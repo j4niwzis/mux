@@ -117,6 +117,13 @@ mux_definitions_of(mux_boost_definitions Boost::asio Boost::beast Boost::context
 message(STATUS "mux: defined everywhere, as Boost defines it: ${mux_boost_definitions}")
 add_compile_definitions(${mux_boost_definitions})
 
+# And alef's constant interpreter, for everything: alef turns clang 23's new
+# one off for itself and for what imports it -- tern does, knot and loom do
+# not -- so a target importing both kinds had the one flag set nothing was
+# built with. The same flag, with the same condition, everywhere.
+add_compile_options(
+  $<$<AND:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,23>>:-fno-experimental-new-constant-interpreter>)
+
 cme_find_package(tern REQUIRED)
 cme_find_package(loom REQUIRED)
 

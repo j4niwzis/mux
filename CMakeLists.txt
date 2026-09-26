@@ -125,8 +125,9 @@ if(MUX_UI)
   cme_find_package(Skia REQUIRED COMPONENTS gl png jpeg freetype fontmgr-directory)
   cme_find_package(SDL3 REQUIRED)
   cme_find_package(skiff-widgets REQUIRED)
-  # skiff's modules do not carry the family's flags, so they would be built
-  # with a std module of their own: given the same ones here.
+  # skiff's modules are C++23 and do not carry the family's flags, so they
+  # would be built with a std module of their own: given the same standard
+  # and the same flags here.
   foreach(target IN ITEMS skiff::skiff skiff::widgets)
     if(TARGET ${target})
       get_target_property(aliased ${target} ALIASED_TARGET)
@@ -136,6 +137,7 @@ if(MUX_UI)
       get_target_property(imported ${target} IMPORTED)
       if(NOT imported)
         target_compile_options(${target} PUBLIC ${mux_std_flags})
+        set_target_properties(${target} PROPERTIES CXX_STANDARD 26)
       endif()
     endif()
   endforeach()

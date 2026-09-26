@@ -57,25 +57,25 @@ class screen {
  public:
   explicit screen(Sender send) : send_(std::move(send)) {
     root_ = scene::make<nodes::Box>({.fill = true}, background);
-    auto* columns = root_->add<nodes::FillFlow>({.fill = true}, nodes::FillFlow::Direction::kHorizontal, 0.0f, 0.0f);
+    auto* columns = root_->template add<nodes::FillFlow>({.fill = true}, nodes::FillFlow::Direction::kHorizontal, 0.0f, 0.0f);
 
-    auto* side = columns->add<nodes::Box>({.fillY = true, .width = 280.0f}, sidebar_colour);
-    auto* side_column = side->add<nodes::FillFlow>({.fill = true, .padding = scene::Margin::all(8.0f)},
+    auto* side = columns->template add<nodes::Box>({.fillY = true, .width = 280.0f}, sidebar_colour);
+    auto* side_column = side->template add<nodes::FillFlow>({.fill = true, .padding = scene::Margin::all(8.0f)},
                                                    nodes::FillFlow::Direction::kVertical, 0.0f, 8.0f);
-    status_ = side_column->add<nodes::Text>({.fillX = true}, "mux", 13.0f, dim_colour);
-    auto* list_scroll = side_column->add<nodes::ScrollContainer>({.fill = true});
-    list_ = list_scroll->add<nodes::FillFlow>({.fillX = true, .autoSize = scene::Axes::kY},
+    status_ = side_column->template add<nodes::Text>({.fillX = true}, "mux", 13.0f, dim_colour);
+    auto* list_scroll = side_column->template add<nodes::ScrollContainer>({.fill = true});
+    list_ = list_scroll->template add<nodes::FillFlow>({.fillX = true, .autoSize = scene::Axes::kY},
                                               nodes::FillFlow::Direction::kVertical, 0.0f, 2.0f);
 
-    auto* main = columns->add<nodes::FillFlow>({.fillY = true, .grow = scene::Axes::kX,
+    auto* main = columns->template add<nodes::FillFlow>({.fillY = true, .grow = scene::Axes::kX,
                                                 .padding = scene::Margin::all(12.0f)},
                                                nodes::FillFlow::Direction::kVertical, 0.0f, 8.0f);
-    title_ = main->add<nodes::Text>({.fillX = true}, "", 20.0f, text_colour, true);
-    topic_ = main->add<nodes::Text>({.fillX = true}, "", 13.0f, dim_colour);
-    timeline_scroll_ = main->add<nodes::ScrollContainer>({.fillX = true, .grow = scene::Axes::kY});
-    timeline_ = timeline_scroll_->add<nodes::FillFlow>({.fillX = true, .autoSize = scene::Axes::kY},
+    title_ = main->template add<nodes::Text>({.fillX = true}, "", 20.0f, text_colour, true);
+    topic_ = main->template add<nodes::Text>({.fillX = true}, "", 13.0f, dim_colour);
+    timeline_scroll_ = main->template add<nodes::ScrollContainer>({.fillX = true, .grow = scene::Axes::kY});
+    timeline_ = timeline_scroll_->template add<nodes::FillFlow>({.fillX = true, .autoSize = scene::Axes::kY},
                                                        nodes::FillFlow::Direction::kVertical, 0.0f, 10.0f);
-    main->add<composer<Sender>>({.fillX = true}, this);
+    main->template add<composer<Sender>>({.fillX = true}, this);
   }
 
   scene::Drawable& root() { return *root_; }
@@ -109,20 +109,20 @@ class screen {
       ++accounts;
       if (kept.state == connection::online)
         ++online;
-      list_->add<nodes::Text>({.fillX = true}, id.address, 12.0f, dim_colour, true);
+      list_->template add<nodes::Text>({.fillX = true}, id.address, 12.0f, dim_colour, true);
       for (const auto& [key, one] : kept.conversations) {
         const bool is_chosen = chosen_ && *chosen_ == one.id;
-        auto* row = list_->add<nodes::Clickable>({.fillX = true, .height = 44.0f},
+        auto* row = list_->template add<nodes::Clickable>({.fillX = true, .height = 44.0f},
                                                  [this, which = one.id] { this->choose(which); }, one.name);
-        row->add<nodes::Box>({.fill = true, .cornerRadius = 6.0f}, is_chosen ? chosen_colour : sidebar_colour);
-        auto* line = row->add<nodes::FillFlow>({.fill = true, .padding = scene::Margin::horizontal(10.0f)},
+        row->template add<nodes::Box>({.fill = true, .cornerRadius = 6.0f}, is_chosen ? chosen_colour : sidebar_colour);
+        auto* line = row->template add<nodes::FillFlow>({.fill = true, .padding = scene::Margin::horizontal(10.0f)},
                                                nodes::FillFlow::Direction::kHorizontal, 8.0f, 0.0f);
-        line->setCrossAlign(nodes::FillFlow::Align::kCentre);
-        auto* name = line->add<nodes::Text>({.grow = scene::Axes::kX}, one.name.empty() ? one.id.id : one.name,
+        line->setCrossAlign(nodes::FillFlow::Align::kMiddle);
+        auto* name = line->template add<nodes::Text>({.grow = scene::Axes::kX}, one.name.empty() ? one.id.id : one.name,
                                             15.0f, text_colour, one.unread > 0);
         name->setElided(true);
         if (one.unread > 0)
-          line->add<nodes::Text>({}, std::to_string(one.unread), 13.0f, accent_colour, true);
+          line->template add<nodes::Text>({}, std::to_string(one.unread), 13.0f, accent_colour, true);
       }
     }
     status_->setText(std::format("{} of {} account{} online", online, accounts, accounts == 1 ? "" : "s"));
@@ -144,24 +144,24 @@ class screen {
       about += (about.empty() ? "" : " · ") + std::to_string(one->typing.size()) + " typing";
     topic_->setText(about);
     for (const message& said : one->timeline) {
-      auto* entry = timeline_->add<nodes::FillFlow>({.fillX = true, .autoSize = scene::Axes::kY},
+      auto* entry = timeline_->template add<nodes::FillFlow>({.fillX = true, .autoSize = scene::Axes::kY},
                                                     nodes::FillFlow::Direction::kVertical, 0.0f, 2.0f);
       std::string who = said.sender;
       if (said.delivery == delivery::sending)
         who += " · sending";
       else if (said.delivery == delivery::failed)
         who += " · not sent";
-      entry->add<nodes::Text>({.fillX = true}, who, 12.0f, said.outgoing ? accent_colour : dim_colour, true);
+      entry->template add<nodes::Text>({.fillX = true}, who, 12.0f, said.outgoing ? accent_colour : dim_colour, true);
       std::string body = said.redacted ? "(removed)" : said.body.plain;
       if (said.edited)
         body += " (edited)";
-      auto* text = entry->add<nodes::Text>({.fillX = true}, body, 15.0f, text_colour);
+      auto* text = entry->template add<nodes::Text>({.fillX = true}, body, 15.0f, text_colour);
       text->setWrapped(true);
       if (!said.reactions.empty()) {
         std::string reactions;
         for (const auto& [key, who_reacted] : said.reactions)
           reactions += std::format("{} {}  ", key, who_reacted.size());
-        entry->add<nodes::Text>({.fillX = true}, reactions, 13.0f, dim_colour);
+        entry->template add<nodes::Text>({.fillX = true}, reactions, 13.0f, dim_colour);
       }
     }
     // The newest is at the bottom, and that is where the reader is.

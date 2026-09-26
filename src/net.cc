@@ -92,6 +92,19 @@ class loop {
   void run() { io_.run(); }
   void stop() { io_.stop(); }
 
+  // Runs until stop(), whether or not there is anything to do: the loop of
+  // a program whose other thread posts work to it.
+  void run_forever() {
+    auto kept = asio::make_work_guard(io_);
+    io_.run();
+  }
+
+  // A fiber started from any thread: the loop's thread runs it.
+  template <class Body>
+  void post(Body body) {
+    asio::post(io_, [this, body = std::move(body)]() mutable { spawn(std::move(body)); });
+  }
+
   // The running fiber; nullptr outside one.
   handle current() const noexcept { return current_; }
 

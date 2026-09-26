@@ -31,6 +31,9 @@ if(NOT COMMAND cme_provider)
 endif()
 
 option(MUX_TESTS "Build the tests" ${PROJECT_IS_TOP_LEVEL})
+# The window: SDL3 and skiff, with Skia on GL. Off until the cmake-everywhere
+# release that has the SDL3 port is the one pinned.
+option(MUX_UI "Build the window, and the mux program" OFF)
 
 # clang's -fconstexpr-steps: one value for mux and every library of the
 # family under it. Each of them adds its own to what imports it, and CMake
@@ -146,6 +149,27 @@ mux_module(mux_xmpp src/xmpp.cc mux_core mux_net tern)
 mux_module(mux_http src/http.cc mux_net Boost::beast Boost::asio OpenSSL::SSL)
 mux_module(mux_matrix src/matrix.cc mux_core mux_net mux_http
            loom_api loom_ev loom_state loom_cs_login loom_cs_room_send loom_cs_sync loom_cs_wellknown)
+
+if(MUX_UI)
+  # skiff and skiff-widgets say the rest of what they are in their own trees.
+  cme_declare_port(NAME skiff PROVIDES skiff
+    GITHUB_REPOSITORY j4niwzis/skiff
+    GIT_TAG e2a4cd97a7c6ab947cc3b48da0bf983a8bc01281)
+  cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
+    GITHUB_REPOSITORY j4niwzis/skiff-widgets
+    GIT_TAG 13d1c1ba4e90aed6188b05061e7930f859de3c48)
+  # Skia as skiff draws with it, on GL, with the system's fonts read from
+  # their directory.
+  set(SKIFF_SKIA_COMPONENTS gl fontmgr-directory CACHE STRING "" FORCE)
+  cme_find_package(Skia REQUIRED COMPONENTS gl png jpeg freetype fontmgr-directory)
+  cme_find_package(SDL3 REQUIRED)
+  cme_find_package(skiff-widgets REQUIRED)
+
+  mux_module(mux_host src/host.cc SDL3::SDL3 skiff::skiff)
+  mux_module(mux_ui src/ui.cc mux_core skiff::widgets skiff::skiff)
+  add_executable(mux src/main.cc)
+  target_link_libraries(mux PRIVATE mux_host mux_ui mux_xmpp mux_matrix)
+endif()
 
 add_executable(mux-cli src/cli.cc)
 target_link_libraries(mux-cli PRIVATE mux_xmpp mux_matrix)

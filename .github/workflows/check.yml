@@ -1,0 +1,71 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Every commit gets a run of its own, and a newer push never cancels one
+# that is under way: each commit is checked to the end.
+concurrency:
+  group: check-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  clang:
+    name: clang ${{ matrix.llvm }}, libc++
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        llvm: [23]
+    steps:
+      - uses: actions/checkout@v4
+
+      # Clang and libc++, which is where `import std` comes from.
+      - name: clang and libc++
+        run: |
+          sudo apt-get update || true
+          sudo apt-get install -y ninja-build lsb-release software-properties-common gnupg curl
+          curl -fsSL https://apt.llvm.org/llvm.sh -o /tmp/llvm.sh
+          chmod +x /tmp/llvm.sh
+          sudo /tmp/llvm.sh ${{ matrix.llvm }}
+          sudo apt-get install -y libc++-${{ matrix.llvm }}-dev libc++abi-${{ matrix.llvm }}-dev
+
+      # OpenSSL from the system until the cmake-everywhere release that has
+      # its port; perl is what that port's build runs, and the runner has it.
+      - name: openssl
+        run: sudo apt-get install -y libssl-dev
+
+      - name: cmake
+        run: |
+          version=4.4.3
+          curl -sSL -o cmake.tar.gz \
+            "https://github.com/Kitware/CMake/releases/download/v${version}/cmake-${version}-linux-x86_64.tar.gz"
+          sudo tar xzf cmake.tar.gz -C /opt
+          echo "/opt/cmake-${version}-linux-x86_64/bin" >> "$GITHUB_PATH"
+
+      # CMake works out where the std module's source is from where the
+      # compiler is, and the compiler a distribution installs is a link in a
+      # directory that says nothing about its toolchain: the answer is
+      # /lib/share/libc++/v1, which no package fills. So both ends are said
+      # outright.
+      - name: where import std is read from
+        run: |
+          sudo mkdir -p /lib/share/libc++
+          sudo ln -sfn /usr/lib/llvm-${{ matrix.llvm }}/share/libc++/v1 /lib/share/libc++/v1
+          sudo ln -sf /usr/lib/llvm-${{ matrix.llvm }}/bin/clang++ /usr/local/bin/clang++
+          test -f /lib/share/libc++/v1/std.cppm
+
+      - name: build
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=/usr/local/bin/clang++ \
+            -DCMAKE_CXX_FLAGS="-stdlib=libc++"
+
+
+          cmake --build build
+
+      - name: test
+        run: ctest --test-dir build --output-on-failure

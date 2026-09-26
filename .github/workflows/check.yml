@@ -89,7 +89,8 @@ jobs:
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_COMPILER=/usr/local/bin/clang++ \
-            -DCMAKE_CXX_FLAGS="-stdlib=libc++"
+            -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+            -DMUX_UI=ON
 
 
           cmake --build build

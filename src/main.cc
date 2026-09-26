@@ -15,6 +15,7 @@ import mux.xmpp;
 import mux.matrix;
 import mux.host;
 import mux.ui;
+import skiff.scene;
 
 namespace {
 

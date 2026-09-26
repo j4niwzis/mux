@@ -88,12 +88,12 @@ struct app {
 
 int main(int argc, char** argv) {
   if (argc < 2) {
-    std::println(stderr, "usage: {} <user@domain | @user:server>...; the password in MUX_PASSWORD", argv[0]);
+    std::println(std::cerr, "usage: {} <user@domain | @user:server>...; the password in MUX_PASSWORD", argv[0]);
     return 2;
   }
   const char* password = std::getenv("MUX_PASSWORD");
   if (!password) {
-    std::println(stderr, "MUX_PASSWORD is not set");
+    std::println(std::cerr, "MUX_PASSWORD is not set");
     return 2;
   }
 
@@ -115,7 +115,7 @@ int main(int argc, char** argv) {
     try {
       net.loop.run_forever();
     } catch (const std::exception& failed) {
-      std::println(stderr, "[mux] the network stopped: {}", failed.what());
+      std::println(std::cerr, "[mux] the network stopped: {}", failed.what());
     }
   });
 

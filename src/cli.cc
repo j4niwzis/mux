@@ -80,7 +80,7 @@ void keyboard(mux::net::loop& loop, Account& account) {
         }
         const auto space = line.find(' ');
         if (space == std::string::npos) {
-          std::println(stderr, "to send: <address or room id> <the message>");
+          std::println(std::cerr, "to send: <address or room id> <the message>");
           continue;
         }
         account.send(line.substr(0, space), line.substr(space + 1));
@@ -94,13 +94,13 @@ void keyboard(mux::net::loop& loop, Account& account) {
 
 int main(int argc, char** argv) {
   if (argc < 2 || argc > 4) {
-    std::println(stderr, "usage: {} <user@domain> [host [port]] | <@user:server> [homeserver URL]", argv[0]);
-    std::println(stderr, "the password is read from MUX_PASSWORD");
+    std::println(std::cerr, "usage: {} <user@domain> [host [port]] | <@user:server> [homeserver URL]", argv[0]);
+    std::println(std::cerr, "the password is read from MUX_PASSWORD");
     return 2;
   }
   const char* password = std::getenv("MUX_PASSWORD");
   if (!password) {
-    std::println(stderr, "MUX_PASSWORD is not set");
+    std::println(std::cerr, "MUX_PASSWORD is not set");
     return 2;
   }
   const std::string address = argv[1];
@@ -135,7 +135,7 @@ int main(int argc, char** argv) {
       loop.run();
     }
   } catch (const std::exception& failed) {
-    std::println(stderr, "stopped: {}", failed.what());
+    std::println(std::cerr, "stopped: {}", failed.what());
     return 1;
   }
   return 0;

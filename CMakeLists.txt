@@ -51,6 +51,17 @@ foreach(family IN ITEMS ALEF CHEVRON TERN KNOT LOOM)
     "clang's -fconstexpr-steps, as mux sets it for the whole family")
 endforeach()
 
+# The flags that decide which copy of std a target is compiled against, the
+# same for everything built here -- Boost's module targets and the family's
+# included -- and set before any of them is read. CMake builds std once for
+# each set of flags that imports it, and a target whose imports were built
+# with another set finds std two ways. The family adds these to whatever
+# imports it (alef the constant interpreter, every library its step count);
+# said once, for everything, they are one set.
+add_compile_options(
+  $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=${MUX_CONSTEXPR_STEPS}>
+  $<$<AND:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,23>>:-fno-experimental-new-constant-interpreter>)
+
 # The libraries of this family, each pinned to a commit.
 cme_declare_port(NAME tern PROVIDES tern
   GITHUB_REPOSITORY j4niwzis/tern
@@ -120,12 +131,6 @@ mux_definitions_of(mux_boost_definitions Boost::asio Boost::beast Boost::context
 message(STATUS "mux: defined everywhere, as Boost defines it: ${mux_boost_definitions}")
 add_compile_definitions(${mux_boost_definitions})
 
-# And alef's constant interpreter, for everything: alef turns clang 23's new
-# one off for itself and for what imports it -- tern does, knot and loom do
-# not -- so a target importing both kinds had the one flag set nothing was
-# built with. The same flag, with the same condition, everywhere.
-add_compile_options(
-  $<$<AND:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,23>>:-fno-experimental-new-constant-interpreter>)
 
 cme_find_package(tern REQUIRED)
 cme_find_package(loom REQUIRED)

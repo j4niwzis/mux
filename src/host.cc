@@ -279,9 +279,8 @@ int run(App& app, const options& how) {
             key.fControl = (event.key.mod & SDL_KMOD_CTRL) != 0;
             key.fAlt = (event.key.mod & SDL_KMOD_ALT) != 0;
             key.fSuper = (event.key.mod & SDL_KMOD_GUI) != 0;
-            if (key.fKey == skiff::scene::Key::kTab && key.fPressed)
-              router.focusNext(key.fShift);
-            else if (key.fKey != skiff::scene::Key::kUnknown)
+            // Tab too: the router moves the focus on it itself.
+            if (key.fKey != skiff::scene::Key::kUnknown)
               router.key(key);
             break;
           }

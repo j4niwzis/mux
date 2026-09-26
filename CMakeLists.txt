@@ -99,9 +99,12 @@ add_library(mux_modules)
 target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
   FILES src/core.cc src/net.cc src/xmpp.cc src/http.cc src/matrix.cc)
 target_compile_features(mux_modules PUBLIC cxx_std_26)
-target_compile_options(mux_modules PUBLIC
+# The flags that decide which std module a target gets: the same on every
+# library of modules in the build, or two std modules meet in one importer.
+set(mux_std_flags
   $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=${MUX_CONSTEXPR_STEPS}>
   $<$<AND:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,23>>:-fno-experimental-new-constant-interpreter>)
+target_compile_options(mux_modules PUBLIC ${mux_std_flags})
 target_link_libraries(mux_modules PUBLIC tern loom Boost::asio Boost::beast Boost::context
   OpenSSL::SSL OpenSSL::Crypto)
 foreach(name IN ITEMS core net xmpp http matrix)
@@ -122,6 +125,20 @@ if(MUX_UI)
   cme_find_package(Skia REQUIRED COMPONENTS gl png jpeg freetype fontmgr-directory)
   cme_find_package(SDL3 REQUIRED)
   cme_find_package(skiff-widgets REQUIRED)
+  # skiff's modules do not carry the family's flags, so they would be built
+  # with a std module of their own: given the same ones here.
+  foreach(target IN ITEMS skiff::skiff skiff::widgets)
+    if(TARGET ${target})
+      get_target_property(aliased ${target} ALIASED_TARGET)
+      if(aliased)
+        set(target ${aliased})
+      endif()
+      get_target_property(imported ${target} IMPORTED)
+      if(NOT imported)
+        target_compile_options(${target} PUBLIC ${mux_std_flags})
+      endif()
+    endif()
+  endforeach()
 
   target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
     FILES src/host.cc src/ui.cc)

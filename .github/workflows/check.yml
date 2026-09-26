@@ -59,10 +59,11 @@ jobs:
           sudo /tmp/llvm.sh ${{ matrix.llvm }}
           sudo apt-get install -y libc++-${{ matrix.llvm }}-dev libc++abi-${{ matrix.llvm }}-dev
 
-      # OpenSSL from the system until the cmake-everywhere release that has
-      # its port; perl is what that port's build runs, and the runner has it.
-      - name: openssl
-        run: sudo apt-get install -y libssl-dev
+      # OpenSSL is built from its port (perl runs its build; the runner has
+      # it). SDL is a window library and needs the headers of the windowing
+      # systems it opens windows on.
+      - name: windowing headers
+        run: sudo apt-get install -y xorg-dev libwayland-dev libxkbcommon-dev wayland-protocols
 
       - name: cmake
         run: |

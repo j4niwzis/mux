@@ -31,9 +31,8 @@ if(NOT COMMAND cme_provider)
 endif()
 
 option(MUX_TESTS "Build the tests" ${PROJECT_IS_TOP_LEVEL})
-# The window: SDL3 and skiff, with Skia on GL. Off until the cmake-everywhere
-# release that has the SDL3 port is the one pinned.
-option(MUX_UI "Build the window, and the mux program" OFF)
+# The window: SDL3 and skiff, with Skia on GL.
+option(MUX_UI "Build the window, and the mux program" ON)
 
 # clang's -fconstexpr-steps: one value for mux and every library of the
 # family under it. Each of them adds its own to what imports it, and CMake

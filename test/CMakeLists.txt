@@ -1,7 +1,7 @@
 # The tests: googletest's, as a module, from cmake-everywhere.
 cme_declare_port(NAME googletest-modules PROVIDES GTest
   GITHUB_REPOSITORY j4niwzis/googletest-modules
-  GIT_TAG 706920f1d230f0316d271466d8885735be3e300e
+  GIT_TAG 4620684d68ef4653e9587a4294fc081ed6526f7e
   LICENSE BSD-3-Clause
   SYSTEM NEVER
   TARGETS gtest_main)

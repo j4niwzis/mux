@@ -55,6 +55,17 @@ cme_find_package(OpenSSL REQUIRED)
 cme_find_package(tern REQUIRED)
 cme_find_package(loom REQUIRED)
 
+# clang's -fconstexpr-steps for mux and what imports it, as in the libraries
+# it stands on. Besides the budget it sets, it is what keeps a target that
+# imports mux and googletest on one std module: CMake builds std once for
+# each set of flags that imports it, and a test compiled with exactly the
+# default flags was handed the default std while googletest's interfaces
+# named another, and the collation refused ("Disagreement of the location
+# of the 'std' module"). tern, knot and loom have never met it for this
+# reason.
+set(MUX_CONSTEXPR_STEPS 100000000 CACHE STRING
+  "clang's -fconstexpr-steps for mux and what imports it")
+
 # One module to a target, as in the libraries it stands on.
 function(mux_module target file)
   add_library(${target})
@@ -64,6 +75,8 @@ function(mux_module target file)
   if(ARGN)
     target_link_libraries(${target} PUBLIC ${ARGN})
   endif()
+  target_compile_options(${target} PUBLIC
+    $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=${MUX_CONSTEXPR_STEPS}>)
 endfunction()
 
 mux_module(mux_core src/core.cc)

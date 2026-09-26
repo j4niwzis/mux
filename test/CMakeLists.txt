@@ -9,15 +9,6 @@ cme_options(googletest-modules
   "BUILD_GMOCK OFF" "INSTALL_GTEST OFF" "gtest_build_modules ON"
   "gtest_build_tests OFF" "gtest_build_samples OFF")
 cme_find_package(GTest REQUIRED)
-# googletest-modules builds itself as C++23, so its module interfaces are
-# compiled against a std module of C++23 -- and a test here, which is C++26,
-# then sees std two ways and loads the other one. Built as C++26 like the
-# rest of the program, there is one std.
-foreach(one IN ITEMS gtest gtest_main)
-  if(TARGET ${one})
-    set_target_properties(${one} PROPERTIES CXX_STANDARD 26)
-  endif()
-endforeach()
 if(TARGET GTest::gtest_main)
   set(mux_gtest GTest::gtest_main)
 else()

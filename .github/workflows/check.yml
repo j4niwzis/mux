@@ -62,6 +62,13 @@ jobs:
       # OpenSSL is built from its port (perl runs its build; the runner has
       # it). SDL is a window library and needs the headers of the windowing
       # systems it opens windows on.
+      # Skia is a GN project: cmake-everywhere runs gn to read it.
+      - name: gn
+        run: |
+          curl -sSL -o gn.zip "https://chrome-infra-packages.appspot.com/dl/gn/gn/linux-amd64/+/latest"
+          mkdir -p "$HOME/.local/bin" && unzip -o -j gn.zip gn -d "$HOME/.local/bin"
+          chmod +x "$HOME/.local/bin/gn" && echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
       - name: windowing headers
         run: sudo apt-get install -y xorg-dev libwayland-dev libxkbcommon-dev wayland-protocols
 

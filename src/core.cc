@@ -149,6 +149,15 @@ struct message_redacted {
   std::string id;
 };
 
+// A message sent from here, known by a local id until the server answered
+// with its own: from now on it is known by that one -- and where the echo
+// came first and is already kept under it, the local one goes.
+struct message_acknowledged {
+  conversation_id in;
+  std::string local_id;
+  std::string id;
+};
+
 struct delivery_changed {
   conversation_id in;
   std::string id;
@@ -178,7 +187,7 @@ struct history_position {
 
 using change_t = std::variant<change::connection_changed, change::conversation_updated, change::conversation_removed,
                               change::presence_changed, change::message_added, change::message_edited,
-                              change::message_redacted, change::delivery_changed, change::reaction_changed,
+                              change::message_redacted, change::message_acknowledged, change::delivery_changed, change::reaction_changed,
                               change::typing_changed, change::history_position>;
 
 // The model: every account, and every change applied to it.
@@ -262,6 +271,17 @@ class model {
       kept->body = {};
       kept->redacted = true;
       kept->reactions.clear();
+    }
+  }
+  void on(const change::message_acknowledged& one) {
+    conversation& where = of(one.in);
+    if (message_in(where, one.id)) {
+      std::erase_if(where.timeline, [&](const message& kept) { return kept.id == one.local_id; });
+      return;
+    }
+    if (message* kept = message_in(where, one.local_id)) {
+      kept->id = one.id;
+      kept->delivery = delivery::sent;
     }
   }
   void on(const change::delivery_changed& one) {

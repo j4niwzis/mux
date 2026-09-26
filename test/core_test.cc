@@ -76,6 +76,21 @@ TEST(Model, Messages) {
   EXPECT_EQ(one->history_from, "mam-17");
 }
 
+TEST(Model, Acknowledged) {
+  model kept;
+  kept.apply(change::message_added{said("txn1", "sent from here", true)});
+  kept.apply(change::message_acknowledged{with_juliet, "txn1", "$event1"});
+  ASSERT_EQ(kept.find(with_juliet)->timeline.size(), 1u);
+  EXPECT_EQ(kept.find(with_juliet)->timeline[0].id, "$event1");
+  EXPECT_EQ(kept.find(with_juliet)->timeline[0].delivery, delivery::sent);
+  // The echo first, then the answer: one message, not two.
+  kept.apply(change::message_added{said("txn2", "again", true)});
+  kept.apply(change::message_added{said("$event2", "again", true)});
+  kept.apply(change::message_acknowledged{with_juliet, "txn2", "$event2"});
+  EXPECT_EQ(kept.find(with_juliet)->timeline.size(), 2u);
+  EXPECT_EQ(kept.find(with_juliet)->timeline[1].id, "$event2");
+}
+
 TEST(Mailbox, CrossesThreads) {
   std::atomic<int> notified = 0;
   mailbox box([&] { ++notified; });

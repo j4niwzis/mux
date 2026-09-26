@@ -82,8 +82,8 @@ struct response {
 // One connection to one host, used by one fiber at a time.
 class connection {
  public:
-  connection(net::loop& owner, asio::ssl::context& tls, url where)
-      : owner_(&owner), tls_(&tls), where_(std::move(where)) {}
+  connection(net::loop& owner, net::tls& settings, url where)
+      : owner_(&owner), tls_(&settings), where_(std::move(where)) {}
   connection(const connection&) = delete;
   connection& operator=(const connection&) = delete;
 
@@ -117,7 +117,7 @@ class connection {
   using stream_type = beast::ssl_stream<beast::tcp_stream>;
 
   void open() {
-    stream_.emplace(owner_->io(), *tls_);
+    stream_.emplace(owner_->io(), tls_->context());
     if (!::SSL_set_tlsext_host_name(stream_->native_handle(), where_.host.c_str()))
       throw net::failure("naming " + where_.host, error_code(static_cast<int>(::ERR_get_error()),
                                                                asio::error::get_ssl_category()));
@@ -184,7 +184,7 @@ class connection {
   }
 
   net::loop* owner_;
-  asio::ssl::context* tls_;
+  net::tls* tls_;
   url where_;
   std::optional<stream_type> stream_;
   beast::flat_buffer buffer_;

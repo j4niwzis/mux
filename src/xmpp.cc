@@ -45,16 +45,86 @@ inline availability availability_of(const std::optional<std::string>& show) {
   return availability::online;
 }
 
-// XEP-0203's stamp (XEP-0082's DateTime): when a stanza was first sent.
+// XEP-0203's stamp, XEP-0082's DateTime: CCYY-MM-DDThh:mm:ss[.sss](Z|+hh:mm|-hh:mm)
+// -- when a stanza was first sent. Read by hand: libc++ has no
+// std::chrono::parse yet.
 inline std::optional<std::chrono::sys_time<std::chrono::milliseconds>> stamp_of(std::string_view text) {
-  std::chrono::sys_time<std::chrono::milliseconds> at;
-  for (const char* format : {"%FT%TZ", "%FT%T%Ez"}) {
-    std::istringstream in{std::string(text)};
-    in >> std::chrono::parse(format, at);
-    if (!in.fail())
-      return at;
+  std::size_t at = 0;
+  const auto number = [&](std::size_t digits) -> std::optional<int> {
+    if (at + digits > text.size())
+      return std::nullopt;
+    int value = 0;
+    for (std::size_t i = 0; i < digits; ++i) {
+      const char c = text[at + i];
+      if (c < '0' || c > '9')
+        return std::nullopt;
+      value = value * 10 + (c - '0');
+    }
+    at += digits;
+    return value;
+  };
+  const auto expect = [&](char c) {
+    if (at < text.size() && text[at] == c) {
+      ++at;
+      return true;
+    }
+    return false;
+  };
+  const auto year = number(4);
+  if (!year || !expect('-'))
+    return std::nullopt;
+  const auto month = number(2);
+  if (!month || !expect('-'))
+    return std::nullopt;
+  const auto day = number(2);
+  if (!day || !expect('T'))
+    return std::nullopt;
+  const auto hour = number(2);
+  if (!hour || !expect(':'))
+    return std::nullopt;
+  const auto minute = number(2);
+  if (!minute || !expect(':'))
+    return std::nullopt;
+  const auto second = number(2);
+  if (!second)
+    return std::nullopt;
+  int millis = 0;
+  if (expect('.')) {
+    int digits = 0;
+    while (at < text.size() && text[at] >= '0' && text[at] <= '9') {
+      if (digits < 3)
+        millis = millis * 10 + (text[at] - '0');
+      ++digits;
+      ++at;
+    }
+    if (digits == 0)
+      return std::nullopt;
+    for (; digits < 3; ++digits)
+      millis *= 10;
   }
-  return std::nullopt;
+  std::chrono::minutes offset{0};
+  if (!expect('Z')) {
+    const bool behind = at < text.size() && text[at] == '-';
+    if (!expect('+') && !expect('-'))
+      return std::nullopt;
+    const auto hours = number(2);
+    if (!hours || !expect(':'))
+      return std::nullopt;
+    const auto minutes = number(2);
+    if (!minutes)
+      return std::nullopt;
+    offset = std::chrono::hours(*hours) + std::chrono::minutes(*minutes);
+    if (behind)
+      offset = -offset;
+  }
+  if (at != text.size())
+    return std::nullopt;
+  const std::chrono::year_month_day date{std::chrono::year(*year), std::chrono::month(static_cast<unsigned>(*month)),
+                                         std::chrono::day(static_cast<unsigned>(*day))};
+  if (!date.ok() || *hour > 23 || *minute > 59 || *second > 60)
+    return std::nullopt;
+  return std::chrono::sys_days(date) + std::chrono::hours(*hour) + std::chrono::minutes(*minute) +
+         std::chrono::seconds(*second) + std::chrono::milliseconds(millis) - offset;
 }
 
 // An account, and the changes it makes: `Sink` is called with each change,
@@ -65,7 +135,7 @@ class account {
   using session_type = decltype(tern::connect(std::declval<net::stream&>(), std::declval<const tern::options&>(),
                                               tern::answering<>{}, net::scheduler{}));
 
-  account(net::loop& loop, net::asio::ssl::context& tls, settings how, Sink sink)
+  account(net::loop& loop, net::tls& tls, settings how, Sink sink)
       : loop_(&loop), tls_(&tls), how_(std::move(how)), sink_(std::move(sink)) {
     const auto at = how_.address.find('@');
     user_ = how_.address.substr(0, at);
@@ -235,7 +305,7 @@ class account {
   }
 
   net::loop* loop_;
-  net::asio::ssl::context* tls_;
+  net::tls* tls_;
   settings how_;
   Sink sink_;
   std::string user_, domain_;

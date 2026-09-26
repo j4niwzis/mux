@@ -36,7 +36,7 @@ using any_account = std::variant<std::unique_ptr<xmpp_account>, std::unique_ptr<
 
 struct network {
   mux::net::loop loop;
-  mux::net::asio::ssl::context tls = mux::net::client_tls();
+  mux::net::tls tls = mux::net::client_tls();
   std::vector<any_account> accounts;
   std::thread thread;
 

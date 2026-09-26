@@ -60,7 +60,7 @@ struct failure {
 template <class Sink>
 class account {
  public:
-  account(net::loop& loop, net::asio::ssl::context& tls, settings how, Sink sink)
+  account(net::loop& loop, net::tls& tls, settings how, Sink sink)
       : loop_(&loop), tls_(&tls), how_(std::move(how)), sink_(std::move(sink)) {
     id_ = account_id{protocol::matrix, how_.user_id};
     const auto colon = how_.user_id.find(':');
@@ -355,7 +355,7 @@ class account {
   };
 
   net::loop* loop_;
-  net::asio::ssl::context* tls_;
+  net::tls* tls_;
   settings how_;
   Sink sink_;
   account_id id_;

@@ -182,31 +182,42 @@ struct scheduler {
   void wake(handle one) { owner->wake(one); }
 };
 
+// TLS settings, as mux's own type: what imports mux.net does not see Asio,
+// which is declared in this module's global fragment, and names this.
+class tls {
+ public:
+  explicit tls(asio::ssl::context made) : context_(std::move(made)) {}
+  asio::ssl::context& context() noexcept { return context_; }
+
+ private:
+  asio::ssl::context context_;
+};
+
 // A client's TLS settings: the system's trusted certificates, TLS 1.2 and up.
-inline asio::ssl::context client_tls() {
+inline tls client_tls() {
   asio::ssl::context made(asio::ssl::context::tls_client);
   made.set_default_verify_paths();
   made.set_options(asio::ssl::context::default_workarounds | asio::ssl::context::no_sslv2 |
                    asio::ssl::context::no_sslv3 | asio::ssl::context::no_tlsv1 | asio::ssl::context::no_tlsv1_1);
   made.set_verify_mode(asio::ssl::verify_peer);
-  return made;
+  return tls(std::move(made));
 }
 
 // A server's TLS settings, from its certificate chain and key in PEM:
 // what a test's server, or a local one, speaks with.
-inline asio::ssl::context server_tls(std::string_view certificate_pem, std::string_view key_pem) {
+inline tls server_tls(std::string_view certificate_pem, std::string_view key_pem) {
   asio::ssl::context made(asio::ssl::context::tls_server);
   made.set_options(asio::ssl::context::default_workarounds | asio::ssl::context::no_sslv2 |
                    asio::ssl::context::no_sslv3 | asio::ssl::context::no_tlsv1 | asio::ssl::context::no_tlsv1_1);
   made.use_certificate_chain(asio::buffer(certificate_pem.data(), certificate_pem.size()));
   made.use_private_key(asio::buffer(key_pem.data(), key_pem.size()), asio::ssl::context::pem);
-  return made;
+  return tls(std::move(made));
 }
 
 // A certificate trusted besides the system's: a server's own, where the
 // user has said to trust it, or a test's.
-inline void trust(asio::ssl::context& tls, std::string_view certificate_pem) {
-  tls.add_certificate_authority(asio::buffer(certificate_pem.data(), certificate_pem.size()));
+inline void trust(tls& settings, std::string_view certificate_pem) {
+  settings.context().add_certificate_authority(asio::buffer(certificate_pem.data(), certificate_pem.size()));
 }
 
 // A TCP connection, TLS once it is started, as tern's transport: input as
@@ -214,8 +225,8 @@ inline void trust(asio::ssl::context& tls, std::string_view certificate_pem) {
 // more -- and output kept until tern flushes a unit.
 class stream {
  public:
-  stream(loop& owner, asio::ssl::context& tls, tcp::socket socket)
-      : owner_(&owner), stream_(std::move(socket), tls) {}
+  stream(loop& owner, tls& settings, tcp::socket socket)
+      : owner_(&owner), stream_(std::move(socket), settings.context()) {}
   stream(const stream&) = delete;
   stream& operator=(const stream&) = delete;
 

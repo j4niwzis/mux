@@ -23,6 +23,9 @@ struct settings {
   // Where to connect, instead of what the domain's SRV records say.
   std::optional<std::string> host;
   std::optional<std::uint16_t> port;
+  // PLAIN over a stream TLS has not secured: only for a server on this
+  // machine, under test. Never over a network.
+  bool plain_without_tls = false;
 };
 
 // A JID's bare part: what a conversation is kept under.
@@ -143,6 +146,7 @@ class account {
     options.domain = domain_;
     options.password = how_.password;
     options.resource = how_.resource;
+    options.plain_without_tls = how_.plain_without_tls;
     options.self = {.identities = {{.category = "client", .type = "pc", .name = "mux"}}};
     options.caps_node = "https://github.com/j4niwzis/mux";
     auto made = tern::try_connect(wire, options, tern::answering<>{}, net::scheduler{loop_});

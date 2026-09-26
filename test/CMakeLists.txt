@@ -24,7 +24,7 @@ else()
   set(mux_gtest gtest_main)
 endif()
 
-foreach(one IN ITEMS core net)
+foreach(one IN ITEMS core net xmpp)
   add_executable(mux-${one}-test ${one}_test.cc)
   target_link_libraries(mux-${one}-test PRIVATE mux_${one} ${mux_gtest})
   add_test(NAME ${one} COMMAND mux-${one}-test)

@@ -65,14 +65,14 @@ add_compile_options(
 # The libraries of this family, each pinned to a commit.
 cme_declare_port(NAME tern PROVIDES tern
   GITHUB_REPOSITORY j4niwzis/tern
-  GIT_TAG dfe83171341c2cfed94015728559e8b28eef999a
+  GIT_TAG d7ffcec27d871c591d28a08391d6e01f39cd9095
   LICENSE AGPL-3.0-only
   SYSTEM NEVER
   TARGETS tern)
 cme_options(tern "TERN_TESTS OFF" "TERN_EXAMPLES OFF")
 cme_declare_port(NAME loom PROVIDES loom
   GITHUB_REPOSITORY j4niwzis/loom
-  GIT_TAG da4adb2396a448665fc711ab45eaff6c3174da08
+  GIT_TAG 60ed25f5c1b5607086bcc9493e7bb3316de3bf05
   LICENSE AGPL-3.0-only
   SYSTEM NEVER
   TARGETS loom)
@@ -133,27 +133,22 @@ add_compile_definitions(${mux_boost_definitions})
 
 
 cme_find_package(tern REQUIRED)
-cme_find_package(loom REQUIRED)
+# Of loom, what mux uses: the state a sync leaves, and the parts of the API it
+# calls -- logging in, sending, syncing, finding the homeserver.
+cme_find_package(loom COMPONENTS state cs-login cs-room_send cs-sync cs-wellknown REQUIRED)
 
-# One module to a target, as in the libraries it stands on.
-function(mux_module target file)
-  add_library(${target})
-  target_sources(${target}
-    PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES ${file})
-  target_compile_features(${target} PUBLIC cxx_std_26)
-  if(ARGN)
-    target_link_libraries(${target} PUBLIC ${ARGN})
-  endif()
-  target_compile_options(${target} PUBLIC
-    $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=${MUX_CONSTEXPR_STEPS}>)
-endfunction()
-
-mux_module(mux_core src/core.cc)
-mux_module(mux_net src/net.cc tern Boost::asio Boost::context OpenSSL::SSL OpenSSL::Crypto)
-mux_module(mux_xmpp src/xmpp.cc mux_core mux_net tern)
-mux_module(mux_http src/http.cc mux_net Boost::beast Boost::asio OpenSSL::SSL)
-mux_module(mux_matrix src/matrix.cc mux_core mux_net mux_http
-           loom_api loom_ev loom_state loom_cs_login loom_cs_room_send loom_cs_sync loom_cs_wellknown)
+# One library of mux's modules, as the libraries it stands on have: modules
+# are what separates them. The window's two join it where the window is
+# built.
+add_library(mux_modules)
+target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
+  FILES src/core.cc src/net.cc src/xmpp.cc src/http.cc src/matrix.cc)
+target_compile_features(mux_modules PUBLIC cxx_std_26)
+target_link_libraries(mux_modules PUBLIC tern loom Boost::asio Boost::beast Boost::context
+  OpenSSL::SSL OpenSSL::Crypto)
+foreach(name IN ITEMS core net xmpp http matrix)
+  add_library(mux_${name} ALIAS mux_modules)
+endforeach()
 
 if(MUX_UI)
   # skiff and skiff-widgets say the rest of what they are in their own trees.
@@ -170,14 +165,15 @@ if(MUX_UI)
   cme_find_package(SDL3 REQUIRED)
   cme_find_package(skiff-widgets REQUIRED)
 
-  mux_module(mux_host src/host.cc SDL3::SDL3 skiff::skiff)
-  mux_module(mux_ui src/ui.cc mux_core skiff::widgets skiff::skiff)
+  target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
+    FILES src/host.cc src/ui.cc)
+  target_link_libraries(mux_modules PUBLIC SDL3::SDL3 skiff::skiff skiff::widgets)
   add_executable(mux src/main.cc)
-  target_link_libraries(mux PRIVATE mux_host mux_ui mux_xmpp mux_matrix)
+  target_link_libraries(mux PRIVATE mux_modules)
 endif()
 
 add_executable(mux-cli src/cli.cc)
-target_link_libraries(mux-cli PRIVATE mux_xmpp mux_matrix)
+target_link_libraries(mux-cli PRIVATE mux_modules)
 
 if(MUX_TESTS)
   enable_testing()

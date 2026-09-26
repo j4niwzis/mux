@@ -83,54 +83,10 @@ cme_options(loom "LOOM_TESTS OFF")
 cme_find_package(Boost COMPONENTS asio beast pfr[modules] context REQUIRED)
 cme_find_package(OpenSSL REQUIRED)
 
-# What Boost's targets define for whatever links them, defined for
-# everything built here -- the libraries of the family below included.
-#
-# A module is built once for each set of flags it is imported with, and std
-# once for each of those. mux.net and mux.http link Boost and so carry its
-# definitions (BOOST_CONTEXT_STATIC_LINK and the rest) to what imports them;
-# mux.matrix imports mux.http and loom, so loom's modules were built a
-# second time with Boost's definitions, knot's under them a third, and the
-# collation found std two ways. With the definitions everywhere, there is
-# one set of flags. Read from the targets rather than written out here, so
-# that what Boost says is what is used.
-function(mux_definitions_of out)
-  set(found "")
-  set(pending ${ARGN})
-  set(seen "")
-  while(pending)
-    list(POP_FRONT pending one)
-    if(one IN_LIST seen OR NOT TARGET ${one})
-      continue()
-    endif()
-    list(APPEND seen ${one})
-    get_target_property(aliased ${one} ALIASED_TARGET)
-    if(aliased)
-      list(APPEND pending ${aliased})
-      continue()
-    endif()
-    get_target_property(defined ${one} INTERFACE_COMPILE_DEFINITIONS)
-    if(defined)
-      list(APPEND found ${defined})
-    endif()
-    get_target_property(linked ${one} INTERFACE_LINK_LIBRARIES)
-    if(linked)
-      foreach(next IN LISTS linked)
-        # $<LINK_ONLY:x> carries no definitions; anything else that is a
-        # generator expression is left alone.
-        if(NOT next MATCHES "^\\$<")
-          list(APPEND pending ${next})
-        endif()
-      endforeach()
-    endif()
-  endwhile()
-  list(REMOVE_DUPLICATES found)
-  set(${out} "${found}" PARENT_SCOPE)
-endfunction()
-mux_definitions_of(mux_boost_definitions Boost::asio Boost::beast Boost::context Boost::pfr)
-message(STATUS "mux: defined everywhere, as Boost defines it: ${mux_boost_definitions}")
-add_compile_definitions(${mux_boost_definitions})
-
+# Boost's definitions reach what links Boost, and nothing else, as in the
+# libraries under mux: defined for the whole build they were on the std
+# target too, and mux's modules were matched to it rather than to the std
+# the family's modules were built against.
 
 cme_find_package(tern REQUIRED)
 # Of loom, what mux uses: the state a sync leaves, and the parts of the API it

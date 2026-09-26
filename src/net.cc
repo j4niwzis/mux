@@ -74,6 +74,10 @@ class loop {
           self->back = std::move(back);
           try {
             body();
+          } catch (const boost::context::detail::forced_unwind&) {
+            // The loop is going away and unwinds what is still parked:
+            // that is how a fiber ends then, not a failure of it.
+            throw;
           } catch (...) {
             self->failure = std::current_exception();
           }
@@ -175,6 +179,23 @@ inline asio::ssl::context client_tls() {
   return made;
 }
 
+// A server's TLS settings, from its certificate chain and key in PEM:
+// what a test's server, or a local one, speaks with.
+inline asio::ssl::context server_tls(std::string_view certificate_pem, std::string_view key_pem) {
+  asio::ssl::context made(asio::ssl::context::tls_server);
+  made.set_options(asio::ssl::context::default_workarounds | asio::ssl::context::no_sslv2 |
+                   asio::ssl::context::no_sslv3 | asio::ssl::context::no_tlsv1 | asio::ssl::context::no_tlsv1_1);
+  made.use_certificate_chain(asio::buffer(certificate_pem.data(), certificate_pem.size()));
+  made.use_private_key(asio::buffer(key_pem.data(), key_pem.size()), asio::ssl::context::pem);
+  return made;
+}
+
+// A certificate trusted besides the system's: a server's own, where the
+// user has said to trust it, or a test's.
+inline void trust(asio::ssl::context& tls, std::string_view certificate_pem) {
+  tls.add_certificate_authority(asio::buffer(certificate_pem.data(), certificate_pem.size()));
+}
+
 // A TCP connection, TLS once it is started, as tern's transport: input as
 // the chunks each read brings -- read only when tern asks whether there is
 // more -- and output kept until tern flushes a unit.
@@ -260,6 +281,23 @@ class stream {
   }
 
   bool secured() const { return tls_; }
+
+  // TLS on the server's side of the connection, with the settings the
+  // stream was made with.
+  bool accept_tls() {
+    const auto [error] = owner_->await<>([&](auto done) {
+      stream_.async_handshake(asio::ssl::stream_base::server, std::move(done));
+    });
+    if (error) {
+      failed_ = error;
+      return false;
+    }
+    tls_ = true;
+    fetched_ = false;
+    ended_ = false;
+    current_ = {};
+    return true;
+  }
 
   // RFC 9266: tls-exporter on TLS 1.3; tls-server-end-point (RFC 5929) on
   // TLS 1.2, where the exporter is only safe with extended master secret,

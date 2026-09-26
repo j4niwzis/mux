@@ -32,6 +32,22 @@ endif()
 
 option(MUX_TESTS "Build the tests" ${PROJECT_IS_TOP_LEVEL})
 
+# clang's -fconstexpr-steps: one value for mux and every library of the
+# family under it. Each of them adds its own to what imports it, and CMake
+# builds a module again for every set of flags it is imported with -- and
+# the std module once for each of those. alef, chevron and tern said 1e8 and
+# knot and loom 3e8, so a target importing both kinds had a set of flags
+# none of them was built with, every module of theirs was built a second
+# time, and the collation found std two ways ("Disagreement of the location
+# of the 'std' module"). One value, set before any of them is read, and
+# there is one set of flags.
+set(MUX_CONSTEXPR_STEPS 300000000 CACHE STRING
+  "clang's -fconstexpr-steps for mux and the family of libraries under it")
+foreach(family IN ITEMS ALEF CHEVRON TERN KNOT LOOM)
+  set(${family}_CONSTEXPR_STEPS ${MUX_CONSTEXPR_STEPS} CACHE STRING
+    "clang's -fconstexpr-steps, as mux sets it for the whole family")
+endforeach()
+
 # The libraries of this family, each pinned to a commit.
 cme_declare_port(NAME tern PROVIDES tern
   GITHUB_REPOSITORY j4niwzis/tern
@@ -54,17 +70,6 @@ cme_find_package(Boost COMPONENTS asio beast pfr[modules] context REQUIRED)
 cme_find_package(OpenSSL REQUIRED)
 cme_find_package(tern REQUIRED)
 cme_find_package(loom REQUIRED)
-
-# clang's -fconstexpr-steps for mux and what imports it, as in the libraries
-# it stands on. Besides the budget it sets, it is what keeps a target that
-# imports mux and googletest on one std module: CMake builds std once for
-# each set of flags that imports it, and a test compiled with exactly the
-# default flags was handed the default std while googletest's interfaces
-# named another, and the collation refused ("Disagreement of the location
-# of the 'std' module"). tern, knot and loom have never met it for this
-# reason.
-set(MUX_CONSTEXPR_STEPS 100000000 CACHE STRING
-  "clang's -fconstexpr-steps for mux and what imports it")
 
 # One module to a target, as in the libraries it stands on.
 function(mux_module target file)

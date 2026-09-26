@@ -69,3 +69,21 @@ jobs:
 
       - name: test
         run: ctest --test-dir build --output-on-failure
+
+      # Where the build stopped over the std module: the flags and defines
+      # each copy of std, and each copy of a module, was built with -- the
+      # difference between them is the answer.
+      - name: the std module's copies, where the build failed
+        if: failure()
+        run: |
+          python3 - <<'EOF'
+          import re
+          text = open("build/build.ninja").read()
+          for block in re.split(r"\n(?=build )", text):
+              first = block.split("\n", 1)[0]
+              if re.search(r"@cmake_cxx_std[^ ]*/std\.cppm|@cmake_cxx_std@synth_\d+\.dir/[0-9a-f]+\.bmi|loom_events(@synth_\d+)?\.dir/src/events\.cc|mux_http(@synth_\d+)?\.dir|knot(@synth_\d+)?\.dir/src/knot\.cc", first):
+                  flags = [l.strip() for l in block.split("\n") if l.strip().startswith(("FLAGS", "DEFINES"))]
+                  print(first[:160])
+                  for f in flags:
+                      print("   ", f[:400])
+          EOF

@@ -92,7 +92,7 @@ TEST(Xmpp, AScriptedSession) {
   EXPECT_EQ(kept.presences.at("romeo@example.net").status, "below the balcony");
   // What the client said: PLAIN, the roster asked for, the push answered,
   // presence.
-  EXPECT_NE(heard.find("mechanism=\"PLAIN\""), std::string::npos) << heard;
+  EXPECT_NE(heard.find("mechanism='PLAIN'"), std::string::npos) << heard;
   EXPECT_NE(heard.find("jabber:iq:roster"), std::string::npos) << heard;
   EXPECT_NE(heard.find("id=\"push1\""), std::string::npos) << heard;
   EXPECT_NE(heard.find("<presence"), std::string::npos) << heard;

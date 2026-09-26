@@ -40,6 +40,15 @@ inline const knot::value* member(const knot::value& of, std::string_view key) {
   return found == all.end() ? nullptr : &found->second;
 }
 
+// A key of an event's content that its type does not name: in the content's
+// rest, or where knot::tagged keeps what the alternative did not type.
+template <class Tagged>
+const knot::value* extra(const knot::value& rest, const Tagged& content, std::string_view key) {
+  if (const knot::value* found = member(rest, key))
+    return found;
+  return member(content.unknown, key);
+}
+
 inline std::optional<std::string> text(const knot::value* of) {
   if (of && of->is<std::string>())
     return of->as<std::string>();
@@ -288,11 +297,11 @@ class account {
     const auto at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(one.origin_server_ts));
     if (one.content.template is<loom::ev::m_room_message_content_t>()) {
       const auto& content = one.content.template as<loom::ev::m_room_message_content_t>();
-      const knot::value* relates = member(content.rest, "m.relates_to");
+      const knot::value* relates = extra(content.rest, one.content, "m.relates_to");
       // An edit: the event it replaces takes its new content.
       if (text(member(relates ? *relates : knot::value(), "rel_type")) == "m.replace") {
         const auto target = text(member(*relates, "event_id"));
-        const knot::value* now = member(content.rest, "m.new_content");
+        const knot::value* now = extra(content.rest, one.content, "m.new_content");
         if (target && now)
           sink_(change::message_edited{in, *target, body_of(text(member(*now, "body")).value_or(""), *now)});
         return;
@@ -301,7 +310,7 @@ class account {
                    .id = one.event_id,
                    .sender = one.sender,
                    .at = at,
-                   .body = body_of(content.body, content.rest),
+                   .body = body_of(content.body, content.rest, one.content),
                    .outgoing = one.sender == id_.address};
       if (content.msgtype == "m.emote")
         made.body.plain = "* " + made.body.plain;
@@ -348,6 +357,13 @@ class account {
     body made{std::move(plain), std::nullopt};
     if (text(member(content, "format")) == "org.matrix.custom.html")
       made.html = text(member(content, "formatted_body"));
+    return made;
+  }
+  template <class Tagged>
+  static body body_of(std::string plain, const knot::value& rest, const Tagged& content) {
+    body made{std::move(plain), std::nullopt};
+    if (text(extra(rest, content, "format")) == "org.matrix.custom.html")
+      made.html = text(extra(rest, content, "formatted_body"));
     return made;
   }
 

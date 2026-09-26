@@ -309,7 +309,8 @@ class account {
         if (const knot::value* reply = member(*relates, "m.in_reply_to"))
           made.replies_to = text(member(*reply, "event_id"));
       sink_(change::message_added{std::move(made)});
-    } else if (one.content.template is<loom::ev::m_room_encrypted_content_t>()) {
+    } else if (one.type == "m.room.encrypted") {
+      // By its type: loom's timeline union does not have its content yet.
       sink_(change::message_added{message{.in = in,
                                           .id = one.event_id,
                                           .sender = one.sender,

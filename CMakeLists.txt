@@ -65,14 +65,14 @@ endforeach()
 # The libraries of this family, each pinned to a commit.
 cme_declare_port(NAME tern PROVIDES tern
   GITHUB_REPOSITORY j4niwzis/tern
-  GIT_TAG d7ffcec27d871c591d28a08391d6e01f39cd9095
+  GIT_TAG 394f222d27a7194c7c2c3099cddf09f2ee5a32f3
   LICENSE AGPL-3.0-only
   SYSTEM NEVER
   TARGETS tern)
 cme_options(tern "TERN_TESTS OFF" "TERN_EXAMPLES OFF")
 cme_declare_port(NAME loom PROVIDES loom
   GITHUB_REPOSITORY j4niwzis/loom
-  GIT_TAG 60ed25f5c1b5607086bcc9493e7bb3316de3bf05
+  GIT_TAG 3992b7a897ab68d647f37657aaae3d80643703bb
   LICENSE AGPL-3.0-only
   SYSTEM NEVER
   TARGETS loom)

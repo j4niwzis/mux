@@ -12,6 +12,9 @@ concurrency:
   group: check-${{ github.sha }}
   cancel-in-progress: false
 
+env:
+  CPM_SOURCE_CACHE: ${{ github.workspace }}/.cache/cpm
+
 jobs:
   clang:
     name: clang ${{ matrix.llvm }}, libc++
@@ -21,7 +24,30 @@ jobs:
       matrix:
         llvm: [23]
     steps:
+      # The whole history, so that each file's time can be the time of the
+      # commit that last changed it (below).
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # The build directory and the fetched sources kept between runs. ninja
+      # decides what to rebuild from the times of files, and a checkout
+      # stamps every file with now -- so each file is given the time of the
+      # last commit that changed it, and what a run restores is only rebuilt
+      # where something it was built from changed since.
+      - name: file times from the history
+        run: |
+          git ls-files -z | while IFS= read -r -d '' file; do
+            when=$(git log -1 --format=%ct -- "$file")
+            [ -n "$when" ] && touch -d "@$when" "$file"
+          done
+      - uses: actions/cache@v4
+        with:
+          path: |
+            build
+            .cache/cpm
+          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ github.sha }}
+          restore-keys: build-${{ runner.os }}-clang${{ matrix.llvm }}-
 
       # Clang and libc++, which is where `import std` comes from.
       - name: clang and libc++

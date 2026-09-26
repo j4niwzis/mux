@@ -51,16 +51,16 @@ foreach(family IN ITEMS ALEF CHEVRON TERN KNOT LOOM)
     "clang's -fconstexpr-steps, as mux sets it for the whole family")
 endforeach()
 
-# The flags that decide which copy of std a target is compiled against, the
-# same for everything built here -- Boost's module targets and the family's
-# included -- and set before any of them is read. CMake builds std once for
-# each set of flags that imports it, and a target whose imports were built
-# with another set finds std two ways. The family adds these to whatever
-# imports it (alef the constant interpreter, every library its step count);
-# said once, for everything, they are one set.
-add_compile_options(
-  $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=${MUX_CONSTEXPR_STEPS}>
-  $<$<AND:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,23>>:-fno-experimental-new-constant-interpreter>)
+# The flags that decide which copy of std a target is compiled against are
+# given as the libraries of the family give them: to what imports the
+# library, not to the whole build. The std target itself is built without
+# them, so everything that imports a module -- mux, its tests, googletest --
+# is compiled against a std synthesized for its flags, one for all of them.
+# Given to the whole build, the std target had them too, and a test that had
+# no other difference was handed that one while googletest's interfaces
+# named the synthesized one. The step count is the same number for all of
+# the family (below), and alef's constant interpreter flag is on mux's
+# modules as it is on alef's.
 
 # The libraries of this family, each pinned to a commit.
 cme_declare_port(NAME tern PROVIDES tern
@@ -144,6 +144,9 @@ add_library(mux_modules)
 target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
   FILES src/core.cc src/net.cc src/xmpp.cc src/http.cc src/matrix.cc)
 target_compile_features(mux_modules PUBLIC cxx_std_26)
+target_compile_options(mux_modules PUBLIC
+  $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=${MUX_CONSTEXPR_STEPS}>
+  $<$<AND:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,23>>:-fno-experimental-new-constant-interpreter>)
 target_link_libraries(mux_modules PUBLIC tern loom Boost::asio Boost::beast Boost::context
   OpenSSL::SSL OpenSSL::Crypto)
 foreach(name IN ITEMS core net xmpp http matrix)

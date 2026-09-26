@@ -9,15 +9,6 @@ cme_options(googletest-modules
   "BUILD_GMOCK OFF" "INSTALL_GTEST OFF" "gtest_build_modules ON"
   "gtest_build_tests OFF" "gtest_build_samples OFF")
 cme_find_package(GTest REQUIRED)
-# googletest-modules builds itself as C++23, and everything else here is
-# C++26 with the same flags -- so its interfaces were the one thing compiled
-# against another std, and every test importing them found std two ways.
-# Built as C++26 like the rest, there is one.
-foreach(one IN ITEMS gtest gtest_main)
-  if(TARGET ${one})
-    set_target_properties(${one} PROPERTIES CXX_STANDARD 26)
-  endif()
-endforeach()
 if(TARGET GTest::gtest_main)
   set(mux_gtest GTest::gtest_main)
 else()
@@ -30,7 +21,8 @@ target_sources(mux_test_certificate
   PUBLIC FILE_SET CXX_MODULES BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR} FILES certificate.cc)
 target_link_libraries(mux_test_certificate PUBLIC OpenSSL::SSL OpenSSL::Crypto)
 target_compile_options(mux_test_certificate PUBLIC
-  $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=${MUX_CONSTEXPR_STEPS}>)
+  $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=${MUX_CONSTEXPR_STEPS}>
+  $<$<AND:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,23>>:-fno-experimental-new-constant-interpreter>)
 
 foreach(one IN ITEMS core net xmpp matrix)
   add_executable(mux-${one}-test ${one}_test.cc)

@@ -579,7 +579,17 @@ struct app {
     const auto& chosen = root().main().chosen;
     if (!chosen)
       return;
-    std::visit(mux::overloaded{[this](mux::protocol::xmpp) { root().show_notice("Leaving XMPP chats"); },
+    const mux::conversation* one = model->find(*chosen);
+    const bool room = one && mux::ui::is_group(*one);
+    std::visit(mux::overloaded{[&](mux::protocol::xmpp) {
+                                 if (!room) {
+                                   root().show_notice("Leaving a direct XMPP chat");
+                                   return;
+                                 }
+                                 if (!ask.demo)
+                                   net->leave(*chosen);
+                                 root().main().info_open = false;
+                               },
                                [&](mux::protocol::matrix) {
                                  if (!ask.demo)
                                    net->leave(*chosen);

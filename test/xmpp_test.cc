@@ -28,6 +28,16 @@ const std::string script =
     "<iq type='result' id='tern-1'><query xmlns='jabber:iq:roster'>"
     "<item jid='nurse@example.com' subscription='both' name='Nurse'/>"
     "<item jid='romeo@example.net' subscription='both'/></query></iq>"
+    "<iq type='result' id='tern-2'><pubsub xmlns='http://jabber.org/protocol/pubsub'>"
+    "<items node='urn:xmpp:bookmarks:1'><item id='balcony@rooms.example.com'>"
+    "<conference xmlns='urn:xmpp:bookmarks:1' name='The Balcony' autojoin='true'><nick>user</nick></conference>"
+    "</item></items></pubsub></iq>"
+    "<presence from='balcony@rooms.example.com/juliet'><x xmlns='http://jabber.org/protocol/muc#user'>"
+    "<item affiliation='owner' role='moderator'/></x></presence>"
+    "<presence from='balcony@rooms.example.com/user'><x xmlns='http://jabber.org/protocol/muc#user'>"
+    "<item affiliation='member' role='participant'/><status code='110'/></x></presence>"
+    "<message from='balcony@rooms.example.com/juliet' type='groupchat' id='g1'>"
+    "<body>Wherefore art thou?</body></message>"
     "<message from='romeo@example.net/orchard' to='user@example.com/mux' type='chat' id='m1'>"
     "<body>Shall I hear more?</body>"
     "<delay xmlns='urn:xmpp:delay' stamp='2026-09-26T17:00:00Z'/></message>"
@@ -90,6 +100,22 @@ TEST(Xmpp, AScriptedSession) {
   ASSERT_TRUE(kept.presences.contains("romeo@example.net"));
   EXPECT_EQ(kept.presences.at("romeo@example.net").state, mux::availability_t{mux::availability::away{}});
   EXPECT_EQ(kept.presences.at("romeo@example.net").status, "below the balcony");
+  // The room bookmarked: in the list, joined, its occupants its members,
+  // and Juliet's message in it, from her.
+  const mux::conversation* balcony = model.find({me, "balcony@rooms.example.com"});
+  ASSERT_NE(balcony, nullptr);
+  EXPECT_EQ(balcony->name, "The Balcony");
+  ASSERT_EQ(balcony->members.size(), 2u);
+  EXPECT_EQ(balcony->members[0].name, "juliet");
+  EXPECT_EQ(balcony->members[0].role, "owner");
+  EXPECT_EQ(balcony->members[1].name, "user");
+  ASSERT_EQ(balcony->timeline.size(), 1u);
+  EXPECT_EQ(balcony->timeline[0].sender, "balcony@rooms.example.com/juliet");
+  EXPECT_EQ(balcony->timeline[0].body.plain, "Wherefore art thou?");
+  EXPECT_FALSE(balcony->timeline[0].outgoing);
+  EXPECT_NE(heard.find("urn:xmpp:bookmarks:1"), std::string::npos) << heard;
+  EXPECT_NE(heard.find("http://jabber.org/protocol/muc"), std::string::npos) << heard;
+  EXPECT_NE(heard.find("balcony@rooms.example.com/user"), std::string::npos) << heard;
   // What the client said: PLAIN, the roster asked for, the push answered,
   // presence.
   EXPECT_NE(heard.find("mechanism='PLAIN'"), std::string::npos) << heard;

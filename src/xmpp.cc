@@ -28,8 +28,17 @@ struct settings {
   bool plain_without_tls = false;
 };
 
+// The protocol spoken: the standard one, rooms (XEP-0045), bookmarks
+// (XEP-0402) and chat markers (XEP-0333).
+using proto = tern::client;
+
 // A JID's bare part: what a conversation is kept under.
 inline std::string bare(std::string_view jid) { return std::string(jid.substr(0, jid.find('/'))); }
+// A JID's resource: in a room, the occupant's nick.
+inline std::string resource_of(std::string_view jid) {
+  const auto slash = jid.find('/');
+  return slash == std::string_view::npos ? std::string() : std::string(jid.substr(slash + 1));
+}
 
 inline availability_t availability_of(const std::optional<std::string>& show) {
   if (!show)
@@ -132,7 +141,7 @@ inline std::optional<std::chrono::sys_time<std::chrono::milliseconds>> stamp_of(
 template <class Sink>
 class account {
  public:
-  using session_type = decltype(tern::connect(std::declval<net::stream&>(), std::declval<const tern::options&>(),
+  using session_type = decltype(tern::connect<proto>(std::declval<net::stream&>(), std::declval<const tern::options&>(),
                                               tern::answering<>{}, net::scheduler{}));
 
   account(net::loop& loop, net::tls& tls, settings how, Sink sink)
@@ -155,10 +164,36 @@ class account {
   // A chat message sent: from any fiber, or posted to the loop from another
   // thread. What was sent is said as a change at once, and marked sent once
   // it has gone out.
-  // Not yet for XMPP: chat markers (XEP-0333), and leaving rooms, which
-  // come with rooms (XEP-0045).
-  void mark_read(std::string, std::string) {}
-  void leave(std::string) {}
+  // A displayed marker (XEP-0333) for a message: its sender, or the room,
+  // sees it was read.
+  void mark_read(std::string to, std::string id) {
+    loop_->spawn([this, to = std::move(to), id = std::move(id)] {
+      if (!session_)
+        return;
+      if (rooms_.contains(to)) {
+        proto::message::groupchat marker{.to = to};
+        marker.payload.emplace_back(tern::markers::displayed{.id = id});
+        session_->send(marker);
+      } else {
+        proto::message::chat marker{.to = to};
+        marker.payload.emplace_back(tern::markers::displayed{.id = id});
+        session_->send(marker);
+      }
+    });
+  }
+
+  // A room left: unavailable to it, and the conversation gone.
+  void leave(std::string room) {
+    loop_->spawn([this, room = std::move(room)] {
+      const auto found = rooms_.find(room);
+      if (found == rooms_.end())
+        return;
+      if (session_)
+        session_->send(proto::presence::unavailable{.to = room + "/" + found->second.nick});
+      rooms_.erase(found);
+      sink_(change::conversation_removed{{id_, room}});
+    });
+  }
 
   void send(std::string to, std::string text) {
     loop_->spawn([this, to = bare(to), text = std::move(text)] {
@@ -174,7 +209,10 @@ class account {
         sink_(change::delivery_changed{out.in, out.id, delivery::failed{}});
         return;
       }
-      session_->send(tern::message::chat{.to = to, .id = out.id, .body = text});
+      if (rooms_.contains(to))
+        session_->send(proto::message::groupchat{.to = to, .id = out.id, .body = text});
+      else
+        session_->send(proto::message::chat{.to = to, .id = out.id, .body = text});
       sink_(change::delivery_changed{out.in, out.id, wire_ && !wire_->failed() ? delivery_t{delivery::sent{}} : delivery_t{delivery::failed{}}});
     });
   }
@@ -222,7 +260,7 @@ class account {
     options.plain_without_tls = how_.plain_without_tls;
     options.self = {.identities = {{.category = "client", .type = "pc", .name = "mux"}}};
     options.caps_node = "https://github.com/j4niwzis/mux";
-    auto made = tern::try_connect(wire, options, tern::answering<>{}, net::scheduler{loop_});
+    auto made = tern::try_connect<proto>(wire, options, tern::answering<>{}, net::scheduler{loop_});
     if (!made) {
       wire_ = nullptr;
       say(connection::failed{made.error().detail.empty() ? "the connection failed" : made.error().detail});
@@ -239,6 +277,11 @@ class account {
       for (const auto& [jid, item] : roster_.items)
         contact(item);
     session.available();
+    // The rooms kept as bookmarks, and those to join joined.
+    if (auto marks = session.template try_request<tern::query::bookmarks>(); marks && marks->items)
+      for (const auto& one : marks->items->items)
+        if (one.conference)
+          this->bookmarked(one.id, *one.conference);
 
     for (;;) {
       auto one = inbox.try_next();
@@ -257,20 +300,35 @@ class account {
       say(connection::offline{});
   }
 
+  // A room, as its bookmark says: in the list, and joined where it says to.
+  void bookmarked(const std::string& jid, const tern::bookmarks::conference& mark) {
+    sink_(change::conversation_updated{.id = {id_, jid},
+                                       .kind = conversation_kind::group{},
+                                       .name = mark.name.value_or(jid)});
+    if (tern::bookmarks::autojoins(mark))
+      this->join(jid, mark.nick.value_or(user_));
+  }
+  void join(const std::string& jid, const std::string& nick) {
+    rooms_[jid].nick = nick;
+    proto::presence::available joining{.to = jid + "/" + nick};
+    joining.payload.emplace_back(tern::muc::join{.history = tern::muc::history{.maxstanzas = "50"}});
+    session_->send(joining);
+  }
+
   void contact(const tern::roster_item& item) {
     sink_(change::conversation_updated{.id = {id_, item.jid},
                                        .kind = conversation_kind::direct{},
                                        .name = item.name.value_or(item.jid)});
   }
 
-  void on(const tern::stanza_t& one) {
-    if (const auto* message = std::get_if<tern::message_t>(&one)) {
+  void on(const proto::stanza_t& one) {
+    if (const auto* message = std::get_if<proto::message_t>(&one)) {
       std::visit([this](const auto& got) { on_message(got); }, *message);
-    } else if (const auto* presence = std::get_if<tern::presence_t>(&one)) {
+    } else if (const auto* presence = std::get_if<proto::presence_t>(&one)) {
       std::visit([this](const auto& got) { on_presence(got); }, *presence);
-    } else if (const auto* iq = std::get_if<tern::iq_t>(&one)) {
+    } else if (const auto* iq = std::get_if<proto::iq_t>(&one)) {
       // A roster push, handed out once tern has answered it.
-      if (const auto* set = std::get_if<tern::iq::set>(iq))
+      if (const auto* set = std::get_if<proto::iq::set>(iq))
         if (roster_.apply(*set))
           for (const auto& [jid, item] : roster_.items)
             contact(item);
@@ -279,8 +337,30 @@ class account {
 
   // A chat or a normal message with a body is a message; anything else is
   // not the conversation's.
-  void on_message(const tern::message::chat& got) { this->text_message(got); }
-  void on_message(const tern::message::normal& got) { this->text_message(got); }
+  void on_message(const proto::message::chat& got) { this->text_message(got); }
+  void on_message(const proto::message::normal& got) { this->text_message(got); }
+  // A room's message: the room is the conversation, the occupant the sender,
+  // and one's own nick says it was sent from here -- the room's echo of it.
+  void on_message(const proto::message::groupchat& got) {
+    if (!got.body || !got.from)
+      return;
+    const std::string room = bare(*got.from);
+    const auto found = rooms_.find(room);
+    if (found == rooms_.end())
+      return;
+    const std::string nick = resource_of(*got.from);
+    message in{.in = {id_, room},
+               .id = got.id.value_or(""),
+               .sender = *got.from,
+               .at = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()),
+               .body = {*got.body, std::nullopt},
+               .outgoing = nick == found->second.nick};
+    for (const auto& carried : got.payload)
+      if (const auto* delayed = carried.template get_if<tern::delay>())
+        if (const auto at = stamp_of(delayed->stamp))
+          in.at = *at;
+    sink_(change::message_added{std::move(in)});
+  }
   template <class Other>
   void on_message(const Other&) {}
 
@@ -301,13 +381,51 @@ class account {
     sink_(change::message_added{std::move(in)});
   }
 
-  void on_presence(const tern::presence::available& got) {
-    if (got.from)
-      sink_(change::presence_changed{id_, bare(*got.from), {availability_of(got.show), got.status}});
+  void on_presence(const proto::presence::available& got) {
+    if (!got.from)
+      return;
+    if (this->occupant(got, true, availability_of(got.show)))
+      return;
+    sink_(change::presence_changed{id_, bare(*got.from), {availability_of(got.show), got.status}});
   }
-  void on_presence(const tern::presence::unavailable& got) {
-    if (got.from)
-      sink_(change::presence_changed{id_, bare(*got.from), {availability::offline{}, got.status}});
+  void on_presence(const proto::presence::unavailable& got) {
+    if (!got.from)
+      return;
+    if (this->occupant(got, false, availability::offline{}))
+      return;
+    sink_(change::presence_changed{id_, bare(*got.from), {availability::offline{}, got.status}});
+  }
+
+  // A room's occupant come or gone: its members, and how the occupant is,
+  // told. False where the presence is not a room's.
+  template <class Presence>
+  bool occupant(const Presence& got, bool here, availability_t state) {
+    const std::string room = bare(*got.from);
+    const auto found = rooms_.find(room);
+    if (found == rooms_.end())
+      return false;
+    const std::string nick = resource_of(*got.from);
+    auto& occupants = found->second.occupants;
+    if (here) {
+      member one{.id = *got.from, .name = nick};
+      for (const auto& carried : got.payload)
+        if (const auto* user = carried.template get_if<tern::muc::user>())
+          for (const auto& item : user->items) {
+            if (item.affiliation == "owner" || item.affiliation == "admin")
+              one.role = item.affiliation;
+            else if (item.role == "moderator")
+              one.role = item.role;
+          }
+      occupants[nick] = std::move(one);
+    } else {
+      occupants.erase(nick);
+    }
+    std::vector<member> who;
+    for (const auto& [name, one] : occupants)
+      who.push_back(one);
+    sink_(change::members_changed{{id_, room}, std::move(who)});
+    sink_(change::presence_changed{id_, *got.from, {std::move(state), got.status}});
+    return true;
   }
   template <class Other>
   void on_presence(const Other&) {}
@@ -319,6 +437,12 @@ class account {
   std::string user_, domain_;
   account_id id_;
   tern::roster_cache roster_;
+  // The rooms joined, by their JIDs: one's nick in each, and who is there.
+  struct room {
+    std::string nick;
+    std::map<std::string, member> occupants;
+  };
+  std::map<std::string, room> rooms_;
   session_type* session_ = nullptr;
   net::stream* wire_ = nullptr;
   std::uint64_t sent_ = 0;

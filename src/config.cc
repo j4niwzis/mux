@@ -46,6 +46,9 @@ using account_t = std::variant<xmpp_account, matrix_account>;
 struct file {
   std::vector<xmpp_account> xmpp;
   std::vector<matrix_account> matrix;
+  // How much the window moves: "none", "reduced" (sections unfold, panels
+  // just appear) or "full". Nothing said is full.
+  std::optional<std::string> motion;
   friend bool operator==(const file&, const file&) = default;
 };
 

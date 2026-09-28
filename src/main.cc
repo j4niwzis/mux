@@ -9,7 +9,7 @@
 //                         MUX_PASSWORD: user@domain for XMPP, @user:server for
 //                         Matrix
 //
-// With no accounts at all it opens on the choice of protocol for a new one.
+// With no accounts at all it opens all the same, and says how to add one.
 import std;
 import mux.core;
 import mux.config;
@@ -18,6 +18,7 @@ import mux.xmpp;
 import mux.matrix;
 import mux.host;
 import mux.ui;
+import skiff.paint;
 import skiff.scene;
 
 namespace {
@@ -138,32 +139,29 @@ namespace request {
 struct choose {
   mux::conversation_id which;
 };
+struct back {};
 struct open_accounts {};
 struct open_new_account {};
 struct add_xmpp {};
 struct add_matrix {};
-struct edit_account {
+struct select_account {
   std::string address;
 };
 struct toggle_advanced {};
 struct toggle_plain {};
 struct submit_login {};
-struct cancel_login {};
-struct set_enabled {
+struct flip_enabled {
   std::string address;
-  bool enabled = true;
 };
 struct remove_account {
   std::string address;
 };
-struct back {};
 }  // namespace request
 
 using request_t =
-    std::variant<request::choose, request::open_accounts, request::open_new_account, request::add_xmpp,
-                 request::add_matrix, request::edit_account, request::toggle_advanced, request::toggle_plain,
-                 request::submit_login, request::cancel_login, request::set_enabled, request::remove_account,
-                 request::back>;
+    std::variant<request::choose, request::back, request::open_accounts, request::open_new_account,
+                 request::add_xmpp, request::add_matrix, request::select_account, request::toggle_advanced,
+                 request::toggle_plain, request::submit_login, request::flip_enabled, request::remove_account>;
 
 // What the screens ask: each a request, kept until the program applies it
 // between events -- except a message, which goes to the network at once.
@@ -173,41 +171,52 @@ struct actions {
 
   void choose(const mux::conversation_id& which) { requests.emplace_back(request::choose{which}); }
   void send(const mux::conversation_id& to, std::string text) { net->send(to, std::move(text)); }
+  void back() { requests.emplace_back(request::back{}); }
   void open_accounts() { requests.emplace_back(request::open_accounts{}); }
   void open_new_account() { requests.emplace_back(request::open_new_account{}); }
   void add_xmpp() { requests.emplace_back(request::add_xmpp{}); }
   void add_matrix() { requests.emplace_back(request::add_matrix{}); }
-  void edit_account(std::string address) { requests.emplace_back(request::edit_account{std::move(address)}); }
+  void select_account(std::string address) { requests.emplace_back(request::select_account{std::move(address)}); }
   void toggle_advanced() { requests.emplace_back(request::toggle_advanced{}); }
   void toggle_plain() { requests.emplace_back(request::toggle_plain{}); }
   void submit_login() { requests.emplace_back(request::submit_login{}); }
-  void cancel_login() { requests.emplace_back(request::cancel_login{}); }
-  void set_enabled(std::string address, bool enabled) {
-    requests.emplace_back(request::set_enabled{std::move(address), enabled});
-  }
+  void flip_enabled(std::string address) { requests.emplace_back(request::flip_enabled{std::move(address)}); }
   void remove_account(std::string address) { requests.emplace_back(request::remove_account{std::move(address)}); }
-  void back() { requests.emplace_back(request::back{}); }
 };
 
 using window_type = mux::ui::window<actions>;
 
+// How much moves, as the accounts file says: "none", "reduced" or "full"
+// (and full where it says nothing, or what it says is none of these).
+skiff::paint::Motion motion_of(const std::optional<std::string>& said) {
+  if (!said || *said == "full")
+    return skiff::paint::motion::full{};
+  if (*said == "reduced")
+    return skiff::paint::motion::reduced{};
+  if (*said == "none")
+    return skiff::paint::motion::none{};
+  std::println(std::cerr, "[mux] motion is \"none\", \"reduced\" or \"full\", not \"{}\": full it is", *said);
+  return skiff::paint::motion::full{};
+}
+
 // What the program does to the window between events.
 struct app {
-  using conversations = mux::ui::conversations_screen<actions>;
-  using choice = mux::ui::protocol_choice<actions>;
-  using xmpp_login = mux::ui::xmpp_login<actions>;
-  using matrix_login = mux::ui::matrix_login<actions>;
-  using accounts = mux::ui::accounts_screen<actions>;
+  using adding = mux::ui::add_account_panel<actions>;
+  using accounts = mux::ui::accounts_panel<actions>;
+  using xmpp_form = mux::ui::xmpp_form<actions>;
+  using matrix_form = mux::ui::matrix_form<actions>;
 
   mailbox_type* box = nullptr;
   mux::model* model = nullptr;
   network* net = nullptr;
   std::filesystem::path config_path;
   std::vector<mux::config::account_t> saved;
+  // How much moves, as read, to be written back as it was.
+  std::optional<std::string> motion;
   // Why the accounts file could not be read, when it could not: then it is
   // not written over either.
   std::optional<std::string> config_error;
-  // The account a login is waiting to hear about.
+  // The account being added that a login is waiting to hear about.
   std::optional<std::string> pending_login;
   actions ask;
   skiff::scene::Scene<window_type> scene{std::in_place, &ask};
@@ -225,6 +234,7 @@ struct app {
   }
 
   void before_frame() {
+    root().drop_closed();
     auto pending = std::exchange(ask.requests, {});
     for (const request_t& one : pending)
       std::visit([this](const auto& each) { this->apply(each); }, one);
@@ -232,44 +242,35 @@ struct app {
 
   void closing() { net->shutdown(); }
 
-  // -- the screens
-  auto& body() { return scene.root().body; }
+  // -- the window
+  window_type& root() { return scene.root(); }
 
   void show_conversations() {
-    body().emplace<conversations>(&ask);
+    pending_login.reset();
+    root().close();
     this->refresh();
   }
-  void show_accounts() {
-    body().emplace<accounts>(&ask);
+  accounts& show_accounts() {
+    pending_login.reset();
+    auto& panel = root().open<accounts>();
     if (config_error)
-      std::get<accounts>(body()).say(*config_error);
+      panel.say(*config_error);
     this->refresh();
+    return panel;
   }
-  void show_choice() {
-    pending_login.reset();
-    body().emplace<choice>(&ask, !saved.empty());
+  // The accounts, with this one's settings up beside them.
+  accounts& show_account(const std::string& address) {
+    auto& panel = this->show_accounts();
+    if (const auto found = this->find(address); found != saved.end()) {
+      panel.select(*found, *model);
+      panel.show(saved, *model);
+    }
+    return panel;
   }
-  void show_login(mux::protocol::xmpp) {
+  void show_adding() {
     pending_login.reset();
-    body().emplace<xmpp_login>(&ask, std::nullopt, true);
-  }
-  void show_login(mux::protocol::matrix) {
-    pending_login.reset();
-    body().emplace<matrix_login>(&ask, std::nullopt, true);
-  }
-  // An edit opens the screen of the account's own protocol.
-  void show_edit(const std::string& address) {
-    const auto found = this->find(address);
-    if (found == saved.end())
-      return;
-    pending_login.reset();
-    std::visit(mux::overloaded{[this](const mux::config::xmpp_account& one) {
-                                 body().emplace<xmpp_login>(&ask, one, true);
-                               },
-                               [this](const mux::config::matrix_account& one) {
-                                 body().emplace<matrix_login>(&ask, one, true);
-                               }},
-               *found);
+    root().open<adding>();
+    this->refresh();
   }
 
   std::vector<mux::config::account_t>::iterator find(std::string_view address) {
@@ -278,122 +279,164 @@ struct app {
     });
   }
 
-  // The current screen, brought up to date with the model: each by its own
+  // The panel that is up, if one is, and the XMPP form in it, if there is one.
+  [[nodiscard]] mux::ui::xmpp_form<actions>* xmpp_form_up() {
+    auto* up = root().open_panel();
+    if (!up)
+      return nullptr;
+    return std::visit([](auto& panel) { return panel.xmpp(); }, *up);
+  }
+
+  // Everything brought up to date with the model: each panel by its own
   // overload.
   void refresh() {
-    std::visit([this](auto& screen) { this->bring_up_to_date(screen); }, body());
+    root().bar.show(*model);
+    root().main().show(*model);
+    if (auto* up = root().open_panel())
+      std::visit([this](auto& panel) { this->bring_up_to_date(panel); }, *up);
   }
-  void bring_up_to_date(conversations& screen) { screen.show(*model); }
-  void bring_up_to_date(accounts& screen) { screen.show(saved, *model); }
-  void bring_up_to_date(choice&) {}
-  void bring_up_to_date(xmpp_login& screen) { this->watch_login(screen); }
-  void bring_up_to_date(matrix_login& screen) { this->watch_login(screen); }
+  void bring_up_to_date(accounts& panel) { panel.show(saved, *model); }
+  void bring_up_to_date(adding& panel) {
+    std::visit([this](auto& form) { this->watch_login(form); }, panel.form);
+  }
 
-  // A login waiting for its account: online is done, failed is said.
-  template <class Login>
-  void watch_login(Login& screen) {
+  // A new account waiting to log in: online is done, failed is said.
+  template <class Form>
+  void watch_login(Form& form) {
     if (!pending_login)
       return;
     const auto found = model->accounts().find(mux::account_id{mux::ui::protocol_of(*pending_login), *pending_login});
     if (found == model->accounts().end())
       return;
-    std::visit(mux::overloaded{[&](const mux::connection::online&) {
-                                 pending_login.reset();
-                                 this->show_conversations();
-                               },
+    std::visit(mux::overloaded{[&](const mux::connection::online&) { this->show_conversations(); },
                                [&](const mux::connection::failed& why) {
-                                 screen.say(why.error.empty() ? "The server said no." : why.error, true);
+                                 form.say(why.error.empty() ? "The server said no." : why.error, true);
                                  pending_login.reset();
                                },
-                               [&](const auto&) { screen.say("Connecting…", false); }},
+                               [&](const auto&) { form.say("Connecting…", false); }},
                found->second.state);
   }
 
   void apply(const request::choose& one) {
-    if (auto* screen = std::get_if<conversations>(&body())) {
-      screen->chosen = one.which;
-      screen->show(*model);
-    }
+    root().main().chosen = one.which;
+    root().main().show(*model);
   }
-  void apply(const request::open_accounts&) { this->show_accounts(); }
-  void apply(const request::open_new_account&) { this->show_choice(); }
-  void apply(const request::add_xmpp&) { this->show_login(mux::protocol::xmpp{}); }
-  void apply(const request::add_matrix&) { this->show_login(mux::protocol::matrix{}); }
-  void apply(const request::edit_account& one) { this->show_edit(one.address); }
+  void apply(const request::back&) { this->show_conversations(); }
+  void apply(const request::open_accounts&) { (void)this->show_accounts(); }
+  void apply(const request::open_new_account&) { this->show_adding(); }
+  void apply(const request::add_xmpp&) { this->switch_form(&adding::show_xmpp); }
+  void apply(const request::add_matrix&) { this->switch_form(&adding::show_matrix); }
+  void apply(const request::select_account& one) {
+    auto* up = root().open_panel();
+    if (!up)
+      return;
+    std::visit(mux::overloaded{[&](accounts& panel) {
+                                 if (const auto found = this->find(one.address); found != saved.end()) {
+                                   panel.select(*found, *model);
+                                   panel.show(saved, *model);
+                                 }
+                               },
+                               [](adding&) {}},
+               *up);
+  }
   void apply(const request::toggle_advanced&) {
-    std::visit(mux::overloaded{[](xmpp_login& screen) { screen.show_advanced(!screen.advanced); }, [](auto&) {}},
-               body());
+    if (auto* form = this->xmpp_form_up())
+      form->show_advanced(!form->advanced);
   }
   void apply(const request::toggle_plain&) {
-    std::visit(mux::overloaded{[](xmpp_login& screen) { screen.flip_plain(); }, [](auto&) {}}, body());
+    if (auto* form = this->xmpp_form_up())
+      form->flip_plain();
   }
   void apply(const request::submit_login&) {
-    std::visit(mux::overloaded{[this](xmpp_login& screen) { this->log_in(screen); },
-                               [this](matrix_login& screen) { this->log_in(screen); }, [](auto&) {}},
-               body());
+    auto* up = root().open_panel();
+    if (!up)
+      return;
+    std::visit(mux::overloaded{[this](adding& panel) {
+                                 std::visit([this](auto& form) { this->add(form); }, panel.form);
+                               },
+                               [this](accounts& panel) {
+                                 if (auto* editor = panel.editor())
+                                   std::visit([this](auto& form) { this->edit(form); }, editor->form);
+                               }},
+               *up);
   }
-  // Back from a login: to the accounts after an edit, to the choice of
-  // protocol when adding.
-  void apply(const request::cancel_login&) {
-    std::visit(mux::overloaded{[this](xmpp_login& screen) { this->leave(screen); },
-                               [this](matrix_login& screen) { this->leave(screen); }, [](auto&) {}},
-               body());
-  }
-  void apply(const request::set_enabled& one) { this->set_enabled(one.address, one.enabled); }
+  void apply(const request::flip_enabled& one) { this->flip_enabled(one.address); }
   void apply(const request::remove_account& one) { this->remove(one.address); }
-  void apply(const request::back&) { this->show_conversations(); }
 
-  template <class Login>
-  void leave(const Login& screen) {
-    if (screen.editing)
-      this->show_accounts();
-    else
-      this->show_choice();
+  void switch_form(void (adding::*to)()) {
+    auto* up = root().open_panel();
+    if (!up)
+      return;
+    pending_login.reset();
+    std::visit(mux::overloaded{[to](adding& panel) { (panel.*to)(); }, [](accounts&) {}}, *up);
   }
 
-  template <class Login>
-  void log_in(Login& screen) {
-    auto typed = screen.account();
+  // A new account: saved, and started; the panel waits to hear how it went.
+  template <class Form>
+  void add(Form& form) {
+    auto typed = form.account();
     if (!typed) {
-      screen.say(typed.error(), true);
+      form.say(typed.error(), true);
       return;
     }
-    mux::config::account_t account{std::move(*typed)};
+    const mux::config::account_t account{std::move(*typed)};
     const std::string address = mux::config::address_of(account);
-    if (this->find(address) != saved.end() && (!screen.editing || *screen.editing != address)) {
-      screen.say("That account is already here.", true);
+    if (this->find(address) != saved.end()) {
+      form.say("That account is already here.", true);
       return;
-    }
-    // An edit replaces the account it was of: the old one stops first, and
-    // the new one is on or off as the old one was.
-    if (screen.editing) {
-      if (const auto old = this->find(*screen.editing); old != saved.end())
-        mux::config::enabled_of(account) = mux::config::enabled_of(*old);
-      std::erase_if(saved, [&](const auto& one) { return mux::config::address_of(one) == *screen.editing; });
-      net->remove(*screen.editing);
     }
     saved.push_back(account);
-    if (!this->save(screen))
-      return;
-    if (!mux::config::enabled_of(account)) {
-      this->show_accounts();
+    if (auto failed = this->write()) {
+      form.say(*failed, true);
       return;
     }
     net->add(account);
     pending_login = address;
-    screen.say("Connecting…", false);
+    form.say("Connecting…", false);
   }
 
-  void set_enabled(const std::string& address, bool enabled) {
-    const auto found = this->find(address);
-    if (found == saved.end() || mux::config::enabled_of(*found) == enabled)
+  // An account's settings changed: the old one stops, and the new one, on
+  // or off as the old one was, takes its place in the list.
+  template <class Form>
+  void edit(Form& form) {
+    auto typed = form.account();
+    if (!typed) {
+      form.say(typed.error(), true);
       return;
-    mux::config::enabled_of(*found) = enabled;
+    }
+    mux::config::account_t account{std::move(*typed)};
+    const std::string address = mux::config::address_of(account);
+    const std::string was = form.editing.value_or(address);
+    const auto old = this->find(was);
+    if (old == saved.end())
+      return;
+    if (address != was && this->find(address) != saved.end()) {
+      form.say("That account is already here.", true);
+      return;
+    }
+    mux::config::enabled_of(account) = mux::config::enabled_of(*old);
+    *old = account;
+    const auto failed = this->write();
+    net->remove(was);
+    if (mux::config::enabled_of(account))
+      net->add(account);
+    // The form is rebuilt from what was saved: `form` is gone after this.
+    auto& panel = this->show_account(address);
+    if (auto* editor = panel.editor())
+      editor->say(failed ? *failed : std::string("Saved."), failed.has_value());
+  }
+
+  void flip_enabled(const std::string& address) {
+    const auto found = this->find(address);
+    if (found == saved.end())
+      return;
+    bool& enabled = mux::config::enabled_of(*found);
+    enabled = !enabled;
     if (enabled)
       net->add(*found);
     else
       net->remove(address);
-    (void)this->save_from_accounts();
+    this->save_from_accounts();
     this->refresh();
   }
 
@@ -401,7 +444,7 @@ struct app {
     if (std::erase_if(saved, [&](const auto& one) { return mux::config::address_of(one) == address; }) == 0)
       return;
     net->remove(address);
-    (void)this->save_from_accounts();
+    this->save_from_accounts();
     this->refresh();
   }
 
@@ -410,25 +453,16 @@ struct app {
   [[nodiscard]] std::optional<std::string> write() {
     if (config_error)
       return "Not saved: " + *config_error;
-    if (auto done = mux::config::save(config_path, mux::config::file_of(saved)); !done)
+    auto file = mux::config::file_of(saved);
+    file.motion = motion;
+    if (auto done = mux::config::save(config_path, file); !done)
       return "Not saved: " + done.error();
     return std::nullopt;
   }
-  template <class Login>
-  bool save(Login& screen) {
-    if (auto failed = this->write()) {
-      screen.say(*failed, true);
-      return false;
-    }
-    return true;
-  }
-  bool save_from_accounts() {
-    if (auto failed = this->write()) {
-      if (auto* screen = std::get_if<accounts>(&body()))
-        screen->say(*failed);
-      return false;
-    }
-    return true;
+  void save_from_accounts() {
+    if (auto failed = this->write())
+      if (auto* up = root().open_panel())
+        std::visit(mux::overloaded{[&](accounts& panel) { panel.say(*failed); }, [](adding&) {}}, *up);
   }
 };
 
@@ -482,11 +516,10 @@ int main(int argc, char** argv) {
   program.ask.net = &net;
   program.config_path = config_path;
   program.saved = mux::config::accounts_of(saved);
+  program.motion = saved.motion;
+  skiff::paint::motionLevel() = motion_of(saved.motion);
   program.config_error = std::move(config_error);
-  if (program.saved.empty() && extra.empty())
-    program.show_choice();
-  else
-    program.show_conversations();
+  program.refresh();
 
   const int code = mux::host::run(program, {});
   net.thread.join();

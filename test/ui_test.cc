@@ -47,6 +47,10 @@ struct stub {
   void not_implemented(std::string) {}
   void close_notice() {}
   void resize_info(float) {}
+  void toggle_mute() {}
+  void close_account_pages() {}
+  void settings_privacy() {}
+  void flip_read_receipts() {}
 };
 
 TEST(Composer, TakesWhatIsTypedIntoIt) {

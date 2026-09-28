@@ -59,6 +59,9 @@ inline const skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110)
 //   void show_account(std::string address)  -- its settings, from the drawer
 //   void set_motion(std::string level)       -- "full", "reduced" or "none"
 //   void quit()
+//   void toggle_mute()               -- the chosen chat muted, or not
+//   void close_account_pages()       -- back to the list of accounts
+//   void settings_privacy(), flip_read_receipts()
 //   void not_implemented(std::string what)  -- a box saying it is not there yet
 //   void close_notice()
 //   void resize_sidebar(float x)     -- the chat list's edge dragged to x
@@ -135,10 +138,11 @@ struct leave {};
 struct check {};
 struct clip {};
 struct send {};
+struct eye {};
 }  // namespace icon
 using icon_t = std::variant<icon::none, icon::person, icon::gear, icon::power, icon::plus, icon::motion, icon::back,
                             icon::close, icon::info, icon::people, icon::add_person, icon::bell, icon::sliders,
-                            icon::leave, icon::check, icon::clip, icon::send>;
+                            icon::leave, icon::check, icon::clip, icon::send, icon::eye>;
 
 [[nodiscard]] inline skia::SkPaint pen(skia::SkColor colour, float alpha, float width = 1.8f) {
   skia::SkPaint out;
@@ -285,6 +289,13 @@ inline void draw_icon(skia::SkCanvas* canvas, icon::send, const skia::SkRect& bo
   plane.lineTo(x - 7.0f, y - 1.5f);
   plane.close();
   canvas->drawPath(plane.detach(), fill);
+}
+inline void draw_icon(skia::SkCanvas* canvas, icon::eye, const skia::SkRect& box, skia::SkColor colour, float alpha) {
+  const auto p = pen(colour, alpha, 1.7f);
+  const float x = box.centerX(), y = box.centerY();
+  canvas->drawArc(skia::SkRect::MakeLTRB(x - 10.0f, y - 7.0f, x + 10.0f, y + 11.0f), 200.0f, 140.0f, false, p);
+  canvas->drawArc(skia::SkRect::MakeLTRB(x - 10.0f, y - 11.0f, x + 10.0f, y + 7.0f), 20.0f, 140.0f, false, p);
+  canvas->drawCircle(x, y, 3.0f, p);
 }
 inline void draw_icon(skia::SkCanvas* canvas, const icon_t& which, const skia::SkRect& box, skia::SkColor colour,
                       float alpha) {
@@ -570,6 +581,11 @@ struct menu_button : scene::Node {
 
 // ---- the conversations ------------------------------------------------------
 
+// A control that does nothing when pressed: the page already up.
+struct nothing {
+  void operator()() const {}
+};
+
 // A control whose action is still to come: it says so.
 template <class Actions>
 struct not_yet {
@@ -645,8 +661,10 @@ struct conversation_row : scene::Node {
   static constexpr float kHeight = 62.0f;
   static constexpr float kTextLeft = 68.0f;
 
-  conversation_row(Actions* a, const conversation& one, bool is_chosen)
-      : actions(a), id(one.id), chosen(is_chosen), unread(one.unread),
+  bool muted = false;
+
+  conversation_row(Actions* a, const conversation& one, bool is_chosen, bool is_muted)
+      : actions(a), id(one.id), chosen(is_chosen), unread(one.unread), muted(is_muted),
         name(display_name(one), 14.0f, text_colour, true), time("", 12.0f, is_chosen ? text_colour : dim_colour),
         preview("", 13.0f, is_chosen ? text_colour : dim_colour) {
     fState.apply({.fillX = true, .height = kHeight});
@@ -706,7 +724,8 @@ struct conversation_row : scene::Node {
                 name.text(), alpha);
     if (const float badge = this->badge_width(); badge > 0.0f) {
       const skia::SkRect pill = skia::SkRect::MakeXYWH(box.fRight - 12.0f - badge, box.fTop + 33.0f, badge, 21.0f);
-      p.fillRounded(pill, 10.5f, chosen ? text_colour : accent_colour, alpha);
+      p.fillRounded(pill, 10.5f, chosen ? text_colour : muted ? skia::colorSetARGB(255, 90, 98, 106) : accent_colour,
+                    alpha);
       const std::string count = std::to_string(unread);
       p.textIn(pill, count, 12.0f, chosen ? selected_colour : background, alpha, true,
                (badge - p.measure(count, 12.0f, true)) * 0.5f);
@@ -1063,7 +1082,7 @@ struct info_panel : scene::Node {
   icon_button<ask<Actions, &Actions::toggle_info>> close;
   nodes::Text name{"", 17.0f, text_colour, true};
   nodes::Text status{"", 13.0f, dim_colour};
-  action_tile<not_yet<Actions>> mute;
+  action_tile<ask<Actions, &Actions::toggle_mute>> mute;
   action_tile<not_yet<Actions>> manage;
   action_tile<not_yet<Actions>> leave;
   nodes::Text id_text{"", 14.0f, accent_colour};
@@ -1078,7 +1097,7 @@ struct info_panel : scene::Node {
 
   explicit info_panel(Actions* a)
       : close(icon::close{}, {a}),
-        mute("Mute", icon::bell{}, {a, "Muting a chat"}),
+        mute("Mute", icon::bell{}, {a}),
         manage("Manage", icon::sliders{}, {a, "Managing a chat"}),
         leave("Leave", icon::leave{}, {a, "Leaving a chat"}),
         add_member(icon::add_person{}, {a, "Adding members"}) {
@@ -1088,7 +1107,8 @@ struct info_panel : scene::Node {
     id_text.setElided(true);
   }
 
-  void show(const conversation& one, const model& now) {
+  void show(const conversation& one, const model& now, bool muted) {
+    mute.label.setText(muted ? "Unmute" : "Mute");
     key = one.id.id;
     group = is_group(one);
     name.setText(display_name(one));
@@ -1458,6 +1478,9 @@ struct conversations_screen : scene::Node {
 
   // The model as it is now: the current account's chats, newest first, and
   // the chosen one.
+  // The chats muted, as the program keeps them.
+  std::set<conversation_id> muted;
+
   void show(const model& now) {
     if (!current || !now.accounts().contains(*current))
       current = now.accounts().empty() ? std::nullopt : std::optional<account_id>(now.accounts().begin()->first);
@@ -1471,7 +1494,7 @@ struct conversations_screen : scene::Node {
       return one->timeline.empty() ? std::chrono::sys_time<std::chrono::milliseconds>{} : one->timeline.back().at;
     });
     for (const conversation* one : chats)
-      rows.emplace_back(actions, *one, chosen && *chosen == one->id);
+      rows.emplace_back(actions, *one, chosen && *chosen == one->id, muted.contains(one->id));
     const bool none = now.accounts().empty();
     for (scene::Node* shown : std::initializer_list<scene::Node*>{&header, &timeline, &line})
       shown->setVisible(!none);
@@ -1490,7 +1513,7 @@ struct conversations_screen : scene::Node {
     header.show(one, now);
     if (!one)
       return;
-    info.show(*one, now);
+    info.show(*one, now, muted.contains(one->id));
     const auto& all = one->timeline;
     for (std::size_t i = 0; i < all.size(); ++i) {
       const auto same = [&](std::size_t j) {
@@ -2058,8 +2081,32 @@ struct account_editor : scene::Node {
   }
 };
 
-// Opened from the top bar: the saved accounts down the side, and the chosen
-// one's settings beside them.
+// An account's pages, in place of the list of accounts once one is chosen:
+// its address with a way back to the list, and a line for each page of its
+// settings -- one for now, Connection.
+template <class Actions>
+struct account_pages : scene::Node {
+  page_header<ask<Actions, &Actions::close_account_pages>, ask<Actions, &Actions::close_account_pages>> header;
+  row_item<nothing> connection{"Connection", {}, icon::sliders{}};
+
+  explicit account_pages(Actions* a) : header("", {a}, {a}, true, false) {
+    fState.apply({.fill = true});
+    connection.set_lit(true);
+  }
+  void show(const std::string& address) { header.title.setText(address); }
+  void forEachChild(auto&& f) {
+    f(header);
+    f(connection);
+  }
+  void layoutChildren() {
+    column_stack stack{fState.contentBox()};
+    stack(header, 2.0f);
+    stack(connection, 0.0f);
+  }
+};
+
+// The saved accounts down the side, and the chosen one's settings beside
+// them.
 template <class Actions>
 struct accounts_panel : closes_on_escape<Actions> {
   static constexpr int kTab = 2;
@@ -2072,6 +2119,7 @@ struct accounts_panel : closes_on_escape<Actions> {
   nodes::ScrollContainer<nodes::Flow<std::vector<account_entry<Actions>>>> list{
       nodes::Flow<std::vector<account_entry<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
   row_item<ask<Actions, &Actions::open_new_account>> add;
+  account_pages<Actions> pages;
   nodes::Text message{"", 13.0f, error_colour};
   // No account chosen, or the chosen one.
   std::variant<nodes::Text, account_editor<Actions>, add_account_pane<Actions>> detail{
@@ -2091,7 +2139,9 @@ struct accounts_panel : closes_on_escape<Actions> {
   }
 
   explicit accounts_panel(Actions* a)
-      : closes_on_escape<Actions>(a), header("Accounts", {a}, {a}, true, false), add("Add account", {a}, icon::plus{}) {
+      : closes_on_escape<Actions>(a), header("Accounts", {a}, {a}, true, false), add("Add account", {a}, icon::plus{}),
+        pages(a) {
+    pages.setVisible(false);
     this->fState.apply({.fill = true});
     side.apply({.fill = true});
     std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -2103,6 +2153,7 @@ struct accounts_panel : closes_on_escape<Actions> {
     f(header);
     f(list);
     f(add);
+    f(pages);
     f(message);
     f(detail);
   }
@@ -2137,13 +2188,31 @@ struct accounts_panel : closes_on_escape<Actions> {
   void select(const config::account_t& one, const model& now) {
     add.set_lit(false);
     selected = config::address_of(one);
+    this->show_pages(true);
+    pages.show(*selected);
     detail.template emplace<1>(this->actions, one);
     this->begin_swap();
     std::get<1>(detail).show(one, now);
   }
 
   // Adding an account, beside the list.
+  // The account list, or the chosen account's pages, down the side.
+  void show_pages(bool shown) {
+    pages.setVisible(shown);
+    add.setVisible(!shown);
+    list.setVisible(!shown);
+    this->invalidateLayout();
+  }
+  // Back to the list of accounts, nothing chosen.
+  void close_pages() {
+    selected.reset();
+    this->show_pages(false);
+    detail.template emplace<0>("Choose an account.", 15.0f, dim_colour);
+    this->begin_swap();
+  }
+
   void show_adding() {
+    this->show_pages(false);
     selected.reset();
     add.set_lit(true);
     detail.template emplace<2>(this->actions);
@@ -2181,6 +2250,9 @@ struct accounts_panel : closes_on_escape<Actions> {
     const float list_width = std::min(kListWidth, box.width() * 0.45f);
     const skia::SkRect left = skia::SkRect::MakeLTRB(box.fLeft, box.fTop, box.fLeft + list_width, box.fBottom);
     scene::layout(side, left);
+    pages.apply({.width = left.width(), .height = left.height()});
+    pages.fState.arrange(0.0f, 0.0f);
+    scene::layout(pages, left);
     add.fState.arrange(0.0f, 0.0f);
     scene::layout(add, left);
     float y = add.bounds().fBottom - box.fTop + 2.0f;
@@ -2349,11 +2421,13 @@ struct settings_home : scene::Node {
   page_header<ask<Actions, &Actions::close_settings>, ask<Actions, &Actions::close_settings>> header;
   row_item<ask<Actions, &Actions::open_accounts>> accounts;
   row_item<ask<Actions, &Actions::settings_animations>> animations;
+  row_item<ask<Actions, &Actions::settings_privacy>> privacy;
 
   explicit settings_home(Actions* a)
       : header("Settings", {a}, {a}, false, true),
         accounts("Accounts", {a}, icon::person{}),
-        animations("Animations", {a}, icon::motion{}) {
+        animations("Animations", {a}, icon::motion{}),
+        privacy("Privacy", {a}, icon::eye{}) {
     fState.apply({.fill = true});
   }
 
@@ -2361,13 +2435,68 @@ struct settings_home : scene::Node {
     f(header);
     f(accounts);
     f(animations);
+    f(privacy);
   }
   void show_motion(std::string_view) {}
+  void show_receipts(bool) {}
   void layoutChildren() {
     column_stack stack{fState.contentBox()};
     stack(header, 6.0f);
     stack(accounts, 0.0f);
     stack(animations, 0.0f);
+    stack(privacy, 0.0f);
+  }
+};
+
+// A line with a switch on its right: its text, and the switch.
+template <class Act>
+struct switch_row : scene::Node {
+  nodes::Text label;
+  widgets::Toggle<Act> toggle;
+
+  switch_row(std::string text, Act what) : label(std::move(text), 15.0f, text_colour), toggle(std::move(what)) {
+    fState.apply({.fillX = true, .height = row_item<nothing>::kHeight});
+  }
+  void forEachChild(auto&& f) {
+    f(label);
+    f(toggle);
+  }
+  void layoutChildren() {
+    const skia::SkRect box = fState.contentBox();
+    toggle.fState.arrange(-20.0f, 0.0f, scene::anchor::kCentreRight, scene::anchor::kCentreRight);
+    scene::layout(toggle, box);
+    label.setMaxWidth(std::max(0.0f, box.width() - 90.0f));
+    label.fState.arrange(20.0f, 0.0f, scene::anchor::kCentreLeft, scene::anchor::kCentreLeft);
+    scene::layout(label, box);
+  }
+};
+
+template <class Actions>
+struct privacy_page : scene::Node {
+  page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>> header;
+  switch_row<ask<Actions, &Actions::flip_read_receipts>> receipts;
+  nodes::Text note{"Off, nobody is told when you have read their messages. Some people may not like that either way; "
+                   "it is yours to choose.",
+                   13.0f, dim_colour};
+
+  explicit privacy_page(Actions* a) : header("Privacy", {a}, {a}, true, true), receipts("Send read receipts", {a}) {
+    fState.apply({.fill = true});
+    note.setWrapped(true);
+  }
+  void forEachChild(auto&& f) {
+    f(header);
+    f(receipts);
+    f(note);
+  }
+  void show_motion(std::string_view) {}
+  void show_receipts(bool on) { receipts.toggle.setOn(on); }
+  void layoutChildren() {
+    column_stack stack{fState.contentBox()};
+    stack(header, 4.0f);
+    stack(receipts, 6.0f);
+    note.setMaxWidth(std::max(0.0f, stack.column.width() - 40.0f));
+    note.fState.arrange(20.0f, stack.y);
+    scene::layout(note, stack.column);
   }
 };
 
@@ -2397,6 +2526,7 @@ struct animations_page : scene::Node {
     f(reduced);
     f(none);
   }
+  void show_receipts(bool) {}
   void show_motion(std::string_view level) {
     full.set_chosen(level == kMotions[0]);
     reduced.set_chosen(level == kMotions[1]);
@@ -2419,9 +2549,11 @@ template <class Actions>
 struct settings_dialog : scene::Node {
   Actions* actions = nullptr;
   std::string motion;
-  std::variant<settings_home<Actions>, animations_page<Actions>> page;
+  bool receipts = true;
+  std::variant<settings_home<Actions>, animations_page<Actions>, privacy_page<Actions>> page;
 
-  settings_dialog(Actions* a, std::string level) : actions(a), motion(std::move(level)), page(std::in_place_index<0>, a) {
+  settings_dialog(Actions* a, std::string level, bool read_receipts)
+      : actions(a), motion(std::move(level)), receipts(read_receipts), page(std::in_place_index<0>, a) {
     fState.apply({.fill = true});
   }
 
@@ -2432,9 +2564,17 @@ struct settings_dialog : scene::Node {
     page.template emplace<1>(actions);
     this->show_motion(motion);
   }
+  void show_privacy() {
+    page.template emplace<2>(actions);
+    std::get<2>(page).receipts.toggle.setOnNow(receipts);
+  }
   void show_motion(std::string level) {
     motion = std::move(level);
     std::visit([this](auto& one) { one.show_motion(motion); }, page);
+  }
+  void show_receipts(bool on) {
+    receipts = on;
+    std::visit([on](auto& one) { one.show_receipts(on); }, page);
   }
 
   void layoutChildren() {
@@ -2507,7 +2647,7 @@ struct window : scene::Node {
     notice.dropClosed();
   }
 
-  void open_settings(std::string motion) { settings.open(actions, std::move(motion)); }
+  void open_settings(std::string motion, bool receipts) { settings.open(actions, std::move(motion), receipts); }
   void close_settings() { settings.close(); }
   [[nodiscard]] settings_dialog<Actions>* settings_up() { return settings.shown(); }
 

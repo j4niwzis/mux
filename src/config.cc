@@ -41,6 +41,13 @@ struct matrix_account {
 // One saved account, of either protocol.
 using account_t = std::variant<xmpp_account, matrix_account>;
 
+// A chat muted: no notifications from it, its unread count in grey.
+struct muted_chat {
+  std::string account;       // the account's address
+  std::string conversation;  // the chat's id in it
+  friend bool operator==(const muted_chat&, const muted_chat&) = default;
+};
+
 // The file: a list for each protocol, so each entry says what it is by where
 // it is, and has only its own protocol's keys.
 struct file {
@@ -49,11 +56,16 @@ struct file {
   // How much the window moves: "none", "reduced" (sections unfold, panels
   // just appear) or "full". Nothing said is full.
   std::optional<std::string> motion;
+  // Whether the people one talks to are told a message was read. Nothing
+  // said is yes.
+  std::optional<bool> read_receipts;
+  std::optional<std::vector<muted_chat>> muted;
   friend bool operator==(const file&, const file&) = default;
 };
 
 consteval auto json_schema(knot::type<xmpp_account>) { return knot::schema<xmpp_account>(); }
 consteval auto json_schema(knot::type<matrix_account>) { return knot::schema<matrix_account>(); }
+consteval auto json_schema(knot::type<muted_chat>) { return knot::schema<muted_chat>(); }
 consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
 
 // What an account is known by: its JID or its user ID. The two never meet:

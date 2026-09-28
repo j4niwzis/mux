@@ -157,6 +157,16 @@ struct message {
   std::map<std::string, std::set<std::string>> reactions;  // key -> who
 };
 
+// Someone in a group: their id (a JID in the room, a Matrix user id), the
+// name they go by there, and their role, where it has one (owner, admin,
+// moderator).
+struct member {
+  std::string id;
+  std::string name;
+  std::optional<std::string> role;
+  friend bool operator==(const member&, const member&) = default;
+};
+
 struct conversation {
   conversation_id id;
   conversation_kind_t kind = conversation_kind::direct{};
@@ -167,6 +177,7 @@ struct conversation {
   std::int64_t unread = 0;
   std::int64_t highlights = 0;
   std::vector<std::string> typing;
+  std::vector<member> members;  // a group's, as far as they are known
   std::vector<message> timeline;  // oldest first, as far back as is loaded
   // Where to page back from, in the protocol's terms: a MAM id, a Matrix
   // prev_batch. Nothing where the beginning has been reached.
@@ -206,6 +217,12 @@ struct conversation_updated {
   bool encrypted = false;
   std::int64_t unread = 0;
   std::int64_t highlights = 0;
+};
+
+// Who is in a group now: the whole list.
+struct members_changed {
+  conversation_id in;
+  std::vector<member> members;
 };
 
 struct conversation_removed {
@@ -277,7 +294,7 @@ using change_t = std::variant<change::connection_changed, change::account_remove
                               change::conversation_removed,
                               change::presence_changed, change::message_added, change::message_edited,
                               change::message_redacted, change::message_acknowledged, change::delivery_changed, change::reaction_changed,
-                              change::typing_changed, change::history_position>;
+                              change::typing_changed, change::history_position, change::members_changed>;
 
 // The model: every account, and every change applied to it.
 class model {
@@ -391,6 +408,7 @@ class model {
   }
   void on(const change::typing_changed& one) { of(one.in).typing = one.who; }
   void on(const change::history_position& one) { of(one.in).history_from = one.from; }
+  void on(const change::members_changed& one) { of(one.in).members = one.members; }
 
   std::map<account_id, account> accounts_;
 };

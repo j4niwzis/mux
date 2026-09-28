@@ -74,6 +74,12 @@ TEST(Model, Messages) {
   EXPECT_EQ(one->timeline[2].delivery, delivery_t{delivery::read{}});
   EXPECT_EQ(one->typing, (std::vector<std::string>{"juliet@example.com"}));
   EXPECT_EQ(one->history_from, "mam-17");
+
+  kept.apply(change::members_changed{with_juliet, {{"juliet@example.com", "Juliet", "owner"}, {"nurse@example.com", "Nurse", std::nullopt}}});
+  one = kept.find(with_juliet);
+  ASSERT_EQ(one->members.size(), 2u);
+  EXPECT_EQ(one->members[0].role, "owner");
+  EXPECT_EQ(one->members[1].name, "Nurse");
 }
 
 TEST(Model, Acknowledged) {

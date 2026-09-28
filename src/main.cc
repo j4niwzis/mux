@@ -215,6 +215,32 @@ inline void fill(mux::model& into) {
                {{"@cheshire:matrix.example", "We're all mad here."},
                 {"@alice:matrix.example", "How do you know I'm mad?", true},
                 {"@cheshire:matrix.example", "You must be, or you wouldn't have come here."}});
+
+  // Who is in the groups, and how everyone is.
+  const auto members = [&into](const mux::account_id& account, std::string id, std::vector<mux::member> who) {
+    into.apply(mux::change_t{mux::change::members_changed{{account, std::move(id)}, std::move(who)}});
+  };
+  members(xmpp, "croquet@rooms.wonderland.example",
+          {{"queen@wonderland.example", "The Queen of Hearts", "owner"},
+           {"king@wonderland.example", "The King of Hearts", "admin"},
+           {"alice@wonderland.example", "Alice", std::nullopt},
+           {"two@wonderland.example", "Two of Spades", std::nullopt},
+           {"rabbit@wonderland.example", "White Rabbit", std::nullopt}});
+  members(matrix, "!tea:matrix.example",
+          {{"@march.hare:matrix.example", "March Hare", "owner"},
+           {"@hatter:matrix.example", "The Hatter", "admin"},
+           {"@dormouse:matrix.example", "Dormouse", std::nullopt},
+           {"@alice:matrix.example", "Alice", std::nullopt}});
+  const auto is = [&into](const mux::account_id& account, std::string contact, mux::availability_t state) {
+    into.apply(mux::change_t{mux::change::presence_changed{account, std::move(contact), mux::presence{state, std::nullopt}}});
+  };
+  is(xmpp, "hatter@wonderland.example", mux::availability::online{});
+  is(xmpp, "rabbit@wonderland.example", mux::availability::away{});
+  is(xmpp, "queen@wonderland.example", mux::availability::do_not_disturb{});
+  is(xmpp, "king@wonderland.example", mux::availability::online{});
+  is(matrix, "@cheshire:matrix.example", mux::availability::extended_away{});
+  is(matrix, "@march.hare:matrix.example", mux::availability::online{});
+  is(matrix, "@hatter:matrix.example", mux::availability::online{});
 }
 
 }  // namespace fake
@@ -251,6 +277,10 @@ struct set_motion {
 struct quit {};
 struct open_settings {};
 struct pop_panel {};
+struct toggle_info {};
+struct switch_account {
+  std::string address;
+};
 struct close_settings {};
 struct settings_home {};
 struct settings_animations {};
@@ -262,7 +292,8 @@ using request_t =
                  request::toggle_plain, request::submit_login, request::flip_enabled, request::remove_account,
                  request::open_drawer, request::show_account, request::set_motion, request::quit,
                  request::open_settings, request::close_settings, request::settings_home,
-                 request::settings_animations, request::pop_panel>;
+                 request::settings_animations, request::pop_panel, request::toggle_info,
+                 request::switch_account>;
 
 // What the screens ask: each a request, kept until the program applies it
 // between events -- except a message, which goes to the network at once.
@@ -306,6 +337,8 @@ struct actions {
   void quit() { requests.emplace_back(request::quit{}); }
   void open_settings() { requests.emplace_back(request::open_settings{}); }
   void pop_panel() { requests.emplace_back(request::pop_panel{}); }
+  void toggle_info() { requests.emplace_back(request::toggle_info{}); }
+  void switch_account(std::string address) { requests.emplace_back(request::switch_account{std::move(address)}); }
   void close_settings() { requests.emplace_back(request::close_settings{}); }
   void settings_home() { requests.emplace_back(request::settings_home{}); }
   void settings_animations() { requests.emplace_back(request::settings_animations{}); }
@@ -504,6 +537,16 @@ struct app {
     root().open_settings(motion.value_or("full"));
   }
   void apply(const request::close_settings&) { root().close_settings(); }
+  void apply(const request::toggle_info&) { root().main().toggle_info(); }
+  // Another account's chats listed: the drawer goes back, and no chat is
+  // chosen.
+  void apply(const request::switch_account& one) {
+    auto& screen = root().main();
+    screen.current = mux::account_id{mux::ui::protocol_of(one.address), one.address};
+    screen.chosen.reset();
+    root().close_drawer();
+    this->refresh();
+  }
   void apply(const request::pop_panel&) {
     pending_login.reset();
     root().back_panel();

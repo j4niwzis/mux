@@ -80,6 +80,41 @@ inline void request_quit() {
 
 namespace detail {
 
+// SDL's shape for each of skiff's pointer shapes.
+inline SDL_SystemCursor system_cursor(skiff::scene::cursor::arrow) { return SDL_SYSTEM_CURSOR_DEFAULT; }
+inline SDL_SystemCursor system_cursor(skiff::scene::cursor::text) { return SDL_SYSTEM_CURSOR_TEXT; }
+inline SDL_SystemCursor system_cursor(skiff::scene::cursor::hand) { return SDL_SYSTEM_CURSOR_POINTER; }
+inline SDL_SystemCursor system_cursor(skiff::scene::cursor::resize_horizontal) { return SDL_SYSTEM_CURSOR_EW_RESIZE; }
+inline SDL_SystemCursor system_cursor(skiff::scene::cursor::resize_vertical) { return SDL_SYSTEM_CURSOR_NS_RESIZE; }
+
+// The pointer's shape, made once each and set when it changes.
+class pointer_shapes {
+ public:
+  pointer_shapes() = default;
+  pointer_shapes(const pointer_shapes&) = delete;
+  pointer_shapes& operator=(const pointer_shapes&) = delete;
+  ~pointer_shapes() {
+    for (SDL_Cursor* one : made_)
+      if (one)
+        SDL_DestroyCursor(one);
+  }
+  void show(const skiff::scene::Cursor& shape) {
+    const SDL_SystemCursor which = std::visit([](auto one) { return system_cursor(one); }, shape);
+    if (which == shown_)
+      return;
+    SDL_Cursor*& made = made_[static_cast<std::size_t>(which)];
+    if (!made)
+      made = SDL_CreateSystemCursor(which);
+    if (made)
+      SDL_SetCursor(made);
+    shown_ = which;
+  }
+
+ private:
+  std::array<SDL_Cursor*, SDL_SYSTEM_CURSOR_COUNT> made_{};
+  SDL_SystemCursor shown_ = SDL_SYSTEM_CURSOR_DEFAULT;
+};
+
 inline skiff::scene::Key key_of(SDL_Keycode key) {
   namespace keys = skiff::scene::keys;
   switch (key) {
@@ -237,6 +272,7 @@ int run(App& app, const options& how) {
   int result = 0;
   {
     detail::canvas_target target(window, how.software);
+    detail::pointer_shapes shapes;
     auto& scene = app.window();
     skiff::scene::InputRouter router;
     const std::array layers{skiff::scene::InputRouter::Layer{scene.handle(), false}};
@@ -321,6 +357,7 @@ int run(App& app, const options& how) {
       app.before_frame();
       scene.update(detail::now_ms());
       scene.layoutIfNeeded(skia::SkRect::MakeWH(width, height));
+      shapes.show(scene.cursor());
       const skiff::scene::FrameResult frame = scene.finishFrame();
       animating = frame.fWantsAnotherFrame;
       if (frame.fDamage.isEmpty() && !redraw)

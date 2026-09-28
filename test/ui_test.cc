@@ -46,6 +46,7 @@ struct stub {
   void resize_sidebar(float) {}
   void not_implemented(std::string) {}
   void close_notice() {}
+  void resize_info(float) {}
 };
 
 TEST(Composer, TakesWhatIsTypedIntoIt) {

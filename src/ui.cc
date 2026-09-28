@@ -62,6 +62,7 @@ inline const skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110)
 //   void not_implemented(std::string what)  -- a box saying it is not there yet
 //   void close_notice()
 //   void resize_sidebar(float x)     -- the chat list's edge dragged to x
+//   void resize_info(float x)        -- the chat info's edge dragged to x
 //   void submit_message(std::string text)  -- Enter in the message field
 //   void send_typed()                -- the send arrow: what is in the field
 //   void toggle_info()               -- the chosen chat's info, beside it
@@ -579,6 +580,8 @@ struct not_yet {
 
 inline const skia::SkColor selected_colour = skia::colorSetARGB(255, 43, 82, 120);
 inline const skia::SkColor band_colour = skia::colorSetARGB(255, 18, 20, 23);
+// Between the sections of a panel: just darker than the panel.
+inline const skia::SkColor section_colour = skia::colorSetARGB(255, 26, 29, 33);
 inline const skia::SkColor tile_colour = skia::colorSetARGB(255, 40, 45, 50);
 
 // What a presence says, in a word or two.
@@ -1140,7 +1143,7 @@ struct info_panel : scene::Node {
     scene::layout(leave, box);
     y += 58.0f + 16.0f;
     bands[0] = y;
-    y += 3.0f + 14.0f;
+    y += 6.0f + 14.0f;
     id_text.setMaxWidth(box.width() - 40.0f);
     id_text.fState.arrange(20.0f, y);
     scene::layout(id_text, box);
@@ -1149,7 +1152,7 @@ struct info_panel : scene::Node {
     scene::layout(id_label, box);
     y += id_label.bounds().height() + 16.0f;
     bands[1] = y;
-    y += 3.0f;
+    y += 6.0f;
     if (!group)
       return;
     const skia::SkRect head = skia::SkRect::MakeXYWH(box.fLeft, box.fTop + y, box.width(), 48.0f);
@@ -1176,63 +1179,73 @@ struct info_panel : scene::Node {
     draw_avatar(canvas, skia::SkRect::MakeXYWH(box.centerX() - 48.0f, box.fTop + 24.0f, 96.0f, 96.0f), key,
                 name.text(), alpha);
     for (const float y : bands)
-      p.fillRounded(skia::SkRect::MakeXYWH(box.fLeft + 1.0f, box.fTop + y, box.width() - 1.0f, 3.0f), 0.0f,
-                    band_colour, alpha);
+      p.fillRounded(skia::SkRect::MakeXYWH(box.fLeft + 1.0f, box.fTop + y, box.width() - 1.0f, 6.0f), 0.0f,
+                    section_colour, alpha);
     if (group)
       draw_icon(canvas, icon::people{}, skia::SkRect::MakeXYWH(box.fLeft + 16.0f, box.fTop + bands[1] + 3.0f, 28.0f, 48.0f),
                 dim_colour, alpha);
   }
 };
 
-// The chat list's right edge, to drag: it lights under the pointer and while
-// held, and a drag asks for the list to be as wide as where the pointer is.
-template <class Actions>
-struct sidebar_edge : scene::Node {
-  Actions* actions = nullptr;
+// An edge between two parts of the window, to drag: the pointer turns into
+// a resize arrow over it, and a drag asks `on_drag(x)` for the edge to be at
+// x. It draws a thin line where `with_line`.
+template <class OnDrag>
+struct drag_edge : scene::Node {
+  OnDrag on_drag;
+  bool with_line = true;
   bool dragging = false;
 
-  explicit sidebar_edge(Actions* a) : actions(a) {}
+  explicit drag_edge(OnDrag what, bool line = true) : on_drag(std::move(what)), with_line(line) {
+    fState.setCursor(scene::cursor::resize_horizontal{});
+  }
 
   void drawSelf(skia::SkCanvas* canvas, float alpha) {
     skia::SkFont* font = skiff::paint::defaultFont();
-    if (font == nullptr)
+    if (font == nullptr || !with_line)
       return;
     const skia::SkRect& box = fState.fBounds;
-    const bool lit = dragging || fState.fHovered;
     skiff::paint::Painter(canvas, *font)
-        .fillRounded(skia::SkRect::MakeXYWH(box.centerX() - (lit ? 1.0f : 0.5f), box.fTop, lit ? 2.0f : 1.0f,
-                                            box.height()),
-                     0.0f, lit ? accent_colour : band_colour, alpha);
+        .fillRounded(skia::SkRect::MakeXYWH(box.centerX() - 0.5f, box.fTop, 1.0f, box.height()), 0.0f, band_colour,
+                     alpha);
   }
 
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool focusable() const { return false; }
-  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
 
   using Node::onPointer;
   void onPointer(scene::phase::target, const scene::pointer::down&, scene::PointerReply& reply) {
     dragging = true;
     reply.capturePointer();
     reply.handle();
-    this->markDamaged();
   }
   void onPointer(scene::phase::target, const scene::pointer::move& at, scene::PointerReply& reply) {
     if (!dragging)
       return;
-    actions->resize_sidebar(at.x);
+    on_drag(at.x);
     reply.handle();
   }
   void onPointer(scene::phase::target, const scene::pointer::up&, scene::PointerReply& reply) {
     dragging = false;
     reply.releasePointer();
     reply.handle();
-    this->markDamaged();
   }
   void onPointer(scene::phase::target, const scene::pointer::cancel&, scene::PointerReply& reply) {
     dragging = false;
     reply.releasePointer();
-    this->markDamaged();
   }
+};
+
+// Where an edge was dragged to, asked of the program.
+template <class Actions>
+struct resize_sidebar_to {
+  Actions* actions = nullptr;
+  void operator()(float x) const { actions->resize_sidebar(x); }
+};
+template <class Actions>
+struct resize_info_to {
+  Actions* actions = nullptr;
+  void operator()(float x) const { actions->resize_info(x); }
 };
 
 // ---- the message field --------------------------------------------------------------
@@ -1311,7 +1324,10 @@ struct conversations_screen : scene::Node {
   float side_width = 300.0f;
 
   nodes::Box<> sidebar{sidebar_colour};
-  sidebar_edge<Actions> edge;
+  drag_edge<resize_sidebar_to<Actions>> edge;
+  drag_edge<resize_info_to<Actions>> info_edge;
+  // How wide the chat's info is, until its edge is dragged.
+  float info_width = 340.0f;
   menu_button<Actions> menu;
   nodes::Text name{"mux", 17.0f, text_colour, true};
   nodes::Text no_chats{"No chats yet.", 13.0f, dim_colour};
@@ -1332,7 +1348,7 @@ struct conversations_screen : scene::Node {
   static constexpr float kPad = 8.0f;
 
   explicit conversations_screen(Actions* a)
-      : actions(a), edge(a), menu(a), header(a), line(a), info(a), empty_add("Add account", {a}) {
+      : actions(a), edge({a}), info_edge({a}, false), menu(a), header(a), line(a), info(a), empty_add("Add account", {a}) {
     fState.apply({.fill = true});
     sidebar.apply({.fill = true});
     empty_add.setPrimary(true);
@@ -1357,11 +1373,18 @@ struct conversations_screen : scene::Node {
     f(empty_note);
     f(empty_add);
     f(edge);  // last: over the list and the chat, where they meet
+    f(info_edge);
   }
 
   // The chat list as wide as `x`, where its edge was dragged to.
   void resize_sidebar(float x) {
     side_width = x - fState.contentBox().fLeft;
+    this->invalidateLayout();
+  }
+
+  // The chat's info as wide as from `x` to the window's right.
+  void resize_info(float x) {
+    info_width = fState.contentBox().fRight - x;
     this->invalidateLayout();
   }
 
@@ -1407,11 +1430,15 @@ struct conversations_screen : scene::Node {
     }
 
     // The chat's info, beside it, where there is room for it.
-    const bool with_info = info_open && chosen.has_value() && main.width() > info_panel<Actions>::kWidth + 240.0f;
+    const float info_room = std::clamp(info_width, 260.0f, std::max(260.0f, main.width() - 300.0f));
+    const bool with_info = info_open && chosen.has_value() && main.width() > 260.0f + 240.0f;
     info.setVisible(with_info);
+    info_edge.setVisible(with_info);
     if (with_info) {
-      const skia::SkRect right =
-          skia::SkRect::MakeLTRB(main.fRight - info_panel<Actions>::kWidth, main.fTop, main.fRight, main.fBottom);
+      const skia::SkRect right = skia::SkRect::MakeLTRB(main.fRight - info_room, main.fTop, main.fRight, main.fBottom);
+      info_edge.apply({.width = 7.0f, .height = right.height()});
+      info_edge.fState.arrange(right.fLeft - box.fLeft - 3.5f, 0.0f);
+      scene::layout(info_edge, box);
       info.apply({.width = right.width(), .height = right.height()});
       info.fState.arrange(0.0f, 0.0f);
       scene::layout(info, right);

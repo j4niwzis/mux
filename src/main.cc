@@ -289,6 +289,9 @@ struct not_implemented {
   std::string what;
 };
 struct close_notice {};
+struct resize_info {
+  float x = 0.0f;
+};
 struct switch_account {
   std::string address;
 };
@@ -305,7 +308,8 @@ using request_t =
                  request::open_settings, request::close_settings, request::settings_home,
                  request::settings_animations, request::pop_panel, request::toggle_info,
                  request::switch_account, request::submit_message, request::send_typed,
-                 request::resize_sidebar, request::not_implemented, request::close_notice>;
+                 request::resize_sidebar, request::not_implemented, request::close_notice,
+                 request::resize_info>;
 
 // What the screens ask: each a request, kept until the program applies it
 // between events -- except a message, which goes to the network at once.
@@ -355,6 +359,7 @@ struct actions {
   void resize_sidebar(float x) { requests.emplace_back(request::resize_sidebar{x}); }
   void not_implemented(std::string what) { requests.emplace_back(request::not_implemented{std::move(what)}); }
   void close_notice() { requests.emplace_back(request::close_notice{}); }
+  void resize_info(float x) { requests.emplace_back(request::resize_info{x}); }
   void switch_account(std::string address) { requests.emplace_back(request::switch_account{std::move(address)}); }
   void close_settings() { requests.emplace_back(request::close_settings{}); }
   void settings_home() { requests.emplace_back(request::settings_home{}); }
@@ -569,6 +574,7 @@ struct app {
   void apply(const request::resize_sidebar& one) { root().main().resize_sidebar(one.x); }
   void apply(const request::not_implemented& one) { root().show_notice(one.what); }
   void apply(const request::close_notice&) { root().close_notice(); }
+  void apply(const request::resize_info& one) { root().main().resize_info(one.x); }
   void apply(const request::send_typed&) { this->send_message(root().main().line.text()); }
   // What is in the message field, to the chosen chat; the field emptied.
   void send_message(std::string text) {

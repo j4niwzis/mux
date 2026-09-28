@@ -439,6 +439,151 @@ inline tcp::socket connect(loop& owner, std::string_view host, std::uint16_t por
   return socket;
 }
 
+// A proxy to connect through: SOCKS5 (RFC 1928, with RFC 1929's user name
+// and password where one is given) or HTTP CONNECT (RFC 9110, 9.3.6, with
+// Basic authorization where one is given).
+struct proxy {
+  std::string kind = "socks5";  // "socks5" or "http"
+  std::string host;
+  std::uint16_t port = 1080;
+  std::optional<std::string> username;
+  std::optional<std::string> password;
+};
+
+namespace detail {
+
+inline void write_all(loop& owner, tcp::socket& socket, std::string_view bytes, std::string_view what) {
+  const auto [error, n] = owner.await<std::size_t>([&](auto done) {
+    asio::async_write(socket, asio::buffer(bytes.data(), bytes.size()), std::move(done));
+  });
+  if (error)
+    throw failure(what, error);
+}
+inline std::string read_exactly(loop& owner, tcp::socket& socket, std::size_t count, std::string_view what) {
+  std::string out(count, '\0');
+  const auto [error, n] = owner.await<std::size_t>([&](auto done) {
+    asio::async_read(socket, asio::buffer(out.data(), out.size()), std::move(done));
+  });
+  if (error)
+    throw failure(what, error);
+  return out;
+}
+
+inline std::string base64(std::string_view in) {
+  static constexpr std::string_view alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  std::string out;
+  std::size_t i = 0;
+  for (; i + 2 < in.size(); i += 3) {
+    const unsigned n = (static_cast<unsigned char>(in[i]) << 16) | (static_cast<unsigned char>(in[i + 1]) << 8) |
+                       static_cast<unsigned char>(in[i + 2]);
+    out += alphabet[(n >> 18) & 63];
+    out += alphabet[(n >> 12) & 63];
+    out += alphabet[(n >> 6) & 63];
+    out += alphabet[n & 63];
+  }
+  if (i + 1 == in.size()) {
+    const unsigned n = static_cast<unsigned char>(in[i]) << 16;
+    out += alphabet[(n >> 18) & 63];
+    out += alphabet[(n >> 12) & 63];
+    out += "==";
+  } else if (i + 2 == in.size()) {
+    const unsigned n = (static_cast<unsigned char>(in[i]) << 16) | (static_cast<unsigned char>(in[i + 1]) << 8);
+    out += alphabet[(n >> 18) & 63];
+    out += alphabet[(n >> 12) & 63];
+    out += alphabet[(n >> 6) & 63];
+    out += '=';
+  }
+  return out;
+}
+
+// A refusal of the proxy's, as a failure of connecting.
+[[noreturn]] inline void refused(std::string_view why) {
+  throw failure(std::string("the proxy ") + std::string(why), asio::error::connection_refused);
+}
+
+inline void socks5(loop& owner, tcp::socket& socket, const proxy& via, std::string_view host, std::uint16_t port) {
+  const bool login = via.username.has_value();
+  write_all(owner, socket, login ? std::string("\x05\x02\x00\x02", 4) : std::string("\x05\x01\x00", 3),
+            "greeting the proxy");
+  const std::string chosen = read_exactly(owner, socket, 2, "reading the proxy's greeting");
+  if (chosen[0] != '\x05')
+    refused("does not speak SOCKS5");
+  if (chosen[1] == '\x02') {
+    if (!login)
+      refused("asks for a user name");
+    const std::string& user = *via.username;
+    const std::string password = via.password.value_or("");
+    if (user.size() > 255 || password.size() > 255)
+      refused("takes user names and passwords of at most 255 bytes");
+    std::string asked("\x01", 1);
+    asked += static_cast<char>(user.size());
+    asked += user;
+    asked += static_cast<char>(password.size());
+    asked += password;
+    write_all(owner, socket, asked, "logging in to the proxy");
+    const std::string answer = read_exactly(owner, socket, 2, "reading the proxy's login");
+    if (answer[1] != '\x00')
+      refused("did not take the user name and password");
+  } else if (chosen[1] != '\x00') {
+    refused("accepts none of the ways offered to log in");
+  }
+  if (host.size() > 255)
+    refused("takes host names of at most 255 bytes");
+  std::string request("\x05\x01\x00\x03", 4);
+  request += static_cast<char>(host.size());
+  request += host;
+  request += static_cast<char>(port >> 8);
+  request += static_cast<char>(port & 0xff);
+  write_all(owner, socket, request, "asking the proxy to connect");
+  const std::string head = read_exactly(owner, socket, 4, "reading the proxy's answer");
+  if (head[1] != '\x00')
+    refused("could not connect (SOCKS5 reply " + std::to_string(static_cast<unsigned char>(head[1])) + ")");
+  std::size_t rest = 2;  // the port
+  if (head[3] == '\x01')
+    rest += 4;
+  else if (head[3] == '\x04')
+    rest += 16;
+  else if (head[3] == '\x03')
+    rest += static_cast<unsigned char>(read_exactly(owner, socket, 1, "reading the proxy's answer")[0]);
+  else
+    refused("answered with an unknown kind of address");
+  (void)read_exactly(owner, socket, rest, "reading the proxy's answer");
+}
+
+inline void http_connect(loop& owner, tcp::socket& socket, const proxy& via, std::string_view host,
+                         std::uint16_t port) {
+  const std::string where = std::string(host) + ":" + std::to_string(port);
+  std::string request = "CONNECT " + where + " HTTP/1.1\r\nHost: " + where + "\r\n";
+  if (via.username)
+    request += "Proxy-Authorization: Basic " + base64(*via.username + ":" + via.password.value_or("")) + "\r\n";
+  request += "\r\n";
+  write_all(owner, socket, request, "asking the proxy to connect");
+  std::string answer;
+  while (!answer.ends_with("\r\n\r\n")) {
+    if (answer.size() > 16384)
+      refused("answered with more than a head");
+    answer += read_exactly(owner, socket, 1, "reading the proxy's answer");
+  }
+  // HTTP/1.x 200 ...
+  const auto space = answer.find(' ');
+  if (space == std::string::npos || answer.compare(space + 1, 3, "200") != 0)
+    refused("would not connect: " + answer.substr(0, answer.find('\r')));
+}
+
+}  // namespace detail
+
+// A connection to host:port, through a proxy where one is given.
+inline tcp::socket connect(loop& owner, const std::optional<proxy>& via, std::string_view host, std::uint16_t port) {
+  if (!via)
+    return connect(owner, host, port);
+  tcp::socket socket = connect(owner, via->host, via->port);
+  if (via->kind == "http")
+    detail::http_connect(owner, socket, *via, host, port);
+  else
+    detail::socks5(owner, socket, *via, host, port);
+  return socket;
+}
+
 // Connections accepted on a port of this machine: 0 for any free one.
 class listener {
  public:

@@ -82,8 +82,8 @@ struct response {
 // One connection to one host, used by one fiber at a time.
 class connection {
  public:
-  connection(net::loop& owner, net::tls& settings, url where)
-      : owner_(&owner), tls_(&settings), where_(std::move(where)) {}
+  connection(net::loop& owner, net::tls& settings, url where, std::optional<net::proxy> via = std::nullopt)
+      : owner_(&owner), tls_(&settings), where_(std::move(where)), via_(std::move(via)) {}
   connection(const connection&) = delete;
   connection& operator=(const connection&) = delete;
 
@@ -123,7 +123,7 @@ class connection {
                                                                asio::error::get_ssl_category()));
     stream_->set_verify_mode(asio::ssl::verify_peer);
     stream_->set_verify_callback(asio::ssl::host_name_verification(where_.host));
-    beast::get_lowest_layer(*stream_).socket() = net::connect(*owner_, where_.host, where_.port);
+    beast::get_lowest_layer(*stream_).socket() = net::connect(*owner_, via_, where_.host, where_.port);
     beast::get_lowest_layer(*stream_).expires_after(std::chrono::seconds(30));
     const auto [shaken] = owner_->await<>([&](auto done) {
       stream_->async_handshake(asio::ssl::stream_base::client, std::move(done));
@@ -186,6 +186,7 @@ class connection {
   net::loop* owner_;
   net::tls* tls_;
   url where_;
+  std::optional<net::proxy> via_;
   std::optional<stream_type> stream_;
   beast::flat_buffer buffer_;
 };

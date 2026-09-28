@@ -153,4 +153,36 @@ TEST(Connect, ARefusedPortFails) {
   EXPECT_TRUE(failed.has_value());
 }
 
+// Through a SOCKS5 proxy: the greeting, the request naming the host and
+// port, and then the bytes of the connection itself.
+TEST(Net, ThroughASocks5Proxy) {
+  namespace net = mux::net;
+  net::loop running;
+  net::listener proxy(running);
+  std::string asked;
+  running.spawn([&] {
+    auto socket = proxy.accept();
+    asked = net::detail::read_exactly(running, socket, 3, "greeting");
+    net::detail::write_all(running, socket, std::string("\x05\x00", 2), "choosing");
+    const std::string head = net::detail::read_exactly(running, socket, 5, "request");
+    asked += head;
+    asked += net::detail::read_exactly(running, socket, static_cast<unsigned char>(head[4]) + 2u, "request");
+    net::detail::write_all(running, socket, std::string("\x05\x00\x00\x01\x7f\x00\x00\x01\x14\x66", 10), "answering");
+    net::detail::write_all(running, socket, "hello", "hello");
+  });
+  std::string heard;
+  running.spawn([&] {
+    auto socket = net::connect(running, net::proxy{.kind = "socks5", .host = "127.0.0.1", .port = proxy.port()},
+                               "example.org", 5222);
+    heard = net::detail::read_exactly(running, socket, 5, "reading");
+  });
+  running.run();
+  EXPECT_EQ(heard, "hello");
+  EXPECT_EQ(asked, std::string("\x05\x01\x00"
+                               "\x05\x01\x00\x03\x0b"
+                               "example.org"
+                               "\x14\x66",
+                               21));
+}
+
 }  // namespace

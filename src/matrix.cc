@@ -28,6 +28,8 @@ struct settings {
   // .well-known says.
   std::optional<std::string> homeserver;
   std::string device_name = "mux";
+  // A proxy to connect through, where there is one.
+  std::optional<net::proxy> proxy;
   // How long a sync waits on the server for something to happen.
   std::chrono::milliseconds sync_timeout = std::chrono::seconds(30);
 };
@@ -176,7 +178,7 @@ class account {
     if (how_.homeserver)
       return http::url::parse(*how_.homeserver);
     if (auto name = http::url::parse(server_name_)) {
-      http::connection discovery(*loop_, *tls_, *name);
+      http::connection discovery(*loop_, *tls_, *name, how_.proxy);
       if (auto found = perform(discovery, loom::cs::get_wellknown{}, std::chrono::seconds(15)))
         if (auto base = http::url::parse(found->m_homeserver.base_url))
           return base;
@@ -192,8 +194,8 @@ class account {
       say(connection::failed{"no homeserver for " + how_.user_id});
       return;
     }
-    http::connection api(*loop_, *tls_, *base);
-    http::connection syncing(*loop_, *tls_, *base);  // the long poll has one of its own
+    http::connection api(*loop_, *tls_, *base, how_.proxy);
+    http::connection syncing(*loop_, *tls_, *base, how_.proxy);  // the long poll has one of its own
     api_ = &api;
 
     loom::cs::def::user_identifier_t who{.type = "m.id.user"};

@@ -26,6 +26,9 @@ struct settings {
   // PLAIN over a stream TLS has not secured: only for a server on this
   // machine, under test. Never over a network.
   bool plain_without_tls = false;
+  // A proxy to connect through, where there is one. The domain's SRV
+  // records are still asked of the resolver directly.
+  std::optional<net::proxy> proxy;
 };
 
 // The protocol spoken: the standard one, rooms (XEP-0045), bookmarks
@@ -240,7 +243,7 @@ class account {
     std::string why;
     for (const auto& target : targets) {
       try {
-        socket.emplace(net::connect(*loop_, target.host, target.port));
+        socket.emplace(net::connect(*loop_, how_.proxy, target.host, target.port));
         break;
       } catch (const net::failure& failed) {
         why = failed.what();

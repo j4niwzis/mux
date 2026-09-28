@@ -68,13 +68,25 @@ struct network {
   void start(const mux::config::account_t& saved) {
     std::visit([this](const auto& each) { this->start_one(each); }, saved);
   }
+  // The proxy an account keeps, as mux.net takes it.
+  static std::optional<mux::net::proxy> proxy_of(const std::optional<mux::config::proxy_settings>& kept) {
+    if (!kept)
+      return std::nullopt;
+    return mux::net::proxy{.kind = kept->kind,
+                           .host = kept->host,
+                           .port = static_cast<std::uint16_t>(kept->port),
+                           .username = kept->username,
+                           .password = kept->password};
+  }
+
   void start_one(const mux::config::xmpp_account& saved) {
     auto live = std::make_shared<std::atomic<bool>>(true);
     mux::xmpp::settings how{.address = saved.address,
                             .password = saved.password,
                             .resource = saved.resource,
                             .host = saved.host,
-                            .plain_without_tls = saved.plain_without_tls};
+                            .plain_without_tls = saved.plain_without_tls,
+                            .proxy = proxy_of(saved.proxy)};
     if (saved.port)
       how.port = static_cast<std::uint16_t>(*saved.port);
     this->run(saved.address, std::make_unique<xmpp_account>(loop, tls, std::move(how), post_change{box, live}), live);
@@ -84,7 +96,8 @@ struct network {
     mux::matrix::settings how{.user_id = saved.user_id,
                               .password = saved.password,
                               .homeserver = saved.homeserver,
-                              .device_name = saved.device_name};
+                              .device_name = saved.device_name,
+                              .proxy = proxy_of(saved.proxy)};
     this->run(saved.user_id, std::make_unique<matrix_account>(loop, tls, std::move(how), post_change{box, live}),
               live);
   }

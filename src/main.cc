@@ -328,7 +328,7 @@ skiff::paint::Motion motion_of(const std::optional<std::string>& said) {
 
 // What the program does to the window between events.
 struct app {
-  using adding = mux::ui::add_account_panel<actions>;
+  using adding = mux::ui::add_account_pane<actions>;
   using accounts = mux::ui::accounts_panel<actions>;
   using xmpp_form = mux::ui::xmpp_form<actions>;
   using matrix_form = mux::ui::matrix_form<actions>;
@@ -397,10 +397,10 @@ struct app {
     }
     return panel;
   }
+  // Adding an account: beside the list, on the accounts page.
   void show_adding() {
-    root().close_drawer();
-    pending_login.reset();
-    root().open<adding>();
+    auto& panel = this->show_accounts();
+    panel.show_adding();
     this->refresh();
   }
 
@@ -426,9 +426,10 @@ struct app {
     if (auto* up = root().open_panel())
       std::visit([this](auto& panel) { this->bring_up_to_date(panel); }, *up);
   }
-  void bring_up_to_date(accounts& panel) { panel.show(saved, *model); }
-  void bring_up_to_date(adding& panel) {
-    std::visit([this](auto& form) { this->watch_login(form); }, panel.form);
+  void bring_up_to_date(accounts& panel) {
+    panel.show(saved, *model);
+    if (auto* pane = panel.adding())
+      std::visit([this](auto& form) { this->watch_login(form); }, pane->form);
   }
 
   // A new account waiting to log in: online is done, failed is said.
@@ -461,14 +462,15 @@ struct app {
     auto* up = root().open_panel();
     if (!up)
       return;
-    std::visit(mux::overloaded{[&](accounts& panel) {
-                                 if (const auto found = this->find(one.address); found != saved.end()) {
-                                   panel.select(*found, *model);
-                                   panel.show(saved, *model);
-                                 }
-                               },
-                               [](adding&) {}},
-               *up);
+    std::visit(
+        [&](accounts& panel) {
+          if (const auto found = this->find(one.address); found != saved.end()) {
+            pending_login.reset();
+            panel.select(*found, *model);
+            panel.show(saved, *model);
+          }
+        },
+        *up);
   }
   void apply(const request::toggle_advanced&) {
     if (auto* form = this->xmpp_form_up())
@@ -482,14 +484,14 @@ struct app {
     auto* up = root().open_panel();
     if (!up)
       return;
-    std::visit(mux::overloaded{[this](adding& panel) {
-                                 std::visit([this](auto& form) { this->add(form); }, panel.form);
-                               },
-                               [this](accounts& panel) {
-                                 if (auto* editor = panel.editor())
-                                   std::visit([this](auto& form) { this->edit(form); }, editor->form);
-                               }},
-               *up);
+    std::visit(
+        [this](accounts& panel) {
+          if (auto* editor = panel.editor())
+            std::visit([this](auto& form) { this->edit(form); }, editor->form);
+          else if (auto* pane = panel.adding())
+            std::visit([this](auto& form) { this->add(form); }, pane->form);
+        },
+        *up);
   }
   void apply(const request::flip_enabled& one) { this->flip_enabled(one.address); }
   void apply(const request::remove_account& one) { this->remove(one.address); }
@@ -529,7 +531,12 @@ struct app {
     if (!up)
       return;
     pending_login.reset();
-    std::visit(mux::overloaded{[to](adding& panel) { (panel.*to)(); }, [](accounts&) {}}, *up);
+    std::visit(
+        [to](accounts& panel) {
+          if (auto* pane = panel.adding())
+            (pane->*to)();
+        },
+        *up);
   }
 
   // A new account: saved, and started; the panel waits to hear how it went.
@@ -625,7 +632,7 @@ struct app {
   void save_from_accounts() {
     if (auto failed = this->write())
       if (auto* up = root().open_panel())
-        std::visit(mux::overloaded{[&](accounts& panel) { panel.say(*failed); }, [](adding&) {}}, *up);
+        std::visit([&](accounts& panel) { panel.say(*failed); }, *up);
   }
 };
 

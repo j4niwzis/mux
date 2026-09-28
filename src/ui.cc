@@ -212,6 +212,12 @@ struct row_item : scene::Node {
     radio = on;
     this->markDamaged();
   }
+  // Lit as the line whose page is shown beside the list.
+  void set_lit(bool on) {
+    lit = on;
+    this->markDamaged();
+  }
+  bool lit = false;
 
   void forEachChild(auto&& f) { f(label); }
   void layoutChildren() {
@@ -227,7 +233,7 @@ struct row_item : scene::Node {
       return;
     const skiff::paint::Painter p(canvas, *font);
     const skia::SkRect& box = fState.fBounds;
-    if (fState.fHovered || this->focused())
+    if (lit || fState.fHovered || this->focused())
       p.fillRounded(box, 0.0f, chosen_colour, alpha);
     draw_icon(canvas, icon, skia::SkRect::MakeXYWH(box.fLeft + 20.0f, box.fTop, 24.0f, box.height()), dim_colour, alpha);
     if (radio) {
@@ -718,6 +724,7 @@ struct form_end {
     submit.setPrimary(true);
     submit.apply({.width = 120.0f, .height = 36.0f});
     close.apply({.width = 120.0f, .height = 36.0f});
+    close.setVisible(editing);
     message.setWrapped(true);
     message.apply({.fillX = true});
   }
@@ -1002,14 +1009,11 @@ struct closes_on_escape : scene::Node {
 
 // ---- adding an account ------------------------------------------------------------
 
-// Opened from the top bar, in place of the conversations: XMPP or Matrix at
-// the top, and that protocol's form under it.
+// Adding an account, beside the list of them: XMPP or Matrix at the top, and
+// that protocol's form under it.
 template <class Actions>
-struct add_account_panel : closes_on_escape<Actions> {
-  static constexpr int kTab = 1;
-  static constexpr float kWidth = 440.0f;
-
-  page_header<ask<Actions, &Actions::pop_panel>, ask<Actions, &Actions::back>> header;
+struct add_account_pane : scene::Node {
+  Actions* actions = nullptr;
   // XMPP | Matrix: two segments in a thin frame.
   nodes::Box<> segments{chosen_colour};
   segment<ask<Actions, &Actions::add_xmpp>> xmpp_tab;
@@ -1021,9 +1025,8 @@ struct add_account_panel : closes_on_escape<Actions> {
   skiff::paint::Tween swap{1.0f, 200.0f, skiff::paint::movement::subtle{}};
   float swap_from = 0.0f;
 
-  explicit add_account_panel(Actions* a)
-      : closes_on_escape<Actions>(a), header("Add an account", {a}, {a}, true, true), xmpp_tab("XMPP", {a}),
-        matrix_tab("Matrix", {a}),
+  explicit add_account_pane(Actions* a)
+      : actions(a), xmpp_tab("XMPP", {a}), matrix_tab("Matrix", {a}),
         form(std::in_place_index<0>, a, std::nullopt) {
     this->fState.apply({.fill = true});
     segments.apply({.width = 187.0f, .height = 30.0f});
@@ -1032,7 +1035,6 @@ struct add_account_panel : closes_on_escape<Actions> {
   }
 
   void forEachChild(auto&& f) {
-    f(header);
     f(segments);
     f(xmpp_tab);
     f(matrix_tab);
@@ -1080,9 +1082,7 @@ struct add_account_panel : closes_on_escape<Actions> {
   }
 
   void layoutChildren() {
-    header.fState.arrange(0.0f, 0.0f);
-    scene::layout(header, this->fState.contentBox());
-    column_stack stack{form_column(this->fState.contentBox(), kWidth, header.kHeight + 20.0f)};
+    column_stack stack{this->fState.contentBox()};
     segments.fState.arrange(0.0f, stack.y);
     scene::layout(segments, stack.column);
     xmpp_tab.fState.arrange(1.0f, stack.y + 1.0f);
@@ -1256,8 +1256,8 @@ struct accounts_panel : closes_on_escape<Actions> {
   row_item<ask<Actions, &Actions::open_new_account>> add;
   nodes::Text message{"", 13.0f, error_colour};
   // No account chosen, or the chosen one.
-  std::variant<nodes::Text, account_editor<Actions>> detail{std::in_place_index<0>, "No accounts yet.", 15.0f,
-                                                           dim_colour};
+  std::variant<nodes::Text, account_editor<Actions>, add_account_pane<Actions>> detail{
+      std::in_place_index<0>, "Choose an account.", 15.0f, dim_colour};
 
   explicit accounts_panel(Actions* a)
       : closes_on_escape<Actions>(a), header("Accounts", {a}, {a}, true, false), add("Add account", {a}, icon::plus{}) {
@@ -1288,32 +1288,51 @@ struct accounts_panel : closes_on_escape<Actions> {
         chosen = &one;
       entries.emplace_back(this->actions, one, now, is_it);
     }
-    if (!chosen) {
+    if (chosen) {
+      if (auto* up = this->editor())
+        up->show(*chosen, now);
+    } else if (!this->adding()) {
+      // Nothing to show beside the list: with no account at all, adding one.
       selected.reset();
-      detail.template emplace<0>(saved.empty() ? "No accounts yet." : "Choose an account.", 15.0f, dim_colour);
-    } else {
-      std::visit(overloaded{[&](account_editor<Actions>& editor) { editor.show(*chosen, now); },
-                            [](nodes::Text&) {}},
-                 detail);
+      if (saved.empty())
+        this->show_adding();
+      else
+        detail.template emplace<0>("Choose an account.", 15.0f, dim_colour);
     }
     this->invalidateLayout();
   }
 
   // An account's settings, brought up afresh.
   void select(const config::account_t& one, const model& now) {
+    add.set_lit(false);
     selected = config::address_of(one);
     detail.template emplace<1>(this->actions, one);
     std::get<1>(detail).show(one, now);
   }
 
+  // Adding an account, beside the list.
+  void show_adding() {
+    selected.reset();
+    add.set_lit(true);
+    detail.template emplace<2>(this->actions);
+    this->invalidateLayout();
+  }
+
   [[nodiscard]] account_editor<Actions>* editor() {
     return std::visit(overloaded{[](account_editor<Actions>& one) { return &one; },
-                                 [](nodes::Text&) -> account_editor<Actions>* { return nullptr; }},
+                                 [](auto&) -> account_editor<Actions>* { return nullptr; }},
+                      detail);
+  }
+  [[nodiscard]] add_account_pane<Actions>* adding() {
+    return std::visit(overloaded{[](add_account_pane<Actions>& one) { return &one; },
+                                 [](auto&) -> add_account_pane<Actions>* { return nullptr; }},
                       detail);
   }
   [[nodiscard]] xmpp_form<Actions>* xmpp() {
-    auto* chosen = this->editor();
-    return chosen ? xmpp_form_in(chosen->form) : nullptr;
+    return std::visit(overloaded{[](account_editor<Actions>& one) { return xmpp_form_in(one.form); },
+                                 [](add_account_pane<Actions>& one) { return one.xmpp(); },
+                                 [](nodes::Text&) -> xmpp_form<Actions>* { return nullptr; }},
+                      detail);
   }
 
   void say(std::string text) {
@@ -1611,7 +1630,7 @@ struct settings_dialog : scene::Node {
 // events.
 template <class Actions>
 struct window : scene::Node {
-  using panel_type = std::variant<add_account_panel<Actions>, accounts_panel<Actions>>;
+  using panel_type = std::variant<accounts_panel<Actions>>;
   using screens = widgets::SlideOver<conversations_screen<Actions>, panel_type>;
 
   Actions* actions = nullptr;

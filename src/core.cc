@@ -108,6 +108,11 @@ struct connection_changed {
   std::optional<std::string> error;
 };
 
+// An account the program no longer has: everything of it goes.
+struct account_removed {
+  account_id account;
+};
+
 struct conversation_updated {
   // The whole of what is known of it, except its timeline.
   conversation_id id;
@@ -185,7 +190,8 @@ struct history_position {
 
 }  // namespace change
 
-using change_t = std::variant<change::connection_changed, change::conversation_updated, change::conversation_removed,
+using change_t = std::variant<change::connection_changed, change::account_removed, change::conversation_updated,
+                              change::conversation_removed,
                               change::presence_changed, change::message_added, change::message_edited,
                               change::message_redacted, change::message_acknowledged, change::delivery_changed, change::reaction_changed,
                               change::typing_changed, change::history_position>;
@@ -237,6 +243,7 @@ class model {
     kept.state = one.state;
     kept.error = one.error;
   }
+  void on(const change::account_removed& one) { accounts_.erase(one.account); }
   void on(const change::conversation_updated& one) {
     conversation& kept = of(one.id);
     kept.kind = one.kind;

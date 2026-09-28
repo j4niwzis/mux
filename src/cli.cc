@@ -26,6 +26,8 @@ std::string describe(const mux::change_t& what) {
           static constexpr std::array names{"offline", "connecting", "online", "failed"};
           return std::format("{} is {}{}", one.account.address, names[static_cast<int>(one.state)],
                              one.error ? ": " + *one.error : std::string());
+        } else if constexpr (std::same_as<type, change::account_removed>) {
+          return std::format("{} removed", one.account.address);
         } else if constexpr (std::same_as<type, change::conversation_updated>) {
           return std::format("{} {} ({}{}{})", one.kind == conversation_kind::direct ? "contact" : "room", one.id.id,
                              one.name, one.encrypted ? ", encrypted" : "",

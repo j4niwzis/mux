@@ -42,3 +42,7 @@ foreach(one IN ITEMS core net xmpp matrix)
   add_test(NAME ${one} COMMAND mux-${one}-test)
 endforeach()
 target_link_libraries(mux-matrix-test PRIVATE mux_test_certificate)
+
+add_executable(mux-config-test config_test.cc)
+target_link_libraries(mux-config-test PRIVATE mux_config ${mux_gtest})
+add_test(NAME config COMMAND mux-config-test)

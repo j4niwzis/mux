@@ -107,6 +107,15 @@ set(mux_std_flags
 target_compile_options(mux_modules PUBLIC ${mux_std_flags})
 target_link_libraries(mux_modules PUBLIC tern loom Boost::asio Boost::beast Boost::context
   OpenSSL::SSL OpenSSL::Crypto)
+
+# The accounts kept between runs: a library of its own, on knot alone, so
+# that it builds and is tested without the protocols.
+add_library(mux_config)
+target_sources(mux_config PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES src/config.cc)
+target_compile_features(mux_config PUBLIC cxx_std_26)
+target_compile_options(mux_config PUBLIC ${mux_std_flags})
+target_link_libraries(mux_config PUBLIC knot)
+target_link_libraries(mux_modules PUBLIC mux_config)
 foreach(name IN ITEMS core net xmpp http matrix)
   add_library(mux_${name} ALIAS mux_modules)
 endforeach()
@@ -115,10 +124,10 @@ if(MUX_UI)
   # skiff and skiff-widgets say the rest of what they are in their own trees.
   cme_declare_port(NAME skiff PROVIDES skiff
     GITHUB_REPOSITORY j4niwzis/skiff
-    GIT_TAG e2a4cd97a7c6ab947cc3b48da0bf983a8bc01281)
+    GIT_TAG 0d736c2a5f7a2aef2bc496be251eeb9eb02b2653)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
-    GIT_TAG 13d1c1ba4e90aed6188b05061e7930f859de3c48)
+    GIT_TAG aac7d54648169e4f1e1aa4edbede057d0271d1b6)
   # Skia as skiff draws with it, on GL, with the system's fonts read from
   # their directory.
   set(SKIFF_SKIA_COMPONENTS gl fontmgr-directory CACHE STRING "" FORCE)

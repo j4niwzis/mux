@@ -183,9 +183,11 @@ inline double now_ms() {
 }  // namespace detail
 
 // The window, until it is closed. What `App` is asked:
-//   skiff::scene::Drawable& root()   the scene
-//   void woken()                     another thread woke the window
-//   void closing()                   the window is going away
+//   window()        the scene: a skiff::scene::Scene<...>, whatever its root
+//   woken()         another thread woke the window
+//   before_frame()  between events: what the screens asked for, applied
+//                   where no handler is running
+//   closing()       the window is going away
 template <class App>
 int run(App& app, const options& how) {
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
@@ -209,16 +211,18 @@ int run(App& app, const options& how) {
   int result = 0;
   {
     detail::canvas_target target(window, how.software);
-    skiff::scene::Drawable& root = app.root();
+    auto& scene = app.window();
     skiff::scene::InputRouter router;
-    const std::array layers{skiff::scene::InputRouter::Layer(&root)};
+    const std::array layers{skiff::scene::InputRouter::Layer{scene.handle(), false}};
     router.setLayers(layers);
-    skiff::scene::Drawable::setTextFocusHook([window](bool on) {
+    // Kept here for as long as the hook is set: the hook keeps a pointer.
+    auto keyboard = [window](bool on) {
       if (on)
         SDL_StartTextInput(window);
       else
         SDL_StopTextInput(window);
-    });
+    };
+    skiff::scene::setTextFocusHook(keyboard);
 
     bool running = true;
     bool redraw = true;
@@ -237,7 +241,7 @@ int run(App& app, const options& how) {
           case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
           case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:
           case SDL_EVENT_WINDOW_EXPOSED:
-            root.invalidateLayout();
+            scene.state().invalidateLayout();
             redraw = true;
             break;
           case SDL_EVENT_MOUSE_MOTION: {
@@ -315,9 +319,10 @@ int run(App& app, const options& how) {
       SDL_GetWindowSizeInPixels(window, &pixel_width, &pixel_height);
       const float width = static_cast<float>(pixel_width) / scale;
       const float height = static_cast<float>(pixel_height) / scale;
-      root.updateTree(detail::now_ms());
-      root.layoutIfNeeded(skia::SkRect::MakeWH(width, height));
-      const skiff::scene::FrameResult frame = root.finishFrame();
+      app.before_frame();
+      scene.update(detail::now_ms());
+      scene.layoutIfNeeded(skia::SkRect::MakeWH(width, height));
+      const skiff::scene::FrameResult frame = scene.finishFrame();
       animating = frame.fWantsAnotherFrame;
       if (frame.fDamage.isEmpty() && !redraw)
         continue;
@@ -329,12 +334,12 @@ int run(App& app, const options& how) {
       canvas->clear(skia::colorSetARGB(255, 24, 27, 30));
       canvas->save();
       canvas->scale(scale, scale);
-      root.draw(canvas);
+      scene.draw(canvas);
       canvas->restore();
       target.present();
     }
     app.closing();
-    skiff::scene::Drawable::setTextFocusHook({});
+    skiff::scene::clearTextFocusHook();
   }
   SDL_DestroyWindow(window);
   SDL_Quit();

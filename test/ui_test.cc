@@ -53,7 +53,13 @@ struct stub {
   void account_page(int) {}
   void flip_account_receipts() {}
   void proxy_kind(int) {}
-  void save_proxy() {}
+  void choose_account_proxy(int) {}
+  void manage_proxies() {}
+  void settings_proxies() {}
+  void add_proxy() {}
+  void edit_proxy(int) {}
+  void save_proxy_profile() {}
+  void delete_proxy_profile() {}
   void leave_chat() {}
 };
 

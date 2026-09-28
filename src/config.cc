@@ -11,8 +11,10 @@ import knot;
 
 export namespace mux::config {
 
-// A proxy an account connects through: SOCKS5 or HTTP CONNECT.
+// A proxy, as a named profile of the program's list -- as Gajim keeps them
+// -- that accounts choose by its name: SOCKS5 or HTTP CONNECT.
 struct proxy_settings {
+  std::string name;
   std::string kind = "socks5";  // "socks5" or "http"
   std::string host;
   std::int64_t port = 1080;
@@ -36,7 +38,8 @@ struct xmpp_account {
   // Whether the people one talks to are told a message was read. Nothing
   // said is yes.
   std::optional<bool> read_receipts;
-  std::optional<proxy_settings> proxy;
+  // The name of the proxy profile it connects through, where it has one.
+  std::optional<std::string> proxy;
   friend bool operator==(const xmpp_account&, const xmpp_account&) = default;
 };
 
@@ -50,7 +53,7 @@ struct matrix_account {
   // What the server shows for this login among the account's devices.
   std::string device_name = "mux";
   std::optional<bool> read_receipts;
-  std::optional<proxy_settings> proxy;
+  std::optional<std::string> proxy;
   friend bool operator==(const matrix_account&, const matrix_account&) = default;
 };
 
@@ -73,6 +76,8 @@ struct file {
   // just appear) or "full". Nothing said is full.
   std::optional<std::string> motion;
   std::optional<std::vector<muted_chat>> muted;
+  // The proxy profiles accounts choose from.
+  std::optional<std::vector<proxy_settings>> proxies;
   friend bool operator==(const file&, const file&) = default;
 };
 
@@ -104,11 +109,19 @@ consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
 [[nodiscard]] inline std::optional<bool>& read_receipts_in(account_t& one) {
   return std::visit([](auto& each) -> std::optional<bool>& { return each.read_receipts; }, one);
 }
-[[nodiscard]] inline std::optional<proxy_settings>& proxy_in(account_t& one) {
-  return std::visit([](auto& each) -> std::optional<proxy_settings>& { return each.proxy; }, one);
+[[nodiscard]] inline std::optional<std::string>& proxy_in(account_t& one) {
+  return std::visit([](auto& each) -> std::optional<std::string>& { return each.proxy; }, one);
 }
-[[nodiscard]] inline const std::optional<proxy_settings>& proxy_of(const account_t& one) {
-  return std::visit([](const auto& each) -> const std::optional<proxy_settings>& { return each.proxy; }, one);
+[[nodiscard]] inline const std::optional<std::string>& proxy_of(const account_t& one) {
+  return std::visit([](const auto& each) -> const std::optional<std::string>& { return each.proxy; }, one);
+}
+// The profile of that name, where there is one.
+[[nodiscard]] inline const proxy_settings* find_proxy(const std::vector<proxy_settings>& all,
+                                                      const std::optional<std::string>& name) {
+  if (!name)
+    return nullptr;
+  const auto found = std::ranges::find(all, *name, &proxy_settings::name);
+  return found == all.end() ? nullptr : &*found;
 }
 
 [[nodiscard]] constexpr std::string_view protocol_name(const xmpp_account&) noexcept { return "XMPP"; }

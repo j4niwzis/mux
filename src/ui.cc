@@ -64,7 +64,9 @@ inline const skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110)
 //   void close_account_pages()       -- back to the list of accounts
 //   void accounts_back()              -- ← on the accounts page
 //   void account_page(int)           -- a page of the chosen account
-//   void flip_account_receipts(), proxy_kind(int), save_proxy()
+//   void flip_account_receipts(), choose_account_proxy(int), manage_proxies()
+//   void settings_proxies(), add_proxy(), edit_proxy(int), proxy_kind(int),
+//        save_proxy_profile(), delete_proxy_profile()
 //   void not_implemented(std::string what)  -- a box saying it is not there yet
 //   void close_notice()
 //   void resize_sidebar(float x)     -- the chat list's edge dragged to x
@@ -2181,114 +2183,46 @@ struct account_privacy : scene::Node {
   }
 };
 
-// A kind of proxy chosen on an account's Proxy page.
+// A proxy profile chosen for the chosen account: -1 for none.
 template <class Actions>
-struct choose_proxy_kind {
+struct choose_account_proxy {
   Actions* actions = nullptr;
-  int kind = 0;
-  void operator()() const { actions->proxy_kind(kind); }
+  int index = -1;
+  void operator()() const { actions->choose_account_proxy(index); }
 };
 
-// An account's Proxy page: none, SOCKS5 or HTTP, where it is, and who to be
-// there; saved with its button.
+// An account's Proxy page, as Gajim's: which of the program's proxy profiles
+// it connects through, or none; and the way to the profiles themselves.
 template <class Actions>
 struct account_proxy : scene::Node {
-  int kind = 0;  // 0 none, 1 SOCKS5, 2 HTTP
   nodes::Text title = section_title("PROXY");
-  nodes::Box<> frame{chosen_colour};
-  segment<choose_proxy_kind<Actions>> none;
-  segment<choose_proxy_kind<Actions>> socks;
-  segment<choose_proxy_kind<Actions>> http;
-  field host{"Host", "proxy.example.com"};
-  field port{"Port", "1080"};
-  field username{"User name", "none"};
-  field password{"Password", "none"};
-  nodes::Text message{"", 13.0f, dim_colour};
-  widgets::Button<ask<Actions, &Actions::save_proxy>> save;
+  std::vector<row_item<choose_account_proxy<Actions>>> choices;
+  row_item<ask<Actions, &Actions::manage_proxies>> manage;
 
-  account_proxy(Actions* a, const std::optional<config::proxy_settings>& from)
-      : none("None", {a, 0}), socks("SOCKS5", {a, 1}), http("HTTP", {a, 2}), save("Save", {a}) {
+  account_proxy(Actions* a, const std::vector<config::proxy_settings>& all, const std::optional<std::string>& current)
+      : manage("Manage proxies…", {a}, icon::gear{}) {
     fState.apply({.fill = true});
-    frame.apply({.width = 3.0f * 92.0f + 4.0f, .height = 30.0f});
-    password.box.setMasked(true);
-    save.setPrimary(true);
-    save.apply({.width = 110.0f, .height = 34.0f});
-    message.setWrapped(true);
-    if (from) {
-      host.box.setText(from->host);
-      port.box.setText(std::to_string(from->port));
-      username.box.setText(from->username.value_or(""));
-      password.box.setText(from->password.value_or(""));
-    }
-    this->set_kind(!from ? 0 : from->kind == "http" ? 2 : 1);
-  }
-
-  void set_kind(int to) {
-    kind = to;
-    none.set_active(kind == 0);
-    socks.set_active(kind == 1);
-    http.set_active(kind == 2);
-    for (field* one : {&host, &port, &username, &password})
-      one->setVisible(kind != 0);
-    this->invalidateLayout();
-  }
-
-  // The proxy as typed: nothing for none, or what is wrong with it.
-  [[nodiscard]] std::expected<std::optional<config::proxy_settings>, std::string> proxy() const {
-    if (kind == 0)
-      return std::optional<config::proxy_settings>{};
-    config::proxy_settings out{.kind = kind == 2 ? "http" : "socks5", .host = host.box.text()};
-    if (out.host.empty())
-      return std::unexpected("Type the proxy's host");
-    const std::string& text = port.box.text();
-    std::int64_t number = 0;
-    const auto [last, failed] = std::from_chars(text.data(), text.data() + text.size(), number);
-    if (text.empty() || failed != std::errc{} || last != text.data() + text.size() || number < 1 || number > 65535)
-      return std::unexpected("A port is a number from 1 to 65535");
-    out.port = number;
-    out.username = typed_or_nothing(username.box.text());
-    out.password = typed_or_nothing(password.box.text());
-    return std::optional<config::proxy_settings>{std::move(out)};
-  }
-
-  void say(std::string text, bool error) {
-    message.setText(std::move(text));
-    message.setColour(error ? error_colour : dim_colour);
+    choices.emplace_back("No proxy", choose_account_proxy<Actions>{a, -1}, icon::none{}, !current.has_value());
+    for (std::size_t i = 0; i < all.size(); ++i)
+      choices.emplace_back(std::format("{} ({} {}:{})", all[i].name, all[i].kind == "http" ? "HTTP" : "SOCKS5",
+                                       all[i].host, all[i].port),
+                           choose_account_proxy<Actions>{a, static_cast<int>(i)}, icon::none{},
+                           current && *current == all[i].name);
   }
   void show(bool) {}
-
+  void say(std::string, bool) {}
   void forEachChild(auto&& f) {
     f(title);
-    f(frame);
-    f(none);
-    f(socks);
-    f(http);
-    f(host);
-    f(port);
-    f(username);
-    f(password);
-    f(message);
-    f(save);
+    f(choices);
+    f(manage);
   }
   void layoutChildren() {
     column_stack stack{fState.contentBox()};
-    stack(title, 8.0f);
-    frame.fState.arrange(0.0f, stack.y);
-    scene::layout(frame, stack.column);
-    float x = 1.0f;
-    for (auto* one : {&none, &socks, &http}) {
-      one->fState.arrange(x, stack.y + 1.0f);
-      scene::layout(*one, stack.column);
-      x += 93.0f;
-    }
-    stack.y += 30.0f + 14.0f;
-    stack(host, 8.0f);
-    stack(port, 8.0f);
-    stack(username, 8.0f);
-    stack(password, 12.0f);
-    message.setMaxWidth(stack.column.width());
-    stack(message, 8.0f);
-    stack(save, 0.0f);
+    stack(title, 4.0f);
+    for (auto& one : choices)
+      stack(one, 0.0f);
+    stack.y += 8.0f;
+    stack(manage, 0.0f);
   }
 };
 
@@ -2378,12 +2312,13 @@ struct accounts_panel : closes_on_escape<Actions> {
   // An account's settings, brought up afresh.
   // One of the chosen account's pages beside the list: 0 Connection, 1
   // Privacy, 2 Proxy.
-  void show_page(int page, const config::account_t& one, const model& now) {
+  void show_page(int page, const config::account_t& one, const model& now,
+                 const std::vector<config::proxy_settings>& proxies = {}) {
     pages.light(page);
     if (page == 1) {
       detail.template emplace<3>(this->actions, config::read_receipts_of(one));
     } else if (page == 2) {
-      detail.template emplace<4>(this->actions, config::proxy_of(one));
+      detail.template emplace<4>(this->actions, proxies, config::proxy_of(one));
     } else {
       detail.template emplace<1>(this->actions, one);
       std::get<1>(detail).show(one, now);
@@ -2637,11 +2572,13 @@ struct settings_home : scene::Node {
   page_header<ask<Actions, &Actions::close_settings>, ask<Actions, &Actions::close_settings>> header;
   row_item<ask<Actions, &Actions::open_accounts>> accounts;
   row_item<ask<Actions, &Actions::settings_animations>> animations;
+  row_item<ask<Actions, &Actions::settings_proxies>> proxies;
 
   explicit settings_home(Actions* a)
       : header("Settings", {a}, {a}, false, true),
         accounts("Accounts", {a}, icon::person{}),
-        animations("Animations", {a}, icon::motion{}) {
+        animations("Animations", {a}, icon::motion{}),
+        proxies("Proxies", {a}, icon::gear{}) {
     fState.apply({.fill = true});
   }
 
@@ -2649,6 +2586,7 @@ struct settings_home : scene::Node {
     f(header);
     f(accounts);
     f(animations);
+    f(proxies);
   }
   void show_motion(std::string_view) {}
   void show_receipts(bool) {}
@@ -2657,6 +2595,7 @@ struct settings_home : scene::Node {
     stack(header, 6.0f);
     stack(accounts, 0.0f);
     stack(animations, 0.0f);
+    stack(proxies, 0.0f);
   }
 };
 
@@ -2707,11 +2646,174 @@ struct animations_page : scene::Node {
   }
 };
 
+// A proxy profile opened from the list in Settings.
+template <class Actions>
+struct edit_proxy {
+  Actions* actions = nullptr;
+  int index = 0;
+  void operator()() const { actions->edit_proxy(index); }
+};
+// A kind of proxy chosen on a profile's page.
+template <class Actions>
+struct choose_proxy_kind {
+  Actions* actions = nullptr;
+  int kind = 1;
+  void operator()() const { actions->proxy_kind(kind); }
+};
+
+// Settings' Proxies page, as Gajim's Manage Proxies: the profiles, and a way
+// to add one.
+template <class Actions>
+struct proxies_page : scene::Node {
+  page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>> header;
+  std::vector<row_item<edit_proxy<Actions>>> profiles;
+  row_item<ask<Actions, &Actions::add_proxy>> add;
+  nodes::Text empty{"No proxies yet. Accounts connect directly.", 13.0f, dim_colour};
+
+  proxies_page(Actions* a, const std::vector<config::proxy_settings>& all)
+      : header("Proxies", {a}, {a}, true, true), add("Add proxy", {a}, icon::plus{}) {
+    fState.apply({.fill = true});
+    for (std::size_t i = 0; i < all.size(); ++i)
+      profiles.emplace_back(std::format("{} ({} {}:{})", all[i].name, all[i].kind == "http" ? "HTTP" : "SOCKS5",
+                                        all[i].host, all[i].port),
+                            edit_proxy<Actions>{a, static_cast<int>(i)}, icon::gear{});
+    empty.setVisible(all.empty());
+  }
+  void show_motion(std::string_view) {}
+  void show_receipts(bool) {}
+  void forEachChild(auto&& f) {
+    f(header);
+    f(profiles);
+    f(add);
+    f(empty);
+  }
+  void layoutChildren() {
+    column_stack stack{fState.contentBox()};
+    stack(header, 4.0f);
+    for (auto& one : profiles)
+      stack(one, 0.0f);
+    stack(add, 8.0f);
+    empty.fState.arrange(20.0f, stack.y);
+    scene::layout(empty, stack.column);
+  }
+};
+
+// One proxy profile's page: its name, SOCKS5 or HTTP, where, and who to be
+// there; saved or deleted with its buttons.
+template <class Actions>
+struct proxy_editor : scene::Node {
+  int index = -1;  // in the list; -1 for a new one
+  int kind = 1;    // 1 SOCKS5, 2 HTTP
+  page_header<ask<Actions, &Actions::settings_proxies>, ask<Actions, &Actions::close_settings>> header;
+  field name{"Name", "Home, Tor, Work…"};
+  nodes::Box<> frame{chosen_colour};
+  segment<choose_proxy_kind<Actions>> socks;
+  segment<choose_proxy_kind<Actions>> http;
+  field host{"Host", "proxy.example.com"};
+  field port{"Port", "1080"};
+  field username{"User name", "none"};
+  field password{"Password", "none"};
+  nodes::Text message{"", 13.0f, dim_colour};
+  widgets::Button<ask<Actions, &Actions::save_proxy_profile>> save;
+  widgets::Button<ask<Actions, &Actions::delete_proxy_profile>> remove;
+
+  proxy_editor(Actions* a, const std::optional<config::proxy_settings>& from, int at)
+      : index(at), header(from ? from->name : std::string("New proxy"), {a}, {a}, true, true),
+        socks("SOCKS5", {a, 1}), http("HTTP", {a, 2}), save("Save", {a}), remove("Delete", {a}) {
+    fState.apply({.fill = true});
+    frame.apply({.width = 2.0f * 92.0f + 3.0f, .height = 30.0f});
+    password.box.setMasked(true);
+    save.setPrimary(true);
+    save.apply({.width = 110.0f, .height = 34.0f});
+    remove.apply({.width = 110.0f, .height = 34.0f});
+    remove.setVisible(from.has_value());
+    message.setWrapped(true);
+    if (from) {
+      name.box.setText(from->name);
+      host.box.setText(from->host);
+      port.box.setText(std::to_string(from->port));
+      username.box.setText(from->username.value_or(""));
+      password.box.setText(from->password.value_or(""));
+    }
+    this->set_kind(from && from->kind == "http" ? 2 : 1);
+  }
+
+  void set_kind(int to) {
+    kind = to;
+    socks.set_active(kind == 1);
+    http.set_active(kind == 2);
+  }
+
+  // The profile as typed, or what is wrong with it.
+  [[nodiscard]] std::expected<config::proxy_settings, std::string> proxy() const {
+    config::proxy_settings out{.name = name.box.text(), .kind = kind == 2 ? "http" : "socks5", .host = host.box.text()};
+    if (out.name.empty())
+      return std::unexpected("Name the proxy");
+    if (out.host.empty())
+      return std::unexpected("Type the proxy's host");
+    const std::string& text = port.box.text();
+    std::int64_t number = 0;
+    const auto [last, failed] = std::from_chars(text.data(), text.data() + text.size(), number);
+    if (text.empty() || failed != std::errc{} || last != text.data() + text.size() || number < 1 || number > 65535)
+      return std::unexpected("A port is a number from 1 to 65535");
+    out.port = number;
+    out.username = typed_or_nothing(username.box.text());
+    out.password = typed_or_nothing(password.box.text());
+    return out;
+  }
+
+  void say(std::string text, bool error) {
+    message.setText(std::move(text));
+    message.setColour(error ? error_colour : dim_colour);
+  }
+  void show_motion(std::string_view) {}
+  void show_receipts(bool) {}
+
+  void forEachChild(auto&& f) {
+    f(header);
+    f(name);
+    f(frame);
+    f(socks);
+    f(http);
+    f(host);
+    f(port);
+    f(username);
+    f(password);
+    f(message);
+    f(save);
+    f(remove);
+  }
+  void layoutChildren() {
+    column_stack stack{scene::inset(fState.contentBox(), 16.0f, 0.0f)};
+    header.fState.arrange(0.0f, 0.0f);
+    scene::layout(header, fState.contentBox());
+    stack.y = header.kHeight + 4.0f;
+    stack(name, 10.0f);
+    frame.fState.arrange(0.0f, stack.y);
+    scene::layout(frame, stack.column);
+    socks.fState.arrange(1.0f, stack.y + 1.0f);
+    scene::layout(socks, stack.column);
+    http.fState.arrange(94.0f, stack.y + 1.0f);
+    scene::layout(http, stack.column);
+    stack.y += 30.0f + 12.0f;
+    stack(host, 6.0f);
+    stack(port, 6.0f);
+    stack(username, 6.0f);
+    stack(password, 10.0f);
+    message.setMaxWidth(stack.column.width());
+    stack(message, 6.0f);
+    save.fState.arrange(0.0f, stack.y);
+    scene::layout(save, stack.column);
+    remove.fState.arrange(save.bounds().width() + 10.0f, stack.y);
+    scene::layout(remove, stack.column);
+  }
+};
+
 template <class Actions>
 struct settings_dialog : scene::Node {
   Actions* actions = nullptr;
   std::string motion;
-  std::variant<settings_home<Actions>, animations_page<Actions>> page;
+  std::variant<settings_home<Actions>, animations_page<Actions>, proxies_page<Actions>, proxy_editor<Actions>> page;
 
   settings_dialog(Actions* a, std::string level) : actions(a), motion(std::move(level)), page(std::in_place_index<0>, a) {
     fState.apply({.fill = true});
@@ -2723,6 +2825,15 @@ struct settings_dialog : scene::Node {
   void show_animations() {
     page.template emplace<1>(actions);
     this->show_motion(motion);
+  }
+  void show_proxies(const std::vector<config::proxy_settings>& all) { page.template emplace<2>(actions, all); }
+  void show_proxy(const std::optional<config::proxy_settings>& from, int index) {
+    page.template emplace<3>(actions, from, index);
+  }
+  [[nodiscard]] proxy_editor<Actions>* editor() {
+    return std::visit(overloaded{[](proxy_editor<Actions>& one) { return &one; },
+                                 [](auto&) -> proxy_editor<Actions>* { return nullptr; }},
+                      page);
   }
   void show_motion(std::string level) {
     motion = std::move(level);

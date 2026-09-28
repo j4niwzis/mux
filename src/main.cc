@@ -65,11 +65,13 @@ struct network {
   std::vector<running_account> retired;
   std::thread thread;
 
-  void start(const mux::config::account_t& saved) {
-    std::visit([this](const auto& each) { this->start_one(each); }, saved);
+  // An account started, through the profile of `proxies` it names.
+  void start(const mux::config::account_t& saved, const std::vector<mux::config::proxy_settings>& proxies) {
+    const auto* via = mux::config::find_proxy(proxies, mux::config::proxy_of(saved));
+    std::visit([this, via](const auto& each) { this->start_one(each, proxy_of(via)); }, saved);
   }
-  // The proxy an account keeps, as mux.net takes it.
-  static std::optional<mux::net::proxy> proxy_of(const std::optional<mux::config::proxy_settings>& kept) {
+  // The proxy a profile names, as mux.net takes it.
+  static std::optional<mux::net::proxy> proxy_of(const mux::config::proxy_settings* kept) {
     if (!kept)
       return std::nullopt;
     return mux::net::proxy{.kind = kept->kind,
@@ -79,25 +81,25 @@ struct network {
                            .password = kept->password};
   }
 
-  void start_one(const mux::config::xmpp_account& saved) {
+  void start_one(const mux::config::xmpp_account& saved, std::optional<mux::net::proxy> via) {
     auto live = std::make_shared<std::atomic<bool>>(true);
     mux::xmpp::settings how{.address = saved.address,
                             .password = saved.password,
                             .resource = saved.resource,
                             .host = saved.host,
                             .plain_without_tls = saved.plain_without_tls,
-                            .proxy = proxy_of(saved.proxy)};
+                            .proxy = std::move(via)};
     if (saved.port)
       how.port = static_cast<std::uint16_t>(*saved.port);
     this->run(saved.address, std::make_unique<xmpp_account>(loop, tls, std::move(how), post_change{box, live}), live);
   }
-  void start_one(const mux::config::matrix_account& saved) {
+  void start_one(const mux::config::matrix_account& saved, std::optional<mux::net::proxy> via) {
     auto live = std::make_shared<std::atomic<bool>>(true);
     mux::matrix::settings how{.user_id = saved.user_id,
                               .password = saved.password,
                               .homeserver = saved.homeserver,
                               .device_name = saved.device_name,
-                              .proxy = proxy_of(saved.proxy)};
+                              .proxy = std::move(via)};
     this->run(saved.user_id, std::make_unique<matrix_account>(loop, tls, std::move(how), post_change{box, live}),
               live);
   }
@@ -118,8 +120,8 @@ struct network {
   }
 
   // From the window's thread.
-  void add(mux::config::account_t saved) {
-    loop.post([this, saved = std::move(saved)] { this->start(saved); });
+  void add(mux::config::account_t saved, std::vector<mux::config::proxy_settings> proxies) {
+    loop.post([this, saved = std::move(saved), proxies = std::move(proxies)] { this->start(saved, proxies); });
   }
   void remove(std::string address) {
     loop.post([this, address = std::move(address)] {
@@ -338,7 +340,17 @@ struct flip_account_receipts {};
 struct proxy_kind {
   int kind = 0;
 };
-struct save_proxy {};
+struct choose_account_proxy {
+  int index = -1;
+};
+struct manage_proxies {};
+struct settings_proxies {};
+struct add_proxy {};
+struct edit_proxy {
+  int index = 0;
+};
+struct save_proxy_profile {};
+struct delete_proxy_profile {};
 struct leave_chat {};
 struct switch_account {
   std::string address;
@@ -359,7 +371,9 @@ using request_t =
                  request::resize_sidebar, request::not_implemented, request::close_notice,
                  request::resize_info, request::toggle_mute, request::close_account_pages,
                  request::accounts_back, request::account_page, request::flip_account_receipts,
-                 request::proxy_kind, request::save_proxy, request::leave_chat>;
+                 request::proxy_kind, request::choose_account_proxy, request::manage_proxies,
+                 request::settings_proxies, request::add_proxy, request::edit_proxy, request::save_proxy_profile,
+                 request::delete_proxy_profile, request::leave_chat>;
 
 // What the screens ask: each a request, kept until the program applies it
 // between events -- except a message, which goes to the network at once.
@@ -416,7 +430,13 @@ struct actions {
   void account_page(int page) { requests.emplace_back(request::account_page{page}); }
   void flip_account_receipts() { requests.emplace_back(request::flip_account_receipts{}); }
   void proxy_kind(int kind) { requests.emplace_back(request::proxy_kind{kind}); }
-  void save_proxy() { requests.emplace_back(request::save_proxy{}); }
+  void choose_account_proxy(int index) { requests.emplace_back(request::choose_account_proxy{index}); }
+  void manage_proxies() { requests.emplace_back(request::manage_proxies{}); }
+  void settings_proxies() { requests.emplace_back(request::settings_proxies{}); }
+  void add_proxy() { requests.emplace_back(request::add_proxy{}); }
+  void edit_proxy(int index) { requests.emplace_back(request::edit_proxy{index}); }
+  void save_proxy_profile() { requests.emplace_back(request::save_proxy_profile{}); }
+  void delete_proxy_profile() { requests.emplace_back(request::delete_proxy_profile{}); }
   void leave_chat() { requests.emplace_back(request::leave_chat{}); }
   void switch_account(std::string address) { requests.emplace_back(request::switch_account{std::move(address)}); }
   void close_settings() { requests.emplace_back(request::close_settings{}); }
@@ -453,8 +473,9 @@ struct app {
   std::vector<mux::config::account_t> saved;
   // How much moves, as read, to be written back as it was.
   std::optional<std::string> motion;
-  // The chats muted, kept in the file.
+  // The chats muted, and the proxy profiles: kept in the file.
   std::set<mux::conversation_id> muted;
+  std::vector<mux::config::proxy_settings> proxies;
   // Why the accounts file could not be read, when it could not: then it is
   // not written over either.
   std::optional<std::string> config_error;
@@ -725,7 +746,7 @@ struct app {
   }
   void apply(const request::account_page& one) {
     this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
-      panel.show_page(one.page, account, *model);
+      panel.show_page(one.page, account, *model, proxies);
     });
   }
   void apply(const request::flip_account_receipts&) {
@@ -738,34 +759,103 @@ struct app {
     });
   }
   void apply(const request::proxy_kind& one) {
-    this->with_chosen_account([&](accounts& panel, mux::config::account_t&) {
-      if (auto* page = panel.proxy())
-        page->set_kind(one.kind);
-    });
+    if (auto* up = root().settings_up())
+      if (auto* editor = up->editor())
+        editor->set_kind(one.kind);
   }
-  // The proxy typed in, kept, and the account connected again through it.
-  void apply(const request::save_proxy&) {
+  // The chosen account through a profile, or none: kept, and connected again.
+  void apply(const request::choose_account_proxy& one) {
     this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
-      auto* page = panel.proxy();
-      if (!page)
-        return;
-      auto typed = page->proxy();
-      if (!typed) {
-        page->say(typed.error(), true);
-        return;
-      }
-      mux::config::proxy_in(account) = std::move(*typed);
-      if (auto failed = this->write()) {
-        page->say(*failed, true);
-        return;
-      }
-      if (mux::config::enabled_of(account)) {
-        net->remove(mux::config::address_of(account));
-        net->add(account);
-      }
-      page->say("Saved.", false);
+      auto& kept = mux::config::proxy_in(account);
+      if (one.index < 0 || static_cast<std::size_t>(one.index) >= proxies.size())
+        kept.reset();
+      else
+        kept = proxies[static_cast<std::size_t>(one.index)].name;
+      (void)this->write();
+      this->reconnect(account);
+      panel.show_page(2, account, *model, proxies);
     });
   }
+  void reconnect(const mux::config::account_t& account) {
+    if (!mux::config::enabled_of(account) || ask.demo)
+      return;
+    net->remove(mux::config::address_of(account));
+    net->add(account, proxies);
+  }
+  // The accounts going through a profile, connected again.
+  void reconnect_through(const std::string& name) {
+    for (const auto& one : saved)
+      if (mux::config::proxy_of(one) == name)
+        this->reconnect(one);
+  }
+  void apply(const request::manage_proxies&) {
+    root().open_settings(motion.value_or("full"));
+    if (auto* up = root().settings_up())
+      up->show_proxies(proxies);
+  }
+  void apply(const request::settings_proxies&) {
+    if (auto* up = root().settings_up())
+      up->show_proxies(proxies);
+  }
+  void apply(const request::add_proxy&) {
+    if (auto* up = root().settings_up())
+      up->show_proxy(std::nullopt, -1);
+  }
+  void apply(const request::edit_proxy& one) {
+    if (auto* up = root().settings_up(); up && one.index >= 0 && static_cast<std::size_t>(one.index) < proxies.size())
+      up->show_proxy(proxies[static_cast<std::size_t>(one.index)], one.index);
+  }
+  // A profile saved: a new one added, or one changed -- and renamed in the
+  // accounts that use it.
+  void apply(const request::save_proxy_profile&) {
+    auto* up = root().settings_up();
+    auto* editor = up ? up->editor() : nullptr;
+    if (!editor)
+      return;
+    auto typed = editor->proxy();
+    if (!typed) {
+      editor->say(typed.error(), true);
+      return;
+    }
+    for (std::size_t i = 0; i < proxies.size(); ++i)
+      if (proxies[i].name == typed->name && static_cast<int>(i) != editor->index) {
+        editor->say("There is a proxy of that name already.", true);
+        return;
+      }
+    const std::string name = typed->name;
+    if (editor->index < 0) {
+      proxies.push_back(std::move(*typed));
+    } else {
+      auto& kept = proxies[static_cast<std::size_t>(editor->index)];
+      for (auto& one : saved)
+        if (auto& uses = mux::config::proxy_in(one); uses == kept.name)
+          uses = name;
+      kept = std::move(*typed);
+    }
+    if (auto failed = this->write()) {
+      editor->say(*failed, true);
+      return;
+    }
+    this->reconnect_through(name);
+    up->show_proxies(proxies);
+  }
+  // A profile deleted: the accounts that used it connect directly.
+  void apply(const request::delete_proxy_profile&) {
+    auto* up = root().settings_up();
+    auto* editor = up ? up->editor() : nullptr;
+    if (!editor || editor->index < 0 || static_cast<std::size_t>(editor->index) >= proxies.size())
+      return;
+    const std::string name = proxies[static_cast<std::size_t>(editor->index)].name;
+    proxies.erase(proxies.begin() + editor->index);
+    for (auto& one : saved)
+      if (auto& uses = mux::config::proxy_in(one); uses == name) {
+        uses.reset();
+        this->reconnect(one);
+      }
+    (void)this->write();
+    up->show_proxies(proxies);
+  }
+
 
   void apply(const request::send_typed&) { this->send_message(root().main().line.text()); }
   // What is in the message field, to the chosen chat; the field emptied.
@@ -840,7 +930,7 @@ struct app {
       form.say(*failed, true);
       return;
     }
-    net->add(account);
+    net->add(account, proxies);
     pending_login = address;
     form.say("Connecting…", false);
   }
@@ -869,7 +959,7 @@ struct app {
     const auto failed = this->write();
     net->remove(was);
     if (mux::config::enabled_of(account))
-      net->add(account);
+      net->add(account, proxies);
     // The form is rebuilt from what was saved: `form` is gone after this.
     auto& panel = this->show_account(address);
     if (auto* editor = panel.editor())
@@ -883,7 +973,7 @@ struct app {
     bool& enabled = mux::config::enabled_of(*found);
     enabled = !enabled;
     if (enabled)
-      net->add(*found);
+      net->add(*found, proxies);
     else
       net->remove(address);
     this->save_from_accounts();
@@ -907,6 +997,8 @@ struct app {
       return "Not saved: " + *config_error;
     auto file = mux::config::file_of(saved);
     file.motion = motion;
+    if (!proxies.empty())
+      file.proxies = proxies;
     if (!muted.empty()) {
       std::vector<mux::config::muted_chat> kept;
       for (const auto& one : muted)
@@ -959,11 +1051,12 @@ int main(int argc, char** argv) {
       extra.push_back(mux::config::account_from(argv[at], password));
   }
 
+  const auto proxies = saved.proxies.value_or(std::vector<mux::config::proxy_settings>{});
   for (const auto& one : mux::config::accounts_of(saved))
     if (mux::config::enabled_of(one) && !demo)
-      net.start(one);
+      net.start(one, proxies);
   for (const auto& one : extra)
-    net.start(one);
+    net.start(one, proxies);
   net.thread = std::thread([&net] {
     try {
       net.loop.run_forever();
@@ -982,6 +1075,7 @@ int main(int argc, char** argv) {
   program.config_path = config_path;
   program.saved = mux::config::accounts_of(saved);
   program.motion = saved.motion;
+  program.proxies = proxies;
   for (const auto& one : saved.muted.value_or(std::vector<mux::config::muted_chat>{}))
     program.muted.insert({{mux::ui::protocol_of(one.account), one.account}, one.conversation});
   skiff::paint::motionLevel() = motion_of(saved.motion);

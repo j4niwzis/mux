@@ -156,12 +156,21 @@ struct flip_enabled {
 struct remove_account {
   std::string address;
 };
+struct open_drawer {};
+struct show_account {
+  std::string address;
+};
+struct set_motion {
+  std::string level;
+};
+struct quit {};
 }  // namespace request
 
 using request_t =
     std::variant<request::choose, request::back, request::open_accounts, request::open_new_account,
                  request::add_xmpp, request::add_matrix, request::select_account, request::toggle_advanced,
-                 request::toggle_plain, request::submit_login, request::flip_enabled, request::remove_account>;
+                 request::toggle_plain, request::submit_login, request::flip_enabled, request::remove_account,
+                 request::open_drawer, request::show_account, request::set_motion, request::quit>;
 
 // What the screens ask: each a request, kept until the program applies it
 // between events -- except a message, which goes to the network at once.
@@ -182,6 +191,10 @@ struct actions {
   void submit_login() { requests.emplace_back(request::submit_login{}); }
   void flip_enabled(std::string address) { requests.emplace_back(request::flip_enabled{std::move(address)}); }
   void remove_account(std::string address) { requests.emplace_back(request::remove_account{std::move(address)}); }
+  void open_drawer() { requests.emplace_back(request::open_drawer{}); }
+  void show_account(std::string address) { requests.emplace_back(request::show_account{std::move(address)}); }
+  void set_motion(std::string level) { requests.emplace_back(request::set_motion{std::move(level)}); }
+  void quit() { requests.emplace_back(request::quit{}); }
 };
 
 using window_type = mux::ui::window<actions>;
@@ -246,11 +259,13 @@ struct app {
   window_type& root() { return scene.root(); }
 
   void show_conversations() {
+    root().close_drawer();
     pending_login.reset();
     root().close();
     this->refresh();
   }
   accounts& show_accounts() {
+    root().close_drawer();
     pending_login.reset();
     auto& panel = root().open<accounts>();
     if (config_error)
@@ -268,6 +283,7 @@ struct app {
     return panel;
   }
   void show_adding() {
+    root().close_drawer();
     pending_login.reset();
     root().open<adding>();
     this->refresh();
@@ -290,7 +306,7 @@ struct app {
   // Everything brought up to date with the model: each panel by its own
   // overload.
   void refresh() {
-    root().bar.show(*model);
+    root().show(saved, *model);
     root().main().show(*model);
     if (auto* up = root().open_panel())
       std::visit([this](auto& panel) { this->bring_up_to_date(panel); }, *up);
@@ -362,6 +378,18 @@ struct app {
   }
   void apply(const request::flip_enabled& one) { this->flip_enabled(one.address); }
   void apply(const request::remove_account& one) { this->remove(one.address); }
+  void apply(const request::open_drawer&) { root().open_drawer(); }
+  void apply(const request::show_account& one) { (void)this->show_account(one.address); }
+  void apply(const request::set_motion& one) { this->set_motion(one.level); }
+  void apply(const request::quit&) { mux::host::request_quit(); }
+
+  // How much moves, from now on and in the file.
+  void set_motion(std::string level) {
+    skiff::paint::motionLevel() = motion_of(level);
+    root().show_motion(level);
+    motion = std::move(level);
+    (void)this->write();
+  }
 
   void switch_form(void (adding::*to)()) {
     auto* up = root().open_panel();
@@ -518,6 +546,7 @@ int main(int argc, char** argv) {
   program.saved = mux::config::accounts_of(saved);
   program.motion = saved.motion;
   skiff::paint::motionLevel() = motion_of(saved.motion);
+  program.root().show_motion(saved.motion.value_or("full"));
   program.config_error = std::move(config_error);
   program.refresh();
 

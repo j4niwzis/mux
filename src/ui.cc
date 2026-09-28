@@ -55,6 +55,10 @@ inline const skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110)
 //   void submit_login()
 //   void flip_enabled(std::string address)
 //   void remove_account(std::string address)
+//   void open_drawer()
+//   void show_account(std::string address)  -- its settings, from the drawer
+//   void set_motion(std::string level)       -- "full", "reduced" or "none"
+//   void quit()
 
 // A request with nothing to say but itself: `ask<Actions, &Actions::back>`.
 template <class Actions, auto Method>
@@ -98,6 +102,45 @@ struct column_stack {
   const float w = std::min(width, box.width() - 32.0f);
   return skia::SkRect::MakeXYWH(box.centerX() - w * 0.5f, box.fTop + top, w, std::max(0.0f, box.height() - top));
 }
+
+// ---- the drawer's button ------------------------------------------------------
+
+// Three lines at the top-left of the conversation list: a press pulls the
+// drawer out.
+template <class Actions>
+struct menu_button : scene::Node {
+  Actions* actions = nullptr;
+
+  explicit menu_button(Actions* a) : actions(a) { fState.apply({.width = 36.0f, .height = 36.0f}); }
+
+  void drawSelf(skia::SkCanvas* canvas, float alpha) {
+    skia::SkFont* font = skiff::paint::defaultFont();
+    if (font == nullptr)
+      return;
+    const skiff::paint::Painter p(canvas, *font);
+    const skia::SkRect& box = fState.fBounds;
+    if (fState.fHovered || this->focused())
+      p.fillRounded(box, 8.0f, chosen_colour, alpha);
+    const float left = box.centerX() - 8.0f;
+    for (const float dy : {-6.0f, 0.0f, 6.0f})
+      p.fillRounded(skia::SkRect::MakeXYWH(left, box.centerY() + dy - 1.0f, 16.0f, 2.0f), 1.0f, text_colour, alpha);
+  }
+
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+  [[nodiscard]] bool focusChangesAppearance() const { return true; }
+  [[nodiscard]] bool onClick(float, float) {
+    actions->open_drawer();
+    return true;
+  }
+  [[nodiscard]] scene::Semantics semantics() const {
+    scene::Semantics out;
+    out.fRole = scene::semantic_role::button{};
+    out.fLabel = "Menu";
+    out.fActions = {scene::semantic_action::focus{}, scene::semantic_action::activate{}};
+    return out;
+  }
+};
 
 // ---- the conversations ------------------------------------------------------
 
@@ -192,6 +235,9 @@ struct conversations_screen : scene::Node {
   std::optional<conversation_id> chosen;
 
   nodes::Box<> sidebar{sidebar_colour};
+  menu_button<Actions> menu;
+  nodes::Text name{"mux", 17.0f, text_colour, true};
+  nodes::Text no_chats{"No conversations yet.", 13.0f, dim_colour};
   nodes::ScrollContainer<nodes::Flow<std::vector<account_block<Actions>>>> list{
       nodes::Flow<std::vector<account_block<Actions>>>({.spacingY = 2.0f, .wrap = false}, {})};
   nodes::Text title{"", 20.0f, text_colour, true};
@@ -204,13 +250,12 @@ struct conversations_screen : scene::Node {
   nodes::Text empty_note{"Add an XMPP or a Matrix account, and its conversations will be here.", 14.0f, dim_colour};
   widgets::Button<ask<Actions, &Actions::open_new_account>> empty_add;
 
-  // The top bar's button this screen lights.
-  static constexpr int kTab = 0;
   static constexpr float kSidebarWidth = 280.0f;
+  static constexpr float kHeader = 52.0f;
   static constexpr float kPad = 8.0f;
 
   explicit conversations_screen(Actions* a)
-      : actions(a), line(a), empty_add("Add account", {a}) {
+      : actions(a), menu(a), line(a), empty_add("Add account", {a}) {
     fState.apply({.fill = true});
     sidebar.apply({.fill = true});
     empty_add.setPrimary(true);
@@ -224,6 +269,9 @@ struct conversations_screen : scene::Node {
 
   void forEachChild(auto&& f) {
     f(sidebar);
+    f(menu);
+    f(name);
+    f(no_chats);
     f(list);
     f(title);
     f(topic);
@@ -236,23 +284,36 @@ struct conversations_screen : scene::Node {
 
   void layoutChildren() {
     const skia::SkRect box = fState.contentBox();
-    // No account at all: no sidebar, and what to do about it in the middle,
-    // a little above the centre.
+    // On a narrow window the list takes most of it.
+    const float side_width = std::min(kSidebarWidth, box.width() * 0.45f);
+    const skia::SkRect side = skia::SkRect::MakeLTRB(box.fLeft, box.fTop, box.fLeft + side_width, box.fBottom);
+    const skia::SkRect main = skia::SkRect::MakeLTRB(side.fRight, box.fTop, box.fRight, box.fBottom);
+    scene::layout(sidebar, side);
+
+    // The header: the drawer's button, and the name beside it.
+    const skia::SkRect head = skia::SkRect::MakeLTRB(side.fLeft + kPad, side.fTop, side.fRight - kPad, side.fTop + kHeader);
+    menu.fState.arrange(0.0f, 0.0f, scene::anchor::kCentreLeft, scene::anchor::kCentreLeft);
+    scene::layout(menu, head);
+    name.fState.arrange(menu.bounds().width() + 10.0f, 0.0f, scene::anchor::kCentreLeft, scene::anchor::kCentreLeft);
+    scene::layout(name, head);
+
+    const skia::SkRect below = skia::SkRect::MakeLTRB(side.fLeft + kPad, head.fBottom, side.fRight - kPad, side.fBottom - kPad);
+    no_chats.fState.arrange(8.0f, 8.0f);
+    scene::layout(no_chats, below);
+    list.apply({.width = below.width(), .height = std::max(0.0f, below.height())});
+    list.fState.arrange(0.0f, 0.0f);
+    scene::layout(list, below);
+
+    // No account at all: what to do about it, in the middle of the rest, a
+    // little above its centre.
     if (empty_title.visible()) {
-      column_stack stack{form_column(box, 420.0f, std::max(24.0f, box.height() * 0.3f))};
+      column_stack stack{form_column(main, 420.0f, std::max(24.0f, main.height() * 0.3f))};
       empty_note.setMaxWidth(stack.column.width());
       stack(empty_title, 10.0f);
       stack(empty_note, 20.0f);
       stack(empty_add, 0.0f);
       return;
     }
-    const skia::SkRect side = skia::SkRect::MakeLTRB(box.fLeft, box.fTop, box.fLeft + kSidebarWidth, box.fBottom);
-    const skia::SkRect main = skia::SkRect::MakeLTRB(side.fRight, box.fTop, box.fRight, box.fBottom);
-    scene::layout(sidebar, side);
-
-    list.apply({.width = side.width() - 2 * kPad, .height = std::max(0.0f, side.height() - 2 * kPad)});
-    list.fState.arrange(kPad, kPad);
-    scene::layout(list, box);
 
     const skia::SkRect inner = scene::inset(main, 12.0f, 12.0f);
     title.fState.arrange(0.0f, 0.0f);
@@ -283,8 +344,12 @@ struct conversations_screen : scene::Node {
       block.apply({.fillX = true, .autoSize = scene::axes::kY});
     }
     const bool none = now.accounts().empty();
-    for (scene::Node* shown : std::initializer_list<scene::Node*>{&sidebar, &list, &title, &topic, &timeline, &line})
+    for (scene::Node* shown : std::initializer_list<scene::Node*>{&title, &topic, &timeline, &line})
       shown->setVisible(!none);
+    std::size_t conversations = 0;
+    for (const auto& [id, kept] : now.accounts())
+      conversations += kept.conversations.size();
+    no_chats.setVisible(conversations == 0);
     empty_title.setVisible(none);
     empty_note.setVisible(none);
     empty_add.setVisible(none);
@@ -982,194 +1047,260 @@ struct accounts_panel : closes_on_escape<Actions> {
 
 // ---- the window -----------------------------------------------------------------
 
-// A flat tab of the top bar: its name, dim, bright under the pointer, and
-// white with an accent line under it while it is the one up.
-template <class Actions, auto Method>
-struct nav_tab : scene::Node {
+// ---- the drawer -------------------------------------------------------------------
+
+// The levels of motion, as the accounts file names them.
+inline constexpr std::array<std::string_view, 3> kMotions{"full", "reduced", "none"};
+
+// A level of motion chosen from the drawer.
+template <class Actions>
+struct choose_motion {
   Actions* actions = nullptr;
-  bool active = false;
+  std::string_view level;
+  void operator()() const { actions->set_motion(std::string(level)); }
+};
+
+// One line of the drawer: flat text that lights under the pointer, and a
+// tick before it when it is the one in use.
+template <class Act>
+struct drawer_item : scene::Node {
+  Act act;
+  bool checked = false;
   nodes::Text label;
-  nodes::Box<> underline{accent_colour};
 
-  static constexpr float kHeight = 48.0f;
-  static constexpr float kPadX = 14.0f;
-
-  nav_tab(Actions* a, std::string name) : actions(a), label(std::move(name), 14.0f, dim_colour, true) {
-    underline.apply({.height = 2.0f, .cornerRadius = 1.0f});
-    underline.setVisible(false);
+  drawer_item(std::string text, Act what) : act(std::move(what)), label(std::move(text), 15.0f, text_colour) {
+    fState.apply({.fillX = true, .height = 40.0f});
   }
 
-  void set_active(bool on) {
-    active = on;
-    underline.setVisible(on);
-    this->colour();
+  void set_checked(bool on) {
+    checked = on;
+    this->markDamaged();
   }
 
-  void forEachChild(auto&& f) {
-    f(label);
-    f(underline);
-  }
-
-  void measure(const skia::SkRect& parent) {
-    label.measure(parent);
-    fState.fWidth = label.fState.fWidth + 2 * kPadX;
-    fState.fHeight = kHeight;
-  }
+  void forEachChild(auto&& f) { f(label); }
   void layoutChildren() {
-    const skia::SkRect box = fState.contentBox();
-    label.fState.arrange(0.0f, 0.0f, scene::anchor::kCentre, scene::anchor::kCentre);
-    scene::layout(label, box);
-    underline.apply({.width = std::max(0.0f, box.width() - 2 * kPadX + 8.0f)});
-    underline.fState.arrange(0.0f, 0.0f, scene::anchor::kBottomCentre, scene::anchor::kBottomCentre);
-    scene::layout(underline, box);
+    label.fState.arrange(34.0f, 0.0f, scene::anchor::kCentreLeft, scene::anchor::kCentreLeft);
+    scene::layout(label, fState.contentBox());
   }
-
-  void colour() { label.setColour(active ? text_colour : this->hovered() ? text_colour : dim_colour); }
-  void update(double) { this->colour(); }
+  void drawSelf(skia::SkCanvas* canvas, float alpha) {
+    skia::SkFont* font = skiff::paint::defaultFont();
+    if (font == nullptr)
+      return;
+    const skiff::paint::Painter p(canvas, *font);
+    const skia::SkRect& box = fState.fBounds;
+    if (fState.fHovered || this->focused())
+      p.fillRounded(box, 8.0f, chosen_colour, alpha);
+    if (checked)
+      p.fillRounded(skia::SkRect::MakeXYWH(box.fLeft + 14.0f, box.centerY() - 4.0f, 8.0f, 8.0f), 4.0f,
+                    accent_colour, alpha);
+  }
 
   [[nodiscard]] bool acceptsInput() const { return true; }
+  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+  [[nodiscard]] bool focusChangesAppearance() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
-    (actions->*Method)();
+    act();
     return true;
   }
   [[nodiscard]] scene::Semantics semantics() const {
     scene::Semantics out;
-    out.fRole = scene::semantic_role::tab{};
+    out.fRole = scene::semantic_role::button{};
     out.fLabel = label.text();
-    out.fSelected = active;
+    out.fSelected = checked;
     out.fActions = {scene::semantic_action::focus{}, scene::semantic_action::activate{}};
     return out;
   }
 };
 
-// Across the top: the name, the tabs for the conversations and the accounts,
-// and on the right how many accounts are online and a button to add one.
+// An account in the drawer: its address, protocol and state; a press shows
+// its settings.
 template <class Actions>
-struct top_bar : scene::Node {
-  nodes::Box<> plate{sidebar_colour};
-  nodes::Box<> divider{skia::colorSetARGB(255, 44, 49, 54)};
-  nodes::Text name{"mux", 17.0f, text_colour, true};
-  nav_tab<Actions, &Actions::back> chats;
-  nav_tab<Actions, &Actions::open_accounts> accounts;
-  nodes::Text status{"", 13.0f, dim_colour};
-  widgets::Button<ask<Actions, &Actions::open_new_account>> add;
+struct drawer_account : scene::Node {
+  Actions* actions = nullptr;
+  std::string address;
+  nodes::Text name;
+  nodes::Text state;
 
-  static constexpr float kHeight = 48.0f;
-  static constexpr float kPadX = 18.0f;
-
-  explicit top_bar(Actions* a) : chats(a, "Chats"), accounts(a, "Accounts"), add("+ Add account", {a}) {
-    fState.apply({.fillX = true, .height = kHeight});
-    plate.apply({.fill = true});
-    divider.apply({.fillX = true, .height = 1.0f});
-    add.setPrimary(true);
-    add.apply({.width = 128.0f, .height = 30.0f});
-    status.setElided(true);
+  drawer_account(Actions* a, const config::account_t& saved, const model& now)
+      : actions(a), address(config::address_of(saved)), name(address, 14.0f, text_colour, true),
+        state("", 12.0f, dim_colour) {
+    fState.apply({.fillX = true, .height = 50.0f});
+    const auto [how, failed] = state_of(saved, now);
+    state.setText(std::format("{} · {}", config::protocol_name(saved), how));
+    state.setColour(failed ? error_colour : dim_colour);
+    name.setElided(true);
+    state.setElided(true);
   }
 
   void forEachChild(auto&& f) {
-    f(plate);
-    f(divider);
     f(name);
-    f(chats);
-    f(accounts);
-    f(status);
-    f(add);
+    f(state);
   }
-
-  // Which is up: 0 the conversations, 1 adding an account, 2 the accounts.
-  void light(int tab) {
-    chats.set_active(tab == 0);
-    accounts.set_active(tab == 2);
-  }
-
-  void show(const model& now) {
-    std::size_t online = 0;
-    for (const auto& [id, kept] : now.accounts())
-      online += is_online(kept.state) ? 1 : 0;
-    const std::size_t all = now.accounts().size();
-    status.setText(all == 0 ? std::string() : std::format("{} of {} online", online, all));
-  }
-
   void layoutChildren() {
-    const skia::SkRect whole = fState.contentBox();
-    scene::layout(plate, whole);
-    divider.fState.arrange(0.0f, 0.0f, scene::anchor::kBottomLeft, scene::anchor::kBottomLeft);
-    scene::layout(divider, whole);
-    const skia::SkRect box = scene::inset(whole, kPadX, 0.0f);
-    name.fState.arrange(0.0f, 0.0f, scene::anchor::kCentreLeft, scene::anchor::kCentreLeft);
-    scene::layout(name, box);
-    float x = name.bounds().width() + 22.0f;
-    chats.fState.arrange(x, 0.0f, scene::anchor::kCentreLeft, scene::anchor::kCentreLeft);
-    scene::layout(chats, box);
-    x += chats.bounds().width();
-    accounts.fState.arrange(x, 0.0f, scene::anchor::kCentreLeft, scene::anchor::kCentreLeft);
-    scene::layout(accounts, box);
-    x += accounts.bounds().width() + 16.0f;
-    add.fState.arrange(0.0f, 0.0f, scene::anchor::kCentreRight, scene::anchor::kCentreRight);
-    scene::layout(add, box);
-    status.setMaxWidth(std::max(0.0f, add.bounds().fLeft - box.fLeft - x - 14.0f));
-    status.fState.arrange(-(add.bounds().width() + 14.0f), 0.0f, scene::anchor::kCentreRight,
-                          scene::anchor::kCentreRight);
-    scene::layout(status, box);
+    const skia::SkRect inner = scene::inset(fState.contentBox(), 14.0f, 7.0f);
+    name.setMaxWidth(inner.width());
+    name.fState.arrange(0.0f, 0.0f);
+    scene::layout(name, inner);
+    state.setMaxWidth(inner.width());
+    state.fState.arrange(0.0f, name.bounds().height() + 3.0f);
+    scene::layout(state, inner);
+  }
+  void drawSelf(skia::SkCanvas* canvas, float alpha) {
+    skia::SkFont* font = skiff::paint::defaultFont();
+    if (font == nullptr || !(fState.fHovered || this->focused()))
+      return;
+    const skiff::paint::Painter p(canvas, *font);
+    p.fillRounded(fState.fBounds, 8.0f, chosen_colour, alpha);
+  }
+
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+  [[nodiscard]] bool onClick(float, float) {
+    actions->show_account(address);
+    return true;
+  }
+  [[nodiscard]] scene::Semantics semantics() const {
+    scene::Semantics out;
+    out.fRole = scene::semantic_role::list_item{};
+    out.fLabel = address;
+    out.fActions = {scene::semantic_action::focus{}, scene::semantic_action::activate{}};
+    return out;
   }
 };
 
-// The top bar, the conversations under it, and over them the panel that is
-// open, if one is: it slides in from the right and covers them, and slides
-// back out when closed. All in this one window, switched by the program
-// between events.
+// What the drawer holds, as Telegram's does: the accounts, then what to do
+// about them, how much moves, and Quit.
+template <class Actions>
+struct drawer_panel : scene::Node {
+  nodes::Text title{"mux", 20.0f, text_colour, true};
+  std::vector<drawer_account<Actions>> accounts;
+  nodes::Box<> rule_1{chosen_colour};
+  drawer_item<ask<Actions, &Actions::open_new_account>> add;
+  drawer_item<ask<Actions, &Actions::open_accounts>> manage;
+  nodes::Box<> rule_2{chosen_colour};
+  nodes::Text motion_title{"Motion", 12.0f, dim_colour, true};
+  drawer_item<choose_motion<Actions>> full;
+  drawer_item<choose_motion<Actions>> reduced;
+  drawer_item<choose_motion<Actions>> none;
+  nodes::Box<> rule_3{chosen_colour};
+  drawer_item<ask<Actions, &Actions::quit>> quit;
+
+  explicit drawer_panel(Actions* a)
+      : add("Add account", {a}),
+        manage("Manage accounts", {a}),
+        full("Full", {a, kMotions[0]}),
+        reduced("Reduced", {a, kMotions[1]}),
+        none("None", {a, kMotions[2]}),
+        quit("Quit", {a}) {
+    fState.apply({.fill = true});
+    for (nodes::Box<>* rule : {&rule_1, &rule_2, &rule_3})
+      rule->apply({.fillX = true, .height = 1.0f});
+  }
+
+  void forEachChild(auto&& f) {
+    f(title);
+    f(accounts);
+    f(rule_1);
+    f(add);
+    f(manage);
+    f(rule_2);
+    f(motion_title);
+    f(full);
+    f(reduced);
+    f(none);
+    f(rule_3);
+    f(quit);
+  }
+
+  void show(Actions* a, const std::vector<config::account_t>& saved, const model& now) {
+    accounts.clear();
+    for (const config::account_t& one : saved)
+      accounts.emplace_back(a, one, now);
+    this->invalidateLayout();
+  }
+  void show_motion(std::string_view level) {
+    full.set_checked(level == kMotions[0]);
+    reduced.set_checked(level == kMotions[1]);
+    none.set_checked(level == kMotions[2]);
+  }
+
+  void layoutChildren() {
+    column_stack stack{scene::inset(fState.contentBox(), 8.0f, 0.0f)};
+    stack.y = 16.0f;
+    title.fState.arrange(14.0f, stack.y);
+    scene::layout(title, stack.column);
+    stack.y += title.bounds().height() + 14.0f;
+    for (auto& one : accounts)
+      stack(one, 2.0f);
+    stack.y += accounts.empty() ? 0.0f : 6.0f;
+    stack(rule_1, 6.0f);
+    stack(add, 0.0f);
+    stack(manage, 6.0f);
+    stack(rule_2, 10.0f);
+    motion_title.fState.arrange(14.0f, stack.y);
+    scene::layout(motion_title, stack.column);
+    stack.y += motion_title.bounds().height() + 4.0f;
+    stack(full, 0.0f);
+    stack(reduced, 0.0f);
+    stack(none, 6.0f);
+    stack(rule_3, 6.0f);
+    stack(quit, 0.0f);
+  }
+};
+
+// ---- the window -------------------------------------------------------------------
+
+// The conversations; over them the panel that is open, if one is, sliding in
+// from the right and back out when closed; and over both, the drawer, pulled
+// out from the left. All in this one window, switched by the program between
+// events.
 template <class Actions>
 struct window : scene::Node {
   using panel_type = std::variant<add_account_panel<Actions>, accounts_panel<Actions>>;
+  using screens = widgets::SlideOver<conversations_screen<Actions>, panel_type>;
 
   Actions* actions = nullptr;
   nodes::Box<> backdrop{background};
-  top_bar<Actions> bar;
-  widgets::SlideOver<conversations_screen<Actions>, panel_type> body;
+  widgets::Drawer<screens, drawer_panel<Actions>> frame;
 
-  explicit window(Actions* a) : actions(a), bar(a), body(a) {
+  explicit window(Actions* a)
+      : actions(a), frame(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a)) {
     fState.apply({.fill = true});
     backdrop.apply({.fill = true});
-    body.setSheetColour(background);
-    this->light();
+    frame.base().setSheetColour(background);
+    frame.setSheetColour(sidebar_colour);
   }
   void forEachChild(auto&& f) {
     f(backdrop);
-    f(bar);
-    f(body);
+    f(frame);
   }
 
-  [[nodiscard]] conversations_screen<Actions>& main() { return body.base(); }
+  [[nodiscard]] conversations_screen<Actions>& main() { return frame.base().base(); }
   // The panel that is up, not on its way out.
-  [[nodiscard]] panel_type* open_panel() { return body.shown(); }
+  [[nodiscard]] panel_type* open_panel() { return frame.base().shown(); }
 
   // A panel opened, in place of the one up if there is one.
   template <class Panel>
   Panel& open() {
-    auto& made = std::get<Panel>(body.open(std::in_place_type<Panel>, actions));
-    this->light();
-    return made;
+    return std::get<Panel>(frame.base().open(std::in_place_type<Panel>, actions));
   }
-  void close() {
-    body.close();
-    this->light();
-  }
+  void close() { frame.base().close(); }
   // From the program, between events.
-  void drop_closed() { body.dropClosed(); }
+  void drop_closed() { frame.base().dropClosed(); }
 
-  // The top bar's button of what is up, lit.
-  void light() {
-    const panel_type* up = body.shown();
-    bar.light(up ? std::visit([](const auto& one) { return one.kTab; }, *up) : body.base().kTab);
+  void open_drawer() { frame.open(); }
+  void close_drawer() { frame.close(); }
+
+  void show(const std::vector<config::account_t>& saved, const model& now) {
+    frame.content().show(actions, saved, now);
   }
+  void show_motion(std::string_view level) { frame.content().show_motion(level); }
 
   void layoutChildren() {
     const skia::SkRect box = fState.contentBox();
     scene::layout(backdrop, box);
-    bar.fState.arrange(0.0f, 0.0f);
-    scene::layout(bar, box);
-    body.fState.arrange(0.0f, 0.0f);
-    scene::layout(body, skia::SkRect::MakeLTRB(box.fLeft, bar.bounds().fBottom, box.fRight, box.fBottom));
+    frame.fState.arrange(0.0f, 0.0f);
+    scene::layout(frame, box);
   }
 };
 

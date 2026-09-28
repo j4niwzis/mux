@@ -70,6 +70,14 @@ inline void load_fonts(const std::string& directory) {
   }
 }
 
+// The window asked to close, as its close button would: from the window's
+// thread, between events or in a handler.
+inline void request_quit() {
+  SDL_Event quit{};
+  quit.type = SDL_EVENT_QUIT;
+  SDL_PushEvent(&quit);
+}
+
 namespace detail {
 
 inline skiff::scene::Key key_of(SDL_Keycode key) {

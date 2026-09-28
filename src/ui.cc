@@ -59,6 +59,7 @@ inline const skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110)
 //   void show_account(std::string address)  -- its settings, from the drawer
 //   void set_motion(std::string level)       -- "full", "reduced" or "none"
 //   void quit()
+//   void resize_sidebar(float x)     -- the chat list's edge dragged to x
 //   void submit_message(std::string text)  -- Enter in the message field
 //   void send_typed()                -- the send arrow: what is in the field
 //   void toggle_info()               -- the chosen chat's info, beside it
@@ -1009,6 +1010,57 @@ struct info_panel : scene::Node {
   }
 };
 
+// The chat list's right edge, to drag: it lights under the pointer and while
+// held, and a drag asks for the list to be as wide as where the pointer is.
+template <class Actions>
+struct sidebar_edge : scene::Node {
+  Actions* actions = nullptr;
+  bool dragging = false;
+
+  explicit sidebar_edge(Actions* a) : actions(a) {}
+
+  void drawSelf(skia::SkCanvas* canvas, float alpha) {
+    skia::SkFont* font = skiff::paint::defaultFont();
+    if (font == nullptr)
+      return;
+    const skia::SkRect& box = fState.fBounds;
+    const bool lit = dragging || fState.fHovered;
+    skiff::paint::Painter(canvas, *font)
+        .fillRounded(skia::SkRect::MakeXYWH(box.centerX() - (lit ? 1.0f : 0.5f), box.fTop, lit ? 2.0f : 1.0f,
+                                            box.height()),
+                     0.0f, lit ? accent_colour : band_colour, alpha);
+  }
+
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  [[nodiscard]] bool focusable() const { return false; }
+  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+
+  using Node::onPointer;
+  void onPointer(scene::phase::target, const scene::pointer::down&, scene::PointerReply& reply) {
+    dragging = true;
+    reply.capturePointer();
+    reply.handle();
+    this->markDamaged();
+  }
+  void onPointer(scene::phase::target, const scene::pointer::move& at, scene::PointerReply& reply) {
+    if (!dragging)
+      return;
+    actions->resize_sidebar(at.x);
+    reply.handle();
+  }
+  void onPointer(scene::phase::target, const scene::pointer::up&, scene::PointerReply& reply) {
+    dragging = false;
+    reply.releasePointer();
+    reply.handle();
+    this->markDamaged();
+  }
+  void onPointer(scene::phase::target, const scene::pointer::cancel&, scene::PointerReply& reply) {
+    dragging = false;
+    reply.releasePointer();
+    this->markDamaged();
+  }
+};
+
 // ---- the message field --------------------------------------------------------------
 
 // What Enter in the message field does: asks for its text to be sent.
@@ -1079,8 +1131,12 @@ struct conversations_screen : scene::Node {
   // The account whose chats are listed.
   std::optional<account_id> current;
   bool info_open = false;
+  // How wide the chat list is: its own, whatever the window's size, until
+  // its edge is dragged.
+  float side_width = 300.0f;
 
   nodes::Box<> sidebar{sidebar_colour};
+  sidebar_edge<Actions> edge;
   menu_button<Actions> menu;
   nodes::Text name{"mux", 17.0f, text_colour, true};
   nodes::Text no_chats{"No chats yet.", 13.0f, dim_colour};
@@ -1096,12 +1152,12 @@ struct conversations_screen : scene::Node {
   nodes::Text empty_note{"Add an XMPP or a Matrix account, and its chats will be here.", 14.0f, dim_colour};
   widgets::Button<ask<Actions, &Actions::open_new_account>> empty_add;
 
-  static constexpr float kSidebarWidth = 300.0f;
+  static constexpr float kMinSidebar = 240.0f;
   static constexpr float kHeader = 52.0f;
   static constexpr float kPad = 8.0f;
 
   explicit conversations_screen(Actions* a)
-      : actions(a), menu(a), header(a), line(a), info(a), empty_add("Add account", {a}) {
+      : actions(a), edge(a), menu(a), header(a), line(a), info(a), empty_add("Add account", {a}) {
     fState.apply({.fill = true});
     sidebar.apply({.fill = true});
     empty_add.setPrimary(true);
@@ -1125,6 +1181,13 @@ struct conversations_screen : scene::Node {
     f(empty_title);
     f(empty_note);
     f(empty_add);
+    f(edge);  // last: over the list and the chat, where they meet
+  }
+
+  // The chat list as wide as `x`, where its edge was dragged to.
+  void resize_sidebar(float x) {
+    side_width = x - fState.contentBox().fLeft;
+    this->invalidateLayout();
   }
 
   void toggle_info() {
@@ -1134,11 +1197,14 @@ struct conversations_screen : scene::Node {
 
   void layoutChildren() {
     const skia::SkRect box = fState.contentBox();
-    // On a narrow window the list takes most of it.
-    const float side_width = std::min(kSidebarWidth, box.width() * 0.45f);
-    const skia::SkRect side = skia::SkRect::MakeLTRB(box.fLeft, box.fTop, box.fLeft + side_width, box.fBottom);
+    // Its own width, as far as the window has room for it.
+    const float width = std::clamp(side_width, std::min(kMinSidebar, box.width()), std::max(kMinSidebar, box.width() * 0.6f));
+    const skia::SkRect side = skia::SkRect::MakeLTRB(box.fLeft, box.fTop, box.fLeft + width, box.fBottom);
     skia::SkRect main = skia::SkRect::MakeLTRB(side.fRight, box.fTop, box.fRight, box.fBottom);
     scene::layout(sidebar, side);
+    edge.apply({.width = 7.0f, .height = side.height()});
+    edge.fState.arrange(side.fRight - box.fLeft - 3.5f, 0.0f);
+    scene::layout(edge, box);
 
     // The header: the drawer's button, and the name beside it.
     const skia::SkRect head = skia::SkRect::MakeLTRB(side.fLeft + kPad, side.fTop, side.fRight - kPad, side.fTop + kHeader);

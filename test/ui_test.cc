@@ -43,6 +43,7 @@ struct stub {
   void switch_account(std::string) {}
   void submit_message(std::string text) { sent.push_back(std::move(text)); }
   void send_typed() {}
+  void resize_sidebar(float) {}
 };
 
 TEST(Composer, TakesWhatIsTypedIntoIt) {
@@ -79,6 +80,48 @@ TEST(Composer, TakesWhatIsTypedIntoIt) {
   router.key(scene::KeyEvent{scene::key::down{scene::keys::kEnter, scene::Modifiers{}, false}});
   ASSERT_EQ(program.sent.size(), 1u);
   EXPECT_EQ(program.sent.front(), "hello\nthere");
+  skiff::paint::defaultFont() = nullptr;
+}
+
+// The drawer slides back out when closed, however long it was out.
+TEST(Drawer, SlidesOutAfterALongWhileOut) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  skiff::paint::motionLevel() = skiff::paint::motion::full{};
+  stub program;
+  scene::Scene<mux::ui::window<stub>> window{std::in_place, &program};
+  mux::model model;
+  window.root().main().show(model);
+  const skia::SkRect viewport = skia::SkRect::MakeWH(1000.0f, 700.0f);
+  double now = 1000.0;
+  const auto frame = [&](double at) {
+    now = at;
+    window.update(now);
+    window.layoutIfNeeded(viewport);
+    (void)window.finishFrame();
+  };
+  frame(now);
+  window.root().open_drawer();
+  for (int i = 0; i < 40; ++i)
+    frame(now + 16.0);
+  const auto& panel = window.root().frame.content();
+  EXPECT_FLOAT_EQ(panel.bounds().fLeft, 0.0f);
+
+  // A long while with nothing to draw, then a press on the dimmed rest.
+  now += 60'000.0;
+  scene::InputRouter router;
+  const std::array layers{scene::InputRouter::Layer{window.handle(), false}};
+  router.setLayers(layers);
+  router.pointer(scene::PointerEvent{scene::pointer::down{900.0f, 300.0f}});
+  router.pointer(scene::PointerEvent{scene::pointer::up{900.0f, 300.0f}});
+  frame(now + 16.0);
+  frame(now + 16.0);
+  const float first = panel.bounds().fLeft;
+  EXPECT_LT(first, 0.0f);
+  EXPECT_GT(first, -panel.bounds().width() * 0.5f) << "it jumped instead of sliding";
+  for (int i = 0; i < 40; ++i)
+    frame(now + 16.0);
+  EXPECT_FALSE(panel.visible());
   skiff::paint::defaultFont() = nullptr;
 }
 

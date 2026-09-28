@@ -44,8 +44,12 @@ struct options {
 // faces for what it does not cover -- CJK, emoji -- behind it.
 inline void load_fonts(const std::string& directory) {
   auto manager = skia::SkFontMgr_New_Custom_Directory(directory.c_str());
-  if (!manager)
+  if (!manager) {
+    // No fonts found: the default face, rather than no text at all.
+    static skia::SkFont font;
+    skiff::paint::defaultFont() = &font;
     return;
+  }
   skia::Sp<skia::SkTypeface> primary;
   for (const char* family : {"Inter", "Noto Sans", "DejaVu Sans", "Liberation Sans", "Cantarell"}) {
     primary = manager->matchFamilyStyle(family, skia::SkFontStyle());
@@ -56,6 +60,10 @@ inline void load_fonts(const std::string& directory) {
     primary = manager->createStyleSet(0)->createTypeface(0);
   if (primary)
     skiff::paint::fonts().setPrimary(primary);
+  // What every Text and widget draws with. Without it they draw nothing:
+  // the window was its boxes and no words.
+  static skia::SkFont font(primary);
+  skiff::paint::defaultFont() = &font;
   for (const std::int32_t sample : {0x3042, 0xAC00, 0x4E00, 0x0627, 0x05D0, 0x0915, 0x1F600}) {
     if (auto face = manager->matchFamilyStyleCharacter(nullptr, skia::SkFontStyle(), nullptr, 0, sample))
       skiff::paint::fonts().addFallback(std::move(face));

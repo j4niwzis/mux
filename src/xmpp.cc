@@ -26,8 +26,8 @@ struct settings {
   // PLAIN over a stream TLS has not secured: only for a server on this
   // machine, under test. Never over a network.
   bool plain_without_tls = false;
-  // A proxy to connect through, where there is one. The domain's SRV
-  // records are still asked of the resolver directly.
+  // A proxy to connect through, where there is one: the domain's SRV
+  // records are asked through it too.
   std::optional<net::proxy> proxy;
 };
 
@@ -238,7 +238,7 @@ class account {
     if (how_.host)
       targets.push_back({0, 0, how_.port.value_or(5222), *how_.host});
     else
-      targets = net::xmpp_targets(*loop_, domain_);
+      targets = net::xmpp_targets(*loop_, how_.proxy, domain_);
     std::optional<net::tcp::socket> socket;
     std::string why;
     for (const auto& target : targets) {

@@ -662,4 +662,58 @@ inline std::vector<tern::srv::target> xmpp_targets(loop& owner, std::string_view
   return ordered;
 }
 
+// Whether a nameserver is one only this machine or its network reaches: a
+// proxy elsewhere cannot ask it.
+inline bool local_only(const asio::ip::address& address) {
+  if (address.is_loopback() || address.is_unspecified())
+    return true;
+  if (address.is_v6())
+    return address.to_v6().is_link_local() || (address.to_v6().to_bytes()[0] & 0xfe) == 0xfc;
+  const auto b = address.to_v4().to_bytes();
+  return b[0] == 10 || (b[0] == 172 && (b[1] & 0xf0) == 16) || (b[0] == 192 && b[1] == 168) ||
+         (b[0] == 169 && b[1] == 254);
+}
+
+// The same, through a proxy: the SRV records asked over TCP (RFC 7766)
+// through the proxy, of the nameserver /etc/resolv.conf names, so that no
+// query leaves this machine outside the proxy. Where that nameserver is one
+// the proxy cannot reach, or the query fails, no SRV records are asked at
+// all, and the domain on 5222 is connected to through the proxy, which
+// resolves it.
+inline std::vector<tern::srv::target> xmpp_targets(loop& owner, const std::optional<proxy>& via,
+                                                   std::string_view domain) {
+  if (!via)
+    return xmpp_targets(owner, domain);
+  std::vector<tern::srv::target> found;
+  const auto server = nameserver();
+  if (!local_only(server)) {
+    try {
+      tcp::socket socket = connect(owner, via, server.to_string(), 53);
+      std::random_device entropy;
+      const auto id = static_cast<std::uint16_t>(entropy());
+      const auto question = tern::srv::query(domain, id);
+      std::string framed;
+      framed += static_cast<char>((question.size() >> 8) & 0xff);
+      framed += static_cast<char>(question.size() & 0xff);
+      for (const auto byte : question)
+        framed += static_cast<char>(byte);
+      detail::write_all(owner, socket, framed, "asking for SRV records");
+      const std::string length = detail::read_exactly(owner, socket, 2, "reading SRV records");
+      const std::size_t size = (static_cast<std::size_t>(static_cast<unsigned char>(length[0])) << 8) |
+                               static_cast<unsigned char>(length[1]);
+      const std::string answer = detail::read_exactly(owner, socket, size, "reading SRV records");
+      std::vector<std::uint8_t> bytes(answer.begin(), answer.end());
+      if (auto targets = tern::srv::answers(std::span<const std::uint8_t>(bytes.data(), bytes.size()), id))
+        found = std::move(*targets);
+    } catch (const failure&) {
+      found.clear();
+    }
+  }
+  std::mt19937 random(std::random_device{}());
+  auto ordered = tern::srv::ordered(found, random);
+  if (ordered.empty())
+    ordered.push_back(tern::srv::fallback(domain));
+  return ordered;
+}
+
 }  // namespace mux::net

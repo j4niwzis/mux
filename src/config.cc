@@ -29,6 +29,10 @@ struct file {
   friend bool operator==(const file&, const file&) = default;
 };
 
+// Both described to knot, member by member, under their own names.
+consteval auto json_schema(knot::type<saved_account>) { return knot::schema<saved_account>(); }
+consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
+
 // An address says its protocol: a Matrix user id begins with '@'.
 constexpr bool is_matrix(std::string_view address) noexcept { return address.starts_with('@'); }
 

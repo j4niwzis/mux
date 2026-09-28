@@ -278,6 +278,10 @@ struct quit {};
 struct open_settings {};
 struct pop_panel {};
 struct toggle_info {};
+struct submit_message {
+  std::string text;
+};
+struct send_typed {};
 struct switch_account {
   std::string address;
 };
@@ -293,7 +297,7 @@ using request_t =
                  request::open_drawer, request::show_account, request::set_motion, request::quit,
                  request::open_settings, request::close_settings, request::settings_home,
                  request::settings_animations, request::pop_panel, request::toggle_info,
-                 request::switch_account>;
+                 request::switch_account, request::submit_message, request::send_typed>;
 
 // What the screens ask: each a request, kept until the program applies it
 // between events -- except a message, which goes to the network at once.
@@ -338,6 +342,8 @@ struct actions {
   void open_settings() { requests.emplace_back(request::open_settings{}); }
   void pop_panel() { requests.emplace_back(request::pop_panel{}); }
   void toggle_info() { requests.emplace_back(request::toggle_info{}); }
+  void submit_message(std::string text) { requests.emplace_back(request::submit_message{std::move(text)}); }
+  void send_typed() { requests.emplace_back(request::send_typed{}); }
   void switch_account(std::string address) { requests.emplace_back(request::switch_account{std::move(address)}); }
   void close_settings() { requests.emplace_back(request::close_settings{}); }
   void settings_home() { requests.emplace_back(request::settings_home{}); }
@@ -538,6 +544,17 @@ struct app {
   }
   void apply(const request::close_settings&) { root().close_settings(); }
   void apply(const request::toggle_info&) { root().main().toggle_info(); }
+  void apply(const request::submit_message& one) { this->send_message(one.text); }
+  void apply(const request::send_typed&) { this->send_message(root().main().line.text()); }
+  // What is in the message field, to the chosen chat; the field emptied.
+  void send_message(std::string text) {
+    auto& screen = root().main();
+    const auto blank = [](unsigned char c) { return std::isspace(c) != 0; };
+    if (!screen.chosen || std::ranges::all_of(text, blank))
+      return;
+    ask.send(*screen.chosen, std::move(text));
+    screen.line.clear();
+  }
   // Another account's chats listed: the drawer goes back, and no chat is
   // chosen.
   void apply(const request::switch_account& one) {

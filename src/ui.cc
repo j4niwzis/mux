@@ -59,6 +59,8 @@ inline const skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110)
 //   void show_account(std::string address)  -- its settings, from the drawer
 //   void set_motion(std::string level)       -- "full", "reduced" or "none"
 //   void quit()
+//   void submit_message(std::string text)  -- Enter in the message field
+//   void send_typed()                -- the send arrow: what is in the field
 //   void toggle_info()               -- the chosen chat's info, beside it
 //   void switch_account(std::string address)  -- whose chats are listed
 //   void pop_panel()                 -- back from the top panel to what is under it
@@ -127,10 +129,12 @@ struct bell {};
 struct sliders {};
 struct leave {};
 struct check {};
+struct clip {};
+struct send {};
 }  // namespace icon
 using icon_t = std::variant<icon::none, icon::person, icon::gear, icon::power, icon::plus, icon::motion, icon::back,
                             icon::close, icon::info, icon::people, icon::add_person, icon::bell, icon::sliders,
-                            icon::leave, icon::check>;
+                            icon::leave, icon::check, icon::clip, icon::send>;
 
 [[nodiscard]] inline skia::SkPaint pen(skia::SkColor colour, float alpha, float width = 1.8f) {
   skia::SkPaint out;
@@ -250,6 +254,25 @@ inline void draw_icon(skia::SkCanvas* canvas, icon::check, const skia::SkRect& b
   const float x = box.centerX(), y = box.centerY();
   canvas->drawLine(x - 5.0f, y, x - 1.5f, y + 4.0f, p);
   canvas->drawLine(x - 1.5f, y + 4.0f, x + 6.0f, y - 4.5f, p);
+}
+inline void draw_icon(skia::SkCanvas* canvas, icon::clip, const skia::SkRect& box, skia::SkColor colour, float alpha) {
+  const auto p = pen(colour, alpha, 1.7f);
+  const float x = box.centerX(), y = box.centerY();
+  const int save = canvas->save();
+  canvas->translate(x, y);
+  canvas->rotate(45.0f);
+  canvas->drawRoundRect(skia::SkRect::MakeLTRB(-3.5f, -10.0f, 3.5f, 8.0f), 3.5f, 3.5f, p);
+  canvas->drawLine(0.0f, -5.5f, 0.0f, 4.0f, p);
+  canvas->restoreToCount(save);
+}
+inline void draw_icon(skia::SkCanvas* canvas, icon::send, const skia::SkRect& box, skia::SkColor colour, float alpha) {
+  const auto p = pen(colour, alpha, 2.0f);
+  const float x = box.centerX(), y = box.centerY();
+  canvas->drawLine(x - 8.0f, y - 7.5f, x + 8.5f, y, p);
+  canvas->drawLine(x + 8.5f, y, x - 8.0f, y + 7.5f, p);
+  canvas->drawLine(x - 8.0f, y + 7.5f, x - 4.5f, y, p);
+  canvas->drawLine(x - 4.5f, y, x - 8.0f, y - 7.5f, p);
+  canvas->drawLine(x - 4.5f, y, x + 3.0f, y, p);
 }
 inline void draw_icon(skia::SkCanvas* canvas, const icon_t& which, const skia::SkRect& box, skia::SkColor colour,
                       float alpha) {
@@ -374,6 +397,7 @@ template <class Act>
 struct icon_button : scene::Node {
   Act act;
   icon_t icon;
+  skia::SkColor colour = text_colour;
 
   icon_button(icon_t mark, Act what) : act(std::move(what)), icon(mark) {
     fState.apply({.width = 36.0f, .height = 36.0f});
@@ -387,7 +411,7 @@ struct icon_button : scene::Node {
     const skia::SkRect& box = fState.fBounds;
     if (fState.fHovered || this->focused())
       p.fillRounded(box, box.width() * 0.5f, chosen_colour, alpha);
-    draw_icon(canvas, icon, box, text_colour, alpha);
+    draw_icon(canvas, icon, box, colour, alpha);
   }
 
   [[nodiscard]] bool acceptsInput() const { return true; }
@@ -533,27 +557,6 @@ struct menu_button : scene::Node {
 };
 
 // ---- the conversations ------------------------------------------------------
-
-// The line to write in: Enter sends what is in it.
-template <class Actions>
-struct composer : widgets::TextBox<> {
-  Actions* actions = nullptr;
-  std::optional<conversation_id> to;
-
-  explicit composer(Actions* a) : widgets::TextBox<>("Write a message…"), actions(a) {}
-
-  using widgets::TextBox<>::onKey;
-  void onKey(scene::phase::target at, const scene::key::down& press, scene::Reply& reply) {
-    if (press.key == scene::keys::kEnter) {
-      if (to && !this->text().empty())
-        actions->send(*to, this->text());
-      this->setText({});
-      reply.handle();
-      return;
-    }
-    widgets::TextBox<>::onKey(at, press, reply);
-  }
-};
 
 // A control whose action is still to come.
 struct not_yet {
@@ -1006,6 +1009,69 @@ struct info_panel : scene::Node {
   }
 };
 
+// ---- the message field --------------------------------------------------------------
+
+// What Enter in the message field does: asks for its text to be sent.
+template <class Actions>
+struct submit_message {
+  Actions* actions = nullptr;
+  void operator()(std::string_view text) const { actions->submit_message(std::string(text)); }
+};
+
+// Where a message is written, across the bottom of a chat as in Telegram
+// Desktop: a line over it, a paperclip on the left, the text growing with
+// what is written, and the send arrow on the right.
+template <class Actions>
+struct composer_bar : scene::Node {
+  nodes::Box<> divider{band_colour};
+  icon_button<not_yet> attach{icon::clip{}, {}};
+  widgets::TextArea<submit_message<Actions>> field;
+  icon_button<ask<Actions, &Actions::send_typed>> send;
+
+  static constexpr float kSide = 50.0f;
+  static constexpr float kPadY = 9.0f;
+
+  explicit composer_bar(Actions* a) : field("Write a message…", {a}), send(icon::send{}, {a}) {
+    fState.apply({.fillX = true});
+    divider.apply({.fillX = true, .height = 1.0f});
+    send.colour = accent_colour;
+  }
+
+  [[nodiscard]] const std::string& text() const { return field.text(); }
+  void clear() { field.setText({}); }
+
+  void forEachChild(auto&& f) {
+    f(divider);
+    f(attach);
+    f(field);
+    f(send);
+  }
+
+  // As tall as the text in it, and a margin.
+  void measure(const skia::SkRect& parent) {
+    field.apply({.width = std::max(0.0f, parent.width() - 2.0f * kSide)});
+    field.measure(parent);
+    fState.fHeight = std::max(field.fState.fHeight + 2.0f * kPadY, 54.0f);
+  }
+  void layoutChildren() {
+    const skia::SkRect box = fState.contentBox();
+    divider.fState.arrange(0.0f, 0.0f);
+    scene::layout(divider, box);
+    attach.fState.arrange(8.0f, -9.0f, scene::anchor::kBottomLeft, scene::anchor::kBottomLeft);
+    scene::layout(attach, box);
+    send.fState.arrange(-8.0f, -9.0f, scene::anchor::kBottomRight, scene::anchor::kBottomRight);
+    scene::layout(send, box);
+    field.fState.arrange(kSide, kPadY);
+    scene::layout(field, box);
+  }
+  void drawSelf(skia::SkCanvas* canvas, float alpha) {
+    skia::SkFont* font = skiff::paint::defaultFont();
+    if (font == nullptr)
+      return;
+    skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 0.0f, sidebar_colour, alpha);
+  }
+};
+
 template <class Actions>
 struct conversations_screen : scene::Node {
   Actions* actions = nullptr;
@@ -1023,7 +1089,7 @@ struct conversations_screen : scene::Node {
   chat_header<Actions> header;
   nodes::ScrollContainer<nodes::Flow<std::vector<message_entry>>> timeline{
       nodes::Flow<std::vector<message_entry>>({.spacingY = 10.0f, .wrap = false}, {})};
-  composer<Actions> line;
+  composer_bar<Actions> line;
   info_panel<Actions> info;
   // What the main area says with no account at all.
   nodes::Text empty_title{"No accounts yet", 22.0f, text_colour, true};
@@ -1113,13 +1179,11 @@ struct conversations_screen : scene::Node {
 
     header.fState.arrange(0.0f, 0.0f);
     scene::layout(header, main);
-    const skia::SkRect inner = skia::SkRect::MakeLTRB(main.fLeft + 12.0f, header.bounds().fBottom + 8.0f,
-                                                      main.fRight - 12.0f, main.fBottom - 12.0f);
-    const float composer_height = line.fState.height();
     line.fState.arrange(0.0f, 0.0f, scene::anchor::kBottomLeft, scene::anchor::kBottomLeft);
-    line.apply({.fillX = true});
-    scene::layout(line, inner);
-    timeline.apply({.width = inner.width(), .height = std::max(0.0f, inner.height() - composer_height - 8.0f)});
+    scene::layout(line, main);
+    const skia::SkRect inner = skia::SkRect::MakeLTRB(main.fLeft + 12.0f, header.bounds().fBottom + 8.0f,
+                                                      main.fRight - 12.0f, line.bounds().fTop - 8.0f);
+    timeline.apply({.width = inner.width(), .height = std::max(0.0f, inner.height())});
     timeline.fState.arrange(inner.fLeft - box.fLeft, inner.fTop - box.fTop);
     scene::layout(timeline, box);
   }
@@ -1154,7 +1218,6 @@ struct conversations_screen : scene::Node {
   void show_conversation(const model& now) {
     auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
     entries.clear();
-    line.to = chosen;
     const conversation* one = chosen ? now.find(*chosen) : nullptr;
     header.show(one, now);
     if (!one)
@@ -1702,7 +1765,7 @@ struct account_editor : scene::Node {
     fState.apply({.fill = true});
     heading.setElided(true);
     state.setElided(true);
-    enabled.setOn(config::enabled_of(saved));
+    enabled.setOnNow(config::enabled_of(saved));
     remove.apply({.width = 100.0f, .height = 32.0f});
   }
 
@@ -1764,6 +1827,19 @@ struct accounts_panel : closes_on_escape<Actions> {
   // No account chosen, or the chosen one.
   std::variant<nodes::Text, account_editor<Actions>, add_account_pane<Actions>> detail{
       std::in_place_index<0>, "Choose an account.", 15.0f, dim_colour};
+  // What is beside the list coming in when another is chosen: sliding and
+  // fading in.
+  skiff::paint::Tween swap{1.0f, 200.0f, skiff::paint::movement::subtle{}};
+
+  void begin_swap() {
+    swap.jump(0.0f);
+    swap.setTarget(1.0f);
+  }
+  [[nodiscard]] bool settling() const { return swap.moving(); }
+  void update(double now_ms) {
+    if (swap.step(now_ms))
+      this->invalidateLayout();
+  }
 
   explicit accounts_panel(Actions* a)
       : closes_on_escape<Actions>(a), header("Accounts", {a}, {a}, true, false), add("Add account", {a}, icon::plus{}) {
@@ -1813,6 +1889,7 @@ struct accounts_panel : closes_on_escape<Actions> {
     add.set_lit(false);
     selected = config::address_of(one);
     detail.template emplace<1>(this->actions, one);
+    this->begin_swap();
     std::get<1>(detail).show(one, now);
   }
 
@@ -1821,6 +1898,7 @@ struct accounts_panel : closes_on_escape<Actions> {
     selected.reset();
     add.set_lit(true);
     detail.template emplace<2>(this->actions);
+    this->begin_swap();
     this->invalidateLayout();
   }
 
@@ -1868,11 +1946,14 @@ struct accounts_panel : closes_on_escape<Actions> {
     scene::layout(list, box);
 
     const skia::SkRect right = skia::SkRect::MakeLTRB(left.fRight, box.fTop, box.fRight, box.fBottom);
+    const float value = swap.value();
     const skia::SkRect column = form_column(right, 520.0f, 24.0f);
+    const skia::SkRect moved = skia::SkRect::MakeXYWH(column.fLeft + (1.0f - value) * 28.0f, column.fTop, column.width(), column.height());
     std::visit(
         [&](auto& one) {
+          one.fState.setAlpha(value);
           one.fState.arrange(0.0f, 0.0f);
-          scene::layout(one, column);
+          scene::layout(one, moved);
         },
         detail);
   }

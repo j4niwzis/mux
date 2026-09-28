@@ -46,3 +46,10 @@ target_link_libraries(mux-matrix-test PRIVATE mux_test_certificate)
 add_executable(mux-config-test config_test.cc)
 target_link_libraries(mux-config-test PRIVATE mux_config ${mux_gtest})
 add_test(NAME config COMMAND mux-config-test)
+
+# The window's screens, pressed and typed into, with no window.
+if(MUX_UI)
+  add_executable(mux-ui-test ui_test.cc)
+  target_link_libraries(mux-ui-test PRIVATE mux_modules ${mux_gtest})
+  add_test(NAME ui COMMAND mux-ui-test)
+endif()

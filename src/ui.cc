@@ -59,6 +59,7 @@ inline const skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110)
 //   void show_account(std::string address)  -- its settings, from the drawer
 //   void set_motion(std::string level)       -- "full", "reduced" or "none"
 //   void quit()
+//   void pop_panel()                 -- back from the top panel to what is under it
 //   void open_settings(), close_settings(), settings_home(), settings_animations()
 
 // A request with nothing to say but itself: `ask<Actions, &Actions::back>`.
@@ -324,6 +325,57 @@ struct page_header : scene::Node {
     title.setMaxWidth(std::max(0.0f, box.width() - left - 48.0f));
     title.fState.arrange(left, 0.0f, scene::anchor::kCentreLeft, scene::anchor::kCentreLeft);
     scene::layout(title, box);
+  }
+};
+
+// One segment of a segmented control: square, its text centred, filled
+// with the accent while it is the one chosen.
+template <class Act>
+struct segment : scene::Node {
+  Act act;
+  bool active = false;
+  nodes::Text label;
+
+  segment(std::string text, Act what) : act(std::move(what)), label(std::move(text), 13.0f, text_colour, true) {
+    fState.apply({.width = 92.0f, .height = 28.0f});
+  }
+
+  void set_active(bool on) {
+    active = on;
+    label.setColour(on ? background : text_colour);
+    this->markDamaged();
+  }
+
+  void forEachChild(auto&& f) { f(label); }
+  void layoutChildren() {
+    label.fState.arrange(0.0f, 0.0f, scene::anchor::kCentre, scene::anchor::kCentre);
+    scene::layout(label, fState.contentBox());
+  }
+  void drawSelf(skia::SkCanvas* canvas, float alpha) {
+    skia::SkFont* font = skiff::paint::defaultFont();
+    if (font == nullptr)
+      return;
+    const skiff::paint::Painter p(canvas, *font);
+    if (active)
+      p.fillRounded(fState.fBounds, 0.0f, accent_colour, alpha);
+    else if (fState.fHovered || this->focused())
+      p.fillRounded(fState.fBounds, 0.0f, chosen_colour, alpha);
+  }
+
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+  [[nodiscard]] bool focusChangesAppearance() const { return true; }
+  [[nodiscard]] bool onClick(float, float) {
+    act();
+    return true;
+  }
+  [[nodiscard]] scene::Semantics semantics() const {
+    scene::Semantics out;
+    out.fRole = scene::semantic_role::tab{};
+    out.fLabel = label.text();
+    out.fSelected = active;
+    out.fActions = {scene::semantic_action::focus{}, scene::semantic_action::activate{}};
+    return out;
   }
 };
 
@@ -660,7 +712,7 @@ template <class Actions>
 struct form_end {
   nodes::Text message{"", 13.0f, error_colour};
   widgets::Button<ask<Actions, &Actions::submit_login>> submit;
-  widgets::Button<ask<Actions, &Actions::back>> close;
+  widgets::Button<ask<Actions, &Actions::pop_panel>> close;
 
   form_end(Actions* a, bool editing) : submit(editing ? "Save" : "Log in", {a}), close("Close", {a}) {
     submit.setPrimary(true);
@@ -933,7 +985,7 @@ void place_form(account_form<Actions>& form, const skia::SkRect& column, float t
       form);
 }
 
-// Esc closes a panel: back to the conversations.
+// Esc closes a panel: back to what is under it.
 template <class Actions>
 struct closes_on_escape : scene::Node {
   Actions* actions = nullptr;
@@ -942,7 +994,7 @@ struct closes_on_escape : scene::Node {
   using Node::onKey;
   void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
     if (press.key == scene::keys::kEscape) {
-      actions->back();
+      actions->pop_panel();
       reply.handle();
     }
   }
@@ -957,25 +1009,31 @@ struct add_account_panel : closes_on_escape<Actions> {
   static constexpr int kTab = 1;
   static constexpr float kWidth = 440.0f;
 
-  page_header<ask<Actions, &Actions::open_accounts>, ask<Actions, &Actions::back>> header;
-  widgets::Button<ask<Actions, &Actions::add_xmpp>> xmpp_tab;
-  widgets::Button<ask<Actions, &Actions::add_matrix>> matrix_tab;
+  page_header<ask<Actions, &Actions::pop_panel>, ask<Actions, &Actions::back>> header;
+  // XMPP | Matrix: two segments in a thin frame.
+  nodes::Box<> segments{chosen_colour};
+  segment<ask<Actions, &Actions::add_xmpp>> xmpp_tab;
+  segment<ask<Actions, &Actions::add_matrix>> matrix_tab;
   nodes::Text note{"", 13.0f, dim_colour};
   account_form<Actions> form;
+  // The form coming in when the protocol changes: from the side of the
+  // segment chosen, fading in.
+  skiff::paint::Tween swap{1.0f, 200.0f, skiff::paint::movement::subtle{}};
+  float swap_from = 0.0f;
 
   explicit add_account_panel(Actions* a)
       : closes_on_escape<Actions>(a), header("Add an account", {a}, {a}, true, true), xmpp_tab("XMPP", {a}),
         matrix_tab("Matrix", {a}),
         form(std::in_place_index<0>, a, std::nullopt) {
     this->fState.apply({.fill = true});
-    xmpp_tab.apply({.width = 110.0f, .height = 32.0f});
-    matrix_tab.apply({.width = 110.0f, .height = 32.0f});
+    segments.apply({.width = 187.0f, .height = 30.0f});
     note.setWrapped(true);
     this->light();
   }
 
   void forEachChild(auto&& f) {
     f(header);
+    f(segments);
     f(xmpp_tab);
     f(matrix_tab);
     f(note);
@@ -984,24 +1042,37 @@ struct add_account_panel : closes_on_escape<Actions> {
 
   void show_xmpp() {
     form.template emplace<0>(this->actions, std::nullopt);
+    this->begin_swap(-1.0f);
     this->light();
   }
   void show_matrix() {
     form.template emplace<1>(this->actions, std::nullopt);
+    this->begin_swap(1.0f);
     this->light();
+  }
+  void begin_swap(float side) {
+    swap_from = side;
+    swap.jump(0.0f);
+    swap.setTarget(1.0f);
+    this->invalidateLayout();
+  }
+  [[nodiscard]] bool settling() const { return swap.moving(); }
+  void update(double now_ms) {
+    if (swap.step(now_ms))
+      this->invalidateLayout();
   }
   [[nodiscard]] xmpp_form<Actions>* xmpp() { return xmpp_form_in(form); }
 
   // The tab of the form that is up, lit, and what that protocol is.
   void light() {
     std::visit(overloaded{[this](const xmpp_form<Actions>&) {
-                            xmpp_tab.setPrimary(true);
-                            matrix_tab.setPrimary(false);
+                            xmpp_tab.set_active(true);
+                            matrix_tab.set_active(false);
                             note.setText("An address like user@example.com, on a server such as Prosody or ejabberd.");
                           },
                           [this](const matrix_form<Actions>&) {
-                            xmpp_tab.setPrimary(false);
-                            matrix_tab.setPrimary(true);
+                            xmpp_tab.set_active(false);
+                            matrix_tab.set_active(true);
                             note.setText("A user ID like @user:example.org, on a homeserver such as Synapse.");
                           }},
                form);
@@ -1012,14 +1083,19 @@ struct add_account_panel : closes_on_escape<Actions> {
     header.fState.arrange(0.0f, 0.0f);
     scene::layout(header, this->fState.contentBox());
     column_stack stack{form_column(this->fState.contentBox(), kWidth, header.kHeight + 20.0f)};
-    xmpp_tab.fState.arrange(0.0f, stack.y);
+    segments.fState.arrange(0.0f, stack.y);
+    scene::layout(segments, stack.column);
+    xmpp_tab.fState.arrange(1.0f, stack.y + 1.0f);
     scene::layout(xmpp_tab, stack.column);
-    matrix_tab.fState.arrange(xmpp_tab.bounds().width() + 8.0f, stack.y);
+    matrix_tab.fState.arrange(xmpp_tab.bounds().width() + 2.0f, stack.y + 1.0f);
     scene::layout(matrix_tab, stack.column);
-    stack.y += xmpp_tab.bounds().height() + 10.0f;
+    stack.y += segments.bounds().height() + 12.0f;
     note.setMaxWidth(stack.column.width());
     stack(note, 16.0f);
-    place_form(form, stack.column, stack.y);
+    const float value = swap.value();
+    const float dx = (1.0f - value) * 32.0f * swap_from;
+    place_form(form, skia::SkRect::MakeXYWH(stack.column.fLeft + dx, stack.column.fTop, stack.column.width(), stack.column.height()), stack.y);
+    std::visit([value](auto& one) { one.fState.setAlpha(value); }, form);
   }
 };
 
@@ -1563,10 +1639,17 @@ struct window : scene::Node {
   [[nodiscard]] panel_type* open_panel() { return frame.base().shown(); }
 
   // A panel opened, in place of the one up if there is one.
+  // A panel up: the one on top if it is one of these, else a new one sliding
+  // in over it.
   template <class Panel>
   Panel& open() {
+    if (panel_type* up = frame.base().shown())
+      if (Panel* same = std::get_if<Panel>(up))
+        return *same;
     return std::get<Panel>(frame.base().open(std::in_place_type<Panel>, actions));
   }
+  // The top panel goes, and the one under it is up again.
+  void back_panel() { frame.base().back(); }
   void close() { frame.base().close(); }
   // From the program, between events.
   void drop_closed() {

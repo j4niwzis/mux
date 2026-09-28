@@ -250,6 +250,7 @@ struct set_motion {
 };
 struct quit {};
 struct open_settings {};
+struct pop_panel {};
 struct close_settings {};
 struct settings_home {};
 struct settings_animations {};
@@ -261,7 +262,7 @@ using request_t =
                  request::toggle_plain, request::submit_login, request::flip_enabled, request::remove_account,
                  request::open_drawer, request::show_account, request::set_motion, request::quit,
                  request::open_settings, request::close_settings, request::settings_home,
-                 request::settings_animations>;
+                 request::settings_animations, request::pop_panel>;
 
 // What the screens ask: each a request, kept until the program applies it
 // between events -- except a message, which goes to the network at once.
@@ -304,6 +305,7 @@ struct actions {
   void set_motion(std::string level) { requests.emplace_back(request::set_motion{std::move(level)}); }
   void quit() { requests.emplace_back(request::quit{}); }
   void open_settings() { requests.emplace_back(request::open_settings{}); }
+  void pop_panel() { requests.emplace_back(request::pop_panel{}); }
   void close_settings() { requests.emplace_back(request::close_settings{}); }
   void settings_home() { requests.emplace_back(request::settings_home{}); }
   void settings_animations() { requests.emplace_back(request::settings_animations{}); }
@@ -500,6 +502,11 @@ struct app {
     root().open_settings(motion.value_or("full"));
   }
   void apply(const request::close_settings&) { root().close_settings(); }
+  void apply(const request::pop_panel&) {
+    pending_login.reset();
+    root().back_panel();
+    this->refresh();
+  }
   void apply(const request::settings_home&) {
     if (auto* up = root().settings_up())
       up->show_home();

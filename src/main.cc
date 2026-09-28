@@ -149,27 +149,10 @@ using request_t = std::variant<request::choose, request::open_accounts, request:
                                request::toggle_advanced, request::submit_login, request::cancel_login,
                                request::set_enabled, request::remove_account, request::back>;
 
-// What the window asks of the program, and what the program does to the
-// window between events.
-struct app {
-  using window_type = mux::ui::window<app>;
-  using conversations = mux::ui::conversations_screen<app>;
-  using login = mux::ui::login_screen<app>;
-  using accounts = mux::ui::accounts_screen<app>;
-
-  mailbox_type* box = nullptr;
-  mux::model* model = nullptr;
+// What the screens ask: each a request, kept until the program applies it
+// between events -- except a message, which goes to the network at once.
+struct actions {
   network* net = nullptr;
-  std::filesystem::path config_path;
-  mux::config::file saved;
-  // Why the accounts file could not be read, when it could not: then it is
-  // not written over either.
-  std::optional<std::string> config_error;
-  // The account a login is waiting to hear about.
-  std::optional<std::string> pending_login;
-  // Made once app is complete: the screens name its member functions.
-  std::unique_ptr<skiff::scene::Scene<window_type>> scene;
-
   std::vector<request_t> requests;
 
   void choose(const mux::conversation_id& which) { requests.emplace_back(request::choose{which}); }
@@ -186,9 +169,31 @@ struct app {
   }
   void remove_account(std::string address) { requests.emplace_back(request::remove_account{std::move(address)}); }
   void back() { requests.emplace_back(request::back{}); }
+};
+
+using window_type = mux::ui::window<actions>;
+
+// What the program does to the window between events.
+struct app {
+  using conversations = mux::ui::conversations_screen<actions>;
+  using login = mux::ui::login_screen<actions>;
+  using accounts = mux::ui::accounts_screen<actions>;
+
+  mailbox_type* box = nullptr;
+  mux::model* model = nullptr;
+  network* net = nullptr;
+  std::filesystem::path config_path;
+  mux::config::file saved;
+  // Why the accounts file could not be read, when it could not: then it is
+  // not written over either.
+  std::optional<std::string> config_error;
+  // The account a login is waiting to hear about.
+  std::optional<std::string> pending_login;
+  actions ask;
+  skiff::scene::Scene<window_type> scene{std::in_place, &ask};
 
   // -- what the host asks
-  skiff::scene::Scene<window_type>& window() { return *scene; }
+  skiff::scene::Scene<window_type>& window() { return scene; }
 
   void woken() {
     auto changes = box->take();
@@ -200,7 +205,7 @@ struct app {
   }
 
   void before_frame() {
-    auto pending = std::exchange(requests, {});
+    auto pending = std::exchange(ask.requests, {});
     for (const request_t& one : pending)
       std::visit([this](const auto& each) { this->apply(each); }, one);
   }
@@ -208,14 +213,14 @@ struct app {
   void closing() { net->shutdown(); }
 
   // -- the screens
-  auto& body() { return scene->root().body; }
+  auto& body() { return scene.root().body; }
 
   void show_conversations() {
-    body().emplace<conversations>(this);
+    body().emplace<conversations>(&ask);
     this->refresh();
   }
   void show_accounts() {
-    body().emplace<accounts>(this);
+    body().emplace<accounts>(&ask);
     if (config_error)
       std::get<accounts>(body()).say(*config_error);
     this->refresh();
@@ -228,7 +233,7 @@ struct app {
         from = *found;
     }
     pending_login.reset();
-    body().emplace<login>(this, from, !saved.accounts.empty());
+    body().emplace<login>(&ask, from, !saved.accounts.empty());
   }
 
   // The current screen, brought up to date with the model.
@@ -412,10 +417,10 @@ int main(int argc, char** argv) {
   program.box = &box;
   program.model = &model;
   program.net = &net;
+  program.ask.net = &net;
   program.config_path = config_path;
   program.saved = std::move(saved);
   program.config_error = std::move(config_error);
-  program.scene = std::make_unique<skiff::scene::Scene<app::window_type>>(std::in_place, &program);
   if (program.saved.accounts.empty() && extra.empty())
     program.show_login(std::nullopt);
   else

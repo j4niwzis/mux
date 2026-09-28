@@ -236,6 +236,16 @@ struct conversations_screen : scene::Node {
 
   void layoutChildren() {
     const skia::SkRect box = fState.contentBox();
+    // No account at all: no sidebar, and what to do about it in the middle,
+    // a little above the centre.
+    if (empty_title.visible()) {
+      column_stack stack{form_column(box, 420.0f, std::max(24.0f, box.height() * 0.3f))};
+      empty_note.setMaxWidth(stack.column.width());
+      stack(empty_title, 10.0f);
+      stack(empty_note, 20.0f);
+      stack(empty_add, 0.0f);
+      return;
+    }
     const skia::SkRect side = skia::SkRect::MakeLTRB(box.fLeft, box.fTop, box.fLeft + kSidebarWidth, box.fBottom);
     const skia::SkRect main = skia::SkRect::MakeLTRB(side.fRight, box.fTop, box.fRight, box.fBottom);
     scene::layout(sidebar, side);
@@ -245,14 +255,6 @@ struct conversations_screen : scene::Node {
     scene::layout(list, box);
 
     const skia::SkRect inner = scene::inset(main, 12.0f, 12.0f);
-    if (empty_title.visible()) {
-      column_stack stack{form_column(inner, 460.0f, 48.0f)};
-      empty_note.setMaxWidth(stack.column.width());
-      stack(empty_title, 10.0f);
-      stack(empty_note, 20.0f);
-      stack(empty_add, 0.0f);
-      return;
-    }
     title.fState.arrange(0.0f, 0.0f);
     scene::layout(title, inner);
     topic.fState.arrange(0.0f, title.bounds().height() + 4.0f);
@@ -281,7 +283,7 @@ struct conversations_screen : scene::Node {
       block.apply({.fillX = true, .autoSize = scene::axes::kY});
     }
     const bool none = now.accounts().empty();
-    for (scene::Node* shown : std::initializer_list<scene::Node*>{&title, &topic, &timeline, &line})
+    for (scene::Node* shown : std::initializer_list<scene::Node*>{&sidebar, &list, &title, &topic, &timeline, &line})
       shown->setVisible(!none);
     empty_title.setVisible(none);
     empty_note.setVisible(none);
@@ -980,41 +982,104 @@ struct accounts_panel : closes_on_escape<Actions> {
 
 // ---- the window -----------------------------------------------------------------
 
-// Across the top: the conversations, adding an account, and the accounts,
-// the one up lit; and how many accounts are online.
+// A flat tab of the top bar: its name, dim, bright under the pointer, and
+// white with an accent line under it while it is the one up.
+template <class Actions, auto Method>
+struct nav_tab : scene::Node {
+  Actions* actions = nullptr;
+  bool active = false;
+  nodes::Text label;
+  nodes::Box<> underline{accent_colour};
+
+  static constexpr float kHeight = 48.0f;
+  static constexpr float kPadX = 14.0f;
+
+  nav_tab(Actions* a, std::string name) : actions(a), label(std::move(name), 14.0f, dim_colour, true) {
+    underline.apply({.height = 2.0f, .cornerRadius = 1.0f});
+    underline.setVisible(false);
+  }
+
+  void set_active(bool on) {
+    active = on;
+    underline.setVisible(on);
+    this->colour();
+  }
+
+  void forEachChild(auto&& f) {
+    f(label);
+    f(underline);
+  }
+
+  void measure(const skia::SkRect& parent) {
+    label.measure(parent);
+    fState.fWidth = label.fState.fWidth + 2 * kPadX;
+    fState.fHeight = kHeight;
+  }
+  void layoutChildren() {
+    const skia::SkRect box = fState.contentBox();
+    label.fState.arrange(0.0f, 0.0f, scene::anchor::kCentre, scene::anchor::kCentre);
+    scene::layout(label, box);
+    underline.apply({.width = std::max(0.0f, box.width() - 2 * kPadX + 8.0f)});
+    underline.fState.arrange(0.0f, 0.0f, scene::anchor::kBottomCentre, scene::anchor::kBottomCentre);
+    scene::layout(underline, box);
+  }
+
+  void colour() { label.setColour(active ? text_colour : this->hovered() ? text_colour : dim_colour); }
+  void update(double) { this->colour(); }
+
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  [[nodiscard]] bool onClick(float, float) {
+    (actions->*Method)();
+    return true;
+  }
+  [[nodiscard]] scene::Semantics semantics() const {
+    scene::Semantics out;
+    out.fRole = scene::semantic_role::tab{};
+    out.fLabel = label.text();
+    out.fSelected = active;
+    out.fActions = {scene::semantic_action::focus{}, scene::semantic_action::activate{}};
+    return out;
+  }
+};
+
+// Across the top: the name, the tabs for the conversations and the accounts,
+// and on the right how many accounts are online and a button to add one.
 template <class Actions>
 struct top_bar : scene::Node {
   nodes::Box<> plate{sidebar_colour};
-  nodes::Text name{"mux", 16.0f, text_colour, true};
-  widgets::Button<ask<Actions, &Actions::back>> chats;
-  widgets::Button<ask<Actions, &Actions::open_new_account>> add;
-  widgets::Button<ask<Actions, &Actions::open_accounts>> accounts;
+  nodes::Box<> divider{skia::colorSetARGB(255, 44, 49, 54)};
+  nodes::Text name{"mux", 17.0f, text_colour, true};
+  nav_tab<Actions, &Actions::back> chats;
+  nav_tab<Actions, &Actions::open_accounts> accounts;
   nodes::Text status{"", 13.0f, dim_colour};
+  widgets::Button<ask<Actions, &Actions::open_new_account>> add;
 
   static constexpr float kHeight = 48.0f;
+  static constexpr float kPadX = 18.0f;
 
-  explicit top_bar(Actions* a) : chats("Chats", {a}), add("Add account", {a}), accounts("Accounts", {a}) {
+  explicit top_bar(Actions* a) : chats(a, "Chats"), accounts(a, "Accounts"), add("+ Add account", {a}) {
     fState.apply({.fillX = true, .height = kHeight});
     plate.apply({.fill = true});
-    chats.apply({.width = 90.0f, .height = 32.0f});
-    add.apply({.width = 130.0f, .height = 32.0f});
-    accounts.apply({.width = 110.0f, .height = 32.0f});
+    divider.apply({.fillX = true, .height = 1.0f});
+    add.setPrimary(true);
+    add.apply({.width = 128.0f, .height = 30.0f});
     status.setElided(true);
   }
 
   void forEachChild(auto&& f) {
     f(plate);
+    f(divider);
     f(name);
     f(chats);
-    f(add);
     f(accounts);
     f(status);
+    f(add);
   }
 
+  // Which is up: 0 the conversations, 1 adding an account, 2 the accounts.
   void light(int tab) {
-    chats.setPrimary(tab == 0);
-    add.setPrimary(tab == 1);
-    accounts.setPrimary(tab == 2);
+    chats.set_active(tab == 0);
+    accounts.set_active(tab == 2);
   }
 
   void show(const model& now) {
@@ -1026,20 +1091,25 @@ struct top_bar : scene::Node {
   }
 
   void layoutChildren() {
-    const skia::SkRect box = scene::inset(fState.contentBox(), 12.0f, 0.0f);
-    scene::layout(plate, fState.contentBox());
-    float x = 0.0f;
-    const auto next = [&](auto& node, float after) {
-      node.fState.arrange(x, 0.0f, scene::anchor::kCentreLeft, scene::anchor::kCentreLeft);
-      scene::layout(node, box);
-      x += node.bounds().width() + after;
-    };
-    next(name, 24.0f);
-    next(chats, 8.0f);
-    next(add, 8.0f);
-    next(accounts, 16.0f);
-    status.setMaxWidth(std::max(0.0f, box.width() - x));
-    status.fState.arrange(0.0f, 0.0f, scene::anchor::kCentreRight, scene::anchor::kCentreRight);
+    const skia::SkRect whole = fState.contentBox();
+    scene::layout(plate, whole);
+    divider.fState.arrange(0.0f, 0.0f, scene::anchor::kBottomLeft, scene::anchor::kBottomLeft);
+    scene::layout(divider, whole);
+    const skia::SkRect box = scene::inset(whole, kPadX, 0.0f);
+    name.fState.arrange(0.0f, 0.0f, scene::anchor::kCentreLeft, scene::anchor::kCentreLeft);
+    scene::layout(name, box);
+    float x = name.bounds().width() + 22.0f;
+    chats.fState.arrange(x, 0.0f, scene::anchor::kCentreLeft, scene::anchor::kCentreLeft);
+    scene::layout(chats, box);
+    x += chats.bounds().width();
+    accounts.fState.arrange(x, 0.0f, scene::anchor::kCentreLeft, scene::anchor::kCentreLeft);
+    scene::layout(accounts, box);
+    x += accounts.bounds().width() + 16.0f;
+    add.fState.arrange(0.0f, 0.0f, scene::anchor::kCentreRight, scene::anchor::kCentreRight);
+    scene::layout(add, box);
+    status.setMaxWidth(std::max(0.0f, add.bounds().fLeft - box.fLeft - x - 14.0f));
+    status.fState.arrange(-(add.bounds().width() + 14.0f), 0.0f, scene::anchor::kCentreRight,
+                          scene::anchor::kCentreRight);
     scene::layout(status, box);
   }
 };

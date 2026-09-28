@@ -60,6 +60,9 @@ struct stub {
   void edit_proxy(int) {}
   void save_proxy_profile() {}
   void delete_proxy_profile() {}
+  void settings_appearance() {}
+  void set_theme(std::string) {}
+  void set_renderer(std::string) {}
   void leave_chat() {}
 };
 

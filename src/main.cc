@@ -351,6 +351,13 @@ struct edit_proxy {
 };
 struct save_proxy_profile {};
 struct delete_proxy_profile {};
+struct settings_appearance {};
+struct set_theme {
+  std::string name;
+};
+struct set_renderer {
+  std::string name;
+};
 struct leave_chat {};
 struct switch_account {
   std::string address;
@@ -373,7 +380,8 @@ using request_t =
                  request::accounts_back, request::account_page, request::flip_account_receipts,
                  request::proxy_kind, request::choose_account_proxy, request::manage_proxies,
                  request::settings_proxies, request::add_proxy, request::edit_proxy, request::save_proxy_profile,
-                 request::delete_proxy_profile, request::leave_chat>;
+                 request::delete_proxy_profile, request::settings_appearance, request::set_theme,
+                 request::set_renderer, request::leave_chat>;
 
 // What the screens ask: each a request, kept until the program applies it
 // between events -- except a message, which goes to the network at once.
@@ -437,6 +445,9 @@ struct actions {
   void edit_proxy(int index) { requests.emplace_back(request::edit_proxy{index}); }
   void save_proxy_profile() { requests.emplace_back(request::save_proxy_profile{}); }
   void delete_proxy_profile() { requests.emplace_back(request::delete_proxy_profile{}); }
+  void settings_appearance() { requests.emplace_back(request::settings_appearance{}); }
+  void set_theme(std::string name) { requests.emplace_back(request::set_theme{std::move(name)}); }
+  void set_renderer(std::string name) { requests.emplace_back(request::set_renderer{std::move(name)}); }
   void leave_chat() { requests.emplace_back(request::leave_chat{}); }
   void switch_account(std::string address) { requests.emplace_back(request::switch_account{std::move(address)}); }
   void close_settings() { requests.emplace_back(request::close_settings{}); }
@@ -473,6 +484,9 @@ struct app {
   std::vector<mux::config::account_t> saved;
   // How much moves, as read, to be written back as it was.
   std::optional<std::string> motion;
+  // The theme and the renderer, for the next start: kept in the file.
+  std::optional<std::string> theme;
+  std::optional<std::string> renderer;
   // The chats muted, and the proxy profiles: kept in the file.
   std::set<mux::conversation_id> muted;
   std::vector<mux::config::proxy_settings> proxies;
@@ -788,6 +802,26 @@ struct app {
       if (mux::config::proxy_of(one) == name)
         this->reconnect(one);
   }
+  void apply(const request::settings_appearance&) {
+    if (auto* up = root().settings_up())
+      up->show_appearance(theme.value_or("dark"), renderer.value_or("opengl"));
+  }
+  // The theme or the renderer chosen: kept, for the next start.
+  void apply(const request::set_theme& one) {
+    theme = one.name;
+    this->show_appearance_choices();
+    (void)this->write();
+  }
+  void apply(const request::set_renderer& one) {
+    renderer = one.name;
+    this->show_appearance_choices();
+    (void)this->write();
+  }
+  void show_appearance_choices() {
+    if (auto* up = root().settings_up())
+      if (auto* page = up->appearance())
+        page->show(theme.value_or("dark"), renderer.value_or("opengl"));
+  }
   void apply(const request::manage_proxies&) {
     root().open_settings(motion.value_or("full"));
     if (auto* up = root().settings_up())
@@ -999,6 +1033,8 @@ struct app {
     file.motion = motion;
     if (!proxies.empty())
       file.proxies = proxies;
+    file.theme = theme;
+    file.renderer = renderer;
     if (!muted.empty()) {
       std::vector<mux::config::muted_chat> kept;
       for (const auto& one : muted)
@@ -1065,6 +1101,8 @@ int main(int argc, char** argv) {
     }
   });
 
+  // The theme first: what is made takes its colours from it.
+  mux::ui::use_theme(saved.theme.value_or("dark"));
   app program;
   program.box = &box;
   program.model = &model;
@@ -1075,6 +1113,8 @@ int main(int argc, char** argv) {
   program.config_path = config_path;
   program.saved = mux::config::accounts_of(saved);
   program.motion = saved.motion;
+  program.theme = saved.theme;
+  program.renderer = saved.renderer;
   program.proxies = proxies;
   for (const auto& one : saved.muted.value_or(std::vector<mux::config::muted_chat>{}))
     program.muted.insert({{mux::ui::protocol_of(one.account), one.account}, one.conversation});
@@ -1083,7 +1123,7 @@ int main(int argc, char** argv) {
   program.config_error = std::move(config_error);
   program.refresh();
 
-  const int code = mux::host::run(program, {});
+  const int code = mux::host::run(program, {.software = saved.renderer == "software"});
   net.thread.join();
   return code;
 }

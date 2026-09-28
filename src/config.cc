@@ -78,6 +78,10 @@ struct file {
   std::optional<std::vector<muted_chat>> muted;
   // The proxy profiles accounts choose from.
   std::optional<std::vector<proxy_settings>> proxies;
+  // The theme, "dark" or "light", and what draws the window, "opengl" or
+  // "software". Nothing said is dark and OpenGL.
+  std::optional<std::string> theme;
+  std::optional<std::string> renderer;
   friend bool operator==(const file&, const file&) = default;
 };
 

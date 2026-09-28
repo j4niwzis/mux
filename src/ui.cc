@@ -25,13 +25,13 @@ namespace scene = skiff::scene;
 namespace nodes = skiff::nodes;
 namespace widgets = skiff::widgets;
 
-inline const skia::SkColor background = skia::colorSetARGB(255, 24, 27, 30);
-inline const skia::SkColor sidebar_colour = skia::colorSetARGB(255, 32, 36, 40);
-inline const skia::SkColor chosen_colour = skia::colorSetARGB(255, 52, 60, 66);
-inline const skia::SkColor text_colour = skia::colorSetARGB(255, 235, 240, 243);
-inline const skia::SkColor dim_colour = skia::colorSetARGB(255, 150, 162, 170);
-inline const skia::SkColor accent_colour = skia::colorSetARGB(255, 102, 204, 255);
-inline const skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110);
+inline skia::SkColor background = skia::colorSetARGB(255, 24, 27, 30);
+inline skia::SkColor sidebar_colour = skia::colorSetARGB(255, 32, 36, 40);
+inline skia::SkColor chosen_colour = skia::colorSetARGB(255, 52, 60, 66);
+inline skia::SkColor text_colour = skia::colorSetARGB(255, 235, 240, 243);
+inline skia::SkColor dim_colour = skia::colorSetARGB(255, 150, 162, 170);
+inline skia::SkColor accent_colour = skia::colorSetARGB(255, 102, 204, 255);
+inline skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110);
 
 // The protocol an address speaks: a Matrix user ID starts with '@', and a JID
 // cannot.
@@ -67,6 +67,7 @@ inline const skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110)
 //   void flip_account_receipts(), choose_account_proxy(int), manage_proxies()
 //   void settings_proxies(), add_proxy(), edit_proxy(int), proxy_kind(int),
 //        save_proxy_profile(), delete_proxy_profile()
+//   void settings_appearance(), set_theme(std::string), set_renderer(std::string)
 //   void not_implemented(std::string what)  -- a box saying it is not there yet
 //   void close_notice()
 //   void resize_sidebar(float x)     -- the chat list's edge dragged to x
@@ -599,11 +600,45 @@ struct not_yet {
   void operator()() const { actions->not_implemented(std::string(what)); }
 };
 
-inline const skia::SkColor selected_colour = skia::colorSetARGB(255, 43, 82, 120);
-inline const skia::SkColor band_colour = skia::colorSetARGB(255, 18, 20, 23);
+inline skia::SkColor selected_colour = skia::colorSetARGB(255, 43, 82, 120);
+inline skia::SkColor band_colour = skia::colorSetARGB(255, 18, 20, 23);
 // Between the sections of a panel: just darker than the panel.
-inline const skia::SkColor section_colour = skia::colorSetARGB(255, 26, 29, 33);
-inline const skia::SkColor tile_colour = skia::colorSetARGB(255, 40, 45, 50);
+inline skia::SkColor section_colour = skia::colorSetARGB(255, 26, 29, 33);
+inline skia::SkColor tile_colour = skia::colorSetARGB(255, 40, 45, 50);
+inline skia::SkColor bubble_colour = skia::colorSetARGB(255, 33, 41, 52);
+inline skia::SkColor sent_time_colour = skia::colorSetARGB(255, 170, 200, 230);
+
+// The colours of a theme, "dark" or "light", put in place: mux.ui's and
+// skiff-widgets'. Before anything is made -- what is made takes its
+// colours then.
+inline void use_theme(std::string_view name) {
+  auto& widget = widgets::theme();
+  if (name == "light") {
+    background = skia::colorSetARGB(255, 241, 243, 245);
+    sidebar_colour = skia::colorSetARGB(255, 255, 255, 255);
+    chosen_colour = skia::colorSetARGB(255, 229, 233, 237);
+    text_colour = skia::colorSetARGB(255, 22, 26, 30);
+    dim_colour = skia::colorSetARGB(255, 108, 118, 128);
+    accent_colour = skia::colorSetARGB(255, 36, 140, 220);
+    error_colour = skia::colorSetARGB(255, 205, 60, 50);
+    selected_colour = skia::colorSetARGB(255, 205, 228, 250);
+    band_colour = skia::colorSetARGB(255, 222, 226, 230);
+    section_colour = skia::colorSetARGB(255, 235, 238, 241);
+    tile_colour = skia::colorSetARGB(255, 238, 241, 244);
+    bubble_colour = skia::colorSetARGB(255, 255, 255, 255);
+    sent_time_colour = skia::colorSetARGB(255, 80, 120, 160);
+    widget.fSurface = skia::colorSetARGB(255, 233, 236, 240);
+    widget.fSurfaceHover = skia::colorSetARGB(255, 223, 228, 233);
+    widget.fSurfaceActive = skia::colorSetARGB(255, 212, 218, 224);
+    widget.fText = skia::colorSetARGB(255, 22, 26, 30);
+    widget.fLabel = skia::colorSetARGB(255, 40, 48, 56);
+    widget.fTextDim = skia::colorSetARGB(255, 100, 110, 120);
+    widget.fTextFaint = skia::colorSetARGB(255, 140, 150, 160);
+    widget.fAccent = accent_colour;
+    widget.fOnAccent = skia::colorSetARGB(255, 255, 255, 255);
+  }
+}
+
 
 // What a presence says, in a word or two.
 [[nodiscard]] inline std::string presence_text(const availability_t& state) {
@@ -869,10 +904,10 @@ struct message_bubble : scene::Node {
     if (font == nullptr || bubble.isEmpty())
       return;
     const skiff::paint::Painter p(canvas, *font);
-    p.fillRounded(bubble, 12.0f, outgoing ? selected_colour : skia::colorSetARGB(255, 33, 41, 52), alpha);
+    p.fillRounded(bubble, 12.0f, outgoing ? selected_colour : bubble_colour, alpha);
     const float width = p.measure(time, 11.0f);
     p.text(time, bubble.fRight - kPadX - width, bubble.fBottom - 6.0f, 11.0f,
-           outgoing ? skia::colorSetARGB(255, 170, 200, 230) : dim_colour, alpha);
+           outgoing ? sent_time_colour : dim_colour, alpha);
     if (with_avatar)
       draw_avatar(canvas,
                   skia::SkRect::MakeXYWH(fState.fBounds.fLeft, fState.fBounds.fBottom - kAvatar - 2.0f, kAvatar, kAvatar),
@@ -2573,12 +2608,14 @@ struct settings_home : scene::Node {
   row_item<ask<Actions, &Actions::open_accounts>> accounts;
   row_item<ask<Actions, &Actions::settings_animations>> animations;
   row_item<ask<Actions, &Actions::settings_proxies>> proxies;
+  row_item<ask<Actions, &Actions::settings_appearance>> appearance;
 
   explicit settings_home(Actions* a)
       : header("Settings", {a}, {a}, false, true),
         accounts("Accounts", {a}, icon::person{}),
         animations("Animations", {a}, icon::motion{}),
-        proxies("Proxies", {a}, icon::gear{}) {
+        proxies("Proxies", {a}, icon::gear{}),
+        appearance("Appearance", {a}, icon::eye{}) {
     fState.apply({.fill = true});
   }
 
@@ -2586,6 +2623,7 @@ struct settings_home : scene::Node {
     f(header);
     f(accounts);
     f(animations);
+    f(appearance);
     f(proxies);
   }
   void show_motion(std::string_view) {}
@@ -2595,6 +2633,7 @@ struct settings_home : scene::Node {
     stack(header, 6.0f);
     stack(accounts, 0.0f);
     stack(animations, 0.0f);
+    stack(appearance, 0.0f);
     stack(proxies, 0.0f);
   }
 };
@@ -2809,11 +2848,84 @@ struct proxy_editor : scene::Node {
   }
 };
 
+// A theme or a renderer chosen on the Appearance page.
+template <class Actions>
+struct choose_theme {
+  Actions* actions = nullptr;
+  std::string_view name;
+  void operator()() const { actions->set_theme(std::string(name)); }
+};
+template <class Actions>
+struct choose_renderer {
+  Actions* actions = nullptr;
+  std::string_view name;
+  void operator()() const { actions->set_renderer(std::string(name)); }
+};
+
+// Settings' Appearance page: the theme, and what draws the window.
+template <class Actions>
+struct appearance_page : scene::Node {
+  page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>> header;
+  nodes::Text theme_title = section_title("THEME");
+  row_item<choose_theme<Actions>> dark;
+  row_item<choose_theme<Actions>> light;
+  nodes::Text renderer_title = section_title("RENDERING");
+  row_item<choose_renderer<Actions>> gpu;
+  row_item<choose_renderer<Actions>> cpu;
+  nodes::Text note{"Both take effect when mux starts again.", 13.0f, dim_colour};
+
+  appearance_page(Actions* a, std::string_view theme, std::string_view renderer)
+      : header("Appearance", {a}, {a}, true, true),
+        dark("Dark", {a, "dark"}, icon::none{}, false),
+        light("Light", {a, "light"}, icon::none{}, false),
+        gpu("OpenGL (the graphics card)", {a, "opengl"}, icon::none{}, false),
+        cpu("Software (the processor)", {a, "software"}, icon::none{}, false) {
+    fState.apply({.fill = true});
+    this->show(theme, renderer);
+  }
+  void show(std::string_view theme, std::string_view renderer) {
+    dark.set_chosen(theme != "light");
+    light.set_chosen(theme == "light");
+    gpu.set_chosen(renderer != "software");
+    cpu.set_chosen(renderer == "software");
+  }
+  void show_motion(std::string_view) {}
+  void show_receipts(bool) {}
+  void forEachChild(auto&& f) {
+    f(header);
+    f(theme_title);
+    f(dark);
+    f(light);
+    f(renderer_title);
+    f(gpu);
+    f(cpu);
+    f(note);
+  }
+  void layoutChildren() {
+    column_stack stack{fState.contentBox()};
+    stack(header, 6.0f);
+    theme_title.fState.arrange(20.0f, stack.y);
+    scene::layout(theme_title, stack.column);
+    stack.y += theme_title.bounds().height() + 4.0f;
+    stack(dark, 0.0f);
+    stack(light, 12.0f);
+    renderer_title.fState.arrange(20.0f, stack.y);
+    scene::layout(renderer_title, stack.column);
+    stack.y += renderer_title.bounds().height() + 4.0f;
+    stack(gpu, 0.0f);
+    stack(cpu, 10.0f);
+    note.fState.arrange(20.0f, stack.y);
+    scene::layout(note, stack.column);
+  }
+};
+
 template <class Actions>
 struct settings_dialog : scene::Node {
   Actions* actions = nullptr;
   std::string motion;
-  std::variant<settings_home<Actions>, animations_page<Actions>, proxies_page<Actions>, proxy_editor<Actions>> page;
+  std::variant<settings_home<Actions>, animations_page<Actions>, proxies_page<Actions>, proxy_editor<Actions>,
+               appearance_page<Actions>>
+      page;
 
   settings_dialog(Actions* a, std::string level) : actions(a), motion(std::move(level)), page(std::in_place_index<0>, a) {
     fState.apply({.fill = true});
@@ -2825,6 +2937,14 @@ struct settings_dialog : scene::Node {
   void show_animations() {
     page.template emplace<1>(actions);
     this->show_motion(motion);
+  }
+  void show_appearance(std::string_view theme, std::string_view renderer) {
+    page.template emplace<4>(actions, theme, renderer);
+  }
+  [[nodiscard]] appearance_page<Actions>* appearance() {
+    return std::visit(overloaded{[](appearance_page<Actions>& one) { return &one; },
+                                 [](auto&) -> appearance_page<Actions>* { return nullptr; }},
+                      page);
   }
   void show_proxies(const std::vector<config::proxy_settings>& all) { page.template emplace<2>(actions, all); }
   void show_proxy(const std::optional<config::proxy_settings>& from, int index) {

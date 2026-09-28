@@ -88,6 +88,25 @@ class account {
 
   void stop() { stopping_ = true; }
 
+  // A read receipt for an event of a room: the people in it see how far this
+  // account has read.
+  void mark_read(std::string room, std::string event) {
+    loop_->spawn([this, room = std::move(room), event = std::move(event)] {
+      if (api_)
+        (void)perform(*api_, loom::cs::post_receipt{.room_id = room,
+                                                    .receipt_type = loom::cs::post_receipt::receipt_type_values::m_read{},
+                                                    .event_id = event});
+    });
+  }
+
+  // The account leaves a room; the next sync says it has, and the room goes.
+  void leave(std::string room) {
+    loop_->spawn([this, room = std::move(room)] {
+      if (api_)
+        (void)perform(*api_, loom::cs::leave_room{.room_id = room});
+    });
+  }
+
   // A text message sent to a room, from a fiber of its own. It is in the
   // conversation at once, under its transaction id; the server's answer
   // gives it its event id, and the echo in the next sync is the same message.
@@ -235,6 +254,7 @@ class account {
           continue;
         const conversation_id in{id_, room};
         conversation(in, found->second);
+        members(in, found->second);
         if (part.timeline)
           for (const auto& one : part.timeline->events)
             event(in, one);
@@ -289,6 +309,14 @@ class account {
                                        .encrypted = kept.state.encrypted(),
                                        .unread = kept.unread.notification,
                                        .highlights = kept.unread.highlight});
+  }
+
+  // Who is in a room, as its state says: those joined, by their names there.
+  void members(const conversation_id& in, const loom::client::joined_room& kept) {
+    std::vector<mux::member> who;
+    for (const std::string& user : kept.state.members("join"))
+      who.push_back({user, kept.state.display_name(user).value_or(user), std::nullopt});
+    sink_(change::members_changed{in, std::move(who)});
   }
 
   void event(const conversation_id& in, const loom::ev::timeline_event& one) {

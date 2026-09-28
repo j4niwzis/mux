@@ -60,6 +60,7 @@ inline const skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110)
 //   void set_motion(std::string level)       -- "full", "reduced" or "none"
 //   void quit()
 //   void toggle_mute()               -- the chosen chat muted, or not
+//   void leave_chat()                -- the chosen chat left
 //   void close_account_pages()       -- back to the list of accounts
 //   void settings_privacy(), flip_read_receipts()
 //   void not_implemented(std::string what)  -- a box saying it is not there yet
@@ -387,7 +388,7 @@ struct row_item : scene::Node {
       return;
     const skiff::paint::Painter p(canvas, *font);
     const skia::SkRect& box = fState.fBounds;
-    if (lit || fState.fHovered || this->focused())
+    if (lit || fState.fHovered || this->showsFocus())
       p.fillRounded(box, 0.0f, chosen_colour, alpha);
     draw_icon(canvas, icon, skia::SkRect::MakeXYWH(box.fLeft + 20.0f, box.fTop, 24.0f, box.height()), dim_colour, alpha);
     if (radio) {
@@ -432,7 +433,7 @@ struct icon_button : scene::Node {
       return;
     const skiff::paint::Painter p(canvas, *font);
     const skia::SkRect& box = fState.fBounds;
-    if (fState.fHovered || this->focused())
+    if (fState.fHovered || this->showsFocus())
       p.fillRounded(box, box.width() * 0.5f, chosen_colour, alpha);
     draw_icon(canvas, icon, box, colour, alpha);
   }
@@ -519,7 +520,7 @@ struct segment : scene::Node {
     const skiff::paint::Painter p(canvas, *font);
     if (active)
       p.fillRounded(fState.fBounds, 0.0f, accent_colour, alpha);
-    else if (fState.fHovered || this->focused())
+    else if (fState.fHovered || this->showsFocus())
       p.fillRounded(fState.fBounds, 0.0f, chosen_colour, alpha);
   }
 
@@ -556,7 +557,7 @@ struct menu_button : scene::Node {
       return;
     const skiff::paint::Painter p(canvas, *font);
     const skia::SkRect& box = fState.fBounds;
-    if (fState.fHovered || this->focused())
+    if (fState.fHovered || this->showsFocus())
       p.fillRounded(box, 8.0f, chosen_colour, alpha);
     const float left = box.centerX() - 8.0f;
     for (const float dy : {-6.0f, 0.0f, 6.0f})
@@ -718,7 +719,7 @@ struct conversation_row : scene::Node {
     const skia::SkRect& box = fState.fBounds;
     if (chosen)
       p.fillRounded(box, 0.0f, selected_colour, alpha);
-    else if (fState.fHovered || this->focused())
+    else if (fState.fHovered || this->showsFocus())
       p.fillRounded(box, 0.0f, chosen_colour, alpha);
     draw_avatar(canvas, skia::SkRect::MakeXYWH(box.fLeft + 10.0f, box.centerY() - 23.0f, 46.0f, 46.0f), id.id,
                 name.text(), alpha);
@@ -1002,7 +1003,7 @@ struct action_tile : scene::Node {
       return;
     const skiff::paint::Painter p(canvas, *font);
     const skia::SkRect& box = fState.fBounds;
-    p.fillRounded(box, 8.0f, fState.fHovered || this->focused() ? chosen_colour : tile_colour, alpha);
+    p.fillRounded(box, 8.0f, fState.fHovered || this->showsFocus() ? chosen_colour : tile_colour, alpha);
     draw_icon(canvas, icon, skia::SkRect::MakeXYWH(box.fLeft, box.fTop + 6.0f, box.width(), 24.0f), text_colour, alpha);
   }
 
@@ -1084,7 +1085,7 @@ struct info_panel : scene::Node {
   nodes::Text status{"", 13.0f, dim_colour};
   action_tile<ask<Actions, &Actions::toggle_mute>> mute;
   action_tile<not_yet<Actions>> manage;
-  action_tile<not_yet<Actions>> leave;
+  action_tile<ask<Actions, &Actions::leave_chat>> leave;
   nodes::Text id_text{"", 14.0f, accent_colour};
   nodes::Text id_label{"ID", 12.0f, dim_colour};
   nodes::Text members_title{"", 13.0f, dim_colour, true};
@@ -1099,7 +1100,7 @@ struct info_panel : scene::Node {
       : close(icon::close{}, {a}),
         mute("Mute", icon::bell{}, {a}),
         manage("Manage", icon::sliders{}, {a, "Managing a chat"}),
-        leave("Leave", icon::leave{}, {a, "Leaving a chat"}),
+        leave("Leave", icon::leave{}, {a}),
         add_member(icon::add_person{}, {a, "Adding members"}) {
     fState.apply({.masking = true});
     name.setElided(true);
@@ -2335,7 +2336,7 @@ struct drawer_account : scene::Node {
       return;
     const skiff::paint::Painter p(canvas, *font);
     const skia::SkRect& box = fState.fBounds;
-    if (current || fState.fHovered || this->focused())
+    if (current || fState.fHovered || this->showsFocus())
       p.fillRounded(box, 0.0f, chosen_colour, alpha);
     draw_avatar(canvas, skia::SkRect::MakeXYWH(box.fLeft + 16.0f, box.centerY() - 19.0f, 38.0f, 38.0f), address,
                 address, alpha);

@@ -51,6 +51,7 @@ struct stub {
   void close_account_pages() {}
   void settings_privacy() {}
   void flip_read_receipts() {}
+  void leave_chat() {}
 };
 
 TEST(Composer, TakesWhatIsTypedIntoIt) {

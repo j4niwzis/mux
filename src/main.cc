@@ -125,6 +125,29 @@ struct network {
             one.account);
     });
   }
+  // For the account a conversation is of: read up to `event`, or left.
+  void mark_read(const mux::conversation_id& in, std::string event) {
+    loop.post([this, in, event = std::move(event)] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == in.account)
+                account->mark_read(in.id, event);
+            },
+            one.account);
+    });
+  }
+  void leave(const mux::conversation_id& in) {
+    loop.post([this, in] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == in.account)
+                account->leave(in.id);
+            },
+            one.account);
+    });
+  }
   void shutdown() {
     loop.post([this] {
       for (auto& one : accounts) {
@@ -296,6 +319,7 @@ struct toggle_mute {};
 struct close_account_pages {};
 struct settings_privacy {};
 struct flip_read_receipts {};
+struct leave_chat {};
 struct switch_account {
   std::string address;
 };
@@ -314,7 +338,7 @@ using request_t =
                  request::switch_account, request::submit_message, request::send_typed,
                  request::resize_sidebar, request::not_implemented, request::close_notice,
                  request::resize_info, request::toggle_mute, request::close_account_pages,
-                 request::settings_privacy, request::flip_read_receipts>;
+                 request::settings_privacy, request::flip_read_receipts, request::leave_chat>;
 
 // What the screens ask: each a request, kept until the program applies it
 // between events -- except a message, which goes to the network at once.
@@ -369,6 +393,7 @@ struct actions {
   void close_account_pages() { requests.emplace_back(request::close_account_pages{}); }
   void settings_privacy() { requests.emplace_back(request::settings_privacy{}); }
   void flip_read_receipts() { requests.emplace_back(request::flip_read_receipts{}); }
+  void leave_chat() { requests.emplace_back(request::leave_chat{}); }
   void switch_account(std::string address) { requests.emplace_back(request::switch_account{std::move(address)}); }
   void close_settings() { requests.emplace_back(request::close_settings{}); }
   void settings_home() { requests.emplace_back(request::settings_home{}); }
@@ -531,6 +556,36 @@ struct app {
   void apply(const request::choose& one) {
     root().main().chosen = one.which;
     root().main().show(*model);
+    this->mark_read(one.which);
+  }
+
+  // A chat opened: read up to its last message from someone else, and the
+  // people in it told so where read receipts are on.
+  void mark_read(const mux::conversation_id& which) {
+    if (!read_receipts.value_or(true) || ask.demo)
+      return;
+    const mux::conversation* one = model->find(which);
+    if (!one)
+      return;
+    for (auto it = one->timeline.rbegin(); it != one->timeline.rend(); ++it)
+      if (!it->outgoing && !it->id.empty()) {
+        net->mark_read(which, it->id);
+        return;
+      }
+  }
+
+  // The chosen chat left: a Matrix room here; XMPP rooms are not there yet.
+  void apply(const request::leave_chat&) {
+    const auto& chosen = root().main().chosen;
+    if (!chosen)
+      return;
+    std::visit(mux::overloaded{[this](mux::protocol::xmpp) { root().show_notice("Leaving XMPP chats"); },
+                               [&](mux::protocol::matrix) {
+                                 if (!ask.demo)
+                                   net->leave(*chosen);
+                                 root().main().info_open = false;
+                               }},
+               chosen->account.speaks);
   }
   void apply(const request::back&) { this->show_conversations(); }
   void apply(const request::open_accounts&) { (void)this->show_accounts(); }

@@ -155,6 +155,11 @@ class account {
   // A chat message sent: from any fiber, or posted to the loop from another
   // thread. What was sent is said as a change at once, and marked sent once
   // it has gone out.
+  // Not yet for XMPP: chat markers (XEP-0333), and leaving rooms, which
+  // come with rooms (XEP-0045).
+  void mark_read(std::string, std::string) {}
+  void leave(std::string) {}
+
   void send(std::string to, std::string text) {
     loop_->spawn([this, to = bare(to), text = std::move(text)] {
       message out{.in = {id_, to},

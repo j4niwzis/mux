@@ -71,7 +71,7 @@ class account {
  public:
   account(net::loop& loop, net::tls& tls, settings how, Sink sink)
       : loop_(&loop), tls_(&tls), how_(std::move(how)), sink_(std::move(sink)) {
-    id_ = account_id{protocol::matrix, how_.user_id};
+    id_ = account_id{protocol::matrix{}, how_.user_id};
     const auto colon = how_.user_id.find(':');
     localpart_ = how_.user_id.substr(how_.user_id.starts_with('@') ? 1 : 0,
                                      colon == std::string::npos ? std::string::npos : colon - 1);
@@ -102,9 +102,9 @@ class account {
           .at = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()),
           .body = {body, std::nullopt},
           .outgoing = true,
-          .delivery = delivery::sending}});
+          .delivery = delivery::sending{}}});
       if (!api_) {
-        sink_(change::delivery_changed{in, txn, delivery::failed});
+        sink_(change::delivery_changed{in, txn, delivery::failed{}});
         return;
       }
       knot::value::object content;
@@ -115,7 +115,7 @@ class account {
                                                         .txn_id = txn,
                                                         .body = knot::value(std::move(content))});
       if (!sent) {
-        sink_(change::delivery_changed{in, txn, delivery::failed});
+        sink_(change::delivery_changed{in, txn, delivery::failed{}});
         return;
       }
       sink_(change::message_acknowledged{in, txn, sent->event_id});
@@ -123,9 +123,7 @@ class account {
   }
 
  private:
-  void say(connection state, std::optional<std::string> error = std::nullopt) {
-    sink_(change::connection_changed{id_, state, std::move(error)});
-  }
+  void say(connection_t state) { sink_(change::connection_changed{id_, std::move(state)}); }
 
   // A request made and its answer read into its type.
   template <class Endpoint>
@@ -167,10 +165,10 @@ class account {
   }
 
   void run() {
-    say(connection::connecting);
+    say(connection::connecting{});
     const auto base = homeserver();
     if (!base) {
-      say(connection::failed, "no homeserver for " + how_.user_id);
+      say(connection::failed{"no homeserver for " + how_.user_id});
       return;
     }
     http::connection api(*loop_, *tls_, *base);
@@ -187,11 +185,11 @@ class account {
                                                         .initial_device_display_name = how_.device_name}});
     if (!logged) {
       api_ = nullptr;
-      say(connection::failed, "login: " + logged.error().said());
+      say(connection::failed{"login: " + logged.error().said()});
       return;
     }
     token_ = logged->access_token;
-    say(connection::online);
+    say(connection::online{});
 
     std::chrono::seconds backoff(1);
     while (!stopping_) {
@@ -202,10 +200,10 @@ class account {
       if (!got) {
         const failure& why = got.error();
         if (why.server && (why.server->errcode == "M_UNKNOWN_TOKEN" || why.server->errcode == "M_FORBIDDEN")) {
-          say(connection::failed, why.said());
+          say(connection::failed{why.said()});
           break;
         }
-        say(connection::connecting, why.said());
+        say(connection::connecting{why.said()});
         const auto wait = why.server && why.server->retry_after_ms
                               ? std::chrono::milliseconds(*why.server->retry_after_ms)
                               : std::chrono::duration_cast<std::chrono::milliseconds>(backoff);
@@ -215,13 +213,13 @@ class account {
       }
       if (backoff != std::chrono::seconds(1)) {
         backoff = std::chrono::seconds(1);
-        say(connection::online);
+        say(connection::online{});
       }
       state_.apply(*got);
       tell(*got);
     }
     api_ = nullptr;
-    say(connection::offline);
+    say(connection::offline{});
   }
 
   // What the rooms a sync named look like now, and what their timelines
@@ -244,7 +242,7 @@ class account {
       }
     if (rooms.invite)
       for (const auto& [room, part] : *rooms.invite)
-        sink_(change::conversation_updated{.id = {id_, room}, .kind = conversation_kind::group, .name = room});
+        sink_(change::conversation_updated{.id = {id_, room}, .kind = conversation_kind::group{}, .name = room});
     if (rooms.leave)
       for (const auto& [room, part] : *rooms.leave)
         sink_(change::conversation_removed{{id_, room}});
@@ -284,7 +282,7 @@ class account {
 
   void conversation(const conversation_id& in, const loom::client::joined_room& kept) {
     sink_(change::conversation_updated{.id = in,
-                                       .kind = direct(in.id) ? conversation_kind::direct : conversation_kind::group,
+                                       .kind = direct(in.id) ? conversation_kind::direct{} : conversation_kind::group{},
                                        .name = name_of(in.id, kept),
                                        .avatar = kept.state.avatar_url(),
                                        .topic = kept.state.topic(),

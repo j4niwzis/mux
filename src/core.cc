@@ -12,14 +12,30 @@ import std;
 
 export namespace mux {
 
+// The overloaded pattern: a visitor made of several callables.
+template <class... Fs>
+struct overloaded : Fs... {
+  using Fs::operator()...;
+};
+template <class... Fs>
+overloaded(Fs...) -> overloaded<Fs...>;
+
 // Which protocol an account speaks. A closed set: what differs between them
 // is in the account types, dispatched with std::visit, not behind a base
 // class.
-enum class protocol : std::uint8_t { xmpp, matrix };
+namespace protocol {
+struct xmpp {
+  friend auto operator<=>(const xmpp&, const xmpp&) = default;
+};
+struct matrix {
+  friend auto operator<=>(const matrix&, const matrix&) = default;
+};
+}  // namespace protocol
+using protocol_t = std::variant<protocol::xmpp, protocol::matrix>;
 
 // An account, as the user names it: user@example.com, or @user:example.org.
 struct account_id {
-  protocol speaks = protocol::xmpp;
+  protocol_t speaks = protocol::xmpp{};
   std::string address;
   friend bool operator==(const account_id&, const account_id&) = default;
   friend auto operator<=>(const account_id&, const account_id&) = default;
@@ -34,14 +50,66 @@ struct conversation_id {
   friend auto operator<=>(const conversation_id&, const conversation_id&) = default;
 };
 
-enum class conversation_kind : std::uint8_t { direct, group };
+namespace conversation_kind {
+struct direct {
+  friend bool operator==(const direct&, const direct&) = default;
+};
+struct group {
+  friend bool operator==(const group&, const group&) = default;
+};
+}  // namespace conversation_kind
+using conversation_kind_t = std::variant<conversation_kind::direct, conversation_kind::group>;
 
-enum class connection : std::uint8_t { offline, connecting, online, failed };
+// Where an account is with its server. A failure says why; a connection
+// being made again may say why too.
+namespace connection {
+struct offline {
+  friend bool operator==(const offline&, const offline&) = default;
+};
+struct connecting {
+  std::optional<std::string> reason;
+  friend bool operator==(const connecting&, const connecting&) = default;
+};
+struct online {
+  friend bool operator==(const online&, const online&) = default;
+};
+struct failed {
+  std::string error;
+  friend bool operator==(const failed&, const failed&) = default;
+};
+}  // namespace connection
+using connection_t = std::variant<connection::offline, connection::connecting, connection::online, connection::failed>;
 
-enum class availability : std::uint8_t { offline, online, away, extended_away, do_not_disturb, chat };
+[[nodiscard]] inline bool is_online(const connection_t& state) {
+  return std::visit(overloaded{[](const connection::online&) { return true; }, [](const auto&) { return false; }},
+                    state);
+}
+
+namespace availability {
+struct offline {
+  friend bool operator==(const offline&, const offline&) = default;
+};
+struct online {
+  friend bool operator==(const online&, const online&) = default;
+};
+struct away {
+  friend bool operator==(const away&, const away&) = default;
+};
+struct extended_away {
+  friend bool operator==(const extended_away&, const extended_away&) = default;
+};
+struct do_not_disturb {
+  friend bool operator==(const do_not_disturb&, const do_not_disturb&) = default;
+};
+struct chat {
+  friend bool operator==(const chat&, const chat&) = default;
+};
+}  // namespace availability
+using availability_t = std::variant<availability::offline, availability::online, availability::away,
+                                    availability::extended_away, availability::do_not_disturb, availability::chat>;
 
 struct presence {
-  availability state = availability::offline;
+  availability_t state = availability::offline{};
   std::optional<std::string> status;
   friend bool operator==(const presence&, const presence&) = default;
 };
@@ -54,7 +122,24 @@ struct body {
   friend bool operator==(const body&, const body&) = default;
 };
 
-enum class delivery : std::uint8_t { sending, sent, delivered, read, failed };
+namespace delivery {
+struct sending {
+  friend bool operator==(const sending&, const sending&) = default;
+};
+struct sent {
+  friend bool operator==(const sent&, const sent&) = default;
+};
+struct delivered {
+  friend bool operator==(const delivered&, const delivered&) = default;
+};
+struct read {
+  friend bool operator==(const read&, const read&) = default;
+};
+struct failed {
+  friend bool operator==(const failed&, const failed&) = default;
+};
+}  // namespace delivery
+using delivery_t = std::variant<delivery::sending, delivery::sent, delivery::delivered, delivery::read, delivery::failed>;
 
 struct message {
   conversation_id in;
@@ -68,13 +153,13 @@ struct message {
   bool edited = false;
   bool redacted = false;
   bool outgoing = false;
-  mux::delivery delivery = mux::delivery::sent;
+  delivery_t delivery = delivery::sent{};
   std::map<std::string, std::set<std::string>> reactions;  // key -> who
 };
 
 struct conversation {
   conversation_id id;
-  conversation_kind kind = conversation_kind::direct;
+  conversation_kind_t kind = conversation_kind::direct{};
   std::string name;
   std::optional<std::string> avatar;  // an mxc:// or a hash, the protocol's
   std::optional<std::string> topic;
@@ -90,8 +175,7 @@ struct conversation {
 
 struct account {
   account_id id;
-  mux::connection state = mux::connection::offline;
-  std::optional<std::string> error;
+  connection_t state = connection::offline{};
   std::string display_name;
   std::map<std::string, conversation> conversations;  // by conversation id
   std::map<std::string, presence> presences;          // by contact
@@ -104,8 +188,7 @@ namespace change {
 
 struct connection_changed {
   account_id account;
-  mux::connection state;
-  std::optional<std::string> error;
+  connection_t state;
 };
 
 // An account the program no longer has: everything of it goes.
@@ -116,7 +199,7 @@ struct account_removed {
 struct conversation_updated {
   // The whole of what is known of it, except its timeline.
   conversation_id id;
-  conversation_kind kind = conversation_kind::direct;
+  conversation_kind_t kind = conversation_kind::direct{};
   std::string name;
   std::optional<std::string> avatar;
   std::optional<std::string> topic;
@@ -166,7 +249,7 @@ struct message_acknowledged {
 struct delivery_changed {
   conversation_id in;
   std::string id;
-  mux::delivery now;
+  delivery_t now;
 };
 
 struct reaction_changed {
@@ -241,7 +324,6 @@ class model {
   void on(const change::connection_changed& one) {
     account& kept = of(one.account);
     kept.state = one.state;
-    kept.error = one.error;
   }
   void on(const change::account_removed& one) { accounts_.erase(one.account); }
   void on(const change::conversation_updated& one) {
@@ -288,7 +370,7 @@ class model {
     }
     if (message* kept = message_in(where, one.local_id)) {
       kept->id = one.id;
-      kept->delivery = delivery::sent;
+      kept->delivery = delivery::sent{};
     }
   }
   void on(const change::delivery_changed& one) {

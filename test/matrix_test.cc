@@ -77,7 +77,7 @@ struct sink {
 struct recorder {
   mux::net::loop* running = nullptr;
   mux::model model;
-  std::vector<mux::connection> states;
+  std::vector<mux::connection_t> states;
   bool sent = false;
   std::optional<mux::matrix::account<sink>> account;
 };
@@ -85,7 +85,10 @@ struct recorder {
 void sink::operator()(mux::change_t one) const {
   if (const auto* changed = std::get_if<mux::change::connection_changed>(&one)) {
     to->states.push_back(changed->state);
-    if (changed->state == mux::connection::offline || changed->state == mux::connection::failed)
+    if (std::visit(mux::overloaded{[](const mux::connection::offline{}&) { return true; },
+                                   [](const mux::connection::failed{}&) { return true; },
+                                   [](const auto&) { return false; }},
+                   changed->state))
       to->running->stop();
   }
   // A message sent once the room is there.
@@ -152,11 +155,11 @@ TEST(Matrix, AgainstAHomeserverOverTls) {
   const auto& states = seen.states;
   const auto& model = seen.model;
 
-  EXPECT_EQ(states.front(), mux::connection::connecting);
-  EXPECT_NE(std::find(states.begin(), states.end(), mux::connection::online), states.end());
-  EXPECT_EQ(states.back(), mux::connection::offline);
+  EXPECT_EQ(states.front(), mux::connection_t{mux::connection::connecting{}});
+  EXPECT_NE(std::find(states.begin(), states.end(), mux::connection_t{mux::connection::online{}}), states.end());
+  EXPECT_EQ(states.back(), mux::connection_t{mux::connection::offline{}});
 
-  const mux::account_id me{mux::protocol::matrix, "@a:x.org"};
+  const mux::account_id me{mux::protocol::matrix{}, "@a:x.org"};
   const mux::conversation* room = model.find({me, "!r:x.org"});
   ASSERT_NE(room, nullptr);
   EXPECT_EQ(room->name, "Garden");
@@ -177,7 +180,7 @@ TEST(Matrix, AgainstAHomeserverOverTls) {
                                      [](const mux::message& one) { return one.body.plain == "from mux"; });
   ASSERT_NE(sent_one, room->timeline.end());
   EXPECT_EQ(sent_one->id, "$sent");
-  EXPECT_EQ(sent_one->delivery, mux::delivery::sent);
+  EXPECT_EQ(sent_one->delivery, mux::delivery_t{mux::delivery::sent{}});
 
   // What the client asked: login without a token, sync with one, the
   // message PUT with a transaction id.

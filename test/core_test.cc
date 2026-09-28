@@ -10,7 +10,7 @@ namespace {
 
 using namespace mux;
 
-const account_id romeo{protocol::xmpp, "romeo@example.net"};
+const account_id romeo{protocol::xmpp{}, "romeo@example.net"};
 const conversation_id with_juliet{romeo, "juliet@example.com"};
 
 message said(std::string id, std::string text, bool outgoing = false) {
@@ -23,12 +23,12 @@ message said(std::string id, std::string text, bool outgoing = false) {
 
 TEST(Model, Conversation) {
   model kept;
-  kept.apply(change::connection_changed{romeo, connection::online, std::nullopt});
+  kept.apply(change::connection_changed{romeo, connection::online{}});
   kept.apply(change::conversation_updated{.id = with_juliet, .name = "Juliet", .unread = 2});
-  kept.apply(change::presence_changed{romeo, "juliet@example.com", {availability::away, "on the balcony"}});
+  kept.apply(change::presence_changed{romeo, "juliet@example.com", {availability::away{}, "on the balcony"}});
   ASSERT_TRUE(kept.accounts().contains(romeo));
   const account& got = kept.accounts().at(romeo);
-  EXPECT_EQ(got.state, connection::online);
+  EXPECT_EQ(got.state, connection_t{connection::online{}});
   EXPECT_EQ(got.presences.at("juliet@example.com").status, "on the balcony");
   const conversation* one = kept.find(with_juliet);
   ASSERT_NE(one, nullptr);
@@ -44,13 +44,13 @@ TEST(Model, Messages) {
   kept.apply(change::message_added{said("0", "earlier"), true});
   // The echo of one sent replaces it rather than adding a second.
   auto echo = said("2", "hi", true);
-  echo.delivery = delivery::delivered;
+  echo.delivery = delivery::delivered{};
   kept.apply(change::message_added{echo});
   const conversation* one = kept.find(with_juliet);
   ASSERT_NE(one, nullptr);
   ASSERT_EQ(one->timeline.size(), 3u);
   EXPECT_EQ(one->timeline[0].id, "0");
-  EXPECT_EQ(one->timeline[2].delivery, delivery::delivered);
+  EXPECT_EQ(one->timeline[2].delivery, delivery_t{delivery::delivered{}});
 
   kept.apply(change::message_edited{with_juliet, "1", {"hello there", std::nullopt}});
   kept.apply(change::reaction_changed{with_juliet, "1", "❤", "romeo@example.net", true});
@@ -67,11 +67,11 @@ TEST(Model, Messages) {
   EXPECT_TRUE(one->timeline[1].body.plain.empty());
   EXPECT_TRUE(one->timeline[1].reactions.empty());
 
-  kept.apply(change::delivery_changed{with_juliet, "2", delivery::read});
+  kept.apply(change::delivery_changed{with_juliet, "2", delivery::read{}});
   kept.apply(change::typing_changed{with_juliet, {"juliet@example.com"}});
   kept.apply(change::history_position{with_juliet, "mam-17"});
   one = kept.find(with_juliet);
-  EXPECT_EQ(one->timeline[2].delivery, delivery::read);
+  EXPECT_EQ(one->timeline[2].delivery, delivery_t{delivery::read{}});
   EXPECT_EQ(one->typing, (std::vector<std::string>{"juliet@example.com"}));
   EXPECT_EQ(one->history_from, "mam-17");
 }
@@ -82,7 +82,7 @@ TEST(Model, Acknowledged) {
   kept.apply(change::message_acknowledged{with_juliet, "txn1", "$event1"});
   ASSERT_EQ(kept.find(with_juliet)->timeline.size(), 1u);
   EXPECT_EQ(kept.find(with_juliet)->timeline[0].id, "$event1");
-  EXPECT_EQ(kept.find(with_juliet)->timeline[0].delivery, delivery::sent);
+  EXPECT_EQ(kept.find(with_juliet)->timeline[0].delivery, delivery_t{delivery::sent{}});
   // The echo first, then the answer: one message, not two.
   kept.apply(change::message_added{said("txn2", "again", true)});
   kept.apply(change::message_added{said("$event2", "again", true)});

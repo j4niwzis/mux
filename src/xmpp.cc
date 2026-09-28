@@ -31,18 +31,18 @@ struct settings {
 // A JID's bare part: what a conversation is kept under.
 inline std::string bare(std::string_view jid) { return std::string(jid.substr(0, jid.find('/'))); }
 
-inline availability availability_of(const std::optional<std::string>& show) {
+inline availability_t availability_of(const std::optional<std::string>& show) {
   if (!show)
-    return availability::online;
+    return availability::online{};
   if (*show == "away")
-    return availability::away;
+    return availability::away{};
   if (*show == "xa")
-    return availability::extended_away;
+    return availability::extended_away{};
   if (*show == "dnd")
-    return availability::do_not_disturb;
+    return availability::do_not_disturb{};
   if (*show == "chat")
-    return availability::chat;
-  return availability::online;
+    return availability::chat{};
+  return availability::online{};
 }
 
 // XEP-0203's stamp, XEP-0082's DateTime: CCYY-MM-DDThh:mm:ss[.sss](Z|+hh:mm|-hh:mm)
@@ -140,7 +140,7 @@ class account {
     const auto at = how_.address.find('@');
     user_ = how_.address.substr(0, at);
     domain_ = at == std::string::npos ? how_.address : how_.address.substr(at + 1);
-    id_ = account_id{protocol::xmpp, bare(how_.address)};
+    id_ = account_id{protocol::xmpp{}, bare(how_.address)};
   }
   account(const account&) = delete;
   account& operator=(const account&) = delete;
@@ -163,14 +163,14 @@ class account {
                   .at = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()),
                   .body = {text, std::nullopt},
                   .outgoing = true,
-                  .delivery = delivery::sending};
+                  .delivery = delivery::sending{}};
       sink_(change::message_added{out});
       if (!session_) {
-        sink_(change::delivery_changed{out.in, out.id, delivery::failed});
+        sink_(change::delivery_changed{out.in, out.id, delivery::failed{}});
         return;
       }
       session_->send(tern::message::chat{.to = to, .id = out.id, .body = text});
-      sink_(change::delivery_changed{out.in, out.id, wire_ && !wire_->failed() ? delivery::sent : delivery::failed});
+      sink_(change::delivery_changed{out.in, out.id, wire_ && !wire_->failed() ? delivery::sent{} : delivery::failed{}});
     });
   }
 
@@ -184,12 +184,10 @@ class account {
   }
 
  private:
-  void say(connection state, std::optional<std::string> error = std::nullopt) {
-    sink_(change::connection_changed{id_, state, std::move(error)});
-  }
+  void say(connection_t state) { sink_(change::connection_changed{id_, std::move(state)}); }
 
   void run() {
-    say(connection::connecting);
+    say(connection::connecting{});
     std::vector<tern::srv::target> targets;
     if (how_.host)
       targets.push_back({0, 0, how_.port.value_or(5222), *how_.host});
@@ -206,7 +204,7 @@ class account {
       }
     }
     if (!socket) {
-      say(connection::failed, "no server of " + domain_ + " answered: " + why);
+      say(connection::failed{"no server of " + domain_ + " answered: " + why});
       return;
     }
     net::stream wire(*loop_, *tls_, std::move(*socket));
@@ -222,12 +220,12 @@ class account {
     auto made = tern::try_connect(wire, options, tern::answering<>{}, net::scheduler{loop_});
     if (!made) {
       wire_ = nullptr;
-      say(connection::failed, made.error().detail.empty() ? "the connection failed" : made.error().detail);
+      say(connection::failed{made.error().detail.empty() ? "the connection failed" : made.error().detail});
       return;
     }
     session_type& session = *made;
     session_ = &session;
-    say(connection::online);
+    say(connection::online{});
 
     // Opened before anything is asked, so that nothing that arrives while
     // the roster is fetched is missed.
@@ -241,7 +239,7 @@ class account {
       auto one = inbox.try_next();
       if (!one) {
         if (!stopping_)
-          say(connection::failed, one.error().detail);
+          say(connection::failed{one.error().detail});
         break;
       }
       if (!*one)
@@ -251,12 +249,12 @@ class account {
     session_ = nullptr;
     wire_ = nullptr;
     if (stopping_ || !wire.failed())
-      say(connection::offline);
+      say(connection::offline{});
   }
 
   void contact(const tern::roster_item& item) {
     sink_(change::conversation_updated{.id = {id_, item.jid},
-                                       .kind = conversation_kind::direct,
+                                       .kind = conversation_kind::direct{},
                                        .name = item.name.value_or(item.jid)});
   }
 
@@ -274,35 +272,40 @@ class account {
     }
   }
 
+  // A chat or a normal message with a body is a message; anything else is
+  // not the conversation's.
+  void on_message(const tern::message::chat& got) { this->text_message(got); }
+  void on_message(const tern::message::normal& got) { this->text_message(got); }
+  template <class Other>
+  void on_message(const Other&) {}
+
   template <class Message>
-  void on_message(const Message& got) {
-    if constexpr (std::same_as<Message, tern::message::chat> || std::same_as<Message, tern::message::normal>) {
-      if (!got.body || !got.from)
-        return;
-      const std::string from = bare(*got.from);
-      message in{.in = {id_, from},
-                 .id = got.id.value_or(""),
-                 .sender = from,
-                 .at = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()),
-                 .body = {*got.body, std::nullopt}};
-      for (const auto& carried : got.payload)
-        if (const auto* delayed = carried.template get_if<tern::delay>())
-          if (const auto at = stamp_of(delayed->stamp))
-            in.at = *at;
-      sink_(change::message_added{std::move(in)});
-    }
+  void text_message(const Message& got) {
+    if (!got.body || !got.from)
+      return;
+    const std::string from = bare(*got.from);
+    message in{.in = {id_, from},
+               .id = got.id.value_or(""),
+               .sender = from,
+               .at = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()),
+               .body = {*got.body, std::nullopt}};
+    for (const auto& carried : got.payload)
+      if (const auto* delayed = carried.template get_if<tern::delay>())
+        if (const auto at = stamp_of(delayed->stamp))
+          in.at = *at;
+    sink_(change::message_added{std::move(in)});
   }
 
-  template <class Presence>
-  void on_presence(const Presence& got) {
-    if (!got.from)
-      return;
-    if constexpr (std::same_as<Presence, tern::presence::available>) {
+  void on_presence(const tern::presence::available& got) {
+    if (got.from)
       sink_(change::presence_changed{id_, bare(*got.from), {availability_of(got.show), got.status}});
-    } else if constexpr (std::same_as<Presence, tern::presence::unavailable>) {
-      sink_(change::presence_changed{id_, bare(*got.from), {availability::offline, got.status}});
-    }
   }
+  void on_presence(const tern::presence::unavailable& got) {
+    if (got.from)
+      sink_(change::presence_changed{id_, bare(*got.from), {availability::offline{}, got.status}});
+  }
+  template <class Other>
+  void on_presence(const Other&) {}
 
   net::loop* loop_;
   net::tls* tls_;

@@ -65,14 +65,14 @@ TEST(Xmpp, AScriptedSession) {
   account.start();
   running.run();
 
-  const mux::account_id me{mux::protocol::xmpp, "user@example.com"};
+  const mux::account_id me{mux::protocol::xmpp{}, "user@example.com"};
   // Connecting, online, and offline at the end of the stream.
-  std::vector<mux::connection> states;
+  std::vector<mux::connection_t> states;
   for (const auto& one : said)
     if (const auto* changed = std::get_if<mux::change::connection_changed>(&one))
       states.push_back(changed->state);
-  EXPECT_EQ(states, (std::vector<mux::connection>{mux::connection::connecting, mux::connection::online,
-                                                  mux::connection::offline}));
+  EXPECT_EQ(states, (std::vector<mux::connection_t>{mux::connection::connecting{}, mux::connection::online{},
+                                                    mux::connection::offline{}}));
   ASSERT_TRUE(model.accounts().contains(me));
   const mux::account& kept = model.accounts().at(me);
   // The roster, and the push that added Juliet.
@@ -88,7 +88,7 @@ TEST(Xmpp, AScriptedSession) {
   EXPECT_EQ(std::format("{:%FT%T}", romeo->timeline[0].at), "2026-09-26T17:00:00.000");
   // His presence.
   ASSERT_TRUE(kept.presences.contains("romeo@example.net"));
-  EXPECT_EQ(kept.presences.at("romeo@example.net").state, mux::availability::away);
+  EXPECT_EQ(kept.presences.at("romeo@example.net").state, mux::availability_t{mux::availability::away{}});
   EXPECT_EQ(kept.presences.at("romeo@example.net").status, "below the balcony");
   // What the client said: PLAIN, the roster asked for, the push answered,
   // presence.

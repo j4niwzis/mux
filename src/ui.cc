@@ -31,6 +31,11 @@ inline const skia::SkColor dim_colour = skia::colorSetARGB(255, 150, 162, 170);
 inline const skia::SkColor accent_colour = skia::colorSetARGB(255, 102, 204, 255);
 inline const skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110);
 
+// The protocol an address speaks.
+[[nodiscard]] inline protocol_t protocol_of(std::string_view address) {
+  return config::is_matrix(address) ? protocol_t{protocol::matrix{}} : protocol_t{protocol::xmpp{}};
+}
+
 // What the screens ask of the program. Each is a request: the program acts on
 // it between events.
 //
@@ -87,15 +92,16 @@ struct composer : widgets::TextBox<> {
 
   explicit composer(Actions* a) : widgets::TextBox<>("Write a message…"), actions(a) {}
 
-  void onKeyEvent(scene::KeyEvent& event) {
-    if (event.fPhase == scene::EventPhase::kTarget && event.fPressed && event.fKey == scene::Key::kEnter) {
+  using widgets::TextBox<>::onKey;
+  void onKey(scene::phase::target at, const scene::key::down& press, scene::Reply& reply) {
+    if (press.key == scene::keys::kEnter) {
       if (to && !this->text().empty())
         actions->send(*to, this->text());
       this->setText({});
-      event.handle();
+      reply.handle();
       return;
     }
-    widgets::TextBox<>::onKeyEvent(event);
+    widgets::TextBox<>::onKey(at, press, reply);
   }
 };
 
@@ -132,12 +138,12 @@ struct conversation_row : scene::Node {
     const skia::SkRect line = scene::inset(box, 10.0f, 0.0f);
     float right = line.fRight;
     if (unread) {
-      unread->fState.arrange(0.0f, 0.0f, scene::Anchor::kCentreRight, scene::Anchor::kCentreRight);
+      unread->fState.arrange(0.0f, 0.0f, scene::anchor::kCentreRight, scene::anchor::kCentreRight);
       scene::layout(*unread, line);
       right = unread->bounds().fLeft - 8.0f;
     }
     name.setMaxWidth(std::max(0.0f, right - line.fLeft));
-    name.fState.arrange(0.0f, 0.0f, scene::Anchor::kCentreLeft, scene::Anchor::kCentreLeft);
+    name.fState.arrange(0.0f, 0.0f, scene::anchor::kCentreLeft, scene::anchor::kCentreLeft);
     scene::layout(name, line);
   }
 
@@ -148,10 +154,10 @@ struct conversation_row : scene::Node {
   }
   [[nodiscard]] scene::Semantics semantics() const {
     scene::Semantics out;
-    out.fRole = scene::SemanticRole::kListItem;
+    out.fRole = scene::semantic_role::list_item{};
     out.fLabel = name.text();
     out.fSelected = chosen;
-    out.fActions = {scene::SemanticAction::kFocus, scene::SemanticAction::kActivate};
+    out.fActions = {scene::semantic_action::focus{}, scene::semantic_action::activate{}};
     return out;
   }
 };
@@ -187,8 +193,8 @@ struct conversations_screen : scene::Node {
     fState.apply({.fill = true});
     sidebar.apply({.fill = true});
     accounts_button.apply({.width = 96.0f, .height = 28.0f});
-    std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::Axes::kY});
-    std::get<0>(timeline.fChildren).apply({.fillX = true, .autoSize = scene::Axes::kY});
+    std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
+    std::get<0>(timeline.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
     title.apply({.fillX = true});
     topic.apply({.fillX = true});
   }
@@ -211,9 +217,9 @@ struct conversations_screen : scene::Node {
     scene::layout(sidebar, side);
 
     const skia::SkRect head = skia::SkRect::MakeLTRB(side.fLeft + kPad, side.fTop + kPad, side.fRight - kPad, side.fTop + 40.0f);
-    status.fState.arrange(0.0f, 0.0f, scene::Anchor::kCentreLeft, scene::Anchor::kCentreLeft);
+    status.fState.arrange(0.0f, 0.0f, scene::anchor::kCentreLeft, scene::anchor::kCentreLeft);
     scene::layout(status, head);
-    accounts_button.fState.arrange(0.0f, 0.0f, scene::Anchor::kCentreRight, scene::Anchor::kCentreRight);
+    accounts_button.fState.arrange(0.0f, 0.0f, scene::anchor::kCentreRight, scene::anchor::kCentreRight);
     scene::layout(accounts_button, head);
     list.apply({.width = side.width() - 2 * kPad, .height = std::max(0.0f, side.fBottom - head.fBottom - 2 * kPad)});
     list.fState.arrange(side.fLeft + kPad - box.fLeft, head.fBottom + kPad - box.fTop);
@@ -226,7 +232,7 @@ struct conversations_screen : scene::Node {
     scene::layout(topic, inner);
     const float top = topic.bounds().fBottom + 8.0f;
     const float composer_height = line.fState.height();
-    line.fState.arrange(0.0f, 0.0f, scene::Anchor::kBottomLeft, scene::Anchor::kBottomLeft);
+    line.fState.arrange(0.0f, 0.0f, scene::anchor::kBottomLeft, scene::anchor::kBottomLeft);
     line.apply({.fillX = true});
     scene::layout(line, inner);
     timeline.apply({.width = inner.width(), .height = std::max(0.0f, inner.fBottom - composer_height - 8.0f - top)});
@@ -240,7 +246,7 @@ struct conversations_screen : scene::Node {
     blocks.clear();
     std::size_t online = 0;
     for (const auto& [id, kept] : now.accounts()) {
-      if (kept.state == connection::online)
+      if (is_online(kept.state))
         ++online;
       std::vector<conversation_row<Actions>> rows;
       for (const auto& [key, one] : kept.conversations)
@@ -248,7 +254,7 @@ struct conversations_screen : scene::Node {
       auto& block = blocks.emplace_back(nodes::FlowOptions{.spacingY = 2.0f, .wrap = false},
                                         scene::make<nodes::Text>({.fillX = true}, id.address, 12.0f, dim_colour, true),
                                         std::move(rows));
-      block.apply({.fillX = true, .autoSize = scene::Axes::kY});
+      block.apply({.fillX = true, .autoSize = scene::axes::kY});
     }
     const std::size_t accounts = now.accounts().size();
     status.setText(std::format("{} of {} account{} online", online, accounts, accounts == 1 ? "" : "s"));
@@ -273,11 +279,11 @@ struct conversations_screen : scene::Node {
       about += (about.empty() ? "" : " · ") + std::to_string(one->typing.size()) + " typing";
     topic.setText(about);
     for (const message& said : one->timeline) {
-      std::string who = said.sender;
-      if (said.delivery == delivery::sending)
-        who += " · sending";
-      else if (said.delivery == delivery::failed)
-        who += " · not sent";
+      const std::string who =
+          said.sender + std::visit(overloaded{[](const delivery::sending&) { return " · sending"; },
+                                              [](const delivery::failed&) { return " · not sent"; },
+                                              [](const auto&) { return ""; }},
+                                   said.delivery);
       std::string body = said.redacted ? "(removed)" : said.body.plain;
       if (said.edited)
         body += " (edited)";
@@ -294,7 +300,7 @@ struct conversations_screen : scene::Node {
           nodes::FlowOptions{.spacingY = 2.0f, .wrap = false},
           scene::make<nodes::Text>({.fillX = true}, who, 12.0f, said.outgoing ? accent_colour : dim_colour, true),
           std::move(text), std::move(reactions));
-      entry.apply({.fillX = true, .autoSize = scene::Axes::kY});
+      entry.apply({.fillX = true, .autoSize = scene::axes::kY});
     }
     // The newest is at the bottom, and that is where the reader is.
     timeline.scrollTo(std::numeric_limits<float>::max());
@@ -447,13 +453,12 @@ struct login_screen : scene::Node {
   }
 
   // Enter in a field logs in: seen here, on its way back up from the field.
-  void onKeyEvent(scene::KeyEvent& event) {
-    if (event.fPhase == scene::EventPhase::kBubble && event.fPressed && event.fKey == scene::Key::kEnter) {
+  using Node::onKey;
+  void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
+    if (press.key == scene::keys::kEnter) {
       actions->submit_login();
-      event.handle();
-      return;
+      reply.handle();
     }
-    scene::defaultKeyEvent(*this, event);
   }
 
   void layoutChildren() {
@@ -517,12 +522,12 @@ struct account_line : scene::Node {
   }
   void layoutChildren() {
     const skia::SkRect box = fState.contentBox();
-    remove.fState.arrange(0.0f, 0.0f, scene::Anchor::kCentreRight, scene::Anchor::kCentreRight);
+    remove.fState.arrange(0.0f, 0.0f, scene::anchor::kCentreRight, scene::anchor::kCentreRight);
     scene::layout(remove, box);
-    edit.fState.arrange(-(remove.bounds().width() + 8.0f), 0.0f, scene::Anchor::kCentreRight, scene::Anchor::kCentreRight);
+    edit.fState.arrange(-(remove.bounds().width() + 8.0f), 0.0f, scene::anchor::kCentreRight, scene::anchor::kCentreRight);
     scene::layout(edit, box);
     enabled.fState.arrange(-(remove.bounds().width() + edit.bounds().width() + 24.0f), 0.0f,
-                           scene::Anchor::kCentreRight, scene::Anchor::kCentreRight);
+                           scene::anchor::kCentreRight, scene::anchor::kCentreRight);
     scene::layout(enabled, box);
     const float room = std::max(0.0f, enabled.bounds().fLeft - box.fLeft - 12.0f);
     address.setMaxWidth(room);
@@ -553,7 +558,7 @@ struct accounts_screen : scene::Node {
     add.setPrimary(true);
     add.apply({.width = 140.0f, .height = 36.0f});
     back.apply({.width = 100.0f, .height = 36.0f});
-    std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::Axes::kY});
+    std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
     message.setWrapped(true);
     message.apply({.fillX = true});
   }
@@ -574,23 +579,16 @@ struct accounts_screen : scene::Node {
     for (const config::saved_account& one : saved) {
       std::string how = one.enabled ? "offline" : "disabled";
       bool failed = false;
-      const account_id id{config::is_matrix(one.address) ? protocol::matrix : protocol::xmpp, one.address};
-      if (auto found = now.accounts().find(id); one.enabled && found != now.accounts().end()) {
-        switch (found->second.state) {
-          case connection::offline:
-            how = "offline";
-            break;
-          case connection::connecting:
-            how = "connecting…";
-            break;
-          case connection::online:
-            how = "online";
-            break;
-          case connection::failed:
-            how = "failed: " + found->second.error.value_or("no reason given");
-            failed = true;
-            break;
-        }
+      if (auto found = now.accounts().find(account_id{protocol_of(one.address), one.address});
+          one.enabled && found != now.accounts().end()) {
+        how = std::visit(overloaded{[](const connection::offline&) { return std::string("offline"); },
+                                    [](const connection::connecting&) { return std::string("connecting…"); },
+                                    [](const connection::online&) { return std::string("online"); },
+                                    [&failed](const connection::failed& why) {
+                                      failed = true;
+                                      return "failed: " + why.error;
+                                    }},
+                         found->second.state);
       }
       lines.emplace_back(actions, one, std::move(how), failed);
     }

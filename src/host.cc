@@ -65,23 +65,33 @@ inline void load_fonts(const std::string& directory) {
 namespace detail {
 
 inline skiff::scene::Key key_of(SDL_Keycode key) {
-  using skiff::scene::Key;
+  namespace keys = skiff::scene::keys;
   switch (key) {
-    case SDLK_TAB: return Key::kTab;
+    case SDLK_TAB: return keys::kTab;
     case SDLK_RETURN:
-    case SDLK_KP_ENTER: return Key::kEnter;
-    case SDLK_SPACE: return Key::kSpace;
-    case SDLK_ESCAPE: return Key::kEscape;
-    case SDLK_LEFT: return Key::kLeft;
-    case SDLK_RIGHT: return Key::kRight;
-    case SDLK_UP: return Key::kUp;
-    case SDLK_DOWN: return Key::kDown;
-    case SDLK_HOME: return Key::kHome;
-    case SDLK_END: return Key::kEnd;
-    case SDLK_BACKSPACE: return Key::kBackspace;
-    case SDLK_DELETE: return Key::kDelete;
-    default: return Key::kUnknown;
+    case SDLK_KP_ENTER: return keys::kEnter;
+    case SDLK_SPACE: return keys::kSpace;
+    case SDLK_ESCAPE: return keys::kEscape;
+    case SDLK_LEFT: return keys::kLeft;
+    case SDLK_RIGHT: return keys::kRight;
+    case SDLK_UP: return keys::kUp;
+    case SDLK_DOWN: return keys::kDown;
+    case SDLK_HOME: return keys::kHome;
+    case SDLK_END: return keys::kEnd;
+    case SDLK_BACKSPACE: return keys::kBackspace;
+    case SDLK_DELETE: return keys::kDelete;
+    default: return keys::kUnknown;
   }
+}
+
+// What SDL says of the modifier keys.
+inline skiff::scene::Modifiers modifiers_of(SDL_Keymod held) {
+  namespace modifier = skiff::scene::modifier;
+  return skiff::scene::Modifiers{}
+      .with<modifier::shift>((held & SDL_KMOD_SHIFT) != 0)
+      .with<modifier::control>((held & SDL_KMOD_CTRL) != 0)
+      .with<modifier::alt>((held & SDL_KMOD_ALT) != 0)
+      .with<modifier::super>((held & SDL_KMOD_GUI) != 0);
 }
 
 // What draws: a GL context and Skia's context over it, or nothing of the
@@ -244,66 +254,39 @@ int run(App& app, const options& how) {
             scene.state().invalidateLayout();
             redraw = true;
             break;
-          case SDL_EVENT_MOUSE_MOTION: {
-            skiff::scene::PointerEvent pointer;
-            pointer.fAction = skiff::scene::PointerAction::kMove;
-            pointer.fX = event.motion.x;
-            pointer.fY = event.motion.y;
-            router.pointer(pointer);
+          case SDL_EVENT_MOUSE_MOTION:
+            router.pointer(skiff::scene::pointer::move{event.motion.x, event.motion.y});
             break;
-          }
           case SDL_EVENT_MOUSE_BUTTON_DOWN:
-          case SDL_EVENT_MOUSE_BUTTON_UP: {
-            skiff::scene::PointerEvent pointer;
-            pointer.fAction = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? skiff::scene::PointerAction::kDown
-                                                                        : skiff::scene::PointerAction::kUp;
-            pointer.fX = event.button.x;
-            pointer.fY = event.button.y;
-            pointer.fButton = event.button.button;
-            router.pointer(pointer);
+            router.pointer(skiff::scene::pointer::down{event.button.x, event.button.y, event.button.button});
             break;
-          }
-          case SDL_EVENT_MOUSE_WHEEL: {
-            skiff::scene::PointerEvent pointer;
-            pointer.fAction = skiff::scene::PointerAction::kScroll;
-            pointer.fX = event.wheel.mouse_x;
-            pointer.fY = event.wheel.mouse_y;
-            pointer.fScrollX = event.wheel.x;
-            pointer.fScrollY = event.wheel.y;
-            router.pointer(pointer);
+          case SDL_EVENT_MOUSE_BUTTON_UP:
+            router.pointer(skiff::scene::pointer::up{event.button.x, event.button.y, event.button.button});
             break;
-          }
+          case SDL_EVENT_MOUSE_WHEEL:
+            router.pointer(skiff::scene::pointer::scroll{event.wheel.mouse_x, event.wheel.mouse_y, event.wheel.x,
+                                                         event.wheel.y});
+            break;
           case SDL_EVENT_KEY_DOWN:
           case SDL_EVENT_KEY_UP: {
-            skiff::scene::KeyEvent key;
-            key.fKey = detail::key_of(event.key.key);
-            key.fPressed = event.type == SDL_EVENT_KEY_DOWN;
-            key.fRepeat = event.key.repeat;
-            key.fShift = (event.key.mod & SDL_KMOD_SHIFT) != 0;
-            key.fControl = (event.key.mod & SDL_KMOD_CTRL) != 0;
-            key.fAlt = (event.key.mod & SDL_KMOD_ALT) != 0;
-            key.fSuper = (event.key.mod & SDL_KMOD_GUI) != 0;
+            const skiff::scene::Key key = detail::key_of(event.key.key);
+            if (key == skiff::scene::keys::kUnknown)
+              break;
             // Tab too: the router moves the focus on it itself.
-            if (key.fKey != skiff::scene::Key::kUnknown)
-              router.key(key);
+            const skiff::scene::Modifiers held = detail::modifiers_of(event.key.mod);
+            if (event.type == SDL_EVENT_KEY_DOWN)
+              router.key(skiff::scene::key::down{key, held, event.key.repeat});
+            else
+              router.key(skiff::scene::key::up{key, held});
             break;
           }
-          case SDL_EVENT_TEXT_INPUT: {
-            skiff::scene::TextInputEvent text;
-            text.fText = event.text.text;
-            text.fCommit = true;
-            router.text(text);
+          case SDL_EVENT_TEXT_INPUT:
+            router.text(skiff::scene::text::commit{event.text.text});
             break;
-          }
-          case SDL_EVENT_TEXT_EDITING: {
-            skiff::scene::TextInputEvent text;
-            text.fComposition = event.edit.text ? event.edit.text : "";
-            text.fSelectionStart = event.edit.start;
-            text.fSelectionLength = event.edit.length;
-            text.fCommit = false;
-            router.text(text);
+          case SDL_EVENT_TEXT_EDITING:
+            router.text(skiff::scene::text::compose{event.edit.text ? event.edit.text : "", event.edit.start,
+                                                    event.edit.length});
             break;
-          }
           default:
             if (event.type == wake_event())
               app.woken();

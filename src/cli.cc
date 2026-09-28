@@ -17,48 +17,79 @@ import mux.matrix;
 
 namespace {
 
+// Each change in a line, by its own overload.
+std::string name_of(const mux::connection_t& state) {
+  return std::visit(mux::overloaded{
+                        [](const mux::connection::offline{}&) { return std::string("offline"); },
+                        [](const mux::connection::connecting{}& now) {
+                          return "connecting" + (now.reason ? ": " + *now.reason : std::string());
+                        },
+                        [](const mux::connection::online{}&) { return std::string("online"); },
+                        [](const mux::connection::failed{}& now) { return "failed: " + now.error; },
+                    },
+                    state);
+}
+std::string name_of(const mux::availability_t& state) {
+  return std::visit(mux::overloaded{
+                        [](const mux::availability::offline{}&) { return "offline"; },
+                        [](const mux::availability::online{}&) { return "online"; },
+                        [](const mux::availability::away{}&) { return "away"; },
+                        [](const mux::availability::extended_away{}&) { return "away for long"; },
+                        [](const mux::availability::do_not_disturb{}&) { return "busy"; },
+                        [](const mux::availability::chat{}&) { return "chatty"; },
+                    },
+                    state);
+}
+std::string name_of(const mux::delivery_t& state) {
+  return std::visit(mux::overloaded{
+                        [](const mux::delivery::sending{}&) { return "sending"; },
+                        [](const mux::delivery::sent{}&) { return "sent"; },
+                        [](const mux::delivery::delivered{}&) { return "delivered"; },
+                        [](const mux::delivery::read{}&) { return "read"; },
+                        [](const mux::delivery::failed{}&) { return "failed"; },
+                    },
+                    state);
+}
+std::string name_of(const mux::conversation_kind_t& kind) {
+  return std::visit(mux::overloaded{[](const mux::conversation_kind::direct{}&) { return "contact"; },
+                                    [](const mux::conversation_kind::group{}&) { return "room"; }},
+                    kind);
+}
+
+namespace said {
+using namespace mux;
+std::string of(const change::connection_changed& one) {
+  return std::format("{} is {}", one.account.address, name_of(one.state));
+}
+std::string of(const change::account_removed& one) { return std::format("{} removed", one.account.address); }
+std::string of(const change::conversation_updated& one) {
+  return std::format("{} {} ({}{}{})", name_of(one.kind), one.id.id, one.name, one.encrypted ? ", encrypted" : "",
+                     one.unread ? ", " + std::to_string(one.unread) + " unread" : std::string());
+}
+std::string of(const change::conversation_removed& one) { return std::format("left {}", one.id.id); }
+std::string of(const change::presence_changed& one) {
+  return std::format("{} is {}{}", one.contact, name_of(one.now.state),
+                     one.now.status ? " (" + *one.now.status + ")" : std::string());
+}
+std::string of(const change::message_added& one) {
+  return std::format("{} {} {}: {}", one.message.in.id, one.message.outgoing ? "<-" : "->", one.message.sender,
+                     one.message.body.plain);
+}
+std::string of(const change::message_edited& one) { return std::format("{} edited {}: {}", one.in.id, one.id, one.now.plain); }
+std::string of(const change::message_redacted& one) { return std::format("{} removed {}", one.in.id, one.id); }
+std::string of(const change::message_acknowledged& one) { return std::format("{} is {}", one.local_id, one.id); }
+std::string of(const change::delivery_changed& one) { return std::format("{} {}", one.id, name_of(one.now)); }
+std::string of(const change::reaction_changed& one) {
+  return std::format("{} {} {} on {}", one.who, one.added ? "reacted" : "took back", one.key, one.id);
+}
+std::string of(const change::typing_changed& one) {
+  return one.who.empty() ? std::string() : std::format("{} typing in {}", one.who.size(), one.in.id);
+}
+std::string of(const change::history_position&) { return std::string(); }
+}  // namespace said
+
 std::string describe(const mux::change_t& what) {
-  return std::visit(
-      [](const auto& one) -> std::string {
-        using type = std::remove_cvref_t<decltype(one)>;
-        using namespace mux;
-        if constexpr (std::same_as<type, change::connection_changed>) {
-          static constexpr std::array names{"offline", "connecting", "online", "failed"};
-          return std::format("{} is {}{}", one.account.address, names[static_cast<int>(one.state)],
-                             one.error ? ": " + *one.error : std::string());
-        } else if constexpr (std::same_as<type, change::account_removed>) {
-          return std::format("{} removed", one.account.address);
-        } else if constexpr (std::same_as<type, change::conversation_updated>) {
-          return std::format("{} {} ({}{}{})", one.kind == conversation_kind::direct ? "contact" : "room", one.id.id,
-                             one.name, one.encrypted ? ", encrypted" : "",
-                             one.unread ? ", " + std::to_string(one.unread) + " unread" : std::string());
-        } else if constexpr (std::same_as<type, change::conversation_removed>) {
-          return std::format("left {}", one.id.id);
-        } else if constexpr (std::same_as<type, change::presence_changed>) {
-          static constexpr std::array names{"offline", "online", "away", "away for long", "busy", "chatty"};
-          return std::format("{} is {}{}", one.contact, names[static_cast<int>(one.now.state)],
-                             one.now.status ? " (" + *one.now.status + ")" : std::string());
-        } else if constexpr (std::same_as<type, change::message_added>) {
-          return std::format("{} {} {}: {}", one.message.in.id, one.message.outgoing ? "<-" : "->",
-                             one.message.sender, one.message.body.plain);
-        } else if constexpr (std::same_as<type, change::message_edited>) {
-          return std::format("{} edited {}: {}", one.in.id, one.id, one.now.plain);
-        } else if constexpr (std::same_as<type, change::message_redacted>) {
-          return std::format("{} removed {}", one.in.id, one.id);
-        } else if constexpr (std::same_as<type, change::message_acknowledged>) {
-          return std::format("{} is {}", one.local_id, one.id);
-        } else if constexpr (std::same_as<type, change::delivery_changed>) {
-          static constexpr std::array names{"sending", "sent", "delivered", "read", "failed"};
-          return std::format("{} {}", one.id, names[static_cast<int>(one.now)]);
-        } else if constexpr (std::same_as<type, change::reaction_changed>) {
-          return std::format("{} {} {} on {}", one.who, one.added ? "reacted" : "took back", one.key, one.id);
-        } else if constexpr (std::same_as<type, change::typing_changed>) {
-          return one.who.empty() ? std::string() : std::format("{} typing in {}", one.who.size(), one.in.id);
-        } else {
-          return std::string();
-        }
-      },
-      what);
+  return std::visit([](const auto& one) { return said::of(one); }, what);
 }
 
 // What is typed, read by a fiber of its own and handed to the account.

@@ -97,8 +97,7 @@ struct network {
   void remove(std::string address) {
     loop.post([this, address = std::move(address)] {
       this->stop(address);
-      box->push(mux::change_t{mux::change::account_removed{
-          {mux::config::is_matrix(address) ? mux::protocol::matrix : mux::protocol::xmpp, address}}});
+      box->push(mux::change_t{mux::change::account_removed{{mux::ui::protocol_of(address), address}}});
     });
   }
   void send(const mux::conversation_id& to, std::string text) {
@@ -236,43 +235,32 @@ struct app {
     body().emplace<login>(&ask, from, !saved.accounts.empty());
   }
 
-  // The current screen, brought up to date with the model.
+  // The current screen, brought up to date with the model: each by its own
+  // overload.
   void refresh() {
-    std::visit(
-        [&](auto& screen) {
-          using screen_type = std::remove_cvref_t<decltype(screen)>;
-          if constexpr (std::same_as<screen_type, conversations>)
-            screen.show(*model);
-          else if constexpr (std::same_as<screen_type, accounts>)
-            screen.show(saved.accounts, *model);
-          else
-            this->watch_login(screen);
-        },
-        body());
+    std::visit([this](auto& screen) { this->bring_up_to_date(screen); }, body());
   }
+  void bring_up_to_date(conversations& screen) { screen.show(*model); }
+  void bring_up_to_date(accounts& screen) { screen.show(saved.accounts, *model); }
+  void bring_up_to_date(login& screen) { this->watch_login(screen); }
 
   // A login waiting for its account: online is done, failed is said.
   void watch_login(login& screen) {
     if (!pending_login)
       return;
-    const mux::account_id id{mux::config::is_matrix(*pending_login) ? mux::protocol::matrix : mux::protocol::xmpp,
-                             *pending_login};
-    const auto found = model->accounts().find(id);
+    const auto found = model->accounts().find(mux::account_id{mux::ui::protocol_of(*pending_login), *pending_login});
     if (found == model->accounts().end())
       return;
-    switch (found->second.state) {
-      case mux::connection::online:
-        pending_login.reset();
-        this->show_conversations();
-        break;
-      case mux::connection::failed:
-        screen.say(found->second.error.value_or("The server said no."), true);
-        pending_login.reset();
-        break;
-      default:
-        screen.say("Connecting…", false);
-        break;
-    }
+    std::visit(mux::overloaded{[&](const mux::connection::online&) {
+                                 pending_login.reset();
+                                 this->show_conversations();
+                               },
+                               [&](const mux::connection::failed& why) {
+                                 screen.say(why.error.empty() ? "The server said no." : why.error, true);
+                                 pending_login.reset();
+                               },
+                               [&](const auto&) { screen.say("Connecting…", false); }},
+               found->second.state);
   }
 
   void apply(const request::choose& one) {

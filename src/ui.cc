@@ -2662,27 +2662,6 @@ struct settings_home : scene::Node {
 
 
 
-  explicit privacy_page(Actions* a) : header("Privacy", {a}, {a}, true, true), receipts("Send read receipts", {a}) {
-    fState.apply({.fill = true});
-    note.setWrapped(true);
-  }
-  void forEachChild(auto&& f) {
-    f(header);
-    f(receipts);
-    f(note);
-  }
-  void show_motion(std::string_view) {}
-  void show_receipts(bool on) { receipts.toggle.setOn(on); }
-  void layoutChildren() {
-    column_stack stack{fState.contentBox()};
-    stack(header, 4.0f);
-    stack(receipts, 6.0f);
-    note.setMaxWidth(std::max(0.0f, stack.column.width() - 40.0f));
-    note.fState.arrange(20.0f, stack.y);
-    scene::layout(note, stack.column);
-  }
-};
-
 template <class Actions>
 struct animations_page : scene::Node {
   page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>> header;

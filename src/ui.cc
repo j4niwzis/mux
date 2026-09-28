@@ -59,6 +59,8 @@ inline const skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110)
 //   void show_account(std::string address)  -- its settings, from the drawer
 //   void set_motion(std::string level)       -- "full", "reduced" or "none"
 //   void quit()
+//   void not_implemented(std::string what)  -- a box saying it is not there yet
+//   void close_notice()
 //   void resize_sidebar(float x)     -- the chat list's edge dragged to x
 //   void submit_message(std::string text)  -- Enter in the message field
 //   void send_typed()                -- the send arrow: what is in the field
@@ -267,13 +269,21 @@ inline void draw_icon(skia::SkCanvas* canvas, icon::clip, const skia::SkRect& bo
   canvas->restoreToCount(save);
 }
 inline void draw_icon(skia::SkCanvas* canvas, icon::send, const skia::SkRect& box, skia::SkColor colour, float alpha) {
-  const auto p = pen(colour, alpha, 2.0f);
+  // Telegram's: a paper plane, filled, pointing right.
+  skia::SkPaint fill;
+  fill.setAntiAlias(true);
+  fill.setColor(colour);
+  fill.setAlphaf(alpha);
   const float x = box.centerX(), y = box.centerY();
-  canvas->drawLine(x - 8.0f, y - 7.5f, x + 8.5f, y, p);
-  canvas->drawLine(x + 8.5f, y, x - 8.0f, y + 7.5f, p);
-  canvas->drawLine(x - 8.0f, y + 7.5f, x - 4.5f, y, p);
-  canvas->drawLine(x - 4.5f, y, x - 8.0f, y - 7.5f, p);
-  canvas->drawLine(x - 4.5f, y, x + 3.0f, y, p);
+  skia::SkPathBuilder plane;
+  plane.moveTo(x - 9.0f, y - 8.5f);
+  plane.lineTo(x + 10.0f, y);
+  plane.lineTo(x - 9.0f, y + 8.5f);
+  plane.lineTo(x - 7.0f, y + 1.5f);
+  plane.lineTo(x + 2.0f, y);
+  plane.lineTo(x - 7.0f, y - 1.5f);
+  plane.close();
+  canvas->drawPath(plane.detach(), fill);
 }
 inline void draw_icon(skia::SkCanvas* canvas, const icon_t& which, const skia::SkRect& box, skia::SkColor colour,
                       float alpha) {
@@ -559,9 +569,12 @@ struct menu_button : scene::Node {
 
 // ---- the conversations ------------------------------------------------------
 
-// A control whose action is still to come.
+// A control whose action is still to come: it says so.
+template <class Actions>
 struct not_yet {
-  void operator()() const {}
+  Actions* actions = nullptr;
+  std::string_view what;
+  void operator()() const { actions->not_implemented(std::string(what)); }
 };
 
 inline const skia::SkColor selected_colour = skia::colorSetARGB(255, 43, 82, 120);
@@ -713,8 +726,164 @@ struct conversation_row : scene::Node {
   }
 };
 
-// One message: who, what, and its reactions.
-using message_entry = nodes::Flow<nodes::Text, nodes::Text, std::optional<nodes::Text>>;
+// One message, as Telegram Desktop shows it: a rounded bubble, on the right
+// and blue for what was sent from here, on the left otherwise; in a group,
+// the sender's name in their colour over the first of a run and their
+// avatar beside its last; the time in the bubble's corner.
+struct message_bubble : scene::Node {
+  bool outgoing = false;
+  bool with_avatar = false;
+  bool avatar_space = false;
+  std::string sender;
+  std::string time;
+  std::optional<nodes::Text> name;
+  nodes::Text text;
+  std::optional<nodes::Text> reactions;
+  // The bubble itself, as the last layout placed it.
+  skia::SkRect bubble = skia::SkRect::MakeEmpty();
+
+  static constexpr float kPadX = 12.0f;
+  static constexpr float kPadY = 7.0f;
+  static constexpr float kAvatar = 34.0f;
+  static constexpr float kMaxWidth = 480.0f;
+
+  message_bubble(const conversation& in, const message& said, bool first_of_run, bool last_of_run)
+      : outgoing(said.outgoing), sender(said.sender), time(clock_of(said.at)),
+        text(said.redacted ? std::string("(removed)") : said.body.plain + (said.edited ? " (edited)" : ""), 14.5f,
+             text_colour) {
+    fState.apply({.fillX = true});
+    const bool group = is_group(in);
+    avatar_space = group && !outgoing;
+    with_avatar = avatar_space && last_of_run;
+    if (group && !outgoing && first_of_run)
+      name.emplace(sender_name(in, said.sender), 13.0f, avatar_colour(said.sender), true);
+    text.setWrapped(true);
+    time += std::visit(overloaded{[](const delivery::sending&) { return " · sending"; },
+                                  [](const delivery::failed&) { return " · not sent"; },
+                                  [](const auto&) { return ""; }},
+                       said.delivery);
+    if (!said.reactions.empty()) {
+      std::string line;
+      for (const auto& [key, who] : said.reactions)
+        line += std::format("{} {}  ", key, who.size());
+      reactions.emplace(std::move(line), 13.0f, dim_colour);
+    }
+  }
+
+  void forEachChild(auto&& f) {
+    f(name);
+    f(text);
+    f(reactions);
+  }
+
+  [[nodiscard]] float inner_width(float row) const {
+    const float left = avatar_space ? kAvatar + 8.0f : 0.0f;
+    return std::max(40.0f, std::min(kMaxWidth, (row - left) * 0.8f) - 2.0f * kPadX);
+  }
+  [[nodiscard]] float natural_width() const {
+    skia::SkFont* font = skiff::paint::defaultFont();
+    if (font == nullptr)
+      return 0.0f;
+    const skiff::paint::Painter p(nullptr, *font);
+    float widest = 0.0f;
+    std::string_view rest = text.text();
+    while (true) {
+      const auto newline = rest.find('\n');
+      widest = std::max(widest, p.measure(std::string(rest.substr(0, newline)), 14.5f));
+      if (newline == std::string_view::npos)
+        break;
+      rest.remove_prefix(newline + 1);
+    }
+    widest = std::max(widest, p.measure(time, 11.0f) + 8.0f);
+    if (name)
+      widest = std::max(widest, p.measure(name->text(), 13.0f, true));
+    return widest;
+  }
+
+  // As tall as the bubble, which is as wide as its text up to most of the
+  // row.
+  void measure(const skia::SkRect& parent) {
+    const float room = this->inner_width(parent.width());
+    const float width = std::min(room, this->natural_width() + 1.0f);
+    text.setMaxWidth(width);
+    text.measure(parent);
+    float height = 2.0f * kPadY + text.fState.fHeight + 14.0f;
+    if (name)
+      height += 18.0f;
+    if (reactions)
+      height += 18.0f;
+    fState.fHeight = height + 2.0f;
+    bubble_width = width + 2.0f * kPadX;
+  }
+  float bubble_width = 0.0f;
+
+  void layoutChildren() {
+    const skia::SkRect box = fState.contentBox();
+    const float left = outgoing ? box.width() - bubble_width : (avatar_space ? kAvatar + 8.0f : 0.0f);
+    bubble = skia::SkRect::MakeXYWH(box.fLeft + left, box.fTop, bubble_width, box.height() - 2.0f);
+    float y = kPadY;
+    if (name) {
+      name->setMaxWidth(bubble_width - 2.0f * kPadX);
+      name->fState.arrange(left + kPadX, y);
+      scene::layout(*name, box);
+      y += 18.0f;
+    }
+    text.fState.arrange(left + kPadX, y);
+    scene::layout(text, box);
+    y += text.bounds().height();
+    if (reactions) {
+      reactions->fState.arrange(left + kPadX, y + 2.0f);
+      scene::layout(*reactions, box);
+    }
+  }
+
+  void drawSelf(skia::SkCanvas* canvas, float alpha) {
+    skia::SkFont* font = skiff::paint::defaultFont();
+    if (font == nullptr || bubble.isEmpty())
+      return;
+    const skiff::paint::Painter p(canvas, *font);
+    p.fillRounded(bubble, 12.0f, outgoing ? selected_colour : skia::colorSetARGB(255, 33, 41, 52), alpha);
+    const float width = p.measure(time, 11.0f);
+    p.text(time, bubble.fRight - kPadX - width, bubble.fBottom - 6.0f, 11.0f,
+           outgoing ? skia::colorSetARGB(255, 170, 200, 230) : dim_colour, alpha);
+    if (with_avatar)
+      draw_avatar(canvas,
+                  skia::SkRect::MakeXYWH(fState.fBounds.fLeft, fState.fBounds.fBottom - kAvatar - 2.0f, kAvatar, kAvatar),
+                  sender, name ? name->text() : sender, alpha);
+  }
+};
+
+// Something not there yet, said in a box over the window.
+template <class Actions>
+struct notice_box : scene::Node {
+  nodes::Text title{"Not implemented yet", 17.0f, text_colour, true};
+  nodes::Text note;
+  widgets::Button<ask<Actions, &Actions::close_notice>> ok;
+
+  notice_box(Actions* a, std::string what)
+      : note(std::format("{} isn't implemented yet.", what), 14.0f, dim_colour), ok("OK", {a}) {
+    fState.apply({.fill = true});
+    note.setWrapped(true);
+    ok.setPrimary(true);
+    ok.apply({.width = 90.0f, .height = 34.0f});
+  }
+  void forEachChild(auto&& f) {
+    f(title);
+    f(note);
+    f(ok);
+  }
+  void layoutChildren() {
+    const skia::SkRect box = scene::inset(fState.contentBox(), 22.0f, 20.0f);
+    title.fState.arrange(0.0f, 0.0f);
+    scene::layout(title, box);
+    note.setMaxWidth(box.width());
+    note.fState.arrange(0.0f, title.bounds().height() + 10.0f);
+    scene::layout(note, box);
+    ok.fState.arrange(0.0f, 0.0f, scene::anchor::kBottomRight, scene::anchor::kBottomRight);
+    scene::layout(ok, box);
+  }
+};
+
 
 // What a chat says of itself, over its messages: its avatar, name and who
 // is in it or how they are, a line under it, and the button that opens its
@@ -891,20 +1060,25 @@ struct info_panel : scene::Node {
   icon_button<ask<Actions, &Actions::toggle_info>> close;
   nodes::Text name{"", 17.0f, text_colour, true};
   nodes::Text status{"", 13.0f, dim_colour};
-  action_tile<not_yet> mute{"Mute", icon::bell{}};
-  action_tile<not_yet> manage{"Manage", icon::sliders{}};
-  action_tile<not_yet> leave{"Leave", icon::leave{}};
+  action_tile<not_yet<Actions>> mute;
+  action_tile<not_yet<Actions>> manage;
+  action_tile<not_yet<Actions>> leave;
   nodes::Text id_text{"", 14.0f, accent_colour};
   nodes::Text id_label{"ID", 12.0f, dim_colour};
   nodes::Text members_title{"", 13.0f, dim_colour, true};
-  icon_button<not_yet> add_member{icon::add_person{}, {}};
+  icon_button<not_yet<Actions>> add_member;
   std::vector<member_row> members;
   // Where the bands between the sections go, as the last layout put them.
   std::array<float, 2> bands{};
 
   static constexpr float kWidth = 340.0f;
 
-  explicit info_panel(Actions* a) : close(icon::close{}, {a}) {
+  explicit info_panel(Actions* a)
+      : close(icon::close{}, {a}),
+        mute("Mute", icon::bell{}, {a, "Muting a chat"}),
+        manage("Manage", icon::sliders{}, {a, "Managing a chat"}),
+        leave("Leave", icon::leave{}, {a, "Leaving a chat"}),
+        add_member(icon::add_person{}, {a, "Adding members"}) {
     fState.apply({.masking = true});
     name.setElided(true);
     status.setElided(true);
@@ -966,7 +1140,7 @@ struct info_panel : scene::Node {
     scene::layout(leave, box);
     y += 58.0f + 16.0f;
     bands[0] = y;
-    y += 8.0f + 14.0f;
+    y += 3.0f + 14.0f;
     id_text.setMaxWidth(box.width() - 40.0f);
     id_text.fState.arrange(20.0f, y);
     scene::layout(id_text, box);
@@ -975,7 +1149,7 @@ struct info_panel : scene::Node {
     scene::layout(id_label, box);
     y += id_label.bounds().height() + 16.0f;
     bands[1] = y;
-    y += 8.0f;
+    y += 3.0f;
     if (!group)
       return;
     const skia::SkRect head = skia::SkRect::MakeXYWH(box.fLeft, box.fTop + y, box.width(), 48.0f);
@@ -1002,10 +1176,10 @@ struct info_panel : scene::Node {
     draw_avatar(canvas, skia::SkRect::MakeXYWH(box.centerX() - 48.0f, box.fTop + 24.0f, 96.0f, 96.0f), key,
                 name.text(), alpha);
     for (const float y : bands)
-      p.fillRounded(skia::SkRect::MakeXYWH(box.fLeft + 1.0f, box.fTop + y, box.width() - 1.0f, 8.0f), 0.0f,
+      p.fillRounded(skia::SkRect::MakeXYWH(box.fLeft + 1.0f, box.fTop + y, box.width() - 1.0f, 3.0f), 0.0f,
                     band_colour, alpha);
     if (group)
-      draw_icon(canvas, icon::people{}, skia::SkRect::MakeXYWH(box.fLeft + 16.0f, box.fTop + bands[1] + 8.0f, 28.0f, 48.0f),
+      draw_icon(canvas, icon::people{}, skia::SkRect::MakeXYWH(box.fLeft + 16.0f, box.fTop + bands[1] + 3.0f, 28.0f, 48.0f),
                 dim_colour, alpha);
   }
 };
@@ -1076,14 +1250,15 @@ struct submit_message {
 template <class Actions>
 struct composer_bar : scene::Node {
   nodes::Box<> divider{band_colour};
-  icon_button<not_yet> attach{icon::clip{}, {}};
+  icon_button<not_yet<Actions>> attach;
   widgets::TextArea<submit_message<Actions>> field;
   icon_button<ask<Actions, &Actions::send_typed>> send;
 
   static constexpr float kSide = 50.0f;
   static constexpr float kPadY = 9.0f;
 
-  explicit composer_bar(Actions* a) : field("Write a message…", {a}), send(icon::send{}, {a}) {
+  explicit composer_bar(Actions* a)
+      : attach(icon::clip{}, {a, "Sending files"}), field("Write a message…", {a}), send(icon::send{}, {a}) {
     fState.apply({.fillX = true});
     divider.apply({.fillX = true, .height = 1.0f});
     send.colour = accent_colour;
@@ -1143,8 +1318,8 @@ struct conversations_screen : scene::Node {
   nodes::ScrollContainer<nodes::Flow<std::vector<conversation_row<Actions>>>> list{
       nodes::Flow<std::vector<conversation_row<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
   chat_header<Actions> header;
-  nodes::ScrollContainer<nodes::Flow<std::vector<message_entry>>> timeline{
-      nodes::Flow<std::vector<message_entry>>({.spacingY = 10.0f, .wrap = false}, {})};
+  nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>> timeline{
+      nodes::Flow<std::vector<message_bubble>>({.spacingY = 3.0f, .wrap = false}, {})};
   composer_bar<Actions> line;
   info_panel<Actions> info;
   // What the main area says with no account at all.
@@ -1289,31 +1464,12 @@ struct conversations_screen : scene::Node {
     if (!one)
       return;
     info.show(*one, now);
-    for (const message& said : one->timeline) {
-      const std::string who =
-          (said.outgoing ? std::string("You") : sender_name(*one, said.sender)) + " · " + clock_of(said.at) +
-          std::visit(overloaded{[](const delivery::sending&) { return " · sending"; },
-                                [](const delivery::failed&) { return " · not sent"; },
-                                [](const auto&) { return ""; }},
-                     said.delivery);
-      std::string body = said.redacted ? "(removed)" : said.body.plain;
-      if (said.edited)
-        body += " (edited)";
-      std::optional<nodes::Text> reactions;
-      if (!said.reactions.empty()) {
-        std::string line_of;
-        for (const auto& [key, who_reacted] : said.reactions)
-          line_of += std::format("{} {}  ", key, who_reacted.size());
-        reactions.emplace(scene::make<nodes::Text>({.fillX = true}, line_of, 13.0f, dim_colour));
-      }
-      nodes::Text text = scene::make<nodes::Text>({.fillX = true}, body, 15.0f, text_colour);
-      text.setWrapped(true);
-      auto& entry = entries.emplace_back(
-          nodes::FlowOptions{.spacingY = 2.0f, .wrap = false},
-          scene::make<nodes::Text>({.fillX = true}, who, 12.0f, said.outgoing ? accent_colour : avatar_colour(said.sender),
-                                   true),
-          std::move(text), std::move(reactions));
-      entry.apply({.fillX = true, .autoSize = scene::axes::kY});
+    const auto& all = one->timeline;
+    for (std::size_t i = 0; i < all.size(); ++i) {
+      const auto same = [&](std::size_t j) {
+        return j < all.size() && all[j].sender == all[i].sender && all[j].outgoing == all[i].outgoing;
+      };
+      entries.emplace_back(*one, all[i], i == 0 || !same(i - 1), !same(i + 1));
     }
     // The newest is at the bottom, and that is where the reader is.
     timeline.scrollTo(std::numeric_limits<float>::max());
@@ -2273,61 +2429,74 @@ struct settings_dialog : scene::Node {
 template <class Actions>
 struct window : scene::Node {
   using panel_type = std::variant<accounts_panel<Actions>>;
-  using screens = widgets::SlideOver<conversations_screen<Actions>, panel_type>;
+  using with_drawer = widgets::Drawer<conversations_screen<Actions>, drawer_panel<Actions>>;
 
   Actions* actions = nullptr;
   nodes::Box<> backdrop{background};
-  widgets::Drawer<screens, drawer_panel<Actions>> frame;
+  // The pages slide over the drawer too: Manage accounts comes in over it.
+  widgets::SlideOver<with_drawer, panel_type> frame;
   widgets::Dialog<settings_dialog<Actions>> settings;
+  widgets::Dialog<notice_box<Actions>> notice;
 
   explicit window(Actions* a)
       : actions(a), frame(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a)) {
     fState.apply({.fill = true});
     backdrop.apply({.fill = true});
-    frame.base().setSheetColour(background);
-    frame.setSheetColour(sidebar_colour);
+    frame.setSheetColour(background);
+    frame.base().setSheetColour(sidebar_colour);
     settings.setSheetColour(sidebar_colour);
     settings.setSize(440.0f, 520.0f);
+    notice.setSheetColour(sidebar_colour);
+    notice.setSize(360.0f, 160.0f);
   }
   void forEachChild(auto&& f) {
     f(backdrop);
     f(frame);
     f(settings);
+    f(notice);
   }
 
   [[nodiscard]] conversations_screen<Actions>& main() { return frame.base().base(); }
   // The panel that is up, not on its way out.
-  [[nodiscard]] panel_type* open_panel() { return frame.base().shown(); }
+  [[nodiscard]] panel_type* open_panel() { return frame.shown(); }
 
   // A panel opened, in place of the one up if there is one.
   // A panel up: the one on top if it is one of these, else a new one sliding
   // in over it.
   template <class Panel>
   Panel& open() {
-    if (panel_type* up = frame.base().shown())
+    if (panel_type* up = frame.shown())
       if (Panel* same = std::get_if<Panel>(up))
         return *same;
-    return std::get<Panel>(frame.base().open(std::in_place_type<Panel>, actions));
+    return std::get<Panel>(frame.open(std::in_place_type<Panel>, actions));
   }
   // The top panel goes, and the one under it is up again.
-  void back_panel() { frame.base().back(); }
-  void close() { frame.base().close(); }
+  void back_panel() { frame.back(); }
+  void close() { frame.close(); }
   // From the program, between events.
   void drop_closed() {
-    frame.base().dropClosed();
+    frame.dropClosed();
     settings.dropClosed();
+    notice.dropClosed();
   }
 
   void open_settings(std::string motion) { settings.open(actions, std::move(motion)); }
   void close_settings() { settings.close(); }
   [[nodiscard]] settings_dialog<Actions>* settings_up() { return settings.shown(); }
 
-  void open_drawer() { frame.open(); }
-  void close_drawer() { frame.close(); }
+  void open_drawer() { frame.base().open(); }
+  void close_drawer() { frame.base().close(); }
+  void close_drawer_now() { frame.base().closeNow(); }
+  [[nodiscard]] bool drawer_open() { return frame.base().isOpen(); }
+  // Whether the pages are still moving.
+  [[nodiscard]] bool pages_moving() { return frame.settling(); }
+
+  void show_notice(std::string what) { notice.open(actions, std::move(what)); }
+  void close_notice() { notice.close(); }
 
   void show(const std::vector<config::account_t>& saved, const model& now) {
     const auto& current = frame.base().base().current;
-    frame.content().show(actions, saved, now, current ? std::string_view(current->address) : std::string_view());
+    frame.base().content().show(actions, saved, now, current ? std::string_view(current->address) : std::string_view());
   }
   void show_motion(std::string_view level) {
     if (auto* up = settings.shown())
@@ -2341,6 +2510,8 @@ struct window : scene::Node {
     scene::layout(frame, box);
     settings.fState.arrange(0.0f, 0.0f);
     scene::layout(settings, box);
+    notice.fState.arrange(0.0f, 0.0f);
+    scene::layout(notice, box);
   }
 };
 

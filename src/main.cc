@@ -285,6 +285,10 @@ struct send_typed {};
 struct resize_sidebar {
   float x = 0.0f;
 };
+struct not_implemented {
+  std::string what;
+};
+struct close_notice {};
 struct switch_account {
   std::string address;
 };
@@ -301,7 +305,7 @@ using request_t =
                  request::open_settings, request::close_settings, request::settings_home,
                  request::settings_animations, request::pop_panel, request::toggle_info,
                  request::switch_account, request::submit_message, request::send_typed,
-                 request::resize_sidebar>;
+                 request::resize_sidebar, request::not_implemented, request::close_notice>;
 
 // What the screens ask: each a request, kept until the program applies it
 // between events -- except a message, which goes to the network at once.
@@ -349,6 +353,8 @@ struct actions {
   void submit_message(std::string text) { requests.emplace_back(request::submit_message{std::move(text)}); }
   void send_typed() { requests.emplace_back(request::send_typed{}); }
   void resize_sidebar(float x) { requests.emplace_back(request::resize_sidebar{x}); }
+  void not_implemented(std::string what) { requests.emplace_back(request::not_implemented{std::move(what)}); }
+  void close_notice() { requests.emplace_back(request::close_notice{}); }
   void switch_account(std::string address) { requests.emplace_back(request::switch_account{std::move(address)}); }
   void close_settings() { requests.emplace_back(request::close_settings{}); }
   void settings_home() { requests.emplace_back(request::settings_home{}); }
@@ -387,6 +393,9 @@ struct app {
   // Why the accounts file could not be read, when it could not: then it is
   // not written over either.
   std::optional<std::string> config_error;
+  // The drawer, left open under a page coming in over it, to go when the
+  // page is in.
+  bool drawer_waits = false;
   // The account being added that a login is waiting to hear about.
   std::optional<std::string> pending_login;
   actions ask;
@@ -409,6 +418,10 @@ struct app {
     auto pending = std::exchange(ask.requests, {});
     for (const request_t& one : pending)
       std::visit([this](const auto& each) { this->apply(each); }, one);
+    if (drawer_waits && !root().pages_moving()) {
+      root().close_drawer_now();
+      drawer_waits = false;
+    }
   }
 
   void closing() { net->shutdown(); }
@@ -423,7 +436,10 @@ struct app {
     this->refresh();
   }
   accounts& show_accounts() {
-    root().close_drawer();
+    // From the drawer, the page comes in over it, and the drawer goes once
+    // the page is in: not two things moving at once.
+    if (root().drawer_open())
+      drawer_waits = true;
     root().close_settings();
     pending_login.reset();
     auto& panel = root().open<accounts>();
@@ -551,6 +567,8 @@ struct app {
   void apply(const request::toggle_info&) { root().main().toggle_info(); }
   void apply(const request::submit_message& one) { this->send_message(one.text); }
   void apply(const request::resize_sidebar& one) { root().main().resize_sidebar(one.x); }
+  void apply(const request::not_implemented& one) { root().show_notice(one.what); }
+  void apply(const request::close_notice&) { root().close_notice(); }
   void apply(const request::send_typed&) { this->send_message(root().main().line.text()); }
   // What is in the message field, to the chosen chat; the field emptied.
   void send_message(std::string text) {

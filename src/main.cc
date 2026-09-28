@@ -807,10 +807,32 @@ struct app {
       up->show_appearance(theme.value_or("dark"), renderer.value_or("opengl"));
   }
   // The theme or the renderer chosen: kept, for the next start.
+  // A theme chosen: its colours in place, and the window made again in them,
+  // as it was -- the chats, the one chosen, the widths -- with Settings open
+  // where it was.
   void apply(const request::set_theme& one) {
     theme = one.name;
-    this->show_appearance_choices();
     (void)this->write();
+    auto& before = root().main();
+    const auto chosen = before.chosen;
+    const auto current = before.current;
+    const float side_width = before.side_width;
+    const float info_width = before.info_width;
+    const bool info_open = before.info_open;
+    mux::ui::use_theme(one.name);
+    pending_login.reset();
+    drawer_waits = false;
+    root().rebuild();
+    auto& after = root().main();
+    after.chosen = chosen;
+    after.current = current;
+    after.side_width = side_width;
+    after.info_width = info_width;
+    after.info_open = info_open;
+    this->refresh();
+    root().open_settings(motion.value_or("full"));
+    if (auto* up = root().settings_up())
+      up->show_appearance(theme.value_or("dark"), renderer.value_or("opengl"));
   }
   void apply(const request::set_renderer& one) {
     renderer = one.name;

@@ -609,10 +609,24 @@ inline skia::SkColor bubble_colour = skia::colorSetARGB(255, 33, 41, 52);
 inline skia::SkColor sent_time_colour = skia::colorSetARGB(255, 170, 200, 230);
 
 // The colours of a theme, "dark" or "light", put in place: mux.ui's and
-// skiff-widgets'. Before anything is made -- what is made takes its
-// colours then.
+// skiff-widgets'. What is made takes its colours then: the window is made
+// again after it (window::rebuild).
 inline void use_theme(std::string_view name) {
   auto& widget = widgets::theme();
+  widget = widgets::Theme{};
+  background = skia::colorSetARGB(255, 24, 27, 30);
+  sidebar_colour = skia::colorSetARGB(255, 32, 36, 40);
+  chosen_colour = skia::colorSetARGB(255, 52, 60, 66);
+  text_colour = skia::colorSetARGB(255, 235, 240, 243);
+  dim_colour = skia::colorSetARGB(255, 150, 162, 170);
+  accent_colour = skia::colorSetARGB(255, 102, 204, 255);
+  error_colour = skia::colorSetARGB(255, 255, 120, 110);
+  selected_colour = skia::colorSetARGB(255, 43, 82, 120);
+  band_colour = skia::colorSetARGB(255, 18, 20, 23);
+  section_colour = skia::colorSetARGB(255, 26, 29, 33);
+  tile_colour = skia::colorSetARGB(255, 40, 45, 50);
+  bubble_colour = skia::colorSetARGB(255, 33, 41, 52);
+  sent_time_colour = skia::colorSetARGB(255, 170, 200, 230);
   if (name == "light") {
     background = skia::colorSetARGB(255, 241, 243, 245);
     sidebar_colour = skia::colorSetARGB(255, 255, 255, 255);
@@ -2872,7 +2886,8 @@ struct appearance_page : scene::Node {
   nodes::Text renderer_title = section_title("RENDERING");
   row_item<choose_renderer<Actions>> gpu;
   row_item<choose_renderer<Actions>> cpu;
-  nodes::Text note{"Both take effect when mux starts again.", 13.0f, dim_colour};
+  nodes::Text note{"The theme changes at once; what draws the window, when mux starts again.", 13.0f,
+                   dim_colour};
 
   appearance_page(Actions* a, std::string_view theme, std::string_view renderer)
       : header("Appearance", {a}, {a}, true, true),
@@ -2982,87 +2997,105 @@ struct window : scene::Node {
   using panel_type = std::variant<accounts_panel<Actions>>;
   using with_drawer = widgets::Drawer<conversations_screen<Actions>, drawer_panel<Actions>>;
 
-  Actions* actions = nullptr;
-  nodes::Box<> backdrop{background};
-  // The pages slide over the drawer too: Manage accounts comes in over it.
-  widgets::SlideOver<with_drawer, panel_type> frame;
-  widgets::Dialog<settings_dialog<Actions>> settings;
-  widgets::Dialog<notice_box<Actions>> notice;
+  // What the window holds, made anew when the theme changes: what is made
+  // takes its colours then.
+  struct parts {
+    nodes::Box<> backdrop{background};
+    // The pages slide over the drawer too: Manage accounts comes in over it.
+    widgets::SlideOver<with_drawer, panel_type> frame;
+    widgets::Dialog<settings_dialog<Actions>> settings;
+    widgets::Dialog<notice_box<Actions>> notice;
 
-  explicit window(Actions* a)
-      : actions(a), frame(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a)) {
+    explicit parts(Actions* a) : frame(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a)) {
+      backdrop.apply({.fill = true});
+      frame.setSheetColour(background);
+      frame.base().setSheetColour(sidebar_colour);
+      settings.setSheetColour(sidebar_colour);
+      settings.setSize(440.0f, 520.0f);
+      notice.setSheetColour(sidebar_colour);
+      notice.setSize(360.0f, 160.0f);
+    }
+  };
+
+  Actions* actions = nullptr;
+  std::optional<parts> p;
+
+  explicit window(Actions* a) : actions(a) {
     fState.apply({.fill = true});
-    backdrop.apply({.fill = true});
-    frame.setSheetColour(background);
-    frame.base().setSheetColour(sidebar_colour);
-    settings.setSheetColour(sidebar_colour);
-    settings.setSize(440.0f, 520.0f);
-    notice.setSheetColour(sidebar_colour);
-    notice.setSize(360.0f, 160.0f);
+    p.emplace(a);
+  }
+  // Everything made again, in the colours of the theme now in place.
+  void rebuild() {
+    p.reset();
+    p.emplace(actions);
+    this->invalidateLayout();
+    this->markDamaged();
   }
   void forEachChild(auto&& f) {
-    f(backdrop);
-    f(frame);
-    f(settings);
-    f(notice);
+    if (!p)
+      return;
+    f(p->backdrop);
+    f(p->frame);
+    f(p->settings);
+    f(p->notice);
   }
 
-  [[nodiscard]] conversations_screen<Actions>& main() { return frame.base().base(); }
+  [[nodiscard]] conversations_screen<Actions>& main() { return p->frame.base().base(); }
   // The panel that is up, not on its way out.
-  [[nodiscard]] panel_type* open_panel() { return frame.shown(); }
+  [[nodiscard]] panel_type* open_panel() { return p->frame.shown(); }
 
   // A panel opened, in place of the one up if there is one.
   // A panel up: the one on top if it is one of these, else a new one sliding
   // in over it.
   template <class Panel>
   Panel& open() {
-    if (panel_type* up = frame.shown())
+    if (panel_type* up = p->frame.shown())
       if (Panel* same = std::get_if<Panel>(up))
         return *same;
-    return std::get<Panel>(frame.open(std::in_place_type<Panel>, actions));
+    return std::get<Panel>(p->frame.open(std::in_place_type<Panel>, actions));
   }
   // The top panel goes, and the one under it is up again.
-  void back_panel() { frame.back(); }
-  void close() { frame.close(); }
+  void back_panel() { p->frame.back(); }
+  void close() { p->frame.close(); }
   // From the program, between events.
   void drop_closed() {
-    frame.dropClosed();
-    settings.dropClosed();
-    notice.dropClosed();
+    p->frame.dropClosed();
+    p->settings.dropClosed();
+    p->notice.dropClosed();
   }
 
-  void open_settings(std::string motion) { settings.open(actions, std::move(motion)); }
-  void close_settings() { settings.close(); }
-  [[nodiscard]] settings_dialog<Actions>* settings_up() { return settings.shown(); }
+  void open_settings(std::string motion) { p->settings.open(actions, std::move(motion)); }
+  void close_settings() { p->settings.close(); }
+  [[nodiscard]] settings_dialog<Actions>* settings_up() { return p->settings.shown(); }
 
-  void open_drawer() { frame.base().open(); }
-  void close_drawer() { frame.base().close(); }
-  void close_drawer_now() { frame.base().closeNow(); }
-  [[nodiscard]] bool drawer_open() { return frame.base().isOpen(); }
+  void open_drawer() { p->frame.base().open(); }
+  void close_drawer() { p->frame.base().close(); }
+  void close_drawer_now() { p->frame.base().closeNow(); }
+  [[nodiscard]] bool drawer_open() { return p->frame.base().isOpen(); }
   // Whether the pages are still moving.
-  [[nodiscard]] bool pages_moving() { return frame.settling(); }
+  [[nodiscard]] bool pages_moving() { return p->frame.settling(); }
 
-  void show_notice(std::string what) { notice.open(actions, std::move(what)); }
-  void close_notice() { notice.close(); }
+  void show_notice(std::string what) { p->notice.open(actions, std::move(what)); }
+  void close_notice() { p->notice.close(); }
 
   void show(const std::vector<config::account_t>& saved, const model& now) {
-    const auto& current = frame.base().base().current;
-    frame.base().content().show(actions, saved, now, current ? std::string_view(current->address) : std::string_view());
+    const auto& current = p->frame.base().base().current;
+    p->frame.base().content().show(actions, saved, now, current ? std::string_view(current->address) : std::string_view());
   }
   void show_motion(std::string_view level) {
-    if (auto* up = settings.shown())
+    if (auto* up = p->settings.shown())
       up->show_motion(std::string(level));
   }
 
   void layoutChildren() {
     const skia::SkRect box = fState.contentBox();
-    scene::layout(backdrop, box);
-    frame.fState.arrange(0.0f, 0.0f);
-    scene::layout(frame, box);
-    settings.fState.arrange(0.0f, 0.0f);
-    scene::layout(settings, box);
-    notice.fState.arrange(0.0f, 0.0f);
-    scene::layout(notice, box);
+    scene::layout(p->backdrop, box);
+    p->frame.fState.arrange(0.0f, 0.0f);
+    scene::layout(p->frame, box);
+    p->settings.fState.arrange(0.0f, 0.0f);
+    scene::layout(p->settings, box);
+    p->notice.fState.arrange(0.0f, 0.0f);
+    scene::layout(p->notice, box);
   }
 };
 

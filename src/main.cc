@@ -164,13 +164,19 @@ struct set_motion {
   std::string level;
 };
 struct quit {};
+struct open_settings {};
+struct close_settings {};
+struct settings_home {};
+struct settings_animations {};
 }  // namespace request
 
 using request_t =
     std::variant<request::choose, request::back, request::open_accounts, request::open_new_account,
                  request::add_xmpp, request::add_matrix, request::select_account, request::toggle_advanced,
                  request::toggle_plain, request::submit_login, request::flip_enabled, request::remove_account,
-                 request::open_drawer, request::show_account, request::set_motion, request::quit>;
+                 request::open_drawer, request::show_account, request::set_motion, request::quit,
+                 request::open_settings, request::close_settings, request::settings_home,
+                 request::settings_animations>;
 
 // What the screens ask: each a request, kept until the program applies it
 // between events -- except a message, which goes to the network at once.
@@ -195,6 +201,10 @@ struct actions {
   void show_account(std::string address) { requests.emplace_back(request::show_account{std::move(address)}); }
   void set_motion(std::string level) { requests.emplace_back(request::set_motion{std::move(level)}); }
   void quit() { requests.emplace_back(request::quit{}); }
+  void open_settings() { requests.emplace_back(request::open_settings{}); }
+  void close_settings() { requests.emplace_back(request::close_settings{}); }
+  void settings_home() { requests.emplace_back(request::settings_home{}); }
+  void settings_animations() { requests.emplace_back(request::settings_animations{}); }
 };
 
 using window_type = mux::ui::window<actions>;
@@ -266,6 +276,7 @@ struct app {
   }
   accounts& show_accounts() {
     root().close_drawer();
+    root().close_settings();
     pending_login.reset();
     auto& panel = root().open<accounts>();
     if (config_error)
@@ -382,6 +393,19 @@ struct app {
   void apply(const request::show_account& one) { (void)this->show_account(one.address); }
   void apply(const request::set_motion& one) { this->set_motion(one.level); }
   void apply(const request::quit&) { mux::host::request_quit(); }
+  void apply(const request::open_settings&) {
+    root().close_drawer();
+    root().open_settings(motion.value_or("full"));
+  }
+  void apply(const request::close_settings&) { root().close_settings(); }
+  void apply(const request::settings_home&) {
+    if (auto* up = root().settings_up())
+      up->show_home();
+  }
+  void apply(const request::settings_animations&) {
+    if (auto* up = root().settings_up())
+      up->show_animations();
+  }
 
   // How much moves, from now on and in the file.
   void set_motion(std::string level) {

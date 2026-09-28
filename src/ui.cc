@@ -1153,15 +1153,15 @@ struct info_panel : scene::Node {
     y += 16.0f;
     const float tile = (box.width() - 32.0f - 16.0f) / 3.0f;
     float x = 16.0f;
-    for (auto* each : {&mute, &manage}) {
-      each->apply({.width = tile});
-      each->fState.arrange(x, y);
-      scene::layout(*each, box);
+    const auto place_tile = [&](auto& each) {
+      each.apply({.width = tile});
+      each.fState.arrange(x, y);
+      scene::layout(each, box);
       x += tile + 8.0f;
-    }
-    leave.apply({.width = tile});
-    leave.fState.arrange(x, y);
-    scene::layout(leave, box);
+    };
+    place_tile(mute);
+    place_tile(manage);
+    place_tile(leave);
     y += 58.0f + 16.0f;
     bands[0] = y;
     y += 6.0f + 14.0f;

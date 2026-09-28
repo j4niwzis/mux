@@ -317,8 +317,15 @@ struct resize_info {
 };
 struct toggle_mute {};
 struct close_account_pages {};
-struct settings_privacy {};
-struct flip_read_receipts {};
+struct accounts_back {};
+struct account_page {
+  int page = 0;
+};
+struct flip_account_receipts {};
+struct proxy_kind {
+  int kind = 0;
+};
+struct save_proxy {};
 struct leave_chat {};
 struct switch_account {
   std::string address;
@@ -338,7 +345,8 @@ using request_t =
                  request::switch_account, request::submit_message, request::send_typed,
                  request::resize_sidebar, request::not_implemented, request::close_notice,
                  request::resize_info, request::toggle_mute, request::close_account_pages,
-                 request::settings_privacy, request::flip_read_receipts, request::leave_chat>;
+                 request::accounts_back, request::account_page, request::flip_account_receipts,
+                 request::proxy_kind, request::save_proxy, request::leave_chat>;
 
 // What the screens ask: each a request, kept until the program applies it
 // between events -- except a message, which goes to the network at once.
@@ -391,8 +399,11 @@ struct actions {
   void resize_info(float x) { requests.emplace_back(request::resize_info{x}); }
   void toggle_mute() { requests.emplace_back(request::toggle_mute{}); }
   void close_account_pages() { requests.emplace_back(request::close_account_pages{}); }
-  void settings_privacy() { requests.emplace_back(request::settings_privacy{}); }
-  void flip_read_receipts() { requests.emplace_back(request::flip_read_receipts{}); }
+  void accounts_back() { requests.emplace_back(request::accounts_back{}); }
+  void account_page(int page) { requests.emplace_back(request::account_page{page}); }
+  void flip_account_receipts() { requests.emplace_back(request::flip_account_receipts{}); }
+  void proxy_kind(int kind) { requests.emplace_back(request::proxy_kind{kind}); }
+  void save_proxy() { requests.emplace_back(request::save_proxy{}); }
   void leave_chat() { requests.emplace_back(request::leave_chat{}); }
   void switch_account(std::string address) { requests.emplace_back(request::switch_account{std::move(address)}); }
   void close_settings() { requests.emplace_back(request::close_settings{}); }
@@ -429,9 +440,7 @@ struct app {
   std::vector<mux::config::account_t> saved;
   // How much moves, as read, to be written back as it was.
   std::optional<std::string> motion;
-  // Whether read receipts are sent (nothing said is yes), and the chats
-  // muted: both kept in the file.
-  std::optional<bool> read_receipts;
+  // The chats muted, kept in the file.
   std::set<mux::conversation_id> muted;
   // Why the accounts file could not be read, when it could not: then it is
   // not written over either.
@@ -562,7 +571,10 @@ struct app {
   // A chat opened: read up to its last message from someone else, and the
   // people in it told so where read receipts are on.
   void mark_read(const mux::conversation_id& which) {
-    if (!read_receipts.value_or(true) || ask.demo)
+    if (ask.demo)
+      return;
+    if (const auto account = this->find(which.account.address);
+        account != saved.end() && !mux::config::read_receipts_of(*account))
       return;
     const mux::conversation* one = model->find(which);
     if (!one)
@@ -645,7 +657,7 @@ struct app {
   void apply(const request::quit&) { mux::host::request_quit(); }
   void apply(const request::open_settings&) {
     root().close_drawer();
-    root().open_settings(motion.value_or("full"), read_receipts.value_or(true));
+    root().open_settings(motion.value_or("full"));
   }
   void apply(const request::close_settings&) { root().close_settings(); }
   void apply(const request::toggle_info&) { root().main().toggle_info(); }
@@ -668,16 +680,80 @@ struct app {
     if (auto* up = root().open_panel())
       std::visit([](accounts& panel) { panel.close_pages(); }, *up);
   }
-  void apply(const request::settings_privacy&) {
-    if (auto* up = root().settings_up())
-      up->show_privacy();
+  // ← on the accounts page: from an account's pages to the list, from the
+  // list to the chats.
+  void apply(const request::accounts_back&) {
+    auto* up = root().open_panel();
+    if (!up)
+      return;
+    std::visit(
+        [this](accounts& panel) {
+          if (panel.pages_open())
+            panel.close_pages();
+          else
+            this->apply(request::pop_panel{});
+        },
+        *up);
   }
-  void apply(const request::flip_read_receipts&) {
-    read_receipts = !read_receipts.value_or(true);
-    if (auto* up = root().settings_up())
-      up->show_receipts(*read_receipts);
-    (void)this->write();
+  // The chosen account, and its accounts page, when they are up.
+  template <class F>
+  void with_chosen_account(F&& f) {
+    auto* up = root().open_panel();
+    if (!up)
+      return;
+    std::visit(
+        [&](accounts& panel) {
+          if (!panel.selected)
+            return;
+          if (const auto found = this->find(*panel.selected); found != saved.end())
+            f(panel, *found);
+        },
+        *up);
   }
+  void apply(const request::account_page& one) {
+    this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
+      panel.show_page(one.page, account, *model);
+    });
+  }
+  void apply(const request::flip_account_receipts&) {
+    this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
+      auto& kept = mux::config::read_receipts_in(account);
+      kept = !kept.value_or(true);
+      if (auto* page = panel.privacy())
+        page->show(*kept);
+      (void)this->write();
+    });
+  }
+  void apply(const request::proxy_kind& one) {
+    this->with_chosen_account([&](accounts& panel, mux::config::account_t&) {
+      if (auto* page = panel.proxy())
+        page->set_kind(one.kind);
+    });
+  }
+  // The proxy typed in, kept, and the account connected again through it.
+  void apply(const request::save_proxy&) {
+    this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
+      auto* page = panel.proxy();
+      if (!page)
+        return;
+      auto typed = page->proxy();
+      if (!typed) {
+        page->say(typed.error(), true);
+        return;
+      }
+      mux::config::proxy_in(account) = std::move(*typed);
+      if (auto failed = this->write()) {
+        page->say(*failed, true);
+        return;
+      }
+      if (mux::config::enabled_of(account)) {
+        net->remove(mux::config::address_of(account));
+        net->add(account);
+      }
+      page->say("Saved.", false);
+    });
+  }
+
   void apply(const request::send_typed&) { this->send_message(root().main().line.text()); }
   // What is in the message field, to the chosen chat; the field emptied.
   void send_message(std::string text) {
@@ -818,7 +894,6 @@ struct app {
       return "Not saved: " + *config_error;
     auto file = mux::config::file_of(saved);
     file.motion = motion;
-    file.read_receipts = read_receipts;
     if (!muted.empty()) {
       std::vector<mux::config::muted_chat> kept;
       for (const auto& one : muted)
@@ -894,7 +969,6 @@ int main(int argc, char** argv) {
   program.config_path = config_path;
   program.saved = mux::config::accounts_of(saved);
   program.motion = saved.motion;
-  program.read_receipts = saved.read_receipts;
   for (const auto& one : saved.muted.value_or(std::vector<mux::config::muted_chat>{}))
     program.muted.insert({{mux::ui::protocol_of(one.account), one.account}, one.conversation});
   skiff::paint::motionLevel() = motion_of(saved.motion);

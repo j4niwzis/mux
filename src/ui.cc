@@ -62,7 +62,9 @@ inline const skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110)
 //   void toggle_mute()               -- the chosen chat muted, or not
 //   void leave_chat()                -- the chosen chat left
 //   void close_account_pages()       -- back to the list of accounts
-//   void settings_privacy(), flip_read_receipts()
+//   void accounts_back()              -- ← on the accounts page
+//   void account_page(int)           -- a page of the chosen account
+//   void flip_account_receipts(), proxy_kind(int), save_proxy()
 //   void not_implemented(std::string what)  -- a box saying it is not there yet
 //   void close_notice()
 //   void resize_sidebar(float x)     -- the chat list's edge dragged to x
@@ -2082,27 +2084,211 @@ struct account_editor : scene::Node {
   }
 };
 
-// An account's pages, in place of the list of accounts once one is chosen:
-// its address with a way back to the list, and a line for each page of its
-// settings -- one for now, Connection.
+// A line with a switch on its right: its text, and the switch.
+template <class Act>
+struct switch_row : scene::Node {
+  nodes::Text label;
+  widgets::Toggle<Act> toggle;
+
+  switch_row(std::string text, Act what) : label(std::move(text), 15.0f, text_colour), toggle(std::move(what)) {
+    fState.apply({.fillX = true, .height = row_item<nothing>::kHeight});
+  }
+  void forEachChild(auto&& f) {
+    f(label);
+    f(toggle);
+  }
+  void layoutChildren() {
+    const skia::SkRect box = fState.contentBox();
+    toggle.fState.arrange(-20.0f, 0.0f, scene::anchor::kCentreRight, scene::anchor::kCentreRight);
+    scene::layout(toggle, box);
+    label.setMaxWidth(std::max(0.0f, box.width() - 90.0f));
+    label.fState.arrange(20.0f, 0.0f, scene::anchor::kCentreLeft, scene::anchor::kCentreLeft);
+    scene::layout(label, box);
+  }
+};
+
+// A page of an account's settings chosen from its list.
+template <class Actions>
+struct choose_account_page {
+  Actions* actions = nullptr;
+  int page = 0;
+  void operator()() const { actions->account_page(page); }
+};
+
+// An account's pages, in place of the list of accounts once one is chosen: a
+// line for each page of its settings, the one shown lit.
 template <class Actions>
 struct account_pages : scene::Node {
-  page_header<ask<Actions, &Actions::close_account_pages>, ask<Actions, &Actions::close_account_pages>> header;
-  row_item<nothing> connection{"Connection", {}, icon::sliders{}};
+  row_item<choose_account_page<Actions>> connection;
+  row_item<choose_account_page<Actions>> privacy;
+  row_item<choose_account_page<Actions>> proxy;
 
-  explicit account_pages(Actions* a) : header("", {a}, {a}, true, false) {
-    fState.apply({.fill = true});
-    connection.set_lit(true);
+  explicit account_pages(Actions* a)
+      : connection("Connection", {a, 0}, icon::sliders{}),
+        privacy("Privacy", {a, 1}, icon::eye{}),
+        proxy("Proxy", {a, 2}, icon::gear{}) {
+    this->light(0);
   }
-  void show(const std::string& address) { header.title.setText(address); }
+  void light(int page) {
+    connection.set_lit(page == 0);
+    privacy.set_lit(page == 1);
+    proxy.set_lit(page == 2);
+  }
   void forEachChild(auto&& f) {
-    f(header);
     f(connection);
+    f(privacy);
+    f(proxy);
   }
   void layoutChildren() {
     column_stack stack{fState.contentBox()};
-    stack(header, 2.0f);
+    stack.y = 6.0f;
     stack(connection, 0.0f);
+    stack(privacy, 0.0f);
+    stack(proxy, 0.0f);
+  }
+};
+
+// A section's title on a settings page, as Gajim sets them: small, bold, dim.
+inline nodes::Text section_title(std::string text) { return nodes::Text(std::move(text), 13.0f, dim_colour, true); }
+
+// An account's Privacy page: whether it sends read receipts.
+template <class Actions>
+struct account_privacy : scene::Node {
+  nodes::Text title = section_title("PRIVACY");
+  switch_row<ask<Actions, &Actions::flip_account_receipts>> receipts;
+  nodes::Text note{"Off, the people you talk to through this account are not told when you have read their "
+                   "messages -- nor, on most servers, are you told when they have read yours.",
+                   13.0f, dim_colour};
+
+  account_privacy(Actions* a, bool on) : receipts("Send read receipts", {a}) {
+    fState.apply({.fill = true});
+    note.setWrapped(true);
+    receipts.toggle.setOnNow(on);
+  }
+  void show(bool on) { receipts.toggle.setOn(on); }
+  void say(std::string, bool) {}
+  void forEachChild(auto&& f) {
+    f(title);
+    f(receipts);
+    f(note);
+  }
+  void layoutChildren() {
+    column_stack stack{fState.contentBox()};
+    stack(title, 4.0f);
+    stack(receipts, 8.0f);
+    note.setMaxWidth(stack.column.width());
+    stack(note, 0.0f);
+  }
+};
+
+// A kind of proxy chosen on an account's Proxy page.
+template <class Actions>
+struct choose_proxy_kind {
+  Actions* actions = nullptr;
+  int kind = 0;
+  void operator()() const { actions->proxy_kind(kind); }
+};
+
+// An account's Proxy page: none, SOCKS5 or HTTP, where it is, and who to be
+// there; saved with its button.
+template <class Actions>
+struct account_proxy : scene::Node {
+  int kind = 0;  // 0 none, 1 SOCKS5, 2 HTTP
+  nodes::Text title = section_title("PROXY");
+  nodes::Box<> frame{chosen_colour};
+  segment<choose_proxy_kind<Actions>> none;
+  segment<choose_proxy_kind<Actions>> socks;
+  segment<choose_proxy_kind<Actions>> http;
+  field host{"Host", "proxy.example.com"};
+  field port{"Port", "1080"};
+  field username{"User name", "none"};
+  field password{"Password", "none"};
+  nodes::Text message{"", 13.0f, dim_colour};
+  widgets::Button<ask<Actions, &Actions::save_proxy>> save;
+
+  account_proxy(Actions* a, const std::optional<config::proxy_settings>& from)
+      : none("None", {a, 0}), socks("SOCKS5", {a, 1}), http("HTTP", {a, 2}), save("Save", {a}) {
+    fState.apply({.fill = true});
+    frame.apply({.width = 3.0f * 92.0f + 4.0f, .height = 30.0f});
+    password.box.setMasked(true);
+    save.setPrimary(true);
+    save.apply({.width = 110.0f, .height = 34.0f});
+    message.setWrapped(true);
+    if (from) {
+      host.box.setText(from->host);
+      port.box.setText(std::to_string(from->port));
+      username.box.setText(from->username.value_or(""));
+      password.box.setText(from->password.value_or(""));
+    }
+    this->set_kind(!from ? 0 : from->kind == "http" ? 2 : 1);
+  }
+
+  void set_kind(int to) {
+    kind = to;
+    none.set_active(kind == 0);
+    socks.set_active(kind == 1);
+    http.set_active(kind == 2);
+    for (field* one : {&host, &port, &username, &password})
+      one->setVisible(kind != 0);
+    this->invalidateLayout();
+  }
+
+  // The proxy as typed: nothing for none, or what is wrong with it.
+  [[nodiscard]] std::expected<std::optional<config::proxy_settings>, std::string> proxy() const {
+    if (kind == 0)
+      return std::optional<config::proxy_settings>{};
+    config::proxy_settings out{.kind = kind == 2 ? "http" : "socks5", .host = host.box.text()};
+    if (out.host.empty())
+      return std::unexpected("Type the proxy's host");
+    const std::string& text = port.box.text();
+    std::int64_t number = 0;
+    const auto [last, failed] = std::from_chars(text.data(), text.data() + text.size(), number);
+    if (text.empty() || failed != std::errc{} || last != text.data() + text.size() || number < 1 || number > 65535)
+      return std::unexpected("A port is a number from 1 to 65535");
+    out.port = number;
+    out.username = typed_or_nothing(username.box.text());
+    out.password = typed_or_nothing(password.box.text());
+    return std::optional<config::proxy_settings>{std::move(out)};
+  }
+
+  void say(std::string text, bool error) {
+    message.setText(std::move(text));
+    message.setColour(error ? error_colour : dim_colour);
+  }
+  void show(bool) {}
+
+  void forEachChild(auto&& f) {
+    f(title);
+    f(frame);
+    f(none);
+    f(socks);
+    f(http);
+    f(host);
+    f(port);
+    f(username);
+    f(password);
+    f(message);
+    f(save);
+  }
+  void layoutChildren() {
+    column_stack stack{fState.contentBox()};
+    stack(title, 8.0f);
+    frame.fState.arrange(0.0f, stack.y);
+    scene::layout(frame, stack.column);
+    float x = 1.0f;
+    for (auto* one : {&none, &socks, &http}) {
+      one->fState.arrange(x, stack.y + 1.0f);
+      scene::layout(*one, stack.column);
+      x += 93.0f;
+    }
+    stack.y += 30.0f + 14.0f;
+    stack(host, 8.0f);
+    stack(port, 8.0f);
+    stack(username, 8.0f);
+    stack(password, 12.0f);
+    message.setMaxWidth(stack.column.width());
+    stack(message, 8.0f);
+    stack(save, 0.0f);
   }
 };
 
@@ -2115,7 +2301,9 @@ struct accounts_panel : closes_on_escape<Actions> {
   static constexpr float kPad = 8.0f;
 
   std::optional<std::string> selected;
-  page_header<ask<Actions, &Actions::back>, ask<Actions, &Actions::back>> header;
+  // Its ← goes back from an account's pages to the list, and from the list
+  // to the chats.
+  page_header<ask<Actions, &Actions::accounts_back>, ask<Actions, &Actions::accounts_back>> header;
   nodes::Box<> side{sidebar_colour};
   nodes::ScrollContainer<nodes::Flow<std::vector<account_entry<Actions>>>> list{
       nodes::Flow<std::vector<account_entry<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
@@ -2123,7 +2311,9 @@ struct accounts_panel : closes_on_escape<Actions> {
   account_pages<Actions> pages;
   nodes::Text message{"", 13.0f, error_colour};
   // No account chosen, or the chosen one.
-  std::variant<nodes::Text, account_editor<Actions>, add_account_pane<Actions>> detail{
+  std::variant<nodes::Text, account_editor<Actions>, add_account_pane<Actions>, account_privacy<Actions>,
+               account_proxy<Actions>>
+      detail{
       std::in_place_index<0>, "Choose an account.", 15.0f, dim_colour};
   // What is beside the list coming in when another is chosen: sliding and
   // fading in.
@@ -2186,14 +2376,38 @@ struct accounts_panel : closes_on_escape<Actions> {
   }
 
   // An account's settings, brought up afresh.
+  // One of the chosen account's pages beside the list: 0 Connection, 1
+  // Privacy, 2 Proxy.
+  void show_page(int page, const config::account_t& one, const model& now) {
+    pages.light(page);
+    if (page == 1) {
+      detail.template emplace<3>(this->actions, config::read_receipts_of(one));
+    } else if (page == 2) {
+      detail.template emplace<4>(this->actions, config::proxy_of(one));
+    } else {
+      detail.template emplace<1>(this->actions, one);
+      std::get<1>(detail).show(one, now);
+    }
+    this->begin_swap();
+    this->invalidateLayout();
+  }
+  [[nodiscard]] account_privacy<Actions>* privacy() {
+    return std::visit(overloaded{[](account_privacy<Actions>& one) { return &one; },
+                                 [](auto&) -> account_privacy<Actions>* { return nullptr; }},
+                      detail);
+  }
+  [[nodiscard]] account_proxy<Actions>* proxy() {
+    return std::visit(overloaded{[](account_proxy<Actions>& one) { return &one; },
+                                 [](auto&) -> account_proxy<Actions>* { return nullptr; }},
+                      detail);
+  }
+  [[nodiscard]] bool pages_open() const { return pages.visible(); }
+
   void select(const config::account_t& one, const model& now) {
     add.set_lit(false);
     selected = config::address_of(one);
     this->show_pages(true);
-    pages.show(*selected);
-    detail.template emplace<1>(this->actions, one);
-    this->begin_swap();
-    std::get<1>(detail).show(one, now);
+    this->show_page(0, one, now);
   }
 
   // Adding an account, beside the list.
@@ -2202,6 +2416,7 @@ struct accounts_panel : closes_on_escape<Actions> {
     pages.setVisible(shown);
     add.setVisible(!shown);
     list.setVisible(!shown);
+    header.title.setText(shown && selected ? *selected : std::string("Accounts"));
     this->invalidateLayout();
   }
   // Back to the list of accounts, nothing chosen.
@@ -2234,7 +2449,7 @@ struct accounts_panel : closes_on_escape<Actions> {
   [[nodiscard]] xmpp_form<Actions>* xmpp() {
     return std::visit(overloaded{[](account_editor<Actions>& one) { return xmpp_form_in(one.form); },
                                  [](add_account_pane<Actions>& one) { return one.xmpp(); },
-                                 [](nodes::Text&) -> xmpp_form<Actions>* { return nullptr; }},
+                                 [](auto&) -> xmpp_form<Actions>* { return nullptr; }},
                       detail);
   }
 
@@ -2422,13 +2637,11 @@ struct settings_home : scene::Node {
   page_header<ask<Actions, &Actions::close_settings>, ask<Actions, &Actions::close_settings>> header;
   row_item<ask<Actions, &Actions::open_accounts>> accounts;
   row_item<ask<Actions, &Actions::settings_animations>> animations;
-  row_item<ask<Actions, &Actions::settings_privacy>> privacy;
 
   explicit settings_home(Actions* a)
       : header("Settings", {a}, {a}, false, true),
         accounts("Accounts", {a}, icon::person{}),
-        animations("Animations", {a}, icon::motion{}),
-        privacy("Privacy", {a}, icon::eye{}) {
+        animations("Animations", {a}, icon::motion{}) {
     fState.apply({.fill = true});
   }
 
@@ -2436,7 +2649,6 @@ struct settings_home : scene::Node {
     f(header);
     f(accounts);
     f(animations);
-    f(privacy);
   }
   void show_motion(std::string_view) {}
   void show_receipts(bool) {}
@@ -2445,40 +2657,10 @@ struct settings_home : scene::Node {
     stack(header, 6.0f);
     stack(accounts, 0.0f);
     stack(animations, 0.0f);
-    stack(privacy, 0.0f);
   }
 };
 
-// A line with a switch on its right: its text, and the switch.
-template <class Act>
-struct switch_row : scene::Node {
-  nodes::Text label;
-  widgets::Toggle<Act> toggle;
 
-  switch_row(std::string text, Act what) : label(std::move(text), 15.0f, text_colour), toggle(std::move(what)) {
-    fState.apply({.fillX = true, .height = row_item<nothing>::kHeight});
-  }
-  void forEachChild(auto&& f) {
-    f(label);
-    f(toggle);
-  }
-  void layoutChildren() {
-    const skia::SkRect box = fState.contentBox();
-    toggle.fState.arrange(-20.0f, 0.0f, scene::anchor::kCentreRight, scene::anchor::kCentreRight);
-    scene::layout(toggle, box);
-    label.setMaxWidth(std::max(0.0f, box.width() - 90.0f));
-    label.fState.arrange(20.0f, 0.0f, scene::anchor::kCentreLeft, scene::anchor::kCentreLeft);
-    scene::layout(label, box);
-  }
-};
-
-template <class Actions>
-struct privacy_page : scene::Node {
-  page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>> header;
-  switch_row<ask<Actions, &Actions::flip_read_receipts>> receipts;
-  nodes::Text note{"Off, nobody is told when you have read their messages. Some people may not like that either way; "
-                   "it is yours to choose.",
-                   13.0f, dim_colour};
 
   explicit privacy_page(Actions* a) : header("Privacy", {a}, {a}, true, true), receipts("Send read receipts", {a}) {
     fState.apply({.fill = true});
@@ -2550,11 +2732,9 @@ template <class Actions>
 struct settings_dialog : scene::Node {
   Actions* actions = nullptr;
   std::string motion;
-  bool receipts = true;
-  std::variant<settings_home<Actions>, animations_page<Actions>, privacy_page<Actions>> page;
+  std::variant<settings_home<Actions>, animations_page<Actions>> page;
 
-  settings_dialog(Actions* a, std::string level, bool read_receipts)
-      : actions(a), motion(std::move(level)), receipts(read_receipts), page(std::in_place_index<0>, a) {
+  settings_dialog(Actions* a, std::string level) : actions(a), motion(std::move(level)), page(std::in_place_index<0>, a) {
     fState.apply({.fill = true});
   }
 
@@ -2565,18 +2745,11 @@ struct settings_dialog : scene::Node {
     page.template emplace<1>(actions);
     this->show_motion(motion);
   }
-  void show_privacy() {
-    page.template emplace<2>(actions);
-    std::get<2>(page).receipts.toggle.setOnNow(receipts);
-  }
   void show_motion(std::string level) {
     motion = std::move(level);
     std::visit([this](auto& one) { one.show_motion(motion); }, page);
   }
-  void show_receipts(bool on) {
-    receipts = on;
-    std::visit([on](auto& one) { one.show_receipts(on); }, page);
-  }
+
 
   void layoutChildren() {
     std::visit(
@@ -2648,7 +2821,7 @@ struct window : scene::Node {
     notice.dropClosed();
   }
 
-  void open_settings(std::string motion, bool receipts) { settings.open(actions, std::move(motion), receipts); }
+  void open_settings(std::string motion) { settings.open(actions, std::move(motion)); }
   void close_settings() { settings.close(); }
   [[nodiscard]] settings_dialog<Actions>* settings_up() { return settings.shown(); }
 

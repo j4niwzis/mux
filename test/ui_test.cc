@@ -49,8 +49,11 @@ struct stub {
   void resize_info(float) {}
   void toggle_mute() {}
   void close_account_pages() {}
-  void settings_privacy() {}
-  void flip_read_receipts() {}
+  void accounts_back() {}
+  void account_page(int) {}
+  void flip_account_receipts() {}
+  void proxy_kind(int) {}
+  void save_proxy() {}
   void leave_chat() {}
 };
 

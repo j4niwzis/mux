@@ -64,7 +64,7 @@ endforeach()
 # The libraries of this family, each pinned to a commit.
 cme_declare_port(NAME tern PROVIDES tern
   GITHUB_REPOSITORY j4niwzis/tern
-  GIT_TAG 7f26cd3892c2df0bd32f4532f60ec09b4428305a
+  GIT_TAG 0793016face6621ec11f6dbac1074505e86673b7
   LICENSE AGPL-3.0-only
   SYSTEM NEVER
   TARGETS tern)

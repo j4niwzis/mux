@@ -11,6 +11,16 @@ import knot;
 
 export namespace mux::config {
 
+// A proxy an account connects through: SOCKS5 or HTTP CONNECT.
+struct proxy_settings {
+  std::string kind = "socks5";  // "socks5" or "http"
+  std::string host;
+  std::int64_t port = 1080;
+  std::optional<std::string> username;
+  std::optional<std::string> password;
+  friend bool operator==(const proxy_settings&, const proxy_settings&) = default;
+};
+
 // An XMPP account: a JID and how to reach its server.
 struct xmpp_account {
   std::string address;  // user@domain
@@ -23,6 +33,10 @@ struct xmpp_account {
   // PLAIN over a stream TLS has not secured: only for a server on this
   // machine, under test. Never over a network.
   bool plain_without_tls = false;
+  // Whether the people one talks to are told a message was read. Nothing
+  // said is yes.
+  std::optional<bool> read_receipts;
+  std::optional<proxy_settings> proxy;
   friend bool operator==(const xmpp_account&, const xmpp_account&) = default;
 };
 
@@ -35,6 +49,8 @@ struct matrix_account {
   std::optional<std::string> homeserver;
   // What the server shows for this login among the account's devices.
   std::string device_name = "mux";
+  std::optional<bool> read_receipts;
+  std::optional<proxy_settings> proxy;
   friend bool operator==(const matrix_account&, const matrix_account&) = default;
 };
 
@@ -56,13 +72,11 @@ struct file {
   // How much the window moves: "none", "reduced" (sections unfold, panels
   // just appear) or "full". Nothing said is full.
   std::optional<std::string> motion;
-  // Whether the people one talks to are told a message was read. Nothing
-  // said is yes.
-  std::optional<bool> read_receipts;
   std::optional<std::vector<muted_chat>> muted;
   friend bool operator==(const file&, const file&) = default;
 };
 
+consteval auto json_schema(knot::type<proxy_settings>) { return knot::schema<proxy_settings>(); }
 consteval auto json_schema(knot::type<xmpp_account>) { return knot::schema<xmpp_account>(); }
 consteval auto json_schema(knot::type<matrix_account>) { return knot::schema<matrix_account>(); }
 consteval auto json_schema(knot::type<muted_chat>) { return knot::schema<muted_chat>(); }
@@ -81,6 +95,20 @@ consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
 }
 [[nodiscard]] inline bool enabled_of(const account_t& one) noexcept {
   return std::visit([](const auto& each) { return each.enabled; }, one);
+}
+
+// Whether an account sends read receipts, and the proxy it goes through.
+[[nodiscard]] inline bool read_receipts_of(const account_t& one) {
+  return std::visit([](const auto& each) { return each.read_receipts.value_or(true); }, one);
+}
+[[nodiscard]] inline std::optional<bool>& read_receipts_in(account_t& one) {
+  return std::visit([](auto& each) -> std::optional<bool>& { return each.read_receipts; }, one);
+}
+[[nodiscard]] inline std::optional<proxy_settings>& proxy_in(account_t& one) {
+  return std::visit([](auto& each) -> std::optional<proxy_settings>& { return each.proxy; }, one);
+}
+[[nodiscard]] inline const std::optional<proxy_settings>& proxy_of(const account_t& one) {
+  return std::visit([](const auto& each) -> const std::optional<proxy_settings>& { return each.proxy; }, one);
 }
 
 [[nodiscard]] constexpr std::string_view protocol_name(const xmpp_account&) noexcept { return "XMPP"; }

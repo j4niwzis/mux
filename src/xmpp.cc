@@ -170,7 +170,7 @@ class account {
         return;
       }
       session_->send(tern::message::chat{.to = to, .id = out.id, .body = text});
-      sink_(change::delivery_changed{out.in, out.id, wire_ && !wire_->failed() ? delivery::sent{} : delivery::failed{}});
+      sink_(change::delivery_changed{out.in, out.id, wire_ && !wire_->failed() ? delivery_t{delivery::sent{}} : delivery_t{delivery::failed{}}});
     });
   }
 

@@ -20,39 +20,39 @@ namespace {
 // Each change in a line, by its own overload.
 std::string name_of(const mux::connection_t& state) {
   return std::visit(mux::overloaded{
-                        [](const mux::connection::offline{}&) { return std::string("offline"); },
-                        [](const mux::connection::connecting{}& now) {
+                        [](const mux::connection::offline&) { return std::string("offline"); },
+                        [](const mux::connection::connecting& now) {
                           return "connecting" + (now.reason ? ": " + *now.reason : std::string());
                         },
-                        [](const mux::connection::online{}&) { return std::string("online"); },
-                        [](const mux::connection::failed{}& now) { return "failed: " + now.error; },
+                        [](const mux::connection::online&) { return std::string("online"); },
+                        [](const mux::connection::failed& now) { return "failed: " + now.error; },
                     },
                     state);
 }
 std::string name_of(const mux::availability_t& state) {
   return std::visit(mux::overloaded{
-                        [](const mux::availability::offline{}&) { return "offline"; },
-                        [](const mux::availability::online{}&) { return "online"; },
-                        [](const mux::availability::away{}&) { return "away"; },
-                        [](const mux::availability::extended_away{}&) { return "away for long"; },
-                        [](const mux::availability::do_not_disturb{}&) { return "busy"; },
-                        [](const mux::availability::chat{}&) { return "chatty"; },
+                        [](const mux::availability::offline&) { return "offline"; },
+                        [](const mux::availability::online&) { return "online"; },
+                        [](const mux::availability::away&) { return "away"; },
+                        [](const mux::availability::extended_away&) { return "away for long"; },
+                        [](const mux::availability::do_not_disturb&) { return "busy"; },
+                        [](const mux::availability::chat&) { return "chatty"; },
                     },
                     state);
 }
 std::string name_of(const mux::delivery_t& state) {
   return std::visit(mux::overloaded{
-                        [](const mux::delivery::sending{}&) { return "sending"; },
-                        [](const mux::delivery::sent{}&) { return "sent"; },
-                        [](const mux::delivery::delivered{}&) { return "delivered"; },
-                        [](const mux::delivery::read{}&) { return "read"; },
-                        [](const mux::delivery::failed{}&) { return "failed"; },
+                        [](const mux::delivery::sending&) { return "sending"; },
+                        [](const mux::delivery::sent&) { return "sent"; },
+                        [](const mux::delivery::delivered&) { return "delivered"; },
+                        [](const mux::delivery::read&) { return "read"; },
+                        [](const mux::delivery::failed&) { return "failed"; },
                     },
                     state);
 }
 std::string name_of(const mux::conversation_kind_t& kind) {
-  return std::visit(mux::overloaded{[](const mux::conversation_kind::direct{}&) { return "contact"; },
-                                    [](const mux::conversation_kind::group{}&) { return "room"; }},
+  return std::visit(mux::overloaded{[](const mux::conversation_kind::direct&) { return "contact"; },
+                                    [](const mux::conversation_kind::group&) { return "room"; }},
                     kind);
 }
 

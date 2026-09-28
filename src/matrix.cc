@@ -282,7 +282,7 @@ class account {
 
   void conversation(const conversation_id& in, const loom::client::joined_room& kept) {
     sink_(change::conversation_updated{.id = in,
-                                       .kind = direct(in.id) ? conversation_kind::direct{} : conversation_kind::group{},
+                                       .kind = direct(in.id) ? conversation_kind_t{conversation_kind::direct{}} : conversation_kind_t{conversation_kind::group{}},
                                        .name = name_of(in.id, kept),
                                        .avatar = kept.state.avatar_url(),
                                        .topic = kept.state.topic(),

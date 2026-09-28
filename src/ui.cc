@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.ui: the window's screens, as skiff nodes -- the conversations of every
 // account down the side with the chosen one beside them, the login screen,
-// and the accounts screen.
+// the choice of protocol, a login screen for each protocol, and the accounts
+// screen.
 //
 // The screens are views. What a control does is ask the program, through
 // `Actions`, and the program changes the screens between events: a screen
@@ -31,7 +32,8 @@ inline const skia::SkColor dim_colour = skia::colorSetARGB(255, 150, 162, 170);
 inline const skia::SkColor accent_colour = skia::colorSetARGB(255, 102, 204, 255);
 inline const skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110);
 
-// The protocol an address speaks.
+// The protocol an address speaks: a Matrix user ID starts with '@', and a JID
+// cannot.
 [[nodiscard]] inline protocol_t protocol_of(std::string_view address) {
   return config::is_matrix(address) ? protocol_t{protocol::matrix{}} : protocol_t{protocol::xmpp{}};
 }
@@ -42,8 +44,12 @@ inline const skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110)
 //   void choose(const conversation_id&)
 //   void send(const conversation_id&, std::string)
 //   void open_accounts()
-//   void open_login(std::optional<std::string> editing)
+//   void open_new_account()          -- the choice of protocol
+//   void add_xmpp()
+//   void add_matrix()
+//   void edit_account(std::string address)
 //   void toggle_advanced()
+//   void toggle_plain()
 //   void submit_login()
 //   void cancel_login()
 //   void set_enabled(std::string address, bool enabled)
@@ -68,18 +74,13 @@ template <class Actions>
 struct edit_account {
   Actions* actions = nullptr;
   std::string address;
-  void operator()() const { actions->open_login(address); }
+  void operator()() const { actions->edit_account(address); }
 };
 template <class Actions>
 struct remove_account {
   Actions* actions = nullptr;
   std::string address;
   void operator()() const { actions->remove_account(address); }
-};
-template <class Actions>
-struct add_account {
-  Actions* actions = nullptr;
-  void operator()() const { actions->open_login(std::nullopt); }
 };
 
 // ---- the conversations ------------------------------------------------------
@@ -334,117 +335,96 @@ struct field : scene::Node {
 
 // ---- logging in ---------------------------------------------------------------
 
-// An account typed in: the address says the protocol, and "Advanced" folds
-// out where to connect. Enter in either field logs in.
-template <class Actions>
-struct login_screen : scene::Node {
-  Actions* actions = nullptr;
-  // The address the account was saved under, when this is an edit of one.
-  std::optional<std::string> editing;
-  bool advanced = false;
-  bool can_cancel = false;
+// Nodes laid out one under another down a column, each followed by its gap;
+// the hidden ones take no room.
+struct column_stack {
+  skia::SkRect column;
+  float y = 0.0f;
+  template <class Child>
+  void operator()(Child& node, float after) {
+    if (!node.visible())
+      return;
+    node.fState.arrange(0.0f, y);
+    scene::layout(node, column);
+    y += node.bounds().height() + after;
+  }
+};
 
+// The column a form is laid out in: at most `width` wide, centred.
+[[nodiscard]] inline skia::SkRect form_column(const skia::SkRect& box, float width, float top) {
+  const float w = std::min(width, box.width() - 32.0f);
+  return skia::SkRect::MakeXYWH(box.centerX() - w * 0.5f, box.fTop + top, w, std::max(0.0f, box.height() - top));
+}
+
+// Which protocol a new account speaks: each has its own screen.
+template <class Actions>
+struct protocol_choice : scene::Node {
   nodes::Text title{"Add an account", 22.0f, text_colour, true};
-  field address{"Address", "user@example.com or @user:example.org"};
-  nodes::Text protocol{"", 13.0f, dim_colour};
-  field password{"Password", "Password"};
-  widgets::Button<ask<Actions, &Actions::toggle_advanced>> advanced_button;
-  field host{"Host (XMPP)", "from the domain's SRV records"};
-  field port{"Port (XMPP)", "5222"};
-  field homeserver{"Homeserver (Matrix)", "from the server's .well-known"};
-  nodes::Text message{"", 13.0f, error_colour};
-  widgets::Button<ask<Actions, &Actions::submit_login>> log_in;
-  widgets::Button<ask<Actions, &Actions::cancel_login>> cancel;
+  widgets::Button<ask<Actions, &Actions::add_xmpp>> xmpp;
+  nodes::Text xmpp_note{"An address like user@example.com, on a server such as Prosody or ejabberd.", 13.0f, dim_colour};
+  widgets::Button<ask<Actions, &Actions::add_matrix>> matrix;
+  nodes::Text matrix_note{"A user ID like @user:example.org, on a homeserver such as Synapse or Conduit.", 13.0f,
+                          dim_colour};
+  widgets::Button<ask<Actions, &Actions::open_accounts>> cancel;
 
   static constexpr float kWidth = 420.0f;
 
-  login_screen(Actions* a, const std::optional<config::saved_account>& from, bool cancellable)
-      : actions(a), can_cancel(cancellable),
-        advanced_button("Advanced", {a}),
-        log_in("Log in", {a}),
-        cancel("Cancel", {a}) {
+  protocol_choice(Actions* a, bool cancellable) : xmpp("XMPP", {a}), matrix("Matrix", {a}), cancel("Cancel", {a}) {
     fState.apply({.fill = true});
-    password.box.setMasked(true);
-    log_in.setPrimary(true);
-    log_in.apply({.width = 120.0f, .height = 36.0f});
+    xmpp.apply({.fillX = true, .height = 40.0f});
+    matrix.apply({.fillX = true, .height = 40.0f});
     cancel.apply({.width = 120.0f, .height = 36.0f});
-    advanced_button.apply({.width = 120.0f, .height = 36.0f});
-    cancel.setVisible(can_cancel);
-    message.setWrapped(true);
-    message.apply({.fillX = true});
-    if (from) {
-      editing = from->address;
-      title.setText("Edit account");
-      address.box.setText(from->address);
-      password.box.setText(from->password);
-      if (from->host)
-        host.box.setText(*from->host);
-      if (from->port)
-        port.box.setText(std::to_string(*from->port));
-      if (from->homeserver)
-        homeserver.box.setText(*from->homeserver);
-      advanced = from->host || from->port || from->homeserver;
+    cancel.setVisible(cancellable);
+    for (nodes::Text* note : {&xmpp_note, &matrix_note}) {
+      note->setWrapped(true);
+      note->apply({.fillX = true});
     }
-    this->show_advanced(advanced);
-    this->update(0.0);
   }
 
   void forEachChild(auto&& f) {
     f(title);
-    f(address);
-    f(protocol);
-    f(password);
-    f(advanced_button);
-    f(host);
-    f(port);
-    f(homeserver);
-    f(message);
-    f(log_in);
+    f(xmpp);
+    f(xmpp_note);
+    f(matrix);
+    f(matrix_note);
     f(cancel);
   }
 
-  void show_advanced(bool shown) {
-    advanced = shown;
-    const bool matrix = config::is_matrix(address.box.text());
-    host.setVisible(shown && !matrix);
-    port.setVisible(shown && !matrix);
-    homeserver.setVisible(shown && matrix);
-    this->invalidateLayout();
+  void layoutChildren() {
+    column_stack stack{form_column(fState.contentBox(), kWidth, 48.0f)};
+    stack(title, 20.0f);
+    stack(xmpp, 6.0f);
+    stack(xmpp_note, 20.0f);
+    stack(matrix, 6.0f);
+    stack(matrix_note, 24.0f);
+    stack(cancel, 0.0f);
+  }
+};
+
+// What every login form ends with: what went wrong or what is happening, and
+// its buttons. Enter in any of the form's fields logs in.
+template <class Actions>
+struct form_end {
+  nodes::Text message{"", 13.0f, error_colour};
+  widgets::Button<ask<Actions, &Actions::submit_login>> log_in;
+  // Back to the choice of protocol when adding, back to the accounts when
+  // editing.
+  widgets::Button<ask<Actions, &Actions::cancel_login>> cancel;
+
+  form_end(Actions* a, bool editing, bool cancellable)
+      : log_in(editing ? "Save" : "Log in", {a}), cancel(editing ? "Cancel" : "Back", {a}) {
+    log_in.setPrimary(true);
+    log_in.apply({.width = 120.0f, .height = 36.0f});
+    cancel.apply({.width = 120.0f, .height = 36.0f});
+    cancel.setVisible(cancellable);
+    message.setWrapped(true);
+    message.apply({.fillX = true});
   }
 
-  // What the address says, kept current as it is typed.
-  void update(double) {
-    const std::string& typed = address.box.text();
-    const std::string said = typed.empty() ? "" : config::is_matrix(typed) ? "Matrix" : "XMPP";
-    if (said != protocol.text()) {
-      protocol.setText(said);
-      this->show_advanced(advanced);
-    }
-  }
-
-  // The account as typed, or what is wrong with it.
-  [[nodiscard]] std::expected<config::saved_account, std::string> account() const {
-    config::saved_account out;
-    out.address = address.box.text();
-    out.password = password.box.text();
-    const bool matrix = config::is_matrix(out.address);
-    if (advanced && !matrix) {
-      if (!host.box.text().empty())
-        out.host = host.box.text();
-      if (!port.box.text().empty()) {
-        std::int64_t number = 0;
-        const std::string& text = port.box.text();
-        const auto [end, failed] = std::from_chars(text.data(), text.data() + text.size(), number);
-        if (failed != std::errc{} || end != text.data() + text.size())
-          return std::unexpected("A port is a number from 1 to 65535");
-        out.port = number;
-      }
-    }
-    if (advanced && matrix && !homeserver.box.text().empty())
-      out.homeserver = homeserver.box.text();
-    if (auto wrong = config::check(out))
-      return std::unexpected(*wrong);
-    return out;
+  void each(auto&& f) {
+    f(message);
+    f(log_in);
+    f(cancel);
   }
 
   void say(std::string text, bool error) {
@@ -452,7 +432,117 @@ struct login_screen : scene::Node {
     message.setColour(error ? error_colour : dim_colour);
   }
 
-  // Enter in a field logs in: seen here, on its way back up from the field.
+  void place(column_stack& stack) {
+    stack(message, 12.0f);
+    log_in.fState.arrange(0.0f, stack.y);
+    scene::layout(log_in, stack.column);
+    cancel.fState.arrange(log_in.bounds().width() + 12.0f, stack.y);
+    scene::layout(cancel, stack.column);
+  }
+};
+
+// Text typed into an optional: nothing when the field is empty.
+[[nodiscard]] inline std::optional<std::string> typed_or_nothing(const std::string& text) {
+  if (text.empty())
+    return std::nullopt;
+  return text;
+}
+
+// An XMPP account: its JID and password, and "Advanced" folds out the
+// resource and where to connect.
+template <class Actions>
+struct xmpp_login : scene::Node {
+  Actions* actions = nullptr;
+  // The address the account was saved under, when this is an edit of one.
+  std::optional<std::string> editing;
+  bool advanced = false;
+
+  nodes::Text title;
+  field address{"Address (JID)", "user@example.com"};
+  field password{"Password", "Password"};
+  widgets::Button<ask<Actions, &Actions::toggle_advanced>> advanced_button;
+  field resource{"Resource", "mux", "mux"};
+  field host{"Host", "from the domain's SRV records"};
+  field port{"Port", "5222"};
+  widgets::Toggle<ask<Actions, &Actions::toggle_plain>> plain;
+  nodes::Text plain_label{"Allow PLAIN without TLS. Only for a test server on this machine: never over a network.",
+                          13.0f, error_colour};
+  form_end<Actions> end;
+
+  static constexpr float kWidth = 420.0f;
+
+  xmpp_login(Actions* a, const std::optional<config::xmpp_account>& from, bool cancellable)
+      : actions(a),
+        title(from ? "Edit XMPP account" : "Add an XMPP account", 22.0f, text_colour, true),
+        advanced_button("Advanced", {a}),
+        plain({a}),
+        end(a, from.has_value(), cancellable) {
+    fState.apply({.fill = true});
+    password.box.setMasked(true);
+    advanced_button.apply({.width = 120.0f, .height = 36.0f});
+    plain_label.setWrapped(true);
+    if (from) {
+      editing = from->address;
+      address.box.setText(from->address);
+      password.box.setText(from->password);
+      resource.box.setText(from->resource);
+      if (from->host)
+        host.box.setText(*from->host);
+      if (from->port)
+        port.box.setText(std::to_string(*from->port));
+      plain.setOn(from->plain_without_tls);
+      advanced = from->resource != "mux" || from->host || from->port || from->plain_without_tls;
+    }
+    this->show_advanced(advanced);
+  }
+
+  void forEachChild(auto&& f) {
+    f(title);
+    f(address);
+    f(password);
+    f(advanced_button);
+    f(resource);
+    f(host);
+    f(port);
+    f(plain);
+    f(plain_label);
+    end.each(f);
+  }
+
+  void show_advanced(bool shown) {
+    advanced = shown;
+    resource.setVisible(shown);
+    host.setVisible(shown);
+    port.setVisible(shown);
+    plain.setVisible(shown);
+    plain_label.setVisible(shown);
+    this->invalidateLayout();
+  }
+
+  void flip_plain() { plain.setOn(!plain.on()); }
+
+  // The account as typed, or what is wrong with it. What is folded away is
+  // kept as it is: folding is not clearing.
+  [[nodiscard]] std::expected<config::xmpp_account, std::string> account() const {
+    config::xmpp_account out{.address = address.box.text(),
+                             .password = password.box.text(),
+                             .resource = resource.box.text(),
+                             .host = typed_or_nothing(host.box.text()),
+                             .plain_without_tls = plain.on()};
+    if (const std::string& text = port.box.text(); !text.empty()) {
+      std::int64_t number = 0;
+      const auto [last, failed] = std::from_chars(text.data(), text.data() + text.size(), number);
+      if (failed != std::errc{} || last != text.data() + text.size())
+        return std::unexpected("A port is a number from 1 to 65535");
+      out.port = number;
+    }
+    if (auto wrong = config::check(out))
+      return std::unexpected(*wrong);
+    return out;
+  }
+
+  void say(std::string text, bool error) { end.say(std::move(text), error); }
+
   using Node::onKey;
   void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
     if (press.key == scene::keys::kEnter) {
@@ -462,36 +552,102 @@ struct login_screen : scene::Node {
   }
 
   void layoutChildren() {
-    const skia::SkRect box = fState.contentBox();
-    const float width = std::min(kWidth, box.width() - 32.0f);
-    const skia::SkRect column = skia::SkRect::MakeXYWH(box.centerX() - width * 0.5f, box.fTop + 48.0f, width, box.height() - 48.0f);
-    float y = 0.0f;
-    const auto stack = [&](auto& node, float after) {
-      if (!node.visible())
-        return;
-      node.fState.arrange(0.0f, y);
-      scene::layout(node, column);
-      y += node.bounds().height() + after;
-    };
+    column_stack stack{form_column(fState.contentBox(), kWidth, 48.0f)};
     stack(title, 20.0f);
-    stack(address, 0.0f);
-    stack(protocol, 12.0f);
+    stack(address, 12.0f);
     stack(password, 12.0f);
     stack(advanced_button, 12.0f);
+    stack(resource, 8.0f);
     stack(host, 8.0f);
     stack(port, 8.0f);
-    stack(homeserver, 8.0f);
-    stack(message, 12.0f);
-    log_in.fState.arrange(0.0f, y);
-    scene::layout(log_in, column);
-    cancel.fState.arrange(log_in.bounds().width() + 12.0f, y);
-    scene::layout(cancel, column);
+    if (plain.visible()) {
+      plain.fState.arrange(0.0f, stack.y);
+      scene::layout(plain, stack.column);
+      const float beside = plain.bounds().width() + 10.0f;
+      plain_label.setMaxWidth(std::max(0.0f, stack.column.width() - beside));
+      plain_label.fState.arrange(beside, stack.y);
+      scene::layout(plain_label, stack.column);
+      stack.y += std::max(plain.bounds().height(), plain_label.bounds().height()) + 12.0f;
+    }
+    end.place(stack);
+  }
+};
+
+// A Matrix account: its user ID and password, the homeserver (found through
+// the server's .well-known when left empty) and what this device is called.
+template <class Actions>
+struct matrix_login : scene::Node {
+  Actions* actions = nullptr;
+  std::optional<std::string> editing;
+
+  nodes::Text title;
+  field user_id{"User ID", "@user:example.org"};
+  field password{"Password", "Password"};
+  field homeserver{"Homeserver", "found through the server's .well-known"};
+  field device_name{"Device name", "mux", "mux"};
+  form_end<Actions> end;
+
+  static constexpr float kWidth = 420.0f;
+
+  matrix_login(Actions* a, const std::optional<config::matrix_account>& from, bool cancellable)
+      : actions(a),
+        title(from ? "Edit Matrix account" : "Add a Matrix account", 22.0f, text_colour, true),
+        end(a, from.has_value(), cancellable) {
+    fState.apply({.fill = true});
+    password.box.setMasked(true);
+    if (from) {
+      editing = from->user_id;
+      user_id.box.setText(from->user_id);
+      password.box.setText(from->password);
+      if (from->homeserver)
+        homeserver.box.setText(*from->homeserver);
+      device_name.box.setText(from->device_name);
+    }
+  }
+
+  void forEachChild(auto&& f) {
+    f(title);
+    f(user_id);
+    f(password);
+    f(homeserver);
+    f(device_name);
+    end.each(f);
+  }
+
+  [[nodiscard]] std::expected<config::matrix_account, std::string> account() const {
+    config::matrix_account out{.user_id = user_id.box.text(),
+                               .password = password.box.text(),
+                               .homeserver = typed_or_nothing(homeserver.box.text()),
+                               .device_name = device_name.box.text()};
+    if (auto wrong = config::check(out))
+      return std::unexpected(*wrong);
+    return out;
+  }
+
+  void say(std::string text, bool error) { end.say(std::move(text), error); }
+
+  using Node::onKey;
+  void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
+    if (press.key == scene::keys::kEnter) {
+      actions->submit_login();
+      reply.handle();
+    }
+  }
+
+  void layoutChildren() {
+    column_stack stack{form_column(fState.contentBox(), kWidth, 48.0f)};
+    stack(title, 20.0f);
+    stack(user_id, 12.0f);
+    stack(password, 12.0f);
+    stack(homeserver, 12.0f);
+    stack(device_name, 12.0f);
+    end.place(stack);
   }
 };
 
 // ---- the accounts -------------------------------------------------------------
 
-// One saved account: its address and state, on or off, edit and remove.
+// One saved account: its address, protocol and state, on or off, edit and remove.
 template <class Actions>
 struct account_line : scene::Node {
   nodes::Text address;
@@ -500,14 +656,14 @@ struct account_line : scene::Node {
   widgets::Button<edit_account<Actions>> edit;
   widgets::Button<remove_account<Actions>> remove;
 
-  account_line(Actions* a, const config::saved_account& saved, std::string how, bool failed)
-      : address(saved.address, 15.0f, text_colour, true),
-        state(std::move(how), 13.0f, failed ? error_colour : dim_colour),
-        enabled(flip_account<Actions>{a, saved.address, saved.enabled}),
-        edit("Edit", edit_account<Actions>{a, saved.address}),
-        remove("Remove", remove_account<Actions>{a, saved.address}) {
+  account_line(Actions* a, const config::account_t& saved, std::string how, bool failed)
+      : address(config::address_of(saved), 15.0f, text_colour, true),
+        state(std::format("{} · {}", config::protocol_name(saved), how), 13.0f, failed ? error_colour : dim_colour),
+        enabled(flip_account<Actions>{a, config::address_of(saved), config::enabled_of(saved)}),
+        edit("Edit", edit_account<Actions>{a, config::address_of(saved)}),
+        remove("Remove", remove_account<Actions>{a, config::address_of(saved)}) {
     fState.apply({.fillX = true, .height = 56.0f});
-    enabled.setOn(saved.enabled);
+    enabled.setOn(config::enabled_of(saved));
     edit.apply({.width = 80.0f, .height = 32.0f});
     remove.apply({.width = 90.0f, .height = 32.0f});
     state.setElided(true);
@@ -547,7 +703,7 @@ struct accounts_screen : scene::Node {
   nodes::ScrollContainer<nodes::Flow<std::vector<account_line<Actions>>>> list{
       nodes::Flow<std::vector<account_line<Actions>>>({.spacingY = 8.0f, .wrap = false}, {})};
   nodes::Text message{"", 13.0f, error_colour};
-  widgets::Button<add_account<Actions>> add;
+  widgets::Button<ask<Actions, &Actions::open_new_account>> add;
   widgets::Button<ask<Actions, &Actions::back>> back;
 
   static constexpr float kWidth = 640.0f;
@@ -573,14 +729,16 @@ struct accounts_screen : scene::Node {
   }
 
   // The saved accounts, with what the model says of each.
-  void show(const std::vector<config::saved_account>& saved, const model& now) {
+  void show(const std::vector<config::account_t>& saved, const model& now) {
     auto& lines = std::get<0>(std::get<0>(list.fChildren).fChildren);
     lines.clear();
-    for (const config::saved_account& one : saved) {
-      std::string how = one.enabled ? "offline" : "disabled";
+    for (const config::account_t& one : saved) {
+      const std::string& address = config::address_of(one);
+      const bool enabled = config::enabled_of(one);
+      std::string how = enabled ? "offline" : "disabled";
       bool failed = false;
-      if (auto found = now.accounts().find(account_id{protocol_of(one.address), one.address});
-          one.enabled && found != now.accounts().end()) {
+      if (auto found = now.accounts().find(account_id{protocol_of(address), address});
+          enabled && found != now.accounts().end()) {
         how = std::visit(overloaded{[](const connection::offline&) { return std::string("offline"); },
                                     [](const connection::connecting&) { return std::string("connecting…"); },
                                     [](const connection::online&) { return std::string("online"); },
@@ -629,7 +787,9 @@ struct accounts_screen : scene::Node {
 template <class Actions>
 struct window : scene::Node {
   nodes::Box<> backdrop{background};
-  std::variant<conversations_screen<Actions>, login_screen<Actions>, accounts_screen<Actions>> body;
+  std::variant<conversations_screen<Actions>, protocol_choice<Actions>, xmpp_login<Actions>, matrix_login<Actions>,
+               accounts_screen<Actions>>
+      body;
 
   explicit window(Actions* a) : body(std::in_place_index<0>, a) {
     fState.apply({.fill = true});

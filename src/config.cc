@@ -11,63 +11,144 @@ import knot;
 
 export namespace mux::config {
 
-// One account as it is kept: what the login screen asks for.
-struct saved_account {
-  std::string address;  // user@domain for XMPP, @user:server for Matrix
+// An XMPP account: a JID and how to reach its server.
+struct xmpp_account {
+  std::string address;  // user@domain
   std::string password;
   bool enabled = true;
-  // XMPP: where to connect, instead of what the domain's SRV records say.
+  std::string resource = "mux";
+  // Where to connect, instead of what the domain's SRV records say.
   std::optional<std::string> host;
   std::optional<std::int64_t> port;
-  // Matrix: the client-server API's base URL, instead of .well-known's.
-  std::optional<std::string> homeserver;
-  friend bool operator==(const saved_account&, const saved_account&) = default;
+  // PLAIN over a stream TLS has not secured: only for a server on this
+  // machine, under test. Never over a network.
+  bool plain_without_tls = false;
+  friend bool operator==(const xmpp_account&, const xmpp_account&) = default;
 };
 
+// A Matrix account: a user ID and its homeserver.
+struct matrix_account {
+  std::string user_id;  // @user:server
+  std::string password;
+  bool enabled = true;
+  // The client-server API's base URL, instead of what .well-known says.
+  std::optional<std::string> homeserver;
+  // What the server shows for this login among the account's devices.
+  std::string device_name = "mux";
+  friend bool operator==(const matrix_account&, const matrix_account&) = default;
+};
+
+// One saved account, of either protocol.
+using account_t = std::variant<xmpp_account, matrix_account>;
+
+// The file: a list for each protocol, so each entry says what it is by where
+// it is, and has only its own protocol's keys.
 struct file {
-  std::vector<saved_account> accounts;
+  std::vector<xmpp_account> xmpp;
+  std::vector<matrix_account> matrix;
   friend bool operator==(const file&, const file&) = default;
 };
 
-// Both described to knot, member by member, under their own names.
-consteval auto json_schema(knot::type<saved_account>) { return knot::schema<saved_account>(); }
+consteval auto json_schema(knot::type<xmpp_account>) { return knot::schema<xmpp_account>(); }
+consteval auto json_schema(knot::type<matrix_account>) { return knot::schema<matrix_account>(); }
 consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
 
-// An address says its protocol: a Matrix user id begins with '@'.
+// What an account is known by: its JID or its user ID. The two never meet:
+// a user ID starts with '@', and a JID cannot.
+[[nodiscard]] inline const std::string& address_of(const xmpp_account& one) noexcept { return one.address; }
+[[nodiscard]] inline const std::string& address_of(const matrix_account& one) noexcept { return one.user_id; }
+[[nodiscard]] inline const std::string& address_of(const account_t& one) noexcept {
+  return std::visit([](const auto& each) -> const std::string& { return address_of(each); }, one);
+}
+
+[[nodiscard]] inline bool& enabled_of(account_t& one) noexcept {
+  return std::visit([](auto& each) -> bool& { return each.enabled; }, one);
+}
+[[nodiscard]] inline bool enabled_of(const account_t& one) noexcept {
+  return std::visit([](const auto& each) { return each.enabled; }, one);
+}
+
+[[nodiscard]] constexpr std::string_view protocol_name(const xmpp_account&) noexcept { return "XMPP"; }
+[[nodiscard]] constexpr std::string_view protocol_name(const matrix_account&) noexcept { return "Matrix"; }
+[[nodiscard]] inline std::string_view protocol_name(const account_t& one) noexcept {
+  return std::visit([](const auto& each) { return protocol_name(each); }, one);
+}
+
 constexpr bool is_matrix(std::string_view address) noexcept { return address.starts_with('@'); }
 
-// What is wrong with an account as typed, said so that it can be shown
-// under the field; nothing when it can be used.
-std::optional<std::string> check(const saved_account& one) {
+// An account from an address alone, as on the command line: the address says
+// the protocol.
+[[nodiscard]] inline account_t account_from(std::string address, std::string password) {
+  if (is_matrix(address))
+    return matrix_account{.user_id = std::move(address), .password = std::move(password)};
+  return xmpp_account{.address = std::move(address), .password = std::move(password)};
+}
+
+// Each account into its protocol's list.
+struct into_its_list {
+  file& into;
+  void operator()(const xmpp_account& one) const { into.xmpp.push_back(one); }
+  void operator()(const matrix_account& one) const { into.matrix.push_back(one); }
+};
+
+// All the accounts of a file, XMPP first; and a file of accounts.
+[[nodiscard]] inline std::vector<account_t> accounts_of(const file& from) {
+  std::vector<account_t> out;
+  out.reserve(from.xmpp.size() + from.matrix.size());
+  out.append_range(from.xmpp);
+  out.append_range(from.matrix);
+  return out;
+}
+[[nodiscard]] inline file file_of(std::span<const account_t> accounts) {
+  file out;
+  for (const account_t& one : accounts)
+    std::visit(into_its_list{out}, one);
+  return out;
+}
+
+std::optional<std::string> check(const xmpp_account& one) {
   const std::string_view address = one.address;
   if (address.empty())
-    return "Type an address: user@example.com or @user:example.org";
-  if (address.find_first_of(" \t\r\n") != std::string_view::npos)
-    return "An address has no spaces in it";
-  if (is_matrix(address)) {
-    const auto colon = address.find(':');
-    if (colon == std::string_view::npos || colon == 1 || colon + 1 == address.size())
-      return "A Matrix address is @user:server";
-    if (one.host || one.port)
-      return "Host and port are for XMPP; a Matrix account takes a homeserver URL";
-    if (one.homeserver && !one.homeserver->starts_with("https://") && !one.homeserver->starts_with("http://"))
-      return "The homeserver is a URL: https://matrix.example.org";
-  } else {
-    const auto at = address.find('@');
-    if (at == std::string_view::npos || at == 0 || at + 1 == address.size() ||
-        address.find('@', at + 1) != std::string_view::npos)
-      return "An XMPP address is user@domain";
-    if (one.homeserver)
-      return "A homeserver is for Matrix; an XMPP account takes a host and a port";
-    if (one.port && (*one.port < 1 || *one.port > 65535))
-      return "A port is a number from 1 to 65535";
-  }
+    return "Type the address: user@example.com";
+  if (address.find_first_of(" \t\r\n/") != std::string_view::npos)
+    return "An XMPP address is user@domain, with no spaces";
+  const auto at = address.find('@');
+  if (at == std::string_view::npos || at == 0 || at + 1 == address.size() ||
+      address.find('@', at + 1) != std::string_view::npos)
+    return "An XMPP address is user@domain";
+  if (one.resource.empty() || one.resource.find_first_of(" \t\r\n") != std::string::npos)
+    return "The resource is a word with no spaces, such as mux";
+  if (one.host && one.host->empty())
+    return "Leave the host empty, or type one";
+  if (one.port && (*one.port < 1 || *one.port > 65535))
+    return "A port is a number from 1 to 65535";
   if (one.password.empty())
     return "Type the password";
   return std::nullopt;
 }
 
-// Where the file is: $XDG_CONFIG_HOME/mux, else $HOME/.config/mux.
+std::optional<std::string> check(const matrix_account& one) {
+  const std::string_view user = one.user_id;
+  if (user.empty())
+    return "Type the user ID: @user:example.org";
+  if (user.find_first_of(" \t\r\n") != std::string_view::npos)
+    return "A user ID has no spaces in it";
+  const auto colon = user.find(':');
+  if (!is_matrix(user) || colon == std::string_view::npos || colon == 1 || colon + 1 == user.size())
+    return "A Matrix user ID is @user:server";
+  if (one.homeserver && !one.homeserver->starts_with("https://") && !one.homeserver->starts_with("http://"))
+    return "The homeserver is a URL: https://matrix.example.org";
+  if (one.device_name.empty())
+    return "Name this device, such as mux";
+  if (one.password.empty())
+    return "Type the password";
+  return std::nullopt;
+}
+
+std::optional<std::string> check(const account_t& one) {
+  return std::visit([](const auto& each) { return check(each); }, one);
+}
+
 std::filesystem::path default_path() {
   if (const char* xdg = std::getenv("XDG_CONFIG_HOME"); xdg && *xdg)
     return std::filesystem::path(xdg) / "mux" / "accounts.json";

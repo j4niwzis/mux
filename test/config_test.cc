@@ -9,7 +9,8 @@ import gtest;
 namespace {
 
 namespace fs = std::filesystem;
-using mux::config::saved_account;
+using mux::config::matrix_account;
+using mux::config::xmpp_account;
 
 // A directory of the test's own, removed after it.
 struct scratch {
@@ -28,16 +29,18 @@ TEST(Config, NoFileIsNoAccounts) {
   scratch here;
   const auto got = mux::config::load(here.dir / "mux" / "accounts.json");
   ASSERT_TRUE(got.has_value());
-  EXPECT_TRUE(got->accounts.empty());
+  EXPECT_TRUE(got->xmpp.empty());
+  EXPECT_TRUE(got->matrix.empty());
 }
 
 TEST(Config, WhatIsSavedIsWhatIsLoaded) {
   scratch here;
   const fs::path where = here.dir / "mux" / "accounts.json";
   mux::config::file kept;
-  kept.accounts.push_back({.address = "alice@example.com", .password = "p\"ss\\word", .host = "xmpp.example.com", .port = 5222});
-  kept.accounts.push_back({.address = "@bob:example.org", .password = "секрет", .enabled = false,
-                           .homeserver = "https://matrix.example.org"});
+  kept.xmpp.push_back({.address = "alice@example.com", .password = "p\"ss\\word", .resource = "laptop",
+                       .host = "xmpp.example.com", .port = 5222, .plain_without_tls = true});
+  kept.matrix.push_back({.user_id = "@bob:example.org", .password = "секрет", .enabled = false,
+                         .homeserver = "https://matrix.example.org", .device_name = "desk"});
   ASSERT_TRUE(mux::config::save(where, kept).has_value());
   const auto got = mux::config::load(where);
   ASSERT_TRUE(got.has_value()) << got.error();
@@ -47,7 +50,7 @@ TEST(Config, WhatIsSavedIsWhatIsLoaded) {
 TEST(Config, OnlyItsOwnerCanReadIt) {
   scratch here;
   const fs::path where = here.dir / "mux" / "accounts.json";
-  ASSERT_TRUE(mux::config::save(where, {.accounts = {{.address = "a@b.c", .password = "x"}}}).has_value());
+  ASSERT_TRUE(mux::config::save(where, {.xmpp = {{.address = "a@b.c", .password = "x"}}}).has_value());
   EXPECT_EQ(fs::status(where).permissions(), fs::perms::owner_read | fs::perms::owner_write);
   EXPECT_EQ(fs::status(where.parent_path()).permissions(), fs::perms::owner_all);
   EXPECT_FALSE(fs::exists(fs::path(where) += ".new"));
@@ -56,42 +59,72 @@ TEST(Config, OnlyItsOwnerCanReadIt) {
 TEST(Config, SavingAgainReplacesTheFile) {
   scratch here;
   const fs::path where = here.dir / "accounts.json";
-  ASSERT_TRUE(mux::config::save(where, {.accounts = {{.address = "a@b.c", .password = "x"}}}).has_value());
+  ASSERT_TRUE(mux::config::save(where, {.xmpp = {{.address = "a@b.c", .password = "x"}}}).has_value());
   ASSERT_TRUE(mux::config::save(where, {}).has_value());
   const auto got = mux::config::load(where);
   ASSERT_TRUE(got.has_value());
-  EXPECT_TRUE(got->accounts.empty());
+  EXPECT_TRUE(got->xmpp.empty());
 }
 
 TEST(Config, ABrokenFileSaysSo) {
   scratch here;
   fs::create_directories(here.dir);
   const fs::path where = here.dir / "accounts.json";
-  std::ofstream(where) << "{\"accounts\": [ {\"address\": }";
+  std::ofstream(where) << "{\"xmpp\": [ {\"address\": }";
   const auto got = mux::config::load(where);
   ASSERT_FALSE(got.has_value());
   EXPECT_NE(got.error().find("is not an accounts file"), std::string::npos);
 }
 
+TEST(Config, AnOldFileIsNotReadAsEmpty) {
+  scratch here;
+  fs::create_directories(here.dir);
+  const fs::path where = here.dir / "accounts.json";
+  std::ofstream(where) << R"({"accounts": [{"address": "a@b.c", "password": "x", "enabled": true}]})";
+  EXPECT_FALSE(mux::config::load(where).has_value());
+}
+
+TEST(Config, TheAccountsOfAFileAndBack) {
+  const mux::config::file kept{.xmpp = {{.address = "a@b.c", .password = "x"}},
+                               .matrix = {{.user_id = "@d:e.f", .password = "y"}}};
+  const auto all = mux::config::accounts_of(kept);
+  ASSERT_EQ(all.size(), 2u);
+  EXPECT_EQ(mux::config::address_of(all[0]), "a@b.c");
+  EXPECT_EQ(mux::config::protocol_name(all[0]), "XMPP");
+  EXPECT_EQ(mux::config::address_of(all[1]), "@d:e.f");
+  EXPECT_EQ(mux::config::protocol_name(all[1]), "Matrix");
+  EXPECT_EQ(mux::config::file_of(all), kept);
+}
+
 TEST(Config, TheAddressSaysTheProtocol) {
   EXPECT_TRUE(mux::config::is_matrix("@bob:example.org"));
   EXPECT_FALSE(mux::config::is_matrix("alice@example.com"));
+  EXPECT_EQ(mux::config::protocol_name(mux::config::account_from("@bob:example.org", "x")), "Matrix");
+  EXPECT_EQ(mux::config::protocol_name(mux::config::account_from("alice@example.com", "x")), "XMPP");
 }
 
-TEST(Config, WhatIsWrongWithAnAccount) {
+TEST(Config, WhatIsWrongWithAnXmppAccount) {
   using mux::config::check;
-  EXPECT_EQ(check({.address = "alice@example.com", .password = "x"}), std::nullopt);
-  EXPECT_EQ(check({.address = "@bob:example.org", .password = "x", .homeserver = "https://m.example.org"}),
+  EXPECT_EQ(check(xmpp_account{.address = "alice@example.com", .password = "x"}), std::nullopt);
+  EXPECT_TRUE(check(xmpp_account{.address = "", .password = "x"}));
+  EXPECT_TRUE(check(xmpp_account{.address = "alice", .password = "x"}));
+  EXPECT_TRUE(check(xmpp_account{.address = "a@b@c", .password = "x"}));
+  EXPECT_TRUE(check(xmpp_account{.address = "@bob:example.org", .password = "x"}));
+  EXPECT_TRUE(check(xmpp_account{.address = "alice@example.com", .password = ""}));
+  EXPECT_TRUE(check(xmpp_account{.address = "alice@example.com", .password = "x", .resource = ""}));
+  EXPECT_TRUE(check(xmpp_account{.address = "alice@example.com", .password = "x", .port = 70000}));
+}
+
+TEST(Config, WhatIsWrongWithAMatrixAccount) {
+  using mux::config::check;
+  EXPECT_EQ(check(matrix_account{.user_id = "@bob:example.org", .password = "x"}), std::nullopt);
+  EXPECT_EQ(check(matrix_account{.user_id = "@bob:example.org", .password = "x", .homeserver = "https://m.example.org"}),
             std::nullopt);
-  EXPECT_TRUE(check({.address = "", .password = "x"}));
-  EXPECT_TRUE(check({.address = "alice", .password = "x"}));
-  EXPECT_TRUE(check({.address = "a@b@c", .password = "x"}));
-  EXPECT_TRUE(check({.address = "@bob", .password = "x"}));
-  EXPECT_TRUE(check({.address = "alice@example.com", .password = ""}));
-  EXPECT_TRUE(check({.address = "alice@example.com", .password = "x", .port = 70000}));
-  EXPECT_TRUE(check({.address = "alice@example.com", .password = "x", .homeserver = "https://x"}));
-  EXPECT_TRUE(check({.address = "@bob:example.org", .password = "x", .host = "h"}));
-  EXPECT_TRUE(check({.address = "@bob:example.org", .password = "x", .homeserver = "matrix.example.org"}));
+  EXPECT_TRUE(check(matrix_account{.user_id = "bob:example.org", .password = "x"}));
+  EXPECT_TRUE(check(matrix_account{.user_id = "@bob", .password = "x"}));
+  EXPECT_TRUE(check(matrix_account{.user_id = "@bob:example.org", .password = ""}));
+  EXPECT_TRUE(check(matrix_account{.user_id = "@bob:example.org", .password = "x", .homeserver = "matrix.example.org"}));
+  EXPECT_TRUE(check(matrix_account{.user_id = "@bob:example.org", .password = "x", .device_name = ""}));
 }
 
 }  // namespace

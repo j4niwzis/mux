@@ -15,6 +15,7 @@ module;
 export module mux.http;
 
 import std;
+import mux.core;
 import mux.net;
 
 export namespace mux::http {
@@ -95,6 +96,7 @@ class connection {
   response request(std::string_view method, std::string_view target, std::string_view body = {},
                    std::optional<std::string_view> bearer = std::nullopt,
                    std::chrono::seconds timeout = std::chrono::seconds(60)) {
+    const turn mine(*this);
     const bool reused = stream_.has_value();
     try {
       return once(method, target, body, bearer, timeout);
@@ -107,6 +109,7 @@ class connection {
   }
 
   void close() {
+    const turn mine(*this);
     if (stream_) {
       (void)owner_->await<>([&](auto done) { stream_->async_shutdown(std::move(done)); });
       stream_.reset();
@@ -123,7 +126,10 @@ class connection {
                                                                asio::error::get_ssl_category()));
     stream_->set_verify_mode(asio::ssl::verify_peer);
     stream_->set_verify_callback(asio::ssl::host_name_verification(where_.host));
+    const auto started = std::chrono::steady_clock::now();
     beast::get_lowest_layer(*stream_).socket() = net::connect(*owner_, via_, where_.host, where_.port);
+    log_line(where_.host, std::format("connected{}, in {} ms", via_ ? std::format(" through {}:{}", via_->host, via_->port) : "",
+                                      since_ms(started)));
     beast::get_lowest_layer(*stream_).expires_after(std::chrono::seconds(30));
     const auto [shaken] = owner_->await<>([&](auto done) {
       stream_->async_handshake(asio::ssl::stream_base::client, std::move(done));
@@ -132,7 +138,15 @@ class connection {
       stream_.reset();
       throw net::failure("TLS with " + where_.host, shaken);
     }
+    log_line(where_.host, std::format("TLS up, in {} ms", since_ms(started)));
   }
+  // How long since then, in whole milliseconds.
+  static long long since_ms(std::chrono::steady_clock::time_point from) {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - from).count();
+  }
+  // A target as it is logged: its path, without the query that may carry
+  // a token or a filter.
+  static std::string_view path_of(std::string_view target) { return target.substr(0, target.find('?')); }
 
   response once(std::string_view method, std::string_view target, std::string_view body,
                 std::optional<std::string_view> bearer, std::chrono::seconds timeout) {
@@ -154,6 +168,7 @@ class connection {
     }
     out.prepare_payload();
     beast::get_lowest_layer(*stream_).expires_after(timeout);
+    const auto asked_at = std::chrono::steady_clock::now();
     const auto [sent, sent_bytes] = owner_->await<std::size_t>([&](auto done) {
       beast::http::async_write(*stream_, out, std::move(done));
     });
@@ -171,6 +186,10 @@ class connection {
       throw net::failure("reading from " + where_.host, read);
     }
     auto got = in.release();
+    // Slow answers said, and what they were: a long wait shows where it was.
+    if (const auto took = since_ms(asked_at); took > 2000 || got.body().size() > 256 * 1024)
+      log_line(where_.host, std::format("{} {}: {} after {} ms, {} KB", method, path_of(target), got.result_int(), took,
+                                        got.body().size() / 1024));
     response made{static_cast<int>(got.result_int()), std::move(got.body()), std::nullopt};
     if (const auto after = got.find(beast::http::field::retry_after); after != got.end()) {
       std::int64_t seconds = 0;
@@ -182,6 +201,34 @@ class connection {
       stream_.reset();
     return made;
   }
+
+  // One request at a time on the stream: Beast allows one read and one
+  // write in flight, and fibers of one account -- the history paged back,
+  // a receipt, a message sent -- ask at once. Each waits its turn, in the
+  // order they asked.
+  struct turn {
+    connection& of;
+    explicit turn(connection& on) : of(on) {
+      while (of.busy_) {
+        if (std::ranges::find(of.waiting_, of.owner_->current()) == of.waiting_.end())
+          of.waiting_.push_back(of.owner_->current());
+        of.owner_->park();
+      }
+      of.busy_ = true;
+    }
+    turn(const turn&) = delete;
+    turn& operator=(const turn&) = delete;
+    ~turn() {
+      of.busy_ = false;
+      if (!of.waiting_.empty()) {
+        const net::loop::handle next = of.waiting_.front();
+        of.waiting_.pop_front();
+        of.owner_->wake(next);
+      }
+    }
+  };
+  bool busy_ = false;
+  std::deque<net::loop::handle> waiting_;
 
   net::loop* owner_;
   net::tls* tls_;

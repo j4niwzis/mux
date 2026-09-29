@@ -86,6 +86,7 @@ std::string of(const change::typing_changed& one) {
   return one.who.empty() ? std::string() : std::format("{} typing in {}", one.who.size(), one.in.id);
 }
 std::string of(const change::history_position&) { return std::string(); }
+std::string of(const change::session_given& one) { return one.account.address + " was given a session"; }
 std::string of(const change::members_changed& one) {
   return std::format("{} has {} member{}", one.in.id, one.members.size(), one.members.size() == 1 ? "" : "s");
 }

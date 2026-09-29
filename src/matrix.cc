@@ -30,6 +30,10 @@ struct settings {
   std::string device_name = "mux";
   // A proxy to connect through, where there is one.
   std::optional<net::proxy> proxy;
+  // The session kept from before: logged in with, rather than logging in
+  // again -- a new device each time -- where it is still good.
+  std::optional<std::string> access_token;
+  std::optional<std::string> device_id;
   // How long a sync waits on the server for something to happen.
   std::chrono::milliseconds sync_timeout = std::chrono::seconds(30);
 };
@@ -198,20 +202,35 @@ class account {
     http::connection syncing(*loop_, *tls_, *base, how_.proxy);  // the long poll has one of its own
     api_ = &api;
 
-    loom::cs::def::user_identifier_t who{.type = "m.id.user"};
-    knot::value::object said_user;
-    said_user.emplace("user", knot::value(localpart_));
-    who.rest = knot::value(std::move(said_user));
-    auto logged = perform(api, loom::cs::login{.body = {.type = "m.login.password",
-                                                        .identifier = std::move(who),
-                                                        .password = how_.password,
-                                                        .initial_device_display_name = how_.device_name}});
-    if (!logged) {
+    // Logged in: as the device kept, where there is one, and the session
+    // told, to be kept.
+    const auto log_in = [&]() -> bool {
+      loom::cs::def::user_identifier_t who{.type = "m.id.user"};
+      knot::value::object said_user;
+      said_user.emplace("user", knot::value(localpart_));
+      who.rest = knot::value(std::move(said_user));
+      auto logged = perform(api, loom::cs::login{.body = {.type = "m.login.password",
+                                                          .identifier = std::move(who),
+                                                          .password = how_.password,
+                                                          .device_id = how_.device_id,
+                                                          .initial_device_display_name = how_.device_name}});
+      if (!logged) {
+        say(connection::failed{"login: " + logged.error().said()});
+        return false;
+      }
+      token_ = logged->access_token;
+      how_.device_id = logged->device_id;
+      sink_(change::session_given{id_, logged->access_token, logged->device_id});
+      return true;
+    };
+    bool kept = false;
+    if (how_.access_token) {
+      token_ = how_.access_token;
+      kept = true;
+    } else if (!log_in()) {
       api_ = nullptr;
-      say(connection::failed{"login: " + logged.error().said()});
       return;
     }
-    token_ = logged->access_token;
     say(connection::online{});
 
     std::chrono::seconds backoff(1);
@@ -223,6 +242,13 @@ class account {
       if (!got) {
         const failure& why = got.error();
         if (why.server && (why.server->errcode == "M_UNKNOWN_TOKEN" || why.server->errcode == "M_FORBIDDEN")) {
+          // A kept session no longer good: logged in again, once.
+          if (kept) {
+            kept = false;
+            if (log_in())
+              continue;
+            break;
+          }
           say(connection::failed{why.said()});
           break;
         }

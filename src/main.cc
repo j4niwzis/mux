@@ -105,7 +105,9 @@ struct network {
                               .password = saved.password,
                               .homeserver = saved.homeserver,
                               .device_name = saved.device_name,
-                              .proxy = std::move(via)};
+                              .proxy = std::move(via),
+                              .access_token = saved.access_token,
+                              .device_id = saved.device_id};
     this->run(saved.user_id, std::make_unique<matrix_account>(loop, tls, std::move(how), post_change{box, live}),
               live);
   }
@@ -522,9 +524,26 @@ struct app {
     auto changes = box->take();
     if (changes.empty())
       return;
-    for (const auto& one : changes)
+    for (const auto& one : changes) {
+      if (const auto* given = std::get_if<mux::change::session_given>(&one))
+        this->keep_session(*given);
       model->apply(one);
+    }
     this->refresh();
+  }
+
+  // A Matrix session given: kept with its account, for the next start.
+  void keep_session(const mux::change::session_given& given) {
+    const auto found = this->find(given.account.address);
+    if (found == saved.end())
+      return;
+    std::visit(mux::overloaded{[&](mux::config::matrix_account& one) {
+                                 one.access_token = given.access_token;
+                                 one.device_id = given.device_id;
+                               },
+                               [](mux::config::xmpp_account&) {}},
+               *found);
+    (void)this->write();
   }
 
   void before_frame() {

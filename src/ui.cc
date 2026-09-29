@@ -1680,7 +1680,7 @@ struct form_end {
 // and PLAIN without TLS. Its height is what its last layout took.
 template <class Actions>
 struct xmpp_advanced : scene::Node {
-  field resource{"Resource", "mux", "mux"};
+  field resource{"Device name (resource)", "mux", "mux"};
   field host{"Host", "from the domain's SRV records"};
   field port{"Port", "5222"};
   widgets::Toggle<ask<Actions, &Actions::toggle_plain>> plain;

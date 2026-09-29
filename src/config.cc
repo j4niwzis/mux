@@ -111,6 +111,9 @@ struct matrix_account {
   std::string device_name = "mux";
   std::optional<bool> read_receipts;
   std::optional<std::string> proxy;
+  // The session the server gave, kept so the next start goes on with it.
+  std::optional<std::string> access_token;
+  std::optional<std::string> device_id;
   friend bool operator==(const matrix_account&, const matrix_account&) = default;
 };
 

@@ -219,6 +219,14 @@ struct conversation_updated {
   std::int64_t highlights = 0;
 };
 
+// A session an account was given -- a Matrix access token and device -- to
+// be kept, so the next start goes on with it rather than logging in again.
+struct session_given {
+  account_id account;
+  std::string access_token;
+  std::string device_id;
+};
+
 // Who is in a group now: the whole list.
 struct members_changed {
   conversation_id in;
@@ -294,7 +302,8 @@ using change_t = std::variant<change::connection_changed, change::account_remove
                               change::conversation_removed,
                               change::presence_changed, change::message_added, change::message_edited,
                               change::message_redacted, change::message_acknowledged, change::delivery_changed, change::reaction_changed,
-                              change::typing_changed, change::history_position, change::members_changed>;
+                              change::typing_changed, change::history_position, change::members_changed,
+                              change::session_given>;
 
 // The model: every account, and every change applied to it.
 class model {
@@ -409,6 +418,7 @@ class model {
   void on(const change::typing_changed& one) { of(one.in).typing = one.who; }
   void on(const change::history_position& one) { of(one.in).history_from = one.from; }
   void on(const change::members_changed& one) { of(one.in).members = one.members; }
+  void on(const change::session_given&) {}  // the program's to keep, not the model's
 
   std::map<account_id, account> accounts_;
 };

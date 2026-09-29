@@ -41,7 +41,9 @@ struct stub {
   void pop_panel() {}
   void toggle_info() {}
   void jump_to_end() {}
-  void message_menu(std::string, bool, std::string, std::string, std::vector<std::string>, float, float) {}
+  void message_menu(mux::ui::menu_facts) {}
+  void menu_copy_link() {}
+  void menu_save() {}
   void close_menu() {}
   void menu_reply() {}
   void menu_edit() {}
@@ -58,7 +60,9 @@ struct stub {
   void message_person(const mux::conversation_id&) {}
   void jump_to_message(std::string) {}
   void reply_to(std::string, std::string) {}
-  void open_picture(std::string) {}
+  std::vector<std::string> pictures_opened;
+  void open_picture(std::string source, std::string, std::string, std::string) { pictures_opened.push_back(std::move(source)); }
+  void save_picture(std::string) {}
   void close_picture() {}
   void open_file(std::string, std::string) {}
   void attach_files() {}
@@ -291,6 +295,49 @@ TEST(Timeline, ScrollsALongChatAtSixtyFrames) {
   const auto again = std::ranges::find(bubbles, reading_id, &mux::ui::message_bubble::message_id);
   ASSERT_NE(again, bubbles.end());
   EXPECT_NEAR(again->bounds().fTop, reading, 1.0f) << "what was read moved when a message came below it";
+  skiff::paint::defaultFont() = nullptr;
+}
+
+// A picture in a message, pressed: the viewer is asked for, with it.
+TEST(Timeline, APicturePressedIsOpened) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  stub program;
+  scene::Scene<mux::ui::window<stub>> window{std::in_place, &program};
+  const mux::account_id alice{mux::protocol::matrix{}, "@alice:example.com"};
+  const mux::conversation_id room{alice, "!room:example.com"};
+  mux::model model;
+  model.apply(mux::change_t{mux::change::connection_changed{alice, mux::connection::online{}}});
+  model.apply(mux::change_t{mux::change::conversation_updated{.id = room, .name = "Pictures"}});
+  mux::message one;
+  one.in = room;
+  one.id = "$picture";
+  one.sender = "@bob:example.com";
+  one.attachment = mux::attachment{.kind = mux::attachment_kind::image{}, .source = "mxc://example.com/abc",
+                                   .name = "cat.jpg", .mimetype = "image/jpeg", .size = 1000, .width = 800,
+                                   .height = 600};
+  model.apply(mux::change_t{mux::change::message_added{.message = std::move(one)}});
+  auto& screen = window.root().main();
+  screen.chosen = room;
+  screen.show(model);
+  const skia::SkRect viewport = skia::SkRect::MakeWH(1100.0f, 720.0f);
+  for (int i = 0; i < 5; ++i) {
+    window.update(1000.0 + 16.0 * i);
+    window.layoutIfNeeded(viewport);
+    (void)window.finishFrame();
+  }
+  auto& bubbles = std::get<0>(std::get<0>(screen.timeline.fChildren).fChildren);
+  ASSERT_EQ(bubbles.size(), 1u);
+  ASSERT_TRUE(bubbles.front().body.picture);
+  const skia::SkRect picture = bubbles.front().body.picture->bounds();
+  ASSERT_FALSE(picture.isEmpty());
+  scene::InputRouter router;
+  const std::array layers{scene::InputRouter::Layer{window.handle(), false}};
+  router.setLayers(layers);
+  router.pointer(scene::PointerEvent{scene::pointer::down{picture.centerX(), picture.centerY(), 1}});
+  router.pointer(scene::PointerEvent{scene::pointer::up{picture.centerX(), picture.centerY(), 1}});
+  ASSERT_EQ(program.pictures_opened.size(), 1u) << "the press never reached the picture's handler";
+  EXPECT_EQ(program.pictures_opened.front(), "mxc://example.com/abc");
   skiff::paint::defaultFont() = nullptr;
 }
 

@@ -89,8 +89,10 @@ inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 //   void toggle_info()               -- the chosen chat's info, beside it
 //   void message_person(const conversation_id&)  -- a member's direct chat
 //   void jump_to_message(std::string id)  -- a quoted message, scrolled to
+//   void message_menu(menu_facts), menu_copy_link(), menu_save()  -- a message's menu
 //   void reply_to(std::string id, std::string text)  -- a message swiped left
-//   void open_picture(std::string source), close_picture(), open_file(std::string source, std::string name)
+//   void open_picture(std::string source, std::string sender, std::string name, std::string when)
+//   void close_picture(), save_picture(std::string source), open_file(std::string source, std::string name)
 //   void attach_files(), close_send_box(), send_files()  -- what is sent with the paperclip
 //   void open_member_info(std::string id)  -- a sender's page, in the info
 //   void load_older(const conversation_id&, std::string from)  -- its history
@@ -1294,22 +1296,55 @@ struct picture_view : scene::Node {
   std::string source;
   std::string time;  // drawn over it where there is no caption
   static constexpr float kMax = 430.0f, kMin = 100.0f;
-  picture_view(std::string where, int width, int height) : source(std::move(where)) {
+  // Its own proportions: as its message says them, and as its picture has
+  // them once it has come -- never another's.
+  int width = 0, height = 0;
+  bool had_picture = false;
+  void update(double) {
+    if (!had_picture && avatar_images().has("thumb:" + source)) {
+      had_picture = true;
+      this->invalidateLayout();  // measured again, by the picture's proportions
+    }
+  }
+  picture_view(std::string where, int w, int h) : source(std::move(where)), width(w), height(h) {}
+  // Fitted into 430 by 430 and into the room there is, its proportions
+  // kept; no side under 100 where the room allows.
+  void measure(const skia::SkRect& parent) {
     float w = width > 0 ? static_cast<float>(width) : 320.0f;
     float h = height > 0 ? static_cast<float>(height) : 240.0f;
-    const float scale = std::min({1.0f, kMax / w, kMax / h});
-    w = std::max(kMin, w * scale);
-    h = std::max(kMin, h * scale);
-    fState.apply({.width = w, .height = h});
+    if (const skia::Sp<skia::SkImage>* image = avatar_images().find("thumb:" + source); image && *image) {
+      // The picture's own proportions, where the message said none or others.
+      const float ratio = static_cast<float>((*image)->width()) / static_cast<float>((*image)->height());
+      if (width <= 0 || height <= 0 || std::abs(w / h - ratio) > 0.01f)
+        h = w / ratio;
+    }
+    const float room = parent.width() > 0.0f ? parent.width() : kMax;
+    const float scale = std::min({1.0f, kMax / w, kMax / h, room / w});
+    w *= scale;
+    h *= scale;
+    if (w < kMin && h < kMin) {
+      const float up = std::min(kMin / std::max(w, h), room / w);
+      w *= up;
+      h *= up;
+    }
+    fState.fWidth = std::floor(w);
+    fState.fHeight = std::floor(h);
   }
   void drawSelf(skia::SkCanvas* canvas, float alpha) {
     const skia::SkRect& box = fState.fBounds;
     const int saved = canvas->save();
     canvas->clipRRect(skia::SkRRect::MakeRectXY(box, 10.0f, 10.0f), true);
     if (const skia::Sp<skia::SkImage>* image = avatar_images().find("thumb:" + source); image && *image) {
+      // Covering the box, cut at the middle where the proportions differ
+      // by a rounding: never stretched.
+      const float iw = static_cast<float>((*image)->width()), ih = static_cast<float>((*image)->height());
+      const float scale = std::max(box.width() / iw, box.height() / ih);
+      const float sw = box.width() / scale, sh = box.height() / scale;
+      const skia::SkRect from = skia::SkRect::MakeXYWH((iw - sw) * 0.5f, (ih - sh) * 0.5f, sw, sh);
       skia::SkPaint paint;
       paint.setAlphaf(alpha);
-      canvas->drawImageRect(*image, box, skia::SkSamplingOptions(skia::SkFilterMode::kLinear), &paint);
+      canvas->drawImageRect(*image, from, box, skia::SkSamplingOptions(skia::SkFilterMode::kLinear), &paint,
+                            skia::SkCanvas::kFast_SrcRectConstraint);
     } else if (skia::SkFont* font = skiff::paint::defaultFont()) {
       skiff::paint::Painter(canvas, *font).fillRounded(box, 10.0f, tile_colour, alpha);
     }
@@ -2308,6 +2343,20 @@ struct jump_button : scene::Node {
 
 // The messages, and over them, where one has scrolled up from the newest,
 // the way back down. Each is placed by its own spec.
+// What a message's menu is made from: the message, and what it carries.
+struct menu_facts {
+  std::string id;
+  bool own = false;
+  std::string text;    // all of it
+  std::string copied;  // what Copy takes: the selection, or all of it
+  bool selection = false;
+  std::vector<std::string> seen;
+  std::optional<std::string> media;  // a picture's or a file's source
+  std::string media_name;
+  std::string link;  // a link to it, where it has one
+  float x = 0.0f, y = 0.0f;
+};
+
 template <class Actions>
 struct timeline_area : scene::Node {
   nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>> timeline{
@@ -2443,7 +2492,11 @@ struct timeline_area : scene::Node {
           }
         // A picture: seen whole. A file: saved and opened.
         if (one.body.picture && one.body.picture->bounds().contains(press.x, press.y)) {
-          actions->open_picture(one.body.picture->source);
+          const conversation* chat = seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr;
+          const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
+          actions->open_picture(one.body.picture->source, one.sender,
+                                chat ? sender_name(*chat, one.sender) : one.sender,
+                                std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day}, clock_of(one.said.at)));
           reply.handle();
           return;
         }
@@ -2475,9 +2528,24 @@ struct timeline_area : scene::Node {
     // is, and all of it if not.
     for (const message_bubble& one : std::get<0>(std::get<0>(timeline.fChildren).fChildren))
       if (one.bounds().contains(press.x, press.y)) {
-        actions->message_menu(one.message_id, one.outgoing, one.plain,
-                              one.body.text.hasSelection() ? one.body.text.selected() : one.plain,
-                              this->seen_by(one.message_id, one.sender), press.x, press.y);
+        menu_facts facts;
+        facts.id = one.message_id;
+        facts.own = one.outgoing;
+        facts.text = one.plain;
+        facts.selection = one.body.text.hasSelection();
+        facts.copied = facts.selection ? one.body.text.selected() : one.plain;
+        facts.seen = this->seen_by(one.message_id, one.sender);
+        if (one.said.attachment) {
+          facts.media = one.said.attachment->source;
+          facts.media_name = one.said.attachment->name;
+        }
+        // A Matrix message's link: matrix.to, to it in its room.
+        if (seen_chat && std::holds_alternative<protocol::matrix>(seen_chat->account.speaks) &&
+            one.message_id.starts_with('$'))
+          facts.link = std::format("https://matrix.to/#/{}/{}", seen_chat->id, one.message_id);
+        facts.x = press.x;
+        facts.y = press.y;
+        actions->message_menu(std::move(facts));
         reply.handle();
         return;
       }
@@ -2779,6 +2847,11 @@ struct conversations_screen : nodes::Stack {
   [[nodiscard]] bool settling() const { return false; }
   // Back to the newest, and nothing unseen.
   void jump_to_end() {
+    // To the newest: the stretch made at the end again.
+    if (!made.to_end && last_model) {
+      made = made_range{};
+      this->show_conversation(*last_model);
+    }
     timeline.scrollToEnd();
     unseen = 0;
     chat.area.jump.set_unseen(0);
@@ -2789,14 +2862,46 @@ struct conversations_screen : nodes::Stack {
   std::string searched;
   const model* last_model = nullptr;
 
-  // How many of the chat's newest messages are made into bubbles: the
-  // newest few dozen, and more as the reader scrolls up to them. What is
-  // made is what every frame walks, so a long chat is not all made at once.
   bool was_typing = false;
   std::string typed_last;
-  static constexpr std::size_t kWindow = 80;
-  static constexpr std::size_t kWindowStep = 60;
-  std::size_t window = kWindow;
+  // Which of the chat's messages are made into bubbles: a stretch of them,
+  // at most a few hundred, that slides with the reader -- more made above
+  // and the far ones below let go as they scroll up, the other way down --
+  // and at the end, follows what comes. Known by the ids at its ends, so
+  // history coming in above does not move it. What is made is what the
+  // frames walk: a chat of any length costs a few hundred bubbles.
+  struct made_range {
+    std::optional<std::string> from, to;
+    bool to_end = true;
+  };
+  made_range made;
+  std::map<conversation_id, made_range> made_of;
+  static constexpr std::size_t kFirstMade = 80, kMostMade = 240, kMadeStep = 60;
+  [[nodiscard]] std::pair<std::size_t, std::size_t> made_indices(const std::vector<message>& all) const {
+    const auto index_of = [&](const std::optional<std::string>& id) -> std::optional<std::size_t> {
+      if (!id)
+        return std::nullopt;
+      const auto it = std::ranges::find(all, *id, &message::id);
+      return it == all.end() ? std::nullopt : std::optional<std::size_t>(static_cast<std::size_t>(it - all.begin()));
+    };
+    std::size_t to = all.size();
+    if (!made.to_end)
+      if (const auto at = index_of(made.to))
+        to = *at + 1;
+    std::size_t from = to > kFirstMade ? to - kFirstMade : 0;
+    if (const auto at = index_of(made.from); at && *at <= to)
+      from = *at;
+    if (to - from > kMostMade)
+      from = to - kMostMade;
+    return {from, to};
+  }
+  void set_made(const std::vector<message>& all, std::size_t from, std::size_t to) {
+    to = std::min(to, all.size());
+    from = std::min(from, to);
+    made.from = from < all.size() ? std::optional<std::string>(all[from].id) : std::nullopt;
+    made.to = to > 0 ? std::optional<std::string>(all[to - 1].id) : std::nullopt;
+    made.to_end = to == all.size();
+  }
   // A message to bring into view, once it is made and laid out.
   std::optional<std::string> jumping_to;
   int jump_tries = 0;
@@ -2831,9 +2936,11 @@ struct conversations_screen : nodes::Stack {
         jumping_to.reset();
       } else if (const auto found = std::ranges::find(one->timeline, *jumping_to, &message::id);
                  found != one->timeline.end()) {
-        const auto from_end = static_cast<std::size_t>(one->timeline.end() - found);
-        if (from_end + 10 > window) {
-          window = from_end + 10;
+        // Made around it, where it is not made already.
+        const auto at = static_cast<std::size_t>(found - one->timeline.begin());
+        const auto [from, to] = this->made_indices(one->timeline);
+        if (at < from || at >= to) {
+          this->set_made(one->timeline, at > 40 ? at - 40 : 0, at + 40);
           this->show_conversation(*last_model);
         }
       } else if (history_from && history_asked != history_from) {
@@ -2860,18 +2967,27 @@ struct conversations_screen : nodes::Stack {
       unseen = 0;
       chat.area.jump.set_unseen(0);
     }
-    // Near the top: more of what is loaded made into bubbles, and past all
-    // of it, the history paged back.
-    if (chosen && last_model && timeline.current() <= 300.0f) {
-      const conversation* one = last_model->find(*chosen);
-      if (one && window < one->timeline.size()) {
-        window += kWindowStep;
-        this->show_conversation(*last_model);
-      } else if (history_from && history_asked != history_from && timeline.current() <= 4.0f) {
-        history_asked = history_from;
-        actions->load_older(*chosen, *history_from);
+    // Near the top: the stretch made slides up -- the far ones below let
+    // go -- and past all that is loaded, the history is paged back. Near
+    // the bottom, where it is not at the end, it slides down.
+    if (chosen && last_model && !jumping_to)
+      if (const conversation* one = last_model->find(*chosen)) {
+        auto [from, to] = this->made_indices(one->timeline);
+        if (timeline.current() <= 300.0f && from > 0) {
+          from = from > kMadeStep ? from - kMadeStep : 0;
+          to = std::min(to, from + kMostMade);
+          this->set_made(one->timeline, from, to);
+          this->show_conversation(*last_model);
+        } else if (timeline.current() <= 4.0f && from == 0 && history_from && history_asked != history_from) {
+          history_asked = history_from;
+          actions->load_older(*chosen, *history_from);
+        } else if (!made.to_end && timeline.current() >= timeline.extent() - 300.0f) {
+          to = std::min(one->timeline.size(), to + kMadeStep);
+          from = to > kMostMade && to - from > kMostMade ? to - kMostMade : from;
+          this->set_made(one->timeline, from, to);
+          this->show_conversation(*last_model);
+        }
       }
-    }
   }
 
   void show(const model& now) {
@@ -2983,14 +3099,19 @@ struct conversations_screen : nodes::Stack {
     };
     const auto first_of_run = [&](std::size_t i) { return i == 0 || !same(i, i - 1); };
     const auto last_of_run = [&](std::size_t i) { return !same(i, i + 1); };
-    // A chat shown anew starts from its newest few dozen.
-    if (shown_chat != chosen)
-      window = kWindow;
-    const std::size_t first_made = all.size() > window ? all.size() - window : 0;
+    // A chat shown anew: its stretch as it was left, or its newest.
+    if (shown_chat != chosen) {
+      if (shown_chat)
+        made_of[*shown_chat] = made;
+      const auto kept = made_of.find(*chosen);
+      made = kept == made_of.end() ? made_range{} : kept->second;
+    }
+    const auto [first_made, last_made] = this->made_indices(all);
+    this->set_made(all, first_made, last_made);
     // The bubbles, as a function of the messages: those that show the same
     // are kept -- with a selection in them -- and only the new are made.
     if (nodes::reconcile(
-            entries, std::views::iota(first_made, all.size()),
+            entries, std::views::iota(first_made, last_made),
             [&](std::size_t i) { return all[i].id; }, [](const message_bubble& row) { return row.message_id; },
             [&](std::size_t i) { return message_bubble(*one, all[i], first_of_run(i), last_of_run(i)); },
             [&](const message_bubble& row, std::size_t i) {
@@ -4726,18 +4847,34 @@ struct context_menu : scene::Node {
   struct card : nodes::Stack {
     row_item<ask<Actions, &Actions::menu_reply>> reply;
     row_item<ask<Actions, &Actions::menu_edit>> edit;
+    row_item<not_yet<Actions>> pin;
     row_item<ask<Actions, &Actions::menu_copy>> copy;
+    row_item<ask<Actions, &Actions::menu_copy_link>> copy_link;
+    row_item<ask<Actions, &Actions::menu_save>> save;
+    row_item<not_yet<Actions>> forward;
     row_item<ask<Actions, &Actions::menu_delete>> remove;
     // Who has seen it, as Telegram's menu says at its top: how many, and
     // their names under it.
     row_item<nothing> seen;
     std::vector<nodes::Text> seen_names;
     nodes::Box<> seen_band{band_colour};
-    card(Actions* a, bool own, const std::vector<std::string>& readers)
-        : reply("Reply", {a}, icon::back{}), edit("Edit", {a}, icon::sliders{}), copy("Copy text", {a}, icon::clip{}),
-          remove("Delete", {a}, icon::close{}),
-          seen(readers.empty() ? std::string("Not seen yet") : std::format("Seen by {}", readers.size()), {},
+    // As tdesktop's, in its order, what does not apply to the message left
+    // out: Reply, Edit, Pin, Copy, Copy Message Link, Save As, Forward,
+    // Delete; and who has seen it, at the foot.
+    card(Actions* a, const menu_facts& facts)
+        : reply("Reply", {a}, icon::back{}), edit("Edit", {a}, icon::sliders{}),
+          pin("Pin", {a, "Pinning messages"}, icon::check{}),
+          copy(facts.selection ? "Copy Selected Text" : "Copy Text", {a}, icon::clip{}),
+          copy_link("Copy Message Link", {a}, icon::info{}), save("Save As…", {a}, icon::send{}),
+          forward("Forward", {a, "Forwarding"}, icon::send{}), remove("Delete", {a}, icon::close{}),
+          seen(facts.seen.empty() ? std::string("Not seen yet") : std::format("Seen by {}", facts.seen.size()), {},
                icon::check{}) {
+      const std::vector<std::string>& readers = facts.seen;
+      edit.setVisible(facts.own && !facts.text.empty() && !facts.media);
+      copy.setVisible(!facts.copied.empty());
+      copy_link.setVisible(!facts.link.empty());
+      save.setVisible(facts.media.has_value());
+      remove.setVisible(facts.own);
       for (std::size_t i = 0; i < readers.size() && i < 10; ++i) {
         seen_names.emplace_back(readers[i], 13.0f, dim_colour);
         seen_names.back().setElided(true);
@@ -4748,18 +4885,20 @@ struct context_menu : scene::Node {
         seen_names.back().apply({.fillX = true, .margin = {0.0f, 16.0f, 2.0f, 64.0f}});
       }
       seen_band.apply({.fillX = true, .height = 1.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f}});
-      fState.apply({.width = 210.0f, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}});
-      edit.setVisible(own);
-      remove.setVisible(own);
+      fState.apply({.width = 230.0f, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}});
     }
     void forEachChild(auto&& f) {
-      f(seen);
-      f(seen_names);
-      f(seen_band);
       f(reply);
       f(edit);
+      f(pin);
       f(copy);
+      f(copy_link);
+      f(save);
+      f(forward);
       f(remove);
+      f(seen_band);
+      f(seen);
+      f(seen_names);
     }
     void drawSelf(skia::SkCanvas* canvas, float alpha) {
       skia::SkFont* font = skiff::paint::defaultFont();
@@ -4775,8 +4914,8 @@ struct context_menu : scene::Node {
   } menu;
   Actions* actions = nullptr;
 
-  context_menu(Actions* a, bool own, float x, float y, const std::vector<std::string>& seen)
-      : menu(a, own, seen), actions(a) {
+  explicit context_menu(Actions* a, const menu_facts& facts) : menu(a, facts), actions(a) {
+    const float x = facts.x, y = facts.y;
     fState.apply({.fill = true});
     menu.apply({.x = x, .y = y});
   }
@@ -4881,41 +5020,155 @@ struct send_box : nodes::Stack {
   }
 };
 
-// A picture seen whole, over the window: dimmed behind, fitted in with a
-// margin, the thumbnail until the whole picture has come; a press anywhere
-// closes it.
+// A picture seen whole, as tdesktop's media viewer -- but over this window,
+// not in one of its own: dark behind; at the top, who sent it and when, and
+// the buttons -- zoom out and in, save, close; the picture fitted in the
+// rest, zoomed by the wheel or the buttons, dragged about when larger than
+// the room. A press on the dark around it closes it; the whole picture
+// replaces its thumbnail when it has come.
 template <class Actions>
-struct picture_viewer : scene::Node {
+struct picture_viewer : nodes::Stack {
   Actions* actions = nullptr;
   std::string source;
-  picture_viewer(Actions* a, std::string where) : actions(a), source(std::move(where)) {
+  // The viewer's own buttons act on it; the rest on the program.
+  struct zoom_by {
+    picture_viewer* viewer;
+    float factor;
+    void operator()() const { viewer->zoom_to(viewer->zoom * factor); }
+  };
+  struct save_it {
+    Actions* actions;
+    std::string source;
+    void operator()() const { actions->save_picture(source); }
+  };
+  struct top_bar : nodes::Stack {
+    avatar_mark face;
+    two_lines texts;
+    nodes::Box<> gap{skia::colorSetARGB(0, 0, 0, 0)};
+    icon_button<zoom_by> smaller;
+    icon_button<zoom_by> larger;
+    icon_button<save_it> save;
+    icon_button<ask<Actions, &Actions::close_picture>> close;
+    top_bar(Actions* a, picture_viewer* viewer, const std::string& source, const std::string& sender,
+            const std::string& name, const std::string& when)
+        : face(sender, name, 36.0f), texts(name, when, 14.0f, 2.0f), smaller(icon::minus{}, {viewer, 1.0f / 1.25f}),
+          larger(icon::plus{}, {viewer, 1.25f}), save(icon::send{}, {a, source}), close(icon::close{}, {a}) {
+      this->setHorizontal();
+      this->setGap(8.0f);
+      fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 16.0f}});
+      texts.name.setColour(skia::colorSetARGB(255, 255, 255, 255));
+      texts.state.setColour(skia::colorSetARGB(255, 200, 200, 200));
+      gap.apply({.height = 1.0f, .grow = scene::axes::kX});
+      for (auto* button : {&smaller.colour, &larger.colour, &close.colour})
+        *button = skia::colorSetARGB(255, 255, 255, 255);
+      save.colour = skia::colorSetARGB(255, 255, 255, 255);
+      for (scene::Node* middle : std::initializer_list<scene::Node*>{&smaller, &larger, &save, &close})
+        middle->apply({.alignSelf = scene::align::kMiddle});
+    }
+    void forEachChild(auto&& f) {
+      f(face);
+      f(texts);
+      f(gap);
+      f(smaller);
+      f(larger);
+      f(save);
+      f(close);
+    }
+  } top;
+  // Where the picture is drawn: fitted, zoomed, moved.
+  struct stage : scene::Node {
+    picture_viewer* viewer;
+    explicit stage(picture_viewer* v) : viewer(v) { fState.apply({.fillX = true, .grow = scene::axes::kY}); }
+    [[nodiscard]] const skia::Sp<skia::SkImage>* image() const {
+      const skia::Sp<skia::SkImage>* one = avatar_images().find("full:" + viewer->source);
+      if (!one || !*one)
+        one = avatar_images().find("thumb:" + viewer->source);
+      return one && *one ? one : nullptr;
+    }
+    [[nodiscard]] skia::SkRect where() const {
+      const skia::Sp<skia::SkImage>* one = this->image();
+      const skia::SkRect& box = fState.fBounds;
+      if (!one)
+        return skia::SkRect::MakeEmpty();
+      const float w = static_cast<float>((*one)->width()), h = static_cast<float>((*one)->height());
+      const float fit = std::min({1.0f, (box.width() - 48.0f) / w, (box.height() - 48.0f) / h});
+      const float scale = fit * viewer->zoom;
+      return skia::SkRect::MakeXYWH(box.centerX() - w * scale * 0.5f + viewer->pan_x,
+                                    box.centerY() - h * scale * 0.5f + viewer->pan_y, w * scale, h * scale);
+    }
+    void drawSelf(skia::SkCanvas* canvas, float alpha) {
+      const skia::Sp<skia::SkImage>* one = this->image();
+      if (!one)
+        return;
+      const int saved = canvas->save();
+      canvas->clipRect(fState.fBounds);
+      skia::SkPaint paint;
+      paint.setAlphaf(alpha);
+      canvas->drawImageRect(*one, this->where(), skia::SkSamplingOptions(skia::SkFilterMode::kLinear), &paint);
+      canvas->restoreToCount(saved);
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+    [[nodiscard]] bool onScroll(float ticks) {
+      viewer->zoom_to(viewer->zoom * std::pow(1.25f, ticks));
+      return true;
+    }
+    bool dragging = false;
+    float last_x = 0.0f, last_y = 0.0f;
+    using Node::onPointer;
+    void onPointer(scene::phase::target, const scene::pointer::down& press, scene::PointerReply& reply) {
+      // Off the picture: closed. On it, and larger than the room: dragged.
+      if (!this->where().contains(press.x, press.y)) {
+        viewer->actions->close_picture();
+        reply.handle();
+        return;
+      }
+      dragging = true;
+      last_x = press.x;
+      last_y = press.y;
+      reply.capturePointer();
+      reply.handle();
+    }
+    void onPointer(scene::phase::target, const scene::pointer::move& at, scene::PointerReply& reply) {
+      if (!dragging || viewer->zoom <= 1.0f)
+        return;
+      viewer->pan_x += at.x - last_x;
+      viewer->pan_y += at.y - last_y;
+      last_x = at.x;
+      last_y = at.y;
+      this->markDamaged();
+      reply.handle();
+    }
+    void onPointer(scene::phase::target, const scene::pointer::up&, scene::PointerReply& reply) {
+      if (dragging) {
+        dragging = false;
+        reply.releasePointer();
+      }
+    }
+  } view;
+  float zoom = 1.0f;
+  float pan_x = 0.0f, pan_y = 0.0f;
+  void zoom_to(float wanted) {
+    zoom = std::clamp(wanted, 1.0f, 8.0f);
+    if (zoom == 1.0f)
+      pan_x = pan_y = 0.0f;
+    view.markDamaged();
+  }
+
+  picture_viewer(Actions* a, std::string where, std::string sender, std::string name, std::string when)
+      : actions(a), source(std::move(where)), top(a, this, source, sender, name, when), view(this) {
     fState.apply({.fill = true});
   }
+  void forEachChild(auto&& f) {
+    f(top);
+    f(view);
+  }
   void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    const skia::SkRect& box = fState.fBounds;
     skia::SkPaint dim;
-    dim.setColor(skia::colorSetARGB(0xd9, 0, 0, 0));
+    dim.setColor(skia::colorSetARGB(0xe6, 0, 0, 0));
     dim.setAlphaf(dim.getAlphaf() * alpha);
-    canvas->drawRect(box, dim);
-    const skia::Sp<skia::SkImage>* image = avatar_images().find("full:" + source);
-    if (!image || !*image)
-      image = avatar_images().find("thumb:" + source);
-    if (!image || !*image)
-      return;
-    const float w = static_cast<float>((*image)->width()), h = static_cast<float>((*image)->height());
-    const float scale = std::min({1.0f, (box.width() - 80.0f) / w, (box.height() - 80.0f) / h});
-    const skia::SkRect at = skia::SkRect::MakeXYWH(box.centerX() - w * scale * 0.5f, box.centerY() - h * scale * 0.5f,
-                                                   w * scale, h * scale);
-    skia::SkPaint paint;
-    paint.setAlphaf(alpha);
-    canvas->drawImageRect(*image, at, skia::SkSamplingOptions(skia::SkFilterMode::kLinear), &paint);
+    canvas->drawRect(fState.fBounds, dim);
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
-  using Node::onPointer;
-  void onPointer(scene::phase::target, const scene::pointer::down&, scene::PointerReply& reply) {
-    actions->close_picture();
-    reply.handle();
-  }
 };
 
 // ---- the window -------------------------------------------------------------------
@@ -5005,7 +5258,9 @@ struct window : scene::Node {
   }
 
   void open_settings(std::string motion) { p->settings.open(actions, std::move(motion)); }
-  void open_picture(std::string source) { p->viewer.emplace(actions, std::move(source)); }
+  void open_picture(std::string source, std::string sender, std::string name, std::string when) {
+    p->viewer.emplace(actions, std::move(source), std::move(sender), std::move(name), std::move(when));
+  }
   void open_send_box(const std::vector<pending_file>& files) {
     p->sending.setSize(440.0f, 560.0f);
     p->sending.open(actions, files);
@@ -5023,9 +5278,7 @@ struct window : scene::Node {
   // Whether the pages are still moving.
   [[nodiscard]] bool pages_moving() { return p->frame.settling(); }
 
-  void open_menu(bool own, float x, float y, const std::vector<std::string>& seen) {
-    p->menu.emplace(actions, own, x, y, seen);
-  }
+  void open_menu(const menu_facts& facts) { p->menu.emplace(actions, facts); }
   void close_menu() { p->menu.reset(); }
 
   void show_notice(std::string what) {

@@ -688,16 +688,9 @@ struct open_settings {};
 struct pop_panel {};
 struct toggle_info {};
 struct jump_to_end {};
-struct message_menu {
-  std::string id;
-  bool own = false;
-  std::string text;
-  float x = 0.0f, y = 0.0f;
-  // What Copy takes: the selection in it, or all of it.
-  std::string copied;
-  // Who has seen it.
-  std::vector<std::string> seen;
-};
+using message_menu = mux::ui::menu_facts;
+struct menu_copy_link {};
+struct menu_save {};
 struct close_menu {};
 struct menu_reply {};
 struct menu_edit {};
@@ -728,6 +721,10 @@ struct flip_rename_pictures {};
 struct close_send_box {};
 struct send_files {};
 struct open_picture {
+  std::string source;
+  std::string sender, name, when;
+};
+struct save_picture {
   std::string source;
 };
 struct close_picture {};
@@ -812,11 +809,11 @@ using request_t =
                  request::toggle_plain, request::submit_login, request::flip_enabled, request::remove_account,
                  request::open_drawer, request::show_account, request::set_motion, request::quit,
                  request::open_settings, request::close_settings, request::settings_home,
-                 request::settings_animations, request::pop_panel, request::toggle_info, request::load_older, request::jump_to_end, request::message_menu,
+                 request::settings_animations, request::pop_panel, request::toggle_info, request::load_older, request::jump_to_end, request::message_menu, request::menu_copy_link, request::menu_save,
                  request::close_menu, request::menu_reply, request::menu_edit, request::menu_copy,
                  request::menu_delete, request::cancel_compose, request::open_url,
                  request::switch_account, request::submit_message, request::send_typed,
-                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_member_info, request::reply_to, request::open_picture, request::close_picture, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::flip_strip_metadata, request::flip_rename_pictures, request::close_notice,
+                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_member_info, request::reply_to, request::open_picture, request::close_picture, request::save_picture, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::flip_strip_metadata, request::flip_rename_pictures, request::close_notice,
                  request::resize_info, request::choose_new_proxy, request::toggle_mute, request::close_account_pages,
                  request::accounts_back, request::account_page, request::flip_account_receipts, request::flip_account_typing, request::typing,
                  request::proxy_kind, request::choose_account_proxy, request::manage_proxies,
@@ -868,10 +865,9 @@ struct actions {
   void pop_panel() { requests.emplace_back(request::pop_panel{}); }
   void toggle_info() { requests.emplace_back(request::toggle_info{}); }
   void jump_to_end() { requests.emplace_back(request::jump_to_end{}); }
-  void message_menu(std::string id, bool own, std::string text, std::string copied, std::vector<std::string> seen,
-                    float x, float y) {
-    requests.emplace_back(request::message_menu{std::move(id), own, std::move(text), x, y, std::move(copied), std::move(seen)});
-  }
+  void message_menu(mux::ui::menu_facts facts) { requests.emplace_back(std::move(facts)); }
+  void menu_copy_link() { requests.emplace_back(request::menu_copy_link{}); }
+  void menu_save() { requests.emplace_back(request::menu_save{}); }
   void close_menu() { requests.emplace_back(request::close_menu{}); }
   void menu_reply() { requests.emplace_back(request::menu_reply{}); }
   void menu_edit() { requests.emplace_back(request::menu_edit{}); }
@@ -892,7 +888,10 @@ struct actions {
   void flip_rename_pictures() { requests.emplace_back(request::flip_rename_pictures{}); }
   void close_send_box() { requests.emplace_back(request::close_send_box{}); }
   void send_files() { requests.emplace_back(request::send_files{}); }
-  void open_picture(std::string source) { requests.emplace_back(request::open_picture{std::move(source)}); }
+  void open_picture(std::string source, std::string sender, std::string name, std::string when) {
+    requests.emplace_back(request::open_picture{std::move(source), std::move(sender), std::move(name), std::move(when)});
+  }
+  void save_picture(std::string source) { requests.emplace_back(request::save_picture{std::move(source)}); }
   void close_picture() { requests.emplace_back(request::close_picture{}); }
   void open_file(std::string source, std::string name) {
     requests.emplace_back(request::open_file{std::move(source), std::move(name)});
@@ -1066,14 +1065,13 @@ struct app {
     // A file fetched to be saved: into Downloads, a number added where the
     // name is taken, and opened.
     if (picture.key.starts_with("file:")) {
-      const std::filesystem::path name = std::filesystem::path(picture.key.substr(5)).filename();
-      std::error_code failed;
-      std::filesystem::create_directories(downloads(), failed);
-      auto where = downloads() / (name.empty() ? std::filesystem::path("file") : name);
-      for (int n = 1; std::filesystem::exists(where, failed); ++n)
-        where = downloads() / std::format("{} ({}){}", name.stem().string(), n, name.extension().string());
-      std::ofstream(where, std::ios::binary) << picture.bytes;
-      mux::host::open_url("file://" + where.string());
+      this->save_download(picture.bytes, picture.key.substr(5), true);
+      return;
+    }
+    if (picture.key.starts_with("save:")) {
+      // The name after save:, where the menu gave one; a picture's else.
+      const std::string name = picture.key.substr(5);
+      this->save_download(picture.bytes, name.starts_with("mxc://") ? std::string("image") : name, false);
       return;
     }
     if (auto image = skia::decodeImage(picture.bytes.data(), picture.bytes.size())) {
@@ -1417,7 +1415,7 @@ struct app {
   // A message's menu, and what is chosen from it.
   void apply(const request::message_menu& one) {
     menu_target = one;
-    root().open_menu(one.own, one.x, one.y, one.seen);
+    root().open_menu(one);
   }
   void apply(const request::close_menu&) { root().close_menu(); }
   // -- files to send: chosen with the paperclip, or dropped on the window
@@ -1502,12 +1500,41 @@ struct app {
   // A picture seen whole: over the window at once, the thumbnail until all
   // of it has come.
   void apply(const request::open_picture& one) {
-    root().open_picture(one.source);
+    root().open_picture(one.source, one.sender, one.name, one.when);
     const auto& chosen = root().main().chosen;
     if (chosen && !mux::ui::avatar_images().has("full:" + one.source) && avatars_fetched.insert("full:" + one.source).second)
       net->fetch_media(chosen->account, one.source, "full:" + one.source, 0);
   }
   void apply(const request::close_picture&) { root().close_picture(); }
+  // A picture saved into Downloads: from the disk where it was fetched
+  // whole, fetched whole where not; named as the picture's type says.
+  void apply(const request::save_picture& one) {
+    const auto kept = avatar_file("full:" + one.source);
+    if (std::ifstream file{kept, std::ios::binary}) {
+      std::string bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+      this->save_download(bytes, "image", false);
+      return;
+    }
+    if (const auto& chosen = root().main().chosen)
+      net->fetch_media(chosen->account, one.source, "save:" + one.source, 0);
+  }
+  // Bytes saved into Downloads under a name -- a picture's with its type's
+  // extension, a number added where the name is taken -- and opened, or not.
+  void save_download(const std::string& bytes, std::string name, bool open) {
+    if (const auto type = mux::media::picture_of(bytes); type && !name.contains('.'))
+      name += std::format(".{}", mux::media::extension_of(*type));
+    const std::filesystem::path base = std::filesystem::path(name).filename();
+    std::error_code failed;
+    std::filesystem::create_directories(downloads(), failed);
+    auto where = downloads() / (base.empty() ? std::filesystem::path("file") : base);
+    for (int n = 1; std::filesystem::exists(where, failed); ++n)
+      where = downloads() / std::format("{} ({}){}", base.stem().string(), n, base.extension().string());
+    std::ofstream(where, std::ios::binary) << bytes;
+    if (open)
+      mux::host::open_url("file://" + where.string());
+    else
+      root().show_message("Saved", std::format("Saved to {}", where.string()));
+  }
   // A file saved -- into ~/Downloads, under its name -- and opened.
   void apply(const request::open_file& one) {
     const auto& chosen = root().main().chosen;
@@ -1543,6 +1570,25 @@ struct app {
   void apply(const request::menu_copy&) {
     root().close_menu();
     skiff::scene::setClipboardText(menu_target.copied.empty() ? menu_target.text : menu_target.copied);
+  }
+  void apply(const request::menu_copy_link&) {
+    root().close_menu();
+    skiff::scene::setClipboardText(menu_target.link);
+  }
+  // A picture or a file saved into Downloads, from the menu.
+  void apply(const request::menu_save&) {
+    root().close_menu();
+    if (!menu_target.media)
+      return;
+    const auto kept = avatar_file("full:" + *menu_target.media);
+    if (std::ifstream file{kept, std::ios::binary}) {
+      std::string bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+      this->save_download(bytes, menu_target.media_name.empty() ? std::string("image") : menu_target.media_name, false);
+      return;
+    }
+    if (const auto& chosen = root().main().chosen)
+      net->fetch_media(chosen->account, *menu_target.media,
+                       "save:" + (menu_target.media_name.empty() ? std::string("image") : menu_target.media_name), 0);
   }
   void apply(const request::menu_delete&) {
     root().close_menu();

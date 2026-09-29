@@ -88,7 +88,7 @@ struct chat_header : nodes::Stack {
       parts.face.setVisible(shown.key.has_value());
       parts.find.setVisible(shown.key.has_value());
       parts.info.setVisible(shown.key.has_value());
-      parts.texts.state.setVisible(shown.key.has_value());
+      parts.texts.parts.state.setVisible(shown.key.has_value());
     }
   };
   struct parts_t {

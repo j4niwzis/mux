@@ -50,8 +50,8 @@ struct drawer_account : nodes::Stack {
     this->setGap(14.0f);
     fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}, .hoverBackground = chosen_colour, .selectedBackground = chosen_colour, .focusBackground = chosen_colour, .selected = current});
     const auto [how, failed] = state_of(saved, now);
-    parts.texts.state.setText(std::format("{} · {}", config::protocol_name(saved), how));
-    parts.texts.state.setColour(failed ? error_colour : dim_colour);
+    parts.texts.parts.state.setText(std::format("{} · {}", config::protocol_name(saved), how));
+    parts.texts.parts.state.setColour(failed ? error_colour : dim_colour);
     parts.tick.setColour(accent_colour);
     parts.tick.setVisible(current);
   }

@@ -419,7 +419,7 @@ struct accounts_panel : closes_on_escape<Actions> {
     pages.setVisible(shown);
     add.setVisible(!shown);
     list.setVisible(!shown);
-    header.title.setText(shown && selected ? *selected : std::string("Accounts"));
+    header.parts.title.setText(shown && selected ? *selected : std::string("Accounts"));
     this->invalidateLayout();
   }
   // Back to the list of accounts, nothing chosen.

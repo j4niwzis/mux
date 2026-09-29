@@ -57,8 +57,8 @@ struct picture_viewer : nodes::Stack {
       this->setHorizontal();
       this->setGap(8.0f);
       fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 16.0f}});
-      parts.texts.name.setColour(skia::colorSetARGB(255, 255, 255, 255));
-      parts.texts.state.setColour(skia::colorSetARGB(255, 200, 200, 200));
+      parts.texts.parts.name.setColour(skia::colorSetARGB(255, 255, 255, 255));
+      parts.texts.parts.state.setColour(skia::colorSetARGB(255, 200, 200, 200));
       parts.gap.apply({.height = 1.0f, .grow = scene::axes::kX});
       // White on the dark of the viewer.
       for (auto* white : {&parts.smaller, &parts.larger})

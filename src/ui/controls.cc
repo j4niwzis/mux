@@ -58,20 +58,19 @@ struct avatar_mark : widgets::Avatar {
 // A name over how it is: two lines, each cut where it runs out of room,
 // taking what their row leaves them.
 struct two_lines : nodes::Stack {
-  nodes::Text name;
-  nodes::Text state;
+  struct parts_t {
+    nodes::Text name;
+    nodes::Text state;
+  } parts;
   two_lines(std::string first, std::string second, float size, float gap)
-      : name(std::move(first), size, text_colour, true), state(std::move(second), size - 2.0f, dim_colour) {
+      : parts{.name = nodes::Text(std::move(first), size, text_colour, true),
+              .state = nodes::Text(std::move(second), size - 2.0f, dim_colour)} {
     this->setGap(gap);
     fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-    for (nodes::Text* each : {&name, &state}) {
+    for (nodes::Text* each : {&parts.name, &parts.state}) {
       each->setElided(true);
       each->apply({.fillX = true});
     }
-  }
-  void forEachChild(auto&& f) {
-    f(name);
-    f(state);
   }
 };
 
@@ -80,15 +79,19 @@ struct row_item : nodes::Stack {
   Act act;
   // Whether it is one of a choice, and the chosen one.
   std::optional<bool> radio;
-  icon_mark mark;
-  nodes::Text label;
-  radio_mark dot;
+  struct parts_t {
+    icon_mark mark;
+    nodes::Text label;
+    radio_mark dot;
+  } parts;
 
   static constexpr float kHeight = 46.0f;
 
   // Declared: its icon, its text taking the room, and a radio at the end.
   row_item(std::string text, Act what, icon_t icon = icon::none{}, std::optional<bool> choice = std::nullopt)
-      : act(std::move(what)), radio(choice), mark(icon), label(std::move(text), 15.0f, text_colour) {
+      : act(std::move(what)), radio(choice),
+        parts{.mark = icon_mark(icon), .label = nodes::Text(std::move(text), 15.0f, text_colour)} {
+    auto& [mark, label, dot] = parts;
     this->setHorizontal();
     this->setGap(16.0f);
     fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}, .hoverBackground = chosen_colour, .selectedBackground = chosen_colour, .focusBackground = chosen_colour});
@@ -101,9 +104,9 @@ struct row_item : nodes::Stack {
 
   void set_chosen(bool on) {
     radio = on;
-    dot.set_on(on);
-    dot.setVisible(true);
-    dot.markDamaged();
+    parts.dot.set_on(on);
+    parts.dot.setVisible(true);
+    parts.dot.markDamaged();
   }
   // Lit as the line whose page is shown beside the list.
   void set_lit(bool on) {
@@ -112,12 +115,6 @@ struct row_item : nodes::Stack {
     this->markDamaged();
   }
   bool lit = false;
-
-  void forEachChild(auto&& f) {
-    f(mark);
-    f(label);
-    f(dot);
-  }
 
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
@@ -129,7 +126,7 @@ struct row_item : nodes::Stack {
   [[nodiscard]] scene::Semantics semantics() const {
     scene::Semantics out;
     out.fRole = scene::semantic_role::button{};
-    out.fLabel = label.text();
+    out.fLabel = parts.label.text();
     out.fSelected = radio.value_or(false);
     out.fActions = {scene::semantic_action::focus{}, scene::semantic_action::activate{}};
     return out;
@@ -174,15 +171,19 @@ struct icon_button : scene::Node {
 // the page's name, and ✕ on the right where the page closes.
 template <class Back, class Close>
 struct page_header : nodes::Stack {
-  icon_button<Back> back;
-  nodes::Text title;
-  icon_button<Close> close;
+  struct parts_t {
+    icon_button<Back> back;
+    nodes::Text title;
+    icon_button<Close> close;
+  } parts;
 
   static constexpr float kHeight = 54.0f;
 
   page_header(std::string name, Back to, Close shut, bool has_back, bool has_close)
-      : back(icon::back{}, std::move(to)), title(std::move(name), 17.0f, text_colour, true),
-        close(icon::close{}, std::move(shut)) {
+      : parts{.back = icon_button<Back>(icon::back{}, std::move(to)),
+              .title = nodes::Text(std::move(name), 17.0f, text_colour, true),
+              .close = icon_button<Close>(icon::close{}, std::move(shut))} {
+    auto& [back, title, close] = parts;
     this->setHorizontal();
     this->setGap(12.0f);
     fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}});
@@ -194,12 +195,6 @@ struct page_header : nodes::Stack {
     title.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle,
                  .margin = {0.0f, 0.0f, 0.0f, has_back ? 0.0f : 10.0f}});
   }
-
-  void forEachChild(auto&& f) {
-    f(back);
-    f(title);
-    f(close);
-  }
 };
 
 // One segment of a segmented control: square, its text centred, filled
@@ -208,21 +203,22 @@ template <class Act>
 struct segment : nodes::Stack {
   Act act;
   bool active = false;
-  nodes::Text label;
+  struct parts_t {
+    nodes::Text label;
+  } parts;
 
-  segment(std::string text, Act what) : act(std::move(what)), label(std::move(text), 13.0f, text_colour, true) {
+  segment(std::string text, Act what)
+      : act(std::move(what)), parts{.label = nodes::Text(std::move(text), 13.0f, text_colour, true)} {
     fState.apply({.width = 92.0f, .height = 28.0f, .hoverBackground = chosen_colour, .selectedBackground = accent_colour, .focusBackground = chosen_colour});
     fStack.justify = nodes::justify::middle{};
-    label.apply({.alignSelf = scene::align::kMiddle});
+    parts.label.apply({.alignSelf = scene::align::kMiddle});
   }
 
   void set_active(bool on) {
     active = on;
-    label.setColour(on ? on_accent_colour : text_colour);
+    parts.label.setColour(on ? on_accent_colour : text_colour);
     fState.apply({.selected = on});
   }
-
-  void forEachChild(auto&& f) { f(label); }
 
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
@@ -234,7 +230,7 @@ struct segment : nodes::Stack {
   [[nodiscard]] scene::Semantics semantics() const {
     scene::Semantics out;
     out.fRole = scene::semantic_role::tab{};
-    out.fLabel = label.text();
+    out.fLabel = parts.label.text();
     out.fSelected = active;
     out.fActions = {scene::semantic_action::focus{}, scene::semantic_action::activate{}};
     return out;

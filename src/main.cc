@@ -106,11 +106,6 @@ int main(int argc, char** argv) {
   program.box = &box;
   program.model = &model;
   program.net = &net;
-  // A link pressed in a message's text: routed as a link is.
-  skiff::scene::linkOpener() = {+[](void* self, std::string_view url) {
-                                  static_cast<app*>(self)->ask.open_url(std::string(url));
-                                },
-                                &program};
   program.ask.net = &net;
   program.ask.demo = demo;
   program.ask.box = &box;

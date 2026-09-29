@@ -408,6 +408,7 @@ inline double now_ms() {
 //   woken()         another thread woke the window
 //   files_given(paths, dropped)  files chosen in the dialog, or dropped
 //   save_path_chosen(path)  where to save a file, chosen in the dialog
+//   open_link(url)  a link pressed in a text
 //   before_frame()  between events: what the screens asked for, applied
 //                   where no handler is running
 //   closing()       the window is going away
@@ -449,21 +450,15 @@ int run(App& app, const options& how) {
     const std::array layers{skiff::scene::InputRouter::Layer{scene.handle(), false}};
     router.setLayers(layers);
     // Kept here for as long as the hook is set: the hook keeps a pointer.
-    auto keyboard = [window](bool on) {
-      if (on)
-        SDL_StartTextInput(window);
-      else
-        SDL_StopTextInput(window);
+    // The system's clipboard, for pasting: read now, and again whenever it
+    // changes.
+    const auto read_clipboard = [] {
+      char* text = SDL_GetClipboardText();
+      skiff::scene::clipboardContents() = text ? text : "";
+      SDL_free(text);
     };
-    skiff::scene::setTextFocusHook(keyboard);
-    // The system's clipboard, for copying, cutting and pasting.
-    skiff::scene::clipboard() = {+[]() -> std::string {
-                                   char* text = SDL_GetClipboardText();
-                                   std::string out = text ? text : "";
-                                   SDL_free(text);
-                                   return out;
-                                 },
-                                 +[](const std::string& text) { SDL_SetClipboardText(text.c_str()); }};
+    read_clipboard();
+    bool typing = false;  // the text input, as last started or stopped
 
     bool running = true;
     bool redraw = true;
@@ -475,6 +470,9 @@ int run(App& app, const options& how) {
         const float scale = SDL_GetWindowDisplayScale(window);
         (void)scale;
         switch (event.type) {
+          case SDL_EVENT_CLIPBOARD_UPDATE:
+            read_clipboard();
+            break;
           case SDL_EVENT_QUIT:
           case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
             running = false;
@@ -545,6 +543,23 @@ int run(App& app, const options& how) {
       SDL_GetWindowSizeInPixels(window, &pixel_width, &pixel_height);
       const float width = static_cast<float>(pixel_width) / scale;
       const float height = static_cast<float>(pixel_height) / scale;
+      // What the scene left for the host: the text input started or stopped
+      // as a field takes the focus or lets it go, what was copied put on
+      // the clipboard, the links pressed followed.
+      auto& work = skiff::scene::hostWork();
+      if (work.typing != typing) {
+        typing = work.typing;
+        if (typing)
+          SDL_StartTextInput(window);
+        else
+          SDL_StopTextInput(window);
+      }
+      if (auto copied = std::exchange(work.copied, std::nullopt)) {
+        SDL_SetClipboardText(copied->c_str());
+        skiff::scene::clipboardContents() = std::move(*copied);
+      }
+      for (auto& url : std::exchange(work.links, {}))
+        app.open_link(std::move(url));
       app.before_frame();
       scene.update(detail::now_ms());
       scene.layoutIfNeeded(skia::SkRect::MakeWH(width, height));
@@ -571,7 +586,6 @@ int run(App& app, const options& how) {
       target.present();
     }
     app.closing();
-    skiff::scene::clearTextFocusHook();
   }
   SDL_DestroyWindow(window);
   SDL_Quit();

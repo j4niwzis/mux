@@ -325,6 +325,8 @@ struct settings_appearance {};
 struct set_theme {
   mux::config::theme_t theme;
 };
+struct flip_partial_redraw {};
+struct flip_flash_redraws {};
 struct set_renderer {
   mux::config::renderer_t renderer;
 };
@@ -356,7 +358,7 @@ using request_t =
                  request::proxy_kind, request::choose_account_proxy, request::manage_proxies,
                  request::settings_proxies, request::add_proxy, request::edit_proxy, request::save_proxy_profile,
                  request::delete_proxy_profile, request::settings_appearance, request::settings_rendering, request::settings_storage, request::change_limit, request::clear_stored, request::set_theme,
-                 request::set_renderer, request::set_accent, request::leave_chat>;
+                 request::set_renderer, request::flip_partial_redraw, request::flip_flash_redraws, request::set_accent, request::leave_chat>;
 
 // What the screens ask: each a request, kept until the program applies it
 // between events -- except a message, which goes to the network at once.
@@ -555,6 +557,8 @@ struct actions {
   void settings_appearance() { requests.emplace_back(request::settings_appearance{}); }
   void set_theme(mux::config::theme_t theme) { requests.emplace_back(request::set_theme{theme}); }
   void set_renderer(mux::config::renderer_t renderer) { requests.emplace_back(request::set_renderer{renderer}); }
+  void flip_partial_redraw() { requests.emplace_back(request::flip_partial_redraw{}); }
+  void flip_flash_redraws() { requests.emplace_back(request::flip_flash_redraws{}); }
   void set_accent(mux::config::accent_t accent) { requests.emplace_back(request::set_accent{accent}); }
   void leave_chat() { requests.emplace_back(request::leave_chat{}); }
   void switch_account(std::string address) { requests.emplace_back(request::switch_account{std::move(address)}); }

@@ -562,6 +562,10 @@ int run(App& app, const options& how) {
     bool redraw = true;
     bool animating = false;
     detail::toasts<App> shown_toasts;
+    // Partial redraw's frame, kept between frames; and which one the last
+    // frame drew into (a new one is painted whole).
+    skia::Sp<skia::SkSurface> kept_frame;
+    skia::SkSurface* kept_frame_for = nullptr;
     while (running) {
       SDL_Event event;
       bool got = (redraw || animating) ? SDL_WaitEventTimeout(&event, 16) : SDL_WaitEvent(&event);
@@ -695,16 +699,58 @@ int run(App& app, const options& how) {
       animating = frame.fWantsAnotherFrame || !shown_toasts.empty();
       if (frame.fDamage.isEmpty() && !redraw)
         continue;
-      redraw = false;
+      const bool whole = std::exchange(redraw, false);
       skia::SkSurface* surface = target.surface();
       if (!surface)
         continue;
       skia::SkCanvas* canvas = surface->getCanvas();
-      canvas->clear(skia::colorSetARGB(255, 24, 27, 30));
-      canvas->save();
-      canvas->scale(scale, scale);
-      scene.draw(canvas);
-      canvas->restore();
+      // What is repainted, in the window's pixels: the damage, a pixel out
+      // for antialiasing -- or all of it.
+      const skia::SkRect all = skia::SkRect::MakeWH(static_cast<float>(surface->width()), static_cast<float>(surface->height()));
+      skia::SkRect repainted = all;
+      if (app.partial_redraw) {
+        // Into a frame kept between frames (the window's buffers are not):
+        // only the damage repainted there, then the frame shown whole.
+        if (!kept_frame || kept_frame->width() != surface->width() || kept_frame->height() != surface->height())
+          kept_frame = surface->makeSurface(surface->imageInfo());
+        if (!kept_frame)
+          continue;
+        const bool fresh = std::exchange(kept_frame_for, kept_frame.get()) != kept_frame.get();
+        if (!whole && !fresh) {
+          repainted = skia::SkRect::MakeLTRB(frame.fDamage.fLeft * scale - 1.0f, frame.fDamage.fTop * scale - 1.0f,
+                                             frame.fDamage.fRight * scale + 1.0f, frame.fDamage.fBottom * scale + 1.0f);
+          repainted.roundOut(&repainted);
+          if (!repainted.intersect(all))
+            continue;
+        }
+        skia::SkCanvas* into = kept_frame->getCanvas();
+        into->save();
+        into->clipRect(repainted);
+        into->clear(skia::colorSetARGB(255, 24, 27, 30));
+        into->scale(scale, scale);
+        scene.draw(into);
+        into->restore();
+        canvas->drawImage(kept_frame->makeImageSnapshot(), 0.0f, 0.0f);
+      } else {
+        kept_frame = nullptr;
+        kept_frame_for = nullptr;
+        canvas->clear(skia::colorSetARGB(255, 24, 27, 30));
+        canvas->save();
+        canvas->scale(scale, scale);
+        scene.draw(canvas);
+        canvas->restore();
+        if (!whole)
+          repainted = skia::SkRect::MakeLTRB(frame.fDamage.fLeft * scale, frame.fDamage.fTop * scale,
+                                             frame.fDamage.fRight * scale, frame.fDamage.fBottom * scale);
+      }
+      // What this frame repainted, outlined, where that is asked for.
+      if (app.flash_redraws) {
+        skia::SkPaint outline;
+        outline.setStyle(skia::kStrokeStyle);
+        outline.setStrokeWidth(2.0f);
+        outline.setColor(skia::colorSetARGB(220, 255, 0, 160));
+        canvas->drawRect(repainted.makeInset(1.0f, 1.0f), outline);
+      }
       target.present();
     }
     app.closing();

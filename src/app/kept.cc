@@ -26,6 +26,10 @@ struct kept_settings {
   mux::config::theme_t theme = mux::config::theme::tinted{};
   mux::config::accent_t accent = mux::config::accent::theme_own{};
   mux::config::renderer_t renderer = mux::config::renderer::opengl{};
+  // Read by the host at each frame: only the damage repainted; and it
+  // outlined.
+  bool partial_redraw = false;
+  bool flash_redraws = false;
   // How much is kept, in memory and on disk.
   mux::config::cache_limits limits;
   // What is done to a picture dropped before it is sent.
@@ -156,6 +160,10 @@ struct kept_settings {
     out.theme = mux::config::word_of(theme);
     out.accent = mux::config::word_of(accent);
     out.renderer = mux::config::word_of(renderer);
+    if (partial_redraw)
+      out.partial_redraw = true;
+    if (flash_redraws)
+      out.flash_redraws = true;
     out.cache = limits;
     out.sending = sending;
     out.history = history;

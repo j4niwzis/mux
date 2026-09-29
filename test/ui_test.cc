@@ -161,6 +161,8 @@ struct stub {
   void change_limit(mux::config::limit_t, bool) {}
   void clear_stored() {}
   void set_theme(mux::config::theme_t) {}
+  void flip_partial_redraw() {}
+  void flip_flash_redraws() {}
   void set_renderer(mux::config::renderer_t) {}
   void set_accent(mux::config::accent_t) {}
   void leave_chat() {}

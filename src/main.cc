@@ -125,6 +125,8 @@ int main(int argc, char** argv) {
   program.theme = mux::config::theme_of(saved.theme);
   program.accent = mux::config::accent_of(saved.accent);
   program.renderer = mux::config::renderer_of(saved.renderer);
+  program.partial_redraw = saved.partial_redraw.value_or(false);
+  program.flash_redraws = saved.flash_redraws.value_or(false);
   program.limits = saved.cache.value_or(mux::config::cache_limits{});
   if (!demo)
     program.drafts.load();

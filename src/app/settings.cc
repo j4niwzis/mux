@@ -61,7 +61,7 @@ class settings_part {
   }
   void apply(const request::settings_rendering&) {
     if (auto* up = s_->root().settings_up())
-      up->show_rendering(k_->renderer);
+      up->show_rendering(k_->renderer, k_->partial_redraw, k_->flash_redraws);
   }
   void apply(const request::set_theme& one) {
     k_->theme = one.theme;
@@ -74,6 +74,15 @@ class settings_part {
     s_->rebuild_due = true;
   }
   // The renderer: for the next start, kept.
+  // Taken at the next frame: the host reads them as it draws.
+  void apply(const request::flip_partial_redraw&) {
+    k_->partial_redraw = !k_->partial_redraw;
+    (void)k_->write();
+  }
+  void apply(const request::flip_flash_redraws&) {
+    k_->flash_redraws = !k_->flash_redraws;
+    (void)k_->write();
+  }
   void apply(const request::set_renderer& one) {
     k_->renderer = one.renderer;
     if (auto* up = s_->root().settings_up()) {

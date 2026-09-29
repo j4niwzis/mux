@@ -487,6 +487,10 @@ struct file {
   std::optional<std::string> theme;
   std::optional<std::string> accent;
   std::optional<std::string> renderer;
+  // Only what changed repainted, into a frame kept between them.
+  std::optional<bool> partial_redraw;
+  // What each frame repainted, outlined: to see that only that is.
+  std::optional<bool> flash_redraws;
   std::optional<cache_limits> cache;
   std::optional<sending_settings> sending;
   std::optional<history_settings> history;

@@ -141,7 +141,7 @@ if(MUX_UI)
   # skiff and skiff-widgets say the rest of what they are in their own trees.
   cme_declare_port(NAME skiff PROVIDES skiff
     GITHUB_REPOSITORY j4niwzis/skiff
-    GIT_TAG f5a4d7a9120def8834a07a8ac400d2128a876553)
+    GIT_TAG 28a706e225e9cddd95bbfa900a7b7b28df579861)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
     GIT_TAG 35e459539865362c6919c946488cd71640511b1c)
@@ -151,7 +151,7 @@ if(MUX_UI)
   # Text shaped by HarfBuzz and laid out by Unicode's rules through alef:
   # Arabic and Hebrew, Indic scripts, emoji sequences, CJK line breaks.
   set(SKIFF_TEXT_SHAPING ON CACHE BOOL "" FORCE)
-  cme_find_package(Skia REQUIRED COMPONENTS gl png jpeg gif webp freetype fontmgr-directory)
+  cme_find_package(Skia REQUIRED COMPONENTS gl png jpeg freetype fontmgr-directory)
   cme_find_package(SDL3 REQUIRED)
   cme_find_package(skiff-widgets REQUIRED)
   # skiff's modules are C++23 and do not carry the family's flags, so they

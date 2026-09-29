@@ -405,6 +405,54 @@ TEST(Emoji, ThePanelHasRowsAndScrolls) {
   skiff::paint::defaultFont() = nullptr;
 }
 
+// A one-letter message in a group, as in the screenshot of #5378: its bubble
+// as wide as its name and its letter ask, not its widest; each part's width
+// said where it is not.
+TEST(Timeline, AOneLetterMessageIsNarrow) {
+  auto manager = skia::SkFontMgr_New_Custom_Directory("/usr/share/fonts");
+  skia::Sp<skia::SkTypeface> face;
+  for (const char* family : {"DejaVu Sans", "Noto Sans", "Liberation Sans"})
+    if (manager && !face)
+      face = manager->matchFamilyStyle(family, skia::SkFontStyle());
+  if (face)
+    skiff::paint::fonts().setPrimary(face);
+  skia::SkFont font(face);
+  skiff::paint::defaultFont() = &font;
+  stub program;
+  scene::Scene<mux::ui::window<stub>> window{std::in_place, &program};
+  const mux::account_id alice{mux::protocol::matrix{}, "@alice:example.com"};
+  const mux::conversation_id room{alice, "!room:example.com"};
+  mux::model model;
+  model.apply(mux::change_t{mux::change::connection_changed{alice, mux::connection::online{}}});
+  model.apply(mux::change_t{mux::change::conversation_updated{
+      .id = room, .kind = mux::conversation_kind::group{}, .name = "A group"}});
+  mux::message one;
+  one.in = room;
+  one.id = "$a";
+  one.sender = "@mika:example.com";
+  one.body.plain = "A";
+  model.apply(mux::change_t{mux::change::message_added{.message = std::move(one)}});
+  auto& screen = window.root().main();
+  screen.chosen = room;
+  screen.show(model);
+  const skia::SkRect viewport = skia::SkRect::MakeWH(1100.0f, 720.0f);
+  for (int i = 0; i < 6; ++i) {
+    window.update(1000.0 + 16.0 * i);
+    window.layoutIfNeeded(viewport);
+    (void)window.finishFrame();
+  }
+  auto& bubbles = std::get<0>(std::get<0>(screen.timeline.fChildren).fChildren);
+  ASSERT_EQ(bubbles.size(), 1u);
+  const auto& body = bubbles.front().parts.body;
+  const auto width = [](const auto& node) { return node.bounds().width(); };
+  EXPECT_LT(body.bounds().width(), 250.0f)
+      << "the bubble " << width(body) << " wide: its name " << (body.parts.name ? width(*body.parts.name) : -1.0f)
+      << ", its text " << width(body.parts.text) << ", its time " << width(body.parts.time) << " (shown "
+      << body.parts.time.visible() << "), the time inside " << width(body.parts.inline_time) << " (shown "
+      << body.parts.inline_time.visible() << ")";
+  skiff::paint::defaultFont() = nullptr;
+}
+
 // A picture in a message, pressed: the viewer is asked for, with it.
 TEST(Timeline, APicturePressedIsOpened) {
   skia::SkFont font;

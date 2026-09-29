@@ -583,7 +583,11 @@ struct context_menu : scene::Node {
       if (emoji)
         return;
       emoji.emplace(react_with<Actions>{actions_of});
-      emoji->apply({.fillX = true, .height = 300.0f});
+      // Unrolled from the top, as Telegram's: its height from nothing to its
+      // own, what is under it clipped meanwhile.
+      emoji->apply({.fillX = true, .height = 0.0f, .masking = true});
+      unroll.jump(0.0f);
+      unroll.setTarget(kEmojiHeight);
       quick.parts.more.setVisible(false);
       for (scene::Node* item : std::initializer_list<scene::Node*>{&reply, &edit, &pin, &copy, &copy_link, &save,
                                                                    &save_gif, &reactions, &forward, &remove,
@@ -592,6 +596,15 @@ struct context_menu : scene::Node {
       for (auto& name : seen_names)
         name.setVisible(false);
       this->invalidateLayout();
+    }
+    static constexpr float kEmojiHeight = 300.0f;
+    skiff::paint::Tween unroll{kEmojiHeight, 220.0f};
+    [[nodiscard]] bool settling() const { return unroll.moving(); }
+    void update(double now_ms) {
+      if (unroll.step(now_ms) && parts.emoji) {
+        parts.emoji->apply({.height = unroll.value()});
+        this->invalidateLayout();
+      }
     }
     // The keys, as tdesktop's menu takes them: Up and Down through its
     // items, round; Enter does what is lit (the item's own); Esc closes it.

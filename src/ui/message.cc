@@ -741,7 +741,12 @@ struct message_bubble : nodes::Stack {
     appearing.setTarget(1.0f);
     fState.apply({.alpha = 0.0f, .shiftY = 12.0f});
   }
-  [[nodiscard]] bool settling() const { return swipe.moving() || flash.moving() || appearing.moving(); }
+  // The swipe's offset as last drawn: a drag jumps the tween, which then
+  // does not move, and the bubble followed only once it was let go.
+  float swipe_drawn = 0.0f;
+  [[nodiscard]] bool settling() const {
+    return swipe.moving() || swipe.value() != swipe_drawn || flash.moving() || appearing.moving();
+  }
   void update(double now_ms) {
     if (flash.step(now_ms))
       fState.apply({.background = (accent_colour & 0x00FFFFFFu) |
@@ -750,10 +755,12 @@ struct message_bubble : nodes::Stack {
       const float shown = appearing.value();
       fState.apply({.alpha = shown, .shiftY = (1.0f - shown) * 12.0f});
     }
-    if (!swipe.step(now_ms))
+    const bool stepped = swipe.step(now_ms);
+    if (!stepped && swipe.value() == swipe_drawn)
       return;
     auto& [face, body, swipe_mark] = parts;
     const float shift = swipe.value();
+    swipe_drawn = shift;
     const float reached = std::clamp(-shift / kSwipeToReply, 0.0f, 1.0f);
     face.apply({.shiftX = shift});
     body.apply({.shiftX = shift});

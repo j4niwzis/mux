@@ -853,11 +853,26 @@ struct conversations_screen : nodes::Stack {
     const auto& all = one->timeline;
     // Where each message is in its sender's run: the first has the name,
     // the last the avatar.
-    const auto same = [&](std::size_t i, std::size_t j) {
-      return j < all.size() && all[j].sender == all[i].sender && all[j].outgoing == all[i].outgoing;
+    // A room's event -- a join, an address set -- is a line of its own and
+    // ends a run: the message after it has its sender's name again. Where
+    // the room's events are hidden, a run goes on past them.
+    const auto events_choice = events_shown.find(one->id);
+    const bool events_here = events_choice == events_shown.end() || events_choice->second;
+    const auto neighbour = [&](std::size_t i, bool forward) -> std::optional<std::size_t> {
+      for (std::size_t j = i;;) {
+        if (forward ? j + 1 >= all.size() : j == 0)
+          return std::nullopt;
+        j = forward ? j + 1 : j - 1;
+        if (events_here || !all[j].service)
+          return j;
+      }
     };
-    const auto first_of_run = [&](std::size_t i) { return i == 0 || !same(i, i - 1); };
-    const auto last_of_run = [&](std::size_t i) { return !same(i, i + 1); };
+    const auto same = [&](std::size_t i, std::optional<std::size_t> j) {
+      return j && !all[i].service && !all[*j].service && all[*j].sender == all[i].sender &&
+             all[*j].outgoing == all[i].outgoing;
+    };
+    const auto first_of_run = [&](std::size_t i) { return !same(i, neighbour(i, false)); };
+    const auto last_of_run = [&](std::size_t i) { return !same(i, neighbour(i, true)); };
     // A chat shown anew: its stretch as it was left, or its newest.
     if (shown_chat != chosen) {
       if (shown_chat)

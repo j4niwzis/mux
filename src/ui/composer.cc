@@ -17,6 +17,7 @@ import :base;
 import :icons;
 import :controls;
 import :themes;
+import :message;
 
 export namespace mux::ui {
 
@@ -138,7 +139,7 @@ struct composer_bar : nodes::Stack {
   // The paperclip, the field growing with what is written in it, the arrow.
   struct input_row : nodes::Stack {
     using attach_button = icon_button<ask<Actions, &Actions::attach_files>>;
-    using field_t = widgets::TextArea<submit_message<Actions>>;
+    using field_t = widgets::TextArea<submit_message<Actions>, message_pictures>;
     using emoji_button = icon_button<ask<Actions, &Actions::toggle_emoji>>;
     using send_button = icon_button<ask<Actions, &Actions::send_typed>>;
     struct parts_t {
@@ -172,7 +173,7 @@ struct composer_bar : nodes::Stack {
     input_row input;
   } parts;
   // The old name, for what reads it.
-  widgets::TextArea<submit_message<Actions>>& field = parts.input.parts.field;
+  typename input_row::field_t& field = parts.input.parts.field;
 
   // Declared: the divider, the answer's line where there is one, the row.
   explicit composer_bar(Actions* a) : parts{.context_line = context_row(a), .input = input_row(a)} {
@@ -181,7 +182,26 @@ struct composer_bar : nodes::Stack {
     parts.divider.apply({.fillX = true, .height = 1.0f});
   }
 
+  // What is in the field, as it holds it: a mention picked, the room its
+  // pill's picture takes and the name.
   [[nodiscard]] const std::string& text() const { return parts.input.parts.field.text(); }
+  // What is written, as it is sent and kept: each mention by its name.
+  [[nodiscard]] std::string plain() const { return parts.input.parts.field.plainText(); }
+  // Who is mentioned in it: its pills, as they are now.
+  [[nodiscard]] std::vector<mention> mentions() const {
+    std::vector<mention> out;
+    for (const auto& one : parts.input.parts.field.atoms())
+      out.push_back({one.plain, one.target});
+    return out;
+  }
+  // A mention picked from the list, over the @ and what was typed of it
+  // (from `from` on): a pill, as the message will show it, and a space.
+  void put_mention(std::size_t from, const std::string& name, const std::string& user) {
+    auto& field = parts.input.parts.field;
+    field.select(from, field.text().size());
+    field.insertAtom("\u2002\u2002" + name, user, name);
+    field.insertText(" ");
+  }
   // Whether what is written answers or edits something.
   [[nodiscard]] bool answering() const { return parts.context_line.visible(); }
   // What is written answers or edits something, shown; or nothing.

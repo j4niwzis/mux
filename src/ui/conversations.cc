@@ -105,7 +105,6 @@ struct conversations_screen : nodes::Stack {
   std::vector<member> mention_matches;
   std::size_t mention_lit = 0;
   std::string mention_query;
-  std::vector<mention> draft_mentions;
   struct pick_mention {
     conversations_screen* screen;
     std::size_t index;
@@ -217,9 +216,7 @@ struct conversations_screen : nodes::Stack {
     const auto at = text.rfind('@');
     if (at == std::string::npos)
       return;
-    const std::string name = one.name.empty() ? one.id : one.name;
-    chat.line.set_text(text.substr(0, at) + name + " ");
-    draft_mentions.push_back({name, one.id});
+    chat.line.put_mention(at, one.name.empty() ? one.id : one.name, one.id);
     mention_query.clear();
     mention_matches.clear();
     chat.parts.mentions.parts.rows.clear();

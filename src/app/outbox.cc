@@ -118,7 +118,7 @@ class outbox_part {
     s_->root().main().line.show_context(std::nullopt);
   }
   void apply(const request::submit_message& one) { this->send(one.text); }
-  void apply(const request::send_typed&) { this->send(s_->root().main().line.text()); }
+  void apply(const request::send_typed&) { this->send(s_->root().main().line.plain()); }
 
   // Files: chosen with the paperclip, or dropped; the send box closed, or
   // what is in it sent -- the caption with the first.
@@ -233,8 +233,8 @@ class outbox_part {
     // first, where it is a window elsewhere, or it would not be shown.
     s_->go_live(to);
     screen.jump_to_end();
-    // Who was picked from the @ list for it: sent as mentions.
-    auto mentions = std::exchange(screen.draft_mentions, {});
+    // Who was picked from the @ list for it, its pills: sent as mentions.
+    auto mentions = screen.line.mentions();
     std::visit(overloaded{[&](const compose::plain&) {
                             if (s_->demo())
                               s_->ask->send(to, std::move(text));

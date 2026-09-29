@@ -29,7 +29,7 @@ void app::apply(const request::choose& one) {
   auto& screen = root().main();
   search.chat_chosen(one.which);
   if (screen.chosen && *screen.chosen != one.which) {
-    drafts.keep(*screen.chosen, screen.line.text());
+    drafts.keep(*screen.chosen, screen.line.plain());
     screen.line.set_text(screen.draft_of(one.which));
   } else if (!screen.chosen) {
     screen.line.set_text(screen.draft_of(one.which));

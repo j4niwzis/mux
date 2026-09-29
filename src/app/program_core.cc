@@ -327,7 +327,7 @@ void app::before_frame() {
 
 void app::closing() {
   if (const auto& chosen = root().main().chosen)
-    drafts.keep(*chosen, root().main().line.text());
+    drafts.keep(*chosen, root().main().line.plain());
   net->shutdown();
 }
 

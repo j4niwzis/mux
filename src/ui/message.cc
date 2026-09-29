@@ -557,8 +557,8 @@ inline std::set<std::string, std::less<>>& rooms_found() {
   return kept;
 }
 struct mentioned {
-  // Rooms named in it whose picture (or whose being there) is still to
-  // come: made again when it has. And the rooms not joined, to be asked of.
+  // Rooms named in it whose picture is still to come, and rooms not known
+  // to be there: made again when the one comes or the other is found.
   std::vector<std::string> waiting;
   std::vector<std::string> unknown;
   std::string text;
@@ -667,7 +667,6 @@ struct mentioned {
                                                 : std::string(text.substr(span.first, span.last - span.first));
       if (!found) {
         out.unknown.push_back(target);
-        out.waiting.push_back(target);
         shown = words;
         if (!span.as_written)
           out.links.push_back(nodes::Text::Link{span.first, span.first + shown.size(), "https://matrix.to/#/" + target});
@@ -1293,10 +1292,12 @@ struct message_bubble : nodes::Stack {
   // those not joined, for the server to be asked of.
   std::vector<std::string> rooms_waiting;
   std::vector<std::string> rooms_unknown;
+  // A picture waited on has come, or a room not known was found: each is
+  // waited on for that alone -- a found room without a picture is not
+  // "come" again at every frame.
   [[nodiscard]] bool rooms_came() const {
-    return std::ranges::any_of(rooms_waiting, [](const std::string& key) {
-      return avatar_images().has(key) || rooms_found().contains(key);
-    });
+    return std::ranges::any_of(rooms_waiting, [](const std::string& key) { return avatar_images().has(key); }) ||
+           std::ranges::any_of(rooms_unknown, [](const std::string& key) { return rooms_found().contains(key); });
   }
   skiff::paint::Tween swipe{0.0f, 180.0f, skiff::paint::movement::subtle{}};
   static constexpr float kSwipeToReply = 70.0f;

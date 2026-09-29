@@ -105,7 +105,8 @@ struct conversations_screen : nodes::Stack {
   std::set<conversation_id> previews_off;
   // Rooms the bubbles made name and wait on; and those not joined, for the
   // program to ask their server of (it drains them).
-  std::set<std::string> rooms_waiting;
+  std::set<std::string> rooms_waiting;  // their pictures
+  std::set<std::string> rooms_unfound;  // whether they are there
   std::set<std::string> rooms_wanted;
   // How far a jump's search pages back in each chat, in events; 0 no limit.
   std::map<conversation_id, std::int64_t> jump_limits;
@@ -784,9 +785,9 @@ struct conversations_screen : nodes::Stack {
   void update(double) {
     // A room a bubble names has come -- its picture, or word that it is
     // there: the bubbles made again.
-    if (last_model && std::ranges::any_of(rooms_waiting, [](const std::string& key) {
-          return avatar_images().has(key) || rooms_found().contains(key);
-        }))
+    if (last_model &&
+        (std::ranges::any_of(rooms_waiting, [](const std::string& key) { return avatar_images().has(key); }) ||
+         std::ranges::any_of(rooms_unfound, [](const std::string& key) { return rooms_found().contains(key); })))
       this->show_conversation(*last_model);
     // The pin the bar shows, as the view moves: the one above it. Not while
     // a jump goes on -- where it lands decides.
@@ -1187,8 +1188,11 @@ struct conversations_screen : nodes::Stack {
             }))
       timeline.invalidateLayout();
     rooms_waiting.clear();
-    for (const message_bubble& row : entries)
+    rooms_unfound.clear();
+    for (const message_bubble& row : entries) {
       rooms_waiting.insert(row.rooms_waiting.begin(), row.rooms_waiting.end());
+      rooms_unfound.insert(row.rooms_unknown.begin(), row.rooms_unknown.end());
+    }
     // The newest is at the bottom: the view follows it where the reader was
     // there or the chat is new to the view; otherwise what came after the
     // last one seen is counted on the way down.

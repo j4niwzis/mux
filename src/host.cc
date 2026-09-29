@@ -561,7 +561,7 @@ int run(App& app, const options& how) {
     bool running = true;
     bool redraw = true;
     bool animating = false;
-    toasts<App> shown_toasts;
+    detail::toasts<App> shown_toasts;
     while (running) {
       SDL_Event event;
       bool got = (redraw || animating) ? SDL_WaitEventTimeout(&event, 16) : SDL_WaitEvent(&event);

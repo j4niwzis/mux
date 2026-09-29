@@ -572,7 +572,10 @@ struct conversation {
   // position: a window far back in the history, or a timeline that no
   // longer has it, counted every message in it as unread -- 60 new in a
   // room where none were.
-  [[nodiscard]] std::int64_t unread_here() const {
+  // How many unread: those after the one read up to that are not one's own
+  // -- and not room events the chat does not show (`shown`, as its settings
+  // resolve): what is hidden in it is not counted either.
+  [[nodiscard]] std::int64_t unread_here(const room_event_filter& shown = {}) const {
     if (!read_up_to)
       return unread;
     if (detached)
@@ -581,7 +584,7 @@ struct conversation {
     for (auto it = timeline.rbegin(); it != timeline.rend(); ++it) {
       if (it->id == *read_up_to)
         return after;
-      if (!it->outgoing)
+      if (!it->outgoing && (!it->service || shown.shows(it->event_kind)))
         ++after;
     }
     return unread;
@@ -613,6 +616,18 @@ struct conversation {
   if (one.latest && (one.detached || one.timeline.empty() || one.latest->at > one.timeline.back().at))
     return &*one.latest;
   return one.timeline.empty() ? nullptr : &one.timeline.back();
+}
+// The newest of what the chat shows: a room event it hides passed over, as
+// its preview in the list says what is in it.
+[[nodiscard]] inline const message* newest(const conversation& one, const room_event_filter& shown) {
+  const auto visible = [&](const message& said) { return !said.service || shown.shows(said.event_kind); };
+  if (one.latest && visible(*one.latest) &&
+      (one.detached || one.timeline.empty() || one.latest->at > one.timeline.back().at))
+    return &*one.latest;
+  for (auto it = one.timeline.rbegin(); it != one.timeline.rend(); ++it)
+    if (visible(*it))
+      return &*it;
+  return nullptr;
 }
 
 struct account {

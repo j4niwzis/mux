@@ -109,16 +109,21 @@ struct conversation_row : nodes::Stack {
     std::string draft;
     friend bool operator==(const view&, const view&) = default;
   };
-  [[nodiscard]] static view view_of(const conversation& one, bool is_chosen, bool is_muted, std::string draft = {}) {
-    return {display_name(one), newest(one) ? std::optional<message>(*newest(one)) : std::nullopt,
-            one.unread_here(), is_chosen, is_muted, std::move(draft)};
+  // What it says of the chat -- its newest and its count -- as the chat
+  // shows it: the room events it hides left out of both.
+  [[nodiscard]] static view view_of(const conversation& one, bool is_chosen, bool is_muted, std::string draft = {},
+                                    const room_event_filter& events = {}) {
+    const message* last = newest(one, events);
+    return {display_name(one), last ? std::optional<message>(*last) : std::nullopt, one.unread_here(events), is_chosen,
+            is_muted, std::move(draft)};
   }
   view shown;
 
-  conversation_row(Actions* a, const conversation& one, bool is_chosen, bool is_muted, std::string draft = {})
-      : actions(a), id(one.id), chosen(is_chosen), muted(is_muted), shown(view_of(one, is_chosen, is_muted, draft)),
+  conversation_row(Actions* a, const conversation& one, bool is_chosen, bool is_muted, std::string draft = {},
+                   const room_event_filter& events = {})
+      : actions(a), id(one.id), chosen(is_chosen), muted(is_muted), shown(view_of(one, is_chosen, is_muted, draft, events)),
         parts{.face = avatar_mark(one.id.id, display_name(one), 46.0f),
-              .lines = lines_column(display_name(one), one.unread_here(), is_chosen, is_muted)} {
+              .lines = lines_column(display_name(one), one.unread_here(events), is_chosen, is_muted)} {
     auto& time = parts.lines.parts.top.parts.time;
     auto& preview = parts.lines.parts.bottom.parts.preview;
     auto& sender = parts.lines.parts.bottom.parts.sender;
@@ -131,7 +136,7 @@ struct conversation_row : nodes::Stack {
     this->setHorizontal();
     this->setGap(12.0f);
     fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = chosen_colour, .selectedBackground = selected_colour, .focusBackground = chosen_colour, .selected = chosen});
-    if (const message* newest_one = newest(one)) {
+    if (const message* newest_one = newest(one, events)) {
       const message& last = *newest_one;
       time.setText(clock_of(last.at));
       // What it says, as drawn: an HTML one's text, not its tags, and

@@ -1029,8 +1029,14 @@ struct conversations_screen : nodes::Stack {
         if (in_folder(one) &&
             (wanted.empty() || lower(display_name(one)).contains(wanted) || lower(one.id.id).contains(wanted)))
           chats.push_back(&one);
-    std::ranges::sort(chats, std::ranges::greater{}, [](const conversation* one) {
-      const message* last = newest(*one);
+    // Each chat's room events as it shows them: what it hides is not its
+    // newest, nor counted.
+    const auto events_of = [&](const conversation* one) {
+      const auto found = event_filters.find(one->id);
+      return found == event_filters.end() ? room_event_filter{} : found->second;
+    };
+    std::ranges::sort(chats, std::ranges::greater{}, [&](const conversation* one) {
+      const message* last = newest(*one, events_of(one));
       return last ? last->at : std::chrono::sys_time<std::chrono::milliseconds>{};
     });
     // The rows, as a function of the chats: those whose chat shows the same
@@ -1040,11 +1046,13 @@ struct conversations_screen : nodes::Stack {
             rows, chats, [](const conversation* one) { return one->id; },
             [](const conversation_row<Actions>& row) { return row.id; },
             [&](const conversation* one) {
-              return conversation_row<Actions>(actions, *one, is_chosen(one), muted.contains(one->id), draft_of(one->id));
+              return conversation_row<Actions>(actions, *one, is_chosen(one), muted.contains(one->id), draft_of(one->id),
+                                               events_of(one));
             },
             [&](const conversation_row<Actions>& row, const conversation* one) {
               return row.shown ==
-                     conversation_row<Actions>::view_of(*one, is_chosen(one), muted.contains(one->id), draft_of(one->id));
+                     conversation_row<Actions>::view_of(*one, is_chosen(one), muted.contains(one->id), draft_of(one->id),
+                                                        events_of(one));
             }))
       list.invalidateLayout();
     const bool none = now.accounts().empty();

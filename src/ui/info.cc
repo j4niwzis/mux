@@ -1166,21 +1166,32 @@ struct info_panel : nodes::Stack {
       parts.title.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
     }
   };
-  using member_list = nodes::ScrollContainer<nodes::Flow<std::vector<member_row<open_person>>>>;
+  using member_rows = nodes::Flow<std::vector<member_row<open_person>>>;
+  // All of it in one column that scrolls, as Telegram's profile: the head
+  // -- however long its description and addresses -- then the members.
+  struct column : nodes::Stack {
+    struct parts_t {
+      nodes::Memo<view, head> upper;
+      nodes::Box<> band_2 = section_band();
+      // The members' head, as a function of how many there are.
+      nodes::Memo<std::size_t, members_head> members_header;
+      // The members, reconciled: the rows kept while they show the same.
+      member_rows members{{.spacingY = 0.0f, .wrap = false}, {}};
+    } parts;
+    column() {
+      this->setGap(2.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    }
+  };
   struct parts_t {
-    nodes::Memo<view, head> upper;
-    nodes::Box<> band_2 = section_band();
-    // The members' head, as a function of how many there are.
-    nodes::Memo<std::size_t, members_head> members_header;
-    // The members, in a list of their own that scrolls, reconciled: its
-    // place and its rows kept while they show the same.
-    member_list members{nodes::Flow<std::vector<member_row<open_person>>>({.spacingY = 0.0f, .wrap = false}, {})};
+    nodes::ScrollContainer<column> scroll{column()};
     nodes::Box<> edge{band_colour};  // its left edge
   } parts;
-  nodes::Memo<view, head>& upper = parts.upper;
-  nodes::Box<>& band_2 = parts.band_2;
-  nodes::Memo<std::size_t, members_head>& members_header = parts.members_header;
-  member_list& members = parts.members;
+  column& content = std::get<0>(parts.scroll.fChildren);
+  nodes::Memo<view, head>& upper = content.parts.upper;
+  nodes::Box<>& band_2 = content.parts.band_2;
+  nodes::Memo<std::size_t, members_head>& members_header = content.parts.members_header;
+  member_rows& members = content.parts.members;
   // The group's view, to come back to from a member's page.
   view group_view;
 
@@ -1189,11 +1200,10 @@ struct info_panel : nodes::Stack {
   explicit info_panel(Actions* a) : actions(a) {
     fState.apply({.background = sidebar_colour, .masking = true});
     parts.edge.apply({.place = scene::anchor::kTopLeft, .fillY = true, .width = 1.0f});
-    this->setGap(2.0f);
+    parts.scroll.apply({.fillX = true, .grow = scene::axes::kY});
     upper.apply({.fillX = true, .autoSize = scene::axes::kY});
     members_header.apply({.fillX = true, .height = 48.0f});
-    members.apply({.fillX = true, .grow = scene::axes::kY});
-    std::get<0>(members.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
+    members.apply({.fillX = true, .autoSize = scene::axes::kY});
   }
 
   // The chat shown: its view worked out, its members reconciled.
@@ -1234,7 +1244,7 @@ struct info_panel : nodes::Stack {
         shown_members.emplace_back(std::move(shown), presence_of(now, one.id.account, each.id));
       }
     }
-    auto& rows = std::get<0>(std::get<0>(members.fChildren).fChildren);
+    auto& rows = std::get<0>(members.fChildren);
     if (!same_members && nodes::reconcile(
             rows, shown_members, [](const auto& each) { return each.first.id; },
             [](const member_row<open_person>& row) { return row.id; },

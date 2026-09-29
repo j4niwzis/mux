@@ -210,9 +210,11 @@ void app::save_marks() {
   };
   for (const auto& [id, account] : model->accounts())
     for (const auto& [key, one] : account.conversations) {
-      if (one.unread_mentions.empty() && one.unread_reactions.empty())
+      if (one.unread_mentions.empty() && one.unread_reactions.empty() && one.seen_marks.empty())
         continue;
       mux::config::chat_marks chat{.account = id.address, .conversation = one.id.id};
+      if (!one.seen_marks.empty())
+        chat.seen = one.seen_marks;
       std::ranges::transform(one.unread_mentions, std::back_inserter(chat.mentions), kept);
       std::ranges::transform(one.unread_reactions, std::back_inserter(chat.reactions), kept);
       out.chats.push_back(std::move(chat));
@@ -234,6 +236,9 @@ void app::load_marks() {
     const auto at = [](std::int64_t ms) {
       return std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(ms));
     };
+    // What was seen first, so that nothing seen comes back as unread.
+    if (chat.seen)
+      pending_marks.emplace_back(id, mux::change_t{mux::change::marks_seen{id, *chat.seen}});
     for (const auto& mark : chat.mentions)
       pending_marks.emplace_back(id, mux::change_t{mux::change::mentioned{id, mark.event, at(mark.at)}});
     for (const auto& mark : chat.reactions)

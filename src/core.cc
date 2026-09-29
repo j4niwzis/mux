@@ -556,6 +556,9 @@ struct conversation {
   // What is for the user in it, not yet seen, oldest first: kept to a number.
   std::vector<unread_mark> unread_mentions;
   std::vector<unread_mark> unread_reactions;
+  // The marks already seen or gone to, by their event: kept (and on disk),
+  // so that what the next start catches up on again is not unread again.
+  std::vector<std::string> seen_marks;
   // Messages a reply in view quotes that are not in the timeline, fetched
   // on their own for their quotes -- kept out of the timeline, and let go
   // once the timeline has them, or when too many have gathered.
@@ -926,6 +929,11 @@ struct directory_listed {
   std::vector<directory_room> rooms;
 };
 // A mark of a kind, gone to: the one named, else the oldest.
+// Marks seen before, read back from the disk: not to be unread again.
+struct marks_seen {
+  conversation_id in;
+  std::vector<std::string> events;
+};
 struct mark_taken {
   conversation_id in;
   mark_kind_t kind;
@@ -954,7 +962,7 @@ using change_t = mux::variant<change::connection_changed, change::account_remove
                               change::window_opened, change::window_extended, change::media_progress,
                               change::room_created, change::preview_loaded, change::devtools_text,
                               change::state_listed, change::room_previewed, change::mentioned,
-                              change::marks_shown, change::mark_taken, change::reacted_to_mine,
+                              change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine,
                               change::directory_listed>;
 
 // The model: every account, and every change applied to it.
@@ -1188,22 +1196,41 @@ class model {
   }
   // Marks kept to a number, the oldest going first: a flood of them cannot
   // grow a chat without end.
-  static void keep_mark(std::vector<unread_mark>& marks, unread_mark one) {
-    constexpr std::size_t kMarksKept = 500;
-    if (std::ranges::contains(marks, one.event, &unread_mark::event))
+  static constexpr std::size_t kMarksKept = 500;
+  static void keep_mark(const conversation& where, std::vector<unread_mark>& marks, unread_mark one) {
+    if (std::ranges::contains(marks, one.event, &unread_mark::event) || std::ranges::contains(where.seen_marks, one.event))
       return;
     marks.push_back(std::move(one));
     if (marks.size() > kMarksKept)
       marks.erase(marks.begin());
   }
-  void on(const change::mentioned& one) { keep_mark(of(one.in).unread_mentions, {one.event, one.event, one.at}); }
+  void on(const change::mentioned& one) {
+    conversation& where = of(one.in);
+    keep_mark(where, where.unread_mentions, {one.event, one.event, one.at});
+  }
+  static void mark_seen(conversation& where, const std::string& event) {
+    if (std::ranges::contains(where.seen_marks, event))
+      return;
+    where.seen_marks.push_back(event);
+    if (where.seen_marks.size() > kMarksKept)
+      where.seen_marks.erase(where.seen_marks.begin());
+  }
+  void on(const change::marks_seen& one) {
+    conversation& where = of(one.in);
+    for (const std::string& event : one.events)
+      mark_seen(where, event);
+  }
   void on(const change::directory_listed&) {}  // the window's: the Explore dialog
   void on(const change::reacted_to_mine& one) {
-    keep_mark(of(one.in).unread_reactions, {one.event, one.target, one.at});
+    keep_mark(of(one.in), of(one.in).unread_reactions, {one.event, one.target, one.at});
   }
   void on(const change::marks_shown& one) {
     conversation& where = of(one.in);
     const auto shown = [&](const unread_mark& mark) { return std::ranges::contains(one.shown, mark.target); };
+    for (const auto* marks : {&where.unread_mentions, &where.unread_reactions})
+      for (const unread_mark& mark : *marks)
+        if (shown(mark))
+          mark_seen(where, mark.event);
     std::erase_if(where.unread_mentions, shown);
     std::erase_if(where.unread_reactions, shown);
   }
@@ -1212,10 +1239,13 @@ class model {
     auto& marks = mux::visit(overloaded{[&](mark_kind::mention) -> std::vector<unread_mark>& { return where.unread_mentions; },
                                         [&](mark_kind::reaction) -> std::vector<unread_mark>& { return where.unread_reactions; }},
                              one.kind);
-    if (one.event)
+    if (one.event) {
+      mark_seen(where, *one.event);
       std::erase_if(marks, [&](const unread_mark& mark) { return mark.event == *one.event; });
-    else if (!marks.empty())
+    } else if (!marks.empty()) {
+      mark_seen(where, marks.front().event);
       marks.erase(marks.begin());
+    }
   }
   void on(const change::typing_changed& one) { of(one.in).typing = one.who; }
   void on(const change::history_position& one) { of(one.in).history_from = one.from; }

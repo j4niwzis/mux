@@ -239,6 +239,7 @@ struct chat_marks {
   std::string conversation;
   std::vector<kept_mark> mentions;
   std::vector<kept_mark> reactions;
+  std::optional<std::vector<std::string>> seen;  // marks seen or gone to, by their event
   friend bool operator==(const chat_marks&, const chat_marks&) = default;
 };
 struct marks_file {

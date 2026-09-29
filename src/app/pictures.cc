@@ -17,6 +17,7 @@ import mux.app.requests;
 import mux.app.services;
 import mux.app.workers;
 import mux.logic.blurhash;
+import mux.audio;
 
 export namespace mux::app {
 
@@ -84,6 +85,7 @@ class pictures_part {
                           // A file fetched to be saved: into Downloads, a number
                           // added where the name is taken, and opened; or only saved.
                           [&](const media_use::to_open& one) { this->save_download(picture.bytes, one.name, true); },
+                          [&](const media_use::to_play&) { this->play(picture.source, picture.bytes); },
                           // Saved where the dialog said, where it said; else into Downloads.
                           [&](const media_use::to_save& one) {
                             if (save_path_)
@@ -238,6 +240,35 @@ class pictures_part {
       s_->net->fetch_media(chosen->account, one.source, media_use::to_open{one.name}, 0);
   }
 
+  // Sound pressed: the one playing paused or played on; another decoded --
+  // from the disk where it was fetched before, from the account where not
+  // -- on a worker, and played.
+  void apply(const request::play_audio& one) {
+    auto& speaker = mux::audio::the_speaker();
+    if (speaker.holds(one.source)) {
+      speaker.toggle();
+      return;
+    }
+    if (const auto bytes = this->kept_whole(one.source)) {
+      this->play(one.source, *bytes);
+      return;
+    }
+    if (const auto& chosen = s_->root().main().chosen)
+      s_->net->fetch_media(chosen->account, one.source, media_use::to_play{}, 0);
+  }
+  void play(const std::string& source, const std::string& bytes) {
+    auto kept = std::make_shared<const std::string>(bytes);
+    auto* scene = s_->scene;
+    s_->work->run([kept, source, scene]() -> workers::done_t {
+      auto sound = mux::audio::decode(*kept);
+      return [sound = std::move(sound), source, scene]() {
+        if (sound)
+          mux::audio::the_speaker().play(source, *sound);
+        scene->state().markDamaged();
+      };
+    });
+  }
+
   // A GIF kept among the saved ones: its whole, from the disk where it is
   // kept once it has played. Named by its source, so saving it twice keeps
   // one; touched, so it comes first.
@@ -383,7 +414,8 @@ class pictures_part {
                                  [&](const media_use::thumbnail&) { return named("thumb_"); },
                                  [&](const media_use::whole&) { return named("full_"); },
                                  [](const media_use::to_open&) { return std::optional<std::filesystem::path>(); },
-                                 [](const media_use::to_save&) { return std::optional<std::filesystem::path>(); }},
+                                 [](const media_use::to_save&) { return std::optional<std::filesystem::path>(); },
+                                 [&](const media_use::to_play&) { return named("full_"); }},
                       use);
   }
 

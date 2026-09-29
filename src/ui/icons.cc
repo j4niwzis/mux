@@ -43,6 +43,8 @@ struct down {};    // a chevron down
 struct reply {};   // tdesktop's historyReplyIcon: an arrow turned back
 struct pencil {};  // tdesktop's historyEditIcon
 struct smile {};   // tdesktop's historyEmojiIcon: a round face
+struct play {};    // a triangle, pointing on
+struct pause {};   // two bars
 // A filled dot of a colour of its own, as a proxy profile's.
 struct dot {
   skia::SkColor colour;
@@ -51,7 +53,8 @@ struct dot {
 using icon_t = std::variant<icon::none, icon::person, icon::gear, icon::power, icon::plus, icon::motion, icon::back,
                             icon::close, icon::info, icon::people, icon::add_person, icon::bell, icon::sliders,
                             icon::leave, icon::check, icon::clip, icon::send, icon::eye, icon::dot, icon::minus,
-                            icon::reply, icon::pencil, icon::search, icon::up, icon::down, icon::smile>;
+                            icon::reply, icon::pencil, icon::search, icon::up, icon::down, icon::smile,
+                            icon::play, icon::pause>;
 
 // Each icon's shape, as data, in points from the middle of its box -- about
 // 20 across -- for nodes::Icon to draw.
@@ -175,6 +178,18 @@ namespace steps = nodes::path_step;
            {marks::circle{-3.3f, -2.5f, 1.2f}, 0.0f, true},
            {marks::circle{3.3f, -2.5f, 1.2f}, 0.0f, true},
            {marks::arc{-5.0f, -4.0f, 5.0f, 5.5f, 20.0f, 140.0f}, 1.7f}}};
+}
+[[nodiscard]] inline IconShape shape_of(icon::play) {
+  return {{{marks::path{{steps::move{-4.5f, -7.0f}, steps::line{7.5f, 0.0f}, steps::line{-4.5f, 7.0f}, steps::close{}}},
+            0.0f, true}}};
+}
+[[nodiscard]] inline IconShape shape_of(icon::pause) {
+  return {{{marks::path{{steps::move{-5.0f, -6.5f}, steps::line{-1.5f, -6.5f}, steps::line{-1.5f, 6.5f},
+                         steps::line{-5.0f, 6.5f}, steps::close{}}},
+            0.0f, true},
+           {marks::path{{steps::move{1.5f, -6.5f}, steps::line{5.0f, -6.5f}, steps::line{5.0f, 6.5f},
+                         steps::line{1.5f, 6.5f}, steps::close{}}},
+            0.0f, true}}};
 }
 [[nodiscard]] inline IconShape shape_of(const icon_t& which) {
   return std::visit([](auto one) { return shape_of(one); }, which);

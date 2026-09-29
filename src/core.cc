@@ -177,6 +177,11 @@ using attachment_kind_t = std::variant<attachment_kind::image, attachment_kind::
 }
 // Whether a picture of this type may move: GIF and WebP -- read where a
 // picture comes in, from what its sender says it is.
+// Sound: a voice message or an audio file, by its type, as the protocol
+// said it; an Ogg file by its name where no type was said.
+[[nodiscard]] inline bool audio_type(std::string_view mimetype, std::string_view name) {
+  return mimetype.starts_with("audio/") || name.ends_with(".ogg") || name.ends_with(".opus") || name.ends_with(".oga");
+}
 [[nodiscard]] inline bool moving_type(std::string_view mimetype) {
   return mimetype == "image/gif" || mimetype == "image/webp";
 }
@@ -432,9 +437,11 @@ struct to_open {      // a file, saved to Downloads and opened
 struct to_save {  // a picture or a file, saved to Downloads
   std::string name;
 };
+// Sound to play: fetched whole, kept as a whole picture is, and played.
+struct to_play {};
 }  // namespace media_use
 using media_use_t = std::variant<media_use::avatar, media_use::thumbnail, media_use::whole, media_use::to_open,
-                                 media_use::to_save>;
+                                 media_use::to_save, media_use::to_play>;
 
 // Where a message goes among those of its chat.
 namespace placement {

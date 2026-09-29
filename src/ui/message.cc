@@ -13,6 +13,7 @@ import skiff.nodes.image;
 import skiff.nodes.text;
 import skiff.widgets.loader;
 import skiff.widgets.pill;
+import mux.audio;
 import mux.core;
 import mux.config;
 import mux.logic.links;
@@ -256,6 +257,32 @@ struct file_view : nodes::Stack {
     disc icon;
     texts_column texts;
   } parts;
+  // Sound: the disc a play button, the size the time, as Telegram's voice
+  // messages have them; as the speaker plays it, drawn each frame.
+  bool sound = false;
+  bool shown_playing = false;
+  std::string shown_time;
+  std::string size_line;
+  [[nodiscard]] bool settling() const { return sound && mux::audio::the_speaker().holds(source); }
+  void update(double) {
+    if (!sound)
+      return;
+    auto& speaker = mux::audio::the_speaker();
+    speaker.tick();
+    const bool playing = speaker.playing(source);
+    if (playing != shown_playing) {
+      shown_playing = playing;
+      parts.icon.setShape(shape_of(playing ? icon_t{icon::pause{}} : icon_t{icon::play{}}));
+    }
+    const std::string time = speaker.holds(source)
+                                 ? std::format("{} / {}", mux::audio::clock(speaker.position()),
+                                               mux::audio::clock(speaker.length()))
+                                 : size_line;
+    if (time != shown_time) {
+      shown_time = time;
+      parts.texts.parts.size.setText(time);
+    }
+  }
   [[nodiscard]] static std::string size_text(std::int64_t bytes) {
     if (bytes <= 0)
       return "File";
@@ -265,8 +292,11 @@ struct file_view : nodes::Stack {
       return std::format("{:.1f} KB", static_cast<double>(bytes) / 1024.0);
     return std::format("{:.1f} MB", static_cast<double>(bytes) / (1024.0 * 1024.0));
   }
-  file_view(std::string where, std::string name, std::int64_t bytes)
-      : source(std::move(where)), parts{.texts = texts_column(std::move(name), size_text(bytes))} {
+  file_view(std::string where, std::string name, std::int64_t bytes, bool is_sound = false)
+      : source(std::move(where)), parts{.texts = texts_column(name, size_text(bytes))}, sound(is_sound),
+        size_line(size_text(bytes)) {
+    if (sound)
+      parts.icon.setShape(shape_of(icon::play{}));
     this->setHorizontal();
     this->setGap(11.0f);
     fState.apply({.autoSize = scene::axes::kBoth, .minWidth = 268.0f - 24.0f, .padding = {2.0f, 0.0f, 2.0f, 0.0f}});
@@ -713,7 +743,10 @@ struct message_bubble : nodes::Stack {
       std::visit(overloaded{[&](attachment_kind::image) {
                               body.parts.picture.emplace(carried.source, carried.width, carried.height);
                             },
-                            [&](attachment_kind::file) { body.parts.file.emplace(carried.source, carried.name, carried.size); }},
+                            [&](attachment_kind::file) {
+                              body.parts.file.emplace(carried.source, carried.name, carried.size,
+                                                      audio_type(carried.mimetype, carried.name));
+                            }},
                  carried.kind);
       // No caption: the text goes, and a picture has its time over it.
       if (said.body.plain.empty() && !said.body.html) {

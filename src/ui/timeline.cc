@@ -194,7 +194,10 @@ struct timeline_area : scene::Node {
           return true;
         }
         if (one.parts.body.parts.file && one.parts.body.parts.file->bounds().contains(press.x, press.y) && one.said.attachment) {
-          actions->open_file(one.parts.body.parts.file->source, one.said.attachment->name);
+          if (one.parts.body.parts.file->sound)
+            actions->play_audio(one.parts.body.parts.file->source);
+          else
+            actions->open_file(one.parts.body.parts.file->source, one.said.attachment->name);
           return true;
         }
         // A reaction's chip: the user's own put or taken back.

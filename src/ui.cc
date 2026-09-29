@@ -74,7 +74,8 @@ inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 //   void flip_account_receipts(), choose_account_proxy(int), manage_proxies()
 //   void settings_proxies(), add_proxy(), edit_proxy(int), proxy_kind(int),
 //        save_proxy_profile(), delete_proxy_profile()
-//   void settings_appearance(), settings_rendering()
+//   void settings_appearance(), settings_rendering(), settings_storage()
+//   void change_limit(config::limit_t, bool more), clear_stored()  -- Storage
 //   void set_theme(config::theme_t), set_accent(config::accent_t), set_renderer(config::renderer_t)
 //   void proxy_kind(config::proxy_kind_t)
 //   void not_implemented(std::string what)  -- a box saying it is not there yet
@@ -160,6 +161,7 @@ struct check {};
 struct clip {};
 struct send {};
 struct eye {};
+struct minus {};
 // A filled dot of a colour of its own, as a proxy profile's.
 struct dot {
   skia::SkColor colour;
@@ -167,7 +169,7 @@ struct dot {
 }  // namespace icon
 using icon_t = std::variant<icon::none, icon::person, icon::gear, icon::power, icon::plus, icon::motion, icon::back,
                             icon::close, icon::info, icon::people, icon::add_person, icon::bell, icon::sliders,
-                            icon::leave, icon::check, icon::clip, icon::send, icon::eye, icon::dot>;
+                            icon::leave, icon::check, icon::clip, icon::send, icon::eye, icon::dot, icon::minus>;
 
 [[nodiscard]] inline skia::SkPaint pen(skia::SkColor colour, float alpha, float width = 1.8f) {
   skia::SkPaint out;
@@ -329,6 +331,10 @@ inline void draw_icon(skia::SkCanvas* canvas, icon::dot which, const skia::SkRec
   fill.setAlphaf(alpha);
   canvas->drawCircle(box.centerX(), box.centerY(), 6.0f, fill);
 }
+inline void draw_icon(skia::SkCanvas* canvas, icon::minus, const skia::SkRect& box, skia::SkColor colour, float alpha) {
+  const float x = box.centerX(), y = box.centerY();
+  canvas->drawLine(x - 7.0f, y, x + 7.0f, y, pen(colour, alpha, 2.0f));
+}
 inline void draw_icon(skia::SkCanvas* canvas, const icon_t& which, const skia::SkRect& box, skia::SkColor colour,
                       float alpha) {
   std::visit([&](auto one) { draw_icon(canvas, one, box, colour, alpha); }, which);
@@ -371,7 +377,13 @@ inline void draw_icon(skia::SkCanvas* canvas, const icon_t& which, const skia::S
 // what is out is read from the disk again when it is wanted.
 class avatar_cache {
  public:
-  static constexpr std::size_t kBudget = 32u << 20;
+  // Held to this many bytes; set from Storage.
+  std::size_t budget = 32u << 20;
+  void clear() {
+    images_.clear();
+    order_.clear();
+    bytes_ = 0;
+  }
 
   // A picture, counted as used now.
   [[nodiscard]] const skia::Sp<skia::SkImage>* find(std::string_view key) {
@@ -394,7 +406,7 @@ class avatar_cache {
     order_.push_front(key);
     images_.emplace(std::move(key), entry{std::move(image), order_.begin(), size});
     bytes_ += size;
-    while (bytes_ > kBudget && order_.size() > 1) {
+    while (bytes_ > budget && order_.size() > 1) {
       const auto oldest = images_.find(order_.back());
       bytes_ -= oldest->second.bytes;
       images_.erase(oldest);
@@ -3645,6 +3657,7 @@ struct settings_home : nodes::Stack {
   row_item<ask<Actions, &Actions::settings_proxies>> proxies;
   row_item<ask<Actions, &Actions::settings_appearance>> appearance;
   row_item<ask<Actions, &Actions::settings_rendering>> rendering;
+  row_item<ask<Actions, &Actions::settings_storage>> storage;
 
   explicit settings_home(Actions* a)
       : header("Settings", {a}, {a}, false, true),
@@ -3652,7 +3665,7 @@ struct settings_home : nodes::Stack {
         animations("Animations", {a}, icon::motion{}),
         proxies("Proxies", {a}, icon::gear{}),
         appearance("Appearance", {a}, icon::eye{}),
-        rendering("Rendering", {a}, icon::sliders{}) {
+        rendering("Rendering", {a}, icon::sliders{}), storage("Storage", {a}, icon::clip{}) {
     // Declared: the header, then the lines, one under another.
     fState.apply({.fill = true});
   }
@@ -3663,6 +3676,7 @@ struct settings_home : nodes::Stack {
     f(animations);
     f(appearance);
     f(rendering);
+    f(storage);
     f(proxies);
   }
   void show_motion(std::string_view) {}
@@ -4080,12 +4094,96 @@ struct rendering_page : nodes::Stack {
   }
 };
 
+// A limit changed by a step: halved or doubled.
+template <class Actions>
+struct step_limit {
+  Actions* actions = nullptr;
+  config::limit_t which;
+  bool more = true;
+  void operator()() const { actions->change_limit(which, more); }
+};
+
+// Settings' Storage page: how much is kept in memory and on disk, each a
+// line with its number and a step down and up; and a way to clear what is
+// kept on disk.
+template <class Actions>
+struct storage_page : nodes::Stack {
+  page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>> header;
+  struct stepper : nodes::Stack {
+    nodes::Text label;
+    nodes::Text value{"", 14.0f, accent_colour, true};
+    icon_button<step_limit<Actions>> less;
+    icon_button<step_limit<Actions>> more;
+    stepper(Actions* a, std::string what, config::limit_t which)
+        : label(std::move(what), 15.0f, text_colour), less(icon::minus{}, {a, which, false}),
+          more(icon::plus{}, {a, which, true}) {
+      this->setHorizontal();
+      this->setGap(6.0f);
+      fState.apply({.fillX = true, .height = 50.0f, .padding = {0.0f, 12.0f, 0.0f, 20.0f}});
+      label.setElided(true);
+      label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      for (scene::Node* middle : std::initializer_list<scene::Node*>{&value, &less, &more})
+        middle->apply({.alignSelf = scene::align::kMiddle});
+    }
+    void forEachChild(auto&& f) {
+      f(label);
+      f(value);
+      f(less);
+      f(more);
+    }
+  };
+  nodes::Text memory_title = section_title("IN MEMORY");
+  stepper messages_in_memory;
+  stepper pictures_in_memory;
+  nodes::Text disk_title = section_title("ON DISK");
+  stepper messages_on_disk;
+  stepper pictures_on_disk;
+  row_item<ask<Actions, &Actions::clear_stored>> clear;
+  nodes::Text note{"Memory holds the newest of the chats read lately; the disk holds the rest, and what is scrolled "
+                   "back to comes from there before the server. Past a limit, what was used longest ago goes first.",
+                   13.0f, dim_colour};
+
+  storage_page(Actions* a, const config::cache_limits& limits)
+      : header("Storage", {a}, {a}, true, true),
+        messages_in_memory(a, "Messages", config::limit::messages_in_memory{}),
+        pictures_in_memory(a, "Pictures", config::limit::pictures_in_memory{}),
+        messages_on_disk(a, "Messages", config::limit::messages_on_disk{}),
+        pictures_on_disk(a, "Pictures", config::limit::pictures_on_disk{}),
+        clear("Clear stored messages and pictures", {a}, icon::close{}) {
+    fState.apply({.fill = true});
+    memory_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
+    disk_title.apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
+    note.setWrapped(true);
+    note.apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
+    this->show(limits);
+  }
+  void show(const config::cache_limits& limits) {
+    messages_in_memory.value.setText(std::format("{} messages", limits.messages_in_memory));
+    pictures_in_memory.value.setText(std::format("{} MB", limits.pictures_in_memory_mb));
+    messages_on_disk.value.setText(std::format("{} MB", limits.messages_on_disk_mb));
+    pictures_on_disk.value.setText(std::format("{} MB", limits.pictures_on_disk_mb));
+  }
+  void show_motion(std::string_view) {}
+  void show_receipts(bool) {}
+  void forEachChild(auto&& f) {
+    f(header);
+    f(memory_title);
+    f(messages_in_memory);
+    f(pictures_in_memory);
+    f(disk_title);
+    f(messages_on_disk);
+    f(pictures_on_disk);
+    f(clear);
+    f(note);
+  }
+};
+
 template <class Actions>
 struct settings_dialog : scene::Node {
   Actions* actions = nullptr;
   std::string motion;
   std::variant<settings_home<Actions>, animations_page<Actions>, proxies_page<Actions>, proxy_editor<Actions>,
-               appearance_page<Actions>, rendering_page<Actions>>
+               appearance_page<Actions>, rendering_page<Actions>, storage_page<Actions>>
       page;
   // What is up coming in from the side, fading in, when the page changes.
   skiff::paint::Tween swap{1.0f, 200.0f, skiff::paint::movement::subtle{}};
@@ -4125,6 +4223,15 @@ struct settings_dialog : scene::Node {
   void show_rendering(const config::renderer_t& renderer) {
     page.template emplace<5>(actions, renderer);
     this->begin_swap(1.0f);
+  }
+  void show_storage(const config::cache_limits& limits) {
+    page.template emplace<6>(actions, limits);
+    this->begin_swap(1.0f);
+  }
+  [[nodiscard]] storage_page<Actions>* storage() {
+    return std::visit(overloaded{[](storage_page<Actions>& one) { return &one; },
+                                 [](auto&) -> storage_page<Actions>* { return nullptr; }},
+                      page);
   }
   [[nodiscard]] rendering_page<Actions>* rendering() {
     return std::visit(overloaded{[](rendering_page<Actions>& one) { return &one; },

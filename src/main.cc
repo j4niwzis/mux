@@ -408,10 +408,16 @@ class message_store {
     if (++appended_ % 500 == 1)
       prune(where);
   }
-  // The files held to a size in all: the chats used longest ago -- read or
-  // written -- go first, whole; `keep`, just written, never does.
-  static constexpr std::uintmax_t kDiskBudget = 512u << 20;
-  static void prune(const std::filesystem::path& keep) {
+
+ public:
+  // The files held to this size in all; set from Storage.
+  std::uintmax_t budget = 512u << 20;
+
+ private:
+  // The chats used longest ago -- read or written -- go first, whole;
+  // `keep`, just written, never does.
+  void prune(const std::filesystem::path& keep) const {
+    const std::uintmax_t kDiskBudget = budget;
     std::error_code failed;
     std::vector<std::pair<std::filesystem::file_time_type, std::filesystem::path>> files;
     std::uintmax_t total = 0;
@@ -608,6 +614,12 @@ struct proxy_kind {
   mux::config::proxy_kind_t kind;
 };
 struct settings_rendering {};
+struct settings_storage {};
+struct change_limit {
+  mux::config::limit_t which;
+  bool more = true;
+};
+struct clear_stored {};
 struct choose_account_proxy {
   int index = -1;
 };
@@ -653,7 +665,7 @@ using request_t =
                  request::accounts_back, request::account_page, request::flip_account_receipts,
                  request::proxy_kind, request::choose_account_proxy, request::manage_proxies,
                  request::settings_proxies, request::add_proxy, request::edit_proxy, request::save_proxy_profile,
-                 request::delete_proxy_profile, request::settings_appearance, request::settings_rendering, request::set_theme,
+                 request::delete_proxy_profile, request::settings_appearance, request::settings_rendering, request::settings_storage, request::change_limit, request::clear_stored, request::set_theme,
                  request::set_renderer, request::set_accent, request::leave_chat>;
 
 // What the screens ask: each a request, kept until the program applies it
@@ -730,6 +742,9 @@ struct actions {
   void flip_account_receipts() { requests.emplace_back(request::flip_account_receipts{}); }
   void proxy_kind(mux::config::proxy_kind_t kind) { requests.emplace_back(request::proxy_kind{kind}); }
   void settings_rendering() { requests.emplace_back(request::settings_rendering{}); }
+  void settings_storage() { requests.emplace_back(request::settings_storage{}); }
+  void change_limit(mux::config::limit_t which, bool more) { requests.emplace_back(request::change_limit{which, more}); }
+  void clear_stored() { requests.emplace_back(request::clear_stored{}); }
   void choose_account_proxy(int index) { requests.emplace_back(request::choose_account_proxy{index}); }
   void manage_proxies() { requests.emplace_back(request::manage_proxies{}); }
   void settings_proxies() { requests.emplace_back(request::settings_proxies{}); }
@@ -781,6 +796,12 @@ struct app {
   mux::config::theme_t theme = mux::config::theme::tinted{};
   mux::config::accent_t accent = mux::config::accent::theme_own{};
   mux::config::renderer_t renderer = mux::config::renderer::opengl{};
+  // How much is kept, in memory and on disk.
+  mux::config::cache_limits limits;
+  void apply_limits() {
+    mux::ui::avatar_images().budget = static_cast<std::size_t>(limits.pictures_in_memory_mb) << 20;
+    store.budget = static_cast<std::uintmax_t>(limits.messages_on_disk_mb) << 20;
+  }
   // The proxy chosen for the account being added, as it is added.
   std::optional<std::string> new_proxy;
   // What the message field's text is: a new message, an answer to one, or
@@ -817,10 +838,9 @@ struct app {
       this->keep_on_disk(one);
     }
     // Messages held to a number in all, least recently read out first.
-    model->trim(kMessageBudget, root().main().chosen);
+    model->trim(static_cast<std::size_t>(limits.messages_in_memory), root().main().chosen);
     this->refresh();
   }
-  static constexpr std::size_t kMessageBudget = 5000;
 
   // -- avatars: what the chats and the people in them look like
   // Fetched once each, kept on disk under the cache, shown by what they are
@@ -872,9 +892,9 @@ struct app {
   }
   // The pictures on disk held to a size: the least recently used go first,
   // a file's time being when it was last read or written.
-  static constexpr std::uintmax_t kAvatarDiskBudget = 512u << 20;
   std::size_t avatars_written = 0;
-  static void prune_avatar_files() {
+  void prune_avatar_files() {
+    const std::uintmax_t budget = static_cast<std::uintmax_t>(limits.pictures_on_disk_mb) << 20;
     std::error_code failed;
     const auto directory = mux::config::cache_path("avatars");
     std::vector<std::pair<std::filesystem::file_time_type, std::filesystem::path>> files;
@@ -885,11 +905,11 @@ struct app {
       total += entry.file_size(failed);
       files.emplace_back(entry.last_write_time(failed), entry.path());
     }
-    if (total <= kAvatarDiskBudget)
+    if (total <= budget)
       return;
     std::ranges::sort(files);
     for (const auto& [when, path] : files) {
-      if (total <= kAvatarDiskBudget)
+      if (total <= budget)
         break;
       const auto size = std::filesystem::file_size(path, failed);
       if (std::filesystem::remove(path, failed))
@@ -1321,6 +1341,33 @@ struct app {
     if (auto* up = root().settings_up())
       up->show_appearance(theme, accent);
   }
+  void apply(const request::settings_storage&) {
+    if (auto* up = root().settings_up())
+      up->show_storage(limits);
+  }
+  // A limit halved or doubled, within its bounds: kept, and in force at once.
+  void apply(const request::change_limit& one) {
+    std::int64_t& value = mux::config::value_of(limits, one.which);
+    const auto [low, high] = mux::config::bounds_of(one.which);
+    value = std::clamp(one.more ? value * 2 : value / 2, low, high);
+    this->apply_limits();
+    model->trim(static_cast<std::size_t>(limits.messages_in_memory), root().main().chosen);
+    (void)this->write();
+    if (auto* up = root().settings_up())
+      if (auto* page = up->storage())
+        page->show(limits);
+  }
+  // What is kept on disk, gone: the stored messages and the pictures, and
+  // the pictures in memory, to be fetched again as they are wanted.
+  void apply(const request::clear_stored&) {
+    std::error_code failed;
+    std::filesystem::remove_all(mux::config::state_path("messages"), failed);
+    std::filesystem::remove_all(mux::config::cache_path("avatars"), failed);
+    mux::ui::avatar_images().clear();
+    avatars_fetched.clear();
+    root().show_message("Storage", "The stored messages and pictures are cleared.");
+    this->refresh();
+  }
   void apply(const request::settings_rendering&) {
     if (auto* up = root().settings_up())
       up->show_rendering(renderer);
@@ -1627,6 +1674,7 @@ struct app {
     file.theme = mux::config::word_of(theme);
     file.accent = mux::config::word_of(accent);
     file.renderer = mux::config::word_of(renderer);
+    file.cache = limits;
     if (!muted.empty()) {
       std::vector<mux::config::muted_chat> kept;
       for (const auto& one : muted)
@@ -1721,6 +1769,8 @@ int main(int argc, char** argv) {
   program.theme = mux::config::theme_of(saved.theme);
   program.accent = mux::config::accent_of(saved.accent);
   program.renderer = mux::config::renderer_of(saved.renderer);
+  program.limits = saved.cache.value_or(mux::config::cache_limits{});
+  program.apply_limits();
   program.proxies = proxies;
   for (const auto& one : saved.muted.value_or(std::vector<mux::config::muted_chat>{}))
     program.muted.insert({{mux::ui::protocol_of(one.account), one.account}, one.conversation});

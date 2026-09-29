@@ -76,6 +76,9 @@ struct stub {
   void delete_proxy_profile() {}
   void settings_appearance() {}
   void settings_rendering() {}
+  void settings_storage() {}
+  void change_limit(mux::config::limit_t, bool) {}
+  void clear_stored() {}
   void set_theme(mux::config::theme_t) {}
   void set_renderer(mux::config::renderer_t) {}
   void set_accent(mux::config::accent_t) {}

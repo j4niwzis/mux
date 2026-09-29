@@ -205,6 +205,53 @@ struct muted_chat {
 
 // The file: a list for each protocol, so each entry says what it is by where
 // it is, and has only its own protocol's keys.
+// How much is kept, in memory and on disk: what the Storage page sets.
+struct cache_limits {
+  std::int64_t messages_in_memory = 5000;
+  std::int64_t messages_on_disk_mb = 512;
+  std::int64_t pictures_in_memory_mb = 32;
+  std::int64_t pictures_on_disk_mb = 512;
+  friend bool operator==(const cache_limits&, const cache_limits&) = default;
+};
+consteval auto json_schema(knot::type<cache_limits>) { return knot::schema<cache_limits>(); }
+// Which of them, as the page names them.
+namespace limit {
+struct messages_in_memory {
+  friend bool operator==(messages_in_memory, messages_in_memory) = default;
+};
+struct messages_on_disk {
+  friend bool operator==(messages_on_disk, messages_on_disk) = default;
+};
+struct pictures_in_memory {
+  friend bool operator==(pictures_in_memory, pictures_in_memory) = default;
+};
+struct pictures_on_disk {
+  friend bool operator==(pictures_on_disk, pictures_on_disk) = default;
+};
+}  // namespace limit
+using limit_t = std::variant<limit::messages_in_memory, limit::messages_on_disk, limit::pictures_in_memory,
+                             limit::pictures_on_disk>;
+// A limit's number, and its bounds: what it can be halved or doubled to.
+[[nodiscard]] inline std::int64_t& value_of(cache_limits& all, const limit_t& which) {
+  return std::visit(
+      [&](auto one) -> std::int64_t& {
+        using T = decltype(one);
+        if constexpr (std::same_as<T, limit::messages_in_memory>)
+          return all.messages_in_memory;
+        else if constexpr (std::same_as<T, limit::messages_on_disk>)
+          return all.messages_on_disk_mb;
+        else if constexpr (std::same_as<T, limit::pictures_in_memory>)
+          return all.pictures_in_memory_mb;
+        else
+          return all.pictures_on_disk_mb;
+      },
+      which);
+}
+[[nodiscard]] inline std::pair<std::int64_t, std::int64_t> bounds_of(const limit_t& which) {
+  return std::holds_alternative<limit::messages_in_memory>(which) ? std::pair<std::int64_t, std::int64_t>{250, 200000}
+                                                                  : std::pair<std::int64_t, std::int64_t>{4, 65536};
+}
+
 struct file {
   std::vector<xmpp_account> xmpp;
   std::vector<matrix_account> matrix;
@@ -219,6 +266,7 @@ struct file {
   std::optional<std::string> theme;
   std::optional<std::string> accent;
   std::optional<std::string> renderer;
+  std::optional<cache_limits> cache;
   friend bool operator==(const file&, const file&) = default;
 };
 

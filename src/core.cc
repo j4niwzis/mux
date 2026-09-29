@@ -295,6 +295,32 @@ void log(const account_id& who, std::format_string<Args...> what, Args&&... args
 // ---------------------------------------------------------------------------
 // Changes: what the protocols say happened.
 
+// What a picture or a file is fetched for: told by its type, never by a
+// word in a key.
+namespace media_use {
+struct avatar {  // a chat's avatar or a person's, shown by their id
+  std::string of;
+};
+struct thumbnail {};  // a message's picture, small, as the chat shows it
+struct whole {};      // a message's picture, whole, as the viewer shows it
+struct to_open {      // a file, saved to Downloads and opened
+  std::string name;
+};
+struct to_save {  // a picture or a file, saved to Downloads
+  std::string name;
+};
+}  // namespace media_use
+using media_use_t = std::variant<media_use::avatar, media_use::thumbnail, media_use::whole, media_use::to_open,
+                                 media_use::to_save>;
+
+// Where a message goes among those of its chat.
+namespace placement {
+struct at_end {};     // live: after the rest -- but not into a window away from the newest
+struct at_start {};   // history paged back: before the rest
+struct in_window {};  // a window's own: loaded around a message, or paged forward
+}  // namespace placement
+using placement_t = std::variant<placement::at_end, placement::at_start, placement::in_window>;
+
 namespace change {
 
 struct connection_changed {
@@ -330,23 +356,6 @@ struct receipts_changed {
   std::map<std::string, std::string> read_by;  // user -> the message read up to
 };
 
-// What a picture or a file is fetched for: told by its type, never by a
-// word in a key.
-namespace media_use {
-struct avatar {  // a chat's avatar or a person's, shown by their id
-  std::string of;
-};
-struct thumbnail {};  // a message's picture, small, as the chat shows it
-struct whole {};      // a message's picture, whole, as the viewer shows it
-struct to_open {      // a file, saved to Downloads and opened
-  std::string name;
-};
-struct to_save {  // a picture or a file, saved to Downloads
-  std::string name;
-};
-}  // namespace media_use
-using media_use_t = std::variant<media_use::avatar, media_use::thumbnail, media_use::whole, media_use::to_open,
-                                 media_use::to_save>;
 
 // A picture or a file as its protocol fetched it: the bytes, what they
 // were fetched for, and the source they were fetched by.
@@ -382,12 +391,6 @@ struct presence_changed {
 
 // A message that arrived, or was sent from here; one with an id already
 // kept replaces it (the echo of one sent, a corrected one).
-namespace placement {
-struct at_end {};     // live: after the rest -- but not into a window away from the newest
-struct at_start {};   // history paged back: before the rest
-struct in_window {};  // a window's own: loaded around a message, or paged forward
-}  // namespace placement
-using placement_t = std::variant<placement::at_end, placement::at_start, placement::in_window>;
 struct message_added {
   mux::message message;
   placement_t where = placement::at_end{};

@@ -591,6 +591,10 @@ extern template class skiff::scene::Scene<mux::app::window_type>;
 // the tables of the window's big subtrees -- and so the walks of all in
 // them -- made in units of their own (walks_*.cc), in parallel, not where
 // the window is walked. A release build walks statically and uses none.
+// And the window's layers -- the frame, every dialog's shell, the popups --
+// so that the scene's own unit walks the window alone.
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::window<mux::app::actions>::layers> = true;
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::window<mux::app::actions>::layers>() noexcept;
 template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::conversations_screen<mux::app::actions>> = true;
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::conversations_screen<mux::app::actions>>() noexcept;
 template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::drawer_panel<mux::app::actions>> = true;

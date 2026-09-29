@@ -251,6 +251,7 @@ if(MUX_UI)
   # The accounts, each in a unit of its own, beside network.cc.
   target_sources(mux PRIVATE src/app/accounts_matrix.cc src/app/accounts_xmpp.cc)
   target_sources(mux PRIVATE
+    $<${mux_erased}:src/app/walks_window.cc>
     $<${mux_erased}:src/app/walks_chats.cc>
     $<${mux_erased}:src/app/walks_settings.cc>
     $<${mux_erased}:src/app/walks_manage.cc>

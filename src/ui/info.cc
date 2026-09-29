@@ -10,6 +10,7 @@ import skiff.nodes;
 import skiff.widgets;
 import mux.core;
 import mux.config;
+import mux.logic.links;
 export import :header;
 
 export namespace mux::ui {
@@ -177,6 +178,9 @@ struct info_panel : nodes::Stack {
     bool group = false;
     bool muted = false;
     bool of_person = false;
+    // What copying the ID gives: for a Matrix room, a link to it with the
+    // servers to join through; else the ID.
+    std::string copied;
     friend bool operator==(const view&, const view&) = default;
   };
 
@@ -239,7 +243,10 @@ struct info_panel : nodes::Stack {
     struct id_line : nodes::Stack {
       nodes::Text id;
       nodes::Text label{"ID", 12.0f, dim_colour};
-      explicit id_line(std::string text) : id(std::move(text), 14.0f, accent_colour) {
+      std::string copied;
+      bool a_link = false;  // what is copied is a link to it, not the ID
+      id_line(std::string text, std::string link)
+          : id(text, 14.0f, accent_colour), copied(link.empty() ? text : link), a_link(!link.empty()) {
         this->setGap(2.0f);
         fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 20.0f, 8.0f, 20.0f}, .hoverBackground = chosen_colour, .focusBackground = chosen_colour});
         fState.setCursor(scene::cursor::hand{});
@@ -253,15 +260,15 @@ struct info_panel : nodes::Stack {
       [[nodiscard]] bool acceptsInput() const { return true; }
       [[nodiscard]] bool hoverChangesAppearance() const { return true; }
       [[nodiscard]] bool onClick(float, float) {
-        skiff::scene::setClipboardText(id.text());
-        label.setText("ID · copied");
+        skiff::scene::setClipboardText(copied);
+        label.setText(a_link ? "ID · link copied, with its servers" : "ID · copied");
         return true;
       }
     } id_text;
 
     head(Actions* a, info_panel* panel, const view& shown)
         : top(a, panel, shown.of_person), name(shown.name, 17.0f, text_colour, true),
-          status(shown.status, 13.0f, dim_colour), id_text(shown.key) {
+          status(shown.status, 13.0f, dim_colour), id_text(shown.key, shown.copied) {
       this->setGap(2.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
       avatar.show(shown.key, shown.name);
@@ -341,6 +348,8 @@ struct info_panel : nodes::Stack {
                   group,
                   muted,
                   false};
+    if (group && is_matrix(one.id.account.speaks))
+      group_view.copied = logic::room_link(one);
     // Its members made again only where they changed -- or another chat's
     // are shown: a big room has thousands, and every refresh rebuilt them.
     const bool same_members = members_of == one.id && members_revision == one.members_revision;

@@ -10,6 +10,7 @@ import skiff.nodes;
 import skiff.widgets;
 import mux.core;
 import mux.config;
+import mux.logic.links;
 export import :composer;
 
 export namespace mux::ui {
@@ -233,7 +234,8 @@ struct timeline_area : scene::Node {
         // A Matrix message's link: matrix.to, to it in its room.
         if (seen_chat && is_matrix(seen_chat->account.speaks) &&
             one.message_id.starts_with('$'))
-          facts.link = std::format("https://matrix.to/#/{}/{}", seen_chat->id, one.message_id);
+          if (const conversation* chat = seen_model ? seen_model->find(*seen_chat) : nullptr)
+            facts.link = logic::message_link(*chat, one.message_id);
         facts.x = press.x;
         facts.y = press.y;
         actions->message_menu(std::move(facts));

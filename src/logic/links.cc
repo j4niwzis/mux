@@ -150,6 +150,43 @@ inline std::optional<link_t> from_xmpp(std::string_view rest) {
   return std::nullopt;
 }
 
+// The servers a room is joined through, for a link to it: as Element picks
+// them, those with the most of its members, at most three -- a room's ID
+// from version 12 on names no server, and one that did may be gone.
+[[nodiscard]] inline std::vector<std::string> via_servers(const conversation& chat, std::size_t most = 3) {
+  std::map<std::string, std::size_t> counted;
+  for (const member& each : chat.members)
+    if (const auto colon = each.id.find(':'); colon != std::string::npos)
+      ++counted[each.id.substr(colon + 1)];
+  std::vector<std::pair<std::string, std::size_t>> ranked(counted.begin(), counted.end());
+  std::ranges::stable_sort(ranked, std::ranges::greater{}, &std::pair<std::string, std::size_t>::second);
+  std::vector<std::string> out;
+  for (auto& [server, count] : ranked) {
+    if (out.size() == most)
+      break;
+    out.push_back(std::move(server));
+  }
+  return out;
+}
+namespace detail {
+inline std::string with_via(std::string link, const std::vector<std::string>& via) {
+  for (std::size_t i = 0; i < via.size(); ++i)
+    link += (i == 0 ? "?via=" : "&via=") + via[i];
+  return link;
+}
+}  // namespace detail
+// A link to a room: by its alias where it has one, which needs no servers;
+// by its ID with the servers to join through where not.
+[[nodiscard]] inline std::string room_link(const conversation& chat) {
+  if (chat.alias)
+    return "https://matrix.to/#/" + *chat.alias;
+  return detail::with_via("https://matrix.to/#/" + chat.id.id, via_servers(chat));
+}
+// A link to a message in it: by the room's ID, with its servers.
+[[nodiscard]] inline std::string message_link(const conversation& chat, std::string_view event) {
+  return detail::with_via("https://matrix.to/#/" + chat.id.id + "/" + std::string(event), via_servers(chat));
+}
+
 // What following a link comes to.
 namespace link_step {
 struct open_chat {  // a chat opened, and a message in it jumped to

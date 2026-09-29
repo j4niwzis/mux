@@ -154,12 +154,12 @@ void app::apply(const request::open_manage&) {
                                      .events_all = room_events.contains(chat->id)
                                                        ? std::optional<bool>(room_events.at(chat->id))
                                                        : std::nullopt,
-                                     .jump_search = jump_search_in.contains(chat->id)
-                                                        ? std::optional<std::int64_t>(jump_search_in.at(chat->id))
-                                                        : std::nullopt,
                                      .receipts = receipts_shown_in.contains(chat->id)
                                                      ? std::optional<bool>(receipts_shown_in.at(chat->id))
                                                      : std::nullopt,
+                                     .jump_search = jump_search_in.contains(chat->id)
+                                                        ? std::optional<std::int64_t>(jump_search_in.at(chat->id))
+                                                        : std::nullopt,
                                      .event_kinds = room_event_kinds.contains(chat->id)
                                                         ? std::optional<mux::config::room_event_kinds>(room_event_kinds.at(chat->id))
                                                         : std::nullopt,

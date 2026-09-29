@@ -122,6 +122,10 @@ struct jump_to_message {
   std::string id;
 };
 struct open_search {};
+struct edit_last {};
+struct reply_step {
+  bool older = true;
+};
 struct close_search {};
 struct search_typed {
   std::string text;
@@ -203,7 +207,7 @@ using request_t =
                  request::close_menu, request::menu_reply, request::menu_edit, request::menu_copy,
                  request::menu_delete, request::cancel_compose, request::open_url,
                  request::switch_account, request::submit_message, request::send_typed,
-                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_search, request::close_search, request::search_typed, request::search_step, request::open_member_info, request::reply_to, request::open_picture, request::close_picture, request::save_picture, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::flip_strip_metadata, request::flip_rename_pictures, request::close_notice,
+                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_search, request::edit_last, request::reply_step, request::close_search, request::search_typed, request::search_step, request::open_member_info, request::reply_to, request::open_picture, request::close_picture, request::save_picture, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::flip_strip_metadata, request::flip_rename_pictures, request::close_notice,
                  request::resize_info, request::choose_new_proxy, request::toggle_mute, request::close_account_pages,
                  request::accounts_back, request::account_page, request::flip_account_receipts, request::flip_account_typing, request::typing,
                  request::proxy_kind, request::choose_account_proxy, request::manage_proxies,
@@ -300,6 +304,8 @@ struct actions {
   void close_search() { requests.emplace_back(request::close_search{}); }
   void search_typed(std::string text) { requests.emplace_back(request::search_typed{std::move(text)}); }
   void search_step(bool older) { requests.emplace_back(request::search_step{older}); }
+  void edit_last() { requests.emplace_back(request::edit_last{}); }
+  void reply_step(bool older) { requests.emplace_back(request::reply_step{older}); }
   void open_member_info(std::string id) { requests.emplace_back(request::open_member_info{std::move(id)}); }
   void not_implemented(std::string what) { requests.emplace_back(request::not_implemented{std::move(what)}); }
   void close_notice() { requests.emplace_back(request::close_notice{}); }

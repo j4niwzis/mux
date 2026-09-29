@@ -67,6 +67,8 @@ struct stub {
   void close_search() {}
   void search_typed(std::string) {}
   void search_step(bool) {}
+  void edit_last() {}
+  void reply_step(bool) {}
   void reply_to(std::string, std::string) {}
   std::vector<std::string> pictures_opened;
   void open_picture(std::string source, std::string, std::string, std::string) { pictures_opened.push_back(std::move(source)); }

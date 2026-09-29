@@ -222,13 +222,39 @@ struct conversations_screen : nodes::Stack {
   nodes::Text& no_chats = side.no_chats;
   nodes::Memo<typename chat_header<Actions>::view, chat_header<Actions>>& header = chat.header;
   search_bar<Actions>& search = chat.search;
-  // Ctrl+F: finding in the chat shown, as in tdesktop.
+  // The keys of a chat, as tdesktop's -- what the input leaves to it:
+  // Ctrl+F finds in it; Up in an empty input edits the last message sent;
+  // Ctrl+Up answers the last message, and each Ctrl+Up after it the one
+  // above, Ctrl+Down back down; Ctrl+C copies what is selected in the
+  // messages; Esc lets an answer or an edit go.
   using Node::onKey;
   void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
-    if (press.key == scene::keys::kF && press.modifiers.template has<scene::modifier::control>() && chosen) {
+    namespace keys = scene::keys;
+    const bool control = press.modifiers.template has<scene::modifier::control>();
+    const bool any = control || press.modifiers.template has<scene::modifier::shift>() ||
+                     press.modifiers.template has<scene::modifier::alt>();
+    if (!chosen)
+      return;
+    if (press.key == keys::kF && control) {
       actions->open_search();
-      reply.handle();
+    } else if (press.key == keys::kUp && control) {
+      actions->reply_step(true);
+    } else if (press.key == keys::kDown && control) {
+      actions->reply_step(false);
+    } else if (press.key == keys::kUp && !any && line.text().empty()) {
+      actions->edit_last();
+    } else if (press.key == keys::kC && control) {
+      auto& bubbles = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
+      const auto selected = std::ranges::find_if(bubbles, [](message_bubble& one) { return one.body.text.hasSelection(); });
+      if (selected == bubbles.end())
+        return;
+      skiff::scene::setClipboardText(selected->body.text.selected());
+    } else if (press.key == keys::kEscape && !any && line.answering()) {
+      actions->cancel_compose();
+    } else {
+      return;
     }
+    reply.handle();
   }
   // The search bar in place of the head, or the head back.
   void show_search(bool shown) {

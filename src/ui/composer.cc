@@ -165,6 +165,8 @@ struct composer_bar : nodes::Stack {
   }
 
   [[nodiscard]] const std::string& text() const { return input.field.text(); }
+  // Whether what is written answers or edits something.
+  [[nodiscard]] bool answering() const { return context_line.visible(); }
   // What is written answers or edits something, shown; or nothing.
   void show_context(std::optional<compose_context> said) {
     context_line.setVisible(said.has_value());

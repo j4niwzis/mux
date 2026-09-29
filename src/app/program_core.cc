@@ -118,6 +118,11 @@ void app::wire() {
 void app::before_frame() {
   ++mux::ui::image_cache::frame();
   root().drop_closed();
+  // The input has the keyboard's focus whenever nothing else does -- at the
+  // start, after a panel or a search closes -- so typing always goes to it,
+  // as in tdesktop.
+  if (scene.focusedId() == 0 && root().main().chosen && !root().open_panel() && !root().settings_up())
+    scene.focus(root().main().line.field);
   auto pending = std::exchange(ask.requests, {});
   for (const request_t& one : pending)
     std::visit([this](const auto& each) { this->route(each); }, one);

@@ -15,6 +15,7 @@ import mux.app.requests;
 import mux.app.services;
 import mux.app.drafts;
 import mux.logic.sending;
+import mux.logic.messages;
 
 export namespace mux::app {
 
@@ -34,6 +35,52 @@ class outbox_part {
     std::ranges::replace(line, '\n', ' ');
     s_->root().main().line.show_context(mux::ui::compose_context{mux::ui::icon::pencil{}, "Edit message", std::move(line)});
     s_->root().main().line.set_text(text);
+  }
+  // Up in an empty input: the last message sent here edited.
+  void apply(const request::edit_last&) {
+    const auto& chosen = s_->root().main().chosen;
+    const conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
+    if (!chat)
+      return;
+    const auto last = std::ranges::find_if(chat->timeline.rbegin(), chat->timeline.rend(), [](const message& one) {
+      return one.outgoing && !one.redacted && !one.id.empty() && !one.body.plain.empty();
+    });
+    if (last != chat->timeline.rend())
+      this->edit(last->id, last->body.plain);
+  }
+  // Ctrl+Up: the last message answered -- and, answering one, the one above
+  // it; Ctrl+Down the one below, and past the newest the answer let go. The
+  // one answered is scrolled to and flashed, as tdesktop does.
+  void apply(const request::reply_step& one) {
+    auto& screen = s_->root().main();
+    const conversation* chat = screen.chosen ? s_->model->find(*screen.chosen) : nullptr;
+    if (!chat)
+      return;
+    std::vector<const message*> answerable;
+    for (const message& each : chat->timeline)
+      if (!each.id.empty() && !each.redacted)
+        answerable.push_back(&each);
+    if (answerable.empty())
+      return;
+    const std::optional<std::string> now = std::visit(
+        overloaded{[](const compose::reply& r) { return std::optional<std::string>(r.id); },
+                   [](const auto&) { return std::optional<std::string>(); }},
+        composing_);
+    const auto at = now ? std::ranges::find(answerable, *now, &message::id) : answerable.end();
+    const message* next = nullptr;
+    if (at == answerable.end())
+      next = one.older ? answerable.back() : nullptr;
+    else if (one.older)
+      next = at == answerable.begin() ? *at : *(at - 1);
+    else if (at + 1 != answerable.end())
+      next = *(at + 1);
+    if (!next) {
+      this->apply(request::cancel_compose{});
+      return;
+    }
+    const std::string title = "Reply to " + (next->outgoing ? std::string("You") : mux::ui::sender_name(*chat, next->sender));
+    this->answer(next->id, title, logic::reply_line(next, next->body.plain));
+    screen.jump_to(next->id);
   }
   void apply(const request::cancel_compose&) {
     composing_ = compose::plain{};

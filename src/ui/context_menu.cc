@@ -89,7 +89,9 @@ struct sticker_grid : nodes::Stack {
   explicit sticker_grid(Actions* a)
       : parts{.empty = nodes::Text("No stickers here. A room's sticker packs, and yours, show here.", 13.0f, dim_colour)} {
     fState.apply({.padding = {4.0f, 4.0f, 4.0f, 4.0f}});
-    parts.empty.apply({.margin = {12.0f, 12.0f, 0.0f, 12.0f}});
+    // Wrapped at the panel's width, not one line running past its edges.
+    parts.empty.setWrapped(true);
+    parts.empty.apply({.fillX = true, .margin = {12.0f, 12.0f, 0.0f, 12.0f}});
     parts.list.apply({.fillX = true, .grow = scene::axes::kY});
     std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
     auto& cells = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);

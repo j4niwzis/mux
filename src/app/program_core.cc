@@ -104,10 +104,7 @@ void app::wire() {
                     .ask = &ask,
                     .scene = &scene,
                     .refresh = [this] { this->refresh(); },
-                    .settings_of = [this](std::string_view address) -> const mux::config::account_t* {
-                      const auto found = this->find(address);
-                      return found == saved.end() ? nullptr : &*found;
-                    }};
+                    .settings_of = [this](std::string_view address) { return this->settings_of(address); }};
 }
 
 void app::before_frame() {
@@ -164,12 +161,6 @@ void app::show_adding() {
   panel.proxies = proxies;
   panel.show_adding();
   this->refresh();
-}
-
-auto app::find(std::string_view address) -> std::vector<mux::config::account_t>::iterator {
-  return std::ranges::find(saved, address, [](const auto& one) -> std::string_view {
-    return mux::config::address_of(one);
-  });
 }
 
 auto app::xmpp_form_up() -> mux::ui::xmpp_form<actions>* {

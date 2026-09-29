@@ -23,6 +23,7 @@ import mux.app.store;
 import mux.app.requests;
 import mux.app.words;
 import mux.app.services;
+import mux.app.kept;
 import mux.app.search;
 import mux.app.pictures;
 import mux.app.drafts;
@@ -33,7 +34,9 @@ import mux.logic.links;
 export namespace mux::app {
 
 // What the program does to the window between events.
-struct app {
+// What the program does to the window between events -- on what the
+// accounts file keeps, its base.
+struct app : kept_settings {
   // -- the parts: each owns its state, and reaches the rest through what
   // they share
   services shared;
@@ -77,30 +80,12 @@ struct app {
   mailbox_type* box = nullptr;
   mux::model* model = nullptr;
   network* net = nullptr;
-  std::filesystem::path config_path;
-  std::vector<mux::config::account_t> saved;
-  // How much moves, as read, to be written back as it was.
-  std::optional<std::string> motion;
-  // The theme and the renderer, for the next start: kept in the file.
-  mux::config::theme_t theme = mux::config::theme::tinted{};
-  mux::config::accent_t accent = mux::config::accent::theme_own{};
-  mux::config::renderer_t renderer = mux::config::renderer::opengl{};
-  // How much is kept, in memory and on disk.
-  mux::config::cache_limits limits;
-  // What is done to a picture dropped before it is sent.
-  mux::config::sending_settings sending;
   void apply_limits();
   // The proxy chosen for the account being added, as it is added.
   std::optional<std::string> new_proxy;
   // What the message field's text is: a new message, an answer to one, or
   // one edited; and the message whose menu is up.
   request::message_menu menu_target;
-  // The chats muted, and the proxy profiles: kept in the file.
-  std::set<mux::conversation_id> muted;
-  std::vector<mux::config::proxy_settings> proxies;
-  // Why the accounts file could not be read, when it could not: then it is
-  // not written over either.
-  std::optional<std::string> config_error;
   // The drawer, left open under a page coming in over it, to go when the
   // page is in.
   bool drawer_waits = false;
@@ -139,7 +124,6 @@ struct app {
   // Adding an account: beside the list, on the accounts page.
   void show_adding();
 
-  std::vector<mux::config::account_t>::iterator find(std::string_view address);
 
   // The panel that is up, if one is, and the XMPP form in it, if there is one.
   [[nodiscard]] mux::ui::xmpp_form<actions>* xmpp_form_up();
@@ -400,9 +384,7 @@ struct app {
 
   void remove(const std::string& address);
 
-  // Written, unless the file there could not be read: that one is the
-  // user's to look at, not to lose.
-  [[nodiscard]] std::optional<std::string> write();
+  // Written, and what went wrong said on the accounts page.
   void save_from_accounts();
 };
 

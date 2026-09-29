@@ -124,6 +124,7 @@ int main(int argc, char** argv) {
   program.ask.box = &box;
   program.wire();
   program.config_path = config_path;
+  program.keeps_nothing = demo;
   program.saved = mux::config::accounts_of(saved);
   program.motion = saved.motion;
   program.theme = mux::config::theme_of(saved.theme);

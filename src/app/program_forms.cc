@@ -58,31 +58,6 @@ void app::remove(const std::string& address) {
   this->refresh();
 }
 
-auto app::write() -> std::optional<std::string> {
-  if (ask.demo)
-    return std::nullopt;  // the demo keeps nothing
-  if (config_error)
-    return "Not saved: " + *config_error;
-  auto file = mux::config::file_of(saved);
-  file.motion = motion;
-  if (!proxies.empty())
-    file.proxies = proxies;
-  file.theme = mux::config::word_of(theme);
-  file.accent = mux::config::word_of(accent);
-  file.renderer = mux::config::word_of(renderer);
-  file.cache = limits;
-  file.sending = sending;
-  if (!muted.empty()) {
-    std::vector<mux::config::muted_chat> kept;
-    for (const auto& one : muted)
-      kept.push_back({one.account.address, one.id});
-    file.muted = std::move(kept);
-  }
-  if (auto done = mux::config::save(config_path, file); !done)
-    return "Not saved: " + done.error();
-  return std::nullopt;
-}
-
 void app::save_from_accounts() {
   if (auto failed = this->write())
     if (auto* up = root().open_panel())

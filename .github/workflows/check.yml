@@ -78,7 +78,7 @@ jobs:
           chmod +x "$HOME/.local/bin/gn" && echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: windowing headers
-        run: sudo apt-get install -y xorg-dev libwayland-dev libxkbcommon-dev wayland-protocols
+        run: sudo apt-get install -y xorg-dev libwayland-dev libxkbcommon-dev wayland-protocols nasm
 
       - name: cmake
         run: |

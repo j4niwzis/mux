@@ -55,6 +55,8 @@ struct window : scene::Node {
       widgets::Dialog<forward_box<Actions>> forwarding;
       // A new chat: someone to message, or a group to make.
       widgets::Dialog<new_chat_box<Actions>> new_chat;
+      // The developer tools.
+      widgets::Dialog<devtools_box<Actions>> devtools;
       widgets::Dialog<send_box<Actions>> sending;
       std::optional<emoji_popup<Actions>> emoji;
       std::optional<context_menu<Actions>> menu;
@@ -77,8 +79,8 @@ struct window : scene::Node {
     explicit layers(Actions* a)
         : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a))},
           actions_of(a) {
-      auto& [backdrop, frame, settings, notice, person, reactions, manage, forwarding, new_chat, sending, emoji, menu,
-             viewer] = parts;
+      auto& [backdrop, frame, settings, notice, person, reactions, manage, forwarding, new_chat, devtools, sending,
+             emoji, menu, viewer] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
       frame.setSheetColour(background);
@@ -101,6 +103,8 @@ struct window : scene::Node {
       forwarding.setSize(400.0f, 520.0f);
       new_chat.setSheetColour(sidebar_colour);
       new_chat.setWidthFittingContent(420.0f);
+      devtools.setSheetColour(sidebar_colour);
+      devtools.setSize(560.0f, 560.0f);
     }
   };
 
@@ -152,6 +156,7 @@ struct window : scene::Node {
     layer().manage.dropClosed();
     layer().forwarding.dropClosed();
     layer().new_chat.dropClosed();
+    layer().devtools.dropClosed();
     layer().sending.dropClosed();
   }
 
@@ -213,6 +218,12 @@ struct window : scene::Node {
     layer().new_chat.open(actions);
   }
   void close_new_chat() { layer().new_chat.close(); }
+  void show_devtools_text(std::string title, std::string text) {
+    layer().devtools.open(actions, std::move(title), std::move(text));
+  }
+  void show_room_state(std::vector<change::state_entry> entries) { layer().devtools.open(actions, std::move(entries)); }
+  void open_send_custom() { layer().devtools.open(actions, typename devtools_box<Actions>::send_form_t{}); }
+  void close_devtools() { layer().devtools.close(); }
 
   void show(const std::vector<config::account_t>& saved, const model& now) {
     const auto& current = layer().frame.base().base().current;

@@ -99,6 +99,15 @@ cme_declare_port(NAME alef PROVIDES alef
 cme_options(alef "ALEF_TESTS OFF")
 cme_find_package(alef COMPONENTS precis idna grapheme line bidi emoji REQUIRED)
 
+# knot, at its pretty printer (a7e6cd4): what a room's events are shown as
+# in the developer tools. loom asks for an older one; the project's pin is
+# the one taken.
+cme_declare_port(NAME knot PROVIDES knot
+  GITHUB_REPOSITORY j4niwzis/knot
+  GIT_TAG a7e6cd44e5f522c1f49ab87ee9a40c4cd96514ad
+  LICENSE AGPL-3.0-only
+  SYSTEM NEVER)
+
 cme_find_package(tern REQUIRED)
 # Of loom, what mux uses: the state a sync leaves, and the parts of the API it
 # calls -- logging in, sending, syncing, finding the homeserver.

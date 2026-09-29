@@ -114,6 +114,12 @@ class menu_part {
     s_->root().open_forward(chats);
   }
   void apply(const request::close_forward&) { s_->root().close_forward(); }
+  // The message as the server has it.
+  void apply(const request::menu_view_source&) {
+    s_->root().close_menu();
+    if (const auto& chosen = s_->root().main().chosen; chosen && !s_->demo())
+      s_->net->view_source(*chosen, target_.id);
+  }
   void apply(const request::forward_to& one) {
     s_->root().close_forward();
     if (!forwarding_ || s_->demo())

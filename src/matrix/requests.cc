@@ -193,6 +193,58 @@ void account<Sink>::send_sticker(std::string room, mux::emote sticker) {
 }
 
 template <class Sink>
+void account<Sink>::view_source(std::string room, std::string event) {
+  loop_->spawn([this, room = std::move(room), event = std::move(event)] {
+    if (!api_)
+      return;
+    auto got = perform(*api_, loom::cs::get_one_room_event{.room_id = room, .event_id = event});
+    if (!got) {
+      sink_(change::devtools_text{"Source of " + event, "Not fetched: " + got.error().said()});
+      return;
+    }
+    sink_(change::devtools_text{"Source of " + event, knot::to_pretty_json_string(knot::to_value(*got))});
+  });
+}
+
+template <class Sink>
+void account<Sink>::list_state(std::string room) {
+  loop_->spawn([this, room = std::move(room)] {
+    std::vector<change::state_entry> entries;
+    if (const auto kept = state_.joined.find(room); kept != state_.joined.end())
+      for (const auto& [key, one] : kept->second.state.events)
+        entries.push_back({key.first, key.second, knot::to_pretty_json_string(knot::to_value(one))});
+    sink_(change::state_listed{{id_, room}, std::move(entries)});
+  });
+}
+
+template <class Sink>
+void account<Sink>::send_custom(std::string room, std::string type, std::optional<std::string> state_key,
+                                std::string json) {
+  loop_->spawn([this, room = std::move(room), type = std::move(type), state_key = std::move(state_key),
+                json = std::move(json)] {
+    const std::string title = "Sent " + type;
+    auto body = knot::try_read<knot::value>(json);
+    if (!body || !body->is<knot::value::object>()) {
+      sink_(change::devtools_text{title, "Not sent: the content is not a JSON object."});
+      return;
+    }
+    if (!api_) {
+      sink_(change::devtools_text{title, "Not sent: not connected."});
+      return;
+    }
+    if (state_key) {
+      auto done = perform(*api_, loom::cs::set_room_state_with_key{
+                                     .room_id = room, .event_type = type, .state_key = *state_key, .body = std::move(*body)});
+      sink_(change::devtools_text{title, done ? "Sent: " + done->event_id : "Not sent: " + done.error().said()});
+    } else {
+      auto done = perform(*api_, loom::cs::send_message{
+                                     .room_id = room, .event_type = type, .txn_id = this->transaction(), .body = std::move(*body)});
+      sink_(change::devtools_text{title, done ? "Sent: " + done->event_id : "Not sent: " + done.error().said()});
+    }
+  });
+}
+
+template <class Sink>
 void account<Sink>::fetch_preview(std::string url) {
   loop_->spawn([this, url = std::move(url)] {
     if (!api_)

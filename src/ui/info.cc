@@ -14,6 +14,7 @@ import skiff.nodes.text;
 import skiff.widgets.pill;
 import skiff.widgets.button;
 import skiff.widgets.textbox;
+import skiff.widgets.textarea;
 import mux.core;
 import mux.config;
 import mux.logic.links;
@@ -320,6 +321,170 @@ struct reactions_box : nodes::Stack {
   }
 };
 
+// The developer tools, as Element's: some JSON to read and copy; a room's
+// state, by type, then by key, then the event; an event of any type sent.
+template <class Actions>
+struct devtools_box : nodes::Stack {
+  Actions* actions = nullptr;
+  struct close_it {
+    Actions* actions;
+    void operator()() const { actions->close_devtools(); }
+  };
+  struct back_up {
+    devtools_box* box;
+    void operator()() const { box->go_back(); }
+  };
+  using header_t = page_header<back_up, close_it>;
+  // A line of the state's list: a type, or a key of one; pressed, what is
+  // under it, at the next frame -- not from inside the list it is in.
+  struct pick {
+    devtools_box* box;
+    std::string type;
+    std::optional<std::string> key;
+    void operator()() const { box->pending = pick{box, type, key}; }
+  };
+  struct send_press {
+    devtools_box* box;
+    void operator()() const { box->send(); }
+  };
+  using entry_row = row_item<pick>;
+  using rows_t = nodes::Flow<std::vector<entry_row>>;
+  struct form : nodes::Stack {
+    struct parts_t {
+      field type;
+      field key;
+      nodes::Text body_caption{"Content (a JSON object)", 13.0f, dim_colour};
+      widgets::TextArea<> body;
+      widgets::Button<send_press> send;
+    } parts;
+    explicit form(devtools_box* box)
+        : parts{.type = field("Event type", "m.room.message"),
+                .key = field("State key (for a state event; empty for a timeline one)", ""),
+                .body = widgets::TextArea<>("{}"),
+                .send = widgets::Button<send_press>("Send", {box})} {
+      this->setGap(8.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 12.0f, 12.0f}});
+      parts.body_caption.apply({.margin = {0.0f, 10.0f, 0.0f, 10.0f}});
+      parts.body.apply({.fillX = true, .height = 180.0f, .margin = {0.0f, 10.0f, 0.0f, 10.0f}, .cornerRadius = 6.0f,
+                        .background = tile_colour, .border = scene::Border{band_colour, 1.0f}});
+      parts.body.setText("{\n  \n}");
+      parts.send.setPrimary(true);
+      parts.send.apply({.width = 120.0f, .height = 34.0f, .margin = {0.0f, 10.0f, 0.0f, 10.0f}});
+    }
+  };
+  struct parts_t {
+    header_t header;
+    nodes::ScrollContainer<nodes::Text> reading{nodes::Text("", 13.0f, text_colour)};
+    nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
+    std::optional<form> sending;
+  } parts;
+  // What it shows: some text, or the state -- all its events -- at a level.
+  std::vector<change::state_entry> state;
+  std::optional<std::string> type_shown;
+  bool showing_state = false;
+  std::optional<pick> pending;
+
+  devtools_box(Actions* a, std::string title, std::string text)
+      : actions(a), parts{.header = header_t(std::move(title), {this}, {a}, false, true)} {
+    this->lay_out();
+    this->show_text(std::move(text));
+  }
+  devtools_box(Actions* a, std::vector<change::state_entry> entries)
+      : actions(a), parts{.header = header_t("Room state", {this}, {a}, false, true)}, state(std::move(entries)) {
+    this->lay_out();
+    this->show_types();
+  }
+  struct send_form_t {};
+  devtools_box(Actions* a, send_form_t) : actions(a), parts{.header = header_t("Send custom event", {this}, {a}, false, true)} {
+    this->lay_out();
+    parts.sending.emplace(this);
+    parts.reading.setVisible(false);
+    parts.list.setVisible(false);
+  }
+  void lay_out() {
+    fState.apply({.fillX = true, .height = 560.0f});
+    for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.reading, &parts.list})
+      each->apply({.fillX = true, .grow = scene::axes::kY});
+    auto& text = std::get<0>(parts.reading.fChildren);
+    text.setWrapped(true);
+    text.setSelectable(true);
+    text.apply({.fillX = true, .padding = {6.0f, 16.0f, 12.0f, 16.0f}});
+    std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
+  }
+  void show_text(std::string text) {
+    std::get<0>(parts.reading.fChildren).setText(std::move(text));
+    parts.reading.setVisible(true);
+    parts.list.setVisible(false);
+    parts.reading.scrollTo(0.0f);
+    this->invalidateLayout();
+  }
+  void show_rows(std::vector<std::pair<std::string, pick>> rows) {
+    auto& all = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
+    all.clear();
+    for (auto& [label, what] : rows)
+      all.emplace_back(std::move(label), std::move(what));
+    parts.reading.setVisible(false);
+    parts.list.setVisible(true);
+    parts.list.scrollTo(0.0f);
+    this->invalidateLayout();
+  }
+  // Every type, and how many events of it.
+  void show_types() {
+    showing_state = true;
+    type_shown.reset();
+    parts.header.parts.back.setVisible(false);
+    std::map<std::string, std::size_t> counts;
+    for (const change::state_entry& one : state)
+      ++counts[one.type];
+    std::vector<std::pair<std::string, pick>> rows;
+    for (const auto& [type, count] : counts)
+      rows.emplace_back(std::format("{}  ({})", type, count), pick{this, type, std::nullopt});
+    this->show_rows(std::move(rows));
+  }
+  // A type's keys.
+  void show_keys(const std::string& type) {
+    type_shown = type;
+    parts.header.parts.back.setVisible(true);
+    std::vector<std::pair<std::string, pick>> rows;
+    for (const change::state_entry& one : state)
+      if (one.type == type)
+        rows.emplace_back(one.key.empty() ? std::string("(empty key)") : one.key, pick{this, type, one.key});
+    this->show_rows(std::move(rows));
+  }
+  void go_back() {
+    if (!showing_state)
+      return;
+    if (!parts.reading.visible() && type_shown)
+      this->show_types();
+    else if (type_shown)
+      this->show_keys(*type_shown);
+  }
+  void update(double) {
+    if (!pending)
+      return;
+    const pick what = *std::exchange(pending, std::nullopt);
+    if (!what.key) {
+      this->show_keys(what.type);
+      return;
+    }
+    for (const change::state_entry& one : state)
+      if (one.type == what.type && one.key == *what.key) {
+        parts.header.parts.back.setVisible(true);
+        this->show_text(one.json);
+        return;
+      }
+  }
+  void send() {
+    if (!parts.sending)
+      return;
+    auto& [type, key, caption, body, button] = parts.sending->parts;
+    if (type.text().empty())
+      return;
+    actions->send_custom(type.text(), key.text().empty() ? std::nullopt : std::optional<std::string>(key.text()),
+                         body.text());
+  }
+};
+
 // A chat to forward to: its id and name.
 struct forward_target {
   conversation_id id;
@@ -610,6 +775,9 @@ struct room_manage : nodes::Stack {
       invite_button invite;
       nodes::Text members_title{"Members", 13.0f, dim_colour, true};
       std::vector<member_row> members;
+      nodes::Text tools_title{"Developer tools", 13.0f, dim_colour, true};
+      widgets::Button<ask<Actions, &Actions::explore_state>> explore;
+      widgets::Button<ask<Actions, &Actions::open_send_custom>> send_custom;
     } parts;
     column(Actions* a, room_manage* box, const manage_facts& facts)
         : parts{.name = field("Name", "The room's name", facts.name),
@@ -619,7 +787,9 @@ struct room_manage : nodes::Stack {
                 .join = row_of_segments_join(box),
                 .history = row_of_segments_history(box),
                 .invitee = field("Invite", "@someone:server"),
-                .invite = invite_button("Invite", {box})} {
+                .invite = invite_button("Invite", {box}),
+                .explore = widgets::Button<ask<Actions, &Actions::explore_state>>("Explore room state", {a}),
+                .send_custom = widgets::Button<ask<Actions, &Actions::open_send_custom>>("Send custom event", {a})} {
       this->setGap(8.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 12.0f, 16.0f, 12.0f}});
       for (auto* button : std::initializer_list<scene::Node*>{&parts.save_name, &parts.save_topic, &parts.invite})
@@ -629,6 +799,9 @@ struct room_manage : nodes::Stack {
       parts.members.reserve(facts.members.size());
       for (const auto& one : facts.members)
         parts.members.emplace_back(a, one);
+      parts.tools_title.apply({.margin = {10.0f, 10.0f, 0.0f, 10.0f}});
+      for (scene::Node* button : std::initializer_list<scene::Node*>{&parts.explore, &parts.send_custom})
+        button->apply({.width = 180.0f, .height = 32.0f, .margin = {0.0f, 10.0f, 0.0f, 10.0f}});
     }
   };
   struct parts_t {

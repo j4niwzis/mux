@@ -520,6 +520,22 @@ struct preview_loaded {
   link_preview preview;
 };
 
+// What the developer tools show: a title over some JSON or an answer; and a
+// room's state, every event of it, by type and key.
+struct devtools_text {
+  std::string title;
+  std::string text;
+};
+struct state_entry {
+  std::string type;
+  std::string key;
+  std::string json;
+};
+struct state_listed {
+  conversation_id in;
+  std::vector<state_entry> entries;
+};
+
 // A room the user made, to be shown once it is: a direct chat or a group.
 struct room_created {
   conversation_id id;
@@ -634,7 +650,8 @@ using change_t = std::variant<change::connection_changed, change::account_remove
                               change::typing_changed, change::history_position, change::members_changed,
                               change::session_given, change::avatar_loaded, change::receipts_changed,
                               change::window_opened, change::window_extended, change::media_progress,
-                              change::room_created, change::preview_loaded>;
+                              change::room_created, change::preview_loaded, change::devtools_text,
+                              change::state_listed>;
 
 // The model: every account, and every change applied to it.
 class model {
@@ -858,6 +875,8 @@ class model {
   void on(const change::avatar_loaded&) {}  // the window's to show, not the model's
   void on(const change::media_progress&) {}  // the window's too
   void on(const change::room_created&) {}    // the program's: it shows it
+  void on(const change::devtools_text&) {}   // the window's
+  void on(const change::state_listed&) {}    // the window's
   void on(const change::preview_loaded& one) { previews.insert_or_assign(one.url, one.preview); }
   void on(const change::receipts_changed& one) {
     conversation& kept = of(one.in);

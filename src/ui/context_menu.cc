@@ -627,6 +627,7 @@ struct context_menu : scene::Node {
     using pin_row = row_item<ask<Actions, &Actions::menu_pin>>;
     using reactions_row = row_item<ask<Actions, &Actions::menu_reactions>>;
     using forward_row = row_item<ask<Actions, &Actions::menu_forward>>;
+    using source_row = row_item<ask<Actions, &Actions::menu_view_source>>;
     using delete_row = row_item<ask<Actions, &Actions::menu_delete>>;
     // As tdesktop's, in its order: the quick reactions; every emoji, in
     // place of the rest once asked for; Reply, Edit, Pin, Copy, Copy
@@ -645,14 +646,15 @@ struct context_menu : scene::Node {
       gif_row save_gif;
       reactions_row reactions;
       forward_row forward;
+      source_row source;
       delete_row remove;
       nodes::Box<> seen_band{band_colour};
       row_item<nothing> seen;
       std::vector<nodes::Text> seen_names;
     } parts;
     void expand() {
-      auto& [quick, quick_band, emoji, reply, edit, pin, copy, copy_link, save, save_gif, reactions, forward, remove,
-             seen_band, seen, seen_names] = parts;
+      auto& [quick, quick_band, emoji, reply, edit, pin, copy, copy_link, save, save_gif, reactions, forward, source,
+             remove, seen_band, seen, seen_names] = parts;
       if (emoji)
         return;
       emoji.emplace(react_with<Actions>{actions_of});
@@ -663,8 +665,8 @@ struct context_menu : scene::Node {
       unroll.setTarget(kEmojiHeight);
       quick.parts.more.setVisible(false);
       for (scene::Node* item : std::initializer_list<scene::Node*>{&reply, &edit, &pin, &copy, &copy_link, &save,
-                                                                   &save_gif, &reactions, &forward, &remove,
-                                                                   &seen_band, &seen})
+                                                                   &save_gif, &reactions, &forward, &source,
+                                                                   &remove, &seen_band, &seen})
         item->setVisible(false);
       for (auto& name : seen_names)
         name.setVisible(false);
@@ -705,12 +707,13 @@ struct context_menu : scene::Node {
                 .save_gif = gif_row("Save GIF", {a}, icon::check{}),
                 .reactions = reactions_row("Show Reactions as Events", {a}, icon::people{}),
                 .forward = forward_row("Forward", {a}, icon::send{}),
+                .source = source_row("View Source", {a}, icon::info{}),
                 .remove = delete_row("Delete", {a}, icon::close{}),
                 .seen = row_item<nothing>(facts.seen.empty() ? std::string("Not seen yet")
                                                              : std::format("Seen by {}", facts.seen.size()),
                                           {}, icon::check{})} {
-      auto& [quick, quick_band, emoji, reply, edit, pin, copy, copy_link, save, save_gif, reactions, forward, remove,
-             seen_band, seen, seen_names] = parts;
+      auto& [quick, quick_band, emoji, reply, edit, pin, copy, copy_link, save, save_gif, reactions, forward, source,
+             remove, seen_band, seen, seen_names] = parts;
       const std::vector<std::string>& readers = facts.seen;
       quick_band.apply({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 4.0f, 0.0f}});
       edit.setVisible(facts.own && !facts.text.empty() && !facts.media);
@@ -720,6 +723,7 @@ struct context_menu : scene::Node {
       save_gif.setVisible(facts.media.has_value() && facts.moving);
       remove.setVisible(facts.own);
       pin.setVisible(facts.pinnable);
+      source.setVisible(facts.pinnable);
       reactions.setVisible(facts.reaction_events);
       for (std::size_t i = 0; i < readers.size() && i < 10; ++i) {
         seen_names.emplace_back(readers[i], 13.0f, dim_colour);

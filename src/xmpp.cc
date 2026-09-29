@@ -199,6 +199,10 @@ class account {
   void fetch_members(std::string) {}
   // Reactions (XEP-0444) are not sent yet.
   void react(std::string, std::string, std::string, bool) {}
+  // The developer tools are Matrix's.
+  void view_source(std::string, std::string) {}
+  void list_state(std::string) {}
+  void send_custom(std::string, std::string, std::optional<std::string>, std::string) {}
   // Stickers are Matrix's.
   void send_sticker(std::string, mux::emote) {}
   // Link previews come from a Matrix homeserver alone.

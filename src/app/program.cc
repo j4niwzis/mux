@@ -230,6 +230,10 @@ struct app : kept_settings {
   void apply(const request::close_emoji&);
   void apply(const request::insert_emoji& one);
   void apply(const request::open_manage&);
+  void apply(const request::explore_state&);
+  void apply(const request::open_send_custom&);
+  void apply(const request::close_devtools&);
+  void apply(const request::send_custom& one);
   void apply(const request::open_new_chat&);
   void apply(const request::close_new_chat&);
   void apply(const request::start_direct& one);

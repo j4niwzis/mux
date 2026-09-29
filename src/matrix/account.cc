@@ -83,6 +83,11 @@ class account {
   void create_group(std::string name);
   // A link's preview, as the homeserver makes it.
   void fetch_preview(std::string url);
+  // The developer tools, as Element's: an event as the server has it; the
+  // room's state, every event of it; and an event of any type sent.
+  void view_source(std::string room, std::string event);
+  void list_state(std::string room);
+  void send_custom(std::string room, std::string type, std::optional<std::string> state_key, std::string json);
   // A sticker sent: an m.sticker, its picture's URL and its name.
   void send_sticker(std::string room, mux::emote sticker);
   void load_newer(std::string room, std::string from);

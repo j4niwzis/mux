@@ -196,6 +196,30 @@ struct network {
             one.account);
     });
   }
+  // The developer tools, by the account the chat is of.
+  template <class Ask>
+  void on_account_of(const mux::conversation_id& in, Ask ask) {
+    loop.post([this, in, ask = std::move(ask)] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == in.account)
+                ask(*account);
+            },
+            one.account);
+    });
+  }
+  void view_source(const mux::conversation_id& in, std::string event) {
+    on_account_of(in, [room = in.id, event = std::move(event)](auto& account) { account.view_source(room, event); });
+  }
+  void list_state(const mux::conversation_id& in) {
+    on_account_of(in, [room = in.id](auto& account) { account.list_state(room); });
+  }
+  void send_custom(const mux::conversation_id& in, std::string type, std::optional<std::string> key, std::string json) {
+    on_account_of(in, [room = in.id, type = std::move(type), key = std::move(key), json = std::move(json)](auto& account) {
+      account.send_custom(room, type, key, json);
+    });
+  }
   // A sticker sent into a chat by the account it is of.
   void send_sticker(const mux::conversation_id& to, mux::emote sticker) {
     loop.post([this, to, sticker = std::move(sticker)] {

@@ -42,6 +42,13 @@ void app::woken() {
                                },
                                // A room the user made: shown, once the model has it.
                                [&](const mux::change::room_created& made) { made_room_ = made.id; },
+                               // What the developer tools asked, shown.
+                               [&](const mux::change::devtools_text& shown) {
+                                 root().show_devtools_text(shown.title, shown.text);
+                               },
+                               [&](const mux::change::state_listed& listed) {
+                                 root().show_room_state(listed.entries);
+                               },
                                [&](const mux::change::media_progress& how) {
                                  mux::ui::download_progress().insert_or_assign(how.source, how.done);
                                  scene.state().markDamaged();

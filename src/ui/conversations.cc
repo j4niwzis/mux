@@ -493,6 +493,9 @@ struct conversations_screen : nodes::Stack {
   // A message to bring into view, once it is made and laid out -- flashed,
   // unless it is where a chat opened, at what it was read up to.
   std::optional<std::string> jumping_to;
+  // The chat the jump is in: one asked with a chat's opening -- a link to
+  // a message there -- is kept when the chat is first shown.
+  std::optional<conversation_id> jump_chat;
   bool jump_quiet = false;
   int jump_tries = 0;
   // Frames a jump has been on its way: the loader shows past a few.
@@ -546,6 +549,7 @@ struct conversations_screen : nodes::Stack {
       return;
     // Made, loaded or paged back to at the next frames, as update() finds it.
     jumping_to = std::move(id);
+    jump_chat = chosen;
     jump_quiet = false;
     jump_tries = 0;
     jump_age = 0;
@@ -891,11 +895,19 @@ struct conversations_screen : nodes::Stack {
       if (shown_chat)
         scrolled[*shown_chat] = was_at_end ? -1.0f : left_at;
       const auto kept = scrolled.find(*chosen);
-      if (one->read_up_to && one->unread_here() > 0) {
+      // A jump asked for in another chat is let go; one asked with this
+      // chat's opening -- a link to a message in it -- decides where the
+      // view goes: not the unread, nor where it was left, first.
+      if (jumping_to && jump_chat != chosen)
+        jumping_to.reset();
+      if (jumping_to) {
+        timeline.scrollToEnd(false);
+      } else if (one->read_up_to && one->unread_here() > 0) {
         // Unread in it: opened where it was read up to, as tdesktop opens
         // a chat at its first unread, and read on from there as it is seen.
         timeline.scrollToEnd(false);
         jumping_to = *one->read_up_to;
+        jump_chat = chosen;
         jump_quiet = true;
         jump_tries = 0;
         context_asked.reset();

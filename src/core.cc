@@ -341,14 +341,24 @@ struct conversation {
   std::optional<std::string> read_up_to;
   // What is unread, as counted here from the user's own position where there
   // is one, and as the server counts it where not.
+  //
+  // Counted only where the timeline reaches the newest and holds the
+  // position: a window far back in the history, or a timeline that no
+  // longer has it, counted every message in it as unread -- 60 new in a
+  // room where none were.
   [[nodiscard]] std::int64_t unread_here() const {
     if (!read_up_to)
       return unread;
+    if (detached)
+      return latest && latest->id == *read_up_to ? 0 : unread;
     std::int64_t after = 0;
-    for (auto it = timeline.rbegin(); it != timeline.rend() && it->id != *read_up_to; ++it)
+    for (auto it = timeline.rbegin(); it != timeline.rend(); ++it) {
+      if (it->id == *read_up_to)
+        return after;
       if (!it->outgoing)
         ++after;
-    return after;
+    }
+    return unread;
   }
   // When it was last read, as the model counts: the chats read longest ago
   // lose their loaded history first.

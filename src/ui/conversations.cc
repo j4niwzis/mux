@@ -594,15 +594,25 @@ struct conversations_screen : nodes::Stack {
                             : box.height() < view.height() ? (view.height() - box.height()) * 0.5f
                                                            : 0.0f;
         const float to = std::max(0.0f, timeline.current() + (box.fTop - view.fTop) - above);
-        if (std::abs(to - aimed_at) > 1.0f) {
-          timeline.scrollTo(to);
+        // The first aim: flashed at once, where it is -- not once all above
+        // it has settled, which can be never, and the flash was lost. Far
+        // away -- a window just loaded around it -- put there at once, not
+        // glided to through what was loaded; near, glided to.
+        if (aimed_at < 0.0f) {
+          if (std::abs(to - timeline.current()) > view.height() * 2.0f)
+            timeline.setCurrent(to);
+          else
+            timeline.scrollTo(to);
           aimed_at = to;
-        } else if (!timeline.moving()) {
           if (!aim_quiet) {
             it->flash.jump(1.0f);
             it->flash.setTarget(0.0f);
-            it->parts.body.markDamaged();
+            it->markDamaged();
           }
+        } else if (std::abs(to - aimed_at) > 1.0f) {
+          timeline.setCurrent(to);
+          aimed_at = to;
+        } else if (!timeline.moving()) {
           aiming.reset();
         }
       }

@@ -56,6 +56,35 @@ class outbox_part {
     const conversation* chat = screen.chosen ? s_->model->find(*screen.chosen) : nullptr;
     if (!chat)
       return;
+    // Editing: Ctrl+Up and Down step through the user's own messages, the
+    // one above or below edited in its place -- past the newest, the edit
+    // let go.
+    const std::optional<std::string> editing = std::visit(
+        overloaded{[](const compose::edit& e) { return std::optional<std::string>(e.id); },
+                   [](const auto&) { return std::optional<std::string>(); }},
+        composing_);
+    if (editing) {
+      std::vector<const message*> own;
+      for (const message& each : chat->timeline)
+        if (each.outgoing && !each.redacted && !each.id.empty() && !each.body.plain.empty())
+          own.push_back(&each);
+      const auto at = std::ranges::find(own, *editing, &message::id);
+      const message* next = nullptr;
+      if (at != own.end()) {
+        if (one.older)
+          next = at == own.begin() ? *at : *(at - 1);
+        else if (at + 1 != own.end())
+          next = *(at + 1);
+      }
+      if (!next) {
+        this->apply(request::cancel_compose{});
+        screen.line.clear();
+        return;
+      }
+      this->edit(next->id, next->body.plain);
+      screen.jump_to(next->id);
+      return;
+    }
     std::vector<const message*> answerable;
     for (const message& each : chat->timeline)
       if (!each.id.empty() && !each.redacted)

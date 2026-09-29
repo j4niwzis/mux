@@ -564,6 +564,23 @@ struct mentioned {
   return out;
 }
 
+// A message's text as a quote's one line shows it: its HTML read, and its
+// mentions -- people, rooms -- by their names, as in the message itself,
+// not the raw addresses; without the room a pill's avatar takes.
+[[nodiscard]] inline std::string quote_line_of(const message& said, const conversation& in, const model* now) {
+  mentioned shown;
+  if (said.body.html) {
+    auto read = read_html(*said.body.html);
+    shown = with_mentions(std::move(read.text), std::move(read.spans), in, now);
+  } else {
+    shown = with_mentions(said.body.plain, link_spans_in(said.body.plain), in, now);
+  }
+  std::string out = std::move(shown.text);
+  for (std::size_t at = out.find("\u2002\u2002"); at != std::string::npos; at = out.find("\u2002\u2002", at))
+    out.erase(at, std::string_view("\u2002\u2002").size());
+  return out;
+}
+
 // A card for a link to a room, or to a message in one: as the chat it is of
 // is known here, or as a room not joined.
 [[nodiscard]] inline link_card card_of(const std::string& url, const logic::link::room& room, const model* now) {
@@ -877,7 +894,7 @@ struct message_bubble : nodes::Stack {
       // A picture's: its thumbnail, and its caption or "Photo"; a file's:
       // its name; else its text.
       std::optional<std::string> picture;
-      std::string line = known ? found->body.plain : std::string("not loaded");
+      std::string line = known ? quote_line_of(*found, in, now) : std::string("not loaded");
       if (known && found->attachment) {
         if (is_picture(found->attachment->kind))
           picture = found->attachment->source;

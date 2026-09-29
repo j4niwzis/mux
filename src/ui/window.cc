@@ -55,7 +55,10 @@ struct window : scene::Node {
       notice.setSheetColour(sidebar_colour);
       notice.setSize(440.0f, 240.0f);
       person.setSheetColour(sidebar_colour);
-      person.setSize(392.0f, 300.0f);
+      // tdesktop's profile layer: 392 wide (infoDesiredWidth), as high as
+      // what it shows, a 24th of the window down within 20 and 40.
+      person.setWidthFittingContent(392.0f);
+      person.setPlace(widgets::dialog_place::near_top{});
     }
   };
 

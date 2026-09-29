@@ -232,7 +232,7 @@ struct person_card : nodes::Stack {
               .face = cover(key, facts),
               .id = id_line(key, ""),
               .message = action_tile<message_them>("Message", icon::send{}, {a, conversation_id{account, key}})} {
-    fState.apply({.fill = true, .padding = {0.0f, 0.0f, 16.0f, 0.0f}});
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}});
     parts.message.apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
   }
 };

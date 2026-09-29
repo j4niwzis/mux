@@ -60,11 +60,14 @@ struct emoji_panel : nodes::Stack {
   struct cell : nodes::Stack {
     emoji_panel* panel;
     std::string glyph;
+    // The emoji it shows, where it is one of the table's: its tones are
+    // found through it.
+    const alef::emoji* source = nullptr;
     struct parts_t {
       nodes::Text face;
     } parts;
-    cell(emoji_panel* p, std::string g)
-        : panel(p), glyph(g), parts{.face = nodes::Text(std::move(g), 22.0f, text_colour)} {
+    cell(emoji_panel* p, std::string g, const alef::emoji* from = nullptr)
+        : panel(p), glyph(g), source(from), parts{.face = nodes::Text(std::move(g), 22.0f, text_colour)} {
       this->setHorizontal();
       fStack.justify = nodes::justify::middle{};
       fState.apply({.width = kCell, .height = kCell, .cornerRadius = 6.0f, .hoverBackground = chosen_colour});
@@ -75,8 +78,17 @@ struct emoji_panel : nodes::Stack {
     [[nodiscard]] bool onClick(float, float) {
       const std::string chosen = glyph;
       remember_emoji(chosen);
+      panel->tones_done = true;
       panel->pick(chosen);
       return true;
+    }
+    // The other button: its skin tones, over it, where it has any.
+    using Node::onPointer;
+    void onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
+      if (press.button != 3 || !source)
+        return;
+      if (panel->show_tones(*source, this->bounds()))
+        reply.handle();
     }
   };
   // A group: its name over its emoji (headerTop 10, headerLeft 14).
@@ -94,7 +106,7 @@ struct emoji_panel : nodes::Stack {
       auto& cells = std::get<0>(parts.cells.fChildren);
       cells.reserve(all.size());
       for (const alef::emoji* one : all)
-        cells.emplace_back(p, logic::emoji_text(*one));
+        cells.emplace_back(p, logic::emoji_text(*one), one);
     }
     // The recently used: emoji as they were picked, text already.
     section(emoji_panel* p, std::string_view name, const std::vector<std::string>& glyphs)
@@ -130,6 +142,27 @@ struct emoji_panel : nodes::Stack {
       return true;
     }
   };
+  // An emoji and its five tones in a row over it, as tdesktop's; a pick
+  // closes it.
+  struct tone_strip : nodes::Stack {
+    struct parts_t {
+      std::vector<cell> each;
+    } parts;
+    tone_strip(emoji_panel* p, const alef::emoji& base, const std::vector<const alef::emoji*>& tones, float x,
+               float y) {
+      this->setHorizontal();
+      const float wide = kCell * static_cast<float>(tones.size() + 1) + 8.0f;
+      fState.apply({.place = scene::anchor::kTopLeft, .x = x, .y = y, .width = wide, .height = kCell + 8.0f,
+                    .padding = {4.0f, 4.0f, 4.0f, 4.0f}, .cornerRadius = 8.0f, .background = sidebar_colour,
+                    .border = scene::Border{band_colour, 1.0f},
+                    .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
+      parts.each.reserve(tones.size() + 1);
+      parts.each.emplace_back(p, logic::emoji_text(base));
+      for (const alef::emoji* one : tones)
+        parts.each.emplace_back(p, logic::emoji_text(*one));
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+  };
   struct searched {
     emoji_panel* panel;
     void operator()(std::string_view text) const { panel->search(text); }
@@ -145,7 +178,12 @@ struct emoji_panel : nodes::Stack {
     field_t field;
     list_t list{nodes::Flow<std::vector<section>>({.spacingY = 0.0f, .wrap = false}, {})};
     footer_row footer;
+    // Over the rest: an emoji's tones, while they are asked for.
+    std::optional<tone_strip> tones;
   } parts;
+  // A pick made: the tones, if open, closed at the next frame -- not now,
+  // from inside one of their own cells.
+  bool tones_done = false;
   // Whether a search is shown, not the groups: no tab is lit then.
   bool searching = false;
   // Where the groups begin in the list: after the recently used, if any.
@@ -153,7 +191,7 @@ struct emoji_panel : nodes::Stack {
 
   // Sized by where it is shown.
   explicit emoji_panel(Pick what) : pick(std::move(what)), parts{.field = field_t("Search emoji", {this})} {
-    auto& [field, list, footer] = parts;
+    auto& [field, list, footer, tones] = parts;
     this->setGap(4.0f);
     fState.apply({.padding = {7.0f, 0.0f, 4.0f, 7.0f}});
     field.setSearchIcon(true);
@@ -207,8 +245,30 @@ struct emoji_panel : nodes::Stack {
     auto& list = parts.list;
     list.scrollTo(std::max(0.0f, list.current() + (all[at].bounds().fTop - list.bounds().fTop)));
   }
+  // An emoji's tones over its cell, kept inside the panel; nothing for one
+  // that takes none.
+  bool show_tones(const alef::emoji& base, const skia::SkRect& at) {
+    const auto found = logic::tones_of(base);
+    if (found.empty())
+      return false;
+    const skia::SkRect box = this->bounds();
+    const float wide = kCell * static_cast<float>(found.size() + 1) + 8.0f;
+    const float x = std::clamp(at.fLeft - box.fLeft - 4.0f, 0.0f, std::max(0.0f, box.width() - wide));
+    const float y = std::max(0.0f, at.fTop - box.fTop - kCell - 12.0f);
+    parts.tones.emplace(this, base, found, x, y);
+    tones_done = false;
+    this->invalidateLayout();
+    return true;
+  }
   // The tab of the group at the top of the list lit.
   void update(double) {
+    if (tones_done) {
+      tones_done = false;
+      if (parts.tones) {
+        parts.tones.reset();
+        this->invalidateLayout();
+      }
+    }
     auto& all = this->sections();
     std::size_t lit = 0;
     const float top = parts.list.bounds().fTop + 1.0f;

@@ -168,6 +168,78 @@ inline image_cache& whole_pictures() {
   return images;
 }
 
+// Pictures that move -- a GIF, an animated WebP -- by their source: their
+// frames, each with how long it stays, shown in place of the still picture,
+// the frame for the time. Held to a number of bytes, the least recently
+// drawn out first; none drawn lately.
+class animation_cache {
+ public:
+  std::size_t budget = 128u << 20;
+  void put(std::string key, std::vector<skia::Frame> frames) {
+    if (frames.size() < 2)
+      return;
+    animation made;
+    for (const skia::Frame& one : frames) {
+      made.total_ms += one.durationMs;
+      made.bytes += static_cast<std::size_t>(one.image->width()) * static_cast<std::size_t>(one.image->height()) * 4u;
+    }
+    made.frames = std::move(frames);
+    made.drawn = image_cache::frame();
+    if (const auto found = all_.find(key); found != all_.end())
+      bytes_ -= found->second.bytes;
+    bytes_ += made.bytes;
+    all_.insert_or_assign(std::move(key), std::move(made));
+    while (bytes_ > budget) {
+      auto oldest = all_.end();
+      for (auto it = all_.begin(); it != all_.end(); ++it)
+        if (it->second.drawn + 1 < image_cache::frame() && (oldest == all_.end() || it->second.drawn < oldest->second.drawn))
+          oldest = it;
+      if (oldest == all_.end())
+        break;
+      bytes_ -= oldest->second.bytes;
+      all_.erase(oldest);
+    }
+  }
+  [[nodiscard]] bool has(std::string_view key) const { return all_.contains(key); }
+  // The frame of `key`'s animation to show at `ms` of a steady clock.
+  [[nodiscard]] const skia::Sp<skia::SkImage>* at(std::string_view key, double ms) {
+    const auto found = all_.find(key);
+    if (found == all_.end() || found->second.total_ms <= 0)
+      return nullptr;
+    animation& one = found->second;
+    one.drawn = image_cache::frame();
+    double into = std::fmod(ms, static_cast<double>(one.total_ms));
+    for (const skia::Frame& each : one.frames) {
+      if (into < each.durationMs)
+        return &each.image;
+      into -= each.durationMs;
+    }
+    return &one.frames.back().image;
+  }
+  void clear() {
+    all_.clear();
+    bytes_ = 0;
+  }
+
+ private:
+  struct animation {
+    std::vector<skia::Frame> frames;
+    int total_ms = 0;
+    std::size_t bytes = 0;
+    std::uint64_t drawn = 0;
+  };
+  std::map<std::string, animation, std::less<>> all_;
+  std::size_t bytes_ = 0;
+};
+inline animation_cache& animations() {
+  static animation_cache all;
+  return all;
+}
+// The clock animations are shown by.
+[[nodiscard]] inline double animation_clock() {
+  return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
 // Where a chat's or a person's picture comes from: the avatars kept, by
 // their id -- asked for each frame, so one that comes later is shown.
 [[nodiscard]] inline nodes::ImageSource picture_of(std::string id) {

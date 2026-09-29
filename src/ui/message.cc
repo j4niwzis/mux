@@ -106,17 +106,27 @@ struct picture_view : scene::Node {
   picture_view(std::string where, int w, int h)
       : source(where), width(w), height(h),
         parts{.preview = nodes::Image([where] { return previews().find(where); }),
-              .picture = nodes::Image([where] { return thumbnails().find(where); })} {
+              .picture = nodes::Image([where] {
+                // Where it moves, the frame for now; else the thumbnail.
+                if (const skia::Sp<skia::SkImage>* moving = animations().at(where, animation_clock()))
+                  return moving;
+                return thumbnails().find(where);
+              })} {
     fState.apply({.cornerRadius = 10.0f, .background = tile_colour, .masking = true});
     parts.preview.apply({.fill = true, .cornerRadius = 10.0f});
     parts.picture.apply({.fill = true, .cornerRadius = 10.0f});
     parts.loader.apply({.place = scene::anchor::kCentre});
   }
-  // The loader while the picture has not come.
+  // The loader while the picture has not come; where it moves, drawn again
+  // each frame for the next of its frames.
+  [[nodiscard]] bool settling() const { return animations().has(source); }
   void update(double) {
-    const bool coming = !thumbnails().has(source);
+    const bool moving = animations().has(source);
+    const bool coming = !moving && !thumbnails().has(source);
     if (coming != parts.loader.visible())
       parts.loader.setVisible(coming);
+    if (moving)
+      parts.picture.markDamaged();
   }
   void show_time(std::string when) {
     parts.time.parts.label.setText(when);

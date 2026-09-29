@@ -15,6 +15,7 @@ import mux.ui;
 import mux.app.network;
 import mux.app.requests;
 import mux.app.services;
+import mux.app.workers;
 import mux.logic.blurhash;
 
 export namespace mux::app {
@@ -37,11 +38,33 @@ class pictures_part {
   // The bytes of a picture or a file fetched: shown, kept, or saved -- as
   // what it was fetched for says.
   void take(const change::avatar_loaded& picture, bool fresh) {
+    // Decoded on a worker, put in its cache on the UI's thread.
+    auto* scene = s_->scene;
     const auto shown = [&](mux::ui::image_cache& cache, const std::string& key) {
-      if (auto image = skia::decodeImage(picture.bytes.data(), picture.bytes.size())) {
-        cache.put(key, std::move(image));
-        s_->scene->state().markDamaged();
-      }
+      auto bytes = std::make_shared<const std::string>(picture.bytes);
+      s_->work->run([bytes, target = &cache, key, scene]() -> workers::done_t {
+        auto image = skia::decodeImage(bytes->data(), bytes->size());
+        return [image = std::move(image), target, key, scene]() mutable {
+          if (image) {
+            target->put(key, std::move(image));
+            scene->state().markDamaged();
+          }
+        };
+      });
+    };
+    // A whole picture: its frames, where it moves; else it, still.
+    const auto shown_whole = [&](const std::string& key) {
+      auto bytes = std::make_shared<const std::string>(picture.bytes);
+      s_->work->run([bytes, key, scene]() -> workers::done_t {
+        auto frames = skia::decodeFrames(bytes->data(), bytes->size());
+        return [frames = std::move(frames), key, scene]() mutable {
+          if (frames.size() > 1)
+            mux::ui::animations().put(key, std::move(frames));
+          else if (!frames.empty())
+            mux::ui::whole_pictures().put(key, std::move(frames.front().image));
+          scene->state().markDamaged();
+        };
+      });
     };
     std::visit(overloaded{[&](const media_use::avatar& one) {
                             shown(mux::ui::avatar_images(), one.of);
@@ -54,7 +77,7 @@ class pictures_part {
                               thumbnails_fetched_.erase(picture.source);
                           },
                           [&](const media_use::whole&) {
-                            shown(mux::ui::whole_pictures(), picture.source);
+                            shown_whole(picture.source);
                             if (fresh)
                               wholes_fetched_.erase(picture.source);
                           },
@@ -114,6 +137,9 @@ class pictures_part {
             if (said.attachment && is_picture(said.attachment->kind)) {
               this->want_thumbnail(id, said.attachment->source);
               this->make_preview(*said.attachment);
+              // One that moves: the whole of it, for its frames.
+              if (moves(said.attachment->kind))
+                this->want_whole(id, said.attachment->source);
             }
             // And of a picture a message made quotes, for its quote.
             if (said.replies_to)
@@ -213,6 +239,18 @@ class pictures_part {
                            : 24;
     if (const auto pixels = logic::blurhash_pixels(*picture.blurhash, width, height))
       mux::ui::previews().put(picture.source, skia::imageFromRGBA(width, height, pixels->data()));
+  }
+
+  // The whole of a picture that moves, for its frames: from the disk where
+  // it was fetched before, from the account where not.
+  void want_whole(const account_id& of, const std::string& source) {
+    if (source.empty() || mux::ui::animations().has(source) || mux::ui::whole_pictures().has(source) ||
+        wholes_fetched_.contains(source))
+      return;
+    if (this->read_back(media_use::whole{}, source))
+      return;
+    wholes_fetched_.insert(source);
+    s_->net->fetch_media(of, source, media_use::whole{}, 0);
   }
 
   // A message's picture's thumbnail: from the disk where it was fetched

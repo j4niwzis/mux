@@ -18,6 +18,7 @@ import mux.ui;
 import skiff.paint;
 import skiff.scene;
 import mux.app.network;
+import mux.app.workers;
 import mux.app.demo;
 import mux.app.store;
 import mux.app.requests;
@@ -49,6 +50,8 @@ struct app : kept_settings {
   outbox_part outbox{shared, drafts, sending};
   menu_part menu{shared, outbox, pictures};
   settings_part settings{shared, *this, pictures, [this] { this->rebuild_in_theme(); }};
+  // Work off the UI's thread: decoding pictures, reading the disk.
+  workers work;
   // Files chosen in the dialog, or dropped on the window: to the outbox.
   void files_given(std::vector<std::string> paths, bool dropped) { outbox.files_given(std::move(paths), dropped); }
   // What the parts share, pointed at the program's own: once the program

@@ -141,7 +141,7 @@ if(MUX_UI)
   # skiff and skiff-widgets say the rest of what they are in their own trees.
   cme_declare_port(NAME skiff PROVIDES skiff
     GITHUB_REPOSITORY j4niwzis/skiff
-    GIT_TAG 86e9687e37503ed12358e98bebbc26e788ade4c9)
+    GIT_TAG 565429b44810fe52d8b972289dd8f24dcadf24eb)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
     GIT_TAG 35e459539865362c6919c946488cd71640511b1c)
@@ -151,7 +151,7 @@ if(MUX_UI)
   # Text shaped by HarfBuzz and laid out by Unicode's rules through alef:
   # Arabic and Hebrew, Indic scripts, emoji sequences, CJK line breaks.
   set(SKIFF_TEXT_SHAPING ON CACHE BOOL "" FORCE)
-  cme_find_package(Skia REQUIRED COMPONENTS gl png jpeg freetype fontmgr-directory)
+  cme_find_package(Skia REQUIRED COMPONENTS gl png jpeg gif webp freetype fontmgr-directory)
   cme_find_package(SDL3 REQUIRED)
   cme_find_package(skiff-widgets REQUIRED)
   # skiff's modules are C++23 and do not carry the family's flags, so they
@@ -194,7 +194,7 @@ if(MUX_UI)
   # The program's own parts: its network, its demo, what it keeps on disk,
   # the requests of its window, the names it reads, and the program itself.
   target_sources(mux PRIVATE FILE_SET CXX_MODULES BASE_DIRS src
-    FILES src/app/network.cc src/app/demo.cc src/app/store.cc src/app/requests.cc src/app/words.cc
+    FILES src/app/network.cc src/app/workers.cc src/app/demo.cc src/app/store.cc src/app/requests.cc src/app/words.cc
           src/app/kept.cc src/app/services.cc src/app/search.cc src/app/pictures.cc src/app/drafts.cc src/app/reading.cc src/app/outbox.cc src/app/settings.cc src/app/menu.cc
           src/app/program.cc)
   # What the program does, a part each: the module's implementation units.

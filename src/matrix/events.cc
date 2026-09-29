@@ -72,6 +72,8 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
         carried.height = static_cast<int>(number("h"));
         carried.blurhash = text(member(*info, "xyz.amorgan.blurhash"));
       }
+      if (picture)
+        carried.kind = attachment_kind::image{.moves = moving_type(carried.mimetype)};
       if (!carried.source.empty()) {
         made.attachment = std::move(carried);
         if (!file_name || *file_name == content.body)

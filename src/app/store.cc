@@ -252,7 +252,7 @@ class message_store {
         };
         mux::attachment a;
         if (flag_of(c, "image"))
-          a.kind = mux::attachment_kind::image{};
+          a.kind = mux::attachment_kind::image{.moves = flag_of(c, "moves")};
         a.source = text_of(c, "source").value_or("");
         a.name = text_of(c, "name").value_or("");
         a.mimetype = text_of(c, "mimetype").value_or("");
@@ -285,6 +285,8 @@ class message_store {
     if (one.attachment) {
       knot::value::object carried;
       carried.emplace("image", knot::value(mux::is_picture(one.attachment->kind)));
+      if (mux::moves(one.attachment->kind))
+        carried.emplace("moves", knot::value(true));
       carried.emplace("source", knot::value(one.attachment->source));
       carried.emplace("name", knot::value(one.attachment->name));
       carried.emplace("mimetype", knot::value(one.attachment->mimetype));

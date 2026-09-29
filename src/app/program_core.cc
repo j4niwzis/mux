@@ -27,6 +27,8 @@ namespace mux::app {
 auto app::window() -> skiff::scene::Scene<window_type>& { return scene; }
 
 void app::woken() {
+  // What the workers made, put where it goes: on this, the UI's thread.
+  work.finish();
   auto changes = box->take();
   if (changes.empty())
     return;
@@ -128,7 +130,8 @@ void app::wire() {
                     .scene = &scene,
                     .refresh = [this] { this->refresh(); },
                     .settings_of = [this](std::string_view address) { return this->settings_of(address); },
-                    .go_live = [this](const mux::conversation_id& in) { this->go_live(in); }};
+                    .go_live = [this](const mux::conversation_id& in) { this->go_live(in); },
+                    .work = &work};
 }
 
 void app::before_frame() {

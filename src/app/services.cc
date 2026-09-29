@@ -11,6 +11,7 @@ import mux.core;
 import mux.config;
 import mux.ui;
 import mux.app.network;
+import mux.app.workers;
 import mux.app.store;
 import mux.app.requests;
 
@@ -31,6 +32,8 @@ struct services {
   // A chat that is a window of its history away from its newest: back to
   // its newest, live -- before anything is put at its end.
   std::function<void(const conversation_id&)> go_live;
+  // Work off the UI's thread.
+  workers* work = nullptr;
 
   [[nodiscard]] window_type& root() const { return scene->root(); }
   // The demo: no network, and nothing kept.

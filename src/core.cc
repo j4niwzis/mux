@@ -156,6 +156,8 @@ using delivery_t = std::variant<delivery::sending, delivery::sent, delivery::del
 namespace attachment_kind {
 struct image {
   static constexpr bool picture = true;
+  // A GIF or a WebP: frames that move, played where it is shown.
+  bool moves = false;
   friend bool operator==(image, image) = default;
 };
 struct file {
@@ -166,6 +168,17 @@ struct file {
 using attachment_kind_t = std::variant<attachment_kind::image, attachment_kind::file>;
 [[nodiscard]] inline bool is_picture(const attachment_kind_t& kind) {
   return std::visit([](auto one) { return one.picture; }, kind);
+}
+// Whether it is a picture that moves.
+[[nodiscard]] inline bool moves(const attachment_kind_t& kind) {
+  return std::visit(overloaded{[](attachment_kind::image one) { return one.moves; },
+                               [](attachment_kind::file) { return false; }},
+                    kind);
+}
+// Whether a picture of this type may move: GIF and WebP -- read where a
+// picture comes in, from what its sender says it is.
+[[nodiscard]] inline bool moving_type(std::string_view mimetype) {
+  return mimetype == "image/gif" || mimetype == "image/webp";
 }
 struct attachment {
   attachment_kind_t kind = attachment_kind::file{};

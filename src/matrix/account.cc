@@ -1,0 +1,223 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// mux.matrix:account -- A Matrix account: the class, its state and what it does, declared.
+export module mux.matrix:account;
+
+import std;
+import knot;
+import loom.api;
+import loom.ev;
+import loom.state;
+import loom.cs.joining;
+import loom.cs.leaving;
+import loom.cs.login;
+import loom.cs.message_pagination;
+import loom.cs.receipts;
+import loom.cs.redaction;
+import loom.cs.room_send;
+import loom.cs.rooms;
+import loom.cs.sync;
+import loom.cs.typing;
+import loom.cs.wellknown;
+import mux.config;
+import mux.core;
+import mux.http;
+import mux.net;
+export import :names;
+
+export namespace mux::matrix {
+
+struct failure {
+  std::optional<loom::error> server;
+  std::string network;
+  std::string said() const {
+    if (server)
+      return server->errcode + (server->message.empty() ? "" : ": " + server->message);
+    return network;
+  }
+};
+
+template <class Sink>
+class account {
+ public:
+  account(net::loop& loop, net::tls& tls, settings how, Sink sink)
+      : loop_(&loop), tls_(&tls), how_(std::move(how)), sink_(std::move(sink)) {
+    id_ = account_id{protocol::matrix{}, how_.user_id};
+    const auto colon = how_.user_id.find(':');
+    localpart_ = how_.user_id.substr(how_.user_id.starts_with('@') ? 1 : 0,
+                                     colon == std::string::npos ? std::string::npos : colon - 1);
+    server_name_ = colon == std::string::npos ? std::string() : how_.user_id.substr(colon + 1);
+  }
+  account(const account&) = delete;
+  account& operator=(const account&) = delete;
+
+  const account_id& id() const noexcept;
+
+  void start();
+
+  void stop();
+
+  // A read receipt for an event of a room: the people in it see how far this
+  // account has read.
+  void mark_read(std::string room, std::string event);
+
+  // Older messages of a room, paged back from `from`: before the rest, and
+  // where to page back from next -- nothing where the beginning is reached.
+  void load_older(std::string room, std::string from);
+
+  // An avatar's picture: the server's thumbnail of an mxc:// URI, at the size
+  // it is drawn at twice over, handed on for `key`. The authenticated media
+  // API first (v1.11), the older one where the server has no such thing.
+  void fetch_avatar(std::string source, std::string key);
+  // What an mxc:// URI keeps: its thumbnail at `size` (cropped to a square,
+  // or scaled to fit), or, where `size` is 0, the whole of it -- handed on
+  // for `key`. The authenticated media API first, the older one where the
+  // server has no such thing.
+  void fetch_media(std::string source, std::string key, int size, bool crop = false);
+
+  // A file sent: shown at once under `local` (its picture, where it is one,
+  // already known to the window), uploaded to the media repository, and
+  // sent as m.image or m.file -- its caption the body, its name apart
+  // (Matrix 1.10) -- then known by the event the server gives it.
+  void send_file(std::string room, std::string local, std::string bytes, std::string name, std::string mimetype,
+                 bool image, int width, int height, std::string caption);
+
+  // A message of one's own edited (m.replace): the new text in its place.
+  void edit(std::string room, std::string event, std::string text);
+  // A message removed (redacted).
+  void remove(std::string room, std::string event);
+
+  // A reaction to a message put, or taken back: m.reaction with its key,
+  // or the redaction of the account's own.
+  void react(std::string room, std::string target, std::string key, bool on);
+
+  // The account leaves a room; the next sync says it has, and the room goes.
+  void leave(std::string room);
+
+  // A text message sent to a room, from a fiber of its own. It is in the
+  // conversation at once, under its transaction id; the server's answer
+  // gives it its event id, and the echo in the next sync is the same message.
+  void send(std::string room, std::string body, std::optional<std::string> reply_to = std::nullopt);
+
+ private:
+  void say(connection_t state);
+
+  // A request made and its answer read into its type.
+  template <class Endpoint>
+  std::expected<typename Endpoint::response, failure> perform(auto& over, const Endpoint& endpoint,
+                                                              std::chrono::seconds timeout = std::chrono::seconds(60)) {
+    const loom::request asked = endpoint.to_send();
+    try {
+      const auto got = over.request(asked.method_name(), asked.target, asked.body,
+                                    asked.authenticated && token_ ? std::optional<std::string_view>(*token_)
+                                                                  : std::nullopt,
+                                    timeout);
+      auto read = loom::read<Endpoint>(got.status, got.body);
+      if (!read) {
+        loom::error said = std::move(read).error();
+        if (!said.retry_after_ms)
+          said.retry_after_ms = got.retry_after_ms;
+        return std::unexpected(failure{std::move(said), {}});
+      }
+      return std::move(*read);
+    } catch (const net::failure& failed) {
+      return std::unexpected(failure{std::nullopt, failed.what()});
+    }
+  }
+
+  // The client-server API's base URL: the one given, or the one the server
+  // name's .well-known says (the spec's server discovery), or the server
+  // name itself.
+  std::optional<http::url> homeserver();
+
+  void run();
+
+  // The file the sync is kept in, for this account.
+  std::filesystem::path kept_file() const;
+  // The sync as it stands, as a sync's answer: every joined room's state,
+  // its timeline since its last gap and where that pages back from, its
+  // summary, unread counts and data; the account's data; and the token to
+  // go on from. Read back, it is applied as an answer is.
+  void save_kept() const;
+  void load_kept();
+
+  // What the rooms a sync named look like now, and what their timelines
+  // brought.
+  void tell(const loom::cs::sync::response& got);
+
+  // A room's picture: its own, or, for a chat with one other person, theirs.
+  std::optional<std::string> avatar_of(const std::string& room, const loom::client::joined_room& kept) const;
+
+  // A room's name as the spec says a client works it out: m.room.name, the
+  // canonical alias, the heroes, the room's id.
+  static std::string name_of(const std::string& room, const loom::client::joined_room& kept);
+
+  bool direct(const std::string& room) const;
+
+  void conversation(const conversation_id& in, const loom::client::joined_room& kept);
+
+  // Whether a room is a space: its creation says so, by its type.
+  static bool space(const loom::client::joined_room& kept);
+  // The rooms a space holds: an m.space.child for each, whose content is
+  // not empty -- an emptied one is a child taken out.
+  static std::vector<std::string> children_of(const loom::client::joined_room& kept);
+
+  // Who is in a room, as its state says: those joined, by their names there.
+  // Who is in a room: all of it, where it was asked for (/joined_members),
+  // with what the syncs say over it -- a sync's state has only those who
+  // spoke lately, the members being loaded lazily -- those who left or were
+  // banned taken out.
+  void members(const conversation_id& in, const loom::client::joined_room& kept);
+ public:
+  // The user typing in a room, or not: for thirty seconds, or until said.
+  void typing(std::string room, bool on);
+  // A room joined, by its id or an alias, through the servers `via` names:
+  // it comes with the next sync.
+  void join(std::string room, std::vector<std::string> via);
+  // A room's members, all of them, from the server: kept, and said.
+  void fetch_members(std::string room);
+  std::map<std::string, std::map<std::string, mux::member>> full_members_;
+
+ private:
+
+  // An event of a room's timeline, as changes: at the end, or before the
+  // rest where it is history paged back to.
+  void event(const conversation_id& in, const loom::ev::timeline_event& one, bool history = false);
+
+  // An encrypted message: said to be there, not yet readable.
+  void encrypted(const conversation_id& in, const loom::ev::timeline_event& one,
+                 std::chrono::sys_time<std::chrono::milliseconds> at, bool history);
+  // A redaction: a reaction taken back, or a message removed.
+  void redaction(const conversation_id& in, const loom::ev::timeline_event& one);
+
+  // A message's body: its plain text, and its HTML where it says it has
+  // org.matrix.custom.html.
+  static body body_of(std::string plain, const knot::value& content);
+  template <class Tagged>
+  static body body_of(std::string plain, const knot::value& rest, const Tagged& content) {
+    body made{std::move(plain), std::nullopt};
+    if (std::visit([](auto of) { return of.html_given; }, body_format_of(text(extra(rest, content, "format")))))
+      made.html = text(extra(rest, content, "formatted_body"));
+    return made;
+  }
+
+  struct reaction {
+    std::string target, key, who;
+  };
+
+  net::loop* loop_;
+  net::tls* tls_;
+  settings how_;
+  Sink sink_;
+  account_id id_;
+  std::string localpart_, server_name_;
+  std::optional<std::string> token_;
+  // The rooms whose place to page back from was told.
+  std::set<std::string> paged_;
+  http::pool* api_ = nullptr;
+  loom::client::state state_;
+  std::map<std::string, reaction> reactions_;
+  std::uint64_t transactions_ = 0;
+  bool stopping_ = false;
+};
+
+}  // namespace mux::matrix

@@ -722,8 +722,12 @@ struct message_bubble : nodes::Stack {
         return;
       }
       skia::SkFont* font = skiff::paint::defaultFont();
-      if (text.bounds().isEmpty() || font == nullptr)
+      if (font == nullptr)
         return;
+      if (text.bounds().isEmpty()) {
+        this->guess_time(*font);
+        return;
+      }
       time_placed = true;
       const float needs =
           text.lastLineWidth() + skiff::paint::Painter(nullptr, *font).measure(inline_time.text(), 11.0f) + 10.0f;
@@ -749,6 +753,29 @@ struct message_bubble : nodes::Stack {
       }
     }
     float time_drop = 0.0f;
+    // Before its first layout, where the time goes is guessed from the text
+    // wrapped at the bubble's widest -- where it does wrap, but in a chat
+    // narrower than a bubble. So a bubble made anew -- sent, edited, reacted
+    // to -- is drawn right from its first frame, not with its time under
+    // its text for one and then beside it, a jump each time. The layout
+    // checks the guess, above.
+    bool guessed = false;
+    void guess_time(skia::SkFont& font) {
+      auto& [name, quote, picture, file, text, cards, preview, reactions, time, inline_time] = parts;
+      if (std::exchange(guessed, true) || text.text().empty())
+        return;
+      const skiff::paint::Painter p(nullptr, font);
+      const auto lines = p.wrap(text.text(), kMaxWidth, 13.0f, false);
+      if (lines.empty())
+        return;
+      const float needs = p.measure(lines.back(), 13.0f, false) + p.measure(inline_time.text(), 11.0f) + 10.0f;
+      if (needs > kMaxWidth)
+        return;
+      time.setVisible(false);
+      inline_time.setVisible(true);
+      widened = std::ceil(needs) + 2.0f * kPadX;
+      fState.apply({.minWidth = std::max(base_min, widened)});
+    }
     body_column(bool mine, std::string said, std::string when)
         : outgoing(mine),
           parts{.text = nodes::Text(std::move(said), 13.0f, text_colour),

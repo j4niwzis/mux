@@ -40,6 +40,11 @@ struct picture_viewer : nodes::Stack {
     std::string source;
     void operator()() const { actions->save_picture(source); }
   };
+  // The loader pressed: the download stopped, or started again.
+  struct press_loader {
+    picture_viewer* viewer;
+    void operator()() const { viewer->actions->press_loader(viewer->source); }
+  };
   struct top_bar : nodes::Stack {
     using close_button = icon_button<ask<Actions, &Actions::close_picture>>;
     struct parts_t {
@@ -88,10 +93,11 @@ struct picture_viewer : nodes::Stack {
         }
       };
       nodes::Image<shown_picture> picture;
-      widgets::RadialLoader loader{};  // while the whole picture is coming
+      widgets::RadialLoader<press_loader> loader;  // while the whole picture is coming
     } parts;
     explicit stage(picture_viewer* v)
-        : viewer(v), parts{.picture = nodes::Image<typename parts_t::shown_picture>({v})} {
+        : viewer(v), parts{.picture = nodes::Image<typename parts_t::shown_picture>({v}),
+                           .loader = widgets::RadialLoader<press_loader>(44.0f, {v})} {
       fState.apply({.fillX = true, .grow = scene::axes::kY, .masking = true});
       parts.loader.apply({.place = scene::anchor::kCentre});
     }
@@ -99,8 +105,10 @@ struct picture_viewer : nodes::Stack {
       const bool coming = !whole_pictures().has(viewer->source);
       if (coming != parts.loader.visible())
         parts.loader.setVisible(coming);
-      if (coming)
+      if (coming) {
         parts.loader.setProgress(progress_of(viewer->source));
+        parts.loader.setStopped(stopped_downloads().contains(viewer->source));
+      }
     }
     // Where the picture goes: fitted, zoomed, moved -- laid out there, not
     // drawn there by hand.

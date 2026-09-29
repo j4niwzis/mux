@@ -113,6 +113,10 @@ class account {
   // for `key`. The authenticated media API first, the older one where the
   // server has no such thing.
   void fetch_media(std::string source, media_use_t use, int size, bool crop = false);
+  // A download of the whole of `source` stopped, where it is going on.
+  void cancel_media(std::string source) { cancelled_.insert(std::move(source)); }
+  // Downloads to stop, as their progress is next said. On the loop's thread.
+  std::set<std::string> cancelled_;
 
   // A file sent: shown at once under `local` (its picture, where it is one,
   // already known to the window), uploaded to the media repository, and

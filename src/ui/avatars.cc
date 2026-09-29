@@ -153,6 +153,11 @@ inline std::map<std::string, float, std::less<>>& download_progress() {
   static std::map<std::string, float, std::less<>> kept;
   return kept;
 }
+// Downloads the user stopped, by source: shown stopped until asked again.
+inline std::set<std::string, std::less<>>& stopped_downloads() {
+  static std::set<std::string, std::less<>> kept;
+  return kept;
+}
 [[nodiscard]] inline std::optional<float> progress_of(std::string_view source) {
   const auto found = download_progress().find(source);
   return found == download_progress().end() ? std::nullopt : std::optional(found->second);

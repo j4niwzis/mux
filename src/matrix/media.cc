@@ -32,6 +32,8 @@ void account<Sink>::fetch_media(std::string source, media_use_t use, int size, b
   loop_->spawn([this, source = std::move(source), use = std::move(use), size, crop] {
     if (!api_ || !source.starts_with("mxc://"))
       return;
+    // Asked again: a stop asked before is let go.
+    cancelled_.erase(source);
     const std::string_view rest = std::string_view(source).substr(6);
     const auto slash = rest.find('/');
     if (slash == std::string_view::npos)
@@ -48,14 +50,18 @@ void account<Sink>::fetch_media(std::string source, media_use_t use, int size, b
       try {
         // A download whole says how far it has come, a twentieth at a time.
         int said = -1;
+        // Going on as long as it is not stopped.
         const auto progress = [&](std::size_t read, std::optional<std::size_t> total) {
+          if (cancelled_.erase(source))
+            return false;
           if (!total || *total == 0)
-            return;
+            return true;
           const int now = static_cast<int>(20 * read / *total);
           if (now != said) {
             said = now;
             sink_(change::media_progress{source, static_cast<float>(read) / static_cast<float>(*total)});
           }
+          return true;
         };
         const auto got = api_->request("GET", base + server + "/" + media + query, {},
                                        token_ ? std::optional<std::string_view>(*token_) : std::nullopt,

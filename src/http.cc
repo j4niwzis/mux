@@ -74,9 +74,10 @@ struct url {
 
 // How far a response's body has come: bytes read, of how many where the
 // server said. Called as it comes, for a download's progress to be shown.
-// Given as a type: any callable of (read, total); none by default.
+// Given as a type: any callable of (read, total) saying whether to go on;
+// none by default.
 struct no_progress {
-  void operator()(std::size_t, std::optional<std::size_t>) const {}
+  bool operator()(std::size_t, std::optional<std::size_t>) const { return true; }
 };
 
 struct response {
@@ -112,8 +113,9 @@ class connection {
     const bool reused = stream_.has_value();
     try {
       return once(method, target, body, bearer, timeout, type, progress);
-    } catch (const net::failure&) {
-      if (!reused)
+    } catch (const net::failure& failed) {
+      // Stopped by its progress: not a closed connection, not tried again.
+      if (!reused || failed.code == asio::error::operation_aborted)
         throw;
       stream_.reset();
       return once(method, target, body, bearer, timeout, type, progress);
@@ -221,7 +223,12 @@ class connection {
           stream_.reset();
           throw net::failure("reading from " + where_.host, read);
         }
-        (*progress)(in.get().body().size(), total);
+        // Stopped by what watches it: the download let go, the connection
+        // with it (it is mid-answer).
+        if (!(*progress)(in.get().body().size(), total)) {
+          stream_.reset();
+          throw net::failure("reading from " + where_.host, asio::error::operation_aborted);
+        }
       }
     }
     auto got = in.release();

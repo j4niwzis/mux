@@ -239,6 +239,21 @@ class pictures_part {
       s_->net->fetch_media(chosen->account, one.source, media_use::whole{}, 0);
   }
   void apply(const request::close_picture&) { s_->root().close_picture(); }
+  // The viewer's cross: the whole picture's download stopped, the thumbnail
+  // left; pressed again (an arrow then), asked for again.
+  void apply(const request::press_loader& one) {
+    const auto& chosen = s_->root().main().chosen;
+    if (!chosen)
+      return;
+    if (wholes_fetched_.erase(one.source)) {
+      s_->net->cancel_media(chosen->account, one.source);
+      mux::ui::download_progress().erase(one.source);
+      mux::ui::stopped_downloads().insert(one.source);
+    } else {
+      mux::ui::stopped_downloads().erase(one.source);
+      this->want_whole(chosen->account, one.source);
+    }
+  }
   void apply(const request::save_picture& one) { this->save(one.source, "image"); }
   // A file in a message, pressed: fetched, saved to Downloads, and opened.
   void apply(const request::open_file& one) {

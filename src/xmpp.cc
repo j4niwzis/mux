@@ -195,6 +195,7 @@ class account {
   // Avatars of XMPP contacts (XEP-0084) are not fetched yet.
   void fetch_avatar(std::string, std::string) {}
   void fetch_media(std::string, media_use_t, int, bool = false) {}
+  void cancel_media(std::string) {}
   // A room's occupants come with its presence; nothing to ask for.
   void fetch_members(std::string) {}
   // Reactions (XEP-0444) are not sent yet.

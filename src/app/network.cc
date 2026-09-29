@@ -403,6 +403,18 @@ struct network {
             one.account);
     });
   }
+  // A whole download stopped, by the account doing it.
+  void cancel_media(const mux::account_id& of, std::string source) {
+    loop.post([this, of, source = std::move(source)] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == of)
+                account->cancel_media(source);
+            },
+            one.account);
+    });
+  }
   // An avatar's picture, fetched by the account it is of, for `key`.
   void fetch_avatar(const mux::account_id& of, std::string source, std::string key) {
     loop.post([this, of, source = std::move(source), key = std::move(key)] {

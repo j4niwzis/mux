@@ -188,7 +188,9 @@ TEST(Matrix, AgainstAHomeserverOverTls) {
   EXPECT_EQ(sent_one->delivery, mux::delivery_t{mux::delivery::sent{}});
 
   // What the client asked: login without a token, sync with one, the
-  // message PUT with a transaction id.
+  // message PUT with a transaction id -- one of this run's own, "mux-<when
+  // the run began>-<n>", never the "mux1" every run used to start from: a
+  // server answers a repeated id with the event it made the first time.
   ASSERT_FALSE(heard.empty());
   EXPECT_TRUE(heard.front().target.starts_with("/_matrix/client/v3/login"));
   EXPECT_NE(heard.front().body.find("m.login.password"), std::string::npos);
@@ -197,7 +199,9 @@ TEST(Matrix, AgainstAHomeserverOverTls) {
   for (const auto& one : heard) {
     if (one.target.starts_with("/_matrix/client/v3/sync"))
       bearer = bearer || one.headers.find("Authorization: Bearer tok") != std::string::npos;
-    if (one.method == "PUT" && one.target.find("/send/m.room.message/mux1") != std::string::npos)
+    if (const auto at = one.target.find("/send/m.room.message/mux-");
+        one.method == "PUT" && at != std::string::npos &&
+        one.target.find("/send/m.room.message/mux1") == std::string::npos)
       put = true;
   }
   EXPECT_TRUE(bearer);

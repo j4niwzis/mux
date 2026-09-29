@@ -42,18 +42,25 @@ struct menu_facts {
 
 template <class Actions>
 struct timeline_area : scene::Node {
+  // The loader's cross: the message jumped to no longer looked for.
+  struct stop_jump {
+    Actions* actions = nullptr;
+    void operator()() const { actions->stop_jump(); }
+  };
   struct parts_t {
     nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>> timeline{
         nodes::Flow<std::vector<message_bubble>>({.spacingY = 0.0f, .wrap = false}, {})};
     jump_button<Actions> jump;
     mark_button<Actions> mentions;
     mark_button<Actions> reactions;
-    // While a message jumped to is being fetched: turning in the middle.
-    widgets::RadialLoader loading{};
+    // While a message jumped to is being fetched: turning in the middle,
+    // its cross stopping the search.
+    widgets::RadialLoader<stop_jump> loading;
   } parts;
   Actions* actions = nullptr;
   explicit timeline_area(Actions* a)
       : parts{.jump = jump_button<Actions>(a),
+              .loading = widgets::RadialLoader<stop_jump>(44.0f, {a}),
               .mentions = mark_button<Actions>(a, mark_kind::mention{}, "@"),
               .reactions = mark_button<Actions>(a, mark_kind::reaction{}, "\u2665")},
         actions(a) {

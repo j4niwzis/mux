@@ -118,6 +118,7 @@ class outbox_part {
     s_->root().main().line.show_context(std::nullopt);
   }
   void apply(const request::submit_message& one) { this->send(one.text); }
+  void apply(const request::stop_jump&) { s_->root().main().stop_jump(); }
   void apply(const request::send_typed&) { this->send(s_->root().main().line.plain()); }
 
   // Files: chosen with the paperclip, or dropped; the send box closed, or

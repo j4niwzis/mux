@@ -237,7 +237,7 @@ struct picture_view : scene::Node {
   struct parts_t {
     nodes::Image<from_previews> preview;  // blurred, from its blurhash, until it comes
     nodes::Image<from_moving_thumbnail> picture;
-    widgets::RadialLoader loader{};  // while it is coming
+    widgets::RadialLoader<> loader{};  // while it is coming
     time_pill time{};
   } parts;
 

@@ -759,6 +759,12 @@ struct conversations_screen : nodes::Stack {
       }
     return best.value_or(0);
   }
+  // The message jumped to no longer looked for: where the view is, it stays.
+  void stop_jump() {
+    jumping_to.reset();
+    context_asked.reset();
+    jump_tries = 0;
+  }
   void update(double) {
     // The pin the bar shows, as the view moves: the one above it. Not while
     // a jump goes on -- where it lands decides.

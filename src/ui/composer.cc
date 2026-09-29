@@ -94,7 +94,6 @@ struct compose_context {
 // what is written, and the send arrow on the right.
 template <class Actions>
 struct composer_bar : nodes::Stack {
-  nodes::Box<> divider{band_colour};
   // What is written answers or edits, as tdesktop's FieldHeader shows it:
   // its icon in the left column (historyReplySkip wide), then two lines --
   // "Reply to <name>" or "Edit message" in the accent, semibold, over a
@@ -102,44 +101,49 @@ struct composer_bar : nodes::Stack {
   struct context_row : nodes::Stack {
     static constexpr float kHeight = 49.0f;  // historyReplyHeight
     static constexpr float kSkip = 51.0f;    // historyReplySkip
-    nodes::Icon mark{IconShape{}, accent_colour};  // in the left column
     struct lines_column : nodes::Stack {
-      nodes::Text title{"", 13.0f, accent_colour, true};
-      nodes::Text line{"", 13.0f, text_colour};
+      struct parts_t {
+        nodes::Text title{"", 13.0f, accent_colour, true};
+        nodes::Text line{"", 13.0f, text_colour};
+      } parts;
       lines_column() {
         this->setGap(2.0f);
-        title.setElided(true);
-        line.setElided(true);
-        title.apply({.fillX = true});
-        line.apply({.fillX = true});
+        for (nodes::Text* each : {&parts.title, &parts.line}) {
+          each->setElided(true);
+          each->apply({.fillX = true});
+        }
       }
-      void forEachChild(auto&& f) {
-        f(title);
-        f(line);
-      }
-    } lines;
-    icon_button<ask<Actions, &Actions::cancel_compose>> cancel;
-    explicit context_row(Actions* a) : cancel(icon::close{}, {a}) {
+    };
+    using cancel_button = icon_button<ask<Actions, &Actions::cancel_compose>>;
+    struct parts_t {
+      nodes::Icon mark{IconShape{}, accent_colour};  // in the left column
+      lines_column lines;
+      cancel_button cancel;
+    } parts;
+    explicit context_row(Actions* a) : parts{.cancel = cancel_button(icon::close{}, {a})} {
       this->setHorizontal();
       this->setGap(8.0f);
       fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 8.0f, 0.0f, 0.0f}});
-      mark.apply({.width = kSkip - 8.0f, .fillY = true});
-      lines.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      cancel.apply({.alignSelf = scene::align::kMiddle});
+      parts.mark.apply({.width = kSkip - 8.0f, .fillY = true});
+      parts.lines.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      parts.cancel.apply({.alignSelf = scene::align::kMiddle});
     }
-    void forEachChild(auto&& f) {
-      f(mark);
-      f(lines);
-      f(cancel);
-    }
-  } context_line;
+  };
   // The paperclip, the field growing with what is written in it, the arrow.
   struct input_row : nodes::Stack {
-    icon_button<ask<Actions, &Actions::attach_files>> attach;
-    widgets::TextArea<submit_message<Actions>> field;
-    icon_button<ask<Actions, &Actions::send_typed>> send;
+    using attach_button = icon_button<ask<Actions, &Actions::attach_files>>;
+    using field_t = widgets::TextArea<submit_message<Actions>>;
+    using send_button = icon_button<ask<Actions, &Actions::send_typed>>;
+    struct parts_t {
+      attach_button attach;
+      field_t field;
+      send_button send;
+    } parts;
     explicit input_row(Actions* a)
-        : attach(icon::clip{}, {a}), field("Write a message…", {a}), send(icon::send{}, {a}) {
+        : parts{.attach = attach_button(icon::clip{}, {a}),
+                .field = field_t("Write a message…", {a}),
+                .send = send_button(icon::send{}, {a})} {
+      auto& [attach, field, send] = parts;
       this->setHorizontal();
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {9.0f, 8.0f, 9.0f, 8.0f}});
@@ -148,42 +152,37 @@ struct composer_bar : nodes::Stack {
       field.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
       send.set_colour(accent_colour);
     }
-    void forEachChild(auto&& f) {
-      f(attach);
-      f(field);
-      f(send);
-    }
-  } input;
-  // The old names, for what reads them.
-  widgets::TextArea<submit_message<Actions>>& field = input.field;
+  };
+  struct parts_t {
+    nodes::Box<> divider{band_colour};
+    context_row context_line;
+    input_row input;
+  } parts;
+  // The old name, for what reads it.
+  widgets::TextArea<submit_message<Actions>>& field = parts.input.parts.field;
 
   // Declared: the divider, the answer's line where there is one, the row.
-  explicit composer_bar(Actions* a) : context_line(a), input(a) {
-    context_line.setVisible(false);
+  explicit composer_bar(Actions* a) : parts{.context_line = context_row(a), .input = input_row(a)} {
+    parts.context_line.setVisible(false);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .background = sidebar_colour});
-    divider.apply({.fillX = true, .height = 1.0f});
+    parts.divider.apply({.fillX = true, .height = 1.0f});
   }
 
-  [[nodiscard]] const std::string& text() const { return input.field.text(); }
+  [[nodiscard]] const std::string& text() const { return parts.input.parts.field.text(); }
   // Whether what is written answers or edits something.
-  [[nodiscard]] bool answering() const { return context_line.visible(); }
+  [[nodiscard]] bool answering() const { return parts.context_line.visible(); }
   // What is written answers or edits something, shown; or nothing.
   void show_context(std::optional<compose_context> said) {
+    auto& context_line = parts.context_line;
     context_line.setVisible(said.has_value());
-    context_line.mark.setShape(said ? shape_of(said->mark) : IconShape{});
-    context_line.lines.title.setText(said ? said->title : std::string());
-    context_line.lines.line.setText(said ? said->line : std::string());
+    context_line.parts.mark.setShape(said ? shape_of(said->mark) : IconShape{});
+    context_line.parts.lines.parts.title.setText(said ? said->title : std::string());
+    context_line.parts.lines.parts.line.setText(said ? said->line : std::string());
     context_line.markDamaged();
     this->invalidateLayout();
   }
-  void set_text(std::string text) { input.field.setText(std::move(text)); }
-  void clear() { input.field.setText({}); }
-
-  void forEachChild(auto&& f) {
-    f(divider);
-    f(context_line);
-    f(input);
-  }
+  void set_text(std::string text) { parts.input.parts.field.setText(std::move(text)); }
+  void clear() { parts.input.parts.field.setText({}); }
 };
 
 // "↓": back to the newest, with how many came while one read above them.
@@ -194,7 +193,9 @@ struct jump_button : scene::Node {
   // A round plate with a chevron down, and over its top the count of what
   // came while the reader was above, on a badge in the accent.
   struct badge_t : nodes::Stack {
-    nodes::Text count{"", 11.0f, on_accent_colour, true};
+    struct parts_t {
+      nodes::Text count{"", 11.0f, on_accent_colour, true};
+    } parts;
     badge_t() {
       fState.apply({.place = scene::anchor::kTopCentre,
                      .y = -10.0f,
@@ -205,10 +206,9 @@ struct jump_button : scene::Node {
                      .cornerRadius = 9.0f,
                      .background = accent_colour});
       fStack.justify = nodes::justify::middle{};
-      count.apply({.alignSelf = scene::align::kMiddle});
+      parts.count.apply({.alignSelf = scene::align::kMiddle});
       this->setVisible(false);
     }
-    void forEachChild(auto&& f) { f(count); }
   };
   struct parts_t {
     nodes::Icon chevron;
@@ -228,7 +228,7 @@ struct jump_button : scene::Node {
   }
   void set_unseen(int count) {
     unseen = count;
-    parts.badge.count.setText(std::to_string(count));
+    parts.badge.parts.count.setText(std::to_string(count));
     parts.badge.setVisible(count > 0);
     this->invalidateLayout();
   }

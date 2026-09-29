@@ -119,8 +119,11 @@ class account {
                                                           .from = from,
                                                           .dir = loom::cs::get_room_events::dir_values::b{},
                                                           .limit = 40});
-      if (!got)
+      if (!got) {
+        log(id_, "history of {}: {}", room, got.error().said());
         return;
+      }
+      log(id_, "history of {}: {} event{}", room, got->chunk.size(), got->chunk.size() == 1 ? "" : "s");
       const conversation_id in{id_, room};
       for (const auto& one : got->chunk)  // newest first: each goes before the rest
         event(in, one, true);
@@ -257,8 +260,12 @@ class account {
 
   void run() {
     say(connection::connecting{});
+    if (how_.proxy)
+      log(id_, "through the proxy {}:{}", how_.proxy->host, how_.proxy->port);
+    log(id_, "finding the homeserver");
     const auto base = homeserver();
     if (!base) {
+      log(id_, "no homeserver found");
       say(connection::failed{"no homeserver for " + how_.user_id});
       return;
     }
@@ -273,17 +280,20 @@ class account {
       knot::value::object said_user;
       said_user.emplace("user", knot::value(localpart_));
       who.rest = knot::value(std::move(said_user));
+      log(id_, "logging in, as the device {}", how_.device_id.value_or("the server makes"));
       auto logged = perform(api, loom::cs::login{.body = {.type = "m.login.password",
                                                           .identifier = std::move(who),
                                                           .password = how_.password,
                                                           .device_id = how_.device_id,
                                                           .initial_device_display_name = how_.device_name}});
       if (!logged) {
+        log(id_, "login failed: {}", logged.error().said());
         say(connection::failed{"login: " + logged.error().said()});
         return false;
       }
       token_ = logged->access_token;
       how_.device_id = logged->device_id;
+      log(id_, "logged in, as the device {}", how_.device_id.value_or("?"));
       sink_(change::session_given{id_, logged->access_token, logged->device_id});
       return true;
     };
@@ -291,6 +301,7 @@ class account {
     if (how_.access_token) {
       token_ = how_.access_token;
       kept = true;
+      log(id_, "going on with the session kept, as the device {}", how_.device_id.value_or("?"));
     } else if (!log_in()) {
       api_ = nullptr;
       return;
@@ -308,6 +319,7 @@ class account {
         if (why.server && (why.server->errcode == "M_UNKNOWN_TOKEN" || why.server->errcode == "M_FORBIDDEN")) {
           // A kept session no longer good: logged in again, once.
           if (kept) {
+            log(id_, "the session kept is no longer good: logging in again");
             kept = false;
             if (log_in())
               continue;
@@ -316,6 +328,7 @@ class account {
           say(connection::failed{why.said()});
           break;
         }
+        log(id_, "sync failed: {}; trying again", why.said());
         say(connection::connecting{why.said()});
         const auto wait = why.server && why.server->retry_after_ms
                               ? std::chrono::milliseconds(*why.server->retry_after_ms)
@@ -326,12 +339,18 @@ class account {
       }
       if (backoff != std::chrono::seconds(1)) {
         backoff = std::chrono::seconds(1);
+        log(id_, "syncing again");
         say(connection::online{});
+      }
+      if (!state_.since) {
+        const std::size_t joined = got->rooms && got->rooms->join ? got->rooms->join->size() : 0;
+        log(id_, "first sync: {} room{}", joined, joined == 1 ? "" : "s");
       }
       state_.apply(*got);
       tell(*got);
     }
     api_ = nullptr;
+    log(id_, "disconnected");
     say(connection::offline{});
   }
 

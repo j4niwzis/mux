@@ -198,6 +198,22 @@ struct account {
 };
 
 // ---------------------------------------------------------------------------
+// The log: a line on standard error for each step an account takes --
+// connecting, where to, logged in, what was loaded -- with when and whose.
+// Lines from the protocols' threads do not run into each other.
+
+inline void log_line(std::string_view who, std::string_view what) {
+  static std::mutex writing;
+  const auto now = std::chrono::floor<std::chrono::milliseconds>(std::chrono::system_clock::now());
+  const std::scoped_lock held(writing);
+  std::println(std::cerr, "{:%H:%M:%S} [{}] {}", now, who, what);
+}
+template <class... Args>
+void log(const account_id& who, std::format_string<Args...> what, Args&&... args) {
+  log_line(who.address, std::format(what, std::forward<Args>(args)...));
+}
+
+// ---------------------------------------------------------------------------
 // Changes: what the protocols say happened.
 
 namespace change {

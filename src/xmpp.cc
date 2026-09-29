@@ -195,9 +195,14 @@ class account {
       const bool room = rooms_.contains(with);
       tern::mam::query asked{.filter = tern::mam::filter(room ? std::nullopt : std::optional<std::string>(with)),
                              .page = tern::rsm::set{.max = 40, .before = before}};
+      log(id_, "history of {}: asking the archive", with);
       auto page = session_->try_archive(std::move(asked), room ? std::optional<std::string>(with) : std::nullopt);
-      if (!page)
+      if (!page) {
+        log(id_, "history of {}: the archive did not answer", with);
         return;
+      }
+      log(id_, "history of {}: {} message{}{}", with, page->results.size(), page->results.size() == 1 ? "" : "s",
+          page->fin.complete.value_or(false) ? ", the beginning" : "");
       const conversation_id in{id_, with};
       // Oldest first in the page: each put before the rest, newest first.
       for (auto it = page->results.rbegin(); it != page->results.rend(); ++it)
@@ -323,25 +328,36 @@ class account {
 
   void run() {
     say(connection::connecting{});
+    if (how_.proxy)
+      log(id_, "through the proxy {}:{}", how_.proxy->host, how_.proxy->port);
     std::vector<tern::srv::target> targets;
-    if (how_.host)
+    if (how_.host) {
       targets.push_back({0, 0, how_.port.value_or(5222), *how_.host});
-    else
+      log(id_, "connecting to {}:{}, as set", *how_.host, how_.port.value_or(5222));
+    } else {
+      log(id_, "looking up the servers of {}", domain_);
       targets = net::xmpp_targets(*loop_, how_.proxy, domain_);
+      log(id_, "{} server{} to try", targets.size(), targets.size() == 1 ? "" : "s");
+    }
     std::optional<net::tcp::socket> socket;
     std::string why;
     for (const auto& target : targets) {
       try {
+        log(id_, "connecting to {}:{}", target.host, target.port);
         socket.emplace(net::connect(*loop_, how_.proxy, target.host, target.port));
+        log(id_, "connected to {}:{}", target.host, target.port);
         break;
       } catch (const net::failure& failed) {
         why = failed.what();
+        log(id_, "{}:{} did not answer: {}", target.host, target.port, why);
       }
     }
     if (!socket) {
+      log(id_, "no server of {} answered", domain_);
       say(connection::failed{"no server of " + domain_ + " answered: " + why});
       return;
     }
+    log(id_, "opening the stream: TLS, then logging in");
     net::stream wire(*loop_, *tls_, std::move(*socket));
     wire_ = &wire;
     tern::options options;
@@ -354,32 +370,44 @@ class account {
     options.caps_node = "https://github.com/j4niwzis/mux";
     auto made = tern::try_connect<proto>(wire, options, tern::answering<>{}, net::scheduler{loop_});
     if (!made) {
+      log(id_, "the stream failed: {}", made.error().detail.empty() ? "the connection failed" : made.error().detail);
       wire_ = nullptr;
       say(connection::failed{made.error().detail.empty() ? "the connection failed" : made.error().detail});
       return;
     }
     session_type& session = *made;
     session_ = &session;
+    log(id_, "logged in, as {}", how_.resource.empty() ? std::string("a resource the server chose") : how_.resource);
     say(connection::online{});
 
     // Opened before anything is asked, so that nothing that arrives while
     // the roster is fetched is missed.
     auto inbox = session.open_inbox();
-    if (session.try_sync(roster_))
+    if (session.try_sync(roster_)) {
+      log(id_, "the roster: {} contact{}", roster_.items.size(), roster_.items.size() == 1 ? "" : "s");
       for (const auto& [jid, item] : roster_.items)
         contact(item);
+    } else {
+      log(id_, "the roster could not be fetched");
+    }
     session.available();
     // The rooms kept as bookmarks, and those to join joined.
-    if (auto marks = session.template try_request<tern::query::bookmarks>(); marks && marks->items)
+    if (auto marks = session.template try_request<tern::query::bookmarks>(); marks && marks->items) {
+      log(id_, "bookmarks: {} room{}", marks->items->items.size(), marks->items->items.size() == 1 ? "" : "s");
       for (const auto& one : marks->items->items)
         if (one.conference)
           this->bookmarked(one.id, *one.conference);
+    } else {
+      log(id_, "no bookmarks");
+    }
 
     for (;;) {
       auto one = inbox.try_next();
       if (!one) {
-        if (!stopping_)
+        if (!stopping_) {
+          log(id_, "the connection was lost: {}", one.error().detail);
           say(connection::failed{one.error().detail});
+        }
         break;
       }
       if (!*one)
@@ -388,8 +416,10 @@ class account {
     }
     session_ = nullptr;
     wire_ = nullptr;
-    if (stopping_ || !wire.failed())
+    if (stopping_ || !wire.failed()) {
+      log(id_, "disconnected");
       say(connection::offline{});
+    }
   }
 
   // A room, as its bookmark says: in the list, and joined where it says to.

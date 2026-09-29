@@ -2120,8 +2120,10 @@ struct conversations_screen : nodes::Stack {
       : actions(a), side(a), edge({a}), chat(a), info_edge({a}, false), info(a) {
     fState.apply({.fill = true});
     this->setHorizontal();
-    edge.apply({.fillY = true, .width = 7.0f});
-    info_edge.apply({.fillY = true, .width = 7.0f});
+    // The edges take a pixel between the columns, their line, and are
+    // wider than that over them to be caught.
+    edge.apply({.fillY = true, .width = 7.0f, .margin = {0.0f, -3.0f, 0.0f, -3.0f}});
+    info_edge.apply({.fillY = true, .width = 7.0f, .margin = {0.0f, -3.0f, 0.0f, -3.0f}});
     info.apply({.fillY = true, .width = info_width});
     this->show_info();
   }

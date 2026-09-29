@@ -377,6 +377,9 @@ void account<Sink>::fetch_avatar(std::string source, std::string of) {
   this->fetch_media(std::move(source), media_use::avatar{std::move(of)}, 96, true);
 }
 
+// Defined further down, beside send: a message made HTML.
+[[nodiscard]] inline std::optional<std::string> html_of(std::string_view body, const std::vector<mux::emote>& emotes);
+
 template <class Sink>
 void account<Sink>::edit(std::string room, std::string event, std::string text) {
   loop_->spawn([this, room = std::move(room), event = std::move(event), text = std::move(text)] {

@@ -665,8 +665,13 @@ struct message_bubble : nodes::Stack {
         body.parts.cards.push_back(card_of(url, room, now));
     }
     if (said.replies_to) {
-      const auto found = std::ranges::find(in.timeline, *said.replies_to, &message::id);
-      const bool known = found != in.timeline.end();
+      const auto in_timeline = std::ranges::find(in.timeline, *said.replies_to, &message::id);
+      const auto aside = in.quoted.find(*said.replies_to);
+      const message* found = in_timeline != in.timeline.end() ? &*in_timeline
+                             : aside != in.quoted.end()      ? &aside->second
+                                                             : nullptr;
+      const bool known = found != nullptr;
+      quote_known = known;
       // A picture's: its thumbnail, and its caption or "Photo"; a file's:
       // its name; else its text.
       std::optional<std::string> picture;
@@ -712,6 +717,9 @@ struct message_bubble : nodes::Stack {
   // where they are laid out does not change -- and the arrow of a reply
   // coming in at the right, out of the row's flow, lit once it is far
   // enough.
+  // Whether the message its reply quotes was there to quote when it was
+  // made: made again once it is, from the timeline or fetched beside it.
+  bool quote_known = true;
   skiff::paint::Tween swipe{0.0f, 180.0f, skiff::paint::movement::subtle{}};
   static constexpr float kSwipeToReply = 70.0f;
   // Where it was jumped to: the whole row -- from the message to the edges,

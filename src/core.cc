@@ -270,6 +270,10 @@ struct conversation {
   std::vector<std::string> pinned;
   // The custom emoji that can be used in it: its packs' and the user's own.
   std::vector<emote> emotes;
+  // Messages a reply in view quotes that are not in the timeline, fetched
+  // on their own for their quotes -- kept out of the timeline, and let go
+  // once the timeline has them, or when too many have gathered.
+  std::map<std::string, message> quoted;
   // Who has read up to where: each other person's last message read, as
   // their receipts say; and the user's own, kept here whether it is sent or
   // not -- what is unread is counted from it.
@@ -365,8 +369,9 @@ namespace placement {
 struct at_end {};     // live: after the rest -- but not into a window away from the newest
 struct at_start {};   // history paged back: before the rest
 struct in_window {};  // a window's own: loaded around a message, or paged forward
+struct aside {};      // not in the timeline: a message a reply quotes, fetched for its quote
 }  // namespace placement
-using placement_t = std::variant<placement::at_end, placement::at_start, placement::in_window>;
+using placement_t = std::variant<placement::at_end, placement::at_start, placement::in_window, placement::aside>;
 
 namespace change {
 
@@ -649,6 +654,8 @@ class model {
       *kept = one.message;
       return;
     }
+    // In the timeline now: what was fetched for a quote is not needed.
+    where.quoted.erase(one.message.id);
     std::visit(overloaded{[&](placement::at_end) {
                             if (!where.latest || one.message.at >= where.latest->at)
                               where.latest = one.message;
@@ -656,7 +663,13 @@ class model {
                               where.timeline.push_back(one.message);
                           },
                           [&](placement::at_start) { where.timeline.insert(where.timeline.begin(), one.message); },
-                          [&](placement::in_window) { where.timeline.push_back(one.message); }},
+                          [&](placement::in_window) { where.timeline.push_back(one.message); },
+                          [&](placement::aside) {
+                            constexpr std::size_t kQuotedKept = 200;
+                            if (where.quoted.size() >= kQuotedKept)
+                              where.quoted.clear();
+                            where.quoted.insert_or_assign(one.message.id, one.message);
+                          }},
                one.where);
   }
   void on(const change::window_opened& one) {

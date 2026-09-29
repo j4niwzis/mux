@@ -162,6 +162,12 @@ class pictures_part {
               if (moves(said.attachment->kind))
                 this->want_whole(id, said.attachment->source);
             }
+            // A message quoted that is neither in the timeline nor fetched:
+            // fetched on its own, once.
+            if (said.replies_to && !one.quoted.contains(*said.replies_to) &&
+                std::ranges::find(one.timeline, *said.replies_to, &message::id) == one.timeline.end() &&
+                quotes_asked_.insert(*said.replies_to).second)
+              s_->net->fetch_quoted(one.id, *said.replies_to);
             // And of a picture a message made quotes, for its quote.
             if (said.replies_to)
               if (const auto quoted = std::ranges::find(one.timeline, *said.replies_to, &message::id);
@@ -466,6 +472,8 @@ class pictures_part {
   std::set<std::string> avatars_fetched_, thumbnails_fetched_, wholes_fetched_;
   // The saved GIFs being decoded, not to be decoded twice.
   std::set<std::string> gifs_decoding_;
+  // The quoted messages asked for, not to be asked twice.
+  std::set<std::string> quotes_asked_;
   std::size_t written_ = 0;
   std::uintmax_t on_disk_ = 512u << 20;
 };

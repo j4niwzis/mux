@@ -73,6 +73,20 @@ void account<Sink>::load_older(std::string room, std::string from) {
 }
 
 template <class Sink>
+void account<Sink>::fetch_quoted(std::string room, std::string target) {
+  loop_->spawn([this, room = std::move(room), target = std::move(target)] {
+    if (!api_)
+      return;
+    auto got = perform(*api_, loom::cs::get_one_room_event{.room_id = room, .event_id = target});
+    if (!got) {
+      log(id_, "could not fetch {} in {}: {}", target, room, got.error().said());
+      return;
+    }
+    event(conversation_id{id_, room}, *got, placement::aside{});
+  });
+}
+
+template <class Sink>
 void account<Sink>::load_context(std::string room, std::string target) {
   loop_->spawn([this, room = std::move(room), target = std::move(target)] {
     if (!api_)

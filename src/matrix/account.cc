@@ -66,6 +66,8 @@ class account {
   // A window of a room's history around a message (/context), in place of
   // its timeline; and a window paged forward, to the newest.
   void load_context(std::string room, std::string target);
+  // A message a reply quotes, fetched on its own, beside the timeline.
+  void fetch_quoted(std::string room, std::string target);
   void load_newer(std::string room, std::string from);
 
   // An avatar's picture: the server's thumbnail of an mxc:// URI, at the size

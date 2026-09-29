@@ -85,6 +85,11 @@ void app::keep_on_disk(const mux::change_t& one) {
   // not in it (it came live while the chat is a window elsewhere), as it
   // came: kept either way, or it would be lost on going back to the newest.
   const auto added = [&](const mux::change::message_added& c) {
+    // A message fetched for a quote is not history read in order: kept on
+    // disk, it would be read back as though it were next to the rest.
+    if (std::visit(mux::overloaded{[](mux::placement::aside) { return true; }, [](const auto&) { return false; }},
+                   c.where))
+      return;
     const mux::conversation* chat = model->find(c.message.in);
     const bool in_timeline =
         chat && std::ranges::find(chat->timeline, c.message.id, &mux::message::id) != chat->timeline.end();

@@ -196,6 +196,18 @@ struct network {
             one.account);
     });
   }
+  // A message a reply quotes, fetched beside the timeline.
+  void fetch_quoted(const mux::conversation_id& in, std::string target) {
+    loop.post([this, in, target = std::move(target)] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == in.account)
+                account->fetch_quoted(in.id, target);
+            },
+            one.account);
+    });
+  }
   // A message pinned or unpinned in its chat, by the account it is of.
   void pin(const mux::conversation_id& in, std::string target, bool on) {
     loop.post([this, in, target = std::move(target), on] {

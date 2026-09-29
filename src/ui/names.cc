@@ -6,8 +6,6 @@ import std;
 import skia;
 import skiff.paint;
 import skiff.scene;
-import skiff.nodes;
-import skiff.widgets;
 import mux.core;
 import mux.config;
 import :base;

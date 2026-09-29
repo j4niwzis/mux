@@ -436,6 +436,93 @@ struct reactions_box : nodes::Stack {
   }
 };
 
+// What a mark list shows of each: the message, and for a reaction to it who
+// reacted and with what.
+struct mark_entry {
+  message said;
+  std::string event;  // the mark's own event
+  std::optional<std::string> who;
+  std::string key;
+};
+
+// The mentions of the user or the reactions to theirs not yet seen, as a
+// list of the chat's bubbles: each its message -- a reaction's with who
+// reacted and with what on a badge at its bottom right. Pressed, gone to.
+template <class Actions>
+struct marks_box : nodes::Stack {
+  using close_button = icon_button<ask<Actions, &Actions::close_marks>>;
+  struct top_bar : nodes::Stack {
+    struct parts_t {
+      nodes::Text title;
+      close_button close;
+    } parts;
+    top_bar(Actions* a, std::string title)
+        : parts{.title = nodes::Text(std::move(title), 16.0f, text_colour, true), .close = close_button(icon::close{}, {a})} {
+      this->setHorizontal();
+      fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 10.0f, 0.0f, 22.0f}});
+      parts.title.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      parts.close.apply({.alignSelf = scene::align::kMiddle});
+    }
+  };
+  struct badge : nodes::Stack {
+    struct parts_t {
+      avatar_mark face;
+      nodes::Text key;
+    } parts;
+    badge(const std::string& who, const std::string& name, const std::string& key)
+        : parts{.face = avatar_mark(who, name, 20.0f),
+                .key = nodes::Text(key.starts_with("mxc://") ? std::string(":emoji:") : key, 15.0f, text_colour)} {
+      this->setHorizontal();
+      this->setGap(4.0f);
+      fState.apply({.place = scene::anchor::kBottomRight, .x = -14.0f, .y = -2.0f, .autoSize = scene::axes::kBoth,
+                    .padding = {2.0f, 6.0f, 2.0f, 3.0f}, .cornerRadius = 12.0f, .background = sidebar_colour});
+      parts.key.apply({.alignSelf = scene::align::kMiddle});
+    }
+  };
+  struct row : nodes::Stack {
+    Actions* actions = nullptr;
+    mark_kind_t kind;
+    std::string event;
+    struct parts_t {
+      message_bubble bubble;
+      std::optional<badge> reacted;
+    } parts;
+    row(Actions* a, mark_kind_t which, const conversation& in, const mark_entry& one, const model* now)
+        : actions(a), kind(which), event(one.event), parts{.bubble = message_bubble(in, one.said, true, true, now)} {
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 8.0f, 12.0f},
+                    .hoverBackground = chosen_colour});
+      fState.setCursor(scene::cursor::hand{});
+      if (one.who)
+        parts.reacted.emplace(*one.who, sender_name(in, *one.who), one.key);
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+    [[nodiscard]] bool onClick(float, float) {
+      actions->go_to_mark(kind, event);
+      actions->close_marks();
+      return true;
+    }
+  };
+  using rows_t = nodes::Flow<std::vector<row>>;
+  struct parts_t {
+    top_bar top;
+    nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
+  } parts;
+  marks_box(Actions* a, mark_kind_t kind, const conversation& in, const std::vector<mark_entry>& entries, const model* now)
+      : parts{.top = top_bar(a, std::visit(overloaded{[](mark_kind::mention) { return std::string("Mentions"); },
+                                                      [](mark_kind::reaction) { return std::string("Reactions"); }},
+                                           kind))} {
+    fState.apply({.fillX = true, .height = 520.0f, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
+    parts.list.apply({.fillX = true, .grow = scene::axes::kY});
+    auto& flow = std::get<0>(parts.list.fChildren);
+    flow.apply({.fillX = true, .autoSize = scene::axes::kY});
+    auto& rows = std::get<0>(flow.fChildren);
+    rows.reserve(entries.size());
+    for (const mark_entry& one : entries)
+      rows.emplace_back(a, kind, in, one, now);
+  }
+};
+
 // The developer tools, as Element's: some JSON to read and copy; a room's
 // state, by type, then by key, then the event; an event of any type sent.
 template <class Actions>

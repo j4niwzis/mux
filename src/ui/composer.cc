@@ -259,6 +259,14 @@ struct mark_button : scene::Node {
     actions->jump_to_mark(kind);
     return true;
   }
+  // The other button: all of them, listed.
+  using Node::onPointer;
+  void onPointer(scene::phase::target, const scene::pointer::down& press, scene::PointerReply& reply) {
+    if (press.button != 3)
+      return;
+    actions->list_marks(kind);
+    reply.handle();
+  }
 };
 
 // "↓": back to the newest, with how many came while one read above them.

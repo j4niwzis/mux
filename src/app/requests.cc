@@ -154,6 +154,14 @@ struct close_room_card {};
 struct jump_to_mark {
   mux::mark_kind_t kind;
 };
+struct list_marks {
+  mux::mark_kind_t kind;
+};
+struct go_to_mark {
+  mux::mark_kind_t kind;
+  std::string event;
+};
+struct close_marks {};
 // Room events shown or not at a level: all of them, or one kind; none said,
 // as the level under says.
 struct set_room_event_kind {
@@ -289,7 +297,7 @@ using request_t =
                  request::close_menu, request::menu_reply, request::menu_edit, request::menu_copy,
                  request::menu_delete, request::cancel_compose, request::open_url,
                  request::switch_account, request::submit_message, request::send_typed,
-                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_search, request::edit_last, request::reply_step, request::close_search, request::search_typed, request::search_step, request::open_member_info, request::reply_to, request::open_picture, request::open_avatar, request::close_picture, request::save_picture, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::flip_strip_metadata, request::flip_show_deleted, request::flip_rename_pictures, request::close_notice, request::close_person_info, request::close_room_card, request::join_room_card, request::jump_to_mark, request::set_room_event_kind, request::toggle_emoji, request::close_emoji, request::insert_emoji, request::menu_save_gif, request::menu_pin, request::menu_reactions, request::close_reactions, request::open_manage, request::close_manage, request::room_act, request::menu_forward, request::close_forward, request::forward_to, request::menu_view_source, request::explore_state, request::open_send_custom, request::close_devtools, request::send_custom, request::open_new_chat, request::close_new_chat, request::start_direct, request::start_group, request::flip_room_events, request::flip_account_room_events, request::flip_chat_room_events, request::show_gifs, request::send_gif, request::send_sticker, request::play_audio,
+                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_search, request::edit_last, request::reply_step, request::close_search, request::search_typed, request::search_step, request::open_member_info, request::reply_to, request::open_picture, request::open_avatar, request::close_picture, request::save_picture, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::flip_strip_metadata, request::flip_show_deleted, request::flip_rename_pictures, request::close_notice, request::close_person_info, request::close_room_card, request::join_room_card, request::jump_to_mark, request::list_marks, request::go_to_mark, request::close_marks, request::set_room_event_kind, request::toggle_emoji, request::close_emoji, request::insert_emoji, request::menu_save_gif, request::menu_pin, request::menu_reactions, request::close_reactions, request::open_manage, request::close_manage, request::room_act, request::menu_forward, request::close_forward, request::forward_to, request::menu_view_source, request::explore_state, request::open_send_custom, request::close_devtools, request::send_custom, request::open_new_chat, request::close_new_chat, request::start_direct, request::start_group, request::flip_room_events, request::flip_account_room_events, request::flip_chat_room_events, request::show_gifs, request::send_gif, request::send_sticker, request::play_audio,
                  request::resize_info, request::choose_new_proxy, request::toggle_mute, request::close_account_pages,
                  request::accounts_back, request::account_page, request::flip_account_receipts, request::flip_account_typing, request::typing,
                  request::proxy_kind, request::choose_account_proxy, request::manage_proxies,
@@ -398,6 +406,11 @@ struct actions {
   void close_person_info() { requests.emplace_back(request::close_person_info{}); }
   void close_room_card() { requests.emplace_back(request::close_room_card{}); }
   void jump_to_mark(mux::mark_kind_t kind) { requests.emplace_back(request::jump_to_mark{kind}); }
+  void list_marks(mux::mark_kind_t kind) { requests.emplace_back(request::list_marks{kind}); }
+  void go_to_mark(mux::mark_kind_t kind, std::string event) {
+    requests.emplace_back(request::go_to_mark{kind, std::move(event)});
+  }
+  void close_marks() { requests.emplace_back(request::close_marks{}); }
   void set_room_event_kind(mux::choice_level_t level, std::optional<mux::room_event_t> kind, std::optional<bool> show) {
     requests.emplace_back(request::set_room_event_kind{level, kind, show});
   }

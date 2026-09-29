@@ -88,6 +88,63 @@ void app::apply(const request::jump_to_mark& one) {
   this->refresh();
 }
 
+// All of them, listed as the chat's bubbles: each mention's message, each
+// reaction's with who and what -- one not here yet, fetched on its own.
+void app::apply(const request::list_marks& one) {
+  const auto& chosen = root().main().chosen;
+  const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
+  if (chat == nullptr)
+    return;
+  const auto& marks =
+      std::visit(mux::overloaded{[&](mux::mark_kind::mention) -> const std::vector<mux::unread_mark>& { return chat->unread_mentions; },
+                                 [&](mux::mark_kind::reaction) -> const std::vector<mux::unread_mark>& { return chat->unread_reactions; }},
+                 one.kind);
+  const auto find = [&](const std::string& id) -> const mux::message* {
+    if (const auto at = std::ranges::find(chat->timeline, id, &mux::message::id); at != chat->timeline.end())
+      return &*at;
+    if (const auto aside = chat->quoted.find(id); aside != chat->quoted.end())
+      return &aside->second;
+    return nullptr;
+  };
+  std::vector<mux::ui::mark_entry> entries;
+  for (const mux::unread_mark& mark : marks) {
+    mux::ui::mark_entry entry{.event = mark.event};
+    if (const mux::message* said = find(mark.target)) {
+      entry.said = *said;
+      if (const auto reacted = std::ranges::find(said->reaction_events, mark.event, &mux::message::reaction_event::event);
+          reacted != said->reaction_events.end()) {
+        entry.who = reacted->who;
+        entry.key = reacted->key;
+      }
+    } else {
+      entry.said = mux::message{.in = *chosen, .id = mark.target, .at = mark.at, .body = {"Loading…", std::nullopt}};
+      if (!shared.demo())
+        net->fetch_quoted(*chosen, mark.target);
+    }
+    entries.push_back(std::move(entry));
+  }
+  root().open_marks(one.kind, *chat, entries, &*model);
+}
+// One of the list, gone to, and let go.
+void app::apply(const request::go_to_mark& one) {
+  const auto& chosen = root().main().chosen;
+  const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
+  if (chat == nullptr)
+    return;
+  const auto& marks =
+      std::visit(mux::overloaded{[&](mux::mark_kind::mention) -> const std::vector<mux::unread_mark>& { return chat->unread_mentions; },
+                                 [&](mux::mark_kind::reaction) -> const std::vector<mux::unread_mark>& { return chat->unread_reactions; }},
+                 one.kind);
+  const auto found = std::ranges::find(marks, one.event, &mux::unread_mark::event);
+  if (found == marks.end())
+    return;
+  const std::string target = found->target;
+  model->apply(mux::change_t{mux::change::mark_taken{*chosen, one.kind, one.event}});
+  root().main().jump_to(target);
+  this->refresh();
+}
+void app::apply(const request::close_marks&) { root().close_marks(); }
+
 void app::apply(const request::close_room_card&) {
   previewing.reset();
   root().close_room_card();

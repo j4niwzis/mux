@@ -52,6 +52,8 @@ struct window : scene::Node {
       widgets::Dialog<room_card<Actions>> room;
       // A message's reactions as events.
       widgets::Dialog<reactions_box<Actions>> reactions;
+      // The mentions or the reactions not yet seen, listed.
+      widgets::Dialog<marks_box<Actions>> marks;
       // A room's management.
       widgets::Dialog<room_settings<Actions>> manage;
       // Where a message is forwarded to.
@@ -82,7 +84,7 @@ struct window : scene::Node {
     explicit layers(Actions* a)
         : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a))},
           actions_of(a) {
-      auto& [backdrop, frame, settings, notice, person, room, reactions, manage, forwarding, new_chat, devtools, sending,
+      auto& [backdrop, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, devtools, sending,
              emoji, menu, viewer] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
@@ -102,6 +104,8 @@ struct window : scene::Node {
       room.setWidthFittingContent(392.0f);
       room.setPlace(widgets::dialog_place::near_top{});
       reactions.setSheetColour(chat_colour);  // its bubbles, as in the chat
+      marks.setSheetColour(chat_colour);
+      marks.setSize(460.0f, 520.0f);
       reactions.setSize(392.0f, 420.0f);
       manage.setSheetColour(sidebar_colour);
       manage.setSize(860.0f, 620.0f);
@@ -160,6 +164,7 @@ struct window : scene::Node {
     layer().person.dropClosed();
     layer().room.dropClosed();
     layer().reactions.dropClosed();
+    layer().marks.dropClosed();
     layer().manage.dropClosed();
     layer().forwarding.dropClosed();
     layer().new_chat.dropClosed();
@@ -224,6 +229,10 @@ struct window : scene::Node {
     layer().reactions.open(actions, in, entries, now);
   }
   void close_reactions() { layer().reactions.close(); }
+  void open_marks(mark_kind_t kind, const conversation& in, const std::vector<mark_entry>& entries, const model* now) {
+    layer().marks.open(actions, kind, in, entries, now);
+  }
+  void close_marks() { layer().marks.close(); }
   void open_manage(const room_settings_facts& facts) { layer().manage.open(actions, facts); }
   void close_manage() { layer().manage.close(); }
   void open_forward(const std::vector<forward_target>& chats) { layer().forwarding.open(actions, chats); }

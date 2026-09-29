@@ -89,6 +89,9 @@ struct stub {
   void close_person_info() {}
   void close_room_card() {}
   void jump_to_mark(mux::mark_kind_t) {}
+  void list_marks(mux::mark_kind_t) {}
+  void go_to_mark(mux::mark_kind_t, std::string) {}
+  void close_marks() {}
   void set_room_event_kind(mux::choice_level_t, std::optional<mux::room_event_t>, std::optional<bool>) {}
   void join_room_card() {}
   void toggle_emoji() {}

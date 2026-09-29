@@ -843,10 +843,11 @@ struct marks_shown {
   conversation_id in;
   std::vector<std::string> shown;
 };
-// The oldest mark of a kind, gone to.
+// A mark of a kind, gone to: the one named, else the oldest.
 struct mark_taken {
   conversation_id in;
   mark_kind_t kind;
+  std::optional<std::string> event;
 };
 
 struct typing_changed {
@@ -1124,7 +1125,9 @@ class model {
     auto& marks = std::visit(overloaded{[&](mark_kind::mention) -> std::vector<unread_mark>& { return where.unread_mentions; },
                                         [&](mark_kind::reaction) -> std::vector<unread_mark>& { return where.unread_reactions; }},
                              one.kind);
-    if (!marks.empty())
+    if (one.event)
+      std::erase_if(marks, [&](const unread_mark& mark) { return mark.event == *one.event; });
+    else if (!marks.empty())
       marks.erase(marks.begin());
   }
   void on(const change::typing_changed& one) { of(one.in).typing = one.who; }

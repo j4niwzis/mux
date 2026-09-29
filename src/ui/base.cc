@@ -93,6 +93,7 @@ inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 //   void close_person_info()
 //   void close_room_card(), join_room_card()  -- a room not joined, from a link: its card
 //   void jump_to_mark(mark_kind_t)   -- the oldest unseen mention or reaction, gone to
+//   void list_marks(mark_kind_t), go_to_mark(mark_kind_t, std::string event), close_marks()  -- all of them listed
 //   void set_room_event_kind(choice_level_t, optional<room_event_t>, optional<bool>)  -- which room events show
 //   void toggle_emoji(), close_emoji(), insert_emoji(std::string)  -- the input's emoji panel
 //   void load_older(const conversation_id&, std::string from)  -- its history

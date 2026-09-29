@@ -376,6 +376,35 @@ TEST(Timeline, AShortReplyToALongMessageIsNarrow) {
   skiff::paint::defaultFont() = nullptr;
 }
 
+// The input's emoji panel, as tdesktop's: the emoji side by side in rows,
+// the list taller than the card, and scrolled by the wheel.
+TEST(Emoji, ThePanelHasRowsAndScrolls) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  stub program;
+  scene::Scene<mux::ui::window<stub>> window{std::in_place, &program};
+  window.root().open_emoji(700.0f, 650.0f);
+  const skia::SkRect viewport = skia::SkRect::MakeWH(1100.0f, 720.0f);
+  for (int i = 0; i < 4; ++i) {
+    window.update(1000.0 + 16.0 * i);
+    window.layoutIfNeeded(viewport);
+    (void)window.finishFrame();
+  }
+  auto& popup = *window.root().layer().emoji;
+  auto& panel = popup.parts.card.parts.panel;
+  auto& sections = panel.sections();
+  ASSERT_FALSE(sections.empty());
+  const auto& cells = std::get<0>(sections.front().parts.cells.fChildren);
+  ASSERT_GE(cells.size(), 2u);
+  EXPECT_GT(cells[1].bounds().fLeft, cells[0].bounds().fLeft)
+      << "side by side: the card " << popup.parts.card.bounds().width() << " wide, the list "
+      << panel.parts.list.bounds().width() << ", the first group " << sections.front().bounds().width()
+      << ", its cells " << sections.front().parts.cells.bounds().width();
+  EXPECT_FLOAT_EQ(cells[1].bounds().fTop, cells[0].bounds().fTop);
+  EXPECT_GT(panel.parts.list.extent(), 0.0f) << "the list: " << panel.parts.list.bounds().height() << " high";
+  skiff::paint::defaultFont() = nullptr;
+}
+
 // A picture in a message, pressed: the viewer is asked for, with it.
 TEST(Timeline, APicturePressedIsOpened) {
   skia::SkFont font;

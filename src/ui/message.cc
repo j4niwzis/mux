@@ -809,7 +809,8 @@ struct message_bubble : nodes::Stack {
     if (outgoing)
       fStack.justify = nodes::justify::end{};
     face.setVisible(with_face);
-    face.apply({.place = scene::anchor::kBottomLeft, .y = -1.0f});
+    // Placed in the content box: back over the padding kept for it.
+    face.apply({.place = scene::anchor::kBottomLeft, .x = -(kAvatar + 8.0f), .y = -1.0f});
     if (!(group && !outgoing && last_of_run))
       face.fState.setAlpha(0.0f);  // its room kept, so the run's bubbles line up
     if (group && !outgoing && first_of_run && !said.service) {

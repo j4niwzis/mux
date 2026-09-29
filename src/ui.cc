@@ -1865,7 +1865,7 @@ struct folder_tab : scene::Node {
   folder_tab(std::string name, folder_t what, bool is_chosen, Pick act)
       : pick(std::move(act)), which(std::move(what)), chosen(is_chosen),
         label(std::move(name), 13.0f, is_chosen ? accent_colour : dim_colour, true) {
-    fState.apply({.autoSize = scene::axes::kX, .height = 32.0f, .padding = {0.0f, 10.0f, 0.0f, 10.0f}});
+    fState.apply({.height = 32.0f, .autoSize = scene::axes::kX, .padding = {0.0f, 10.0f, 0.0f, 10.0f}});
     label.setMaxWidth(160.0f);
     label.setElided(true);
     label.apply({.anchor = scene::anchor::kCentreLeft, .origin = scene::anchor::kCentreLeft});

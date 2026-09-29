@@ -221,17 +221,47 @@ struct file_view : nodes::Stack {
 // A message's reactions, as tdesktop's: a chip for each, its emoji and
 // how many, the user's own in the accent; a press on one puts or takes back
 // the user's.
-struct reaction_chip : widgets::Pill {
+//
+// A reaction is whatever text a client put in it: an emoji mostly; an
+// mxc:// URL where it is a picture -- a custom emoji, shown as the picture,
+// fetched as an avatar is -- and words where it is words, cut to a chip's
+// length.
+struct reaction_chip : nodes::Stack {
   std::string key;
   std::size_t count = 0;
   bool mine = false;
+  struct parts_t {
+    std::optional<nodes::Image> picture;
+    nodes::Text label;
+  } parts;
+  [[nodiscard]] static bool pictured(std::string_view k) { return k.starts_with("mxc://"); }
+  // What the chip says: the count beside a picture; else the reaction, cut
+  // at a character's edge past 20 bytes, and the count.
+  [[nodiscard]] static std::string label_of(std::string_view k, std::size_t n) {
+    if (pictured(k))
+      return std::to_string(n);
+    constexpr std::size_t kLong = 20;
+    if (k.size() <= kLong)
+      return std::format("{} {}", k, n);
+    std::size_t cut = kLong;
+    while (cut > 0 && (static_cast<unsigned char>(k[cut]) & 0xC0) == 0x80)
+      --cut;
+    return std::format("{}… {}", k.substr(0, cut), n);
+  }
   reaction_chip(std::string k, std::size_t n, bool own)
-      : widgets::Pill(std::format("{} {}", k, n), {.plate = own ? accent_colour : tile_colour,
-                                                   .text = own ? on_accent_colour : text_colour,
-                                                   .size = 13.0f,
-                                                   .height = 26.0f,
-                                                   .padX = 9.0f}),
-        key(std::move(k)), count(n), mine(own) {}
+      : key(std::move(k)), count(n), mine(own),
+        parts{.label = nodes::Text(label_of(key, n), 13.0f, own ? on_accent_colour : text_colour)} {
+    this->setHorizontal();
+    this->setGap(4.0f);
+    fStack.justify = nodes::justify::middle{};
+    fState.apply({.height = 26.0f, .autoSize = scene::axes::kX, .minWidth = 26.0f, .padding = {0.0f, 9.0f, 0.0f, 9.0f},
+                  .cornerRadius = 13.0f, .background = own ? accent_colour : tile_colour});
+    if (pictured(key)) {
+      parts.picture.emplace([k = key] { return avatar_images().find(k); });
+      parts.picture->apply({.width = 18.0f, .height = 18.0f, .alignSelf = scene::align::kMiddle});
+    }
+    parts.label.apply({.alignSelf = scene::align::kMiddle});
+  }
   [[nodiscard]] bool acceptsInput() const { return true; }
 };
 struct reaction_row : nodes::Flow<std::vector<reaction_chip>> {

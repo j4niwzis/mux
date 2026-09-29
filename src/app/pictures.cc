@@ -135,6 +135,12 @@ class pictures_part {
           for (const member& each : one.members)
             if (senders.contains(each.id))
               want(id, each.avatar, each.id);
+          // The reactions that are pictures -- custom emoji, mxc:// URLs --
+          // on the bubbles made: fetched as avatars are, keyed by the URL.
+          for (std::size_t i = first; i < last && i < one.timeline.size(); ++i)
+            for (const auto& [reaction, who] : one.timeline[i].reactions)
+              if (reaction.starts_with("mxc://"))
+                want(id, reaction, reaction);
           // Those on screen and near it, at twice the size they are drawn
           // at -- not every picture in its history, which pushed the rest out.
           const auto [from, to] = screen.made_indices(one.timeline);

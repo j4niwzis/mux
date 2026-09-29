@@ -276,6 +276,11 @@ TEST(Timeline, ScrollsALongChatAtSixtyFrames) {
   EXPECT_NE(screen.timeline.current(), before) << "the wheel did not scroll the messages";
   EXPECT_LT(per_frame, 16.0) << "a frame of scrolling is longer than a frame of a 60 Hz screen";
 
+  // The wheel's glide let run out: what is read is measured where the view
+  // has come to rest, not in the middle of a glide still under way.
+  for (int i = 0; i < 5000 && screen.timeline.moving(); ++i)
+    frame();
+  ASSERT_FALSE(screen.timeline.moving()) << "the wheel's glide did not come to rest";
   // A message at the bottom, while the reader is up in the history.
   updating = laying = drawing = 0.0;
   // What is being read: a message in view, and where it is on the screen.

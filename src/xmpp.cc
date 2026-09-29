@@ -199,6 +199,8 @@ class account {
   void fetch_members(std::string) {}
   // Reactions (XEP-0444) are not sent yet.
   void react(std::string, std::string, std::string, bool) {}
+  // Link previews come from a Matrix homeserver alone.
+  void fetch_preview(std::string) {}
   // New chats and groups are made over Matrix alone for now.
   void create_direct(std::string) {}
   void create_group(std::string) {}

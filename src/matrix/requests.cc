@@ -17,6 +17,8 @@ import loom.cs.redaction;
 import loom.cs.room_send;
 import loom.cs.rooms;
 import loom.cs.room_state;
+import loom.cs.content_repo;
+import loom.cs.authed_content_repo;
 import loom.cs.create_room;
 import loom.cs.account_data;
 import loom.cs.kicking;
@@ -169,6 +171,30 @@ void account<Sink>::create_direct(std::string user) {
     (void)perform(*api_, loom::cs::set_account_data{.user_id = id_.address, .type = "m.direct",
                                                     .body = knot::value(std::move(direct))});
     sink_(change::room_created{{id_, made->room_id}});
+  });
+}
+
+template <class Sink>
+void account<Sink>::fetch_preview(std::string url) {
+  loop_->spawn([this, url = std::move(url)] {
+    if (!api_)
+      return;
+    // The authenticated endpoint (Matrix 1.11), and the old one where the
+    // server has not that.
+    knot::value tree;
+    if (auto got = perform(*api_, loom::cs::get_url_preview_authed{.url = url}))
+      tree = knot::to_value(*got);
+    else if (auto old = perform(*api_, loom::cs::get_url_preview{.url = url}))
+      tree = knot::to_value(*old);
+    else
+      return;
+    const auto said = [&](std::string_view key) { return text(member(tree, key)).value_or(""); };
+    link_preview made{.site = said("og:site_name"), .title = said("og:title"), .description = said("og:description")};
+    if (auto image = text(member(tree, "og:image")); image && image->starts_with("mxc://"))
+      made.image = std::move(image);
+    if (made.title.empty() && made.description.empty())
+      return;
+    sink_(change::preview_loaded{url, std::move(made)});
   });
 }
 

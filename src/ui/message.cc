@@ -76,6 +76,63 @@ struct link_card : nodes::Stack {
   [[nodiscard]] bool acceptsInput() const { return true; }
 };
 
+// The first link a message's text has: what its preview is of.
+[[nodiscard]] inline std::optional<std::string> first_link_of(const message& said) {
+  if (said.service)
+    return std::nullopt;
+  const auto spans = said.body.html ? read_html(*said.body.html).spans : link_spans_in(said.body.plain);
+  for (const auto& span : spans)
+    if (!span.picture && (span.target.starts_with("https://") || span.target.starts_with("http://")) &&
+        !span.target.starts_with("https://matrix.to/"))
+      return span.target;
+  return std::nullopt;
+}
+
+// A link's preview, as Telegram's: under the text, a stripe in the accent,
+// the site's name in it, the page's title and a few lines about it, and its
+// picture on the right.
+struct page_preview : nodes::Stack {
+  struct column : nodes::Stack {
+    struct parts_t {
+      nodes::Text site;
+      nodes::Text title;
+      nodes::Text about;
+    } parts;
+    explicit column(const link_preview& shown)
+        : parts{.site = nodes::Text(shown.site, 13.0f, accent_colour, true),
+                .title = nodes::Text(shown.title, 13.0f, text_colour, true),
+                .about = nodes::Text(shown.description, 13.0f, text_colour)} {
+      this->setGap(1.0f);
+      fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX});
+      parts.site.setVisible(!shown.site.empty());
+      parts.title.setVisible(!shown.title.empty());
+      parts.about.setVisible(!shown.description.empty());
+      for (nodes::Text* each : {&parts.site, &parts.title})
+        each->setElided(true);
+      parts.about.setWrapped(true);
+      for (nodes::Text* each : {&parts.site, &parts.title, &parts.about})
+        each->apply({.fillX = true});
+    }
+  };
+  struct parts_t {
+    nodes::Box<> stripe{accent_colour};
+    column texts;
+    std::optional<nodes::Image> picture;
+  } parts;
+  explicit page_preview(const link_preview& shown) : parts{.texts = column(shown)} {
+    this->setHorizontal();
+    this->setGap(8.0f);
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {6.0f, 0.0f, 2.0f, 0.0f},
+                  .padding = {4.0f, 6.0f, 4.0f, 0.0f}, .cornerRadius = 4.0f,
+                  .background = (accent_colour & 0x00FFFFFFu) | (0x18u << 24)});
+    parts.stripe.apply({.width = 3.0f, .fillY = true, .cornerRadius = 1.5f});
+    if (shown.image) {
+      parts.picture.emplace([url = *shown.image] { return avatar_images().find(url); });
+      parts.picture->apply({.width = 56.0f, .height = 56.0f, .cornerRadius = 6.0f});
+    }
+  }
+};
+
 // One message, as Telegram Desktop shows it: a rounded bubble, on the right
 // and blue for what was sent from here, on the left otherwise; in a group,
 // the sender's name in their colour over the first of a run and their
@@ -512,6 +569,7 @@ struct message_bubble : nodes::Stack {
       std::optional<file_view> file;
       nodes::Text text;
       std::vector<link_card> cards;
+      std::optional<page_preview> preview;
       std::optional<reaction_row> reactions;
       nodes::Text time;
       // The time inside the last line of the text, where that line leaves
@@ -540,8 +598,8 @@ struct message_bubble : nodes::Stack {
     // where it is narrower; on a line of its own only where they do not.
     // Decided from the last layout; a change is laid out at the next.
     void update(double now_ms) {
-      auto& [name, quote, picture, file, text, cards, reactions, time, inline_time] = parts;
-      if (!text.visible() || !cards.empty() || reactions) {
+      auto& [name, quote, picture, file, text, cards, preview, reactions, time, inline_time] = parts;
+      if (!text.visible() || !cards.empty() || preview || reactions) {
         time_placed = true;  // under it, as it is
         return;
       }
@@ -567,7 +625,7 @@ struct message_bubble : nodes::Stack {
                 .time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour),
                 .inline_time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour)},
           plate(mine ? out_bubble_colour : bubble_colour) {
-      auto& [name, quote, picture, file, text, cards, reactions, time, inline_time] = parts;
+      auto& [name, quote, picture, file, text, cards, preview, reactions, time, inline_time] = parts;
       this->setGap(2.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
                     .padding = {kPadY, kPadX, 5.0f, kPadX}, .cornerRadius = 12.0f, .background = mine ? out_bubble_colour : bubble_colour});
@@ -685,6 +743,12 @@ struct message_bubble : nodes::Stack {
       for (const auto& [url, room] : shown.cards)
         body.parts.cards.push_back(card_of(url, room, now));
     }
+    // The first link's preview, where it has come.
+    if (const auto link = first_link_of(said); link && now)
+      if (const auto found = now->previews.find(*link); found != now->previews.end()) {
+        body.parts.preview.emplace(found->second);
+        preview_known = true;
+      }
     if (said.replies_to) {
       const auto in_timeline = std::ranges::find(in.timeline, *said.replies_to, &message::id);
       const auto aside = in.quoted.find(*said.replies_to);
@@ -749,6 +813,8 @@ struct message_bubble : nodes::Stack {
   // Whether room events were shown when it was made: made again when that
   // changes.
   bool events_shown = true;
+  // Whether its link's preview had come when it was made.
+  bool preview_known = false;
   skiff::paint::Tween swipe{0.0f, 180.0f, skiff::paint::movement::subtle{}};
   static constexpr float kSwipeToReply = 70.0f;
   // Where it was jumped to: the whole row -- from the message to the edges,

@@ -81,6 +81,8 @@ class account {
   // other clients know it is one -- or a group, private, with a name.
   void create_direct(std::string user);
   void create_group(std::string name);
+  // A link's preview, as the homeserver makes it.
+  void fetch_preview(std::string url);
   void load_newer(std::string room, std::string from);
 
   // An avatar's picture: the server's thumbnail of an mxc:// URI, at the size

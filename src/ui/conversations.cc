@@ -848,8 +848,11 @@ struct conversations_screen : nodes::Stack {
             [&](const message_bubble& row, std::size_t i) {
               const bool quote_known = !all[i].replies_to || one->quoted.contains(*all[i].replies_to) ||
                                        std::ranges::find(all, *all[i].replies_to, &message::id) != all.end();
+              const auto link = first_link_of(all[i]);
+              const bool preview_known = link && now.previews.contains(*link);
               return row.said == all[i] && row.first == first_of_run(i) && row.last == last_of_run(i) &&
-                     row.quote_known == quote_known && row.events_shown == events;
+                     row.quote_known == quote_known && row.events_shown == events &&
+                     row.preview_known == preview_known;
             }))
       timeline.invalidateLayout();
     // The newest is at the bottom: the view follows it where the reader was

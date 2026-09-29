@@ -169,6 +169,15 @@ class pictures_part {
               if (moves(said.attachment->kind))
                 this->want_whole(id, said.attachment->source);
             }
+            // Its first link's preview, once; and the preview's picture.
+            if (const auto link = mux::ui::first_link_of(said)) {
+              if (const auto found = s_->model->previews.find(*link); found != s_->model->previews.end()) {
+                if (found->second.image)
+                  want(id, found->second.image, *found->second.image);
+              } else if (previews_asked_.insert(*link).second) {
+                s_->net->fetch_preview(id, *link);
+              }
+            }
             // A message quoted that is neither in the timeline nor fetched:
             // fetched on its own, once.
             if (said.replies_to && !one.quoted.contains(*said.replies_to) &&
@@ -481,6 +490,8 @@ class pictures_part {
   std::set<std::string> gifs_decoding_;
   // The quoted messages asked for, not to be asked twice.
   std::set<std::string> quotes_asked_;
+  // The links whose previews were asked for, not to be asked twice.
+  std::set<std::string> previews_asked_;
   std::size_t written_ = 0;
   std::uintmax_t on_disk_ = 512u << 20;
 };

@@ -495,6 +495,20 @@ struct avatar_loaded {
 
 // How far a picture or a file being fetched whole has come, 0 to 1, by the
 // source it is fetched by: for its loader to show.
+// What a link in a message is, as its page says (Open Graph): the site, the
+// title, a line about it, and its picture, kept on the server.
+struct link_preview {
+  std::string site;
+  std::string title;
+  std::string description;
+  std::optional<std::string> image;
+  friend bool operator==(const link_preview&, const link_preview&) = default;
+};
+struct preview_loaded {
+  std::string url;
+  link_preview preview;
+};
+
 // A room the user made, to be shown once it is: a direct chat or a group.
 struct room_created {
   conversation_id id;
@@ -609,13 +623,15 @@ using change_t = std::variant<change::connection_changed, change::account_remove
                               change::typing_changed, change::history_position, change::members_changed,
                               change::session_given, change::avatar_loaded, change::receipts_changed,
                               change::window_opened, change::window_extended, change::media_progress,
-                              change::room_created>;
+                              change::room_created, change::preview_loaded>;
 
 // The model: every account, and every change applied to it.
 class model {
  public:
   // A message deleted is shown where it was, marked -- or taken out.
   bool show_deleted = false;
+  // The links' previews, by their URLs: as fetched this session.
+  std::map<std::string, link_preview> previews;
 
   const std::map<account_id, account>& accounts() const noexcept { return accounts_; }
 
@@ -830,6 +846,7 @@ class model {
   void on(const change::avatar_loaded&) {}  // the window's to show, not the model's
   void on(const change::media_progress&) {}  // the window's too
   void on(const change::room_created&) {}    // the program's: it shows it
+  void on(const change::preview_loaded& one) { previews.insert_or_assign(one.url, one.preview); }
   void on(const change::receipts_changed& one) {
     conversation& kept = of(one.in);
     for (const auto& [user, event] : one.read_by)

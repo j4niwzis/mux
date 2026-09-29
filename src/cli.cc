@@ -89,6 +89,7 @@ std::string of(const change::history_position&) { return std::string(); }
 std::string of(const change::media_progress& one) {
   return std::format("{}: {}%", one.source, static_cast<int>(one.done * 100.0f));
 }
+std::string of(const change::preview_loaded& one) { return std::format("a preview of {}", one.url); }
 std::string of(const change::room_created& one) { return std::format("{} was made", one.id.id); }
 std::string of(const change::window_opened& one) { return std::format("a window of {}'s history opened", one.in.id); }
 std::string of(const change::window_extended& one) {

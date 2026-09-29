@@ -196,6 +196,18 @@ struct network {
             one.account);
     });
   }
+  // A link's preview, asked of the account's server.
+  void fetch_preview(const mux::account_id& by, std::string url) {
+    loop.post([this, by, url = std::move(url)] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == by)
+                account->fetch_preview(url);
+            },
+            one.account);
+    });
+  }
   // A room made by an account: a direct chat with someone, or a group.
   void create_direct(const mux::account_id& by, std::string user) {
     loop.post([this, by, user = std::move(user)] {

@@ -118,8 +118,8 @@ struct files_page : nodes::Stack {
     this->show(now);
   }
   void show(const config::sending_settings& now) {
-    strip.toggle.setOnNow(now.strip_metadata);
-    rename.toggle.setOnNow(now.rename);
+    strip.parts.toggle.setOnNow(now.strip_metadata);
+    rename.parts.toggle.setOnNow(now.rename);
   }
   void show_motion(std::string_view) {}
   void show_receipts(bool) {}

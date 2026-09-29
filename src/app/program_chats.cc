@@ -122,7 +122,7 @@ void app::apply(const request::submit_login&) {
   std::visit(
       [this](accounts& panel) {
         if (auto* editor = panel.editor())
-          std::visit([this](auto& form) { this->edit(form); }, editor->form);
+          std::visit([this](auto& form) { this->edit(form); }, editor->parts.form);
         else if (auto* pane = panel.adding()) {
           new_proxy = pane->proxy;
           std::visit([this](auto& form) { this->add(form); }, pane->form);

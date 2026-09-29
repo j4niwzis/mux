@@ -44,28 +44,25 @@ struct account_entry : nodes::Stack {
   Actions* actions = nullptr;
   std::string address;
   bool selected = false;
-  nodes::Text name;
-  nodes::Text state;
+  struct parts_t {
+    nodes::Text name;
+    nodes::Text state;
+  } parts;
 
   // Declared: its address over its protocol and state, on a plate lit
   // while it is the one chosen.
   account_entry(Actions* a, const config::account_t& saved, const model& now, bool is_selected)
       : actions(a), address(config::address_of(saved)), selected(is_selected),
-        name(address, 15.0f, text_colour, true), state("", 13.0f, dim_colour) {
+        parts{.name = nodes::Text(address, 15.0f, text_colour, true), .state = nodes::Text("", 13.0f, dim_colour)} {
     this->setGap(4.0f);
     fState.apply({.fillX = true, .height = 52.0f, .padding = {7.0f, 16.0f, 7.0f, 16.0f}, .background = sidebar_colour, .selectedBackground = chosen_colour, .selected = selected});
     const auto [how, failed] = state_of(saved, now);
-    state.setText(std::format("{} · {}", config::protocol_name(saved), how));
-    state.setColour(failed ? error_colour : dim_colour);
-    for (nodes::Text* each : {&name, &state}) {
+    parts.state.setText(std::format("{} · {}", config::protocol_name(saved), how));
+    parts.state.setColour(failed ? error_colour : dim_colour);
+    for (nodes::Text* each : {&parts.name, &parts.state}) {
       each->setElided(true);
       each->apply({.fillX = true});
     }
-  }
-
-  void forEachChild(auto&& f) {
-    f(name);
-    f(state);
   }
 
   [[nodiscard]] bool acceptsInput() const { return true; }
@@ -88,78 +85,72 @@ template <class Actions>
 struct account_editor : nodes::Stack {
   // Its address, then on or off and Remove, in a line.
   struct head_row : nodes::Stack {
-    nodes::Text heading;
-    nodes::Text enabled_label{"On", 13.0f, dim_colour};
-    widgets::Toggle<flip_account<Actions>> enabled;
-    widgets::Button<remove_account<Actions>> remove;
+    struct parts_t {
+      nodes::Text heading;
+      nodes::Text enabled_label{"On", 13.0f, dim_colour};
+      widgets::Toggle<flip_account<Actions>> enabled;
+      widgets::Button<remove_account<Actions>> remove;
+    } parts;
     head_row(Actions* a, const config::account_t& saved)
-        : heading(config::address_of(saved), 20.0f, text_colour, true),
-          enabled(flip_account<Actions>{a, config::address_of(saved)}),
-          remove("Remove", remove_account<Actions>{a, config::address_of(saved)}) {
+        : parts{.heading = nodes::Text(config::address_of(saved), 20.0f, text_colour, true),
+                .enabled = widgets::Toggle<flip_account<Actions>>(flip_account<Actions>{a, config::address_of(saved)}),
+                .remove = widgets::Button<remove_account<Actions>>(
+                    "Remove", remove_account<Actions>{a, config::address_of(saved)})} {
       this->setHorizontal();
       this->setGap(10.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-      heading.setElided(true);
-      heading.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      enabled_label.apply({.alignSelf = scene::align::kMiddle});
-      enabled.apply({.alignSelf = scene::align::kMiddle});
-      enabled.setOnNow(config::enabled_of(saved));
-      remove.apply({.width = 100.0f, .height = 32.0f});
+      parts.heading.setElided(true);
+      parts.heading.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      parts.enabled_label.apply({.alignSelf = scene::align::kMiddle});
+      parts.enabled.apply({.alignSelf = scene::align::kMiddle});
+      parts.enabled.setOnNow(config::enabled_of(saved));
+      parts.remove.apply({.width = 100.0f, .height = 32.0f});
     }
-    void forEachChild(auto&& f) {
-      f(heading);
-      f(enabled_label);
-      f(enabled);
-      f(remove);
-    }
-  } head;
-  nodes::Text state{"", 13.0f, dim_colour};
-  account_form<Actions> form;
+  };
+  struct parts_t {
+    head_row head;
+    nodes::Text state{"", 13.0f, dim_colour};
+    account_form<Actions> form;
+  } parts;
 
-  account_editor(Actions* a, const config::account_t& saved) : head(a, saved), form(form_of(a, saved)) {
+  account_editor(Actions* a, const config::account_t& saved)
+      : parts{.head = head_row(a, saved), .form = form_of(a, saved)} {
     fState.apply({.fill = true});
     this->setGap(6.0f);
-    state.setElided(true);
-    state.apply({.fillX = true, .margin = {0.0f, 0.0f, 14.0f, 0.0f}});
-  }
-
-  void forEachChild(auto&& f) {
-    f(head);
-    f(state);
-    f(form);
+    parts.state.setElided(true);
+    parts.state.apply({.fillX = true, .margin = {0.0f, 0.0f, 14.0f, 0.0f}});
   }
 
   // What the model says of it now, kept current without touching the form.
   void show(const config::account_t& saved, const model& now) {
     const auto [how, failed] = state_of(saved, now);
-    state.setText(std::format("{} · {}", config::protocol_name(saved), how));
-    state.setColour(failed ? error_colour : dim_colour);
-    head.enabled.setOn(config::enabled_of(saved));
+    parts.state.setText(std::format("{} · {}", config::protocol_name(saved), how));
+    parts.state.setColour(failed ? error_colour : dim_colour);
+    parts.head.parts.enabled.setOn(config::enabled_of(saved));
   }
 
   void say(std::string text, bool error) {
-    std::visit([&](auto& one) { one.say(std::move(text), error); }, form);
+    std::visit([&](auto& one) { one.say(std::move(text), error); }, parts.form);
   }
 };
 
 // A line with a switch on its right: its text, and the switch.
 template <class Act>
 struct switch_row : nodes::Stack {
-  nodes::Text label;
-  widgets::Toggle<Act> toggle;
+  struct parts_t {
+    nodes::Text label;
+    widgets::Toggle<Act> toggle;
+  } parts;
 
   // Declared: the text taking the room, the switch at the end.
-  switch_row(std::string text, Act what) : label(std::move(text), 15.0f, text_colour), toggle(std::move(what)) {
+  switch_row(std::string text, Act what)
+      : parts{.label = nodes::Text(std::move(text), 15.0f, text_colour), .toggle = widgets::Toggle<Act>(std::move(what))} {
     this->setHorizontal();
     this->setGap(16.0f);
     fState.apply({.fillX = true, .height = row_item<nothing>::kHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
-    label.setElided(true);
-    label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-    toggle.apply({.alignSelf = scene::align::kMiddle});
-  }
-  void forEachChild(auto&& f) {
-    f(label);
-    f(toggle);
+    parts.label.setElided(true);
+    parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+    parts.toggle.apply({.alignSelf = scene::align::kMiddle});
   }
 };
 
@@ -175,26 +166,24 @@ struct choose_account_page {
 // line for each page of its settings, the one shown lit.
 template <class Actions>
 struct account_pages : nodes::Stack {
-  row_item<choose_account_page<Actions>> connection;
-  row_item<choose_account_page<Actions>> privacy;
-  row_item<choose_account_page<Actions>> proxy;
+  using row = row_item<choose_account_page<Actions>>;
+  struct parts_t {
+    row connection;
+    row privacy;
+    row proxy;
+  } parts;
 
   explicit account_pages(Actions* a)
-      : connection("Connection", {a, 0}, icon::sliders{}),
-        privacy("Privacy", {a, 1}, icon::eye{}),
-        proxy("Proxy", {a, 2}, icon::gear{}) {
+      : parts{.connection = row("Connection", {a, 0}, icon::sliders{}),
+              .privacy = row("Privacy", {a, 1}, icon::eye{}),
+              .proxy = row("Proxy", {a, 2}, icon::gear{})} {
     fState.apply({.padding = {6.0f, 0.0f, 0.0f, 0.0f}});
     this->light(0);
   }
   void light(int page) {
-    connection.set_lit(page == 0);
-    privacy.set_lit(page == 1);
-    proxy.set_lit(page == 2);
-  }
-  void forEachChild(auto&& f) {
-    f(connection);
-    f(privacy);
-    f(proxy);
+    parts.connection.set_lit(page == 0);
+    parts.privacy.set_lit(page == 1);
+    parts.proxy.set_lit(page == 2);
   }
 };
 
@@ -204,33 +193,31 @@ inline nodes::Text section_title(std::string text) { return nodes::Text(std::mov
 // An account's Privacy page: whether it sends read receipts.
 template <class Actions>
 struct account_privacy : nodes::Stack {
-  nodes::Text title = section_title("PRIVACY");
-  switch_row<ask<Actions, &Actions::flip_account_receipts>> receipts;
-  switch_row<ask<Actions, &Actions::flip_account_typing>> typing;
-  nodes::Text note{"Off, the people you talk to through this account are not told when you have read their "
-                   "messages, or that you are typing. Theirs are still shown, and receipts are still kept here.",
-                   13.0f, dim_colour};
+  using receipts_row = switch_row<ask<Actions, &Actions::flip_account_receipts>>;
+  using typing_row = switch_row<ask<Actions, &Actions::flip_account_typing>>;
+  struct parts_t {
+    nodes::Text title = section_title("PRIVACY");
+    receipts_row receipts;
+    typing_row typing;
+    nodes::Text note{"Off, the people you talk to through this account are not told when you have read their "
+                     "messages, or that you are typing. Theirs are still shown, and receipts are still kept here.",
+                     13.0f, dim_colour};
+  } parts;
 
   account_privacy(Actions* a, bool receipts_on, bool typing_on)
-      : receipts("Send read receipts", {a}), typing("Send typing notifications", {a}) {
+      : parts{.receipts = receipts_row("Send read receipts", {a}), .typing = typing_row("Send typing notifications", {a})} {
     this->setGap(8.0f);
-    note.apply({.fillX = true});
+    parts.note.apply({.fillX = true});
     fState.apply({.fill = true});
-    note.setWrapped(true);
-    receipts.toggle.setOnNow(receipts_on);
-    typing.toggle.setOnNow(typing_on);
+    parts.note.setWrapped(true);
+    parts.receipts.parts.toggle.setOnNow(receipts_on);
+    parts.typing.parts.toggle.setOnNow(typing_on);
   }
   void show(bool receipts_on, bool typing_on) {
-    receipts.toggle.setOn(receipts_on);
-    typing.toggle.setOn(typing_on);
+    parts.receipts.parts.toggle.setOn(receipts_on);
+    parts.typing.parts.toggle.setOn(typing_on);
   }
   void say(std::string, bool) {}
-  void forEachChild(auto&& f) {
-    f(title);
-    f(receipts);
-    f(typing);
-    f(note);
-  }
 };
 
 // A proxy profile chosen for the chosen account: -1 for none.
@@ -245,14 +232,18 @@ struct choose_account_proxy {
 // it connects through, or none; and the way to the profiles themselves.
 template <class Actions>
 struct account_proxy : nodes::Stack {
-  nodes::Text title = section_title("PROXY");
-  std::vector<row_item<choose_account_proxy<Actions>>> choices;
-  row_item<ask<Actions, &Actions::manage_proxies>> manage;
+  using manage_row = row_item<ask<Actions, &Actions::manage_proxies>>;
+  struct parts_t {
+    nodes::Text title = section_title("PROXY");
+    std::vector<row_item<choose_account_proxy<Actions>>> choices;
+    manage_row manage;
+  } parts;
 
   account_proxy(Actions* a, const std::vector<config::proxy_settings>& all, const std::optional<std::string>& current)
-      : manage("Manage proxies…", {a}, icon::gear{}) {
-    title.apply({.margin = {0.0f, 0.0f, 4.0f, 0.0f}});
-    manage.apply({.margin = {8.0f, 0.0f, 0.0f, 0.0f}});
+      : parts{.manage = manage_row("Manage proxies…", {a}, icon::gear{})} {
+    auto& choices = parts.choices;
+    parts.title.apply({.margin = {0.0f, 0.0f, 4.0f, 0.0f}});
+    parts.manage.apply({.margin = {8.0f, 0.0f, 0.0f, 0.0f}});
     fState.apply({.fill = true});
     // An empty place where the dots are, so the names line up.
     choices.emplace_back("No proxy", choose_account_proxy<Actions>{a, -1}, icon::dot{skia::colorSetARGB(0, 0, 0, 0)},
@@ -265,11 +256,6 @@ struct account_proxy : nodes::Stack {
   }
   void show(bool) {}
   void say(std::string, bool) {}
-  void forEachChild(auto&& f) {
-    f(title);
-    f(choices);
-    f(manage);
-  }
 };
 
 // The saved accounts down the side, and the chosen one's settings beside
@@ -285,16 +271,24 @@ struct accounts_panel : closes_on_escape<Actions> {
 
   // Its ← goes back from an account's pages to the list, and from the list
   // to the chats.
-  page_header<ask<Actions, &Actions::accounts_back>, ask<Actions, &Actions::accounts_back>> header;
+  using header_t = page_header<ask<Actions, &Actions::accounts_back>, ask<Actions, &Actions::accounts_back>>;
   // Under the header: the list down the side, and beside it what is chosen.
   struct body_row : nodes::Stack {
     struct side_column : nodes::Stack {
-      row_item<ask<Actions, &Actions::open_new_account>> add;
-      account_pages<Actions> pages;
-      nodes::Text message{"", 13.0f, error_colour};
-      nodes::ScrollContainer<nodes::Flow<std::vector<account_entry<Actions>>>> list{
-          nodes::Flow<std::vector<account_entry<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
-      explicit side_column(Actions* a) : add("Add account", {a}, icon::plus{}), pages(a) {
+      using add_row = row_item<ask<Actions, &Actions::open_new_account>>;
+      struct parts_t {
+        add_row add;
+        account_pages<Actions> pages;
+        nodes::Text message{"", 13.0f, error_colour};
+        nodes::ScrollContainer<nodes::Flow<std::vector<account_entry<Actions>>>> list{
+            nodes::Flow<std::vector<account_entry<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
+      } parts;
+      add_row& add = parts.add;
+      account_pages<Actions>& pages = parts.pages;
+      nodes::Text& message = parts.message;
+      decltype(parts_t::list)& list = parts.list;
+      explicit side_column(Actions* a)
+          : parts{.add = add_row("Add account", {a}, icon::plus{}), .pages = account_pages<Actions>(a)} {
         fState.apply({.fillY = true, .width = kListWidth, .background = sidebar_colour});
         pages.setVisible(false);
         pages.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -303,37 +297,37 @@ struct accounts_panel : closes_on_escape<Actions> {
         list.apply({.fillX = true, .grow = scene::axes::kY});
         std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
       }
-      void forEachChild(auto&& f) {
-        f(add);
-        f(pages);
-        f(message);
-        f(list);
-      }
-    } side;
+    };
     struct detail_column : nodes::Stack {
       // No account chosen, or the chosen one, or adding one.
-      std::variant<nodes::Text, account_editor<Actions>, add_account_pane<Actions>, account_privacy<Actions>,
-                   account_proxy<Actions>>
-          detail{std::in_place_index<0>, "Choose an account.", 15.0f, dim_colour};
+      struct parts_t {
+        std::variant<nodes::Text, account_editor<Actions>, add_account_pane<Actions>, account_privacy<Actions>,
+                     account_proxy<Actions>>
+            detail{std::in_place_index<0>, "Choose an account.", 15.0f, dim_colour};
+      } parts;
       detail_column() {
         fState.apply({.fillY = true, .grow = scene::axes::kX, .padding = {24.0f, 28.0f, 24.0f, 28.0f}});
       }
-      void forEachChild(auto&& f) { f(detail); }
-    } main;
-    explicit body_row(Actions* a) : side(a) {
+    };
+    struct parts_t {
+      side_column side;
+      detail_column main;
+    } parts;
+    explicit body_row(Actions* a) : parts{.side = side_column(a)} {
       this->setHorizontal();
       fState.apply({.fillX = true, .grow = scene::axes::kY});
     }
-    void forEachChild(auto&& f) {
-      f(side);
-      f(main);
-    }
-  } body;
-  row_item<ask<Actions, &Actions::open_new_account>>& add = body.side.add;
-  account_pages<Actions>& pages = body.side.pages;
-  nodes::Text& message = body.side.message;
-  decltype(body.side.list)& list = body.side.list;
-  decltype(body.main.detail)& detail = body.main.detail;
+  };
+  struct parts_t {
+    header_t header;
+    body_row body;
+  } parts;
+  header_t& header = parts.header;
+  typename body_row::side_column::add_row& add = parts.body.parts.side.add;
+  account_pages<Actions>& pages = parts.body.parts.side.pages;
+  nodes::Text& message = parts.body.parts.side.message;
+  decltype(body_row::side_column::parts_t::list)& list = parts.body.parts.side.list;
+  decltype(body_row::detail_column::parts_t::detail)& detail = parts.body.parts.main.parts.detail;
 
   // What is beside the list coming in when another is chosen, fading in.
   skiff::paint::Tween swap{1.0f, 200.0f, skiff::paint::movement::subtle{}};
@@ -353,13 +347,8 @@ struct accounts_panel : closes_on_escape<Actions> {
   }
 
   explicit accounts_panel(Actions* a)
-      : closes_on_escape<Actions>(a), header("Accounts", {a}, {a}, true, false), body(a) {
+      : closes_on_escape<Actions>(a), parts{.header = header_t("Accounts", {a}, {a}, true, false), .body = body_row(a)} {
     this->fState.apply({.fill = true});
-  }
-
-  void forEachChild(auto&& f) {
-    f(header);
-    f(body);
   }
 
   // The saved accounts, with what the model says of each; the chosen one's
@@ -461,7 +450,7 @@ struct accounts_panel : closes_on_escape<Actions> {
                       detail);
   }
   [[nodiscard]] xmpp_form<Actions>* xmpp() {
-    return std::visit(overloaded{[](account_editor<Actions>& one) { return xmpp_form_in(one.form); },
+    return std::visit(overloaded{[](account_editor<Actions>& one) { return xmpp_form_in(one.parts.form); },
                                  [](add_account_pane<Actions>& one) { return one.xmpp(); },
                                  [](auto&) -> xmpp_form<Actions>* { return nullptr; }},
                       detail);

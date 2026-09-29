@@ -33,6 +33,13 @@ struct post_change {
 
 using xmpp_account = mux::xmpp::account<post_change>;
 using matrix_account = mux::matrix::account<post_change>;
+}  // namespace mux::app
+// The accounts themselves -- their requests, sync, media, and the HTTP and
+// TLS under them -- instantiated in units of their own (accounts_*.cc), in
+// parallel: they were most of this one's four and a half minutes.
+extern template class mux::xmpp::account<mux::app::post_change>;
+extern template class mux::matrix::account<mux::app::post_change>;
+export namespace mux::app {
 using any_account = std::variant<std::unique_ptr<xmpp_account>, std::unique_ptr<matrix_account>>;
 
 struct running_account {

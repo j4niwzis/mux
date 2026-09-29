@@ -241,6 +241,8 @@ if(MUX_UI)
   if(NOT DEFINED SKIFF_ERASE_WALKS)
     set(mux_erased $<NOT:$<CONFIG:Release>>)
   endif()
+  # The accounts, each in a unit of its own, beside network.cc.
+  target_sources(mux PRIVATE src/app/accounts_matrix.cc src/app/accounts_xmpp.cc)
   target_sources(mux PRIVATE
     $<${mux_erased}:src/app/walks_chats.cc>
     $<${mux_erased}:src/app/walks_settings.cc>

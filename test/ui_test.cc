@@ -159,4 +159,107 @@ TEST(Drawer, SlidesOutAfterALongWhileOut) {
   skiff::paint::defaultFont() = nullptr;
 }
 
+// A long chat scrolled with the wheel, a frame at a time: how long update,
+// layout and drawing take, printed, and the whole held to a frame of a
+// 60 Hz screen. Then a message arriving at the bottom, the same way.
+TEST(Timeline, ScrollsALongChatAtSixtyFrames) {
+  auto manager = skia::SkFontMgr_New_Custom_Directory("/usr/share/fonts");
+  skia::Sp<skia::SkTypeface> face;
+  for (const char* family : {"DejaVu Sans", "Noto Sans", "Liberation Sans"})
+    if (manager && !face)
+      face = manager->matchFamilyStyle(family, skia::SkFontStyle());
+  if (face)
+    skiff::paint::fonts().setPrimary(face);
+  skia::SkFont font(face);
+  skiff::paint::defaultFont() = &font;
+  stub program;
+  scene::Scene<mux::ui::window<stub>> window{std::in_place, &program};
+
+  const mux::account_id alice{mux::protocol::matrix{}, "@alice:example.com"};
+  const mux::conversation_id room{alice, "!room:example.com"};
+  mux::model model;
+  model.apply(mux::change_t{mux::change::connection_changed{alice, mux::connection::online{}}});
+  model.apply(mux::change_t{mux::change::conversation_updated{
+      .id = room, .kind = mux::conversation_kind::group{}, .name = "A busy room"}});
+  const std::array<std::string_view, 4> said{
+      "Short one.",
+      "A message of a few words, as most of them are in a chat like this.",
+      "A longer message, which wraps over two or three lines in a bubble: it goes on about something at "
+      "length, with a link to https://example.com/some/page in it, and then it ends.",
+      "Два слова по-русски, и ещё немного текста, чтобы строка перенеслась."};
+  const auto start = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(1'700'000'000'000));
+  const auto add = [&](int i) {
+    mux::message one;
+    one.in = room;
+    one.id = std::format("$event{}", i);
+    one.sender = i % 3 == 0 ? "@alice:example.com" : (i % 3 == 1 ? "@bob:example.com" : "@carol:example.com");
+    one.outgoing = i % 3 == 0;
+    one.at = start + std::chrono::minutes(i);
+    one.body.plain = std::string(said[static_cast<std::size_t>(i) % said.size()]);
+    model.apply(mux::change_t{mux::change::message_added{.message = std::move(one)}});
+  };
+  constexpr int kMessages = 600;
+  for (int i = 0; i < kMessages; ++i)
+    add(i);
+  auto& screen = window.root().main();
+  screen.chosen = room;
+  screen.show(model);
+
+  const skia::SkRect viewport = skia::SkRect::MakeWH(1100.0f, 720.0f);
+  auto surface = skia::Raster(skia::SkImageInfo::MakeN32Premul(1100, 720));
+  ASSERT_TRUE(surface);
+  double now = 1000.0;
+  using clock = std::chrono::steady_clock;
+  double updating = 0.0, laying = 0.0, drawing = 0.0;
+  const auto ms = [](clock::duration d) { return std::chrono::duration<double, std::milli>(d).count(); };
+  const auto frame = [&] {
+    now += 16.0;
+    const auto a = clock::now();
+    window.update(now);
+    const auto b = clock::now();
+    window.layoutIfNeeded(viewport);
+    const auto c = clock::now();
+    window.draw(surface->getCanvas());
+    (void)window.finishFrame();
+    const auto d = clock::now();
+    updating += ms(b - a);
+    laying += ms(c - b);
+    drawing += ms(d - c);
+  };
+  for (int i = 0; i < 30; ++i)
+    frame();  // settled at the newest
+
+  scene::InputRouter router;
+  const std::array layers{scene::InputRouter::Layer{window.handle(), false}};
+  router.setLayers(layers);
+  const skia::SkRect list = screen.timeline.bounds();
+  ASSERT_FALSE(list.isEmpty());
+  updating = laying = drawing = 0.0;
+  constexpr int kFrames = 120;
+  const float before = screen.timeline.current();
+  for (int i = 0; i < kFrames; ++i) {
+    router.pointer(scene::PointerEvent{scene::pointer::scroll{list.centerX(), list.centerY(), 0.0f, 1.0f}});
+    frame();
+  }
+  const double per_frame = (updating + laying + drawing) / kFrames;
+  std::println("scrolling {} messages, per frame: update {:.2f} ms, layout {:.2f} ms, draw {:.2f} ms, all {:.2f} ms",
+               kMessages, updating / kFrames, laying / kFrames, drawing / kFrames, per_frame);
+  EXPECT_LT(screen.timeline.current(), before) << "the wheel did not scroll the messages";
+  EXPECT_LT(per_frame, 16.0) << "a frame of scrolling is longer than a frame of a 60 Hz screen";
+
+  // A message at the bottom, while the reader is up in the history.
+  updating = laying = drawing = 0.0;
+  const float reading = screen.timeline.current();
+  add(kMessages);
+  const auto shown = clock::now();
+  screen.show(model);
+  const double showing = ms(clock::now() - shown);
+  frame();
+  std::println("a new message: show {:.2f} ms, then update {:.2f} ms, layout {:.2f} ms, draw {:.2f} ms", showing,
+               updating, laying, drawing);
+  EXPECT_LT(showing + updating + laying + drawing, 16.0);
+  EXPECT_NEAR(screen.timeline.current(), reading, 1.0f) << "the view moved when a message came below it";
+  skiff::paint::defaultFont() = nullptr;
+}
+
 }  // namespace

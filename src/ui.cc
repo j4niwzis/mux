@@ -1547,19 +1547,24 @@ inline nodes::Box<> section_band() {
 // Declared: a column of these, nothing placed by hand.
 template <class Actions>
 struct info_panel : nodes::Stack {
-  std::string key;
-  bool group = false;
+  Actions* actions = nullptr;
   account_id account;
-  // The member shown on a page of their own, over the group's, if one is.
+  std::string key;
+  // The member shown on a page of their own, over the group's, if one is:
+  // the panel's own state, which the page is made from.
   std::optional<std::string> person;
-  // What a press does: the panel's own, so they hold where it is.
+  // The members as last shown, and how each is.
+  std::vector<std::pair<member, std::string>> shown_members;
+
+  // What a press does, to the panel -- which stays where it is while its
+  // pages are made again.
   struct open_person {
     info_panel* panel;
-    void operator()(const auto& row) const { panel->show_person(row); }
+    void operator()(const auto& row) const { panel->open_member(row.id); }
   };
   struct back_to_group {
     info_panel* panel;
-    void operator()() const { panel->show_group(); }
+    void operator()() const { panel->close_member(); }
   };
   struct message_them {
     Actions* actions;
@@ -1569,67 +1574,119 @@ struct info_panel : nodes::Stack {
         actions->message_person(conversation_id{panel->account, *panel->person});
     }
   };
-  struct top_row : nodes::Stack {
-    icon_button<back_to_group> back;
-    nodes::Box<> gap{skia::colorSetARGB(0, 0, 0, 0)};
-    icon_button<ask<Actions, &Actions::toggle_info>> close;
-    top_row(Actions* a, info_panel* panel) : back(icon::back{}, {panel}), close(icon::close{}, {a}) {
-      this->setHorizontal();
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 0.0f, 8.0f}});
-      gap.apply({.height = 1.0f, .grow = scene::axes::kX});
-      back.setVisible(false);
+
+  // What the upper part shows: a chat's, or one of its members'.
+  struct view {
+    std::string key;
+    std::string name;
+    std::string status;
+    bool group = false;
+    bool muted = false;
+    bool of_person = false;
+    friend bool operator==(const view&, const view&) = default;
+  };
+
+  // The upper part, made from its view: ← where a member is shown, ✕; the
+  // big avatar, the name, how it is; the chat's tiles or the member's; its ID.
+  struct head : nodes::Stack {
+    struct top_row : nodes::Stack {
+      icon_button<back_to_group> back;
+      nodes::Box<> gap{skia::colorSetARGB(0, 0, 0, 0)};
+      icon_button<ask<Actions, &Actions::toggle_info>> close;
+      top_row(Actions* a, info_panel* panel, bool with_back) : back(icon::back{}, {panel}), close(icon::close{}, {a}) {
+        this->setHorizontal();
+        fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 0.0f, 8.0f}});
+        gap.apply({.height = 1.0f, .grow = scene::axes::kX});
+        back.setVisible(with_back);
+      }
+      void forEachChild(auto&& f) {
+        f(back);
+        f(gap);
+        f(close);
+      }
+    } top;
+    big_avatar avatar;
+    nodes::Text name;
+    nodes::Text status;
+    struct tiles_row : nodes::Stack {
+      action_tile<ask<Actions, &Actions::toggle_mute>> mute;
+      action_tile<not_yet<Actions>> manage;
+      action_tile<ask<Actions, &Actions::leave_chat>> leave;
+      tiles_row(Actions* a, bool muted)
+          : mute(muted ? "Unmute" : "Mute", icon::bell{}, {a}), manage("Manage", icon::sliders{}, {a, "Managing a chat"}),
+            leave("Leave", icon::leave{}, {a}) {
+        this->setHorizontal();
+        this->setGap(8.0f);
+        fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}});
+        mute.apply({.grow = scene::axes::kX});
+        manage.apply({.grow = scene::axes::kX});
+        leave.apply({.grow = scene::axes::kX});
+      }
+      void forEachChild(auto&& f) {
+        f(mute);
+        f(manage);
+        f(leave);
+      }
+    };
+    // A member's own: a message to them.
+    struct person_row : nodes::Stack {
+      action_tile<message_them> message;
+      person_row(Actions* a, info_panel* panel) : message("Message", icon::send{}, {a, panel}) {
+        this->setHorizontal();
+        fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}});
+        message.apply({.grow = scene::axes::kX});
+      }
+      void forEachChild(auto&& f) { f(message); }
+    };
+    std::optional<tiles_row> tiles;
+    std::optional<person_row> person_tiles;
+    nodes::Box<> band_1 = section_band();
+    nodes::Text id_text;
+    nodes::Text id_label{"ID", 12.0f, dim_colour};
+
+    head(Actions* a, info_panel* panel, const view& shown)
+        : top(a, panel, shown.of_person), name(shown.name, 17.0f, text_colour, true),
+          status(shown.status, 13.0f, dim_colour), id_text(shown.key, 14.0f, accent_colour) {
+      this->setGap(2.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+      avatar.key = shown.key;
+      avatar.name = shown.name;
+      if (shown.of_person)
+        person_tiles.emplace(a, panel);
+      else
+        tiles.emplace(a, shown.muted);
+      for (nodes::Text* centred : {&name, &status}) {
+        centred->setElided(true);
+        centred->apply({.alignSelf = scene::align::kMiddle, .margin = {4.0f, 20.0f, 0.0f, 20.0f}});
+      }
+      id_text.setElided(true);
+      id_text.apply({.fillX = true, .margin = {8.0f, 20.0f, 0.0f, 20.0f}});
+      id_label.apply({.margin = {0.0f, 20.0f, 8.0f, 20.0f}});
     }
     void forEachChild(auto&& f) {
-      f(back);
-      f(gap);
-      f(close);
+      f(top);
+      f(avatar);
+      f(name);
+      f(status);
+      f(tiles);
+      f(person_tiles);
+      f(band_1);
+      f(id_text);
+      f(id_label);
     }
-  } top;
-  big_avatar avatar;
-  nodes::Text name{"", 17.0f, text_colour, true};
-  nodes::Text status{"", 13.0f, dim_colour};
-  struct tiles_row : nodes::Stack {
-    action_tile<ask<Actions, &Actions::toggle_mute>> mute;
-    action_tile<not_yet<Actions>> manage;
-    action_tile<ask<Actions, &Actions::leave_chat>> leave;
-    explicit tiles_row(Actions* a)
-        : mute("Mute", icon::bell{}, {a}), manage("Manage", icon::sliders{}, {a, "Managing a chat"}),
-          leave("Leave", icon::leave{}, {a}) {
-      this->setHorizontal();
-      this->setGap(8.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}});
-      mute.apply({.grow = scene::axes::kX});
-      manage.apply({.grow = scene::axes::kX});
-      leave.apply({.grow = scene::axes::kX});
-    }
-    void forEachChild(auto&& f) {
-      f(mute);
-      f(manage);
-      f(leave);
-    }
-  } tiles;
-  // A member's own: a message to them, in place of the group's tiles.
-  struct person_row : nodes::Stack {
-    action_tile<message_them> message;
-    person_row(Actions* a, info_panel* panel) : message("Message", icon::send{}, {a, panel}) {
-      this->setHorizontal();
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}});
-      message.apply({.grow = scene::axes::kX});
-    }
-    void forEachChild(auto&& f) { f(message); }
-  } person_tiles;
-  nodes::Box<> band_1 = section_band();
-  nodes::Text id_text{"", 14.0f, accent_colour};
-  nodes::Text id_label{"ID", 12.0f, dim_colour};
+  };
+  nodes::Memo<view, head> upper;
   nodes::Box<> band_2 = section_band();
   struct members_head : nodes::Stack {
     icon_view people{icon::people{}};
-    nodes::Text title{"", 13.0f, dim_colour, true};
+    nodes::Text title;
     icon_button<not_yet<Actions>> add_member;
-    explicit members_head(Actions* a) : add_member(icon::add_person{}, {a, "Adding members"}) {
+    members_head(Actions* a, std::size_t count)
+        : title(std::format("{} MEMBER{}", count, count == 1 ? "" : "S"), 13.0f, dim_colour, true),
+          add_member(icon::add_person{}, {a, "Adding members"}) {
       this->setHorizontal();
       this->setGap(10.0f);
-      fState.apply({.fillX = true, .height = 48.0f, .padding = {6.0f, 10.0f, 6.0f, 16.0f}});
+      fState.apply({.fill = true, .padding = {6.0f, 10.0f, 6.0f, 16.0f}});
       title.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
     }
     void forEachChild(auto&& f) {
@@ -1637,107 +1694,88 @@ struct info_panel : nodes::Stack {
       f(title);
       f(add_member);
     }
-  } members_header;
-  // The members, in a list of their own that scrolls.
+  };
+  // The members' head, as a function of how many there are.
+  nodes::Memo<std::size_t, members_head> members_header;
+  // The members, in a list of their own that scrolls, reconciled: its place
+  // and its rows kept while they show the same.
   nodes::ScrollContainer<nodes::Flow<std::vector<member_row<open_person>>>> members{
       nodes::Flow<std::vector<member_row<open_person>>>({.spacingY = 0.0f, .wrap = false}, {})};
-  // The group's own, to come back to from a member's page.
-  std::string group_name, group_status;
-  // The old names, for what is kept in the parts.
-  action_tile<ask<Actions, &Actions::toggle_mute>>& mute = tiles.mute;
+  // The group's view, to come back to from a member's page.
+  view group_view;
 
   static constexpr float kWidth = 340.0f;
 
-  explicit info_panel(Actions* a) : top(a, this), tiles(a), person_tiles(a, this), members_header(a) {
-    person_tiles.setVisible(false);
+  explicit info_panel(Actions* a) : actions(a) {
     fState.apply({.masking = true});
     this->setGap(2.0f);
-    for (nodes::Text* centred : {&name, &status}) {
-      centred->setElided(true);
-      centred->apply({.alignSelf = scene::align::kMiddle, .margin = {4.0f, 20.0f, 0.0f, 20.0f}});
-    }
-    id_text.setElided(true);
-    id_text.apply({.fillX = true, .margin = {8.0f, 20.0f, 0.0f, 20.0f}});
-    id_label.apply({.margin = {0.0f, 20.0f, 8.0f, 20.0f}});
+    upper.apply({.fillX = true, .autoSize = scene::axes::kY});
+    members_header.apply({.fillX = true, .height = 48.0f});
     members.apply({.fillX = true, .grow = scene::axes::kY});
     std::get<0>(members.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
   }
 
+  // The chat shown: its view worked out, its members reconciled.
   void show(const conversation& one, const model& now, bool muted) {
-    mute.label.setText(muted ? "Unmute" : "Mute");
+    if (one.id.id != key || one.id.account != account)
+      person.reset();
     key = one.id.id;
     account = one.id.account;
-    person.reset();
-    group = is_group(one);
-    avatar.key = key;
-    avatar.name = display_name(one);
-    avatar.markDamaged();
-    name.setText(display_name(one));
-    status.setText(group ? std::format("{} member{}", one.members.size(), one.members.size() == 1 ? "" : "s")
-                         : presence_of(now, one.id.account, one.id.id));
-    id_text.setText(one.id.id);
-    members_header.title.setText(std::format("{} MEMBER{}", one.members.size(), one.members.size() == 1 ? "" : "S"));
+    const bool group = is_group(one);
+    group_view = {one.id.id,
+                  display_name(one),
+                  group ? std::format("{} member{}", one.members.size(), one.members.size() == 1 ? "" : "s")
+                        : presence_of(now, one.id.account, one.id.id),
+                  group,
+                  muted,
+                  false};
+    shown_members.clear();
+    for (const member& each : one.members)
+      shown_members.emplace_back(each, presence_of(now, one.id.account, each.id));
     auto& rows = std::get<0>(std::get<0>(members.fChildren).fChildren);
-    // The rows, as a function of the members.
     if (nodes::reconcile(
-            rows, one.members, [](const member& each) { return each.id; },
+            rows, shown_members, [](const auto& each) { return each.first.id; },
             [](const member_row<open_person>& row) { return row.id; },
-            [&](const member& each) {
-              return member_row<open_person>(each, presence_of(now, one.id.account, each.id), open_person{this});
-            },
-            [&](const member_row<open_person>& row, const member& each) {
-              return row.who == each && row.how_shown == presence_of(now, one.id.account, each.id);
+            [&](const auto& each) { return member_row<open_person>(each.first, each.second, open_person{this}); },
+            [](const member_row<open_person>& row, const auto& each) {
+              return row.who == each.first && row.how_shown == each.second;
             }))
       members.invalidateLayout();
-    group_name = name.text();
-    group_status = status.text();
-    this->show_group();
+    members_header.show(one.members.size(), [this](std::size_t count) { return members_head(actions, count); });
+    this->render();
   }
-
-  // A member on a page of their own: their avatar, name, how they are and
-  // their role, their ID, and a way to write to them.
-  template <class Row>
-  void show_person(const Row& row) {
-    person = row.id;
-    avatar.key = row.id;
-    avatar.name = row.texts.name.text();
-    avatar.markDamaged();
-    name.setText(row.texts.name.text());
-    status.setText(row.role ? std::format("{} · {}", row.texts.state.text(), *row.role) : row.texts.state.text());
-    id_text.setText(row.id);
-    this->show_parts(true);
+  void open_member(std::string id) {
+    person = std::move(id);
+    this->render();
   }
-  // Back from a member to the group.
-  void show_group() {
+  void close_member() {
     person.reset();
-    avatar.key = key;
-    avatar.name = group_name;
-    avatar.markDamaged();
-    name.setText(group_name);
-    status.setText(group_status);
-    id_text.setText(key);
-    this->show_parts(false);
+    this->render();
   }
-  void show_parts(bool of_person) {
-    top.back.setVisible(of_person);
-    tiles.setVisible(!of_person);
-    person_tiles.setVisible(of_person);
-    members.setVisible(group && !of_person);
-    members_header.setVisible(group && !of_person);
-    band_2.setVisible(group && !of_person);
+  // The upper part as a function of the group's view and the member open.
+  void render() {
+    view shown = group_view;
+    if (person)
+      if (const auto found = std::ranges::find(shown_members, *person, [](const auto& each) { return each.first.id; });
+          found != shown_members.end()) {
+        const member& who = found->first;
+        shown = {who.id,
+                 who.name.empty() ? who.id : who.name,
+                 who.role ? std::format("{} · {}", found->second, *who.role) : found->second,
+                 group_view.group,
+                 group_view.muted,
+                 true};
+      }
+    upper.show(shown, [this](const view& v) { return head(actions, this, v); });
+    const bool list = shown.group && !shown.of_person;
+    band_2.setVisible(list);
+    members_header.setVisible(list);
+    members.setVisible(list);
     this->invalidateLayout();
   }
 
   void forEachChild(auto&& f) {
-    f(top);
-    f(avatar);
-    f(name);
-    f(status);
-    f(tiles);
-    f(person_tiles);
-    f(band_1);
-    f(id_text);
-    f(id_label);
+    f(upper);
     f(band_2);
     f(members_header);
     f(members);

@@ -8,6 +8,7 @@ import skiff.paint;
 import skiff.scene;
 import skiff.nodes.box;
 import skiff.nodes.flow;
+import skiff.nodes.image;
 import skiff.nodes.scroll;
 import skiff.nodes.text;
 import skiff.widgets.textbox;
@@ -18,6 +19,7 @@ import :base;
 import :icons;
 import :controls;
 import :themes;
+import :avatars;
 import :timeline;
 import :conversations;
 import :forms;
@@ -294,6 +296,70 @@ struct insert_emoji_into {
   void operator()(const std::string& glyph) const { actions->insert_emoji(glyph); }
 };
 
+// The GIFs saved, as tdesktop's GIF tab shows them: a grid of them playing,
+// newest first; a press sends one into the chat.
+template <class Actions>
+struct gif_grid : nodes::Stack {
+  struct gif_cell : nodes::Stack {
+    Actions* actions;
+    std::string path;
+    std::string key;
+    struct parts_t {
+      nodes::Image picture;
+    } parts;
+    gif_cell(Actions* a, std::string p)
+        : actions(a), path(p), key("gif:" + p),
+          parts{.picture = nodes::Image([k = "gif:" + p] {
+            // Its frame for now, where it moves; else it, still.
+            if (const skia::Sp<skia::SkImage>* moving = animations().at(k, animation_clock()))
+              return moving;
+            return whole_pictures().find(k);
+          })} {
+      fState.apply({.width = 104.0f, .height = 104.0f, .margin = {2.0f, 2.0f, 2.0f, 2.0f}, .cornerRadius = 6.0f,
+                    .background = tile_colour, .masking = true});
+      parts.picture.apply({.fill = true, .cornerRadius = 6.0f});
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+    [[nodiscard]] bool onClick(float, float) {
+      actions->send_gif(path);
+      return true;
+    }
+    // Drawn again each frame while it moves, for its next frame.
+    [[nodiscard]] bool settling() const { return animations().has(key); }
+    void update(double) {
+      if (animations().has(key))
+        parts.picture.markDamaged();
+    }
+  };
+  using cells_t = nodes::Flow<std::vector<gif_cell>>;
+  struct parts_t {
+    nodes::Text empty;
+    nodes::ScrollContainer<cells_t> list{
+        cells_t({.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, {})};
+  } parts;
+  Actions* actions = nullptr;
+
+  explicit gif_grid(Actions* a)
+      : parts{.empty = nodes::Text("No saved GIFs yet. Save one from a GIF's menu.", 13.0f, dim_colour)}, actions(a) {
+    auto& [empty, list] = parts;
+    fState.apply({.padding = {4.0f, 4.0f, 4.0f, 4.0f}});
+    empty.apply({.margin = {12.0f, 12.0f, 0.0f, 12.0f}});
+    list.apply({.fillX = true, .grow = scene::axes::kY});
+    std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
+  }
+  // The saved ones, as the program lists them: newest first.
+  void show(const std::vector<std::string>& paths) {
+    auto& cells = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
+    cells.clear();
+    cells.reserve(paths.size());
+    for (const std::string& one : paths)
+      cells.emplace_back(actions, one);
+    parts.empty.setVisible(paths.empty());
+    parts.list.invalidateLayout();
+    parts.list.scrollTo(0.0f);
+  }
+};
+
 // The input's emoji, as tdesktop's panel: a card over the chat, 345 wide
 // (emojiPanWidth), 278 to 640 high, rounded 8, its bottom right at the top
 // right of the button that opened it; a press off it closes it. It stays
@@ -302,14 +368,64 @@ template <class Actions>
 struct emoji_popup : scene::Node {
   struct card_t : nodes::Stack {
     using panel_t = emoji_panel<insert_emoji_into<Actions>>;
+    // Emoji or GIFs, as tdesktop's tabs at the panel's top.
+    struct tab : nodes::Stack {
+      card_t* card;
+      bool gifs;
+      struct parts_t {
+        nodes::Text label;
+      } parts;
+      tab(card_t* c, bool g, std::string name)
+          : card(c), gifs(g), parts{.label = nodes::Text(std::move(name), 13.0f, text_colour, true)} {
+        this->setHorizontal();
+        fStack.justify = nodes::justify::middle{};
+        fState.apply({.width = 80.0f, .height = 28.0f, .cornerRadius = 6.0f, .hoverBackground = chosen_colour,
+                      .selectedBackground = tile_colour});
+        parts.label.apply({.alignSelf = scene::align::kMiddle});
+      }
+      [[nodiscard]] bool acceptsInput() const { return true; }
+      [[nodiscard]] bool onClick(float, float) {
+        card->show(gifs);
+        return true;
+      }
+    };
+    struct tabs_row : nodes::Stack {
+      struct parts_t {
+        tab emoji;
+        tab gifs;
+      } parts;
+      explicit tabs_row(card_t* c) : parts{.emoji = tab(c, false, "Emoji"), .gifs = tab(c, true, "GIFs")} {
+        this->setHorizontal();
+        this->setGap(4.0f);
+        fState.apply({.fillX = true, .height = 36.0f, .padding = {4.0f, 8.0f, 4.0f, 8.0f}});
+      }
+    };
     struct parts_t {
+      tabs_row tabs;
       panel_t panel;
+      gif_grid<Actions> gifs;
     } parts;
-    explicit card_t(Actions* a) : parts{.panel = panel_t(insert_emoji_into<Actions>{a})} {
+    Actions* actions = nullptr;
+    explicit card_t(Actions* a)
+        : parts{.tabs = tabs_row(this), .panel = panel_t(insert_emoji_into<Actions>{a}), .gifs = gif_grid<Actions>(a)},
+          actions(a) {
       fState.apply({.width = 345.0f, .height = 360.0f, .cornerRadius = 8.0f, .background = sidebar_colour,
                     .border = scene::Border{band_colour, 1.0f},
                     .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
-      parts.panel.apply({.fill = true});
+      parts.panel.apply({.fillX = true, .grow = scene::axes::kY});
+      parts.gifs.apply({.fillX = true, .grow = scene::axes::kY});
+      this->show(false);
+    }
+    // One tab's page shown, the other hidden; the GIFs asked of the program
+    // as their tab opens, for what was saved since.
+    void show(bool gifs) {
+      parts.panel.setVisible(!gifs);
+      parts.gifs.setVisible(gifs);
+      parts.tabs.parts.emoji.fState.apply({.selected = !gifs});
+      parts.tabs.parts.gifs.fState.apply({.selected = gifs});
+      if (gifs)
+        actions->show_gifs();
+      this->invalidateLayout();
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
   };
@@ -402,6 +518,7 @@ struct context_menu : scene::Node {
     using copy_row = row_item<ask<Actions, &Actions::menu_copy>>;
     using link_row = row_item<ask<Actions, &Actions::menu_copy_link>>;
     using save_row = row_item<ask<Actions, &Actions::menu_save>>;
+    using gif_row = row_item<ask<Actions, &Actions::menu_save_gif>>;
     using delete_row = row_item<ask<Actions, &Actions::menu_delete>>;
     // As tdesktop's, in its order: the quick reactions; every emoji, in
     // place of the rest once asked for; Reply, Edit, Pin, Copy, Copy
@@ -417,6 +534,7 @@ struct context_menu : scene::Node {
       copy_row copy;
       link_row copy_link;
       save_row save;
+      gif_row save_gif;
       later_row forward;
       delete_row remove;
       nodes::Box<> seen_band{band_colour};
@@ -424,15 +542,16 @@ struct context_menu : scene::Node {
       std::vector<nodes::Text> seen_names;
     } parts;
     void expand() {
-      auto& [quick, quick_band, emoji, reply, edit, pin, copy, copy_link, save, forward, remove, seen_band, seen,
-             seen_names] = parts;
+      auto& [quick, quick_band, emoji, reply, edit, pin, copy, copy_link, save, save_gif, forward, remove, seen_band,
+             seen, seen_names] = parts;
       if (emoji)
         return;
       emoji.emplace(react_with<Actions>{actions_of});
       emoji->apply({.fillX = true, .height = 300.0f});
       quick.parts.more.setVisible(false);
       for (scene::Node* item : std::initializer_list<scene::Node*>{&reply, &edit, &pin, &copy, &copy_link, &save,
-                                                                   &forward, &remove, &seen_band, &seen})
+                                                                   &save_gif, &forward, &remove, &seen_band,
+                                                                   &seen})
         item->setVisible(false);
       for (auto& name : seen_names)
         name.setVisible(false);
@@ -461,19 +580,21 @@ struct context_menu : scene::Node {
                 .copy = copy_row(facts.selection ? "Copy Selected Text" : "Copy Text", {a}, icon::clip{}),
                 .copy_link = link_row("Copy Message Link", {a}, icon::info{}),
                 .save = save_row("Save As…", {a}, icon::send{}),
+                .save_gif = gif_row("Save GIF", {a}, icon::check{}),
                 .forward = later_row("Forward", {a, "Forwarding"}, icon::send{}),
                 .remove = delete_row("Delete", {a}, icon::close{}),
                 .seen = row_item<nothing>(facts.seen.empty() ? std::string("Not seen yet")
                                                              : std::format("Seen by {}", facts.seen.size()),
                                           {}, icon::check{})} {
-      auto& [quick, quick_band, emoji, reply, edit, pin, copy, copy_link, save, forward, remove, seen_band, seen,
-             seen_names] = parts;
+      auto& [quick, quick_band, emoji, reply, edit, pin, copy, copy_link, save, save_gif, forward, remove, seen_band,
+             seen, seen_names] = parts;
       const std::vector<std::string>& readers = facts.seen;
       quick_band.apply({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 4.0f, 0.0f}});
       edit.setVisible(facts.own && !facts.text.empty() && !facts.media);
       copy.setVisible(!facts.copied.empty());
       copy_link.setVisible(!facts.link.empty());
       save.setVisible(facts.media.has_value());
+      save_gif.setVisible(facts.media.has_value() && facts.moving);
       remove.setVisible(facts.own);
       for (std::size_t i = 0; i < readers.size() && i < 10; ++i) {
         seen_names.emplace_back(readers[i], 13.0f, dim_colour);

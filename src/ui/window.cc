@@ -160,6 +160,11 @@ struct window : scene::Node {
   // The input's emoji panel, over the chat above its button.
   void open_emoji(float right, float bottom) { layer().emoji.emplace(actions, right, bottom); }
   void close_emoji() { layer().emoji.reset(); }
+  // The GIFs saved, for the popup's GIF tab, where it is open.
+  void show_gifs(const std::vector<std::string>& paths) {
+    if (layer().emoji)
+      layer().emoji->parts.card.parts.gifs.show(paths);
+  }
   [[nodiscard]] bool emoji_open() { return layer().emoji.has_value(); }
   // The menu's card, where one is up: what takes the keys while it is.
   [[nodiscard]] scene::Node* menu_card() { return layer().menu ? &layer().menu->parts.menu : nullptr; }

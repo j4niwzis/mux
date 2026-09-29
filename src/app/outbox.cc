@@ -111,6 +111,34 @@ class outbox_part {
     to_send_.clear();
     s_->root().close_send_box();
   }
+  // A saved GIF sent into the chat, as a picture that moves -- as a file
+  // dropped is, without the send box: its thumbnail shown under its local id
+  // while it goes.
+  void apply(const request::send_gif& one) {
+    const auto& chosen = s_->root().main().chosen;
+    if (!chosen)
+      return;
+    std::ifstream in(one.path, std::ios::binary);
+    if (!in)
+      return;
+    std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    std::string name = std::filesystem::path(one.path).filename().string();
+    if (!name.contains('.'))
+      name += ".gif";
+    file sent{logic::prepared_of(std::move(bytes), std::move(name), false, *settings_),
+              std::format("mux-file-{}-{}", std::chrono::system_clock::now().time_since_epoch().count(), ++made_)};
+    if (auto image = skia::decodeImage(sent.as.bytes.data(), sent.as.bytes.size())) {
+      sent.width = image->width();
+      sent.height = image->height();
+      mux::ui::thumbnails().put(sent.local, std::move(image));
+    }
+    s_->root().close_emoji();
+    s_->go_live(*chosen);
+    s_->root().main().jump_to_end();
+    s_->net->send_file(*chosen, sent.local, std::move(sent.as.bytes), sent.as.name, sent.as.mimetype,
+                       sent.as.picture.has_value(), sent.width, sent.height, std::string());
+  }
+
   // Files given: read and prepared as the logic of sending says; a
   // picture's thumbnail shown under its local id while it goes. Then the
   // send box, with what was waiting in it before.

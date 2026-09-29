@@ -31,6 +31,7 @@ struct menu_facts {
   std::vector<std::string> seen;
   std::optional<std::string> media;  // a picture's or a file's source
   std::string media_name;
+  bool moving = false;  // a GIF or a moving WebP: one that can be saved to the GIFs
   std::string link;  // a link to it, where it has one
   float x = 0.0f, y = 0.0f;
 };
@@ -240,6 +241,7 @@ struct timeline_area : scene::Node {
         if (one.said.attachment) {
           facts.media = one.said.attachment->source;
           facts.media_name = one.said.attachment->name;
+          facts.moving = moves(one.said.attachment->kind);
         }
         // A Matrix message's link: matrix.to, to it in its room.
         if (seen_chat && is_matrix(seen_chat->account.speaks) &&

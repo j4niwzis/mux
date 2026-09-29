@@ -69,6 +69,12 @@ class menu_part {
     if (target_.media)
       pictures_->save(*target_.media, target_.media_name.empty() ? std::string("image") : target_.media_name);
   }
+  // A GIF kept among the saved ones, for the input's GIF tab.
+  void apply(const request::menu_save_gif&) {
+    s_->root().close_menu();
+    if (target_.media)
+      pictures_->save_gif(*target_.media);
+  }
   void apply(const request::menu_delete&) {
     s_->root().close_menu();
     const auto& chosen = s_->root().main().chosen;

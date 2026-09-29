@@ -180,6 +180,62 @@ class pictures_part {
       s_->net->fetch_media(chosen->account, one.source, media_use::to_open{one.name}, 0);
   }
 
+  // A GIF kept among the saved ones: its whole, from the disk where it is
+  // kept once it has played. Named by its source, so saving it twice keeps
+  // one; touched, so it comes first.
+  void save_gif(const std::string& source) {
+    const auto kept = kept_file(media_use::whole{}, source);
+    std::ifstream file;
+    if (kept)
+      file.open(*kept, std::ios::binary);
+    if (!file.is_open()) {
+      s_->root().show_message("GIFs", "The GIF has not loaded yet. Save it once it plays.");
+      return;
+    }
+    std::string bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    std::error_code failed;
+    std::filesystem::create_directories(gifs(), failed);
+    std::string name;
+    for (const char c : source)
+      name += std::isalnum(static_cast<unsigned char>(c)) ? c : '_';
+    std::ofstream(gifs() / name, std::ios::binary) << bytes;
+    s_->root().show_message("GIFs", "Saved to your GIFs.");
+  }
+  // The saved GIFs, newest first, to the input's GIF tab; each decoded on a
+  // worker into the frames it plays, where it is not already.
+  void apply(const request::show_gifs&) {
+    std::error_code failed;
+    std::vector<std::pair<std::filesystem::file_time_type, std::string>> found;
+    for (const auto& entry : std::filesystem::directory_iterator(gifs(), failed))
+      if (entry.is_regular_file(failed))
+        found.emplace_back(entry.last_write_time(failed), entry.path().string());
+    std::ranges::sort(found, std::greater{});
+    std::vector<std::string> paths;
+    auto* scene = s_->scene;
+    for (const auto& [when, path] : found) {
+      paths.push_back(path);
+      const std::string key = "gif:" + path;
+      if (mux::ui::animations().has(key) || mux::ui::whole_pictures().has(key) || !gifs_decoding_.insert(key).second)
+        continue;
+      s_->work->run([path, key, scene]() -> workers::done_t {
+        std::ifstream in(path, std::ios::binary);
+        std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        auto frames = skia::decodeFrames(bytes.data(), bytes.size());
+        return [frames = std::move(frames), key, scene]() mutable {
+          if (frames.size() > 1)
+            mux::ui::animations().put(key, std::move(frames));
+          else if (!frames.empty())
+            mux::ui::whole_pictures().put(key, std::move(frames.front().image));
+          scene->state().markDamaged();
+        };
+      });
+    }
+    s_->root().show_gifs(paths);
+  }
+  // Where the saved GIFs are kept: with the program's state, not its cache,
+  // which is pruned.
+  static std::filesystem::path gifs() { return mux::config::state_path("gifs"); }
+
   // A picture or a file saved to Downloads under `name`: from the disk
   // where the whole of it is kept, from the account where not.
   void save(const std::string& source, const std::string& name) {
@@ -327,6 +383,8 @@ class pictures_part {
   // What is being fetched from a server, not to be asked for twice: avatars
   // by their source, thumbnails and whole pictures by theirs.
   std::set<std::string> avatars_fetched_, thumbnails_fetched_, wholes_fetched_;
+  // The saved GIFs being decoded, not to be decoded twice.
+  std::set<std::string> gifs_decoding_;
   std::size_t written_ = 0;
   std::uintmax_t on_disk_ = 512u << 20;
 };

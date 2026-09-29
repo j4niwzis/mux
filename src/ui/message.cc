@@ -455,6 +455,9 @@ struct mentioned {
   struct replaced {
     std::size_t first, last;
     std::optional<logic::link_t> pill;
+    // Shown as written, not by its name: an address that came encoded
+    // (%23room%3Aserver), decoded -- a pill only where the room is known.
+    std::optional<std::string> as_written = std::nullopt;
   };
   std::vector<replaced> spans;
   std::vector<nodes::Text::Link> kept;
@@ -492,12 +495,37 @@ struct mentioned {
         --end;
       const bool inside = std::ranges::any_of(spans, [&](const replaced& p) { return at < p.last && end > p.first; }) ||
                           std::ranges::any_of(kept, [&](const auto& l) { return at < l.last && end > l.first; });
-      if (end > at && !inside)
+      if (end > at && !inside) {
         if (auto what = id_in(std::string_view(text).substr(at, end - at))) {
-          spans.push_back({at, end, std::move(what)});
+          spans.push_back({at, end, std::move(what), std::string(text.substr(at, end - at))});
           at = end;
           continue;
         }
+        // Matrix addresses written percent-encoded, as a link carries them
+        // -- %23room%3Aserver, %40user%3Aserver, one or more between
+        // slashes: each decoded, and made what it is.
+        const std::string_view word = std::string_view(text).substr(at, end - at);
+        if (word.contains('%')) {
+          bool any = false;
+          for (std::size_t from = 0; from <= word.size();) {
+            const auto slash = word.find('/', from);
+            const std::size_t to = slash == std::string_view::npos ? word.size() : slash;
+            const std::string decoded = logic::percent_decoded(word.substr(from, to - from));
+            if (decoded != word.substr(from, to - from))
+              if (auto found = id_in(decoded)) {
+                spans.push_back({at + from, at + to, std::move(found), decoded});
+                any = true;
+              }
+            if (slash == std::string_view::npos)
+              break;
+            from = slash + 1;
+          }
+          if (any) {
+            at = end;
+            continue;
+          }
+        }
+      }
     }
     ++at;
   }
@@ -507,7 +535,22 @@ struct mentioned {
   for (const replaced& span : spans) {
     std::string shown;
     std::optional<nodes::Text::Link> pill;
-    if (span.pill) {
+    const bool person = span.pill && std::visit(overloaded{[](const logic::link::person&) { return true; },
+                                                           [](const auto&) { return false; }},
+                                                *span.pill);
+    if (span.pill && span.as_written && !person) {
+      // A room's address written in the text: shown as written, not by the
+      // room's name; a pill with its avatar where the room is one this
+      // account knows, else the address alone.
+      const bool known = now && logic::chat_of(*now, *span.pill).has_value();
+      const auto [name, target] = name_of(*span.pill);
+      if (known) {
+        shown = "\u2002\u2002" + *span.as_written;
+        pill = nodes::Text::Link{span.first, span.first + shown.size(), "https://matrix.to/#/" + target, true};
+      } else {
+        shown = *span.as_written;
+      }
+    } else if (span.pill) {
       const auto [name, target] = name_of(*span.pill);
       shown = "\u2002\u2002" + name;  // room for its avatar
       pill = nodes::Text::Link{span.first, span.first + shown.size(), "https://matrix.to/#/" + target, true};

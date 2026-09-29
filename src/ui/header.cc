@@ -17,25 +17,25 @@ export namespace mux::ui {
 // Something not there yet, said in a box over the window.
 template <class Actions>
 struct notice_box : nodes::Stack {
-  nodes::Text title;
-  nodes::Text note;
-  widgets::Button<ask<Actions, &Actions::close_notice>> ok;
+  using ok_button = widgets::Button<ask<Actions, &Actions::close_notice>>;
+  struct parts_t {
+    nodes::Text title;
+    nodes::Text note;
+    ok_button ok;
+  } parts;
 
   notice_box(Actions* a, std::string heading, std::string text)
-      : title(std::move(heading), 17.0f, text_colour, true), note(std::move(text), 14.0f, dim_colour), ok("OK", {a}) {
+      : parts{.title = nodes::Text(std::move(heading), 17.0f, text_colour, true),
+              .note = nodes::Text(std::move(text), 14.0f, dim_colour),
+              .ok = ok_button("OK", {a})} {
     fState.apply({.fill = true, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
     this->setGap(10.0f);
-    title.setWrapped(true);
-    title.apply({.fillX = true});
-    note.setWrapped(true);
-    note.apply({.fillX = true});
-    ok.setPrimary(true);
-    ok.apply({.width = 90.0f, .height = 34.0f, .alignSelf = scene::align::kEnd});
-  }
-  void forEachChild(auto&& f) {
-    f(title);
-    f(note);
-    f(ok);
+    for (nodes::Text* each : {&parts.title, &parts.note}) {
+      each->setWrapped(true);
+      each->apply({.fillX = true});
+    }
+    parts.ok.setPrimary(true);
+    parts.ok.apply({.width = 90.0f, .height = 34.0f, .alignSelf = scene::align::kEnd});
   }
 };
 
@@ -67,43 +67,41 @@ struct chat_header : nodes::Stack {
 
   // The chat's avatar, its name over how it is, and the button to its info.
   struct head_row : nodes::Stack {
-    avatar_mark face;
-    two_lines texts;
-    icon_button<ask<Actions, &Actions::open_search>> find;
-    icon_button<ask<Actions, &Actions::toggle_info>> info;
+    using find_button = icon_button<ask<Actions, &Actions::open_search>>;
+    using info_button = icon_button<ask<Actions, &Actions::toggle_info>>;
+    struct parts_t {
+      avatar_mark face;
+      two_lines texts;
+      find_button find;
+      info_button info;
+    } parts;
     head_row(Actions* a, const view& shown)
-        : face(shown.key.value_or(""), shown.title, 38.0f), texts(shown.title, shown.status, 15.0f, 3.0f),
-          find(icon::search{}, {a}), info(icon::info{}, {a}) {
+        : parts{.face = avatar_mark(shown.key.value_or(""), shown.title, 38.0f),
+                .texts = two_lines(shown.title, shown.status, 15.0f, 3.0f),
+                .find = find_button(icon::search{}, {a}),
+                .info = info_button(icon::info{}, {a})} {
       this->setHorizontal();
       this->setGap(12.0f);
       fState.apply({.fillX = true, .grow = scene::axes::kY, .padding = {0.0f, 16.0f, 0.0f, 22.0f}});
-      find.apply({.alignSelf = scene::align::kMiddle});
-      info.apply({.alignSelf = scene::align::kMiddle});
-      face.setVisible(shown.key.has_value());
-      find.setVisible(shown.key.has_value());
-      info.setVisible(shown.key.has_value());
-      texts.state.setVisible(shown.key.has_value());
+      parts.find.apply({.alignSelf = scene::align::kMiddle});
+      parts.info.apply({.alignSelf = scene::align::kMiddle});
+      parts.face.setVisible(shown.key.has_value());
+      parts.find.setVisible(shown.key.has_value());
+      parts.info.setVisible(shown.key.has_value());
+      parts.texts.state.setVisible(shown.key.has_value());
     }
-    void forEachChild(auto&& f) {
-      f(face);
-      f(texts);
-      f(find);
-      f(info);
-    }
-  } row;
-  nodes::Box<> divider{band_colour};
+  };
+  struct parts_t {
+    head_row row;
+    nodes::Box<> divider{band_colour};
+  } parts;
 
   static constexpr float kHeight = 56.0f;
 
   // Declared: the row over a line dividing it from the messages.
-  chat_header(Actions* a, const view& shown) : row(a, shown) {
+  chat_header(Actions* a, const view& shown) : parts{.row = head_row(a, shown)} {
     fState.apply({.fill = true, .background = sidebar_colour});
-    divider.apply({.fillX = true, .height = 1.0f});
-  }
-
-  void forEachChild(auto&& f) {
-    f(row);
-    f(divider);
+    parts.divider.apply({.fillX = true, .height = 1.0f});
   }
 };
 
@@ -124,16 +122,24 @@ struct search_step {
 };
 template <class Actions>
 struct search_bar : nodes::Stack {
-  nodes::Box<> bottom_line{band_colour};
   Actions* actions;
-  widgets::TextBox<search_typed<Actions>> field;
-  nodes::Text found{"", 13.0f, dim_colour};
-  icon_button<search_step<Actions>> newer, older;
-  icon_button<ask<Actions, &Actions::close_search>> close;
+  using field_t = widgets::TextBox<search_typed<Actions>>;
+  using step_button = icon_button<search_step<Actions>>;
+  using close_button = icon_button<ask<Actions, &Actions::close_search>>;
+  struct parts_t {
+    field_t field;
+    nodes::Text found{"", 13.0f, dim_colour};
+    step_button newer, older;
+    close_button close;
+    nodes::Box<> bottom_line{band_colour};
+  } parts;
 
   explicit search_bar(Actions* a)
-      : actions(a), field("Search", {a}), newer(icon::up{}, {a, false}), older(icon::down{}, {a, true}),
-        close(icon::close{}, {a}) {
+      : actions(a), parts{.field = field_t("Search", {a}),
+                          .newer = step_button(icon::up{}, {a, false}),
+                          .older = step_button(icon::down{}, {a, true}),
+                          .close = close_button(icon::close{}, {a})} {
+    auto& [field, found, newer, older, close, bottom_line] = parts;
     this->setHorizontal();
     this->setGap(4.0f);
     fState.apply({.fillX = true, .height = chat_header<Actions>::kHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f},
@@ -149,16 +155,8 @@ struct search_bar : nodes::Stack {
   }
   // Where the finding is: the one shown of how many, or none found.
   void show_found(std::optional<std::size_t> at, std::size_t of, bool asked) {
-    found.setText(!asked ? std::string() : of == 0 ? std::string("No results") : std::format("{} of {}", at.value_or(0) + 1, of));
+    parts.found.setText(!asked ? std::string() : of == 0 ? std::string("No results") : std::format("{} of {}", at.value_or(0) + 1, of));
     this->invalidateLayout();
-  }
-  void forEachChild(auto&& f) {
-    f(field);
-    f(found);
-    f(newer);
-    f(older);
-    f(close);
-    f(bottom_line);
   }
   using Node::onKey;
   void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {

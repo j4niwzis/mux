@@ -25,7 +25,7 @@ class search_part {
     if (!searching_ || searching_->in != *screen.chosen)
       searching_ = state{*screen.chosen, {}, {}, std::nullopt};
     screen.show_search(true);
-    s_->scene->focus(screen.search.field);
+    s_->scene->focus(screen.search.parts.field);
   }
   void apply(const request::close_search&) {
     searching_.reset();

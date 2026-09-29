@@ -109,8 +109,12 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
         }
     // Nothing mux can show of it: said so, so that it is there to be looked
     // at (View Source) rather than an empty space.
-    if (made.body.plain.empty() && !made.body.html && !made.attachment && made.album.empty())
-      made.body.plain = "Unsupported message";
+    if (made.body.plain.empty() && !made.body.html && !made.attachment && made.album.empty()) {
+      const knot::value tree = knot::to_value(one);
+      const knot::value* said = member(tree, "content");
+      made.body.plain = std::format("Unsupported message ({})",
+                                    said ? text(member(*said, "msgtype")).value_or("no msgtype") : std::string("no msgtype"));
+    }
     if (relates)
       if (const knot::value* reply = member(*relates, "m.in_reply_to"))
         made.replies_to = text(member(*reply, "event_id"));

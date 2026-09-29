@@ -22,6 +22,14 @@ endif()
 
 project(mux VERSION 0.1 LANGUAGES C CXX)
 
+# A release build is optimised across its units (ThinLTO with clang), where
+# the toolchain can.
+include(CheckIPOSupported)
+check_ipo_supported(RESULT mux_ipo OUTPUT mux_ipo_said LANGUAGES C CXX)
+if(mux_ipo)
+  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+endif()
+
 if(NOT COMMAND cme_provider)
   message(FATAL_ERROR
     "cmake-everywhere is not installed in this build, so nothing answers "
@@ -227,7 +235,12 @@ if(MUX_UI)
   target_sources(mux PRIVATE
     src/app/program_core.cc src/app/program_media.cc
     src/app/program_chats.cc src/app/program_links.cc src/app/program_accounts.cc
-    src/app/program_settings.cc src/app/program_sending.cc src/app/program_forms.cc)
+    src/app/program_settings.cc src/app/program_sending.cc src/app/program_forms.cc
+    src/app/scene.cc)
+  # The scene's walks, instantiated for the whole tree: outside a release
+  # build, nothing in them is inlined -- the inliner flattening the tree
+  # into itself was most of the unit's time; each node's walk stays a call.
+  set_property(SOURCE src/app/scene.cc APPEND PROPERTY COMPILE_OPTIONS "$<$<NOT:$<CONFIG:Release>>:-fno-inline>")
   target_link_libraries(mux PRIVATE mux_modules)
 endif()
 

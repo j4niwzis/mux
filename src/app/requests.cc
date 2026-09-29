@@ -3,6 +3,7 @@
 export module mux.app.requests;
 
 import std;
+import skiff.scene;
 import mux.core;
 import mux.config;
 import mux.ui;
@@ -453,3 +454,10 @@ struct actions {
 using window_type = mux::ui::window<actions>;
 
 }  // namespace mux::app
+
+// The window's scene is instantiated once, in src/app/scene.cc: its walks
+// over the whole tree -- routing, layout, drawing, for every type of node
+// in it -- were most of a build, made again in every unit that touched the
+// scene. In a named module, members defined in a class are not implicitly
+// inline, so this keeps them all out of the other units.
+extern template class skiff::scene::Scene<mux::app::window_type>;

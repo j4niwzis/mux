@@ -204,7 +204,13 @@ void app::apply(const request::room_act& one) {
 // An emoji picked: into what is written, where the caret is; the input keeps
 // the keys.
 void app::apply(const request::insert_emoji& one) {
-  root().main().line.parts.input.parts.field.insertText(one.text);
+  auto& field = root().main().line.parts.input.parts.field;
+  // A custom emoji: its picture in the line, as the message will show it,
+  // sent as its shortcode.
+  if (one.picture.empty())
+    field.insertText(one.text);
+  else
+    field.insertAtom("\u2003", one.picture, one.text, true);
   scene.focus(root().main().line.field);
 }
 

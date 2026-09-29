@@ -99,7 +99,7 @@ inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 //   void settings_notifications(), flip_notify(notify_flag_t), set_notify_backend(notify_backend_t),
 //        flip_account_notify(), flip_account_notify_sound(), set_chat_notify(notify_mode_t)  -- notifications
 //   void set_room_event_kind(choice_level_t, optional<room_event_t>, optional<bool>)  -- which room events show
-//   void toggle_emoji(), close_emoji(), insert_emoji(std::string)  -- the input's emoji panel
+//   void toggle_emoji(), close_emoji(), insert_emoji(std::string text, std::string picture)  -- the input's emoji panel
 //   void load_older(const conversation_id&, std::string from)  -- its history
 //   void jump_to_end()               -- back to a chat's newest message
 //   void open_search(), close_search(), search_typed(std::string), search_step(bool older)  -- finding in a chat

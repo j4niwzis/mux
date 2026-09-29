@@ -202,6 +202,7 @@ struct toggle_emoji {};
 struct close_emoji {};
 struct insert_emoji {
   std::string text;
+  std::string picture;  // a custom emoji's, where it is one
 };
 // The GIFs: one saved from its menu, the saved ones shown in the input's
 // panel, and one of them sent.
@@ -501,7 +502,9 @@ struct actions {
   void send_gif(std::string path) { requests.emplace_back(request::send_gif{std::move(path)}); }
   void send_sticker(mux::emote sticker) { requests.emplace_back(request::send_sticker{std::move(sticker)}); }
   void play_audio(std::string source) { requests.emplace_back(request::play_audio{std::move(source)}); }
-  void insert_emoji(std::string text) { requests.emplace_back(request::insert_emoji{std::move(text)}); }
+  void insert_emoji(std::string text, std::string picture = {}) {
+    requests.emplace_back(request::insert_emoji{std::move(text), std::move(picture)});
+  }
   void resize_info(float x) { requests.emplace_back(request::resize_info{x}); }
   void choose_new_proxy(int index) { requests.emplace_back(request::choose_new_proxy{index}); }
   void toggle_mute() { requests.emplace_back(request::toggle_mute{}); }

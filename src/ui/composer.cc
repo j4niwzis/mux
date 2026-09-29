@@ -191,7 +191,8 @@ struct composer_bar : nodes::Stack {
   [[nodiscard]] std::vector<mention> mentions() const {
     std::vector<mention> out;
     for (const auto& one : parts.input.parts.field.atoms())
-      out.push_back({one.plain, one.target});
+      if (!one.picture)
+        out.push_back({one.plain, one.target});
     return out;
   }
   // A mention picked from the list, over the @ and what was typed of it

@@ -392,7 +392,11 @@ struct react_with {
 template <class Actions>
 struct insert_emoji_into {
   Actions* actions = nullptr;
-  void operator()(const std::string& text, const std::string&) const { actions->insert_emoji(text); }
+  // A glyph as itself; a custom emoji (its key its picture's, not its
+  // text) as its picture.
+  void operator()(const std::string& text, const std::string& key) const {
+    actions->insert_emoji(text, key == text ? std::string() : key);
+  }
 };
 
 // The GIFs saved, as tdesktop's GIF tab shows them: a grid of them playing,

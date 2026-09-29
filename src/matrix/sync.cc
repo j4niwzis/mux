@@ -321,6 +321,20 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
       sink_(change::conversation_removed{{id_, room}});
 }
 
+// Each one's say in a room, as its power levels list them.
+inline std::map<std::string, std::int64_t> powers_of(const knot::value& content) {
+  std::map<std::string, std::int64_t> out;
+  if (const knot::value* users = member(content, "users"); users && users->is<knot::value::object>())
+    for (const auto& [user, level] : users->as<knot::value::object>())
+      if (level.is<std::int64_t>())
+        out.emplace(user, level.as<std::int64_t>());
+  return out;
+}
+inline std::int64_t power_default_of(const knot::value& content) {
+  const knot::value* level = member(content, "users_default");
+  return level && level->is<std::int64_t>() ? level->as<std::int64_t>() : 0;
+}
+
 template <class Sink>
 auto account<Sink>::avatar_of(const std::string& room, const loom::client::joined_room& kept) const -> std::optional<std::string> {
   if (auto own = kept.state.avatar_url(); own && !own->empty())
@@ -381,8 +395,25 @@ void account<Sink>::conversation(const conversation_id& in, const loom::client::
                                      .member_count = kept.summary.joined_members,
                                      .alias = kept.state.canonical_alias(),
                                      .pinned = pinned_of(kept),
-                                     .emotes = emotes_of(kept)});
+                                     .emotes = emotes_of(kept),
+                                     .join_rule = join_rule_of(text(member(state_content(kept, "m.room.join_rules"), "join_rule"))),
+                                     .history = history_rule_of(text(member(state_content(kept, "m.room.history_visibility"),
+                                                                            "history_visibility"))),
+                                     .powers = powers_of(state_content(kept, "m.room.power_levels")),
+                                     .power_default = power_default_of(state_content(kept, "m.room.power_levels"))});
 }
+
+template <class Sink>
+auto account<Sink>::state_content(const loom::client::joined_room& kept, std::string_view type) -> knot::value {
+  const auto* said = kept.state.find(std::string(type));
+  if (!said)
+    return knot::value();
+  const knot::value tree = knot::to_value(*said);
+  const knot::value* content = member(tree, "content");
+  return content ? *content : knot::value();
+}
+
+
 
 // Whether a usage list lets an image be an emoji: MSC2545's "usage", on the
 // image or else on its pack -- "emoticon", "sticker", or both where it is

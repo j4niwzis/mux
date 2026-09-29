@@ -68,6 +68,9 @@ class account {
   void load_context(std::string room, std::string target);
   // A message a reply quotes, fetched on its own, beside the timeline.
   void fetch_quoted(std::string room, std::string target);
+  // Something done to a room by one allowed to: its state set, or someone
+  // let in or sent out.
+  void manage(std::string room, room_action_t action);
   void load_newer(std::string room, std::string from);
 
   // An avatar's picture: the server's thumbnail of an mxc:// URI, at the size
@@ -171,6 +174,8 @@ class account {
   static std::vector<std::string> children_of(const loom::client::joined_room& kept);
   // The room's pinned messages, as its state says.
   static std::vector<std::string> pinned_of(const loom::client::joined_room& kept);
+  // A state event's content, as a tree; null where the room has none.
+  static knot::value state_content(const loom::client::joined_room& kept, std::string_view type);
   // The custom emoji usable in a room: the user's own (im.ponies.user_emotes)
   // and the room's packs (im.ponies.room_emotes), a shortcode once.
   [[nodiscard]] std::vector<mux::emote> emotes_of(const loom::client::joined_room& kept) const;

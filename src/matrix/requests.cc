@@ -73,6 +73,70 @@ void account<Sink>::load_older(std::string room, std::string from) {
 }
 
 template <class Sink>
+void account<Sink>::manage(std::string room, room_action_t action) {
+  loop_->spawn([this, room = std::move(room), action = std::move(action)] {
+    if (!api_)
+      return;
+    // A state event of the room set, its content given.
+    const auto set = [&](std::string type, knot::value::object content) {
+      auto done = perform(*api_, loom::cs::set_room_state_with_key{
+                                     .room_id = room, .event_type = type, .state_key = "", .body = knot::value(std::move(content))});
+      if (!done)
+        log(id_, "could not set {} in {}: {}", type, room, done.error().said());
+    };
+    const auto one_field = [](std::string_view key, std::string value) {
+      knot::value::object content;
+      content.emplace(std::string(key), knot::value(std::move(value)));
+      return content;
+    };
+    const auto told = [&](const char* what, auto done) {
+      if (!done)
+        log(id_, "could not {} in {}: {}", what, room, done.error().said());
+    };
+    std::visit(
+        overloaded{
+            [&](const room_action::rename& one) { set("m.room.name", one_field("name", one.name)); },
+            [&](const room_action::retopic& one) { set("m.room.topic", one_field("topic", one.topic)); },
+            [&](const room_action::set_join_rule& one) {
+              set("m.room.join_rules",
+                  one_field("join_rule", std::string(std::visit([](auto of) { return word_of(of); }, one.rule))));
+            },
+            [&](const room_action::set_history& one) {
+              set("m.room.history_visibility",
+                  one_field("history_visibility", std::string(std::visit([](auto of) { return word_of(of); }, one.rule))));
+            },
+            [&](const room_action::invite& one) {
+              told("invite", perform(*api_, loom::cs::invite_user{.room_id = room, .body = {.user_id = one.user}}));
+            },
+            [&](const room_action::kick& one) {
+              told("remove", perform(*api_, loom::cs::kick{.room_id = room, .body = {.user_id = one.user}}));
+            },
+            [&](const room_action::ban& one) {
+              told("ban", perform(*api_, loom::cs::ban{.room_id = room, .body = {.user_id = one.user}}));
+            },
+            [&](const room_action::unban& one) {
+              told("unban", perform(*api_, loom::cs::unban{.room_id = room, .body = {.user_id = one.user}}));
+            },
+            // A say given: the room's power levels as they are, with it.
+            [&](const room_action::set_power& one) {
+              knot::value::object content;
+              if (const auto kept = state_.joined.find(room); kept != state_.joined.end())
+                if (const knot::value now = state_content(kept->second, "m.room.power_levels");
+                    now.is<knot::value::object>())
+                  content = now.as<knot::value::object>();
+              knot::value::object users;
+              if (const auto found = content.find("users");
+                  found != content.end() && found->second.is<knot::value::object>())
+                users = found->second.as<knot::value::object>();
+              users.insert_or_assign(one.user, knot::value(one.level));
+              content.insert_or_assign("users", knot::value(std::move(users)));
+              set("m.room.power_levels", std::move(content));
+            }},
+        action);
+  });
+}
+
+template <class Sink>
 void account<Sink>::fetch_quoted(std::string room, std::string target) {
   loop_->spawn([this, room = std::move(room), target = std::move(target)] {
     if (!api_)

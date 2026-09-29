@@ -237,6 +237,60 @@ struct member {
   friend bool operator==(const member&, const member&) = default;
 };
 
+// Who may join a room, as its join rule says.
+namespace join_rule {
+struct open {};      // anyone: "public"
+struct invite {};    // those invited
+struct knock {};     // those who ask, once let in
+struct other {};     // restricted, private -- a rule not offered here
+}  // namespace join_rule
+using join_rule_t = std::variant<join_rule::open, join_rule::invite, join_rule::knock, join_rule::other>;
+// Who may read a room's history.
+namespace history_rule {
+struct shared {};          // members, all of it
+struct invited {};         // members, from when they were invited
+struct joined {};          // members, from when they joined
+struct world_readable {};  // anyone
+}  // namespace history_rule
+using history_rule_t =
+    std::variant<history_rule::shared, history_rule::invited, history_rule::joined, history_rule::world_readable>;
+
+// What can be done to a room by those allowed to: named, described, opened
+// or closed, people let in or sent out, and given a say.
+namespace room_action {
+struct rename {
+  std::string name;
+};
+struct retopic {
+  std::string topic;
+};
+struct set_join_rule {
+  join_rule_t rule;
+};
+struct set_history {
+  history_rule_t rule;
+};
+struct invite {
+  std::string user;
+};
+struct kick {
+  std::string user;
+};
+struct ban {
+  std::string user;
+};
+struct unban {
+  std::string user;
+};
+struct set_power {
+  std::string user;
+  std::int64_t level = 0;
+};
+}  // namespace room_action
+using room_action_t =
+    std::variant<room_action::rename, room_action::retopic, room_action::set_join_rule, room_action::set_history,
+                 room_action::invite, room_action::kick, room_action::ban, room_action::unban, room_action::set_power>;
+
 // A custom emoji: its shortcode, as written between colons, and its picture
 // on the server -- one of a Matrix room's packs, or the user's own.
 struct emote {
@@ -270,6 +324,12 @@ struct conversation {
   std::vector<std::string> pinned;
   // The custom emoji that can be used in it: its packs' and the user's own.
   std::vector<emote> emotes;
+  // Who may join it and read its history, and each one's say in it: a
+  // Matrix room's power levels, those not listed having the default.
+  join_rule_t join_rule = join_rule::invite{};
+  history_rule_t history = history_rule::shared{};
+  std::map<std::string, std::int64_t> powers;
+  std::int64_t power_default = 0;
   // Messages a reply in view quotes that are not in the timeline, fetched
   // on their own for their quotes -- kept out of the timeline, and let go
   // once the timeline has them, or when too many have gathered.
@@ -402,6 +462,10 @@ struct conversation_updated {
   std::optional<std::string> alias;
   std::vector<std::string> pinned;
   std::vector<emote> emotes;
+  join_rule_t join_rule = join_rule::invite{};
+  history_rule_t history = history_rule::shared{};
+  std::map<std::string, std::int64_t> powers;
+  std::int64_t power_default = 0;
 };
 
 // Receipts: who has read up to which message, as the server says.
@@ -640,6 +704,10 @@ class model {
     kept.alias = one.alias;
     kept.pinned = one.pinned;
     kept.emotes = one.emotes;
+    kept.join_rule = one.join_rule;
+    kept.history = one.history;
+    kept.powers = one.powers;
+    kept.power_default = one.power_default;
   }
   void on(const change::conversation_removed& one) { of(one.id.account).conversations.erase(one.id.id); }
   void on(const change::presence_changed& one) { of(one.account).presences[one.contact] = one.now; }

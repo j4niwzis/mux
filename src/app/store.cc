@@ -263,6 +263,7 @@ class message_store {
       one.edited = flag_of(o, "edited");
       one.redacted = flag_of(o, "redacted");
       one.outgoing = flag_of(o, "out");
+      one.service = flag_of(o, "service");
       if (const auto carried = o.find("attachment");
           carried != o.end() && carried->second.is<knot::value::object>()) {
         const auto& c = carried->second.as<knot::value::object>();
@@ -302,6 +303,9 @@ class message_store {
       line.emplace("redacted", knot::value(true));
     if (one.outgoing)
       line.emplace("out", knot::value(true));
+    // Something done, not said: read back as a line of its own again.
+    if (one.service)
+      line.emplace("service", knot::value(true));
     if (one.attachment) {
       knot::value::object carried;
       carried.emplace("image", knot::value(mux::is_picture(one.attachment->kind)));

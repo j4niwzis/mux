@@ -97,6 +97,9 @@ struct stub {
   void menu_reactions() {}
   void close_reactions() {}
   void open_avatar(std::string) {}
+  void open_manage() {}
+  void close_manage() {}
+  void room_act(mux::room_action_t) {}
   void resize_info(float) {}
   void choose_new_proxy(int) {}
   void toggle_mute() {}

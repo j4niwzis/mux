@@ -49,6 +49,8 @@ struct window : scene::Node {
       widgets::Dialog<person_card<Actions>> person;
       // A message's reactions as events.
       widgets::Dialog<reactions_box<Actions>> reactions;
+      // A room's management.
+      widgets::Dialog<room_manage<Actions>> manage;
       widgets::Dialog<send_box<Actions>> sending;
       std::optional<emoji_popup<Actions>> emoji;
       std::optional<context_menu<Actions>> menu;
@@ -71,7 +73,7 @@ struct window : scene::Node {
     explicit layers(Actions* a)
         : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a))},
           actions_of(a) {
-      auto& [backdrop, frame, settings, notice, person, reactions, sending, emoji, menu, viewer] = parts;
+      auto& [backdrop, frame, settings, notice, person, reactions, manage, sending, emoji, menu, viewer] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
       frame.setSheetColour(background);
@@ -88,6 +90,8 @@ struct window : scene::Node {
       person.setPlace(widgets::dialog_place::near_top{});
       reactions.setSheetColour(sidebar_colour);
       reactions.setSize(392.0f, 420.0f);
+      manage.setSheetColour(sidebar_colour);
+      manage.setSize(480.0f, 600.0f);
     }
   };
 
@@ -136,6 +140,7 @@ struct window : scene::Node {
     layer().notice.dropClosed();
     layer().person.dropClosed();
     layer().reactions.dropClosed();
+    layer().manage.dropClosed();
     layer().sending.dropClosed();
   }
 
@@ -188,6 +193,8 @@ struct window : scene::Node {
   void close_person() { layer().person.close(); }
   void open_reactions(const std::vector<reaction_entry>& entries) { layer().reactions.open(actions, entries); }
   void close_reactions() { layer().reactions.close(); }
+  void open_manage(const manage_facts& facts) { layer().manage.open(actions, facts); }
+  void close_manage() { layer().manage.close(); }
 
   void show(const std::vector<config::account_t>& saved, const model& now) {
     const auto& current = layer().frame.base().base().current;

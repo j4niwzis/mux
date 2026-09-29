@@ -47,6 +47,31 @@ void app::apply(const request::toggle_emoji&) {
   root().open_emoji(at.fRight, at.fTop - 6.0f);
 }
 void app::apply(const request::close_emoji&) { root().close_emoji(); }
+
+// The room's management: made from what the model knows of it now.
+void app::apply(const request::open_manage&) {
+  const auto& chosen = root().main().chosen;
+  const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
+  if (!chat)
+    return;
+  mux::ui::manage_facts facts{.name = chat->name, .topic = chat->topic.value_or(""), .join_rule = chat->join_rule,
+                              .history = chat->history};
+  for (const mux::member& one : chat->members) {
+    const auto level = chat->powers.find(one.id);
+    facts.members.push_back({one.id, one.name.empty() ? one.id : one.name,
+                             level == chat->powers.end() ? chat->power_default : level->second});
+  }
+  std::ranges::sort(facts.members, std::greater{}, &mux::ui::manage_facts::person::level);
+  root().open_manage(facts);
+}
+void app::apply(const request::close_manage&) { root().close_manage(); }
+// Done to the room being read, by its account.
+void app::apply(const request::room_act& one) {
+  const auto& chosen = root().main().chosen;
+  if (!chosen || shared.demo())
+    return;
+  net->manage(*chosen, one.action);
+}
 // An emoji picked: into what is written, where the caret is; the input keeps
 // the keys.
 void app::apply(const request::insert_emoji& one) {

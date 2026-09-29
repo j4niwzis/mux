@@ -196,6 +196,18 @@ struct network {
             one.account);
     });
   }
+  // Something done to a room, by the account it is of.
+  void manage(const mux::conversation_id& in, mux::room_action_t action) {
+    loop.post([this, in, action = std::move(action)] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == in.account)
+                account->manage(in.id, action);
+            },
+            one.account);
+    });
+  }
   // A message a reply quotes, fetched beside the timeline.
   void fetch_quoted(const mux::conversation_id& in, std::string target) {
     loop.post([this, in, target = std::move(target)] {

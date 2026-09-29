@@ -12,6 +12,7 @@ import skiff.nodes.icon;
 import skiff.nodes.scroll;
 import skiff.nodes.text;
 import skiff.widgets.pill;
+import skiff.widgets.button;
 import mux.core;
 import mux.config;
 import mux.logic.links;
@@ -20,6 +21,7 @@ import :icons;
 import :controls;
 import :themes;
 import :names;
+import :forms;
 
 export namespace mux::ui {
 
@@ -317,6 +319,218 @@ struct reactions_box : nodes::Stack {
   }
 };
 
+// What the management of a room shows: as it is now.
+struct manage_facts {
+  std::string name;
+  std::string topic;
+  join_rule_t join_rule = join_rule::invite{};
+  history_rule_t history = history_rule::shared{};
+  struct person {
+    std::string id;
+    std::string name;
+    std::int64_t level = 0;
+  };
+  std::vector<person> members;
+};
+[[nodiscard]] inline std::string role_of(std::int64_t level) {
+  if (level >= 100)
+    return "Admin";
+  if (level >= 50)
+    return "Moderator";
+  return level > 0 ? std::format("Level {}", level) : std::string("Member");
+}
+
+// A room's management, as tdesktop's and Element's room settings: its name
+// and topic to change; who may join it and read its history; someone to
+// invite; and its members, each with their role -- made a moderator or an
+// admin, or back to a member; removed; banned. What is done is asked of the
+// program, which asks the server; the box shows what was so when it opened.
+template <class Actions>
+struct room_manage : nodes::Stack {
+  Actions* actions = nullptr;
+  struct close_it {
+    Actions* actions;
+    void operator()() const { actions->close_manage(); }
+  };
+  struct nothing_back {
+    void operator()() const {}
+  };
+  // A field's text, done with: the name, the topic, someone invited. The
+  // field is found through the box when pressed -- not held by address, for
+  // the column it is in is moved into its scroll container once made.
+  template <class Make>
+  struct from_field {
+    room_manage* box;
+    void operator()() const {
+      const std::string& text = Make::read(box->content());
+      if (!text.empty() || Make::may_be_empty)
+        box->actions->room_act(Make{}(text));
+    }
+  };
+  struct make_name {
+    static constexpr bool may_be_empty = true;
+    template <class Column>
+    static const std::string& read(Column& c) { return c.parts.name.text(); }
+    room_action_t operator()(const std::string& text) const { return room_action::rename{text}; }
+  };
+  struct make_topic {
+    static constexpr bool may_be_empty = true;
+    template <class Column>
+    static const std::string& read(Column& c) { return c.parts.topic.text(); }
+    room_action_t operator()(const std::string& text) const { return room_action::retopic{text}; }
+  };
+  struct make_invite {
+    static constexpr bool may_be_empty = false;
+    template <class Column>
+    static const std::string& read(Column& c) { return c.parts.invitee.text(); }
+    room_action_t operator()(const std::string& text) const { return room_action::invite{text}; }
+  };
+  // One of a choice: a join rule or a history rule, set.
+  template <class Rule>
+  struct choose {
+    room_manage* box;
+    Rule rule;
+    void operator()() const { box->chose(rule); }
+  };
+  // Something done to a member.
+  struct to_member {
+    Actions* actions;
+    room_action_t action;
+    void operator()() const { actions->room_act(action); }
+  };
+  struct member_row : nodes::Stack {
+    using act_button = segment<to_member>;
+    struct parts_t {
+      avatar_mark face;
+      two_lines texts;
+      act_button role;
+      act_button remove;
+      act_button ban;
+    } parts;
+    member_row(Actions* a, const manage_facts::person& one)
+        : parts{.face = avatar_mark(one.id, one.name, 32.0f),
+                .texts = two_lines(one.name, role_of(one.level), 14.0f, 2.0f),
+                .role = act_button(one.level >= 50 ? (one.level >= 100 ? "Member" : "Admin") : "Moderator",
+                                   {a, room_action::set_power{one.id, one.level >= 50 ? (one.level >= 100 ? 0 : 100) : 50}}),
+                .remove = act_button("Remove", {a, room_action::kick{one.id}}),
+                .ban = act_button("Ban", {a, room_action::ban{one.id}})} {
+      this->setHorizontal();
+      this->setGap(8.0f);
+      fState.apply({.fillX = true, .height = 48.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}});
+      for (act_button* each : {&parts.role, &parts.remove, &parts.ban})
+        each->apply({.width = 84.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 6.0f});
+    }
+  };
+  using header_t = page_header<nothing_back, close_it>;
+  using name_save = widgets::Button<from_field<make_name>>;
+  using topic_save = widgets::Button<from_field<make_topic>>;
+  using invite_button = widgets::Button<from_field<make_invite>>;
+  using join_segment = segment<choose<join_rule_t>>;
+  using history_segment = segment<choose<history_rule_t>>;
+  struct row_of_segments_join : nodes::Stack {
+    struct parts_t {
+      join_segment open, invite, knock;
+    } parts;
+    row_of_segments_join(room_manage* box)
+        : parts{.open = join_segment("Public", {box, join_rule::open{}}),
+                .invite = join_segment("Invite only", {box, join_rule::invite{}}),
+                .knock = join_segment("Ask to join", {box, join_rule::knock{}})} {
+      this->setHorizontal();
+      this->setGap(4.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {0.0f, 10.0f, 0.0f, 10.0f}});
+    }
+  };
+  struct row_of_segments_history : nodes::Stack {
+    struct parts_t {
+      history_segment shared, invited, joined, anyone;
+    } parts;
+    row_of_segments_history(room_manage* box)
+        : parts{.shared = history_segment("Members", {box, history_rule::shared{}}),
+                .invited = history_segment("Since invited", {box, history_rule::invited{}}),
+                .joined = history_segment("Since joined", {box, history_rule::joined{}}),
+                .anyone = history_segment("Anyone", {box, history_rule::world_readable{}})} {
+      this->setHorizontal();
+      this->setGap(4.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {0.0f, 10.0f, 0.0f, 10.0f}});
+    }
+  };
+  struct column : nodes::Stack {
+    struct parts_t {
+      field name;
+      name_save save_name;
+      field topic;
+      topic_save save_topic;
+      nodes::Text join_title{"Who can join", 13.0f, dim_colour, true};
+      row_of_segments_join join;
+      nodes::Text history_title{"Who can read the history", 13.0f, dim_colour, true};
+      row_of_segments_history history;
+      field invitee;
+      invite_button invite;
+      nodes::Text members_title{"Members", 13.0f, dim_colour, true};
+      std::vector<member_row> members;
+    } parts;
+    column(Actions* a, room_manage* box, const manage_facts& facts)
+        : parts{.name = field("Name", "The room's name", facts.name),
+                .save_name = name_save("Save name", {box}),
+                .topic = field("Topic", "What the room is about", facts.topic),
+                .save_topic = topic_save("Save topic", {box}),
+                .join = row_of_segments_join(box),
+                .history = row_of_segments_history(box),
+                .invitee = field("Invite", "@someone:server"),
+                .invite = invite_button("Invite", {box})} {
+      this->setGap(8.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 12.0f, 16.0f, 12.0f}});
+      for (auto* button : std::initializer_list<scene::Node*>{&parts.save_name, &parts.save_topic, &parts.invite})
+        button->apply({.width = 130.0f, .height = 32.0f, .margin = {0.0f, 10.0f, 0.0f, 10.0f}});
+      for (nodes::Text* title : {&parts.join_title, &parts.history_title, &parts.members_title})
+        title->apply({.margin = {10.0f, 10.0f, 0.0f, 10.0f}});
+      parts.members.reserve(facts.members.size());
+      for (const auto& one : facts.members)
+        parts.members.emplace_back(a, one);
+    }
+  };
+  struct parts_t {
+    header_t header;
+    nodes::ScrollContainer<column> body;
+  } parts;
+
+  room_manage(Actions* a, const manage_facts& facts)
+      : actions(a),
+        parts{.header = header_t("Manage room", {}, {a}, false, true),
+              .body = nodes::ScrollContainer<column>(column(a, this, facts))} {
+    fState.apply({.fillX = true, .height = 600.0f});
+    parts.body.apply({.fillX = true, .grow = scene::axes::kY});
+    join_shown = facts.join_rule;
+    history_shown = facts.history;
+    this->show_rules(facts.join_rule, facts.history);
+  }
+  [[nodiscard]] column& content() { return std::get<0>(parts.body.fChildren); }
+  // The chosen rules lit.
+  void show_rules(const join_rule_t& join, const history_rule_t& history) {
+    auto& [open, invite, knock] = content().parts.join.parts;
+    open.set_active(std::visit(overloaded{[](join_rule::open) { return true; }, [](const auto&) { return false; }}, join));
+    invite.set_active(std::visit(overloaded{[](join_rule::invite) { return true; }, [](const auto&) { return false; }}, join));
+    knock.set_active(std::visit(overloaded{[](join_rule::knock) { return true; }, [](const auto&) { return false; }}, join));
+    auto& [shared, invited, joined, anyone] = content().parts.history.parts;
+    shared.set_active(std::visit(overloaded{[](history_rule::shared) { return true; }, [](const auto&) { return false; }}, history));
+    invited.set_active(std::visit(overloaded{[](history_rule::invited) { return true; }, [](const auto&) { return false; }}, history));
+    joined.set_active(std::visit(overloaded{[](history_rule::joined) { return true; }, [](const auto&) { return false; }}, history));
+    anyone.set_active(std::visit(overloaded{[](history_rule::world_readable) { return true; }, [](const auto&) { return false; }}, history));
+  }
+  join_rule_t join_shown = join_rule::invite{};
+  history_rule_t history_shown = history_rule::shared{};
+  void chose(const join_rule_t& rule) {
+    join_shown = rule;
+    actions->room_act(room_action::set_join_rule{rule});
+    this->show_rules(join_shown, history_shown);
+  }
+  void chose(const history_rule_t& rule) {
+    history_shown = rule;
+    actions->room_act(room_action::set_history{rule});
+    this->show_rules(join_shown, history_shown);
+  }
+};
+
 template <class Actions>
 struct info_panel : nodes::Stack {
   Actions* actions = nullptr;
@@ -384,7 +598,7 @@ struct info_panel : nodes::Stack {
     };
     struct tiles_row : nodes::Stack {
       using mute_tile = action_tile<ask<Actions, &Actions::toggle_mute>>;
-      using manage_tile = action_tile<not_yet<Actions>>;
+      using manage_tile = action_tile<ask<Actions, &Actions::open_manage>>;
       using leave_tile = action_tile<ask<Actions, &Actions::leave_chat>>;
       struct parts_t {
         mute_tile mute;
@@ -393,7 +607,7 @@ struct info_panel : nodes::Stack {
       } parts;
       tiles_row(Actions* a, bool muted)
           : parts{.mute = mute_tile(muted ? "Unmute" : "Mute", icon::bell{}, {a}),
-                  .manage = manage_tile("Manage", icon::sliders{}, {a, "Managing a chat"}),
+                  .manage = manage_tile("Manage", icon::sliders{}, {a}),
                   .leave = leave_tile("Leave", icon::leave{}, {a})} {
         this->setHorizontal();
         this->setGap(8.0f);

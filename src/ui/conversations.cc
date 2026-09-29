@@ -501,6 +501,11 @@ struct conversations_screen : nodes::Stack {
   int aim_frames = 0;
   float aimed_at = -1.0f;
 
+  // While a jump is on its way or being aimed: the message jumped to. What is
+  // loaded to reach it is not looked at, and only the pictures right around
+  // it are fetched.
+  [[nodiscard]] const std::optional<std::string>& jump_target() const { return jumping_to ? jumping_to : aiming; }
+
   // The newest message whose end is on screen in the chat shown: how far it
   // has been read. None while a jump is on its way, as what is passed on the
   // way is not read.

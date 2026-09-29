@@ -159,7 +159,20 @@ class pictures_part {
                   want(id, span.target, span.target);
           // Those on screen and near it, at twice the size they are drawn
           // at -- not every picture in its history, which pushed the rest out.
-          const auto [from, to] = screen.made_indices(one.timeline);
+          // While a message is being jumped to, only those right around it:
+          // what was loaded on the way is not looked at.
+          auto [from, to] = screen.made_indices(one.timeline);
+          if (const auto& target = screen.jump_target()) {
+            const auto found = std::ranges::find(one.timeline, *target, &message::id);
+            if (found == one.timeline.end()) {
+              from = to = 0;
+            } else {
+              constexpr std::size_t kAround = 5;
+              const auto at = static_cast<std::size_t>(found - one.timeline.begin());
+              from = at > kAround ? at - kAround : 0;
+              to = std::min(one.timeline.size(), at + kAround + 1);
+            }
+          }
           for (std::size_t i = from; i < to && i < one.timeline.size(); ++i) {
             const message& said = one.timeline[i];
             if (said.attachment && is_picture(said.attachment->kind)) {

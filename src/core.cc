@@ -211,6 +211,22 @@ struct conversation {
   std::int64_t member_count = 0;
   // Its alias, where it has one: a Matrix room's canonical #alias.
   std::optional<std::string> alias;
+  // Who has read up to where: each other person's last message read, as
+  // their receipts say; and the user's own, kept here whether it is sent or
+  // not -- what is unread is counted from it.
+  std::map<std::string, std::string> read_by;
+  std::optional<std::string> read_up_to;
+  // What is unread, as counted here from the user's own position where there
+  // is one, and as the server counts it where not.
+  [[nodiscard]] std::int64_t unread_here() const {
+    if (!read_up_to)
+      return unread;
+    std::int64_t after = 0;
+    for (auto it = timeline.rbegin(); it != timeline.rend() && it->id != *read_up_to; ++it)
+      if (!it->outgoing)
+        ++after;
+    return after;
+  }
   // When it was last read, as the model counts: the chats read longest ago
   // lose their loaded history first.
   std::uint64_t read_at = 0;
@@ -275,6 +291,12 @@ struct conversation_updated {
   std::vector<std::string> groups;
   std::int64_t member_count = 0;
   std::optional<std::string> alias;
+};
+
+// Receipts: who has read up to which message, as the server says.
+struct receipts_changed {
+  conversation_id in;
+  std::map<std::string, std::string> read_by;  // user -> the message read up to
 };
 
 // An avatar's picture, as its protocol fetched it: the bytes of its file,
@@ -369,7 +391,7 @@ using change_t = std::variant<change::connection_changed, change::account_remove
                               change::presence_changed, change::message_added, change::message_edited,
                               change::message_redacted, change::message_acknowledged, change::delivery_changed, change::reaction_changed,
                               change::typing_changed, change::history_position, change::members_changed,
-                              change::session_given, change::avatar_loaded>;
+                              change::session_given, change::avatar_loaded, change::receipts_changed>;
 
 // The model: every account, and every change applied to it.
 class model {
@@ -395,6 +417,12 @@ class model {
     std::visit([this](const auto& one) { on(one); }, what);
   }
 
+  // The user has read a chat up to a message: kept, sent or not.
+  void read_up_to(const conversation_id& id, std::string message) {
+    if (const auto found = accounts_.find(id.account); found != accounts_.end())
+      if (const auto in = found->second.conversations.find(id.id); in != found->second.conversations.end())
+        in->second.read_up_to = std::move(message);
+  }
   // A chat read now: the last to lose its history.
   void touch(const conversation_id& id) {
     if (const auto found = accounts_.find(id.account); found != accounts_.end())
@@ -523,6 +551,11 @@ class model {
   void on(const change::members_changed& one) { of(one.in).members = one.members; }
   void on(const change::session_given&) {}  // the program's to keep, not the model's
   void on(const change::avatar_loaded&) {}  // the window's to show, not the model's
+  void on(const change::receipts_changed& one) {
+    conversation& kept = of(one.in);
+    for (const auto& [user, event] : one.read_by)
+      kept.read_by.insert_or_assign(user, event);
+  }
 
   std::map<account_id, account> accounts_;
   std::uint64_t read_tick_ = 0;

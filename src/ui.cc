@@ -1208,14 +1208,14 @@ struct conversation_row : nodes::Stack {
   };
   [[nodiscard]] static view view_of(const conversation& one, bool is_chosen, bool is_muted) {
     return {display_name(one), one.timeline.empty() ? std::nullopt : std::optional<message>(one.timeline.back()),
-            one.unread, is_chosen, is_muted};
+            one.unread_here(), is_chosen, is_muted};
   }
   view shown;
 
   conversation_row(Actions* a, const conversation& one, bool is_chosen, bool is_muted)
       : actions(a), id(one.id), chosen(is_chosen), muted(is_muted), shown(view_of(one, is_chosen, is_muted)),
         face(one.id.id, display_name(one), 46.0f),
-        lines(display_name(one), one.unread, is_chosen, is_muted) {
+        lines(display_name(one), one.unread_here(), is_chosen, is_muted) {
     this->setHorizontal();
     this->setGap(12.0f);
     fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 12.0f, 0.0f, 10.0f}});
@@ -2405,6 +2405,31 @@ struct timeline_area : scene::Node {
     }
   }
 
+  // Who has read a message: those whose receipt is for it or for one after
+  // it, by their names in the chat -- its sender and the user aside.
+  const model* seen_model = nullptr;
+  std::optional<conversation_id> seen_chat;
+  std::vector<std::string> seen_by(const std::string& id, const std::string& sender) const {
+    std::vector<std::string> out;
+    const conversation* chat = seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr;
+    if (!chat)
+      return out;
+    std::map<std::string, std::size_t> at;
+    for (std::size_t i = 0; i < chat->timeline.size(); ++i)
+      at.emplace(chat->timeline[i].id, i);
+    const auto mine = at.find(id);
+    if (mine == at.end())
+      return out;
+    for (const auto& [user, event] : chat->read_by) {
+      if (user == sender || user == chat->id.account.address)
+        continue;
+      if (const auto theirs = at.find(event); theirs != at.end() && theirs->second >= mine->second)
+        out.push_back(sender_name(*chat, user));
+    }
+    std::ranges::sort(out);
+    return out;
+  }
+
   // A right press on a message: its menu, where it was pressed.
   using Node::onPointer;
   void onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
@@ -2451,7 +2476,8 @@ struct timeline_area : scene::Node {
     for (const message_bubble& one : std::get<0>(std::get<0>(timeline.fChildren).fChildren))
       if (one.bounds().contains(press.x, press.y)) {
         actions->message_menu(one.message_id, one.outgoing, one.plain,
-                              one.body.text.hasSelection() ? one.body.text.selected() : one.plain, press.x, press.y);
+                              one.body.text.hasSelection() ? one.body.text.selected() : one.plain,
+                              this->seen_by(one.message_id, one.sender), press.x, press.y);
         reply.handle();
         return;
       }
@@ -2947,6 +2973,8 @@ struct conversations_screen : nodes::Stack {
       return;
     }
     info.show(*one, now, muted.contains(one->id));
+    chat.area.seen_model = &now;
+    chat.area.seen_chat = one->id;
     const auto& all = one->timeline;
     // Where each message is in its sender's run: the first has the name,
     // the last the avatar.
@@ -4700,14 +4728,34 @@ struct context_menu : scene::Node {
     row_item<ask<Actions, &Actions::menu_edit>> edit;
     row_item<ask<Actions, &Actions::menu_copy>> copy;
     row_item<ask<Actions, &Actions::menu_delete>> remove;
-    card(Actions* a, bool own)
+    // Who has seen it, as Telegram's menu says at its top: how many, and
+    // their names under it.
+    row_item<nothing> seen;
+    std::vector<nodes::Text> seen_names;
+    nodes::Box<> seen_band{band_colour};
+    card(Actions* a, bool own, const std::vector<std::string>& readers)
         : reply("Reply", {a}, icon::back{}), edit("Edit", {a}, icon::sliders{}), copy("Copy text", {a}, icon::clip{}),
-          remove("Delete", {a}, icon::close{}) {
+          remove("Delete", {a}, icon::close{}),
+          seen(readers.empty() ? std::string("Not seen yet") : std::format("Seen by {}", readers.size()), {},
+               icon::check{}) {
+      for (std::size_t i = 0; i < readers.size() && i < 10; ++i) {
+        seen_names.emplace_back(readers[i], 13.0f, dim_colour);
+        seen_names.back().setElided(true);
+        seen_names.back().apply({.fillX = true, .margin = {0.0f, 16.0f, 2.0f, 64.0f}});
+      }
+      if (readers.size() > 10) {
+        seen_names.emplace_back(std::format("and {} more", readers.size() - 10), 13.0f, dim_colour);
+        seen_names.back().apply({.fillX = true, .margin = {0.0f, 16.0f, 2.0f, 64.0f}});
+      }
+      seen_band.apply({.fillX = true, .height = 1.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f}});
       fState.apply({.width = 210.0f, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}});
       edit.setVisible(own);
       remove.setVisible(own);
     }
     void forEachChild(auto&& f) {
+      f(seen);
+      f(seen_names);
+      f(seen_band);
       f(reply);
       f(edit);
       f(copy);
@@ -4727,7 +4775,8 @@ struct context_menu : scene::Node {
   } menu;
   Actions* actions = nullptr;
 
-  context_menu(Actions* a, bool own, float x, float y) : menu(a, own), actions(a) {
+  context_menu(Actions* a, bool own, float x, float y, const std::vector<std::string>& seen)
+      : menu(a, own, seen), actions(a) {
     fState.apply({.fill = true});
     menu.apply({.x = x, .y = y});
   }
@@ -4974,7 +5023,9 @@ struct window : scene::Node {
   // Whether the pages are still moving.
   [[nodiscard]] bool pages_moving() { return p->frame.settling(); }
 
-  void open_menu(bool own, float x, float y) { p->menu.emplace(actions, own, x, y); }
+  void open_menu(bool own, float x, float y, const std::vector<std::string>& seen) {
+    p->menu.emplace(actions, own, x, y, seen);
+  }
   void close_menu() { p->menu.reset(); }
 
   void show_notice(std::string what) {

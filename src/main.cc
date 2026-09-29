@@ -431,6 +431,42 @@ class message_store {
     if (!one.id.empty())
       append(one.in, line_of(one));
   }
+  // Who has read up to where in a chat, the user among them: one small file
+  // beside its messages, written anew when it changes, read when the chat
+  // is opened.
+  void keep_reads(const mux::conversation_id& in, const mux::conversation& chat) {
+    knot::value::object users;
+    for (const auto& [user, event] : chat.read_by)
+      users.emplace(user, knot::value(event));
+    knot::value::object all;
+    all.emplace("users", knot::value(std::move(users)));
+    if (chat.read_up_to)
+      all.emplace("me", knot::value(*chat.read_up_to));
+    const auto where = reads_file_of(in);
+    std::error_code failed;
+    std::filesystem::create_directories(where.parent_path(), failed);
+    std::ofstream(where, std::ios::binary | std::ios::trunc) << knot::to_json_string(knot::value(std::move(all)));
+  }
+  struct reads {
+    std::map<std::string, std::string> read_by;
+    std::optional<std::string> me;
+  };
+  [[nodiscard]] static reads read_reads(const mux::conversation_id& in) {
+    reads out;
+    std::ifstream file(reads_file_of(in), std::ios::binary);
+    const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    auto parsed = knot::try_read<knot::value>(std::string_view(text));
+    if (!parsed || !parsed->is<knot::value::object>())
+      return out;
+    const auto& all = parsed->as<knot::value::object>();
+    if (const auto users = all.find("users"); users != all.end() && users->second.is<knot::value::object>())
+      for (const auto& [user, event] : users->second.as<knot::value::object>())
+        if (event.is<std::string>())
+          out.read_by.emplace(user, event.as<std::string>());
+    if (const auto me = all.find("me"); me != all.end() && me->second.is<std::string>())
+      out.me = me->second.as<std::string>();
+    return out;
+  }
   void forget(const mux::conversation_id& in, const std::string& id) {
     knot::value::object line;
     line.emplace("id", knot::value(id));
@@ -460,6 +496,9 @@ class message_store {
     for (const char c : name)
       out += std::isalnum(static_cast<unsigned char>(c)) || c == '@' || c == '.' || c == '-' ? c : '_';
     return out;
+  }
+  static std::filesystem::path reads_file_of(const mux::conversation_id& in) {
+    return mux::config::state_path("messages") / safe(in.account.address) / (safe(in.id) + ".reads.json");
   }
   static std::filesystem::path file_of(const mux::conversation_id& in) {
     return mux::config::state_path("messages") / safe(in.account.address) / (safe(in.id) + ".jsonl");
@@ -656,6 +695,8 @@ struct message_menu {
   float x = 0.0f, y = 0.0f;
   // What Copy takes: the selection in it, or all of it.
   std::string copied;
+  // Who has seen it.
+  std::vector<std::string> seen;
 };
 struct close_menu {};
 struct menu_reply {};
@@ -827,8 +868,9 @@ struct actions {
   void pop_panel() { requests.emplace_back(request::pop_panel{}); }
   void toggle_info() { requests.emplace_back(request::toggle_info{}); }
   void jump_to_end() { requests.emplace_back(request::jump_to_end{}); }
-  void message_menu(std::string id, bool own, std::string text, std::string copied, float x, float y) {
-    requests.emplace_back(request::message_menu{std::move(id), own, std::move(text), x, y, std::move(copied)});
+  void message_menu(std::string id, bool own, std::string text, std::string copied, std::vector<std::string> seen,
+                    float x, float y) {
+    requests.emplace_back(request::message_menu{std::move(id), own, std::move(text), x, y, std::move(copied), std::move(seen)});
   }
   void close_menu() { requests.emplace_back(request::close_menu{}); }
   void menu_reply() { requests.emplace_back(request::menu_reply{}); }
@@ -971,6 +1013,9 @@ struct app {
     // Messages held to a number in all, least recently read out first.
     model->trim(static_cast<std::size_t>(limits.messages_in_memory), root().main().chosen);
     this->refresh();
+    // What comes into the chat being read, at its end, is read.
+    if (const auto& chosen = root().main().chosen; chosen && root().main().timeline.atEnd(40.0f))
+      this->mark_read(*chosen);
     // A room joined from a link: opened once it is here.
     if (pending_link)
       if (const auto found = this->chat_of(*pending_link)) {
@@ -996,6 +1041,10 @@ struct app {
                                [&](const mux::change::message_edited& c) { as_now(c.in, c.id); },
                                [&](const mux::change::message_redacted& c) { as_now(c.in, c.id); },
                                [&](const mux::change::reaction_changed& c) { as_now(c.in, c.id); },
+                               [&](const mux::change::receipts_changed& c) {
+                                 if (const mux::conversation* chat = model->find(c.in))
+                                   store.keep_reads(c.in, *chat);
+                               },
                                [&](const mux::change::message_acknowledged& c) {
                                  store.forget(c.in, c.local_id);
                                  as_now(c.in, c.id);
@@ -1240,6 +1289,18 @@ struct app {
 
   void apply(const request::choose& one) {
     model->touch(one.which);
+    // What was kept of its reads, where the model has nothing newer.
+    if (const mux::conversation* chat = model->find(one.which); chat && !ask.demo) {
+      auto kept = message_store::read_reads(one.which);
+      std::map<std::string, std::string> missing;
+      for (auto& [user, event] : kept.read_by)
+        if (!chat->read_by.contains(user))
+          missing.emplace(user, std::move(event));
+      if (!missing.empty())
+        model->apply(mux::change_t{mux::change::receipts_changed{one.which, std::move(missing)}});
+      if (!chat->read_up_to && kept.me)
+        model->read_up_to(one.which, *kept.me);
+    }
     // A group opened: all its members, once, where a sync gives only some.
     if (const mux::conversation* chat = model->find(one.which);
         chat && !ask.demo && chat->member_count > static_cast<std::int64_t>(chat->members.size()) &&
@@ -1252,18 +1313,24 @@ struct app {
 
   // A chat opened: read up to its last message from someone else, and the
   // people in it told so where read receipts are on.
+  // The user's own read position: kept here always -- in the model and on
+  // disk -- and told to the server only where the account's privacy lets it.
   void mark_read(const mux::conversation_id& which) {
     if (ask.demo)
-      return;
-    if (const auto account = this->find(which.account.address);
-        account != saved.end() && !mux::config::read_receipts_of(*account))
       return;
     const mux::conversation* one = model->find(which);
     if (!one)
       return;
     for (auto it = one->timeline.rbegin(); it != one->timeline.rend(); ++it)
       if (!it->outgoing && !it->id.empty()) {
-        net->mark_read(which, it->id);
+        if (one->read_up_to == it->id)
+          return;
+        const std::string id = it->id;
+        model->read_up_to(which, id);
+        store.keep_reads(which, *model->find(which));
+        if (const auto account = this->find(which.account.address);
+            account != saved.end() && mux::config::read_receipts_of(*account))
+          net->mark_read(which, id);
         return;
       }
   }
@@ -1350,7 +1417,7 @@ struct app {
   // A message's menu, and what is chosen from it.
   void apply(const request::message_menu& one) {
     menu_target = one;
-    root().open_menu(one.own, one.x, one.y);
+    root().open_menu(one.own, one.x, one.y, one.seen);
   }
   void apply(const request::close_menu&) { root().close_menu(); }
   // -- files to send: chosen with the paperclip, or dropped on the window

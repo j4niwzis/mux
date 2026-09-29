@@ -595,6 +595,29 @@ class account {
           for (const auto& one : part.timeline->events)
             event(in, one);
         sink_(change::typing_changed{in, found->second.typing});
+        // Receipts: m.receipt's content is event -> kind -> user; the public
+        // and the private m.read both say how far someone has read.
+        if (part.ephemeral && part.ephemeral->events) {
+          std::map<std::string, std::string> read_by;
+          for (const auto& event : *part.ephemeral->events) {
+            if (event.type != "m.receipt")
+              continue;
+            const knot::value tree = knot::to_value(event);
+            const knot::value* content = member(tree, "content");
+            if (!content || !content->is<knot::value::object>())
+              continue;
+            for (const auto& [event_id, kinds] : content->as<knot::value::object>()) {
+              if (!kinds.is<knot::value::object>())
+                continue;
+              for (const auto& [kind, users] : kinds.as<knot::value::object>())
+                if ((kind == "m.read" || kind == "m.read.private") && users.is<knot::value::object>())
+                  for (const auto& [user, when] : users.as<knot::value::object>())
+                    read_by.insert_or_assign(user, event_id);
+            }
+          }
+          if (!read_by.empty())
+            sink_(change::receipts_changed{in, std::move(read_by)});
+        }
       }
     if (rooms.invite)
       for (const auto& [room, part] : *rooms.invite)

@@ -41,7 +41,7 @@ struct stub {
   void pop_panel() {}
   void toggle_info() {}
   void jump_to_end() {}
-  void message_menu(std::string, bool, std::string, std::string, float, float) {}
+  void message_menu(std::string, bool, std::string, std::string, std::vector<std::string>, float, float) {}
   void close_menu() {}
   void menu_reply() {}
   void menu_edit() {}

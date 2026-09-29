@@ -1912,7 +1912,7 @@ void place_form(account_form<Actions>& form, const skia::SkRect& column, float t
 
 // Esc closes a panel: back to what is under it.
 template <class Actions>
-struct closes_on_escape : scene::Node {
+struct closes_on_escape : nodes::Stack {
   Actions* actions = nullptr;
   explicit closes_on_escape(Actions* a) : actions(a) {}
 
@@ -2321,57 +2321,92 @@ template <class Actions>
 struct accounts_panel : closes_on_escape<Actions> {
   static constexpr int kTab = 2;
   static constexpr float kListWidth = 280.0f;
-  static constexpr float kPad = 8.0f;
 
   std::optional<std::string> selected;
+  // The proxy profiles, for adding an account through one.
+  std::vector<config::proxy_settings> proxies;
+
   // Its ← goes back from an account's pages to the list, and from the list
   // to the chats.
   page_header<ask<Actions, &Actions::accounts_back>, ask<Actions, &Actions::accounts_back>> header;
-  nodes::Box<> side{sidebar_colour};
-  nodes::ScrollContainer<nodes::Flow<std::vector<account_entry<Actions>>>> list{
-      nodes::Flow<std::vector<account_entry<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
-  row_item<ask<Actions, &Actions::open_new_account>> add;
-  account_pages<Actions> pages;
-  // The proxy profiles, for adding an account through one.
-  std::vector<config::proxy_settings> proxies;
-  nodes::Text message{"", 13.0f, error_colour};
-  // No account chosen, or the chosen one.
-  std::variant<nodes::Text, account_editor<Actions>, add_account_pane<Actions>, account_privacy<Actions>,
-               account_proxy<Actions>>
-      detail{
-      std::in_place_index<0>, "Choose an account.", 15.0f, dim_colour};
-  // What is beside the list coming in when another is chosen: sliding and
-  // fading in.
-  skiff::paint::Tween swap{1.0f, 200.0f, skiff::paint::movement::subtle{}};
+  // Under the header: the list down the side, and beside it what is chosen.
+  struct body_row : nodes::Stack {
+    struct side_column : nodes::Stack {
+      row_item<ask<Actions, &Actions::open_new_account>> add;
+      account_pages<Actions> pages;
+      nodes::Text message{"", 13.0f, error_colour};
+      nodes::ScrollContainer<nodes::Flow<std::vector<account_entry<Actions>>>> list{
+          nodes::Flow<std::vector<account_entry<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
+      explicit side_column(Actions* a) : add("Add account", {a}, icon::plus{}), pages(a) {
+        fState.apply({.fillY = true, .width = kListWidth});
+        pages.setVisible(false);
+        pages.apply({.fillX = true, .autoSize = scene::axes::kY});
+        message.setWrapped(true);
+        message.apply({.fillX = true, .margin = scene::Margin::all(8.0f)});
+        list.apply({.fillX = true, .grow = scene::axes::kY});
+        std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
+      }
+      void forEachChild(auto&& f) {
+        f(add);
+        f(pages);
+        f(message);
+        f(list);
+      }
+      void drawSelf(skia::SkCanvas* canvas, float alpha) {
+        if (skia::SkFont* font = skiff::paint::defaultFont())
+          skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 0.0f, sidebar_colour, alpha);
+      }
+    } side;
+    struct detail_column : nodes::Stack {
+      // No account chosen, or the chosen one, or adding one.
+      std::variant<nodes::Text, account_editor<Actions>, add_account_pane<Actions>, account_privacy<Actions>,
+                   account_proxy<Actions>>
+          detail{std::in_place_index<0>, "Choose an account.", 15.0f, dim_colour};
+      detail_column() {
+        fState.apply({.fillY = true, .grow = scene::axes::kX, .padding = {24.0f, 28.0f, 24.0f, 28.0f}});
+      }
+      void forEachChild(auto&& f) { f(detail); }
+    } main;
+    explicit body_row(Actions* a) : side(a) {
+      this->setHorizontal();
+      fState.apply({.fillX = true, .grow = scene::axes::kY});
+    }
+    void forEachChild(auto&& f) {
+      f(side);
+      f(main);
+    }
+  } body;
+  row_item<ask<Actions, &Actions::open_new_account>>& add = body.side.add;
+  account_pages<Actions>& pages = body.side.pages;
+  nodes::Text& message = body.side.message;
+  decltype(body.side.list)& list = body.side.list;
+  decltype(body.main.detail)& detail = body.main.detail;
 
+  // What is beside the list coming in when another is chosen, fading in.
+  skiff::paint::Tween swap{1.0f, 200.0f, skiff::paint::movement::subtle{}};
   void begin_swap() {
     swap.jump(0.0f);
     swap.setTarget(1.0f);
+    this->fade();
+  }
+  void fade() {
+    const float value = swap.value();
+    std::visit([value](auto& one) { one.fState.setAlpha(value); }, detail);
   }
   [[nodiscard]] bool settling() const { return swap.moving(); }
   void update(double now_ms) {
     if (swap.step(now_ms))
-      this->invalidateLayout();
+      this->fade();
   }
 
   explicit accounts_panel(Actions* a)
-      : closes_on_escape<Actions>(a), header("Accounts", {a}, {a}, true, false), add("Add account", {a}, icon::plus{}),
-        pages(a) {
-    pages.setVisible(false);
+      : closes_on_escape<Actions>(a), header("Accounts", {a}, {a}, true, false), body(a) {
     this->fState.apply({.fill = true});
-    side.apply({.fill = true});
-    std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
-    message.setWrapped(true);
   }
 
   void forEachChild(auto&& f) {
-    f(side);
     f(header);
-    f(list);
-    f(add);
-    f(pages);
-    f(message);
-    f(detail);
+    f(body);
   }
 
   // The saved accounts, with what the model says of each; the chosen one's
@@ -2484,42 +2519,6 @@ struct accounts_panel : closes_on_escape<Actions> {
     this->invalidateLayout();
   }
 
-  void layoutChildren() {
-    const skia::SkRect whole = this->fState.contentBox();
-    header.fState.arrange(0.0f, 0.0f);
-    scene::layout(header, whole);
-    const skia::SkRect box = skia::SkRect::MakeLTRB(whole.fLeft, header.bounds().fBottom, whole.fRight, whole.fBottom);
-    const float list_width = std::min(kListWidth, box.width() * 0.45f);
-    const skia::SkRect left = skia::SkRect::MakeLTRB(box.fLeft, box.fTop, box.fLeft + list_width, box.fBottom);
-    scene::layout(side, left);
-    pages.apply({.width = left.width(), .height = left.height()});
-    pages.fState.arrange(0.0f, 0.0f);
-    scene::layout(pages, left);
-    add.fState.arrange(0.0f, 0.0f);
-    scene::layout(add, left);
-    float y = add.bounds().fBottom - box.fTop + 2.0f;
-    if (!message.text().empty()) {
-      message.setMaxWidth(list_width - 2 * kPad);
-      message.fState.arrange(kPad, y);
-      scene::layout(message, left);
-      y = message.bounds().fBottom - box.fTop + kPad;
-    }
-    list.apply({.width = list_width, .height = std::max(0.0f, box.height() - y)});
-    list.fState.arrange(0.0f, y);
-    scene::layout(list, box);
-
-    const skia::SkRect right = skia::SkRect::MakeLTRB(left.fRight, box.fTop, box.fRight, box.fBottom);
-    const float value = swap.value();
-    const skia::SkRect column = form_column(right, 520.0f, 24.0f);
-    const skia::SkRect moved = skia::SkRect::MakeXYWH(column.fLeft + (1.0f - value) * 28.0f, column.fTop, column.width(), column.height());
-    std::visit(
-        [&](auto& one) {
-          one.fState.setAlpha(value);
-          one.fState.arrange(0.0f, 0.0f);
-          scene::layout(one, moved);
-        },
-        detail);
-  }
 };
 
 // ---- the drawer -------------------------------------------------------------------

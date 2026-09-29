@@ -761,6 +761,9 @@ struct message_bubble : nodes::Stack {
       // The time inside the last line of the text, where that line leaves
       // room for it, as Telegram's: out of the column's flow, at its end.
       nodes::Text inline_time;
+      // The last of a run's tail, as Telegram's: out of the flow, at the
+      // corner on the sender's side, in the bubble's colour.
+      std::optional<nodes::Icon> tail;
     } parts;
     skia::SkColor plate = bubble_colour;
     // Its least width as the message asks it (a quote's), and as the time
@@ -784,7 +787,7 @@ struct message_bubble : nodes::Stack {
     // where it is narrower; on a line of its own only where they do not.
     // Decided from the last layout; a change is laid out at the next.
     void update(double now_ms) {
-      auto& [name, quote, picture, file, text, cards, preview, reactions, time, inline_time] = parts;
+      auto& [name, quote, picture, file, text, cards, preview, reactions, time, inline_time, tail] = parts;
       if (!cards.empty() || preview || (!text.visible() && !reactions)) {
         time_placed = true;  // under it, as it is
         return;
@@ -829,6 +832,24 @@ struct message_bubble : nodes::Stack {
       }
     }
     float time_drop = 0.0f;
+    // The tail: 10 by 12, its straight side on the bubble's edge, curving
+    // down and out to its tip at the bubble's bottom.
+    static IconShape tail_shape(bool mine) {
+      const float side = mine ? -5.0f : 5.0f, tip = -side;
+      return {{{marks::path{{steps::move{side + (mine ? -1.0f : 1.0f), -6.0f}, steps::line{side, -6.0f},
+                             steps::cubic{side, 1.0f, side * 0.2f, 5.0f, tip, 6.0f},
+                             steps::line{side + (mine ? -1.0f : 1.0f), 6.0f}, steps::close{}}},
+                0.0f, true}}};
+    }
+    void grow_tail(bool mine) {
+      parts.tail.emplace(tail_shape(mine), plate);
+      parts.tail->apply({.place = mine ? scene::anchor::kBottomRight : scene::anchor::kBottomLeft,
+                         .x = mine ? kPadX + 10.0f : -(kPadX + 10.0f),
+                         .y = kPadY,
+                         .width = 10.0f,
+                         .height = 12.0f});
+      fState.apply({.corners = mine ? scene::Corners{12.0f, 12.0f, 0.0f, 12.0f} : scene::Corners{12.0f, 12.0f, 12.0f, 0.0f}});
+    }
     // Before its first layout, where the time goes is guessed from the text
     // wrapped at the bubble's widest -- where it does wrap, but in a chat
     // narrower than a bubble. So a bubble made anew -- sent, edited, reacted
@@ -837,7 +858,7 @@ struct message_bubble : nodes::Stack {
     // checks the guess, above.
     bool guessed = false;
     void guess_time(skia::SkFont& font) {
-      auto& [name, quote, picture, file, text, cards, preview, reactions, time, inline_time] = parts;
+      auto& [name, quote, picture, file, text, cards, preview, reactions, time, inline_time, tail] = parts;
       if (std::exchange(guessed, true) || text.text().empty())
         return;
       const skiff::paint::Painter p(nullptr, font);
@@ -858,7 +879,7 @@ struct message_bubble : nodes::Stack {
                 .time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour),
                 .inline_time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour)},
           plate(mine ? out_bubble_colour : bubble_colour) {
-      auto& [name, quote, picture, file, text, cards, preview, reactions, time, inline_time] = parts;
+      auto& [name, quote, picture, file, text, cards, preview, reactions, time, inline_time, tail] = parts;
       this->setGap(2.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
                     .padding = {kPadY, kPadX, kPadY, kPadX}, .cornerRadius = 12.0f, .background = mine ? out_bubble_colour : bubble_colour});
@@ -983,6 +1004,12 @@ struct message_bubble : nodes::Stack {
       for (const auto& [url, room] : shown.cards)
         body.parts.cards.push_back(card_of(url, room, now));
     }
+    // The last of a run: its bottom corner on the sender's side squared and
+    // a tail grown from it, as Telegram draws one -- not for a line of what
+    // was done, nor a picture with nothing under it.
+    const bool bare_picture = said.attachment && said.body.plain.empty() && !said.body.html && body.parts.picture;
+    if (last_of_run && !said.service && !bare_picture)
+      body.grow_tail(outgoing);
     // The first link's preview, where it has come.
     if (const auto link = first_link_of(said); link && now)
       if (const auto found = now->previews.find(*link); found != now->previews.end()) {

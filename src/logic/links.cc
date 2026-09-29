@@ -59,6 +59,20 @@ using link_t = std::variant<link::person, link::room, link::xmpp_address>;
   return link::room{std::move(id), std::move(event), std::move(via)};
 }
 
+// A word shaped as a Matrix ID: a sigil, a name, a colon and a server; or
+// a room's ID of room version 12 and on (MSC4291), which has no server: '!'
+// and the 43 characters of its create event's hash, unpadded base64url.
+[[nodiscard]] inline bool id_shaped(std::string_view word) {
+  if (word.size() < 4)
+    return false;
+  if (const auto colon = word.find(':'); colon != std::string_view::npos)
+    return colon >= 2 && colon + 1 < word.size();
+  const auto base64url = [](char c) {
+    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_';
+  };
+  return word.size() == 44 && word.front() == '!' && std::ranges::all_of(word.substr(1), base64url);
+}
+
 namespace detail {
 // What follows a '?': the servers of its via=.
 inline std::vector<std::string> via_of(std::string_view query) {

@@ -113,6 +113,13 @@ TEST(Links, ReadIntoWhatTheyPointAt) {
   EXPECT_EQ(logic::link_of("matrix:x/whatever"), std::nullopt);
 }
 
+TEST(Links, IdsOfEveryRoomVersion) {
+  EXPECT_TRUE(logic::id_shaped("#ru4:ed25519.uk"));
+  EXPECT_TRUE(logic::id_shaped("!OgeJ1T_3F4fAL2o-vE2tfsEopmJ3qZm021t1pJ_J82w"));
+  EXPECT_FALSE(logic::id_shaped("!short"));
+  EXPECT_FALSE(logic::id_shaped("@x"));
+}
+
 TEST(Links, ARoomNotJoinedIsJoinedThroughAMatrixAccount) {
   model now;
   const account_id me{protocol::matrix{}, "@me:x.org"};

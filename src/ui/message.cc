@@ -218,8 +218,7 @@ struct mentioned {
   };
   // A word shaped as a Matrix ID: a sigil, a name, a colon, a server.
   const auto id_in = [](std::string_view word) -> std::optional<logic::link_t> {
-    const auto colon = word.find(':');
-    if (word.size() < 4 || colon == std::string_view::npos || colon < 2 || colon + 1 >= word.size())
+    if (!logic::id_shaped(word))
       return std::nullopt;
     return logic::matrix_id_of(std::string(word));
   };
@@ -350,6 +349,7 @@ struct message_bubble : nodes::Stack {
   // same room, empty, beside the rest.
   avatar_mark face;
   // What it answers: a bar in the sender's colour, beside who and a line.
+  static constexpr float kReplyLineMax = 240.0f;  // tdesktop's maxSignatureSize
   struct quote_row : nodes::Stack {
     struct bar : scene::Node {
       skia::SkColor colour;
@@ -363,10 +363,13 @@ struct message_bubble : nodes::Stack {
           : who(std::move(name), 13.0f, colour, true), said(std::move(line), 13.0f, dim_colour) {
         this->setGap(1.0f);
         fState.apply({.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle});
-        for (nodes::Text* each : {&who, &said}) {
-          each->setElided(true);
-          each->setMaxWidth(kMaxWidth - 10.0f);
-        }
+        // As tdesktop's reply: the name as wide as it is, the line of the
+        // message at most maxSignatureSize (240) -- so a short answer to a
+        // long message does not stretch its bubble to the full width.
+        who.setElided(true);
+        who.setMaxWidth(kMaxWidth - 10.0f);
+        said.setElided(true);
+        said.setMaxWidth(kReplyLineMax);
       }
       void forEachChild(auto&& f) {
         f(who);

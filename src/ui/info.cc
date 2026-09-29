@@ -816,23 +816,19 @@ struct info_panel : nodes::Stack {
       using mute_tile = action_tile<ask<Actions, &Actions::toggle_mute>>;
       using manage_tile = action_tile<ask<Actions, &Actions::open_manage>>;
       using leave_tile = action_tile<ask<Actions, &Actions::leave_chat>>;
-      using events_tile = action_tile<ask<Actions, &Actions::flip_chat_room_events>>;
       struct parts_t {
         mute_tile mute;
-        events_tile events;
         manage_tile manage;
         leave_tile leave;
       } parts;
       tiles_row(Actions* a, bool muted)
           : parts{.mute = mute_tile(muted ? "Unmute" : "Mute", icon::bell{}, {a}),
-                .events = events_tile("Events", icon::info{}, {a}),
                   .manage = manage_tile("Manage", icon::sliders{}, {a}),
                   .leave = leave_tile("Leave", icon::leave{}, {a})} {
         this->setHorizontal();
         this->setGap(8.0f);
         fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}});
         parts.mute.apply({.grow = scene::axes::kX});
-        parts.events.apply({.grow = scene::axes::kX});
         parts.manage.apply({.grow = scene::axes::kX});
         parts.leave.apply({.grow = scene::axes::kX});
       }

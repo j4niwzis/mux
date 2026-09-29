@@ -96,6 +96,7 @@ void app::apply(const request::open_manage&) {
                                      .history = chat->history,
                                      .version = chat->version,
                                      .muted = muted.contains(chat->id),
+                                     .events_shown = this->room_events_shown(chat->id),
                                      .mine = level_of(chat->id.account.address),
                                      .needs = chat->needs};
   // Element's privileged users: those the power levels name with a level of

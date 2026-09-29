@@ -184,6 +184,9 @@ struct conversation {
   // Where to page back from, in the protocol's terms: a MAM id, a Matrix
   // prev_batch. Nothing where the beginning has been reached.
   std::optional<std::string> history_from;
+  // When it was last read, as the model counts: the chats read longest ago
+  // lose their loaded history first.
+  std::uint64_t read_at = 0;
   // A Matrix space, and the rooms it holds: a folder of chats, not a chat.
   bool space = false;
   std::vector<std::string> children;
@@ -363,6 +366,38 @@ class model {
     std::visit([this](const auto& one) { on(one); }, what);
   }
 
+  // A chat read now: the last to lose its history.
+  void touch(const conversation_id& id) {
+    if (const auto found = accounts_.find(id.account); found != accounts_.end())
+      if (const auto in = found->second.conversations.find(id.id); in != found->second.conversations.end())
+        in->second.read_at = ++read_tick_;
+  }
+  // The messages held, least recently used first out: past `budget` in
+  // all, the chats read longest ago keep only their last message -- what
+  // the list shows of them -- and page back from their newest when read
+  // again, what comes twice being one by its id. `keep`, the chat being
+  // read, keeps all of its.
+  void trim(std::size_t budget, const std::optional<conversation_id>& keep) {
+    std::size_t held = 0;
+    std::vector<conversation*> order;
+    for (auto& [id, one] : accounts_)
+      for (auto& [key, chat] : one.conversations) {
+        held += chat.timeline.size();
+        if (chat.timeline.size() > 1 && (!keep || chat.id != *keep))
+          order.push_back(&chat);
+      }
+    if (held <= budget)
+      return;
+    std::ranges::sort(order, {}, &conversation::read_at);
+    for (conversation* chat : order) {
+      if (held <= budget)
+        break;
+      held -= chat->timeline.size() - 1;
+      chat->timeline.erase(chat->timeline.begin(), chat->timeline.end() - 1);
+      chat->history_from = std::string();  // from the newest
+    }
+  }
+
  private:
   account& of(const account_id& id) {
     account& made = accounts_[id];
@@ -459,6 +494,7 @@ class model {
   void on(const change::avatar_loaded&) {}  // the window's to show, not the model's
 
   std::map<account_id, account> accounts_;
+  std::uint64_t read_tick_ = 0;
 };
 
 // Changes from the network's thread to the UI's: pushed on one, taken all

@@ -649,13 +649,17 @@ struct app {
         this->take_avatar(*picture, true);
       model->apply(one);
     }
+    // Messages held to a number in all, least recently read out first.
+    model->trim(kMessageBudget, root().main().chosen);
     this->refresh();
   }
+  static constexpr std::size_t kMessageBudget = 5000;
 
   // -- avatars: what the chats and the people in them look like
   // Fetched once each, kept on disk under the cache, shown by what they are
   // of: a chat by its id, a person by theirs.
-  std::set<std::string> avatars_asked;
+  // What is being fetched from a server, not to be asked for twice.
+  std::set<std::string> avatars_fetched;
   static std::filesystem::path avatar_file(std::string_view source) {
     std::string name;
     for (const char c : source)
@@ -664,7 +668,7 @@ struct app {
   }
   void take_avatar(const mux::change::avatar_loaded& picture, bool fresh) {
     if (auto image = skia::decodeImage(picture.bytes.data(), picture.bytes.size())) {
-      mux::ui::avatar_images()[picture.key] = std::move(image);
+      mux::ui::avatar_images().put(picture.key, std::move(image));
       scene.state().markDamaged();
     }
     if (fresh) {
@@ -672,6 +676,35 @@ struct app {
       std::error_code failed;
       std::filesystem::create_directories(where.parent_path(), failed);
       std::ofstream(where, std::ios::binary) << picture.bytes;
+      avatars_fetched.erase(picture.source);
+      if (++avatars_written % 50 == 1)
+        prune_avatar_files();
+    }
+  }
+  // The pictures on disk held to a size: the least recently used go first,
+  // a file's time being when it was last read or written.
+  static constexpr std::uintmax_t kAvatarDiskBudget = 128u << 20;
+  std::size_t avatars_written = 0;
+  static void prune_avatar_files() {
+    std::error_code failed;
+    const auto directory = mux::config::cache_path("avatars");
+    std::vector<std::pair<std::filesystem::file_time_type, std::filesystem::path>> files;
+    std::uintmax_t total = 0;
+    for (const auto& entry : std::filesystem::directory_iterator(directory, failed)) {
+      if (!entry.is_regular_file(failed))
+        continue;
+      total += entry.file_size(failed);
+      files.emplace_back(entry.last_write_time(failed), entry.path());
+    }
+    if (total <= kAvatarDiskBudget)
+      return;
+    std::ranges::sort(files);
+    for (const auto& [when, path] : files) {
+      if (total <= kAvatarDiskBudget)
+        break;
+      const auto size = std::filesystem::file_size(path, failed);
+      if (std::filesystem::remove(path, failed))
+        total -= size;
     }
   }
   // What the model has pictures of and the window has not: from the disk
@@ -680,13 +713,18 @@ struct app {
     if (ask.demo)
       return;
     const auto want = [&](const mux::account_id& of, const std::optional<std::string>& source, const std::string& key) {
-      if (!source || source->empty() || !avatars_asked.insert(key + "\n" + *source).second)
+      // Shown already, or on its way: nothing to do.
+      if (!source || source->empty() || mux::ui::avatar_images().has(key) || avatars_fetched.contains(*source))
         return;
-      if (std::ifstream file{avatar_file(*source), std::ios::binary}) {
+      const auto where = avatar_file(*source);
+      if (std::ifstream file{where, std::ios::binary}) {
         std::string bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        std::error_code failed;
+        std::filesystem::last_write_time(where, std::filesystem::file_time_type::clock::now(), failed);  // used now
         this->take_avatar(mux::change::avatar_loaded{key, *source, std::move(bytes)}, false);
         return;
       }
+      avatars_fetched.insert(*source);
       net->fetch_avatar(of, *source, key);
     };
     for (const auto& [id, account] : model->accounts())
@@ -814,6 +852,7 @@ struct app {
   }
 
   void apply(const request::choose& one) {
+    model->touch(one.which);
     root().main().chosen = one.which;
     root().main().show(*model);
     this->mark_read(one.which);

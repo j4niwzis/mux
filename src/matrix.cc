@@ -116,8 +116,10 @@ class account {
     loop_->spawn([this, room = std::move(room), from = std::move(from)] {
       if (!api_)
         return;
+      // No token: from the room's newest, back.
       auto got = perform(*api_, loom::cs::get_room_events{.room_id = room,
-                                                          .from = from,
+                                                          .from = from.empty() ? std::nullopt
+                                                                               : std::optional<std::string>(from),
                                                           .dir = loom::cs::get_room_events::dir_values::b{},
                                                           .limit = 40});
       if (!got) {

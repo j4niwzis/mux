@@ -366,21 +366,65 @@ inline void draw_icon(skia::SkCanvas* canvas, const icon_t& which, const skia::S
 }
 
 // A round avatar: the colour of `id`, and the initials of `name` in it.
-// The pictures fetched for avatars, by what they are of: a chat's id, a
-// person's. Where one has none, its initials are drawn.
-inline std::map<std::string, skia::Sp<skia::SkImage>, std::less<>>& avatar_images() {
-  static std::map<std::string, skia::Sp<skia::SkImage>, std::less<>> images;
+// The pictures fetched for avatars, decoded, by what they are of: a chat's
+// id, a person's. Least recently drawn first out, past a number of bytes;
+// what is out is read from the disk again when it is wanted.
+class avatar_cache {
+ public:
+  static constexpr std::size_t kBudget = 64u << 20;
+
+  // A picture, counted as used now.
+  [[nodiscard]] const skia::Sp<skia::SkImage>* find(std::string_view key) {
+    const auto found = images_.find(key);
+    if (found == images_.end())
+      return nullptr;
+    order_.splice(order_.begin(), order_, found->second.used);
+    return &found->second.image;
+  }
+  [[nodiscard]] bool has(std::string_view key) const { return images_.contains(key); }
+  void put(std::string key, skia::Sp<skia::SkImage> image) {
+    if (!image)
+      return;
+    if (const auto found = images_.find(key); found != images_.end()) {
+      bytes_ -= found->second.bytes;
+      order_.erase(found->second.used);
+      images_.erase(found);
+    }
+    const std::size_t size = static_cast<std::size_t>(image->width()) * static_cast<std::size_t>(image->height()) * 4u;
+    order_.push_front(key);
+    images_.emplace(std::move(key), entry{std::move(image), order_.begin(), size});
+    bytes_ += size;
+    while (bytes_ > kBudget && order_.size() > 1) {
+      const auto oldest = images_.find(order_.back());
+      bytes_ -= oldest->second.bytes;
+      images_.erase(oldest);
+      order_.pop_back();
+    }
+  }
+
+ private:
+  struct entry {
+    skia::Sp<skia::SkImage> image;
+    std::list<std::string>::iterator used;
+    std::size_t bytes = 0;
+  };
+  std::list<std::string> order_;  // the most recently used first
+  std::map<std::string, entry, std::less<>> images_;
+  std::size_t bytes_ = 0;
+};
+inline avatar_cache& avatar_images() {
+  static avatar_cache images;
   return images;
 }
 
 inline void draw_avatar(skia::SkCanvas* canvas, const skia::SkRect& disc, std::string_view id, std::string_view name,
                         float alpha) {
-  if (const auto found = avatar_images().find(id); found != avatar_images().end() && found->second) {
+  if (const skia::Sp<skia::SkImage>* found = avatar_images().find(id); found && *found) {
     const int saved = canvas->save();
     canvas->clipRRect(skia::SkRRect::MakeOval(disc), true);
     skia::SkPaint paint;
     paint.setAlphaf(alpha);
-    canvas->drawImageRect(found->second, disc, skia::SkSamplingOptions(skia::SkFilterMode::kLinear), &paint);
+    canvas->drawImageRect(*found, disc, skia::SkSamplingOptions(skia::SkFilterMode::kLinear), &paint);
     canvas->restoreToCount(saved);
     return;
   }
@@ -2366,27 +2410,19 @@ struct conversations_screen : nodes::Stack {
     const conversation* one = last_model->find(*chosen);
     if (!one)
       return;
-    const auto found = std::ranges::find(one->timeline, id, &message::id);
-    if (found != one->timeline.end()) {
-      const auto from_end = static_cast<std::size_t>(one->timeline.end() - found);
-      if (from_end + 10 > window) {
-        window = from_end + 10;
-        this->show_conversation(*last_model);
-      }
-    } else if (history_from) {
-      // Not loaded yet: the history is paged back until it is.
-      history_asked = history_from;
-      actions->load_older(*chosen, *history_from);
-    }
+    // Made, loaded or paged back to at the next frames, as update() finds it.
     jumping_to = std::move(id);
     jump_tries = 0;
   }
 
   void update(double) {
-    // A message jumped to: into view, flashed, once it is laid out.
-    if (jumping_to) {
+    // A message jumped to: made into a bubble where it is loaded, paged back
+    // to where it is not -- page after page, as long as there is history --
+    // and once it is laid out, brought into view and flashed.
+    if (jumping_to && chosen && last_model) {
       auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
       const auto it = std::ranges::find(entries, *jumping_to, &message_bubble::message_id);
+      const conversation* one = last_model->find(*chosen);
       if (it != entries.end() && !it->bounds().isEmpty()) {
         const float to = timeline.current() + (it->bounds().fTop - timeline.bounds().fTop) - 60.0f;
         timeline.scrollTo(std::max(0.0f, to));
@@ -2394,8 +2430,20 @@ struct conversations_screen : nodes::Stack {
         it->body.flash.setTarget(0.0f);
         it->body.markDamaged();
         jumping_to.reset();
-      } else if (++jump_tries > 600) {
-        jumping_to.reset();  // ten seconds of frames, and it never came
+      } else if (one == nullptr) {
+        jumping_to.reset();
+      } else if (const auto found = std::ranges::find(one->timeline, *jumping_to, &message::id);
+                 found != one->timeline.end()) {
+        const auto from_end = static_cast<std::size_t>(one->timeline.end() - found);
+        if (from_end + 10 > window) {
+          window = from_end + 10;
+          this->show_conversation(*last_model);
+        }
+      } else if (history_from && history_asked != history_from) {
+        history_asked = history_from;
+        actions->load_older(*chosen, *history_from);
+      } else if (!history_from && ++jump_tries > 120) {
+        jumping_to.reset();  // the beginning, and it was not there
       }
     }
     if (side.search.field.text() != searched && last_model) {

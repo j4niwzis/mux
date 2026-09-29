@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.app.screens: the window's screens, made for this program's actions once
-// -- in this module's units, side by side -- and not again in every unit of
+// -- in the plain units screens_*.cc, side by side -- and not again in every unit of
 // the program that reaches them. The declarations here say where they are
 // made. They are not exported (an explicit instantiation names nothing), but
 // whoever imports this module reaches them, and makes none of them itself.

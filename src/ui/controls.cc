@@ -16,6 +16,7 @@ import mux.config;
 import :base;
 import :icons;
 import :avatars;
+import :themes;
 
 export namespace mux::ui {
 

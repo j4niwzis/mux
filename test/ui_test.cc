@@ -104,10 +104,14 @@ struct stub {
   void flip_account_notify_sound() {}
   void set_chat_notify(mux::config::notify_mode_t) {}
   void set_room_event_kind(mux::choice_level_t, std::optional<mux::room_event_t>, std::optional<bool>) {}
+  void set_receipts_shown(mux::choice_level_t, std::optional<bool>) {}
+  void set_jump_search(mux::choice_level_t, std::optional<std::int64_t>) {}
+  void press_loader(std::string) {}
+  void stop_jump() {}
   void join_room_card() {}
   void toggle_emoji() {}
   void close_emoji() {}
-  void insert_emoji(std::string) {}
+  void insert_emoji(std::string, std::string = {}) {}
   void menu_save_gif() {}
   void show_gifs() {}
   void send_gif(std::string) {}

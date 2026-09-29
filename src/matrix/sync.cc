@@ -384,12 +384,30 @@ void account<Sink>::conversation(const conversation_id& in, const loom::client::
                                      .emotes = emotes_of(kept)});
 }
 
-// A pack's images, as MSC2545 has them: "images", shortcode to {"url"}.
+// Whether a usage list lets an image be an emoji: MSC2545's "usage", on the
+// image or else on its pack -- "emoticon", "sticker", or both where it is
+// missing or empty.
+inline bool usable_as_emoji(const knot::value* usage) {
+  if (!usage || !usage->is<knot::value::array>() || usage->as<knot::value::array>().empty())
+    return true;
+  for (const auto& one : usage->as<knot::value::array>())
+    if (one.is<std::string>() && std::visit([](auto of) { return of.emoticon; }, image_usage_of(one.as<std::string>())))
+      return true;
+  return false;
+}
+
+// A pack's images, as MSC2545 has them: "images", shortcode to {"url"},
+// those that may be emoji.
 inline void emotes_from(const knot::value* content, std::vector<mux::emote>& into) {
   const knot::value* images = content ? member(*content, "images") : nullptr;
   if (!images || !images->is<knot::value::object>())
     return;
+  const knot::value* pack = member(*content, "pack");
+  const knot::value* pack_usage = pack ? member(*pack, "usage") : nullptr;
   for (const auto& [shortcode, image] : images->as<knot::value::object>()) {
+    const knot::value* own_usage = member(image, "usage");
+    if (!usable_as_emoji(own_usage ? own_usage : pack_usage))
+      continue;
     const auto url = text(member(image, "url"));
     if (url && url->starts_with("mxc://") &&
         std::ranges::find(into, shortcode, &mux::emote::shortcode) == into.end())
@@ -409,6 +427,25 @@ auto account<Sink>::emotes_of(const loom::client::joined_room& kept) const -> st
       continue;
     const knot::value tree = knot::to_value(one);
     emotes_from(member(tree, "content"), out);
+  }
+  // And the packs of other rooms the user made usable everywhere, as Cinny
+  // and Sable do: im.ponies.emote_rooms, room to the state keys of its packs.
+  if (const auto chosen = state_.account_data.find("im.ponies.emote_rooms"); chosen != state_.account_data.end()) {
+    const knot::value tree = knot::to_value(chosen->second);
+    const knot::value* content = member(tree, "content");
+    const knot::value* rooms = content ? member(*content, "rooms") : nullptr;
+    if (rooms && rooms->is<knot::value::object>())
+      for (const auto& [room, packs] : rooms->as<knot::value::object>()) {
+        const auto joined = state_.joined.find(room);
+        if (joined == state_.joined.end() || !packs.is<knot::value::object>())
+          continue;
+        for (const auto& [state_key, ignored] : packs.as<knot::value::object>())
+          for (const auto& [key, one] : joined->second.state.events)
+            if (key.second == state_key && std::visit([](auto of) { return of.emotes; }, state_type_of(key.first))) {
+              const knot::value pack = knot::to_value(one);
+              emotes_from(member(pack, "content"), out);
+            }
+      }
   }
   return out;
 }

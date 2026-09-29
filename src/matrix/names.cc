@@ -217,6 +217,24 @@ using state_type_t = std::variant<state_type::space_child, state_type::room_emot
       {"m.space.child", state_type::space_child{}}, {"im.ponies.room_emotes", state_type::room_emotes{}}};
   return named<state_type_t, state_type::other>(known, name);
 }
+// What an image of a pack may be used as (MSC2545's "usage").
+namespace image_usage {
+struct emoticon {
+  static constexpr bool emoticon = true;
+};
+struct sticker {
+  static constexpr bool emoticon = false;
+};
+struct other {
+  static constexpr bool emoticon = false;
+};
+}  // namespace image_usage
+using image_usage_t = std::variant<image_usage::emoticon, image_usage::sticker, image_usage::other>;
+[[nodiscard]] inline image_usage_t image_usage_of(std::optional<std::string_view> name) {
+  static const std::unordered_map<std::string_view, image_usage_t> known = {
+      {"emoticon", image_usage::emoticon{}}, {"sticker", image_usage::sticker{}}};
+  return named<image_usage_t, image_usage::other>(known, name);
+}
 // A server's errcode: the ones that say the session is gone, and the rest.
 namespace errcode {
 struct session_gone {  // M_UNKNOWN_TOKEN, M_FORBIDDEN

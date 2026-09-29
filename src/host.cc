@@ -60,6 +60,8 @@ inline void load_fonts(const std::string& directory) {
     primary = manager->createStyleSet(0)->createTypeface(0);
   if (primary)
     skiff::paint::fonts().setPrimary(primary);
+  // Where a character no face loaded here has is looked for: the system's.
+  skiff::paint::fonts().setFontManager(manager);
   // What every Text and widget draws with. Without it they draw nothing:
   // the window was its boxes and no words.
   static skia::SkFont font(primary);

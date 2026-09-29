@@ -324,6 +324,8 @@ struct conversation {
   std::vector<std::string> pinned;
   // The custom emoji that can be used in it: its packs' and the user's own.
   std::vector<emote> emotes;
+  // And the stickers, of the same packs.
+  std::vector<emote> stickers;
   // Who may join it and read its history, and each one's say in it: a
   // Matrix room's power levels, those not listed having the default.
   join_rule_t join_rule = join_rule::invite{};
@@ -472,6 +474,7 @@ struct conversation_updated {
   std::optional<std::string> alias;
   std::vector<std::string> pinned;
   std::vector<emote> emotes;
+  std::vector<emote> stickers;
   join_rule_t join_rule = join_rule::invite{};
   history_rule_t history = history_rule::shared{};
   std::map<std::string, std::int64_t> powers;
@@ -736,6 +739,7 @@ class model {
     kept.alias = one.alias;
     kept.pinned = one.pinned;
     kept.emotes = one.emotes;
+    kept.stickers = one.stickers;
     kept.join_rule = one.join_rule;
     kept.history = one.history;
     kept.powers = one.powers;

@@ -245,12 +245,15 @@ using state_type_t = std::variant<state_type::space_child, state_type::room_emot
 namespace image_usage {
 struct emoticon {
   static constexpr bool as_emoji = true;
+  static constexpr bool as_sticker = false;
 };
 struct sticker {
   static constexpr bool as_emoji = false;
+  static constexpr bool as_sticker = true;
 };
 struct other {
   static constexpr bool as_emoji = false;
+  static constexpr bool as_sticker = false;
 };
 }  // namespace image_usage
 using image_usage_t = std::variant<image_usage::emoticon, image_usage::sticker, image_usage::other>;

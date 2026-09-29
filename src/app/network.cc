@@ -196,6 +196,18 @@ struct network {
             one.account);
     });
   }
+  // A sticker sent into a chat by the account it is of.
+  void send_sticker(const mux::conversation_id& to, mux::emote sticker) {
+    loop.post([this, to, sticker = std::move(sticker)] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == to.account)
+                account->send_sticker(to.id, sticker);
+            },
+            one.account);
+    });
+  }
   // A link's preview, asked of the account's server.
   void fetch_preview(const mux::account_id& by, std::string url) {
     loop.post([this, by, url = std::move(url)] {

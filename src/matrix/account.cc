@@ -83,6 +83,8 @@ class account {
   void create_group(std::string name);
   // A link's preview, as the homeserver makes it.
   void fetch_preview(std::string url);
+  // A sticker sent: an m.sticker, its picture's URL and its name.
+  void send_sticker(std::string room, mux::emote sticker);
   void load_newer(std::string room, std::string from);
 
   // An avatar's picture: the server's thumbnail of an mxc:// URI, at the size
@@ -190,7 +192,7 @@ class account {
   static knot::value state_content(const loom::client::joined_room& kept, std::string_view type);
   // The custom emoji usable in a room: the user's own (im.ponies.user_emotes)
   // and the room's packs (im.ponies.room_emotes), a shortcode once.
-  [[nodiscard]] std::vector<mux::emote> emotes_of(const loom::client::joined_room& kept) const;
+  [[nodiscard]] std::vector<mux::emote> emotes_of(const loom::client::joined_room& kept, bool stickers = false) const;
   [[nodiscard]] std::vector<mux::emote> emotes_in(const std::string& room) const;
 
   // Who is in a room, as its state says: those joined, by their names there.

@@ -44,6 +44,7 @@ void app::apply(const request::toggle_emoji&) {
   const auto& chosen = root().main().chosen;
   const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
   mux::ui::chat_emotes() = chat ? chat->emotes : std::vector<mux::emote>{};
+  mux::ui::chat_stickers() = chat ? chat->stickers : std::vector<mux::emote>{};
   root().open_emoji(at.fRight, at.fTop - 6.0f);
 }
 void app::apply(const request::close_emoji&) { root().close_emoji(); }

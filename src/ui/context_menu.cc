@@ -42,6 +42,60 @@ inline std::vector<emote>& chat_emotes() {
   static std::vector<emote> kept;
   return kept;
 }
+// And its stickers.
+inline std::vector<emote>& chat_stickers() {
+  static std::vector<emote> kept;
+  return kept;
+}
+
+// The input's popup's pages.
+namespace popup_page {
+struct emoji {};
+struct stickers {};
+struct gifs {};
+}  // namespace popup_page
+using popup_page_t = std::variant<popup_page::emoji, popup_page::stickers, popup_page::gifs>;
+
+// The chat's stickers, as tdesktop's tab: a grid of them; a press sends one.
+template <class Actions>
+struct sticker_grid : nodes::Stack {
+  struct cell : nodes::Stack {
+    Actions* actions;
+    emote sticker;
+    struct parts_t {
+      nodes::Image picture;
+    } parts;
+    cell(Actions* a, emote one)
+        : actions(a), sticker(one), parts{.picture = nodes::Image([url = one.url] { return avatar_images().find(url); })} {
+      fState.apply({.width = 80.0f, .height = 80.0f, .margin = {2.0f, 2.0f, 2.0f, 2.0f}, .cornerRadius = 6.0f,
+                    .hoverBackground = chosen_colour});
+      parts.picture.apply({.fill = true});
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+    [[nodiscard]] bool onClick(float, float) {
+      actions->send_sticker(sticker);
+      return true;
+    }
+  };
+  using cells_t = nodes::Flow<std::vector<cell>>;
+  struct parts_t {
+    nodes::Text empty;
+    nodes::ScrollContainer<cells_t> list{
+        cells_t({.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, {})};
+  } parts;
+  explicit sticker_grid(Actions* a)
+      : parts{.empty = nodes::Text("No stickers here. A room's sticker packs, and yours, show here.", 13.0f, dim_colour)} {
+    fState.apply({.padding = {4.0f, 4.0f, 4.0f, 4.0f}});
+    parts.empty.apply({.margin = {12.0f, 12.0f, 0.0f, 12.0f}});
+    parts.list.apply({.fillX = true, .grow = scene::axes::kY});
+    std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
+    auto& cells = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
+    for (const emote& one : chat_stickers())
+      cells.emplace_back(a, one);
+    parts.empty.setVisible(chat_stickers().empty());
+  }
+};
 inline void remember_emoji(const std::string& glyph) {
   constexpr std::size_t kKept = 42;
   auto& all = recent_emoji();
@@ -401,15 +455,15 @@ template <class Actions>
 struct emoji_popup : scene::Node {
   struct card_t : nodes::Stack {
     using panel_t = emoji_panel<insert_emoji_into<Actions>>;
-    // Emoji or GIFs, as tdesktop's tabs at the panel's top.
+    // Emoji, stickers or GIFs, as tdesktop's tabs at the panel's top.
     struct tab : nodes::Stack {
       card_t* card;
-      bool gifs;
+      popup_page_t page;
       struct parts_t {
         nodes::Text label;
       } parts;
-      tab(card_t* c, bool g, std::string name)
-          : card(c), gifs(g), parts{.label = nodes::Text(std::move(name), 13.0f, text_colour, true)} {
+      tab(card_t* c, popup_page_t p, std::string name)
+          : card(c), page(p), parts{.label = nodes::Text(std::move(name), 13.0f, text_colour, true)} {
         this->setHorizontal();
         fStack.justify = nodes::justify::middle{};
         fState.apply({.width = 80.0f, .height = 28.0f, .cornerRadius = 6.0f, .hoverBackground = chosen_colour,
@@ -418,16 +472,20 @@ struct emoji_popup : scene::Node {
       }
       [[nodiscard]] bool acceptsInput() const { return true; }
       [[nodiscard]] bool onClick(float, float) {
-        card->show(gifs);
+        card->show(page);
         return true;
       }
     };
     struct tabs_row : nodes::Stack {
       struct parts_t {
         tab emoji;
+        tab stickers;
         tab gifs;
       } parts;
-      explicit tabs_row(card_t* c) : parts{.emoji = tab(c, false, "Emoji"), .gifs = tab(c, true, "GIFs")} {
+      explicit tabs_row(card_t* c)
+          : parts{.emoji = tab(c, popup_page::emoji{}, "Emoji"),
+                  .stickers = tab(c, popup_page::stickers{}, "Stickers"),
+                  .gifs = tab(c, popup_page::gifs{}, "GIFs")} {
         this->setHorizontal();
         this->setGap(4.0f);
         fState.apply({.fillX = true, .height = 36.0f, .padding = {4.0f, 8.0f, 4.0f, 8.0f}});
@@ -436,25 +494,37 @@ struct emoji_popup : scene::Node {
     struct parts_t {
       tabs_row tabs;
       panel_t panel;
+      sticker_grid<Actions> stickers;
       gif_grid<Actions> gifs;
     } parts;
     Actions* actions = nullptr;
     explicit card_t(Actions* a)
-        : parts{.tabs = tabs_row(this), .panel = panel_t(insert_emoji_into<Actions>{a}), .gifs = gif_grid<Actions>(a)},
+        : parts{.tabs = tabs_row(this),
+                .panel = panel_t(insert_emoji_into<Actions>{a}),
+                .stickers = sticker_grid<Actions>(a),
+                .gifs = gif_grid<Actions>(a)},
           actions(a) {
       fState.apply({.width = 345.0f, .height = 360.0f, .cornerRadius = 8.0f, .background = sidebar_colour,
                     .border = scene::Border{band_colour, 1.0f},
                     .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
       parts.panel.apply({.fillX = true, .grow = scene::axes::kY});
+      parts.stickers.apply({.fillX = true, .grow = scene::axes::kY});
       parts.gifs.apply({.fillX = true, .grow = scene::axes::kY});
-      this->show(false);
+      this->show(popup_page::emoji{});
     }
-    // One tab's page shown, the other hidden; the GIFs asked of the program
+    // One tab's page shown, the others hidden; the GIFs asked of the program
     // as their tab opens, for what was saved since.
-    void show(bool gifs) {
-      parts.panel.setVisible(!gifs);
+    void show(const popup_page_t& page) {
+      const auto [emoji, stickers, gifs] =
+          std::visit(overloaded{[](popup_page::emoji) { return std::array{true, false, false}; },
+                                [](popup_page::stickers) { return std::array{false, true, false}; },
+                                [](popup_page::gifs) { return std::array{false, false, true}; }},
+                     page);
+      parts.panel.setVisible(emoji);
+      parts.stickers.setVisible(stickers);
       parts.gifs.setVisible(gifs);
-      parts.tabs.parts.emoji.fState.apply({.selected = !gifs});
+      parts.tabs.parts.emoji.fState.apply({.selected = emoji});
+      parts.tabs.parts.stickers.fState.apply({.selected = stickers});
       parts.tabs.parts.gifs.fState.apply({.selected = gifs});
       if (gifs)
         actions->show_gifs();

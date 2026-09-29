@@ -93,6 +93,7 @@ struct stub {
   void menu_save_gif() {}
   void show_gifs() {}
   void send_gif(std::string) {}
+  void send_sticker(mux::emote) {}
   void menu_pin() {}
   void menu_reactions() {}
   void close_reactions() {}

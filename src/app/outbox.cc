@@ -139,6 +139,17 @@ class outbox_part {
                        sent.as.picture.has_value(), sent.width, sent.height, std::string());
   }
 
+  // A sticker, sent into the chat being read; the popup closed.
+  void apply(const request::send_sticker& one) {
+    const auto& chosen = s_->root().main().chosen;
+    if (!chosen || s_->demo())
+      return;
+    s_->root().close_emoji();
+    s_->go_live(*chosen);
+    s_->root().main().jump_to_end();
+    s_->net->send_sticker(*chosen, one.sticker);
+  }
+
   // Files given: read and prepared as the logic of sending says; a
   // picture's thumbnail shown under its local id while it goes. Then the
   // send box, with what was waiting in it before.

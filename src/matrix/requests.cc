@@ -175,6 +175,24 @@ void account<Sink>::create_direct(std::string user) {
 }
 
 template <class Sink>
+void account<Sink>::send_sticker(std::string room, mux::emote sticker) {
+  loop_->spawn([this, room = std::move(room), sticker = std::move(sticker)] {
+    if (!api_)
+      return;
+    knot::value::object content;
+    content.emplace("body", knot::value(sticker.shortcode));
+    content.emplace("url", knot::value(sticker.url));
+    content.emplace("info", knot::value(knot::value::object{}));
+    auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
+                                                      .event_type = "m.sticker",
+                                                      .txn_id = this->transaction(),
+                                                      .body = knot::value(std::move(content))});
+    if (!sent)
+      log(id_, "could not send a sticker to {}: {}", room, sent.error().said());
+  });
+}
+
+template <class Sink>
 void account<Sink>::fetch_preview(std::string url) {
   loop_->spawn([this, url = std::move(url)] {
     if (!api_)

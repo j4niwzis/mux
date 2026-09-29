@@ -148,9 +148,11 @@ class pictures_part {
                 std::ranges::find(one.timeline, pinned, &message::id) == one.timeline.end() &&
                 quotes_asked_.insert(pinned).second)
               s_->net->fetch_quoted(one.id, pinned);
-          // The chat's own custom emoji, for its panels.
+          // The chat's own custom emoji and stickers, for its panels.
           for (const emote& custom : one.emotes)
             want(id, custom.url, custom.url);
+          for (const emote& sticker : one.stickers)
+            want(id, sticker.url, sticker.url);
           // And the custom emoji in their text: an <img> of the server's.
           for (std::size_t i = first; i < last && i < one.timeline.size(); ++i)
             if (const auto& html = one.timeline[i].body.html)

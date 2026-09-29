@@ -396,6 +396,7 @@ void account<Sink>::conversation(const conversation_id& in, const loom::client::
                                      .alias = kept.state.canonical_alias(),
                                      .pinned = pinned_of(kept),
                                      .emotes = emotes_of(kept),
+                                     .stickers = emotes_of(kept, true),
                                      .join_rule = join_rule_of(text(member(state_content(kept, "m.room.join_rules"), "join_rule"))),
                                      .history = history_rule_of(text(member(state_content(kept, "m.room.history_visibility"),
                                                                             "history_visibility"))),
@@ -426,10 +427,18 @@ inline bool usable_as_emoji(const knot::value* usage) {
       return true;
   return false;
 }
+inline bool usable_as_sticker(const knot::value* usage) {
+  if (!usage || !usage->is<knot::value::array>() || usage->as<knot::value::array>().empty())
+    return true;
+  for (const auto& one : usage->as<knot::value::array>())
+    if (one.is<std::string>() && std::visit([](auto of) { return of.as_sticker; }, image_usage_of(one.as<std::string>())))
+      return true;
+  return false;
+}
 
 // A pack's images, as MSC2545 has them: "images", shortcode to {"url"},
-// those that may be emoji.
-inline void emotes_from(const knot::value* content, std::vector<mux::emote>& into) {
+// those that may be emoji -- or, asked for stickers, those that may be those.
+inline void emotes_from(const knot::value* content, std::vector<mux::emote>& into, bool stickers = false) {
   const knot::value* images = content ? member(*content, "images") : nullptr;
   if (!images || !images->is<knot::value::object>())
     return;
@@ -437,7 +446,8 @@ inline void emotes_from(const knot::value* content, std::vector<mux::emote>& int
   const knot::value* pack_usage = pack ? member(*pack, "usage") : nullptr;
   for (const auto& [shortcode, image] : images->as<knot::value::object>()) {
     const knot::value* own_usage = member(image, "usage");
-    if (!usable_as_emoji(own_usage ? own_usage : pack_usage))
+    const knot::value* usage = own_usage ? own_usage : pack_usage;
+    if (!(stickers ? usable_as_sticker(usage) : usable_as_emoji(usage)))
       continue;
     const auto url = text(member(image, "url"));
     if (url && url->starts_with("mxc://") &&
@@ -447,17 +457,17 @@ inline void emotes_from(const knot::value* content, std::vector<mux::emote>& int
 }
 
 template <class Sink>
-auto account<Sink>::emotes_of(const loom::client::joined_room& kept) const -> std::vector<mux::emote> {
+auto account<Sink>::emotes_of(const loom::client::joined_room& kept, bool stickers) const -> std::vector<mux::emote> {
   std::vector<mux::emote> out;
   if (const auto own = state_.account_data.find("im.ponies.user_emotes"); own != state_.account_data.end()) {
     const knot::value tree = knot::to_value(own->second);
-    emotes_from(member(tree, "content"), out);
+    emotes_from(member(tree, "content"), out, stickers);
   }
   for (const auto& [key, one] : kept.state.events) {
     if (!std::visit([](auto of) { return of.emotes; }, state_type_of(key.first)))
       continue;
     const knot::value tree = knot::to_value(one);
-    emotes_from(member(tree, "content"), out);
+    emotes_from(member(tree, "content"), out, stickers);
   }
   // And the packs of other rooms the user made usable everywhere, as Cinny
   // and Sable do: im.ponies.emote_rooms, room to the state keys of its packs.
@@ -474,7 +484,7 @@ auto account<Sink>::emotes_of(const loom::client::joined_room& kept) const -> st
           for (const auto& [key, one] : joined->second.state.events)
             if (key.second == state_key && std::visit([](auto of) { return of.emotes; }, state_type_of(key.first))) {
               const knot::value pack = knot::to_value(one);
-              emotes_from(member(pack, "content"), out);
+              emotes_from(member(pack, "content"), out, stickers);
             }
       }
   }

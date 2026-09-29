@@ -1466,8 +1466,8 @@ struct chat_header : nodes::Stack {
   [[nodiscard]] static view view_of(const conversation* one, const model& now) {
     if (one == nullptr)
       return {};
-    std::string about = is_group(*one) ? std::format("{} member{}", one->members.size(),
-                                                     one->members.size() == 1 ? "" : "s")
+    const auto count = std::max<std::int64_t>(static_cast<std::int64_t>(one->members.size()), one->member_count);
+    std::string about = is_group(*one) ? std::format("{} member{}", count, count == 1 ? "" : "s")
                                        : presence_of(now, one->id.account, one->id.id);
     if (!one->typing.empty())
       about = one->typing.size() == 1 ? sender_name(*one, one->typing.front()) + " is typing…"
@@ -1839,7 +1839,8 @@ struct info_panel : nodes::Stack {
     const bool group = is_group(one);
     group_view = {one.id.id,
                   display_name(one),
-                  group ? std::format("{} member{}", one.members.size(), one.members.size() == 1 ? "" : "s")
+                  group ? std::format("{} member{}", std::max<std::int64_t>(static_cast<std::int64_t>(one.members.size()), one.member_count),
+                                      std::max<std::int64_t>(static_cast<std::int64_t>(one.members.size()), one.member_count) == 1 ? "" : "s")
                         : presence_of(now, one.id.account, one.id.id),
                   group,
                   muted,
@@ -1856,7 +1857,8 @@ struct info_panel : nodes::Stack {
               return row.who == each.first && row.how_shown == each.second;
             }))
       members.invalidateLayout();
-    members_header.show(one.members.size(), [this](std::size_t count) { return members_head(actions, count); });
+    members_header.show(static_cast<std::size_t>(std::max<std::int64_t>(static_cast<std::int64_t>(one.members.size()), one.member_count)),
+                        [this](std::size_t count) { return members_head(actions, count); });
     this->render();
   }
   void open_member(std::string id) {

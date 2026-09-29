@@ -184,6 +184,9 @@ struct conversation {
   // Where to page back from, in the protocol's terms: a MAM id, a Matrix
   // prev_batch. Nothing where the beginning has been reached.
   std::optional<std::string> history_from;
+  // How many are in it, as its server counts: more than `members` where
+  // not all of them are known yet.
+  std::int64_t member_count = 0;
   // When it was last read, as the model counts: the chats read longest ago
   // lose their loaded history first.
   std::uint64_t read_at = 0;
@@ -246,6 +249,7 @@ struct conversation_updated {
   bool space = false;
   std::vector<std::string> children;
   std::vector<std::string> groups;
+  std::int64_t member_count = 0;
 };
 
 // An avatar's picture, as its protocol fetched it: the bytes of its file,
@@ -433,6 +437,7 @@ class model {
     kept.space = one.space;
     kept.children = one.children;
     kept.groups = one.groups;
+    kept.member_count = one.member_count;
   }
   void on(const change::conversation_removed& one) { of(one.id.account).conversations.erase(one.id.id); }
   void on(const change::presence_changed& one) { of(one.account).presences[one.contact] = one.now; }

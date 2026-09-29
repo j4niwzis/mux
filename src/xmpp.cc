@@ -171,6 +171,8 @@ class account {
   // sees it was read.
   // Avatars of XMPP contacts (XEP-0084) are not fetched yet.
   void fetch_avatar(std::string, std::string) {}
+  // A room's occupants come with its presence; nothing to ask for.
+  void fetch_members(std::string) {}
 
   void mark_read(std::string to, std::string id) {
     loop_->spawn([this, to = std::move(to), id = std::move(id)] {

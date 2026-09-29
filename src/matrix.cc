@@ -15,6 +15,7 @@ import loom.cs.message_pagination;
 import loom.cs.receipts;
 import loom.cs.redaction;
 import loom.cs.room_send;
+import loom.cs.rooms;
 import loom.cs.sync;
 import loom.cs.wellknown;
 import mux.config;
@@ -568,7 +569,8 @@ class account {
                                        .unread = kept.unread.notification,
                                        .highlights = kept.unread.highlight,
                                        .space = space(kept),
-                                       .children = children_of(kept)});
+                                       .children = children_of(kept),
+                                       .member_count = kept.summary.joined_members});
   }
 
   // Whether a room is a space: its creation says so, by its type.
@@ -597,15 +599,45 @@ class account {
   }
 
   // Who is in a room, as its state says: those joined, by their names there.
+  // Who is in a room: all of it, where it was asked for (/joined_members),
+  // with what the syncs say over it -- a sync's state has only those who
+  // spoke lately, the members being loaded lazily -- those who left or were
+  // banned taken out.
   void members(const conversation_id& in, const loom::client::joined_room& kept) {
-    std::vector<mux::member> who;
+    std::map<std::string, mux::member> who;
+    if (const auto full = full_members_.find(in.id); full != full_members_.end())
+      who = full->second;
     for (const std::string& user : kept.state.members("join")) {
       const auto* joined = kept.state.content<loom::ev::m_room_member_content_t>("m.room.member", user);
-      who.push_back({user, kept.state.display_name(user).value_or(user), std::nullopt,
-                     joined ? joined->avatar_url : std::nullopt});
+      who.insert_or_assign(user, mux::member{user, kept.state.display_name(user).value_or(user), std::nullopt,
+                                             joined ? joined->avatar_url : std::nullopt});
     }
-    sink_(change::members_changed{in, std::move(who)});
+    for (const char* gone : {"leave", "ban"})
+      for (const std::string& user : kept.state.members(gone))
+        who.erase(user);
+    std::vector<mux::member> out;
+    out.reserve(who.size());
+    for (auto& [id, one] : who)
+      out.push_back(std::move(one));
+    sink_(change::members_changed{in, std::move(out)});
   }
+  // A room's members, all of them, from the server: kept, and said.
+  void fetch_members(std::string room) {
+    loop_->spawn([this, room = std::move(room)] {
+      if (!api_)
+        return;
+      auto got = perform(*api_, loom::cs::get_joined_members_by_room{.room_id = room});
+      if (!got || !got->joined)
+        return;
+      auto& all = full_members_[room];
+      for (const auto& [user, one] : *got->joined)
+        all.insert_or_assign(user, mux::member{user, one.display_name.value_or(user), std::nullopt, one.avatar_url});
+      log(id_, "members of {}: {}", room, all.size());
+      if (const auto kept = state_.joined.find(room); kept != state_.joined.end())
+        members(conversation_id{id_, room}, kept->second);
+    });
+  }
+  std::map<std::string, std::map<std::string, mux::member>> full_members_;
 
   // An event of a room's timeline, as changes: at the end, or before the
   // rest where it is history paged back to.

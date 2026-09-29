@@ -36,17 +36,24 @@ void app::apply(const request::choose& one) {
   }
   model->touch(one.which);
   // What was kept of its reads, where the model has nothing newer.
-  if (const mux::conversation* chat = model->find(one.which); chat && !ask.demo) {
-    auto kept = message_store::read_reads(one.which);
-    std::map<std::string, std::string> missing;
-    for (auto& [user, event] : kept.read_by)
-      if (!chat->read_by.contains(user))
-        missing.emplace(user, std::move(event));
-    if (!missing.empty())
-      model->apply(mux::change_t{mux::change::receipts_changed{one.which, std::move(missing)}});
-    if (!chat->read_up_to && kept.me)
-      model->read_up_to(one.which, *kept.me);
-  }
+  if (model->find(one.which) && !ask.demo)
+    work.run([this, which = one.which]() -> workers::done_t {
+      auto kept = message_store::read_reads(which);
+      return [this, which, kept = std::move(kept)]() mutable {
+        const mux::conversation* chat = model->find(which);
+        if (!chat)
+          return;
+        std::map<std::string, std::string> missing;
+        for (auto& [user, event] : kept.read_by)
+          if (!chat->read_by.contains(user))
+            missing.emplace(user, std::move(event));
+        if (!missing.empty())
+          model->apply(mux::change_t{mux::change::receipts_changed{which, std::move(missing)}});
+        if (!chat->read_up_to && kept.me)
+          model->read_up_to(which, *kept.me);
+        this->refresh();
+      };
+    });
   // A group opened: all its members, once, where a sync gives only some.
   if (const mux::conversation* chat = model->find(one.which);
       chat && !ask.demo && chat->member_count > static_cast<std::int64_t>(chat->members.size()) &&

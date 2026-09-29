@@ -79,7 +79,10 @@ class message_store {
     const auto where = deleted_file_of(in);
     std::error_code failed;
     std::filesystem::create_directories(where.parent_path(), failed);
-    std::ofstream(where, std::ios::binary | std::ios::app) << line_of(*whole) << '\n';
+    {
+      std::lock_guard held(file_lock());
+      std::ofstream(where, std::ios::binary | std::ios::app) << line_of(*whole) << '\n';
+    }
     prune(mux::config::state_path("deleted"), deleted_budget, where);
   }
   void forget(const mux::conversation_id& in, const std::string& id) {
@@ -89,15 +92,15 @@ class message_store {
     append(in, knot::to_json_string(knot::value(std::move(line))));
   }
 
-  // All of a chat's messages kept, by id.
-  std::map<std::string, mux::message> everything(const mux::conversation_id& in) {
+  // All of a chat's messages kept, by id. From any thread: a worker's.
+  static std::map<std::string, mux::message> everything(const mux::conversation_id& in) {
     auto all = read(in);
     return {std::make_move_iterator(all.begin()), std::make_move_iterator(all.end())};
   }
 
   // Up to `count` of a chat's messages from before `before`, oldest first.
-  // Reading a chat's file counts as using it.
-  std::vector<mux::message> older(const mux::conversation_id& in, time_point before, std::size_t count) {
+  // Reading a chat's file counts as using it. From any thread: a worker's.
+  static std::vector<mux::message> older(const mux::conversation_id& in, time_point before, std::size_t count) {
     std::error_code failed;
     std::filesystem::last_write_time(file_of(in), std::filesystem::file_time_type::clock::now(), failed);
     auto all = read(in);
@@ -127,11 +130,20 @@ class message_store {
   static std::filesystem::path file_of(const mux::conversation_id& in) {
     return mux::config::state_path("messages") / safe(in.account.address) / (safe(in.id) + ".jsonl");
   }
+  // The files are read on workers and written on the UI's thread: a line
+  // written, and a file written again whole, hold this.
+  static std::mutex& file_lock() {
+    static std::mutex held;
+    return held;
+  }
   void append(const mux::conversation_id& in, const std::string& line) {
     const auto where = file_of(in);
     std::error_code failed;
     std::filesystem::create_directories(where.parent_path(), failed);
-    std::ofstream(where, std::ios::binary | std::ios::app) << line << '\n';
+    {
+      std::lock_guard held(file_lock());
+      std::ofstream(where, std::ios::binary | std::ios::app) << line << '\n';
+    }
     if (++appended_ % 500 == 1)
       prune(mux::config::state_path("messages"), budget, where);
   }
@@ -178,6 +190,8 @@ class message_store {
   static std::map<std::string, mux::message> read(const mux::conversation_id& in) {
     std::map<std::string, mux::message> all;
     const auto where = file_of(in);
+    std::error_code sized;
+    const auto size_read = std::filesystem::file_size(where, sized);
     const std::size_t lines = read_lines(where, in, all);
     if (lines > 2 * all.size() + 64) {
       // Mostly old versions: one line each, oldest first.
@@ -191,8 +205,14 @@ class message_store {
         for (const mux::message* one : order)
           out << line_of(*one) << '\n';
       }
+      // Put in its place only where nothing was written to it meanwhile:
+      // a line written since the read would be lost.
+      std::lock_guard held(file_lock());
       std::error_code failed;
-      std::filesystem::rename(fresh, where, failed);
+      if (std::filesystem::file_size(where, failed) == size_read && !sized && !failed)
+        std::filesystem::rename(fresh, where, failed);
+      else
+        std::filesystem::remove(fresh, failed);
     }
     read_lines(deleted_file_of(in), in, all);
     return all;

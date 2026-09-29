@@ -10,6 +10,7 @@ import mux.ui;
 import mux.app.store;
 import mux.app.requests;
 import mux.app.services;
+import mux.app.workers;
 import mux.logic.search;
 
 export namespace mux::app {
@@ -35,9 +36,24 @@ class search_part {
     if (!searching_)
       return;
     searching_->query = one.text;
-    searching_->found = this->find_in(searching_->in, one.text);
-    searching_->at.reset();
-    this->step(true);
+    // Found on a worker, over the disk and a copy of what is in memory; shown
+    // where the same is still asked in the same chat.
+    std::vector<message> in_memory;
+    if (const conversation* chat = s_->model->find(searching_->in))
+      in_memory = chat->timeline;
+    s_->work->run([this, in = searching_->in, query = one.text, in_memory = std::move(in_memory)]() -> workers::done_t {
+      std::map<std::string, message> all = message_store::everything(in);
+      for (const message& each : in_memory)
+        all.insert_or_assign(each.id, each);
+      auto found = logic::found_in(all, query);
+      return [this, in, query, found = std::move(found)]() mutable {
+        if (!searching_ || searching_->in != in || searching_->query != query)
+          return;
+        searching_->found = std::move(found);
+        searching_->at.reset();
+        this->step(true);
+      };
+    });
   }
   void apply(const request::search_step& one) { this->step(one.older); }
 
@@ -68,16 +84,6 @@ class search_part {
     if (searching_->at)
       screen.jump_to(searching_->found[*searching_->at]);
     screen.search.show_found(searching_->at, searching_->found.size(), !searching_->query.empty());
-  }
-
-  // What is found in a chat: in all it has, those on disk and those in
-  // memory.
-  std::vector<std::string> find_in(const conversation_id& in, std::string_view query) {
-    std::map<std::string, message> all = s_->store->everything(in);
-    if (const conversation* chat = s_->model->find(in))
-      for (const message& one : chat->timeline)
-        all.insert_or_assign(one.id, one);
-    return logic::found_in(all, query);
   }
 
   services* s_;

@@ -66,17 +66,27 @@ void app::apply(const request::load_older& one) {
   const mux::conversation* chat = model->find(one.in);
   const auto before = chat && !chat->timeline.empty() ? chat->timeline.front().at
                                                       : message_store::time_point::max();
-  // From the disk first -- but not before a window of the history, whose
-  // messages the disk may not have up to: from the server, from its token.
-  if (auto kept = chat && chat->detached ? std::vector<mux::message>() : store.older(one.in, before, 100); !kept.empty()) {
-    for (auto it = kept.rbegin(); it != kept.rend(); ++it)
-      model->apply(mux::change_t{mux::change::message_added{.message = std::move(*it), .where = mux::placement::at_start{}}});
-    // The window may ask again: there may be more on the disk.
-    root().main().history_asked.reset();
-    this->refresh();
+  // From the disk first -- read on a worker -- but not before a window of the
+  // history, whose messages the disk may not have up to: from the server,
+  // from its token, where the disk has none.
+  if (chat && chat->detached) {
+    net->load_older(one.in, one.from);
     return;
   }
-  net->load_older(one.in, one.from);
+  work.run([this, in = one.in, from = one.from, before]() -> workers::done_t {
+    auto kept = message_store::older(in, before, 100);
+    return [this, in, from, kept = std::move(kept)]() mutable {
+      if (kept.empty()) {
+        net->load_older(in, from);
+        return;
+      }
+      for (auto it = kept.rbegin(); it != kept.rend(); ++it)
+        model->apply(mux::change_t{mux::change::message_added{.message = std::move(*it), .where = mux::placement::at_start{}}});
+      // The window may ask again: there may be more on the disk.
+      root().main().history_asked.reset();
+      this->refresh();
+    };
+  });
 }
 
 void app::apply(const request::resize_sidebar& one) { root().main().resize_sidebar(one.x); }

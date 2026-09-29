@@ -229,17 +229,29 @@ class pictures_part {
   }
 
   // A picture's blurred preview, from its blurhash, until its thumbnail
-  // comes: 32 across, in its proportions.
-  static void make_preview(const attachment& picture) {
-    if (!picture.blurhash || mux::ui::thumbnails().has(picture.source) || mux::ui::previews().has(picture.source))
+  // comes: 32 across, in its proportions; made on a worker.
+  void make_preview(const attachment& picture) {
+    if (!picture.blurhash || mux::ui::thumbnails().has(picture.source) || mux::ui::previews().has(picture.source) ||
+        !previews_asked_.insert(picture.source).second)
       return;
     const int width = 32;
     const int height = picture.width > 0 && picture.height > 0
                            ? std::clamp(width * picture.height / picture.width, 8, 96)
                            : 24;
-    if (const auto pixels = logic::blurhash_pixels(*picture.blurhash, width, height))
-      mux::ui::previews().put(picture.source, skia::imageFromRGBA(width, height, pixels->data()));
+    s_->work->run([hash = *picture.blurhash, source = picture.source, width, height,
+                   scene = s_->scene]() -> workers::done_t {
+      skia::Sp<skia::SkImage> image;
+      if (const auto pixels = logic::blurhash_pixels(hash, width, height))
+        image = skia::imageFromRGBA(width, height, pixels->data());
+      return [image = std::move(image), source, scene]() mutable {
+        if (image) {
+          mux::ui::previews().put(source, std::move(image));
+          scene->state().markDamaged();
+        }
+      };
+    });
   }
+  std::set<std::string> previews_asked_;
 
   // The whole of a picture that moves, for its frames: from the disk where
   // it was fetched before, from the account where not.

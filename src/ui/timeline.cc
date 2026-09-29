@@ -259,6 +259,15 @@ struct timeline_area : scene::Node {
           actions->jump_to_message(*one.said.replies_to);
           return true;
         }
+        // A quoted stretch of a reply's text -- the part of the message it
+        // answers, as "> " quotes it: to that message, the part marked, as
+        // the reply's own quote goes.
+        if (const auto& text = one.parts.body.parts.text;
+            one.said.replies_to && text.visible() && text.bounds().contains(press.x, press.y) && !text.hasSelection() &&
+            text.quotedAt(press.x, press.y)) {
+          actions->jump_to_message(*one.said.replies_to, quoted_fragment(one.said));
+          return true;
+        }
         // The quote: to the message it quotes.
         if (one.parts.body.parts.quote && one.said.replies_to && one.parts.body.parts.quote->bounds().contains(press.x, press.y)) {
           actions->jump_to_message(*one.said.replies_to, quoted_fragment(one.said));

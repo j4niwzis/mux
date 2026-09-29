@@ -51,6 +51,8 @@ struct window : scene::Node {
       widgets::Dialog<reactions_box<Actions>> reactions;
       // A room's management.
       widgets::Dialog<room_manage<Actions>> manage;
+      // Where a message is forwarded to.
+      widgets::Dialog<forward_box<Actions>> forwarding;
       widgets::Dialog<send_box<Actions>> sending;
       std::optional<emoji_popup<Actions>> emoji;
       std::optional<context_menu<Actions>> menu;
@@ -73,7 +75,8 @@ struct window : scene::Node {
     explicit layers(Actions* a)
         : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a))},
           actions_of(a) {
-      auto& [backdrop, frame, settings, notice, person, reactions, manage, sending, emoji, menu, viewer] = parts;
+      auto& [backdrop, frame, settings, notice, person, reactions, manage, forwarding, sending, emoji, menu, viewer] =
+          parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
       frame.setSheetColour(background);
@@ -92,6 +95,8 @@ struct window : scene::Node {
       reactions.setSize(392.0f, 420.0f);
       manage.setSheetColour(sidebar_colour);
       manage.setSize(480.0f, 600.0f);
+      forwarding.setSheetColour(sidebar_colour);
+      forwarding.setSize(400.0f, 520.0f);
     }
   };
 
@@ -141,6 +146,7 @@ struct window : scene::Node {
     layer().person.dropClosed();
     layer().reactions.dropClosed();
     layer().manage.dropClosed();
+    layer().forwarding.dropClosed();
     layer().sending.dropClosed();
   }
 
@@ -195,6 +201,8 @@ struct window : scene::Node {
   void close_reactions() { layer().reactions.close(); }
   void open_manage(const manage_facts& facts) { layer().manage.open(actions, facts); }
   void close_manage() { layer().manage.close(); }
+  void open_forward(const std::vector<forward_target>& chats) { layer().forwarding.open(actions, chats); }
+  void close_forward() { layer().forwarding.close(); }
 
   void show(const std::vector<config::account_t>& saved, const model& now) {
     const auto& current = layer().frame.base().base().current;

@@ -199,6 +199,8 @@ class account {
   void fetch_members(std::string) {}
   // Reactions (XEP-0444) are not sent yet.
   void react(std::string, std::string, std::string, bool) {}
+  // Forwarding is over Matrix alone for now.
+  void forward(std::string, std::string, std::string) {}
   // Rooms are managed over Matrix alone for now.
   void manage(std::string, room_action_t) {}
   // A quoted message is fetched by Matrix alone for now.

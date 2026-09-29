@@ -141,6 +141,31 @@ void account<Sink>::manage(std::string room, room_action_t action) {
 }
 
 template <class Sink>
+void account<Sink>::forward(std::string from, std::string event, std::string to) {
+  loop_->spawn([this, from = std::move(from), event = std::move(event), to = std::move(to)] {
+    if (!api_)
+      return;
+    auto got = perform(*api_, loom::cs::get_one_room_event{.room_id = from, .event_id = event});
+    if (!got) {
+      log(id_, "could not fetch {} to forward: {}", event, got.error().said());
+      return;
+    }
+    const knot::value tree = knot::to_value(*got);
+    const knot::value* content = member(tree, "content");
+    if (!content || !content->is<knot::value::object>())
+      return;
+    knot::value::object sent = content->as<knot::value::object>();
+    sent.erase("m.relates_to");
+    auto done = perform(*api_, loom::cs::send_message{.room_id = to,
+                                                      .event_type = "m.room.message",
+                                                      .txn_id = this->transaction(),
+                                                      .body = knot::value(std::move(sent))});
+    if (!done)
+      log(id_, "could not forward {} to {}: {}", event, to, done.error().said());
+  });
+}
+
+template <class Sink>
 void account<Sink>::fetch_quoted(std::string room, std::string target) {
   loop_->spawn([this, room = std::move(room), target = std::move(target)] {
     if (!api_)

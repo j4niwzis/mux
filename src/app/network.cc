@@ -196,6 +196,18 @@ struct network {
             one.account);
     });
   }
+  // A message forwarded, within the account it is of.
+  void forward(const mux::conversation_id& from, std::string event, const mux::conversation_id& to) {
+    loop.post([this, from, event = std::move(event), to] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == from.account)
+                account->forward(from.id, event, to.id);
+            },
+            one.account);
+    });
+  }
   // Something done to a room, by the account it is of.
   void manage(const mux::conversation_id& in, mux::room_action_t action) {
     loop.post([this, in, action = std::move(action)] {

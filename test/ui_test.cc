@@ -98,6 +98,9 @@ struct stub {
   void close_reactions() {}
   void open_avatar(std::string) {}
   void open_manage() {}
+  void menu_forward() {}
+  void close_forward() {}
+  void forward_to(mux::conversation_id) {}
   void flip_room_events() {}
   void flip_account_room_events() {}
   void flip_chat_room_events() {}

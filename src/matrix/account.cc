@@ -71,6 +71,10 @@ class account {
   // Something done to a room by one allowed to: its state set, or someone
   // let in or sent out.
   void manage(std::string room, room_action_t action);
+  // A message sent on to another room: its content as it is -- a picture's
+  // or a file's URL with it, so nothing is uploaded again -- less what tied
+  // it to its own room (the reply it was).
+  void forward(std::string from, std::string event, std::string to);
   void load_newer(std::string room, std::string from);
 
   // An avatar's picture: the server's thumbnail of an mxc:// URI, at the size

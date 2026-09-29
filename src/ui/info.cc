@@ -13,6 +13,7 @@ import skiff.nodes.scroll;
 import skiff.nodes.text;
 import skiff.widgets.pill;
 import skiff.widgets.button;
+import skiff.widgets.textbox;
 import mux.core;
 import mux.config;
 import mux.logic.links;
@@ -316,6 +317,91 @@ struct reactions_box : nodes::Stack {
     rows.reserve(entries.size());
     for (const reaction_entry& one : entries)
       rows.emplace_back(a, one);
+  }
+};
+
+// A chat to forward to: its id and name.
+struct forward_target {
+  conversation_id id;
+  std::string name;
+};
+
+// Where to forward a message, as tdesktop's box: the account's chats, with
+// a field to find one by its name; a press sends it there.
+template <class Actions>
+struct forward_box : nodes::Stack {
+  Actions* actions = nullptr;
+  std::vector<forward_target> all;
+  struct close_it {
+    Actions* actions;
+    void operator()() const { actions->close_forward(); }
+  };
+  struct nothing_back {
+    void operator()() const {}
+  };
+  struct typed {
+    forward_box* box;
+    void operator()(std::string_view text) const { box->find(text); }
+  };
+  struct row : nodes::Stack {
+    Actions* actions;
+    conversation_id id;
+    struct parts_t {
+      avatar_mark face;
+      nodes::Text name;
+    } parts;
+    row(Actions* a, const forward_target& one)
+        : actions(a), id(one.id), parts{.face = avatar_mark(one.id.id, one.name, 36.0f),
+                                        .name = nodes::Text(one.name, 15.0f, text_colour)} {
+      this->setHorizontal();
+      this->setGap(12.0f);
+      fState.apply({.fillX = true, .height = 50.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f},
+                    .hoverBackground = chosen_colour});
+      fState.setCursor(scene::cursor::hand{});
+      parts.name.setElided(true);
+      parts.name.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+    [[nodiscard]] bool onClick(float, float) {
+      actions->forward_to(id);
+      return true;
+    }
+  };
+  using rows_t = nodes::Flow<std::vector<row>>;
+  using header_t = page_header<nothing_back, close_it>;
+  struct parts_t {
+    header_t header;
+    widgets::TextBox<typed> field;
+    nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
+  } parts;
+
+  forward_box(Actions* a, const std::vector<forward_target>& chats)
+      : actions(a), all(chats),
+        parts{.header = header_t("Forward to…", {}, {a}, false, true), .field = widgets::TextBox<typed>("Search", {this})} {
+    fState.apply({.fillX = true, .height = 520.0f});
+    parts.field.setSearchIcon(true);
+    parts.field.apply({.fillX = true, .height = 34.0f, .margin = {0.0f, 16.0f, 8.0f, 16.0f}});
+    parts.list.apply({.fillX = true, .grow = scene::axes::kY});
+    std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
+    this->find({});
+  }
+  // The chats whose names have what is typed, in any case.
+  void find(std::string_view text) {
+    const auto lower = [](std::string_view s) {
+      std::string out(s);
+      for (char& c : out)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+      return out;
+    };
+    const std::string wanted = lower(text);
+    auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
+    rows.clear();
+    for (const forward_target& one : all)
+      if (wanted.empty() || lower(one.name).contains(wanted))
+        rows.emplace_back(actions, one);
+    parts.list.invalidateLayout();
+    parts.list.scrollTo(0.0f);
   }
 };
 

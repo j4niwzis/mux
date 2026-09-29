@@ -98,6 +98,33 @@ class menu_part {
     s_->root().open_reactions(entries);
   }
   void apply(const request::close_reactions&) { s_->root().close_reactions(); }
+  // Forward: the chats of the account, to choose where; then sent there.
+  void apply(const request::menu_forward&) {
+    s_->root().close_menu();
+    const auto& chosen = s_->root().main().chosen;
+    if (!chosen)
+      return;
+    forwarding_ = std::pair{*chosen, target_.id};
+    std::vector<mux::ui::forward_target> chats;
+    for (const auto& [id, account] : s_->model->accounts())
+      if (id == chosen->account)
+        for (const auto& [key, one] : account.conversations)
+          chats.push_back({one.id, mux::ui::display_name(one)});
+    std::ranges::sort(chats, {}, &mux::ui::forward_target::name);
+    s_->root().open_forward(chats);
+  }
+  void apply(const request::close_forward&) { s_->root().close_forward(); }
+  void apply(const request::forward_to& one) {
+    s_->root().close_forward();
+    if (!forwarding_ || s_->demo())
+      return;
+    const auto [from, event] = *std::exchange(forwarding_, std::nullopt);
+    s_->net->forward(from, event, one.to);
+    s_->root().show_message("Forward", "Forwarded to " + [&] {
+      const conversation* to = s_->model->find(one.to);
+      return to ? mux::ui::display_name(*to) : one.to.id;
+    }());
+  }
   // A GIF kept among the saved ones, for the input's GIF tab.
   void apply(const request::menu_save_gif&) {
     s_->root().close_menu();
@@ -138,6 +165,9 @@ class menu_part {
   }
 
  private:
+  // The message being forwarded, and the chat it is in, until a chat is
+  // chosen to forward it to.
+  std::optional<std::pair<conversation_id, std::string>> forwarding_;
   services* s_;
   outbox_part* outbox_;
   pictures_part* pictures_;

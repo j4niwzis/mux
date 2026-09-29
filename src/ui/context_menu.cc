@@ -554,6 +554,7 @@ struct context_menu : scene::Node {
     using gif_row = row_item<ask<Actions, &Actions::menu_save_gif>>;
     using pin_row = row_item<ask<Actions, &Actions::menu_pin>>;
     using reactions_row = row_item<ask<Actions, &Actions::menu_reactions>>;
+    using forward_row = row_item<ask<Actions, &Actions::menu_forward>>;
     using delete_row = row_item<ask<Actions, &Actions::menu_delete>>;
     // As tdesktop's, in its order: the quick reactions; every emoji, in
     // place of the rest once asked for; Reply, Edit, Pin, Copy, Copy
@@ -571,7 +572,7 @@ struct context_menu : scene::Node {
       save_row save;
       gif_row save_gif;
       reactions_row reactions;
-      later_row forward;
+      forward_row forward;
       delete_row remove;
       nodes::Box<> seen_band{band_colour};
       row_item<nothing> seen;
@@ -631,7 +632,7 @@ struct context_menu : scene::Node {
                 .save = save_row("Save As…", {a}, icon::send{}),
                 .save_gif = gif_row("Save GIF", {a}, icon::check{}),
                 .reactions = reactions_row("Show Reactions as Events", {a}, icon::people{}),
-                .forward = later_row("Forward", {a, "Forwarding"}, icon::send{}),
+                .forward = forward_row("Forward", {a}, icon::send{}),
                 .remove = delete_row("Delete", {a}, icon::close{}),
                 .seen = row_item<nothing>(facts.seen.empty() ? std::string("Not seen yet")
                                                              : std::format("Seen by {}", facts.seen.size()),

@@ -160,6 +160,9 @@ struct composer_bar : nodes::Stack {
       attach.apply({.alignSelf = scene::align::kEnd});
       send.apply({.alignSelf = scene::align::kEnd});
       field.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      // What is typed looks as it will be sent: the messages' size, as in
+      // tdesktop, whose field takes the message font.
+      field.setFontSize(13.0f);
       send.set_colour(accent_colour);
     }
   };

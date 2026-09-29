@@ -437,7 +437,8 @@ struct gif_grid : nodes::Stack {
       : parts{.empty = nodes::Text("No saved GIFs yet. Save one from a GIF's menu.", 13.0f, dim_colour)}, actions(a) {
     auto& [empty, list] = parts;
     fState.apply({.padding = {4.0f, 4.0f, 4.0f, 4.0f}});
-    empty.apply({.margin = {12.0f, 12.0f, 0.0f, 12.0f}});
+    empty.setWrapped(true);
+    empty.apply({.fillX = true, .margin = {12.0f, 12.0f, 0.0f, 12.0f}});
     list.apply({.fillX = true, .grow = scene::axes::kY});
     std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
   }

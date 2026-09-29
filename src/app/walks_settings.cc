@@ -6,4 +6,6 @@ import skiff.scene;
 import mux.ui;
 import mux.app.requests;
 
-template const skiff::scene::AnyNode::Ops& skiff::scene::AnyNode::opsOf<mux::ui::settings_dialog<mux::app::actions>>() noexcept;
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::settings_dialog<mux::app::actions>>() noexcept {
+  return skiff::scene::AnyNode::opsOf<mux::ui::settings_dialog<mux::app::actions>>();
+}

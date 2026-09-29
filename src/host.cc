@@ -716,33 +716,22 @@ int run(App& app, const options& how) {
       if (traced && !frame.fDamage.isEmpty())
         std::println(std::cerr, "[frame] damage {:.0f},{:.0f} {:.0f}x{:.0f}{}", frame.fDamage.fLeft, frame.fDamage.fTop,
                      frame.fDamage.width(), frame.fDamage.height(), frame.fWantsAnotherFrame ? " (another wanted)" : "");
-      // And, outside a release build, which nodes keep asking for frames: the
-      // deepest that still settle, by type -- said when that set changes.
-      if constexpr (skiff::scene::kErasedWalks) {
-        static std::string settling_before;
-        if (traced && frame.fWantsAnotherFrame) {
-          std::string settling;
-          skiff::scene::AnyNodeRef top = skiff::scene::AnyNodeRef::of(scene.root());
-          auto find = [&](auto& self, skiff::scene::AnyNodeRef& node) -> void {
-            bool deeper = false;
-            skiff::scene::eachChild(node, [&](auto& child) {
-              if (skiff::scene::walk::animating(child)) {
-                deeper = true;
-                self(self, child);
-              }
-            });
-            if (!deeper) {
-              int status = 0;
-              char* name = abi::__cxa_demangle(skiff::scene::typeOf(node).name(), nullptr, nullptr, &status);
-              settling += std::string("\n    ") + (name ? name : skiff::scene::typeOf(node).name());
-              std::free(name);
-            }
-          };
-          find(find, top);
-          if (settling != settling_before)
-            std::println(std::cerr, "[frame] settling:{}", settling);
-          settling_before = std::move(settling);
+      // And which nodes keep asking for frames, by type: said when that
+      // changes. skiff notes them as it asks, where asked to.
+      skiff::scene::traceSettling() = traced;
+      if (traced) {
+        std::string settling;
+        for (const auto& one : std::exchange(skiff::scene::settlers(), {})) {
+          int status = 0;
+          char* name = abi::__cxa_demangle(one.type->name(), nullptr, nullptr, &status);
+          settling += std::string("\n    ") + (name ? name : one.type->name()) +
+                      (one.transform ? " (transform)" : " (settling)");
+          std::free(name);
         }
+        static std::string settling_before;
+        if (settling != settling_before)
+          std::println(std::cerr, "[frame] settling:{}", settling.empty() ? std::string(" nothing") : settling);
+        settling_before = std::move(settling);
       }
       // Frames go on while a notification is up: it goes when its time is.
       animating = frame.fWantsAnotherFrame || !shown_toasts.empty();

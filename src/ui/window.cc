@@ -129,6 +129,8 @@ struct window : scene::Node {
 
   void open_menu(const menu_facts& facts) { layer().menu.emplace(actions, facts); }
   void close_menu() { layer().menu.reset(); }
+  // The menu's card, where one is up: what takes the keys while it is.
+  [[nodiscard]] scene::Node* menu_card() { return layer().menu ? &layer().menu->parts.menu : nullptr; }
 
   void show_notice(std::string what) {
     layer().notice.open(actions, "Not implemented yet", std::format("{} isn't implemented yet.", what));

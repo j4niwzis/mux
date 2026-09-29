@@ -204,6 +204,19 @@ struct context_menu : scene::Node {
         name.setVisible(false);
       this->invalidateLayout();
     }
+    // The keys, as tdesktop's menu takes them: Up and Down through its
+    // items, round; Enter does what is lit (the item's own); Esc closes it.
+    [[nodiscard]] bool focusable() const { return true; }
+    using Node::onKey;
+    void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
+      namespace keys = scene::keys;
+      if (press.key == keys::kUp || press.key == keys::kDown) {
+        reply.moveFocus(press.key == keys::kUp);
+      } else if (press.key == keys::kEscape) {
+        actions_of->close_menu();
+        reply.handle();
+      }
+    }
     // What does not apply to the message left out.
     card(Actions* a, const menu_facts& facts)
         : actions_of(a),

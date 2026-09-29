@@ -25,6 +25,10 @@ class menu_part {
   void apply(const request::message_menu& one) {
     target_ = one;
     s_->root().open_menu(one);
+    // The menu takes the keys, as tdesktop's: the arrows go through it,
+    // Enter does what is lit, Esc closes it. Nothing lit until an arrow.
+    if (skiff::scene::Node* card = s_->root().menu_card())
+      s_->scene->focus(*card);
   }
   void apply(const request::close_menu&) { s_->root().close_menu(); }
 

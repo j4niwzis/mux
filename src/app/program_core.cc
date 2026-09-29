@@ -58,6 +58,17 @@ void app::woken() {
                                // A room looked up: its card filled, while it
                                // is up for that room still.
                                [&](const mux::change::room_previewed& shown) {
+                                 // Asked for a pill: the room there or not, and
+                                 // its picture, under the address it was named by.
+                                 if (pictures.pill_rooms.contains(shown.asked) &&
+                                     !(previewing && previewing->step.room == shown.asked)) {
+                                   if (!shown.preview.id.empty()) {
+                                     mux::ui::rooms_found().insert(shown.asked);
+                                     if (shown.preview.avatar)
+                                       net->fetch_avatar(shown.by, *shown.preview.avatar, shown.asked);
+                                   }
+                                   return;
+                                 }
                                  if (!previewing || !root().room_card_up() || previewing->step.by != shown.by ||
                                      previewing->step.room != shown.asked)
                                    return;

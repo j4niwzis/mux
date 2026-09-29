@@ -165,6 +165,11 @@ class pictures_part {
           // at -- not every picture in its history, which pushed the rest out.
           // While a message is being jumped to, only those right around it:
           // what was loaded on the way is not looked at.
+          // Rooms named in its messages, not joined: their server asked,
+          // once, whether they are there and what their picture is.
+          for (const std::string& room : std::exchange(screen.rooms_wanted, {}))
+            if (pill_rooms.insert(room).second)
+              s_->net->preview_room(id, room, {});
           auto [from, to] = screen.made_indices(one.timeline);
           if (const auto& target = screen.jump_target()) {
             const auto found = std::ranges::find(one.timeline, *target, &message::id);
@@ -575,6 +580,13 @@ class pictures_part {
   }
   // The links whose previews were asked for, not to be asked twice.
   std::set<std::string> links_asked_;
+
+public:
+  // Rooms asked of for a message's pill: what their server says goes to the
+  // pill, not a card.
+  std::set<std::string> pill_rooms;
+
+private:
   std::size_t written_ = 0;
   std::uintmax_t on_disk_ = 512u << 20;
 };

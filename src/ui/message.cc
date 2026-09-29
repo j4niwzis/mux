@@ -511,7 +511,17 @@ struct reaction_row : nodes::Flow<std::vector<reaction_chip>> {
 // drawn as a pill with a small avatar and the name it goes by here (a
 // room's name, a member's), a link to it. The text is given back with the
 // names in place of the IDs, and its links with it.
+// Rooms not joined here whose server said they are there, by the address a
+// message names them by: shown as pills; one not said to be is plain text.
+inline std::set<std::string, std::less<>>& rooms_found() {
+  static std::set<std::string, std::less<>> kept;
+  return kept;
+}
 struct mentioned {
+  // Rooms named in it whose picture (or whose being there) is still to
+  // come: made again when it has. And the rooms not joined, to be asked of.
+  std::vector<std::string> waiting;
+  std::vector<std::string> unknown;
   std::string text;
   std::vector<nodes::Text::Link> links;
   std::vector<std::pair<std::string, logic::link::room>> cards;  // the link, and the room it is of
@@ -604,17 +614,29 @@ struct mentioned {
     const bool person = span.pill && std::visit(overloaded{[](const logic::link::person&) { return true; },
                                                            [](const auto&) { return false; }},
                                                 *span.pill);
-    if (span.pill && span.as_written && !person) {
-      // A room's address written in the text: shown as written, not by the
-      // room's name; a pill with its avatar where the room is one this
-      // account knows, else the address alone.
+    if (span.pill && !person) {
+      // A room: a pill where it is joined here, or its server said it is
+      // there -- its picture in it only where it has a real one; a room
+      // not known to be there is its text alone, nothing drawn for it.
+      // Written as an address, it stays as written; named by words over a
+      // link, by its name.
       const bool known = now && logic::chat_of(*now, *span.pill).has_value();
       const auto [name, target] = name_of(*span.pill);
-      if (known) {
-        shown = "\u2002\u2002" + *span.as_written;
-        pill = nodes::Text::Link{span.first, span.first + shown.size(), "https://matrix.to/#/" + target, true};
+      const bool found = known || rooms_found().contains(target);
+      const bool pictured = avatar_images().has(target);
+      const std::string words = span.as_written ? *span.as_written
+                                                : std::string(text.substr(span.first, span.last - span.first));
+      if (!found) {
+        out.unknown.push_back(target);
+        out.waiting.push_back(target);
+        shown = words;
+        if (!span.as_written)
+          out.links.push_back(nodes::Text::Link{span.first, span.first + shown.size(), "https://matrix.to/#/" + target});
       } else {
-        shown = *span.as_written;
+        if (!pictured)
+          out.waiting.push_back(target);
+        shown = (pictured ? std::string("\u2002\u2002") : std::string()) + (span.as_written ? words : name);
+        pill = nodes::Text::Link{span.first, span.first + shown.size(), "https://matrix.to/#/" + target, true};
       }
     } else if (span.pill) {
       const auto [name, target] = name_of(*span.pill);
@@ -703,6 +725,13 @@ struct message_pictures {
   static std::optional<skiff::scene::PillPicture> pill(std::string_view target) {
     const auto at = target.find("#/");
     const std::string_view id = at == std::string_view::npos ? target : target.substr(at + 2);
+    // A room's: its real picture only.
+    if (id.starts_with('#') || id.starts_with('!')) {
+      const skia::Sp<skia::SkImage>* real = avatar_images().find(id);
+      if (!real || !*real)
+        return std::nullopt;
+      return skiff::scene::PillPicture{real, 0, 0, std::string()};
+    }
     const auto [top, bottom] = userpic_colours(id);
     return skiff::scene::PillPicture{avatar_images().find(id), top, bottom, initials_of(id)};
   }
@@ -1126,6 +1155,8 @@ struct message_bubble : nodes::Stack {
     } else {
       shown = with_mentions(said.body.plain, link_spans_in(said.body.plain), in, now);
     }
+    rooms_waiting = std::move(shown.waiting);
+    rooms_unknown = std::move(shown.unknown);
     {
       body.parts.text.setText(shown.text);
       body.parts.text.setLinks(std::move(shown.links), accent_colour);
@@ -1215,6 +1246,15 @@ struct message_bubble : nodes::Stack {
   bool preview_known = false;
   // Whether its chat shows link previews, as it was made.
   bool previews_shown = true;
+  // Rooms it names whose picture or whose being there is still to come; and
+  // those not joined, for the server to be asked of.
+  std::vector<std::string> rooms_waiting;
+  std::vector<std::string> rooms_unknown;
+  [[nodiscard]] bool rooms_came() const {
+    return std::ranges::any_of(rooms_waiting, [](const std::string& key) {
+      return avatar_images().has(key) || rooms_found().contains(key);
+    });
+  }
   skiff::paint::Tween swipe{0.0f, 180.0f, skiff::paint::movement::subtle{}};
   static constexpr float kSwipeToReply = 70.0f;
   // Where it was jumped to: the whole row -- from the message to the edges,

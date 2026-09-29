@@ -10,6 +10,7 @@ import mux.core;
 import mux.config;
 import mux.ui;
 import mux.app.services;
+import mux.logic.drafts;
 
 export namespace mux::app {
 
@@ -17,44 +18,24 @@ class drafts_part {
  public:
   explicit drafts_part(services& shared) : s_(&shared) {}
 
-  // What is in a chat's field, kept as its draft: blank, none.
+  // What is in a chat's field, kept as its draft -- blank, none -- and the
+  // file written where it changed.
   void keep(const conversation_id& in, const std::string& text) {
     auto& drafts = s_->root().main().drafts;
-    const bool blank = std::ranges::all_of(text, [](unsigned char c) { return std::isspace(c) != 0; });
-    const auto found = drafts.find(in);
-    if (blank ? found == drafts.end() : (found != drafts.end() && found->second == text))
+    if (!logic::keep_draft(drafts, in, text) || s_->demo())
       return;
-    if (blank)
-      drafts.erase(in);
-    else
-      drafts.insert_or_assign(in, text);
-    if (s_->demo())
-      return;
-    knot::value::object all;
-    for (const auto& [id, draft] : drafts)
-      all.emplace(id.account.address + "\n" + id.id, knot::value(draft));
     const auto where = mux::config::state_path("drafts.json");
     std::error_code failed;
     std::filesystem::create_directories(where.parent_path(), failed);
-    std::ofstream(where, std::ios::binary | std::ios::trunc) << knot::to_json_string(knot::value(std::move(all)));
+    std::ofstream(where, std::ios::binary | std::ios::trunc) << logic::drafts_text(drafts);
   }
 
   // The drafts kept, back in the window: at the start.
   void load() {
     std::ifstream file(mux::config::state_path("drafts.json"), std::ios::binary);
     const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-    auto parsed = knot::try_read<knot::value>(std::string_view(text));
-    if (!parsed || !parsed->is<knot::value::object>())
-      return;
-    for (const auto& [key, draft] : parsed->as<knot::value::object>()) {
-      const auto cut = key.find('\n');
-      if (cut == std::string::npos || !draft.is<std::string>())
-        continue;
-      const std::string address = key.substr(0, cut);
-      s_->root().main().drafts.insert_or_assign(
-          conversation_id{account_id{mux::ui::protocol_of(address), address}, key.substr(cut + 1)},
-          draft.as<std::string>());
-    }
+    for (auto& [in, draft] : logic::drafts_from(text))
+      s_->root().main().drafts.insert_or_assign(in, std::move(draft));
   }
 
  private:

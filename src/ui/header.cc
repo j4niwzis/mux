@@ -111,55 +111,6 @@ struct chat_header : nodes::Stack {
   }
 };
 
-// A text with its case folded, for finding words in any case: Latin, Greek
-// and Cyrillic capitals made small; the rest as it is.
-[[nodiscard]] inline std::string folded(std::string_view text) {
-  std::string out;
-  out.reserve(text.size());
-  std::size_t at = 0;
-  const auto put = [&](char32_t c) {
-    if (c < 0x80) {
-      out += static_cast<char>(c);
-    } else if (c < 0x800) {
-      out += static_cast<char>(0xC0 | (c >> 6));
-      out += static_cast<char>(0x80 | (c & 0x3F));
-    } else if (c < 0x10000) {
-      out += static_cast<char>(0xE0 | (c >> 12));
-      out += static_cast<char>(0x80 | ((c >> 6) & 0x3F));
-      out += static_cast<char>(0x80 | (c & 0x3F));
-    } else {
-      out += static_cast<char>(0xF0 | (c >> 18));
-      out += static_cast<char>(0x80 | ((c >> 12) & 0x3F));
-      out += static_cast<char>(0x80 | ((c >> 6) & 0x3F));
-      out += static_cast<char>(0x80 | (c & 0x3F));
-    }
-  };
-  while (at < text.size()) {
-    const auto lead = static_cast<unsigned char>(text[at]);
-    const std::size_t length = lead < 0x80 ? 1 : lead < 0xE0 ? 2 : lead < 0xF0 ? 3 : 4;
-    if (at + length > text.size() || (length > 1 && lead < 0xC0)) {
-      out += text[at++];
-      continue;
-    }
-    char32_t c = length == 1 ? lead : lead & (0xFF >> (length + 1));
-    for (std::size_t i = 1; i < length; ++i)
-      c = (c << 6) | (static_cast<unsigned char>(text[at + i]) & 0x3F);
-    at += length;
-    if (c >= U'A' && c <= U'Z')
-      c += 0x20;
-    else if (c >= 0x0410 && c <= 0x042F)  // А..Я
-      c += 0x20;
-    else if (c >= 0x0400 && c <= 0x040F)  // Ѐ..Џ, Ё among them
-      c += 0x50;
-    else if (c >= 0x0391 && c <= 0x03A9 && c != 0x03A2)  // Α..Ω
-      c += 0x20;
-    else if (c >= 0x00C0 && c <= 0x00DE && c != 0x00D7)  // À..Þ
-      c += 0x20;
-    put(c);
-  }
-  return out;
-}
-
 // Finding in a chat, as tdesktop's search in a chat: in place of the head,
 // a field with the magnifier, how many are found and which is shown ("3 of
 // 12"), the arrows to the newer and the older, and ✕. Enter goes to the

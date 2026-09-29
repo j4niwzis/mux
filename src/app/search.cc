@@ -10,6 +10,7 @@ import mux.ui;
 import mux.app.store;
 import mux.app.requests;
 import mux.app.services;
+import mux.logic.search;
 
 export namespace mux::app {
 
@@ -63,44 +64,20 @@ class search_part {
     if (!searching_)
       return;
     auto& screen = s_->root().main();
-    const std::size_t count = searching_->found.size();
-    if (count > 0) {
-      if (!searching_->at)
-        searching_->at = 0;
-      else if (older && *searching_->at + 1 < count)
-        ++*searching_->at;
-      else if (!older && *searching_->at > 0)
-        --*searching_->at;
+    searching_->at = logic::stepped(searching_->at, searching_->found.size(), older);
+    if (searching_->at)
       screen.jump_to(searching_->found[*searching_->at]);
-    }
-    screen.search.show_found(searching_->at, count, !searching_->query.empty());
+    screen.search.show_found(searching_->at, searching_->found.size(), !searching_->query.empty());
   }
 
-  // The messages of a chat with the words asked in their text or in the
-  // name of what they carry, any case: all it has -- those on disk and those
-  // in memory -- newest first.
+  // What is found in a chat: in all it has, those on disk and those in
+  // memory.
   std::vector<std::string> find_in(const conversation_id& in, std::string_view query) {
-    const std::string asked = mux::ui::folded(query);
-    if (asked.empty())
-      return {};
     std::map<std::string, message> all = s_->store->everything(in);
     if (const conversation* chat = s_->model->find(in))
       for (const message& one : chat->timeline)
         all.insert_or_assign(one.id, one);
-    std::vector<const message*> hits;
-    for (const auto& [id, one] : all) {
-      if (one.redacted)
-        continue;
-      const bool in_text = mux::ui::folded(one.body.plain).contains(asked);
-      const bool in_name = one.attachment && mux::ui::folded(one.attachment->name).contains(asked);
-      if (in_text || in_name)
-        hits.push_back(&one);
-    }
-    std::ranges::sort(hits, std::ranges::greater{}, &message::at);
-    std::vector<std::string> out;
-    for (const message* one : hits)
-      out.push_back(one->id);
-    return out;
+    return logic::found_in(all, query);
   }
 
   services* s_;

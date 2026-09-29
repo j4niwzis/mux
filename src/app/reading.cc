@@ -14,6 +14,7 @@ import mux.app.network;
 import mux.app.store;
 import mux.app.requests;
 import mux.app.services;
+import mux.logic.reading;
 
 export namespace mux::app {
 
@@ -29,49 +30,36 @@ class reading_part {
     const conversation* one = s_->model->find(which);
     if (!one)
       return;
-    for (auto it = one->timeline.rbegin(); it != one->timeline.rend(); ++it)
-      if (!it->outgoing && !it->id.empty()) {
-        if (one->read_up_to == it->id)
-          return;
-        const std::string id = it->id;
-        s_->model->read_up_to(which, id);
-        s_->store->keep_reads(which, *s_->model->find(which));
-        if (const auto* account = s_->settings_of(which.account.address);
-            account && mux::config::read_receipts_of(*account))
-          s_->net->mark_read(which, id);
-        return;
-      }
+    const auto id = logic::to_mark_read(*one);
+    if (!id)
+      return;
+    s_->model->read_up_to(which, *id);
+    s_->store->keep_reads(which, *s_->model->find(which));
+    if (const auto* account = s_->settings_of(which.account.address);
+        account && mux::config::read_receipts_of(*account))
+      s_->net->mark_read(which, *id);
   }
 
-  // The user typing in the chosen chat, or not: said, where the account's
-  // privacy lets it -- 'typing' at most every twenty seconds while it goes
-  // on, and 'stopped' when it stops or the chat is left.
+  // The user typing in the chosen chat, or not: said as the logic of it
+  // says, where the account's privacy lets it.
   void apply(const request::typing& one) {
     if (s_->demo())
       return;
-    const auto& chosen = s_->root().main().chosen;
-    const auto now = std::chrono::steady_clock::now();
     const auto allowed = [&](const conversation_id& in) {
       const auto* account = s_->settings_of(in.account.address);
       return account && mux::config::send_typing_of(*account);
     };
-    if (typing_in_ && (!one.on || typing_in_ != chosen)) {
-      if (allowed(*typing_in_))
-        s_->net->typing(*typing_in_, false);
-      typing_in_.reset();
-    }
-    if (one.on && chosen && allowed(*chosen) &&
-        (typing_in_ != chosen || now - typing_said_ > std::chrono::seconds(20))) {
-      s_->net->typing(*chosen, true);
-      typing_in_ = chosen;
-      typing_said_ = now;
-    }
+    auto step = logic::typing_after(typing_, one.on, s_->root().main().chosen, std::chrono::steady_clock::now(), allowed);
+    for (const auto& said : step.say)
+      std::visit(overloaded{[&](const logic::typing_said::started& it) { s_->net->typing(it.in, true); },
+                            [&](const logic::typing_said::stopped& it) { s_->net->typing(it.in, false); }},
+                 said);
+    typing_ = step.next;
   }
 
  private:
   services* s_;
-  std::optional<conversation_id> typing_in_;
-  std::chrono::steady_clock::time_point typing_said_{};
+  logic::typing_state typing_;
 };
 
 }  // namespace mux::app

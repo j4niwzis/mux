@@ -10,6 +10,7 @@ import skiff.nodes;
 import skiff.widgets;
 import mux.core;
 import mux.config;
+import mux.logic.text;
 
 export namespace mux::ui {
 
@@ -34,7 +35,7 @@ inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 // The protocol an address speaks: a Matrix user ID starts with '@', and a JID
 // cannot.
 [[nodiscard]] inline protocol_t protocol_of(std::string_view address) {
-  return config::is_matrix(address) ? protocol_t{protocol::matrix{}} : protocol_t{protocol::xmpp{}};
+  return logic::protocol_of(address);
 }
 
 // What the screens ask of the program. Each is a request: the program acts on

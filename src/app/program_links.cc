@@ -82,8 +82,12 @@ void app::apply(const request::jump_to_mark& one) {
                  one.kind);
   if (marks.empty())
     return;
-  const std::string target = marks.front().target;
-  model->apply(mux::change_t{mux::change::mark_taken{*chosen, one.kind}});
+  // The oldest first, as Telegram goes through them: by when each came, not
+  // by the order they were learned in -- the ones caught up after a restart
+  // come in after newer ones.
+  const auto oldest = std::ranges::min_element(marks, {}, &mux::unread_mark::at);
+  const std::string target = oldest->target;
+  model->apply(mux::change_t{mux::change::mark_taken{*chosen, one.kind, oldest->event}});
   this->save_marks();
   root().main().jump_to(target);
   this->refresh();

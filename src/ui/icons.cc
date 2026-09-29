@@ -40,6 +40,7 @@ struct minus {};
 struct search {};  // a magnifier
 struct up {};      // a chevron up
 struct down {};    // a chevron down
+struct download {};  // an arrow down onto a line: saved to the disk
 struct reply {};   // tdesktop's historyReplyIcon: an arrow turned back
 struct pencil {};  // tdesktop's historyEditIcon
 struct smile {};   // tdesktop's historyEmojiIcon: a round face
@@ -54,7 +55,7 @@ using icon_t = std::variant<icon::none, icon::person, icon::gear, icon::power, i
                             icon::close, icon::info, icon::people, icon::add_person, icon::bell, icon::sliders,
                             icon::leave, icon::check, icon::clip, icon::send, icon::eye, icon::dot, icon::minus,
                             icon::reply, icon::pencil, icon::search, icon::up, icon::down, icon::smile,
-                            icon::play, icon::pause>;
+                            icon::play, icon::pause, icon::download>;
 
 // Each icon's shape, as data, in points from the middle of its box -- about
 // 20 across -- for nodes::Icon to draw.
@@ -171,6 +172,12 @@ namespace steps = nodes::path_step;
 }
 [[nodiscard]] inline IconShape shape_of(icon::down) {
   return {{{marks::line{-6.0f, -3.0f, 0.0f, 3.0f}, 2.0f}, {marks::line{0.0f, 3.0f, 6.0f, -3.0f}, 2.0f}}};
+}
+// tdesktop's media viewer's: an arrow down onto a line.
+[[nodiscard]] inline IconShape shape_of(icon::download) {
+  return {{{marks::line{0.0f, -9.0f, 0.0f, 4.0f}, 2.0f},
+           {marks::path{{steps::move{-5.5f, -1.5f}, steps::line{0.0f, 4.0f}, steps::line{5.5f, -1.5f}}}, 2.0f},
+           {marks::line{-8.0f, 9.0f, 8.0f, 9.0f}, 2.0f}}};
 }
 // A face: its round, two eyes, a smile.
 [[nodiscard]] inline IconShape shape_of(icon::smile) {

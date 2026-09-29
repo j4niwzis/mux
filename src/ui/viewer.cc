@@ -57,7 +57,7 @@ struct picture_viewer : nodes::Stack {
                 .texts = two_lines(name, when, 14.0f, 2.0f),
                 .smaller = icon_button<zoom_by>(icon::minus{}, {viewer, 1.0f / 1.25f}),
                 .larger = icon_button<zoom_by>(icon::plus{}, {viewer, 1.25f}),
-                .save = icon_button<save_it>(icon::send{}, {a, source}),
+                .save = icon_button<save_it>(icon::download{}, {a, source}),
                 .close = close_button(icon::close{}, {a})} {
       this->setHorizontal();
       this->setGap(8.0f);

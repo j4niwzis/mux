@@ -16,6 +16,17 @@ import skia;
 import skiff.paint;
 import skiff.scene;
 
+namespace mux::host::shipped {
+// Telegram Desktop's own faces, in the binary: Open Sans, regular and
+// semibold, as it draws its text with (SIL Open Font License, fonts/OFL.txt).
+constexpr unsigned char open_sans_regular[] = {
+#embed "../fonts/OpenSans-Regular.ttf"
+};
+constexpr unsigned char open_sans_semibold[] = {
+#embed "../fonts/OpenSans-SemiBold.ttf"
+};
+}  // namespace mux::host::shipped
+
 export namespace mux::host {
 
 // The event another thread pushes to wake the window: SDL's queue is the one
@@ -40,8 +51,9 @@ struct options {
   std::string fonts = "/usr/share/fonts";
 };
 
-// The system's fonts, until mux ships its own: a sans-serif face first, and
-// faces for what it does not cover -- CJK, emoji -- behind it.
+// Open Sans, shipped, as Telegram Desktop's text is: regular, and semibold
+// for what is bold -- two faces, not one thickened. The system's fonts are
+// behind them for what they do not cover -- CJK, emoji.
 inline void load_fonts(const std::string& directory) {
   auto manager = skia::SkFontMgr_New_Custom_Directory(directory.c_str());
   if (!manager) {
@@ -58,13 +70,27 @@ inline void load_fonts(const std::string& directory) {
   }
   if (!primary && manager->countFamilies() > 0)
     primary = manager->createStyleSet(0)->createTypeface(0);
-  if (primary)
+  const auto shipped_face = [&](const unsigned char* bytes, std::size_t size) {
+    return manager->makeFromData(skia::SkData::MakeWithoutCopy(bytes, size));
+  };
+  auto regular = shipped_face(shipped::open_sans_regular, sizeof shipped::open_sans_regular);
+  auto semibold = shipped_face(shipped::open_sans_semibold, sizeof shipped::open_sans_semibold);
+  if (regular && semibold) {
+    primary = regular;
+    skiff::paint::fonts().setPrimary(std::move(regular), std::move(semibold));
+  } else if (primary) {
     skiff::paint::fonts().setPrimary(primary);
+  }
   // Where a character no face loaded here has is looked for: the system's.
   skiff::paint::fonts().setFontManager(manager);
   // What every Text and widget draws with. Without it they draw nothing:
   // the window was its boxes and no words.
   static skia::SkFont font(primary);
+  // Smoothed, and fitted to the pixels only lightly, as Qt draws on Linux:
+  // full hinting is what made the text look heavier than Telegram's.
+  font.setEdging(skia::SkFont::Edging::kAntiAlias);
+  font.setHinting(skia::SkFontHinting::kSlight);
+  font.setSubpixel(true);
   skiff::paint::defaultFont() = &font;
   for (const std::int32_t sample : {0x3042, 0xAC00, 0x4E00, 0x0627, 0x05D0, 0x0915, 0x1F600}) {
     if (auto face = manager->matchFamilyStyleCharacter(nullptr, skia::SkFontStyle(), nullptr, 0, sample))

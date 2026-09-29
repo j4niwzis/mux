@@ -589,8 +589,8 @@ struct app {
   // How much moves, as read, to be written back as it was.
   std::optional<std::string> motion;
   // The theme and the renderer, for the next start: kept in the file.
-  mux::config::theme_t theme = mux::config::theme::dark{};
-  mux::config::accent_t accent = mux::config::accent::blue{};
+  mux::config::theme_t theme = mux::config::theme::tinted{};
+  mux::config::accent_t accent = mux::config::accent::theme_own{};
   mux::config::renderer_t renderer = mux::config::renderer::opengl{};
   // The proxy chosen for the account being added, as it is added.
   std::optional<std::string> new_proxy;

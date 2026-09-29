@@ -14,42 +14,54 @@ export namespace mux::config {
 // A theme, and what draws the window: kept as words in the file, read into
 // these once, and used as these everywhere else.
 namespace theme {
-struct dark {
-  friend bool operator==(dark, dark) = default;
+// Telegram Desktop's four: its base palette, day-blue, night, night-green.
+struct classic {
+  friend bool operator==(classic, classic) = default;
 };
-struct light {
-  friend bool operator==(light, light) = default;
-};
-struct night {
-  friend bool operator==(night, night) = default;
+struct day {
+  friend bool operator==(day, day) = default;
 };
 struct tinted {
   friend bool operator==(tinted, tinted) = default;
 };
+struct night {
+  friend bool operator==(night, night) = default;
+};
 }  // namespace theme
-using theme_t = std::variant<theme::dark, theme::light, theme::night, theme::tinted>;
-// The accent a theme is drawn with, as Telegram's circles offer them.
+using theme_t = std::variant<theme::classic, theme::day, theme::tinted, theme::night>;
+// The accent a theme is drawn with: its own, or one of Telegram's circles --
+// each a shade of its own in each theme.
 namespace accent {
+struct theme_own {
+  friend bool operator==(theme_own, theme_own) = default;
+};
 struct blue {
   friend bool operator==(blue, blue) = default;
 };
 struct green {
   friend bool operator==(green, green) = default;
 };
+struct pink {
+  friend bool operator==(pink, pink) = default;
+};
 struct orange {
   friend bool operator==(orange, orange) = default;
-};
-struct red {
-  friend bool operator==(red, red) = default;
 };
 struct purple {
   friend bool operator==(purple, purple) = default;
 };
-struct cyan {
-  friend bool operator==(cyan, cyan) = default;
+struct red {
+  friend bool operator==(red, red) = default;
+};
+struct grey {
+  friend bool operator==(grey, grey) = default;
+};
+struct gold {
+  friend bool operator==(gold, gold) = default;
 };
 }  // namespace accent
-using accent_t = std::variant<accent::blue, accent::green, accent::orange, accent::red, accent::purple, accent::cyan>;
+using accent_t = std::variant<accent::theme_own, accent::blue, accent::green, accent::pink, accent::orange,
+                              accent::purple, accent::red, accent::grey, accent::gold>;
 namespace renderer {
 struct opengl {
   friend bool operator==(opengl, opengl) = default;
@@ -71,26 +83,32 @@ using proxy_kind_t = std::variant<proxy_kind::socks5, proxy_kind::http>;
 
 // The words of the file, and what they mean: anything else is the default.
 [[nodiscard]] inline theme_t theme_of(const std::optional<std::string>& word) {
-  if (word == "light")
-    return theme::light{};
-  if (word == "night")
+  if (word == "classic")
+    return theme::classic{};
+  if (word == "day" || word == "light")  // "light": mux's own light, before
+    return theme::day{};
+  if (word == "night" || word == "dark")  // "dark": mux's own dark, before
     return theme::night{};
-  if (word == "tinted")
-    return theme::tinted{};
-  return theme::dark{};
+  return theme::tinted{};
 }
 [[nodiscard]] inline accent_t accent_of(const std::optional<std::string>& word) {
+  if (word == "blue" || word == "cyan")
+    return accent::blue{};
   if (word == "green")
     return accent::green{};
+  if (word == "pink")
+    return accent::pink{};
   if (word == "orange")
     return accent::orange{};
-  if (word == "red")
-    return accent::red{};
   if (word == "purple")
     return accent::purple{};
-  if (word == "cyan")
-    return accent::cyan{};
-  return accent::blue{};
+  if (word == "red")
+    return accent::red{};
+  if (word == "grey")
+    return accent::grey{};
+  if (word == "gold")
+    return accent::gold{};
+  return accent::theme_own{};
 }
 [[nodiscard]] inline renderer_t renderer_of(const std::optional<std::string>& word) {
   return word == "software" ? renderer_t{renderer::software{}} : renderer_t{renderer::opengl{}};
@@ -98,16 +116,19 @@ using proxy_kind_t = std::variant<proxy_kind::socks5, proxy_kind::http>;
 [[nodiscard]] inline proxy_kind_t proxy_kind_of(std::string_view word) {
   return word == "http" ? proxy_kind_t{proxy_kind::http{}} : proxy_kind_t{proxy_kind::socks5{}};
 }
-[[nodiscard]] constexpr std::string_view word_of(theme::dark) { return "dark"; }
-[[nodiscard]] constexpr std::string_view word_of(theme::light) { return "light"; }
-[[nodiscard]] constexpr std::string_view word_of(theme::night) { return "night"; }
+[[nodiscard]] constexpr std::string_view word_of(theme::classic) { return "classic"; }
+[[nodiscard]] constexpr std::string_view word_of(theme::day) { return "day"; }
 [[nodiscard]] constexpr std::string_view word_of(theme::tinted) { return "tinted"; }
+[[nodiscard]] constexpr std::string_view word_of(theme::night) { return "night"; }
+[[nodiscard]] constexpr std::string_view word_of(accent::theme_own) { return "theme"; }
 [[nodiscard]] constexpr std::string_view word_of(accent::blue) { return "blue"; }
 [[nodiscard]] constexpr std::string_view word_of(accent::green) { return "green"; }
+[[nodiscard]] constexpr std::string_view word_of(accent::pink) { return "pink"; }
 [[nodiscard]] constexpr std::string_view word_of(accent::orange) { return "orange"; }
-[[nodiscard]] constexpr std::string_view word_of(accent::red) { return "red"; }
 [[nodiscard]] constexpr std::string_view word_of(accent::purple) { return "purple"; }
-[[nodiscard]] constexpr std::string_view word_of(accent::cyan) { return "cyan"; }
+[[nodiscard]] constexpr std::string_view word_of(accent::red) { return "red"; }
+[[nodiscard]] constexpr std::string_view word_of(accent::grey) { return "grey"; }
+[[nodiscard]] constexpr std::string_view word_of(accent::gold) { return "gold"; }
 [[nodiscard]] constexpr std::string_view word_of(renderer::opengl) { return "opengl"; }
 [[nodiscard]] constexpr std::string_view word_of(renderer::software) { return "software"; }
 [[nodiscard]] constexpr std::string_view word_of(proxy_kind::socks5) { return "socks5"; }

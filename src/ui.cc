@@ -1207,16 +1207,17 @@ struct conversation_row : nodes::Stack {
     std::optional<message> last;
     std::int64_t unread = 0;
     bool chosen = false, muted = false;
+    std::string draft;
     friend bool operator==(const view&, const view&) = default;
   };
-  [[nodiscard]] static view view_of(const conversation& one, bool is_chosen, bool is_muted) {
+  [[nodiscard]] static view view_of(const conversation& one, bool is_chosen, bool is_muted, std::string draft = {}) {
     return {display_name(one), one.timeline.empty() ? std::nullopt : std::optional<message>(one.timeline.back()),
-            one.unread_here(), is_chosen, is_muted};
+            one.unread_here(), is_chosen, is_muted, std::move(draft)};
   }
   view shown;
 
-  conversation_row(Actions* a, const conversation& one, bool is_chosen, bool is_muted)
-      : actions(a), id(one.id), chosen(is_chosen), muted(is_muted), shown(view_of(one, is_chosen, is_muted)),
+  conversation_row(Actions* a, const conversation& one, bool is_chosen, bool is_muted, std::string draft = {})
+      : actions(a), id(one.id), chosen(is_chosen), muted(is_muted), shown(view_of(one, is_chosen, is_muted, draft)),
         face(one.id.id, display_name(one), 46.0f),
         lines(display_name(one), one.unread_here(), is_chosen, is_muted) {
     this->setHorizontal();
@@ -1235,6 +1236,13 @@ struct conversation_row : nodes::Stack {
       else if (is_group(one))
         text = sender_name(one, last.sender) + ": " + text;
       lines.bottom.preview.setText(std::move(text));
+    }
+    // A draft left in it: said instead, as tdesktop says it, in red.
+    if (!shown.draft.empty() && !is_chosen) {
+      std::string text = shown.draft;
+      std::ranges::replace(text, '\n', ' ');
+      lines.bottom.preview.setText("Draft: " + text);
+      lines.bottom.preview.setColour(error_colour);
     }
   }
 
@@ -2888,6 +2896,12 @@ struct conversations_screen : nodes::Stack {
   // the chosen one.
   // The chats muted, as the program keeps them.
   std::set<conversation_id> muted;
+  // What is left written in each chat, as the program keeps it.
+  std::map<conversation_id, std::string> drafts;
+  [[nodiscard]] std::string draft_of(const conversation_id& id) const {
+    const auto found = drafts.find(id);
+    return found == drafts.end() ? std::string() : found->second;
+  }
   // Where the chosen chat pages back from, and where it was last asked to:
   // scrolled to its top, the older messages are asked for, once for each.
   std::optional<std::string> history_from;
@@ -3101,10 +3115,11 @@ struct conversations_screen : nodes::Stack {
             rows, chats, [](const conversation* one) { return one->id; },
             [](const conversation_row<Actions>& row) { return row.id; },
             [&](const conversation* one) {
-              return conversation_row<Actions>(actions, *one, is_chosen(one), muted.contains(one->id));
+              return conversation_row<Actions>(actions, *one, is_chosen(one), muted.contains(one->id), draft_of(one->id));
             },
             [&](const conversation_row<Actions>& row, const conversation* one) {
-              return row.shown == conversation_row<Actions>::view_of(*one, is_chosen(one), muted.contains(one->id));
+              return row.shown ==
+                     conversation_row<Actions>::view_of(*one, is_chosen(one), muted.contains(one->id), draft_of(one->id));
             }))
       list.invalidateLayout();
     const bool none = now.accounts().empty();

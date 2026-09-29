@@ -1217,7 +1217,49 @@ struct app {
     }
   }
 
-  void closing() { net->shutdown(); }
+  void closing() {
+    if (const auto& chosen = root().main().chosen)
+      this->keep_draft(*chosen, root().main().line.text());
+    net->shutdown();
+  }
+  // Drafts: in the screen, and on disk in one small file, written anew
+  // when one changes.
+  void keep_draft(const mux::conversation_id& in, const std::string& text) {
+    auto& drafts = root().main().drafts;
+    const bool blank = std::ranges::all_of(text, [](unsigned char c) { return std::isspace(c) != 0; });
+    const auto found = drafts.find(in);
+    if (blank ? found == drafts.end() : (found != drafts.end() && found->second == text))
+      return;
+    if (blank)
+      drafts.erase(in);
+    else
+      drafts.insert_or_assign(in, text);
+    if (ask.demo)
+      return;
+    knot::value::object all;
+    for (const auto& [id, draft] : drafts)
+      all.emplace(id.account.address + "\n" + id.id, knot::value(draft));
+    const auto where = mux::config::state_path("drafts.json");
+    std::error_code failed;
+    std::filesystem::create_directories(where.parent_path(), failed);
+    std::ofstream(where, std::ios::binary | std::ios::trunc) << knot::to_json_string(knot::value(std::move(all)));
+  }
+  void load_drafts() {
+    std::ifstream file(mux::config::state_path("drafts.json"), std::ios::binary);
+    const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    auto parsed = knot::try_read<knot::value>(std::string_view(text));
+    if (!parsed || !parsed->is<knot::value::object>())
+      return;
+    for (const auto& [key, draft] : parsed->as<knot::value::object>()) {
+      const auto cut = key.find('\n');
+      if (cut == std::string::npos || !draft.is<std::string>())
+        continue;
+      const std::string address = key.substr(0, cut);
+      root().main().drafts.insert_or_assign(
+          mux::conversation_id{mux::account_id{mux::ui::protocol_of(address), address}, key.substr(cut + 1)},
+          draft.as<std::string>());
+    }
+  }
 
   // -- the window
   window_type& root() { return scene.root(); }
@@ -1307,6 +1349,15 @@ struct app {
   }
 
   void apply(const request::choose& one) {
+    // What was being written where the reader was: kept as its draft; and
+    // the chat opened's own put back in the field.
+    auto& screen = root().main();
+    if (screen.chosen && *screen.chosen != one.which) {
+      this->keep_draft(*screen.chosen, screen.line.text());
+      screen.line.set_text(screen.draft_of(one.which));
+    } else if (!screen.chosen) {
+      screen.line.set_text(screen.draft_of(one.which));
+    }
     model->touch(one.which);
     // What was kept of its reads, where the model has nothing newer.
     if (const mux::conversation* chat = model->find(one.which); chat && !ask.demo) {
@@ -2171,6 +2222,7 @@ struct app {
     composing = compose::plain{};
     screen.line.show_context(std::nullopt);
     screen.line.clear();
+    this->keep_draft(to, std::string());
   }
   // Another account's chats listed: the drawer goes back, and no chat is
   // chosen.
@@ -2428,6 +2480,8 @@ int main(int argc, char** argv) {
   program.accent = mux::config::accent_of(saved.accent);
   program.renderer = mux::config::renderer_of(saved.renderer);
   program.limits = saved.cache.value_or(mux::config::cache_limits{});
+  if (!demo)
+    program.load_drafts();
   program.sending = saved.sending.value_or(mux::config::sending_settings{});
   program.apply_limits();
   program.proxies = proxies;

@@ -127,6 +127,35 @@ struct link_card : nodes::Stack {
   return out;
 }
 
+// A preview's line about its page, as Telegram shows one: its whitespace --
+// the page's own lines, a menu's items one under another -- run together,
+// and cut at a word near 200 bytes.
+[[nodiscard]] inline std::string preview_line(std::string_view said) {
+  std::string out;
+  bool gap = false;
+  for (const char c : said) {
+    if (c == ' ' || c == '\n' || c == '\t' || c == '\r') {
+      gap = !out.empty();
+      continue;
+    }
+    if (gap)
+      out += ' ';
+    gap = false;
+    out += c;
+  }
+  constexpr std::size_t kMost = 200;
+  if (out.size() > kMost) {
+    std::size_t cut = out.rfind(' ', kMost);
+    if (cut == std::string::npos || cut < kMost / 2)
+      cut = kMost;
+    while (cut > 0 && (static_cast<unsigned char>(out[cut]) & 0xC0) == 0x80)
+      --cut;  // not inside a character
+    out.resize(cut);
+    out += "\u2026";
+  }
+  return out;
+}
+
 // A link's preview, as Telegram's: under the text, a stripe in the accent,
 // the site's name in it, the page's title and a few lines about it, and its
 // picture on the right.
@@ -140,7 +169,7 @@ struct page_preview : nodes::Stack {
     explicit column(const link_preview& shown)
         : parts{.site = nodes::Text(shown.site, 13.0f, accent_colour, true),
                 .title = nodes::Text(shown.title, 13.0f, text_colour, true),
-                .about = nodes::Text(shown.description, 13.0f, text_colour)} {
+                .about = nodes::Text(preview_line(shown.description), 13.0f, text_colour)} {
       this->setGap(1.0f);
       fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX});
       parts.site.setVisible(!shown.site.empty());

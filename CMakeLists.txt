@@ -87,6 +87,18 @@ cme_find_package(OpenSSL REQUIRED)
 # target too, and mux's modules were matched to it rather than to the std
 # the family's modules were built against.
 
+# alef, which tern reads addresses with and skiff lays text out with, asked
+# for once with all that both of them need, before either asks: a later ask
+# for more of it finds it already built without that, and stops.
+cme_declare_port(NAME alef PROVIDES alef
+  GITHUB_REPOSITORY j4niwzis/alef
+  GIT_TAG 583c3a85adfecf60e68dccd2742e7ad97e667645
+  LICENSE AGPL-3.0-only
+  SYSTEM NEVER
+  TARGETS alef)
+cme_options(alef "ALEF_TESTS OFF")
+cme_find_package(alef COMPONENTS precis idna grapheme line bidi REQUIRED)
+
 cme_find_package(tern REQUIRED)
 # Of loom, what mux uses: the state a sync leaves, and the parts of the API it
 # calls -- logging in, sending, syncing, finding the homeserver.

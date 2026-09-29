@@ -220,7 +220,16 @@ class account {
   http::pool* api_ = nullptr;
   loom::client::state state_;
   std::map<std::string, reaction> reactions_;
+  // A transaction id, unique across runs and not only within one. A server
+  // remembers the ids it has seen per access token and answers a repeated
+  // one with the event it made the first time, sending nothing: a counter
+  // from zero at every start sent "mux1" again after a restart, the answer
+  // was the old message's event, and the message written -- shown for a
+  // moment as it went -- merged into that old one and was never sent.
+  [[nodiscard]] std::string transaction() { return std::format("mux-{}-{}", run_, ++transactions_); }
   std::uint64_t transactions_ = 0;
+  // When this run began, in the clock's ticks: what makes its ids its own.
+  std::int64_t run_ = std::chrono::system_clock::now().time_since_epoch().count();
   bool stopping_ = false;
 };
 

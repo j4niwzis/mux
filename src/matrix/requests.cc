@@ -144,7 +144,7 @@ void account<Sink>::edit(std::string room, std::string event, std::string text) 
     content.emplace("m.relates_to", knot::value(std::move(relates)));
     if (perform(*api_, loom::cs::send_message{.room_id = room,
                                               .event_type = "m.room.message",
-                                              .txn_id = "mux" + std::to_string(++transactions_),
+                                              .txn_id = this->transaction(),
                                               .body = knot::value(std::move(content))}))
       sink_(change::message_edited{{id_, room}, event, body{text, std::nullopt}});
   });
@@ -157,7 +157,7 @@ void account<Sink>::remove(std::string room, std::string event) {
       return;
     if (perform(*api_, loom::cs::redact_event{.room_id = room,
                                               .event_id = event,
-                                              .txn_id = "mux" + std::to_string(++transactions_)}))
+                                              .txn_id = this->transaction()}))
       sink_(change::message_redacted{{id_, room}, event});
   });
 }
@@ -176,7 +176,7 @@ void account<Sink>::react(std::string room, std::string target, std::string key,
       content.emplace("m.relates_to", knot::value(std::move(relates)));
       (void)perform(*api_, loom::cs::send_message{.room_id = room,
                                                   .event_type = "m.reaction",
-                                                  .txn_id = "mux" + std::to_string(++transactions_),
+                                                  .txn_id = this->transaction(),
                                                   .body = knot::value(std::move(content))});
       return;
     }
@@ -184,7 +184,7 @@ void account<Sink>::react(std::string room, std::string target, std::string key,
       if (one.target == target && one.key == key && one.who == id_.address) {
         (void)perform(*api_, loom::cs::redact_event{.room_id = room,
                                                     .event_id = event,
-                                                    .txn_id = "mux" + std::to_string(++transactions_)});
+                                                    .txn_id = this->transaction()});
         return;
       }
   });
@@ -201,7 +201,7 @@ void account<Sink>::leave(std::string room) {
 template <class Sink>
 void account<Sink>::send(std::string room, std::string body, std::optional<std::string> reply_to) {
   loop_->spawn([this, room = std::move(room), body = std::move(body), reply_to = std::move(reply_to)] {
-    const std::string txn = "mux" + std::to_string(++transactions_);
+    const std::string txn = this->transaction();
     const conversation_id in{id_, room};
     sink_(change::message_added{message{
         .in = in,

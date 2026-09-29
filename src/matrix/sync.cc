@@ -329,6 +329,38 @@ inline std::map<std::string, std::int64_t> powers_of(const knot::value& content)
         out.emplace(user, level.as<std::int64_t>());
   return out;
 }
+// What each thing done in a room asks, as its power levels say: read here,
+// where they come in, into what the rest keeps.
+inline power_needs needs_of(const knot::value& content) {
+  power_needs out;
+  const auto level = [&](const knot::value* at, std::int64_t& into) {
+    if (at && at->is<std::int64_t>())
+      into = at->as<std::int64_t>();
+  };
+  level(member(content, "users_default"), out.users_default);
+  level(member(content, "events_default"), out.events_default);
+  level(member(content, "state_default"), out.state_default);
+  level(member(content, "invite"), out.invite);
+  level(member(content, "kick"), out.kick);
+  level(member(content, "ban"), out.ban);
+  level(member(content, "redact"), out.redact);
+  if (const knot::value* told = member(content, "notifications"))
+    level(member(*told, "room"), out.notify_room);
+  if (const knot::value* events = member(content, "events"); events && events->is<knot::value::object>())
+    for (const auto& [kind, needed] : events->as<knot::value::object>())
+      if (needed.is<std::int64_t>())
+        out.events.emplace(kind, needed.as<std::int64_t>());
+  return out;
+}
+// The other addresses a room publishes, besides its canonical one.
+inline std::vector<std::string> other_aliases_of(const knot::value& content) {
+  std::vector<std::string> out;
+  if (const knot::value* alt = member(content, "alt_aliases"); alt && alt->is<knot::value::array>())
+    for (const knot::value& one : alt->as<knot::value::array>())
+      if (one.is<std::string>())
+        out.push_back(one.as<std::string>());
+  return out;
+}
 inline std::int64_t power_default_of(const knot::value& content) {
   const knot::value* level = member(content, "users_default");
   return level && level->is<std::int64_t>() ? level->as<std::int64_t>() : 0;
@@ -400,7 +432,10 @@ void account<Sink>::conversation(const conversation_id& in, const loom::client::
                                      .history = history_rule_of(text(member(state_content(kept, "m.room.history_visibility"),
                                                                             "history_visibility"))),
                                      .powers = powers_of(state_content(kept, "m.room.power_levels")),
-                                     .power_default = power_default_of(state_content(kept, "m.room.power_levels"))});
+                                     .power_default = power_default_of(state_content(kept, "m.room.power_levels")),
+                                     .needs = needs_of(state_content(kept, "m.room.power_levels")),
+                                     .version = text(member(state_content(kept, "m.room.create"), "room_version")).value_or("1"),
+                                     .other_aliases = other_aliases_of(state_content(kept, "m.room.canonical_alias"))});
 }
 
 template <class Sink>

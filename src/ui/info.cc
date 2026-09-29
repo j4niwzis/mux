@@ -89,6 +89,8 @@ struct member_row : nodes::Stack {
         each->setElided(true);
         each->apply({.fillX = true});
       }
+      // No presence known: no line kept for it, the name in the middle.
+      parts.state.setVisible(!parts.state.text().empty());
     }
   };
   // Their role, in a pill beside their name.
@@ -1130,8 +1132,15 @@ struct info_panel : nodes::Stack {
     members_revision = one.members_revision;
     if (!same_members) {
       shown_members.clear();
-      for (const member& each : one.members)
-        shown_members.emplace_back(each, presence_of(now, one.id.account, each.id));
+      for (const member& each : one.members) {
+        // A Matrix room's say as their role, where it gives them one, as
+        // Element marks its admins and moderators.
+        member shown = each;
+        if (!shown.role)
+          if (const auto level = one.powers.find(each.id); level != one.powers.end() && level->second >= 50)
+            shown.role = role_of(level->second);
+        shown_members.emplace_back(std::move(shown), presence_of(now, one.id.account, each.id));
+      }
     }
     auto& rows = std::get<0>(std::get<0>(members.fChildren).fChildren);
     if (!same_members && nodes::reconcile(

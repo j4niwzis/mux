@@ -92,6 +92,9 @@ struct two_lines : nodes::Stack {
       each->setElided(true);
       each->apply({.fillX = true});
     }
+    // Nothing to say under the name -- no presence known, no role: no line
+    // kept for it, the name alone in the middle.
+    parts.state.setVisible(!parts.state.text().empty());
   }
 };
 

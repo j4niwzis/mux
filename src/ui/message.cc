@@ -727,8 +727,27 @@ struct message_bubble : nodes::Stack {
   // The bubble: as wide as what it says, up to its largest.
   struct body_column : nodes::Stack {
     bool outgoing = false;
+    // The sender's name over their run, in their colour, and after it their
+    // role in the room, dim, as Telegram shows "admin".
+    struct name_row : nodes::Stack {
+      struct parts_t {
+        nodes::Text name;
+        nodes::Text role;
+      } parts;
+      name_row(std::string who, skia::SkColor colour, std::string role)
+          : parts{.name = nodes::Text(std::move(who), 13.0f, colour, true),
+                  .role = nodes::Text(std::move(role), 12.0f, dim_colour)} {
+        this->setHorizontal();
+        this->setGap(10.0f);
+        fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth});
+        parts.name.setElided(true);
+        parts.name.apply({.shrink = scene::axes::kX});
+        parts.role.setVisible(!parts.role.text().empty());
+        parts.role.apply({.alignSelf = scene::align::kEnd});
+      }
+    };
     struct parts_t {
-      std::optional<nodes::Text> name;
+      std::optional<name_row> name;
       std::optional<quote_row> quote;
       std::optional<picture_view> picture;
       std::optional<file_view> file;
@@ -888,9 +907,11 @@ struct message_bubble : nodes::Stack {
     if (!(group && !outgoing && last_of_run))
       face.fState.setAlpha(0.0f);  // its room kept, so the run's bubbles line up
     if (group && !outgoing && first_of_run && !said.service) {
-      body.parts.name.emplace(sender_name(in, said.sender), 13.0f, avatar_colour(said.sender), true);
-      body.parts.name->setElided(true);
-      body.parts.name->setMaxWidth(kMaxWidth);
+      // Their role, where the room gives them a say: Matrix's 100 and 50.
+      const auto level = in.powers.find(said.sender);
+      const std::int64_t power = level == in.powers.end() ? in.power_default : level->second;
+      body.parts.name.emplace(sender_name(in, said.sender), avatar_colour(said.sender),
+                              power >= 100 ? std::string("admin") : power >= 50 ? std::string("mod") : std::string());
     }
     // Something done, not said: a line in the middle, on a plate of its own,
     // with no avatar and no name -- as tdesktop's service messages.

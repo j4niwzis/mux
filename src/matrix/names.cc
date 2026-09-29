@@ -200,14 +200,21 @@ template <class Variant, class Other>
 namespace state_type {
 struct space_child {  // m.space.child
   static constexpr bool child = true;
+  static constexpr bool emotes = false;
+};
+struct room_emotes {  // im.ponies.room_emotes: a pack of the room's custom emoji
+  static constexpr bool child = false;
+  static constexpr bool emotes = true;
 };
 struct other {
   static constexpr bool child = false;
+  static constexpr bool emotes = false;
 };
 }  // namespace state_type
-using state_type_t = std::variant<state_type::space_child, state_type::other>;
+using state_type_t = std::variant<state_type::space_child, state_type::room_emotes, state_type::other>;
 [[nodiscard]] inline state_type_t state_type_of(std::optional<std::string_view> name) {
-  static const std::unordered_map<std::string_view, state_type_t> known = {{"m.space.child", state_type::space_child{}}};
+  static const std::unordered_map<std::string_view, state_type_t> known = {
+      {"m.space.child", state_type::space_child{}}, {"im.ponies.room_emotes", state_type::room_emotes{}}};
   return named<state_type_t, state_type::other>(known, name);
 }
 // A server's errcode: the ones that say the session is gone, and the rest.

@@ -141,6 +141,9 @@ class pictures_part {
             for (const auto& [reaction, who] : one.timeline[i].reactions)
               if (reaction.starts_with("mxc://"))
                 want(id, reaction, reaction);
+          // The chat's own custom emoji, for its panels.
+          for (const emote& custom : one.emotes)
+            want(id, custom.url, custom.url);
           // And the custom emoji in their text: an <img> of the server's.
           for (std::size_t i = first; i < last && i < one.timeline.size(); ++i)
             if (const auto& html = one.timeline[i].body.html)

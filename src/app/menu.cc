@@ -24,6 +24,9 @@ class menu_part {
 
   void apply(const request::message_menu& one) {
     target_ = one;
+    const auto& chosen = s_->root().main().chosen;
+    const conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
+    mux::ui::chat_emotes() = chat ? chat->emotes : std::vector<emote>{};
     s_->root().open_menu(one);
     // The menu takes the keys, as tdesktop's: the arrows go through it,
     // Enter does what is lit, Esc closes it. Nothing lit until an arrow.

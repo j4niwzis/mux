@@ -380,7 +380,44 @@ void account<Sink>::conversation(const conversation_id& in, const loom::client::
                                      .children = children_of(kept),
                                      .member_count = kept.summary.joined_members,
                                      .alias = kept.state.canonical_alias(),
-                                     .pinned = pinned_of(kept)});
+                                     .pinned = pinned_of(kept),
+                                     .emotes = emotes_of(kept)});
+}
+
+// A pack's images, as MSC2545 has them: "images", shortcode to {"url"}.
+inline void emotes_from(const knot::value* content, std::vector<mux::emote>& into) {
+  const knot::value* images = content ? member(*content, "images") : nullptr;
+  if (!images || !images->is<knot::value::object>())
+    return;
+  for (const auto& [shortcode, image] : images->as<knot::value::object>()) {
+    const auto url = text(member(image, "url"));
+    if (url && url->starts_with("mxc://") &&
+        std::ranges::find(into, shortcode, &mux::emote::shortcode) == into.end())
+      into.push_back({shortcode, *url});
+  }
+}
+
+template <class Sink>
+auto account<Sink>::emotes_of(const loom::client::joined_room& kept) const -> std::vector<mux::emote> {
+  std::vector<mux::emote> out;
+  if (const auto own = state_.account_data.find("im.ponies.user_emotes"); own != state_.account_data.end()) {
+    const knot::value tree = knot::to_value(own->second);
+    emotes_from(member(tree, "content"), out);
+  }
+  for (const auto& [key, one] : kept.state.events) {
+    if (!std::visit([](auto of) { return of.emotes; }, state_type_of(key.first)))
+      continue;
+    const knot::value tree = knot::to_value(one);
+    emotes_from(member(tree, "content"), out);
+  }
+  return out;
+}
+
+template <class Sink>
+auto account<Sink>::emotes_in(const std::string& room) const -> std::vector<mux::emote> {
+  if (const auto kept = state_.joined.find(room); kept != state_.joined.end())
+    return emotes_of(kept->second);
+  return {};
 }
 
 // The room's pinned messages: m.room.pinned_events' "pinned", as it says.

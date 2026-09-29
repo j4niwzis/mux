@@ -37,6 +37,11 @@ inline std::function<void()>& on_recent_emoji() {
   static std::function<void()> told;
   return told;
 }
+// The custom emoji of the chat the panel is opened over, as the program says.
+inline std::vector<emote>& chat_emotes() {
+  static std::vector<emote> kept;
+  return kept;
+}
 inline void remember_emoji(const std::string& glyph) {
   constexpr std::size_t kKept = 42;
   auto& all = recent_emoji();
@@ -65,7 +70,11 @@ struct emoji_panel : nodes::Stack {
     // The emoji it shows, where it is one of the table's: its tones are
     // found through it.
     const alef::emoji* source = nullptr;
+    // A custom emoji's picture on the server: what a reaction with it is,
+    // while what goes into the text is its :shortcode:.
+    std::string picture_url;
     struct parts_t {
+      std::optional<nodes::Image> picture;
       nodes::Text face;
     } parts;
     cell(emoji_panel* p, std::string g, const alef::emoji* from = nullptr)
@@ -77,11 +86,20 @@ struct emoji_panel : nodes::Stack {
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+    // A custom emoji: its picture in place of a glyph.
+    cell(emoji_panel* p, const emote& custom) : cell(p, ":" + custom.shortcode + ":") {
+      picture_url = custom.url;
+      parts.face.setVisible(false);
+      parts.picture.emplace([url = custom.url] { return avatar_images().find(url); });
+      parts.picture->apply({.width = 26.0f, .height = 26.0f, .alignSelf = scene::align::kMiddle});
+    }
     [[nodiscard]] bool onClick(float, float) {
       const std::string chosen = glyph;
-      remember_emoji(chosen);
+      const std::string key = picture_url.empty() ? glyph : picture_url;
+      if (picture_url.empty())
+        remember_emoji(chosen);
       panel->tones_done = true;
-      panel->pick(chosen);
+      panel->pick(chosen, key);
       return true;
     }
     // The other button: its skin tones, over it, where it has any.
@@ -109,6 +127,17 @@ struct emoji_panel : nodes::Stack {
       cells.reserve(all.size());
       for (const alef::emoji* one : all)
         cells.emplace_back(p, logic::emoji_text(*one), one);
+    }
+    // The chat's custom emoji, as pictures.
+    section(emoji_panel* p, std::string_view name, const std::vector<emote>& custom)
+        : parts{.title = nodes::Text(std::string(name), 13.0f, dim_colour, true)} {
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+      parts.title.apply({.margin = {10.0f, 0.0f, 6.0f, 7.0f}});
+      parts.cells.apply({.fillX = true, .autoSize = scene::axes::kY});
+      auto& cells = std::get<0>(parts.cells.fChildren);
+      cells.reserve(custom.size());
+      for (const emote& one : custom)
+        cells.emplace_back(p, one);
     }
     // The recently used: emoji as they were picked, text already.
     section(emoji_panel* p, std::string_view name, const std::vector<std::string>& glyphs)
@@ -216,7 +245,11 @@ struct emoji_panel : nodes::Stack {
     first_group = 0;
     if (!recent_emoji().empty()) {
       all.emplace_back(this, "Recently used", recent_emoji());
-      first_group = 1;
+      ++first_group;
+    }
+    if (!chat_emotes().empty()) {
+      all.emplace_back(this, "Custom", chat_emotes());
+      ++first_group;
     }
     for (std::size_t g = 0; g < alef::emoji_groups.size(); ++g)
       all.emplace_back(this, alef::emoji_groups[g].name, logic::emoji_of_group(g));
@@ -287,13 +320,13 @@ struct emoji_panel : nodes::Stack {
 template <class Actions>
 struct react_with {
   Actions* actions = nullptr;
-  void operator()(const std::string& glyph) const { actions->menu_react(glyph); }
+  void operator()(const std::string&, const std::string& key) const { actions->menu_react(key); }
 };
 // What the input's emoji do: go into what is written.
 template <class Actions>
 struct insert_emoji_into {
   Actions* actions = nullptr;
-  void operator()(const std::string& glyph) const { actions->insert_emoji(glyph); }
+  void operator()(const std::string& text, const std::string&) const { actions->insert_emoji(text); }
 };
 
 // The GIFs saved, as tdesktop's GIF tab shows them: a grid of them playing,

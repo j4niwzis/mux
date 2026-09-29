@@ -237,6 +237,14 @@ struct member {
   friend bool operator==(const member&, const member&) = default;
 };
 
+// A custom emoji: its shortcode, as written between colons, and its picture
+// on the server -- one of a Matrix room's packs, or the user's own.
+struct emote {
+  std::string shortcode;
+  std::string url;
+  friend bool operator==(const emote&, const emote&) = default;
+};
+
 struct conversation {
   conversation_id id;
   conversation_kind_t kind = conversation_kind::direct{};
@@ -260,6 +268,8 @@ struct conversation {
   // The messages pinned in it, by their ids, oldest first: a Matrix room's
   // m.room.pinned_events.
   std::vector<std::string> pinned;
+  // The custom emoji that can be used in it: its packs' and the user's own.
+  std::vector<emote> emotes;
   // Who has read up to where: each other person's last message read, as
   // their receipts say; and the user's own, kept here whether it is sent or
   // not -- what is unread is counted from it.
@@ -386,6 +396,7 @@ struct conversation_updated {
   std::int64_t member_count = 0;
   std::optional<std::string> alias;
   std::vector<std::string> pinned;
+  std::vector<emote> emotes;
 };
 
 // Receipts: who has read up to which message, as the server says.
@@ -623,6 +634,7 @@ class model {
     kept.member_count = one.member_count;
     kept.alias = one.alias;
     kept.pinned = one.pinned;
+    kept.emotes = one.emotes;
   }
   void on(const change::conversation_removed& one) { of(one.id.account).conversations.erase(one.id.id); }
   void on(const change::presence_changed& one) { of(one.account).presences[one.contact] = one.now; }

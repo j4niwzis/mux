@@ -169,6 +169,10 @@ class account {
   static std::vector<std::string> children_of(const loom::client::joined_room& kept);
   // The room's pinned messages, as its state says.
   static std::vector<std::string> pinned_of(const loom::client::joined_room& kept);
+  // The custom emoji usable in a room: the user's own (im.ponies.user_emotes)
+  // and the room's packs (im.ponies.room_emotes), a shortcode once.
+  [[nodiscard]] std::vector<mux::emote> emotes_of(const loom::client::joined_room& kept) const;
+  [[nodiscard]] std::vector<mux::emote> emotes_in(const std::string& room) const;
 
   // Who is in a room, as its state says: those joined, by their names there.
   // Who is in a room: all of it, where it was asked for (/joined_members),

@@ -174,6 +174,11 @@ void account<Sink>::react(std::string room, std::string target, std::string key,
       relates.emplace("key", knot::value(key));
       knot::value::object content;
       content.emplace("m.relates_to", knot::value(std::move(relates)));
+      if (key.starts_with("mxc://")) {
+        const auto emotes = emotes_in(room);
+        if (const auto found = std::ranges::find(emotes, key, &mux::emote::url); found != emotes.end())
+          content.emplace("com.beeper.reaction.shortcode", knot::value(std::format(":{}:", found->shortcode)));
+      }
       (void)perform(*api_, loom::cs::send_message{.room_id = room,
                                                   .event_type = "m.reaction",
                                                   .txn_id = this->transaction(),
@@ -223,17 +228,58 @@ void account<Sink>::leave(std::string room) {
   });
 }
 
+// A message's text as HTML where it names custom emoji: each :shortcode: the
+// room knows an <img data-mx-emoticon>, as MSC2545 sends them, and the rest
+// escaped. Nothing where it names none.
+[[nodiscard]] inline std::optional<std::string> with_emotes(std::string_view body, const std::vector<mux::emote>& emotes) {
+  if (emotes.empty())
+    return std::nullopt;
+  std::string html;
+  bool any = false;
+  const auto escaped = [&](char c) {
+    switch (c) {
+      case '&': html += "&amp;"; break;
+      case '<': html += "&lt;"; break;
+      case '>': html += "&gt;"; break;
+      case '"': html += "&quot;"; break;
+      case '\n': html += "<br>"; break;
+      default: html += c;
+    }
+  };
+  for (std::size_t at = 0; at < body.size();) {
+    if (body[at] == ':') {
+      const auto end = body.find(':', at + 1);
+      if (end != std::string_view::npos && end > at + 1) {
+        const std::string_view code = body.substr(at + 1, end - at - 1);
+        if (const auto found = std::ranges::find(emotes, code, &mux::emote::shortcode); found != emotes.end()) {
+          html += std::format(R"(<img data-mx-emoticon src="{}" alt=":{}:" title=":{}:" height="32">)", found->url,
+                              code, code);
+          any = true;
+          at = end + 1;
+          continue;
+        }
+      }
+    }
+    escaped(body[at]);
+    ++at;
+  }
+  if (!any)
+    return std::nullopt;
+  return html;
+}
+
 template <class Sink>
 void account<Sink>::send(std::string room, std::string body, std::optional<std::string> reply_to) {
   loop_->spawn([this, room = std::move(room), body = std::move(body), reply_to = std::move(reply_to)] {
     const std::string txn = this->transaction();
     const conversation_id in{id_, room};
+    const auto html = with_emotes(body, emotes_in(room));
     sink_(change::message_added{message{
         .in = in,
         .id = txn,
         .sender = id_.address,
         .at = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()),
-        .body = {body, std::nullopt},
+        .body = {body, html},
         .replies_to = reply_to,
         .outgoing = true,
         .delivery = delivery::sending{}}});
@@ -244,6 +290,10 @@ void account<Sink>::send(std::string room, std::string body, std::optional<std::
     knot::value::object content;
     content.emplace("msgtype", knot::value(std::string("m.text")));
     content.emplace("body", knot::value(body));
+    if (html) {
+      content.emplace("format", knot::value(std::string("org.matrix.custom.html")));
+      content.emplace("formatted_body", knot::value(*html));
+    }
     if (reply_to) {
       knot::value::object target;
       target.emplace("event_id", knot::value(*reply_to));

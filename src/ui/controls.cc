@@ -3,6 +3,7 @@
 export module mux.ui:controls;
 
 import std;
+import mux.variant;
 import skia;
 import skiff.paint;
 import skiff.scene;
@@ -121,7 +122,7 @@ struct row_item : nodes::Stack {
     this->setHorizontal();
     this->setGap(16.0f);
     fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}, .hoverBackground = chosen_colour, .selectedBackground = chosen_colour, .focusBackground = chosen_colour});
-    mark.setVisible(std::visit([](auto one) { return drawn(one); }, icon));
+    mark.setVisible(mux::visit([](auto one) { return drawn(one); }, icon));
     label.setElided(true);
     label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
     dot.set_on(choice.value_or(false));
@@ -370,13 +371,13 @@ struct event_kind_list : nodes::Stack {
   event_kind_list(Actions* a, choice_level_t level, std::optional<bool> all,
                   const std::optional<config::room_event_kinds>& kinds) {
     const bool everywhere =
-        std::visit(overloaded{[](choice_level::everywhere) { return true; }, [](const auto&) { return false; }}, level);
+        mux::visit(overloaded{[](choice_level::everywhere) { return true; }, [](const auto&) { return false; }}, level);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     // Made where they stay: each row's switches know it by its address.
     parts.rows.reserve(1 + kRoomEventKinds);
     parts.rows.emplace_back(a, level, std::nullopt, "All room events", all, !everywhere);
     for (const room_event_t& kind : all_room_events)
-      parts.rows.emplace_back(a, level, kind, std::visit([](auto one) { return label_of(one); }, kind),
+      parts.rows.emplace_back(a, level, kind, mux::visit([](auto one) { return label_of(one); }, kind),
                               logic::choice_of(kinds, kind), true);
   }
 };
@@ -409,7 +410,7 @@ struct jump_search_choice : nodes::Stack {
           parts{.label = nodes::Text("Look back for a message", 14.0f, text_colour),
                 .fallback = segment<choose>("Default", {this, std::nullopt})} {
       const bool everywhere =
-          std::visit(overloaded{[](choice_level::everywhere) { return true; }, [](const auto&) { return false; }}, level);
+          mux::visit(overloaded{[](choice_level::everywhere) { return true; }, [](const auto&) { return false; }}, level);
       this->setHorizontal();
       this->setGap(4.0f);
       fState.apply({.fillX = true, .height = 36.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
@@ -470,7 +471,7 @@ struct previews_choice : nodes::Stack {
                 .show = segment<choose>("Show", {this, true}),
                 .hide = segment<choose>("Hide", {this, false})} {
       const bool everywhere =
-          std::visit(overloaded{[](choice_level::everywhere) { return true; }, [](const auto&) { return false; }}, level);
+          mux::visit(overloaded{[](choice_level::everywhere) { return true; }, [](const auto&) { return false; }}, level);
       this->setHorizontal();
       this->setGap(4.0f);
       fState.apply({.fillX = true, .height = 36.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
@@ -525,7 +526,7 @@ struct receipts_choice : nodes::Stack {
               .show = segment<choose>("Show", {this, true}),
               .hide = segment<choose>("Hide", {this, false})} {
     const bool everywhere =
-        std::visit(overloaded{[](choice_level::everywhere) { return true; }, [](const auto&) { return false; }}, level);
+        mux::visit(overloaded{[](choice_level::everywhere) { return true; }, [](const auto&) { return false; }}, level);
     this->setHorizontal();
     this->setGap(4.0f);
     fState.apply({.fillX = true, .height = 36.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});

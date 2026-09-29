@@ -7,6 +7,7 @@
 export module mux.ui:room_settings;
 
 import std;
+import mux.variant;
 import skia;
 import skiff.paint;
 import skiff.scene;
@@ -83,7 +84,7 @@ struct roles {};
 struct notifications {};
 struct advanced {};
 }  // namespace settings_tab
-using settings_tab_t = std::variant<settings_tab::general, settings_tab::security, settings_tab::roles,
+using settings_tab_t = mux::variant<settings_tab::general, settings_tab::security, settings_tab::roles,
                                     settings_tab::notifications, settings_tab::advanced>;
 
 // A heading over a tab, and over a part of one, as Element's.
@@ -303,7 +304,7 @@ struct room_settings : nodes::Stack {
     }
     void show(const settings_tab_t& tab) {
       const auto is = [&](auto kind) {
-        return std::visit(overloaded{[](decltype(kind)) { return true; }, [](const auto&) { return false; }}, tab);
+        return mux::visit(overloaded{[](decltype(kind)) { return true; }, [](const auto&) { return false; }}, tab);
       };
       parts.general.set_chosen(is(settings_tab::general{}));
       parts.security.set_chosen(is(settings_tab::security{}));
@@ -631,7 +632,7 @@ struct room_settings : nodes::Stack {
     }
   };
 
-  using page_t = std::variant<general_page, security_page, roles_page, notifications_page, advanced_page>;
+  using page_t = mux::variant<general_page, security_page, roles_page, notifications_page, advanced_page>;
   struct page_holder : nodes::Stack {
     struct parts_t {
       page_t page;
@@ -698,7 +699,7 @@ struct room_settings : nodes::Stack {
   }
   void rebuild() {
     const settings_tab_t to = tab;
-    std::visit(overloaded{
+    mux::visit(overloaded{
                    [&](settings_tab::general) { holder().parts.page.template emplace<0>(actions, this, facts); },
                    [&](settings_tab::security) { holder().parts.page.template emplace<1>(actions, this, facts); },
                    [&](settings_tab::roles) { holder().parts.page.template emplace<2>(actions, this, facts); },
@@ -714,7 +715,7 @@ struct room_settings : nodes::Stack {
 
   // What is done: asked of the program, and the facts kept as they will be.
   void store_general() {
-    std::visit(overloaded{[&](general_page& page) {
+    mux::visit(overloaded{[&](general_page& page) {
                             const std::string& name = page.parts.name.text();
                             const std::string& topic = page.parts.topic.text();
                             if (name != facts.name && facts.may(power_need::rename{})) {
@@ -761,7 +762,7 @@ struct room_settings : nodes::Stack {
     if (!facts.may(power_need::change_permissions{}) || level > facts.mine)
       return;
     actions->room_act(room_action::set_need{need, level});
-    std::visit(overloaded{[&](power_need::default_role) { facts.needs.users_default = level; },
+    mux::visit(overloaded{[&](power_need::default_role) { facts.needs.users_default = level; },
                           [&](power_need::send_messages) { facts.needs.events_default = level; },
                           [&](power_need::change_settings) { facts.needs.state_default = level; },
                           [&](power_need::invite) { facts.needs.invite = level; },
@@ -783,7 +784,7 @@ struct room_settings : nodes::Stack {
     this->show_tab(tab);
   }
   void show_new_level() {
-    std::visit(overloaded{[&](roles_page& page) {
+    mux::visit(overloaded{[&](roles_page& page) {
                             page.parts.adding.parts.moderator.set_active(new_level == 50);
                             page.parts.adding.parts.admin.set_active(new_level == 100);
                           },
@@ -792,7 +793,7 @@ struct room_settings : nodes::Stack {
   }
   void apply_new_level() {
     std::string user;
-    std::visit(overloaded{[&](roles_page& page) { user = page.parts.adding.parts.user.text(); }, [](auto&) {}},
+    mux::visit(overloaded{[&](roles_page& page) { user = page.parts.adding.parts.user.text(); }, [](auto&) {}},
                holder().parts.page);
     if (user.empty())
       return;
@@ -808,7 +809,7 @@ struct room_settings : nodes::Stack {
 
   template <class Rule, class Variant>
   [[nodiscard]] static bool is(const Variant& now) {
-    return std::visit(overloaded{[](const Rule&) { return true; }, [](const auto&) { return false; }}, now);
+    return mux::visit(overloaded{[](const Rule&) { return true; }, [](const auto&) { return false; }}, now);
   }
 };
 

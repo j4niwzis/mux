@@ -3,6 +3,7 @@
 module mux.app.program;
 
 import std;
+import mux.variant;
 import knot;
 import skia;
 import mux.core;
@@ -28,7 +29,7 @@ void app::switch_form(void (adding::*to)()) {
   if (!up)
     return;
   pending_login.reset();
-  std::visit(
+  mux::visit(
       [to](accounts& panel) {
         if (auto* pane = panel.adding())
           (pane->*to)();
@@ -61,7 +62,7 @@ void app::remove(const std::string& address) {
 void app::save_from_accounts() {
   if (auto failed = this->write())
     if (auto* up = root().open_panel())
-      std::visit([&](accounts& panel) { panel.say(*failed); }, *up);
+      mux::visit([&](accounts& panel) { panel.say(*failed); }, *up);
 }
 
 }  // namespace mux::app

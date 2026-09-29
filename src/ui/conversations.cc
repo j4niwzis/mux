@@ -3,6 +3,7 @@
 export module mux.ui:conversations;
 
 import std;
+import mux.variant;
 import skia;
 import skiff.paint;
 import skiff.scene;
@@ -43,7 +44,7 @@ struct group {
   friend bool operator==(const group&, const group&) = default;
 };
 }  // namespace folder
-using folder_t = std::variant<folder::all, folder::space, folder::group>;
+using folder_t = mux::variant<folder::all, folder::space, folder::group>;
 
 // A folder's tab over the chat list, as Telegram's: its name, and under
 // the one chosen a line in the accent.
@@ -1025,7 +1026,7 @@ struct conversations_screen : nodes::Stack {
     const auto in_folder = [&](const conversation& one) {
       if (one.space)
         return false;
-      return std::visit(overloaded{[](const folder::all&) { return true; },
+      return mux::visit(overloaded{[](const folder::all&) { return true; },
                                    [&](const folder::space& s) {
                                      const auto found = in->conversations.find(s.room);
                                      return found != in->conversations.end() &&
@@ -1173,7 +1174,7 @@ struct conversations_screen : nodes::Stack {
     const bool same_chat = shown_chat == chosen;
     const auto arrives = [&](std::size_t i) {
       const bool known = !appeared.insert(all[i].id).second;
-      const bool acknowledged = all[i].outgoing && std::visit(overloaded{[](const delivery::sent&) { return true; },
+      const bool acknowledged = all[i].outgoing && mux::visit(overloaded{[](const delivery::sent&) { return true; },
                                                                          [](const auto&) { return false; }},
                                                               all[i].delivery);
       return same_chat && !known && !acknowledged && i + 3 >= all.size();

@@ -3,6 +3,7 @@
 export module mux.matrix:events;
 
 import std;
+import mux.variant;
 import knot;
 import loom.api;
 import loom.ev;
@@ -34,7 +35,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     const auto& content = one.content.template as<loom::ev::m_room_message_content_t>();
     const knot::value* relates = extra(content.rest, one.content, "m.relates_to");
     // An edit: the event it replaces takes its new content.
-    if (std::visit([](auto of) { return of.edit; },
+    if (mux::visit([](auto of) { return of.edit; },
                    relation_of(text(member(relates ? *relates : knot::value(), "rel_type"))))) {
       const auto target = text(member(*relates, "event_id"));
       const knot::value* now = extra(content.rest, one.content, "m.new_content");
@@ -48,7 +49,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
                  .at = at,
                  .body = body_of(content.body, content.rest, one.content),
                  .outgoing = one.sender == id_.address};
-    const auto [carries, picture, emote] = std::visit(
+    const auto [carries, picture, emote] = mux::visit(
         [](auto of) { return std::tuple(of.carries, of.picture, of.is_emote); }, msgtype_of(content.msgtype));
     if (emote)
       made.body.plain = "* " + made.body.plain;
@@ -73,7 +74,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
         carried.blurhash = text(member(*info, "xyz.amorgan.blurhash"));
         // A video: shown by its thumbnail, as a picture, until it can be
         // played here; its own size where the video gives none.
-        const bool video = std::visit(overloaded{[](msgtype::video) { return true; }, [](const auto&) { return false; }},
+        const bool video = mux::visit(overloaded{[](msgtype::video) { return true; }, [](const auto&) { return false; }},
                                       msgtype_of(content.msgtype));
         if (const auto thumbnail = text(member(*info, "thumbnail_url")); video && thumbnail) {
           carried.video = carried.source;
@@ -98,12 +99,12 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     }
     // A gallery (MSC4274): each of its itemtypes read as a picture or a file
     // alone is, its body the caption.
-    if (std::visit(overloaded{[](msgtype::gallery) { return true; }, [](const auto&) { return false; }},
+    if (mux::visit(overloaded{[](msgtype::gallery) { return true; }, [](const auto&) { return false; }},
                    msgtype_of(content.msgtype)))
       if (const knot::value* items = extra(content.rest, one.content, "itemtypes"); items && items->is<knot::value::array>())
         for (const knot::value& item : items->as<knot::value::array>()) {
           const auto kind = text(member(item, "itemtype"));
-          const bool is_picture_item = std::visit([](auto of) { return of.picture; }, msgtype_of(kind));
+          const bool is_picture_item = mux::visit([](auto of) { return of.picture; }, msgtype_of(kind));
           mux::attachment carried;
           carried.source = text(member(item, "url")).value_or("");
           carried.name = text(member(item, "filename")).value_or(text(member(item, "body")).value_or(""));
@@ -136,7 +137,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
         made.replies_to = text(member(*reply, "event_id"));
     // A message for the user, come as it happened: listed, as Telegram's @.
     // Who it mentions, as m.mentions says; before that, the user's ID in it.
-    const bool live = std::visit(overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
+    const bool live = mux::visit(overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
     const auto mentions_me = [&] {
       if (const knot::value* said = extra(content.rest, one.content, "m.mentions")) {
         if (const knot::value* users = member(*said, "user_ids"); users && users->is<knot::value::array>())
@@ -156,14 +157,14 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     if (content.m_relates_to && content.m_relates_to->event_id && content.m_relates_to->key) {
       reactions_[one.event_id] = {*content.m_relates_to->event_id, *content.m_relates_to->key, one.sender};
       const bool live =
-          std::visit(overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
+          mux::visit(overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
       sink_(change::reaction_changed{in, *content.m_relates_to->event_id, *content.m_relates_to->key, one.sender,
                                      true, one.event_id, at, live});
       // Fetched on its own, as what a reply quotes: a message of its own for
       // the quote, whether reactions are shown as events or not -- "Reacted
       // with" its key -- pointing at what it reacted to.
       const std::string& key = *content.m_relates_to->key;
-      std::visit(overloaded{[&](placement::aside) {
+      mux::visit(overloaded{[&](placement::aside) {
                               message made{.in = in,
                                            .id = one.event_id,
                                            .sender = one.sender,
@@ -200,7 +201,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     // The rest, by its type: loom's timeline union does not have their
     // content yet.
     const event_type_t type = event_type_of(one.type);
-    std::visit(overloaded{[&](event_type::encrypted) { encrypted(in, one, at, where); },
+    mux::visit(overloaded{[&](event_type::encrypted) { encrypted(in, one, at, where); },
                           [&](event_type::redaction) { redaction(in, one); },
                           [](event_type::receipt) {},
                           [&](const auto&) { done(in, one, type, at, where); }},
@@ -258,16 +259,16 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
   };
   const std::string who = name_in(in.id, one.sender);
   const auto say = [&](room_event_t kind, std::string said) { service(in, one, at, where, std::move(said), kind); };
-  std::visit(
+  mux::visit(
       overloaded{
           [&](event_type::member) {
             const std::string target_id = one.state_key.value_or(one.sender);
             const std::string target = field(content, "displayname").value_or(name_in(in.id, target_id));
             const membership_t now = membership_of(field(content, "membership"));
             const membership_t was = membership_of(field(before, "membership"));
-            const bool was_in = std::visit([](auto of) { return of.in; }, was);
+            const bool was_in = mux::visit([](auto of) { return of.in; }, was);
             const bool self = one.sender == target_id;
-            std::visit(overloaded{[&](membership::join) {
+            mux::visit(overloaded{[&](membership::join) {
                                     if (!was_in) {
                                       say(room_event::joins{}, std::format("{} joined", target));
                                     } else if (const auto old = field(before, "displayname"); old && *old != target) {
@@ -277,7 +278,7 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
                                     }
                                   },
                                   [&](membership::leave) {
-                                    std::visit(overloaded{[&](membership::ban) { say(room_event::invites{}, std::format("{} unbanned {}", who, target)); },
+                                    mux::visit(overloaded{[&](membership::ban) { say(room_event::invites{}, std::format("{} unbanned {}", who, target)); },
                                                           [&](membership::invite) {
                                                             say(room_event::invites{}, self ? std::format("{} declined the invitation", target)
                                                                      : std::format("{} withdrew {}'s invitation", who, target));
@@ -373,7 +374,7 @@ void account<Sink>::redaction(const conversation_id& in, const loom::ev::timelin
 template <class Sink>
 auto account<Sink>::body_of(std::string plain, const knot::value& content) -> body {
   body made{std::move(plain), std::nullopt};
-  if (std::visit([](auto of) { return of.html_given; }, body_format_of(text(member(content, "format")))))
+  if (mux::visit([](auto of) { return of.html_given; }, body_format_of(text(member(content, "format")))))
     made.html = text(member(content, "formatted_body"));
   return made;
 }

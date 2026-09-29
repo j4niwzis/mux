@@ -5,6 +5,7 @@
 export module mux.app.program;
 
 import std;
+import mux.variant;
 import knot;
 import skia;
 import mux.core;
@@ -156,7 +157,7 @@ struct app : kept_settings {
     const auto found = model->accounts().find(mux::account_id{mux::ui::protocol_of(*pending_login), *pending_login});
     if (found == model->accounts().end())
       return;
-    std::visit(mux::overloaded{[&](const mux::connection::online&) { this->show_conversations(); },
+    mux::visit(mux::overloaded{[&](const mux::connection::online&) { this->show_conversations(); },
                                [&](const mux::connection::failed& why) {
                                  form.say(why.error.empty() ? "The server said no." : why.error, true);
                                  pending_login.reset();
@@ -315,7 +316,7 @@ struct app : kept_settings {
     auto* up = root().open_panel();
     if (!up)
       return;
-    std::visit(
+    mux::visit(
         [&](accounts& panel) {
           if (!panel.selected)
             return;
@@ -418,7 +419,7 @@ struct app : kept_settings {
     // And a Matrix session: the same user on the same homeserver goes on
     // with the device it has, rather than logging in as a new one at every
     // Save.
-    std::visit(mux::overloaded{[](mux::config::matrix_account& now, const mux::config::matrix_account& before) {
+    mux::visit(mux::overloaded{[](mux::config::matrix_account& now, const mux::config::matrix_account& before) {
                                  if (before.user_id == now.user_id && before.homeserver == now.homeserver &&
                                      before.password == now.password) {
                                    now.access_token = before.access_token;

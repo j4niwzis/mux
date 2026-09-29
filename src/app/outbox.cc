@@ -5,6 +5,7 @@
 export module mux.app.outbox;
 
 import std;
+import mux.variant;
 import skia;
 import mux.core;
 import mux.config;
@@ -59,7 +60,7 @@ class outbox_part {
     // Editing: Ctrl+Up and Down step through the user's own messages, the
     // one above or below edited in its place -- past the newest, the edit
     // let go.
-    const std::optional<std::string> editing = std::visit(
+    const std::optional<std::string> editing = mux::visit(
         overloaded{[](const compose::edit& e) { return std::optional<std::string>(e.id); },
                    [](const auto&) { return std::optional<std::string>(); }},
         composing_);
@@ -91,7 +92,7 @@ class outbox_part {
         answerable.push_back(&each);
     if (answerable.empty())
       return;
-    const std::optional<std::string> now = std::visit(
+    const std::optional<std::string> now = mux::visit(
         overloaded{[](const compose::reply& r) { return std::optional<std::string>(r.id); },
                    [](const auto&) { return std::optional<std::string>(); }},
         composing_);
@@ -139,14 +140,14 @@ class outbox_part {
     std::string caption = box->parts.caption.text();
     // Sent while answering: the first of them the answer, as Element sends.
     std::optional<std::string> reply_to =
-        std::visit(overloaded{[](const compose::reply& r) { return std::optional<std::string>(r.id); },
+        mux::visit(overloaded{[](const compose::reply& r) { return std::optional<std::string>(r.id); },
                               [](const auto&) { return std::optional<std::string>(); }},
                    composing_);
     for (file& one : to_send_)
       s_->net->send_file(*chosen, one.local, std::move(one.as.bytes), one.as.name, one.as.mimetype,
                          one.as.picture.has_value(), one.width, one.height, std::exchange(caption, std::string()),
                          std::exchange(reply_to, std::nullopt));
-    if (std::visit(overloaded{[](const compose::reply&) { return true; }, [](const auto&) { return false; }}, composing_)) {
+    if (mux::visit(overloaded{[](const compose::reply&) { return true; }, [](const auto&) { return false; }}, composing_)) {
       composing_ = compose::plain{};
       s_->root().main().line.show_context(std::nullopt);
     }
@@ -236,7 +237,7 @@ class outbox_part {
     screen.jump_to_end();
     // Who was picked from the @ list for it, its pills: sent as mentions.
     auto mentions = screen.line.mentions();
-    std::visit(overloaded{[&](const compose::plain&) {
+    mux::visit(overloaded{[&](const compose::plain&) {
                             if (s_->demo())
                               s_->ask->send(to, std::move(text));
                             else

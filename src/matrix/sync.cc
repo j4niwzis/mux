@@ -3,6 +3,7 @@
 export module mux.matrix:sync;
 
 import std;
+import mux.variant;
 import knot;
 import loom.api;
 import loom.ev;
@@ -121,7 +122,7 @@ void account<Sink>::run() {
                                    std::chrono::seconds(30));
     if (!got) {
       const failure& why = got.error();
-      if (why.server && std::visit([](auto code) { return code.gone; }, errcode_of(why.server->errcode))) {
+      if (why.server && mux::visit([](auto code) { return code.gone; }, errcode_of(why.server->errcode))) {
         // A kept session no longer good: logged in again, once.
         if (kept) {
           log(id_, "the session kept is no longer good: logging in again");
@@ -251,7 +252,7 @@ void account<Sink>::load_kept() {
 // value the spec does not name is taken as offline.
 [[nodiscard]] inline mux::presence presence_from(const loom::ev::m_presence_content_t& content) {
   using values = loom::ev::m_presence_content_t::presence_values;
-  return {std::visit(overloaded{[](values::online) -> mux::availability_t { return mux::availability::online{}; },
+  return {mux::visit(overloaded{[](values::online) -> mux::availability_t { return mux::availability::online{}; },
                                 [](values::unavailable) -> mux::availability_t { return mux::availability::away{}; },
                                 [](values::offline) -> mux::availability_t { return mux::availability::offline{}; },
                                 [](const std::string&) -> mux::availability_t { return mux::availability::offline{}; }},
@@ -265,7 +266,7 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
   if (got.presence && got.presence->events)
     for (const auto& event : *got.presence->events)
       if (event.sender)
-        std::visit(overloaded{[&](const loom::ev::m_presence_content_t& content) {
+        mux::visit(overloaded{[&](const loom::ev::m_presence_content_t& content) {
                                 sink_(change::presence_changed{id_, *event.sender, presence_from(content)});
                               },
                               [](const auto&) {}},
@@ -299,7 +300,7 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
         std::map<std::string, std::string> read_by;
         std::map<std::string, std::chrono::sys_time<std::chrono::milliseconds>> read_at;
         for (const auto& event : *part.ephemeral->events) {
-          const bool receipt = std::visit(overloaded{[](event_type::receipt) { return true; },
+          const bool receipt = mux::visit(overloaded{[](event_type::receipt) { return true; },
                                                      // Every other type an ephemeral event can have.
                                                      [](const auto&) { return false; }},
                                           event_type_of(event.type));
@@ -313,7 +314,7 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
             if (!kinds.is<knot::value::object>())
               continue;
             for (const auto& [kind, users] : kinds.as<knot::value::object>())
-              if (std::visit([](auto of) { return of.read_up_to; }, receipt_kind_of(kind)) &&
+              if (mux::visit([](auto of) { return of.read_up_to; }, receipt_kind_of(kind)) &&
                   users.is<knot::value::object>())
                 for (const auto& [user, when] : users.as<knot::value::object>()) {
                   read_by.insert_or_assign(user, event_id);
@@ -472,7 +473,7 @@ inline bool usable_as_emoji(const knot::value* usage) {
   if (!usage || !usage->is<knot::value::array>() || usage->as<knot::value::array>().empty())
     return true;
   for (const auto& one : usage->as<knot::value::array>())
-    if (one.is<std::string>() && std::visit([](auto of) { return of.as_emoji; }, image_usage_of(one.as<std::string>())))
+    if (one.is<std::string>() && mux::visit([](auto of) { return of.as_emoji; }, image_usage_of(one.as<std::string>())))
       return true;
   return false;
 }
@@ -480,7 +481,7 @@ inline bool usable_as_sticker(const knot::value* usage) {
   if (!usage || !usage->is<knot::value::array>() || usage->as<knot::value::array>().empty())
     return true;
   for (const auto& one : usage->as<knot::value::array>())
-    if (one.is<std::string>() && std::visit([](auto of) { return of.as_sticker; }, image_usage_of(one.as<std::string>())))
+    if (one.is<std::string>() && mux::visit([](auto of) { return of.as_sticker; }, image_usage_of(one.as<std::string>())))
       return true;
   return false;
 }
@@ -513,7 +514,7 @@ auto account<Sink>::emotes_of(const loom::client::joined_room& kept, bool sticke
     emotes_from(member(tree, "content"), out, stickers);
   }
   for (const auto& [key, one] : kept.state.events) {
-    if (!std::visit([](auto of) { return of.emotes; }, state_type_of(key.first)))
+    if (!mux::visit([](auto of) { return of.emotes; }, state_type_of(key.first)))
       continue;
     const knot::value tree = knot::to_value(one);
     emotes_from(member(tree, "content"), out, stickers);
@@ -531,7 +532,7 @@ auto account<Sink>::emotes_of(const loom::client::joined_room& kept, bool sticke
           continue;
         for (const auto& [state_key, ignored] : packs.as<knot::value::object>())
           for (const auto& [key, one] : joined->second.state.events)
-            if (key.second == state_key && std::visit([](auto of) { return of.emotes; }, state_type_of(key.first))) {
+            if (key.second == state_key && mux::visit([](auto of) { return of.emotes; }, state_type_of(key.first))) {
               const knot::value pack = knot::to_value(one);
               emotes_from(member(pack, "content"), out, stickers);
             }
@@ -572,14 +573,14 @@ auto account<Sink>::space(const loom::client::joined_room& kept) -> bool {
   const knot::value tree = knot::to_value(*created);
   const knot::value* content = member(tree, "content");
   const knot::value* type = content ? member(*content, "type") : nullptr;
-  return std::visit([](auto of) { return of.is_space; }, room_type_of(text(type)));
+  return mux::visit([](auto of) { return of.is_space; }, room_type_of(text(type)));
 }
 
 template <class Sink>
 auto account<Sink>::children_of(const loom::client::joined_room& kept) -> std::vector<std::string> {
   std::vector<std::string> out;
   for (const auto& [key, one] : kept.state.events) {
-    if (!std::visit([](auto of) { return of.child; }, state_type_of(key.first)))
+    if (!mux::visit([](auto of) { return of.child; }, state_type_of(key.first)))
       continue;
     const knot::value tree = knot::to_value(one);
     const knot::value* content = member(tree, "content");

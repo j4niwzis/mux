@@ -3,6 +3,7 @@
 export module mux.ui:icons;
 
 import std;
+import mux.variant;
 import skia;
 import skiff.paint;
 import skiff.scene;
@@ -51,7 +52,7 @@ struct dot {
   skia::SkColor colour;
 };
 }  // namespace icon
-using icon_t = std::variant<icon::none, icon::person, icon::gear, icon::power, icon::plus, icon::motion, icon::back,
+using icon_t = mux::variant<icon::none, icon::person, icon::gear, icon::power, icon::plus, icon::motion, icon::back,
                             icon::close, icon::info, icon::people, icon::add_person, icon::bell, icon::sliders,
                             icon::leave, icon::check, icon::clip, icon::send, icon::eye, icon::dot, icon::minus,
                             icon::reply, icon::pencil, icon::search, icon::up, icon::down, icon::smile,
@@ -199,7 +200,7 @@ namespace steps = nodes::path_step;
             0.0f, true}}};
 }
 [[nodiscard]] inline IconShape shape_of(const icon_t& which) {
-  return std::visit([](auto one) { return shape_of(one); }, which);
+  return mux::visit([](auto one) { return shape_of(one); }, which);
 }
 
 // Whether an icon draws anything: all but none.

@@ -3,6 +3,7 @@
 export module mux.ui:forms;
 
 import std;
+import mux.variant;
 import skia;
 import skiff.paint;
 import skiff.scene;
@@ -281,12 +282,12 @@ struct matrix_form : nodes::Stack {
 
 // Either form, as the panels hold them.
 template <class Actions>
-using account_form = std::variant<xmpp_form<Actions>, matrix_form<Actions>>;
+using account_form = mux::variant<xmpp_form<Actions>, matrix_form<Actions>>;
 
 // The form of an account's own protocol, filled in from it.
 template <class Actions>
 [[nodiscard]] account_form<Actions> form_of(Actions* a, const config::account_t& saved) {
-  return std::visit(overloaded{[a](const config::xmpp_account& one) {
+  return mux::visit(overloaded{[a](const config::xmpp_account& one) {
                                  return account_form<Actions>(std::in_place_index<0>, a, one);
                                },
                                [a](const config::matrix_account& one) {
@@ -298,7 +299,7 @@ template <class Actions>
 // The XMPP form among them, when that is the one up.
 template <class Actions>
 [[nodiscard]] xmpp_form<Actions>* xmpp_form_in(account_form<Actions>& form) {
-  return std::visit(overloaded{[](xmpp_form<Actions>& one) { return &one; },
+  return mux::visit(overloaded{[](xmpp_form<Actions>& one) { return &one; },
                                [](matrix_form<Actions>&) -> xmpp_form<Actions>* { return nullptr; }},
                     form);
 }
@@ -306,7 +307,7 @@ template <class Actions>
 // A form laid out in the column under `top`.
 template <class Actions>
 void place_form(account_form<Actions>& form, const skia::SkRect& column, float top) {
-  std::visit(
+  mux::visit(
       [&](auto& one) {
         one.fState.arrange(0.0f, 0.0f);
         scene::layout(one, skia::SkRect::MakeLTRB(column.fLeft, column.fTop + top, column.fRight, column.fBottom));

@@ -3,6 +3,7 @@
 export module mux.ui:context_menu;
 
 import std;
+import mux.variant;
 import skia;
 import skiff.paint;
 import skiff.scene;
@@ -56,7 +57,7 @@ struct emoji {};
 struct stickers {};
 struct gifs {};
 }  // namespace popup_page
-using popup_page_t = std::variant<popup_page::emoji, popup_page::stickers, popup_page::gifs>;
+using popup_page_t = mux::variant<popup_page::emoji, popup_page::stickers, popup_page::gifs>;
 
 // What the mouse rests on in a panel of emoji or stickers, shown large over
 // it, as Telegram's preview: its picture (or its glyph) and its name. Cells
@@ -629,7 +630,7 @@ struct emoji_popup : scene::Node {
     // as their tab opens, for what was saved since.
     void show(const popup_page_t& page) {
       const auto [emoji, stickers, gifs] =
-          std::visit(overloaded{[](popup_page::emoji) { return std::array{true, false, false}; },
+          mux::visit(overloaded{[](popup_page::emoji) { return std::array{true, false, false}; },
                                 [](popup_page::stickers) { return std::array{false, true, false}; },
                                 [](popup_page::gifs) { return std::array{false, false, true}; }},
                      page);

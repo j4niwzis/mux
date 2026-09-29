@@ -22,7 +22,7 @@ struct edit {
   std::string id;
 };
 }  // namespace compose
-using compose_t = std::variant<compose::plain, compose::reply, compose::edit>;
+using compose_t = mux::variant<compose::plain, compose::reply, compose::edit>;
 
 namespace request {
 struct choose {

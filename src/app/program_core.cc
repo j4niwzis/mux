@@ -38,7 +38,7 @@ void app::woken() {
   for (const auto& one : changes) {
     // What the program itself does with a change, besides the model: a
     // session kept, a picture shown.
-    std::visit(mux::overloaded{[&](const mux::change::session_given& given) { this->keep_session(given); },
+    mux::visit(mux::overloaded{[&](const mux::change::session_given& given) { this->keep_session(given); },
                                [&](const mux::change::avatar_loaded& picture) {
                                  pictures.take(picture, true);
                                  mux::ui::download_progress().erase(picture.source);
@@ -95,7 +95,7 @@ void app::woken() {
     // A message deleted: marked where it is kept, and kept whole apart --
     // as it was, before the model takes it out of view.
     if (!ask.demo)
-      std::visit(mux::overloaded{[&](const mux::change::message_redacted& c) {
+      mux::visit(mux::overloaded{[&](const mux::change::message_redacted& c) {
                                    std::optional<mux::message> was;
                                    if (const mux::conversation* chat = model->find(c.in))
                                      if (const auto found = std::ranges::find(chat->timeline, c.id, &mux::message::id);
@@ -117,7 +117,7 @@ void app::woken() {
     return true;
   });
   const bool marks_changed = std::ranges::any_of(changes, [](const mux::change_t& one) {
-    return std::visit(mux::overloaded{[](const mux::change::mentioned&) { return true; },
+    return mux::visit(mux::overloaded{[](const mux::change::mentioned&) { return true; },
                                       [](const mux::change::reacted_to_mine&) { return true; },
                                       [](const mux::change::reaction_changed& c) { return c.live; },
                                       [](const auto&) { return false; }},
@@ -130,12 +130,12 @@ void app::woken() {
   if (!ask.demo) {
     std::set<std::string> mentioning;
     for (const mux::change_t& one : changes)
-      std::visit(mux::overloaded{[&](const mux::change::mentioned& m) { mentioning.insert(m.event); },
+      mux::visit(mux::overloaded{[&](const mux::change::mentioned& m) { mentioning.insert(m.event); },
                                  [](const auto&) {}},
                  one);
     for (const mux::change_t& one : changes)
-      std::visit(mux::overloaded{[&](const mux::change::message_added& added) {
-                                   const bool live = std::visit(
+      mux::visit(mux::overloaded{[&](const mux::change::message_added& added) {
+                                   const bool live = mux::visit(
                                        mux::overloaded{[](mux::placement::at_end) { return true; },
                                                        [](const auto&) { return false; }},
                                        added.where);
@@ -189,7 +189,7 @@ void app::notify_of(const mux::message& said, bool mentions_me) {
   }
   // Shown by the backend chosen: the desktop's service, asked off the UI's
   // thread; or mux's own window, which comes next -- until then, the log.
-  std::visit(mux::overloaded{[&](mux::config::notify_backend::native) {
+  mux::visit(mux::overloaded{[&](mux::config::notify_backend::native) {
                                std::thread([title, text] {
                                  if (!mux::dbus::notify(title, text))
                                    std::println(std::cerr, "[notify] no desktop notification service; {}: {}", title, text);
@@ -255,7 +255,7 @@ void app::keep_on_disk(const mux::change_t& one) {
   const auto added = [&](const mux::change::message_added& c) {
     // A message fetched for a quote is not history read in order: kept on
     // disk, it would be read back as though it were next to the rest.
-    if (std::visit(mux::overloaded{[](mux::placement::aside) { return true; }, [](const auto&) { return false; }},
+    if (mux::visit(mux::overloaded{[](mux::placement::aside) { return true; }, [](const auto&) { return false; }},
                    c.where))
       return;
     const mux::conversation* chat = model->find(c.message.in);
@@ -266,7 +266,7 @@ void app::keep_on_disk(const mux::change_t& one) {
     else if (!c.message.id.empty())
       store.record(c.message);
   };
-  std::visit(mux::overloaded{[&](const mux::change::message_added& c) { added(c); },
+  mux::visit(mux::overloaded{[&](const mux::change::message_added& c) { added(c); },
                              [&](const mux::change::message_edited& c) { as_now(c.in, c.id); },
                              [&](const mux::change::reaction_changed& c) { as_now(c.in, c.id); },
                              [&](const mux::change::receipts_changed& c) {
@@ -285,7 +285,7 @@ void app::keep_session(const mux::change::session_given& given) {
   const auto found = this->find(given.account.address);
   if (found == saved.end())
     return;
-  std::visit(mux::overloaded{[&](mux::config::matrix_account& one) {
+  mux::visit(mux::overloaded{[&](mux::config::matrix_account& one) {
                                one.access_token = given.access_token;
                                one.device_id = given.device_id;
                              },
@@ -400,7 +400,7 @@ auto app::xmpp_form_up() -> mux::ui::xmpp_form<actions>* {
   auto* up = root().open_panel();
   if (!up)
     return nullptr;
-  return std::visit([](auto& panel) { return panel.xmpp(); }, *up);
+  return mux::visit([](auto& panel) { return panel.xmpp(); }, *up);
 }
 
 void app::refresh(std::source_location from) {
@@ -439,7 +439,7 @@ void app::refresh(std::source_location from) {
   root().show(saved, *model);
   root().main().show(*model);
   if (auto* up = root().open_panel())
-    std::visit([this](auto& panel) { this->bring_up_to_date(panel); }, *up);
+    mux::visit([this](auto& panel) { this->bring_up_to_date(panel); }, *up);
 }
 
 void app::bring_up_to_date(accounts& panel) {
@@ -447,7 +447,7 @@ void app::bring_up_to_date(accounts& panel) {
   panel.show(saved, *model);
   if (auto* pane = panel.adding()) {
     pane->set_proxies(proxies);
-    std::visit([this](auto& form) { this->watch_login(form); }, pane->parts.form);
+    mux::visit([this](auto& form) { this->watch_login(form); }, pane->parts.form);
   }
 }
 

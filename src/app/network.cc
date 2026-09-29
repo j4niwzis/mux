@@ -3,6 +3,7 @@
 export module mux.app.network;
 
 import std;
+import mux.variant;
 import mux.core;
 import mux.config;
 import mux.net;
@@ -40,7 +41,7 @@ using matrix_account = mux::matrix::account<post_change>;
 extern template class mux::xmpp::account<mux::app::post_change>;
 extern template class mux::matrix::account<mux::app::post_change>;
 export namespace mux::app {
-using any_account = std::variant<std::unique_ptr<xmpp_account>, std::unique_ptr<matrix_account>>;
+using any_account = mux::variant<std::unique_ptr<xmpp_account>, std::unique_ptr<matrix_account>>;
 
 struct running_account {
   std::string address;
@@ -63,13 +64,13 @@ struct network {
   // An account started, through the profile of `proxies` it names.
   void start(const mux::config::account_t& saved, const std::vector<mux::config::proxy_settings>& proxies) {
     const auto* via = mux::config::find_proxy(proxies, mux::config::proxy_of(saved));
-    std::visit([this, via](const auto& each) { this->start_one(each, proxy_of(via)); }, saved);
+    mux::visit([this, via](const auto& each) { this->start_one(each, proxy_of(via)); }, saved);
   }
   // The proxy a profile names, as mux.net takes it.
   static std::optional<mux::net::proxy> proxy_of(const mux::config::proxy_settings* kept) {
     if (!kept)
       return std::nullopt;
-    return mux::net::proxy{.kind = std::visit(mux::overloaded{[](mux::config::proxy_kind::socks5) {
+    return mux::net::proxy{.kind = mux::visit(mux::overloaded{[](mux::config::proxy_kind::socks5) {
                                                                  return mux::net::proxy_kind_t{mux::net::proxy_kind::socks5{}};
                                                                },
                                                                [](mux::config::proxy_kind::http) {
@@ -108,7 +109,7 @@ struct network {
   }
   void run(const std::string& address, any_account account, std::shared_ptr<std::atomic<bool>> live) {
     running_account entry{address, std::move(account), std::move(live)};
-    std::visit([](auto& one) { one->start(); }, entry.account);
+    mux::visit([](auto& one) { one->start(); }, entry.account);
     accounts.push_back(std::move(entry));
   }
 
@@ -117,7 +118,7 @@ struct network {
     if (found == accounts.end())
       return;
     found->live->store(false);
-    std::visit([](auto& account) { account->stop(); }, found->account);
+    mux::visit([](auto& account) { account->stop(); }, found->account);
     retired.push_back(std::move(*found));
     accounts.erase(found);
   }
@@ -136,7 +137,7 @@ struct network {
             std::vector<mux::mention> mentions = {}) {
     loop.post([this, to, text = std::move(text), reply_to = std::move(reply_to), mentions = std::move(mentions)] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == to.account)
                 account->send(to.id, text, reply_to, mentions);
@@ -147,7 +148,7 @@ struct network {
   void edit(const mux::conversation_id& in, std::string id, std::string text) {
     loop.post([this, in, id = std::move(id), text = std::move(text)] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == in.account)
                 account->edit(in.id, id, text);
@@ -158,7 +159,7 @@ struct network {
   void remove_message(const mux::conversation_id& in, std::string id) {
     loop.post([this, in, id = std::move(id)] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == in.account)
                 account->remove(in.id, id);
@@ -170,7 +171,7 @@ struct network {
   void mark_read(const mux::conversation_id& in, std::string event) {
     loop.post([this, in, event = std::move(event)] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == in.account)
                 account->mark_read(in.id, event);
@@ -186,7 +187,7 @@ struct network {
                mimetype = std::move(mimetype), image, width, height, caption = std::move(caption),
                reply_to = std::move(reply_to)] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == in.account)
                 account->send_file(in.id, local, bytes, name, mimetype, image, width, height, caption, reply_to);
@@ -198,7 +199,7 @@ struct network {
   void react(const mux::conversation_id& in, std::string target, std::string key, bool on) {
     loop.post([this, in, target = std::move(target), key = std::move(key), on] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == in.account)
                 account->react(in.id, target, key, on);
@@ -211,7 +212,7 @@ struct network {
   void on_account_of(const mux::conversation_id& in, Ask ask) {
     loop.post([this, in, ask = std::move(ask)] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == in.account)
                 ask(*account);
@@ -234,7 +235,7 @@ struct network {
   void send_sticker(const mux::conversation_id& to, mux::emote sticker) {
     loop.post([this, to, sticker = std::move(sticker)] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == to.account)
                 account->send_sticker(to.id, sticker);
@@ -246,7 +247,7 @@ struct network {
   void fetch_preview(const mux::account_id& by, std::string url) {
     loop.post([this, by, url = std::move(url)] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == by)
                 account->fetch_preview(url);
@@ -258,7 +259,7 @@ struct network {
   void create_direct(const mux::account_id& by, std::string user) {
     loop.post([this, by, user = std::move(user)] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == by)
                 account->create_direct(user);
@@ -269,7 +270,7 @@ struct network {
   void create_group(const mux::account_id& by, std::string name) {
     loop.post([this, by, name = std::move(name)] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == by)
                 account->create_group(name);
@@ -281,7 +282,7 @@ struct network {
   void forward(const mux::conversation_id& from, std::string event, const mux::conversation_id& to) {
     loop.post([this, from, event = std::move(event), to] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == from.account)
                 account->forward(from.id, event, to.id);
@@ -293,7 +294,7 @@ struct network {
   void manage(const mux::conversation_id& in, mux::room_action_t action) {
     loop.post([this, in, action = std::move(action)] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == in.account)
                 account->manage(in.id, action);
@@ -305,7 +306,7 @@ struct network {
   void fetch_quoted(const mux::conversation_id& in, std::string target) {
     loop.post([this, in, target = std::move(target)] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == in.account)
                 account->fetch_quoted(in.id, target);
@@ -317,7 +318,7 @@ struct network {
   void pin(const mux::conversation_id& in, std::string target, bool on) {
     loop.post([this, in, target = std::move(target), on] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == in.account)
                 account->pin(in.id, target, on);
@@ -329,7 +330,7 @@ struct network {
   void typing(const mux::conversation_id& in, bool on) {
     loop.post([this, in, on] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == in.account)
                 account->typing(in.id, on);
@@ -341,7 +342,7 @@ struct network {
   void search_directory(const mux::account_id& by, std::string server, std::string query) {
     loop.post([this, by, server = std::move(server), query = std::move(query)] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == by)
                 account->search_directory(server, query);
@@ -353,7 +354,7 @@ struct network {
   void create_room(const mux::account_id& by, std::string name, std::string topic, bool open, std::string alias) {
     loop.post([this, by, name = std::move(name), topic = std::move(topic), open, alias = std::move(alias)] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == by)
                 account->create_room(name, topic, open, alias);
@@ -365,7 +366,7 @@ struct network {
   void preview_room(const mux::account_id& by, std::string room, std::vector<std::string> via) {
     loop.post([this, by, room = std::move(room), via = std::move(via)] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == by)
                 account->preview_room(room, via);
@@ -377,7 +378,7 @@ struct network {
   void join(const mux::account_id& by, std::string room, std::vector<std::string> via) {
     loop.post([this, by, room = std::move(room), via = std::move(via)] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == by)
                 account->join(room, via);
@@ -389,7 +390,7 @@ struct network {
   void fetch_members(const mux::conversation_id& in) {
     loop.post([this, in] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == in.account)
                 account->fetch_members(in.id);
@@ -402,7 +403,7 @@ struct network {
   void fetch_media(const mux::account_id& of, std::string source, mux::media_use_t use, int size) {
     loop.post([this, of, source = std::move(source), use = std::move(use), size] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == of)
                 account->fetch_media(source, use, size);
@@ -414,7 +415,7 @@ struct network {
   void cancel_media(const mux::account_id& of, std::string source) {
     loop.post([this, of, source = std::move(source)] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == of)
                 account->cancel_media(source);
@@ -426,7 +427,7 @@ struct network {
   void fetch_avatar(const mux::account_id& of, std::string source, std::string key) {
     loop.post([this, of, source = std::move(source), key = std::move(key)] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == of)
                 account->fetch_avatar(source, key);
@@ -438,7 +439,7 @@ struct network {
   void load_context(const mux::conversation_id& in, std::string target) {
     loop.post([this, in, target = std::move(target)] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == in.account)
                 account->load_context(in.id, target);
@@ -449,7 +450,7 @@ struct network {
   void load_newer(const mux::conversation_id& in, std::string from) {
     loop.post([this, in, from = std::move(from)] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == in.account)
                 account->load_newer(in.id, from);
@@ -460,7 +461,7 @@ struct network {
   void load_older(const mux::conversation_id& in, std::string from) {
     loop.post([this, in, from = std::move(from)] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == in.account)
                 account->load_older(in.id, from);
@@ -471,7 +472,7 @@ struct network {
   void leave(const mux::conversation_id& in) {
     loop.post([this, in] {
       for (auto& one : accounts)
-        std::visit(
+        mux::visit(
             [&](auto& account) {
               if (account->id() == in.account)
                 account->leave(in.id);
@@ -483,7 +484,7 @@ struct network {
     loop.post([this] {
       for (auto& one : accounts) {
         one.live->store(false);
-        std::visit([](auto& account) { account->stop(); }, one.account);
+        mux::visit([](auto& account) { account->stop(); }, one.account);
       }
       loop.stop();
     });

@@ -3,6 +3,7 @@
 module mux.app.program;
 
 import std;
+import mux.variant;
 import knot;
 import skia;
 import mux.core;
@@ -228,7 +229,7 @@ void app::apply(const request::resize_info& one) { root().main().resize_info(one
 
 void app::apply(const request::choose_new_proxy& one) {
   if (auto* up = root().open_panel())
-    std::visit(
+    mux::visit(
         [&](accounts& panel) {
           if (auto* pane = panel.adding())
             pane->set_proxy(one.index);
@@ -248,14 +249,14 @@ void app::apply(const request::toggle_mute&) {
 
 void app::apply(const request::close_account_pages&) {
   if (auto* up = root().open_panel())
-    std::visit([](accounts& panel) { panel.close_pages(); }, *up);
+    mux::visit([](accounts& panel) { panel.close_pages(); }, *up);
 }
 
 void app::apply(const request::accounts_back&) {
   auto* up = root().open_panel();
   if (!up)
     return;
-  std::visit(
+  mux::visit(
       [this](accounts& panel) {
         if (panel.pages_open())
           panel.close_pages();
@@ -332,7 +333,7 @@ void app::apply(const request::set_chat_notify& one) {
     return;
   notify_modes.erase(*chosen);
   muted.erase(*chosen);
-  std::visit(mux::overloaded{[&](mux::config::notify_mode::off) { muted.insert(*chosen); },
+  mux::visit(mux::overloaded{[&](mux::config::notify_mode::off) { muted.insert(*chosen); },
                              [&](mux::config::notify_mode::by_default) {},
                              [&](const auto& own) { notify_modes.insert_or_assign(*chosen, own); }},
              one.mode);
@@ -348,7 +349,7 @@ void app::apply(const request::set_room_event_kind& one) {
       kinds.emplace();
     mux::logic::choice_in(*kinds, *one.kind) = one.show;
   };
-  std::visit(mux::overloaded{[&](mux::choice_level::everywhere) {
+  mux::visit(mux::overloaded{[&](mux::choice_level::everywhere) {
                                if (one.kind)
                                  set_kind(history.room_event_kinds);
                                else
@@ -380,7 +381,7 @@ void app::apply(const request::set_room_event_kind& one) {
 
 // How far a jump's search pages back, at a level.
 void app::apply(const request::set_jump_search& one) {
-  std::visit(mux::overloaded{[&](mux::choice_level::everywhere) { history.jump_search = one.most.value_or(5000); },
+  mux::visit(mux::overloaded{[&](mux::choice_level::everywhere) { history.jump_search = one.most.value_or(5000); },
                              [&](mux::choice_level::account) {
                                this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
                                  mux::config::jump_search_in(account) = one.most;
@@ -402,7 +403,7 @@ void app::apply(const request::set_jump_search& one) {
 
 // Link previews, at a level.
 void app::apply(const request::set_link_previews& one) {
-  std::visit(mux::overloaded{[&](mux::choice_level::everywhere) { history.link_previews = one.show.value_or(true); },
+  mux::visit(mux::overloaded{[&](mux::choice_level::everywhere) { history.link_previews = one.show.value_or(true); },
                              [&](mux::choice_level::account) {
                                this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
                                  mux::config::link_previews_in(account) = one.show;
@@ -424,7 +425,7 @@ void app::apply(const request::set_link_previews& one) {
 
 // Who has read up to where, as faces, at a level.
 void app::apply(const request::set_receipts_shown& one) {
-  std::visit(mux::overloaded{[&](mux::choice_level::everywhere) { history.show_receipts = one.show.value_or(false); },
+  mux::visit(mux::overloaded{[&](mux::choice_level::everywhere) { history.show_receipts = one.show.value_or(false); },
                              [&](mux::choice_level::account) {
                                this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
                                  mux::config::show_receipts_in(account) = one.show;

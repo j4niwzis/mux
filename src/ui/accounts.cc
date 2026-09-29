@@ -3,6 +3,7 @@
 export module mux.ui:accounts;
 
 import std;
+import mux.variant;
 import skia;
 import skiff.paint;
 import skiff.scene;
@@ -35,7 +36,7 @@ export namespace mux::ui {
   if (found == now.accounts().end())
     return {"offline", false};
   bool failed = false;
-  std::string said = std::visit(overloaded{[](const connection::offline&) { return std::string("offline"); },
+  std::string said = mux::visit(overloaded{[](const connection::offline&) { return std::string("offline"); },
                                            [](const connection::connecting&) { return std::string("connecting…"); },
                                            [](const connection::online&) { return std::string("online"); },
                                            [&failed](const connection::failed& why) {
@@ -139,7 +140,7 @@ struct account_editor : nodes::Stack {
   }
 
   void say(std::string text, bool error) {
-    std::visit([&](auto& one) { one.say(std::move(text), error); }, parts.form);
+    mux::visit([&](auto& one) { one.say(std::move(text), error); }, parts.form);
   }
 };
 
@@ -331,7 +332,7 @@ struct accounts_panel : closes_on_escape<Actions> {
     struct detail_column : nodes::Stack {
       // No account chosen, or the chosen one, or adding one.
       struct parts_t {
-        std::variant<nodes::Text, account_editor<Actions>, add_account_pane<Actions>, account_privacy<Actions>,
+        mux::variant<nodes::Text, account_editor<Actions>, add_account_pane<Actions>, account_privacy<Actions>,
                      account_proxy<Actions>>
             detail{std::in_place_index<0>, "Choose an account.", 15.0f, dim_colour};
       } parts;
@@ -368,7 +369,7 @@ struct accounts_panel : closes_on_escape<Actions> {
   }
   void fade() {
     const float value = swap.value();
-    std::visit([value](auto& one) { one.fState.setAlpha(value); }, detail);
+    mux::visit([value](auto& one) { one.fState.setAlpha(value); }, detail);
   }
   [[nodiscard]] bool settling() const { return swap.moving(); }
   void update(double now_ms) {
@@ -429,12 +430,12 @@ struct accounts_panel : closes_on_escape<Actions> {
     this->invalidateLayout();
   }
   [[nodiscard]] account_privacy<Actions>* privacy() {
-    return std::visit(overloaded{[](account_privacy<Actions>& one) { return &one; },
+    return mux::visit(overloaded{[](account_privacy<Actions>& one) { return &one; },
                                  [](auto&) -> account_privacy<Actions>* { return nullptr; }},
                       detail);
   }
   [[nodiscard]] account_proxy<Actions>* proxy() {
-    return std::visit(overloaded{[](account_proxy<Actions>& one) { return &one; },
+    return mux::visit(overloaded{[](account_proxy<Actions>& one) { return &one; },
                                  [](auto&) -> account_proxy<Actions>* { return nullptr; }},
                       detail);
   }
@@ -474,17 +475,17 @@ struct accounts_panel : closes_on_escape<Actions> {
   }
 
   [[nodiscard]] account_editor<Actions>* editor() {
-    return std::visit(overloaded{[](account_editor<Actions>& one) { return &one; },
+    return mux::visit(overloaded{[](account_editor<Actions>& one) { return &one; },
                                  [](auto&) -> account_editor<Actions>* { return nullptr; }},
                       detail);
   }
   [[nodiscard]] add_account_pane<Actions>* adding() {
-    return std::visit(overloaded{[](add_account_pane<Actions>& one) { return &one; },
+    return mux::visit(overloaded{[](add_account_pane<Actions>& one) { return &one; },
                                  [](auto&) -> add_account_pane<Actions>* { return nullptr; }},
                       detail);
   }
   [[nodiscard]] xmpp_form<Actions>* xmpp() {
-    return std::visit(overloaded{[](account_editor<Actions>& one) { return xmpp_form_in(one.parts.form); },
+    return mux::visit(overloaded{[](account_editor<Actions>& one) { return xmpp_form_in(one.parts.form); },
                                  [](add_account_pane<Actions>& one) { return one.xmpp(); },
                                  [](auto&) -> xmpp_form<Actions>* { return nullptr; }},
                       detail);

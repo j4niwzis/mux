@@ -9,6 +9,7 @@
 export module mux.media;
 
 import std;
+import mux.variant;
 
 export namespace mux::media {
 
@@ -19,7 +20,7 @@ struct jpeg {};
 struct gif {};
 struct webp {};
 }  // namespace picture
-using picture_t = std::variant<picture::png, picture::jpeg, picture::gif, picture::webp>;
+using picture_t = mux::variant<picture::png, picture::jpeg, picture::gif, picture::webp>;
 
 [[nodiscard]] inline std::optional<picture_t> picture_of(std::string_view bytes) {
   if (bytes.starts_with("\x89PNG\r\n\x1A\n"))
@@ -38,14 +39,14 @@ using picture_t = std::variant<picture::png, picture::jpeg, picture::gif, pictur
 [[nodiscard]] inline std::string_view mimetype_of(picture::gif) { return "image/gif"; }
 [[nodiscard]] inline std::string_view mimetype_of(picture::webp) { return "image/webp"; }
 [[nodiscard]] inline std::string_view mimetype_of(const picture_t& type) {
-  return std::visit([](auto one) { return mimetype_of(one); }, type);
+  return mux::visit([](auto one) { return mimetype_of(one); }, type);
 }
 [[nodiscard]] inline std::string_view extension_of(picture::png) { return "png"; }
 [[nodiscard]] inline std::string_view extension_of(picture::jpeg) { return "jpg"; }
 [[nodiscard]] inline std::string_view extension_of(picture::gif) { return "gif"; }
 [[nodiscard]] inline std::string_view extension_of(picture::webp) { return "webp"; }
 [[nodiscard]] inline std::string_view extension_of(const picture_t& type) {
-  return std::visit([](auto one) { return extension_of(one); }, type);
+  return mux::visit([](auto one) { return extension_of(one); }, type);
 }
 
 namespace detail {
@@ -109,7 +110,7 @@ struct kept {
   static constexpr bool keep = true, last = false;
 };
 }  // namespace png_chunk
-using png_chunk_t = std::variant<png_chunk::metadata, png_chunk::end, png_chunk::kept>;
+using png_chunk_t = mux::variant<png_chunk::metadata, png_chunk::end, png_chunk::kept>;
 [[nodiscard]] inline png_chunk_t png_chunk_of(std::string_view type) {
   static const std::unordered_map<std::string_view, png_chunk_t> known = {
       {"tEXt", png_chunk::metadata{}}, {"zTXt", png_chunk::metadata{}}, {"iTXt", png_chunk::metadata{}},
@@ -127,7 +128,7 @@ using png_chunk_t = std::variant<png_chunk::metadata, png_chunk::end, png_chunk:
     if (at + 12 + length > in.size())
       return std::string(in);
     const png_chunk_t type = png_chunk_of(in.substr(at + 4, 4));
-    const auto [keep, last] = std::visit([](auto chunk) { return std::pair(chunk.keep, chunk.last); }, type);
+    const auto [keep, last] = mux::visit([](auto chunk) { return std::pair(chunk.keep, chunk.last); }, type);
     if (keep)
       out.append(in.substr(at, 12 + length));
     at += 12 + length;
@@ -150,7 +151,7 @@ struct kept {
   static constexpr bool keep = true, is_vp8x = false;
 };
 }  // namespace webp_chunk
-using webp_chunk_t = std::variant<webp_chunk::metadata, webp_chunk::header, webp_chunk::kept>;
+using webp_chunk_t = mux::variant<webp_chunk::metadata, webp_chunk::header, webp_chunk::kept>;
 [[nodiscard]] inline webp_chunk_t webp_chunk_of(std::string_view type) {
   static const std::unordered_map<std::string_view, webp_chunk_t> known = {
       {"EXIF", webp_chunk::metadata{}}, {"XMP ", webp_chunk::metadata{}}, {"VP8X", webp_chunk::header{}}};
@@ -169,7 +170,7 @@ using webp_chunk_t = std::variant<webp_chunk::metadata, webp_chunk::header, webp
     const std::size_t padded = length + (length & 1);
     if (at + 8 + length > in.size())
       return std::string(in);
-    const auto [keep, header] = std::visit([](auto chunk) { return std::pair(chunk.keep, chunk.is_vp8x); },
+    const auto [keep, header] = mux::visit([](auto chunk) { return std::pair(chunk.keep, chunk.is_vp8x); },
                                            webp_chunk_of(in.substr(at, 4)));
     if (header)
       vp8x = out.size();
@@ -243,7 +244,7 @@ using webp_chunk_t = std::variant<webp_chunk::metadata, webp_chunk::header, webp
   const auto type = picture_of(bytes);
   if (!type)
     return std::string(bytes);
-  return std::visit([&](auto one) { return detail::stripped(one, bytes); }, *type);
+  return mux::visit([&](auto one) { return detail::stripped(one, bytes); }, *type);
 }
 
 }  // namespace mux::media

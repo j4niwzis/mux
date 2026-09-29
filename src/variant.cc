@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.variant -- One of several types, as std::variant holds it, but built
-// in time linear in how many there are. libc++ keeps a variant as a union
+// mux.variant -- One of several types: std::variant's interface, built in
+// time linear in how many there are. libc++ keeps a variant as a union
 // nested as deep as it has alternatives, and reaching or making the k-th
 // goes k levels down, each level a template of its own: a variant of 148
 // requests cost 148 * 149 / 2 instantiations in every unit that made them
@@ -77,7 +77,7 @@ constexpr decltype(auto) peel_to(layer<T, Rest>, std::size_t index, F& f) {
   return peel_to(Rest{}, index - 1, f);
 }
 
-// The place of T among Ts.
+// The place of T among Ts; sizeof...(Ts) where it is not one.
 template <class T, class... Ts>
 consteval std::size_t index_in() {
   constexpr std::array<bool, sizeof...(Ts)> same{std::same_as<T, Ts>...};
@@ -86,20 +86,67 @@ consteval std::size_t index_in() {
       return i;
   return sizeof...(Ts);
 }
+template <class T, class... Ts>
+concept one_of = (std::same_as<T, Ts> || ...);
 }  // namespace mux::detail
 
 export namespace mux {
 
 template <class... Ts>
+class variant;
+
+template <class V>
+struct variant_size;
+template <class... Ts>
+struct variant_size<variant<Ts...>> : std::integral_constant<std::size_t, sizeof...(Ts)> {};
+template <class V>
+struct variant_size<const V> : variant_size<V> {};
+template <class V>
+inline constexpr std::size_t variant_size_v = variant_size<V>::value;
+
+template <std::size_t I, class V>
+struct variant_alternative;
+template <std::size_t I, class... Ts>
+struct variant_alternative<I, variant<Ts...>> {
+  using type = std::tuple_element_t<I, std::tuple<Ts...>>;
+};
+template <std::size_t I, class V>
+struct variant_alternative<I, const V> {
+  using type = const typename variant_alternative<I, V>::type;
+};
+template <std::size_t I, class V>
+using variant_alternative_t = typename variant_alternative<I, V>::type;
+
+template <class... Ts>
 class variant {
+  using first = std::tuple_element_t<0, std::tuple<Ts...>>;
+
  public:
   static constexpr std::size_t kSize = sizeof...(Ts);
 
+  // As std::variant's: the first alternative, made by default.
+  constexpr variant() noexcept(std::is_nothrow_default_constructible_v<first>)
+    requires std::default_initializable<first>
+      : fIndex(0) {
+    this->make<first>();
+  }
+  // One of them, converted to: only its own type, exactly -- a request, a
+  // tag, a change as it is named.
   template <class T>
-    requires(std::same_as<std::remove_cvref_t<T>, Ts> || ...)
+    requires detail::one_of<std::remove_cvref_t<T>, Ts...>
   constexpr variant(T&& value)  // NOLINT: converting, as std::variant's is
       : fIndex(detail::index_in<std::remove_cvref_t<T>, Ts...>()) {
     this->make<std::remove_cvref_t<T>>(std::forward<T>(value));
+  }
+  template <class T, class... Args>
+    requires detail::one_of<T, Ts...>
+  constexpr explicit variant(std::in_place_type_t<T>, Args&&... args) : fIndex(detail::index_in<T, Ts...>()) {
+    this->make<T>(std::forward<Args>(args)...);
+  }
+  template <std::size_t I, class... Args>
+    requires(I < sizeof...(Ts))
+  constexpr explicit variant(std::in_place_index_t<I>, Args&&... args) : fIndex(I) {
+    this->make<std::tuple_element_t<I, std::tuple<Ts...>>>(std::forward<Args>(args)...);
   }
   constexpr variant(variant&& other) noexcept : fIndex(other.fIndex) { this->move_from(other); }
   constexpr variant(const variant& other) : fIndex(other.fIndex) { this->copy_from(other); }
@@ -119,17 +166,84 @@ class variant {
     }
     return *this;
   }
+  template <class T>
+    requires detail::one_of<std::remove_cvref_t<T>, Ts...>
+  constexpr variant& operator=(T&& value) {
+    this->emplace<std::remove_cvref_t<T>>(std::forward<T>(value));
+    return *this;
+  }
   constexpr ~variant() { this->destroy(); }
 
-  [[nodiscard]] constexpr std::size_t index() const noexcept { return fIndex; }
+  template <class T, class... Args>
+    requires detail::one_of<T, Ts...>
+  constexpr T& emplace(Args&&... args) {
+    this->destroy();
+    fIndex = detail::index_in<T, Ts...>();
+    this->make<T>(std::forward<Args>(args)...);
+    return detail::value_of<T>(fObject);
+  }
+  template <std::size_t I, class... Args>
+    requires(I < sizeof...(Ts))
+  constexpr std::tuple_element_t<I, std::tuple<Ts...>>& emplace(Args&&... args) {
+    return this->emplace<std::tuple_element_t<I, std::tuple<Ts...>>>(std::forward<Args>(args)...);
+  }
 
-  // The one it holds, given to `f`; what `f` gives back.
-  template <class F>
-  constexpr decltype(auto) visit(F&& f) {
-    using R = std::invoke_result_t<F&, std::tuple_element_t<0, std::tuple<Ts...>>&>;
+  [[nodiscard]] constexpr std::size_t index() const noexcept { return fIndex; }
+  [[nodiscard]] constexpr bool valueless_by_exception() const noexcept { return false; }
+  constexpr void swap(variant& other) {
+    variant kept(std::move(other));
+    other = std::move(*this);
+    *this = std::move(kept);
+  }
+
+  // C++26's member visit: the one it holds, given to `f`.
+  template <class Self, class F>
+  constexpr decltype(auto) visit(this Self&& self, F&& f) {
+    return std::forward<Self>(self).template visit_as<void, true>(f);
+  }
+  template <class R, class Self, class F>
+  constexpr R visit(this Self&& self, F&& f) {
+    return std::forward<Self>(self).template visit_as<R, false>(f);
+  }
+
+  // The one held, as a T -- where it is one.
+  template <class T>
+  [[nodiscard]] constexpr T* get_if() noexcept {
+    return fIndex == detail::index_in<T, Ts...>() ? &detail::value_of<T>(fObject) : nullptr;
+  }
+  template <class T>
+  [[nodiscard]] constexpr const T* get_if() const noexcept {
+    return fIndex == detail::index_in<T, Ts...>() ? &detail::value_of<T>(static_cast<const detail::held*>(fObject))
+                                                  : nullptr;
+  }
+
+  friend constexpr bool operator==(const variant& a, const variant& b)
+    requires(std::equality_comparable<Ts> && ...)
+  {
+    if (a.fIndex != b.fIndex)
+      return false;
+    return a.visit([&]<class T>(const T& one) { return one == *b.template get_if<T>(); });
+  }
+  friend constexpr auto operator<=>(const variant& a, const variant& b)
+    requires(std::three_way_comparable<Ts> && ...)
+  {
+    using order = std::common_comparison_category_t<std::compare_three_way_result_t<Ts>...>;
+    if (a.fIndex != b.fIndex)
+      return order(a.fIndex <=> b.fIndex);
+    return a.visit([&]<class T>(const T& one) -> order { return one <=> *b.template get_if<T>(); });
+  }
+
+ private:
+  using onion = decltype((detail::peel<Ts>{} | ... | detail::core{}));
+
+  // `f` given the one held, as it is referred to (a const variant's is const):
+  // what it gives back, of the first's type, or R where one is asked for.
+  template <class R, bool Deduced, class F>
+  constexpr decltype(auto) visit_as(F& f) {
+    using Out = std::conditional_t<Deduced, std::invoke_result_t<F&, first&>, R>;
     if constexpr (detail::kVariantTables) {
-      static constexpr std::array<R (*)(F&, detail::held*), kSize> table{
-          +[](F& g, detail::held* p) -> R { return std::invoke(g, detail::value_of<Ts>(p)); }...};
+      static constexpr std::array<Out (*)(F&, detail::held*), kSize> table{
+          +[](F& g, detail::held* p) -> Out { return std::invoke(g, detail::value_of<Ts>(p)); }...};
       if consteval {
         return table[fIndex](f, fObject);
       } else {
@@ -137,17 +251,17 @@ class variant {
         return opaque[fIndex](f, fObject);
       }
     } else {
-      auto at = [&]<class T>(std::type_identity<T>) -> R { return std::invoke(f, detail::value_of<T>(fObject)); };
+      auto at = [&]<class T>(std::type_identity<T>) -> Out { return std::invoke(f, detail::value_of<T>(fObject)); };
       return detail::peel_to(onion{}, fIndex, at);
     }
   }
-  template <class F>
-  constexpr decltype(auto) visit(F&& f) const {
-    using R = std::invoke_result_t<F&, const std::tuple_element_t<0, std::tuple<Ts...>>&>;
+  template <class R, bool Deduced, class F>
+  constexpr decltype(auto) visit_as(F& f) const {
+    using Out = std::conditional_t<Deduced, std::invoke_result_t<F&, const first&>, R>;
     const detail::held* object = fObject;
     if constexpr (detail::kVariantTables) {
-      static constexpr std::array<R (*)(F&, const detail::held*), kSize> table{
-          +[](F& g, const detail::held* p) -> R { return std::invoke(g, detail::value_of<Ts>(p)); }...};
+      static constexpr std::array<Out (*)(F&, const detail::held*), kSize> table{
+          +[](F& g, const detail::held* p) -> Out { return std::invoke(g, detail::value_of<Ts>(p)); }...};
       if consteval {
         return table[fIndex](f, object);
       } else {
@@ -155,13 +269,10 @@ class variant {
         return opaque[fIndex](f, object);
       }
     } else {
-      auto at = [&]<class T>(std::type_identity<T>) -> R { return std::invoke(f, detail::value_of<T>(object)); };
+      auto at = [&]<class T>(std::type_identity<T>) -> Out { return std::invoke(f, detail::value_of<T>(object)); };
       return detail::peel_to(onion{}, fIndex, at);
     }
   }
-
- private:
-  using onion = decltype((detail::peel<Ts>{} | ... | detail::core{}));
 
   template <class T, class... Args>
   constexpr void make(Args&&... args) {
@@ -236,14 +347,69 @@ class variant {
   detail::held* fObject = nullptr;
 };
 
-// As std::visit, for one variant.
-template <class F, class... Ts>
-constexpr decltype(auto) visit(F&& f, variant<Ts...>& v) {
-  return v.visit(std::forward<F>(f));
+// As std::get and std::get_if.
+template <class T, class... Ts>
+[[nodiscard]] constexpr T& get(variant<Ts...>& v) {
+  if (T* one = v.template get_if<T>())
+    return *one;
+  throw std::bad_variant_access();
 }
-template <class F, class... Ts>
-constexpr decltype(auto) visit(F&& f, const variant<Ts...>& v) {
-  return v.visit(std::forward<F>(f));
+template <class T, class... Ts>
+[[nodiscard]] constexpr const T& get(const variant<Ts...>& v) {
+  if (const T* one = v.template get_if<T>())
+    return *one;
+  throw std::bad_variant_access();
+}
+template <std::size_t I, class... Ts>
+[[nodiscard]] constexpr auto& get(variant<Ts...>& v) {
+  return mux::get<std::tuple_element_t<I, std::tuple<Ts...>>>(v);
+}
+template <std::size_t I, class... Ts>
+[[nodiscard]] constexpr const auto& get(const variant<Ts...>& v) {
+  return mux::get<std::tuple_element_t<I, std::tuple<Ts...>>>(v);
+}
+template <class T, class... Ts>
+[[nodiscard]] constexpr T* get_if(variant<Ts...>* v) noexcept {
+  return v ? v->template get_if<T>() : nullptr;
+}
+template <class T, class... Ts>
+[[nodiscard]] constexpr const T* get_if(const variant<Ts...>* v) noexcept {
+  return v ? v->template get_if<T>() : nullptr;
+}
+template <class T, class... Ts>
+[[nodiscard]] constexpr bool holds_alternative(const variant<Ts...>& v) noexcept {
+  return v.index() == detail::index_in<T, Ts...>();
+}
+
+// As std::visit, over one or more variants -- ours, or std's (a library's
+// types, knot's config): each visited in turn, the visitor given them all.
+template <class V, class F>
+constexpr decltype(auto) visit_one(V&& v, F&& f) {
+  return std::forward<V>(v).visit(std::forward<F>(f));
+}
+template <class... Ts, class F>
+constexpr decltype(auto) visit_one(std::variant<Ts...>& v, F&& f) {
+  return std::visit(std::forward<F>(f), v);
+}
+template <class... Ts, class F>
+constexpr decltype(auto) visit_one(const std::variant<Ts...>& v, F&& f) {
+  return std::visit(std::forward<F>(f), v);
+}
+template <class... Ts, class F>
+constexpr decltype(auto) visit_one(std::variant<Ts...>&& v, F&& f) {
+  return std::visit(std::forward<F>(f), std::move(v));
+}
+template <class F, class V>
+constexpr decltype(auto) visit(F&& f, V&& v) {
+  return mux::visit_one(std::forward<V>(v), std::forward<F>(f));
+}
+template <class F, class V, class W, class... More>
+constexpr decltype(auto) visit(F&& f, V&& v, W&& w, More&&... more) {
+  return mux::visit_one(std::forward<V>(v), [&](auto&& one) -> decltype(auto) {
+    return mux::visit([&](auto&&... rest) -> decltype(auto) {
+      return std::invoke(f, std::forward<decltype(one)>(one), std::forward<decltype(rest)>(rest)...);
+    }, std::forward<W>(w), std::forward<More>(more)...);
+  });
 }
 
 }  // namespace mux

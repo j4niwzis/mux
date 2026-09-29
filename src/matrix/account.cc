@@ -3,6 +3,7 @@
 export module mux.matrix:account;
 
 import std;
+import mux.variant;
 import knot;
 import loom.api;
 import loom.ev;
@@ -266,7 +267,7 @@ class account {
   template <class Tagged>
   static body body_of(std::string plain, const knot::value& rest, const Tagged& content) {
     body made{std::move(plain), std::nullopt};
-    if (std::visit([](auto of) { return of.html_given; }, body_format_of(text(extra(rest, content, "format")))))
+    if (mux::visit([](auto of) { return of.html_given; }, body_format_of(text(extra(rest, content, "format")))))
       made.html = text(extra(rest, content, "formatted_body"));
     return made;
   }

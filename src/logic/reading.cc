@@ -4,6 +4,7 @@
 export module mux.logic.reading;
 
 import std;
+import mux.variant;
 import mux.core;
 
 export namespace mux::logic {
@@ -51,7 +52,7 @@ struct stopped {
   conversation_id in;
 };
 }  // namespace typing_said
-using typing_said_t = std::variant<typing_said::started, typing_said::stopped>;
+using typing_said_t = mux::variant<typing_said::started, typing_said::stopped>;
 
 // Where 'typing' was last said, and when.
 struct typing_state {

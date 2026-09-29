@@ -3,6 +3,7 @@
 export module mux.ui:info;
 
 import std;
+import mux.variant;
 import skia;
 import skiff.paint;
 import skiff.scene;
@@ -512,7 +513,7 @@ struct marks_box : nodes::Stack {
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
   } parts;
   marks_box(Actions* a, mark_kind_t kind, const conversation& in, const std::vector<mark_entry>& entries, const model* now)
-      : parts{.top = top_bar(a, std::visit(overloaded{[](mark_kind::mention) { return std::string("Mentions"); },
+      : parts{.top = top_bar(a, mux::visit(overloaded{[](mark_kind::mention) { return std::string("Mentions"); },
                                                       [](mark_kind::reaction) { return std::string("Reactions"); }},
                                            kind))} {
     fState.apply({.fillX = true, .height = 520.0f, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});

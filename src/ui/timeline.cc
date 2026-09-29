@@ -3,6 +3,7 @@
 export module mux.ui:timeline;
 
 import std;
+import mux.variant;
 import skia;
 import skiff.paint;
 import skiff.scene;
@@ -271,7 +272,7 @@ struct timeline_area : scene::Node {
         }
         // A reaction shown as a line: pressed anywhere, to what it is on.
         if (one.said.service && one.said.replies_to && one.parts.body.bounds().contains(press.x, press.y) &&
-            std::visit(overloaded{[](room_event::reactions) { return true; }, [](const auto&) { return false; }},
+            mux::visit(overloaded{[](room_event::reactions) { return true; }, [](const auto&) { return false; }},
                        one.said.event_kind)) {
           actions->jump_to_message(*one.said.replies_to);
           return true;

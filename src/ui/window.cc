@@ -3,6 +3,7 @@
 export module mux.ui:window;
 
 import std;
+import mux.variant;
 import skia;
 import skiff.paint;
 import skiff.scene;
@@ -33,7 +34,7 @@ export namespace mux::ui {
 // events.
 template <class Actions>
 struct window : scene::Node {
-  using panel_type = std::variant<accounts_panel<Actions>>;
+  using panel_type = mux::variant<accounts_panel<Actions>>;
   using with_drawer = widgets::Drawer<conversations_screen<Actions>, drawer_panel<Actions>>;
 
   // What the window holds, made anew when the theme changes: what is made
@@ -151,7 +152,7 @@ struct window : scene::Node {
   template <class Panel>
   Panel& open() {
     if (panel_type* up = layer().frame.shown())
-      if (Panel* same = std::visit(overloaded{[](Panel& one) -> Panel* { return &one; },
+      if (Panel* same = mux::visit(overloaded{[](Panel& one) -> Panel* { return &one; },
                                               [](auto&) -> Panel* { return nullptr; }},
                                    *up))
         return *same;

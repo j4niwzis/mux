@@ -3,6 +3,7 @@
 export module mux.matrix:requests;
 
 import std;
+import mux.variant;
 import knot;
 import loom.api;
 import loom.ev;
@@ -111,17 +112,17 @@ void account<Sink>::manage(std::string room, room_action_t action) {
       if (!done)
         log(id_, "could not {} in {}: {}", what, room, done.error().said());
     };
-    std::visit(
+    mux::visit(
         overloaded{
             [&](const room_action::rename& one) { set("m.room.name", one_field("name", one.name)); },
             [&](const room_action::retopic& one) { set("m.room.topic", one_field("topic", one.topic)); },
             [&](const room_action::set_join_rule& one) {
               set("m.room.join_rules",
-                  one_field("join_rule", std::string(std::visit([](auto of) { return word_of(of); }, one.rule))));
+                  one_field("join_rule", std::string(mux::visit([](auto of) { return word_of(of); }, one.rule))));
             },
             [&](const room_action::set_history& one) {
               set("m.room.history_visibility",
-                  one_field("history_visibility", std::string(std::visit([](auto of) { return word_of(of); }, one.rule))));
+                  one_field("history_visibility", std::string(mux::visit([](auto of) { return word_of(of); }, one.rule))));
             },
             [&](const room_action::invite& one) {
               told("invite", perform(*api_, loom::cs::invite_user{.room_id = room, .body = {.user_id = one.user}}));
@@ -162,7 +163,7 @@ void account<Sink>::manage(std::string room, room_action_t action) {
                 inner.insert_or_assign(std::string(key), knot::value(one.level));
                 content.insert_or_assign(std::string(outer), knot::value(std::move(inner)));
               };
-              std::visit(overloaded{[&](power_need::default_role) { top("users_default"); },
+              mux::visit(overloaded{[&](power_need::default_role) { top("users_default"); },
                                     [&](power_need::send_messages) { top("events_default"); },
                                     [&](power_need::change_settings) { top("state_default"); },
                                     [&](power_need::invite) { top("invite"); },

@@ -7,6 +7,7 @@
 export module mux.config;
 
 import std;
+import mux.variant;
 import knot;
 
 export namespace mux::config {
@@ -32,7 +33,7 @@ struct night {
   friend bool operator==(night, night) = default;
 };
 }  // namespace theme
-using theme_t = std::variant<theme::classic, theme::day, theme::tinted, theme::night>;
+using theme_t = mux::variant<theme::classic, theme::day, theme::tinted, theme::night>;
 // The accent a theme is drawn with: its own, or one of Telegram's circles --
 // each a shade of its own in each theme.
 namespace accent {
@@ -64,7 +65,7 @@ struct gold {
   friend bool operator==(gold, gold) = default;
 };
 }  // namespace accent
-using accent_t = std::variant<accent::theme_own, accent::blue, accent::green, accent::pink, accent::orange,
+using accent_t = mux::variant<accent::theme_own, accent::blue, accent::green, accent::pink, accent::orange,
                               accent::purple, accent::red, accent::grey, accent::gold>;
 namespace renderer {
 struct opengl {
@@ -74,7 +75,7 @@ struct software {
   friend bool operator==(software, software) = default;
 };
 }  // namespace renderer
-using renderer_t = std::variant<renderer::opengl, renderer::software>;
+using renderer_t = mux::variant<renderer::opengl, renderer::software>;
 namespace proxy_kind {
 struct socks5 {
   friend bool operator==(socks5, socks5) = default;
@@ -83,7 +84,7 @@ struct http {
   friend bool operator==(http, http) = default;
 };
 }  // namespace proxy_kind
-using proxy_kind_t = std::variant<proxy_kind::socks5, proxy_kind::http>;
+using proxy_kind_t = mux::variant<proxy_kind::socks5, proxy_kind::http>;
 
 // The words of the file, and what they mean: anything else is the default.
 // A word of the file looked up in a table of the ones known; the default
@@ -129,7 +130,7 @@ struct built_in {
   friend bool operator==(built_in, built_in) = default;
 };
 }  // namespace notify_backend
-using notify_backend_t = std::variant<notify_backend::native, notify_backend::built_in>;
+using notify_backend_t = mux::variant<notify_backend::native, notify_backend::built_in>;
 [[nodiscard]] inline notify_backend_t notify_backend_of(const std::optional<std::string>& word) {
   static const std::unordered_map<std::string_view, notify_backend_t> known = {
       {"native", notify_backend::native{}}, {"built-in", notify_backend::built_in{}}};
@@ -151,7 +152,7 @@ struct off {
   friend bool operator==(off, off) = default;
 };
 }  // namespace notify_mode
-using notify_mode_t = std::variant<notify_mode::by_default, notify_mode::all, notify_mode::mentions, notify_mode::off>;
+using notify_mode_t = mux::variant<notify_mode::by_default, notify_mode::all, notify_mode::mentions, notify_mode::off>;
 [[nodiscard]] inline notify_mode_t notify_mode_of(const std::optional<std::string>& word) {
   static const std::unordered_map<std::string_view, notify_mode_t> known = {{"all", notify_mode::all{}},
                                                                             {"mentions", notify_mode::mentions{}}};
@@ -164,7 +165,7 @@ struct show_name {};
 struct show_text {};
 struct sound {};
 }  // namespace notify_flag
-using notify_flag_t = std::variant<notify_flag::desktop, notify_flag::show_name, notify_flag::show_text, notify_flag::sound>;
+using notify_flag_t = mux::variant<notify_flag::desktop, notify_flag::show_name, notify_flag::show_text, notify_flag::sound>;
 
 [[nodiscard]] inline proxy_kind_t proxy_kind_of(std::string_view word) {
   static const std::unordered_map<std::string_view, proxy_kind_t> known = {{"http", proxy_kind::http{}},
@@ -195,14 +196,14 @@ using notify_flag_t = std::variant<notify_flag::desktop, notify_flag::show_name,
 [[nodiscard]] constexpr std::string_view word_of(notify_mode::mentions) { return "mentions"; }
 [[nodiscard]] constexpr std::string_view word_of(notify_mode::off) { return "off"; }
 template <class... Ts>
-[[nodiscard]] std::string word_of(const std::variant<Ts...>& one) {
-  return std::string(std::visit([](auto each) { return word_of(each); }, one));
+[[nodiscard]] std::string word_of(const mux::variant<Ts...>& one) {
+  return std::string(mux::visit([](auto each) { return word_of(each); }, one));
 }
 // What a user reads for a proxy's kind.
 [[nodiscard]] constexpr std::string_view label_of(proxy_kind::socks5) { return "SOCKS5"; }
 [[nodiscard]] constexpr std::string_view label_of(proxy_kind::http) { return "HTTP"; }
 [[nodiscard]] inline std::string_view label_of(const proxy_kind_t& one) {
-  return std::visit([](auto each) { return label_of(each); }, one);
+  return mux::visit([](auto each) { return label_of(each); }, one);
 }
 
 // A proxy, as a named profile of the program's list -- as Gajim keeps them
@@ -266,7 +267,7 @@ consteval auto json_schema(knot::type<notification_settings>) { return knot::sch
 [[nodiscard]] constexpr bool notification_settings::* flag_member(notify_flag::show_text) { return &notification_settings::show_text; }
 [[nodiscard]] constexpr bool notification_settings::* flag_member(notify_flag::sound) { return &notification_settings::sound; }
 [[nodiscard]] inline bool& flag_in(notification_settings& in, const notify_flag_t& flag) {
-  return in.*std::visit([](auto one) { return flag_member(one); }, flag);
+  return in.*mux::visit([](auto one) { return flag_member(one); }, flag);
 }
 // A chat's own choice of what notifies: everything, or what mentions the
 // user -- muted chats are kept apart, as before.
@@ -397,7 +398,7 @@ struct deleted_on_disk {
   friend bool operator==(deleted_on_disk, deleted_on_disk) = default;
 };
 }  // namespace limit
-using limit_t = std::variant<limit::messages_in_memory, limit::messages_on_disk, limit::pictures_in_memory,
+using limit_t = mux::variant<limit::messages_in_memory, limit::messages_on_disk, limit::pictures_in_memory,
                              limit::pictures_on_disk, limit::deleted_on_disk>;
 inline constexpr std::int64_t kDeletedOnDiskMb = 256;
 [[nodiscard]] inline std::int64_t deleted_on_disk_of(const cache_limits& all) {
@@ -423,7 +424,7 @@ inline constexpr std::int64_t kDeletedOnDiskMb = 256;
   return *all.deleted_on_disk_mb;
 }
 [[nodiscard]] inline std::int64_t& value_of(cache_limits& all, const limit_t& which) {
-  return std::visit([&](auto one) -> std::int64_t& { return value_of(all, one); }, which);
+  return mux::visit([&](auto one) -> std::int64_t& { return value_of(all, one); }, which);
 }
 // Messages are counted, pictures weighed in MiB.
 [[nodiscard]] inline std::pair<std::int64_t, std::int64_t> bounds_of(limit::messages_in_memory) { return {250, 200000}; }
@@ -432,7 +433,7 @@ inline constexpr std::int64_t kDeletedOnDiskMb = 256;
 [[nodiscard]] inline std::pair<std::int64_t, std::int64_t> bounds_of(limit::pictures_on_disk) { return {4, 65536}; }
 [[nodiscard]] inline std::pair<std::int64_t, std::int64_t> bounds_of(limit::deleted_on_disk) { return {4, 65536}; }
 [[nodiscard]] inline std::pair<std::int64_t, std::int64_t> bounds_of(const limit_t& which) {
-  return std::visit([](auto one) { return bounds_of(one); }, which);
+  return mux::visit([](auto one) { return bounds_of(one); }, which);
 }
 
 // What is done to a picture dropped on the window before it is sent.
@@ -510,79 +511,79 @@ consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
 [[nodiscard]] inline const std::string& address_of(const xmpp_account& one) noexcept { return one.address; }
 [[nodiscard]] inline const std::string& address_of(const matrix_account& one) noexcept { return one.user_id; }
 [[nodiscard]] inline const std::string& address_of(const account_t& one) noexcept {
-  return std::visit([](const auto& each) -> const std::string& { return address_of(each); }, one);
+  return mux::visit([](const auto& each) -> const std::string& { return address_of(each); }, one);
 }
 
 [[nodiscard]] inline bool& enabled_of(account_t& one) noexcept {
-  return std::visit([](auto& each) -> bool& { return each.enabled; }, one);
+  return mux::visit([](auto& each) -> bool& { return each.enabled; }, one);
 }
 [[nodiscard]] inline bool enabled_of(const account_t& one) noexcept {
-  return std::visit([](const auto& each) { return each.enabled; }, one);
+  return mux::visit([](const auto& each) { return each.enabled; }, one);
 }
 
 // Whether an account sends read receipts, and the proxy it goes through.
 [[nodiscard]] inline bool read_receipts_of(const account_t& one) {
-  return std::visit([](const auto& each) { return each.read_receipts.value_or(true); }, one);
+  return mux::visit([](const auto& each) { return each.read_receipts.value_or(true); }, one);
 }
 [[nodiscard]] inline std::optional<bool>& read_receipts_in(account_t& one) {
-  return std::visit([](auto& each) -> std::optional<bool>& { return each.read_receipts; }, one);
+  return mux::visit([](auto& each) -> std::optional<bool>& { return each.read_receipts; }, one);
 }
 // Whether the account tells whom it talks to that the user is typing.
 [[nodiscard]] inline bool send_typing_of(const account_t& one) {
-  return std::visit([](const auto& each) { return each.send_typing.value_or(true); }, one);
+  return mux::visit([](const auto& each) { return each.send_typing.value_or(true); }, one);
 }
 [[nodiscard]] inline std::optional<bool>& send_typing_in(account_t& one) {
-  return std::visit([](auto& each) -> std::optional<bool>& { return each.send_typing; }, one);
+  return mux::visit([](auto& each) -> std::optional<bool>& { return each.send_typing; }, one);
 }
 // Whether the account's chats show their room events: its own choice, if
 // it made one.
 [[nodiscard]] inline const std::optional<std::int64_t>& jump_search_of(const account_t& one) {
-  return std::visit([](const auto& each) -> const std::optional<std::int64_t>& { return each.jump_search; }, one);
+  return mux::visit([](const auto& each) -> const std::optional<std::int64_t>& { return each.jump_search; }, one);
 }
 [[nodiscard]] inline std::optional<std::int64_t>& jump_search_in(account_t& one) {
-  return std::visit([](auto& each) -> std::optional<std::int64_t>& { return each.jump_search; }, one);
+  return mux::visit([](auto& each) -> std::optional<std::int64_t>& { return each.jump_search; }, one);
 }
 [[nodiscard]] inline const std::optional<bool>& link_previews_of(const account_t& one) {
-  return std::visit([](const auto& each) -> const std::optional<bool>& { return each.link_previews; }, one);
+  return mux::visit([](const auto& each) -> const std::optional<bool>& { return each.link_previews; }, one);
 }
 [[nodiscard]] inline std::optional<bool>& link_previews_in(account_t& one) {
-  return std::visit([](auto& each) -> std::optional<bool>& { return each.link_previews; }, one);
+  return mux::visit([](auto& each) -> std::optional<bool>& { return each.link_previews; }, one);
 }
 [[nodiscard]] inline const std::optional<bool>& show_receipts_of(const account_t& one) {
-  return std::visit([](const auto& each) -> const std::optional<bool>& { return each.show_receipts; }, one);
+  return mux::visit([](const auto& each) -> const std::optional<bool>& { return each.show_receipts; }, one);
 }
 [[nodiscard]] inline std::optional<bool>& show_receipts_in(account_t& one) {
-  return std::visit([](auto& each) -> std::optional<bool>& { return each.show_receipts; }, one);
+  return mux::visit([](auto& each) -> std::optional<bool>& { return each.show_receipts; }, one);
 }
 [[nodiscard]] inline const std::optional<bool>& room_events_of(const account_t& one) {
-  return std::visit([](const auto& each) -> const std::optional<bool>& { return each.room_events; }, one);
+  return mux::visit([](const auto& each) -> const std::optional<bool>& { return each.room_events; }, one);
 }
 [[nodiscard]] inline std::optional<bool>& room_events_in(account_t& one) {
-  return std::visit([](auto& each) -> std::optional<bool>& { return each.room_events; }, one);
+  return mux::visit([](auto& each) -> std::optional<bool>& { return each.room_events; }, one);
 }
 [[nodiscard]] inline const std::optional<bool>& notify_of(const account_t& one) {
-  return std::visit([](const auto& each) -> const std::optional<bool>& { return each.notify; }, one);
+  return mux::visit([](const auto& each) -> const std::optional<bool>& { return each.notify; }, one);
 }
 [[nodiscard]] inline std::optional<bool>& notify_in(account_t& one) {
-  return std::visit([](auto& each) -> std::optional<bool>& { return each.notify; }, one);
+  return mux::visit([](auto& each) -> std::optional<bool>& { return each.notify; }, one);
 }
 [[nodiscard]] inline const std::optional<bool>& notify_sound_of(const account_t& one) {
-  return std::visit([](const auto& each) -> const std::optional<bool>& { return each.notify_sound; }, one);
+  return mux::visit([](const auto& each) -> const std::optional<bool>& { return each.notify_sound; }, one);
 }
 [[nodiscard]] inline std::optional<bool>& notify_sound_in(account_t& one) {
-  return std::visit([](auto& each) -> std::optional<bool>& { return each.notify_sound; }, one);
+  return mux::visit([](auto& each) -> std::optional<bool>& { return each.notify_sound; }, one);
 }
 [[nodiscard]] inline const std::optional<room_event_kinds>& room_event_kinds_of(const account_t& one) {
-  return std::visit([](const auto& each) -> const std::optional<room_event_kinds>& { return each.room_event_kinds; }, one);
+  return mux::visit([](const auto& each) -> const std::optional<room_event_kinds>& { return each.room_event_kinds; }, one);
 }
 [[nodiscard]] inline std::optional<room_event_kinds>& room_event_kinds_in(account_t& one) {
-  return std::visit([](auto& each) -> std::optional<room_event_kinds>& { return each.room_event_kinds; }, one);
+  return mux::visit([](auto& each) -> std::optional<room_event_kinds>& { return each.room_event_kinds; }, one);
 }
 [[nodiscard]] inline std::optional<std::string>& proxy_in(account_t& one) {
-  return std::visit([](auto& each) -> std::optional<std::string>& { return each.proxy; }, one);
+  return mux::visit([](auto& each) -> std::optional<std::string>& { return each.proxy; }, one);
 }
 [[nodiscard]] inline const std::optional<std::string>& proxy_of(const account_t& one) {
-  return std::visit([](const auto& each) -> const std::optional<std::string>& { return each.proxy; }, one);
+  return mux::visit([](const auto& each) -> const std::optional<std::string>& { return each.proxy; }, one);
 }
 // The profile of that name, where there is one.
 [[nodiscard]] inline const proxy_settings* find_proxy(const std::vector<proxy_settings>& all,
@@ -596,7 +597,7 @@ consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
 [[nodiscard]] constexpr std::string_view protocol_name(const xmpp_account&) noexcept { return "XMPP"; }
 [[nodiscard]] constexpr std::string_view protocol_name(const matrix_account&) noexcept { return "Matrix"; }
 [[nodiscard]] inline std::string_view protocol_name(const account_t& one) noexcept {
-  return std::visit([](const auto& each) { return protocol_name(each); }, one);
+  return mux::visit([](const auto& each) { return protocol_name(each); }, one);
 }
 
 constexpr bool is_matrix(std::string_view address) noexcept { return address.starts_with('@'); }
@@ -627,7 +628,7 @@ struct into_its_list {
 [[nodiscard]] inline file file_of(std::span<const account_t> accounts) {
   file out;
   for (const account_t& one : accounts)
-    std::visit(into_its_list{out}, one);
+    mux::visit(into_its_list{out}, one);
   return out;
 }
 
@@ -671,7 +672,7 @@ std::optional<std::string> check(const matrix_account& one) {
 }
 
 std::optional<std::string> check(const account_t& one) {
-  return std::visit([](const auto& each) { return check(each); }, one);
+  return mux::visit([](const auto& each) { return check(each); }, one);
 }
 
 // Where what the program keeps between runs, and could make again, is put:

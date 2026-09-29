@@ -28,6 +28,7 @@ module;
 export module mux.net;
 
 import std;
+import mux.variant;
 import tern;
 
 // Whether completion handlers are erased (outside a release build): CMake
@@ -464,7 +465,7 @@ namespace proxy_kind {
 struct socks5 {};
 struct http {};
 }  // namespace proxy_kind
-using proxy_kind_t = std::variant<proxy_kind::socks5, proxy_kind::http>;
+using proxy_kind_t = mux::variant<proxy_kind::socks5, proxy_kind::http>;
 
 struct proxy {
   proxy_kind_t kind = proxy_kind::socks5{};
@@ -606,7 +607,7 @@ inline tcp::socket connect(loop& owner, const std::optional<proxy>& via, std::st
   if (!via)
     return connect(owner, host, port);
   tcp::socket socket = connect(owner, via->host, via->port);
-  std::visit(overloaded_kind{[&](proxy_kind::socks5) { detail::socks5(owner, socket, *via, host, port); },
+  mux::visit(overloaded_kind{[&](proxy_kind::socks5) { detail::socks5(owner, socket, *via, host, port); },
                              [&](proxy_kind::http) { detail::http_connect(owner, socket, *via, host, port); }},
              via->kind);
   return socket;

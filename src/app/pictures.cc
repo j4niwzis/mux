@@ -6,6 +6,7 @@
 export module mux.app.pictures;
 
 import std;
+import mux.variant;
 import skia;
 import mux.core;
 import mux.config;
@@ -67,7 +68,7 @@ class pictures_part {
         };
       });
     };
-    std::visit(overloaded{[&](const media_use::avatar& one) {
+    mux::visit(overloaded{[&](const media_use::avatar& one) {
                             shown(mux::ui::avatar_images(), one.of);
                             if (fresh)
                               avatars_fetched_.erase(picture.source);
@@ -483,7 +484,7 @@ class pictures_part {
         name += std::isalnum(static_cast<unsigned char>(c)) ? c : '_';
       return std::optional(mux::config::cache_path("avatars") / name);
     };
-    return std::visit(overloaded{[&](const media_use::avatar&) { return named(""); },
+    return mux::visit(overloaded{[&](const media_use::avatar&) { return named(""); },
                                  [&](const media_use::thumbnail&) { return named("thumb_"); },
                                  [&](const media_use::whole&) { return named("full_"); },
                                  [](const media_use::to_open&) { return std::optional<std::filesystem::path>(); },

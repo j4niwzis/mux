@@ -7,6 +7,7 @@
 export module mux.app.kept;
 
 import std;
+import mux.variant;
 import mux.core;
 import mux.config;
 import mux.logic.room_events;
@@ -123,7 +124,7 @@ struct kept_settings {
     return own == notify_modes.end() ? mux::config::notify_mode_t{mux::config::notify_mode::by_default{}} : own->second;
   }
   [[nodiscard]] notify_decision notify_for(const conversation_id& chat, bool mentions_me) {
-    const bool wanted = std::visit(mux::overloaded{[](mux::config::notify_mode::off) { return false; },
+    const bool wanted = mux::visit(mux::overloaded{[](mux::config::notify_mode::off) { return false; },
                                                    [&](mux::config::notify_mode::mentions) { return mentions_me; },
                                                    [](const auto&) { return true; }},
                                    this->notify_mode_of(chat));

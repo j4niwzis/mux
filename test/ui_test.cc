@@ -171,7 +171,7 @@ TEST(Drawer, SlidesOutAfterALongWhileOut) {
   window.root().open_drawer();
   for (int i = 0; i < 40; ++i)
     frame(now + 16.0);
-  const auto& panel = window.root().p->frame.base().content();
+  const auto& panel = window.root().layer().frame.base().content();
   EXPECT_FLOAT_EQ(panel.bounds().fLeft, 0.0f);
 
   // A long while with nothing to draw, then a press on the dimmed rest.

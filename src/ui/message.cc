@@ -348,24 +348,28 @@ struct message_bubble : nodes::Stack {
   // The sender's avatar, beside the last of their run in a group; the
   // same room, empty, beside the rest.
   avatar_mark face;
-  // What it answers: a bar in the sender's colour, beside who and a line.
+  // What it answers, as tdesktop's reply (history_view_reply.cpp): a block
+  // tinted with the sender's colour (at 0.12), rounded 5, with a bar of it
+  // down its left (3, at 0.9); the sender's name in it, semibold, over a
+  // line of the message in the text's colour; a quoted picture's thumbnail,
+  // 32 and rounded, at its left (historyReplyPreview). Its padding,
+  // historyReplyPadding: 2 above and below, 11 at the left, 6 at the right.
   static constexpr float kReplyLineMax = 240.0f;  // tdesktop's maxSignatureSize
+  [[nodiscard]] static skia::SkColor with_alpha(skia::SkColor colour, float alpha) {
+    return (colour & 0x00FFFFFFu) | (static_cast<skia::SkColor>(std::lround(alpha * 255.0f)) << 24);
+  }
   struct quote_row : nodes::Stack {
-    struct bar : scene::Node {
-      skia::SkColor colour;
-      explicit bar(skia::SkColor c) : colour(c) { fState.apply({.width = 3.0f, .height = 32.0f, .cornerRadius = 1.5f, .background = c}); }
-    } line;
+    nodes::Box<> bar;
     // Who said it over a line of it, each cut at the bubble's width.
     struct said_column : nodes::Stack {
       nodes::Text who;
       nodes::Text said;
       said_column(skia::SkColor colour, std::string name, std::string line)
-          : who(std::move(name), 13.0f, colour, true), said(std::move(line), 13.0f, dim_colour) {
-        this->setGap(1.0f);
+          : who(std::move(name), 13.0f, colour, true), said(std::move(line), 13.0f, text_colour) {
         fState.apply({.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle});
-        // As tdesktop's reply: the name as wide as it is, the line of the
-        // message at most maxSignatureSize (240) -- so a short answer to a
-        // long message does not stretch its bubble to the full width.
+        // The name as wide as it is, the line of the message at most
+        // maxSignatureSize (240) -- so a short answer to a long message does
+        // not stretch its bubble to the full width.
         who.setElided(true);
         who.setMaxWidth(kMaxWidth - 10.0f);
         said.setElided(true);
@@ -376,21 +380,27 @@ struct message_bubble : nodes::Stack {
         f(said);
       }
     } texts;
-    // A picture quoted: its thumbnail, small and rounded, as tdesktop's.
+    // A picture quoted: its thumbnail.
     std::optional<nodes::Image> thumb;
     quote_row(skia::SkColor colour, std::string who, std::string said, std::optional<std::string> picture = std::nullopt)
-        : line(colour), texts(colour, std::move(who), std::move(said)) {
+        : bar(with_alpha(colour, 0.9f)), texts(colour, std::move(who), std::move(said)) {
       this->setHorizontal();
-      this->setGap(7.0f);
-      fState.apply({.autoSize = scene::axes::kBoth, .margin = {2.0f, 0.0f, 4.0f, 0.0f}});
+      this->setGap(4.0f);
+      fState.apply({.autoSize = scene::axes::kBoth,
+                    .margin = {2.0f, 0.0f, 4.0f, 0.0f},
+                    .padding = {2.0f, 6.0f, 2.0f, picture ? 7.0f : 11.0f},
+                    .cornerRadius = 5.0f,
+                    .background = with_alpha(colour, 0.12f),
+                    .masking = true});
+      bar.apply({.place = scene::anchor::kTopLeft, .x = picture ? -7.0f : -11.0f, .y = -2.0f, .fillY = true, .width = 3.0f});
       if (picture) {
         thumb.emplace([source = *picture] { return thumbnails().find(source); });
-        thumb->apply({.width = 32.0f, .height = 32.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 4.0f,
-                      .background = tile_colour});
+        thumb->apply({.width = 32.0f, .height = 32.0f, .alignSelf = scene::align::kMiddle,
+                      .margin = {2.0f, 0.0f, 2.0f, 0.0f}, .cornerRadius = 3.0f, .background = tile_colour});
       }
     }
     void forEachChild(auto&& f) {
-      f(line);
+      f(bar);
       f(thumb);
       f(texts);
     }

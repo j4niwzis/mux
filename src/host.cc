@@ -235,6 +235,18 @@ inline skiff::scene::Key key_of(SDL_Keycode key) {
     case SDLK_X: return keys::kX;
     case SDLK_Y: return keys::kY;
     case SDLK_Z: return keys::kZ;
+    case SDLK_PAGEUP: return keys::kPageUp;
+    case SDLK_PAGEDOWN: return keys::kPageDown;
+    case SDLK_0: return keys::k0;
+    case SDLK_1: return keys::k1;
+    case SDLK_2: return keys::k2;
+    case SDLK_3: return keys::k3;
+    case SDLK_4: return keys::k4;
+    case SDLK_5: return keys::k5;
+    case SDLK_6: return keys::k6;
+    case SDLK_7: return keys::k7;
+    case SDLK_8: return keys::k8;
+    case SDLK_9: return keys::k9;
     default: return keys::kUnknown;
   }
 }

@@ -251,6 +251,24 @@ struct conversations_screen : nodes::Stack {
       skiff::scene::setClipboardText(selected->body.text.selected());
     } else if (press.key == keys::kEscape && !any && line.answering()) {
       actions->cancel_compose();
+    } else if ((press.key == keys::kTab && control) ||
+               ((press.key == keys::kUp || press.key == keys::kDown) && press.modifiers.template has<scene::modifier::alt>())) {
+      // To the next chat in the list, or the one before: Ctrl+Tab and
+      // Ctrl+Shift+Tab, Alt+Down and Alt+Up.
+      const bool back = press.key == keys::kUp || press.modifiers.template has<scene::modifier::shift>();
+      const auto& rows = std::get<0>(std::get<0>(list.fChildren).fChildren);
+      const auto at = std::ranges::find(rows, *chosen, &conversation_row<Actions>::id);
+      if (at == rows.end() || rows.empty())
+        return;
+      const auto index = static_cast<std::size_t>(at - rows.begin());
+      const std::size_t to = back ? (index == 0 ? rows.size() - 1 : index - 1) : (index + 1) % rows.size();
+      actions->choose(rows[to].id);
+    } else if (press.key == keys::kPageUp || press.key == keys::kPageDown) {
+      // A page of the messages, most of what is in view.
+      const float page = timeline.bounds().height() * 0.9f;
+      timeline.scrollTo(std::max(0.0f, timeline.current() + (press.key == keys::kPageUp ? -page : page)));
+    } else if (press.key == keys::kEnd && control) {
+      actions->jump_to_end();
     } else {
       return;
     }

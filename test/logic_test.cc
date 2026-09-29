@@ -143,7 +143,7 @@ TEST(Links, ARoomNotJoinedIsJoinedThroughAMatrixAccount) {
   model now;
   const account_id me{protocol::matrix{}, "@me:x.org"};
   now.apply(change::connection_changed{me, connection::online{}});
-  const auto step = logic::where_to(now, logic::link::room{"#new:x.org", std::nullopt, {"x.org"}}, std::nullopt, std::nullopt);
+  const auto step = logic::where_to(now, logic::link::room{"#new:x.org", std::nullopt, {"x.org"}}, std::nullopt);
   EXPECT_EQ(step, logic::link_step_t(logic::link_step::join{me, "#new:x.org", {"x.org"}}));
 }
 

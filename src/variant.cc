@@ -76,6 +76,21 @@ constexpr decltype(auto) peel_to(layer<T, Rest>, std::size_t index, F& f) {
     return f(std::type_identity<T>{});
   return peel_to(Rest{}, index - 1, f);
 }
+// The same, halved each step: the alternatives [Lo, Hi) split at their
+// middle, the index compared once per step -- log2(n) compares, not n, a
+// tree the optimiser lays out as a jump or a few branches, each node one
+// instantiation (2n in all).
+template <std::size_t Lo, std::size_t Hi, class F, class... Ts>
+constexpr decltype(auto) halve_to(std::size_t index, F& f) {
+  if constexpr (Hi - Lo == 1) {
+    return f(std::type_identity<std::tuple_element_t<Lo, std::tuple<Ts...>>>{});
+  } else {
+    constexpr std::size_t mid = Lo + (Hi - Lo) / 2;
+    if (index < mid)
+      return halve_to<Lo, mid, F, Ts...>(index, f);
+    return halve_to<mid, Hi, F, Ts...>(index, f);
+  }
+}
 
 // The place of T among Ts; sizeof...(Ts) where it is not one.
 template <class T, class... Ts>
@@ -135,17 +150,17 @@ class variant {
   template <class T>
     requires detail::one_of<std::remove_cvref_t<T>, Ts...>
   constexpr variant(T&& value)  // NOLINT: converting, as std::variant's is
-      : fIndex(detail::index_in<std::remove_cvref_t<T>, Ts...>()) {
+      : fIndex(static_cast<index_type>(detail::index_in<std::remove_cvref_t<T>, Ts...>())) {
     this->make<std::remove_cvref_t<T>>(std::forward<T>(value));
   }
   template <class T, class... Args>
     requires detail::one_of<T, Ts...>
-  constexpr explicit variant(std::in_place_type_t<T>, Args&&... args) : fIndex(detail::index_in<T, Ts...>()) {
+  constexpr explicit variant(std::in_place_type_t<T>, Args&&... args) : fIndex(static_cast<index_type>(detail::index_in<T, Ts...>())) {
     this->make<T>(std::forward<Args>(args)...);
   }
   template <std::size_t I, class... Args>
     requires(I < sizeof...(Ts))
-  constexpr explicit variant(std::in_place_index_t<I>, Args&&... args) : fIndex(I) {
+  constexpr explicit variant(std::in_place_index_t<I>, Args&&... args) : fIndex(static_cast<index_type>(I)) {
     this->make<std::tuple_element_t<I, std::tuple<Ts...>>>(std::forward<Args>(args)...);
   }
   constexpr variant(variant&& other) noexcept : fIndex(other.fIndex) { this->move_from(other); }
@@ -178,7 +193,7 @@ class variant {
     requires detail::one_of<T, Ts...>
   constexpr T& emplace(Args&&... args) {
     this->destroy();
-    fIndex = detail::index_in<T, Ts...>();
+    fIndex = static_cast<index_type>(detail::index_in<T, Ts...>());
     this->make<T>(std::forward<Args>(args)...);
     return detail::value_of<T>(fObject);
   }
@@ -252,7 +267,7 @@ class variant {
       }
     } else {
       auto at = [&]<class T>(std::type_identity<T>) -> Out { return std::invoke(f, detail::value_of<T>(fObject)); };
-      return detail::peel_to(onion{}, fIndex, at);
+      return detail::halve_to<0, kSize, decltype(at), Ts...>(fIndex, at);
     }
   }
   template <class R, bool Deduced, class F>
@@ -270,7 +285,7 @@ class variant {
       }
     } else {
       auto at = [&]<class T>(std::type_identity<T>) -> Out { return std::invoke(f, detail::value_of<T>(object)); };
-      return detail::peel_to(onion{}, fIndex, at);
+      return detail::halve_to<0, kSize, decltype(at), Ts...>(fIndex, at);
     }
   }
 
@@ -310,7 +325,7 @@ class variant {
       }
     } else {
       auto at = [&]<class T>(std::type_identity<T>) { move_one<T>(*this, other); };
-      detail::peel_to(onion{}, fIndex, at);
+      detail::halve_to<0, kSize, decltype(at), Ts...>(fIndex, at);
     }
   }
   constexpr void copy_from(const variant& other) {
@@ -324,7 +339,7 @@ class variant {
       }
     } else {
       auto at = [&]<class T>(std::type_identity<T>) { copy_one<T>(*this, other); };
-      detail::peel_to(onion{}, fIndex, at);
+      detail::halve_to<0, kSize, decltype(at), Ts...>(fIndex, at);
     }
   }
   constexpr void destroy() {
@@ -338,11 +353,14 @@ class variant {
       }
     } else {
       auto at = [&]<class T>(std::type_identity<T>) { destroy_one<T>(*this); };
-      detail::peel_to(onion{}, fIndex, at);
+      detail::halve_to<0, kSize, decltype(at), Ts...>(fIndex, at);
     }
   }
 
-  std::size_t fIndex = 0;
+  // Which one: in the smallest unsigned that holds every index.
+  using index_type = std::conditional_t<(sizeof...(Ts) <= 0xff), std::uint8_t,
+                                        std::conditional_t<(sizeof...(Ts) <= 0xffff), std::uint16_t, std::size_t>>;
+  index_type fIndex = 0;
   alignas(detail::holder<Ts>...) unsigned char fBuffer[std::max({sizeof(detail::holder<Ts>)...})];
   detail::held* fObject = nullptr;
 };

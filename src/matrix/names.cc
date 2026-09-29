@@ -244,13 +244,13 @@ using state_type_t = std::variant<state_type::space_child, state_type::room_emot
 // What an image of a pack may be used as (MSC2545's "usage").
 namespace image_usage {
 struct emoticon {
-  static constexpr bool emoticon = true;
+  static constexpr bool as_emoji = true;
 };
 struct sticker {
-  static constexpr bool emoticon = false;
+  static constexpr bool as_emoji = false;
 };
 struct other {
-  static constexpr bool emoticon = false;
+  static constexpr bool as_emoji = false;
 };
 }  // namespace image_usage
 using image_usage_t = std::variant<image_usage::emoticon, image_usage::sticker, image_usage::other>;

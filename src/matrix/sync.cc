@@ -422,7 +422,7 @@ inline bool usable_as_emoji(const knot::value* usage) {
   if (!usage || !usage->is<knot::value::array>() || usage->as<knot::value::array>().empty())
     return true;
   for (const auto& one : usage->as<knot::value::array>())
-    if (one.is<std::string>() && std::visit([](auto of) { return of.emoticon; }, image_usage_of(one.as<std::string>())))
+    if (one.is<std::string>() && std::visit([](auto of) { return of.as_emoji; }, image_usage_of(one.as<std::string>())))
       return true;
   return false;
 }

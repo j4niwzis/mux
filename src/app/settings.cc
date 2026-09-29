@@ -29,6 +29,7 @@ class settings_part {
   void apply_limits() {
     pictures_->set_limits(k_->limits);
     s_->store->budget = static_cast<std::uintmax_t>(k_->limits.messages_on_disk_mb) << 20;
+    s_->store->deleted_budget = static_cast<std::uintmax_t>(mux::config::deleted_on_disk_of(k_->limits)) << 20;
   }
   // How much moves: set, shown, kept.
   void set_motion(std::string level) {
@@ -114,10 +115,10 @@ class settings_part {
     if (auto* up = s_->root().settings_up())
       up->show_files(k_->sending);
   }
-  // Deleted messages kept where they were, marked, or taken out.
-  void apply(const request::flip_keep_deleted&) {
-    k_->history.keep_deleted = !k_->history.keep_deleted;
-    s_->model->keep_deleted = k_->history.keep_deleted;
+  // Deleted messages shown where they were, marked, or taken out of view.
+  void apply(const request::flip_show_deleted&) {
+    k_->history.show_deleted = !k_->history.show_deleted;
+    s_->model->show_deleted = k_->history.show_deleted;
     (void)k_->write();
   }
   void apply(const request::flip_strip_metadata&) {

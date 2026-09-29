@@ -99,7 +99,7 @@ struct message_person {
 struct attach_files {};
 struct settings_files {};
 struct flip_strip_metadata {};
-struct flip_keep_deleted {};
+struct flip_show_deleted {};
 struct flip_rename_pictures {};
 struct close_send_box {};
 struct send_files {};
@@ -209,7 +209,7 @@ using request_t =
                  request::close_menu, request::menu_reply, request::menu_edit, request::menu_copy,
                  request::menu_delete, request::cancel_compose, request::open_url,
                  request::switch_account, request::submit_message, request::send_typed,
-                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_search, request::edit_last, request::reply_step, request::close_search, request::search_typed, request::search_step, request::open_member_info, request::reply_to, request::open_picture, request::close_picture, request::save_picture, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::flip_strip_metadata, request::flip_keep_deleted, request::flip_rename_pictures, request::close_notice, request::close_person_info,
+                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_search, request::edit_last, request::reply_step, request::close_search, request::search_typed, request::search_step, request::open_member_info, request::reply_to, request::open_picture, request::close_picture, request::save_picture, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::flip_strip_metadata, request::flip_show_deleted, request::flip_rename_pictures, request::close_notice, request::close_person_info,
                  request::resize_info, request::choose_new_proxy, request::toggle_mute, request::close_account_pages,
                  request::accounts_back, request::account_page, request::flip_account_receipts, request::flip_account_typing, request::typing,
                  request::proxy_kind, request::choose_account_proxy, request::manage_proxies,
@@ -289,7 +289,7 @@ struct actions {
   void attach_files() { requests.emplace_back(request::attach_files{}); }
   void settings_files() { requests.emplace_back(request::settings_files{}); }
   void flip_strip_metadata() { requests.emplace_back(request::flip_strip_metadata{}); }
-  void flip_keep_deleted() { requests.emplace_back(request::flip_keep_deleted{}); }
+  void flip_show_deleted() { requests.emplace_back(request::flip_show_deleted{}); }
   void flip_rename_pictures() { requests.emplace_back(request::flip_rename_pictures{}); }
   void close_send_box() { requests.emplace_back(request::close_send_box{}); }
   void send_files() { requests.emplace_back(request::send_files{}); }

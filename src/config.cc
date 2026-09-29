@@ -220,6 +220,8 @@ struct cache_limits {
   std::int64_t messages_on_disk_mb = 512;
   std::int64_t pictures_in_memory_mb = 32;
   std::int64_t pictures_on_disk_mb = 512;
+  // Deleted messages kept on disk, apart from the rest: none said is 256.
+  std::optional<std::int64_t> deleted_on_disk_mb;
   friend bool operator==(const cache_limits&, const cache_limits&) = default;
 };
 consteval auto json_schema(knot::type<cache_limits>) { return knot::schema<cache_limits>(); }
@@ -237,9 +239,16 @@ struct pictures_in_memory {
 struct pictures_on_disk {
   friend bool operator==(pictures_on_disk, pictures_on_disk) = default;
 };
+struct deleted_on_disk {
+  friend bool operator==(deleted_on_disk, deleted_on_disk) = default;
+};
 }  // namespace limit
 using limit_t = std::variant<limit::messages_in_memory, limit::messages_on_disk, limit::pictures_in_memory,
-                             limit::pictures_on_disk>;
+                             limit::pictures_on_disk, limit::deleted_on_disk>;
+inline constexpr std::int64_t kDeletedOnDiskMb = 256;
+[[nodiscard]] inline std::int64_t deleted_on_disk_of(const cache_limits& all) {
+  return all.deleted_on_disk_mb.value_or(kDeletedOnDiskMb);
+}
 // A limit's number, and its bounds: what it can be halved or doubled to.
 // Each limit's, by overloads; a limit_t's, by visiting them.
 [[nodiscard]] inline std::int64_t& value_of(cache_limits& all, limit::messages_in_memory) {
@@ -254,6 +263,11 @@ using limit_t = std::variant<limit::messages_in_memory, limit::messages_on_disk,
 [[nodiscard]] inline std::int64_t& value_of(cache_limits& all, limit::pictures_on_disk) {
   return all.pictures_on_disk_mb;
 }
+[[nodiscard]] inline std::int64_t& value_of(cache_limits& all, limit::deleted_on_disk) {
+  if (!all.deleted_on_disk_mb)
+    all.deleted_on_disk_mb = kDeletedOnDiskMb;
+  return *all.deleted_on_disk_mb;
+}
 [[nodiscard]] inline std::int64_t& value_of(cache_limits& all, const limit_t& which) {
   return std::visit([&](auto one) -> std::int64_t& { return value_of(all, one); }, which);
 }
@@ -262,6 +276,7 @@ using limit_t = std::variant<limit::messages_in_memory, limit::messages_on_disk,
 [[nodiscard]] inline std::pair<std::int64_t, std::int64_t> bounds_of(limit::messages_on_disk) { return {4, 65536}; }
 [[nodiscard]] inline std::pair<std::int64_t, std::int64_t> bounds_of(limit::pictures_in_memory) { return {4, 65536}; }
 [[nodiscard]] inline std::pair<std::int64_t, std::int64_t> bounds_of(limit::pictures_on_disk) { return {4, 65536}; }
+[[nodiscard]] inline std::pair<std::int64_t, std::int64_t> bounds_of(limit::deleted_on_disk) { return {4, 65536}; }
 [[nodiscard]] inline std::pair<std::int64_t, std::int64_t> bounds_of(const limit_t& which) {
   return std::visit([](auto one) { return bounds_of(one); }, which);
 }
@@ -276,9 +291,9 @@ consteval auto json_schema(knot::type<sending_settings>) { return knot::schema<s
 
 // What is kept of the history beyond what the servers keep.
 struct history_settings {
-  // A message deleted stays where it was, all it said, marked; off, it is
-  // gone from the chat and from the disk.
-  bool keep_deleted = false;
+  // A message deleted is shown where it was, all it said, marked; off, it
+  // is gone from the chat. Either way it is kept on disk.
+  bool show_deleted = false;
   friend bool operator==(const history_settings&, const history_settings&) = default;
 };
 consteval auto json_schema(knot::type<history_settings>) { return knot::schema<history_settings>(); }

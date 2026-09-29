@@ -44,6 +44,19 @@ void app::woken() {
                                },
                                [](const auto&) {}},
                one);
+    // A message deleted: marked where it is kept, and kept whole apart --
+    // as it was, before the model takes it out of view.
+    if (!ask.demo)
+      std::visit(mux::overloaded{[&](const mux::change::message_redacted& c) {
+                                   std::optional<mux::message> was;
+                                   if (const mux::conversation* chat = model->find(c.in))
+                                     if (const auto found = std::ranges::find(chat->timeline, c.id, &mux::message::id);
+                                         found != chat->timeline.end())
+                                       was = *found;
+                                   store.mark_deleted(c.in, c.id, was);
+                                 },
+                                 [](const auto&) {}},
+                 one);
     model->apply(one);
     this->keep_on_disk(one);
   }
@@ -80,12 +93,6 @@ void app::keep_on_disk(const mux::change_t& one) {
   };
   std::visit(mux::overloaded{[&](const mux::change::message_added& c) { added(c); },
                              [&](const mux::change::message_edited& c) { as_now(c.in, c.id); },
-                             [&](const mux::change::message_redacted& c) {
-                               if (model->keep_deleted)
-                                 as_now(c.in, c.id);
-                               else
-                                 store.forget(c.in, c.id);
-                             },
                              [&](const mux::change::reaction_changed& c) { as_now(c.in, c.id); },
                              [&](const mux::change::receipts_changed& c) {
                                if (const mux::conversation* chat = model->find(c.in))

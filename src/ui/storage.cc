@@ -51,7 +51,7 @@ struct storage_page : nodes::Stack {
     }
   };
   using clear_row = row_item<ask<Actions, &Actions::clear_stored>>;
-  using keep_row = switch_row<ask<Actions, &Actions::flip_keep_deleted>>;
+  using keep_row = switch_row<ask<Actions, &Actions::flip_show_deleted>>;
   struct parts_t {
     header_t header;
     nodes::Text memory_title = section_title("IN MEMORY");
@@ -64,10 +64,12 @@ struct storage_page : nodes::Stack {
     nodes::Text note{"Memory holds the newest of the chats read lately; the disk holds the rest, and what is scrolled "
                      "back to comes from there before the server. Past a limit, what was used longest ago goes first.",
                      13.0f, dim_colour};
-    nodes::Text history_title = section_title("HISTORY");
-    keep_row keep_deleted;
-    nodes::Text history_note{"On, a message deleted stays where it was, with all it said and its time, marked removed, "
-                             "and is kept on disk. Off, it is gone.",
+    nodes::Text history_title = section_title("DELETED MESSAGES");
+    keep_row show_deleted;
+    stepper deleted_on_disk;
+    nodes::Text history_note{"Deleted messages are kept on disk, apart from the rest and up to their own size, the "
+                             "oldest going first past it. Shown, one stays where it was, with all it said and its "
+                             "time, marked removed.",
                              13.0f, dim_colour};
   } parts;
 
@@ -78,7 +80,8 @@ struct storage_page : nodes::Stack {
               .messages_on_disk = stepper(a, "Messages", config::limit::messages_on_disk{}),
               .pictures_on_disk = stepper(a, "Pictures", config::limit::pictures_on_disk{}),
               .clear = clear_row("Clear stored messages and pictures", {a}, icon::close{}),
-              .keep_deleted = keep_row("Keep deleted messages", {a})} {
+              .show_deleted = keep_row("Show deleted messages", {a}),
+              .deleted_on_disk = stepper(a, "On disk", config::limit::deleted_on_disk{})} {
     fState.apply({.fill = true});
     parts.memory_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
     parts.disk_title.apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
@@ -87,7 +90,7 @@ struct storage_page : nodes::Stack {
       each->setWrapped(true);
       each->apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
     }
-    parts.keep_deleted.parts.toggle.setOnNow(history.keep_deleted);
+    parts.show_deleted.parts.toggle.setOnNow(history.show_deleted);
     this->show(limits);
   }
   void show(const config::cache_limits& limits) {
@@ -95,6 +98,7 @@ struct storage_page : nodes::Stack {
     parts.pictures_in_memory.parts.value.setText(std::format("{} MB", limits.pictures_in_memory_mb));
     parts.messages_on_disk.parts.value.setText(std::format("{} MB", limits.messages_on_disk_mb));
     parts.pictures_on_disk.parts.value.setText(std::format("{} MB", limits.pictures_on_disk_mb));
+    parts.deleted_on_disk.parts.value.setText(std::format("{} MB", config::deleted_on_disk_of(limits)));
   }
   void show_motion(std::string_view) {}
   void show_receipts(bool) {}

@@ -134,7 +134,7 @@ int main(int argc, char** argv) {
     program.drafts.load();
   program.sending = saved.sending.value_or(mux::config::sending_settings{});
   program.history = saved.history.value_or(mux::config::history_settings{});
-  program.model->keep_deleted = program.history.keep_deleted;
+  program.model->show_deleted = program.history.show_deleted;
   program.settings.apply_limits();
   program.proxies = proxies;
   for (const auto& one : saved.muted.value_or(std::vector<mux::config::muted_chat>{}))

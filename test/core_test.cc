@@ -88,7 +88,7 @@ TEST(Model, Messages) {
 
   // Deleted, where deleted messages are kept: in its place, all it said
   // kept, marked.
-  kept.keep_deleted = true;
+  kept.show_deleted = true;
   kept.apply(change::message_redacted{with_juliet, "1"});
   one = kept.find(with_juliet);
   EXPECT_TRUE(one->timeline[1].redacted);

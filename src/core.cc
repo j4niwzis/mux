@@ -483,8 +483,8 @@ using change_t = std::variant<change::connection_changed, change::account_remove
 // The model: every account, and every change applied to it.
 class model {
  public:
-  // A message deleted is kept where it was, marked -- or taken out.
-  bool keep_deleted = false;
+  // A message deleted is shown where it was, marked -- or taken out.
+  bool show_deleted = false;
 
   const std::map<account_id, account>& accounts() const noexcept { return accounts_; }
 
@@ -594,7 +594,7 @@ class model {
     // A deleted one, read back from the disk: only where deleted messages
     // are kept, and something of it is left to show.
     if (one.message.redacted &&
-        (!keep_deleted || (one.message.body.plain.empty() && !one.message.body.html && !one.message.attachment)))
+        (!show_deleted || (one.message.body.plain.empty() && !one.message.body.html && !one.message.attachment)))
       return;
     conversation& where = of(one.message.in);
     if (message* kept = one.message.id.empty() ? nullptr : message_in(where, one.message.id)) {
@@ -633,7 +633,7 @@ class model {
   // was with all it said and its time, marked; else it is taken out.
   void on(const change::message_redacted& one) {
     conversation& where = of(one.in);
-    if (keep_deleted) {
+    if (show_deleted) {
       if (message* kept = message_in(where, one.id))
         kept->redacted = true;
       return;

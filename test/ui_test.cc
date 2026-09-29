@@ -80,7 +80,7 @@ struct stub {
   void flip_account_typing() {}
   void settings_files() {}
   void flip_strip_metadata() {}
-  void flip_keep_deleted() {}
+  void flip_show_deleted() {}
   void flip_rename_pictures() {}
   void close_send_box() {}
   void send_files() {}

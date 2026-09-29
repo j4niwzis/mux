@@ -60,6 +60,28 @@ class message_store {
       out.me = me->second.as<std::string>();
     return out;
   }
+  // A message deleted: marked where it is kept, and kept whole in the
+  // archive of deleted messages, which the cache's limit does not reach --
+  // as it was where that is given, else as the disk has it.
+  void mark_deleted(const mux::conversation_id& in, const std::string& id, std::optional<mux::message> whole) {
+    knot::value::object line;
+    line.emplace("id", knot::value(id));
+    line.emplace("deleted", knot::value(true));
+    append(in, knot::to_json_string(knot::value(std::move(line))));
+    if (!whole) {
+      auto all = read(in);
+      if (const auto found = all.find(id); found != all.end())
+        whole = std::move(found->second);
+    }
+    if (!whole)
+      return;
+    whole->redacted = true;
+    const auto where = deleted_file_of(in);
+    std::error_code failed;
+    std::filesystem::create_directories(where.parent_path(), failed);
+    std::ofstream(where, std::ios::binary | std::ios::app) << line_of(*whole) << '\n';
+    prune(mux::config::state_path("deleted"), deleted_budget, where);
+  }
   void forget(const mux::conversation_id& in, const std::string& id) {
     knot::value::object line;
     line.emplace("id", knot::value(id));
@@ -99,6 +121,9 @@ class message_store {
   static std::filesystem::path reads_file_of(const mux::conversation_id& in) {
     return mux::config::state_path("messages") / safe(in.account.address) / (safe(in.id) + ".reads.json");
   }
+  static std::filesystem::path deleted_file_of(const mux::conversation_id& in) {
+    return mux::config::state_path("deleted") / safe(in.account.address) / (safe(in.id) + ".jsonl");
+  }
   static std::filesystem::path file_of(const mux::conversation_id& in) {
     return mux::config::state_path("messages") / safe(in.account.address) / (safe(in.id) + ".jsonl");
   }
@@ -108,22 +133,24 @@ class message_store {
     std::filesystem::create_directories(where.parent_path(), failed);
     std::ofstream(where, std::ios::binary | std::ios::app) << line << '\n';
     if (++appended_ % 500 == 1)
-      prune(where);
+      prune(mux::config::state_path("messages"), budget, where);
   }
 
  public:
   // The files held to this size in all; set from Storage.
   std::uintmax_t budget = 512u << 20;
+  // The deleted messages' archive held to this size; set from Storage.
+  std::uintmax_t deleted_budget = 256u << 20;
 
  private:
-  // The chats used longest ago -- read or written -- go first, whole;
-  // `keep`, just written, never does.
-  void prune(const std::filesystem::path& keep) const {
-    const std::uintmax_t kDiskBudget = budget;
+  // What is under `dir` held to `cap`: the chats used longest ago -- read
+  // or written -- go first, whole; `keep`, just written, never does.
+  static void prune(const std::filesystem::path& dir, std::uintmax_t cap, const std::filesystem::path& keep) {
+    const std::uintmax_t kDiskBudget = cap;
     std::error_code failed;
     std::vector<std::pair<std::filesystem::file_time_type, std::filesystem::path>> files;
     std::uintmax_t total = 0;
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(mux::config::state_path("messages"), failed)) {
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(dir, failed)) {
       if (!entry.is_regular_file(failed))
         continue;
       total += entry.file_size(failed);
@@ -145,9 +172,34 @@ class message_store {
   std::size_t appended_ = 0;
   // The chat's messages as its file says, each as its last line says; the
   // file written again with one line each where most of its lines were old.
+  // The chat's messages as its file says, each as its last line says -- the
+  // file written again with one line each where most of its lines were old
+  // -- and what was deleted in it, from the archive apart.
   static std::map<std::string, mux::message> read(const mux::conversation_id& in) {
     std::map<std::string, mux::message> all;
     const auto where = file_of(in);
+    const std::size_t lines = read_lines(where, in, all);
+    if (lines > 2 * all.size() + 64) {
+      // Mostly old versions: one line each, oldest first.
+      std::vector<const mux::message*> order;
+      for (const auto& [id, one] : all)
+        order.push_back(&one);
+      std::ranges::sort(order, {}, [](const mux::message* one) { return one->at; });
+      const auto fresh = std::filesystem::path(where.string() + ".new");
+      {
+        std::ofstream out(fresh, std::ios::binary | std::ios::trunc);
+        for (const mux::message* one : order)
+          out << line_of(*one) << '\n';
+      }
+      std::error_code failed;
+      std::filesystem::rename(fresh, where, failed);
+    }
+    read_lines(deleted_file_of(in), in, all);
+    return all;
+  }
+  // One file's lines, into `all`: how many there were.
+  static std::size_t read_lines(const std::filesystem::path& where, const mux::conversation_id& in,
+                                std::map<std::string, mux::message>& all) {
     std::ifstream file(where, std::ios::binary);
     std::string text;
     std::size_t lines = 0;
@@ -172,6 +224,11 @@ class message_store {
         continue;
       if (flag_of(o, "gone")) {
         all.erase(*id);
+        continue;
+      }
+      if (flag_of(o, "deleted")) {
+        if (const auto found = all.find(*id); found != all.end())
+          found->second.redacted = true;
         continue;
       }
       mux::message one;
@@ -207,22 +264,7 @@ class message_store {
       }
       all.insert_or_assign(*id, std::move(one));
     }
-    if (lines > 2 * all.size() + 64) {
-      // Mostly old versions: one line each, oldest first.
-      std::vector<const mux::message*> order;
-      for (const auto& [id, one] : all)
-        order.push_back(&one);
-      std::ranges::sort(order, {}, [](const mux::message* one) { return one->at; });
-      const auto fresh = std::filesystem::path(where.string() + ".new");
-      {
-        std::ofstream out(fresh, std::ios::binary | std::ios::trunc);
-        for (const mux::message* one : order)
-          out << line_of(*one) << '\n';
-      }
-      std::error_code failed;
-      std::filesystem::rename(fresh, where, failed);
-    }
-    return all;
+    return lines;
   }
   static std::string line_of(const mux::message& one) {
     knot::value::object line;

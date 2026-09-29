@@ -254,6 +254,16 @@ struct conversations_screen : nodes::Stack {
     const bool control = press.modifiers.template has<scene::modifier::control>();
     const bool any = control || press.modifiers.template has<scene::modifier::shift>() ||
                      press.modifiers.template has<scene::modifier::alt>();
+    // Ctrl+1 to Ctrl+9: the folder in that place, as tdesktop's.
+    static constexpr std::array kFolderKeys{keys::k1, keys::k2, keys::k3, keys::k4, keys::k5,
+                                            keys::k6, keys::k7, keys::k8, keys::k9};
+    if (const auto digit = std::ranges::find(kFolderKeys, press.key); control && digit != kFolderKeys.end()) {
+      const auto& tabs = std::get<0>(side.folders.fChildren);
+      if (const auto place = static_cast<std::size_t>(digit - kFolderKeys.begin()); place < tabs.size())
+        this->choose_folder(tabs[place].which);
+      reply.handle();
+      return;
+    }
     if (!chosen)
       return;
     if (press.key == keys::kF && control) {

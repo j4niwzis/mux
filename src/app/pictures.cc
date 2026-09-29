@@ -192,8 +192,11 @@ class pictures_part {
                 this->want_thumbnail(id, item.source);
                 this->make_preview(item);
               }
-            // Its first link's preview, once; and the preview's picture.
-            if (const auto link = mux::ui::first_link_of(said)) {
+            // Its first link's preview, once, where the chat shows them;
+            // and the preview's picture.
+            if (const auto link = s_->root().main().previews_off.contains(one.id)
+                                      ? std::nullopt
+                                      : mux::ui::first_link_of(said)) {
               if (const auto found = s_->model->previews.find(*link); found != s_->model->previews.end()) {
                 if (found->second.image)
                   want(id, found->second.image, *found->second.image);

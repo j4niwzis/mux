@@ -147,6 +147,8 @@ int main(int argc, char** argv) {
       program.room_event_kinds.insert_or_assign(chat, *one.kinds);
     if (one.receipts)
       program.receipts_shown_in.insert_or_assign(chat, *one.receipts);
+    if (one.previews)
+      program.previews_shown_in.insert_or_assign(chat, *one.previews);
     if (one.jump_search)
       program.jump_search_in.insert_or_assign(chat, *one.jump_search);
   }

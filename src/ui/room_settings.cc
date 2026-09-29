@@ -44,6 +44,8 @@ struct room_settings_facts {
   // Which of its room events it shows, as chosen for it: none chosen is as
   // its account's.
   std::optional<bool> events_all;
+  // Whether it shows link previews, as chosen for it.
+  std::optional<bool> previews;
   // Whether it shows who has read up to where, as chosen for it.
   std::optional<bool> receipts;
   // How far a jump's search pages back in it, as chosen for it.
@@ -347,6 +349,7 @@ struct room_settings : nodes::Stack {
       nodes::Text events_about = explained("Room events shown in this room, for you: Default is as your account's.");
       event_kind_list<Actions> events;
       receipts_choice<Actions> receipts;
+      previews_choice<Actions> previews;
       jump_search_choice<Actions> jump_search;
       nodes::Text leave_heading = part_heading("Leave room");
       widgets::Button<ask<Actions, &Actions::leave_chat>> leave;
@@ -361,6 +364,7 @@ struct room_settings : nodes::Stack {
                     text_colour),
                 .events = event_kind_list<Actions>(a, choice_level::chat{}, facts.events_all, facts.event_kinds),
                 .receipts = receipts_choice<Actions>(a, choice_level::chat{}, facts.receipts),
+                .previews = previews_choice<Actions>(a, choice_level::chat{}, facts.previews),
                 .jump_search = jump_search_choice<Actions>(a, choice_level::chat{}, facts.jump_search),
                 .leave = widgets::Button<ask<Actions, &Actions::leave_chat>>("Leave room", {a})} {
       this->setGap(6.0f);

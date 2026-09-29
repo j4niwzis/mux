@@ -76,6 +76,7 @@ struct storage_page : nodes::Stack {
       nodes::Text events_title = section_title("ROOM EVENTS");
       event_kind_list<Actions> events;
       receipts_choice<Actions> receipts;
+      previews_choice<Actions> previews;
       jump_search_choice<Actions> jump_search;
       nodes::Text history_note{"Deleted messages are kept on disk, apart from the rest and up to their own size, the "
                                "oldest going first past it. Shown, one stays where it was, with all it said and its "
@@ -93,6 +94,7 @@ struct storage_page : nodes::Stack {
                 .events = event_kind_list<Actions>(a, choice_level::everywhere{}, history.show_room_events,
                                                    history.room_event_kinds),
                 .receipts = receipts_choice<Actions>(a, choice_level::everywhere{}, history.show_receipts),
+                .previews = previews_choice<Actions>(a, choice_level::everywhere{}, history.link_previews),
                 .jump_search = jump_search_choice<Actions>(a, choice_level::everywhere{}, history.jump_search)} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
       parts.memory_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});

@@ -1032,7 +1032,7 @@ struct message_bubble : nodes::Stack {
   // one's own; the bubble a column of the name, the quote, the text, the
   // links, the reactions and the time.
   message_bubble(const conversation& in, const message& said, bool first_of_run, bool last_of_run,
-                 const model* now = nullptr, bool show_events = true)
+                 const model* now = nullptr, bool show_events = true, bool show_preview = true)
       : said(said), first(first_of_run), last(last_of_run), message_id(said.id), plain(said.body.plain),
         outgoing(said.outgoing), sender(said.sender),
         parts{.face = avatar_mark(said.sender, sender_name(in, said.sender), kAvatar),
@@ -1141,7 +1141,8 @@ struct message_bubble : nodes::Stack {
     if (last_of_run && !said.service && !bare_picture)
       body.grow_tail(outgoing);
     // The first link's preview, where it has come.
-    if (const auto link = first_link_of(said); link && now)
+    previews_shown = show_preview;
+    if (const auto link = first_link_of(said); link && now && show_preview)
       if (const auto found = now->previews.find(*link); found != now->previews.end()) {
         body.parts.preview.emplace(found->second, *link);
         preview_known = true;
@@ -1212,6 +1213,8 @@ struct message_bubble : nodes::Stack {
   bool events_shown = true;
   // Whether its link's preview had come when it was made.
   bool preview_known = false;
+  // Whether its chat shows link previews, as it was made.
+  bool previews_shown = true;
   skiff::paint::Tween swipe{0.0f, 180.0f, skiff::paint::movement::subtle{}};
   static constexpr float kSwipeToReply = 70.0f;
   // Where it was jumped to: the whole row -- from the message to the edges,

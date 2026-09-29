@@ -154,6 +154,9 @@ void app::apply(const request::open_manage&) {
                                      .events_all = room_events.contains(chat->id)
                                                        ? std::optional<bool>(room_events.at(chat->id))
                                                        : std::nullopt,
+                                     .previews = previews_shown_in.contains(chat->id)
+                                                     ? std::optional<bool>(previews_shown_in.at(chat->id))
+                                                     : std::nullopt,
                                      .receipts = receipts_shown_in.contains(chat->id)
                                                      ? std::optional<bool>(receipts_shown_in.at(chat->id))
                                                      : std::nullopt,
@@ -391,6 +394,28 @@ void app::apply(const request::set_jump_search& one) {
                                  jump_search_in.insert_or_assign(*chosen, *one.most);
                                else
                                  jump_search_in.erase(*chosen);
+                             }},
+             one.level);
+  (void)this->write();
+  this->refresh();
+}
+
+// Link previews, at a level.
+void app::apply(const request::set_link_previews& one) {
+  std::visit(mux::overloaded{[&](mux::choice_level::everywhere) { history.link_previews = one.show.value_or(true); },
+                             [&](mux::choice_level::account) {
+                               this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+                                 mux::config::link_previews_in(account) = one.show;
+                               });
+                             },
+                             [&](mux::choice_level::chat) {
+                               const auto& chosen = root().main().chosen;
+                               if (!chosen)
+                                 return;
+                               if (one.show)
+                                 previews_shown_in.insert_or_assign(*chosen, *one.show);
+                               else
+                                 previews_shown_in.erase(*chosen);
                              }},
              one.level);
   (void)this->write();

@@ -38,6 +38,8 @@ struct kept_settings {
   std::map<conversation_id, bool> room_events;
   // Chats' own choice of showing who has read up to where.
   std::map<conversation_id, bool> receipts_shown_in;
+  // Chats' own choice of link previews.
+  std::map<conversation_id, bool> previews_shown_in;
   // Chats' own limit on a jump's search, in events; 0 no limit.
   std::map<conversation_id, std::int64_t> jump_search_in;
   // And each kind of them, where a chat chose apart.
@@ -73,6 +75,16 @@ struct kept_settings {
       if (const auto& chosen = mux::config::jump_search_of(*account))
         return *chosen;
     return history.jump_search;
+  }
+  // Whether a chat shows link previews: its own choice, else its account's,
+  // else every account's.
+  [[nodiscard]] bool previews_shown(const conversation_id& chat) {
+    if (const auto own = previews_shown_in.find(chat); own != previews_shown_in.end())
+      return own->second;
+    if (const auto* account = this->settings_of(chat.account.address))
+      if (const auto& chosen = mux::config::link_previews_of(*account))
+        return *chosen;
+    return history.link_previews;
   }
   [[nodiscard]] bool receipts_shown(const conversation_id& chat) {
     if (const auto own = receipts_shown_in.find(chat); own != receipts_shown_in.end())
@@ -153,7 +165,7 @@ struct kept_settings {
       for (const auto& [chat, mode] : notify_modes)
         out.chat_notify->push_back({chat.account.address, chat.id, mux::config::word_of(mode)});
     }
-    if (!room_events.empty() || !room_event_kinds.empty() || !receipts_shown_in.empty() || !jump_search_in.empty()) {
+    if (!room_events.empty() || !room_event_kinds.empty() || !receipts_shown_in.empty() || !jump_search_in.empty() || !previews_shown_in.empty()) {
       std::map<conversation_id, mux::config::room_events_choice> chosen;
       for (const auto& [chat, show] : room_events) {
         auto& one = chosen[chat];
@@ -166,6 +178,12 @@ struct kept_settings {
         one.account = chat.account.address;
         one.conversation = chat.id;
         one.kinds = kinds;
+      }
+      for (const auto& [chat, show] : previews_shown_in) {
+        auto& one = chosen[chat];
+        one.account = chat.account.address;
+        one.conversation = chat.id;
+        one.previews = show;
       }
       for (const auto& [chat, most] : jump_search_in) {
         auto& one = chosen[chat];

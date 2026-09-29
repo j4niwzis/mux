@@ -291,6 +291,7 @@ struct app : kept_settings {
   void apply(const request::start_group& one);
   void apply(const request::flip_account_room_events&);
   void apply(const request::set_receipts_shown&);
+  void apply(const request::set_link_previews&);
   void apply(const request::set_jump_search&);
   void apply(const request::flip_chat_room_events&);
   void apply(const request::close_manage&);

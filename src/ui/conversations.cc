@@ -101,6 +101,8 @@ struct conversations_screen : nodes::Stack {
   std::map<conversation_id, room_event_filter> event_filters;
   // The chats that show who has read up to where, as faces.
   std::set<conversation_id> receipts_in;
+  // The chats that show no link previews.
+  std::set<conversation_id> previews_off;
   // How far a jump's search pages back in each chat, in events; 0 no limit.
   std::map<conversation_id, std::int64_t> jump_limits;
   // How many messages the chat had when the search began paging back.
@@ -1153,7 +1155,8 @@ struct conversations_screen : nodes::Stack {
             entries, std::views::iota(first_made, last_made),
             [&](std::size_t i) { return all[i].id; }, [](const message_bubble& row) { return row.message_id; },
             [&](std::size_t i) {
-              message_bubble made(*one, all[i], first_of_run(i), last_of_run(i), &now, shows(all[i]));
+              message_bubble made(*one, all[i], first_of_run(i), last_of_run(i), &now, shows(all[i]),
+                                  !previews_off.contains(one->id));
               if (unread_from && all[i].id == *unread_from)
                 made.mark_unread_start();
               made.show_readers(*one, readers_of(i));
@@ -1168,7 +1171,8 @@ struct conversations_screen : nodes::Stack {
               const bool preview_known = link && now.previews.contains(*link);
               return row.said == all[i] && row.first == first_of_run(i) && row.last == last_of_run(i) &&
                      row.quote_known == quote_known && row.events_shown == shows(all[i]) && row.unread_start == (unread_from && all[i].id == *unread_from) &&
-                     row.preview_known == preview_known && row.readers_shown == readers_of(i);
+                     row.preview_known == preview_known && row.readers_shown == readers_of(i) &&
+                     row.previews_shown == !previews_off.contains(one->id);
             }))
       timeline.invalidateLayout();
     // The newest is at the bottom: the view follows it where the reader was

@@ -393,6 +393,13 @@ void app::refresh() {
     for (const auto& [key, one] : account.conversations)
       if (this->receipts_shown(one.id))
         receipts.insert(one.id);
+  // And which show no link previews.
+  auto& unpreviewed = root().main().previews_off;
+  unpreviewed.clear();
+  for (const auto& [id, account] : model->accounts())
+    for (const auto& [key, one] : account.conversations)
+      if (!this->previews_shown(one.id))
+        unpreviewed.insert(one.id);
   // And how far a jump's search pages back in each.
   auto& limits = root().main().jump_limits;
   limits.clear();

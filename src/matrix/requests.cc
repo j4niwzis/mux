@@ -626,11 +626,31 @@ void account<Sink>::leave(std::string room) {
 }
 
 template <class Sink>
-void account<Sink>::send(std::string room, std::string body, std::optional<std::string> reply_to) {
-  loop_->spawn([this, room = std::move(room), body = std::move(body), reply_to = std::move(reply_to)] {
+void account<Sink>::send(std::string room, std::string body, std::optional<std::string> reply_to,
+                         std::vector<mention> mentions) {
+  loop_->spawn([this, room = std::move(room), body = std::move(body), reply_to = std::move(reply_to),
+                mentions = std::move(mentions)] {
     const std::string txn = this->transaction();
     const conversation_id in{id_, room};
-    const auto html = html_of(body, emotes_in(room));
+    // Each mention a link to its person in the Markdown, as Element sends a
+    // pill: the body keeps the name as written.
+    std::string marked = body;
+    std::size_t from = 0;
+    for (const mention& one : mentions) {
+      const auto at = marked.find(one.name, from);
+      if (at == std::string::npos)
+        continue;
+      std::string label;
+      for (const char c : one.name) {
+        if (c == '[' || c == ']' || c == '\\')
+          label += '\\';
+        label += c;
+      }
+      const std::string link = std::format("[{}](https://matrix.to/#/{})", label, one.user);
+      marked.replace(at, one.name.size(), link);
+      from = at + link.size();
+    }
+    const auto html = html_of(marked, emotes_in(room));
     sink_(change::message_added{message{
         .in = in,
         .id = txn,
@@ -657,6 +677,15 @@ void account<Sink>::send(std::string room, std::string body, std::optional<std::
       knot::value::object relates;
       relates.emplace("m.in_reply_to", knot::value(std::move(target)));
       content.emplace("m.relates_to", knot::value(std::move(relates)));
+    }
+    // Who is mentioned, as Matrix 1.7 says it: what their clients notify by.
+    if (!mentions.empty()) {
+      knot::value::array users;
+      for (const mention& one : mentions)
+        users.push_back(knot::value(one.user));
+      knot::value::object said;
+      said.emplace("user_ids", knot::value(std::move(users)));
+      content.emplace("m.mentions", knot::value(std::move(said)));
     }
     auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.room.message",

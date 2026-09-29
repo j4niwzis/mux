@@ -194,12 +194,19 @@ class outbox_part {
     // first, where it is a window elsewhere, or it would not be shown.
     s_->go_live(to);
     screen.jump_to_end();
-    std::visit(overloaded{[&](const compose::plain&) { s_->ask->send(to, std::move(text)); },
+    // Who was picked from the @ list for it: sent as mentions.
+    auto mentions = std::exchange(screen.draft_mentions, {});
+    std::visit(overloaded{[&](const compose::plain&) {
+                            if (s_->demo())
+                              s_->ask->send(to, std::move(text));
+                            else
+                              s_->net->send(to, std::move(text), std::nullopt, std::move(mentions));
+                          },
                           [&](const compose::reply& one) {
                             if (s_->demo())
                               s_->ask->send(to, std::move(text));
                             else
-                              s_->net->send(to, std::move(text), one.id);
+                              s_->net->send(to, std::move(text), one.id, std::move(mentions));
                           },
                           [&](const compose::edit& one) {
                             if (s_->demo())

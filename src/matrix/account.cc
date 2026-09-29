@@ -129,7 +129,8 @@ class account {
   // A text message sent to a room, from a fiber of its own. It is in the
   // conversation at once, under its transaction id; the server's answer
   // gives it its event id, and the echo in the next sync is the same message.
-  void send(std::string room, std::string body, std::optional<std::string> reply_to = std::nullopt);
+  void send(std::string room, std::string body, std::optional<std::string> reply_to = std::nullopt,
+            std::vector<mention> mentions = {});
 
  private:
   void say(connection_t state);

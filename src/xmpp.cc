@@ -315,7 +315,8 @@ class account {
     });
   }
 
-  void send(std::string to, std::string text, std::optional<std::string> reply_to = std::nullopt) {
+  void send(std::string to, std::string text, std::optional<std::string> reply_to = std::nullopt,
+            std::vector<mux::mention> = {}) {
     loop_->spawn([this, to = bare(to), text = std::move(text), reply_to = std::move(reply_to)] {
       message out{.in = {id_, to},
                   .id = "mux-" + std::to_string(++sent_),

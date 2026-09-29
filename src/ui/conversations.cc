@@ -100,6 +100,47 @@ struct conversations_screen : nodes::Stack {
   // by chat, set by the program before it shows the model; a chat not in it
   // shows them.
   std::map<conversation_id, bool> events_shown;
+  // The @ list: the chat's members matching what follows an @ at the end of
+  // what is written, as Telegram's; who was picked from it, to be sent as
+  // mentions with the message.
+  std::vector<member> mention_matches;
+  std::size_t mention_lit = 0;
+  std::string mention_query;
+  std::vector<mention> draft_mentions;
+  struct pick_mention {
+    conversations_screen* screen;
+    std::size_t index;
+    void operator()() const { screen->choose_mention(index); }
+  };
+  // One of the @ list: the avatar, the name over the ID.
+  struct mention_row : nodes::Stack {
+    pick_mention act;
+    struct parts_t {
+      avatar_mark face;
+      two_lines texts;
+    } parts;
+    mention_row(pick_mention what, const member& one)
+        : act(what), parts{.face = avatar_mark(one.id, one.name.empty() ? one.id : one.name, 28.0f),
+                           .texts = two_lines(one.name.empty() ? one.id : one.name, one.id, 14.0f, 1.0f)} {
+      this->setHorizontal();
+      this->setGap(10.0f);
+      fState.apply({.fillX = true, .height = 44.0f, .padding = {0.0f, 14.0f, 0.0f, 14.0f},
+                    .hoverBackground = chosen_colour, .selectedBackground = chosen_colour});
+    }
+    void set_lit(bool on) { fState.apply({.selected = on}); }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+    [[nodiscard]] bool onClick(float, float) {
+      act();
+      return true;
+    }
+  };
+  struct mention_list : nodes::Stack {
+    struct parts_t {
+      std::vector<mention_row> rows;
+    } parts;
+    mention_list() { fState.apply({.fillX = true, .autoSize = scene::axes::kY, .background = sidebar_colour}); }
+  };
   // The account to list once the model has it: the one shown last, kept.
   // Taken the first time it is there; dropped when an account is chosen.
   std::optional<account_id> wanted;
@@ -117,6 +158,97 @@ struct conversations_screen : nodes::Stack {
     conversations_screen* screen;
     void operator()(const folder_t& which) const { screen->choose_folder(which); }
   };
+  // The @ list, as what is written now asks: what follows the last @ at
+  // its end -- one at its start or after a space, with no space after it --
+  // matched against the chat's members, by name or ID, as Telegram does.
+  void find_mentions() {
+    const std::string& text = chat.line.text();
+    std::optional<std::string> query;
+    if (const auto at = text.rfind('@'); at != std::string::npos && (at == 0 || text[at - 1] == ' ' || text[at - 1] == '\n')) {
+      const std::string_view after = std::string_view(text).substr(at + 1);
+      if (after.find_first_of(" \n") == std::string_view::npos)
+        query = std::string(after);
+    }
+    const conversation* in = chosen && last_model ? last_model->find(*chosen) : nullptr;
+    if (!query || in == nullptr || !is_group(*in)) {
+      if (chat.parts.mentions.visible()) {
+        chat.parts.mentions.setVisible(false);
+        mention_matches.clear();
+        this->invalidateLayout();
+      }
+      mention_query.clear();
+      return;
+    }
+    if (*query == mention_query && chat.parts.mentions.visible())
+      return;
+    mention_query = *query;
+    const auto lower = [](std::string_view in) {
+      std::string out(in);
+      for (char& c : out)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+      return out;
+    };
+    const std::string wanted = lower(*query);
+    mention_matches.clear();
+    for (const member& one : in->members) {
+      if (chosen && one.id == chosen->account.address)
+        continue;
+      if (lower(one.name).find(wanted) != std::string::npos || lower(one.id).find(wanted) != std::string::npos)
+        mention_matches.push_back(one);
+      if (mention_matches.size() == 6)
+        break;
+    }
+    auto& rows = chat.parts.mentions.parts.rows;
+    rows.clear();
+    for (std::size_t i = 0; i < mention_matches.size(); ++i)
+      rows.emplace_back(pick_mention{this, i}, mention_matches[i]);
+    mention_lit = 0;
+    if (!rows.empty())
+      rows.front().set_lit(true);
+    chat.parts.mentions.setVisible(!rows.empty());
+    this->invalidateLayout();
+  }
+  // One picked: the @ and what follows it made their name, and they kept
+  // to be mentioned when it is sent.
+  void choose_mention(std::size_t index) {
+    if (index >= mention_matches.size())
+      return;
+    const member one = mention_matches[index];
+    const std::string& text = chat.line.text();
+    const auto at = text.rfind('@');
+    if (at == std::string::npos)
+      return;
+    const std::string name = one.name.empty() ? one.id : one.name;
+    chat.line.set_text(text.substr(0, at) + name + " ");
+    draft_mentions.push_back({name, one.id});
+    mention_query.clear();
+    mention_matches.clear();
+    chat.parts.mentions.parts.rows.clear();
+    chat.parts.mentions.setVisible(false);
+    this->invalidateLayout();
+  }
+  // The keys, while the list is up: Up and Down through it, Enter picks,
+  // Esc closes it -- before the input reads Enter as sending.
+  void onKey(scene::phase::capture, const scene::key::down& press, scene::Reply& reply) {
+    if (!chat.parts.mentions.visible() || mention_matches.empty())
+      return;
+    namespace keys = scene::keys;
+    auto& rows = chat.parts.mentions.parts.rows;
+    if (press.key == keys::kUp || press.key == keys::kDown) {
+      rows[mention_lit].set_lit(false);
+      const std::size_t n = rows.size();
+      mention_lit = press.key == keys::kUp ? (mention_lit + n - 1) % n : (mention_lit + 1) % n;
+      rows[mention_lit].set_lit(true);
+      reply.handle();
+    } else if (press.key == keys::kEnter) {
+      this->choose_mention(mention_lit);
+      reply.handle();
+    } else if (press.key == keys::kEscape) {
+      chat.parts.mentions.setVisible(false);
+      this->invalidateLayout();
+      reply.handle();
+    }
+  }
   void choose_folder(const folder_t& which) {
     folder = which;
     if (last_model)
@@ -242,6 +374,7 @@ struct conversations_screen : nodes::Stack {
       // The pinned message, under the head, where the chat has any.
       pinned_t pinned;
       timeline_area<Actions> area;
+      mention_list mentions;
       composer_bar<Actions> line;
       empty_state empty;
       select_hint hint;
@@ -264,6 +397,7 @@ struct conversations_screen : nodes::Stack {
       header.show({}, [a](const auto& shown) { return chat_header<Actions>(a, shown); });
       fState.apply({.fillY = true, .grow = scene::axes::kX, .background = chat_colour});
       area.apply({.fillX = true, .grow = scene::axes::kY});
+      parts.mentions.setVisible(false);
     }
   };
   using side_edge = drag_edge<resize_sidebar_to<Actions>>;
@@ -668,6 +802,7 @@ struct conversations_screen : nodes::Stack {
     jump_age = jumping_to ? jump_age + 1 : 0;
     if (const bool loading = jump_age > 6; loading != chat.area.parts.loading.visible())
       chat.area.parts.loading.setVisible(loading);
+    this->find_mentions();
     // What is in the composer: typing while there is text in it.
     if (const bool has_text = !line.text().empty(); has_text != was_typing || (has_text && line.text() != typed_last)) {
       was_typing = has_text;

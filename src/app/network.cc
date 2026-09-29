@@ -125,13 +125,14 @@ struct network {
       box->push(mux::change_t{mux::change::account_removed{{mux::ui::protocol_of(address), address}}});
     });
   }
-  void send(const mux::conversation_id& to, std::string text, std::optional<std::string> reply_to = std::nullopt) {
-    loop.post([this, to, text = std::move(text), reply_to = std::move(reply_to)] {
+  void send(const mux::conversation_id& to, std::string text, std::optional<std::string> reply_to = std::nullopt,
+            std::vector<mux::mention> mentions = {}) {
+    loop.post([this, to, text = std::move(text), reply_to = std::move(reply_to), mentions = std::move(mentions)] {
       for (auto& one : accounts)
         std::visit(
             [&](auto& account) {
               if (account->id() == to.account)
-                account->send(to.id, text, reply_to);
+                account->send(to.id, text, reply_to, mentions);
             },
             one.account);
     });

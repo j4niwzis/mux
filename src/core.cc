@@ -400,6 +400,13 @@ struct emote {
   friend bool operator==(const emote&, const emote&) = default;
 };
 
+// Someone mentioned in what is sent: the name as written in it, and who.
+struct mention {
+  std::string name;
+  std::string user;
+  friend bool operator==(const mention&, const mention&) = default;
+};
+
 struct conversation {
   conversation_id id;
   conversation_kind_t kind = conversation_kind::direct{};

@@ -161,7 +161,23 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
                                            .reaction = true};
                               sink_(change::message_added{std::move(made), where});
                             },
-                            [](const auto&) {}},
+                            // Else a line of its own too, quoting what it is on: shown
+                            // where the chat's settings show reactions so.
+                            [&](const auto&) {
+                              message made{.in = in,
+                                           .id = one.event_id,
+                                           .sender = one.sender,
+                                           .at = at,
+                                           .body = {std::format("{} reacted {}", name_in(in.id, one.sender),
+                                                                key.starts_with("mxc://") ? std::string("with a custom emoji")
+                                                                                          : key),
+                                                    std::nullopt},
+                                           .replies_to = content.m_relates_to->event_id,
+                                           .outgoing = one.sender == id_.address,
+                                           .service = true,
+                                           .event_kind = room_event::reactions{}};
+                              sink_(change::message_added{std::move(made), where});
+                            }},
                  where);
     }
   } else {

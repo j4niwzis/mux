@@ -25,6 +25,11 @@ using kinds_t = config::room_event_kinds;
 [[nodiscard]] constexpr std::optional<bool> kinds_t::* member_of(room_event::access) { return &kinds_t::access; }
 [[nodiscard]] constexpr std::optional<bool> kinds_t::* member_of(room_event::encryption) { return &kinds_t::encryption; }
 [[nodiscard]] constexpr std::optional<bool> kinds_t::* member_of(room_event::other) { return &kinds_t::other; }
+[[nodiscard]] constexpr std::optional<bool> kinds_t::* member_of(room_event::reactions) { return &kinds_t::reactions; }
+// What a kind is where nothing is chosen for it: shown, but reactions --
+// each one a line of its own only where asked for.
+[[nodiscard]] constexpr bool shown_unless_chosen(room_event::reactions) { return false; }
+[[nodiscard]] constexpr bool shown_unless_chosen(const auto&) { return true; }
 
 [[nodiscard]] inline std::optional<bool>& choice_in(kinds_t& in, const room_event_t& kind) {
   return in.*std::visit([](auto one) { return member_of(one); }, kind);
@@ -53,7 +58,8 @@ using kinds_t = config::room_event_kinds;
       shown = account_all;
     if (!shown)
       shown = choice_of(every_kinds, kind);
-    out.shown[kind.index()] = shown.value_or(every_all);
+    const bool fallback = std::visit([](auto one) { return shown_unless_chosen(one); }, kind);
+    out.shown[kind.index()] = shown.value_or(fallback && every_all);
   }
   return out;
 }

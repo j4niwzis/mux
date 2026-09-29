@@ -263,50 +263,6 @@ struct world_readable {};  // anyone
 using history_rule_t =
     std::variant<history_rule::shared, history_rule::invited, history_rule::joined, history_rule::world_readable>;
 
-// What can be done to a room by those allowed to: named, described, opened
-// or closed, people let in or sent out, and given a say.
-namespace room_action {
-struct rename {
-  std::string name;
-};
-struct retopic {
-  std::string topic;
-};
-struct set_join_rule {
-  join_rule_t rule;
-};
-struct set_history {
-  history_rule_t rule;
-};
-struct invite {
-  std::string user;
-};
-struct kick {
-  std::string user;
-};
-struct ban {
-  std::string user;
-};
-struct unban {
-  std::string user;
-};
-struct set_power {
-  std::string user;
-  std::int64_t level = 0;
-};
-}  // namespace room_action
-using room_action_t =
-    std::variant<room_action::rename, room_action::retopic, room_action::set_join_rule, room_action::set_history,
-                 room_action::invite, room_action::kick, room_action::ban, room_action::unban, room_action::set_power>;
-
-// A custom emoji: its shortcode, as written between colons, and its picture
-// on the server -- one of a Matrix room's packs, or the user's own.
-struct emote {
-  std::string shortcode;
-  std::string url;
-  friend bool operator==(const emote&, const emote&) = default;
-};
-
 // What a room asks of those who do something in it: the level each needs,
 // as its power levels say (m.room.power_levels), Matrix's defaults where
 // they say nothing. What is asked is a tag, one for each thing done; one
@@ -392,6 +348,56 @@ struct power_needs {
   [[nodiscard]] std::int64_t of(const power_need_t& need) const {
     return std::visit([this](auto one) { return this->of(one); }, need);
   }
+};
+
+// What can be done to a room by those allowed to: named, described, opened
+// or closed, people let in or sent out, and given a say.
+namespace room_action {
+struct rename {
+  std::string name;
+};
+struct retopic {
+  std::string topic;
+};
+struct set_join_rule {
+  join_rule_t rule;
+};
+struct set_history {
+  history_rule_t rule;
+};
+struct invite {
+  std::string user;
+};
+struct kick {
+  std::string user;
+};
+struct ban {
+  std::string user;
+};
+struct unban {
+  std::string user;
+};
+struct set_power {
+  std::string user;
+  std::int64_t level = 0;
+};
+struct encrypt {};  // for good: it cannot be turned off
+struct set_need {  // the level a thing done asks
+  power_need_t need;
+  std::int64_t level = 0;
+};
+}  // namespace room_action
+using room_action_t =
+    std::variant<room_action::rename, room_action::retopic, room_action::set_join_rule, room_action::set_history,
+                 room_action::invite, room_action::kick, room_action::ban, room_action::unban, room_action::set_power,
+                 room_action::encrypt, room_action::set_need>;
+
+// A custom emoji: its shortcode, as written between colons, and its picture
+// on the server -- one of a Matrix room's packs, or the user's own.
+struct emote {
+  std::string shortcode;
+  std::string url;
+  friend bool operator==(const emote&, const emote&) = default;
 };
 
 struct conversation {

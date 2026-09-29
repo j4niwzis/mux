@@ -21,6 +21,7 @@ export import :chat_list;
 export import :message;
 export import :header;
 export import :info;
+export import :room_settings;
 export import :composer;
 export import :timeline;
 export import :conversations;

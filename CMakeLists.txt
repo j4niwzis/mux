@@ -220,7 +220,7 @@ if(MUX_UI)
   set_property(SOURCE src/emoji_font.cc APPEND PROPERTY OBJECT_DEPENDS ${mux_emoji_font})
   target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
     FILES src/host.cc src/audio.cc src/ui.cc
-          src/ui/base.cc src/ui/icons.cc src/ui/avatars.cc src/ui/controls.cc src/ui/themes.cc src/ui/names.cc src/ui/html.cc src/ui/chat_list.cc src/ui/message.cc src/ui/header.cc src/ui/info.cc src/ui/composer.cc src/ui/timeline.cc src/ui/conversations.cc src/ui/forms.cc src/ui/add_account.cc src/ui/accounts.cc src/ui/drawer.cc src/ui/proxies.cc src/ui/appearance.cc src/ui/storage.cc src/ui/settings.cc src/ui/context_menu.cc src/ui/sending.cc src/ui/viewer.cc src/ui/window.cc)
+          src/ui/base.cc src/ui/icons.cc src/ui/avatars.cc src/ui/controls.cc src/ui/themes.cc src/ui/names.cc src/ui/html.cc src/ui/chat_list.cc src/ui/message.cc src/ui/header.cc src/ui/info.cc src/ui/room_settings.cc src/ui/composer.cc src/ui/timeline.cc src/ui/conversations.cc src/ui/forms.cc src/ui/add_account.cc src/ui/accounts.cc src/ui/drawer.cc src/ui/proxies.cc src/ui/appearance.cc src/ui/storage.cc src/ui/settings.cc src/ui/context_menu.cc src/ui/sending.cc src/ui/viewer.cc src/ui/window.cc)
   target_link_libraries(mux_modules PUBLIC SDL3::SDL3 skiff::skiff skiff::widgets Opus::opus Vorbis::vorbisfile)
   add_executable(mux src/main.cc)
   # The program's own parts: its network, its demo, what it keeps on disk,

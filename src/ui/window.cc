@@ -13,6 +13,7 @@ import mux.config;
 import :base;
 import :header;
 import :info;
+import :room_settings;
 import :timeline;
 import :conversations;
 import :accounts;
@@ -52,7 +53,7 @@ struct window : scene::Node {
       // A message's reactions as events.
       widgets::Dialog<reactions_box<Actions>> reactions;
       // A room's management.
-      widgets::Dialog<room_manage<Actions>> manage;
+      widgets::Dialog<room_settings<Actions>> manage;
       // Where a message is forwarded to.
       widgets::Dialog<forward_box<Actions>> forwarding;
       // A new chat: someone to message, or a group to make.
@@ -103,7 +104,7 @@ struct window : scene::Node {
       reactions.setSheetColour(chat_colour);  // its bubbles, as in the chat
       reactions.setSize(392.0f, 420.0f);
       manage.setSheetColour(sidebar_colour);
-      manage.setSize(480.0f, 600.0f);
+      manage.setSize(860.0f, 620.0f);
       forwarding.setSheetColour(sidebar_colour);
       forwarding.setSize(400.0f, 520.0f);
       new_chat.setSheetColour(sidebar_colour);
@@ -223,7 +224,7 @@ struct window : scene::Node {
     layer().reactions.open(actions, in, entries, now);
   }
   void close_reactions() { layer().reactions.close(); }
-  void open_manage(const manage_facts& facts) { layer().manage.open(actions, facts); }
+  void open_manage(const room_settings_facts& facts) { layer().manage.open(actions, facts); }
   void close_manage() { layer().manage.close(); }
   void open_forward(const std::vector<forward_target>& chats) { layer().forwarding.open(actions, chats); }
   void close_forward() { layer().forwarding.close(); }

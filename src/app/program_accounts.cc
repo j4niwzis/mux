@@ -82,14 +82,32 @@ void app::apply(const request::open_manage&) {
   const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
   if (!chat)
     return;
-  mux::ui::manage_facts facts{.name = chat->name, .topic = chat->topic.value_or(""), .join_rule = chat->join_rule,
-                              .history = chat->history};
-  for (const mux::member& one : chat->members) {
-    const auto level = chat->powers.find(one.id);
-    facts.members.push_back({one.id, one.name.empty() ? one.id : one.name,
-                             level == chat->powers.end() ? chat->power_default : level->second});
+  const auto level_of = [&](const std::string& user) {
+    const auto found = chat->powers.find(user);
+    return found == chat->powers.end() ? chat->power_default : found->second;
+  };
+  mux::ui::room_settings_facts facts{.id = chat->id.id,
+                                     .name = chat->name,
+                                     .topic = chat->topic.value_or(""),
+                                     .alias = chat->alias,
+                                     .other_aliases = chat->other_aliases,
+                                     .encrypted = chat->encrypted,
+                                     .join_rule = chat->join_rule,
+                                     .history = chat->history,
+                                     .version = chat->version,
+                                     .muted = muted.contains(chat->id),
+                                     .mine = level_of(chat->id.account.address),
+                                     .needs = chat->needs};
+  // Element's privileged users: those the power levels name with a level of
+  // their own, the highest first.
+  for (const auto& [user, level] : chat->powers) {
+    if (level == chat->needs.users_default)
+      continue;
+    const auto member = std::ranges::find(chat->members, user, &mux::member::id);
+    facts.privileged.push_back(
+        {user, member != chat->members.end() && !member->name.empty() ? member->name : user, level});
   }
-  std::ranges::sort(facts.members, std::greater{}, &mux::ui::manage_facts::person::level);
+  std::ranges::stable_sort(facts.privileged, std::greater{}, &mux::ui::room_settings_facts::person::level);
   root().open_manage(facts);
 }
 void app::apply(const request::close_manage&) { root().close_manage(); }

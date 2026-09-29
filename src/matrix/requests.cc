@@ -99,6 +99,13 @@ void account<Sink>::manage(std::string room, room_action_t action) {
       content.emplace(std::string(key), knot::value(std::move(value)));
       return content;
     };
+    // The room's power levels as they are now: what a change is made on.
+    const auto power_levels = [&] {
+      if (const auto kept = state_.joined.find(room); kept != state_.joined.end())
+        if (const knot::value now = state_content(kept->second, "m.room.power_levels"); now.is<knot::value::object>())
+          return now.as<knot::value::object>();
+      return knot::value::object();
+    };
     const auto told = [&](const char* what, auto done) {
       if (!done)
         log(id_, "could not {} in {}: {}", what, room, done.error().said());
@@ -129,17 +136,41 @@ void account<Sink>::manage(std::string room, room_action_t action) {
             },
             // A say given: the room's power levels as they are, with it.
             [&](const room_action::set_power& one) {
-              knot::value::object content;
-              if (const auto kept = state_.joined.find(room); kept != state_.joined.end())
-                if (const knot::value now = state_content(kept->second, "m.room.power_levels");
-                    now.is<knot::value::object>())
-                  content = now.as<knot::value::object>();
+              knot::value::object content = power_levels();
               knot::value::object users;
               if (const auto found = content.find("users");
                   found != content.end() && found->second.is<knot::value::object>())
                 users = found->second.as<knot::value::object>();
               users.insert_or_assign(one.user, knot::value(one.level));
               content.insert_or_assign("users", knot::value(std::move(users)));
+              set("m.room.power_levels", std::move(content));
+            },
+            // Encryption on, as Element turns it on.
+            [&](const room_action::encrypt&) { set("m.room.encryption", one_field("algorithm", "m.megolm.v1.aes-sha2")); },
+            // What a thing done asks: the power levels as they are, with it.
+            [&](const room_action::set_need& one) {
+              knot::value::object content = power_levels();
+              const auto top = [&](std::string_view key) {
+                content.insert_or_assign(std::string(key), knot::value(one.level));
+              };
+              const auto nested = [&](std::string_view outer, std::string_view key) {
+                knot::value::object inner;
+                if (const auto found = content.find(std::string(outer));
+                    found != content.end() && found->second.is<knot::value::object>())
+                  inner = found->second.as<knot::value::object>();
+                inner.insert_or_assign(std::string(key), knot::value(one.level));
+                content.insert_or_assign(std::string(outer), knot::value(std::move(inner)));
+              };
+              std::visit(overloaded{[&](power_need::default_role) { top("users_default"); },
+                                    [&](power_need::send_messages) { top("events_default"); },
+                                    [&](power_need::change_settings) { top("state_default"); },
+                                    [&](power_need::invite) { top("invite"); },
+                                    [&](power_need::kick) { top("kick"); },
+                                    [&](power_need::ban) { top("ban"); },
+                                    [&](power_need::redact) { top("redact"); },
+                                    [&](power_need::notify_everyone) { nested("notifications", "room"); },
+                                    [&]<sends_state Need>(Need) { nested("events", Need::event); }},
+                         one.need);
               set("m.room.power_levels", std::move(content));
             }},
         action);

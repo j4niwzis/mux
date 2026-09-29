@@ -739,9 +739,11 @@ struct message_bubble : nodes::Stack {
                   .role = nodes::Text(std::move(role), 12.0f, dim_colour)} {
         this->setHorizontal();
         this->setGap(10.0f);
-        fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth});
+        fState.apply({.autoSize = scene::axes::kBoth});
+        // Sized as the name alone was: cut where it passes the bubble's
+        // widest, the role's room kept.
         parts.name.setElided(true);
-        parts.name.apply({.shrink = scene::axes::kX});
+        parts.name.setMaxWidth(kMaxWidth - 60.0f);
         parts.role.setVisible(!parts.role.text().empty());
         parts.role.apply({.alignSelf = scene::align::kEnd});
       }

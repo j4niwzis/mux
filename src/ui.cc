@@ -1640,15 +1640,34 @@ struct field : scene::Node {
 
 // ---- the account forms ---------------------------------------------------------
 
+// Buttons side by side, as a form ends.
+template <class... Buttons>
+struct button_row : nodes::Stack {
+  std::tuple<Buttons...> buttons;
+  explicit button_row(Buttons... all) : buttons(std::move(all)...) {
+    this->setHorizontal();
+    this->setGap(10.0f);
+    fState.apply({.autoSize = scene::axes::kBoth});
+  }
+  void forEachChild(auto&& f) {
+    std::apply([&](auto&... each) { (f(each), ...); }, buttons);
+  }
+};
+
 // What every account form ends with: what went wrong or what is happening,
 // and its buttons. Enter in any of the form's fields submits it.
 template <class Actions>
-struct form_end {
+struct form_end : nodes::Stack {
   nodes::Text message{"", 13.0f, error_colour};
-  widgets::Button<ask<Actions, &Actions::submit_login>> submit;
-  widgets::Button<ask<Actions, &Actions::pop_panel>> close;
+  button_row<widgets::Button<ask<Actions, &Actions::submit_login>>, widgets::Button<ask<Actions, &Actions::pop_panel>>>
+      buttons;
 
-  form_end(Actions* a, bool editing) : submit(editing ? "Save" : "Log in", {a}), close("Close", {a}) {
+  form_end(Actions* a, bool editing)
+      : buttons(widgets::Button<ask<Actions, &Actions::submit_login>>(editing ? "Save" : "Log in", {a}),
+                widgets::Button<ask<Actions, &Actions::pop_panel>>("Close", {a})) {
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    this->setGap(12.0f);
+    auto& [submit, close] = buttons.buttons;
     submit.setPrimary(true);
     submit.apply({.width = 120.0f, .height = 36.0f});
     close.apply({.width = 120.0f, .height = 36.0f});
@@ -1657,23 +1676,14 @@ struct form_end {
     message.apply({.fillX = true});
   }
 
-  void each(auto&& f) {
+  void forEachChild(auto&& f) {
     f(message);
-    f(submit);
-    f(close);
+    f(buttons);
   }
 
   void say(std::string text, bool error) {
     message.setText(std::move(text));
     message.setColour(error ? error_colour : dim_colour);
-  }
-
-  void place(column_stack& stack) {
-    stack(message, 12.0f);
-    submit.fState.arrange(0.0f, stack.y);
-    scene::layout(submit, stack.column);
-    close.fState.arrange(submit.bounds().width() + 12.0f, stack.y);
-    scene::layout(close, stack.column);
   }
 };
 
@@ -1687,51 +1697,45 @@ struct form_end {
 // What "Advanced" folds out on an XMPP form: the resource, where to connect,
 // and PLAIN without TLS. Its height is what its last layout took.
 template <class Actions>
-struct xmpp_advanced : scene::Node {
+struct xmpp_advanced : nodes::Stack {
   field resource{"Device name (resource)", "mux", "mux"};
   field host{"Host", "from the domain's SRV records"};
   field port{"Port", "5222"};
-  widgets::Toggle<ask<Actions, &Actions::toggle_plain>> plain;
-  nodes::Text plain_label{"Allow PLAIN without TLS. Only for a test server on this machine: never over a network.",
-                          13.0f, error_colour};
-  // Its height unfolded, as the last layout found it.
-  float full = 0.0f;
+  // The switch and what it says, side by side.
+  struct plain_row : nodes::Stack {
+    widgets::Toggle<ask<Actions, &Actions::toggle_plain>> plain;
+    nodes::Text label{"Allow PLAIN without TLS. Only for a test server on this machine: never over a network.",
+                      13.0f, error_colour};
+    explicit plain_row(Actions* a) : plain({a}) {
+      this->setHorizontal();
+      this->setGap(10.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+      label.setWrapped(true);
+      label.apply({.grow = scene::axes::kX});
+    }
+    void forEachChild(auto&& f) {
+      f(plain);
+      f(label);
+    }
+  } row;
+  widgets::Toggle<ask<Actions, &Actions::toggle_plain>>& plain = row.plain;
 
-  explicit xmpp_advanced(Actions* a) : plain({a}) {
-    fState.apply({.fillX = true});
-    plain_label.setWrapped(true);
+  explicit xmpp_advanced(Actions* a) : row(a) {
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
+    this->setGap(8.0f);
   }
-
-  void measure(const skia::SkRect&) { fState.fHeight = full; }
-
   void forEachChild(auto&& f) {
     f(resource);
     f(host);
     f(port);
-    f(plain);
-    f(plain_label);
-  }
-
-  void layoutChildren() {
-    const skia::SkRect box = fState.contentBox();
-    column_stack stack{skia::SkRect::MakeXYWH(box.fLeft, box.fTop, box.width(), 10000.0f)};
-    stack(resource, 8.0f);
-    stack(host, 8.0f);
-    stack(port, 8.0f);
-    plain.fState.arrange(0.0f, stack.y);
-    scene::layout(plain, stack.column);
-    const float beside = plain.bounds().width() + 10.0f;
-    plain_label.setMaxWidth(std::max(0.0f, stack.column.width() - beside));
-    plain_label.fState.arrange(beside, stack.y);
-    scene::layout(plain_label, stack.column);
-    full = stack.y + std::max(plain.bounds().height(), plain_label.bounds().height()) + 12.0f;
+    f(row);
   }
 };
 
 // An XMPP account's settings: its JID and password, and "Advanced" folds out
 // the rest. It fills the column it is given.
 template <class Actions>
-struct xmpp_form : scene::Node {
+struct xmpp_form : nodes::Stack {
   Actions* actions = nullptr;
   // The address the account was saved under, when this is an edit of one.
   std::optional<std::string> editing;
@@ -1745,7 +1749,8 @@ struct xmpp_form : scene::Node {
 
   xmpp_form(Actions* a, const std::optional<config::xmpp_account>& from)
       : actions(a), advanced_button("Advanced", {a}), more(a), end(a, from.has_value()) {
-    fState.apply({.fill = true});
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    this->setGap(12.0f);
     password.box.setMasked(true);
     advanced_button.apply({.width = 120.0f, .height = 36.0f});
     if (from) {
@@ -1768,7 +1773,7 @@ struct xmpp_form : scene::Node {
     f(password);
     f(advanced_button);
     f(more);
-    end.each(f);
+    f(end);
   }
 
   // Folded out or away: smoothly, where things move.
@@ -1809,21 +1814,13 @@ struct xmpp_form : scene::Node {
     }
   }
 
-  void layoutChildren() {
-    column_stack stack{fState.contentBox()};
-    stack(address, 12.0f);
-    stack(password, 12.0f);
-    stack(advanced_button, 12.0f);
-    stack(more, 0.0f);
-    end.place(stack);
-  }
 };
 
 // A Matrix account's settings: its user ID and password, the homeserver
 // (found through the server's .well-known when left empty) and what this
 // device is called.
 template <class Actions>
-struct matrix_form : scene::Node {
+struct matrix_form : nodes::Stack {
   Actions* actions = nullptr;
   std::optional<std::string> editing;
 
@@ -1835,7 +1832,8 @@ struct matrix_form : scene::Node {
 
   matrix_form(Actions* a, const std::optional<config::matrix_account>& from)
       : actions(a), end(a, from.has_value()) {
-    fState.apply({.fill = true});
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    this->setGap(12.0f);
     password.box.setMasked(true);
     if (from) {
       editing = from->user_id;
@@ -1852,7 +1850,7 @@ struct matrix_form : scene::Node {
     f(password);
     f(homeserver);
     f(device_name);
-    end.each(f);
+    f(end);
   }
 
   [[nodiscard]] std::expected<config::matrix_account, std::string> account() const {
@@ -1875,14 +1873,6 @@ struct matrix_form : scene::Node {
     }
   }
 
-  void layoutChildren() {
-    column_stack stack{fState.contentBox()};
-    stack(user_id, 12.0f);
-    stack(password, 12.0f);
-    stack(homeserver, 12.0f);
-    stack(device_name, 12.0f);
-    end.place(stack);
-  }
 };
 
 // Either form, as the panels hold them.
@@ -1948,57 +1938,79 @@ struct choose_new_proxy {
 // Adding an account, beside the list of them: XMPP or Matrix at the top, and
 // that protocol's form under it.
 template <class Actions>
-struct add_account_pane : scene::Node {
+struct add_account_pane : nodes::Stack {
   Actions* actions = nullptr;
   // XMPP | Matrix: two segments in a thin frame.
-  nodes::Box<> segments{chosen_colour};
-  segment<ask<Actions, &Actions::add_xmpp>> xmpp_tab;
-  segment<ask<Actions, &Actions::add_matrix>> matrix_tab;
+  struct protocol_switch : nodes::Stack {
+    segment<ask<Actions, &Actions::add_xmpp>> xmpp_tab;
+    segment<ask<Actions, &Actions::add_matrix>> matrix_tab;
+    explicit protocol_switch(Actions* a) : xmpp_tab("XMPP", {a}), matrix_tab("Matrix", {a}) {
+      this->setHorizontal();
+      this->setGap(1.0f);
+      fState.apply({.autoSize = scene::axes::kBoth, .padding = {1.0f, 1.0f, 1.0f, 1.0f}});
+    }
+    void forEachChild(auto&& f) {
+      f(xmpp_tab);
+      f(matrix_tab);
+    }
+    void drawSelf(skia::SkCanvas* canvas, float alpha) {
+      if (skia::SkFont* font = skiff::paint::defaultFont())
+        skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 0.0f, chosen_colour, alpha);
+    }
+  } tabs;
   nodes::Text note{"", 13.0f, dim_colour};
-  account_form<Actions> form;
   // The proxy the new account goes through: none, or one of the profiles.
-  nodes::Text proxy_title = nodes::Text("Proxy", 13.0f, dim_colour);
-  std::vector<segment<choose_new_proxy<Actions>>> proxy_choices;
+  struct proxy_row : nodes::Stack {
+    nodes::Text title{"Proxy", 13.0f, dim_colour};
+    std::vector<segment<choose_new_proxy<Actions>>> choices;
+    proxy_row() {
+      this->setHorizontal();
+      this->setGap(4.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+      title.apply({.alignSelf = scene::align::kMiddle});
+    }
+    void forEachChild(auto&& f) {
+      f(title);
+      f(choices);
+    }
+  } proxies_row;
+  account_form<Actions> form;
   std::vector<std::string> proxy_names;
   std::optional<std::string> proxy;
-  // The form coming in when the protocol changes: from the side of the
-  // segment chosen, fading in.
+  // The form coming in when the protocol changes, fading in.
   skiff::paint::Tween swap{1.0f, 200.0f, skiff::paint::movement::subtle{}};
-  float swap_from = 0.0f;
 
   add_account_pane(Actions* a, const std::vector<config::proxy_settings>& proxies)
-      : actions(a), xmpp_tab("XMPP", {a}), matrix_tab("Matrix", {a}),
-        form(std::in_place_index<0>, a, std::nullopt) {
-    proxy_choices.emplace_back("None", choose_new_proxy<Actions>{a, -1});
+      : actions(a), tabs(a), form(std::in_place_index<0>, a, std::nullopt) {
+    fState.apply({.fill = true});
+    this->setGap(12.0f);
+    note.setWrapped(true);
+    note.apply({.fillX = true});
+    proxies_row.choices.emplace_back("None", choose_new_proxy<Actions>{a, -1});
     for (std::size_t k = 0; k < proxies.size(); ++k) {
       proxy_names.push_back(proxies[k].name);
-      proxy_choices.emplace_back(proxies[k].name, choose_new_proxy<Actions>{a, static_cast<int>(k)});
+      proxies_row.choices.emplace_back(proxies[k].name, choose_new_proxy<Actions>{a, static_cast<int>(k)});
     }
+    proxies_row.setVisible(!proxies.empty());
     this->set_proxy(-1);
-    this->fState.apply({.fill = true});
-    segments.apply({.width = 187.0f, .height = 30.0f});
-    note.setWrapped(true);
     this->light();
   }
 
   void forEachChild(auto&& f) {
-    f(segments);
-    f(proxy_title);
-    f(proxy_choices);
-    f(xmpp_tab);
-    f(matrix_tab);
+    f(tabs);
     f(note);
+    f(proxies_row);
     f(form);
   }
 
   void show_xmpp() {
     form.template emplace<0>(this->actions, std::nullopt);
-    this->begin_swap(-1.0f);
+    this->begin_swap();
     this->light();
   }
   void show_matrix() {
     form.template emplace<1>(this->actions, std::nullopt);
-    this->begin_swap(1.0f);
+    this->begin_swap();
     this->light();
   }
   // The proxy chosen for the new account: -1 for none.
@@ -2006,65 +2018,39 @@ struct add_account_pane : scene::Node {
     proxy.reset();
     if (index >= 0 && static_cast<std::size_t>(index) < proxy_names.size())
       proxy = proxy_names[static_cast<std::size_t>(index)];
-    for (std::size_t i = 0; i < proxy_choices.size(); ++i)
-      proxy_choices[i].set_active(static_cast<int>(i) - 1 == index);
+    for (std::size_t i = 0; i < proxies_row.choices.size(); ++i)
+      proxies_row.choices[i].set_active(static_cast<int>(i) - 1 == index);
   }
-
-  void begin_swap(float side) {
-    swap_from = side;
+  void begin_swap() {
     swap.jump(0.0f);
     swap.setTarget(1.0f);
-    this->invalidateLayout();
+    this->fade();
+  }
+  void fade() {
+    const float value = swap.value();
+    std::visit([value](auto& one) { one.fState.setAlpha(value); }, form);
   }
   [[nodiscard]] bool settling() const { return swap.moving(); }
   void update(double now_ms) {
     if (swap.step(now_ms))
-      this->invalidateLayout();
+      this->fade();
   }
+
   [[nodiscard]] xmpp_form<Actions>* xmpp() { return xmpp_form_in(form); }
 
   // The tab of the form that is up, lit, and what that protocol is.
   void light() {
     std::visit(overloaded{[this](const xmpp_form<Actions>&) {
-                            xmpp_tab.set_active(true);
-                            matrix_tab.set_active(false);
+                            tabs.xmpp_tab.set_active(true);
+                            tabs.matrix_tab.set_active(false);
                             note.setText("An address like user@example.com, on a server such as Prosody or ejabberd.");
                           },
                           [this](const matrix_form<Actions>&) {
-                            xmpp_tab.set_active(false);
-                            matrix_tab.set_active(true);
+                            tabs.xmpp_tab.set_active(false);
+                            tabs.matrix_tab.set_active(true);
                             note.setText("A user ID like @user:example.org, on a homeserver such as Synapse.");
                           }},
                form);
-    this->invalidateLayout();
-  }
-
-  void layoutChildren() {
-    column_stack stack{this->fState.contentBox()};
-    segments.fState.arrange(0.0f, stack.y);
-    scene::layout(segments, stack.column);
-    xmpp_tab.fState.arrange(1.0f, stack.y + 1.0f);
-    scene::layout(xmpp_tab, stack.column);
-    matrix_tab.fState.arrange(xmpp_tab.bounds().width() + 2.0f, stack.y + 1.0f);
-    scene::layout(matrix_tab, stack.column);
-    stack.y += segments.bounds().height() + 12.0f;
-    note.setMaxWidth(stack.column.width());
-    stack(note, 10.0f);
-    if (proxy_choices.size() > 1) {
-      proxy_title.fState.arrange(0.0f, stack.y + 6.0f);
-      scene::layout(proxy_title, stack.column);
-      float x = proxy_title.bounds().width() + 12.0f;
-      for (auto& one : proxy_choices) {
-        one.fState.arrange(x, stack.y);
-        scene::layout(one, stack.column);
-        x += one.bounds().width() + 4.0f;
-      }
-      stack.y += 28.0f + 12.0f;
-    }
-    const float value = swap.value();
-    const float dx = (1.0f - value) * 32.0f * swap_from;
-    place_form(form, skia::SkRect::MakeXYWH(stack.column.fLeft + dx, stack.column.fTop, stack.column.width(), stack.column.height()), stack.y);
-    std::visit([value](auto& one) { one.fState.setAlpha(value); }, form);
   }
 };
 
@@ -2149,32 +2135,47 @@ struct account_entry : scene::Node {
 
 // The chosen account: on or off, removed, and its own protocol's form.
 template <class Actions>
-struct account_editor : scene::Node {
-  nodes::Text heading;
+struct account_editor : nodes::Stack {
+  // Its address, then on or off and Remove, in a line.
+  struct head_row : nodes::Stack {
+    nodes::Text heading;
+    nodes::Text enabled_label{"On", 13.0f, dim_colour};
+    widgets::Toggle<flip_account<Actions>> enabled;
+    widgets::Button<remove_account<Actions>> remove;
+    head_row(Actions* a, const config::account_t& saved)
+        : heading(config::address_of(saved), 20.0f, text_colour, true),
+          enabled(flip_account<Actions>{a, config::address_of(saved)}),
+          remove("Remove", remove_account<Actions>{a, config::address_of(saved)}) {
+      this->setHorizontal();
+      this->setGap(10.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+      heading.setElided(true);
+      heading.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      enabled_label.apply({.alignSelf = scene::align::kMiddle});
+      enabled.apply({.alignSelf = scene::align::kMiddle});
+      enabled.setOnNow(config::enabled_of(saved));
+      remove.apply({.width = 100.0f, .height = 32.0f});
+    }
+    void forEachChild(auto&& f) {
+      f(heading);
+      f(enabled_label);
+      f(enabled);
+      f(remove);
+    }
+  } head;
   nodes::Text state{"", 13.0f, dim_colour};
-  widgets::Toggle<flip_account<Actions>> enabled;
-  nodes::Text enabled_label{"On", 13.0f, dim_colour};
-  widgets::Button<remove_account<Actions>> remove;
   account_form<Actions> form;
 
-  account_editor(Actions* a, const config::account_t& saved)
-      : heading(config::address_of(saved), 20.0f, text_colour, true),
-        enabled(flip_account<Actions>{a, config::address_of(saved)}),
-        remove("Remove", remove_account<Actions>{a, config::address_of(saved)}),
-        form(form_of(a, saved)) {
+  account_editor(Actions* a, const config::account_t& saved) : head(a, saved), form(form_of(a, saved)) {
     fState.apply({.fill = true});
-    heading.setElided(true);
+    this->setGap(6.0f);
     state.setElided(true);
-    enabled.setOnNow(config::enabled_of(saved));
-    remove.apply({.width = 100.0f, .height = 32.0f});
+    state.apply({.fillX = true, .margin = {0.0f, 0.0f, 14.0f, 0.0f}});
   }
 
   void forEachChild(auto&& f) {
-    f(heading);
+    f(head);
     f(state);
-    f(enabled);
-    f(enabled_label);
-    f(remove);
     f(form);
   }
 
@@ -2183,29 +2184,11 @@ struct account_editor : scene::Node {
     const auto [how, failed] = state_of(saved, now);
     state.setText(std::format("{} · {}", config::protocol_name(saved), how));
     state.setColour(failed ? error_colour : dim_colour);
-    enabled.setOn(config::enabled_of(saved));
+    head.enabled.setOn(config::enabled_of(saved));
   }
 
   void say(std::string text, bool error) {
     std::visit([&](auto& one) { one.say(std::move(text), error); }, form);
-  }
-
-  void layoutChildren() {
-    const skia::SkRect box = fState.contentBox();
-    remove.fState.arrange(0.0f, 0.0f, scene::anchor::kTopRight, scene::anchor::kTopRight);
-    scene::layout(remove, box);
-    enabled.fState.arrange(-(remove.bounds().width() + 16.0f), 5.0f, scene::anchor::kTopRight,
-                           scene::anchor::kTopRight);
-    scene::layout(enabled, box);
-    enabled_label.fState.arrange(enabled.bounds().fLeft - box.fLeft - 30.0f, 7.0f);
-    scene::layout(enabled_label, box);
-    heading.setMaxWidth(std::max(0.0f, enabled_label.bounds().fLeft - box.fLeft - 12.0f));
-    heading.fState.arrange(0.0f, 0.0f);
-    scene::layout(heading, box);
-    state.setMaxWidth(box.width());
-    state.fState.arrange(0.0f, heading.bounds().height() + 6.0f);
-    scene::layout(state, box);
-    place_form(form, box, state.bounds().fBottom - box.fTop + 20.0f);
   }
 };
 
@@ -2623,7 +2606,7 @@ struct drawer_account : scene::Node {
 // accounts under them, then Settings and Quit, each a full-width line with
 // its icon.
 template <class Actions>
-struct drawer_panel : scene::Node {
+struct drawer_panel : nodes::Stack {
   nodes::Text title{"mux", 20.0f, text_colour, true};
   std::vector<drawer_account<Actions>> accounts;
   row_item<ask<Actions, &Actions::open_accounts>> manage;
@@ -2635,6 +2618,9 @@ struct drawer_panel : scene::Node {
       : manage("Manage accounts", {a}, icon::person{}),
         settings("Settings", {a}, icon::gear{}),
         quit("Quit", {a}, icon::power{}) {
+    title.apply({.margin = {18.0f, 20.0f, 14.0f, 20.0f}});
+    manage.apply({.margin = {0.0f, 0.0f, 6.0f, 0.0f}});
+    rule_1.apply({.margin = {0.0f, 0.0f, 6.0f, 0.0f}});
     fState.apply({.fill = true});
     rule_1.apply({.fillX = true, .height = 1.0f});
   }
@@ -2655,20 +2641,6 @@ struct drawer_panel : scene::Node {
     this->invalidateLayout();
   }
 
-  void layoutChildren() {
-    column_stack stack{fState.contentBox()};
-    stack.y = 18.0f;
-    title.fState.arrange(20.0f, stack.y);
-    scene::layout(title, stack.column);
-    stack.y += title.bounds().height() + 14.0f;
-    // The accounts, and Manage accounts under them, in one section.
-    for (auto& one : accounts)
-      stack(one, 0.0f);
-    stack(manage, 6.0f);
-    stack(rule_1, 6.0f);
-    stack(settings, 0.0f);
-    stack(quit, 0.0f);
-  }
 };
 
 // ---- the settings -------------------------------------------------------------------
@@ -2836,19 +2808,6 @@ struct kind_switch : nodes::Stack {
   }
 };
 
-// Buttons side by side, as a form ends.
-template <class... Buttons>
-struct button_row : nodes::Stack {
-  std::tuple<Buttons...> buttons;
-  explicit button_row(Buttons... all) : buttons(std::move(all)...) {
-    this->setHorizontal();
-    this->setGap(10.0f);
-    fState.apply({.autoSize = scene::axes::kBoth});
-  }
-  void forEachChild(auto&& f) {
-    std::apply([&](auto&... each) { (f(each), ...); }, buttons);
-  }
-};
 
 // One proxy profile's page: its name, SOCKS5 or HTTP, where, and who to be
 // there; saved or deleted with its buttons. Declared: a column of these,

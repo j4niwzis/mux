@@ -157,11 +157,4 @@ void app::apply(const request::jump_to_end&) {
   screen.jump_to_end();
 }
 
-void app::apply(const request::message_menu& one) {
-  menu_target = one;
-  root().open_menu(one);
-}
-
-void app::apply(const request::close_menu&) { root().close_menu(); }
-
 }  // namespace mux::app

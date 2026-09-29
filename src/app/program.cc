@@ -30,6 +30,7 @@ import mux.app.drafts;
 import mux.app.reading;
 import mux.app.outbox;
 import mux.app.settings;
+import mux.app.menu;
 import mux.logic.links;
 
 export namespace mux::app {
@@ -46,6 +47,7 @@ struct app : kept_settings {
   drafts_part drafts{shared};
   reading_part reading{shared};
   outbox_part outbox{shared, drafts, sending};
+  menu_part menu{shared, outbox, pictures};
   settings_part settings{shared, *this, pictures, [this] { this->rebuild_in_theme(); }};
   // Files chosen in the dialog, or dropped on the window: to the outbox.
   void files_given(std::vector<std::string> paths, bool dropped) { outbox.files_given(std::move(paths), dropped); }
@@ -69,9 +71,10 @@ struct app : kept_settings {
   static constexpr bool takes = requires(Part& part, const Request& one) { part.apply(one); };
   template <class Request>
   void route(const Request& one) {
-    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<app, Request>, "a request no part of the program takes");
+    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> ||
+                      takes<app, Request>, "a request no part of the program takes");
     if (!offer(search, one) && !offer(pictures, one) && !offer(reading, one) && !offer(outbox, one) &&
-        !offer(settings, one))
+        !offer(settings, one) && !offer(menu, one))
       offer(*this, one);
   }
 
@@ -87,7 +90,6 @@ struct app : kept_settings {
   std::optional<std::string> new_proxy;
   // What the message field's text is: a new message, an answer to one, or
   // one edited; and the message whose menu is up.
-  request::message_menu menu_target;
   // The drawer, left open under a page coming in over it, to go when the
   // page is in.
   bool drawer_waits = false;
@@ -179,8 +181,6 @@ struct app : kept_settings {
   void apply(const request::jump_to_end&);
 
   // A message's menu, and what is chosen from it.
-  void apply(const request::message_menu& one);
-  void apply(const request::close_menu&);
   // -- files to send: chosen with the paperclip, or dropped on the window
   // Files given: read, a picture known by its bytes; a picture dropped on
   // the window written anew from its pixels -- nothing of its file, its
@@ -189,18 +189,9 @@ struct app : kept_settings {
   // Sent: each file, the caption with the first; the box closed.
 
   // A message swiped to the left: answered, as its menu's Reply does.
-  void apply(const request::reply_to& one);
-  void apply(const request::menu_reply&);
-  void apply(const request::menu_edit&);
-  void apply(const request::menu_copy&);
   // A reaction: the user's own put where it is not, taken back where it
   // is -- shown at once, and told to the server.
-  void apply(const request::react& one);
-  void apply(const request::menu_react& one);
-  void apply(const request::menu_copy_link&);
   // A picture or a file saved into Downloads, from the menu.
-  void apply(const request::menu_save&);
-  void apply(const request::menu_delete&);
   // A link pressed: to a user, a room or a message, in here -- matrix.to,
   // matrix: and xmpp: links -- and anywhere else, in the browser.
   void apply(const request::open_url& one);

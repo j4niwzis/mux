@@ -113,7 +113,7 @@ target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
         src/matrix/base.cc src/matrix/names.cc src/matrix/account.cc src/matrix/requests.cc src/matrix/sync.cc
         src/matrix/events.cc src/matrix/media.cc
         src/logic/text.cc src/logic/search.cc src/logic/reading.cc src/logic/drafts.cc
-        src/logic/links.cc src/logic/sending.cc)
+        src/logic/links.cc src/logic/sending.cc src/logic/messages.cc)
 target_compile_features(mux_modules PUBLIC cxx_std_26)
 # The flags that decide which std module a target gets: the same on every
 # library of modules in the build, or two std modules meet in one importer.
@@ -179,7 +179,7 @@ if(MUX_UI)
   # the requests of its window, the names it reads, and the program itself.
   target_sources(mux PRIVATE FILE_SET CXX_MODULES BASE_DIRS src
     FILES src/app/network.cc src/app/demo.cc src/app/store.cc src/app/requests.cc src/app/words.cc
-          src/app/kept.cc src/app/services.cc src/app/search.cc src/app/pictures.cc src/app/drafts.cc src/app/reading.cc src/app/outbox.cc src/app/settings.cc
+          src/app/kept.cc src/app/services.cc src/app/search.cc src/app/pictures.cc src/app/drafts.cc src/app/reading.cc src/app/outbox.cc src/app/settings.cc src/app/menu.cc
           src/app/program.cc)
   # What the program does, a part each: the module's implementation units.
   target_sources(mux PRIVATE src/app/program_core.cc src/app/program_media.cc

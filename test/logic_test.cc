@@ -8,6 +8,7 @@ import mux.logic.search;
 import mux.logic.reading;
 import mux.logic.drafts;
 import mux.logic.links;
+import mux.logic.messages;
 
 #include "gtest/gtest-macros.h"
 
@@ -118,6 +119,21 @@ TEST(Links, ARoomNotJoinedIsJoinedThroughAMatrixAccount) {
   now.apply(change::connection_changed{me, connection::online{}});
   const auto step = logic::where_to(now, logic::link::room{"#new:x.org", std::nullopt, {"x.org"}}, std::nullopt, std::nullopt);
   EXPECT_EQ(step, logic::link_step_t(logic::link_step::join{me, "#new:x.org", {"x.org"}}));
+}
+
+TEST(Messages, AReactionTogglesTheUsersOwn) {
+  auto one = said("1", "hi");
+  EXPECT_TRUE(logic::reaction_turns_on(one, "👍", "romeo@example.com"));
+  one.reactions["👍"].insert("romeo@example.com");
+  EXPECT_FALSE(logic::reaction_turns_on(one, "👍", "romeo@example.com"));
+  EXPECT_TRUE(logic::reaction_turns_on(one, "❤️", "romeo@example.com"));
+}
+
+TEST(Messages, AReplysLineIsOneLineOrWhatItCarries) {
+  EXPECT_EQ(logic::reply_line(nullptr, "two\nlines"), "two lines");
+  auto picture = said("1", "");
+  picture.attachment = attachment{.kind = attachment_kind::image{}, .name = "cat.jpg"};
+  EXPECT_EQ(logic::reply_line(&picture, ""), "Photo");
 }
 
 }  // namespace

@@ -21,7 +21,33 @@ struct formatted {
   std::string text;
   std::vector<std::pair<std::string, std::string>> links;  // what it says, where it goes
   std::vector<nodes::Text::Link> spans;                    // where in the text each is
+  std::vector<nodes::Text::Styled> styles;                 // what is strong, slanted, code, quoted
 };
+// What a tag makes of the text inside it.
+namespace text_style {
+struct strong {};    // <b>, <strong>
+struct emphasis {};  // <i>, <em>
+struct struck {};    // <del>, <s>, <strike>
+struct code {};      // <code>, <pre>
+struct quote {};     // <blockquote>
+}  // namespace text_style
+using text_style_t =
+    std::variant<text_style::strong, text_style::emphasis, text_style::struck, text_style::code, text_style::quote>;
+[[nodiscard]] inline nodes::Text::Styled styled(text_style::strong, std::size_t a, std::size_t b) {
+  return {.first = a, .last = b, .strong = true};
+}
+[[nodiscard]] inline nodes::Text::Styled styled(text_style::emphasis, std::size_t a, std::size_t b) {
+  return {.first = a, .last = b, .emphasis = true};
+}
+[[nodiscard]] inline nodes::Text::Styled styled(text_style::struck, std::size_t a, std::size_t b) {
+  return {.first = a, .last = b, .struck = true};
+}
+[[nodiscard]] inline nodes::Text::Styled styled(text_style::code, std::size_t a, std::size_t b) {
+  return {.first = a, .last = b, .code = true};
+}
+[[nodiscard]] inline nodes::Text::Styled styled(text_style::quote, std::size_t a, std::size_t b) {
+  return {.first = a, .last = b, .quote = true};
+}
 // An HTML tag, as read: what it does to the text, told by its type. Its
 // name is looked up once, where it is read (tag_of); what follows works on
 // the variant.
@@ -35,6 +61,12 @@ struct link_open {     // <a href="...">
   std::string href;
 };
 struct link_close {};  // </a>
+struct style_open {    // <b>, <em>, <code>, <blockquote>, ...
+  text_style_t style;
+};
+struct style_close {   // </b>, </em>, </code>, </blockquote>, ...
+  text_style_t style;
+};
 struct image {         // <img src="mxc://..." alt="..."> -- a custom emoji, in Matrix
   std::string src;
   std::string alt;
@@ -43,7 +75,7 @@ struct other {};  // anything else: dropped
 }  // namespace html_tag
 using html_tag_t = std::variant<html_tag::line_break, html_tag::block_end, html_tag::list_item, html_tag::quote,
                                 html_tag::reply, html_tag::link_open, html_tag::link_close, html_tag::image,
-                                html_tag::other>;
+                                html_tag::style_open, html_tag::style_close, html_tag::other>;
 
 // An attribute's value in a tag's inside, quoted either way.
 [[nodiscard]] inline std::optional<std::string> attribute_of(std::string_view inside, std::string_view name) {
@@ -71,9 +103,19 @@ using html_tag_t = std::variant<html_tag::line_break, html_tag::block_end, html_
   }
   static const std::unordered_map<std::string_view, html_tag_t> known = {
       {"br", html_tag::line_break{}},   {"/p", html_tag::block_end{}},    {"/div", html_tag::block_end{}},
-      {"/blockquote", html_tag::block_end{}}, {"/li", html_tag::block_end{}}, {"/h1", html_tag::block_end{}},
-      {"/h2", html_tag::block_end{}},   {"/h3", html_tag::block_end{}},   {"/pre", html_tag::block_end{}},
-      {"li", html_tag::list_item{}},    {"blockquote", html_tag::quote{}}, {"mx-reply", html_tag::reply{}},
+      {"/li", html_tag::block_end{}}, {"/h1", html_tag::block_end{}},
+      {"/h2", html_tag::block_end{}},   {"/h3", html_tag::block_end{}},
+      {"li", html_tag::list_item{}},    {"mx-reply", html_tag::reply{}},
+      {"b", html_tag::style_open{text_style::strong{}}},       {"/b", html_tag::style_close{text_style::strong{}}},
+      {"strong", html_tag::style_open{text_style::strong{}}},  {"/strong", html_tag::style_close{text_style::strong{}}},
+      {"i", html_tag::style_open{text_style::emphasis{}}},     {"/i", html_tag::style_close{text_style::emphasis{}}},
+      {"em", html_tag::style_open{text_style::emphasis{}}},    {"/em", html_tag::style_close{text_style::emphasis{}}},
+      {"del", html_tag::style_open{text_style::struck{}}},     {"/del", html_tag::style_close{text_style::struck{}}},
+      {"s", html_tag::style_open{text_style::struck{}}},       {"/s", html_tag::style_close{text_style::struck{}}},
+      {"strike", html_tag::style_open{text_style::struck{}}},  {"/strike", html_tag::style_close{text_style::struck{}}},
+      {"code", html_tag::style_open{text_style::code{}}},      {"/code", html_tag::style_close{text_style::code{}}},
+      {"pre", html_tag::style_open{text_style::code{}}},       {"/pre", html_tag::style_close{text_style::code{}}},
+      {"blockquote", html_tag::style_open{text_style::quote{}}}, {"/blockquote", html_tag::style_close{text_style::quote{}}},
       {"a", html_tag::link_open{}},     {"/a", html_tag::link_close{}},  {"img", html_tag::image{}},
   };
   const auto found = known.find(name);
@@ -112,6 +154,8 @@ using html_tag_t = std::variant<html_tag::line_break, html_tag::block_end, html_
 
 [[nodiscard]] inline formatted read_html(std::string_view html) {
   formatted out;
+  // Where each open style began, by its kind: closed, a stretch.
+  std::vector<std::pair<text_style_t, std::size_t>> opened;
   std::string open_href;
   std::size_t link_start = 0;
   std::size_t at = 0;
@@ -126,7 +170,30 @@ using html_tag_t = std::variant<html_tag::line_break, html_tag::block_end, html_
       std::visit(overloaded{[&](html_tag::line_break) { out.text += '\n'; },
                             [&](html_tag::block_end) { out.text += '\n'; },
                             [&](html_tag::list_item) { out.text += "• "; },
-                            [&](html_tag::quote) { out.text += "│ "; },
+                            [&](html_tag::quote) {},
+                            [&](html_tag::style_open& open) {
+                              // A quote and a block of code start on a line of their own.
+                              std::visit(overloaded{[&](text_style::quote) {
+                                                      if (!out.text.empty() && out.text.back() != '\n')
+                                                        out.text += '\n';
+                                                    },
+                                                    [](const auto&) {}},
+                                         open.style);
+                              opened.emplace_back(open.style, out.text.size());
+                            },
+                            [&](html_tag::style_close& close) {
+                              for (auto it = opened.rbegin(); it != opened.rend(); ++it)
+                                if (it->first.index() == close.style.index()) {
+                                  const std::size_t from = it->second;
+                                  if (out.text.size() > from)
+                                    out.styles.push_back(std::visit(
+                                        [&](auto kind) { return styled(kind, from, out.text.size()); }, close.style));
+                                  opened.erase(std::next(it).base());
+                                  break;
+                                }
+                              std::visit(overloaded{[&](text_style::quote) { out.text += '\n'; }, [](const auto&) {}},
+                                         close.style);
+                            },
                             [&](html_tag::reply) {
                               // The quoted message: not shown twice.
                               const auto close = html.find("</mx-reply>", end);

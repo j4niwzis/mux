@@ -387,9 +387,11 @@ struct mentioned {
   std::string text;
   std::vector<nodes::Text::Link> links;
   std::vector<std::pair<std::string, logic::link::room>> cards;  // the link, and the room it is of
+  std::vector<nodes::Text::Styled> styles;
 };
 [[nodiscard]] inline mentioned with_mentions(std::string text, std::vector<nodes::Text::Link> links,
-                                             const conversation& in, const model* now) {
+                                             const conversation& in, const model* now,
+                                             std::vector<nodes::Text::Styled> styles = {}) {
   // What a mention is called here, and what it links to: a person by their
   // name in the chat, a room by its name where it is known.
   const auto name_of = [&](const logic::link_t& what) -> std::pair<std::string, std::string> {
@@ -481,6 +483,14 @@ struct mentioned {
           link.first = static_cast<std::size_t>(static_cast<std::ptrdiff_t>(link.first) + grew);
           link.last = static_cast<std::size_t>(static_cast<std::ptrdiff_t>(link.last) + grew);
         }
+    // And the styles: moved where they are after it, grown or shrunk where
+    // it is inside them.
+    for (auto& style : styles) {
+      if (style.first >= span.last)
+        style.first = static_cast<std::size_t>(static_cast<std::ptrdiff_t>(style.first) + grew);
+      if (style.last >= span.last)
+        style.last = static_cast<std::size_t>(static_cast<std::ptrdiff_t>(style.last) + grew);
+    }
     if (pill)
       out.links.push_back(std::move(*pill));
   }
@@ -489,6 +499,10 @@ struct mentioned {
   // What is left of the text: without the space a card's link stood in.
   while (!text.empty() && std::isspace(static_cast<unsigned char>(text.back())))
     text.pop_back();
+  for (auto& style : styles)
+    style.last = std::min(style.last, text.size());
+  std::erase_if(styles, [](const auto& style) { return style.first >= style.last; });
+  out.styles = std::move(styles);
   out.text = std::move(text);
   return out;
 }
@@ -765,13 +779,14 @@ struct message_bubble : nodes::Stack {
     mentioned shown;
     if (said.body.html) {
       auto read = read_html(*said.body.html);
-      shown = with_mentions(std::move(read.text), std::move(read.spans), in, now);
+      shown = with_mentions(std::move(read.text), std::move(read.spans), in, now, std::move(read.styles));
     } else {
       shown = with_mentions(said.body.plain, link_spans_in(said.body.plain), in, now);
     }
     {
       body.parts.text.setText(shown.text);
       body.parts.text.setLinks(std::move(shown.links), accent_colour);
+      body.parts.text.setStyles(std::move(shown.styles), accent_colour);
       body.parts.text.setVisible(!shown.text.empty());
       for (const auto& [url, room] : shown.cards)
         body.parts.cards.push_back(card_of(url, room, now));

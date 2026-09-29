@@ -158,7 +158,7 @@ if(MUX_UI)
   # skiff and skiff-widgets say the rest of what they are in their own trees.
   cme_declare_port(NAME skiff PROVIDES skiff
     GITHUB_REPOSITORY j4niwzis/skiff
-    GIT_TAG eed92261af3e4c904fb18f4afd1911508f3762df)
+    GIT_TAG 4e5544c5ab3398db069eaddb7e9634652163eda8)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
     GIT_TAG 34116a0b8e3e71741df35d123f3aa3bc35417cd2)
@@ -237,10 +237,6 @@ if(MUX_UI)
     src/app/program_chats.cc src/app/program_links.cc src/app/program_accounts.cc
     src/app/program_settings.cc src/app/program_sending.cc src/app/program_forms.cc
     src/app/scene.cc)
-  # The scene's walks, instantiated for the whole tree: outside a release
-  # build, nothing in them is inlined -- the inliner flattening the tree
-  # into itself was most of the unit's time; each node's walk stays a call.
-  set_property(SOURCE src/app/scene.cc APPEND PROPERTY COMPILE_OPTIONS "$<$<NOT:$<CONFIG:Release>>:-fno-inline>")
   target_link_libraries(mux PRIVATE mux_modules)
 endif()
 

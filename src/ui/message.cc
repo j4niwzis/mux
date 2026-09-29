@@ -1038,6 +1038,10 @@ struct message_bubble : nodes::Stack {
                     .padding = {kPadY, kPadX, kPadY, kPadX}, .cornerRadius = 12.0f, .background = mine ? out_bubble_colour : bubble_colour});
       text.setWrapped(true);
       text.setShrinksToLines(true);
+      // Wrapped at the bubble's width however wide the room it is first
+      // measured in: not at the chat's, the bubble then capped narrower
+      // than its lines.
+      text.apply({.maxWidth = kMaxWidth});
       time.apply({.alignSelf = scene::align::kEnd});
       // Shown once the last line is found to leave room for it.
       inline_time.apply({.place = scene::anchor::kBottomRight, .y = kTimeLower});

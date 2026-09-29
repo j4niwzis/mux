@@ -22,28 +22,24 @@ struct conversation_row : nodes::Stack {
   conversation_id id;
   bool chosen = false;
   bool muted = false;
-  avatar_mark face;
   // The name and the time over the last message and the unread count.
   struct lines_column : nodes::Stack {
     struct top_line : nodes::Stack {
-      nodes::Text name;
-      nodes::Text time;
+      struct parts_t {
+        nodes::Text name;
+        nodes::Text time;
+      } parts;
       top_line(std::string shown, bool chosen)
-          : name(std::move(shown), 13.0f, chosen ? selected_text_colour : text_colour, true),
-            time("", 13.0f, chosen ? selected_text_colour : dim_colour) {
+          : parts{.name = nodes::Text(std::move(shown), 13.0f, chosen ? selected_text_colour : text_colour, true),
+                  .time = nodes::Text("", 13.0f, chosen ? selected_text_colour : dim_colour)} {
         this->setHorizontal();
         this->setGap(8.0f);
         fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-        name.setElided(true);
-        name.apply({.grow = scene::axes::kX});
+        parts.name.setElided(true);
+        parts.name.apply({.grow = scene::axes::kX});
       }
-      void forEachChild(auto&& f) {
-        f(name);
-        f(time);
-      }
-    } top;
+    };
     struct bottom_line : nodes::Stack {
-      nodes::Text preview;
       // The chats' unread count, in a pill.
       struct badge : widgets::Pill {
         badge(std::int64_t n, bool is_chosen, bool is_muted)
@@ -54,31 +50,36 @@ struct conversation_row : nodes::Stack {
                              .height = 21.0f,
                              .padX = 7.0f,
                              .bold = true}) {}
-      } unread;
+      };
+      struct parts_t {
+        nodes::Text preview;
+        badge unread;
+      } parts;
       bottom_line(std::int64_t count, bool chosen, bool muted)
-          : preview("", 13.0f, chosen ? selected_text_colour : dim_colour), unread(count, chosen, muted) {
+          : parts{.preview = nodes::Text("", 13.0f, chosen ? selected_text_colour : dim_colour),
+                  .unread = badge(count, chosen, muted)} {
         this->setHorizontal();
         this->setGap(8.0f);
         fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-        preview.setElided(true);
-        preview.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-        unread.setVisible(count > 0);
+        parts.preview.setElided(true);
+        parts.preview.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+        parts.unread.setVisible(count > 0);
       }
-      void forEachChild(auto&& f) {
-        f(preview);
-        f(unread);
-      }
-    } bottom;
+    };
+    struct parts_t {
+      top_line top;
+      bottom_line bottom;
+    } parts;
     lines_column(std::string shown, std::int64_t count, bool chosen, bool muted)
-        : top(std::move(shown), chosen), bottom(count, chosen, muted) {
+        : parts{.top = top_line(std::move(shown), chosen), .bottom = bottom_line(count, chosen, muted)} {
       this->setGap(6.0f);
       fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
     }
-    void forEachChild(auto&& f) {
-      f(top);
-      f(bottom);
-    }
-  } lines;
+  };
+  struct parts_t {
+    avatar_mark face;
+    lines_column lines;
+  } parts;
 
   static constexpr float kHeight = 62.0f;
 
@@ -101,14 +102,16 @@ struct conversation_row : nodes::Stack {
 
   conversation_row(Actions* a, const conversation& one, bool is_chosen, bool is_muted, std::string draft = {})
       : actions(a), id(one.id), chosen(is_chosen), muted(is_muted), shown(view_of(one, is_chosen, is_muted, draft)),
-        face(one.id.id, display_name(one), 46.0f),
-        lines(display_name(one), one.unread_here(), is_chosen, is_muted) {
+        parts{.face = avatar_mark(one.id.id, display_name(one), 46.0f),
+              .lines = lines_column(display_name(one), one.unread_here(), is_chosen, is_muted)} {
+    auto& time = parts.lines.parts.top.parts.time;
+    auto& preview = parts.lines.parts.bottom.parts.preview;
     this->setHorizontal();
     this->setGap(12.0f);
     fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = chosen_colour, .selectedBackground = selected_colour, .focusBackground = chosen_colour, .selected = chosen});
     if (const message* newest_one = newest(one)) {
       const message& last = *newest_one;
-      lines.top.time.setText(clock_of(last.at));
+      time.setText(clock_of(last.at));
       // What it says, as drawn: an HTML one's text, not its tags.
       std::string text = last.body.html ? read_html(*last.body.html).text : last.body.plain;
       std::ranges::replace(text, '\n', ' ');
@@ -116,20 +119,15 @@ struct conversation_row : nodes::Stack {
         text = "You: " + text;
       else if (is_group(one))
         text = sender_name(one, last.sender) + ": " + text;
-      lines.bottom.preview.setText(std::move(text));
+      preview.setText(std::move(text));
     }
     // A draft left in it: said instead, as tdesktop says it, in red.
     if (!shown.draft.empty() && !is_chosen) {
       std::string text = shown.draft;
       std::ranges::replace(text, '\n', ' ');
-      lines.bottom.preview.setText("Draft: " + text);
-      lines.bottom.preview.setColour(error_colour);
+      preview.setText("Draft: " + text);
+      preview.setColour(error_colour);
     }
-  }
-
-  void forEachChild(auto&& f) {
-    f(face);
-    f(lines);
   }
 
   [[nodiscard]] bool acceptsInput() const { return true; }
@@ -141,7 +139,7 @@ struct conversation_row : nodes::Stack {
   [[nodiscard]] scene::Semantics semantics() const {
     scene::Semantics out;
     out.fRole = scene::semantic_role::list_item{};
-    out.fLabel = lines.top.name.text();
+    out.fLabel = parts.lines.parts.top.parts.name.text();
     out.fSelected = chosen;
     out.fActions = {scene::semantic_action::focus{}, scene::semantic_action::activate{}};
     return out;

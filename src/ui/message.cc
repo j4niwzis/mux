@@ -632,8 +632,11 @@ struct message_bubble : nodes::Stack {
   bool outgoing = false;
   std::string sender;
 
-  static constexpr float kPadX = 12.0f;
-  static constexpr float kPadY = 7.0f;
+  // tdesktop's msgPadding, margins(11, 8, 11, 8); its time sits lower than
+  // the text by msgDateDelta, point(2, 5): 5 over the bubble's bottom.
+  static constexpr float kPadX = 11.0f;
+  static constexpr float kPadY = 8.0f;
+  static constexpr float kTimeLower = kPadY - 5.0f;
   static constexpr float kAvatar = 34.0f;
   static constexpr float kMaxWidth = 480.0f;
 
@@ -763,7 +766,7 @@ struct message_bubble : nodes::Stack {
         const float drop = text.bounds().fBottom - fState.contentBox().fBottom;
         if (std::abs(drop - time_drop) > 0.25f) {
           time_drop = drop;
-          inline_time.apply({.y = drop});
+          inline_time.apply({.y = drop + kTimeLower});
           this->invalidateLayout();
         }
       }
@@ -801,12 +804,12 @@ struct message_bubble : nodes::Stack {
       auto& [name, quote, picture, file, text, cards, preview, reactions, time, inline_time] = parts;
       this->setGap(2.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
-                    .padding = {kPadY, kPadX, 5.0f, kPadX}, .cornerRadius = 12.0f, .background = mine ? out_bubble_colour : bubble_colour});
+                    .padding = {kPadY, kPadX, kPadY, kPadX}, .cornerRadius = 12.0f, .background = mine ? out_bubble_colour : bubble_colour});
       text.setWrapped(true);
       text.setShrinksToLines(true);
       time.apply({.alignSelf = scene::align::kEnd});
       // Shown once the last line is found to leave room for it.
-      inline_time.apply({.place = scene::anchor::kBottomRight});
+      inline_time.apply({.place = scene::anchor::kBottomRight, .y = kTimeLower});
       inline_time.setVisible(false);
     }
   };

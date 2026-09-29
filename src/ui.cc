@@ -151,10 +151,14 @@ struct check {};
 struct clip {};
 struct send {};
 struct eye {};
+// A filled dot of a colour of its own, as a proxy profile's.
+struct dot {
+  skia::SkColor colour;
+};
 }  // namespace icon
 using icon_t = std::variant<icon::none, icon::person, icon::gear, icon::power, icon::plus, icon::motion, icon::back,
                             icon::close, icon::info, icon::people, icon::add_person, icon::bell, icon::sliders,
-                            icon::leave, icon::check, icon::clip, icon::send, icon::eye>;
+                            icon::leave, icon::check, icon::clip, icon::send, icon::eye, icon::dot>;
 
 [[nodiscard]] inline skia::SkPaint pen(skia::SkColor colour, float alpha, float width = 1.8f) {
   skia::SkPaint out;
@@ -309,6 +313,13 @@ inline void draw_icon(skia::SkCanvas* canvas, icon::eye, const skia::SkRect& box
   canvas->drawArc(skia::SkRect::MakeLTRB(x - 10.0f, y - 11.0f, x + 10.0f, y + 7.0f), 20.0f, 140.0f, false, p);
   canvas->drawCircle(x, y, 3.0f, p);
 }
+inline void draw_icon(skia::SkCanvas* canvas, icon::dot which, const skia::SkRect& box, skia::SkColor, float alpha) {
+  skia::SkPaint fill;
+  fill.setAntiAlias(true);
+  fill.setColor(which.colour);
+  fill.setAlphaf(alpha);
+  canvas->drawCircle(box.centerX(), box.centerY(), 6.0f, fill);
+}
 inline void draw_icon(skia::SkCanvas* canvas, const icon_t& which, const skia::SkRect& box, skia::SkColor colour,
                       float alpha) {
   std::visit([&](auto one) { draw_icon(canvas, one, box, colour, alpha); }, which);
@@ -323,6 +334,10 @@ inline void draw_icon(skia::SkCanvas* canvas, const icon_t& which, const skia::S
       skia::colorSetARGB(255, 220, 110, 170)};
   return palette[std::hash<std::string_view>{}(id) % palette.size()];
 }
+
+// A proxy profile's colour, as Gajim gives each its own: the same every
+// time for the same name, so an account's choice is known at a glance.
+[[nodiscard]] inline skia::SkColor proxy_colour(std::string_view name) { return avatar_colour(name); }
 
 // Up to two letters for an avatar: the first of each of the first two words
 // of a name, or of an address's local part.
@@ -2734,11 +2749,13 @@ struct account_proxy : nodes::Stack {
     title.apply({.margin = {0.0f, 0.0f, 4.0f, 0.0f}});
     manage.apply({.margin = {8.0f, 0.0f, 0.0f, 0.0f}});
     fState.apply({.fill = true});
-    choices.emplace_back("No proxy", choose_account_proxy<Actions>{a, -1}, icon::none{}, !current.has_value());
+    // An empty place where the dots are, so the names line up.
+    choices.emplace_back("No proxy", choose_account_proxy<Actions>{a, -1}, icon::dot{skia::colorSetARGB(0, 0, 0, 0)},
+                         !current.has_value());
     for (std::size_t i = 0; i < all.size(); ++i)
       choices.emplace_back(std::format("{} ({} {}:{})", all[i].name, config::label_of(config::proxy_kind_of(all[i].kind)),
                                        all[i].host, all[i].port),
-                           choose_account_proxy<Actions>{a, static_cast<int>(i)}, icon::none{},
+                           choose_account_proxy<Actions>{a, static_cast<int>(i)}, icon::dot{proxy_colour(all[i].name)},
                            current && *current == all[i].name);
   }
   void show(bool) {}
@@ -3183,7 +3200,7 @@ struct proxies_page : nodes::Stack {
     for (std::size_t i = 0; i < all.size(); ++i)
       profiles.emplace_back(std::format("{} ({} {}:{})", all[i].name, config::label_of(config::proxy_kind_of(all[i].kind)),
                                         all[i].host, all[i].port),
-                            edit_proxy<Actions>{a, static_cast<int>(i)}, icon::gear{});
+                            edit_proxy<Actions>{a, static_cast<int>(i)}, icon::dot{proxy_colour(all[i].name)});
     empty.setVisible(all.empty());
   }
   void show_motion(std::string_view) {}

@@ -433,6 +433,9 @@ struct set_theme {
 struct set_renderer {
   mux::config::renderer_t renderer;
 };
+struct set_accent {
+  mux::config::accent_t accent;
+};
 struct leave_chat {};
 struct switch_account {
   std::string address;
@@ -458,7 +461,7 @@ using request_t =
                  request::proxy_kind, request::choose_account_proxy, request::manage_proxies,
                  request::settings_proxies, request::add_proxy, request::edit_proxy, request::save_proxy_profile,
                  request::delete_proxy_profile, request::settings_appearance, request::settings_rendering, request::set_theme,
-                 request::set_renderer, request::leave_chat>;
+                 request::set_renderer, request::set_accent, request::leave_chat>;
 
 // What the screens ask: each a request, kept until the program applies it
 // between events -- except a message, which goes to the network at once.
@@ -540,6 +543,7 @@ struct actions {
   void settings_appearance() { requests.emplace_back(request::settings_appearance{}); }
   void set_theme(mux::config::theme_t theme) { requests.emplace_back(request::set_theme{theme}); }
   void set_renderer(mux::config::renderer_t renderer) { requests.emplace_back(request::set_renderer{renderer}); }
+  void set_accent(mux::config::accent_t accent) { requests.emplace_back(request::set_accent{accent}); }
   void leave_chat() { requests.emplace_back(request::leave_chat{}); }
   void switch_account(std::string address) { requests.emplace_back(request::switch_account{std::move(address)}); }
   void close_settings() { requests.emplace_back(request::close_settings{}); }
@@ -578,6 +582,7 @@ struct app {
   std::optional<std::string> motion;
   // The theme and the renderer, for the next start: kept in the file.
   mux::config::theme_t theme = mux::config::theme::dark{};
+  mux::config::accent_t accent = mux::config::accent::blue{};
   mux::config::renderer_t renderer = mux::config::renderer::opengl{};
   // The proxy chosen for the account being added, as it is added.
   std::optional<std::string> new_proxy;
@@ -975,7 +980,7 @@ struct app {
   }
   void apply(const request::settings_appearance&) {
     if (auto* up = root().settings_up())
-      up->show_appearance(theme);
+      up->show_appearance(theme, accent);
   }
   void apply(const request::settings_rendering&) {
     if (auto* up = root().settings_up())
@@ -988,13 +993,24 @@ struct app {
   void apply(const request::set_theme& one) {
     theme = one.theme;
     (void)this->write();
+    this->rebuild_in_theme();
+  }
+  // An accent chosen: the same as a theme, over it.
+  void apply(const request::set_accent& one) {
+    accent = one.accent;
+    (void)this->write();
+    this->rebuild_in_theme();
+  }
+  // The theme and accent now chosen put in place, and the window made again
+  // in them, as it was, with Settings open on Appearance.
+  void rebuild_in_theme() {
     auto& before = root().main();
     const auto chosen = before.chosen;
     const auto current = before.current;
     const float side_width = before.side_width;
     const float info_width = before.info_width;
     const bool info_open = before.info_open;
-    mux::ui::use_theme(one.theme);
+    mux::ui::use_theme(theme, accent);
     pending_login.reset();
     drawer_waits = false;
     root().rebuild();
@@ -1007,7 +1023,7 @@ struct app {
     this->refresh();
     root().open_settings(motion.value_or("full"));
     if (auto* up = root().settings_up())
-      up->show_appearance(theme);
+      up->show_appearance(theme, accent);
   }
   void apply(const request::set_renderer& one) {
     renderer = one.renderer;
@@ -1017,7 +1033,7 @@ struct app {
   void show_appearance_choices() {
     if (auto* up = root().settings_up()) {
       if (auto* page = up->appearance())
-        page->show(theme);
+        page->show(theme, accent);
       if (auto* page = up->rendering())
         page->show(renderer);
     }
@@ -1256,6 +1272,7 @@ struct app {
     if (!proxies.empty())
       file.proxies = proxies;
     file.theme = mux::config::word_of(theme);
+    file.accent = mux::config::word_of(accent);
     file.renderer = mux::config::word_of(renderer);
     if (!muted.empty()) {
       std::vector<mux::config::muted_chat> kept;
@@ -1337,7 +1354,7 @@ int main(int argc, char** argv) {
   });
 
   // The theme first: what is made takes its colours from it.
-  mux::ui::use_theme(mux::config::theme_of(saved.theme));
+  mux::ui::use_theme(mux::config::theme_of(saved.theme), mux::config::accent_of(saved.accent));
   app program;
   program.box = &box;
   program.model = &model;
@@ -1349,6 +1366,7 @@ int main(int argc, char** argv) {
   program.saved = mux::config::accounts_of(saved);
   program.motion = saved.motion;
   program.theme = mux::config::theme_of(saved.theme);
+  program.accent = mux::config::accent_of(saved.accent);
   program.renderer = mux::config::renderer_of(saved.renderer);
   program.proxies = proxies;
   for (const auto& one : saved.muted.value_or(std::vector<mux::config::muted_chat>{}))

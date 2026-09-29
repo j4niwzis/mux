@@ -69,7 +69,7 @@ inline skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110);
 //   void settings_proxies(), add_proxy(), edit_proxy(int), proxy_kind(int),
 //        save_proxy_profile(), delete_proxy_profile()
 //   void settings_appearance(), settings_rendering()
-//   void set_theme(config::theme_t), set_renderer(config::renderer_t)
+//   void set_theme(config::theme_t), set_accent(config::accent_t), set_renderer(config::renderer_t)
 //   void proxy_kind(config::proxy_kind_t)
 //   void not_implemented(std::string what)  -- a box saying it is not there yet
 //   void close_notice()
@@ -660,8 +660,50 @@ inline void use_theme(config::theme::light) {
     widget.fAccent = accent_colour;
     widget.fOnAccent = skia::colorSetARGB(255, 255, 255, 255);
 }
+// Night: the dark of a clear night, blue-black, as Telegram's.
+inline void use_theme(config::theme::night) {
+  use_theme(config::theme::dark{});
+  background = skia::colorSetARGB(255, 14, 22, 33);
+  sidebar_colour = skia::colorSetARGB(255, 23, 33, 43);
+  chosen_colour = skia::colorSetARGB(255, 32, 46, 60);
+  band_colour = skia::colorSetARGB(255, 10, 16, 24);
+  section_colour = skia::colorSetARGB(255, 18, 27, 37);
+  tile_colour = skia::colorSetARGB(255, 30, 44, 58);
+  bubble_colour = skia::colorSetARGB(255, 24, 37, 51);
+  selected_colour = skia::colorSetARGB(255, 43, 82, 120);
+  auto& widget = widgets::theme();
+  widget.fSurface = skia::colorSetARGB(255, 30, 44, 58);
+  widget.fSurfaceHover = skia::colorSetARGB(255, 38, 54, 70);
+}
+// Tinted: light, with the accent in its surfaces.
+inline void use_theme(config::theme::tinted) {
+  use_theme(config::theme::light{});
+  background = skia::colorSetARGB(255, 222, 234, 244);
+  sidebar_colour = skia::colorSetARGB(255, 240, 246, 251);
+  chosen_colour = skia::colorSetARGB(255, 206, 224, 240);
+  section_colour = skia::colorSetARGB(255, 226, 236, 245);
+  bubble_colour = skia::colorSetARGB(255, 250, 252, 255);
+  selected_colour = skia::colorSetARGB(255, 190, 220, 248);
+}
 inline void use_theme(const config::theme_t& chosen) {
   std::visit([](auto one) { use_theme(one); }, chosen);
+}
+
+// An accent's colour.
+[[nodiscard]] constexpr skia::SkColor colour_of(config::accent::blue) { return skia::colorSetARGB(255, 82, 160, 230); }
+[[nodiscard]] constexpr skia::SkColor colour_of(config::accent::green) { return skia::colorSetARGB(255, 90, 185, 100); }
+[[nodiscard]] constexpr skia::SkColor colour_of(config::accent::orange) { return skia::colorSetARGB(255, 240, 150, 60); }
+[[nodiscard]] constexpr skia::SkColor colour_of(config::accent::red) { return skia::colorSetARGB(255, 225, 90, 90); }
+[[nodiscard]] constexpr skia::SkColor colour_of(config::accent::purple) { return skia::colorSetARGB(255, 160, 120, 225); }
+[[nodiscard]] constexpr skia::SkColor colour_of(config::accent::cyan) { return skia::colorSetARGB(255, 60, 190, 200); }
+[[nodiscard]] inline skia::SkColor colour_of(const config::accent_t& one) {
+  return std::visit([](auto each) { return colour_of(each); }, one);
+}
+// A theme, and the accent over it.
+inline void use_theme(const config::theme_t& chosen, const config::accent_t& accent) {
+  use_theme(chosen);
+  accent_colour = colour_of(accent);
+  widgets::theme().fAccent = accent_colour;
 }
 
 
@@ -3104,33 +3146,139 @@ struct choose_renderer {
   void operator()() const { actions->set_renderer(renderer); }
 };
 
-// Settings' Appearance page: the theme, which changes at once.
+// A theme's card on the Appearance page: a small picture of it -- its
+// background, a bubble of each side -- its name, and a ring where it is the
+// one in use. Its colours are its own, not the theme up.
+template <class Actions>
+struct theme_card : nodes::Stack {
+  Actions* actions = nullptr;
+  config::theme_t theme;
+  bool chosen = false;
+  skia::SkColor back, bubble, mine;
+  nodes::Text name;
+  theme_card(Actions* a, config::theme_t which, std::string label, skia::SkColor b, skia::SkColor in, skia::SkColor out)
+      : actions(a), theme(which), back(b), bubble(in), mine(out), name(std::move(label), 12.0f, dim_colour) {
+    fState.apply({.width = 92.0f, .height = 92.0f, .padding = {66.0f, 0.0f, 0.0f, 0.0f}});
+    name.apply({.alignSelf = scene::align::kMiddle});
+  }
+  void forEachChild(auto&& f) { f(name); }
+  void drawSelf(skia::SkCanvas* canvas, float alpha) {
+    skia::SkFont* font = skiff::paint::defaultFont();
+    if (font == nullptr)
+      return;
+    const skiff::paint::Painter p(canvas, *font);
+    const skia::SkRect& box = fState.fBounds;
+    const skia::SkRect picture = skia::SkRect::MakeXYWH(box.fLeft + 6.0f, box.fTop + 4.0f, box.width() - 12.0f, 56.0f);
+    p.fillRounded(picture, 8.0f, back, alpha);
+    p.fillRounded(skia::SkRect::MakeXYWH(picture.fLeft + 6.0f, picture.fTop + 8.0f, 44.0f, 14.0f), 7.0f, bubble, alpha);
+    p.fillRounded(skia::SkRect::MakeXYWH(picture.fRight - 50.0f, picture.fTop + 30.0f, 44.0f, 14.0f), 7.0f, mine, alpha);
+    if (chosen)
+      p.strokeRounded(skia::SkRect::MakeLTRB(picture.fLeft - 3.0f, picture.fTop - 3.0f, picture.fRight + 3.0f,
+                                             picture.fBottom + 3.0f),
+                      10.0f, accent_colour, 2.0f, alpha);
+  }
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  [[nodiscard]] bool onClick(float, float) {
+    actions->set_theme(theme);
+    return true;
+  }
+};
+
+// An accent's circle: its colour, a ring where it is the one in use.
+template <class Actions>
+struct accent_circle : scene::Node {
+  Actions* actions = nullptr;
+  config::accent_t accent;
+  bool chosen = false;
+  accent_circle(Actions* a, config::accent_t which) : actions(a), accent(which) {
+    fState.apply({.width = 34.0f, .height = 34.0f});
+  }
+  void drawSelf(skia::SkCanvas* canvas, float alpha) {
+    skia::SkFont* font = skiff::paint::defaultFont();
+    if (font == nullptr)
+      return;
+    const skiff::paint::Painter p(canvas, *font);
+    const skia::SkRect& box = fState.fBounds;
+    const skia::SkRect dot = skia::SkRect::MakeXYWH(box.fLeft + 5.0f, box.fTop + 5.0f, 24.0f, 24.0f);
+    p.fillRounded(dot, 12.0f, colour_of(accent), alpha);
+    if (chosen)
+      p.strokeRounded(skia::SkRect::MakeLTRB(box.fLeft + 1.0f, box.fTop + 1.0f, box.fRight - 1.0f, box.fBottom - 1.0f), 16.0f,
+                      colour_of(accent), 2.0f, alpha);
+  }
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  [[nodiscard]] bool onClick(float, float) {
+    actions->set_accent(accent);
+    return true;
+  }
+};
+
+// Settings' Appearance page, as Telegram's: the themes as cards, and the
+// accents as circles. Either changes at once.
 template <class Actions>
 struct appearance_page : nodes::Stack {
   page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>> header;
   nodes::Text theme_title = section_title("THEME");
-  row_item<choose_theme<Actions>> dark;
-  row_item<choose_theme<Actions>> light;
+  struct cards_row : nodes::Stack {
+    theme_card<Actions> day, night, dark, tinted;
+    explicit cards_row(Actions* a)
+        : day(a, config::theme::light{}, "Day", skia::colorSetARGB(255, 241, 243, 245),
+              skia::colorSetARGB(255, 255, 255, 255), skia::colorSetARGB(255, 205, 228, 250)),
+          night(a, config::theme::night{}, "Night", skia::colorSetARGB(255, 14, 22, 33),
+                skia::colorSetARGB(255, 24, 37, 51), skia::colorSetARGB(255, 43, 82, 120)),
+          dark(a, config::theme::dark{}, "Classic", skia::colorSetARGB(255, 24, 27, 30),
+               skia::colorSetARGB(255, 33, 41, 52), skia::colorSetARGB(255, 43, 82, 120)),
+          tinted(a, config::theme::tinted{}, "Tinted", skia::colorSetARGB(255, 222, 234, 244),
+                 skia::colorSetARGB(255, 250, 252, 255), skia::colorSetARGB(255, 190, 220, 248)) {
+      this->setHorizontal();
+      this->setGap(6.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 16.0f, 8.0f, 16.0f}});
+    }
+    void forEachChild(auto&& f) {
+      f(day);
+      f(night);
+      f(dark);
+      f(tinted);
+    }
+  } cards;
+  nodes::Text accent_title = section_title("ACCENT");
+  struct circles_row : nodes::Stack {
+    std::vector<accent_circle<Actions>> circles;
+    explicit circles_row(Actions* a) {
+      this->setHorizontal();
+      this->setGap(8.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 16.0f, 8.0f, 16.0f}});
+      circles.emplace_back(a, config::accent::blue{});
+      circles.emplace_back(a, config::accent::green{});
+      circles.emplace_back(a, config::accent::orange{});
+      circles.emplace_back(a, config::accent::red{});
+      circles.emplace_back(a, config::accent::purple{});
+      circles.emplace_back(a, config::accent::cyan{});
+    }
+    void forEachChild(auto&& f) { f(circles); }
+  } circles;
 
-  appearance_page(Actions* a, const config::theme_t& theme)
-      : header("Appearance", {a}, {a}, true, true),
-        dark("Dark", {a, config::theme::dark{}}, icon::none{}, false),
-        light("Light", {a, config::theme::light{}}, icon::none{}, false) {
-    theme_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
+  appearance_page(Actions* a, const config::theme_t& theme, const config::accent_t& accent)
+      : header("Appearance", {a}, {a}, true, true), cards(a), circles(a) {
     fState.apply({.fill = true});
-    this->show(theme);
+    theme_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
+    accent_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
+    this->show(theme, accent);
   }
-  void show(const config::theme_t& theme) {
-    dark.set_chosen(theme == config::theme_t{config::theme::dark{}});
-    light.set_chosen(theme == config::theme_t{config::theme::light{}});
+  void show(const config::theme_t& theme, const config::accent_t& accent) {
+    for (auto* card : {&cards.day, &cards.night, &cards.dark, &cards.tinted})
+      card->chosen = card->theme == theme;
+    for (auto& circle : circles.circles)
+      circle.chosen = circle.accent == accent;
+    this->markDamaged();
   }
   void show_motion(std::string_view) {}
   void show_receipts(bool) {}
   void forEachChild(auto&& f) {
     f(header);
     f(theme_title);
-    f(dark);
-    f(light);
+    f(cards);
+    f(accent_title);
+    f(circles);
   }
 };
 
@@ -3203,8 +3351,8 @@ struct settings_dialog : scene::Node {
     page.template emplace<1>(actions);
     this->show_motion(motion);
   }
-  void show_appearance(const config::theme_t& theme) {
-    page.template emplace<4>(actions, theme);
+  void show_appearance(const config::theme_t& theme, const config::accent_t& accent) {
+    page.template emplace<4>(actions, theme, accent);
     this->begin_swap(1.0f);
   }
   void show_rendering(const config::renderer_t& renderer) {

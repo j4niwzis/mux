@@ -20,8 +20,36 @@ struct dark {
 struct light {
   friend bool operator==(light, light) = default;
 };
+struct night {
+  friend bool operator==(night, night) = default;
+};
+struct tinted {
+  friend bool operator==(tinted, tinted) = default;
+};
 }  // namespace theme
-using theme_t = std::variant<theme::dark, theme::light>;
+using theme_t = std::variant<theme::dark, theme::light, theme::night, theme::tinted>;
+// The accent a theme is drawn with, as Telegram's circles offer them.
+namespace accent {
+struct blue {
+  friend bool operator==(blue, blue) = default;
+};
+struct green {
+  friend bool operator==(green, green) = default;
+};
+struct orange {
+  friend bool operator==(orange, orange) = default;
+};
+struct red {
+  friend bool operator==(red, red) = default;
+};
+struct purple {
+  friend bool operator==(purple, purple) = default;
+};
+struct cyan {
+  friend bool operator==(cyan, cyan) = default;
+};
+}  // namespace accent
+using accent_t = std::variant<accent::blue, accent::green, accent::orange, accent::red, accent::purple, accent::cyan>;
 namespace renderer {
 struct opengl {
   friend bool operator==(opengl, opengl) = default;
@@ -43,7 +71,26 @@ using proxy_kind_t = std::variant<proxy_kind::socks5, proxy_kind::http>;
 
 // The words of the file, and what they mean: anything else is the default.
 [[nodiscard]] inline theme_t theme_of(const std::optional<std::string>& word) {
-  return word == "light" ? theme_t{theme::light{}} : theme_t{theme::dark{}};
+  if (word == "light")
+    return theme::light{};
+  if (word == "night")
+    return theme::night{};
+  if (word == "tinted")
+    return theme::tinted{};
+  return theme::dark{};
+}
+[[nodiscard]] inline accent_t accent_of(const std::optional<std::string>& word) {
+  if (word == "green")
+    return accent::green{};
+  if (word == "orange")
+    return accent::orange{};
+  if (word == "red")
+    return accent::red{};
+  if (word == "purple")
+    return accent::purple{};
+  if (word == "cyan")
+    return accent::cyan{};
+  return accent::blue{};
 }
 [[nodiscard]] inline renderer_t renderer_of(const std::optional<std::string>& word) {
   return word == "software" ? renderer_t{renderer::software{}} : renderer_t{renderer::opengl{}};
@@ -53,6 +100,14 @@ using proxy_kind_t = std::variant<proxy_kind::socks5, proxy_kind::http>;
 }
 [[nodiscard]] constexpr std::string_view word_of(theme::dark) { return "dark"; }
 [[nodiscard]] constexpr std::string_view word_of(theme::light) { return "light"; }
+[[nodiscard]] constexpr std::string_view word_of(theme::night) { return "night"; }
+[[nodiscard]] constexpr std::string_view word_of(theme::tinted) { return "tinted"; }
+[[nodiscard]] constexpr std::string_view word_of(accent::blue) { return "blue"; }
+[[nodiscard]] constexpr std::string_view word_of(accent::green) { return "green"; }
+[[nodiscard]] constexpr std::string_view word_of(accent::orange) { return "orange"; }
+[[nodiscard]] constexpr std::string_view word_of(accent::red) { return "red"; }
+[[nodiscard]] constexpr std::string_view word_of(accent::purple) { return "purple"; }
+[[nodiscard]] constexpr std::string_view word_of(accent::cyan) { return "cyan"; }
 [[nodiscard]] constexpr std::string_view word_of(renderer::opengl) { return "opengl"; }
 [[nodiscard]] constexpr std::string_view word_of(renderer::software) { return "software"; }
 [[nodiscard]] constexpr std::string_view word_of(proxy_kind::socks5) { return "socks5"; }
@@ -141,6 +196,7 @@ struct file {
   // The theme, "dark" or "light", and what draws the window, "opengl" or
   // "software". Nothing said is dark and OpenGL.
   std::optional<std::string> theme;
+  std::optional<std::string> accent;
   std::optional<std::string> renderer;
   friend bool operator==(const file&, const file&) = default;
 };

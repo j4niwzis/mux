@@ -74,6 +74,7 @@ struct stub {
   void settings_rendering() {}
   void set_theme(mux::config::theme_t) {}
   void set_renderer(mux::config::renderer_t) {}
+  void set_accent(mux::config::accent_t) {}
   void leave_chat() {}
 };
 

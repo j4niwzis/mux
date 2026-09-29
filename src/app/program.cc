@@ -27,6 +27,7 @@ import mux.app.search;
 import mux.app.pictures;
 import mux.app.drafts;
 import mux.app.reading;
+import mux.app.outbox;
 import mux.logic.links;
 
 export namespace mux::app {
@@ -40,6 +41,9 @@ struct app {
   pictures_part pictures{shared};
   drafts_part drafts{shared};
   reading_part reading{shared};
+  outbox_part outbox{shared, drafts, sending};
+  // Files chosen in the dialog, or dropped on the window: to the outbox.
+  void files_given(std::vector<std::string> paths, bool dropped) { outbox.files_given(std::move(paths), dropped); }
   // What the parts share, pointed at the program's own: once the program
   // is given its model, network and mailbox.
   void wire();
@@ -60,8 +64,8 @@ struct app {
   static constexpr bool takes = requires(Part& part, const Request& one) { part.apply(one); };
   template <class Request>
   void route(const Request& one) {
-    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<app, Request>, "a request no part of the program takes");
-    if (!offer(search, one) && !offer(pictures, one) && !offer(reading, one))
+    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<app, Request>, "a request no part of the program takes");
+    if (!offer(search, one) && !offer(pictures, one) && !offer(reading, one) && !offer(outbox, one))
       offer(*this, one);
   }
 
@@ -90,7 +94,6 @@ struct app {
   std::optional<std::string> new_proxy;
   // What the message field's text is: a new message, an answer to one, or
   // one edited; and the message whose menu is up.
-  compose_t composing = compose::plain{};
   request::message_menu menu_target;
   // The chats muted, and the proxy profiles: kept in the file.
   std::set<mux::conversation_id> muted;
@@ -196,25 +199,11 @@ struct app {
   void apply(const request::message_menu& one);
   void apply(const request::close_menu&);
   // -- files to send: chosen with the paperclip, or dropped on the window
-  struct prepared_file {
-    std::string bytes;
-    std::string name;
-    std::string mimetype;
-    bool image = false;
-    int width = 0, height = 0;
-    std::string key;  // its picture, known to the window already
-  };
-  std::vector<prepared_file> to_send;
-  std::uint64_t files_made = 0;
-  void apply(const request::attach_files&);
-  void apply(const request::close_send_box&);
   // Files given: read, a picture known by its bytes; a picture dropped on
   // the window written anew from its pixels -- nothing of its file, its
   // metadata among it, goes with it -- and named image.<its type>. Then the
   // send box, with what was waiting in it before.
-  void files_given(std::vector<std::string> paths, bool dropped);
   // Sent: each file, the caption with the first; the box closed.
-  void apply(const request::send_files&);
 
   // A message swiped to the left: answered, as its menu's Reply does.
   void apply(const request::reply_to& one);
@@ -239,11 +228,9 @@ struct app {
   std::optional<mux::logic::link::room> joining;
   void follow(const mux::logic::link_t& where);
   void open_chat(const mux::conversation_id& which, const std::optional<std::string>& event);
-  void apply(const request::cancel_compose&);
   // Older messages of a chat: from the disk while it has some from before
   // the oldest in memory, from the server past that.
   void apply(const request::load_older& one);
-  void apply(const request::submit_message& one);
   void apply(const request::resize_sidebar& one);
   // A member written to: their direct chat, where there is one already.
   void apply(const request::message_person& one);
@@ -319,10 +306,8 @@ struct app {
   void apply(const request::delete_proxy_profile&);
 
 
-  void apply(const request::send_typed&);
   // What is in the message field, to the chosen chat -- a new message, an
   // answer to one, or one edited -- and the field emptied.
-  void send_message(std::string text);
   // Another account's chats listed: the drawer goes back, and no chat is
   // chosen.
   void apply(const request::switch_account& one);

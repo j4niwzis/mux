@@ -131,6 +131,4 @@ void app::apply(const request::delete_proxy_profile&) {
   up->show_proxies(proxies);
 }
 
-void app::apply(const request::send_typed&) { this->send_message(root().main().line.text()); }
-
 }  // namespace mux::app

@@ -50,11 +50,6 @@ void app::follow(const mux::logic::link_t& where) {
              mux::logic::where_to(*model, where, screen.chosen, screen.current));
 }
 
-void app::apply(const request::cancel_compose&) {
-  composing = compose::plain{};
-  root().main().line.show_context(std::nullopt);
-}
-
 void app::apply(const request::load_older& one) {
   if (ask.demo)
     return;
@@ -71,8 +66,6 @@ void app::apply(const request::load_older& one) {
   }
   net->load_older(one.in, one.from);
 }
-
-void app::apply(const request::submit_message& one) { this->send_message(one.text); }
 
 void app::apply(const request::resize_sidebar& one) { root().main().resize_sidebar(one.x); }
 

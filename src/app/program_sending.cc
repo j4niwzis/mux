@@ -23,33 +23,6 @@ import mux.app.words;
 
 namespace mux::app {
 
-void app::send_message(std::string text) {
-  auto& screen = root().main();
-  const auto blank = [](unsigned char c) { return std::isspace(c) != 0; };
-  if (!screen.chosen || std::ranges::all_of(text, blank))
-    return;
-  const mux::conversation_id to = *screen.chosen;
-  std::visit(mux::overloaded{[&](const compose::plain&) { ask.send(to, std::move(text)); },
-                             [&](const compose::reply& one) {
-                               if (ask.demo)
-                                 ask.send(to, std::move(text));
-                               else
-                                 net->send(to, std::move(text), one.id);
-                             },
-                             [&](const compose::edit& one) {
-                               if (ask.demo)
-                                 box->push(mux::change_t{
-                                     mux::change::message_edited{to, one.id, mux::body{std::move(text), std::nullopt}}});
-                               else
-                                 net->edit(to, one.id, std::move(text));
-                             }},
-             composing);
-  composing = compose::plain{};
-  screen.line.show_context(std::nullopt);
-  screen.line.clear();
-  drafts.keep(to, std::string());
-}
-
 void app::apply(const request::switch_account& one) {
   auto& screen = root().main();
   screen.current = mux::account_id{mux::ui::protocol_of(one.address), one.address};

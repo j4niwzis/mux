@@ -169,6 +169,9 @@ class account {
   // it has gone out.
   // A displayed marker (XEP-0333) for a message: its sender, or the room,
   // sees it was read.
+  // Avatars of XMPP contacts (XEP-0084) are not fetched yet.
+  void fetch_avatar(std::string, std::string) {}
+
   void mark_read(std::string to, std::string id) {
     loop_->spawn([this, to = std::move(to), id = std::move(id)] {
       if (!session_)

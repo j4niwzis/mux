@@ -13,6 +13,7 @@
 //
 // With no accounts at all it opens all the same, and says how to add one.
 import std;
+import skia;
 import mux.core;
 import mux.config;
 import mux.net;
@@ -178,6 +179,18 @@ struct network {
             [&](auto& account) {
               if (account->id() == in.account)
                 account->mark_read(in.id, event);
+            },
+            one.account);
+    });
+  }
+  // An avatar's picture, fetched by the account it is of, for `key`.
+  void fetch_avatar(const mux::account_id& of, std::string source, std::string key) {
+    loop.post([this, of, source = std::move(source), key = std::move(key)] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == of)
+                account->fetch_avatar(source, key);
             },
             one.account);
     });
@@ -630,9 +643,58 @@ struct app {
     for (const auto& one : changes) {
       if (const auto* given = std::get_if<mux::change::session_given>(&one))
         this->keep_session(*given);
+      if (const auto* picture = std::get_if<mux::change::avatar_loaded>(&one))
+        this->take_avatar(*picture, true);
       model->apply(one);
     }
     this->refresh();
+  }
+
+  // -- avatars: what the chats and the people in them look like
+  // Fetched once each, kept on disk under the cache, shown by what they are
+  // of: a chat by its id, a person by theirs.
+  std::set<std::string> avatars_asked;
+  static std::filesystem::path avatar_file(std::string_view source) {
+    std::string name;
+    for (const char c : source)
+      name += std::isalnum(static_cast<unsigned char>(c)) ? c : '_';
+    return mux::config::cache_path("avatars") / name;
+  }
+  void take_avatar(const mux::change::avatar_loaded& picture, bool fresh) {
+    if (auto image = skia::decodeImage(picture.bytes.data(), picture.bytes.size())) {
+      mux::ui::avatar_images()[picture.key] = std::move(image);
+      scene.state().markDamaged();
+    }
+    if (fresh) {
+      const auto where = avatar_file(picture.source);
+      std::error_code failed;
+      std::filesystem::create_directories(where.parent_path(), failed);
+      std::ofstream(where, std::ios::binary) << picture.bytes;
+    }
+  }
+  // What the model has pictures of and the window has not: from the disk
+  // where they were fetched before, from the account where not.
+  void ask_avatars() {
+    if (ask.demo)
+      return;
+    const auto want = [&](const mux::account_id& of, const std::optional<std::string>& source, const std::string& key) {
+      if (!source || source->empty() || !avatars_asked.insert(key + "\n" + *source).second)
+        return;
+      if (std::ifstream file{avatar_file(*source), std::ios::binary}) {
+        std::string bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+        this->take_avatar(mux::change::avatar_loaded{key, *source, std::move(bytes)}, false);
+        return;
+      }
+      net->fetch_avatar(of, *source, key);
+    };
+    for (const auto& [id, account] : model->accounts())
+      for (const auto& [key, one] : account.conversations) {
+        want(id, one.avatar, one.id.id);
+        // The people of the chat being read: its members' pictures.
+        if (root().main().chosen == one.id)
+          for (const mux::member& each : one.members)
+            want(id, each.avatar, each.id);
+      }
   }
 
   // A Matrix session given: kept with its account, for the next start.
@@ -718,6 +780,7 @@ struct app {
   // Everything brought up to date with the model: each panel by its own
   // overload.
   void refresh() {
+    this->ask_avatars();
     root().main().muted = muted;
     root().show(saved, *model);
     root().main().show(*model);

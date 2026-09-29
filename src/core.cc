@@ -165,6 +165,7 @@ struct member {
   std::string id;
   std::string name;
   std::optional<std::string> role;
+  std::optional<std::string> avatar;  // an mxc:// or a hash, the protocol's
   friend bool operator==(const member&, const member&) = default;
 };
 
@@ -242,6 +243,14 @@ struct conversation_updated {
   bool space = false;
   std::vector<std::string> children;
   std::vector<std::string> groups;
+};
+
+// An avatar's picture, as its protocol fetched it: the bytes of its file,
+// for whatever shows `key` -- a chat's id, a user's.
+struct avatar_loaded {
+  std::string key;
+  std::string source;  // the mxc:// or hash it was fetched by
+  std::string bytes;
 };
 
 // A session an account was given -- a Matrix access token and device -- to
@@ -328,7 +337,7 @@ using change_t = std::variant<change::connection_changed, change::account_remove
                               change::presence_changed, change::message_added, change::message_edited,
                               change::message_redacted, change::message_acknowledged, change::delivery_changed, change::reaction_changed,
                               change::typing_changed, change::history_position, change::members_changed,
-                              change::session_given>;
+                              change::session_given, change::avatar_loaded>;
 
 // The model: every account, and every change applied to it.
 class model {
@@ -447,6 +456,7 @@ class model {
   void on(const change::history_position& one) { of(one.in).history_from = one.from; }
   void on(const change::members_changed& one) { of(one.in).members = one.members; }
   void on(const change::session_given&) {}  // the program's to keep, not the model's
+  void on(const change::avatar_loaded&) {}  // the window's to show, not the model's
 
   std::map<account_id, account> accounts_;
 };

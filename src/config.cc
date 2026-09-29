@@ -356,6 +356,16 @@ std::filesystem::path state_path(std::string_view name) {
   return std::filesystem::path(std::format("mux-{}", name));
 }
 
+// Where what can be fetched again is kept: $XDG_CACHE_HOME/mux, or
+// ~/.cache/mux.
+std::filesystem::path cache_path(std::string_view name) {
+  if (const char* xdg = std::getenv("XDG_CACHE_HOME"); xdg && *xdg)
+    return std::filesystem::path(xdg) / "mux" / name;
+  if (const char* home = std::getenv("HOME"); home && *home)
+    return std::filesystem::path(home) / ".cache" / "mux" / name;
+  return std::filesystem::path(std::format("mux-cache-{}", name));
+}
+
 std::filesystem::path default_path() {
   if (const char* xdg = std::getenv("XDG_CONFIG_HOME"); xdg && *xdg)
     return std::filesystem::path(xdg) / "mux" / "accounts.json";

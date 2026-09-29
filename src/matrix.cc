@@ -132,6 +132,36 @@ class account {
     });
   }
 
+  // An avatar's picture: the server's thumbnail of an mxc:// URI, at the size
+  // it is drawn at twice over, handed on for `key`. The authenticated media
+  // API first (v1.11), the older one where the server has no such thing.
+  void fetch_avatar(std::string source, std::string key) {
+    loop_->spawn([this, source = std::move(source), key = std::move(key)] {
+      if (!api_ || !source.starts_with("mxc://"))
+        return;
+      const std::string_view rest = std::string_view(source).substr(6);
+      const auto slash = rest.find('/');
+      if (slash == std::string_view::npos)
+        return;
+      const std::string server(rest.substr(0, slash));
+      const std::string media(rest.substr(slash + 1));
+      const std::string query = "?width=96&height=96&method=crop";
+      for (const std::string& base : {std::string("/_matrix/client/v1/media/thumbnail/"),
+                                      std::string("/_matrix/media/v3/thumbnail/")}) {
+        try {
+          const auto got = api_->request("GET", base + server + "/" + media + query, {},
+                                         token_ ? std::optional<std::string_view>(*token_) : std::nullopt);
+          if (got.status == 200 && !got.body.empty()) {
+            sink_(change::avatar_loaded{key, source, got.body});
+            return;
+          }
+        } catch (const net::failure&) {
+          return;
+        }
+      }
+    });
+  }
+
   // A message of one's own edited (m.replace): the new text in its place.
   void edit(std::string room, std::string event, std::string text) {
     loop_->spawn([this, room = std::move(room), event = std::move(event), text = std::move(text)] {
@@ -481,6 +511,19 @@ class account {
         sink_(change::conversation_removed{{id_, room}});
   }
 
+  // A room's picture: its own, or, for a chat with one other person, theirs.
+  std::optional<std::string> avatar_of(const std::string& room, const loom::client::joined_room& kept) const {
+    if (auto own = kept.state.avatar_url(); own && !own->empty())
+      return own;
+    if (!direct(room))
+      return std::nullopt;
+    for (const std::string& hero : kept.summary.heroes)
+      if (const auto* them = kept.state.content<loom::ev::m_room_member_content_t>("m.room.member", hero);
+          them && them->avatar_url)
+        return them->avatar_url;
+    return std::nullopt;
+  }
+
   // A room's name as the spec says a client works it out: m.room.name, the
   // canonical alias, the heroes, the room's id.
   static std::string name_of(const std::string& room, const loom::client::joined_room& kept) {
@@ -517,7 +560,7 @@ class account {
     sink_(change::conversation_updated{.id = in,
                                        .kind = direct(in.id) ? conversation_kind_t{conversation_kind::direct{}} : conversation_kind_t{conversation_kind::group{}},
                                        .name = name_of(in.id, kept),
-                                       .avatar = kept.state.avatar_url(),
+                                       .avatar = avatar_of(in.id, kept),
                                        .topic = kept.state.topic(),
                                        .encrypted = kept.state.encrypted(),
                                        .unread = kept.unread.notification,
@@ -554,8 +597,11 @@ class account {
   // Who is in a room, as its state says: those joined, by their names there.
   void members(const conversation_id& in, const loom::client::joined_room& kept) {
     std::vector<mux::member> who;
-    for (const std::string& user : kept.state.members("join"))
-      who.push_back({user, kept.state.display_name(user).value_or(user), std::nullopt});
+    for (const std::string& user : kept.state.members("join")) {
+      const auto* joined = kept.state.content<loom::ev::m_room_member_content_t>("m.room.member", user);
+      who.push_back({user, kept.state.display_name(user).value_or(user), std::nullopt,
+                     joined ? joined->avatar_url : std::nullopt});
+    }
     sink_(change::members_changed{in, std::move(who)});
   }
 

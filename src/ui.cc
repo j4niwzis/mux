@@ -366,8 +366,24 @@ inline void draw_icon(skia::SkCanvas* canvas, const icon_t& which, const skia::S
 }
 
 // A round avatar: the colour of `id`, and the initials of `name` in it.
+// The pictures fetched for avatars, by what they are of: a chat's id, a
+// person's. Where one has none, its initials are drawn.
+inline std::map<std::string, skia::Sp<skia::SkImage>, std::less<>>& avatar_images() {
+  static std::map<std::string, skia::Sp<skia::SkImage>, std::less<>> images;
+  return images;
+}
+
 inline void draw_avatar(skia::SkCanvas* canvas, const skia::SkRect& disc, std::string_view id, std::string_view name,
                         float alpha) {
+  if (const auto found = avatar_images().find(id); found != avatar_images().end() && found->second) {
+    const int saved = canvas->save();
+    canvas->clipRRect(skia::SkRRect::MakeOval(disc), true);
+    skia::SkPaint paint;
+    paint.setAlphaf(alpha);
+    canvas->drawImageRect(found->second, disc, skia::SkSamplingOptions(skia::SkFilterMode::kLinear), &paint);
+    canvas->restoreToCount(saved);
+    return;
+  }
   skia::SkFont* font = skiff::paint::defaultFont();
   if (font == nullptr)
     return;

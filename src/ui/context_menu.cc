@@ -585,12 +585,12 @@ struct context_menu : scene::Node {
         nodes::Text face;
       } parts;
       quick_reaction(Actions* a, std::string k)
-          : actions(a), key(k), parts{.face = nodes::Text(std::move(k), 19.0f, text_colour)} {
+          : actions(a), key(k), parts{.face = nodes::Text(std::move(k), 22.0f, text_colour)} {
         auto& face = parts.face;
         this->setHorizontal();
         fStack.justify = nodes::justify::middle{};
         // tdesktop's reactionCornerSize (36 by 32) and reactionCornerImage (22).
-        fState.apply({.width = 32.0f, .height = 28.0f, .cornerRadius = 14.0f, .hoverBackground = chosen_colour});
+        fState.apply({.width = 36.0f, .height = 32.0f, .cornerRadius = 16.0f, .hoverBackground = chosen_colour});
         face.apply({.alignSelf = scene::align::kMiddle});
       }
       [[nodiscard]] bool acceptsInput() const { return true; }
@@ -618,7 +618,7 @@ struct context_menu : scene::Node {
         fState.apply({.autoSize = scene::axes::kBoth, .padding = {2.0f, 6.0f, 4.0f, 6.0f}});
         for (const char* key : {"👍", "❤️", "😂", "😮", "😢", "🙏"})
           each.emplace_back(a, key);
-        more.apply({.width = 26.0f, .height = 28.0f, .cornerRadius = 13.0f});
+        more.apply({.width = 28.0f, .height = 32.0f, .cornerRadius = 14.0f});
       }
     };
     Actions* actions_of = nullptr;
@@ -746,10 +746,12 @@ struct context_menu : scene::Node {
              remove, seen_band, seen, seen_names, emoji] = parts;
       const std::vector<std::string>& readers = facts.seen;
       quick_band.apply({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 4.0f, 0.0f}});
-      // A menu's rows, smaller than a page's: tdesktop's menu is compact.
+      // A menu's rows as tdesktop's menuWithIcons: 8 over and under the
+      // 13px normalFont's line -- 33 high -- the icon 15 in, the text 54 in.
       const auto compact = [](auto& row) {
-        row.apply({.height = 34.0f, .padding = {0.0f, 16.0f, 0.0f, 14.0f}});
-        row.parts.label.setFontSize(13.5f);
+        row.apply({.height = 33.0f, .padding = {0.0f, 17.0f, 0.0f, 15.0f}});
+        row.setGap(15.0f);
+        row.parts.label.setFontSize(13.0f);
       };
       compact(reply);
       compact(edit);

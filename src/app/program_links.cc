@@ -69,6 +69,25 @@ void app::apply(const request::join_room_card&) {
   root().close_room_card();
 }
 
+// Telegram's @ and heart: the oldest mention or reaction not yet seen, gone
+// to -- straight to what is around it, as a reply's quote goes -- and let go.
+void app::apply(const request::jump_to_mark& one) {
+  const auto& chosen = root().main().chosen;
+  const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
+  if (chat == nullptr)
+    return;
+  const auto& marks =
+      std::visit(mux::overloaded{[&](mux::mark_kind::mention) -> const std::vector<mux::unread_mark>& { return chat->unread_mentions; },
+                                 [&](mux::mark_kind::reaction) -> const std::vector<mux::unread_mark>& { return chat->unread_reactions; }},
+                 one.kind);
+  if (marks.empty())
+    return;
+  const std::string target = marks.front().target;
+  model->apply(mux::change_t{mux::change::mark_taken{*chosen, one.kind}});
+  root().main().jump_to(target);
+  this->refresh();
+}
+
 void app::apply(const request::close_room_card&) {
   previewing.reset();
   root().close_room_card();

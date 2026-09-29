@@ -45,11 +45,17 @@ struct timeline_area : scene::Node {
     nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>> timeline{
         nodes::Flow<std::vector<message_bubble>>({.spacingY = 0.0f, .wrap = false}, {})};
     jump_button<Actions> jump;
+    mark_button<Actions> mentions;
+    mark_button<Actions> reactions;
     // While a message jumped to is being fetched: turning in the middle.
     widgets::RadialLoader loading{};
   } parts;
   Actions* actions = nullptr;
-  explicit timeline_area(Actions* a) : parts{.jump = jump_button<Actions>(a)}, actions(a) {
+  explicit timeline_area(Actions* a)
+      : parts{.jump = jump_button<Actions>(a),
+              .mentions = mark_button<Actions>(a, mark_kind::mention{}, "@"),
+              .reactions = mark_button<Actions>(a, mark_kind::reaction{}, "\u2665")},
+        actions(a) {
     parts.timeline.apply({.fill = true});
     // The room around the messages is inside what scrolls, so the bar is at
     // the window's edge.

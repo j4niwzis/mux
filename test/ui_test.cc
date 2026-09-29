@@ -88,6 +88,7 @@ struct stub {
   void close_notice() {}
   void close_person_info() {}
   void close_room_card() {}
+  void jump_to_mark(mux::mark_kind_t) {}
   void join_room_card() {}
   void toggle_emoji() {}
   void close_emoji() {}

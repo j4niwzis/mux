@@ -198,6 +198,69 @@ struct composer_bar : nodes::Stack {
   void clear() { parts.input.parts.field.setText({}); }
 };
 
+// Telegram's @ and heart over "↓": how many mentions of the user, or
+// reactions to theirs, are not yet seen; pressed, the oldest is gone to.
+template <class Actions>
+struct mark_button : scene::Node {
+  Actions* actions = nullptr;
+  mark_kind_t kind;
+  struct badge_t : nodes::Stack {
+    struct parts_t {
+      nodes::Text count{"", 11.0f, on_accent_colour, true};
+    } parts;
+    badge_t() {
+      fState.apply({.place = scene::anchor::kTopCentre,
+                    .y = -10.0f,
+                    .height = 18.0f,
+                    .autoSize = scene::axes::kX,
+                    .minWidth = 20.0f,
+                    .padding = {1.0f, 5.0f, 1.0f, 5.0f},
+                    .cornerRadius = 9.0f,
+                    .background = accent_colour});
+      fStack.justify = nodes::justify::middle{};
+      parts.count.apply({.alignSelf = scene::align::kMiddle});
+    }
+  };
+  struct parts_t {
+    nodes::Text glyph;
+    badge_t badge;
+  } parts;
+  mark_button(Actions* a, mark_kind_t which, std::string glyph)
+      : actions(a), kind(which), parts{.glyph = nodes::Text(std::move(glyph), 18.0f, text_colour, true)} {
+    fState.apply({.place = scene::anchor::kBottomRight,
+                  .x = -18.0f,
+                  .y = -12.0f,
+                  .width = 42.0f,
+                  .height = 42.0f,
+                  .cornerRadius = 21.0f,
+                  .background = sidebar_colour,
+                  .hoverBackground = chosen_colour,
+                  .border = scene::Border{band_colour, 1.0f}});
+    parts.glyph.apply({.place = scene::anchor::kCentre});
+    this->setVisible(false);
+  }
+  // How many, and which place up the stack it takes: 0 at the bottom.
+  void show(std::size_t count, int slot) {
+    const bool up = count > 0;
+    if (up != this->visible())
+      this->setVisible(up);
+    const std::string said = std::to_string(count);
+    if (parts.badge.parts.count.text() != said)
+      parts.badge.parts.count.setText(said);
+    const float y = -12.0f - 52.0f * static_cast<float>(slot);
+    if (fState.fY != y) {
+      fState.apply({.y = y});
+      this->invalidateLayout();
+    }
+  }
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+  [[nodiscard]] bool onClick(float, float) {
+    actions->jump_to_mark(kind);
+    return true;
+  }
+};
+
 // "↓": back to the newest, with how many came while one read above them.
 template <class Actions>
 struct jump_button : scene::Node {

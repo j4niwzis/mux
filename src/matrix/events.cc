@@ -83,13 +83,31 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     if (relates)
       if (const knot::value* reply = member(*relates, "m.in_reply_to"))
         made.replies_to = text(member(*reply, "event_id"));
+    // A message for the user, come as it happened: listed, as Telegram's @.
+    // Who it mentions, as m.mentions says; before that, the user's ID in it.
+    const bool live = std::visit(overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
+    const auto mentions_me = [&] {
+      if (const knot::value* said = extra(content.rest, one.content, "m.mentions")) {
+        if (const knot::value* users = member(*said, "user_ids"); users && users->is<knot::value::array>())
+          for (const knot::value& user : users->as<knot::value::array>())
+            if (user.is<std::string>() && user.as<std::string>() == id_.address)
+              return true;
+        const knot::value* room = member(*said, "room");
+        return room != nullptr && room->is<bool>() && room->as<bool>();
+      }
+      return made.body.plain.find(id_.address) != std::string::npos;
+    };
+    if (live && !made.outgoing && mentions_me())
+      sink_(change::mentioned{in, made.id, made.at});
     sink_(change::message_added{std::move(made), where});
   } else if (one.content.template is<loom::ev::m_reaction_content_t>()) {
     const auto& content = one.content.template as<loom::ev::m_reaction_content_t>();
     if (content.m_relates_to && content.m_relates_to->event_id && content.m_relates_to->key) {
       reactions_[one.event_id] = {*content.m_relates_to->event_id, *content.m_relates_to->key, one.sender};
+      const bool live =
+          std::visit(overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
       sink_(change::reaction_changed{in, *content.m_relates_to->event_id, *content.m_relates_to->key, one.sender,
-                                     true, one.event_id, at});
+                                     true, one.event_id, at, live});
       // Fetched on its own, as what a reply quotes: a message of its own for
       // the quote, whether reactions are shown as events or not -- "Reacted
       // with" its key -- pointing at what it reacted to.

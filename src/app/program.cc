@@ -236,6 +236,7 @@ struct app : kept_settings {
   void apply(const request::close_notice&);
   void apply(const request::close_person_info&);
   void apply(const request::close_room_card&);
+  void apply(const request::jump_to_mark& one);
   void apply(const request::join_room_card&);
   void apply(const request::toggle_emoji&);
   void apply(const request::close_emoji&);

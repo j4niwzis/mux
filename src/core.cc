@@ -400,6 +400,21 @@ struct emote {
   friend bool operator==(const emote&, const emote&) = default;
 };
 
+// Something for the user in a chat, not yet seen, as Telegram's @ and heart
+// buttons count them: a message mentioning them, or a reaction to one of
+// theirs -- its event, the message to go to, and when.
+struct unread_mark {
+  std::string event;
+  std::string target;
+  std::chrono::sys_time<std::chrono::milliseconds> at{};
+  friend bool operator==(const unread_mark&, const unread_mark&) = default;
+};
+namespace mark_kind {
+struct mention {};
+struct reaction {};
+}  // namespace mark_kind
+using mark_kind_t = std::variant<mark_kind::mention, mark_kind::reaction>;
+
 // Someone mentioned in what is sent: the name as written in it, and who.
 struct mention {
   std::string name;
@@ -446,6 +461,9 @@ struct conversation {
   std::string version;
   // Its other published addresses, besides its alias.
   std::vector<std::string> other_aliases;
+  // What is for the user in it, not yet seen, oldest first: kept to a number.
+  std::vector<unread_mark> unread_mentions;
+  std::vector<unread_mark> unread_reactions;
   // Messages a reply in view quotes that are not in the timeline, fetched
   // on their own for their quotes -- kept out of the timeline, and let go
   // once the timeline has them, or when too many have gathered.
@@ -762,6 +780,26 @@ struct reaction_changed {
   // The reaction's own event, and when it was sent, where it is one.
   std::string event{};
   std::chrono::sys_time<std::chrono::milliseconds> at{};
+  // Come as it happened -- not read back from the history.
+  bool live = false;
+};
+
+// A message that mentions the user, come as it happened.
+struct mentioned {
+  conversation_id in;
+  std::string event;
+  std::chrono::sys_time<std::chrono::milliseconds> at{};
+};
+// The newest message of a chat the user has seen: what is for them up to
+// it is seen.
+struct marks_seen {
+  conversation_id in;
+  std::string up_to;
+};
+// The oldest mark of a kind, gone to.
+struct mark_taken {
+  conversation_id in;
+  mark_kind_t kind;
 };
 
 struct typing_changed {
@@ -785,7 +823,8 @@ using change_t = std::variant<change::connection_changed, change::account_remove
                               change::session_given, change::avatar_loaded, change::receipts_changed,
                               change::window_opened, change::window_extended, change::media_progress,
                               change::room_created, change::preview_loaded, change::devtools_text,
-                              change::state_listed, change::room_previewed>;
+                              change::state_listed, change::room_previewed, change::mentioned,
+                              change::marks_seen, change::mark_taken>;
 
 // The model: every account, and every change applied to it.
 class model {
@@ -1006,12 +1045,46 @@ class model {
         who.insert(one.who);
         if (!one.event.empty())
           kept->reaction_events.push_back({one.event, one.key, one.who, one.at});
+        // Another's reaction to the user's own, as it happened: for them.
+        if (one.live && kept->outgoing && one.who != one.in.account.address && !one.event.empty())
+          keep_mark(of(one.in).unread_reactions, {one.event, one.id, one.at});
       } else {
         who.erase(one.who);
         if (who.empty())
           kept->reactions.erase(one.key);
       }
     }
+  }
+  // Marks kept to a number, the oldest going first: a flood of them cannot
+  // grow a chat without end.
+  static void keep_mark(std::vector<unread_mark>& marks, unread_mark one) {
+    constexpr std::size_t kMarksKept = 500;
+    if (std::ranges::contains(marks, one.event, &unread_mark::event))
+      return;
+    marks.push_back(std::move(one));
+    if (marks.size() > kMarksKept)
+      marks.erase(marks.begin());
+  }
+  void on(const change::mentioned& one) { keep_mark(of(one.in).unread_mentions, {one.event, one.event, one.at}); }
+  void on(const change::marks_seen& one) {
+    conversation& where = of(one.in);
+    const message* seen = message_in(where, one.up_to);
+    if (seen == nullptr)
+      return;
+    const auto seen_at = seen->at;
+    std::erase_if(where.unread_mentions, [&](const unread_mark& mark) { return mark.at <= seen_at; });
+    std::erase_if(where.unread_reactions, [&](const unread_mark& mark) {
+      const message* target = message_in(where, mark.target);
+      return target != nullptr && target->at <= seen_at;
+    });
+  }
+  void on(const change::mark_taken& one) {
+    conversation& where = of(one.in);
+    auto& marks = std::visit(overloaded{[&](mark_kind::mention) -> std::vector<unread_mark>& { return where.unread_mentions; },
+                                        [&](mark_kind::reaction) -> std::vector<unread_mark>& { return where.unread_reactions; }},
+                             one.kind);
+    if (!marks.empty())
+      marks.erase(marks.begin());
   }
   void on(const change::typing_changed& one) { of(one.in).typing = one.who; }
   void on(const change::history_position& one) { of(one.in).history_from = one.from; }

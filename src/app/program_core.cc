@@ -166,8 +166,11 @@ void app::before_frame() {
   // as in tdesktop: the chat list's counts go down as it is read, not all
   // at once when it is opened or left.
   if (const auto& chosen = root().main().chosen; chosen && !root().open_panel() && !root().settings_up())
-    if (const auto seen = root().main().last_seen(); seen && reading.mark_seen(*chosen, *seen))
+    if (const auto seen = root().main().last_seen(); seen && reading.mark_seen(*chosen, *seen)) {
+      // What was for the user up to there, seen.
+      model->apply(mux::change_t{mux::change::marks_seen{*chosen, *seen}});
       this->refresh();
+    }
   // The input has the keyboard's focus whenever nothing else does -- at the
   // start, after a panel or a search closes -- so typing always goes to it,
   // as in tdesktop.

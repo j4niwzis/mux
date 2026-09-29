@@ -818,6 +818,14 @@ struct conversations_screen : nodes::Stack {
     const bool away = !timeline.atEnd(40.0f) || (shown_one && shown_one->detached);
     if (away != chat.area.parts.jump.visible())
       chat.area.parts.jump.setVisible(away);
+    // The @ and the heart, stacked over "↓" where it is up.
+    if (const conversation* here = chosen && last_model ? last_model->find(*chosen) : nullptr) {
+      int slot = chat.area.parts.jump.visible() ? 1 : 0;
+      chat.area.parts.mentions.show(here->unread_mentions.size(), slot);
+      if (!here->unread_mentions.empty())
+        ++slot;
+      chat.area.parts.reactions.show(here->unread_reactions.size(), slot);
+    }
     if (!away && unseen != 0) {
       unseen = 0;
       chat.area.parts.jump.set_unseen(0);

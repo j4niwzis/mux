@@ -92,6 +92,7 @@ inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 //   void open_member_info(std::string id)  -- a person's info, in the middle
 //   void close_person_info()
 //   void close_room_card(), join_room_card()  -- a room not joined, from a link: its card
+//   void jump_to_mark(mark_kind_t)   -- the oldest unseen mention or reaction, gone to
 //   void toggle_emoji(), close_emoji(), insert_emoji(std::string)  -- the input's emoji panel
 //   void load_older(const conversation_id&, std::string from)  -- its history
 //   void jump_to_end()               -- back to a chat's newest message

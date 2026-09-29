@@ -879,6 +879,13 @@ inline void use_theme(config::theme::night) {
 }
 inline void use_theme(const config::theme_t& chosen) {
   std::visit([](auto one) { use_theme(one); }, chosen);
+  // The scroll bars, as tdesktop's scrollBarBg and scrollBarBgOver: dark on
+  // the light themes, light on the dark.
+  const bool light = std::holds_alternative<config::theme::classic>(chosen) ||
+                     std::holds_alternative<config::theme::day>(chosen);
+  nodes::scrollBarColours() = light ? nodes::ScrollBarColours{skia::colorSetARGB(0x53, 0, 0, 0), skia::colorSetARGB(0x7a, 0, 0, 0)}
+                                    : nodes::ScrollBarColours{skia::colorSetARGB(0x53, 255, 255, 255),
+                                                              skia::colorSetARGB(0x7a, 255, 255, 255)};
 }
 
 // An accent's colour in a theme: Telegram's circles, a shade of their own

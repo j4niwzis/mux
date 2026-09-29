@@ -8,9 +8,11 @@
 //
 // Here: which one it is, a buffer as large as the largest, and a pointer to
 // the object in it -- what the compiler sees the object through, not the
-// buffer's bytes. In constant evaluation the object is allocated instead
-// (placement into a buffer is not a constant expression; a void* cast back
-// to its type is, since C++26). Moving, copying, destroying and visiting go
+// buffer's bytes. The object is held in a holder<T>, derived from one empty
+// base the pointer is kept as: a base pointer cast down to its holder is a
+// constant expression everywhere, where a void* cast back is not (C++26
+// only, and not in every compiler). In constant evaluation the holder is
+// allocated instead: placement into a buffer is not a constant expression. Moving, copying, destroying and visiting go
 // through one table each per variant type (and per visitor): an entry per
 // alternative, made by one pack expansion.
 export module mux.variant;
@@ -18,6 +20,22 @@ export module mux.variant;
 import std;
 
 namespace mux::detail {
+// What every alternative is held in: one base for the pointer, empty.
+struct held {};
+template <class T>
+struct holder : held {
+  T value;
+  template <class... Args>
+  constexpr explicit holder(std::in_place_t, Args&&... args) : value(std::forward<Args>(args)...) {}
+};
+template <class T>
+[[nodiscard]] constexpr T& value_of(held* p) noexcept {
+  return static_cast<holder<T>*>(p)->value;
+}
+template <class T>
+[[nodiscard]] constexpr const T& value_of(const held* p) noexcept {
+  return static_cast<const holder<T>*>(p)->value;
+}
 // The place of T among Ts.
 template <class T, class... Ts>
 consteval std::size_t index_in() {
@@ -68,15 +86,15 @@ class variant {
   template <class F>
   constexpr decltype(auto) visit(F&& f) {
     using R = std::invoke_result_t<F&, std::tuple_element_t<0, std::tuple<Ts...>>&>;
-    static constexpr std::array<R (*)(F&, void*), kSize> table{
-        +[](F& g, void* p) -> R { return std::invoke(g, *static_cast<Ts*>(p)); }...};
+    static constexpr std::array<R (*)(F&, detail::held*), kSize> table{
+        +[](F& g, detail::held* p) -> R { return std::invoke(g, detail::value_of<Ts>(p)); }...};
     return table[fIndex](f, fObject);
   }
   template <class F>
   constexpr decltype(auto) visit(F&& f) const {
     using R = std::invoke_result_t<F&, const std::tuple_element_t<0, std::tuple<Ts...>>&>;
-    static constexpr std::array<R (*)(F&, const void*), kSize> table{
-        +[](F& g, const void* p) -> R { return std::invoke(g, *static_cast<const Ts*>(p)); }...};
+    static constexpr std::array<R (*)(F&, const detail::held*), kSize> table{
+        +[](F& g, const detail::held* p) -> R { return std::invoke(g, detail::value_of<Ts>(p)); }...};
     return table[fIndex](f, fObject);
   }
 
@@ -84,25 +102,25 @@ class variant {
   template <class T, class... Args>
   constexpr void make(Args&&... args) {
     if consteval {
-      fObject = new T(std::forward<Args>(args)...);
+      fObject = new detail::holder<T>(std::in_place, std::forward<Args>(args)...);
     } else {
-      fObject = ::new (static_cast<void*>(fBuffer)) T(std::forward<Args>(args)...);
+      fObject = ::new (static_cast<void*>(fBuffer)) detail::holder<T>(std::in_place, std::forward<Args>(args)...);
     }
   }
   template <class T>
   static constexpr void move_one(variant& to, variant& from) {
-    to.template make<T>(std::move(*static_cast<T*>(from.fObject)));
+    to.template make<T>(std::move(detail::value_of<T>(from.fObject)));
   }
   template <class T>
   static constexpr void copy_one(variant& to, const variant& from) {
-    to.template make<T>(*static_cast<const T*>(from.fObject));
+    to.template make<T>(detail::value_of<T>(static_cast<const detail::held*>(from.fObject)));
   }
   template <class T>
   static constexpr void destroy_one(variant& self) {
     if consteval {
-      delete static_cast<T*>(self.fObject);
+      delete static_cast<detail::holder<T>*>(self.fObject);
     } else {
-      static_cast<T*>(self.fObject)->~T();
+      static_cast<detail::holder<T>*>(self.fObject)->~holder();
     }
   }
   static constexpr std::array<void (*)(variant&, variant&), kSize> kMove{&move_one<Ts>...};
@@ -110,8 +128,8 @@ class variant {
   static constexpr std::array<void (*)(variant&), kSize> kDestroy{&destroy_one<Ts>...};
 
   std::size_t fIndex = 0;
-  alignas(Ts...) unsigned char fBuffer[std::max({sizeof(Ts)...})];
-  void* fObject = nullptr;
+  alignas(detail::holder<Ts>...) unsigned char fBuffer[std::max({sizeof(detail::holder<Ts>)...})];
+  detail::held* fObject = nullptr;
 };
 
 // As std::visit, for one variant.

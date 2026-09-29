@@ -333,7 +333,7 @@ void app::before_frame() {
     scene.focus(root().main().line.field);
   auto pending = std::exchange(ask.requests, {});
   for (const request_t& one : pending)
-    std::visit([this](const auto& each) { this->route(each); }, one);
+    std::visit([this](const auto& group) { std::visit([this](const auto& each) { this->route(each); }, group); }, one);
   // What the parts left to do: the window made again, brought up to date;
   // the emoji picked lately kept.
   if (std::exchange(shared.rebuild_due, false))

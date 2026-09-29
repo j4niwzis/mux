@@ -598,13 +598,18 @@ struct message_bubble : nodes::Stack {
     this->setGap(8.0f);
     // As tdesktop: a sender's messages one under the other nearly touch;
     // where the sender changes, a gap.
+    const bool group = is_group(in);
+    // The avatar hangs at the row's bottom left, as tdesktop's: out of the
+    // row's flow, the row keeping its width on the left. In the flow, a
+    // 34-high avatar made a one-line bubble's row taller, and the last
+    // bubble of a run stood apart from the rest.
+    const bool with_face = group && !outgoing && !said.service;
     fState.apply({.fillX = true, .autoSize = scene::axes::kY,
-                  .padding = {first_of_run ? 8.0f : 1.0f, 0.0f, 1.0f, 0.0f}});
+                  .padding = {first_of_run ? 8.0f : 1.0f, 0.0f, 1.0f, with_face ? kAvatar + 8.0f : 0.0f}});
     if (outgoing)
       fStack.justify = nodes::justify::end{};
-    const bool group = is_group(in);
-    face.setVisible(group && !outgoing);
-    face.apply({.alignSelf = scene::align::kEnd});
+    face.setVisible(with_face);
+    face.apply({.place = scene::anchor::kBottomLeft, .y = -1.0f});
     if (!(group && !outgoing && last_of_run))
       face.fState.setAlpha(0.0f);  // its room kept, so the run's bubbles line up
     if (group && !outgoing && first_of_run && !said.service) {

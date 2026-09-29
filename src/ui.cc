@@ -1770,6 +1770,23 @@ struct conversations_screen : nodes::Stack {
         f(name);
       }
     } head;
+    // Search: the chats listed are those whose name or address has what is
+    // typed here.
+    struct search_box : scene::Node {
+      widgets::TextArea<> field{"Search"};
+      search_box() {
+        fState.apply({.fillX = true, .height = 36.0f, .margin = {0.0f, 10.0f, 8.0f, 10.0f}});
+        field.setSingleLine(true);
+        field.setFontSize(14.0f);
+        field.apply({.fillX = true, .margin = {2.0f, 14.0f, 0.0f, 14.0f}});
+      }
+      void forEachChild(auto&& f) { f(field); }
+      void drawSelf(skia::SkCanvas* canvas, float alpha) {
+        if (skia::SkFont* font = skiff::paint::defaultFont())
+          skiff::paint::Painter(canvas, *font)
+              .fillRounded(fState.fBounds, 18.0f, field.focused() ? chosen_colour : tile_colour, alpha);
+      }
+    } search;
     nodes::Text no_chats{"No chats yet.", 13.0f, dim_colour};
     nodes::ScrollContainer<nodes::Flow<std::vector<conversation_row<Actions>>>> list{
         nodes::Flow<std::vector<conversation_row<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
@@ -1786,6 +1803,7 @@ struct conversations_screen : nodes::Stack {
     }
     void forEachChild(auto&& f) {
       f(head);
+      f(search);
       f(no_chats);
       f(list);
     }
@@ -1912,7 +1930,16 @@ struct conversations_screen : nodes::Stack {
     chat.area.jump.set_unseen(0);
   }
 
+  // What was searched for last, and the model last shown: typing into the
+  // search filters the list again.
+  std::string searched;
+  const model* last_model = nullptr;
+
   void update(double) {
+    if (side.search.field.text() != searched && last_model) {
+      searched = side.search.field.text();
+      this->show(*last_model);
+    }
     const bool away = !timeline.atEnd(40.0f);
     if (away != chat.area.jump.visible())
       chat.area.jump.setVisible(away);
@@ -1927,14 +1954,23 @@ struct conversations_screen : nodes::Stack {
   }
 
   void show(const model& now) {
+    last_model = &now;
     if (!current || !now.accounts().contains(*current))
       current = now.accounts().empty() ? std::nullopt : std::optional<account_id>(now.accounts().begin()->first);
     auto& rows = std::get<0>(std::get<0>(list.fChildren).fChildren);
     rows.clear();
     std::vector<const conversation*> chats;
+    // What is searched for, in any case: in a name or an address.
+    const auto lower = [](std::string text) {
+      for (char& c : text)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+      return text;
+    };
+    const std::string wanted = lower(side.search.field.text());
     if (current)
       for (const auto& [key, one] : now.accounts().at(*current).conversations)
-        chats.push_back(&one);
+        if (wanted.empty() || lower(display_name(one)).contains(wanted) || lower(one.id.id).contains(wanted))
+          chats.push_back(&one);
     std::ranges::sort(chats, std::ranges::greater{}, [](const conversation* one) {
       return one->timeline.empty() ? std::chrono::sys_time<std::chrono::milliseconds>{} : one->timeline.back().at;
     });

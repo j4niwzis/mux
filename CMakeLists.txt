@@ -141,7 +141,7 @@ if(MUX_UI)
   # skiff and skiff-widgets say the rest of what they are in their own trees.
   cme_declare_port(NAME skiff PROVIDES skiff
     GITHUB_REPOSITORY j4niwzis/skiff
-    GIT_TAG 3f9bfb3afbe3ab2f40437812f7fcc8469bd9d92a)
+    GIT_TAG e3e788bf5340de14fbf88ab942704776d50fea00)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
     GIT_TAG 35e459539865362c6919c946488cd71640511b1c)
@@ -157,17 +157,14 @@ if(MUX_UI)
   # their directory, text shaped by HarfBuzz and laid out by Unicode's rules
   # through alef (Arabic and Hebrew, Indic scripts, emoji sequences, CJK line
   # breaks), GL where asked for, and the pictures mux decodes. skiff asks Skia
-  # for what they need; Skia is asked for the same here.
+  # for what they need; mux asks Skia for nothing itself.
   set(mux_skiff_components fontmgr-directory text-shaping)
-  set(mux_skia_components freetype fontmgr-directory)
   foreach(feature IN ITEMS gl png jpeg gif webp)
     string(TOUPPER ${feature} option_name)
     if(MUX_${option_name})
       list(APPEND mux_skiff_components ${feature})
-      list(APPEND mux_skia_components ${feature})
     endif()
   endforeach()
-  cme_find_package(Skia REQUIRED COMPONENTS ${mux_skia_components})
   cme_find_package(SDL3 REQUIRED)
   cme_find_package(skiff COMPONENTS ${mux_skiff_components} REQUIRED)
   cme_find_package(skiff-widgets REQUIRED)

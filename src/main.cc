@@ -2465,6 +2465,14 @@ int main(int argc, char** argv) {
   program.box = &box;
   program.model = &model;
   program.net = &net;
+  // A pill's avatar in a message's text: the one of what it names.
+  skiff::scene::pillPainter() = {+[](void*, skia::SkCanvas* canvas, const skia::SkRect& disc, std::string_view target,
+                                     float alpha) {
+                                   const auto at = target.find("#/");
+                                   const std::string_view id = at == std::string_view::npos ? target : target.substr(at + 2);
+                                   mux::ui::draw_avatar(canvas, disc, id, id, alpha);
+                                 },
+                                 nullptr};
   // A link pressed in a message's text: routed as a link is.
   skiff::scene::linkOpener() = {+[](void* self, std::string_view url) {
                                   static_cast<app*>(self)->ask.open_url(std::string(url));

@@ -1444,6 +1444,91 @@ struct reaction_row : nodes::Flow<std::vector<reaction_chip>> {
   const std::vector<reaction_chip>& chips() const { return std::get<0>(fChildren); }
 };
 
+// Mentions, as pills: Matrix IDs in a message's text -- #alias:server,
+// !room:server, @user:server -- and its HTML's matrix.to links to them, each
+// drawn as a pill with a small avatar and the name it goes by here (a
+// room's name, a member's), a link to it. The text is given back with the
+// names in place of the IDs, and its links with it.
+[[nodiscard]] inline std::pair<std::string, std::vector<nodes::Text::Link>> with_mentions(
+    std::string text, std::vector<nodes::Text::Link> links, const conversation& in, const model* now) {
+  const auto name_of = [&](const std::string& id) -> std::pair<std::string, std::string> {  // name, id to link to
+    if (id.starts_with('@'))
+      return {sender_name(in, id), id};
+    if (now)
+      for (const auto& [account, one] : now->accounts())
+        for (const auto& [key, chat] : one.conversations)
+          if (chat.id.id == id || (chat.alias && *chat.alias == id))
+            return {display_name(chat), chat.id.id};
+    return {id, id};
+  };
+  const auto is_id = [](std::string_view word) {
+    if (word.size() < 4 || !std::string_view("@#!").contains(word.front()))
+      return false;
+    const auto colon = word.find(':');
+    return colon != std::string_view::npos && colon > 1 && colon + 1 < word.size();
+  };
+  // Where the pills go: the HTML's links to an ID, and the IDs standing in
+  // the text on their own.
+  struct pill_at {
+    std::size_t first, last;
+    std::string id;
+  };
+  std::vector<pill_at> pills;
+  std::vector<nodes::Text::Link> kept;
+  for (auto& link : links) {
+    constexpr std::string_view to = "https://matrix.to/#/";
+    if (link.target.starts_with(to)) {
+      std::string id = link.target.substr(to.size());
+      id = id.substr(0, id.find_first_of("/?"));
+      if (is_id(id)) {
+        pills.push_back({link.first, link.last, id});
+        continue;
+      }
+    }
+    kept.push_back(std::move(link));
+  }
+  for (std::size_t at = 0; at < text.size();) {
+    const bool starts = at == 0 || std::string_view(" \n\t(").contains(text[at - 1]);
+    if (starts && std::string_view("@#!").contains(text[at])) {
+      std::size_t end = at + 1;
+      while (end < text.size() && !std::string_view(" \n\t,;)").contains(text[end]))
+        ++end;
+      while (end > at && std::string_view(".!?").contains(text[end - 1]))
+        --end;
+      const std::string_view word = std::string_view(text).substr(at, end - at);
+      const bool inside = std::ranges::any_of(pills, [&](const pill_at& p) { return at < p.last && end > p.first; }) ||
+                          std::ranges::any_of(kept, [&](const auto& l) { return at < l.last && end > l.first; });
+      if (is_id(word) && !inside) {
+        pills.push_back({at, end, std::string(word)});
+        at = end;
+        continue;
+      }
+    }
+    ++at;
+  }
+  // Replaced from the end, so what comes before keeps its place; links
+  // after a replaced stretch move with it.
+  std::ranges::sort(pills, std::ranges::greater{}, &pill_at::first);
+  std::vector<nodes::Text::Link> out;
+  for (const pill_at& pill : pills) {
+    const auto [name, target] = name_of(pill.id);
+    const std::string shown = "\u2002\u2002" + name;  // room for its avatar
+    const std::ptrdiff_t grew =
+        static_cast<std::ptrdiff_t>(shown.size()) - static_cast<std::ptrdiff_t>(pill.last - pill.first);
+    text.replace(pill.first, pill.last - pill.first, shown);
+    for (auto* list : {&kept, &out})
+      for (auto& link : *list)
+        if (link.first >= pill.last) {
+          link.first = static_cast<std::size_t>(static_cast<std::ptrdiff_t>(link.first) + grew);
+          link.last = static_cast<std::size_t>(static_cast<std::ptrdiff_t>(link.last) + grew);
+        }
+    out.push_back({pill.first, pill.first + shown.size(), "https://matrix.to/#/" + target, true});
+  }
+  for (auto& link : kept)
+    out.push_back(std::move(link));
+  return {std::move(text), std::move(out)};
+}
+
 struct message_bubble : nodes::Stack {
   // The message as it was shown, and where in its sender's run: while
   // these are the same, the bubble is kept.
@@ -1577,7 +1662,8 @@ struct message_bubble : nodes::Stack {
   // Declared: the avatar's room and the bubble, at the right where it is
   // one's own; the bubble a column of the name, the quote, the text, the
   // links, the reactions and the time.
-  message_bubble(const conversation& in, const message& said, bool first_of_run, bool last_of_run)
+  message_bubble(const conversation& in, const message& said, bool first_of_run, bool last_of_run,
+                 const model* now = nullptr)
       : said(said), first(first_of_run), last(last_of_run), message_id(said.id), plain(said.body.plain),
         outgoing(said.outgoing), sender(said.sender), face(said.sender, sender_name(in, said.sender), kAvatar),
         body(said.outgoing, said.redacted ? std::string("(removed)") : said.body.plain + (said.edited ? " (edited)" : ""),
@@ -1632,10 +1718,13 @@ struct message_bubble : nodes::Stack {
     // its href says, and the addresses in a plain text.
     if (said.body.html && !said.redacted) {
       auto read = read_html(*said.body.html);
-      body.text.setText(read.text + (said.edited ? " (edited)" : ""));
-      body.text.setLinks(std::move(read.spans), accent_colour);
+      auto [text, links] = with_mentions(std::move(read.text), std::move(read.spans), in, now);
+      body.text.setText(text + (said.edited ? " (edited)" : ""));
+      body.text.setLinks(std::move(links), accent_colour);
     } else if (!said.redacted) {
-      body.text.setLinks(link_spans_in(said.body.plain), accent_colour);
+      auto [text, links] = with_mentions(said.body.plain, link_spans_in(said.body.plain), in, now);
+      body.text.setText(text + (said.edited ? " (edited)" : ""));
+      body.text.setLinks(std::move(links), accent_colour);
     }
     if (said.replies_to) {
       const auto found = std::ranges::find(in.timeline, *said.replies_to, &message::id);
@@ -3177,7 +3266,7 @@ struct conversations_screen : nodes::Stack {
     if (nodes::reconcile(
             entries, std::views::iota(first_made, last_made),
             [&](std::size_t i) { return all[i].id; }, [](const message_bubble& row) { return row.message_id; },
-            [&](std::size_t i) { return message_bubble(*one, all[i], first_of_run(i), last_of_run(i)); },
+            [&](std::size_t i) { return message_bubble(*one, all[i], first_of_run(i), last_of_run(i), &now); },
             [&](const message_bubble& row, std::size_t i) {
               return row.said == all[i] && row.first == first_of_run(i) && row.last == last_of_run(i);
             }))

@@ -31,6 +31,7 @@ import mux.config;
 import mux.core;
 import mux.http;
 import mux.net;
+import mux.logic.markdown;
 import :account;
 
 // The members defined here are declared in :account, and exported there.
@@ -381,22 +382,32 @@ void account<Sink>::edit(std::string room, std::string event, std::string text) 
   loop_->spawn([this, room = std::move(room), event = std::move(event), text = std::move(text)] {
     if (!api_)
       return;
+    // Made HTML as a message sent is: its Markdown, the room's emoji.
+    const auto html = html_of(text, emotes_in(room));
     knot::value::object now;
     now.emplace("msgtype", knot::value(std::string("m.text")));
     now.emplace("body", knot::value(text));
+    if (html) {
+      now.emplace("format", knot::value(std::string("org.matrix.custom.html")));
+      now.emplace("formatted_body", knot::value(*html));
+    }
     knot::value::object relates;
     relates.emplace("rel_type", knot::value(std::string("m.replace")));
     relates.emplace("event_id", knot::value(event));
     knot::value::object content;
     content.emplace("msgtype", knot::value(std::string("m.text")));
     content.emplace("body", knot::value("* " + text));
+    if (html) {
+      content.emplace("format", knot::value(std::string("org.matrix.custom.html")));
+      content.emplace("formatted_body", knot::value("* " + *html));
+    }
     content.emplace("m.new_content", knot::value(std::move(now)));
     content.emplace("m.relates_to", knot::value(std::move(relates)));
     if (perform(*api_, loom::cs::send_message{.room_id = room,
                                               .event_type = "m.room.message",
                                               .txn_id = this->transaction(),
                                               .body = knot::value(std::move(content))}))
-      sink_(change::message_edited{{id_, room}, event, body{text, std::nullopt}});
+      sink_(change::message_edited{{id_, room}, event, body{text, html}});
   });
 }
 
@@ -518,12 +529,51 @@ void account<Sink>::leave(std::string room) {
   return html;
 }
 
+// In HTML already -- Markdown made so -- the :shortcode:s of the room's
+// custom emoji made <img>s, in the text and not inside a tag.
+[[nodiscard]] inline std::string emotes_in_html(std::string_view html, const std::vector<mux::emote>& emotes) {
+  std::string out;
+  for (std::size_t at = 0; at < html.size();) {
+    if (html[at] == '<') {
+      const auto end = html.find('>', at);
+      const auto stop = end == std::string_view::npos ? html.size() : end + 1;
+      out.append(html.substr(at, stop - at));
+      at = stop;
+      continue;
+    }
+    if (html[at] == ':') {
+      const auto end = html.find(':', at + 1);
+      if (end != std::string_view::npos && end > at + 1) {
+        const std::string_view code = html.substr(at + 1, end - at - 1);
+        if (const auto found = std::ranges::find(emotes, code, &mux::emote::shortcode); found != emotes.end()) {
+          out += std::format(R"(<img data-mx-emoticon src="{}" alt=":{}:" title=":{}:" height="32">)", found->url, code,
+                             code);
+          at = end + 1;
+          continue;
+        }
+      }
+    }
+    out += html[at];
+    ++at;
+  }
+  return out;
+}
+
+// What a message is sent as: its Markdown made HTML, as Element sends it,
+// and the room's custom emoji in that; else the emoji alone, where it names
+// any; else nothing -- the text as it is.
+[[nodiscard]] inline std::optional<std::string> html_of(std::string_view body, const std::vector<mux::emote>& emotes) {
+  if (auto marked = mux::logic::markdown_html(body))
+    return emotes.empty() ? *marked : emotes_in_html(*marked, emotes);
+  return with_emotes(body, emotes);
+}
+
 template <class Sink>
 void account<Sink>::send(std::string room, std::string body, std::optional<std::string> reply_to) {
   loop_->spawn([this, room = std::move(room), body = std::move(body), reply_to = std::move(reply_to)] {
     const std::string txn = this->transaction();
     const conversation_id in{id_, room};
-    const auto html = with_emotes(body, emotes_in(room));
+    const auto html = html_of(body, emotes_in(room));
     sink_(change::message_added{message{
         .in = in,
         .id = txn,

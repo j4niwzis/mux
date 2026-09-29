@@ -146,6 +146,9 @@ struct info_panel : nodes::Stack {
   std::optional<std::string> person;
   // The members as last shown, and how each is.
   std::vector<std::pair<member, std::string>> shown_members;
+  // Whose members those are, at which revision of them.
+  std::optional<conversation_id> members_of;
+  std::uint64_t members_revision = 0;
 
   // What a press does, to the panel -- which stays where it is while its
   // pages are made again.
@@ -338,11 +341,18 @@ struct info_panel : nodes::Stack {
                   group,
                   muted,
                   false};
-    shown_members.clear();
-    for (const member& each : one.members)
-      shown_members.emplace_back(each, presence_of(now, one.id.account, each.id));
+    // Its members made again only where they changed -- or another chat's
+    // are shown: a big room has thousands, and every refresh rebuilt them.
+    const bool same_members = members_of == one.id && members_revision == one.members_revision;
+    members_of = one.id;
+    members_revision = one.members_revision;
+    if (!same_members) {
+      shown_members.clear();
+      for (const member& each : one.members)
+        shown_members.emplace_back(each, presence_of(now, one.id.account, each.id));
+    }
     auto& rows = std::get<0>(std::get<0>(members.fChildren).fChildren);
-    if (nodes::reconcile(
+    if (!same_members && nodes::reconcile(
             rows, shown_members, [](const auto& each) { return each.first.id; },
             [](const member_row<open_person>& row) { return row.id; },
             [&](const auto& each) { return member_row<open_person>(each.first, each.second, open_person{this}); },

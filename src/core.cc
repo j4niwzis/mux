@@ -258,6 +258,9 @@ struct conversation {
   bool detached = false;
   std::optional<std::string> future_from;
   std::optional<message> latest;
+  // Counted up whenever its members change: what shows them is made again
+  // only then -- a big room has thousands.
+  std::uint64_t members_revision = 0;
 };
 
 // Its newest message, as the chat list shows it and sorts by: the last of
@@ -644,7 +647,11 @@ class model {
   }
   void on(const change::typing_changed& one) { of(one.in).typing = one.who; }
   void on(const change::history_position& one) { of(one.in).history_from = one.from; }
-  void on(const change::members_changed& one) { of(one.in).members = one.members; }
+  void on(const change::members_changed& one) {
+    conversation& where = of(one.in);
+    where.members = one.members;
+    ++where.members_revision;
+  }
   void on(const change::session_given&) {}  // the program's to keep, not the model's
   void on(const change::avatar_loaded&) {}  // the window's to show, not the model's
   void on(const change::receipts_changed& one) {

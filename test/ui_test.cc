@@ -90,6 +90,13 @@ struct stub {
   void toggle_emoji() {}
   void close_emoji() {}
   void insert_emoji(std::string) {}
+  void menu_save_gif() {}
+  void show_gifs() {}
+  void send_gif(std::string) {}
+  void menu_pin() {}
+  void menu_reactions() {}
+  void close_reactions() {}
+  void open_avatar(std::string) {}
   void resize_info(float) {}
   void choose_new_proxy(int) {}
   void toggle_mute() {}

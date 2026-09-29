@@ -22,11 +22,42 @@ import mux.app.demo;
 import mux.app.store;
 import mux.app.requests;
 import mux.app.words;
+import mux.app.services;
+import mux.app.search;
 
 export namespace mux::app {
 
 // What the program does to the window between events.
 struct app {
+  // -- the parts: each owns its state, and reaches the rest through what
+  // they share
+  services shared;
+  search_part search{shared};
+  // What the parts share, pointed at the program's own: once the program
+  // is given its model, network and mailbox.
+  void wire();
+  // A request, to the part that takes it -- the first with an apply for
+  // it, as overload resolution finds -- and to the program's own where
+  // none does.
+  template <class Part, class Request>
+    requires requires(Part& part, const Request& one) { part.apply(one); }
+  static bool offer(Part& part, const Request& one) {
+    part.apply(one);
+    return true;
+  }
+  template <class Part, class Request>
+  static bool offer(Part&, const Request&) {
+    return false;
+  }
+  template <class Part, class Request>
+  static constexpr bool takes = requires(Part& part, const Request& one) { part.apply(one); };
+  template <class Request>
+  void route(const Request& one) {
+    static_assert(takes<search_part, Request> || takes<app, Request>, "a request no part of the program takes");
+    if (!offer(search, one))
+      offer(*this, one);
+  }
+
   using adding = mux::ui::add_account_pane<actions>;
   using accounts = mux::ui::accounts_panel<actions>;
   using xmpp_form = mux::ui::xmpp_form<actions>;
@@ -264,25 +295,6 @@ struct app {
   void apply(const request::message_person& one);
   void apply(const request::jump_to_message& one);
 
-  // Finding in a chat: what is asked, in which chat, the messages it is in
-  // (newest first), and which of them is shown.
-  struct search_state {
-    mux::conversation_id in;
-    std::string query;
-    std::vector<std::string> found;
-    std::optional<std::size_t> at;
-  };
-  std::optional<search_state> searching;
-  void apply(const request::open_search&);
-  void apply(const request::close_search&);
-  void apply(const request::search_typed& one);
-  void apply(const request::search_step& one);
-  // To the next found, older or newer, shown and flashed; the count set.
-  void search_to(bool older);
-  // The messages of a chat with the words asked in their text or in the name
-  // of what they carry, any case: all it has -- those on disk and those in
-  // memory -- newest first.
-  std::vector<std::string> find_in(const mux::conversation_id& in, std::string_view query);
   // A sender pressed in the messages: their page, in the chat's info.
   void apply(const request::open_member_info& one);
   void apply(const request::not_implemented& one);

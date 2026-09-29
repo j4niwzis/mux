@@ -100,11 +100,21 @@ void app::keep_session(const mux::change::session_given& given) {
   (void)this->write();
 }
 
+void app::wire() {
+  shared = services{.model = model,
+                    .net = net,
+                    .store = &store,
+                    .box = box,
+                    .ask = &ask,
+                    .scene = &scene,
+                    .refresh = [this] { this->refresh(); }};
+}
+
 void app::before_frame() {
   root().drop_closed();
   auto pending = std::exchange(ask.requests, {});
   for (const request_t& one : pending)
-    std::visit([this](const auto& each) { this->apply(each); }, one);
+    std::visit([this](const auto& each) { this->route(each); }, one);
   if (drawer_waits && !root().pages_moving()) {
     root().close_drawer_now();
     drawer_waits = false;

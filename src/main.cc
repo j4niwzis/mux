@@ -122,6 +122,7 @@ int main(int argc, char** argv) {
   program.ask.net = &net;
   program.ask.demo = demo;
   program.ask.box = &box;
+  program.wire();
   program.config_path = config_path;
   program.saved = mux::config::accounts_of(saved);
   program.motion = saved.motion;

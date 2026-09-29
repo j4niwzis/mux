@@ -27,11 +27,7 @@ void app::apply(const request::choose& one) {
   // What was being written where the reader was: kept as its draft; and
   // the chat opened's own put back in the field.
   auto& screen = root().main();
-  // Finding is in one chat: another chosen, it is closed.
-  if (searching && searching->in != one.which) {
-    searching.reset();
-    screen.show_search(false);
-  }
+  search.chat_chosen(one.which);
   if (screen.chosen && *screen.chosen != one.which) {
     this->keep_draft(*screen.chosen, screen.line.text());
     screen.line.set_text(screen.draft_of(one.which));

@@ -411,7 +411,9 @@ struct reactions_box : nodes::Stack {
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
-      actions->reply_to(entry.event, std::format("{} reacted {}", entry.name, entry.key));
+      // Answered, where it is an event of its own to answer.
+      if (!entry.event.empty())
+        actions->reply_to(entry.event, std::format("{} reacted {}", entry.name, entry.key));
       actions->close_reactions();
       return true;
     }

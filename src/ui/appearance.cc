@@ -37,7 +37,6 @@ struct theme_card : nodes::Stack {
   config::theme_t theme;
   bool chosen = false;
   skia::SkColor back, bubble, mine;
-  nodes::Text name;
   // A small picture of it: its background, a bubble of each side, and a
   // ring round it while it is the one in use -- plates placed on the card.
   struct picture_t : scene::Node {
@@ -55,20 +54,20 @@ struct theme_card : nodes::Stack {
                             .cornerRadius = 7.0f});
     }
     void set_ring(bool on) { fState.apply({.border = scene::Border{on ? accent_colour : 0u, on ? 2.0f : 0.0f}}); }
-  } picture;
+  };
+  struct parts_t {
+    nodes::Text name;
+    picture_t picture;
+  } parts;
   theme_card(Actions* a, config::theme_t which, std::string label, skia::SkColor b, skia::SkColor in, skia::SkColor out)
-      : actions(a), theme(which), back(b), bubble(in), mine(out), name(std::move(label), 12.0f, dim_colour),
-        picture(b, in, out) {
+      : actions(a), theme(which), back(b), bubble(in), mine(out),
+        parts{.name = nodes::Text(std::move(label), 12.0f, dim_colour), .picture = picture_t(b, in, out)} {
     fState.apply({.width = 92.0f, .height = 92.0f, .padding = {66.0f, 6.0f, 0.0f, 6.0f}});
-    name.apply({.alignSelf = scene::align::kMiddle});
+    parts.name.apply({.alignSelf = scene::align::kMiddle});
   }
   void set_chosen(bool on) {
     chosen = on;
-    picture.set_ring(on);
-  }
-  void forEachChild(auto&& f) {
-    f(name);
-    f(picture);
+    parts.picture.set_ring(on);
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
@@ -109,35 +108,32 @@ struct accent_circle : scene::Node {
 // accents as circles. Either changes at once.
 template <class Actions>
 struct appearance_page : nodes::Stack {
-  page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>> header;
-  nodes::Text theme_title = section_title("THEME");
+  using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
   struct cards_row : nodes::Stack {
+    using card = theme_card<Actions>;
     // Telegram's cards, in its order, with its own pictures' colours:
     // the wallpaper, a bubble received, one sent.
-    theme_card<Actions> classic, day, tinted, night;
+    struct parts_t {
+      card classic, day, tinted, night;
+    } parts;
     explicit cards_row(Actions* a)
-        : classic(a, config::theme::classic{}, "Classic", skia::colorSetARGB(255, 155, 212, 148),
-                  skia::colorSetARGB(255, 255, 255, 255), skia::colorSetARGB(255, 234, 255, 220)),
-          day(a, config::theme::day{}, "Day", skia::colorSetARGB(255, 126, 196, 234),
-              skia::colorSetARGB(255, 255, 255, 255), skia::colorSetARGB(255, 215, 240, 255)),
-          tinted(a, config::theme::tinted{}, "Tinted", skia::colorSetARGB(255, 72, 87, 97),
-                 skia::colorSetARGB(255, 107, 128, 141), skia::colorSetARGB(255, 92, 167, 212)),
-          night(a, config::theme::night{}, "Night", skia::colorSetARGB(255, 72, 87, 97),
-                skia::colorSetARGB(255, 107, 128, 141), skia::colorSetARGB(255, 117, 191, 181)) {
+        : parts{.classic = card(a, config::theme::classic{}, "Classic", skia::colorSetARGB(255, 155, 212, 148),
+                                skia::colorSetARGB(255, 255, 255, 255), skia::colorSetARGB(255, 234, 255, 220)),
+                .day = card(a, config::theme::day{}, "Day", skia::colorSetARGB(255, 126, 196, 234),
+                            skia::colorSetARGB(255, 255, 255, 255), skia::colorSetARGB(255, 215, 240, 255)),
+                .tinted = card(a, config::theme::tinted{}, "Tinted", skia::colorSetARGB(255, 72, 87, 97),
+                               skia::colorSetARGB(255, 107, 128, 141), skia::colorSetARGB(255, 92, 167, 212)),
+                .night = card(a, config::theme::night{}, "Night", skia::colorSetARGB(255, 72, 87, 97),
+                              skia::colorSetARGB(255, 107, 128, 141), skia::colorSetARGB(255, 117, 191, 181))} {
       this->setHorizontal();
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 16.0f, 8.0f, 16.0f}});
     }
-    void forEachChild(auto&& f) {
-      f(classic);
-      f(day);
-      f(tinted);
-      f(night);
-    }
-  } cards;
-  nodes::Text accent_title = section_title("ACCENT");
+  };
   struct circles_row : nodes::Stack {
-    std::vector<accent_circle<Actions>> circles;
+    struct parts_t {
+      std::vector<accent_circle<Actions>> circles;
+    } parts;
     // The theme's own first, then Telegram's eight.
     circles_row(Actions* a, const config::theme_t& in) {
       this->setHorizontal();
@@ -149,65 +145,65 @@ struct appearance_page : nodes::Stack {
             config::accent_t{config::accent::orange{}}, config::accent_t{config::accent::purple{}},
             config::accent_t{config::accent::red{}}, config::accent_t{config::accent::grey{}},
             config::accent_t{config::accent::gold{}}})
-        circles.emplace_back(a, one, in);
+        parts.circles.emplace_back(a, one, in);
     }
-    void forEachChild(auto&& f) { f(circles); }
-  } circles;
+  };
+  struct parts_t {
+    header_t header;
+    nodes::Text theme_title = section_title("THEME");
+    cards_row cards;
+    nodes::Text accent_title = section_title("ACCENT");
+    circles_row circles;
+  } parts;
 
   appearance_page(Actions* a, const config::theme_t& theme, const config::accent_t& accent)
-      : header("Appearance", {a}, {a}, true, true), cards(a), circles(a, theme) {
+      : parts{.header = header_t("Appearance", {a}, {a}, true, true),
+              .cards = cards_row(a),
+              .circles = circles_row(a, theme)} {
     fState.apply({.fill = true});
-    theme_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
-    accent_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
+    parts.theme_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
+    parts.accent_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
     this->show(theme, accent);
   }
   void show(const config::theme_t& theme, const config::accent_t& accent) {
-    for (auto* card : {&cards.classic, &cards.day, &cards.tinted, &cards.night})
+    auto& [classic, day, tinted, night] = parts.cards.parts;
+    for (auto* card : {&classic, &day, &tinted, &night})
       card->set_chosen(card->theme == theme);
-    for (auto& circle : circles.circles)
+    for (auto& circle : parts.circles.parts.circles)
       circle.set_chosen(circle.accent == accent);
     this->markDamaged();
   }
   void show_motion(std::string_view) {}
   void show_receipts(bool) {}
-  void forEachChild(auto&& f) {
-    f(header);
-    f(theme_title);
-    f(cards);
-    f(accent_title);
-    f(circles);
-  }
 };
 
 // Settings' Rendering page: what draws the window, from the next start.
 template <class Actions>
 struct rendering_page : nodes::Stack {
-  page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>> header;
-  row_item<choose_renderer<Actions>> gpu;
-  row_item<choose_renderer<Actions>> cpu;
-  nodes::Text note{"Takes effect when mux starts again.", 13.0f, dim_colour};
+  using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
+  using choice = row_item<choose_renderer<Actions>>;
+  struct parts_t {
+    header_t header;
+    choice gpu;
+    choice cpu;
+    nodes::Text note{"Takes effect when mux starts again.", 13.0f, dim_colour};
+  } parts;
 
   rendering_page(Actions* a, const config::renderer_t& renderer)
-      : header("Rendering", {a}, {a}, true, true),
-        gpu("OpenGL (the graphics card)", {a, config::renderer::opengl{}}, icon::none{}, false),
-        cpu("Software (the processor)", {a, config::renderer::software{}}, icon::none{}, false) {
-    note.apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
+      : parts{.header = header_t("Rendering", {a}, {a}, true, true),
+              .gpu = choice("OpenGL (the graphics card)", {a, config::renderer::opengl{}}, icon::none{}, false),
+              .cpu = choice("Software (the processor)", {a, config::renderer::software{}}, icon::none{}, false)} {
+    parts.note.apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
     fState.apply({.fill = true});
-    note.setWrapped(true);
+    parts.note.setWrapped(true);
     this->show(renderer);
   }
   void show(const config::renderer_t& renderer) {
-    gpu.set_chosen(renderer == config::renderer_t{config::renderer::opengl{}});
-    cpu.set_chosen(renderer == config::renderer_t{config::renderer::software{}});
+    parts.gpu.set_chosen(renderer == config::renderer_t{config::renderer::opengl{}});
+    parts.cpu.set_chosen(renderer == config::renderer_t{config::renderer::software{}});
   }
   void show_motion(std::string_view) {}
   void show_receipts(bool) {}
-  void forEachChild(auto&& f) {
-    f(header);
-    f(gpu);
-    f(cpu);
-    f(note);
-  }
 };
 
 }  // namespace mux::ui

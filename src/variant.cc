@@ -224,12 +224,11 @@ class variant {
   // The one held, as a T -- where it is one.
   template <class T>
   [[nodiscard]] constexpr T* get_if() noexcept {
-    return fIndex == detail::index_in<T, Ts...>() ? &detail::value_of<T>(fObject) : nullptr;
+    return fIndex == detail::index_in<T, Ts...>() ? &this->template value<T>() : nullptr;
   }
   template <class T>
   [[nodiscard]] constexpr const T* get_if() const noexcept {
-    return fIndex == detail::index_in<T, Ts...>() ? &detail::value_of<T>(static_cast<const detail::held*>(fObject))
-                                                  : nullptr;
+    return fIndex == detail::index_in<T, Ts...>() ? &this->template value<T>() : nullptr;
   }
 
   friend constexpr bool operator==(const variant& a, const variant& b)
@@ -263,17 +262,17 @@ class variant {
         return table[fIndex](f, fObject);
       } else {
         static const auto* volatile opaque = table.data();
-        return opaque[fIndex](f, fObject);
+        return opaque[fIndex](f, this->object());
       }
     } else {
-      auto at = [&]<class T>(std::type_identity<T>) -> Out { return std::invoke(f, detail::value_of<T>(fObject)); };
+      auto at = [&]<class T>(std::type_identity<T>) -> Out { return std::invoke(f, this->template value<T>()); };
       return detail::halve_to<0, kSize, decltype(at), Ts...>(fIndex, at);
     }
   }
   template <class R, bool Deduced, class F>
   constexpr decltype(auto) visit_as(F& f) const {
     using Out = std::conditional_t<Deduced, std::invoke_result_t<F&, const first&>, R>;
-    const detail::held* object = fObject;
+    const detail::held* object = this->object();
     if constexpr (detail::kVariantTables) {
       static constexpr std::array<Out (*)(F&, const detail::held*), kSize> table{
           +[](F& g, const detail::held* p) -> Out { return std::invoke(g, detail::value_of<Ts>(p)); }...};
@@ -284,8 +283,48 @@ class variant {
         return opaque[fIndex](f, object);
       }
     } else {
-      auto at = [&]<class T>(std::type_identity<T>) -> Out { return std::invoke(f, detail::value_of<T>(object)); };
+      auto at = [&]<class T>(std::type_identity<T>) -> Out { return std::invoke(f, this->template value<T>()); };
       return detail::halve_to<0, kSize, decltype(at), Ts...>(fIndex, at);
+    }
+  }
+
+  // The object held. At runtime it is always the holder made in the buffer,
+  // its empty base at the buffer's start: said so, for the optimiser to
+  // take the buffer's address rather than load the pointer.
+  [[nodiscard]] constexpr detail::held* object() noexcept {
+    if consteval {
+      return fObject;
+    } else {
+      [[assume(static_cast<void*>(fObject) == static_cast<void*>(fBuffer))]];
+      return fObject;
+    }
+  }
+  [[nodiscard]] constexpr const detail::held* object() const noexcept {
+    if consteval {
+      return fObject;
+    } else {
+      [[assume(static_cast<const void*>(fObject) == static_cast<const void*>(fBuffer))]];
+      return fObject;
+    }
+  }
+
+  // The one held, as a T, where its type is known: at runtime the holder in
+  // the buffer itself (laundered, as placement new made it), so nothing is
+  // loaded to reach it; in constant evaluation, through the pointer.
+  template <class T>
+  [[nodiscard]] constexpr T& value() noexcept {
+    if consteval {
+      return detail::value_of<T>(fObject);
+    } else {
+      return std::launder(reinterpret_cast<detail::holder<T>*>(fBuffer))->value;
+    }
+  }
+  template <class T>
+  [[nodiscard]] constexpr const T& value() const noexcept {
+    if consteval {
+      return detail::value_of<T>(static_cast<const detail::held*>(fObject));
+    } else {
+      return std::launder(reinterpret_cast<const detail::holder<T>*>(fBuffer))->value;
     }
   }
 
@@ -299,18 +338,18 @@ class variant {
   }
   template <class T>
   static constexpr void move_one(variant& to, variant& from) {
-    to.template make<T>(std::move(detail::value_of<T>(from.fObject)));
+    to.template make<T>(std::move(from.template value<T>()));
   }
   template <class T>
   static constexpr void copy_one(variant& to, const variant& from) {
-    to.template make<T>(detail::value_of<T>(static_cast<const detail::held*>(from.fObject)));
+    to.template make<T>(from.template value<T>());
   }
   template <class T>
   static constexpr void destroy_one(variant& self) {
     if consteval {
       delete static_cast<detail::holder<T>*>(self.fObject);
     } else {
-      static_cast<detail::holder<T>*>(self.fObject)->~holder();
+      std::launder(reinterpret_cast<detail::holder<T>*>(self.fBuffer))->~holder();
     }
   }
   // Each operation for the one held: through its table, or its layer.

@@ -88,8 +88,8 @@ struct conversations_screen : nodes::Stack {
   std::optional<conversation_id> chosen;
   // The account whose chats are listed.
   std::optional<account_id> current;
-  // Which of the chat's pins the bar shows: counted back from the newest,
-  // one on at each press, round.
+  // Which of the chat's pins the bar shows, by its place among them: the
+  // one above the view (the newest until that is worked out).
   std::size_t pinned_step = 0;
   std::optional<conversation_id> pinned_of;
   // The messages a bubble was made for: one made for the first time, while
@@ -316,14 +316,13 @@ struct conversations_screen : nodes::Stack {
   };
   // The chat: its header, its messages, and where one writes; or, with no
   // account at all, what to do about it.
-  // The pinned bar pressed: to the pinned message, and the bar to the one
-  // pinned before it.
+  // The pinned bar pressed: to the pinned message -- the bar then shows the
+  // one pinned above it, as it always shows the one above the view.
   struct pinned_press {
     conversations_screen* screen;
     std::string id;
     void operator()() const {
       screen->actions->jump_to_message(id);
-      ++screen->pinned_step;
     }
   };
   struct chat_column : nodes::Stack {
@@ -705,7 +704,68 @@ struct conversations_screen : nodes::Stack {
     context_asked.reset();
   }
 
+  // The pinned bar: of the chat's pins, the one `pinned_step` says -- the
+  // newest where none was worked out yet.
+  void show_pinned(const conversation* one) {
+    {
+      auto& bar = chat.parts.pinned;
+      if (!one || one->pinned.empty()) {
+        bar.setVisible(false);
+      } else {
+        const std::size_t count = one->pinned.size();
+        const std::size_t at = std::min(pinned_step, count - 1);
+        const std::string& id = one->pinned[at];
+        pinned_view shown{id, count == 1 ? std::string("Pinned message")
+                                         : std::format("Pinned message #{} of {}", at + 1, count),
+                          "A message"};
+        const auto found = std::ranges::find(one->timeline, id, &message::id);
+        const message* said = found != one->timeline.end() ? &*found : nullptr;
+        if (!said)
+          if (const auto aside = one->quoted.find(id); aside != one->quoted.end())
+            said = &aside->second;
+        if (said) {
+          shown.line = said->body.plain.empty() && said->attachment ? std::string("Photo") : said->body.plain;
+          std::ranges::replace(shown.line, '\n', ' ');
+        }
+        bar.setVisible(true);
+        bar.show(shown, [this](const pinned_view& view) { return pinned_bar<pinned_press>({this, view.id}, view); });
+      }
+    }
+  }
+  // The pin the bar shows, as Telegram's: the newest pinned above the view
+  // -- before the first message seen -- else the oldest. A pin not loaded
+  // is taken as older than all that is.
+  [[nodiscard]] std::size_t pin_above(const conversation& one) {
+    const skia::SkRect view = timeline.bounds();
+    const auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
+    const auto first = std::ranges::find_if(entries, [&](const message_bubble& row) {
+      const skia::SkRect box = row.bounds();
+      return !row.message_id.empty() && row.visible() && !box.isEmpty() && box.fBottom > view.fTop + 8.0f;
+    });
+    const auto place = [&](const std::string& id) -> std::ptrdiff_t {
+      const auto found = std::ranges::find(one.timeline, id, &message::id);
+      return found == one.timeline.end() ? -1 : found - one.timeline.begin();
+    };
+    const std::ptrdiff_t top = first == entries.end() ? std::numeric_limits<std::ptrdiff_t>::max()
+                                                      : place(first->message_id);
+    std::optional<std::size_t> best;
+    std::ptrdiff_t best_place = -2;
+    for (std::size_t i = 0; i < one.pinned.size(); ++i)
+      if (const std::ptrdiff_t at = place(one.pinned[i]); at < top && at >= best_place) {
+        best = i;
+        best_place = at;
+      }
+    return best.value_or(0);
+  }
   void update(double) {
+    // The pin the bar shows, as the view moves: the one above it. Not while
+    // a jump goes on -- where it lands decides.
+    if (!jumping_to && !aiming && chosen && last_model)
+      if (const conversation* one = last_model->find(*chosen); one && !one->pinned.empty())
+        if (const std::size_t want = this->pin_above(*one); want != std::min(pinned_step, one->pinned.size() - 1)) {
+          pinned_step = want;
+          this->show_pinned(one);
+        }
     // A message jumped to: made into a bubble where it is loaded, paged back
     // to where it is not -- page after page, as long as there is history --
     // and once it is laid out, brought into view and flashed.
@@ -969,35 +1029,11 @@ struct conversations_screen : nodes::Stack {
     const conversation* one = chosen ? now.find(*chosen) : nullptr;
     header.show(chat_header<Actions>::view_of(one, now),
                 [this](const auto& shown) { return chat_header<Actions>(actions, shown); });
-    // The pinned bar: the chat's pins, newest first, the one stepped to.
-    {
-      if (pinned_of != chosen) {
-        pinned_of = chosen;
-        pinned_step = 0;
-      }
-      auto& bar = chat.parts.pinned;
-      if (!one || one->pinned.empty()) {
-        bar.setVisible(false);
-      } else {
-        const std::size_t count = one->pinned.size();
-        const std::size_t at = count - 1 - pinned_step % count;
-        const std::string& id = one->pinned[at];
-        pinned_view shown{id, count == 1 ? std::string("Pinned message")
-                                         : std::format("Pinned message #{} of {}", at + 1, count),
-                          "A message"};
-        const auto found = std::ranges::find(one->timeline, id, &message::id);
-        const message* said = found != one->timeline.end() ? &*found : nullptr;
-        if (!said)
-          if (const auto aside = one->quoted.find(id); aside != one->quoted.end())
-            said = &aside->second;
-        if (said) {
-          shown.line = said->body.plain.empty() && said->attachment ? std::string("Photo") : said->body.plain;
-          std::ranges::replace(shown.line, '\n', ' ');
-        }
-        bar.setVisible(true);
-        bar.show(shown, [this](const pinned_view& view) { return pinned_bar<pinned_press>({this, view.id}, view); });
-      }
+    if (pinned_of != chosen) {
+      pinned_of = chosen;
+      pinned_step = std::numeric_limits<std::size_t>::max();
     }
+    this->show_pinned(one);
     history_from = one ? one->history_from : std::nullopt;
     this->show_info();
     if (!one) {

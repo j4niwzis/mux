@@ -233,8 +233,12 @@ struct reaction_chip : nodes::Stack {
   struct parts_t {
     std::optional<nodes::Image> picture;
     nodes::Text label;
+    // Who reacted, as Telegram shows them: their avatars in place of the
+    // count, where they are three or fewer.
+    std::vector<avatar_mark> who;
   } parts;
   [[nodiscard]] static bool pictured(std::string_view k) { return k.starts_with("mxc://"); }
+  static constexpr std::size_t kFacesShown = 3;
   // What the chip says: the count beside a picture; else the reaction, cut
   // at a character's edge past 20 bytes, and the count.
   [[nodiscard]] static std::string label_of(std::string_view k, std::size_t n) {
@@ -248,7 +252,9 @@ struct reaction_chip : nodes::Stack {
       --cut;
     return std::format("{}… {}", k.substr(0, cut), n);
   }
-  reaction_chip(std::string k, std::size_t n, bool own)
+  // `people`: who reacted, by id and name.
+  reaction_chip(std::string k, std::size_t n, bool own,
+                const std::vector<std::pair<std::string, std::string>>& people = {})
       : key(std::move(k)), count(n), mine(own),
         parts{.label = nodes::Text(label_of(key, n), 13.0f, own ? on_accent_colour : text_colour)} {
     this->setHorizontal();
@@ -261,6 +267,17 @@ struct reaction_chip : nodes::Stack {
       parts.picture->apply({.width = 18.0f, .height = 18.0f, .alignSelf = scene::align::kMiddle});
     }
     parts.label.apply({.alignSelf = scene::align::kMiddle});
+    if (!people.empty() && people.size() <= kFacesShown) {
+      // The count's place taken by the faces: the reaction alone before them.
+      parts.label.setText(pictured(key) ? std::string() : label_of(key, 0).substr(0, label_of(key, 0).size() - 2));
+      parts.label.setVisible(!pictured(key));
+      parts.who.reserve(people.size());
+      for (const auto& [id, name] : people) {
+        parts.who.emplace_back(id, name, 20.0f);
+        parts.who.back().apply({.margin = {0.0f, 0.0f, 0.0f, parts.who.size() == 1 ? 2.0f : -6.0f},
+                                .border = scene::Border{own ? accent_colour : tile_colour, 1.5f}});
+      }
+    }
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
 };
@@ -712,7 +729,12 @@ struct message_bubble : nodes::Stack {
       body.parts.reactions.emplace();
       for (const auto& [key, who] : said.reactions)
         if (!who.empty())
-          body.parts.reactions->chips().emplace_back(key, who.size(), who.contains(said.in.account.address));
+          body.parts.reactions->chips().emplace_back(key, who.size(), who.contains(said.in.account.address), [&] {
+            std::vector<std::pair<std::string, std::string>> people;
+            for (const std::string& one : who)
+              people.emplace_back(one, sender_name(in, one));
+            return people;
+          }());
     }
   }
 

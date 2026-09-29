@@ -91,8 +91,8 @@ struct picture_view : scene::Node {
   struct parts_t {
     nodes::Image preview;  // blurred, from its blurhash, until it comes
     nodes::Image picture;
-    widgets::RadialLoader loader;  // while it is coming
-    time_pill time;
+    widgets::RadialLoader loader{};  // while it is coming
+    time_pill time{};
   } parts;
 
   // Rounded; a plate until the thumbnail comes, then the thumbnail covering

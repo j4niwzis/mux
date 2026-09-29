@@ -199,6 +199,8 @@ class account {
   void fetch_members(std::string) {}
   // Reactions (XEP-0444) are not sent yet.
   void react(std::string, std::string, std::string, bool) {}
+  // Pinning is Matrix's: nothing to do over XMPP.
+  void pin(std::string, std::string, bool) {}
   // Chat states (XEP-0085) are not sent yet.
   void typing(std::string, bool) {}
   // Rooms are joined through their bookmarks; not from a link yet.

@@ -519,6 +519,7 @@ struct context_menu : scene::Node {
     using link_row = row_item<ask<Actions, &Actions::menu_copy_link>>;
     using save_row = row_item<ask<Actions, &Actions::menu_save>>;
     using gif_row = row_item<ask<Actions, &Actions::menu_save_gif>>;
+    using pin_row = row_item<ask<Actions, &Actions::menu_pin>>;
     using delete_row = row_item<ask<Actions, &Actions::menu_delete>>;
     // As tdesktop's, in its order: the quick reactions; every emoji, in
     // place of the rest once asked for; Reply, Edit, Pin, Copy, Copy
@@ -530,7 +531,7 @@ struct context_menu : scene::Node {
       std::optional<emoji_panel<react_with<Actions>>> emoji;
       reply_row reply;
       edit_row edit;
-      later_row pin;
+      pin_row pin;
       copy_row copy;
       link_row copy_link;
       save_row save;
@@ -576,7 +577,7 @@ struct context_menu : scene::Node {
           parts{.quick = quick_row(a, this),
                 .reply = reply_row("Reply", {a}, icon::back{}),
                 .edit = edit_row("Edit", {a}, icon::sliders{}),
-                .pin = later_row("Pin", {a, "Pinning messages"}, icon::check{}),
+                .pin = pin_row(facts.pinned ? "Unpin" : "Pin", {a}, icon::check{}),
                 .copy = copy_row(facts.selection ? "Copy Selected Text" : "Copy Text", {a}, icon::clip{}),
                 .copy_link = link_row("Copy Message Link", {a}, icon::info{}),
                 .save = save_row("Save As…", {a}, icon::send{}),
@@ -596,6 +597,7 @@ struct context_menu : scene::Node {
       save.setVisible(facts.media.has_value());
       save_gif.setVisible(facts.media.has_value() && facts.moving);
       remove.setVisible(facts.own);
+      pin.setVisible(facts.pinnable);
       for (std::size_t i = 0; i < readers.size() && i < 10; ++i) {
         seen_names.emplace_back(readers[i], 13.0f, dim_colour);
         seen_names.back().setElided(true);

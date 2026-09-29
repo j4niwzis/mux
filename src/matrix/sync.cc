@@ -379,7 +379,25 @@ void account<Sink>::conversation(const conversation_id& in, const loom::client::
                                      .space = space(kept),
                                      .children = children_of(kept),
                                      .member_count = kept.summary.joined_members,
-                                     .alias = kept.state.canonical_alias()});
+                                     .alias = kept.state.canonical_alias(),
+                                     .pinned = pinned_of(kept)});
+}
+
+// The room's pinned messages: m.room.pinned_events' "pinned", as it says.
+template <class Sink>
+auto account<Sink>::pinned_of(const loom::client::joined_room& kept) -> std::vector<std::string> {
+  std::vector<std::string> out;
+  const auto* said = kept.state.find("m.room.pinned_events");
+  if (!said)
+    return out;
+  const knot::value tree = knot::to_value(*said);
+  const knot::value* content = member(tree, "content");
+  const knot::value* pinned = content ? member(*content, "pinned") : nullptr;
+  if (pinned && pinned->is<knot::value::array>())
+    for (const auto& one : pinned->as<knot::value::array>())
+      if (one.is<std::string>())
+        out.push_back(one.as<std::string>());
+  return out;
 }
 
 template <class Sink>

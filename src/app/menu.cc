@@ -69,6 +69,14 @@ class menu_part {
     if (target_.media)
       pictures_->save(*target_.media, target_.media_name.empty() ? std::string("image") : target_.media_name);
   }
+  // Pinned in its chat, or unpinned where it is: the room's list, set.
+  void apply(const request::menu_pin&) {
+    s_->root().close_menu();
+    const auto& chosen = s_->root().main().chosen;
+    if (!chosen || s_->demo())
+      return;
+    s_->net->pin(*chosen, target_.id, !target_.pinned);
+  }
   // A GIF kept among the saved ones, for the input's GIF tab.
   void apply(const request::menu_save_gif&) {
     s_->root().close_menu();

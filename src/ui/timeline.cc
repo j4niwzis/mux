@@ -32,6 +32,8 @@ struct menu_facts {
   std::optional<std::string> media;  // a picture's or a file's source
   std::string media_name;
   bool moving = false;  // a GIF or a moving WebP: one that can be saved to the GIFs
+  bool pinned = false;  // pinned in its chat: the menu offers Unpin
+  bool pinnable = false;  // in a chat where pins are kept: a Matrix room
   std::string link;  // a link to it, where it has one
   float x = 0.0f, y = 0.0f;
 };
@@ -242,6 +244,10 @@ struct timeline_area : scene::Node {
           facts.media = one.said.attachment->source;
           facts.media_name = one.said.attachment->name;
           facts.moving = moves(one.said.attachment->kind);
+        }
+        if (const conversation* chat = seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr) {
+          facts.pinned = std::ranges::contains(chat->pinned, one.message_id);
+          facts.pinnable = is_matrix(chat->id.account.speaks) && one.message_id.starts_with('$');
         }
         // A Matrix message's link: matrix.to, to it in its room.
         if (seen_chat && is_matrix(seen_chat->account.speaks) &&

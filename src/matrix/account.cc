@@ -93,6 +93,9 @@ class account {
   // A reaction to a message put, or taken back: m.reaction with its key,
   // or the redaction of the account's own.
   void react(std::string room, std::string target, std::string key, bool on);
+  // A message pinned in its room, or unpinned: the room's list as the last
+  // sync had it, with it put in or taken out, set as the room's state.
+  void pin(std::string room, std::string target, bool on);
 
   // The account leaves a room; the next sync says it has, and the room goes.
   void leave(std::string room);
@@ -164,6 +167,8 @@ class account {
   // The rooms a space holds: an m.space.child for each, whose content is
   // not empty -- an emptied one is a child taken out.
   static std::vector<std::string> children_of(const loom::client::joined_room& kept);
+  // The room's pinned messages, as its state says.
+  static std::vector<std::string> pinned_of(const loom::client::joined_room& kept);
 
   // Who is in a room, as its state says: those joined, by their names there.
   // Who is in a room: all of it, where it was asked for (/joined_members),

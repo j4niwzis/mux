@@ -191,6 +191,31 @@ void account<Sink>::react(std::string room, std::string target, std::string key,
 }
 
 template <class Sink>
+void account<Sink>::pin(std::string room, std::string target, bool on) {
+  loop_->spawn([this, room = std::move(room), target = std::move(target), on] {
+    if (!api_)
+      return;
+    std::vector<std::string> pinned;
+    if (const auto kept = state_.joined.find(room); kept != state_.joined.end())
+      pinned = pinned_of(kept->second);
+    std::erase(pinned, target);
+    if (on)
+      pinned.push_back(target);
+    knot::value::array listed;
+    for (auto& one : pinned)
+      listed.push_back(knot::value(std::move(one)));
+    knot::value::object content;
+    content.emplace("pinned", knot::value(std::move(listed)));
+    if (auto done = perform(*api_, loom::cs::set_room_state_with_key{.room_id = room,
+                                                                     .event_type = "m.room.pinned_events",
+                                                                     .state_key = "",
+                                                                     .body = knot::value(std::move(content))});
+        !done)
+      log(id_, "could not {} {} in {}: {}", on ? "pin" : "unpin", target, room, done.error().said());
+  });
+}
+
+template <class Sink>
 void account<Sink>::leave(std::string room) {
   loop_->spawn([this, room = std::move(room)] {
     if (api_)

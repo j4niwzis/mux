@@ -242,6 +242,9 @@ struct conversation {
   std::int64_t member_count = 0;
   // Its alias, where it has one: a Matrix room's canonical #alias.
   std::optional<std::string> alias;
+  // The messages pinned in it, by their ids, oldest first: a Matrix room's
+  // m.room.pinned_events.
+  std::vector<std::string> pinned;
   // Who has read up to where: each other person's last message read, as
   // their receipts say; and the user's own, kept here whether it is sent or
   // not -- what is unread is counted from it.
@@ -367,6 +370,7 @@ struct conversation_updated {
   std::vector<std::string> groups;
   std::int64_t member_count = 0;
   std::optional<std::string> alias;
+  std::vector<std::string> pinned;
 };
 
 // Receipts: who has read up to which message, as the server says.
@@ -600,6 +604,7 @@ class model {
     kept.groups = one.groups;
     kept.member_count = one.member_count;
     kept.alias = one.alias;
+    kept.pinned = one.pinned;
   }
   void on(const change::conversation_removed& one) { of(one.id.account).conversations.erase(one.id.id); }
   void on(const change::presence_changed& one) { of(one.account).presences[one.contact] = one.now; }

@@ -196,6 +196,18 @@ struct network {
             one.account);
     });
   }
+  // A message pinned or unpinned in its chat, by the account it is of.
+  void pin(const mux::conversation_id& in, std::string target, bool on) {
+    loop.post([this, in, target = std::move(target), on] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == in.account)
+                account->pin(in.id, target, on);
+            },
+            one.account);
+    });
+  }
   // Whether the user is typing in a chat, told to it.
   void typing(const mux::conversation_id& in, bool on) {
     loop.post([this, in, on] {

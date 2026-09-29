@@ -1131,122 +1131,141 @@ struct member_row : scene::Node {
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
 };
 
+// A round avatar on its own: the chat's, big, over its name.
+struct big_avatar : scene::Node {
+  std::string key;
+  std::string name;
+  big_avatar() { fState.apply({.width = 96.0f, .height = 96.0f, .alignSelf = scene::align::kMiddle}); }
+  void drawSelf(skia::SkCanvas* canvas, float alpha) { draw_avatar(canvas, fState.fBounds, key, name, alpha); }
+};
+// An icon on its own, not to be pressed.
+struct icon_view : scene::Node {
+  icon_t icon;
+  explicit icon_view(icon_t mark) : icon(mark) { fState.apply({.width = 28.0f, .height = 36.0f}); }
+  void drawSelf(skia::SkCanvas* canvas, float alpha) { draw_icon(canvas, icon, fState.fBounds, dim_colour, alpha); }
+};
+// A band between sections: just darker than the panel.
+inline nodes::Box<> section_band() {
+  nodes::Box<> out{section_colour};
+  out.apply({.fillX = true, .height = 6.0f, .margin = {6.0f, 0.0f, 6.0f, 0.0f}});
+  return out;
+}
+
 // A chat's info, beside it, as Telegram Desktop shows it: a big avatar, the
 // name and who is in it, three square buttons, its ID, and its members.
+// Declared: a column of these, nothing placed by hand.
 template <class Actions>
-struct info_panel : scene::Node {
+struct info_panel : nodes::Stack {
   std::string key;
   bool group = false;
-  icon_button<ask<Actions, &Actions::toggle_info>> close;
+  struct top_row : nodes::Stack {
+    icon_button<ask<Actions, &Actions::toggle_info>> close;
+    explicit top_row(Actions* a) : close(icon::close{}, {a}) {
+      this->setHorizontal();
+      fStack.justify = nodes::justify::end{};
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 0.0f, 8.0f}});
+    }
+    void forEachChild(auto&& f) { f(close); }
+  } top;
+  big_avatar avatar;
   nodes::Text name{"", 17.0f, text_colour, true};
   nodes::Text status{"", 13.0f, dim_colour};
-  action_tile<ask<Actions, &Actions::toggle_mute>> mute;
-  action_tile<not_yet<Actions>> manage;
-  action_tile<ask<Actions, &Actions::leave_chat>> leave;
+  struct tiles_row : nodes::Stack {
+    action_tile<ask<Actions, &Actions::toggle_mute>> mute;
+    action_tile<not_yet<Actions>> manage;
+    action_tile<ask<Actions, &Actions::leave_chat>> leave;
+    explicit tiles_row(Actions* a)
+        : mute("Mute", icon::bell{}, {a}), manage("Manage", icon::sliders{}, {a, "Managing a chat"}),
+          leave("Leave", icon::leave{}, {a}) {
+      this->setHorizontal();
+      this->setGap(8.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}});
+      mute.apply({.grow = scene::axes::kX});
+      manage.apply({.grow = scene::axes::kX});
+      leave.apply({.grow = scene::axes::kX});
+    }
+    void forEachChild(auto&& f) {
+      f(mute);
+      f(manage);
+      f(leave);
+    }
+  } tiles;
+  nodes::Box<> band_1 = section_band();
   nodes::Text id_text{"", 14.0f, accent_colour};
   nodes::Text id_label{"ID", 12.0f, dim_colour};
-  nodes::Text members_title{"", 13.0f, dim_colour, true};
-  icon_button<not_yet<Actions>> add_member;
+  nodes::Box<> band_2 = section_band();
+  struct members_head : nodes::Stack {
+    icon_view people{icon::people{}};
+    nodes::Text title{"", 13.0f, dim_colour, true};
+    icon_button<not_yet<Actions>> add_member;
+    explicit members_head(Actions* a) : add_member(icon::add_person{}, {a, "Adding members"}) {
+      this->setHorizontal();
+      this->setGap(10.0f);
+      fState.apply({.fillX = true, .height = 48.0f, .padding = {6.0f, 10.0f, 6.0f, 16.0f}});
+      title.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+    }
+    void forEachChild(auto&& f) {
+      f(people);
+      f(title);
+      f(add_member);
+    }
+  } members_header;
   // The members, in a list of their own that scrolls.
   nodes::ScrollContainer<nodes::Flow<std::vector<member_row>>> members{
       nodes::Flow<std::vector<member_row>>({.spacingY = 0.0f, .wrap = false}, {})};
-  // Where the bands between the sections go, as the last layout put them.
-  std::array<float, 2> bands{};
+  // The old names, for what is kept in the parts.
+  action_tile<ask<Actions, &Actions::toggle_mute>>& mute = tiles.mute;
 
   static constexpr float kWidth = 340.0f;
 
-  explicit info_panel(Actions* a)
-      : close(icon::close{}, {a}),
-        mute("Mute", icon::bell{}, {a}),
-        manage("Manage", icon::sliders{}, {a, "Managing a chat"}),
-        leave("Leave", icon::leave{}, {a}),
-        add_member(icon::add_person{}, {a, "Adding members"}) {
+  explicit info_panel(Actions* a) : top(a), tiles(a), members_header(a) {
     fState.apply({.masking = true});
-    std::get<0>(members.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
-    name.setElided(true);
-    status.setElided(true);
+    this->setGap(2.0f);
+    for (nodes::Text* centred : {&name, &status}) {
+      centred->setElided(true);
+      centred->apply({.alignSelf = scene::align::kMiddle, .margin = {4.0f, 20.0f, 0.0f, 20.0f}});
+    }
     id_text.setElided(true);
+    id_text.apply({.fillX = true, .margin = {8.0f, 20.0f, 0.0f, 20.0f}});
+    id_label.apply({.margin = {0.0f, 20.0f, 8.0f, 20.0f}});
+    members.apply({.fillX = true, .grow = scene::axes::kY});
+    std::get<0>(members.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
   }
 
   void show(const conversation& one, const model& now, bool muted) {
     mute.label.setText(muted ? "Unmute" : "Mute");
     key = one.id.id;
     group = is_group(one);
+    avatar.key = key;
+    avatar.name = display_name(one);
+    avatar.markDamaged();
     name.setText(display_name(one));
     status.setText(group ? std::format("{} member{}", one.members.size(), one.members.size() == 1 ? "" : "s")
                          : presence_of(now, one.id.account, one.id.id));
     id_text.setText(one.id.id);
-    members_title.setText(std::format("{} MEMBER{}", one.members.size(), one.members.size() == 1 ? "" : "S"));
+    members_header.title.setText(std::format("{} MEMBER{}", one.members.size(), one.members.size() == 1 ? "" : "S"));
     auto& rows = std::get<0>(std::get<0>(members.fChildren).fChildren);
     rows.clear();
     for (const member& each : one.members)
       rows.emplace_back(each, presence_of(now, one.id.account, each.id));
     members.setVisible(group);
-    members_title.setVisible(group);
-    add_member.setVisible(group);
+    members_header.setVisible(group);
+    band_2.setVisible(group);
     this->invalidateLayout();
   }
 
   void forEachChild(auto&& f) {
-    f(close);
+    f(top);
+    f(avatar);
     f(name);
     f(status);
-    f(mute);
-    f(manage);
-    f(leave);
+    f(tiles);
+    f(band_1);
     f(id_text);
     f(id_label);
-    f(members_title);
-    f(add_member);
+    f(band_2);
+    f(members_header);
     f(members);
-  }
-
-  void layoutChildren() {
-    const skia::SkRect box = fState.contentBox();
-    close.fState.arrange(-8.0f, 8.0f, scene::anchor::kTopRight, scene::anchor::kTopRight);
-    scene::layout(close, box);
-    float y = 24.0f + 96.0f + 14.0f;
-    for (nodes::Text* centred : {&name, &status}) {
-      centred->setMaxWidth(box.width() - 40.0f);
-      centred->fState.arrange(0.0f, y, scene::anchor::kTopCentre, scene::anchor::kTopCentre);
-      scene::layout(*centred, box);
-      y += centred->bounds().height() + 2.0f;
-    }
-    y += 16.0f;
-    const float tile = (box.width() - 32.0f - 16.0f) / 3.0f;
-    float x = 16.0f;
-    const auto place_tile = [&](auto& each) {
-      each.apply({.width = tile});
-      each.fState.arrange(x, y);
-      scene::layout(each, box);
-      x += tile + 8.0f;
-    };
-    place_tile(mute);
-    place_tile(manage);
-    place_tile(leave);
-    y += 58.0f + 16.0f;
-    bands[0] = y;
-    y += 6.0f + 14.0f;
-    id_text.setMaxWidth(box.width() - 40.0f);
-    id_text.fState.arrange(20.0f, y);
-    scene::layout(id_text, box);
-    y += id_text.bounds().height() + 2.0f;
-    id_label.fState.arrange(20.0f, y);
-    scene::layout(id_label, box);
-    y += id_label.bounds().height() + 16.0f;
-    bands[1] = y;
-    y += 6.0f;
-    if (!group)
-      return;
-    const skia::SkRect head = skia::SkRect::MakeXYWH(box.fLeft, box.fTop + y, box.width(), 48.0f);
-    members_title.fState.arrange(56.0f, 0.0f, scene::anchor::kCentreLeft, scene::anchor::kCentreLeft);
-    scene::layout(members_title, head);
-    add_member.fState.arrange(-10.0f, 0.0f, scene::anchor::kCentreRight, scene::anchor::kCentreRight);
-    scene::layout(add_member, head);
-    y += 48.0f;
-    members.apply({.width = box.width(), .height = std::max(0.0f, box.height() - y)});
-    members.fState.arrange(0.0f, y);
-    scene::layout(members, box);
   }
 
   void drawSelf(skia::SkCanvas* canvas, float alpha) {
@@ -1257,14 +1276,6 @@ struct info_panel : scene::Node {
     const skia::SkRect& box = fState.fBounds;
     p.fillRounded(box, 0.0f, sidebar_colour, alpha);
     p.fillRounded(skia::SkRect::MakeXYWH(box.fLeft, box.fTop, 1.0f, box.height()), 0.0f, band_colour, alpha);
-    draw_avatar(canvas, skia::SkRect::MakeXYWH(box.centerX() - 48.0f, box.fTop + 24.0f, 96.0f, 96.0f), key,
-                name.text(), alpha);
-    for (const float y : bands)
-      p.fillRounded(skia::SkRect::MakeXYWH(box.fLeft + 1.0f, box.fTop + y, box.width() - 1.0f, 6.0f), 0.0f,
-                    section_colour, alpha);
-    if (group)
-      draw_icon(canvas, icon::people{}, skia::SkRect::MakeXYWH(box.fLeft + 16.0f, box.fTop + bands[1] + 3.0f, 28.0f, 48.0f),
-                dim_colour, alpha);
   }
 };
 
@@ -3178,16 +3189,8 @@ struct window : scene::Node {
       up->show_motion(std::string(level));
   }
 
-  void layoutChildren() {
-    const skia::SkRect box = fState.contentBox();
-    scene::layout(p->backdrop, box);
-    p->frame.fState.arrange(0.0f, 0.0f);
-    scene::layout(p->frame, box);
-    p->settings.fState.arrange(0.0f, 0.0f);
-    scene::layout(p->settings, box);
-    p->notice.fState.arrange(0.0f, 0.0f);
-    scene::layout(p->notice, box);
-  }
+  // Its layers, each filling the window, as the default layout places them:
+  // nothing placed by hand.
 };
 
 }  // namespace mux::ui

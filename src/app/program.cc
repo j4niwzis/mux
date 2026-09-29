@@ -254,6 +254,16 @@ struct app : kept_settings {
   // Whether the window has the keyboard's focus: a message to the chat
   // being read then notifies nothing.
   bool window_focused = true;
+  // The notifications mux shows itself, for the host to put up.
+  struct toast_due {
+    mux::conversation_id chat;
+    std::string key;
+    std::string title;
+    std::string text;
+  };
+  using toast_card = mux::ui::toast_card;
+  std::vector<toast_due> toasts_due;
+  void open_notified(const mux::conversation_id& chat) { this->open_chat(chat, std::nullopt); }
   void focus_changed(bool on) { window_focused = on; }
   // A message come as it happened, notified as the settings say.
   void notify_of(const mux::message& said, bool mentions_me);

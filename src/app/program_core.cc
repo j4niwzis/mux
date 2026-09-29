@@ -166,7 +166,7 @@ void app::notify_of(const mux::message& said, bool mentions_me) {
                                }).detach();
                              },
                              [&](mux::config::notify_backend::built_in) {
-                               std::println(std::cerr, "[notify] {}: {}", title, text);
+                               toasts_due.push_back({said.in, said.in.id, title, text});
                              }},
              mux::config::notify_backend_of(notifications.backend));
 }

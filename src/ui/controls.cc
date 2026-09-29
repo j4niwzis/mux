@@ -380,4 +380,21 @@ struct event_kind_list : nodes::Stack {
   }
 };
 
+// A notification as mux shows it itself, as Telegram Desktop's own: a card
+// in a small window of its own -- the chat's avatar beside the title over
+// the text.
+struct toast_card : nodes::Stack {
+  struct parts_t {
+    avatar_mark face;
+    two_lines texts;
+  } parts;
+  toast_card(std::string key, std::string title, std::string text)
+      : parts{.face = avatar_mark(key, title, 44.0f), .texts = two_lines(title, std::move(text), 14.0f, 4.0f)} {
+    this->setHorizontal();
+    this->setGap(12.0f);
+    fState.apply({.fill = true, .padding = {12.0f, 14.0f, 12.0f, 14.0f}, .background = sidebar_colour,
+                  .border = scene::Border{band_colour, 1.0f}});
+  }
+};
+
 }  // namespace mux::ui

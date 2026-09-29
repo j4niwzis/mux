@@ -94,6 +94,10 @@ jobs:
 
       - name: build
         run: |
+          # The tests' module maps, restored from another commit's build, can
+          # miss a module added since (mux.logic.blurhash was "not found"):
+          # the tests are small, and are built afresh each time.
+          rm -rf build/test
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_COMPILER=/usr/local/bin/clang++ \
             -DCMAKE_CXX_FLAGS="-stdlib=libc++" \

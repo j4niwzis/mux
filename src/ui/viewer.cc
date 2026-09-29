@@ -77,7 +77,7 @@ struct picture_viewer : nodes::Stack {
     // The picture: the whole one where it has come, its thumbnail until then.
     struct parts_t {
       nodes::Image picture;
-      widgets::RadialLoader loader;  // while the whole picture is coming
+      widgets::RadialLoader loader{};  // while the whole picture is coming
     } parts;
     explicit stage(picture_viewer* v)
         : viewer(v), parts{.picture = nodes::Image([v] {

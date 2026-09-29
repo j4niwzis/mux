@@ -77,11 +77,19 @@ class settings_part {
   // Taken at the next frame: the host reads them as it draws.
   void apply(const request::flip_partial_redraw&) {
     k_->partial_redraw = !k_->partial_redraw;
+    this->show_frames();
     (void)k_->write();
   }
   void apply(const request::flip_flash_redraws&) {
     k_->flash_redraws = !k_->flash_redraws;
+    this->show_frames();
     (void)k_->write();
+  }
+  // The Rendering page's switches, moved to what is now so.
+  void show_frames() {
+    if (auto* up = s_->root().settings_up())
+      if (auto* page = up->rendering())
+        page->show_frames(k_->partial_redraw, k_->flash_redraws);
   }
   void apply(const request::set_renderer& one) {
     k_->renderer = one.renderer;

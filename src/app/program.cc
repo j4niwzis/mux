@@ -143,7 +143,9 @@ struct app : kept_settings {
 
   // Everything brought up to date with the model: each panel by its own
   // overload.
-  void refresh();
+  // `from`: who asked -- said on stderr where MUX_TRACE_FRAMES is set, to
+  // find what rebuilds the window when nothing should.
+  void refresh(std::source_location from = std::source_location::current());
   void bring_up_to_date(accounts& panel);
 
   // A new account waiting to log in: online is done, failed is said.

@@ -220,6 +220,10 @@ struct rendering_page : nodes::Stack {
     parts.flash.parts.toggle.setOnNow(flash);
     this->show(renderer);
   }
+  void show_frames(bool partial, bool flash) {
+    parts.partial.parts.toggle.setOn(partial);
+    parts.flash.parts.toggle.setOn(flash);
+  }
   void show(const config::renderer_t& renderer) {
     parts.gpu.set_chosen(renderer == config::renderer_t{config::renderer::opengl{}});
     parts.cpu.set_chosen(renderer == config::renderer_t{config::renderer::software{}});

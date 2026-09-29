@@ -695,6 +695,12 @@ int run(App& app, const options& how) {
                      one.x, one.y);
       shapes.show(scene.cursor());
       const skiff::scene::FrameResult frame = scene.finishFrame();
+      // Frames said, where MUX_TRACE_FRAMES is set: what each repaints, and
+      // whether more are asked for.
+      static const bool traced = std::getenv("MUX_TRACE_FRAMES") != nullptr;
+      if (traced && !frame.fDamage.isEmpty())
+        std::println(std::cerr, "[frame] damage {:.0f},{:.0f} {:.0f}x{:.0f}{}", frame.fDamage.fLeft, frame.fDamage.fTop,
+                     frame.fDamage.width(), frame.fDamage.height(), frame.fWantsAnotherFrame ? " (another wanted)" : "");
       // Frames go on while a notification is up: it goes when its time is.
       animating = frame.fWantsAnotherFrame || !shown_toasts.empty();
       if (frame.fDamage.isEmpty() && !redraw)

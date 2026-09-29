@@ -397,7 +397,11 @@ auto app::xmpp_form_up() -> mux::ui::xmpp_form<actions>* {
   return std::visit([](auto& panel) { return panel.xmpp(); }, *up);
 }
 
-void app::refresh() {
+void app::refresh(std::source_location from) {
+  static const bool traced = std::getenv("MUX_TRACE_FRAMES") != nullptr;
+  if (traced)
+    std::println(std::cerr, "[frame] refresh from {}:{} ({})", std::filesystem::path(from.file_name()).filename().string(),
+                 from.line(), from.function_name());
   pictures.ask();
   root().main().muted = muted;
   // Which chats show what is done in them, as the settings say now.

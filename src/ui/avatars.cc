@@ -147,6 +147,17 @@ inline image_cache& thumbnails() {
   static image_cache images;
   return images;
 }
+// How far what is being fetched whole has come, by its source: what its
+// loader shows.
+inline std::map<std::string, float, std::less<>>& download_progress() {
+  static std::map<std::string, float, std::less<>> kept;
+  return kept;
+}
+[[nodiscard]] inline std::optional<float> progress_of(std::string_view source) {
+  const auto found = download_progress().find(source);
+  return found == download_progress().end() ? std::nullopt : std::optional(found->second);
+}
+
 // A picture's blurred preview, from its blurhash, by its source.
 inline image_cache& previews() {
   static image_cache images;

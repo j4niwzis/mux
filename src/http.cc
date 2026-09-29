@@ -72,6 +72,10 @@ struct url {
   }
 };
 
+// How far a response's body has come: bytes read, of how many where the
+// server said. Called as it comes, for a download's progress to be shown.
+using progress_t = std::function<void(std::size_t read, std::optional<std::size_t> total)>;
+
 struct response {
   int status = 0;
   std::string body;
@@ -98,16 +102,17 @@ class connection {
   // `type` is the body's, where it is not JSON: an upload's.
   response request(std::string_view method, std::string_view target, std::string_view body = {},
                    std::optional<std::string_view> bearer = std::nullopt,
-                   std::chrono::seconds timeout = std::chrono::seconds(60), std::string_view type = {}) {
+                   std::chrono::seconds timeout = std::chrono::seconds(60), std::string_view type = {},
+                   const progress_t* progress = nullptr) {
     const turn mine(*this);
     const bool reused = stream_.has_value();
     try {
-      return once(method, target, body, bearer, timeout, type);
+      return once(method, target, body, bearer, timeout, type, progress);
     } catch (const net::failure&) {
       if (!reused)
         throw;
       stream_.reset();
-      return once(method, target, body, bearer, timeout, type);
+      return once(method, target, body, bearer, timeout, type, progress);
     }
   }
 
@@ -152,7 +157,8 @@ class connection {
   static std::string_view path_of(std::string_view target) { return target.substr(0, target.find('?')); }
 
   response once(std::string_view method, std::string_view target, std::string_view body,
-                std::optional<std::string_view> bearer, std::chrono::seconds timeout, std::string_view type = {}) {
+                std::optional<std::string_view> bearer, std::chrono::seconds timeout, std::string_view type = {},
+                const progress_t* progress = nullptr) {
     if (!stream_)
       open();
     beast::http::request<beast::http::string_body> out;
@@ -183,12 +189,35 @@ class connection {
     }
     beast::http::response_parser<beast::http::string_body> in;
     in.body_limit(64 * 1024 * 1024);  // a first sync can be large
-    const auto [read, read_bytes] = owner_->await<std::size_t>([&](auto done) {
-      beast::http::async_read(*stream_, buffer_, in, std::move(done));
-    });
-    if (read) {
-      stream_.reset();
-      throw net::failure("reading from " + where_.host, read);
+    if (!progress) {
+      const auto [read, read_bytes] = owner_->await<std::size_t>([&](auto done) {
+        beast::http::async_read(*stream_, buffer_, in, std::move(done));
+      });
+      if (read) {
+        stream_.reset();
+        throw net::failure("reading from " + where_.host, read);
+      }
+    } else {
+      // Read in pieces, how far it has come said after each.
+      const auto [header, header_bytes] = owner_->await<std::size_t>([&](auto done) {
+        beast::http::async_read_header(*stream_, buffer_, in, std::move(done));
+      });
+      if (header) {
+        stream_.reset();
+        throw net::failure("reading from " + where_.host, header);
+      }
+      const std::optional<std::size_t> total =
+          in.content_length() ? std::optional<std::size_t>(static_cast<std::size_t>(*in.content_length())) : std::nullopt;
+      while (!in.is_done()) {
+        const auto [read, read_bytes] = owner_->await<std::size_t>([&](auto done) {
+          beast::http::async_read_some(*stream_, buffer_, in, std::move(done));
+        });
+        if (read) {
+          stream_.reset();
+          throw net::failure("reading from " + where_.host, read);
+        }
+        (*progress)(in.get().body().size(), total);
+      }
     }
     auto got = in.release();
     // Slow answers said, and what they were: a long wait shows where it was.
@@ -259,7 +288,8 @@ class pool {
 
   response request(std::string_view method, std::string_view target, std::string_view body = {},
                    std::optional<std::string_view> bearer = std::nullopt,
-                   std::chrono::seconds timeout = std::chrono::seconds(60), std::string_view type = {}) {
+                   std::chrono::seconds timeout = std::chrono::seconds(60), std::string_view type = {},
+                   const progress_t* progress = nullptr) {
     connection* free = this->take();
     while (free == nullptr) {
       if (std::ranges::find(waiting_, owner_->current()) == waiting_.end())
@@ -279,7 +309,7 @@ class pool {
         }
       }
     } const told{*this};
-    return free->request(method, target, body, bearer, timeout, type);
+    return free->request(method, target, body, bearer, timeout, type, progress);
   }
 
   void close() {

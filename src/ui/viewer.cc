@@ -91,6 +91,8 @@ struct picture_viewer : nodes::Stack {
       const bool coming = !whole_pictures().has(viewer->source);
       if (coming != parts.loader.visible())
         parts.loader.setVisible(coming);
+      if (coming)
+        parts.loader.setProgress(progress_of(viewer->source));
     }
     // Where the picture goes: fitted, zoomed, moved -- laid out there, not
     // drawn there by hand.

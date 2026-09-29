@@ -46,8 +46,20 @@ void account<Sink>::fetch_media(std::string source, media_use_t use, int size, b
                                                              "/_matrix/media/v3/download/"};
     for (const std::string& base : bases) {
       try {
+        // A download whole says how far it has come, a twentieth at a time.
+        int said = -1;
+        const http::progress_t progress = [&](std::size_t read, std::optional<std::size_t> total) {
+          if (!total || *total == 0)
+            return;
+          const int now = static_cast<int>(20 * read / *total);
+          if (now != said) {
+            said = now;
+            sink_(change::media_progress{source, static_cast<float>(read) / static_cast<float>(*total)});
+          }
+        };
         const auto got = api_->request("GET", base + server + "/" + media + query, {},
-                                       token_ ? std::optional<std::string_view>(*token_) : std::nullopt);
+                                       token_ ? std::optional<std::string_view>(*token_) : std::nullopt,
+                                       std::chrono::seconds(60), {}, size > 0 ? nullptr : &progress);
         if (got.status == 200 && !got.body.empty()) {
           sink_(change::avatar_loaded{use, source, got.body});
           return;

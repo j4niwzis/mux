@@ -371,6 +371,13 @@ struct avatar_loaded {
   std::string bytes;
 };
 
+// How far a picture or a file being fetched whole has come, 0 to 1, by the
+// source it is fetched by: for its loader to show.
+struct media_progress {
+  std::string source;
+  float done = 0.0f;
+};
+
 // A session an account was given -- a Matrix access token and device -- to
 // be kept, so the next start goes on with it rather than logging in again.
 struct session_given {
@@ -471,7 +478,7 @@ using change_t = std::variant<change::connection_changed, change::account_remove
                               change::message_redacted, change::message_acknowledged, change::delivery_changed, change::reaction_changed,
                               change::typing_changed, change::history_position, change::members_changed,
                               change::session_given, change::avatar_loaded, change::receipts_changed,
-                              change::window_opened, change::window_extended>;
+                              change::window_opened, change::window_extended, change::media_progress>;
 
 // The model: every account, and every change applied to it.
 class model {
@@ -657,6 +664,7 @@ class model {
   }
   void on(const change::session_given&) {}  // the program's to keep, not the model's
   void on(const change::avatar_loaded&) {}  // the window's to show, not the model's
+  void on(const change::media_progress&) {}  // the window's too
   void on(const change::receipts_changed& one) {
     conversation& kept = of(one.in);
     for (const auto& [user, event] : one.read_by)

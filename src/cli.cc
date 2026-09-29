@@ -86,6 +86,9 @@ std::string of(const change::typing_changed& one) {
   return one.who.empty() ? std::string() : std::format("{} typing in {}", one.who.size(), one.in.id);
 }
 std::string of(const change::history_position&) { return std::string(); }
+std::string of(const change::media_progress& one) {
+  return std::format("{}: {}%", one.source, static_cast<int>(one.done * 100.0f));
+}
 std::string of(const change::window_opened& one) { return std::format("a window of {}'s history opened", one.in.id); }
 std::string of(const change::window_extended& one) {
   return std::format("{}'s window paged forward{}", one.in.id, one.future_from ? "" : ", to the newest");

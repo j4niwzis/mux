@@ -34,7 +34,14 @@ void app::woken() {
     // What the program itself does with a change, besides the model: a
     // session kept, a picture shown.
     std::visit(mux::overloaded{[&](const mux::change::session_given& given) { this->keep_session(given); },
-                               [&](const mux::change::avatar_loaded& picture) { pictures.take(picture, true); },
+                               [&](const mux::change::avatar_loaded& picture) {
+                                 pictures.take(picture, true);
+                                 mux::ui::download_progress().erase(picture.source);
+                               },
+                               [&](const mux::change::media_progress& how) {
+                                 mux::ui::download_progress().insert_or_assign(how.source, how.done);
+                                 scene.state().markDamaged();
+                               },
                                [](const auto&) {}},
                one);
     model->apply(one);

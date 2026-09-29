@@ -284,7 +284,7 @@ struct conversations_screen : nodes::Stack {
     }
     this->invalidateLayout();
   }
-  nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>>& timeline = chat.area.timeline;
+  nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>>& timeline = chat.area.parts.timeline;
   // The chat whose messages are shown, how many, and how many came while
   // the view was above the newest.
   std::optional<conversation_id> shown_chat;
@@ -369,7 +369,7 @@ struct conversations_screen : nodes::Stack {
     }
     timeline.scrollToEnd();
     unseen = 0;
-    chat.area.jump.set_unseen(0);
+    chat.area.parts.jump.set_unseen(0);
   }
 
   // What was searched for last, and the model last shown: typing into the
@@ -422,12 +422,20 @@ struct conversations_screen : nodes::Stack {
   std::optional<std::string> jumping_to;
   bool jump_quiet = false;
   int jump_tries = 0;
+  // Frames a jump has been on its way: the loader shows past a few.
+  int jump_age = 0;
+  // A message jumped to and made, aimed at until it stays where it was
+  // aimed: what is above it may still grow as it is made and laid out.
+  std::optional<std::string> aiming;
+  bool aim_quiet = false;
+  int aim_frames = 0;
+  float aimed_at = -1.0f;
 
   // The newest message whose end is on screen in the chat shown: how far it
   // has been read. None while a jump is on its way, as what is passed on the
   // way is not read.
   [[nodiscard]] std::optional<std::string> last_seen() {
-    if (jumping_to)
+    if (jumping_to || aiming)
       return std::nullopt;
     const skia::SkRect view = timeline.bounds();
     const auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
@@ -454,6 +462,8 @@ struct conversations_screen : nodes::Stack {
     jumping_to = std::move(id);
     jump_quiet = false;
     jump_tries = 0;
+    jump_age = 0;
+    aiming.reset();
     context_asked.reset();
   }
 
@@ -466,14 +476,10 @@ struct conversations_screen : nodes::Stack {
       const auto it = std::ranges::find(entries, *jumping_to, &message_bubble::message_id);
       const conversation* one = last_model->find(*chosen);
       if (it != entries.end() && !it->bounds().isEmpty()) {
-        const float to = timeline.current() + (it->bounds().fTop - timeline.bounds().fTop) - 60.0f;
-        timeline.scrollTo(std::max(0.0f, to));
-        if (!jump_quiet) {
-          it->body.flash.jump(1.0f);
-          it->body.flash.setTarget(0.0f);
-          it->body.markDamaged();
-        }
-        jumping_to.reset();
+        aiming = std::exchange(jumping_to, std::nullopt);
+        aim_quiet = jump_quiet;
+        aim_frames = 0;
+        aimed_at = -1.0f;
       } else if (one == nullptr) {
         jumping_to.reset();
       } else if (const auto found = std::ranges::find(one->timeline, *jumping_to, &message::id);
@@ -501,6 +507,41 @@ struct conversations_screen : nodes::Stack {
         jumping_to.reset();  // the beginning, and it was not there
       }
     }
+    // A message jumped to, aimed at until it stays: in the middle of the
+    // view, as tdesktop brings one (its top, where it is taller than the
+    // view) -- or, opened at what was read, near the top with the unread
+    // below. Aimed again each frame while what is above it moves it; flashed
+    // once the list is still, where the flash is seen.
+    if (aiming) {
+      auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
+      const auto it = std::ranges::find(entries, *aiming, &message_bubble::message_id);
+      if (it == entries.end() || it->bounds().isEmpty() || ++aim_frames > 180) {
+        aiming.reset();
+      } else {
+        const skia::SkRect view = timeline.bounds();
+        const skia::SkRect box = it->bounds();
+        const float above = aim_quiet ? 60.0f
+                            : box.height() < view.height() ? (view.height() - box.height()) * 0.5f
+                                                           : 0.0f;
+        const float to = std::max(0.0f, timeline.current() + (box.fTop - view.fTop) - above);
+        if (std::abs(to - aimed_at) > 1.0f) {
+          timeline.scrollTo(to);
+          aimed_at = to;
+        } else if (!timeline.moving()) {
+          if (!aim_quiet) {
+            it->body.flash.jump(1.0f);
+            it->body.flash.setTarget(0.0f);
+            it->body.markDamaged();
+          }
+          aiming.reset();
+        }
+      }
+    }
+    // A jump on its way for more than a few frames -- fetched, or paged back
+    // to -- shows the loader turning in the middle of the list.
+    jump_age = jumping_to ? jump_age + 1 : 0;
+    if (const bool loading = jump_age > 6; loading != chat.area.parts.loading.visible())
+      chat.area.parts.loading.setVisible(loading);
     // What is in the composer: typing while there is text in it.
     if (const bool has_text = !line.text().empty(); has_text != was_typing || (has_text && line.text() != typed_last)) {
       was_typing = has_text;
@@ -514,11 +555,11 @@ struct conversations_screen : nodes::Stack {
     // Away from the newest: scrolled up, or in a window of the history.
     const conversation* shown_one = chosen && last_model ? last_model->find(*chosen) : nullptr;
     const bool away = !timeline.atEnd(40.0f) || (shown_one && shown_one->detached);
-    if (away != chat.area.jump.visible())
-      chat.area.jump.setVisible(away);
+    if (away != chat.area.parts.jump.visible())
+      chat.area.parts.jump.setVisible(away);
     if (!away && unseen != 0) {
       unseen = 0;
-      chat.area.jump.set_unseen(0);
+      chat.area.parts.jump.set_unseen(0);
     }
     // Near the top: the stretch made slides up -- the far ones below let
     // go -- and past all that is loaded, the history is paged back. Near
@@ -708,7 +749,7 @@ struct conversations_screen : nodes::Stack {
         ++after;
       unseen += after;
     }
-    chat.area.jump.set_unseen(unseen);
+    chat.area.parts.jump.set_unseen(unseen);
     shown_chat = chosen;
     shown_last = last;
   }

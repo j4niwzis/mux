@@ -33,21 +33,27 @@ struct menu_facts {
 
 template <class Actions>
 struct timeline_area : scene::Node {
-  nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>> timeline{
-      nodes::Flow<std::vector<message_bubble>>({.spacingY = 0.0f, .wrap = false}, {})};
-  jump_button<Actions> jump;
+  struct parts_t {
+    nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>> timeline{
+        nodes::Flow<std::vector<message_bubble>>({.spacingY = 0.0f, .wrap = false}, {})};
+    jump_button<Actions> jump;
+    // While a message jumped to is being fetched: turning in the middle.
+    widgets::RadialLoader loading{};
+  } parts;
   Actions* actions = nullptr;
-  explicit timeline_area(Actions* a) : jump(a), actions(a) {
-    timeline.apply({.fill = true});
+  explicit timeline_area(Actions* a) : parts{.jump = jump_button<Actions>(a)}, actions(a) {
+    parts.timeline.apply({.fill = true});
     // The room around the messages is inside what scrolls, so the bar is at
     // the window's edge.
-    std::get<0>(timeline.fChildren).apply(
+    std::get<0>(parts.timeline.fChildren).apply(
         {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 12.0f, 8.0f, 12.0f}});
-    jump.setVisible(false);
+    parts.jump.setVisible(false);
+    parts.loading.apply({.place = scene::anchor::kCentre});
+    parts.loading.setVisible(false);
   }
-  void forEachChild(auto&& f) {
-    f(timeline);
-    f(jump);
+  // The bubbles in the list, as they are made.
+  [[nodiscard]] std::vector<message_bubble>& bubbles() {
+    return std::get<0>(std::get<0>(parts.timeline.fChildren).fChildren);
   }
   // A message swiped left: watched from above, before the list's scrolling
   // and a text's selecting see the pointer. A press that moves left at once,
@@ -60,7 +66,7 @@ struct timeline_area : scene::Node {
   message_bubble* swiped() {
     if (!swiping)
       return nullptr;
-    auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
+    auto& entries = this->bubbles();
     const auto it = std::ranges::find(entries, *swiping, &message_bubble::message_id);
     return it == entries.end() ? nullptr : &*it;
   }
@@ -86,7 +92,7 @@ struct timeline_area : scene::Node {
     if (dx >= 0.0f || std::abs(dx) < 2.0f * std::abs(dy) ||
         std::chrono::steady_clock::now() - swipe_pressed > std::chrono::milliseconds(250))
       return;
-    for (message_bubble& one : std::get<0>(std::get<0>(timeline.fChildren).fChildren))
+    for (message_bubble& one : this->bubbles())
       if (one.bounds().contains(swipe_x, swipe_y) && !one.message_id.empty()) {
         swiping = one.message_id;
         one.swipe.jump(std::clamp(dx, -120.0f, 0.0f));
@@ -169,7 +175,7 @@ struct timeline_area : scene::Node {
     const struct {
       float x, y;
     } press{x, y};
-      for (const message_bubble& one : std::get<0>(std::get<0>(timeline.fChildren).fChildren)) {
+      for (const message_bubble& one : this->bubbles()) {
         // A picture: seen whole. A file: saved and opened.
         if (one.body.picture && one.body.picture->bounds().contains(press.x, press.y)) {
           const conversation* chat = seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr;
@@ -218,7 +224,7 @@ struct timeline_area : scene::Node {
     // Whichever message's row the press is in -- its text, its bubble or the
     // room beside it. What Copy takes is what is selected in it, if anything
     // is, and all of it if not.
-    for (const message_bubble& one : std::get<0>(std::get<0>(timeline.fChildren).fChildren))
+    for (const message_bubble& one : this->bubbles())
       if (one.bounds().contains(press.x, press.y)) {
         menu_facts facts;
         facts.id = one.message_id;

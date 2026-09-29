@@ -1186,7 +1186,7 @@ class model {
           kept->reaction_events.push_back({one.event, one.key, one.who, one.at});
         // Another's reaction to the user's own, as it happened: for them.
         if (one.live && kept->outgoing && one.who != one.in.account.address && !one.event.empty())
-          keep_mark(of(one.in).unread_reactions, {one.event, one.id, one.at});
+          keep_mark(of(one.in), of(one.in).unread_reactions, {one.event, one.id, one.at});
       } else {
         who.erase(one.who);
         if (who.empty())

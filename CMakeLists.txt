@@ -170,6 +170,21 @@ if(MUX_UI)
     endif()
   endforeach()
 
+  # The emoji face the window draws emoji with, as tdesktop has its own:
+  # Noto Color Emoji, fetched once at a pinned commit and checked, and put
+  # in the binary by host.cc's #embed.
+  set(mux_emoji_dir ${CMAKE_BINARY_DIR}/fonts)
+  set(mux_emoji_font ${mux_emoji_dir}/NotoColorEmoji-Regular.ttf)
+  if(NOT EXISTS ${mux_emoji_font})
+    file(DOWNLOAD
+      https://raw.githubusercontent.com/google/fonts/142c8963e7606b510c93a644c82a4c4cdeae6ef9/ofl/notocoloremoji/NotoColorEmoji-Regular.ttf
+      ${mux_emoji_font}
+      EXPECTED_HASH SHA256=4d82a18d8d95f60ba883ce242bbadbf84a576e987745dd7ba38d71c67cff2d73
+      TLS_VERIFY ON)
+  endif()
+  target_sources(mux_modules PRIVATE src/emoji_font.cc)
+  set_property(SOURCE src/emoji_font.cc APPEND PROPERTY COMPILE_OPTIONS --embed-dir=${mux_emoji_dir})
+  set_property(SOURCE src/emoji_font.cc APPEND PROPERTY OBJECT_DEPENDS ${mux_emoji_font})
   target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
     FILES src/host.cc src/ui.cc
           src/ui/base.cc src/ui/icons.cc src/ui/avatars.cc src/ui/controls.cc src/ui/themes.cc src/ui/names.cc src/ui/html.cc src/ui/chat_list.cc src/ui/message.cc src/ui/header.cc src/ui/info.cc src/ui/composer.cc src/ui/timeline.cc src/ui/conversations.cc src/ui/forms.cc src/ui/add_account.cc src/ui/accounts.cc src/ui/drawer.cc src/ui/proxies.cc src/ui/appearance.cc src/ui/storage.cc src/ui/settings.cc src/ui/context_menu.cc src/ui/sending.cc src/ui/viewer.cc src/ui/window.cc)

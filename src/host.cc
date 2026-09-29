@@ -16,6 +16,17 @@ import skia;
 import skiff.paint;
 import skiff.scene;
 
+// And emoji, as tdesktop has its own rather than the system's: Google's
+// Noto Color Emoji (SIL Open Font License, fonts/OFL-NotoColorEmoji.txt),
+// fetched at a pinned commit by the build, so they are the same on every
+// machine and never boxes. Its 25 MB are in a translation unit of their
+// own (emoji_font.cc), not in this module's interface, which every
+// importer reads.
+extern "C++" {
+extern const unsigned char mux_noto_color_emoji[];
+extern const decltype(sizeof 0) mux_noto_color_emoji_size;
+}
+
 namespace mux::host::shipped {
 // Telegram Desktop's own faces, in the binary: Open Sans, regular and
 // semibold, as it draws its text with (SIL Open Font License, fonts/OFL.txt).
@@ -25,6 +36,7 @@ constexpr unsigned char open_sans_regular[] = {
 constexpr unsigned char open_sans_semibold[] = {
 #embed "../fonts/OpenSans-SemiBold.ttf"
 };
+
 }  // namespace mux::host::shipped
 
 export namespace mux::host {
@@ -81,6 +93,9 @@ inline void load_fonts(const std::string& directory) {
   } else if (primary) {
     skiff::paint::fonts().setPrimary(primary);
   }
+  // Emoji from the face shipped for them, before anything of the system's.
+  if (auto emoji = shipped_face(mux_noto_color_emoji, mux_noto_color_emoji_size))
+    skiff::paint::fonts().addFallback(std::move(emoji));
   // Where a character no face loaded here has is looked for: the system's.
   skiff::paint::fonts().setFontManager(manager);
   // What every Text and widget draws with. Without it they draw nothing:

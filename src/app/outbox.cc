@@ -79,7 +79,9 @@ class outbox_part {
       return;
     }
     const std::string title = "Reply to " + (next->outgoing ? std::string("You") : mux::ui::sender_name(*chat, next->sender));
-    this->answer(next->id, title, logic::reply_line(next, next->body.plain));
+    this->answer(next->id, title,
+                 next->body.plain.empty() ? logic::reply_line(next, next->body.plain)
+                                          : mux::ui::quote_line_of(*next, *chat, s_->model));
     screen.jump_to(next->id);
   }
   void apply(const request::cancel_compose&) {

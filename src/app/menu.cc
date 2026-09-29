@@ -46,13 +46,17 @@ class menu_part {
     s_->root().close_menu();
     std::string title = "Reply";
     const message* said = nullptr;
+    std::string line;
     if (const auto& chosen = s_->root().main().chosen)
       if (const conversation* chat = s_->model->find(*chosen))
         if (const auto it = std::ranges::find(chat->timeline, target_.id, &message::id); it != chat->timeline.end()) {
           said = &*it;
           title = "Reply to " + mux::ui::sender_name(*chat, it->sender);
+          // Its mentions by name, as the quote in the bubble shows them.
+          if (!it->body.plain.empty())
+            line = mux::ui::quote_line_of(*it, *chat, s_->model);
         }
-    outbox_->answer(target_.id, std::move(title), logic::reply_line(said, target_.text));
+    outbox_->answer(target_.id, std::move(title), line.empty() ? logic::reply_line(said, target_.text) : line);
   }
   void apply(const request::menu_edit&) {
     s_->root().close_menu();

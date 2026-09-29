@@ -113,6 +113,10 @@ int main(int argc, char** argv) {
     const auto [top, bottom] = mux::ui::userpic_colours(id);
     return skiff::scene::PillPicture{mux::ui::avatar_images().find(id), top, bottom, mux::ui::initials_of(id)};
   };
+  // A custom emoji in a message's text: its picture, fetched as an avatar is.
+  skiff::scene::inlinePicture() = [](std::string_view target) -> const skia::Sp<skia::SkImage>* {
+    return mux::ui::avatar_images().find(std::string(target));
+  };
   // A link pressed in a message's text: routed as a link is.
   skiff::scene::linkOpener() = {+[](void* self, std::string_view url) {
                                   static_cast<app*>(self)->ask.open_url(std::string(url));

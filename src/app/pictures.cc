@@ -141,6 +141,12 @@ class pictures_part {
             for (const auto& [reaction, who] : one.timeline[i].reactions)
               if (reaction.starts_with("mxc://"))
                 want(id, reaction, reaction);
+          // And the custom emoji in their text: an <img> of the server's.
+          for (std::size_t i = first; i < last && i < one.timeline.size(); ++i)
+            if (const auto& html = one.timeline[i].body.html)
+              for (const auto& span : mux::ui::read_html(*html).spans)
+                if (span.picture)
+                  want(id, span.target, span.target);
           // Those on screen and near it, at twice the size they are drawn
           // at -- not every picture in its history, which pushed the rest out.
           const auto [from, to] = screen.made_indices(one.timeline);

@@ -35,10 +35,31 @@ struct link_open {     // <a href="...">
   std::string href;
 };
 struct link_close {};  // </a>
-struct other {};       // anything else: dropped
+struct image {         // <img src="mxc://..." alt="..."> -- a custom emoji, in Matrix
+  std::string src;
+  std::string alt;
+};
+struct other {};  // anything else: dropped
 }  // namespace html_tag
 using html_tag_t = std::variant<html_tag::line_break, html_tag::block_end, html_tag::list_item, html_tag::quote,
-                                html_tag::reply, html_tag::link_open, html_tag::link_close, html_tag::other>;
+                                html_tag::reply, html_tag::link_open, html_tag::link_close, html_tag::image,
+                                html_tag::other>;
+
+// An attribute's value in a tag's inside, quoted either way.
+[[nodiscard]] inline std::optional<std::string> attribute_of(std::string_view inside, std::string_view name) {
+  for (std::size_t at = inside.find(name); at != std::string_view::npos; at = inside.find(name, at + 1)) {
+    const bool starts = at == 0 || inside[at - 1] == ' ';
+    const std::size_t eq = at + name.size();
+    if (!starts || eq + 1 >= inside.size() || inside[eq] != '=')
+      continue;
+    const char quote = inside[eq + 1];
+    if (quote != '"' && quote != '\'')
+      continue;
+    const auto stop = inside.find(quote, eq + 2);
+    return std::string(inside.substr(eq + 2, stop == std::string_view::npos ? std::string_view::npos : stop - eq - 2));
+  }
+  return std::nullopt;
+}
 
 // A tag's inside (between < and >) read into what it is.
 [[nodiscard]] inline html_tag_t tag_of(std::string_view inside) {
@@ -53,7 +74,7 @@ using html_tag_t = std::variant<html_tag::line_break, html_tag::block_end, html_
       {"/blockquote", html_tag::block_end{}}, {"/li", html_tag::block_end{}}, {"/h1", html_tag::block_end{}},
       {"/h2", html_tag::block_end{}},   {"/h3", html_tag::block_end{}},   {"/pre", html_tag::block_end{}},
       {"li", html_tag::list_item{}},    {"blockquote", html_tag::quote{}}, {"mx-reply", html_tag::reply{}},
-      {"a", html_tag::link_open{}},     {"/a", html_tag::link_close{}},
+      {"a", html_tag::link_open{}},     {"/a", html_tag::link_close{}},  {"img", html_tag::image{}},
   };
   const auto found = known.find(name);
   if (found == known.end())
@@ -67,6 +88,10 @@ using html_tag_t = std::variant<html_tag::line_break, html_tag::block_end, html_
                                  const auto stop = inside.find(quote, href + 6);
                                  return html_tag::link_open{std::string(inside.substr(
                                      href + 6, stop == std::string_view::npos ? std::string_view::npos : stop - href - 6))};
+                               },
+                               [&](html_tag::image) -> html_tag_t {
+                                 return html_tag::image{attribute_of(inside, "src").value_or(""),
+                                                        attribute_of(inside, "alt").value_or("")};
                                },
                                [](const auto& as_found) -> html_tag_t { return as_found; }},
                     found->second);
@@ -116,6 +141,18 @@ using html_tag_t = std::variant<html_tag::line_break, html_tag::block_end, html_
                               if (out.text.size() > link_start)
                                 out.spans.push_back({link_start, out.text.size(), open_href});
                               open_href.clear();
+                            },
+                            // A picture from the server -- a custom emoji -- in the
+                            // line, in the room of an em space; anything else by
+                            // what it says it is.
+                            [&](html_tag::image& picture) {
+                              if (picture.src.starts_with("mxc://")) {
+                                const std::size_t first = out.text.size();
+                                out.text += "\u2003";
+                                out.spans.push_back({first, out.text.size(), std::move(picture.src), false, true});
+                              } else {
+                                out.text += picture.alt;
+                              }
                             },
                             [](html_tag::other) {}},
                  read);

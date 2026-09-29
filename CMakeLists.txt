@@ -140,10 +140,10 @@ if(MUX_UI)
   # skiff and skiff-widgets say the rest of what they are in their own trees.
   cme_declare_port(NAME skiff PROVIDES skiff
     GITHUB_REPOSITORY j4niwzis/skiff
-    GIT_TAG 18717d3c3581c73c449dbaf6ef51a412c12893bc)
+    GIT_TAG df849317acb6eb255a649f1ff98dcc0b4b16ddda)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
-    GIT_TAG e754504be9fb6222ee1bc0502b3894541e322b50)
+    GIT_TAG 7853ae4084bb7f45129f57e585bbf844031ae52c)
   # Skia as skiff draws with it, on GL, with the system's fonts read from
   # their directory.
   set(SKIFF_SKIA_COMPONENTS gl fontmgr-directory CACHE STRING "" FORCE)

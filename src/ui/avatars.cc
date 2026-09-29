@@ -163,30 +163,5 @@ inline image_cache& whole_pictures() {
   return scene::Gradient{top, bottom};
 }
 
-inline void draw_avatar(skia::SkCanvas* canvas, const skia::SkRect& disc, std::string_view id, std::string_view name,
-                        float alpha) {
-  if (const skia::Sp<skia::SkImage>* found = avatar_images().find(id); found && *found) {
-    const int saved = canvas->save();
-    canvas->clipRRect(skia::SkRRect::MakeOval(disc), true);
-    skia::SkPaint paint;
-    paint.setAlphaf(alpha);
-    canvas->drawImageRect(*found, disc, skia::SkSamplingOptions(skia::SkFilterMode::kLinear), &paint);
-    canvas->restoreToCount(saved);
-    return;
-  }
-  skia::SkFont* font = skiff::paint::defaultFont();
-  if (font == nullptr)
-    return;
-  const skiff::paint::Painter p(canvas, *font);
-  const auto [top, bottom] = userpic_colours(id);
-  const int saved = canvas->save();
-  canvas->clipRRect(skia::SkRRect::MakeOval(disc), true);
-  skiff::paint::verticalGradient(canvas, disc, top, bottom, alpha);
-  canvas->restoreToCount(saved);
-  const std::string letters = initials_of(name);
-  const float size = disc.width() * 0.4f;
-  const float width = p.measure(letters, size, true);
-  p.textIn(disc, letters, size, skia::colorSetARGB(255, 255, 255, 255), alpha, true, (disc.width() - width) * 0.5f);
-}
 
 }  // namespace mux::ui

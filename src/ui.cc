@@ -2059,10 +2059,13 @@ struct timeline_area : scene::Node {
     }
     if (press.button != 3)
       return;
-    // Whichever bubble the press is in: its text takes presses of its own.
+    // Whichever message's row the press is in -- its text, its bubble or the
+    // room beside it. What Copy takes is what is selected in it, if anything
+    // is, and all of it if not.
     for (const message_bubble& one : std::get<0>(std::get<0>(timeline.fChildren).fChildren))
-      if (one.body.bounds().contains(press.x, press.y)) {
-        actions->message_menu(one.message_id, one.outgoing, one.plain, press.x, press.y);
+      if (one.bounds().contains(press.x, press.y)) {
+        actions->message_menu(one.message_id, one.outgoing, one.plain,
+                              one.body.text.hasSelection() ? one.body.text.selected() : one.plain, press.x, press.y);
         reply.handle();
         return;
       }

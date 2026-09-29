@@ -12,6 +12,13 @@ cmake_minimum_required(VERSION 4.3.4 FATAL_ERROR)
 #
 # Every dependency comes through cmake-everywhere: the machine's copy where
 # it has one with what is needed, and a pinned source where it has not.
+# Optimised unless asked otherwise: a build with no type is compiled with no
+# optimisation at all, and the window's code, templates all through, runs
+# tens of times slower so -- scrolling a long chat at a few frames a second.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Debug, Release, RelWithDebInfo or MinSizeRel" FORCE)
+endif()
+
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/import-std.cmake)
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_EXTENSIONS OFF)

@@ -389,6 +389,8 @@ struct message_menu {
   bool own = false;
   std::string text;
   float x = 0.0f, y = 0.0f;
+  // What Copy takes: the selection in it, or all of it.
+  std::string copied;
 };
 struct close_menu {};
 struct menu_reply {};
@@ -532,8 +534,8 @@ struct actions {
   void pop_panel() { requests.emplace_back(request::pop_panel{}); }
   void toggle_info() { requests.emplace_back(request::toggle_info{}); }
   void jump_to_end() { requests.emplace_back(request::jump_to_end{}); }
-  void message_menu(std::string id, bool own, std::string text, float x, float y) {
-    requests.emplace_back(request::message_menu{std::move(id), own, std::move(text), x, y});
+  void message_menu(std::string id, bool own, std::string text, std::string copied, float x, float y) {
+    requests.emplace_back(request::message_menu{std::move(id), own, std::move(text), x, y, std::move(copied)});
   }
   void close_menu() { requests.emplace_back(request::close_menu{}); }
   void menu_reply() { requests.emplace_back(request::menu_reply{}); }
@@ -935,7 +937,7 @@ struct app {
   }
   void apply(const request::menu_copy&) {
     root().close_menu();
-    skiff::scene::setClipboardText(menu_target.text);
+    skiff::scene::setClipboardText(menu_target.copied.empty() ? menu_target.text : menu_target.copied);
   }
   void apply(const request::menu_delete&) {
     root().close_menu();

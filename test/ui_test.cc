@@ -41,7 +41,7 @@ struct stub {
   void pop_panel() {}
   void toggle_info() {}
   void jump_to_end() {}
-  void message_menu(std::string, bool, std::string, float, float) {}
+  void message_menu(std::string, bool, std::string, std::string, float, float) {}
   void close_menu() {}
   void menu_reply() {}
   void menu_edit() {}
@@ -238,15 +238,17 @@ TEST(Timeline, ScrollsALongChatAtSixtyFrames) {
   ASSERT_FALSE(list.isEmpty());
   updating = laying = drawing = 0.0;
   constexpr int kFrames = 120;
+  // Up where there is room above, down where the view is at the top.
   const float before = screen.timeline.current();
+  const float ticks = before > 0.0f ? 1.0f : -1.0f;
   for (int i = 0; i < kFrames; ++i) {
-    router.pointer(scene::PointerEvent{scene::pointer::scroll{list.centerX(), list.centerY(), 0.0f, 1.0f}});
+    router.pointer(scene::PointerEvent{scene::pointer::scroll{list.centerX(), list.centerY(), 0.0f, ticks}});
     frame();
   }
   const double per_frame = (updating + laying + drawing) / kFrames;
   std::println("scrolling {} messages, per frame: update {:.2f} ms, layout {:.2f} ms, draw {:.2f} ms, all {:.2f} ms",
                kMessages, updating / kFrames, laying / kFrames, drawing / kFrames, per_frame);
-  EXPECT_LT(screen.timeline.current(), before) << "the wheel did not scroll the messages";
+  EXPECT_NE(screen.timeline.current(), before) << "the wheel did not scroll the messages";
   EXPECT_LT(per_frame, 16.0) << "a frame of scrolling is longer than a frame of a 60 Hz screen";
 
   // A message at the bottom, while the reader is up in the history.

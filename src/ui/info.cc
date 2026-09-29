@@ -19,22 +19,20 @@ export namespace mux::ui {
 template <class Act>
 struct action_tile : nodes::Stack {
   Act act;
-  icon_mark mark;
-  nodes::Text label;
+  struct parts_t {
+    icon_mark mark;
+    nodes::Text label;
+  } parts;
 
   // Declared: the icon at the top, the name at the bottom.
   action_tile(std::string text, icon_t icon, Act what = {})
-      : act(std::move(what)), mark(icon), label(std::move(text), 12.0f, text_colour) {
+      : act(std::move(what)), parts{.mark = icon_mark(icon), .label = nodes::Text(std::move(text), 12.0f, text_colour)} {
+    auto& [mark, label] = parts;
     fState.apply({.height = 58.0f, .padding = {6.0f, 0.0f, 8.0f, 0.0f}, .cornerRadius = 8.0f, .background = tile_colour, .hoverBackground = chosen_colour, .focusBackground = chosen_colour});
     fStack.justify = nodes::justify::space_between{};
     mark.setColour(text_colour);
     mark.apply({.height = 24.0f});
     label.apply({.alignSelf = scene::align::kMiddle});
-  }
-
-  void forEachChild(auto&& f) {
-    f(mark);
-    f(label);
   }
 
   [[nodiscard]] bool acceptsInput() const { return true; }
@@ -47,7 +45,7 @@ struct action_tile : nodes::Stack {
   [[nodiscard]] scene::Semantics semantics() const {
     scene::Semantics out;
     out.fRole = scene::semantic_role::button{};
-    out.fLabel = label.text();
+    out.fLabel = parts.label.text();
     out.fActions = {scene::semantic_action::focus{}, scene::semantic_action::activate{}};
     return out;
   }
@@ -63,25 +61,23 @@ struct member_row : nodes::Stack {
   Open open;
   std::string id;
   std::optional<std::string> role;
-  avatar_mark face;
   // Their name, and how they are under it.
   struct texts_column : nodes::Stack {
-    nodes::Text name;
-    nodes::Text state;
+    struct parts_t {
+      nodes::Text name;
+      nodes::Text state;
+    } parts;
     texts_column(std::string shown, std::string how)
-        : name(std::move(shown), 14.0f, text_colour, true), state(std::move(how), 12.0f, dim_colour) {
+        : parts{.name = nodes::Text(std::move(shown), 14.0f, text_colour, true),
+                .state = nodes::Text(std::move(how), 12.0f, dim_colour)} {
       this->setGap(4.0f);
       fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      for (nodes::Text* each : {&name, &state}) {
+      for (nodes::Text* each : {&parts.name, &parts.state}) {
         each->setElided(true);
         each->apply({.fillX = true});
       }
     }
-    void forEachChild(auto&& f) {
-      f(name);
-      f(state);
-    }
-  } texts;
+  };
   // Their role, in a pill beside their name.
   struct role_pill : widgets::Pill {
     explicit role_pill(std::string what)
@@ -92,23 +88,23 @@ struct member_row : nodes::Stack {
                                           .padX = 8.0f}) {
       fState.apply({.alignSelf = scene::align::kStart, .margin = {10.0f, 0.0f, 0.0f, 0.0f}});
     }
-  } pill;
+  };
+  struct parts_t {
+    avatar_mark face;
+    texts_column texts;
+    role_pill pill;
+  } parts;
 
   // Declared: the avatar, the name over how they are, the role at the end.
   member_row(const member& one, std::string how, Open what)
       : who(one), how_shown(how), open(std::move(what)), id(one.id), role(one.role),
-        face(one.id, one.name.empty() ? one.id : one.name, 40.0f),
-        texts(one.name.empty() ? one.id : one.name, std::move(how)), pill(one.role.value_or("")) {
+        parts{.face = avatar_mark(one.id, one.name.empty() ? one.id : one.name, 40.0f),
+              .texts = texts_column(one.name.empty() ? one.id : one.name, std::move(how)),
+              .pill = role_pill(one.role.value_or(""))} {
     this->setHorizontal();
     this->setGap(12.0f);
     fState.apply({.fillX = true, .height = 54.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}, .hoverBackground = chosen_colour});
-    pill.setVisible(one.role.has_value());
-  }
-
-  void forEachChild(auto&& f) {
-    f(face);
-    f(texts);
-    f(pill);
+    parts.pill.setVisible(one.role.has_value());
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
@@ -243,7 +239,6 @@ struct person_card : nodes::Stack {
 
 template <class Actions>
 struct info_panel : nodes::Stack {
-  nodes::Box<> edge{band_colour};  // its left edge
   Actions* actions = nullptr;
   account_id account;
   std::string key;
@@ -293,62 +288,70 @@ struct info_panel : nodes::Stack {
   // big avatar, the name, how it is; the chat's tiles or the member's; its ID.
   struct head : nodes::Stack {
     struct top_row : nodes::Stack {
-      icon_button<back_to_group> back;
-      nodes::Box<> gap{skia::colorSetARGB(0, 0, 0, 0)};
-      icon_button<ask<Actions, &Actions::toggle_info>> close;
-      top_row(Actions* a, info_panel* panel, bool with_back) : back(icon::back{}, {panel}), close(icon::close{}, {a}) {
+      using close_button = icon_button<ask<Actions, &Actions::toggle_info>>;
+      struct parts_t {
+        icon_button<back_to_group> back;
+        nodes::Box<> gap{skia::colorSetARGB(0, 0, 0, 0)};
+        close_button close;
+      } parts;
+      top_row(Actions* a, info_panel* panel, bool with_back)
+          : parts{.back = icon_button<back_to_group>(icon::back{}, {panel}), .close = close_button(icon::close{}, {a})} {
         this->setHorizontal();
         fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 0.0f, 8.0f}});
-        gap.apply({.height = 1.0f, .grow = scene::axes::kX});
-        back.setVisible(with_back);
+        parts.gap.apply({.height = 1.0f, .grow = scene::axes::kX});
+        parts.back.setVisible(with_back);
       }
-      void forEachChild(auto&& f) {
-        f(back);
-        f(gap);
-        f(close);
-      }
-    } top;
-    big_avatar avatar;
-    nodes::Text name;
-    nodes::Text status;
+    };
     struct tiles_row : nodes::Stack {
-      action_tile<ask<Actions, &Actions::toggle_mute>> mute;
-      action_tile<not_yet<Actions>> manage;
-      action_tile<ask<Actions, &Actions::leave_chat>> leave;
+      using mute_tile = action_tile<ask<Actions, &Actions::toggle_mute>>;
+      using manage_tile = action_tile<not_yet<Actions>>;
+      using leave_tile = action_tile<ask<Actions, &Actions::leave_chat>>;
+      struct parts_t {
+        mute_tile mute;
+        manage_tile manage;
+        leave_tile leave;
+      } parts;
       tiles_row(Actions* a, bool muted)
-          : mute(muted ? "Unmute" : "Mute", icon::bell{}, {a}), manage("Manage", icon::sliders{}, {a, "Managing a chat"}),
-            leave("Leave", icon::leave{}, {a}) {
+          : parts{.mute = mute_tile(muted ? "Unmute" : "Mute", icon::bell{}, {a}),
+                  .manage = manage_tile("Manage", icon::sliders{}, {a, "Managing a chat"}),
+                  .leave = leave_tile("Leave", icon::leave{}, {a})} {
         this->setHorizontal();
         this->setGap(8.0f);
         fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}});
-        mute.apply({.grow = scene::axes::kX});
-        manage.apply({.grow = scene::axes::kX});
-        leave.apply({.grow = scene::axes::kX});
-      }
-      void forEachChild(auto&& f) {
-        f(mute);
-        f(manage);
-        f(leave);
+        parts.mute.apply({.grow = scene::axes::kX});
+        parts.manage.apply({.grow = scene::axes::kX});
+        parts.leave.apply({.grow = scene::axes::kX});
       }
     };
     // A member's own: a message to them.
     struct person_row : nodes::Stack {
-      action_tile<message_them> message;
-      person_row(Actions* a, info_panel* panel) : message("Message", icon::send{}, {a, panel}) {
+      struct parts_t {
+        action_tile<message_them> message;
+      } parts;
+      person_row(Actions* a, info_panel* panel)
+          : parts{.message = action_tile<message_them>("Message", icon::send{}, {a, panel})} {
         this->setHorizontal();
         fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}});
-        message.apply({.grow = scene::axes::kX});
+        parts.message.apply({.grow = scene::axes::kX});
       }
-      void forEachChild(auto&& f) { f(message); }
     };
-    std::optional<tiles_row> tiles;
-    std::optional<person_row> person_tiles;
-    nodes::Box<> band_1 = section_band();
-    id_line id_text;
+    struct parts_t {
+      top_row top;
+      big_avatar avatar;
+      nodes::Text name;
+      nodes::Text status;
+      std::optional<tiles_row> tiles;
+      std::optional<person_row> person_tiles;
+      nodes::Box<> band_1 = section_band();
+      id_line id_text;
+    } parts;
 
     head(Actions* a, info_panel* panel, const view& shown)
-        : top(a, panel, shown.of_person), name(shown.name, 17.0f, text_colour, true),
-          status(shown.status, 13.0f, dim_colour), id_text(shown.key, shown.copied) {
+        : parts{.top = top_row(a, panel, shown.of_person),
+                .name = nodes::Text(shown.name, 17.0f, text_colour, true),
+                .status = nodes::Text(shown.status, 13.0f, dim_colour),
+                .id_text = id_line(shown.key, shown.copied)} {
+      auto& [top, avatar, name, status, tiles, person_tiles, band_1, id_text] = parts;
       this->setGap(2.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
       avatar.show(shown.key, shown.name);
@@ -361,43 +364,38 @@ struct info_panel : nodes::Stack {
         centred->apply({.alignSelf = scene::align::kMiddle, .margin = {4.0f, 20.0f, 0.0f, 20.0f}});
       }
     }
-    void forEachChild(auto&& f) {
-      f(top);
-      f(avatar);
-      f(name);
-      f(status);
-      f(tiles);
-      f(person_tiles);
-      f(band_1);
-      f(id_text);
-    }
   };
-  nodes::Memo<view, head> upper;
-  nodes::Box<> band_2 = section_band();
   struct members_head : nodes::Stack {
-    icon_view people{icon::people{}};
-    nodes::Text title;
-    icon_button<not_yet<Actions>> add_member;
+    using add_button = icon_button<not_yet<Actions>>;
+    struct parts_t {
+      icon_view people{icon::people{}};
+      nodes::Text title;
+      add_button add_member;
+    } parts;
     members_head(Actions* a, std::size_t count)
-        : title(std::format("{} MEMBER{}", count, count == 1 ? "" : "S"), 13.0f, dim_colour, true),
-          add_member(icon::add_person{}, {a, "Adding members"}) {
+        : parts{.title = nodes::Text(std::format("{} MEMBER{}", count, count == 1 ? "" : "S"), 13.0f, dim_colour, true),
+                .add_member = add_button(icon::add_person{}, {a, "Adding members"})} {
       this->setHorizontal();
       this->setGap(10.0f);
       fState.apply({.fill = true, .padding = {6.0f, 10.0f, 6.0f, 16.0f}});
-      title.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-    }
-    void forEachChild(auto&& f) {
-      f(people);
-      f(title);
-      f(add_member);
+      parts.title.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
     }
   };
-  // The members' head, as a function of how many there are.
-  nodes::Memo<std::size_t, members_head> members_header;
-  // The members, in a list of their own that scrolls, reconciled: its place
-  // and its rows kept while they show the same.
-  nodes::ScrollContainer<nodes::Flow<std::vector<member_row<open_person>>>> members{
-      nodes::Flow<std::vector<member_row<open_person>>>({.spacingY = 0.0f, .wrap = false}, {})};
+  using member_list = nodes::ScrollContainer<nodes::Flow<std::vector<member_row<open_person>>>>;
+  struct parts_t {
+    nodes::Memo<view, head> upper;
+    nodes::Box<> band_2 = section_band();
+    // The members' head, as a function of how many there are.
+    nodes::Memo<std::size_t, members_head> members_header;
+    // The members, in a list of their own that scrolls, reconciled: its
+    // place and its rows kept while they show the same.
+    member_list members{nodes::Flow<std::vector<member_row<open_person>>>({.spacingY = 0.0f, .wrap = false}, {})};
+    nodes::Box<> edge{band_colour};  // its left edge
+  } parts;
+  nodes::Memo<view, head>& upper = parts.upper;
+  nodes::Box<>& band_2 = parts.band_2;
+  nodes::Memo<std::size_t, members_head>& members_header = parts.members_header;
+  member_list& members = parts.members;
   // The group's view, to come back to from a member's page.
   view group_view;
 
@@ -405,7 +403,7 @@ struct info_panel : nodes::Stack {
 
   explicit info_panel(Actions* a) : actions(a) {
     fState.apply({.background = sidebar_colour, .masking = true});
-    edge.apply({.place = scene::anchor::kTopLeft, .fillY = true, .width = 1.0f});
+    parts.edge.apply({.place = scene::anchor::kTopLeft, .fillY = true, .width = 1.0f});
     this->setGap(2.0f);
     upper.apply({.fillX = true, .autoSize = scene::axes::kY});
     members_header.apply({.fillX = true, .height = 48.0f});
@@ -489,14 +487,6 @@ struct info_panel : nodes::Stack {
     members_header.setVisible(list);
     members.setVisible(list);
     this->invalidateLayout();
-  }
-
-  void forEachChild(auto&& f) {
-    f(upper);
-    f(band_2);
-    f(members_header);
-    f(members);
-    f(edge);
   }
 
 };

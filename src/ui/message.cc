@@ -1160,7 +1160,9 @@ struct message_bubble : nodes::Stack {
     {
       body.parts.text.setText(shown.text);
       body.parts.text.setLinks(std::move(shown.links), accent_colour);
-      body.parts.text.setStyles(std::move(shown.styles), accent_colour);
+      // The quote's colour: the accent on theirs; on one's own, the text's,
+      // as tdesktop's outgoing blockquote -- not the accent on its accent.
+      body.parts.text.setStyles(std::move(shown.styles), outgoing ? text_colour : accent_colour);
       body.parts.text.setVisible(!shown.text.empty());
       for (const auto& [url, room] : shown.cards)
         body.parts.cards.push_back(card_of(url, room, now));

@@ -94,8 +94,17 @@ class pictures_part {
       for (const auto& [key, one] : account.conversations) {
         want(id, one.avatar, one.id.id);
         if (screen.chosen == one.id) {
+          // The people of the bubbles made -- not every member: a big room
+          // has thousands, and asking for all of them at each refresh read
+          // them from the disk, pushed out what is on screen, and read them
+          // again.
+          std::set<std::string_view> senders;
+          const auto [first, last] = screen.made_indices(one.timeline);
+          for (std::size_t i = first; i < last && i < one.timeline.size(); ++i)
+            senders.insert(one.timeline[i].sender);
           for (const member& each : one.members)
-            want(id, each.avatar, each.id);
+            if (senders.contains(each.id))
+              want(id, each.avatar, each.id);
           // Those on screen and near it, at twice the size they are drawn
           // at -- not every picture in its history, which pushed the rest out.
           const auto [from, to] = screen.made_indices(one.timeline);

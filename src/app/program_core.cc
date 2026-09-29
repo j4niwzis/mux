@@ -116,6 +116,7 @@ void app::wire() {
 }
 
 void app::before_frame() {
+  ++mux::ui::image_cache::frame();
   root().drop_closed();
   auto pending = std::exchange(ask.requests, {});
   for (const request_t& one : pending)

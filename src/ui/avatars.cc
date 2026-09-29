@@ -76,7 +76,9 @@ export namespace mux::ui {
 // pictures in messages, and whole pictures (both by their source).
 class avatar_cache {
  public:
-  // Held to this many bytes; set from Storage.
+  // Held to this many bytes; set from Storage. What was drawn in this frame
+  // or the one before is never let go, over the budget if need be: what is
+  // on screen stays.
   std::size_t budget = 32u << 20;
   void clear() {
     images_.clear();
@@ -84,12 +86,13 @@ class avatar_cache {
     bytes_ = 0;
   }
 
-  // A picture, counted as used now.
+  // A picture, counted as used now: in this frame.
   [[nodiscard]] const skia::Sp<skia::SkImage>* find(std::string_view key) {
     const auto found = images_.find(key);
     if (found == images_.end())
       return nullptr;
     order_.splice(order_.begin(), order_, found->second.used);
+    found->second.frame = frame();
     return &found->second.image;
   }
   [[nodiscard]] bool has(std::string_view key) const { return images_.contains(key); }
@@ -103,14 +106,25 @@ class avatar_cache {
     }
     const std::size_t size = static_cast<std::size_t>(image->width()) * static_cast<std::size_t>(image->height()) * 4u;
     order_.push_front(key);
-    images_.emplace(std::move(key), entry{std::move(image), order_.begin(), size});
+    images_.emplace(std::move(key), entry{std::move(image), order_.begin(), size, frame()});
     bytes_ += size;
+    // The least recently used out -- but none drawn lately: from there on,
+    // everything is newer still.
     while (bytes_ > budget && order_.size() > 1) {
       const auto oldest = images_.find(order_.back());
+      if (oldest->second.frame + 1 >= frame())
+        break;
       bytes_ -= oldest->second.bytes;
       images_.erase(oldest);
       order_.pop_back();
     }
+  }
+
+  // The frame being drawn, counted by the window: what was used in it and
+  // the one before is on screen.
+  static std::uint64_t& frame() {
+    static std::uint64_t now = 1;
+    return now;
   }
 
  private:
@@ -118,6 +132,7 @@ class avatar_cache {
     skia::Sp<skia::SkImage> image;
     std::list<std::string>::iterator used;
     std::size_t bytes = 0;
+    std::uint64_t frame = 0;  // the last it was drawn in
   };
   std::list<std::string> order_;  // the most recently used first
   std::map<std::string, entry, std::less<>> images_;

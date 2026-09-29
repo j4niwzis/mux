@@ -442,8 +442,14 @@ inline tcp::socket connect(loop& owner, std::string_view host, std::uint16_t por
 // A proxy to connect through: SOCKS5 (RFC 1928, with RFC 1929's user name
 // and password where one is given) or HTTP CONNECT (RFC 9110, 9.3.6, with
 // Basic authorization where one is given).
+namespace proxy_kind {
+struct socks5 {};
+struct http {};
+}  // namespace proxy_kind
+using proxy_kind_t = std::variant<proxy_kind::socks5, proxy_kind::http>;
+
 struct proxy {
-  std::string kind = "socks5";  // "socks5" or "http"
+  proxy_kind_t kind = proxy_kind::socks5{};
   std::string host;
   std::uint16_t port = 1080;
   std::optional<std::string> username;
@@ -572,15 +578,19 @@ inline void http_connect(loop& owner, tcp::socket& socket, const proxy& via, std
 
 }  // namespace detail
 
+template <class... F>
+struct overloaded_kind : F... {
+  using F::operator()...;
+};
+
 // A connection to host:port, through a proxy where one is given.
 inline tcp::socket connect(loop& owner, const std::optional<proxy>& via, std::string_view host, std::uint16_t port) {
   if (!via)
     return connect(owner, host, port);
   tcp::socket socket = connect(owner, via->host, via->port);
-  if (via->kind == "http")
-    detail::http_connect(owner, socket, *via, host, port);
-  else
-    detail::socks5(owner, socket, *via, host, port);
+  std::visit(overloaded_kind{[&](proxy_kind::socks5) { detail::socks5(owner, socket, *via, host, port); },
+                             [&](proxy_kind::http) { detail::http_connect(owner, socket, *via, host, port); }},
+             via->kind);
   return socket;
 }
 

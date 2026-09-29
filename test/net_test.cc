@@ -172,7 +172,7 @@ TEST(Net, ThroughASocks5Proxy) {
   });
   std::string heard;
   running.spawn([&] {
-    auto socket = net::connect(running, net::proxy{.kind = "socks5", .host = "127.0.0.1", .port = proxy.port()},
+    auto socket = net::connect(running, net::proxy{.kind = net::proxy_kind::socks5{}, .host = "127.0.0.1", .port = proxy.port()},
                                "example.org", 5222);
     heard = net::detail::read_exactly(running, socket, 5, "reading");
   });

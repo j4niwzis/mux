@@ -127,4 +127,21 @@ TEST(Config, WhatIsWrongWithAMatrixAccount) {
   EXPECT_TRUE(check(matrix_account{.user_id = "@bob:example.org", .password = "x", .device_name = ""}));
 }
 
+// What an account keeps of itself -- its proxy's name, its receipts -- and
+// the program's proxy profiles, saved and read back as they were.
+TEST(Config, ProxiesAndTheirAccountsAreKept) {
+  scratch here;
+  const fs::path where = here.dir / "accounts.json";
+  mux::config::file kept;
+  kept.xmpp.push_back({.address = "alice@example.com", .password = "x", .read_receipts = false, .proxy = "tor"});
+  kept.proxies = std::vector<mux::config::proxy_settings>{
+      {.name = "tor", .kind = "socks5", .host = "127.0.0.1", .port = 9050}};
+  ASSERT_TRUE(mux::config::save(where, kept).has_value());
+  const auto got = mux::config::load(where);
+  ASSERT_TRUE(got.has_value()) << got.error();
+  EXPECT_EQ(*got, kept);
+  ASSERT_EQ(got->xmpp.size(), 1u);
+  EXPECT_EQ(got->xmpp.front().proxy, "tor");
+}
+
 }  // namespace

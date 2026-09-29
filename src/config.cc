@@ -11,6 +11,63 @@ import knot;
 
 export namespace mux::config {
 
+// A theme, and what draws the window: kept as words in the file, read into
+// these once, and used as these everywhere else.
+namespace theme {
+struct dark {
+  friend bool operator==(dark, dark) = default;
+};
+struct light {
+  friend bool operator==(light, light) = default;
+};
+}  // namespace theme
+using theme_t = std::variant<theme::dark, theme::light>;
+namespace renderer {
+struct opengl {
+  friend bool operator==(opengl, opengl) = default;
+};
+struct software {
+  friend bool operator==(software, software) = default;
+};
+}  // namespace renderer
+using renderer_t = std::variant<renderer::opengl, renderer::software>;
+namespace proxy_kind {
+struct socks5 {
+  friend bool operator==(socks5, socks5) = default;
+};
+struct http {
+  friend bool operator==(http, http) = default;
+};
+}  // namespace proxy_kind
+using proxy_kind_t = std::variant<proxy_kind::socks5, proxy_kind::http>;
+
+// The words of the file, and what they mean: anything else is the default.
+[[nodiscard]] inline theme_t theme_of(const std::optional<std::string>& word) {
+  return word == "light" ? theme_t{theme::light{}} : theme_t{theme::dark{}};
+}
+[[nodiscard]] inline renderer_t renderer_of(const std::optional<std::string>& word) {
+  return word == "software" ? renderer_t{renderer::software{}} : renderer_t{renderer::opengl{}};
+}
+[[nodiscard]] inline proxy_kind_t proxy_kind_of(std::string_view word) {
+  return word == "http" ? proxy_kind_t{proxy_kind::http{}} : proxy_kind_t{proxy_kind::socks5{}};
+}
+[[nodiscard]] constexpr std::string_view word_of(theme::dark) { return "dark"; }
+[[nodiscard]] constexpr std::string_view word_of(theme::light) { return "light"; }
+[[nodiscard]] constexpr std::string_view word_of(renderer::opengl) { return "opengl"; }
+[[nodiscard]] constexpr std::string_view word_of(renderer::software) { return "software"; }
+[[nodiscard]] constexpr std::string_view word_of(proxy_kind::socks5) { return "socks5"; }
+[[nodiscard]] constexpr std::string_view word_of(proxy_kind::http) { return "http"; }
+template <class... Ts>
+[[nodiscard]] std::string word_of(const std::variant<Ts...>& one) {
+  return std::string(std::visit([](auto each) { return word_of(each); }, one));
+}
+// What a user reads for a proxy's kind.
+[[nodiscard]] constexpr std::string_view label_of(proxy_kind::socks5) { return "SOCKS5"; }
+[[nodiscard]] constexpr std::string_view label_of(proxy_kind::http) { return "HTTP"; }
+[[nodiscard]] inline std::string_view label_of(const proxy_kind_t& one) {
+  return std::visit([](auto each) { return label_of(each); }, one);
+}
+
 // A proxy, as a named profile of the program's list -- as Gajim keeps them
 // -- that accounts choose by its name: SOCKS5 or HTTP CONNECT.
 struct proxy_settings {

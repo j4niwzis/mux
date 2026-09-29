@@ -62,12 +62,15 @@ inline skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110);
 //   void toggle_mute()               -- the chosen chat muted, or not
 //   void leave_chat()                -- the chosen chat left
 //   void close_account_pages()       -- back to the list of accounts
+//   void choose_new_proxy(int)       -- the proxy of an account being added
 //   void accounts_back()              -- ← on the accounts page
 //   void account_page(int)           -- a page of the chosen account
 //   void flip_account_receipts(), choose_account_proxy(int), manage_proxies()
 //   void settings_proxies(), add_proxy(), edit_proxy(int), proxy_kind(int),
 //        save_proxy_profile(), delete_proxy_profile()
-//   void settings_appearance(), set_theme(std::string), set_renderer(std::string)
+//   void settings_appearance(), settings_rendering()
+//   void set_theme(config::theme_t), set_renderer(config::renderer_t)
+//   void proxy_kind(config::proxy_kind_t)
 //   void not_implemented(std::string what)  -- a box saying it is not there yet
 //   void close_notice()
 //   void resize_sidebar(float x)     -- the chat list's edge dragged to x
@@ -611,7 +614,7 @@ inline skia::SkColor sent_time_colour = skia::colorSetARGB(255, 170, 200, 230);
 // The colours of a theme, "dark" or "light", put in place: mux.ui's and
 // skiff-widgets'. What is made takes its colours then: the window is made
 // again after it (window::rebuild).
-inline void use_theme(std::string_view name) {
+inline void use_theme(config::theme::dark) {
   auto& widget = widgets::theme();
   widget = widgets::Theme{};
   background = skia::colorSetARGB(255, 24, 27, 30);
@@ -627,7 +630,11 @@ inline void use_theme(std::string_view name) {
   tile_colour = skia::colorSetARGB(255, 40, 45, 50);
   bubble_colour = skia::colorSetARGB(255, 33, 41, 52);
   sent_time_colour = skia::colorSetARGB(255, 170, 200, 230);
-  if (name == "light") {
+}
+inline void use_theme(config::theme::light) {
+  use_theme(config::theme::dark{});
+  auto& widget = widgets::theme();
+
     background = skia::colorSetARGB(255, 241, 243, 245);
     sidebar_colour = skia::colorSetARGB(255, 255, 255, 255);
     chosen_colour = skia::colorSetARGB(255, 229, 233, 237);
@@ -650,7 +657,9 @@ inline void use_theme(std::string_view name) {
     widget.fTextFaint = skia::colorSetARGB(255, 140, 150, 160);
     widget.fAccent = accent_colour;
     widget.fOnAccent = skia::colorSetARGB(255, 255, 255, 255);
-  }
+}
+inline void use_theme(const config::theme_t& chosen) {
+  std::visit([](auto one) { use_theme(one); }, chosen);
 }
 
 
@@ -1143,7 +1152,9 @@ struct info_panel : scene::Node {
   nodes::Text id_label{"ID", 12.0f, dim_colour};
   nodes::Text members_title{"", 13.0f, dim_colour, true};
   icon_button<not_yet<Actions>> add_member;
-  std::vector<member_row> members;
+  // The members, in a list of their own that scrolls.
+  nodes::ScrollContainer<nodes::Flow<std::vector<member_row>>> members{
+      nodes::Flow<std::vector<member_row>>({.spacingY = 0.0f, .wrap = false}, {})};
   // Where the bands between the sections go, as the last layout put them.
   std::array<float, 2> bands{};
 
@@ -1156,6 +1167,7 @@ struct info_panel : scene::Node {
         leave("Leave", icon::leave{}, {a}),
         add_member(icon::add_person{}, {a, "Adding members"}) {
     fState.apply({.masking = true});
+    std::get<0>(members.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
     name.setElided(true);
     status.setElided(true);
     id_text.setElided(true);
@@ -1170,9 +1182,11 @@ struct info_panel : scene::Node {
                          : presence_of(now, one.id.account, one.id.id));
     id_text.setText(one.id.id);
     members_title.setText(std::format("{} MEMBER{}", one.members.size(), one.members.size() == 1 ? "" : "S"));
-    members.clear();
+    auto& rows = std::get<0>(std::get<0>(members.fChildren).fChildren);
+    rows.clear();
     for (const member& each : one.members)
-      members.emplace_back(each, presence_of(now, one.id.account, each.id));
+      rows.emplace_back(each, presence_of(now, one.id.account, each.id));
+    members.setVisible(group);
     members_title.setVisible(group);
     add_member.setVisible(group);
     this->invalidateLayout();
@@ -1235,11 +1249,9 @@ struct info_panel : scene::Node {
     add_member.fState.arrange(-10.0f, 0.0f, scene::anchor::kCentreRight, scene::anchor::kCentreRight);
     scene::layout(add_member, head);
     y += 48.0f;
-    for (member_row& each : members) {
-      each.fState.arrange(0.0f, y);
-      scene::layout(each, box);
-      y += each.bounds().height();
-    }
+    members.apply({.width = box.width(), .height = std::max(0.0f, box.height() - y)});
+    members.fState.arrange(0.0f, y);
+    scene::layout(members, box);
   }
 
   void drawSelf(skia::SkCanvas* canvas, float alpha) {
@@ -1584,13 +1596,24 @@ struct conversations_screen : scene::Node {
 
 struct field : scene::Node {
   nodes::Text caption;
-  widgets::TextBox<> box;
+  widgets::TextArea<> box;
+  // Where the text is, as the last layout put it: the plate drawn under it.
+  skia::SkRect plate = skia::SkRect::MakeEmpty();
 
   field(std::string label, std::string placeholder, std::string text = {})
       : caption(std::move(label), 13.0f, dim_colour), box(std::move(placeholder)) {
     fState.apply({.fillX = true, .height = 64.0f});
+    box.setSingleLine(true);
     box.apply({.fillX = true});
     box.setText(std::move(text));
+  }
+  void drawSelf(skia::SkCanvas* canvas, float alpha) {
+    skia::SkFont* font = skiff::paint::defaultFont();
+    if (font == nullptr || plate.isEmpty())
+      return;
+    const skiff::paint::Painter p(canvas, *font);
+    p.fillRounded(plate, 6.0f, tile_colour, alpha);
+    p.strokeRounded(plate, 6.0f, box.focused() ? accent_colour : band_colour, 1.0f, alpha);
   }
   void forEachChild(auto&& f) {
     f(caption);
@@ -1600,8 +1623,10 @@ struct field : scene::Node {
     const skia::SkRect area = fState.contentBox();
     caption.fState.arrange(0.0f, 0.0f);
     scene::layout(caption, area);
-    box.fState.arrange(0.0f, caption.bounds().height() + 4.0f);
-    scene::layout(box, area);
+    const float top = caption.bounds().fBottom + 4.0f;
+    box.fState.arrange(0.0f, 0.0f);
+    scene::layout(box, skia::SkRect::MakeLTRB(area.fLeft + 10.0f, top, area.fRight - 10.0f, area.fBottom));
+    plate = skia::SkRect::MakeLTRB(area.fLeft, top, area.fRight, box.bounds().fBottom);
   }
 };
 
@@ -1904,6 +1929,14 @@ struct closes_on_escape : scene::Node {
 
 // ---- adding an account ------------------------------------------------------------
 
+// A proxy chosen for an account being added: -1 for none.
+template <class Actions>
+struct choose_new_proxy {
+  Actions* actions = nullptr;
+  int index = -1;
+  void operator()() const { actions->choose_new_proxy(index); }
+};
+
 // Adding an account, beside the list of them: XMPP or Matrix at the top, and
 // that protocol's form under it.
 template <class Actions>
@@ -1915,14 +1948,25 @@ struct add_account_pane : scene::Node {
   segment<ask<Actions, &Actions::add_matrix>> matrix_tab;
   nodes::Text note{"", 13.0f, dim_colour};
   account_form<Actions> form;
+  // The proxy the new account goes through: none, or one of the profiles.
+  nodes::Text proxy_title = nodes::Text("Proxy", 13.0f, dim_colour);
+  std::vector<segment<choose_new_proxy<Actions>>> proxy_choices;
+  std::vector<std::string> proxy_names;
+  std::optional<std::string> proxy;
   // The form coming in when the protocol changes: from the side of the
   // segment chosen, fading in.
   skiff::paint::Tween swap{1.0f, 200.0f, skiff::paint::movement::subtle{}};
   float swap_from = 0.0f;
 
-  explicit add_account_pane(Actions* a)
+  add_account_pane(Actions* a, const std::vector<config::proxy_settings>& proxies)
       : actions(a), xmpp_tab("XMPP", {a}), matrix_tab("Matrix", {a}),
         form(std::in_place_index<0>, a, std::nullopt) {
+    proxy_choices.emplace_back("None", choose_new_proxy<Actions>{a, -1});
+    for (std::size_t k = 0; k < proxies.size(); ++k) {
+      proxy_names.push_back(proxies[k].name);
+      proxy_choices.emplace_back(proxies[k].name, choose_new_proxy<Actions>{a, static_cast<int>(k)});
+    }
+    this->set_proxy(-1);
     this->fState.apply({.fill = true});
     segments.apply({.width = 187.0f, .height = 30.0f});
     note.setWrapped(true);
@@ -1931,6 +1975,8 @@ struct add_account_pane : scene::Node {
 
   void forEachChild(auto&& f) {
     f(segments);
+    f(proxy_title);
+    f(proxy_choices);
     f(xmpp_tab);
     f(matrix_tab);
     f(note);
@@ -1947,6 +1993,15 @@ struct add_account_pane : scene::Node {
     this->begin_swap(1.0f);
     this->light();
   }
+  // The proxy chosen for the new account: -1 for none.
+  void set_proxy(int index) {
+    proxy.reset();
+    if (index >= 0 && static_cast<std::size_t>(index) < proxy_names.size())
+      proxy = proxy_names[static_cast<std::size_t>(index)];
+    for (std::size_t i = 0; i < proxy_choices.size(); ++i)
+      proxy_choices[i].set_active(static_cast<int>(i) - 1 == index);
+  }
+
   void begin_swap(float side) {
     swap_from = side;
     swap.jump(0.0f);
@@ -1986,7 +2041,18 @@ struct add_account_pane : scene::Node {
     scene::layout(matrix_tab, stack.column);
     stack.y += segments.bounds().height() + 12.0f;
     note.setMaxWidth(stack.column.width());
-    stack(note, 16.0f);
+    stack(note, 10.0f);
+    if (proxy_choices.size() > 1) {
+      proxy_title.fState.arrange(0.0f, stack.y + 6.0f);
+      scene::layout(proxy_title, stack.column);
+      float x = proxy_title.bounds().width() + 12.0f;
+      for (auto& one : proxy_choices) {
+        one.fState.arrange(x, stack.y);
+        scene::layout(one, stack.column);
+        x += one.bounds().width() + 4.0f;
+      }
+      stack.y += 28.0f + 12.0f;
+    }
     const float value = swap.value();
     const float dx = (1.0f - value) * 32.0f * swap_from;
     place_form(form, skia::SkRect::MakeXYWH(stack.column.fLeft + dx, stack.column.fTop, stack.column.width(), stack.column.height()), stack.y);
@@ -2253,7 +2319,7 @@ struct account_proxy : scene::Node {
     fState.apply({.fill = true});
     choices.emplace_back("No proxy", choose_account_proxy<Actions>{a, -1}, icon::none{}, !current.has_value());
     for (std::size_t i = 0; i < all.size(); ++i)
-      choices.emplace_back(std::format("{} ({} {}:{})", all[i].name, all[i].kind == "http" ? "HTTP" : "SOCKS5",
+      choices.emplace_back(std::format("{} ({} {}:{})", all[i].name, config::label_of(config::proxy_kind_of(all[i].kind)),
                                        all[i].host, all[i].port),
                            choose_account_proxy<Actions>{a, static_cast<int>(i)}, icon::none{},
                            current && *current == all[i].name);
@@ -2292,6 +2358,8 @@ struct accounts_panel : closes_on_escape<Actions> {
       nodes::Flow<std::vector<account_entry<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
   row_item<ask<Actions, &Actions::open_new_account>> add;
   account_pages<Actions> pages;
+  // The proxy profiles, for adding an account through one.
+  std::vector<config::proxy_settings> proxies;
   nodes::Text message{"", 13.0f, error_colour};
   // No account chosen, or the chosen one.
   std::variant<nodes::Text, account_editor<Actions>, add_account_pane<Actions>, account_privacy<Actions>,
@@ -2415,7 +2483,7 @@ struct accounts_panel : closes_on_escape<Actions> {
     this->show_pages(false);
     selected.reset();
     add.set_lit(true);
-    detail.template emplace<2>(this->actions);
+    detail.template emplace<2>(this->actions, proxies);
     this->begin_swap();
     this->invalidateLayout();
   }
@@ -2623,13 +2691,15 @@ struct settings_home : scene::Node {
   row_item<ask<Actions, &Actions::settings_animations>> animations;
   row_item<ask<Actions, &Actions::settings_proxies>> proxies;
   row_item<ask<Actions, &Actions::settings_appearance>> appearance;
+  row_item<ask<Actions, &Actions::settings_rendering>> rendering;
 
   explicit settings_home(Actions* a)
       : header("Settings", {a}, {a}, false, true),
         accounts("Accounts", {a}, icon::person{}),
         animations("Animations", {a}, icon::motion{}),
         proxies("Proxies", {a}, icon::gear{}),
-        appearance("Appearance", {a}, icon::eye{}) {
+        appearance("Appearance", {a}, icon::eye{}),
+        rendering("Rendering", {a}, icon::sliders{}) {
     fState.apply({.fill = true});
   }
 
@@ -2638,6 +2708,7 @@ struct settings_home : scene::Node {
     f(accounts);
     f(animations);
     f(appearance);
+    f(rendering);
     f(proxies);
   }
   void show_motion(std::string_view) {}
@@ -2648,6 +2719,7 @@ struct settings_home : scene::Node {
     stack(accounts, 0.0f);
     stack(animations, 0.0f);
     stack(appearance, 0.0f);
+    stack(rendering, 0.0f);
     stack(proxies, 0.0f);
   }
 };
@@ -2710,7 +2782,7 @@ struct edit_proxy {
 template <class Actions>
 struct choose_proxy_kind {
   Actions* actions = nullptr;
-  int kind = 1;
+  config::proxy_kind_t kind;
   void operator()() const { actions->proxy_kind(kind); }
 };
 
@@ -2728,7 +2800,7 @@ struct proxies_page : scene::Node {
       : header("Proxies", {a}, {a}, with_back, true), add("Add proxy", {a}, icon::plus{}) {
     fState.apply({.fill = true});
     for (std::size_t i = 0; i < all.size(); ++i)
-      profiles.emplace_back(std::format("{} ({} {}:{})", all[i].name, all[i].kind == "http" ? "HTTP" : "SOCKS5",
+      profiles.emplace_back(std::format("{} ({} {}:{})", all[i].name, config::label_of(config::proxy_kind_of(all[i].kind)),
                                         all[i].host, all[i].port),
                             edit_proxy<Actions>{a, static_cast<int>(i)}, icon::gear{});
     empty.setVisible(all.empty());
@@ -2757,7 +2829,9 @@ struct proxies_page : scene::Node {
 template <class Actions>
 struct proxy_editor : scene::Node {
   int index = -1;  // in the list; -1 for a new one
-  int kind = 1;    // 1 SOCKS5, 2 HTTP
+  config::proxy_kind_t kind = config::proxy_kind::socks5{};
+  // The highlight of the kind chosen, sliding from one segment to the other.
+  skiff::paint::Tween slide{0.0f, 180.0f, skiff::paint::movement::subtle{}};
   page_header<ask<Actions, &Actions::settings_proxies>, ask<Actions, &Actions::close_settings>> header;
   field name{"Name", "Home, Tor, Work…"};
   nodes::Box<> frame{chosen_colour};
@@ -2773,8 +2847,10 @@ struct proxy_editor : scene::Node {
 
   proxy_editor(Actions* a, const std::optional<config::proxy_settings>& from, int at)
       : index(at), header(from ? from->name : std::string("New proxy"), {a}, {a}, true, true),
-        socks("SOCKS5", {a, 1}), http("HTTP", {a, 2}), save("Save", {a}), remove("Delete", {a}) {
+        socks("SOCKS5", {a, config::proxy_kind::socks5{}}), http("HTTP", {a, config::proxy_kind::http{}}),
+        save("Save", {a}), remove("Delete", {a}) {
     fState.apply({.fill = true});
+    frame.setVisible(false);
     frame.apply({.width = 2.0f * 92.0f + 3.0f, .height = 30.0f});
     password.box.setMasked(true);
     save.setPrimary(true);
@@ -2789,18 +2865,28 @@ struct proxy_editor : scene::Node {
       username.box.setText(from->username.value_or(""));
       password.box.setText(from->password.value_or(""));
     }
-    this->set_kind(from && from->kind == "http" ? 2 : 1);
+    this->set_kind(from ? config::proxy_kind_of(from->kind) : config::proxy_kind_t{config::proxy_kind::socks5{}});
+    slide.jump(slide.target());
   }
 
-  void set_kind(int to) {
+  void set_kind(const config::proxy_kind_t& to) {
     kind = to;
-    socks.set_active(kind == 1);
-    http.set_active(kind == 2);
+    std::visit(overloaded{[this](config::proxy_kind::socks5) { slide.setTarget(0.0f); },
+                          [this](config::proxy_kind::http) { slide.setTarget(1.0f); }},
+               kind);
+    socks.set_active(false);
+    http.set_active(false);
+    this->invalidateLayout();
+  }
+  [[nodiscard]] bool settling() const { return slide.moving(); }
+  void update(double now_ms) {
+    if (slide.step(now_ms))
+      this->markDamaged();
   }
 
   // The profile as typed, or what is wrong with it.
   [[nodiscard]] std::expected<config::proxy_settings, std::string> proxy() const {
-    config::proxy_settings out{.name = name.box.text(), .kind = kind == 2 ? "http" : "socks5", .host = host.box.text()};
+    config::proxy_settings out{.name = name.box.text(), .kind = config::word_of(kind), .host = host.box.text()};
     if (out.name.empty())
       return std::unexpected("Name the proxy");
     if (out.host.empty())
@@ -2822,6 +2908,20 @@ struct proxy_editor : scene::Node {
   }
   void show_motion(std::string_view) {}
   void show_receipts(bool) {}
+  // The kind chosen, lit: a plate between the two segments' places, where
+  // the slide has it.
+  void drawSelf(skia::SkCanvas* canvas, float alpha) {
+    skia::SkFont* font = skiff::paint::defaultFont();
+    if (font == nullptr)
+      return;
+    const skia::SkRect& a = socks.bounds();
+    const skia::SkRect& b = http.bounds();
+    const float x = a.fLeft + (b.fLeft - a.fLeft) * slide.value();
+    const skiff::paint::Painter p(canvas, *font);
+    p.fillRounded(skia::SkRect::MakeLTRB(a.fLeft - 1.0f, a.fTop - 1.0f, b.fRight + 1.0f, b.fBottom + 1.0f), 0.0f,
+                  chosen_colour, alpha);
+    p.fillRounded(skia::SkRect::MakeXYWH(x, a.fTop, a.width(), a.height()), 0.0f, accent_colour, alpha);
+  }
 
   void forEachChild(auto&& f) {
     f(header);
@@ -2863,47 +2963,38 @@ struct proxy_editor : scene::Node {
   }
 };
 
-// A theme or a renderer chosen on the Appearance page.
+// A theme chosen on the Appearance page, a renderer on the Rendering page.
 template <class Actions>
 struct choose_theme {
   Actions* actions = nullptr;
-  std::string_view name;
-  void operator()() const { actions->set_theme(std::string(name)); }
+  config::theme_t theme;
+  void operator()() const { actions->set_theme(theme); }
 };
 template <class Actions>
 struct choose_renderer {
   Actions* actions = nullptr;
-  std::string_view name;
-  void operator()() const { actions->set_renderer(std::string(name)); }
+  config::renderer_t renderer;
+  void operator()() const { actions->set_renderer(renderer); }
 };
 
-// Settings' Appearance page: the theme, and what draws the window.
+// Settings' Appearance page: the theme, which changes at once.
 template <class Actions>
 struct appearance_page : scene::Node {
   page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>> header;
   nodes::Text theme_title = section_title("THEME");
   row_item<choose_theme<Actions>> dark;
   row_item<choose_theme<Actions>> light;
-  nodes::Text renderer_title = section_title("RENDERING");
-  row_item<choose_renderer<Actions>> gpu;
-  row_item<choose_renderer<Actions>> cpu;
-  nodes::Text note{"The theme changes at once; what draws the window, when mux starts again.", 13.0f,
-                   dim_colour};
 
-  appearance_page(Actions* a, std::string_view theme, std::string_view renderer)
+  appearance_page(Actions* a, const config::theme_t& theme)
       : header("Appearance", {a}, {a}, true, true),
-        dark("Dark", {a, "dark"}, icon::none{}, false),
-        light("Light", {a, "light"}, icon::none{}, false),
-        gpu("OpenGL (the graphics card)", {a, "opengl"}, icon::none{}, false),
-        cpu("Software (the processor)", {a, "software"}, icon::none{}, false) {
+        dark("Dark", {a, config::theme::dark{}}, icon::none{}, false),
+        light("Light", {a, config::theme::light{}}, icon::none{}, false) {
     fState.apply({.fill = true});
-    this->show(theme, renderer);
+    this->show(theme);
   }
-  void show(std::string_view theme, std::string_view renderer) {
-    dark.set_chosen(theme != "light");
-    light.set_chosen(theme == "light");
-    gpu.set_chosen(renderer != "software");
-    cpu.set_chosen(renderer == "software");
+  void show(const config::theme_t& theme) {
+    dark.set_chosen(theme == config::theme_t{config::theme::dark{}});
+    light.set_chosen(theme == config::theme_t{config::theme::light{}});
   }
   void show_motion(std::string_view) {}
   void show_receipts(bool) {}
@@ -2912,10 +3003,6 @@ struct appearance_page : scene::Node {
     f(theme_title);
     f(dark);
     f(light);
-    f(renderer_title);
-    f(gpu);
-    f(cpu);
-    f(note);
   }
   void layoutChildren() {
     column_stack stack{fState.contentBox()};
@@ -2924,12 +3011,44 @@ struct appearance_page : scene::Node {
     scene::layout(theme_title, stack.column);
     stack.y += theme_title.bounds().height() + 4.0f;
     stack(dark, 0.0f);
-    stack(light, 12.0f);
-    renderer_title.fState.arrange(20.0f, stack.y);
-    scene::layout(renderer_title, stack.column);
-    stack.y += renderer_title.bounds().height() + 4.0f;
+    stack(light, 0.0f);
+  }
+};
+
+// Settings' Rendering page: what draws the window, from the next start.
+template <class Actions>
+struct rendering_page : scene::Node {
+  page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>> header;
+  row_item<choose_renderer<Actions>> gpu;
+  row_item<choose_renderer<Actions>> cpu;
+  nodes::Text note{"Takes effect when mux starts again.", 13.0f, dim_colour};
+
+  rendering_page(Actions* a, const config::renderer_t& renderer)
+      : header("Rendering", {a}, {a}, true, true),
+        gpu("OpenGL (the graphics card)", {a, config::renderer::opengl{}}, icon::none{}, false),
+        cpu("Software (the processor)", {a, config::renderer::software{}}, icon::none{}, false) {
+    fState.apply({.fill = true});
+    note.setWrapped(true);
+    this->show(renderer);
+  }
+  void show(const config::renderer_t& renderer) {
+    gpu.set_chosen(renderer == config::renderer_t{config::renderer::opengl{}});
+    cpu.set_chosen(renderer == config::renderer_t{config::renderer::software{}});
+  }
+  void show_motion(std::string_view) {}
+  void show_receipts(bool) {}
+  void forEachChild(auto&& f) {
+    f(header);
+    f(gpu);
+    f(cpu);
+    f(note);
+  }
+  void layoutChildren() {
+    column_stack stack{fState.contentBox()};
+    stack(header, 6.0f);
     stack(gpu, 0.0f);
     stack(cpu, 10.0f);
+    note.setMaxWidth(std::max(0.0f, stack.column.width() - 40.0f));
     note.fState.arrange(20.0f, stack.y);
     scene::layout(note, stack.column);
   }
@@ -2940,8 +3059,22 @@ struct settings_dialog : scene::Node {
   Actions* actions = nullptr;
   std::string motion;
   std::variant<settings_home<Actions>, animations_page<Actions>, proxies_page<Actions>, proxy_editor<Actions>,
-               appearance_page<Actions>>
+               appearance_page<Actions>, rendering_page<Actions>>
       page;
+  // What is up coming in from the side, fading in, when the page changes.
+  skiff::paint::Tween swap{1.0f, 200.0f, skiff::paint::movement::subtle{}};
+  float swap_from = 1.0f;
+  void begin_swap(float side) {
+    swap_from = side;
+    swap.jump(0.0f);
+    swap.setTarget(1.0f);
+    this->invalidateLayout();
+  }
+  [[nodiscard]] bool settling() const { return swap.moving(); }
+  void update(double now_ms) {
+    if (swap.step(now_ms))
+      this->invalidateLayout();
+  }
 
   settings_dialog(Actions* a, std::string level) : actions(a), motion(std::move(level)), page(std::in_place_index<0>, a) {
     fState.apply({.fill = true});
@@ -2949,13 +3082,28 @@ struct settings_dialog : scene::Node {
 
   void forEachChild(auto&& f) { f(page); }
 
-  void show_home() { page.template emplace<0>(actions); }
+  // Home comes back from the left, the pages come in from the right.
+  void show_home() {
+    page.template emplace<0>(actions);
+    this->begin_swap(-1.0f);
+  }
   void show_animations() {
+    this->begin_swap(1.0f);
     page.template emplace<1>(actions);
     this->show_motion(motion);
   }
-  void show_appearance(std::string_view theme, std::string_view renderer) {
-    page.template emplace<4>(actions, theme, renderer);
+  void show_appearance(const config::theme_t& theme) {
+    page.template emplace<4>(actions, theme);
+    this->begin_swap(1.0f);
+  }
+  void show_rendering(const config::renderer_t& renderer) {
+    page.template emplace<5>(actions, renderer);
+    this->begin_swap(1.0f);
+  }
+  [[nodiscard]] rendering_page<Actions>* rendering() {
+    return std::visit(overloaded{[](rendering_page<Actions>& one) { return &one; },
+                                 [](auto&) -> rendering_page<Actions>* { return nullptr; }},
+                      page);
   }
   [[nodiscard]] appearance_page<Actions>* appearance() {
     return std::visit(overloaded{[](appearance_page<Actions>& one) { return &one; },
@@ -2964,9 +3112,11 @@ struct settings_dialog : scene::Node {
   }
   void show_proxies(const std::vector<config::proxy_settings>& all, bool with_back = true) {
     page.template emplace<2>(actions, all, with_back);
+    this->begin_swap(1.0f);
   }
   void show_proxy(const std::optional<config::proxy_settings>& from, int index) {
     page.template emplace<3>(actions, from, index);
+    this->begin_swap(1.0f);
   }
   [[nodiscard]] proxy_editor<Actions>* editor() {
     return std::visit(overloaded{[](proxy_editor<Actions>& one) { return &one; },
@@ -2983,7 +3133,11 @@ struct settings_dialog : scene::Node {
     std::visit(
         [this](auto& one) {
           one.fState.arrange(0.0f, 0.0f);
-          scene::layout(one, fState.contentBox());
+          const float value = swap.value();
+          const skia::SkRect box = fState.contentBox();
+          one.fState.setAlpha(value);
+          scene::layout(one, skia::SkRect::MakeXYWH(box.fLeft + (1.0f - value) * 32.0f * swap_from, box.fTop,
+                                                    box.width(), box.height()));
         },
         page);
   }

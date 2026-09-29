@@ -47,12 +47,13 @@ struct stub {
   void not_implemented(std::string) {}
   void close_notice() {}
   void resize_info(float) {}
+  void choose_new_proxy(int) {}
   void toggle_mute() {}
   void close_account_pages() {}
   void accounts_back() {}
   void account_page(int) {}
   void flip_account_receipts() {}
-  void proxy_kind(int) {}
+  void proxy_kind(mux::config::proxy_kind_t) {}
   void choose_account_proxy(int) {}
   void manage_proxies() {}
   void settings_proxies() {}
@@ -61,8 +62,9 @@ struct stub {
   void save_proxy_profile() {}
   void delete_proxy_profile() {}
   void settings_appearance() {}
-  void set_theme(std::string) {}
-  void set_renderer(std::string) {}
+  void settings_rendering() {}
+  void set_theme(mux::config::theme_t) {}
+  void set_renderer(mux::config::renderer_t) {}
   void leave_chat() {}
 };
 

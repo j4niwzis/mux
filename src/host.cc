@@ -131,6 +131,10 @@ inline skiff::scene::Key key_of(SDL_Keycode key) {
     case SDLK_END: return keys::kEnd;
     case SDLK_BACKSPACE: return keys::kBackspace;
     case SDLK_DELETE: return keys::kDelete;
+    case SDLK_A: return keys::kA;
+    case SDLK_C: return keys::kC;
+    case SDLK_V: return keys::kV;
+    case SDLK_X: return keys::kX;
     default: return keys::kUnknown;
   }
 }
@@ -285,6 +289,14 @@ int run(App& app, const options& how) {
         SDL_StopTextInput(window);
     };
     skiff::scene::setTextFocusHook(keyboard);
+    // The system's clipboard, for copying, cutting and pasting.
+    skiff::scene::clipboard() = {+[]() -> std::string {
+                                   char* text = SDL_GetClipboardText();
+                                   std::string out = text ? text : "";
+                                   SDL_free(text);
+                                   return out;
+                                 },
+                                 +[](const std::string& text) { SDL_SetClipboardText(text.c_str()); }};
 
     bool running = true;
     bool redraw = true;

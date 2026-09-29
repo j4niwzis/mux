@@ -164,7 +164,7 @@ struct page_preview : nodes::Stack {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {6.0f, 0.0f, 2.0f, 0.0f},
                   .padding = {4.0f, 6.0f, 4.0f, 0.0f}, .cornerRadius = 4.0f,
                   .background = (accent_colour & 0x00FFFFFFu) | (0x18u << 24)});
-    parts.stripe.apply({.width = 3.0f, .fillY = true, .cornerRadius = 1.5f});
+    parts.stripe.apply({.fillY = true, .width = 3.0f, .cornerRadius = 1.5f});
     if (shown.image) {
       parts.picture.emplace([url = *shown.image] { return avatar_images().find(url); });
       parts.picture->apply({.width = 56.0f, .height = 56.0f, .cornerRadius = 6.0f});

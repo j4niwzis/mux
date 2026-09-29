@@ -149,7 +149,7 @@ struct pinned_bar : nodes::Stack {
     fState.apply({.fill = true, .padding = {6.0f, 16.0f, 7.0f, 18.0f}, .background = sidebar_colour,
                   .hoverBackground = chosen_colour});
     fState.setCursor(scene::cursor::hand{});
-    parts.stripe.apply({.width = 2.0f, .fillY = true, .cornerRadius = 1.0f});
+    parts.stripe.apply({.fillY = true, .width = 2.0f, .cornerRadius = 1.0f});
     parts.texts.parts.name.setColour(accent_colour);
     parts.divider.apply({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f});
   }

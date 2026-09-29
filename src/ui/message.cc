@@ -700,7 +700,19 @@ struct message_bubble : nodes::Stack {
         fState.apply({.minWidth = std::max(base_min, widest)});
         this->invalidateLayout();
       }
+      // On the last line: its bottom where the text's is, wherever the text
+      // ends in the bubble -- anchored to the bubble's bottom alone, it stood
+      // above the line it is beside.
+      if (inside) {
+        const float drop = text.bounds().fBottom - fState.contentBox().fBottom;
+        if (std::abs(drop - time_drop) > 0.25f) {
+          time_drop = drop;
+          inline_time.apply({.y = drop});
+          this->invalidateLayout();
+        }
+      }
     }
+    float time_drop = 0.0f;
     body_column(bool mine, std::string said, std::string when)
         : outgoing(mine),
           parts{.text = nodes::Text(std::move(said), 13.0f, text_colour),

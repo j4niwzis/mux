@@ -231,6 +231,9 @@ struct message {
   };
   std::vector<reaction_event> reaction_events;
   std::optional<mux::attachment> attachment;
+  // Several pictures or files in one message, as a gallery (MSC4274) carries
+  // them: shown as an album.
+  std::vector<mux::attachment> album;
   friend bool operator==(const message&, const message&) = default;
 };
 

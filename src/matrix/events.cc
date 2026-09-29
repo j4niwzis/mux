@@ -80,6 +80,37 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
           made.body = {};  // no caption: the body was the file's name
       }
     }
+    // A gallery (MSC4274): each of its itemtypes read as a picture or a file
+    // alone is, its body the caption.
+    if (std::visit(overloaded{[](msgtype::gallery) { return true; }, [](const auto&) { return false; }},
+                   msgtype_of(content.msgtype)))
+      if (const knot::value* items = extra(content.rest, one.content, "itemtypes"); items && items->is<knot::value::array>())
+        for (const knot::value& item : items->as<knot::value::array>()) {
+          const auto kind = text(member(item, "itemtype"));
+          const bool is_picture_item = std::visit([](auto of) { return of.picture; }, msgtype_of(kind));
+          mux::attachment carried;
+          carried.source = text(member(item, "url")).value_or("");
+          carried.name = text(member(item, "filename")).value_or(text(member(item, "body")).value_or(""));
+          if (const knot::value* info = member(item, "info")) {
+            const auto number = [&](std::string_view key) -> std::int64_t {
+              const knot::value* got = member(*info, key);
+              return got && got->is<std::int64_t>() ? got->as<std::int64_t>() : 0;
+            };
+            carried.mimetype = text(member(*info, "mimetype")).value_or("");
+            carried.size = number("size");
+            carried.width = static_cast<int>(number("w"));
+            carried.height = static_cast<int>(number("h"));
+            carried.blurhash = text(member(*info, "xyz.amorgan.blurhash"));
+          }
+          if (is_picture_item)
+            carried.kind = attachment_kind::image{.moves = moving_type(carried.mimetype)};
+          if (!carried.source.empty())
+            made.album.push_back(std::move(carried));
+        }
+    // Nothing mux can show of it: said so, so that it is there to be looked
+    // at (View Source) rather than an empty space.
+    if (made.body.plain.empty() && !made.body.html && !made.attachment && made.album.empty())
+      made.body.plain = "Unsupported message";
     if (relates)
       if (const knot::value* reply = member(*relates, "m.in_reply_to"))
         made.replies_to = text(member(*reply, "event_id"));

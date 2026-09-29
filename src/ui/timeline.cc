@@ -199,6 +199,18 @@ struct timeline_area : scene::Node {
                                 std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day}, clock_of(one.said.at)));
           return true;
         }
+        // A picture of an album: seen whole, as one alone is.
+        if (one.parts.body.parts.album)
+          for (const auto& row : one.parts.body.parts.album->parts.rows)
+            for (const picture_view& cell : row.parts.cells)
+              if (cell.bounds().contains(press.x, press.y)) {
+                const conversation* chat = seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr;
+                const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
+                actions->open_picture(cell.source, one.sender, chat ? sender_name(*chat, one.sender) : one.sender,
+                                      std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day},
+                                                  clock_of(one.said.at)));
+                return true;
+              }
         if (one.parts.body.parts.file && one.parts.body.parts.file->bounds().contains(press.x, press.y) && one.said.attachment) {
           if (one.parts.body.parts.file->sound)
             actions->play_audio(one.parts.body.parts.file->source);

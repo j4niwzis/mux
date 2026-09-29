@@ -205,6 +205,53 @@ struct page_preview : nodes::Stack {
   }
 };
 
+// Several pictures in one message, as tdesktop shows an album: rows filling
+// its width with a thin gap between -- where they are odd, the first alone
+// and wide, then pairs -- each picture cut to fill its cell.
+struct album_view : nodes::Stack {
+  struct row : nodes::Stack {
+    struct parts_t {
+      std::vector<picture_view> cells;
+    } parts;
+    row() {
+      this->setHorizontal();
+      this->setGap(2.0f);
+      fState.apply({.autoSize = scene::axes::kBoth});
+    }
+  };
+  struct parts_t {
+    std::vector<row> rows;
+  } parts;
+  static constexpr float kWidth = 360.0f, kGap = 2.0f;
+  explicit album_view(const std::vector<attachment>& items) {
+    this->setGap(kGap);
+    fState.apply({.autoSize = scene::axes::kBoth});
+    std::vector<std::size_t> per_row;
+    std::size_t placed = items.size() % 2 == 1 ? 1 : 0;
+    if (placed == 1)
+      per_row.push_back(1);
+    while (placed < items.size()) {
+      per_row.push_back(std::min<std::size_t>(2, items.size() - placed));
+      placed += per_row.back();
+    }
+    parts.rows.reserve(per_row.size());
+    std::size_t at = 0;
+    for (const std::size_t count : per_row) {
+      auto& made = parts.rows.emplace_back();
+      const float w = (kWidth - kGap * static_cast<float>(count - 1)) / static_cast<float>(count);
+      for (std::size_t i = 0; i < count; ++i, ++at) {
+        const attachment& item = items[at];
+        const float ratio = item.width > 0 && item.height > 0
+                                ? static_cast<float>(item.height) / static_cast<float>(item.width)
+                                : 0.75f;
+        const float h = count == 1 ? std::clamp(w * ratio, 120.0f, 300.0f) : std::clamp(w * 0.8f, 100.0f, 220.0f);
+        made.parts.cells.emplace_back(item.source, item.width, item.height);
+        made.parts.cells.back().set_cell(std::floor(w), std::floor(h));
+      }
+    }
+  }
+};
+
 // One message, as Telegram Desktop shows it: a rounded bubble, on the right
 // and blue for what was sent from here, on the left otherwise; in a group,
 // the sender's name in their colour over the first of a run and their
@@ -269,7 +316,19 @@ struct picture_view : scene::Node {
   }
   // Fitted into 430 by 430 and into the room there is, its proportions
   // kept; no side under 100 where the room allows.
+  // A cell of an album: its size given, the picture cut to fill it.
+  float cell_w = 0.0f, cell_h = 0.0f;
+  void set_cell(float w, float h) {
+    cell_w = w;
+    cell_h = h;
+    this->invalidateLayout();
+  }
   void measure(const skia::SkRect& parent) {
+    if (cell_w > 0.0f) {
+      fState.fWidth = cell_w;
+      fState.fHeight = cell_h;
+      return;
+    }
     float w = width > 0 ? static_cast<float>(width) : 320.0f;
     float h = height > 0 ? static_cast<float>(height) : 240.0f;
     // The picture's own proportions, where the message said none or others.
@@ -752,6 +811,7 @@ struct message_bubble : nodes::Stack {
       std::optional<name_row> name;
       std::optional<quote_row> quote;
       std::optional<picture_view> picture;
+      std::optional<album_view> album;
       std::optional<file_view> file;
       nodes::BasicText<message_pictures> text;
       std::vector<link_card> cards;
@@ -787,7 +847,7 @@ struct message_bubble : nodes::Stack {
     // where it is narrower; on a line of its own only where they do not.
     // Decided from the last layout; a change is laid out at the next.
     void update(double now_ms) {
-      auto& [name, quote, picture, file, text, cards, preview, reactions, time, inline_time, tail] = parts;
+      auto& [name, quote, picture, album, file, text, cards, preview, reactions, time, inline_time, tail] = parts;
       if (!cards.empty() || preview || (!text.visible() && !reactions)) {
         time_placed = true;  // under it, as it is
         return;
@@ -858,7 +918,7 @@ struct message_bubble : nodes::Stack {
     // checks the guess, above.
     bool guessed = false;
     void guess_time(skia::SkFont& font) {
-      auto& [name, quote, picture, file, text, cards, preview, reactions, time, inline_time, tail] = parts;
+      auto& [name, quote, picture, album, file, text, cards, preview, reactions, time, inline_time, tail] = parts;
       if (std::exchange(guessed, true) || text.text().empty())
         return;
       const skiff::paint::Painter p(nullptr, font);
@@ -879,7 +939,7 @@ struct message_bubble : nodes::Stack {
                 .time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour),
                 .inline_time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour)},
           plate(mine ? out_bubble_colour : bubble_colour) {
-      auto& [name, quote, picture, file, text, cards, preview, reactions, time, inline_time, tail] = parts;
+      auto& [name, quote, picture, album, file, text, cards, preview, reactions, time, inline_time, tail] = parts;
       this->setGap(2.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
                     .padding = {kPadY, kPadX, kPadY, kPadX}, .cornerRadius = 12.0f, .background = mine ? out_bubble_colour : bubble_colour});
@@ -985,6 +1045,9 @@ struct message_bubble : nodes::Stack {
         }
       }
     }
+    // A gallery: its pictures as an album, its body the caption under it.
+    if (!said.album.empty())
+      body.parts.album.emplace(said.album);
     // Formatted, it is drawn from its HTML: its text, and its links; plain,
     // its links are the URLs in it.
     // Its links in its text, where they stand: an <a>'s label going where

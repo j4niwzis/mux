@@ -51,9 +51,12 @@ struct emote {
 struct other {  // m.text, m.notice, and what is not known
   static constexpr bool carries = false, picture = false, is_emote = false;
 };
+struct gallery {  // MSC4274: several in one message, in its itemtypes
+  static constexpr bool carries = false, picture = false, is_emote = false;
+};
 }  // namespace msgtype
 using msgtype_t = std::variant<msgtype::image, msgtype::file, msgtype::video, msgtype::audio, msgtype::emote,
-                               msgtype::other>;
+                               msgtype::other, msgtype::gallery>;
 namespace event_type {
 struct encrypted {};           // m.room.encrypted
 struct redaction {};           // m.room.redaction
@@ -149,6 +152,7 @@ template <class Variant, class Other>
   static const std::unordered_map<std::string_view, msgtype_t> known = {
       {"m.image", msgtype::image{}}, {"m.file", msgtype::file{}},   {"m.video", msgtype::video{}},
       {"m.audio", msgtype::audio{}}, {"m.emote", msgtype::emote{}},
+      {"dm.filament.gallery", msgtype::gallery{}}, {"m.gallery", msgtype::gallery{}},
   };
   return named<msgtype_t, msgtype::other>(known, name);
 }

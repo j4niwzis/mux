@@ -186,6 +186,12 @@ class pictures_part {
               if (moves(said.attachment->kind))
                 this->want_whole(id, said.attachment->source);
             }
+            // An album's pictures, each as one alone.
+            for (const attachment& item : said.album)
+              if (is_picture(item.kind)) {
+                this->want_thumbnail(id, item.source);
+                this->make_preview(item);
+              }
             // Its first link's preview, once; and the preview's picture.
             if (const auto link = mux::ui::first_link_of(said)) {
               if (const auto found = s_->model->previews.find(*link); found != s_->model->previews.end()) {

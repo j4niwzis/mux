@@ -129,6 +129,13 @@ int main(int argc, char** argv) {
   // The account shown last, shown again once it is in the model: accounts
   // arrive after the first frame, and the first one there is not the one.
   program.last_account = saved.last_account;
+  // The emoji picked lately: shown first in the panels, and kept as picked.
+  program.recent_emoji = saved.recent_emoji.value_or(std::vector<std::string>{});
+  mux::ui::recent_emoji() = program.recent_emoji;
+  mux::ui::on_recent_emoji() = [&program] {
+    program.recent_emoji = mux::ui::recent_emoji();
+    (void)program.write();
+  };
   if (saved.last_account)
     program.root().main().wanted = mux::account_id{mux::ui::protocol_of(*saved.last_account), *saved.last_account};
   program.theme = mux::config::theme_of(saved.theme);

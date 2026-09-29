@@ -306,6 +306,8 @@ struct file {
   std::optional<std::string> motion;
   // The account shown last, by its address: shown again at the next start.
   std::optional<std::string> last_account;
+  // The emoji picked lately, newest first.
+  std::optional<std::vector<std::string>> recent_emoji;
   std::optional<std::vector<muted_chat>> muted;
   // The proxy profiles accounts choose from.
   std::optional<std::vector<proxy_settings>> proxies;

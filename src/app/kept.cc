@@ -19,6 +19,8 @@ struct kept_settings {
   std::optional<std::string> motion;
   // The account shown last, by its address, for the next start.
   std::optional<std::string> last_account;
+  // The emoji picked lately, newest first.
+  std::vector<std::string> recent_emoji;
   // The theme and the renderer, for the next start.
   mux::config::theme_t theme = mux::config::theme::tinted{};
   mux::config::accent_t accent = mux::config::accent::theme_own{};
@@ -53,6 +55,8 @@ struct kept_settings {
     auto out = mux::config::file_of(saved);
     out.motion = motion;
     out.last_account = last_account;
+    if (!recent_emoji.empty())
+      out.recent_emoji = recent_emoji;
     if (!proxies.empty())
       out.proxies = proxies;
     out.theme = mux::config::word_of(theme);

@@ -24,6 +24,28 @@ import :forms;
 
 export namespace mux::ui {
 
+// The emoji picked lately, newest first, as tdesktop keeps them (at most
+// 42); and what is told when one is picked, so that the program keeps the
+// list in its file.
+inline std::vector<std::string>& recent_emoji() {
+  static std::vector<std::string> kept;
+  return kept;
+}
+inline std::function<void()>& on_recent_emoji() {
+  static std::function<void()> told;
+  return told;
+}
+inline void remember_emoji(const std::string& glyph) {
+  constexpr std::size_t kKept = 42;
+  auto& all = recent_emoji();
+  std::erase(all, glyph);
+  all.insert(all.begin(), glyph);
+  if (all.size() > kKept)
+    all.resize(kKept);
+  if (const auto& told = on_recent_emoji())
+    told();
+}
+
 // Every emoji, as tdesktop's panel lists them (chat_helpers.style): a search
 // at its top; the groups one under another in one list that scrolls, each a
 // semibold header over its emoji, 37 across (desiredSize); and a footer of
@@ -51,7 +73,9 @@ struct emoji_panel : nodes::Stack {
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
-      panel->pick(glyph);
+      const std::string chosen = glyph;
+      remember_emoji(chosen);
+      panel->pick(chosen);
       return true;
     }
   };
@@ -71,6 +95,17 @@ struct emoji_panel : nodes::Stack {
       cells.reserve(all.size());
       for (const alef::emoji* one : all)
         cells.emplace_back(p, logic::emoji_text(*one));
+    }
+    // The recently used: emoji as they were picked, text already.
+    section(emoji_panel* p, std::string_view name, const std::vector<std::string>& glyphs)
+        : parts{.title = nodes::Text(std::string(name), 13.0f, dim_colour, true)} {
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+      parts.title.apply({.margin = {10.0f, 0.0f, 6.0f, 7.0f}});
+      parts.cells.apply({.fillX = true, .autoSize = scene::axes::kY});
+      auto& cells = std::get<0>(parts.cells.fChildren);
+      cells.reserve(glyphs.size());
+      for (const std::string& one : glyphs)
+        cells.emplace_back(p, one);
     }
   };
   // A group's tab in the footer: its first emoji (iconArea 28).
@@ -113,6 +148,8 @@ struct emoji_panel : nodes::Stack {
   } parts;
   // Whether a search is shown, not the groups: no tab is lit then.
   bool searching = false;
+  // Where the groups begin in the list: after the recently used, if any.
+  std::size_t first_group = 0;
 
   // Sized by where it is shown.
   explicit emoji_panel(Pick what) : pick(std::move(what)), parts{.field = field_t("Search emoji", {this})} {
@@ -135,7 +172,12 @@ struct emoji_panel : nodes::Stack {
   void show_all() {
     auto& all = this->sections();
     all.clear();
-    all.reserve(alef::emoji_groups.size());
+    all.reserve(alef::emoji_groups.size() + 1);
+    first_group = 0;
+    if (!recent_emoji().empty()) {
+      all.emplace_back(this, "Recently used", recent_emoji());
+      first_group = 1;
+    }
     for (std::size_t g = 0; g < alef::emoji_groups.size(); ++g)
       all.emplace_back(this, alef::emoji_groups[g].name, logic::emoji_of_group(g));
     searching = false;
@@ -159,19 +201,20 @@ struct emoji_panel : nodes::Stack {
     if (searching)
       parts.field.setText({});
     auto& all = this->sections();
-    if (group >= all.size() || all[group].bounds().isEmpty())
+    const std::size_t at = group + first_group;
+    if (at >= all.size() || all[at].bounds().isEmpty())
       return;
     auto& list = parts.list;
-    list.scrollTo(std::max(0.0f, list.current() + (all[group].bounds().fTop - list.bounds().fTop)));
+    list.scrollTo(std::max(0.0f, list.current() + (all[at].bounds().fTop - list.bounds().fTop)));
   }
   // The tab of the group at the top of the list lit.
   void update(double) {
     auto& all = this->sections();
     std::size_t lit = 0;
     const float top = parts.list.bounds().fTop + 1.0f;
-    for (std::size_t g = 0; g < all.size(); ++g)
-      if (!all[g].bounds().isEmpty() && all[g].bounds().fTop <= top)
-        lit = g;
+    for (std::size_t s = first_group; s < all.size(); ++s)
+      if (!all[s].bounds().isEmpty() && all[s].bounds().fTop <= top)
+        lit = s - first_group;
     for (tab& each : parts.footer.parts.each)
       if (const bool on = !searching && each.group == lit; on != each.fState.selected())
         each.fState.apply({.selected = on});

@@ -30,17 +30,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # The build directory and the fetched sources kept between runs. ninja
-      # decides what to rebuild from the times of files, and a checkout
-      # stamps every file with now -- so each file is given the time of the
-      # last commit that changed it, and what a run restores is only rebuilt
-      # where something it was built from changed since.
-      - name: file times from the history
-        run: |
-          git ls-files -z | while IFS= read -r -d '' file; do
-            when=$(git log -1 --format=%ct -- "$file")
-            [ -n "$when" ] && touch -d "@$when" "$file"
-          done
+      # The build directory and the fetched sources kept between runs.
       - uses: actions/cache@v4
         with:
           path: |
@@ -48,6 +38,24 @@ jobs:
             .cache/cpm
           key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ github.sha }}
           restore-keys: build-${{ runner.os }}-clang${{ matrix.llvm }}-
+
+      # ninja decides what to rebuild from the times of files, and a checkout
+      # stamps every file with now. The build restored says what it was built
+      # from -- each file's hash, written after a build that went through --
+      # and a file is new where its hash differs from that, old where not.
+      # (The times of the last commits were not enough: runs end in any
+      # order, and a build saved later than a change could pass it over.)
+      - name: file times against the build restored
+        run: |
+          git ls-files -z | xargs -0 touch -d "@1000000000"
+          if [ -f build/sources.sha1 ]; then
+            git ls-files -z | xargs -0 sha1sum | sort > /tmp/sources-now.sha1
+            sort build/sources.sha1 | comm -13 - /tmp/sources-now.sha1 | cut -c43- | while IFS= read -r file; do
+              touch "$file"
+            done
+          else
+            git ls-files -z | xargs -0 touch
+          fi
 
       # Clang and libc++, which is where `import std` comes from.
       - name: clang and libc++
@@ -93,11 +101,8 @@ jobs:
           test -f /lib/share/libc++/v1/std.cppm
 
       - name: build
+        id: build
         run: |
-          # The tests' module maps, restored from another commit's build, can
-          # miss a module added since (mux.logic.blurhash was "not found"):
-          # the tests are small, and are built afresh each time.
-          rm -rf build/test
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_COMPILER=/usr/local/bin/clang++ \
             -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
@@ -106,8 +111,19 @@ jobs:
 
           cmake --build build
 
+      # What this build was built from, for the next run to compare with:
+      # only where it went through, so that what failed is built again.
+      - name: what the build was built from
+        run: git ls-files -z | xargs -0 sha1sum > build/sources.sha1
+
       - name: test
         run: ctest --test-dir build --output-on-failure
+
+      # A build that failed may have left what it made from other sources than
+      # the list says: the list goes, and the next run builds mux afresh.
+      - name: no list where the build failed
+        if: failure() && steps.build.outcome == 'failure'
+        run: rm -f build/sources.sha1
 
       # Where the build stopped over the std module: the flags and defines
       # each copy of std, and each copy of a module, was built with -- the

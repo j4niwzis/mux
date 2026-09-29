@@ -156,10 +156,16 @@ class account {
                                                               std::chrono::seconds timeout = std::chrono::seconds(60)) {
     const loom::request asked = endpoint.to_send();
     try {
-      const auto got = over.request(asked.method_name(), asked.target, asked.body,
-                                    asked.authenticated && token_ ? std::optional<std::string_view>(*token_)
-                                                                  : std::nullopt,
-                                    timeout);
+      const std::optional<std::string_view> bearer =
+          asked.authenticated && token_ ? std::optional<std::string_view>(*token_) : std::nullopt;
+      // Outside a release build, the exchange is one function of mux.http's,
+      // not the request templates inlined into every endpoint's perform.
+      const auto got = [&] {
+        if constexpr (net::kErasedHandlers)
+          return http::exchange(over, asked.method_name(), asked.target, asked.body, bearer, timeout);
+        else
+          return over.request(asked.method_name(), asked.target, asked.body, bearer, timeout);
+      }();
       auto read = loom::read<Endpoint>(got.status, got.body);
       if (!read) {
         loom::error said = std::move(read).error();

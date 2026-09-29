@@ -32,11 +32,13 @@ import tern;
 
 // Whether completion handlers are erased (outside a release build): CMake
 // says which build this is; C++ cannot see it.
+export namespace mux::net {
 #ifdef MUX_ERASED_HANDLERS
 inline constexpr bool kErasedHandlers = true;
 #else
 inline constexpr bool kErasedHandlers = false;
 #endif
+}  // namespace mux::net
 
 export namespace mux::net {
 

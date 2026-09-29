@@ -205,53 +205,6 @@ struct page_preview : nodes::Stack {
   }
 };
 
-// Several pictures in one message, as tdesktop shows an album: rows filling
-// its width with a thin gap between -- where they are odd, the first alone
-// and wide, then pairs -- each picture cut to fill its cell.
-struct album_view : nodes::Stack {
-  struct row : nodes::Stack {
-    struct parts_t {
-      std::vector<picture_view> cells;
-    } parts;
-    row() {
-      this->setHorizontal();
-      this->setGap(2.0f);
-      fState.apply({.autoSize = scene::axes::kBoth});
-    }
-  };
-  struct parts_t {
-    std::vector<row> rows;
-  } parts;
-  static constexpr float kWidth = 360.0f, kGap = 2.0f;
-  explicit album_view(const std::vector<attachment>& items) {
-    this->setGap(kGap);
-    fState.apply({.autoSize = scene::axes::kBoth});
-    std::vector<std::size_t> per_row;
-    std::size_t placed = items.size() % 2 == 1 ? 1 : 0;
-    if (placed == 1)
-      per_row.push_back(1);
-    while (placed < items.size()) {
-      per_row.push_back(std::min<std::size_t>(2, items.size() - placed));
-      placed += per_row.back();
-    }
-    parts.rows.reserve(per_row.size());
-    std::size_t at = 0;
-    for (const std::size_t count : per_row) {
-      auto& made = parts.rows.emplace_back();
-      const float w = (kWidth - kGap * static_cast<float>(count - 1)) / static_cast<float>(count);
-      for (std::size_t i = 0; i < count; ++i, ++at) {
-        const attachment& item = items[at];
-        const float ratio = item.width > 0 && item.height > 0
-                                ? static_cast<float>(item.height) / static_cast<float>(item.width)
-                                : 0.75f;
-        const float h = count == 1 ? std::clamp(w * ratio, 120.0f, 300.0f) : std::clamp(w * 0.8f, 100.0f, 220.0f);
-        made.parts.cells.emplace_back(item.source, item.width, item.height);
-        made.parts.cells.back().set_cell(std::floor(w), std::floor(h));
-      }
-    }
-  }
-};
-
 // One message, as Telegram Desktop shows it: a rounded bubble, on the right
 // and blue for what was sent from here, on the left otherwise; in a group,
 // the sender's name in their colour over the first of a run and their
@@ -348,6 +301,54 @@ struct picture_view : scene::Node {
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
 };
+
+// Several pictures in one message, as tdesktop shows an album: rows filling
+// its width with a thin gap between -- where they are odd, the first alone
+// and wide, then pairs -- each picture cut to fill its cell.
+struct album_view : nodes::Stack {
+  struct row : nodes::Stack {
+    struct parts_t {
+      std::vector<picture_view> cells;
+    } parts;
+    row() {
+      this->setHorizontal();
+      this->setGap(2.0f);
+      fState.apply({.autoSize = scene::axes::kBoth});
+    }
+  };
+  struct parts_t {
+    std::vector<row> rows;
+  } parts;
+  static constexpr float kWidth = 360.0f, kGap = 2.0f;
+  explicit album_view(const std::vector<attachment>& items) {
+    this->setGap(kGap);
+    fState.apply({.autoSize = scene::axes::kBoth});
+    std::vector<std::size_t> per_row;
+    std::size_t placed = items.size() % 2 == 1 ? 1 : 0;
+    if (placed == 1)
+      per_row.push_back(1);
+    while (placed < items.size()) {
+      per_row.push_back(std::min<std::size_t>(2, items.size() - placed));
+      placed += per_row.back();
+    }
+    parts.rows.reserve(per_row.size());
+    std::size_t at = 0;
+    for (const std::size_t count : per_row) {
+      auto& made = parts.rows.emplace_back();
+      const float w = (kWidth - kGap * static_cast<float>(count - 1)) / static_cast<float>(count);
+      for (std::size_t i = 0; i < count; ++i, ++at) {
+        const attachment& item = items[at];
+        const float ratio = item.width > 0 && item.height > 0
+                                ? static_cast<float>(item.height) / static_cast<float>(item.width)
+                                : 0.75f;
+        const float h = count == 1 ? std::clamp(w * ratio, 120.0f, 300.0f) : std::clamp(w * 0.8f, 100.0f, 220.0f);
+        made.parts.cells.emplace_back(item.source, item.width, item.height);
+        made.parts.cells.back().set_cell(std::floor(w), std::floor(h));
+      }
+    }
+  }
+};
+
 
 // A file in a message, as tdesktop's row: a round icon in the accent, the
 // name over its size; pressed, it is saved and opened.

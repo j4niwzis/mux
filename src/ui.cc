@@ -1756,12 +1756,37 @@ struct info_panel : nodes::Stack {
     std::optional<tiles_row> tiles;
     std::optional<person_row> person_tiles;
     nodes::Box<> band_1 = section_band();
-    nodes::Text id_text;
-    nodes::Text id_label{"ID", 12.0f, dim_colour};
+    // The ID, whole -- wrapped, never cut -- and copied when pressed.
+    struct id_line : nodes::Stack {
+      nodes::Text id;
+      nodes::Text label{"ID", 12.0f, dim_colour};
+      explicit id_line(std::string text) : id(std::move(text), 14.0f, accent_colour) {
+        this->setGap(2.0f);
+        fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 20.0f, 8.0f, 20.0f}});
+        fState.setCursor(scene::cursor::hand{});
+        id.setWrapped(true);
+        id.apply({.fillX = true});
+      }
+      void forEachChild(auto&& f) {
+        f(id);
+        f(label);
+      }
+      void drawSelf(skia::SkCanvas* canvas, float alpha) {
+        if (skia::SkFont* font = skiff::paint::defaultFont(); font && (fState.fHovered || this->showsFocus()))
+          skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 0.0f, chosen_colour, alpha);
+      }
+      [[nodiscard]] bool acceptsInput() const { return true; }
+      [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+      [[nodiscard]] bool onClick(float, float) {
+        skiff::scene::setClipboardText(id.text());
+        label.setText("ID · copied");
+        return true;
+      }
+    } id_text;
 
     head(Actions* a, info_panel* panel, const view& shown)
         : top(a, panel, shown.of_person), name(shown.name, 17.0f, text_colour, true),
-          status(shown.status, 13.0f, dim_colour), id_text(shown.key, 14.0f, accent_colour) {
+          status(shown.status, 13.0f, dim_colour), id_text(shown.key) {
       this->setGap(2.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
       avatar.key = shown.key;
@@ -1774,9 +1799,6 @@ struct info_panel : nodes::Stack {
         centred->setElided(true);
         centred->apply({.alignSelf = scene::align::kMiddle, .margin = {4.0f, 20.0f, 0.0f, 20.0f}});
       }
-      id_text.setElided(true);
-      id_text.apply({.fillX = true, .margin = {8.0f, 20.0f, 0.0f, 20.0f}});
-      id_label.apply({.margin = {0.0f, 20.0f, 8.0f, 20.0f}});
     }
     void forEachChild(auto&& f) {
       f(top);
@@ -1787,7 +1809,6 @@ struct info_panel : nodes::Stack {
       f(person_tiles);
       f(band_1);
       f(id_text);
-      f(id_label);
     }
   };
   nodes::Memo<view, head> upper;

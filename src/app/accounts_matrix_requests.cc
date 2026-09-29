@@ -16,6 +16,10 @@ import mux.net;
 import mux.matrix;
 
 namespace mux::matrix {
+template auto account<mux::app::post_change>::id() const noexcept -> const account_id&;
+template void account<mux::app::post_change>::start();
+template void account<mux::app::post_change>::stop();
+template void account<mux::app::post_change>::mark_read(std::string room, std::string event);
 template void account<mux::app::post_change>::load_older(std::string room, std::string from);
 template void account<mux::app::post_change>::manage(std::string room, room_action_t action);
 template void account<mux::app::post_change>::create_direct(std::string user);

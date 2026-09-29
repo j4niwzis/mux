@@ -16,6 +16,8 @@ import mux.net;
 import mux.matrix;
 
 namespace mux::matrix {
+template void account<mux::app::post_change>::say(connection_t state);
+template auto account<mux::app::post_change>::homeserver() -> std::optional<http::url>;
 template void account<mux::app::post_change>::run();
 template auto account<mux::app::post_change>::kept_file() const -> std::filesystem::path;
 template void account<mux::app::post_change>::save_kept() const;

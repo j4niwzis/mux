@@ -89,6 +89,8 @@ class connection {
   connection& operator=(const connection&) = delete;
 
   const url& where() const noexcept { return where_; }
+  // Whether a request is on it now.
+  bool busy() const noexcept { return busy_; }
 
   // A request and its response. `target` is under the service's path; the
   // bearer token goes in Authorization where there is one. A connection the
@@ -236,6 +238,70 @@ class connection {
   std::optional<net::proxy> via_;
   std::optional<stream_type> stream_;
   beast::flat_buffer buffer_;
+};
+
+// Several connections to one host, opened as they are needed, up to
+// `most`: a request takes one that no other request holds, and waits only
+// while all of them are held. What an account asks at once -- history
+// paged back, receipts, messages sent -- goes at once.
+class pool {
+ public:
+  pool(net::loop& owner, net::tls& settings, url where, std::optional<net::proxy> via = std::nullopt,
+       std::size_t most = 4)
+      : owner_(&owner), tls_(&settings), where_(std::move(where)), via_(std::move(via)), most_(std::max<std::size_t>(1, most)) {}
+  pool(const pool&) = delete;
+  pool& operator=(const pool&) = delete;
+
+  const url& where() const noexcept { return where_; }
+
+  response request(std::string_view method, std::string_view target, std::string_view body = {},
+                   std::optional<std::string_view> bearer = std::nullopt,
+                   std::chrono::seconds timeout = std::chrono::seconds(60)) {
+    connection* free = this->take();
+    while (free == nullptr) {
+      if (std::ranges::find(waiting_, owner_->current()) == waiting_.end())
+        waiting_.push_back(owner_->current());
+      owner_->park();
+      free = this->take();
+    }
+    // Whatever becomes of the request, the next in line is told a
+    // connection is free.
+    struct next_in_line {
+      pool& of;
+      ~next_in_line() {
+        if (!of.waiting_.empty()) {
+          const net::loop::handle next = of.waiting_.front();
+          of.waiting_.pop_front();
+          of.owner_->wake(next);
+        }
+      }
+    } const told{*this};
+    return free->request(method, target, body, bearer, timeout);
+  }
+
+  void close() {
+    for (connection& one : all_)
+      one.close();
+  }
+
+ private:
+  // One no request holds, or a new one where there is room for it.
+  connection* take() {
+    for (connection& one : all_)
+      if (!one.busy())
+        return &one;
+    if (all_.size() < most_)
+      return &all_.emplace_back(*owner_, *tls_, where_, via_);
+    return nullptr;
+  }
+
+  net::loop* owner_;
+  net::tls* tls_;
+  url where_;
+  std::optional<net::proxy> via_;
+  std::size_t most_;
+  std::deque<connection> all_;
+  std::deque<net::loop::handle> waiting_;
 };
 
 }  // namespace mux::http

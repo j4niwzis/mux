@@ -221,7 +221,7 @@ class account {
 
   // A request made and its answer read into its type.
   template <class Endpoint>
-  std::expected<typename Endpoint::response, failure> perform(http::connection& over, const Endpoint& endpoint,
+  std::expected<typename Endpoint::response, failure> perform(auto& over, const Endpoint& endpoint,
                                                               std::chrono::seconds timeout = std::chrono::seconds(60)) {
     const loom::request asked = endpoint.to_send();
     try {
@@ -269,7 +269,8 @@ class account {
       say(connection::failed{"no homeserver for " + how_.user_id});
       return;
     }
-    http::connection api(*loop_, *tls_, *base, how_.proxy);
+    // Several at once for what is asked while the long poll waits.
+    http::pool api(*loop_, *tls_, *base, how_.proxy);
     http::connection syncing(*loop_, *tls_, *base, how_.proxy);  // the long poll has one of its own
     api_ = &api;
 
@@ -565,7 +566,7 @@ class account {
   std::optional<std::string> token_;
   // The rooms whose place to page back from was told.
   std::set<std::string> paged_;
-  http::connection* api_ = nullptr;
+  http::pool* api_ = nullptr;
   loom::client::state state_;
   std::map<std::string, reaction> reactions_;
   std::uint64_t transactions_ = 0;

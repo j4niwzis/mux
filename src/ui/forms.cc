@@ -26,23 +26,21 @@ struct field : nodes::Stack {
     this->setGap(4.0f);
     fState.apply({.fillX = true, .height = 64.0f});
     box.setSingleLine(true);
-    box.apply({.fillX = true, .margin = {0.0f, 10.0f, 0.0f, 10.0f}});
+    box.apply({.fillX = true, .margin = {0.0f, 10.0f, 0.0f, 10.0f}, .cornerRadius = 6.0f, .background = tile_colour,
+               .border = scene::Border{band_colour, 1.0f}});
     box.setText(std::move(text));
+  }
+  // Its border in the accent while it has the focus.
+  bool lit = false;
+  void update(double) {
+    if (box.focused() == lit)
+      return;
+    lit = box.focused();
+    box.apply({.border = scene::Border{lit ? accent_colour : band_colour, 1.0f}});
   }
   void forEachChild(auto&& f) {
     f(caption);
     f(box);
-  }
-  // The plate is where the field is, out to the row's edges.
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    skia::SkFont* font = skiff::paint::defaultFont();
-    const skia::SkRect& at = box.bounds();
-    if (font == nullptr || at.isEmpty())
-      return;
-    const skia::SkRect plate = skia::SkRect::MakeLTRB(fState.fBounds.fLeft, at.fTop, fState.fBounds.fRight, at.fBottom);
-    const skiff::paint::Painter p(canvas, *font);
-    p.fillRounded(plate, 6.0f, tile_colour, alpha);
-    p.strokeRounded(plate, 6.0f, box.focused() ? accent_colour : band_colour, 1.0f, alpha);
   }
 };
 

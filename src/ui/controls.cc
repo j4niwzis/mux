@@ -247,22 +247,21 @@ struct segment : nodes::Stack {
 // drawer out.
 template <class Actions>
 struct menu_button : scene::Node {
+  // Three bars, and a plate under them while it is hovered or focused.
+  struct parts_t {
+    nodes::Icon bars;
+  } parts{.bars = nodes::Icon(IconShape{{{nodes::mark::rect{-8.0f, -7.0f, 8.0f, -5.0f, 1.0f}, 0.0f, true},
+                                         {nodes::mark::rect{-8.0f, -1.0f, 8.0f, 1.0f, 1.0f}, 0.0f, true},
+                                         {nodes::mark::rect{-8.0f, 5.0f, 8.0f, 7.0f, 1.0f}, 0.0f, true}}},
+                              text_colour)};
   Actions* actions = nullptr;
 
-  explicit menu_button(Actions* a) : actions(a) { fState.apply({.width = 36.0f, .height = 36.0f}); }
-
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    skia::SkFont* font = skiff::paint::defaultFont();
-    if (font == nullptr)
-      return;
-    const skiff::paint::Painter p(canvas, *font);
-    const skia::SkRect& box = fState.fBounds;
-    if (fState.fHovered || this->showsFocus())
-      p.fillRounded(box, 8.0f, chosen_colour, alpha);
-    const float left = box.centerX() - 8.0f;
-    for (const float dy : {-6.0f, 0.0f, 6.0f})
-      p.fillRounded(skia::SkRect::MakeXYWH(left, box.centerY() + dy - 1.0f, 16.0f, 2.0f), 1.0f, text_colour, alpha);
+  explicit menu_button(Actions* a) : actions(a) {
+    fState.apply({.width = 36.0f, .height = 36.0f, .cornerRadius = 8.0f, .hoverBackground = chosen_colour,
+                  .focusBackground = chosen_colour});
+    parts.bars.apply({.fill = true});
   }
+
 
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }

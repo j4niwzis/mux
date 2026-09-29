@@ -124,6 +124,7 @@ struct search_step {
 };
 template <class Actions>
 struct search_bar : nodes::Stack {
+  nodes::Box<> bottom_line{band_colour};
   Actions* actions;
   widgets::TextBox<search_typed<Actions>> field;
   nodes::Text found{"", 13.0f, dim_colour};
@@ -135,7 +136,9 @@ struct search_bar : nodes::Stack {
         close(icon::close{}, {a}) {
     this->setHorizontal();
     this->setGap(4.0f);
-    fState.apply({.fillX = true, .height = chat_header<Actions>::kHeight, .padding = {0.0f, 10.0f, 1.0f, 14.0f}});
+    fState.apply({.fillX = true, .height = chat_header<Actions>::kHeight, .padding = {0.0f, 10.0f, 1.0f, 14.0f},
+                  .background = sidebar_colour});
+    bottom_line.apply({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f});
     field.setSearchIcon(true);
     field.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
     found.apply({.alignSelf = scene::align::kMiddle});
@@ -155,6 +158,7 @@ struct search_bar : nodes::Stack {
     f(newer);
     f(older);
     f(close);
+    f(bottom_line);
   }
   using Node::onKey;
   void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
@@ -170,15 +174,6 @@ struct search_bar : nodes::Stack {
     } else if (press.key == scene::keys::kDown) {
       actions->search_step(true);
       reply.handle();
-    }
-  }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    if (skia::SkFont* font = skiff::paint::defaultFont()) {
-      const skiff::paint::Painter p(canvas, *font);
-      p.fillRounded(fState.fBounds, 0.0f, sidebar_colour, alpha);
-      const skia::SkRect& at = fState.fBounds;
-      p.fillRounded(skia::SkRect::MakeLTRB(at.left(), at.bottom() - 1.0f, at.right(), at.bottom()), 0.0f, band_colour,
-                    alpha);
     }
   }
 };

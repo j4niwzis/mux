@@ -23,18 +23,15 @@ struct drag_edge : scene::Node {
   bool with_line = true;
   bool dragging = false;
 
+  // The thin line down its middle, where it has one.
+  struct parts_t {
+    nodes::Box<> line;
+  } parts{.line = nodes::Box<>(band_colour)};
+
   explicit drag_edge(OnDrag what, bool line = true) : on_drag(std::move(what)), with_line(line) {
     fState.setCursor(scene::cursor::resize_horizontal{});
-  }
-
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    skia::SkFont* font = skiff::paint::defaultFont();
-    if (font == nullptr || !with_line)
-      return;
-    const skia::SkRect& box = fState.fBounds;
-    skiff::paint::Painter(canvas, *font)
-        .fillRounded(skia::SkRect::MakeXYWH(box.centerX() - 0.5f, box.fTop, 1.0f, box.height()), 0.0f, band_colour,
-                     alpha);
+    parts.line.apply({.place = scene::anchor::kTopCentre, .fillY = true, .width = 1.0f});
+    parts.line.setVisible(line);
   }
 
   [[nodiscard]] bool acceptsInput() const { return true; }

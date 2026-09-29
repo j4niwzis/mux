@@ -136,6 +136,9 @@ struct proxies_page : nodes::Stack {
 // that slides from one to the other.
 template <class Actions>
 struct kind_switch : nodes::Stack {
+  // The highlight that slides from one to the other: under them, out of
+  // their flow, shifted as far as the slide has come.
+  nodes::Box<> highlight{accent_colour};
   segment<choose_proxy_kind<Actions>> socks;
   segment<choose_proxy_kind<Actions>> http;
   skiff::paint::Tween slide{0.0f, 180.0f, skiff::paint::movement::subtle{}};
@@ -144,7 +147,8 @@ struct kind_switch : nodes::Stack {
       : socks("SOCKS5", {a, config::proxy_kind::socks5{}}), http("HTTP", {a, config::proxy_kind::http{}}) {
     this->setHorizontal();
     this->setGap(1.0f);
-    fState.apply({.autoSize = scene::axes::kBoth, .padding = {1.0f, 1.0f, 1.0f, 1.0f}});
+    fState.apply({.autoSize = scene::axes::kBoth, .padding = {1.0f, 1.0f, 1.0f, 1.0f}, .background = chosen_colour});
+    highlight.apply({.place = scene::anchor::kTopLeft, .width = 92.0f, .height = 28.0f});
   }
   void show(const config::proxy_kind_t& kind, bool at_once) {
     const float to = std::visit(overloaded{[](config::proxy_kind::socks5) { return 0.0f; },
@@ -157,24 +161,14 @@ struct kind_switch : nodes::Stack {
     this->markDamaged();
   }
   void forEachChild(auto&& f) {
+    f(highlight);
     f(socks);
     f(http);
   }
   [[nodiscard]] bool settling() const { return slide.moving(); }
   void update(double now_ms) {
     if (slide.step(now_ms))
-      this->markDamaged();
-  }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    skia::SkFont* font = skiff::paint::defaultFont();
-    if (font == nullptr)
-      return;
-    const skiff::paint::Painter p(canvas, *font);
-    p.fillRounded(fState.fBounds, 0.0f, chosen_colour, alpha);
-    const skia::SkRect& a = socks.bounds();
-    const skia::SkRect& b = http.bounds();
-    const float x = a.fLeft + (b.fLeft - a.fLeft) * slide.value();
-    p.fillRounded(skia::SkRect::MakeXYWH(x, a.fTop, a.width(), a.height()), 0.0f, accent_colour, alpha);
+      highlight.apply({.shiftX = (http.bounds().fLeft - socks.bounds().fLeft) * slide.value()});
   }
 };
 

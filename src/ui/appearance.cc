@@ -38,26 +38,37 @@ struct theme_card : nodes::Stack {
   bool chosen = false;
   skia::SkColor back, bubble, mine;
   nodes::Text name;
+  // A small picture of it: its background, a bubble of each side, and a
+  // ring round it while it is the one in use -- plates placed on the card.
+  struct picture_t : scene::Node {
+    struct parts_t {
+      nodes::Box<> incoming;
+      nodes::Box<> outgoing;
+    } parts;
+    picture_t(skia::SkColor back, skia::SkColor in, skia::SkColor out)
+        : parts{.incoming = nodes::Box<>(in), .outgoing = nodes::Box<>(out)} {
+      fState.apply({.place = scene::anchor::kTopLeft, .y = -62.0f, .fillX = true, .height = 56.0f, .cornerRadius = 8.0f,
+                    .background = back});
+      parts.incoming.apply({.place = scene::anchor::kTopLeft, .x = 6.0f, .y = 8.0f, .width = 44.0f, .height = 14.0f,
+                            .cornerRadius = 7.0f});
+      parts.outgoing.apply({.place = scene::anchor::kTopRight, .x = -6.0f, .y = 30.0f, .width = 44.0f, .height = 14.0f,
+                            .cornerRadius = 7.0f});
+    }
+    void set_ring(bool on) { fState.apply({.border = scene::Border{on ? accent_colour : 0u, on ? 2.0f : 0.0f}}); }
+  } picture;
   theme_card(Actions* a, config::theme_t which, std::string label, skia::SkColor b, skia::SkColor in, skia::SkColor out)
-      : actions(a), theme(which), back(b), bubble(in), mine(out), name(std::move(label), 12.0f, dim_colour) {
-    fState.apply({.width = 92.0f, .height = 92.0f, .padding = {66.0f, 0.0f, 0.0f, 0.0f}});
+      : actions(a), theme(which), back(b), bubble(in), mine(out), name(std::move(label), 12.0f, dim_colour),
+        picture(b, in, out) {
+    fState.apply({.width = 92.0f, .height = 92.0f, .padding = {66.0f, 6.0f, 0.0f, 6.0f}});
     name.apply({.alignSelf = scene::align::kMiddle});
   }
-  void forEachChild(auto&& f) { f(name); }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    skia::SkFont* font = skiff::paint::defaultFont();
-    if (font == nullptr)
-      return;
-    const skiff::paint::Painter p(canvas, *font);
-    const skia::SkRect& box = fState.fBounds;
-    const skia::SkRect picture = skia::SkRect::MakeXYWH(box.fLeft + 6.0f, box.fTop + 4.0f, box.width() - 12.0f, 56.0f);
-    p.fillRounded(picture, 8.0f, back, alpha);
-    p.fillRounded(skia::SkRect::MakeXYWH(picture.fLeft + 6.0f, picture.fTop + 8.0f, 44.0f, 14.0f), 7.0f, bubble, alpha);
-    p.fillRounded(skia::SkRect::MakeXYWH(picture.fRight - 50.0f, picture.fTop + 30.0f, 44.0f, 14.0f), 7.0f, mine, alpha);
-    if (chosen)
-      p.strokeRounded(skia::SkRect::MakeLTRB(picture.fLeft - 3.0f, picture.fTop - 3.0f, picture.fRight + 3.0f,
-                                             picture.fBottom + 3.0f),
-                      10.0f, accent_colour, 2.0f, alpha);
+  void set_chosen(bool on) {
+    chosen = on;
+    picture.set_ring(on);
+  }
+  void forEachChild(auto&& f) {
+    f(name);
+    f(picture);
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
@@ -74,21 +85,18 @@ struct accent_circle : scene::Node {
   bool chosen = false;
   // Its shade in the theme in use.
   skia::SkColor shade;
+  struct parts_t {
+    nodes::Box<> dot;
+  } parts;
   accent_circle(Actions* a, config::accent_t which, const config::theme_t& in)
-      : actions(a), accent(which), shade(colour_of(which, in)) {
-    fState.apply({.width = 34.0f, .height = 34.0f});
+      : actions(a), accent(which), shade(colour_of(which, in)), parts{.dot = nodes::Box<>(shade)} {
+    fState.apply({.width = 34.0f, .height = 34.0f, .cornerRadius = 17.0f});
+    parts.dot.apply({.place = scene::anchor::kCentre, .width = 24.0f, .height = 24.0f, .cornerRadius = 12.0f});
   }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    skia::SkFont* font = skiff::paint::defaultFont();
-    if (font == nullptr)
-      return;
-    const skiff::paint::Painter p(canvas, *font);
-    const skia::SkRect& box = fState.fBounds;
-    const skia::SkRect dot = skia::SkRect::MakeXYWH(box.fLeft + 5.0f, box.fTop + 5.0f, 24.0f, 24.0f);
-    p.fillRounded(dot, 12.0f, shade, alpha);
-    if (chosen)
-      p.strokeRounded(skia::SkRect::MakeLTRB(box.fLeft + 1.0f, box.fTop + 1.0f, box.fRight - 1.0f, box.fBottom - 1.0f), 16.0f,
-                      shade, 2.0f, alpha);
+  // A ring in its shade while it is the one in use.
+  void set_chosen(bool on) {
+    chosen = on;
+    fState.apply({.border = scene::Border{on ? shade : 0u, on ? 2.0f : 0.0f}});
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
@@ -155,9 +163,9 @@ struct appearance_page : nodes::Stack {
   }
   void show(const config::theme_t& theme, const config::accent_t& accent) {
     for (auto* card : {&cards.classic, &cards.day, &cards.tinted, &cards.night})
-      card->chosen = card->theme == theme;
+      card->set_chosen(card->theme == theme);
     for (auto& circle : circles.circles)
-      circle.chosen = circle.accent == accent;
+      circle.set_chosen(circle.accent == accent);
     this->markDamaged();
   }
   void show_motion(std::string_view) {}

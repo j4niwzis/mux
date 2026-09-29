@@ -134,6 +134,11 @@ int main(int argc, char** argv) {
   program.settings.apply_limits();
   program.proxies = proxies;
   program.load_marks();
+  program.notifications = saved.notifications.value_or(mux::config::notification_settings{});
+  for (const auto& one : saved.chat_notify.value_or(std::vector<mux::config::chat_notify>{}))
+    program.notify_modes.insert_or_assign(
+        mux::conversation_id{{mux::ui::protocol_of(one.account), one.account}, one.conversation},
+        mux::config::notify_mode_of(one.mode));
   for (const auto& one : saved.room_events.value_or(std::vector<mux::config::room_events_choice>{})) {
     const mux::conversation_id chat{{mux::ui::protocol_of(one.account), one.account}, one.conversation};
     if (one.show)

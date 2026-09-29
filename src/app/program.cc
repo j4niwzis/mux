@@ -245,6 +245,18 @@ struct app : kept_settings {
   void apply(const request::list_marks& one);
   void apply(const request::go_to_mark& one);
   void apply(const request::close_marks&);
+  void apply(const request::settings_notifications&);
+  void apply(const request::flip_notify& one);
+  void apply(const request::set_notify_backend& one);
+  void apply(const request::flip_account_notify&);
+  void apply(const request::flip_account_notify_sound&);
+  void apply(const request::set_chat_notify& one);
+  // Whether the window has the keyboard's focus: a message to the chat
+  // being read then notifies nothing.
+  bool window_focused = true;
+  void focus_changed(bool on) { window_focused = on; }
+  // A message come as it happened, notified as the settings say.
+  void notify_of(const mux::message& said, bool mentions_me);
   void apply(const request::set_room_event_kind& one);
   void apply(const request::join_room_card&);
   void apply(const request::toggle_emoji&);

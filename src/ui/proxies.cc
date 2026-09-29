@@ -35,6 +35,7 @@ struct settings_home : nodes::Stack {
     row_item<ask<Actions, &Actions::settings_animations>> animations;
     row_item<ask<Actions, &Actions::settings_appearance>> appearance;
     row_item<ask<Actions, &Actions::settings_rendering>> rendering;
+    row_item<ask<Actions, &Actions::settings_notifications>> notifications;
     row_item<ask<Actions, &Actions::settings_storage>> storage;
     row_item<ask<Actions, &Actions::settings_files>> files;
     row_item<ask<Actions, &Actions::settings_proxies>> proxies;
@@ -46,6 +47,7 @@ struct settings_home : nodes::Stack {
               .animations = {"Animations", {a}, icon::motion{}},
               .appearance = {"Appearance", {a}, icon::eye{}},
               .rendering = {"Rendering", {a}, icon::sliders{}},
+              .notifications = {"Notifications", {a}, icon::bell{}},
               .storage = {"Storage", {a}, icon::clip{}},
               .files = {"Files", {a}, icon::send{}},
               .proxies = {"Proxies", {a}, icon::gear{}}} {

@@ -6,6 +6,7 @@ import std;
 import knot;
 import skia;
 import mux.core;
+import mux.audio;
 import mux.config;
 import mux.net;
 import mux.xmpp;
@@ -98,6 +99,26 @@ void app::woken() {
   });
   if (marks_changed)
     this->save_marks();
+  // What came as it happened, notified: mentions known by the marks the same
+  // changes made.
+  if (!ask.demo) {
+    std::set<std::string> mentioning;
+    for (const mux::change_t& one : changes)
+      std::visit(mux::overloaded{[&](const mux::change::mentioned& m) { mentioning.insert(m.event); },
+                                 [](const auto&) {}},
+                 one);
+    for (const mux::change_t& one : changes)
+      std::visit(mux::overloaded{[&](const mux::change::message_added& added) {
+                                   const bool live = std::visit(
+                                       mux::overloaded{[](mux::placement::at_end) { return true; },
+                                                       [](const auto&) { return false; }},
+                                       added.where);
+                                   if (live && !added.message.outgoing && !added.message.service)
+                                     this->notify_of(added.message, mentioning.contains(added.message.id));
+                                 },
+                                 [](const auto&) {}},
+                 one);
+  }
   // Messages held to a number in all, least recently read out first.
   model->trim(static_cast<std::size_t>(limits.messages_in_memory), root().main().chosen);
   this->refresh();
@@ -110,6 +131,34 @@ void app::woken() {
       const auto room = std::exchange(joining, std::nullopt);
       this->open_chat(*found, room->event);
     }
+}
+
+// A message as it came, notified as the settings say: nothing where it is
+// in the chat being read with the window focused; else a notification --
+// the chat and sender, and the text, as chosen -- and the chime.
+void app::notify_of(const mux::message& said, bool mentions_me) {
+  if (window_focused && root().main().chosen == said.in)
+    return;
+  const auto decision = this->notify_for(said.in, mentions_me);
+  if (decision.sound)
+    mux::audio::play_chime(mux::audio::chime());
+  if (!decision.popup)
+    return;
+  const mux::conversation* chat = model->find(said.in);
+  std::string title = "mux";
+  if (notifications.show_name && chat) {
+    const std::string who = mux::ui::sender_name(*chat, said.sender);
+    title = mux::ui::is_group(*chat) ? std::format("{} ({})", who, mux::ui::display_name(*chat)) : who;
+  }
+  std::string text = "New message";
+  if (notifications.show_text) {
+    text = said.body.plain.empty() && said.attachment ? std::string("Picture or file") : said.body.plain;
+    if (text.size() > 300)
+      text = text.substr(0, 300) + "\u2026";
+  }
+  // Shown by the backend chosen -- the desktop service or mux own window,
+  // which come next; until then, said in the log.
+  std::println(std::cerr, "[notify] {}: {}", title, text);
 }
 
 void app::save_marks() {

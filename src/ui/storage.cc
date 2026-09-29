@@ -127,6 +127,81 @@ struct storage_page : nodes::Stack {
   void show_receipts(bool) {}
 };
 
+// Settings' Notifications page, as Telegram Desktop's: a notification on
+// the desktop or not, the sender's name and the text in it or not, a sound
+// or not; and what shows it -- the desktop's own service, or mux's window.
+template <class Actions>
+struct flip_notify_flag {
+  Actions* actions = nullptr;
+  config::notify_flag_t flag;
+  void operator()() const { actions->flip_notify(flag); }
+};
+template <class Actions>
+struct choose_notify_backend {
+  Actions* actions = nullptr;
+  config::notify_backend_t backend;
+  void operator()() const { actions->set_notify_backend(backend); }
+};
+template <class Actions>
+struct notifications_page : nodes::Stack {
+  using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
+  using flag_row = switch_row<flip_notify_flag<Actions>>;
+  using backend_segment = segment<choose_notify_backend<Actions>>;
+  struct backend_row : nodes::Stack {
+    struct parts_t {
+      backend_segment native, built_in;
+    } parts;
+    explicit backend_row(Actions* a)
+        : parts{.native = backend_segment("System", {a, config::notify_backend::native{}}),
+                .built_in = backend_segment("Built in", {a, config::notify_backend::built_in{}})} {
+      this->setHorizontal();
+      this->setGap(4.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 20.0f, 4.0f, 20.0f}});
+    }
+  };
+  struct parts_t {
+    header_t header;
+    nodes::Text title = section_title("DESKTOP NOTIFICATIONS");
+    flag_row desktop;
+    flag_row name;
+    flag_row text;
+    nodes::Text sound_title = section_title("SOUND");
+    flag_row sound;
+    nodes::Text backend_title = section_title("SHOWN BY");
+    backend_row backend;
+    nodes::Text note{"System asks the desktop's own notification service (org.freedesktop.Notifications); Built in "
+                     "shows mux's own, in a corner of the screen, as Telegram Desktop does.",
+                     13.0f, dim_colour};
+  } parts;
+  notifications_page(Actions* a, const config::notification_settings& now)
+      : parts{.header = header_t("Notifications", {a}, {a}, true, true),
+              .desktop = flag_row("Desktop notifications", {a, config::notify_flag::desktop{}}),
+              .name = flag_row("Show the sender's name", {a, config::notify_flag::show_name{}}),
+              .text = flag_row("Show the message's text", {a, config::notify_flag::show_text{}}),
+              .sound = flag_row("Play a sound", {a, config::notify_flag::sound{}}),
+              .backend = backend_row(a)} {
+    fState.apply({.fill = true});
+    for (nodes::Text* title : {&parts.title, &parts.sound_title, &parts.backend_title})
+      title->apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
+    parts.note.setWrapped(true);
+    parts.note.apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
+    this->show(now);
+  }
+  void show(const config::notification_settings& now) {
+    parts.desktop.parts.toggle.setOnNow(now.desktop);
+    parts.name.parts.toggle.setOnNow(now.show_name);
+    parts.text.parts.toggle.setOnNow(now.show_text);
+    parts.sound.parts.toggle.setOnNow(now.sound);
+    const bool native = std::visit(overloaded{[](config::notify_backend::native) { return true; },
+                                              [](const auto&) { return false; }},
+                                   config::notify_backend_of(now.backend));
+    parts.backend.parts.native.set_active(native);
+    parts.backend.parts.built_in.set_active(!native);
+  }
+  void show_motion(std::string_view) {}
+  void show_receipts(bool) {}
+};
+
 // Settings' Files page: what is done to a picture dropped on the window
 // before it is sent.
 template <class Actions>

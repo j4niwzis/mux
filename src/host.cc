@@ -409,6 +409,7 @@ inline double now_ms() {
 //   files_given(paths, dropped)  files chosen in the dialog, or dropped
 //   save_path_chosen(path)  where to save a file, chosen in the dialog
 //   open_link(url)  a link pressed in a text
+//   focus_changed(on)  the window given the keyboard's focus, or losing it
 //   before_frame()  between events: what the screens asked for, applied
 //                   where no handler is running
 //   closing()       the window is going away
@@ -472,6 +473,12 @@ int run(App& app, const options& how) {
         switch (event.type) {
           case SDL_EVENT_CLIPBOARD_UPDATE:
             read_clipboard();
+            break;
+          case SDL_EVENT_WINDOW_FOCUS_GAINED:
+            app.focus_changed(true);
+            break;
+          case SDL_EVENT_WINDOW_FOCUS_LOST:
+            app.focus_changed(false);
             break;
           case SDL_EVENT_QUIT:
           case SDL_EVENT_WINDOW_CLOSE_REQUESTED:

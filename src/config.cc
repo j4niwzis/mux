@@ -118,6 +118,54 @@ template <class Variant>
                                                                          {"opengl", renderer::opengl{}}};
   return word_of<renderer_t>(known, word, renderer::opengl{});
 }
+// How a notification is shown: by the desktop's own service
+// (org.freedesktop.Notifications, over D-Bus), or by mux, as tdesktop's
+// own: a small window in a corner of the screen.
+namespace notify_backend {
+struct native {
+  friend bool operator==(native, native) = default;
+};
+struct built_in {
+  friend bool operator==(built_in, built_in) = default;
+};
+}  // namespace notify_backend
+using notify_backend_t = std::variant<notify_backend::native, notify_backend::built_in>;
+[[nodiscard]] inline notify_backend_t notify_backend_of(const std::optional<std::string>& word) {
+  static const std::unordered_map<std::string_view, notify_backend_t> known = {
+      {"native", notify_backend::native{}}, {"built-in", notify_backend::built_in{}}};
+  return word_of<notify_backend_t>(known, word, notify_backend::native{});
+}
+// A chat's own choice of what notifies, as Telegram's and Element's: as
+// its account says, everything, only what mentions the user, nothing.
+namespace notify_mode {
+struct by_default {
+  friend bool operator==(by_default, by_default) = default;
+};
+struct all {
+  friend bool operator==(all, all) = default;
+};
+struct mentions {
+  friend bool operator==(mentions, mentions) = default;
+};
+struct off {
+  friend bool operator==(off, off) = default;
+};
+}  // namespace notify_mode
+using notify_mode_t = std::variant<notify_mode::by_default, notify_mode::all, notify_mode::mentions, notify_mode::off>;
+[[nodiscard]] inline notify_mode_t notify_mode_of(const std::optional<std::string>& word) {
+  static const std::unordered_map<std::string_view, notify_mode_t> known = {{"all", notify_mode::all{}},
+                                                                            {"mentions", notify_mode::mentions{}}};
+  return word_of<notify_mode_t>(known, word, notify_mode::by_default{});
+}
+// The switches of the notifications page, each a member of its settings.
+namespace notify_flag {
+struct desktop {};
+struct show_name {};
+struct show_text {};
+struct sound {};
+}  // namespace notify_flag
+using notify_flag_t = std::variant<notify_flag::desktop, notify_flag::show_name, notify_flag::show_text, notify_flag::sound>;
+
 [[nodiscard]] inline proxy_kind_t proxy_kind_of(std::string_view word) {
   static const std::unordered_map<std::string_view, proxy_kind_t> known = {{"http", proxy_kind::http{}},
                                                                            {"socks5", proxy_kind::socks5{}}};
@@ -140,6 +188,12 @@ template <class Variant>
 [[nodiscard]] constexpr std::string_view word_of(renderer::software) { return "software"; }
 [[nodiscard]] constexpr std::string_view word_of(proxy_kind::socks5) { return "socks5"; }
 [[nodiscard]] constexpr std::string_view word_of(proxy_kind::http) { return "http"; }
+[[nodiscard]] constexpr std::string_view word_of(notify_backend::native) { return "native"; }
+[[nodiscard]] constexpr std::string_view word_of(notify_backend::built_in) { return "built-in"; }
+[[nodiscard]] constexpr std::string_view word_of(notify_mode::by_default) { return "default"; }
+[[nodiscard]] constexpr std::string_view word_of(notify_mode::all) { return "all"; }
+[[nodiscard]] constexpr std::string_view word_of(notify_mode::mentions) { return "mentions"; }
+[[nodiscard]] constexpr std::string_view word_of(notify_mode::off) { return "off"; }
 template <class... Ts>
 [[nodiscard]] std::string word_of(const std::variant<Ts...>& one) {
   return std::string(std::visit([](auto each) { return word_of(each); }, one));
@@ -194,6 +248,36 @@ consteval auto json_schema(knot::type<kept_mark>) { return knot::schema<kept_mar
 consteval auto json_schema(knot::type<chat_marks>) { return knot::schema<chat_marks>(); }
 consteval auto json_schema(knot::type<marks_file>) { return knot::schema<marks_file>(); }
 
+// What notifies, and how, as Telegram Desktop's settings have it: a
+// notification on the desktop, with the sender's name and the message's
+// text or not, and a sound -- the chime, or a file -- by one backend.
+struct notification_settings {
+  bool desktop = true;
+  bool show_name = true;
+  bool show_text = true;
+  bool sound = true;
+  std::string backend = "native";
+  std::optional<std::string> sound_file;
+  friend bool operator==(const notification_settings&, const notification_settings&) = default;
+};
+consteval auto json_schema(knot::type<notification_settings>) { return knot::schema<notification_settings>(); }
+[[nodiscard]] constexpr bool notification_settings::* flag_member(notify_flag::desktop) { return &notification_settings::desktop; }
+[[nodiscard]] constexpr bool notification_settings::* flag_member(notify_flag::show_name) { return &notification_settings::show_name; }
+[[nodiscard]] constexpr bool notification_settings::* flag_member(notify_flag::show_text) { return &notification_settings::show_text; }
+[[nodiscard]] constexpr bool notification_settings::* flag_member(notify_flag::sound) { return &notification_settings::sound; }
+[[nodiscard]] inline bool& flag_in(notification_settings& in, const notify_flag_t& flag) {
+  return in.*std::visit([](auto one) { return flag_member(one); }, flag);
+}
+// A chat's own choice of what notifies: everything, or what mentions the
+// user -- muted chats are kept apart, as before.
+struct chat_notify {
+  std::string account;
+  std::string conversation;
+  std::string mode;
+  friend bool operator==(const chat_notify&, const chat_notify&) = default;
+};
+consteval auto json_schema(knot::type<chat_notify>) { return knot::schema<chat_notify>(); }
+
 // An XMPP account: a JID and how to reach its server.
 struct xmpp_account {
   std::string address;  // user@domain
@@ -212,6 +296,10 @@ struct xmpp_account {
   std::optional<bool> send_typing;  // others' typing is always shown
   std::optional<bool> room_events;  // as matrix_account's
   std::optional<room_event_kinds> room_event_kinds;
+  // Its notifications, on the desktop and heard: as every account's, until
+  // chosen.
+  std::optional<bool> notify;
+  std::optional<bool> notify_sound;
   // The name of the proxy profile it connects through, where it has one.
   std::optional<std::string> proxy;
   friend bool operator==(const xmpp_account&, const xmpp_account&) = default;
@@ -232,6 +320,10 @@ struct matrix_account {
   // nothing said is as the settings say for every account.
   std::optional<bool> room_events;
   std::optional<room_event_kinds> room_event_kinds;
+  // Its notifications, on the desktop and heard: as every account's, until
+  // chosen.
+  std::optional<bool> notify;
+  std::optional<bool> notify_sound;
   std::optional<std::string> proxy;
   // The session the server gave, kept so the next start goes on with it.
   std::optional<std::string> access_token;
@@ -374,6 +466,8 @@ struct file {
   std::optional<cache_limits> cache;
   std::optional<sending_settings> sending;
   std::optional<history_settings> history;
+  std::optional<notification_settings> notifications;
+  std::optional<std::vector<chat_notify>> chat_notify;
   friend bool operator==(const file&, const file&) = default;
 };
 
@@ -419,6 +513,18 @@ consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
 }
 [[nodiscard]] inline std::optional<bool>& room_events_in(account_t& one) {
   return std::visit([](auto& each) -> std::optional<bool>& { return each.room_events; }, one);
+}
+[[nodiscard]] inline const std::optional<bool>& notify_of(const account_t& one) {
+  return std::visit([](const auto& each) -> const std::optional<bool>& { return each.notify; }, one);
+}
+[[nodiscard]] inline std::optional<bool>& notify_in(account_t& one) {
+  return std::visit([](auto& each) -> std::optional<bool>& { return each.notify; }, one);
+}
+[[nodiscard]] inline const std::optional<bool>& notify_sound_of(const account_t& one) {
+  return std::visit([](const auto& each) -> const std::optional<bool>& { return each.notify_sound; }, one);
+}
+[[nodiscard]] inline std::optional<bool>& notify_sound_in(account_t& one) {
+  return std::visit([](auto& each) -> std::optional<bool>& { return each.notify_sound; }, one);
 }
 [[nodiscard]] inline const std::optional<room_event_kinds>& room_event_kinds_of(const account_t& one) {
   return std::visit([](const auto& each) -> const std::optional<room_event_kinds>& { return each.room_event_kinds; }, one);

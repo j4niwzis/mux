@@ -92,6 +92,12 @@ struct stub {
   void list_marks(mux::mark_kind_t) {}
   void go_to_mark(mux::mark_kind_t, std::string) {}
   void close_marks() {}
+  void settings_notifications() {}
+  void flip_notify(mux::config::notify_flag_t) {}
+  void set_notify_backend(mux::config::notify_backend_t) {}
+  void flip_account_notify() {}
+  void flip_account_notify_sound() {}
+  void set_chat_notify(mux::config::notify_mode_t) {}
   void set_room_event_kind(mux::choice_level_t, std::optional<mux::room_event_t>, std::optional<bool>) {}
   void join_room_card() {}
   void toggle_emoji() {}

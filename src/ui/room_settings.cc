@@ -40,7 +40,7 @@ struct room_settings_facts {
   join_rule_t join_rule = join_rule::invite{};
   history_rule_t history = history_rule::shared{};
   std::string version;
-  bool muted = false;
+  config::notify_mode_t notify_mode = config::notify_mode::by_default{};
   // Which of its room events it shows, as chosen for it: none chosen is as
   // its account's.
   std::optional<bool> events_all;
@@ -253,8 +253,8 @@ struct room_settings : nodes::Stack {
   };
   struct notify_as {
     room_settings* box;
-    bool muted;
-    void operator()() const { box->notify(muted); }
+    config::notify_mode_t mode;
+    void operator()() const { box->notify(mode); }
   };
 
   // ---- the tabs down the left ------------------------------------------------
@@ -581,13 +581,16 @@ struct room_settings : nodes::Stack {
       choice by_default, all, mentions, off;
     } parts;
     notifications_page(Actions*, room_settings* box, const room_settings_facts& facts)
-        : parts{.by_default = choice("Default", "Get notified only with mentions and keywords as set up in your settings",
-                                     {box, false}, false, true),
-                .all = choice("All messages", "Get notifications as set up in your settings", {box, false},
-                              !facts.muted, true),
+        : parts{.by_default = choice("Default", "As your account's notifications are set up",
+                                     {box, config::notify_mode::by_default{}},
+                                     is<config::notify_mode::by_default>(facts.notify_mode), true),
+                .all = choice("All messages", "Get notified of every message", {box, config::notify_mode::all{}},
+                              is<config::notify_mode::all>(facts.notify_mode), true),
                 .mentions = choice("@mentions & keywords", "Get notified only with mentions and keywords",
-                                   {box, true}, false, true),
-                .off = choice("Off", "You won't get any notifications", {box, true}, facts.muted, true)} {
+                                   {box, config::notify_mode::mentions{}},
+                                   is<config::notify_mode::mentions>(facts.notify_mode), true),
+                .off = choice("Off", "You won't get any notifications", {box, config::notify_mode::off{}},
+                              is<config::notify_mode::off>(facts.notify_mode), true)} {
       this->setGap(4.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
     }
@@ -785,11 +788,9 @@ struct room_settings : nodes::Stack {
       facts.privileged.push_back({user, user, facts.needs.users_default});
     this->user_level(user, new_level);
   }
-  void notify(bool muted) {
-    if (muted != facts.muted) {
-      facts.muted = muted;
-      actions->toggle_mute();
-    }
+  void notify(const config::notify_mode_t& mode) {
+    facts.notify_mode = mode;
+    actions->set_chat_notify(mode);
     this->show_tab(tab);
   }
 

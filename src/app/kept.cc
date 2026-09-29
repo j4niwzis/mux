@@ -38,6 +38,10 @@ struct kept_settings {
   std::map<conversation_id, bool> room_events;
   // And each kind of them, where a chat chose apart.
   std::map<conversation_id, mux::config::room_event_kinds> room_event_kinds;
+  // What notifies, and the chats that chose everything or mentions alone
+  // (a muted chat is in `muted`).
+  mux::config::notification_settings notifications;
+  std::map<conversation_id, mux::config::notify_mode_t> notify_modes;
   std::vector<mux::config::proxy_settings> proxies;
   // Why the accounts file could not be read, when it could not: then it is
   // not written over either.
@@ -63,6 +67,31 @@ struct kept_settings {
       if (const auto& chosen = mux::config::room_events_of(*account))
         return *chosen;
     return history.show_room_events;
+  }
+
+  // What a message coming to a chat notifies with: nothing where the chat
+  // is muted or asks for mentions and it is none; else as its account
+  // says, else as every account's.
+  struct notify_decision {
+    bool popup = false;
+    bool sound = false;
+  };
+  [[nodiscard]] mux::config::notify_mode_t notify_mode_of(const conversation_id& chat) const {
+    if (muted.contains(chat))
+      return mux::config::notify_mode::off{};
+    const auto own = notify_modes.find(chat);
+    return own == notify_modes.end() ? mux::config::notify_mode_t{mux::config::notify_mode::by_default{}} : own->second;
+  }
+  [[nodiscard]] notify_decision notify_for(const conversation_id& chat, bool mentions_me) {
+    const bool wanted = std::visit(mux::overloaded{[](mux::config::notify_mode::off) { return false; },
+                                                   [&](mux::config::notify_mode::mentions) { return mentions_me; },
+                                                   [](const auto&) { return true; }},
+                                   this->notify_mode_of(chat));
+    if (!wanted)
+      return {};
+    const mux::config::account_t* account = this->settings_of(chat.account.address);
+    return {account ? mux::config::notify_of(*account).value_or(notifications.desktop) : notifications.desktop,
+            account ? mux::config::notify_sound_of(*account).value_or(notifications.sound) : notifications.sound};
   }
 
   // Which room events a chat shows, kind by kind: its own choices, its
@@ -94,6 +123,12 @@ struct kept_settings {
     out.cache = limits;
     out.sending = sending;
     out.history = history;
+    out.notifications = notifications;
+    if (!notify_modes.empty()) {
+      out.chat_notify.emplace();
+      for (const auto& [chat, mode] : notify_modes)
+        out.chat_notify->push_back({chat.account.address, chat.id, mux::config::word_of(mode)});
+    }
     if (!room_events.empty() || !room_event_kinds.empty()) {
       std::map<conversation_id, mux::config::room_events_choice> chosen;
       for (const auto& [chat, show] : room_events) {

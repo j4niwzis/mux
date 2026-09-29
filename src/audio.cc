@@ -197,4 +197,42 @@ inline speaker& the_speaker() {
   return std::format("{}:{:02}", whole / 60, whole % 60);
 }
 
+// The chime a message comes with: two soft notes, a fifth apart, fading --
+// made once, not a file. Played on a stream of its own, so a voice message
+// playing goes on.
+[[nodiscard]] inline const pcm& chime() {
+  static const pcm made = [] {
+    pcm out{.channels = 1, .rate = 48000};
+    const auto note = [&](double hz, double from, double length) {
+      const auto first = static_cast<std::size_t>(from * out.rate);
+      const auto count = static_cast<std::size_t>(length * out.rate);
+      if (out.samples.size() < first + count)
+        out.samples.resize(first + count, 0.0f);
+      for (std::size_t i = 0; i < count; ++i) {
+        const double t = static_cast<double>(i) / out.rate;
+        const double fade = std::exp(-t * 9.0) * std::min(1.0, t * 400.0);
+        out.samples[first + i] += static_cast<float>(0.25 * fade * std::sin(2.0 * std::numbers::pi * hz * t));
+      }
+    };
+    note(880.0, 0.0, 0.35);
+    note(1318.5, 0.09, 0.4);
+    return out;
+  }();
+  return made;
+}
+inline void play_chime(const pcm& sound) {
+  static SDL_AudioStream* stream = nullptr;
+  if (!SDL_WasInit(SDL_INIT_AUDIO) && !SDL_InitSubSystem(SDL_INIT_AUDIO))
+    return;
+  if (stream)
+    SDL_DestroyAudioStream(stream);
+  const SDL_AudioSpec spec{SDL_AUDIO_F32, sound.channels, sound.rate};
+  stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
+  if (!stream)
+    return;
+  SDL_PutAudioStreamData(stream, sound.samples.data(), static_cast<int>(sound.samples.size() * sizeof(float)));
+  SDL_FlushAudioStream(stream);
+  SDL_ResumeAudioStreamDevice(stream);
+}
+
 }  // namespace mux::audio

@@ -96,7 +96,7 @@ void app::apply(const request::open_manage&) {
                                      .join_rule = chat->join_rule,
                                      .history = chat->history,
                                      .version = chat->version,
-                                     .muted = muted.contains(chat->id),
+                                     .notify_mode = this->notify_mode_of(chat->id),
                                      .events_all = room_events.contains(chat->id)
                                                        ? std::optional<bool>(room_events.at(chat->id))
                                                        : std::nullopt,
@@ -220,6 +220,55 @@ void app::apply(const request::flip_account_typing&) {
       page->show(mux::config::read_receipts_of(account), *kept);
     (void)this->write();
   });
+}
+
+// Notifications: the page, its switches, what shows them; an account's and
+// a chat's own.
+void app::apply(const request::settings_notifications&) {
+  if (auto* up = root().settings_up())
+    up->show_notifications(notifications);
+}
+void app::apply(const request::flip_notify& one) {
+  bool& flag = mux::config::flag_in(notifications, one.flag);
+  flag = !flag;
+  (void)this->write();
+  if (auto* up = root().settings_up())
+    if (auto* page = up->notifications())
+      page->show(notifications);
+}
+void app::apply(const request::set_notify_backend& one) {
+  notifications.backend = mux::config::word_of(one.backend);
+  (void)this->write();
+  if (auto* up = root().settings_up())
+    if (auto* page = up->notifications())
+      page->show(notifications);
+}
+void app::apply(const request::flip_account_notify&) {
+  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+    auto& kept = mux::config::notify_in(account);
+    kept = !kept.value_or(notifications.desktop);
+    (void)this->write();
+  });
+}
+void app::apply(const request::flip_account_notify_sound&) {
+  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+    auto& kept = mux::config::notify_sound_in(account);
+    kept = !kept.value_or(notifications.sound);
+    (void)this->write();
+  });
+}
+void app::apply(const request::set_chat_notify& one) {
+  const auto& chosen = root().main().chosen;
+  if (!chosen)
+    return;
+  notify_modes.erase(*chosen);
+  muted.erase(*chosen);
+  std::visit(mux::overloaded{[&](mux::config::notify_mode::off) { muted.insert(*chosen); },
+                             [&](mux::config::notify_mode::by_default) {},
+                             [&](const auto& own) { notify_modes.insert_or_assign(*chosen, own); }},
+             one.mode);
+  (void)this->write();
+  this->refresh();
 }
 
 // Which room events show, as chosen at a level: all of them, or one kind --

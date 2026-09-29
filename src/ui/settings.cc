@@ -20,7 +20,8 @@ struct settings_dialog : scene::Node {
   Actions* actions = nullptr;
   std::string motion;
   using page_t = std::variant<settings_home<Actions>, animations_page<Actions>, proxies_page<Actions>, proxy_editor<Actions>,
-                              appearance_page<Actions>, rendering_page<Actions>, storage_page<Actions>, files_page<Actions>>;
+                              appearance_page<Actions>, rendering_page<Actions>, storage_page<Actions>, files_page<Actions>,
+                              notifications_page<Actions>>;
   // The page up: home, or one of its pages.
   struct parts_t {
     page_t page;
@@ -62,6 +63,15 @@ struct settings_dialog : scene::Node {
   void show_rendering(const config::renderer_t& renderer) {
     parts.page.template emplace<5>(actions, renderer);
     this->begin_swap(1.0f);
+  }
+  void show_notifications(const config::notification_settings& now) {
+    parts.page.template emplace<8>(actions, now);
+    this->begin_swap(1.0f);
+  }
+  [[nodiscard]] notifications_page<Actions>* notifications() {
+    return std::visit(overloaded{[](notifications_page<Actions>& one) { return &one; },
+                                 [](auto&) -> notifications_page<Actions>* { return nullptr; }},
+                      parts.page);
   }
   void show_files(const config::sending_settings& now) {
     parts.page.template emplace<7>(actions, now);

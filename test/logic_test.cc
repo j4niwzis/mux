@@ -7,6 +7,7 @@ import mux.logic.text;
 import mux.logic.search;
 import mux.logic.reading;
 import mux.logic.drafts;
+import mux.logic.links;
 
 namespace {
 
@@ -92,6 +93,29 @@ TEST(Drafts, KeptAndReadBack) {
   EXPECT_EQ(read, drafts);
   EXPECT_TRUE(logic::keep_draft(drafts, with_juliet, "   "));
   EXPECT_TRUE(drafts.empty());
+}
+
+TEST(Links, ReadIntoWhatTheyPointAt) {
+  EXPECT_EQ(logic::link_of("https://matrix.to/#/%23ru4:ed25519.uk"),
+            std::optional<logic::link_t>(logic::link::room{"#ru4:ed25519.uk", std::nullopt, {}}));
+  EXPECT_EQ(logic::link_of("https://matrix.to/#/!r:x.org/$e?via=x.org&via=y.org"),
+            std::optional<logic::link_t>(logic::link::room{"!r:x.org", "$e", {"x.org", "y.org"}}));
+  EXPECT_EQ(logic::link_of("https://matrix.to/#/@me:x.org"), std::optional<logic::link_t>(logic::link::person{"@me:x.org"}));
+  EXPECT_EQ(logic::link_of("matrix:r/room:x.org/e/abc"),
+            std::optional<logic::link_t>(logic::link::room{"#room:x.org", "$abc", {}}));
+  EXPECT_EQ(logic::link_of("matrix:u/me:x.org"), std::optional<logic::link_t>(logic::link::person{"@me:x.org"}));
+  EXPECT_EQ(logic::link_of("xmpp:juliet@example.com"),
+            std::optional<logic::link_t>(logic::link::xmpp_address{"juliet@example.com"}));
+  EXPECT_EQ(logic::link_of("https://example.com/"), std::nullopt);
+  EXPECT_EQ(logic::link_of("matrix:x/whatever"), std::nullopt);
+}
+
+TEST(Links, ARoomNotJoinedIsJoinedThroughAMatrixAccount) {
+  model now;
+  const account_id me{protocol::matrix{}, "@me:x.org"};
+  now.apply(change::connection_changed{me, connection::online{}});
+  const auto step = logic::where_to(now, logic::link::room{"#new:x.org", std::nullopt, {"x.org"}}, std::nullopt, std::nullopt);
+  EXPECT_EQ(step, logic::link_step_t(logic::link_step::join{me, "#new:x.org", {"x.org"}}));
 }
 
 }  // namespace

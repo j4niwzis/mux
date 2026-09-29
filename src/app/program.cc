@@ -27,6 +27,7 @@ import mux.app.search;
 import mux.app.pictures;
 import mux.app.drafts;
 import mux.app.reading;
+import mux.logic.links;
 
 export namespace mux::app {
 
@@ -232,23 +233,12 @@ struct app {
   // matrix: and xmpp: links -- and anywhere else, in the browser.
   void apply(const request::open_url& one);
 
-  // What a link points at, in here.
-  struct link_target {
-    std::string id;                    // @user, !room, #alias, or a JID
-    std::optional<std::string> event;  // $event, in the room
-    std::vector<std::string> via;      // the servers to join through
-    bool xmpp = false;
-  };
-  static std::string percent_decoded(std::string_view text);
-  static std::optional<link_target> link_target_of(std::string_view url);
-
-  // A link followed: the chat it names, opened -- and the message in it,
-  // jumped to -- or the person, their page; a room not joined yet, joined,
-  // and opened when it comes.
-  std::optional<link_target> pending_link;
+  // A link followed, as where it leads says: a chat opened -- and a message
+  // in it jumped to -- a person's page, a word said, or a room joined, and
+  // opened when it comes.
+  std::optional<mux::logic::link::room> joining;
+  void follow(const mux::logic::link_t& where);
   void open_chat(const mux::conversation_id& which, const std::optional<std::string>& event);
-  std::optional<mux::conversation_id> chat_of(const link_target& where) const;
-  void go_to(const link_target& where);
   void apply(const request::cancel_compose&);
   // Older messages of a chat: from the disk while it has some from before
   // the oldest in memory, from the server past that.

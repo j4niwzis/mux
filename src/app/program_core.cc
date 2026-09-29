@@ -20,6 +20,7 @@ import mux.app.demo;
 import mux.app.store;
 import mux.app.requests;
 import mux.app.words;
+import mux.logic.links;
 
 namespace mux::app {
 
@@ -51,10 +52,10 @@ void app::woken() {
   if (const auto& chosen = root().main().chosen; chosen && root().main().timeline.atEnd(40.0f))
     reading.mark_read(*chosen);
   // A room joined from a link: opened once it is here.
-  if (pending_link)
-    if (const auto found = this->chat_of(*pending_link)) {
-      const auto where = std::exchange(pending_link, std::nullopt);
-      this->open_chat(*found, where->event);
+  if (joining)
+    if (const auto found = mux::logic::chat_of(*model, *joining)) {
+      const auto room = std::exchange(joining, std::nullopt);
+      this->open_chat(*found, room->event);
     }
 }
 

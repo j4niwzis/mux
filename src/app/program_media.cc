@@ -20,6 +20,7 @@ import mux.app.demo;
 import mux.app.store;
 import mux.app.requests;
 import mux.app.words;
+import mux.logic.links;
 
 namespace mux::app {
 
@@ -175,8 +176,8 @@ void app::apply(const request::menu_delete&) {
 }
 
 void app::apply(const request::open_url& one) {
-  if (auto where = link_target_of(one.url)) {
-    this->go_to(*where);
+  if (const auto where = mux::logic::link_of(one.url)) {
+    this->follow(*where);
     return;
   }
   mux::host::open_url(one.url);

@@ -102,6 +102,10 @@ inline std::optional<link_t> from_matrix_to(std::string_view rest) {
   std::optional<std::string> event;
   if (slash != std::string_view::npos)
     event = percent_decoded(path.substr(slash + 1));
+  // What follows the room is an event, and an event id begins with $: a
+  // second address there is not one, and the link is no link to a message.
+  if (event && !event->starts_with('$'))
+    return std::nullopt;
   return matrix_id_of(percent_decoded(path.substr(0, slash)), std::move(event), via_of(query));
 }
 

@@ -580,11 +580,12 @@ struct context_menu : scene::Node {
         nodes::Text face;
       } parts;
       quick_reaction(Actions* a, std::string k)
-          : actions(a), key(k), parts{.face = nodes::Text(std::move(k), 18.0f, text_colour)} {
+          : actions(a), key(k), parts{.face = nodes::Text(std::move(k), 22.0f, text_colour)} {
         auto& face = parts.face;
         this->setHorizontal();
         fStack.justify = nodes::justify::middle{};
-        fState.apply({.width = 32.0f, .height = 32.0f, .cornerRadius = 16.0f, .hoverBackground = chosen_colour});
+        // tdesktop's reactionCornerSize (36 by 32) and reactionCornerImage (22).
+        fState.apply({.width = 36.0f, .height = 32.0f, .cornerRadius = 16.0f, .hoverBackground = chosen_colour});
         face.apply({.alignSelf = scene::align::kMiddle});
       }
       [[nodiscard]] bool acceptsInput() const { return true; }
@@ -606,11 +607,10 @@ struct context_menu : scene::Node {
       } parts;
       quick_row(Actions* a, card* of) : parts{.more = icon_button<expand_emoji>(icon::down{}, {of})} {
         auto& [each, more] = parts;
-        // Six of 32 and the arrow's 28, a gap of 1 between, in the card's
-        // 240 less its padding: the arrow had run out past the card's edge.
+        // As wide as what is in it: the menu is sized by it, not it by the
+        // menu -- a menu of a set width had the arrow run out past its edge.
         this->setHorizontal();
-        this->setGap(1.0f);
-        fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {2.0f, 6.0f, 4.0f, 6.0f}});
+        fState.apply({.autoSize = scene::axes::kBoth, .padding = {2.0f, 6.0f, 4.0f, 6.0f}});
         for (const char* key : {"👍", "❤️", "😂", "😮", "😢", "🙏"})
           each.emplace_back(a, key);
         more.apply({.width = 28.0f, .height = 32.0f, .cornerRadius = 14.0f});
@@ -731,7 +731,9 @@ struct context_menu : scene::Node {
         seen_names.back().apply({.fillX = true, .margin = {0.0f, 16.0f, 2.0f, 64.0f}});
       }
       seen_band.apply({.fillX = true, .height = 1.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f}});
-      fState.apply({.width = 240.0f, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .cornerRadius = 10.0f, .background = sidebar_colour, .border = scene::Border{band_colour, 1.0f},
+      // As wide as its widest -- the quick reactions -- and no narrower than a
+      // menu reads well at; the items fill that width.
+      fState.apply({.autoSize = scene::axes::kBoth, .minWidth = 220.0f, .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .cornerRadius = 10.0f, .background = sidebar_colour, .border = scene::Border{band_colour, 1.0f},
                     .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
     }
   };

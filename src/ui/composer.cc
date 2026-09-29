@@ -124,7 +124,7 @@ struct composer_bar : nodes::Stack {
       this->setHorizontal();
       this->setGap(8.0f);
       fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 8.0f, 0.0f, 0.0f}});
-      parts.mark.apply({.width = kSkip - 8.0f, .fillY = true});
+      parts.mark.apply({.fillY = true, .width = kSkip - 8.0f});
       parts.lines.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
       parts.cancel.apply({.alignSelf = scene::align::kMiddle});
     }

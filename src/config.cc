@@ -297,6 +297,7 @@ struct xmpp_account {
   std::optional<bool> room_events;  // as matrix_account's
   std::optional<room_event_kinds> room_event_kinds;
   std::optional<bool> show_receipts;  // as matrix_account's
+  std::optional<std::int64_t> jump_search;  // as matrix_account's
   // Its notifications, on the desktop and heard: as every account's, until
   // chosen.
   std::optional<bool> notify;
@@ -324,6 +325,9 @@ struct matrix_account {
   // Whether its chats show who has read up to where, as Element's faces
   // under a message: its own choice, else every account's.
   std::optional<bool> show_receipts;
+  // How many events a search for a message jumped to pages back before it
+  // gives up; 0 for no limit. Its own choice, else every account's.
+  std::optional<std::int64_t> jump_search;
   // Its notifications, on the desktop and heard: as every account's, until
   // chosen.
   std::optional<bool> notify;
@@ -345,6 +349,7 @@ struct room_events_choice {
   std::optional<bool> show;  // all of them
   std::optional<room_event_kinds> kinds;  // each kind
   std::optional<bool> receipts;  // who has read up to where, as faces
+  std::optional<std::int64_t> jump_search;  // events paged back looking for one; 0 no limit
   friend bool operator==(const room_events_choice&, const room_events_choice&) = default;
 };
 consteval auto json_schema(knot::type<room_events_choice>) { return knot::schema<room_events_choice>(); }
@@ -445,6 +450,9 @@ struct history_settings {
   // Who has read up to where, as Element shows it: small faces under the
   // message each person read up to. Off unless chosen.
   bool show_receipts = false;
+  // How many events a search for a message jumped to (a reply's, a link's)
+  // pages back through before it gives up; 0 for no limit.
+  std::int64_t jump_search = 5000;
   // And each kind of them, where chosen apart.
   std::optional<room_event_kinds> room_event_kinds;
   friend bool operator==(const history_settings&, const history_settings&) = default;
@@ -516,6 +524,12 @@ consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
 }
 // Whether the account's chats show their room events: its own choice, if
 // it made one.
+[[nodiscard]] inline const std::optional<std::int64_t>& jump_search_of(const account_t& one) {
+  return std::visit([](const auto& each) -> const std::optional<std::int64_t>& { return each.jump_search; }, one);
+}
+[[nodiscard]] inline std::optional<std::int64_t>& jump_search_in(account_t& one) {
+  return std::visit([](auto& each) -> std::optional<std::int64_t>& { return each.jump_search; }, one);
+}
 [[nodiscard]] inline const std::optional<bool>& show_receipts_of(const account_t& one) {
   return std::visit([](const auto& each) -> const std::optional<bool>& { return each.show_receipts; }, one);
 }

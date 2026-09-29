@@ -46,6 +46,8 @@ struct room_settings_facts {
   std::optional<bool> events_all;
   // Whether it shows who has read up to where, as chosen for it.
   std::optional<bool> receipts;
+  // How far a jump's search pages back in it, as chosen for it.
+  std::optional<std::int64_t> jump_search;
   std::optional<config::room_event_kinds> event_kinds;
   // The user's own level, and what each thing done asks.
   std::int64_t mine = 0;
@@ -345,6 +347,7 @@ struct room_settings : nodes::Stack {
       nodes::Text events_about = explained("Room events shown in this room, for you: Default is as your account's.");
       event_kind_list<Actions> events;
       receipts_choice<Actions> receipts;
+      jump_search_choice<Actions> jump_search;
       nodes::Text leave_heading = part_heading("Leave room");
       widgets::Button<ask<Actions, &Actions::leave_chat>> leave;
     } parts;
@@ -358,6 +361,7 @@ struct room_settings : nodes::Stack {
                     text_colour),
                 .events = event_kind_list<Actions>(a, choice_level::chat{}, facts.events_all, facts.event_kinds),
                 .receipts = receipts_choice<Actions>(a, choice_level::chat{}, facts.receipts),
+                .jump_search = jump_search_choice<Actions>(a, choice_level::chat{}, facts.jump_search),
                 .leave = widgets::Button<ask<Actions, &Actions::leave_chat>>("Leave room", {a})} {
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});

@@ -101,6 +101,12 @@ struct conversations_screen : nodes::Stack {
   std::map<conversation_id, room_event_filter> event_filters;
   // The chats that show who has read up to where, as faces.
   std::set<conversation_id> receipts_in;
+  // How far a jump's search pages back in each chat, in events; 0 no limit.
+  std::map<conversation_id, std::int64_t> jump_limits;
+  // How many messages the chat had when the search began paging back.
+  std::optional<std::size_t> jump_base;
+  // The server's window around it did not bring it: paging back instead.
+  bool jump_paging = false;
   // The @ list: the chat's members matching what follows an @ at the end of
   // what is written, as Telegram's; who was picked from it, to be sent as
   // mentions with the message.
@@ -701,6 +707,8 @@ struct conversations_screen : nodes::Stack {
     jump_chat = chosen;
     jump_quiet = false;
     jump_tries = 0;
+    jump_base.reset();
+    jump_paging = false;
     jump_age = 0;
     aiming.reset();
     context_asked.reset();
@@ -762,6 +770,8 @@ struct conversations_screen : nodes::Stack {
   // The message jumped to no longer looked for: where the view is, it stays.
   void stop_jump() {
     jumping_to.reset();
+    jump_base.reset();
+    jump_paging = false;
     context_asked.reset();
     jump_tries = 0;
   }
@@ -812,18 +822,29 @@ struct conversations_screen : nodes::Stack {
           this->set_made(one->timeline, at > 40 ? at - 40 : 0, at + 40);
           this->show_conversation(*last_model);
         }
-      } else if (is_matrix(chosen->account.speaks)) {
+      } else if (is_matrix(chosen->account.speaks) && !jump_paging) {
         // Not here: a window of the history around it, from the server --
-        // not all of it from here to there.
+        // not all of it from here to there. Where that does not bring it,
+        // paged back to, as far as the chat's limit.
         if (context_asked != jumping_to) {
           context_asked = jumping_to;
           actions->load_context(*chosen, *jumping_to);
-        } else if (++jump_tries > 600) {
-          jumping_to.reset();  // it did not come
+        } else if (++jump_tries > 240) {
+          jump_paging = true;
+          jump_tries = 0;
         }
       } else if (history_from && history_asked != history_from) {
-        history_asked = history_from;
-        actions->load_older(*chosen, *history_from);
+        // Paged back, as far as the chat's limit says: past it, given up.
+        if (!jump_base)
+          jump_base = one->timeline.size();
+        const auto limit = jump_limits.find(*chosen);
+        const std::int64_t most = limit == jump_limits.end() ? 5000 : limit->second;
+        if (most > 0 && static_cast<std::int64_t>(one->timeline.size() - std::min(*jump_base, one->timeline.size())) >= most) {
+          this->stop_jump();
+        } else {
+          history_asked = history_from;
+          actions->load_older(*chosen, *history_from);
+        }
       } else if (!history_from && ++jump_tries > 120) {
         jumping_to.reset();  // the beginning, and it was not there
       }

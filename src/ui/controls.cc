@@ -381,6 +381,71 @@ struct event_kind_list : nodes::Stack {
   }
 };
 
+// How far a search for a message jumped to pages back, at one level: a few
+// numbers of events and No limit, and, where a level under decides for it,
+// Default.
+template <class Actions>
+struct jump_search_choice : nodes::Stack {
+  static constexpr std::array<std::int64_t, 4> kChoices{500, 5000, 50000, 0};
+  struct row;
+  struct choose {
+    row* in = nullptr;
+    std::optional<std::int64_t> most;
+    void operator()() const { in->chose(most); }
+  };
+  struct row : nodes::Stack {
+    Actions* actions = nullptr;
+    choice_level_t level;
+    struct parts_t {
+      nodes::Text label;
+      segment<choose> fallback;
+      std::vector<segment<choose>> choices;
+    } parts;
+    [[nodiscard]] static std::string label_of(std::int64_t most) {
+      return most == 0 ? std::string("No limit") : std::format("{}", most);
+    }
+    row(Actions* a, choice_level_t at, std::optional<std::int64_t> now)
+        : actions(a), level(at),
+          parts{.label = nodes::Text("Look back for a message", 14.0f, text_colour),
+                .fallback = segment<choose>("Default", {this, std::nullopt})} {
+      const bool everywhere =
+          std::visit(overloaded{[](choice_level::everywhere) { return true; }, [](const auto&) { return false; }}, level);
+      this->setHorizontal();
+      this->setGap(4.0f);
+      fState.apply({.fillX = true, .height = 36.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
+      parts.label.setElided(true);
+      parts.label.apply({.grow = scene::axes::kX, .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      parts.fallback.apply({.width = 64.0f, .alignSelf = scene::align::kMiddle});
+      parts.fallback.setVisible(!everywhere);
+      parts.choices.reserve(kChoices.size());
+      for (const std::int64_t most : kChoices) {
+        parts.choices.emplace_back(label_of(most), choose{this, most});
+        parts.choices.back().apply({.width = 64.0f, .alignSelf = scene::align::kMiddle});
+      }
+      this->show_choice(everywhere ? std::optional<std::int64_t>(now.value_or(5000)) : now);
+    }
+    void show_choice(std::optional<std::int64_t> now) {
+      parts.fallback.set_active(!now);
+      for (std::size_t i = 0; i < kChoices.size(); ++i)
+        parts.choices[i].set_active(now == kChoices[i]);
+    }
+    void chose(std::optional<std::int64_t> most) {
+      this->show_choice(most);
+      actions->set_jump_search(level, most);
+    }
+  };
+  // Made where it stays, apart from the page: its switches know it by its
+  // address.
+  struct parts_t {
+    std::vector<row> rows;
+  } parts;
+  jump_search_choice(Actions* a, choice_level_t at, std::optional<std::int64_t> now) {
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    parts.rows.reserve(1);
+    parts.rows.emplace_back(a, at, now);
+  }
+};
+
 // Whether read receipts show as faces, at one level: Show and Hide and,
 // where a level under decides for it, Default -- as a room event kind's row.
 template <class Actions>

@@ -38,6 +38,8 @@ struct kept_settings {
   std::map<conversation_id, bool> room_events;
   // Chats' own choice of showing who has read up to where.
   std::map<conversation_id, bool> receipts_shown_in;
+  // Chats' own limit on a jump's search, in events; 0 no limit.
+  std::map<conversation_id, std::int64_t> jump_search_in;
   // And each kind of them, where a chat chose apart.
   std::map<conversation_id, mux::config::room_event_kinds> room_event_kinds;
   // What notifies, and the chats that chose everything or mentions alone
@@ -62,6 +64,16 @@ struct kept_settings {
   }
   // Whether a chat shows who has read up to where: its own choice, else its
   // account's, else every account's.
+  // How far a jump's search pages back in a chat: its own limit, else its
+  // account's, else every account's.
+  [[nodiscard]] std::int64_t jump_search_of(const conversation_id& chat) {
+    if (const auto own = jump_search_in.find(chat); own != jump_search_in.end())
+      return own->second;
+    if (const auto* account = this->settings_of(chat.account.address))
+      if (const auto& chosen = mux::config::jump_search_of(*account))
+        return *chosen;
+    return history.jump_search;
+  }
   [[nodiscard]] bool receipts_shown(const conversation_id& chat) {
     if (const auto own = receipts_shown_in.find(chat); own != receipts_shown_in.end())
       return own->second;
@@ -141,7 +153,7 @@ struct kept_settings {
       for (const auto& [chat, mode] : notify_modes)
         out.chat_notify->push_back({chat.account.address, chat.id, mux::config::word_of(mode)});
     }
-    if (!room_events.empty() || !room_event_kinds.empty() || !receipts_shown_in.empty()) {
+    if (!room_events.empty() || !room_event_kinds.empty() || !receipts_shown_in.empty() || !jump_search_in.empty()) {
       std::map<conversation_id, mux::config::room_events_choice> chosen;
       for (const auto& [chat, show] : room_events) {
         auto& one = chosen[chat];
@@ -154,6 +166,12 @@ struct kept_settings {
         one.account = chat.account.address;
         one.conversation = chat.id;
         one.kinds = kinds;
+      }
+      for (const auto& [chat, most] : jump_search_in) {
+        auto& one = chosen[chat];
+        one.account = chat.account.address;
+        one.conversation = chat.id;
+        one.jump_search = most;
       }
       for (const auto& [chat, show] : receipts_shown_in) {
         auto& one = chosen[chat];

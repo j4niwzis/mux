@@ -154,6 +154,9 @@ void app::apply(const request::open_manage&) {
                                      .events_all = room_events.contains(chat->id)
                                                        ? std::optional<bool>(room_events.at(chat->id))
                                                        : std::nullopt,
+                                     .jump_search = jump_search_in.contains(chat->id)
+                                                        ? std::optional<std::int64_t>(jump_search_in.at(chat->id))
+                                                        : std::nullopt,
                                      .receipts = receipts_shown_in.contains(chat->id)
                                                      ? std::optional<bool>(receipts_shown_in.at(chat->id))
                                                      : std::nullopt,
@@ -366,6 +369,28 @@ void app::apply(const request::set_room_event_kind& one) {
                                  room_events.insert_or_assign(*chosen, *one.show);
                                else
                                  room_events.erase(*chosen);
+                             }},
+             one.level);
+  (void)this->write();
+  this->refresh();
+}
+
+// How far a jump's search pages back, at a level.
+void app::apply(const request::set_jump_search& one) {
+  std::visit(mux::overloaded{[&](mux::choice_level::everywhere) { history.jump_search = one.most.value_or(5000); },
+                             [&](mux::choice_level::account) {
+                               this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+                                 mux::config::jump_search_in(account) = one.most;
+                               });
+                             },
+                             [&](mux::choice_level::chat) {
+                               const auto& chosen = root().main().chosen;
+                               if (!chosen)
+                                 return;
+                               if (one.most)
+                                 jump_search_in.insert_or_assign(*chosen, *one.most);
+                               else
+                                 jump_search_in.erase(*chosen);
                              }},
              one.level);
   (void)this->write();

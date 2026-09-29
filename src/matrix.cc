@@ -175,6 +175,85 @@ class account {
     });
   }
 
+  // A file sent: shown at once under `local` (its picture, where it is one,
+  // already known to the window), uploaded to the media repository, and
+  // sent as m.image or m.file -- its caption the body, its name apart
+  // (Matrix 1.10) -- then known by the event the server gives it.
+  void send_file(std::string room, std::string local, std::string bytes, std::string name, std::string mimetype,
+                 bool image, int width, int height, std::string caption) {
+    loop_->spawn([this, room = std::move(room), local = std::move(local), bytes = std::move(bytes),
+                  name = std::move(name), mimetype = std::move(mimetype), image, width, height,
+                  caption = std::move(caption)] {
+      const conversation_id in{id_, room};
+      mux::attachment carried;
+      if (image)
+        carried.kind = attachment_kind::image{};
+      carried.source = "local:" + local;
+      carried.name = name;
+      carried.mimetype = mimetype;
+      carried.size = static_cast<std::int64_t>(bytes.size());
+      carried.width = width;
+      carried.height = height;
+      sink_(change::message_added{message{.in = in,
+                                          .id = local,
+                                          .sender = id_.address,
+                                          .at = std::chrono::time_point_cast<std::chrono::milliseconds>(
+                                              std::chrono::system_clock::now()),
+                                          .body = {caption, std::nullopt},
+                                          .outgoing = true,
+                                          .delivery = delivery::sending{},
+                                          .attachment = carried}});
+      if (!api_) {
+        sink_(change::delivery_changed{in, local, delivery::failed{}});
+        return;
+      }
+      std::string target = "/_matrix/media/v3/upload?filename=";
+      for (const char c : name)
+        target += std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_'
+                      ? std::string(1, c)
+                      : std::format("%{:02X}", static_cast<unsigned>(static_cast<unsigned char>(c)));
+      std::optional<std::string> uri;
+      try {
+        const auto got = api_->request("POST", target, bytes, token_ ? std::optional<std::string_view>(*token_) : std::nullopt,
+                                       std::chrono::seconds(600),
+                                       mimetype.empty() ? std::string_view("application/octet-stream") : mimetype);
+        if (got.status == 200)
+          if (auto answer = knot::try_read<knot::value>(std::string_view(got.body)); answer)
+            uri = text(member(*answer, "content_uri"));
+        if (!uri)
+          log(id_, "upload of {} failed: {} {}", name, got.status, got.body.substr(0, 200));
+      } catch (const net::failure& failed) {
+        log(id_, "upload of {} failed: {}", name, failed.what());
+      }
+      if (!uri) {
+        sink_(change::delivery_changed{in, local, delivery::failed{}});
+        return;
+      }
+      knot::value::object content;
+      content.emplace("msgtype", knot::value(std::string(image ? "m.image" : "m.file")));
+      content.emplace("body", knot::value(caption.empty() ? name : caption));
+      content.emplace("filename", knot::value(name));
+      content.emplace("url", knot::value(*uri));
+      knot::value::object info;
+      info.emplace("mimetype", knot::value(mimetype));
+      info.emplace("size", knot::value(static_cast<std::int64_t>(bytes.size())));
+      if (image) {
+        info.emplace("w", knot::value(static_cast<std::int64_t>(width)));
+        info.emplace("h", knot::value(static_cast<std::int64_t>(height)));
+      }
+      content.emplace("info", knot::value(std::move(info)));
+      auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
+                                                        .event_type = "m.room.message",
+                                                        .txn_id = local,
+                                                        .body = knot::value(std::move(content))});
+      if (!sent) {
+        sink_(change::delivery_changed{in, local, delivery::failed{}});
+        return;
+      }
+      sink_(change::message_acknowledged{in, local, sent->event_id});
+    });
+  }
+
   // A message of one's own edited (m.replace): the new text in its place.
   void edit(std::string room, std::string event, std::string text) {
     loop_->spawn([this, room = std::move(room), event = std::move(event), text = std::move(text)] {

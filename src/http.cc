@@ -95,18 +95,19 @@ class connection {
   // A request and its response. `target` is under the service's path; the
   // bearer token goes in Authorization where there is one. A connection the
   // server closed since the last request is opened again, once.
+  // `type` is the body's, where it is not JSON: an upload's.
   response request(std::string_view method, std::string_view target, std::string_view body = {},
                    std::optional<std::string_view> bearer = std::nullopt,
-                   std::chrono::seconds timeout = std::chrono::seconds(60)) {
+                   std::chrono::seconds timeout = std::chrono::seconds(60), std::string_view type = {}) {
     const turn mine(*this);
     const bool reused = stream_.has_value();
     try {
-      return once(method, target, body, bearer, timeout);
+      return once(method, target, body, bearer, timeout, type);
     } catch (const net::failure&) {
       if (!reused)
         throw;
       stream_.reset();
-      return once(method, target, body, bearer, timeout);
+      return once(method, target, body, bearer, timeout, type);
     }
   }
 
@@ -151,7 +152,7 @@ class connection {
   static std::string_view path_of(std::string_view target) { return target.substr(0, target.find('?')); }
 
   response once(std::string_view method, std::string_view target, std::string_view body,
-                std::optional<std::string_view> bearer, std::chrono::seconds timeout) {
+                std::optional<std::string_view> bearer, std::chrono::seconds timeout, std::string_view type = {}) {
     if (!stream_)
       open();
     beast::http::request<beast::http::string_body> out;
@@ -165,7 +166,7 @@ class connection {
     if (bearer)
       out.set(beast::http::field::authorization, "Bearer " + std::string(*bearer));
     if (!body.empty() || method == "POST" || method == "PUT") {
-      out.set(beast::http::field::content_type, "application/json");
+      out.set(beast::http::field::content_type, type.empty() ? std::string_view("application/json") : type);
       out.body() = std::string(body);
     }
     out.prepare_payload();
@@ -256,7 +257,7 @@ class pool {
 
   response request(std::string_view method, std::string_view target, std::string_view body = {},
                    std::optional<std::string_view> bearer = std::nullopt,
-                   std::chrono::seconds timeout = std::chrono::seconds(60)) {
+                   std::chrono::seconds timeout = std::chrono::seconds(60), std::string_view type = {}) {
     connection* free = this->take();
     while (free == nullptr) {
       if (std::ranges::find(waiting_, owner_->current()) == waiting_.end())
@@ -276,7 +277,7 @@ class pool {
         }
       }
     } const told{*this};
-    return free->request(method, target, body, bearer, timeout);
+    return free->request(method, target, body, bearer, timeout, type);
   }
 
   void close() {

@@ -61,6 +61,9 @@ struct stub {
   void open_picture(std::string) {}
   void close_picture() {}
   void open_file(std::string, std::string) {}
+  void attach_files() {}
+  void close_send_box() {}
+  void send_files() {}
   void open_member_info(std::string) {}
   void close_notice() {}
   void resize_info(float) {}

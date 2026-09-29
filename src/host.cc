@@ -101,6 +101,38 @@ inline void load_fonts(const std::string& directory) {
 // A link opened in what the system opens links with.
 inline void open_url(const std::string& url) { SDL_OpenURL(url.c_str()); }
 
+// Files the user picked or dropped, handed to the window's thread as an
+// event of its own: the dialog answers on a thread of its choosing.
+inline std::uint32_t files_event() {
+  static const std::uint32_t registered = SDL_RegisterEvents(1);
+  return registered;
+}
+inline SDL_Window*& the_window() {
+  static SDL_Window* window = nullptr;
+  return window;
+}
+// The system's dialog for opening files, several at once.
+inline void choose_files() {
+  SDL_ShowOpenFileDialog(
+      +[](void*, const char* const* list, int) {
+        if (!list)
+          return;
+        auto* chosen = new std::vector<std::string>();
+        for (const char* const* one = list; *one; ++one)
+          chosen->emplace_back(*one);
+        if (chosen->empty()) {
+          delete chosen;
+          return;
+        }
+        SDL_Event event{};
+        event.type = files_event();
+        event.user.data1 = chosen;
+        event.user.code = 0;  // chosen, not dropped
+        SDL_PushEvent(&event);
+      },
+      nullptr, the_window(), nullptr, 0, nullptr, true);
+}
+
 // The window asked to close, as its close button would: from the window's
 // thread, between events or in a handler.
 inline void request_quit() {
@@ -281,6 +313,7 @@ inline double now_ms() {
 // The window, until it is closed. What `App` is asked:
 //   window()        the scene: a skiff::scene::Scene<...>, whatever its root
 //   woken()         another thread woke the window
+//   files_given(paths, dropped)  files chosen in the dialog, or dropped
 //   before_frame()  between events: what the screens asked for, applied
 //                   where no handler is running
 //   closing()       the window is going away
@@ -291,6 +324,7 @@ int run(App& app, const options& how) {
     return 1;
   }
   (void)wake_event();
+  (void)files_event();
   load_fonts(how.fonts);
   SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
@@ -304,6 +338,7 @@ int run(App& app, const options& how) {
     SDL_Quit();
     return 1;
   }
+  the_window() = window;
   int result = 0;
   {
     detail::canvas_target target(window, how.software);
@@ -375,6 +410,10 @@ int run(App& app, const options& how) {
               router.key(skiff::scene::key::up{key, held});
             break;
           }
+          case SDL_EVENT_DROP_FILE:
+            if (event.drop.data)
+              app.files_given(std::vector<std::string>{event.drop.data}, true);
+            break;
           case SDL_EVENT_TEXT_INPUT:
             router.text(skiff::scene::text::commit{event.text.text});
             break;
@@ -385,6 +424,10 @@ int run(App& app, const options& how) {
           default:
             if (event.type == wake_event())
               app.woken();
+            else if (event.type == files_event()) {
+              std::unique_ptr<std::vector<std::string>> chosen(static_cast<std::vector<std::string>*>(event.user.data1));
+              app.files_given(std::move(*chosen), false);
+            }
             break;
         }
         got = SDL_PollEvent(&event);

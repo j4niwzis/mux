@@ -184,6 +184,20 @@ struct network {
             one.account);
     });
   }
+  // A file sent into a chat by the account it is of.
+  void send_file(const mux::conversation_id& in, std::string local, std::string bytes, std::string name,
+                 std::string mimetype, bool image, int width, int height, std::string caption) {
+    loop.post([this, in, local = std::move(local), bytes = std::move(bytes), name = std::move(name),
+               mimetype = std::move(mimetype), image, width, height, caption = std::move(caption)] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == in.account)
+                account->send_file(in.id, local, bytes, name, mimetype, image, width, height, caption);
+            },
+            one.account);
+    });
+  }
   // A room joined by the account named, through the servers named.
   void join(const mux::account_id& by, std::string room, std::vector<std::string> via) {
     loop.post([this, by, room = std::move(room), via = std::move(via)] {
@@ -653,6 +667,9 @@ struct resize_sidebar {
 struct message_person {
   mux::conversation_id who;
 };
+struct attach_files {};
+struct close_send_box {};
+struct send_files {};
 struct open_picture {
   std::string source;
 };
@@ -738,7 +755,7 @@ using request_t =
                  request::close_menu, request::menu_reply, request::menu_edit, request::menu_copy,
                  request::menu_delete, request::cancel_compose, request::open_url,
                  request::switch_account, request::submit_message, request::send_typed,
-                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_member_info, request::reply_to, request::open_picture, request::close_picture, request::open_file, request::close_notice,
+                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_member_info, request::reply_to, request::open_picture, request::close_picture, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::close_notice,
                  request::resize_info, request::choose_new_proxy, request::toggle_mute, request::close_account_pages,
                  request::accounts_back, request::account_page, request::flip_account_receipts,
                  request::proxy_kind, request::choose_account_proxy, request::manage_proxies,
@@ -807,6 +824,9 @@ struct actions {
   void send_typed() { requests.emplace_back(request::send_typed{}); }
   void resize_sidebar(float x) { requests.emplace_back(request::resize_sidebar{x}); }
   void message_person(const mux::conversation_id& who) { requests.emplace_back(request::message_person{who}); }
+  void attach_files() { requests.emplace_back(request::attach_files{}); }
+  void close_send_box() { requests.emplace_back(request::close_send_box{}); }
+  void send_files() { requests.emplace_back(request::send_files{}); }
   void open_picture(std::string source) { requests.emplace_back(request::open_picture{std::move(source)}); }
   void close_picture() { requests.emplace_back(request::close_picture{}); }
   void open_file(std::string source, std::string name) {
@@ -1306,6 +1326,101 @@ struct app {
     root().open_menu(one.own, one.x, one.y);
   }
   void apply(const request::close_menu&) { root().close_menu(); }
+  // -- files to send: chosen with the paperclip, or dropped on the window
+  struct prepared_file {
+    std::string bytes;
+    std::string name;
+    std::string mimetype;
+    bool image = false;
+    int width = 0, height = 0;
+    std::string key;  // its picture, known to the window already
+  };
+  std::vector<prepared_file> to_send;
+  std::uint64_t files_made = 0;
+  void apply(const request::attach_files&) {
+    if (root().main().chosen)
+      mux::host::choose_files();
+  }
+  void apply(const request::close_send_box&) {
+    to_send.clear();
+    root().close_send_box();
+  }
+  // What a file is, by its first bytes: a picture's type, where it is one.
+  static std::optional<std::pair<std::string, std::string>> picture_type_of(std::string_view bytes) {
+    if (bytes.starts_with("\x89PNG"))
+      return std::pair<std::string, std::string>{"image/png", "png"};
+    if (bytes.starts_with("\xFF\xD8\xFF"))
+      return std::pair<std::string, std::string>{"image/jpeg", "jpg"};
+    if (bytes.starts_with("GIF8"))
+      return std::pair<std::string, std::string>{"image/gif", "gif"};
+    if (bytes.size() > 12 && bytes.starts_with("RIFF") && bytes.substr(8, 4) == "WEBP")
+      return std::pair<std::string, std::string>{"image/webp", "webp"};
+    return std::nullopt;
+  }
+  // Files given: read, a picture known by its bytes; a picture dropped on
+  // the window written anew from its pixels -- nothing of its file, its
+  // metadata among it, goes with it -- and named image.<its type>. Then the
+  // send box, with what was waiting in it before.
+  void files_given(std::vector<std::string> paths, bool dropped) {
+    if (!root().main().chosen)
+      return;
+    for (const std::string& path : paths) {
+      std::ifstream file(path, std::ios::binary);
+      if (!file)
+        continue;
+      prepared_file one;
+      one.bytes.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+      one.name = std::filesystem::path(path).filename().string();
+      one.mimetype = "application/octet-stream";
+      if (const auto type = picture_type_of(one.bytes)) {
+        if (auto image = skia::decodeImage(one.bytes.data(), one.bytes.size())) {
+          one.image = true;
+          one.width = image->width();
+          one.height = image->height();
+          one.mimetype = type->first;
+          if (dropped) {
+            // Animated GIFs keep their frames; the rest are written anew.
+            const bool jpeg = type->second == "jpg";
+            if (type->second != "gif")
+              if (auto fresh = skia::encodeImage(*image, jpeg); !fresh.empty()) {
+                one.bytes = std::move(fresh);
+                one.mimetype = jpeg ? "image/jpeg" : "image/png";
+              }
+            one.name = std::format("image.{}", type->second == "gif" ? "gif" : jpeg ? "jpg" : "png");
+          }
+          one.key = std::format("thumb:local:mux-file-{}-{}", std::chrono::system_clock::now().time_since_epoch().count(),
+                                ++files_made);
+          mux::ui::avatar_images().put(one.key, std::move(image));
+        }
+      }
+      to_send.push_back(std::move(one));
+    }
+    if (to_send.empty())
+      return;
+    std::vector<mux::ui::pending_file> shown;
+    for (const prepared_file& one : to_send)
+      shown.push_back({one.name, one.key, static_cast<std::int64_t>(one.bytes.size()), one.image});
+    root().open_send_box(shown);
+  }
+  // Sent: each file, the caption with the first; the box closed.
+  void apply(const request::send_files&) {
+    const auto& chosen = root().main().chosen;
+    auto* box = root().send_box_up();
+    if (!chosen || !box || to_send.empty())
+      return;
+    std::string caption = box->caption.text();
+    for (prepared_file& one : to_send) {
+      // Its local id is its picture's, so the window shows it while it goes.
+      std::string local = one.key.empty() ? std::format("mux-file-{}-{}", std::chrono::system_clock::now().time_since_epoch().count(),
+                                                        ++files_made)
+                                          : one.key.substr(std::string_view("thumb:local:").size());
+      net->send_file(*chosen, std::move(local), std::move(one.bytes), one.name, one.mimetype, one.image, one.width,
+                     one.height, std::exchange(caption, std::string()));
+    }
+    to_send.clear();
+    root().close_send_box();
+  }
+
   // A picture seen whole: over the window at once, the thumbnail until all
   // of it has come.
   void apply(const request::open_picture& one) {

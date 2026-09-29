@@ -89,6 +89,7 @@ inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 //   void jump_to_message(std::string id)  -- a quoted message, scrolled to
 //   void reply_to(std::string id, std::string text)  -- a message swiped left
 //   void open_picture(std::string source), close_picture(), open_file(std::string source, std::string name)
+//   void attach_files(), close_send_box(), send_files()  -- what is sent with the paperclip
 //   void open_member_info(std::string id)  -- a sender's page, in the info
 //   void load_older(const conversation_id&, std::string from)  -- its history
 //   void jump_to_end()               -- back to a chat's newest message
@@ -2213,11 +2214,11 @@ struct composer_bar : nodes::Stack {
   } context_line;
   // The paperclip, the field growing with what is written in it, the arrow.
   struct input_row : nodes::Stack {
-    icon_button<not_yet<Actions>> attach;
+    icon_button<ask<Actions, &Actions::attach_files>> attach;
     widgets::TextArea<submit_message<Actions>> field;
     icon_button<ask<Actions, &Actions::send_typed>> send;
     explicit input_row(Actions* a)
-        : attach(icon::clip{}, {a, "Sending files"}), field("Write a message…", {a}), send(icon::send{}, {a}) {
+        : attach(icon::clip{}, {a}), field("Write a message…", {a}), send(icon::send{}, {a}) {
       this->setHorizontal();
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {9.0f, 8.0f, 9.0f, 8.0f}});
@@ -4652,6 +4653,97 @@ struct context_menu : scene::Node {
   }
 };
 
+// What is about to be sent, as tdesktop's send box shows it: its title, a
+// picture scaled to the box or a file's row for each, a caption, and Cancel
+// and Send.
+struct pending_file {
+  std::string name;
+  std::string key;  // its picture's, where it is one: "thumb:local:..."
+  std::int64_t size = 0;
+  bool image = false;
+};
+template <class Actions>
+struct send_box : nodes::Stack {
+  nodes::Text title;
+  struct previews_column : nodes::Stack {
+    struct picture_preview : scene::Node {
+      std::string key;
+      picture_preview(std::string k, float width, float height) : key(std::move(k)) {
+        fState.apply({.width = width, .height = height, .alignSelf = scene::align::kMiddle});
+      }
+      void drawSelf(skia::SkCanvas* canvas, float alpha) {
+        const skia::SkRect& box = fState.fBounds;
+        const int saved = canvas->save();
+        canvas->clipRRect(skia::SkRRect::MakeRectXY(box, 10.0f, 10.0f), true);
+        if (const skia::Sp<skia::SkImage>* image = avatar_images().find(key); image && *image) {
+          skia::SkPaint paint;
+          paint.setAlphaf(alpha);
+          canvas->drawImageRect(*image, box, skia::SkSamplingOptions(skia::SkFilterMode::kLinear), &paint);
+        }
+        canvas->restoreToCount(saved);
+      }
+    };
+    std::vector<picture_preview> pictures;
+    std::vector<file_view> files;
+    explicit previews_column(const std::vector<pending_file>& all) {
+      this->setGap(8.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+      for (const pending_file& one : all) {
+        if (one.image) {
+          const skia::Sp<skia::SkImage>* image = avatar_images().find(one.key);
+          float w = image && *image ? static_cast<float>((*image)->width()) : 380.0f;
+          float h = image && *image ? static_cast<float>((*image)->height()) : 240.0f;
+          const float scale = std::min({1.0f, 380.0f / w, (all.size() > 1 ? 160.0f : 300.0f) / h});
+          pictures.emplace_back(one.key, w * scale, h * scale);
+        } else {
+          files.emplace_back(std::string(), one.name, one.size);
+        }
+      }
+    }
+    void forEachChild(auto&& f) {
+      f(pictures);
+      f(files);
+    }
+  };
+  nodes::ScrollContainer<previews_column> previews;
+  widgets::TextArea<> caption{"Add a caption…"};
+  struct buttons_row : nodes::Stack {
+    widgets::Button<ask<Actions, &Actions::close_send_box>> cancel;
+    widgets::Button<ask<Actions, &Actions::send_files>> send;
+    explicit buttons_row(Actions* a) : cancel("Cancel", {a}), send("Send", {a}) {
+      this->setHorizontal();
+      this->setGap(8.0f);
+      fStack.justify = nodes::justify::end{};
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+      send.setPrimary(true);
+      cancel.apply({.width = 96.0f, .height = 36.0f});
+      send.apply({.width = 96.0f, .height = 36.0f});
+    }
+    void forEachChild(auto&& f) {
+      f(cancel);
+      f(send);
+    }
+  } buttons;
+
+  send_box(Actions* a, const std::vector<pending_file>& all)
+      : title(all.size() == 1 ? (all.front().image ? "Send a photo" : "Send a file")
+                              : std::format("Send {} {}", all.size(),
+                                            std::ranges::all_of(all, &pending_file::image) ? "photos" : "files"),
+              17.0f, text_colour, true),
+        previews(previews_column(all)), buttons(a) {
+    this->setGap(12.0f);
+    fState.apply({.fill = true, .padding = {18.0f, 20.0f, 16.0f, 20.0f}});
+    previews.apply({.fillX = true, .grow = scene::axes::kY});
+    caption.apply({.fillX = true});
+  }
+  void forEachChild(auto&& f) {
+    f(title);
+    f(previews);
+    f(caption);
+    f(buttons);
+  }
+};
+
 // A picture seen whole, over the window: dimmed behind, fitted in with a
 // margin, the thumbnail until the whole picture has come; a press anywhere
 // closes it.
@@ -4710,12 +4802,14 @@ struct window : scene::Node {
     widgets::Dialog<notice_box<Actions>> notice;
     std::optional<context_menu<Actions>> menu;
     std::optional<picture_viewer<Actions>> viewer;
+    widgets::Dialog<send_box<Actions>> sending;
 
     explicit parts(Actions* a) : frame(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a)) {
       backdrop.apply({.fill = true});
       frame.setSheetColour(background);
       frame.base().setSheetColour(sidebar_colour);
       settings.setSheetColour(sidebar_colour);
+      sending.setSheetColour(sidebar_colour);
       settings.setSize(440.0f, 520.0f);
       notice.setSheetColour(sidebar_colour);
       notice.setSize(440.0f, 240.0f);
@@ -4743,6 +4837,7 @@ struct window : scene::Node {
     f(p->frame);
     f(p->settings);
     f(p->notice);
+    f(p->sending);
     f(p->menu);
     f(p->viewer);
   }
@@ -4769,10 +4864,17 @@ struct window : scene::Node {
     p->frame.dropClosed();
     p->settings.dropClosed();
     p->notice.dropClosed();
+    p->sending.dropClosed();
   }
 
   void open_settings(std::string motion) { p->settings.open(actions, std::move(motion)); }
   void open_picture(std::string source) { p->viewer.emplace(actions, std::move(source)); }
+  void open_send_box(const std::vector<pending_file>& files) {
+    p->sending.setSize(440.0f, 560.0f);
+    p->sending.open(actions, files);
+  }
+  void close_send_box() { p->sending.close(); }
+  [[nodiscard]] send_box<Actions>* send_box_up() { return p->sending.shown(); }
   void close_picture() { p->viewer.reset(); }
   void close_settings() { p->settings.close(); }
   [[nodiscard]] settings_dialog<Actions>* settings_up() { return p->settings.shown(); }

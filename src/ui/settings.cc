@@ -1,0 +1,119 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// mux.ui:settings -- The settings box.
+export module mux.ui:settings;
+
+import std;
+import skia;
+import skiff.paint;
+import skiff.scene;
+import skiff.nodes;
+import skiff.widgets;
+import mux.core;
+import mux.config;
+export import :storage;
+
+export namespace mux::ui {
+
+template <class Actions>
+struct settings_dialog : scene::Node {
+  Actions* actions = nullptr;
+  std::string motion;
+  std::variant<settings_home<Actions>, animations_page<Actions>, proxies_page<Actions>, proxy_editor<Actions>,
+               appearance_page<Actions>, rendering_page<Actions>, storage_page<Actions>, files_page<Actions>>
+      page;
+  // What is up coming in from the side, fading in, when the page changes.
+  skiff::paint::Tween swap{1.0f, 200.0f, skiff::paint::movement::subtle{}};
+  float swap_from = 1.0f;
+  void begin_swap(float side) {
+    swap_from = side;
+    swap.jump(0.0f);
+    swap.setTarget(1.0f);
+    this->invalidateLayout();
+  }
+  [[nodiscard]] bool settling() const { return swap.moving(); }
+  void update(double now_ms) {
+    if (swap.step(now_ms))
+      this->invalidateLayout();
+  }
+
+  settings_dialog(Actions* a, std::string level) : actions(a), motion(std::move(level)), page(std::in_place_index<0>, a) {
+    fState.apply({.fill = true});
+  }
+
+  void forEachChild(auto&& f) { f(page); }
+
+  // Home comes back from the left, the pages come in from the right.
+  void show_home() {
+    page.template emplace<0>(actions);
+    this->begin_swap(-1.0f);
+  }
+  void show_animations() {
+    this->begin_swap(1.0f);
+    page.template emplace<1>(actions);
+    this->show_motion(motion);
+  }
+  void show_appearance(const config::theme_t& theme, const config::accent_t& accent) {
+    page.template emplace<4>(actions, theme, accent);
+    this->begin_swap(1.0f);
+  }
+  void show_rendering(const config::renderer_t& renderer) {
+    page.template emplace<5>(actions, renderer);
+    this->begin_swap(1.0f);
+  }
+  void show_files(const config::sending_settings& now) {
+    page.template emplace<7>(actions, now);
+    this->begin_swap(1.0f);
+  }
+  void show_storage(const config::cache_limits& limits) {
+    page.template emplace<6>(actions, limits);
+    this->begin_swap(1.0f);
+  }
+  [[nodiscard]] storage_page<Actions>* storage() {
+    return std::visit(overloaded{[](storage_page<Actions>& one) { return &one; },
+                                 [](auto&) -> storage_page<Actions>* { return nullptr; }},
+                      page);
+  }
+  [[nodiscard]] rendering_page<Actions>* rendering() {
+    return std::visit(overloaded{[](rendering_page<Actions>& one) { return &one; },
+                                 [](auto&) -> rendering_page<Actions>* { return nullptr; }},
+                      page);
+  }
+  [[nodiscard]] appearance_page<Actions>* appearance() {
+    return std::visit(overloaded{[](appearance_page<Actions>& one) { return &one; },
+                                 [](auto&) -> appearance_page<Actions>* { return nullptr; }},
+                      page);
+  }
+  void show_proxies(const std::vector<config::proxy_settings>& all, bool with_back = true) {
+    page.template emplace<2>(actions, all, with_back);
+    this->begin_swap(1.0f);
+  }
+  void show_proxy(const std::optional<config::proxy_settings>& from, int index) {
+    page.template emplace<3>(actions, from, index);
+    this->begin_swap(1.0f);
+  }
+  [[nodiscard]] proxy_editor<Actions>* editor() {
+    return std::visit(overloaded{[](proxy_editor<Actions>& one) { return &one; },
+                                 [](auto&) -> proxy_editor<Actions>* { return nullptr; }},
+                      page);
+  }
+  void show_motion(std::string level) {
+    motion = std::move(level);
+    std::visit([this](auto& one) { one.show_motion(motion); }, page);
+  }
+
+
+  void layoutChildren() {
+    std::visit(
+        [this](auto& one) {
+          one.fState.arrange(0.0f, 0.0f);
+          const float value = swap.value();
+          const skia::SkRect box = fState.contentBox();
+          one.fState.setAlpha(value);
+          scene::layout(one, skia::SkRect::MakeXYWH(box.fLeft + (1.0f - value) * 32.0f * swap_from, box.fTop,
+                                                    box.width(), box.height()));
+        },
+        page);
+  }
+};
+
+}  // namespace mux::ui

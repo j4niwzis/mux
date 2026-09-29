@@ -167,9 +167,14 @@ if(MUX_UI)
   endforeach()
 
   target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
-    FILES src/host.cc src/ui.cc)
+    FILES src/host.cc src/ui.cc
+          src/ui/base.cc src/ui/icons.cc src/ui/avatars.cc src/ui/controls.cc src/ui/themes.cc src/ui/names.cc src/ui/html.cc src/ui/chat_list.cc src/ui/message.cc src/ui/header.cc src/ui/info.cc src/ui/composer.cc src/ui/timeline.cc src/ui/conversations.cc src/ui/forms.cc src/ui/add_account.cc src/ui/accounts.cc src/ui/drawer.cc src/ui/proxies.cc src/ui/appearance.cc src/ui/storage.cc src/ui/settings.cc src/ui/context_menu.cc src/ui/sending.cc src/ui/viewer.cc src/ui/window.cc)
   target_link_libraries(mux_modules PUBLIC SDL3::SDL3 skiff::skiff skiff::widgets)
   add_executable(mux src/main.cc)
+  # The program's own parts: its network, its demo, what it keeps on disk,
+  # the requests of its window, and the names it reads.
+  target_sources(mux PRIVATE FILE_SET CXX_MODULES BASE_DIRS src
+    FILES src/app/network.cc src/app/demo.cc src/app/store.cc src/app/requests.cc src/app/words.cc)
   target_link_libraries(mux PRIVATE mux_modules)
 endif()
 

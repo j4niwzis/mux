@@ -611,6 +611,10 @@ struct resize_sidebar {
 struct message_person {
   mux::conversation_id who;
 };
+struct reply_to {
+  std::string id;
+  std::string text;
+};
 struct jump_to_message {
   std::string id;
 };
@@ -684,7 +688,7 @@ using request_t =
                  request::close_menu, request::menu_reply, request::menu_edit, request::menu_copy,
                  request::menu_delete, request::cancel_compose, request::open_url,
                  request::switch_account, request::submit_message, request::send_typed,
-                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_member_info, request::close_notice,
+                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_member_info, request::reply_to, request::close_notice,
                  request::resize_info, request::choose_new_proxy, request::toggle_mute, request::close_account_pages,
                  request::accounts_back, request::account_page, request::flip_account_receipts,
                  request::proxy_kind, request::choose_account_proxy, request::manage_proxies,
@@ -753,6 +757,7 @@ struct actions {
   void send_typed() { requests.emplace_back(request::send_typed{}); }
   void resize_sidebar(float x) { requests.emplace_back(request::resize_sidebar{x}); }
   void message_person(const mux::conversation_id& who) { requests.emplace_back(request::message_person{who}); }
+  void reply_to(std::string id, std::string text) { requests.emplace_back(request::reply_to{std::move(id), std::move(text)}); }
   void jump_to_message(std::string id) { requests.emplace_back(request::jump_to_message{std::move(id)}); }
   void open_member_info(std::string id) { requests.emplace_back(request::open_member_info{std::move(id)}); }
   void not_implemented(std::string what) { requests.emplace_back(request::not_implemented{std::move(what)}); }
@@ -1206,6 +1211,12 @@ struct app {
     root().open_menu(one.own, one.x, one.y);
   }
   void apply(const request::close_menu&) { root().close_menu(); }
+  // A message swiped to the left: answered, as its menu's Reply does.
+  void apply(const request::reply_to& one) {
+    menu_target.id = one.id;
+    menu_target.text = one.text;
+    this->apply(request::menu_reply{});
+  }
   void apply(const request::menu_reply&) {
     root().close_menu();
     composing = compose::reply{menu_target.id};

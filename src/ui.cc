@@ -87,6 +87,7 @@ inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 //   void toggle_info()               -- the chosen chat's info, beside it
 //   void message_person(const conversation_id&)  -- a member's direct chat
 //   void jump_to_message(std::string id)  -- a quoted message, scrolled to
+//   void reply_to(std::string id, std::string text)  -- a message swiped left
 //   void open_member_info(std::string id)  -- a sender's page, in the info
 //   void load_older(const conversation_id&, std::string from)  -- its history
 //   void jump_to_end()               -- back to a chat's newest message
@@ -1476,6 +1477,35 @@ struct message_bubble : nodes::Stack {
     f(face);
     f(body);
   }
+
+  // Swiped to the left to answer it: how far, following the pointer, and
+  // back to its place when let go. Drawn moved, with the arrow of a reply
+  // coming in at the right; where it is laid out does not change.
+  skiff::paint::Tween swipe{0.0f, 180.0f, skiff::paint::movement::subtle{}};
+  static constexpr float kSwipeToReply = 70.0f;
+  [[nodiscard]] bool settling() const { return swipe.moving(); }
+  void update(double now_ms) {
+    if (swipe.step(now_ms))
+      this->markDamaged();
+  }
+  void draw(skia::SkCanvas* canvas, float alpha) {
+    const float shift = swipe.value();
+    if (shift == 0.0f) {
+      scene::drawDefault(*this, canvas, alpha);
+      return;
+    }
+    const int saved = canvas->save();
+    canvas->translate(shift, 0.0f);
+    scene::drawDefault(*this, canvas, alpha);
+    canvas->restoreToCount(saved);
+    const float reached = std::clamp(-shift / kSwipeToReply, 0.0f, 1.0f);
+    const skia::SkRect& box = fState.fBounds;
+    const skia::SkRect disc = skia::SkRect::MakeXYWH(box.fRight - 34.0f, box.centerY() - 14.0f, 28.0f, 28.0f);
+    if (skia::SkFont* font = skiff::paint::defaultFont())
+      skiff::paint::Painter(canvas, *font).fillRounded(disc, 14.0f, reached >= 1.0f ? accent_colour : tile_colour,
+                                                       alpha * reached);
+    draw_icon(canvas, icon::back{}, disc, reached >= 1.0f ? on_accent_colour : dim_colour, alpha * reached);
+  }
   // Pressed with the right button, it asks for its menu.
   [[nodiscard]] bool acceptsInput() const { return true; }
 };
@@ -2192,6 +2222,85 @@ struct timeline_area : scene::Node {
     f(timeline);
     f(jump);
   }
+  // A message swiped left: watched from above, before the list's scrolling
+  // and a text's selecting see the pointer. A press that moves left at once,
+  // and more across than up or down, takes the pointer and moves the
+  // message; let go past its mark, it is answered; either way it goes back.
+  std::optional<std::string> swiping;
+  bool swipe_armed = false;
+  float swipe_x = 0.0f, swipe_y = 0.0f;
+  std::chrono::steady_clock::time_point swipe_pressed{};
+  message_bubble* swiped() {
+    if (!swiping)
+      return nullptr;
+    auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
+    const auto it = std::ranges::find(entries, *swiping, &message_bubble::message_id);
+    return it == entries.end() ? nullptr : &*it;
+  }
+  template <class Phase>
+  void onPointer(const Phase&, const scene::pointer::down& press, scene::PointerReply&)
+    requires(std::same_as<Phase, scene::phase::capture> || std::same_as<Phase, scene::phase::target>)
+  {
+    swipe_armed = press.button <= 1;
+    swipe_x = press.x;
+    swipe_y = press.y;
+    swipe_pressed = std::chrono::steady_clock::now();
+  }
+  template <class Phase>
+  void onPointer(const Phase&, const scene::pointer::move& at, scene::PointerReply& reply)
+    requires(std::same_as<Phase, scene::phase::capture> || std::same_as<Phase, scene::phase::target>)
+  {
+    if (message_bubble* one = this->swiped()) {
+      one->swipe.jump(std::clamp(at.x - swipe_x, -120.0f, 0.0f));
+      one->markDamaged();
+      reply.handle();
+      return;
+    }
+    if (!swipe_armed)
+      return;
+    const float dx = at.x - swipe_x, dy = at.y - swipe_y;
+    if (std::abs(dx) < 8.0f && std::abs(dy) < 8.0f)
+      return;
+    swipe_armed = false;
+    if (dx >= 0.0f || std::abs(dx) < 2.0f * std::abs(dy) ||
+        std::chrono::steady_clock::now() - swipe_pressed > std::chrono::milliseconds(250))
+      return;
+    for (message_bubble& one : std::get<0>(std::get<0>(timeline.fChildren).fChildren))
+      if (one.bounds().contains(swipe_x, swipe_y) && !one.message_id.empty()) {
+        swiping = one.message_id;
+        one.swipe.jump(std::clamp(dx, -120.0f, 0.0f));
+        reply.capturePointer();
+        reply.suppressHover();
+        reply.handle();
+        return;
+      }
+  }
+  template <class Phase>
+  void onPointer(const Phase&, const scene::pointer::up&, scene::PointerReply& reply)
+    requires(std::same_as<Phase, scene::phase::capture> || std::same_as<Phase, scene::phase::target>)
+  {
+    swipe_armed = false;
+    if (message_bubble* one = this->swiped()) {
+      if (one->swipe.value() <= -message_bubble::kSwipeToReply)
+        actions->reply_to(one->message_id, one->plain);
+      one->swipe.setTarget(0.0f);
+      swiping.reset();
+      reply.releasePointer();
+      reply.handle();
+    }
+  }
+  template <class Phase>
+  void onPointer(const Phase&, const scene::pointer::cancel&, scene::PointerReply& reply)
+    requires(std::same_as<Phase, scene::phase::capture> || std::same_as<Phase, scene::phase::target>)
+  {
+    swipe_armed = false;
+    if (message_bubble* one = this->swiped()) {
+      one->swipe.setTarget(0.0f);
+      swiping.reset();
+      reply.releasePointer();
+    }
+  }
+
   // A right press on a message: its menu, where it was pressed.
   using Node::onPointer;
   void onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {

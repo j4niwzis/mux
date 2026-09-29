@@ -207,11 +207,14 @@ struct timeline_area : scene::Node {
     } press{x, y};
       for (const message_bubble& one : this->bubbles()) {
         // A picture: seen whole. A file: saved and opened.
-        // A video, shown by its thumbnail: played by the system's player, as
-        // a file is opened, until it can be here.
+        // A video, shown by its thumbnail: played in the viewer.
         if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y) &&
             one.said.attachment && one.said.attachment->video) {
-          actions->open_file(*one.said.attachment->video, one.said.attachment->name);
+          const conversation* chat = seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr;
+          const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
+          actions->open_video(one.parts.body.parts.picture->source, *one.said.attachment->video, one.sender,
+                              chat ? sender_name(*chat, one.sender) : one.sender,
+                              std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day}, clock_of(one.said.at)));
           return true;
         }
         if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y)) {

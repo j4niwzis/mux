@@ -86,6 +86,15 @@ class pictures_part {
                           // added where the name is taken, and opened; or only saved.
                           [&](const media_use::to_open& one) { this->save_download(picture.bytes, one.name, true); },
                           [&](const media_use::to_play&) { this->play(picture.source, picture.bytes); },
+                          // A video: into its file, and played where the viewer waits for it.
+                          [&](const media_use::to_watch&) {
+                            videos_fetching_.erase(picture.source);
+                            const auto where = video_file(picture.source);
+                            std::error_code failed;
+                            std::filesystem::create_directories(where.parent_path(), failed);
+                            std::ofstream(where, std::ios::binary) << picture.bytes;
+                            s_->root().play_video(picture.source, where);
+                          },
                           // Saved where the dialog said, where it said; else into Downloads.
                           [&](const media_use::to_save& one) {
                             if (save_path_)
@@ -247,12 +256,47 @@ class pictures_part {
       s_->net->fetch_media(chosen->account, one.source, media_use::whole{}, 0);
   }
   void apply(const request::close_picture&) { s_->root().close_picture(); }
+  // A video: the viewer on its thumbnail at once; the video from its file
+  // where it was fetched before, else fetched, the loader showing how far.
+  void apply(const request::open_video& one) {
+    s_->root().open_video(one.source, one.video, one.sender, one.name, one.when);
+    videos_.insert(one.video);
+    mux::ui::stopped_downloads().erase(one.video);
+    this->watch(one.video);
+  }
+  void watch(const std::string& video) {
+    if (const auto where = video_file(video); std::filesystem::exists(where)) {
+      s_->root().play_video(video, where);
+      return;
+    }
+    if (const auto& chosen = s_->root().main().chosen; chosen && videos_fetching_.insert(video).second)
+      s_->net->fetch_media(chosen->account, video, media_use::to_watch{}, 0);
+  }
+  // Where a video is kept once fetched: a file of its own, named by it.
+  [[nodiscard]] static std::filesystem::path video_file(std::string_view source) {
+    std::string name;
+    for (const char c : source)
+      name += std::isalnum(static_cast<unsigned char>(c)) ? c : '_';
+    return mux::config::cache_path("videos") / name;
+  }
   // The viewer's cross: the whole picture's download stopped, the thumbnail
   // left; pressed again (an arrow then), asked for again.
   void apply(const request::press_loader& one) {
     const auto& chosen = s_->root().main().chosen;
     if (!chosen)
       return;
+    // A video's: its download stopped, or asked again.
+    if (videos_.contains(one.source)) {
+      if (videos_fetching_.erase(one.source)) {
+        s_->net->cancel_media(chosen->account, one.source);
+        mux::ui::download_progress().erase(one.source);
+        mux::ui::stopped_downloads().insert(one.source);
+      } else {
+        mux::ui::stopped_downloads().erase(one.source);
+        this->watch(one.source);
+      }
+      return;
+    }
     if (wholes_fetched_.erase(one.source)) {
       s_->net->cancel_media(chosen->account, one.source);
       mux::ui::download_progress().erase(one.source);
@@ -444,7 +488,8 @@ class pictures_part {
                                  [&](const media_use::whole&) { return named("full_"); },
                                  [](const media_use::to_open&) { return std::optional<std::filesystem::path>(); },
                                  [](const media_use::to_save&) { return std::optional<std::filesystem::path>(); },
-                                 [&](const media_use::to_play&) { return named("full_"); }},
+                                 [&](const media_use::to_play&) { return named("full_"); },
+                                 [](const media_use::to_watch&) { return std::optional<std::filesystem::path>(); }},
                       use);
   }
 
@@ -580,6 +625,8 @@ class pictures_part {
   }
   // The links whose previews were asked for, not to be asked twice.
   std::set<std::string> links_asked_;
+  // Videos opened, and those being fetched.
+  std::set<std::string> videos_, videos_fetching_;
 
 public:
   // Rooms asked of for a message's pill: what their server says goes to the

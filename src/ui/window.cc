@@ -188,6 +188,16 @@ struct window : scene::Node {
   void close_send_box() { layer().sending.close(); }
   [[nodiscard]] send_box<Actions>* send_box_up() { return layer().sending.shown(); }
   void close_picture() { layer().viewer.reset(); }
+  // A video: the viewer on its thumbnail, waiting for it; played once its
+  // file is there, where the viewer is still up for it.
+  void open_video(std::string thumbnail, std::string video, std::string sender, std::string name, std::string when) {
+    layer().viewer.emplace(actions, std::move(thumbnail), std::move(sender), std::move(name), std::move(when));
+    layer().viewer->video = std::move(video);
+  }
+  void play_video(const std::string& video, const std::filesystem::path& file) {
+    if (auto& up = layer().viewer; up && up->video == video)
+      up->start(file);
+  }
   void close_settings() { layer().settings.close(); }
   [[nodiscard]] settings_dialog<Actions>* settings_up() { return layer().settings.shown(); }
 

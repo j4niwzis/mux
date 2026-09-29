@@ -109,6 +109,7 @@ struct stub {
   void set_jump_search(mux::choice_level_t, std::optional<std::int64_t>) {}
   void press_loader(std::string) {}
   void stop_jump() {}
+  void open_video(std::string, std::string, std::string, std::string, std::string) {}
   void join_room_card() {}
   void toggle_emoji() {}
   void close_emoji() {}

@@ -10,6 +10,7 @@ import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.image;
 import skiff.widgets.loader;
+import mux.video;
 import mux.core;
 import mux.config;
 import :base;
@@ -29,6 +30,15 @@ template <class Actions>
 struct picture_viewer : nodes::Stack {
   Actions* actions = nullptr;
   std::string source;
+  // A video's: its file's source, and it playing once its file is here --
+  // its picture shown in place of the thumbnail, a bar under it.
+  std::optional<std::string> video;
+  std::unique_ptr<mux::video::player> playing;
+  void start(const std::filesystem::path& file) {
+    playing = mux::video::player::open(file);
+    parts.bar.setVisible(playing != nullptr);
+    this->invalidateLayout();
+  }
   // The viewer's own buttons act on it; the rest on the program.
   struct zoom_by {
     picture_viewer* viewer;
@@ -43,7 +53,7 @@ struct picture_viewer : nodes::Stack {
   // The loader pressed: the download stopped, or started again.
   struct press_loader {
     picture_viewer* viewer;
-    void operator()() const { viewer->actions->press_loader(viewer->source); }
+    void operator()() const { viewer->actions->press_loader(viewer->video.value_or(viewer->source)); }
   };
   struct top_bar : nodes::Stack {
     using close_button = icon_button<ask<Actions, &Actions::close_picture>>;
@@ -88,6 +98,8 @@ struct picture_viewer : nodes::Stack {
       struct shown_picture {
         picture_viewer* viewer;
         const skia::Sp<skia::SkImage>* operator()() const {
+          if (viewer->playing && viewer->playing->picture())
+            return &viewer->playing->picture();
           const skia::Sp<skia::SkImage>* one = whole_pictures().find(viewer->source);
           return one && *one ? one : thumbnails().find(viewer->source);
         }
@@ -101,13 +113,26 @@ struct picture_viewer : nodes::Stack {
       fState.apply({.fillX = true, .grow = scene::axes::kY, .masking = true});
       parts.loader.apply({.place = scene::anchor::kCentre});
     }
-    void update(double) {
-      const bool coming = !whole_pictures().has(viewer->source);
+    // A video playing: frames while it plays.
+    [[nodiscard]] bool settling() const { return viewer->playing && !viewer->playing->paused(); }
+    void update(double now) {
+      if (viewer->playing) {
+        const bool first = !viewer->playing->picture();
+        if (viewer->playing->advance(now)) {
+          parts.picture.markDamaged();
+          if (first)
+            this->invalidateLayout();  // its own size, not the thumbnail's
+        }
+        viewer->parts.bar.show(*viewer->playing);
+      }
+      // What is coming: the whole picture, or the video's file.
+      const std::string& loading = viewer->video.value_or(viewer->source);
+      const bool coming = viewer->video ? !viewer->playing : !whole_pictures().has(viewer->source);
       if (coming != parts.loader.visible())
         parts.loader.setVisible(coming);
       if (coming) {
-        parts.loader.setProgress(progress_of(viewer->source));
-        parts.loader.setStopped(stopped_downloads().contains(viewer->source));
+        parts.loader.setProgress(progress_of(loading));
+        parts.loader.setStopped(stopped_downloads().contains(loading));
       }
     }
     // Where the picture goes: fitted, zoomed, moved -- laid out there, not
@@ -119,6 +144,8 @@ struct picture_viewer : nodes::Stack {
       scene::layoutChildrenInContentBox(*this);
     }
     [[nodiscard]] const skia::Sp<skia::SkImage>* image() const {
+      if (viewer->playing && viewer->playing->picture())
+        return &viewer->playing->picture();
       const skia::Sp<skia::SkImage>* one = whole_pictures().find(viewer->source);
       if (!one || !*one)
         one = thumbnails().find(viewer->source);
@@ -150,6 +177,13 @@ struct picture_viewer : nodes::Stack {
         reply.handle();
         return;
       }
+      // On a video playing: paused, or played on.
+      if (viewer->playing) {
+        viewer->playing->toggle();
+        this->markDamaged();
+        reply.handle();
+        return;
+      }
       dragging = true;
       last_x = press.x;
       last_y = press.y;
@@ -173,9 +207,63 @@ struct picture_viewer : nodes::Stack {
       }
     }
   };
+  // Under a video: how far it has played, a bar pressed to go elsewhere in
+  // it, and its time, as tdesktop's player.
+  struct video_bar : nodes::Stack {
+    picture_viewer* viewer;
+    struct track_t : nodes::Stack {
+      struct parts_t {
+        nodes::Box<> played{skia::colorSetARGB(255, 255, 255, 255)};
+      } parts;
+      track_t() {
+        this->setHorizontal();
+        fState.apply({.height = 4.0f, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle, .cornerRadius = 2.0f,
+                      .background = skia::colorSetARGB(0x60, 255, 255, 255)});
+        parts.played.apply({.width = 0.0f, .fillY = true, .cornerRadius = 2.0f});
+      }
+    };
+    struct parts_t {
+      track_t track;
+      nodes::Text time{"", 13.0f, skia::colorSetARGB(255, 255, 255, 255)};
+    } parts;
+    explicit video_bar(picture_viewer* v) : viewer(v) {
+      this->setHorizontal();
+      this->setGap(12.0f);
+      fState.apply({.fillX = true, .height = 44.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
+      parts.time.apply({.alignSelf = scene::align::kMiddle});
+      this->setVisible(false);
+    }
+    [[nodiscard]] static std::string clock_of(double seconds) {
+      const auto whole = static_cast<std::int64_t>(seconds);
+      return std::format("{}:{:02}", whole / 60, whole % 60);
+    }
+    void show(const mux::video::player& one) {
+      const double length = one.length();
+      const float share = length > 0.0 ? static_cast<float>(one.position() / length) : 0.0f;
+      const float width = std::floor(parts.track.bounds().width() * share);
+      if (std::abs(width - parts.track.parts.played.fState.fWidth) >= 1.0f) {
+        parts.track.parts.played.apply({.width = width});
+        parts.track.invalidateLayout();
+      }
+      if (std::string now = clock_of(one.position()) + " / " + clock_of(length); now != parts.time.text())
+        parts.time.setText(std::move(now));
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+    // A press on the bar: there in the video.
+    using Node::onPointer;
+    void onPointer(scene::phase::target, const scene::pointer::down& press, scene::PointerReply& reply) {
+      const skia::SkRect track = parts.track.bounds();
+      if (!viewer->playing || track.width() <= 0.0f)
+        return;
+      const double share = std::clamp((press.x - track.fLeft) / track.width(), 0.0f, 1.0f);
+      viewer->playing->seek(share * viewer->playing->length());
+      reply.handle();
+    }
+  };
   struct parts_t {
     top_bar top;
     stage view;
+    video_bar bar;
   } parts;
   float zoom = 1.0f;
   float pan_x = 0.0f, pan_y = 0.0f;
@@ -187,10 +275,20 @@ struct picture_viewer : nodes::Stack {
   }
 
   picture_viewer(Actions* a, std::string where, std::string sender, std::string name, std::string when)
-      : actions(a), source(std::move(where)), parts{.top = top_bar(a, this, source, sender, name, when), .view = stage(this)} {
+      : actions(a), source(std::move(where)),
+        parts{.top = top_bar(a, this, source, sender, name, when), .view = stage(this), .bar = video_bar(this)} {
     fState.apply({.fill = true, .background = skia::colorSetARGB(0xe6, 0, 0, 0)});
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
+  // Space: a video paused, or played on.
+  using Node::onKey;
+  void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
+    if (playing && press.key == scene::keys::kSpace) {
+      playing->toggle();
+      parts.view.markDamaged();
+      reply.handle();
+    }
+  }
 };
 
 }  // namespace mux::ui

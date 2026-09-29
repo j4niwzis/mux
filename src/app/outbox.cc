@@ -104,7 +104,7 @@ class outbox_part {
     auto* box = s_->root().send_box_up();
     if (!chosen || !box || to_send_.empty())
       return;
-    std::string caption = box->caption.text();
+    std::string caption = box->parts.caption.text();
     for (file& one : to_send_)
       s_->net->send_file(*chosen, one.local, std::move(one.as.bytes), one.as.name, one.as.mimetype,
                          one.as.picture.has_value(), one.width, one.height, std::exchange(caption, std::string()));

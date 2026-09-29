@@ -219,7 +219,7 @@ void app::bring_up_to_date(accounts& panel) {
   panel.proxies = proxies;
   panel.show(saved, *model);
   if (auto* pane = panel.adding())
-    std::visit([this](auto& form) { this->watch_login(form); }, pane->form);
+    std::visit([this](auto& form) { this->watch_login(form); }, pane->parts.form);
 }
 
 }  // namespace mux::app

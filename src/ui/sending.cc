@@ -25,7 +25,6 @@ struct pending_file {
 };
 template <class Actions>
 struct send_box : nodes::Stack {
-  nodes::Text title;
   struct previews_column : nodes::Stack {
     // A picture to be sent, as it will look: rounded, its thumbnail by its
     // local id.
@@ -36,8 +35,10 @@ struct send_box : nodes::Stack {
         fState.apply({.width = width, .height = height, .alignSelf = scene::align::kMiddle, .cornerRadius = 10.0f});
       }
     };
-    std::vector<picture_preview> pictures;
-    std::vector<file_view> files;
+    struct parts_t {
+      std::vector<picture_preview> pictures;
+      std::vector<file_view> files;
+    } parts;
     explicit previews_column(const std::vector<pending_file>& all) {
       this->setGap(8.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -47,53 +48,51 @@ struct send_box : nodes::Stack {
           float w = image && *image ? static_cast<float>((*image)->width()) : 380.0f;
           float h = image && *image ? static_cast<float>((*image)->height()) : 240.0f;
           const float scale = std::min({1.0f, 380.0f / w, (all.size() > 1 ? 160.0f : 300.0f) / h});
-          pictures.emplace_back(one.key, w * scale, h * scale);
+          parts.pictures.emplace_back(one.key, w * scale, h * scale);
         } else {
-          files.emplace_back(std::string(), one.name, one.size);
+          parts.files.emplace_back(std::string(), one.name, one.size);
         }
       }
     }
-    void forEachChild(auto&& f) {
-      f(pictures);
-      f(files);
-    }
   };
-  nodes::ScrollContainer<previews_column> previews;
-  widgets::TextArea<> caption{"Add a caption…"};
   struct buttons_row : nodes::Stack {
-    widgets::Button<ask<Actions, &Actions::close_send_box>> cancel;
-    widgets::Button<ask<Actions, &Actions::send_files>> send;
-    explicit buttons_row(Actions* a) : cancel("Cancel", {a}), send("Send", {a}) {
+    using cancel_button = widgets::Button<ask<Actions, &Actions::close_send_box>>;
+    using send_button = widgets::Button<ask<Actions, &Actions::send_files>>;
+    struct parts_t {
+      cancel_button cancel;
+      send_button send;
+    } parts;
+    explicit buttons_row(Actions* a) : parts{.cancel = cancel_button("Cancel", {a}), .send = send_button("Send", {a})} {
       this->setHorizontal();
       this->setGap(8.0f);
       fStack.justify = nodes::justify::end{};
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-      send.setPrimary(true);
-      cancel.apply({.width = 96.0f, .height = 36.0f});
-      send.apply({.width = 96.0f, .height = 36.0f});
+      parts.send.setPrimary(true);
+      parts.cancel.apply({.width = 96.0f, .height = 36.0f});
+      parts.send.apply({.width = 96.0f, .height = 36.0f});
     }
-    void forEachChild(auto&& f) {
-      f(cancel);
-      f(send);
-    }
-  } buttons;
+  };
+  // What a box of these says it sends.
+  [[nodiscard]] static std::string title_of(const std::vector<pending_file>& all) {
+    return all.size() == 1 ? std::string(all.front().image ? "Send a photo" : "Send a file")
+                           : std::format("Send {} {}", all.size(),
+                                         std::ranges::all_of(all, &pending_file::image) ? "photos" : "files");
+  }
+  struct parts_t {
+    nodes::Text title;
+    nodes::ScrollContainer<previews_column> previews;
+    widgets::TextArea<> caption{"Add a caption…"};
+    buttons_row buttons;
+  } parts;
 
   send_box(Actions* a, const std::vector<pending_file>& all)
-      : title(all.size() == 1 ? (all.front().image ? "Send a photo" : "Send a file")
-                              : std::format("Send {} {}", all.size(),
-                                            std::ranges::all_of(all, &pending_file::image) ? "photos" : "files"),
-              17.0f, text_colour, true),
-        previews(previews_column(all)), buttons(a) {
+      : parts{.title = nodes::Text(title_of(all), 17.0f, text_colour, true),
+              .previews = nodes::ScrollContainer<previews_column>(previews_column(all)),
+              .buttons = buttons_row(a)} {
     this->setGap(12.0f);
     fState.apply({.fill = true, .padding = {18.0f, 20.0f, 16.0f, 20.0f}});
-    previews.apply({.fillX = true, .grow = scene::axes::kY});
-    caption.apply({.fillX = true});
-  }
-  void forEachChild(auto&& f) {
-    f(title);
-    f(previews);
-    f(caption);
-    f(buttons);
+    parts.previews.apply({.fillX = true, .grow = scene::axes::kY});
+    parts.caption.apply({.fillX = true});
   }
 };
 

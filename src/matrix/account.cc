@@ -197,6 +197,13 @@ class account {
                  std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where);
   // A redaction: a reaction taken back, or a message removed.
   void redaction(const conversation_id& in, const loom::ev::timeline_event& one);
+  // What is done in a room rather than said, as a line of its own; and a
+  // person's name there, as the room's state has it.
+  void service(const conversation_id& in, const loom::ev::timeline_event& one,
+               std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where, std::string said);
+  void done(const conversation_id& in, const loom::ev::timeline_event& one, event_type_t type,
+            std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where);
+  [[nodiscard]] std::string name_in(const std::string& room, const std::string& user) const;
 
   // A message's body: its plain text, and its HTML where it says it has
   // org.matrix.custom.html.

@@ -607,10 +607,17 @@ struct message_bubble : nodes::Stack {
     face.apply({.alignSelf = scene::align::kEnd});
     if (!(group && !outgoing && last_of_run))
       face.fState.setAlpha(0.0f);  // its room kept, so the run's bubbles line up
-    if (group && !outgoing && first_of_run) {
+    if (group && !outgoing && first_of_run && !said.service) {
       body.parts.name.emplace(sender_name(in, said.sender), 13.0f, avatar_colour(said.sender), true);
       body.parts.name->setElided(true);
       body.parts.name->setMaxWidth(kMaxWidth);
+    }
+    // Something done, not said: a line in the middle, on a plate of its own,
+    // with no avatar and no name -- as tdesktop's service messages.
+    if (said.service) {
+      fStack.justify = nodes::justify::middle{};
+      face.setVisible(false);
+      body.apply({.cornerRadius = 12.0f, .background = tile_colour});
     }
     // Anyone's words can be selected and copied, as in Telegram.
     body.parts.text.setSelectable(true);

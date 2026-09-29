@@ -55,12 +55,50 @@ struct other {  // m.text, m.notice, and what is not known
 using msgtype_t = std::variant<msgtype::image, msgtype::file, msgtype::video, msgtype::audio, msgtype::emote,
                                msgtype::other>;
 namespace event_type {
-struct encrypted {};  // m.room.encrypted
-struct redaction {};  // m.room.redaction
-struct receipt {};    // m.receipt
+struct encrypted {};           // m.room.encrypted
+struct redaction {};           // m.room.redaction
+struct receipt {};             // m.receipt
+struct member {};              // m.room.member
+struct room_name {};           // m.room.name
+struct topic {};               // m.room.topic
+struct room_avatar {};         // m.room.avatar
+struct create {};              // m.room.create
+struct power_levels {};        // m.room.power_levels
+struct pinned {};              // m.room.pinned_events
+struct join_rules {};          // m.room.join_rules
+struct history_visibility {};  // m.room.history_visibility
+struct canonical_alias {};     // m.room.canonical_alias
+struct sticker {};             // m.sticker
 struct other {};
 }  // namespace event_type
-using event_type_t = std::variant<event_type::encrypted, event_type::redaction, event_type::receipt, event_type::other>;
+using event_type_t =
+    std::variant<event_type::encrypted, event_type::redaction, event_type::receipt, event_type::member,
+                 event_type::room_name, event_type::topic, event_type::room_avatar, event_type::create,
+                 event_type::power_levels, event_type::pinned, event_type::join_rules,
+                 event_type::history_visibility, event_type::canonical_alias, event_type::sticker, event_type::other>;
+// Where someone stands in a room, as an m.room.member says.
+namespace membership {
+struct join {
+  static constexpr bool in = true;
+};
+struct leave {
+  static constexpr bool in = false;
+};
+struct invite {
+  static constexpr bool in = false;
+};
+struct ban {
+  static constexpr bool in = false;
+};
+struct knock {
+  static constexpr bool in = false;
+};
+struct other {
+  static constexpr bool in = false;
+};
+}  // namespace membership
+using membership_t = std::variant<membership::join, membership::leave, membership::invite, membership::ban,
+                                  membership::knock, membership::other>;
 namespace relation {
 struct replace {  // m.replace
   static constexpr bool edit = true;
@@ -119,8 +157,26 @@ template <class Variant, class Other>
       {"m.room.encrypted", event_type::encrypted{}},
       {"m.room.redaction", event_type::redaction{}},
       {"m.receipt", event_type::receipt{}},
+      {"m.room.member", event_type::member{}},
+      {"m.room.name", event_type::room_name{}},
+      {"m.room.topic", event_type::topic{}},
+      {"m.room.avatar", event_type::room_avatar{}},
+      {"m.room.create", event_type::create{}},
+      {"m.room.power_levels", event_type::power_levels{}},
+      {"m.room.pinned_events", event_type::pinned{}},
+      {"m.room.join_rules", event_type::join_rules{}},
+      {"m.room.history_visibility", event_type::history_visibility{}},
+      {"m.room.canonical_alias", event_type::canonical_alias{}},
+      {"m.sticker", event_type::sticker{}},
   };
   return named<event_type_t, event_type::other>(known, name);
+}
+[[nodiscard]] inline membership_t membership_of(std::optional<std::string_view> name) {
+  static const std::unordered_map<std::string_view, membership_t> known = {
+      {"join", membership::join{}},     {"leave", membership::leave{}}, {"invite", membership::invite{}},
+      {"ban", membership::ban{}},       {"knock", membership::knock{}},
+  };
+  return named<membership_t, membership::other>(known, name);
 }
 [[nodiscard]] inline relation_t relation_of(std::optional<std::string_view> name) {
   static const std::unordered_map<std::string_view, relation_t> known = {{"m.replace", relation::replace{}}};

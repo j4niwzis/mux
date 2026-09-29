@@ -205,6 +205,10 @@ struct message {
   bool edited = false;
   bool redacted = false;
   bool outgoing = false;
+  // Not something said but something done -- someone joined, the room was
+  // renamed, an event nothing here reads -- shown as a line of its own in
+  // the middle, as tdesktop shows its service messages.
+  bool service = false;
   delivery_t delivery = delivery::sent{};
   std::map<std::string, std::set<std::string>> reactions;  // key -> who
   // The same reactions as the events they are, where the protocol has

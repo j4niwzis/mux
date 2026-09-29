@@ -99,6 +99,8 @@ struct conversations_screen : nodes::Stack {
   // say: set by the program before it shows the model; a chat not in it
   // shows them all.
   std::map<conversation_id, room_event_filter> event_filters;
+  // The chats that show who has read up to where, as faces.
+  std::set<conversation_id> receipts_in;
   // The @ list: the chat's members matching what follows an @ at the end of
   // what is written, as Telegram's; who was picked from it, to be sent as
   // mentions with the message.
@@ -1065,6 +1067,36 @@ struct conversations_screen : nodes::Stack {
       return j && !all[i].service && !all[*j].service && all[*j].sender == all[i].sender &&
              all[*j].outgoing == all[i].outgoing;
     };
+    // Who has read up to where, where the chat shows it: each other person
+    // on the message their receipt points at -- or, pointing at what is not
+    // shown or not here, the nearest shown before it, by its time.
+    std::map<std::string, std::vector<std::string>> readers;
+    if (receipts_in.contains(one->id)) {
+      std::map<std::string, std::size_t> place;
+      for (std::size_t i = 0; i < all.size(); ++i)
+        place.emplace(all[i].id, i);
+      for (const auto& [user, event] : one->read_by) {
+        if (user == one->id.account.address)
+          continue;
+        std::optional<std::size_t> at;
+        if (const auto found = place.find(event); found != place.end())
+          at = found->second;
+        else if (const auto when = one->receipt_times.find(user); when != one->receipt_times.end())
+          for (std::size_t j = all.size(); j-- > 0;)
+            if (all[j].at <= when->second) {
+              at = j;
+              break;
+            }
+        while (at && !shows(all[*at]))
+          at = *at == 0 ? std::nullopt : std::optional<std::size_t>(*at - 1);
+        if (at)
+          readers[all[*at].id].push_back(user);
+      }
+    }
+    const auto readers_of = [&](std::size_t i) {
+      const auto found = readers.find(all[i].id);
+      return found == readers.end() ? std::vector<std::string>{} : found->second;
+    };
     const auto first_of_run = [&](std::size_t i) { return !same(i, neighbour(i, false)); };
     const auto last_of_run = [&](std::size_t i) { return !same(i, neighbour(i, true)); };
     // A chat shown anew: its stretch as it was left, or its newest.
@@ -1097,6 +1129,7 @@ struct conversations_screen : nodes::Stack {
               message_bubble made(*one, all[i], first_of_run(i), last_of_run(i), &now, shows(all[i]));
               if (unread_from && all[i].id == *unread_from)
                 made.mark_unread_start();
+              made.show_readers(*one, readers_of(i));
               if (arrives(i))
                 made.appear();
               return made;
@@ -1108,7 +1141,7 @@ struct conversations_screen : nodes::Stack {
               const bool preview_known = link && now.previews.contains(*link);
               return row.said == all[i] && row.first == first_of_run(i) && row.last == last_of_run(i) &&
                      row.quote_known == quote_known && row.events_shown == shows(all[i]) && row.unread_start == (unread_from && all[i].id == *unread_from) &&
-                     row.preview_known == preview_known;
+                     row.preview_known == preview_known && row.readers_shown == readers_of(i);
             }))
       timeline.invalidateLayout();
     // The newest is at the bottom: the view follows it where the reader was

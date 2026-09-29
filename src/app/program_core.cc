@@ -386,6 +386,13 @@ void app::refresh() {
   for (const auto& [id, account] : model->accounts())
     for (const auto& [key, one] : account.conversations)
       filters.emplace(one.id, this->room_event_filter_of(one.id));
+  // And which show who has read up to where.
+  auto& receipts = root().main().receipts_in;
+  receipts.clear();
+  for (const auto& [id, account] : model->accounts())
+    for (const auto& [key, one] : account.conversations)
+      if (this->receipts_shown(one.id))
+        receipts.insert(one.id);
   root().show(saved, *model);
   root().main().show(*model);
   if (auto* up = root().open_panel())

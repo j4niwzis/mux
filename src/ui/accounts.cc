@@ -214,6 +214,7 @@ struct account_privacy : nodes::Stack {
     notify_sound_row notify_sound;
     // Its chats' room events: as every account's, until chosen here.
     event_kind_list<Actions> events;
+    receipts_choice<Actions> faces;
     nodes::Text note{"Off, the people you talk to through this account are not told when you have read their "
                      "messages, or that you are typing. Theirs are still shown, and receipts are still kept here.",
                      13.0f, dim_colour};
@@ -221,12 +222,13 @@ struct account_privacy : nodes::Stack {
 
   account_privacy(Actions* a, bool receipts_on, bool typing_on, std::optional<bool> events_all = std::nullopt,
                   const std::optional<config::room_event_kinds>& kinds = std::nullopt, bool notify_on = true,
-                  bool notify_sound_on = true)
+                  bool notify_sound_on = true, std::optional<bool> faces_on = std::nullopt)
       : parts{.receipts = receipts_row("Send read receipts", {a}),
               .typing = typing_row("Send typing notifications", {a}),
               .notify = notify_row("Desktop notifications from it", {a}),
               .notify_sound = notify_sound_row("Their sound", {a}),
-              .events = event_kind_list<Actions>(a, choice_level::account{}, events_all, kinds)} {
+              .events = event_kind_list<Actions>(a, choice_level::account{}, events_all, kinds),
+              .faces = receipts_choice<Actions>(a, choice_level::account{}, faces_on)} {
     this->setGap(8.0f);
     parts.note.apply({.fillX = true});
     fState.apply({.fill = true});
@@ -409,7 +411,8 @@ struct accounts_panel : closes_on_escape<Actions> {
     if (page == 1) {
       detail.template emplace<3>(this->actions, config::read_receipts_of(one), config::send_typing_of(one),
                                    config::room_events_of(one), config::room_event_kinds_of(one),
-                                   config::notify_of(one).value_or(true), config::notify_sound_of(one).value_or(true));
+                                   config::notify_of(one).value_or(true), config::notify_sound_of(one).value_or(true),
+                                   config::show_receipts_of(one));
     } else if (page == 2) {
       detail.template emplace<4>(this->actions, proxies, config::proxy_of(one));
     } else {

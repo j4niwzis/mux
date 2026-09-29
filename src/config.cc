@@ -296,6 +296,7 @@ struct xmpp_account {
   std::optional<bool> send_typing;  // others' typing is always shown
   std::optional<bool> room_events;  // as matrix_account's
   std::optional<room_event_kinds> room_event_kinds;
+  std::optional<bool> show_receipts;  // as matrix_account's
   // Its notifications, on the desktop and heard: as every account's, until
   // chosen.
   std::optional<bool> notify;
@@ -320,6 +321,9 @@ struct matrix_account {
   // nothing said is as the settings say for every account.
   std::optional<bool> room_events;
   std::optional<room_event_kinds> room_event_kinds;
+  // Whether its chats show who has read up to where, as Element's faces
+  // under a message: its own choice, else every account's.
+  std::optional<bool> show_receipts;
   // Its notifications, on the desktop and heard: as every account's, until
   // chosen.
   std::optional<bool> notify;
@@ -340,6 +344,7 @@ struct room_events_choice {
   std::string conversation;  // the chat's id in it
   std::optional<bool> show;  // all of them
   std::optional<room_event_kinds> kinds;  // each kind
+  std::optional<bool> receipts;  // who has read up to where, as faces
   friend bool operator==(const room_events_choice&, const room_events_choice&) = default;
 };
 consteval auto json_schema(knot::type<room_events_choice>) { return knot::schema<room_events_choice>(); }
@@ -437,6 +442,9 @@ struct history_settings {
   // events nothing here reads -- shown as lines of their own, or not. Kept
   // either way; an account's choice, and a room's own, come first.
   bool show_room_events = true;
+  // Who has read up to where, as Element shows it: small faces under the
+  // message each person read up to. Off unless chosen.
+  bool show_receipts = false;
   // And each kind of them, where chosen apart.
   std::optional<room_event_kinds> room_event_kinds;
   friend bool operator==(const history_settings&, const history_settings&) = default;
@@ -508,6 +516,12 @@ consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
 }
 // Whether the account's chats show their room events: its own choice, if
 // it made one.
+[[nodiscard]] inline const std::optional<bool>& show_receipts_of(const account_t& one) {
+  return std::visit([](const auto& each) -> const std::optional<bool>& { return each.show_receipts; }, one);
+}
+[[nodiscard]] inline std::optional<bool>& show_receipts_in(account_t& one) {
+  return std::visit([](auto& each) -> std::optional<bool>& { return each.show_receipts; }, one);
+}
 [[nodiscard]] inline const std::optional<bool>& room_events_of(const account_t& one) {
   return std::visit([](const auto& each) -> const std::optional<bool>& { return each.room_events; }, one);
 }

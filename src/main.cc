@@ -145,6 +145,8 @@ int main(int argc, char** argv) {
       program.room_events.insert_or_assign(chat, *one.show);
     if (one.kinds)
       program.room_event_kinds.insert_or_assign(chat, *one.kinds);
+    if (one.receipts)
+      program.receipts_shown_in.insert_or_assign(chat, *one.receipts);
   }
   for (const auto& one : saved.muted.value_or(std::vector<mux::config::muted_chat>{}))
     program.muted.insert({{mux::ui::protocol_of(one.account), one.account}, one.conversation});

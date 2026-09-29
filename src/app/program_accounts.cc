@@ -154,6 +154,9 @@ void app::apply(const request::open_manage&) {
                                      .events_all = room_events.contains(chat->id)
                                                        ? std::optional<bool>(room_events.at(chat->id))
                                                        : std::nullopt,
+                                     .receipts = receipts_shown_in.contains(chat->id)
+                                                     ? std::optional<bool>(receipts_shown_in.at(chat->id))
+                                                     : std::nullopt,
                                      .event_kinds = room_event_kinds.contains(chat->id)
                                                         ? std::optional<mux::config::room_event_kinds>(room_event_kinds.at(chat->id))
                                                         : std::nullopt,
@@ -357,6 +360,28 @@ void app::apply(const request::set_room_event_kind& one) {
                                  room_events.insert_or_assign(*chosen, *one.show);
                                else
                                  room_events.erase(*chosen);
+                             }},
+             one.level);
+  (void)this->write();
+  this->refresh();
+}
+
+// Who has read up to where, as faces, at a level.
+void app::apply(const request::set_receipts_shown& one) {
+  std::visit(mux::overloaded{[&](mux::choice_level::everywhere) { history.show_receipts = one.show.value_or(false); },
+                             [&](mux::choice_level::account) {
+                               this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+                                 mux::config::show_receipts_in(account) = one.show;
+                               });
+                             },
+                             [&](mux::choice_level::chat) {
+                               const auto& chosen = root().main().chosen;
+                               if (!chosen)
+                                 return;
+                               if (one.show)
+                                 receipts_shown_in.insert_or_assign(*chosen, *one.show);
+                               else
+                                 receipts_shown_in.erase(*chosen);
                              }},
              one.level);
   (void)this->write();

@@ -711,6 +711,29 @@ struct message_pictures {
   }
 };
 
+// Who has read up to a message, as Element shows it: their small faces at
+// the row's right under it, three at most and the rest counted.
+struct readers_row : nodes::Stack {
+  static constexpr float kFace = 14.0f;  // Element's read receipt avatar
+  static constexpr std::size_t kMost = 3;
+  struct parts_t {
+    std::vector<avatar_mark> faces;
+    nodes::Text more;
+  } parts;
+  readers_row(const conversation& in, const std::vector<std::string>& users)
+      : parts{.more = nodes::Text(users.size() > kMost ? std::format("+{}", users.size() - kMost) : std::string(),
+                                  10.0f, dim_colour)} {
+    this->setHorizontal();
+    this->setGap(2.0f);
+    fState.apply({.autoSize = scene::axes::kBoth});
+    parts.faces.reserve(std::min(users.size(), kMost));
+    for (std::size_t i = 0; i < users.size() && i < kMost; ++i)
+      parts.faces.emplace_back(users[i], sender_name(in, users[i]), kFace);
+    parts.more.setVisible(users.size() > kMost);
+    parts.more.apply({.alignSelf = scene::align::kMiddle});
+  }
+};
+
 struct message_bubble : nodes::Stack {
   // The message as it was shown, and where in its sender's run: while
   // these are the same, the bubble is kept.
@@ -978,8 +1001,23 @@ struct message_bubble : nodes::Stack {
     nodes::Icon swipe_mark{shape_of(icon::back{}), dim_colour};
     // Over the first unread message of a chat opened: tdesktop's bar.
     std::optional<unread_bar_t> unread_bar;
+    // Under it, where the chat shows them: who has read up to it.
+    std::optional<readers_row> readers;
   } parts;
   // Whether it has the bar: kept while the chat's first unread is it.
+  // Who has read up to it, as shown: while the same, the bubble is kept.
+  std::vector<std::string> readers_shown;
+  static constexpr float kReaders = 16.0f;
+  void show_readers(const conversation& in, std::vector<std::string> users) {
+    readers_shown = std::move(users);
+    if (readers_shown.empty())
+      return;
+    parts.readers.emplace(in, readers_shown);
+    parts.readers->apply({.place = scene::anchor::kBottomRight, .x = -4.0f, .y = kReaders + 1.0f});
+    fState.apply({.padding = {fState.fPadding.fTop, fState.fPadding.fRight, fState.fPadding.fBottom + kReaders + 2.0f,
+                              fState.fPadding.fLeft}});
+    this->invalidateLayout();
+  }
   bool unread_start = false;
   // tdesktop's "Unread messages" bar, across the whole row, over it.
   void mark_unread_start() {
@@ -999,7 +1037,7 @@ struct message_bubble : nodes::Stack {
         outgoing(said.outgoing), sender(said.sender),
         parts{.face = avatar_mark(said.sender, sender_name(in, said.sender), kAvatar),
               .body = body_column(said.outgoing, said.body.plain, mark_of(said) + clock_of(said.at))} {
-    auto& [face, body, swipe_mark, unread_bar] = parts;
+    auto& [face, body, swipe_mark, unread_bar, readers] = parts;
     swipe_mark.apply({.place = scene::anchor::kCentreRight,
                       .x = -6.0f,
                       .width = 28.0f,
@@ -1230,7 +1268,7 @@ struct message_bubble : nodes::Stack {
     const bool stepped = swipe.step(now_ms);
     if (!stepped && swipe.value() == swipe_drawn)
       return;
-    auto& [face, body, swipe_mark, unread_bar] = parts;
+    auto& [face, body, swipe_mark, unread_bar, readers] = parts;
     const float shift = swipe.value();
     swipe_drawn = shift;
     const float reached = std::clamp(-shift / kSwipeToReply, 0.0f, 1.0f);

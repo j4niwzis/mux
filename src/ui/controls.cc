@@ -380,6 +380,63 @@ struct event_kind_list : nodes::Stack {
   }
 };
 
+// Whether read receipts show as faces, at one level: Show and Hide and,
+// where a level under decides for it, Default -- as a room event kind's row.
+template <class Actions>
+struct receipts_choice : nodes::Stack {
+  struct row;
+  struct choose {
+    row* in = nullptr;
+    std::optional<bool> show;
+    void operator()() const { in->chose(show); }
+  };
+  struct row : nodes::Stack {
+  Actions* actions = nullptr;
+  choice_level_t level;
+  struct parts_t {
+    nodes::Text label;
+    segment<choose> fallback, show, hide;
+  } parts;
+  row(Actions* a, choice_level_t at, std::optional<bool> now)
+      : actions(a), level(at),
+        parts{.label = nodes::Text("Read receipts as faces", 14.0f, text_colour),
+              .fallback = segment<choose>("Default", {this, std::nullopt}),
+              .show = segment<choose>("Show", {this, true}),
+              .hide = segment<choose>("Hide", {this, false})} {
+    const bool everywhere =
+        std::visit(overloaded{[](choice_level::everywhere) { return true; }, [](const auto&) { return false; }}, level);
+    this->setHorizontal();
+    this->setGap(4.0f);
+    fState.apply({.fillX = true, .height = 36.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
+    parts.label.setElided(true);
+    parts.label.apply({.grow = scene::axes::kX, .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+    for (segment<choose>* each : {&parts.fallback, &parts.show, &parts.hide})
+      each->apply({.width = 70.0f, .alignSelf = scene::align::kMiddle});
+    parts.fallback.setVisible(!everywhere);
+    this->show_choice(everywhere ? std::optional<bool>(now.value_or(false)) : now);
+  }
+  void show_choice(std::optional<bool> now) {
+    parts.fallback.set_active(!now);
+    parts.show.set_active(now == true);
+    parts.hide.set_active(now == false);
+  }
+  void chose(std::optional<bool> now) {
+    this->show_choice(now);
+    actions->set_receipts_shown(level, now);
+  }
+  };
+  // Made where it stays, apart from the page: its switches know it by its
+  // address, as event_kind_list's rows.
+  struct parts_t {
+    std::vector<row> rows;
+  } parts;
+  receipts_choice(Actions* a, choice_level_t at, std::optional<bool> now) {
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    parts.rows.reserve(1);
+    parts.rows.emplace_back(a, at, now);
+  }
+};
+
 // A notification as mux shows it itself, as Telegram Desktop's own: a card
 // in a small window of its own -- the chat's avatar beside the title over
 // the text.

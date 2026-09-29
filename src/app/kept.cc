@@ -36,6 +36,8 @@ struct kept_settings {
   std::set<conversation_id> muted;
   // The chats that chose for themselves whether their room events show.
   std::map<conversation_id, bool> room_events;
+  // Chats' own choice of showing who has read up to where.
+  std::map<conversation_id, bool> receipts_shown_in;
   // And each kind of them, where a chat chose apart.
   std::map<conversation_id, mux::config::room_event_kinds> room_event_kinds;
   // What notifies, and the chats that chose everything or mentions alone
@@ -57,6 +59,16 @@ struct kept_settings {
   [[nodiscard]] const mux::config::account_t* settings_of(std::string_view address) {
     const auto found = this->find(address);
     return found == saved.end() ? nullptr : &*found;
+  }
+  // Whether a chat shows who has read up to where: its own choice, else its
+  // account's, else every account's.
+  [[nodiscard]] bool receipts_shown(const conversation_id& chat) {
+    if (const auto own = receipts_shown_in.find(chat); own != receipts_shown_in.end())
+      return own->second;
+    if (const auto* account = this->settings_of(chat.account.address))
+      if (const auto& chosen = mux::config::show_receipts_of(*account))
+        return *chosen;
+    return history.show_receipts;
   }
   // Whether a chat shows what is done in it: its own choice, else its
   // account's, else every account's.
@@ -129,7 +141,7 @@ struct kept_settings {
       for (const auto& [chat, mode] : notify_modes)
         out.chat_notify->push_back({chat.account.address, chat.id, mux::config::word_of(mode)});
     }
-    if (!room_events.empty() || !room_event_kinds.empty()) {
+    if (!room_events.empty() || !room_event_kinds.empty() || !receipts_shown_in.empty()) {
       std::map<conversation_id, mux::config::room_events_choice> chosen;
       for (const auto& [chat, show] : room_events) {
         auto& one = chosen[chat];
@@ -142,6 +154,12 @@ struct kept_settings {
         one.account = chat.account.address;
         one.conversation = chat.id;
         one.kinds = kinds;
+      }
+      for (const auto& [chat, show] : receipts_shown_in) {
+        auto& one = chosen[chat];
+        one.account = chat.account.address;
+        one.conversation = chat.id;
+        one.receipts = show;
       }
       out.room_events.emplace();
       for (auto& [chat, one] : chosen)

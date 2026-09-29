@@ -44,6 +44,8 @@ struct room_settings_facts {
   // Which of its room events it shows, as chosen for it: none chosen is as
   // its account's.
   std::optional<bool> events_all;
+  // Whether it shows who has read up to where, as chosen for it.
+  std::optional<bool> receipts;
   std::optional<config::room_event_kinds> event_kinds;
   // The user's own level, and what each thing done asks.
   std::int64_t mine = 0;
@@ -342,6 +344,7 @@ struct room_settings : nodes::Stack {
       nodes::Text other = part_heading("Other");
       nodes::Text events_about = explained("Room events shown in this room, for you: Default is as your account's.");
       event_kind_list<Actions> events;
+      receipts_choice<Actions> receipts;
       nodes::Text leave_heading = part_heading("Leave room");
       widgets::Button<ask<Actions, &Actions::leave_chat>> leave;
     } parts;
@@ -354,6 +357,7 @@ struct room_settings : nodes::Stack {
                     facts.alias ? std::format("Main address: {}", *facts.alias) : std::string("Main address: none"), 14.0f,
                     text_colour),
                 .events = event_kind_list<Actions>(a, choice_level::chat{}, facts.events_all, facts.event_kinds),
+                .receipts = receipts_choice<Actions>(a, choice_level::chat{}, facts.receipts),
                 .leave = widgets::Button<ask<Actions, &Actions::leave_chat>>("Leave room", {a})} {
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});

@@ -140,7 +140,7 @@ if(MUX_UI)
   # skiff and skiff-widgets say the rest of what they are in their own trees.
   cme_declare_port(NAME skiff PROVIDES skiff
     GITHUB_REPOSITORY j4niwzis/skiff
-    GIT_TAG a8bbe9a48550de9bcaa9894d988fd6918af01ea5)
+    GIT_TAG e0512b1f5aa45b54ae9e5ecb47cec8b89237f0be)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
     GIT_TAG c009fc59971941e7e0b2f7064d231594424d0bdc)

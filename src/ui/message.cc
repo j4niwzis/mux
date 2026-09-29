@@ -458,7 +458,11 @@ struct message_bubble : nodes::Stack {
     // beside the last line asks it: the bubble widened to hold both.
     float base_min = 0.0f;
     float widened = 0.0f;
-    [[nodiscard]] bool settling() const { return flash.moving(); }
+    // Whether where the time goes has been decided, from a layout: until it
+    // has, the bubble asks for frames, for a window at rest updates nothing
+    // and the time stayed under the text.
+    bool time_placed = false;
+    [[nodiscard]] bool settling() const { return flash.moving() || !time_placed; }
     [[nodiscard]] static skia::SkColor mixed(skia::SkColor from, skia::SkColor to, float amount) {
       const auto channel = [&](int shift) {
         const float a = static_cast<float>((from >> shift) & 0xFF), b = static_cast<float>((to >> shift) & 0xFF);
@@ -474,11 +478,14 @@ struct message_bubble : nodes::Stack {
       auto& [name, quote, picture, file, text, cards, reactions, time, inline_time] = parts;
       if (flash.step(now_ms))
         fState.apply({.background = mixed(plate, accent_colour, 0.35f * flash.value())});
-      if (!text.visible() || text.bounds().isEmpty() || !cards.empty() || reactions)
+      if (!text.visible() || !cards.empty() || reactions) {
+        time_placed = true;  // under it, as it is
         return;
+      }
       skia::SkFont* font = skiff::paint::defaultFont();
-      if (font == nullptr)
+      if (text.bounds().isEmpty() || font == nullptr)
         return;
+      time_placed = true;
       const float needs =
           text.lastLineWidth() + skiff::paint::Painter(nullptr, *font).measure(inline_time.text(), 11.0f) + 10.0f;
       const bool inside = needs <= kMaxWidth;

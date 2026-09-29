@@ -751,6 +751,7 @@ struct context_menu : scene::Node {
       const auto compact = [](auto& row) {
         row.apply({.height = 33.0f, .padding = {0.0f, 17.0f, 0.0f, 15.0f}});
         row.setGap(15.0f);
+        row.parts.mark.apply({.width = 24.0f, .height = 24.0f});
         row.parts.label.setFontSize(13.0f);
       };
       compact(reply);

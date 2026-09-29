@@ -1243,11 +1243,25 @@ struct app {
     mux::config::enabled_of(account) = mux::config::enabled_of(*old);
     mux::config::proxy_in(account) = mux::config::proxy_of(*old);
     mux::config::read_receipts_in(account) = mux::config::read_receipts_in(*old);
+    // And a Matrix session: the same user on the same homeserver goes on
+    // with the device it has, rather than logging in as a new one at every
+    // Save.
+    if (auto* now = std::get_if<mux::config::matrix_account>(&account))
+      if (const auto* before = std::get_if<mux::config::matrix_account>(&*old);
+          before && before->user_id == now->user_id && before->homeserver == now->homeserver &&
+          before->password == now->password) {
+        now->access_token = before->access_token;
+        now->device_id = before->device_id;
+      }
+    // Nothing changed: saved as it is, and the connection left alone.
+    const bool same = account == *old;
     *old = account;
     const auto failed = this->write();
-    net->remove(was);
-    if (mux::config::enabled_of(account))
-      net->add(account, proxies);
+    if (!same) {
+      net->remove(was);
+      if (mux::config::enabled_of(account))
+        net->add(account, proxies);
+    }
     // The form is rebuilt from what was saved: `form` is gone after this.
     auto& panel = this->show_account(address);
     if (auto* editor = panel.editor())

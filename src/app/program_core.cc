@@ -7,6 +7,7 @@ import knot;
 import skia;
 import mux.core;
 import mux.audio;
+import mux.dbus;
 import mux.config;
 import mux.net;
 import mux.xmpp;
@@ -156,9 +157,18 @@ void app::notify_of(const mux::message& said, bool mentions_me) {
     if (text.size() > 300)
       text = text.substr(0, 300) + "\u2026";
   }
-  // Shown by the backend chosen -- the desktop service or mux own window,
-  // which come next; until then, said in the log.
-  std::println(std::cerr, "[notify] {}: {}", title, text);
+  // Shown by the backend chosen: the desktop's service, asked off the UI's
+  // thread; or mux's own window, which comes next -- until then, the log.
+  std::visit(mux::overloaded{[&](mux::config::notify_backend::native) {
+                               std::thread([title, text] {
+                                 if (!mux::dbus::notify(title, text))
+                                   std::println(std::cerr, "[notify] no desktop notification service; {}: {}", title, text);
+                               }).detach();
+                             },
+                             [&](mux::config::notify_backend::built_in) {
+                               std::println(std::cerr, "[notify] {}: {}", title, text);
+                             }},
+             mux::config::notify_backend_of(notifications.backend));
 }
 
 void app::save_marks() {

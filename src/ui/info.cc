@@ -11,7 +11,11 @@ import skiff.widgets;
 import mux.core;
 import mux.config;
 import mux.logic.links;
-export import :header;
+import :base;
+import :icons;
+import :controls;
+import :themes;
+import :names;
 
 export namespace mux::ui {
 

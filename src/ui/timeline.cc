@@ -11,7 +11,10 @@ import skiff.widgets;
 import mux.core;
 import mux.config;
 import mux.logic.links;
-export import :composer;
+import :base;
+import :names;
+import :message;
+import :composer;
 
 export namespace mux::ui {
 

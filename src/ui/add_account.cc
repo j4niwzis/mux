@@ -10,7 +10,9 @@ import skiff.nodes;
 import skiff.widgets;
 import mux.core;
 import mux.config;
-export import :forms;
+import :base;
+import :controls;
+import :forms;
 
 export namespace mux::ui {
 

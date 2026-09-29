@@ -10,7 +10,11 @@ import skiff.nodes;
 import skiff.widgets;
 import mux.core;
 import mux.config;
-export import :appearance;
+import :base;
+import :icons;
+import :controls;
+import :accounts;
+import :proxies;
 
 export namespace mux::ui {
 

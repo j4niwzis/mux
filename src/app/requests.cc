@@ -587,3 +587,25 @@ using window_type = mux::ui::window<actions>;
 // scene. In a named module, members defined in a class are not implicitly
 // inline, so this keeps them all out of the other units.
 extern template class skiff::scene::Scene<mux::app::window_type>;
+// Outside a release build, where each child is walked through its table:
+// the tables of the window's big subtrees -- and so the walks of all in
+// them -- made in units of their own (walks_*.cc), in parallel, not where
+// the window is walked. A release build walks statically and uses none.
+extern template const skiff::scene::AnyNode::Ops& skiff::scene::AnyNode::opsOf<mux::ui::conversations_screen<mux::app::actions>>() noexcept;
+extern template const skiff::scene::AnyNode::Ops& skiff::scene::AnyNode::opsOf<mux::ui::drawer_panel<mux::app::actions>>() noexcept;
+extern template const skiff::scene::AnyNode::Ops& skiff::scene::AnyNode::opsOf<mux::ui::accounts_panel<mux::app::actions>>() noexcept;
+extern template const skiff::scene::AnyNode::Ops& skiff::scene::AnyNode::opsOf<mux::ui::settings_dialog<mux::app::actions>>() noexcept;
+extern template const skiff::scene::AnyNode::Ops& skiff::scene::AnyNode::opsOf<mux::ui::room_settings<mux::app::actions>>() noexcept;
+extern template const skiff::scene::AnyNode::Ops& skiff::scene::AnyNode::opsOf<mux::ui::explore_box<mux::app::actions>>() noexcept;
+extern template const skiff::scene::AnyNode::Ops& skiff::scene::AnyNode::opsOf<mux::ui::new_chat_box<mux::app::actions>>() noexcept;
+extern template const skiff::scene::AnyNode::Ops& skiff::scene::AnyNode::opsOf<mux::ui::person_card<mux::app::actions>>() noexcept;
+extern template const skiff::scene::AnyNode::Ops& skiff::scene::AnyNode::opsOf<mux::ui::room_card<mux::app::actions>>() noexcept;
+extern template const skiff::scene::AnyNode::Ops& skiff::scene::AnyNode::opsOf<mux::ui::reactions_box<mux::app::actions>>() noexcept;
+extern template const skiff::scene::AnyNode::Ops& skiff::scene::AnyNode::opsOf<mux::ui::marks_box<mux::app::actions>>() noexcept;
+extern template const skiff::scene::AnyNode::Ops& skiff::scene::AnyNode::opsOf<mux::ui::forward_box<mux::app::actions>>() noexcept;
+extern template const skiff::scene::AnyNode::Ops& skiff::scene::AnyNode::opsOf<mux::ui::devtools_box<mux::app::actions>>() noexcept;
+extern template const skiff::scene::AnyNode::Ops& skiff::scene::AnyNode::opsOf<mux::ui::send_box<mux::app::actions>>() noexcept;
+extern template const skiff::scene::AnyNode::Ops& skiff::scene::AnyNode::opsOf<mux::ui::notice_box<mux::app::actions>>() noexcept;
+extern template const skiff::scene::AnyNode::Ops& skiff::scene::AnyNode::opsOf<mux::ui::emoji_popup<mux::app::actions>>() noexcept;
+extern template const skiff::scene::AnyNode::Ops& skiff::scene::AnyNode::opsOf<mux::ui::context_menu<mux::app::actions>>() noexcept;
+extern template const skiff::scene::AnyNode::Ops& skiff::scene::AnyNode::opsOf<mux::ui::picture_viewer<mux::app::actions>>() noexcept;

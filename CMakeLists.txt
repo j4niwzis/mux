@@ -156,7 +156,7 @@ if(MUX_UI)
   # skiff and skiff-widgets say the rest of what they are in their own trees.
   cme_declare_port(NAME skiff PROVIDES skiff
     GITHUB_REPOSITORY j4niwzis/skiff
-    GIT_TAG 555ae4a15f32380854a74b0b01b52c1c065cd7f5)
+    GIT_TAG 6a8fa6ee74f25c5a7e03c60dfb037aa4eb8dfad5)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
     GIT_TAG 95e3d4326f5f031ed0b642b6d28ea47fa7cc1079)
@@ -235,6 +235,18 @@ if(MUX_UI)
   target_link_libraries(mux_modules PUBLIC SDL3::SDL3 skiff::skiff skiff::widgets Opus::opus Vorbis::vorbisfile
     ${mux_video_libraries})
   add_executable(mux src/main.cc)
+  # Outside a release build, with walks erased: the big subtrees' tables and
+  # walks each in a unit of its own, not all in scene.cc.
+  set(mux_erased $<AND:$<BOOL:${SKIFF_ERASE_WALKS}>,$<NOT:$<CONFIG:Release>>>)
+  if(NOT DEFINED SKIFF_ERASE_WALKS)
+    set(mux_erased $<NOT:$<CONFIG:Release>>)
+  endif()
+  target_sources(mux PRIVATE
+    $<${mux_erased}:src/app/walks_chats.cc>
+    $<${mux_erased}:src/app/walks_settings.cc>
+    $<${mux_erased}:src/app/walks_manage.cc>
+    $<${mux_erased}:src/app/walks_boxes.cc>
+    $<${mux_erased}:src/app/walks_popups.cc>)
   # The program's own parts: its network, its demo, what it keeps on disk,
   # the requests of its window, the names it reads, and the program itself.
   target_sources(mux PRIVATE FILE_SET CXX_MODULES BASE_DIRS src

@@ -455,8 +455,8 @@ struct mentioned {
   struct replaced {
     std::size_t first, last;
     std::optional<logic::link_t> pill;
-    // Shown as written, not by its name: an address that came encoded
-    // (%23room%3Aserver), decoded -- a pill only where the room is known.
+    // Shown as written, not by its name: a room's address as the message
+    // has it -- a pill only where the room is known.
     std::optional<std::string> as_written = std::nullopt;
   };
   std::vector<replaced> spans;
@@ -500,30 +500,6 @@ struct mentioned {
           spans.push_back({at, end, std::move(what), std::string(text.substr(at, end - at))});
           at = end;
           continue;
-        }
-        // Matrix addresses written percent-encoded, as a link carries them
-        // -- %23room%3Aserver, %40user%3Aserver, one or more between
-        // slashes: each decoded, and made what it is.
-        const std::string_view word = std::string_view(text).substr(at, end - at);
-        if (word.contains('%')) {
-          bool any = false;
-          for (std::size_t from = 0; from <= word.size();) {
-            const auto slash = word.find('/', from);
-            const std::size_t to = slash == std::string_view::npos ? word.size() : slash;
-            const std::string decoded = logic::percent_decoded(word.substr(from, to - from));
-            if (decoded != word.substr(from, to - from))
-              if (auto found = id_in(decoded)) {
-                spans.push_back({at + from, at + to, std::move(found), decoded});
-                any = true;
-              }
-            if (slash == std::string_view::npos)
-              break;
-            from = slash + 1;
-          }
-          if (any) {
-            at = end;
-            continue;
-          }
         }
       }
     }

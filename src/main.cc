@@ -486,6 +486,12 @@ class message_store {
     append(in, knot::to_json_string(knot::value(std::move(line))));
   }
 
+  // All of a chat's messages kept, by id.
+  std::map<std::string, mux::message> everything(const mux::conversation_id& in) {
+    auto all = read(in);
+    return {std::make_move_iterator(all.begin()), std::make_move_iterator(all.end())};
+  }
+
   // Up to `count` of a chat's messages from before `before`, oldest first.
   // Reading a chat's file counts as using it.
   std::vector<mux::message> older(const mux::conversation_id& in, time_point before, std::size_t count) {
@@ -758,6 +764,14 @@ struct reply_to {
 struct jump_to_message {
   std::string id;
 };
+struct open_search {};
+struct close_search {};
+struct search_typed {
+  std::string text;
+};
+struct search_step {
+  bool older = true;
+};
 struct open_member_info {
   std::string id;
 };
@@ -832,7 +846,7 @@ using request_t =
                  request::close_menu, request::menu_reply, request::menu_edit, request::menu_copy,
                  request::menu_delete, request::cancel_compose, request::open_url,
                  request::switch_account, request::submit_message, request::send_typed,
-                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_member_info, request::reply_to, request::open_picture, request::close_picture, request::save_picture, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::flip_strip_metadata, request::flip_rename_pictures, request::close_notice,
+                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_search, request::close_search, request::search_typed, request::search_step, request::open_member_info, request::reply_to, request::open_picture, request::close_picture, request::save_picture, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::flip_strip_metadata, request::flip_rename_pictures, request::close_notice,
                  request::resize_info, request::choose_new_proxy, request::toggle_mute, request::close_account_pages,
                  request::accounts_back, request::account_page, request::flip_account_receipts, request::flip_account_typing, request::typing,
                  request::proxy_kind, request::choose_account_proxy, request::manage_proxies,
@@ -919,6 +933,10 @@ struct actions {
   }
   void reply_to(std::string id, std::string text) { requests.emplace_back(request::reply_to{std::move(id), std::move(text)}); }
   void jump_to_message(std::string id) { requests.emplace_back(request::jump_to_message{std::move(id)}); }
+  void open_search() { requests.emplace_back(request::open_search{}); }
+  void close_search() { requests.emplace_back(request::close_search{}); }
+  void search_typed(std::string text) { requests.emplace_back(request::search_typed{std::move(text)}); }
+  void search_step(bool older) { requests.emplace_back(request::search_step{older}); }
   void open_member_info(std::string id) { requests.emplace_back(request::open_member_info{std::move(id)}); }
   void not_implemented(std::string what) { requests.emplace_back(request::not_implemented{std::move(what)}); }
   void close_notice() { requests.emplace_back(request::close_notice{}); }
@@ -1386,6 +1404,11 @@ struct app {
     // What was being written where the reader was: kept as its draft; and
     // the chat opened's own put back in the field.
     auto& screen = root().main();
+    // Finding is in one chat: another chosen, it is closed.
+    if (searching && searching->in != one.which) {
+      searching.reset();
+      screen.show_search(false);
+    }
     if (screen.chosen && *screen.chosen != one.which) {
       this->keep_draft(*screen.chosen, screen.line.text());
       screen.line.set_text(screen.draft_of(one.which));
@@ -1930,6 +1953,81 @@ struct app {
       root().show_notice("Starting a new chat");
   }
   void apply(const request::jump_to_message& one) { root().main().jump_to(one.id); }
+
+  // Finding in a chat: what is asked, in which chat, the messages it is in
+  // (newest first), and which of them is shown.
+  struct search_state {
+    mux::conversation_id in;
+    std::string query;
+    std::vector<std::string> found;
+    std::optional<std::size_t> at;
+  };
+  std::optional<search_state> searching;
+  void apply(const request::open_search&) {
+    auto& screen = root().main();
+    if (!screen.chosen)
+      return;
+    if (!searching || searching->in != *screen.chosen)
+      searching = search_state{*screen.chosen, {}, {}, std::nullopt};
+    screen.show_search(true);
+    scene.focus(screen.search.field);
+  }
+  void apply(const request::close_search&) {
+    searching.reset();
+    root().main().show_search(false);
+  }
+  void apply(const request::search_typed& one) {
+    if (!searching)
+      return;
+    searching->query = one.text;
+    searching->found = this->find_in(searching->in, one.text);
+    searching->at.reset();
+    this->search_to(true);
+  }
+  void apply(const request::search_step& one) { this->search_to(one.older); }
+  // To the next found, older or newer, shown and flashed; the count set.
+  void search_to(bool older) {
+    if (!searching)
+      return;
+    auto& screen = root().main();
+    const std::size_t count = searching->found.size();
+    if (count > 0) {
+      if (!searching->at)
+        searching->at = 0;
+      else if (older && *searching->at + 1 < count)
+        ++*searching->at;
+      else if (!older && *searching->at > 0)
+        --*searching->at;
+      screen.jump_to(searching->found[*searching->at]);
+    }
+    screen.search.show_found(searching->at, count, !searching->query.empty());
+  }
+  // The messages of a chat with the words asked in their text or in the name
+  // of what they carry, any case: all it has -- those on disk and those in
+  // memory -- newest first.
+  std::vector<std::string> find_in(const mux::conversation_id& in, std::string_view query) {
+    const std::string asked = mux::ui::folded(query);
+    if (asked.empty())
+      return {};
+    std::map<std::string, mux::message> all = store.everything(in);
+    if (const mux::conversation* chat = model->find(in))
+      for (const mux::message& one : chat->timeline)
+        all.insert_or_assign(one.id, one);
+    std::vector<const mux::message*> hits;
+    for (const auto& [id, one] : all) {
+      if (one.redacted)
+        continue;
+      const bool in_text = mux::ui::folded(one.body.plain).contains(asked);
+      const bool in_name = one.attachment && mux::ui::folded(one.attachment->name).contains(asked);
+      if (in_text || in_name)
+        hits.push_back(&one);
+    }
+    std::ranges::sort(hits, std::ranges::greater{}, &mux::message::at);
+    std::vector<std::string> out;
+    for (const mux::message* one : hits)
+      out.push_back(one->id);
+    return out;
+  }
   // A sender pressed in the messages: their page, in the chat's info.
   void apply(const request::open_member_info& one) {
     auto& screen = root().main();

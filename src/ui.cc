@@ -98,6 +98,7 @@ inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 //   void open_member_info(std::string id)  -- a sender's page, in the info
 //   void load_older(const conversation_id&, std::string from)  -- its history
 //   void jump_to_end()               -- back to a chat's newest message
+//   void open_search(), close_search(), search_typed(std::string), search_step(bool older)  -- finding in a chat
 //   void open_url(std::string)       -- a link, in the browser
 //   void switch_account(std::string address)  -- whose chats are listed
 //   void pop_panel()                 -- back from the top panel to what is under it
@@ -170,6 +171,9 @@ struct clip {};
 struct send {};
 struct eye {};
 struct minus {};
+struct search {};  // a magnifier
+struct up {};      // a chevron up
+struct down {};    // a chevron down
 struct reply {};   // tdesktop's historyReplyIcon: an arrow turned back
 struct pencil {};  // tdesktop's historyEditIcon
 // A filled dot of a colour of its own, as a proxy profile's.
@@ -180,7 +184,7 @@ struct dot {
 using icon_t = std::variant<icon::none, icon::person, icon::gear, icon::power, icon::plus, icon::motion, icon::back,
                             icon::close, icon::info, icon::people, icon::add_person, icon::bell, icon::sliders,
                             icon::leave, icon::check, icon::clip, icon::send, icon::eye, icon::dot, icon::minus,
-                            icon::reply, icon::pencil>;
+                            icon::reply, icon::pencil, icon::search, icon::up, icon::down>;
 
 [[nodiscard]] inline skia::SkPaint pen(skia::SkColor colour, float alpha, float width = 1.8f) {
   skia::SkPaint out;
@@ -374,6 +378,24 @@ inline void draw_icon(skia::SkCanvas* canvas, icon::pencil, const skia::SkRect& 
   tip.lineTo(2.5f, 5.0f);
   canvas->drawPath(tip.detach(), p);
   canvas->restoreToCount(save);
+}
+inline void draw_icon(skia::SkCanvas* canvas, icon::search, const skia::SkRect& box, skia::SkColor colour, float alpha) {
+  const auto p = pen(colour, alpha, 2.0f);
+  const float x = box.centerX() - 2.0f, y = box.centerY() - 2.0f;
+  canvas->drawCircle(x, y, 6.5f, p);
+  canvas->drawLine(x + 4.8f, y + 4.8f, x + 10.0f, y + 10.0f, p);
+}
+inline void draw_icon(skia::SkCanvas* canvas, icon::up, const skia::SkRect& box, skia::SkColor colour, float alpha) {
+  const auto p = pen(colour, alpha, 2.0f);
+  const float x = box.centerX(), y = box.centerY();
+  canvas->drawLine(x - 6.0f, y + 3.0f, x, y - 3.0f, p);
+  canvas->drawLine(x, y - 3.0f, x + 6.0f, y + 3.0f, p);
+}
+inline void draw_icon(skia::SkCanvas* canvas, icon::down, const skia::SkRect& box, skia::SkColor colour, float alpha) {
+  const auto p = pen(colour, alpha, 2.0f);
+  const float x = box.centerX(), y = box.centerY();
+  canvas->drawLine(x - 6.0f, y - 3.0f, x, y + 3.0f, p);
+  canvas->drawLine(x, y + 3.0f, x + 6.0f, y - 3.0f, p);
 }
 // Whether an icon draws anything: all but none.
 [[nodiscard]] constexpr bool drawn(icon::none) { return false; }
@@ -1907,21 +1929,25 @@ struct chat_header : nodes::Stack {
   struct head_row : nodes::Stack {
     avatar_mark face;
     two_lines texts;
+    icon_button<ask<Actions, &Actions::open_search>> find;
     icon_button<ask<Actions, &Actions::toggle_info>> info;
     head_row(Actions* a, const view& shown)
         : face(shown.key.value_or(""), shown.title, 38.0f), texts(shown.title, shown.status, 15.0f, 3.0f),
-          info(icon::info{}, {a}) {
+          find(icon::search{}, {a}), info(icon::info{}, {a}) {
       this->setHorizontal();
       this->setGap(12.0f);
       fState.apply({.fillX = true, .grow = scene::axes::kY, .padding = {0.0f, 10.0f, 0.0f, 14.0f}});
+      find.apply({.alignSelf = scene::align::kMiddle});
       info.apply({.alignSelf = scene::align::kMiddle});
       face.setVisible(shown.key.has_value());
+      find.setVisible(shown.key.has_value());
       info.setVisible(shown.key.has_value());
       texts.state.setVisible(shown.key.has_value());
     }
     void forEachChild(auto&& f) {
       f(face);
       f(texts);
+      f(find);
       f(info);
     }
   } row;
@@ -1942,6 +1968,131 @@ struct chat_header : nodes::Stack {
   void drawSelf(skia::SkCanvas* canvas, float alpha) {
     if (skia::SkFont* font = skiff::paint::defaultFont())
       skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 0.0f, sidebar_colour, alpha);
+  }
+};
+
+// A text with its case folded, for finding words in any case: Latin, Greek
+// and Cyrillic capitals made small; the rest as it is.
+[[nodiscard]] inline std::string folded(std::string_view text) {
+  std::string out;
+  out.reserve(text.size());
+  std::size_t at = 0;
+  const auto put = [&](char32_t c) {
+    if (c < 0x80) {
+      out += static_cast<char>(c);
+    } else if (c < 0x800) {
+      out += static_cast<char>(0xC0 | (c >> 6));
+      out += static_cast<char>(0x80 | (c & 0x3F));
+    } else if (c < 0x10000) {
+      out += static_cast<char>(0xE0 | (c >> 12));
+      out += static_cast<char>(0x80 | ((c >> 6) & 0x3F));
+      out += static_cast<char>(0x80 | (c & 0x3F));
+    } else {
+      out += static_cast<char>(0xF0 | (c >> 18));
+      out += static_cast<char>(0x80 | ((c >> 12) & 0x3F));
+      out += static_cast<char>(0x80 | ((c >> 6) & 0x3F));
+      out += static_cast<char>(0x80 | (c & 0x3F));
+    }
+  };
+  while (at < text.size()) {
+    const auto lead = static_cast<unsigned char>(text[at]);
+    const std::size_t length = lead < 0x80 ? 1 : lead < 0xE0 ? 2 : lead < 0xF0 ? 3 : 4;
+    if (at + length > text.size() || (length > 1 && lead < 0xC0)) {
+      out += text[at++];
+      continue;
+    }
+    char32_t c = length == 1 ? lead : lead & (0xFF >> (length + 1));
+    for (std::size_t i = 1; i < length; ++i)
+      c = (c << 6) | (static_cast<unsigned char>(text[at + i]) & 0x3F);
+    at += length;
+    if (c >= U'A' && c <= U'Z')
+      c += 0x20;
+    else if (c >= 0x0410 && c <= 0x042F)  // А..Я
+      c += 0x20;
+    else if (c >= 0x0400 && c <= 0x040F)  // Ѐ..Џ, Ё among them
+      c += 0x50;
+    else if (c >= 0x0391 && c <= 0x03A9 && c != 0x03A2)  // Α..Ω
+      c += 0x20;
+    else if (c >= 0x00C0 && c <= 0x00DE && c != 0x00D7)  // À..Þ
+      c += 0x20;
+    put(c);
+  }
+  return out;
+}
+
+// Finding in a chat, as tdesktop's search in a chat: in place of the head,
+// a field with the magnifier, how many are found and which is shown ("3 of
+// 12"), the arrows to the newer and the older, and ✕. Enter goes to the
+// older one, Shift+Enter to the newer, Esc closes.
+template <class Actions>
+struct search_typed {
+  Actions* actions = nullptr;
+  void operator()(std::string_view text) const { actions->search_typed(std::string(text)); }
+};
+template <class Actions>
+struct search_step {
+  Actions* actions = nullptr;
+  bool older = true;
+  void operator()() const { actions->search_step(older); }
+};
+template <class Actions>
+struct search_bar : nodes::Stack {
+  Actions* actions;
+  widgets::TextBox<search_typed<Actions>> field;
+  nodes::Text found{"", 13.0f, dim_colour};
+  icon_button<search_step<Actions>> newer, older;
+  icon_button<ask<Actions, &Actions::close_search>> close;
+
+  explicit search_bar(Actions* a)
+      : actions(a), field("Search", {a}), newer(icon::up{}, {a, false}), older(icon::down{}, {a, true}),
+        close(icon::close{}, {a}) {
+    this->setHorizontal();
+    this->setGap(4.0f);
+    fState.apply({.fillX = true, .height = chat_header<Actions>::kHeight, .padding = {0.0f, 10.0f, 1.0f, 14.0f}});
+    field.setSearchIcon(true);
+    field.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+    found.apply({.alignSelf = scene::align::kMiddle});
+    newer.apply({.alignSelf = scene::align::kMiddle});
+    older.apply({.alignSelf = scene::align::kMiddle});
+    close.apply({.alignSelf = scene::align::kMiddle});
+    this->setVisible(false);
+  }
+  // Where the finding is: the one shown of how many, or none found.
+  void show_found(std::optional<std::size_t> at, std::size_t of, bool asked) {
+    found.setText(!asked ? std::string() : of == 0 ? std::string("No results") : std::format("{} of {}", at.value_or(0) + 1, of));
+    this->invalidateLayout();
+  }
+  void forEachChild(auto&& f) {
+    f(field);
+    f(found);
+    f(newer);
+    f(older);
+    f(close);
+  }
+  using Node::onKey;
+  void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
+    if (press.key == scene::keys::kEnter) {
+      actions->search_step(!press.modifiers.template has<scene::modifier::shift>());
+      reply.handle();
+    } else if (press.key == scene::keys::kEscape) {
+      actions->close_search();
+      reply.handle();
+    } else if (press.key == scene::keys::kUp) {
+      actions->search_step(false);
+      reply.handle();
+    } else if (press.key == scene::keys::kDown) {
+      actions->search_step(true);
+      reply.handle();
+    }
+  }
+  void drawSelf(skia::SkCanvas* canvas, float alpha) {
+    if (skia::SkFont* font = skiff::paint::defaultFont()) {
+      const skiff::paint::Painter p(canvas, *font);
+      p.fillRounded(fState.fBounds, 0.0f, sidebar_colour, alpha);
+      const skia::SkRect& at = fState.fBounds;
+      p.fillRounded(skia::SkRect::MakeLTRB(at.left(), at.bottom() - 1.0f, at.right(), at.bottom()), 0.0f, band_colour,
+                    alpha);
+    }
   }
 };
 
@@ -2960,6 +3111,7 @@ struct conversations_screen : nodes::Stack {
   struct chat_column : nodes::Stack {
     // The head, as a function of the chat shown.
     nodes::Memo<typename chat_header<Actions>::view, chat_header<Actions>> header;
+    search_bar<Actions> search;
     timeline_area<Actions> area;
     composer_bar<Actions> line;
     struct empty_state : nodes::Stack {
@@ -3006,7 +3158,7 @@ struct conversations_screen : nodes::Stack {
       }
       void forEachChild(auto&& f) { f(shown); }
     } hint;
-    explicit chat_column(Actions* a) : area(a), line(a), empty(a) {
+    explicit chat_column(Actions* a) : search(a), area(a), line(a), empty(a) {
       header.apply({.fillX = true, .height = chat_header<Actions>::kHeight});
       header.show({}, [a](const auto& shown) { return chat_header<Actions>(a, shown); });
       fState.apply({.fillY = true, .grow = scene::axes::kX});
@@ -3014,6 +3166,7 @@ struct conversations_screen : nodes::Stack {
     }
     void forEachChild(auto&& f) {
       f(header);
+      f(search);
       f(area);
       f(line);
       f(empty);
@@ -3032,6 +3185,25 @@ struct conversations_screen : nodes::Stack {
   nodes::ScrollContainer<nodes::Flow<std::vector<conversation_row<Actions>>>>& list = side.list;
   nodes::Text& no_chats = side.no_chats;
   nodes::Memo<typename chat_header<Actions>::view, chat_header<Actions>>& header = chat.header;
+  search_bar<Actions>& search = chat.search;
+  // Ctrl+F: finding in the chat shown, as in tdesktop.
+  using Node::onKey;
+  void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
+    if (press.key == scene::keys::kF && press.modifiers.template has<scene::modifier::control>() && chosen) {
+      actions->open_search();
+      reply.handle();
+    }
+  }
+  // The search bar in place of the head, or the head back.
+  void show_search(bool shown) {
+    search.setVisible(shown);
+    header.setVisible(!shown);
+    if (!shown) {
+      search.field.setText({});
+      search.show_found(std::nullopt, 0, false);
+    }
+    this->invalidateLayout();
+  }
   nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>>& timeline = chat.area.timeline;
   // The chat whose messages are shown, how many, and how many came while
   // the view was above the newest.

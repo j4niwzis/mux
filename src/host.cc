@@ -195,9 +195,31 @@ inline skiff::scene::Key key_of(SDL_Keycode key) {
     case SDLK_BACKSPACE: return keys::kBackspace;
     case SDLK_DELETE: return keys::kDelete;
     case SDLK_A: return keys::kA;
+    case SDLK_B: return keys::kB;
     case SDLK_C: return keys::kC;
+    case SDLK_D: return keys::kD;
+    case SDLK_E: return keys::kE;
+    case SDLK_F: return keys::kF;
+    case SDLK_G: return keys::kG;
+    case SDLK_H: return keys::kH;
+    case SDLK_I: return keys::kI;
+    case SDLK_J: return keys::kJ;
+    case SDLK_K: return keys::kK;
+    case SDLK_L: return keys::kL;
+    case SDLK_M: return keys::kM;
+    case SDLK_N: return keys::kN;
+    case SDLK_O: return keys::kO;
+    case SDLK_P: return keys::kP;
+    case SDLK_Q: return keys::kQ;
+    case SDLK_R: return keys::kR;
+    case SDLK_S: return keys::kS;
+    case SDLK_T: return keys::kT;
+    case SDLK_U: return keys::kU;
     case SDLK_V: return keys::kV;
+    case SDLK_W: return keys::kW;
     case SDLK_X: return keys::kX;
+    case SDLK_Y: return keys::kY;
+    case SDLK_Z: return keys::kZ;
     default: return keys::kUnknown;
   }
 }
@@ -436,6 +458,7 @@ int run(App& app, const options& how) {
         break;
 
       const float scale = SDL_GetWindowDisplayScale(window);
+      skiff::scene::pixelScale() = scale;
       int pixel_width = 0, pixel_height = 0;
       SDL_GetWindowSizeInPixels(window, &pixel_width, &pixel_height);
       const float width = static_cast<float>(pixel_width) / scale;

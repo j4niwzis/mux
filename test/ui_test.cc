@@ -61,6 +61,10 @@ struct stub {
   void not_implemented(std::string) {}
   void message_person(const mux::conversation_id&) {}
   void jump_to_message(std::string) {}
+  void open_search() {}
+  void close_search() {}
+  void search_typed(std::string) {}
+  void search_step(bool) {}
   void reply_to(std::string, std::string) {}
   std::vector<std::string> pictures_opened;
   void open_picture(std::string source, std::string, std::string, std::string) { pictures_opened.push_back(std::move(source)); }

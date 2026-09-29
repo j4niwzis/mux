@@ -76,7 +76,7 @@ struct chat_header : nodes::Stack {
           find(icon::search{}, {a}), info(icon::info{}, {a}) {
       this->setHorizontal();
       this->setGap(12.0f);
-      fState.apply({.fillX = true, .grow = scene::axes::kY, .padding = {0.0f, 10.0f, 0.0f, 14.0f}});
+      fState.apply({.fillX = true, .grow = scene::axes::kY, .padding = {0.0f, 16.0f, 0.0f, 22.0f}});
       find.apply({.alignSelf = scene::align::kMiddle});
       info.apply({.alignSelf = scene::align::kMiddle});
       face.setVisible(shown.key.has_value());
@@ -136,7 +136,7 @@ struct search_bar : nodes::Stack {
         close(icon::close{}, {a}) {
     this->setHorizontal();
     this->setGap(4.0f);
-    fState.apply({.fillX = true, .height = chat_header<Actions>::kHeight, .padding = {0.0f, 10.0f, 1.0f, 14.0f},
+    fState.apply({.fillX = true, .height = chat_header<Actions>::kHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f},
                   .background = sidebar_colour});
     bottom_line.apply({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f});
     field.setSearchIcon(true);

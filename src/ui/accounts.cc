@@ -53,7 +53,7 @@ struct account_entry : nodes::Stack {
       : actions(a), address(config::address_of(saved)), selected(is_selected),
         name(address, 15.0f, text_colour, true), state("", 13.0f, dim_colour) {
     this->setGap(4.0f);
-    fState.apply({.fillX = true, .height = 52.0f, .padding = {7.0f, 10.0f, 7.0f, 10.0f}, .background = sidebar_colour, .selectedBackground = chosen_colour, .selected = selected});
+    fState.apply({.fillX = true, .height = 52.0f, .padding = {7.0f, 16.0f, 7.0f, 16.0f}, .background = sidebar_colour, .selectedBackground = chosen_colour, .selected = selected});
     const auto [how, failed] = state_of(saved, now);
     state.setText(std::format("{} · {}", config::protocol_name(saved), how));
     state.setColour(failed ? error_colour : dim_colour);

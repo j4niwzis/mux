@@ -20,37 +20,31 @@ export namespace mux::ui {
 // sections, and each section a page of the same box.
 template <class Actions>
 struct settings_home : nodes::Stack {
-  page_header<ask<Actions, &Actions::close_settings>, ask<Actions, &Actions::close_settings>> header;
-  row_item<ask<Actions, &Actions::open_accounts>> accounts;
-  row_item<ask<Actions, &Actions::settings_animations>> animations;
-  row_item<ask<Actions, &Actions::settings_proxies>> proxies;
-  row_item<ask<Actions, &Actions::settings_appearance>> appearance;
-  row_item<ask<Actions, &Actions::settings_rendering>> rendering;
-  row_item<ask<Actions, &Actions::settings_storage>> storage;
-  row_item<ask<Actions, &Actions::settings_files>> files;
+  // Its children, in the order they are shown: the header, then the lines,
+  // one under another -- walked as they are declared.
+  struct parts_t {
+    page_header<ask<Actions, &Actions::close_settings>, ask<Actions, &Actions::close_settings>> header;
+    row_item<ask<Actions, &Actions::open_accounts>> accounts;
+    row_item<ask<Actions, &Actions::settings_animations>> animations;
+    row_item<ask<Actions, &Actions::settings_appearance>> appearance;
+    row_item<ask<Actions, &Actions::settings_rendering>> rendering;
+    row_item<ask<Actions, &Actions::settings_storage>> storage;
+    row_item<ask<Actions, &Actions::settings_files>> files;
+    row_item<ask<Actions, &Actions::settings_proxies>> proxies;
+  } parts;
 
   explicit settings_home(Actions* a)
-      : header("Settings", {a}, {a}, false, true),
-        accounts("Accounts", {a}, icon::person{}),
-        animations("Animations", {a}, icon::motion{}),
-        proxies("Proxies", {a}, icon::gear{}),
-        appearance("Appearance", {a}, icon::eye{}),
-        rendering("Rendering", {a}, icon::sliders{}), storage("Storage", {a}, icon::clip{}),
-        files("Files", {a}, icon::send{}) {
-    // Declared: the header, then the lines, one under another.
+      : parts{.header = {"Settings", {a}, {a}, false, true},
+              .accounts = {"Accounts", {a}, icon::person{}},
+              .animations = {"Animations", {a}, icon::motion{}},
+              .appearance = {"Appearance", {a}, icon::eye{}},
+              .rendering = {"Rendering", {a}, icon::sliders{}},
+              .storage = {"Storage", {a}, icon::clip{}},
+              .files = {"Files", {a}, icon::send{}},
+              .proxies = {"Proxies", {a}, icon::gear{}}} {
     fState.apply({.fill = true});
   }
 
-  void forEachChild(auto&& f) {
-    f(header);
-    f(accounts);
-    f(animations);
-    f(appearance);
-    f(rendering);
-    f(storage);
-    f(files);
-    f(proxies);
-  }
   void show_motion(std::string_view) {}
   void show_receipts(bool) {}
 };

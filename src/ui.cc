@@ -1118,9 +1118,10 @@ struct link_line : nodes::Stack {
   std::string url;
   nodes::Text label;
   link_line(std::string said, std::string where) : url(std::move(where)), label("🔗 " + std::move(said), 13.0f, accent_colour) {
-    fState.apply({.height = 20.0f});
+    // As wide as it says, up to a bubble's width: cut there.
+    fState.apply({.height = 20.0f, .autoSize = scene::axes::kX});
     label.setElided(true);
-    label.apply({.fillX = true});
+    label.setMaxWidth(480.0f);
     fState.setCursor(scene::cursor::hand{});
   }
   void forEachChild(auto&& f) { f(label); }
@@ -1131,191 +1132,162 @@ struct link_line : nodes::Stack {
 // and blue for what was sent from here, on the left otherwise; in a group,
 // the sender's name in their colour over the first of a run and their
 // avatar beside its last; the time in the bubble's corner.
-struct message_bubble : scene::Node {
+struct message_bubble : nodes::Stack {
   // The message: its id and text, for its menu.
   std::string message_id;
   std::string plain;
   bool outgoing = false;
-  bool with_avatar = false;
-  bool avatar_space = false;
   std::string sender;
-  std::string time;
-  std::optional<nodes::Text> name;
-  // What it answers, quoted over it: who said it, and a line of it.
-  std::optional<nodes::Text> quote_name;
-  std::optional<nodes::Text> quote_text;
-  std::string quote_sender;
-  nodes::Text text;
-  std::optional<nodes::Text> reactions;
-  // Its links, each a line under its text.
-  std::vector<link_line> links;
-  // The bubble itself, as the last layout placed it.
-  skia::SkRect bubble = skia::SkRect::MakeEmpty();
 
   static constexpr float kPadX = 12.0f;
   static constexpr float kPadY = 7.0f;
   static constexpr float kAvatar = 34.0f;
   static constexpr float kMaxWidth = 480.0f;
 
+  // The sender's avatar, beside the last of their run in a group; the
+  // same room, empty, beside the rest.
+  avatar_mark face;
+  // What it answers: a bar in the sender's colour, beside who and a line.
+  struct quote_row : nodes::Stack {
+    struct bar : scene::Node {
+      skia::SkColor colour;
+      explicit bar(skia::SkColor c) : colour(c) { fState.apply({.width = 3.0f, .height = 32.0f}); }
+      void drawSelf(skia::SkCanvas* canvas, float alpha) {
+        if (skia::SkFont* font = skiff::paint::defaultFont())
+          skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 1.5f, colour, alpha);
+      }
+    } line;
+    // Who said it over a line of it, each cut at the bubble's width.
+    struct said_column : nodes::Stack {
+      nodes::Text who;
+      nodes::Text said;
+      said_column(skia::SkColor colour, std::string name, std::string line)
+          : who(std::move(name), 13.0f, colour, true), said(std::move(line), 13.0f, dim_colour) {
+        this->setGap(1.0f);
+        fState.apply({.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle});
+        for (nodes::Text* each : {&who, &said}) {
+          each->setElided(true);
+          each->setMaxWidth(kMaxWidth - 10.0f);
+        }
+      }
+      void forEachChild(auto&& f) {
+        f(who);
+        f(said);
+      }
+    } texts;
+    quote_row(skia::SkColor colour, std::string who, std::string said)
+        : line(colour), texts(colour, std::move(who), std::move(said)) {
+      this->setHorizontal();
+      this->setGap(7.0f);
+      fState.apply({.autoSize = scene::axes::kBoth, .margin = {2.0f, 0.0f, 4.0f, 0.0f}});
+    }
+    void forEachChild(auto&& f) {
+      f(line);
+      f(texts);
+    }
+  };
+  // The bubble: as wide as what it says, up to its largest.
+  struct body_column : nodes::Stack {
+    bool outgoing = false;
+    std::optional<nodes::Text> name;
+    std::optional<quote_row> quote;
+    nodes::Text text;
+    std::vector<link_line> links;
+    std::optional<nodes::Text> reactions;
+    nodes::Text time;
+    body_column(bool mine, std::string said, std::string when)
+        : outgoing(mine), text(std::move(said), 13.0f, text_colour), time(std::move(when), 11.0f,
+                                                                           mine ? sent_time_colour : dim_colour) {
+      this->setGap(2.0f);
+      fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
+                    .padding = {kPadY, kPadX, 5.0f, kPadX}});
+      text.setWrapped(true);
+      text.setShrinksToLines(true);
+      time.apply({.alignSelf = scene::align::kEnd});
+    }
+    void forEachChild(auto&& f) {
+      f(name);
+      f(quote);
+      f(text);
+      f(links);
+      f(reactions);
+      f(time);
+    }
+    void drawSelf(skia::SkCanvas* canvas, float alpha) {
+      if (skia::SkFont* font = skiff::paint::defaultFont())
+        skiff::paint::Painter(canvas, *font)
+            .fillRounded(fState.fBounds, 12.0f, outgoing ? out_bubble_colour : bubble_colour, alpha);
+    }
+  } body;
+
+  // Declared: the avatar's room and the bubble, at the right where it is
+  // one's own; the bubble a column of the name, the quote, the text, the
+  // links, the reactions and the time.
   message_bubble(const conversation& in, const message& said, bool first_of_run, bool last_of_run)
-      : message_id(said.id), plain(said.body.plain), outgoing(said.outgoing), sender(said.sender), time(clock_of(said.at)),
-        text(said.redacted ? std::string("(removed)") : said.body.plain + (said.edited ? " (edited)" : ""), 13.0f,
-             text_colour) {
-    fState.apply({.fillX = true});
+      : message_id(said.id), plain(said.body.plain), outgoing(said.outgoing), sender(said.sender),
+        face(said.sender, sender_name(in, said.sender), kAvatar),
+        body(said.outgoing, said.redacted ? std::string("(removed)") : said.body.plain + (said.edited ? " (edited)" : ""),
+             clock_of(said.at)) {
+    this->setHorizontal();
+    this->setGap(8.0f);
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 2.0f, 0.0f}});
+    if (outgoing)
+      fStack.justify = nodes::justify::end{};
     const bool group = is_group(in);
-    avatar_space = group && !outgoing;
-    with_avatar = avatar_space && last_of_run;
-    if (group && !outgoing && first_of_run)
-      name.emplace(sender_name(in, said.sender), 13.0f, avatar_colour(said.sender), true);
-    text.setWrapped(true);
+    face.setVisible(group && !outgoing);
+    face.apply({.alignSelf = scene::align::kEnd});
+    if (!(group && !outgoing && last_of_run))
+      face.fState.setAlpha(0.0f);  // its room kept, so the run's bubbles line up
+    if (group && !outgoing && first_of_run) {
+      body.name.emplace(sender_name(in, said.sender), 13.0f, avatar_colour(said.sender), true);
+      body.name->setElided(true);
+      body.name->setMaxWidth(kMaxWidth);
+    }
     // Anyone's words can be selected and copied, as in Telegram.
-    text.setSelectable(true);
-    text.setSelectionColour((accent_colour & 0x00FFFFFFu) | (110u << 24));  // the accent, see-through
-    time += std::visit(overloaded{[](const delivery::sending&) { return " · sending"; },
+    body.text.setSelectable(true);
+    body.text.setSelectionColour((accent_colour & 0x00FFFFFFu) | (110u << 24));  // the accent, see-through
+    std::string when = clock_of(said.at);
+    when += std::visit(overloaded{[](const delivery::sending&) { return " · sending"; },
                                   [](const delivery::failed&) { return " · not sent"; },
                                   [](const auto&) { return ""; }},
                        said.delivery);
+    body.time.setText(std::move(when));
     // Formatted, it is drawn from its HTML: its text, and its links; plain,
     // its links are the URLs in it.
     if (said.body.html && !said.redacted) {
       auto read = read_html(*said.body.html);
-      text.setText(read.text + (said.edited ? " (edited)" : ""));
+      body.text.setText(read.text + (said.edited ? " (edited)" : ""));
       for (auto& [what, where] : read.links)
-        links.emplace_back(std::move(what), std::move(where));
+        body.links.emplace_back(std::move(what), std::move(where));
     } else if (!said.redacted) {
       for (auto& [what, where] : links_in(said.body.plain))
-        links.emplace_back(std::move(what), std::move(where));
+        body.links.emplace_back(std::move(what), std::move(where));
     }
     if (said.replies_to) {
       const auto found = std::ranges::find(in.timeline, *said.replies_to, &message::id);
-      quote_sender = found != in.timeline.end() ? found->sender : std::string();
-      quote_name.emplace(found != in.timeline.end() ? (found->outgoing ? std::string("You") : sender_name(in, found->sender))
-                                                    : std::string("A message"),
-                         13.0f, found != in.timeline.end() ? avatar_colour(found->sender) : accent_colour, true);
-      std::string line = found != in.timeline.end() ? found->body.plain : std::string("not loaded");
+      const bool known = found != in.timeline.end();
+      std::string line = known ? found->body.plain : std::string("not loaded");
       std::ranges::replace(line, '\n', ' ');
-      quote_text.emplace(std::move(line), 13.0f, dim_colour);
-      quote_name->setElided(true);
-      quote_text->setElided(true);
+      body.quote.emplace(known ? avatar_colour(found->sender) : accent_colour,
+                         known ? (found->outgoing ? std::string("You") : sender_name(in, found->sender))
+                               : std::string("A message"),
+                         std::move(line));
+      body.apply({.minWidth = 160.0f});
     }
     if (!said.reactions.empty()) {
       std::string line;
       for (const auto& [key, who] : said.reactions)
         line += std::format("{} {}  ", key, who.size());
-      reactions.emplace(std::move(line), 13.0f, dim_colour);
+      body.reactions.emplace(std::move(line), 13.0f, dim_colour);
     }
   }
 
   void forEachChild(auto&& f) {
-    f(name);
-    f(quote_name);
-    f(quote_text);
-    f(text);
-    f(reactions);
-    f(links);
+    f(face);
+    f(body);
   }
-
-  [[nodiscard]] float inner_width(float row) const {
-    const float left = avatar_space ? kAvatar + 8.0f : 0.0f;
-    return std::max(40.0f, std::min(kMaxWidth, (row - left) * 0.8f) - 2.0f * kPadX);
-  }
-  [[nodiscard]] float natural_width() const {
-    skia::SkFont* font = skiff::paint::defaultFont();
-    if (font == nullptr)
-      return 0.0f;
-    const skiff::paint::Painter p(nullptr, *font);
-    float widest = 0.0f;
-    std::string_view rest = text.text();
-    while (true) {
-      const auto newline = rest.find('\n');
-      widest = std::max(widest, p.measure(std::string(rest.substr(0, newline)), 13.0f));
-      if (newline == std::string_view::npos)
-        break;
-      rest.remove_prefix(newline + 1);
-    }
-    widest = std::max(widest, p.measure(time, 11.0f) + 8.0f);
-    if (name)
-      widest = std::max(widest, p.measure(name->text(), 13.0f, true));
-    return widest;
-  }
-
-  // As tall as the bubble, which is as wide as its text up to most of the
-  // row.
-  void measure(const skia::SkRect& parent) {
-    const float room = this->inner_width(parent.width());
-    const float width = std::min(room, std::max(this->natural_width() + 1.0f, quote_name ? 160.0f : 0.0f));
-    text.setMaxWidth(width);
-    text.measure(parent);
-    float height = 2.0f * kPadY + text.fState.fHeight + 14.0f;
-    if (name)
-      height += 18.0f;
-    if (quote_name)
-      height += 38.0f;
-    if (reactions)
-      height += 18.0f;
-    height += 20.0f * static_cast<float>(links.size());
-    fState.fHeight = height + 2.0f;
-    bubble_width = width + 2.0f * kPadX;
-  }
-  float bubble_width = 0.0f;
-  float quote_top = 0.0f;
-
-  void layoutChildren() {
-    const skia::SkRect box = fState.contentBox();
-    const float left = outgoing ? box.width() - bubble_width : (avatar_space ? kAvatar + 8.0f : 0.0f);
-    bubble = skia::SkRect::MakeXYWH(box.fLeft + left, box.fTop, bubble_width, box.height() - 2.0f);
-    float y = kPadY;
-    if (name) {
-      name->setMaxWidth(bubble_width - 2.0f * kPadX);
-      name->fState.arrange(left + kPadX, y);
-      scene::layout(*name, box);
-      y += 18.0f;
-    }
-    if (quote_name) {
-      quote_top = y;
-      for (nodes::Text* one : {&*quote_name, &*quote_text}) {
-        one->setMaxWidth(bubble_width - 2.0f * kPadX - 10.0f);
-        one->fState.arrange(left + kPadX + 10.0f, y + 2.0f);
-        scene::layout(*one, box);
-        y += 17.0f;
-      }
-      y += 4.0f;
-    }
-    text.fState.arrange(left + kPadX, y);
-    scene::layout(text, box);
-    y += text.bounds().height();
-    for (link_line& one : links) {
-      one.apply({.width = bubble_width - 2.0f * kPadX});
-      one.fState.arrange(left + kPadX, y);
-      scene::layout(one, box);
-      y += 20.0f;
-    }
-    if (reactions) {
-      reactions->fState.arrange(left + kPadX, y + 2.0f);
-      scene::layout(*reactions, box);
-    }
-  }
-
   // Pressed with the right button, it asks for its menu.
   [[nodiscard]] bool acceptsInput() const { return true; }
-
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    skia::SkFont* font = skiff::paint::defaultFont();
-    if (font == nullptr || bubble.isEmpty())
-      return;
-    const skiff::paint::Painter p(canvas, *font);
-    p.fillRounded(bubble, 12.0f, outgoing ? out_bubble_colour : bubble_colour, alpha);
-    if (quote_name)
-      p.fillRounded(skia::SkRect::MakeXYWH(bubble.fLeft + kPadX, fState.fBounds.fTop + quote_top + 2.0f, 3.0f, 32.0f),
-                    1.5f, quote_sender.empty() ? accent_colour : avatar_colour(quote_sender), alpha);
-    const float width = p.measure(time, 11.0f);
-    p.text(time, bubble.fRight - kPadX - width, bubble.fBottom - 6.0f, 11.0f,
-           outgoing ? sent_time_colour : dim_colour, alpha);
-    if (with_avatar)
-      draw_avatar(canvas,
-                  skia::SkRect::MakeXYWH(fState.fBounds.fLeft, fState.fBounds.fBottom - kAvatar - 2.0f, kAvatar, kAvatar),
-                  sender, name ? name->text() : sender, alpha);
-  }
 };
 
 // Something not there yet, said in a box over the window.
@@ -1829,80 +1801,75 @@ struct submit_message {
 // Desktop: a line over it, a paperclip on the left, the text growing with
 // what is written, and the send arrow on the right.
 template <class Actions>
-struct composer_bar : scene::Node {
+struct composer_bar : nodes::Stack {
   nodes::Box<> divider{band_colour};
   // What is written answers or edits: said over the field, and ✕ to go back
   // to a plain message.
-  nodes::Text context{"", 13.0f, accent_colour};
-  icon_button<ask<Actions, &Actions::cancel_compose>> cancel;
-  icon_button<not_yet<Actions>> attach;
-  widgets::TextArea<submit_message<Actions>> field;
-  icon_button<ask<Actions, &Actions::send_typed>> send;
+  struct context_row : nodes::Stack {
+    nodes::Text context{"", 13.0f, accent_colour};
+    icon_button<ask<Actions, &Actions::cancel_compose>> cancel;
+    explicit context_row(Actions* a) : cancel(icon::close{}, {a}) {
+      this->setHorizontal();
+      this->setGap(8.0f);
+      fState.apply({.fillX = true, .height = 30.0f, .padding = {0.0f, 8.0f, 0.0f, 50.0f}});
+      context.setElided(true);
+      context.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      cancel.apply({.alignSelf = scene::align::kMiddle});
+    }
+    void forEachChild(auto&& f) {
+      f(context);
+      f(cancel);
+    }
+  } context_line;
+  // The paperclip, the field growing with what is written in it, the arrow.
+  struct input_row : nodes::Stack {
+    icon_button<not_yet<Actions>> attach;
+    widgets::TextArea<submit_message<Actions>> field;
+    icon_button<ask<Actions, &Actions::send_typed>> send;
+    explicit input_row(Actions* a)
+        : attach(icon::clip{}, {a, "Sending files"}), field("Write a message…", {a}), send(icon::send{}, {a}) {
+      this->setHorizontal();
+      this->setGap(6.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {9.0f, 8.0f, 9.0f, 8.0f}});
+      attach.apply({.alignSelf = scene::align::kEnd});
+      send.apply({.alignSelf = scene::align::kEnd});
+      field.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      send.colour = accent_colour;
+    }
+    void forEachChild(auto&& f) {
+      f(attach);
+      f(field);
+      f(send);
+    }
+  } input;
+  // The old names, for what reads them.
+  widgets::TextArea<submit_message<Actions>>& field = input.field;
 
-  static constexpr float kSide = 50.0f;
-  static constexpr float kPadY = 9.0f;
-
-  explicit composer_bar(Actions* a)
-      : cancel(icon::close{}, {a}), attach(icon::clip{}, {a, "Sending files"}), field("Write a message…", {a}),
-        send(icon::send{}, {a}) {
-    context.setElided(true);
-    context.setVisible(false);
-    cancel.setVisible(false);
-    fState.apply({.fillX = true});
+  // Declared: the divider, the answer's line where there is one, the row.
+  explicit composer_bar(Actions* a) : context_line(a), input(a) {
+    context_line.setVisible(false);
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     divider.apply({.fillX = true, .height = 1.0f});
-    send.colour = accent_colour;
   }
 
-  [[nodiscard]] const std::string& text() const { return field.text(); }
+  [[nodiscard]] const std::string& text() const { return input.field.text(); }
   // What is written answers or edits something, said; or nothing.
   void show_context(std::optional<std::string> said) {
-    context.setVisible(said.has_value());
-    cancel.setVisible(said.has_value());
-    context.setText(said.value_or(""));
+    context_line.setVisible(said.has_value());
+    context_line.context.setText(said.value_or(""));
     this->invalidateLayout();
   }
-  void set_text(std::string text) { field.setText(std::move(text)); }
-  void clear() { field.setText({}); }
+  void set_text(std::string text) { input.field.setText(std::move(text)); }
+  void clear() { input.field.setText({}); }
 
   void forEachChild(auto&& f) {
-    f(context);
-    f(cancel);
     f(divider);
-    f(attach);
-    f(field);
-    f(send);
-  }
-
-  // As tall as the text in it, and a margin.
-  void measure(const skia::SkRect& parent) {
-    field.apply({.width = std::max(0.0f, parent.width() - 2.0f * kSide)});
-    field.measure(parent);
-    fState.fHeight = std::max(field.fState.fHeight + 2.0f * kPadY, 54.0f) + (context.visible() ? 30.0f : 0.0f);
-  }
-  void layoutChildren() {
-    const skia::SkRect box = fState.contentBox();
-    divider.fState.arrange(0.0f, 0.0f);
-    scene::layout(divider, box);
-    attach.fState.arrange(8.0f, -9.0f, scene::anchor::kBottomLeft, scene::anchor::kBottomLeft);
-    scene::layout(attach, box);
-    send.fState.arrange(-8.0f, -9.0f, scene::anchor::kBottomRight, scene::anchor::kBottomRight);
-    scene::layout(send, box);
-    const float extra = context.visible() ? 30.0f : 0.0f;
-    if (context.visible()) {
-      cancel.fState.arrange(-8.0f, 0.0f, scene::anchor::kTopRight, scene::anchor::kTopRight);
-      scene::layout(cancel, box);
-      context.setMaxWidth(std::max(0.0f, box.width() - kSide - 56.0f));
-      context.fState.arrange(kSide, 9.0f);
-      scene::layout(context, box);
-    }
-    field.fState.arrange(kSide, kPadY + extra);
-    scene::layout(field, box);
+    f(context_line);
+    f(input);
   }
   void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    skia::SkFont* font = skiff::paint::defaultFont();
-    if (font == nullptr)
-      return;
-    skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 0.0f, sidebar_colour, alpha);
+    if (skia::SkFont* font = skiff::paint::defaultFont())
+      skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 0.0f, sidebar_colour, alpha);
   }
 };
 
@@ -1968,7 +1935,7 @@ struct timeline_area : scene::Node {
   void onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
     if (press.button == 1) {
       for (const message_bubble& one : std::get<0>(std::get<0>(timeline.fChildren).fChildren))
-        for (const link_line& link : one.links)
+        for (const link_line& link : one.body.links)
           if (link.id() == reply.fTarget) {
             actions->open_url(link.url);
             reply.handle();
@@ -1978,8 +1945,9 @@ struct timeline_area : scene::Node {
     }
     if (press.button != 3)
       return;
+    // Whichever bubble the press is in: its text takes presses of its own.
     for (const message_bubble& one : std::get<0>(std::get<0>(timeline.fChildren).fChildren))
-      if (one.id() == reply.fTarget) {
+      if (one.body.bounds().contains(press.x, press.y)) {
         actions->message_menu(one.message_id, one.outgoing, one.plain, press.x, press.y);
         reply.handle();
         return;

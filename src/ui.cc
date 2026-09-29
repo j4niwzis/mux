@@ -71,7 +71,8 @@ inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 //   void choose_new_proxy(int)       -- the proxy of an account being added
 //   void accounts_back()              -- ← on the accounts page
 //   void account_page(int)           -- a page of the chosen account
-//   void flip_account_receipts(), choose_account_proxy(int), manage_proxies()
+//   void flip_account_receipts(), flip_account_typing(), choose_account_proxy(int), manage_proxies()
+//   void typing(bool)                -- the composer has text in it, or not
 //   void settings_proxies(), add_proxy(), edit_proxy(int), proxy_kind(int),
 //        save_proxy_profile(), delete_proxy_profile()
 //   void settings_appearance(), settings_rendering(), settings_storage()
@@ -2628,6 +2629,32 @@ struct conversations_screen : nodes::Stack {
         f(add);
       }
     } empty;
+    // No chat chosen: the wallpaper, and in its middle a small pill saying
+    // what to do, as tdesktop's (its service message look).
+    struct select_hint : nodes::Stack {
+      struct pill : scene::Node {
+        std::string text = "Select a chat to start messaging";
+        pill() { fState.apply({.alignSelf = scene::align::kMiddle}); }
+        void measure(const skia::SkRect&) {
+          if (skia::SkFont* font = skiff::paint::defaultFont()) {
+            fState.fWidth = skiff::paint::Painter(nullptr, *font).measure(text, 13.0f) + 24.0f;
+            fState.fHeight = 26.0f;
+          }
+        }
+        void drawSelf(skia::SkCanvas* canvas, float alpha) {
+          if (skia::SkFont* font = skiff::paint::defaultFont()) {
+            const skiff::paint::Painter p(canvas, *font);
+            p.fillRounded(fState.fBounds, 13.0f, skia::colorSetARGB(0x66, 0, 0, 0), alpha);
+            p.textIn(fState.fBounds, text, 13.0f, skia::colorSetARGB(255, 255, 255, 255), alpha, false, 12.0f);
+          }
+        }
+      } shown;
+      select_hint() {
+        fStack.justify = nodes::justify::middle{};
+        fState.apply({.fillX = true, .grow = scene::axes::kY});
+      }
+      void forEachChild(auto&& f) { f(shown); }
+    } hint;
     explicit chat_column(Actions* a) : area(a), line(a), empty(a) {
       header.apply({.fillX = true, .height = chat_header<Actions>::kHeight});
       header.show({}, [a](const auto& shown) { return chat_header<Actions>(a, shown); });
@@ -2639,6 +2666,7 @@ struct conversations_screen : nodes::Stack {
       f(area);
       f(line);
       f(empty);
+      f(hint);
     }
     // The theme's wallpaper, as its colour, behind the messages.
     void drawSelf(skia::SkCanvas* canvas, float alpha) {
@@ -2738,6 +2766,8 @@ struct conversations_screen : nodes::Stack {
   // How many of the chat's newest messages are made into bubbles: the
   // newest few dozen, and more as the reader scrolls up to them. What is
   // made is what every frame walks, so a long chat is not all made at once.
+  bool was_typing = false;
+  std::string typed_last;
   static constexpr std::size_t kWindow = 80;
   static constexpr std::size_t kWindowStep = 60;
   std::size_t window = kWindow;
@@ -2786,6 +2816,12 @@ struct conversations_screen : nodes::Stack {
       } else if (!history_from && ++jump_tries > 120) {
         jumping_to.reset();  // the beginning, and it was not there
       }
+    }
+    // What is in the composer: typing while there is text in it.
+    if (const bool has_text = !line.text().empty(); has_text != was_typing || (has_text && line.text() != typed_last)) {
+      was_typing = has_text;
+      typed_last = line.text();
+      actions->typing(has_text);
     }
     if (side.search.field.text() != searched && last_model) {
       searched = side.search.field.text();
@@ -2883,8 +2919,11 @@ struct conversations_screen : nodes::Stack {
     const bool none = now.accounts().empty();
     // The messages' area, not only its list: hidden, it no longer takes the
     // column's height and pushes what is said instead to the bottom.
+    // A chat open: its head, messages and composer. None chosen: the hint.
+    const bool open = !none && chosen.has_value();
     for (scene::Node* shown : std::initializer_list<scene::Node*>{&header, &chat.area, &line})
-      shown->setVisible(!none);
+      shown->setVisible(open);
+    chat.hint.setVisible(!none && !chosen.has_value());
     no_chats.setVisible(!none && chats.empty());
     chat.empty.setVisible(none);
     this->show_info();
@@ -3603,22 +3642,29 @@ template <class Actions>
 struct account_privacy : nodes::Stack {
   nodes::Text title = section_title("PRIVACY");
   switch_row<ask<Actions, &Actions::flip_account_receipts>> receipts;
+  switch_row<ask<Actions, &Actions::flip_account_typing>> typing;
   nodes::Text note{"Off, the people you talk to through this account are not told when you have read their "
-                   "messages -- nor, on most servers, are you told when they have read yours.",
+                   "messages, or that you are typing. Theirs are still shown, and receipts are still kept here.",
                    13.0f, dim_colour};
 
-  account_privacy(Actions* a, bool on) : receipts("Send read receipts", {a}) {
+  account_privacy(Actions* a, bool receipts_on, bool typing_on)
+      : receipts("Send read receipts", {a}), typing("Send typing notifications", {a}) {
     this->setGap(8.0f);
     note.apply({.fillX = true});
     fState.apply({.fill = true});
     note.setWrapped(true);
-    receipts.toggle.setOnNow(on);
+    receipts.toggle.setOnNow(receipts_on);
+    typing.toggle.setOnNow(typing_on);
   }
-  void show(bool on) { receipts.toggle.setOn(on); }
+  void show(bool receipts_on, bool typing_on) {
+    receipts.toggle.setOn(receipts_on);
+    typing.toggle.setOn(typing_on);
+  }
   void say(std::string, bool) {}
   void forEachChild(auto&& f) {
     f(title);
     f(receipts);
+    f(typing);
     f(note);
   }
 };
@@ -3789,7 +3835,7 @@ struct accounts_panel : closes_on_escape<Actions> {
                  const std::vector<config::proxy_settings>& proxies = {}) {
     pages.light(page);
     if (page == 1) {
-      detail.template emplace<3>(this->actions, config::read_receipts_of(one));
+      detail.template emplace<3>(this->actions, config::read_receipts_of(one), config::send_typing_of(one));
     } else if (page == 2) {
       detail.template emplace<4>(this->actions, proxies, config::proxy_of(one));
     } else {

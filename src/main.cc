@@ -199,6 +199,18 @@ struct network {
             one.account);
     });
   }
+  // Whether the user is typing in a chat, told to it.
+  void typing(const mux::conversation_id& in, bool on) {
+    loop.post([this, in, on] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == in.account)
+                account->typing(in.id, on);
+            },
+            one.account);
+    });
+  }
   // A room joined by the account named, through the servers named.
   void join(const mux::account_id& by, std::string room, std::vector<std::string> via) {
     loop.post([this, by, room = std::move(room), via = std::move(via)] {
@@ -709,6 +721,10 @@ struct account_page {
   int page = 0;
 };
 struct flip_account_receipts {};
+struct flip_account_typing {};
+struct typing {
+  bool on = false;
+};
 struct proxy_kind {
   mux::config::proxy_kind_t kind;
 };
@@ -761,7 +777,7 @@ using request_t =
                  request::switch_account, request::submit_message, request::send_typed,
                  request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_member_info, request::reply_to, request::open_picture, request::close_picture, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::flip_strip_metadata, request::flip_rename_pictures, request::close_notice,
                  request::resize_info, request::choose_new_proxy, request::toggle_mute, request::close_account_pages,
-                 request::accounts_back, request::account_page, request::flip_account_receipts,
+                 request::accounts_back, request::account_page, request::flip_account_receipts, request::flip_account_typing, request::typing,
                  request::proxy_kind, request::choose_account_proxy, request::manage_proxies,
                  request::settings_proxies, request::add_proxy, request::edit_proxy, request::save_proxy_profile,
                  request::delete_proxy_profile, request::settings_appearance, request::settings_rendering, request::settings_storage, request::change_limit, request::clear_stored, request::set_theme,
@@ -851,6 +867,8 @@ struct actions {
   void accounts_back() { requests.emplace_back(request::accounts_back{}); }
   void account_page(int page) { requests.emplace_back(request::account_page{page}); }
   void flip_account_receipts() { requests.emplace_back(request::flip_account_receipts{}); }
+  void flip_account_typing() { requests.emplace_back(request::flip_account_typing{}); }
+  void typing(bool on) { requests.emplace_back(request::typing{on}); }
   void proxy_kind(mux::config::proxy_kind_t kind) { requests.emplace_back(request::proxy_kind{kind}); }
   void settings_rendering() { requests.emplace_back(request::settings_rendering{}); }
   void settings_storage() { requests.emplace_back(request::settings_storage{}); }
@@ -1733,9 +1751,44 @@ struct app {
       auto& kept = mux::config::read_receipts_in(account);
       kept = !kept.value_or(true);
       if (auto* page = panel.privacy())
-        page->show(*kept);
+        page->show(*kept, mux::config::send_typing_of(account));
       (void)this->write();
     });
+  }
+  void apply(const request::flip_account_typing&) {
+    this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
+      auto& kept = mux::config::send_typing_in(account);
+      kept = !kept.value_or(true);
+      if (auto* page = panel.privacy())
+        page->show(mux::config::read_receipts_of(account), *kept);
+      (void)this->write();
+    });
+  }
+  // The user typing in the chosen chat, or not: said, where the account's
+  // privacy lets it -- 'typing' at most every twenty seconds while it goes
+  // on (it lasts thirty), 'stopped' when the field is emptied or sent.
+  std::optional<mux::conversation_id> typing_in;
+  std::chrono::steady_clock::time_point typing_said{};
+  void apply(const request::typing& one) {
+    if (ask.demo)
+      return;
+    const auto& chosen = root().main().chosen;
+    const auto now = std::chrono::steady_clock::now();
+    const auto allowed = [&](const mux::conversation_id& in) {
+      const auto account = this->find(in.account.address);
+      return account != saved.end() && mux::config::send_typing_of(*account);
+    };
+    if (typing_in && (!one.on || typing_in != chosen)) {
+      if (allowed(*typing_in))
+        net->typing(*typing_in, false);
+      typing_in.reset();
+    }
+    if (one.on && chosen && allowed(*chosen) &&
+        (typing_in != chosen || now - typing_said > std::chrono::seconds(20))) {
+      net->typing(*chosen, true);
+      typing_in = chosen;
+      typing_said = now;
+    }
   }
   void apply(const request::proxy_kind& one) {
     if (auto* up = root().settings_up())
@@ -2055,6 +2108,7 @@ struct app {
     mux::config::enabled_of(account) = mux::config::enabled_of(*old);
     mux::config::proxy_in(account) = mux::config::proxy_of(*old);
     mux::config::read_receipts_in(account) = mux::config::read_receipts_in(*old);
+    mux::config::send_typing_in(account) = mux::config::send_typing_in(*old);
     // And a Matrix session: the same user on the same homeserver goes on
     // with the device it has, rather than logging in as a new one at every
     // Save.

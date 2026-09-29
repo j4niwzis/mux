@@ -18,6 +18,7 @@ import loom.cs.redaction;
 import loom.cs.room_send;
 import loom.cs.rooms;
 import loom.cs.sync;
+import loom.cs.typing;
 import loom.cs.wellknown;
 import mux.config;
 import mux.core;
@@ -712,6 +713,17 @@ class account {
     sink_(change::members_changed{in, std::move(out)});
   }
  public:
+  // The user typing in a room, or not: for thirty seconds, or until said.
+  void typing(std::string room, bool on) {
+    loop_->spawn([this, room = std::move(room), on] {
+      if (api_)
+        (void)perform(*api_, loom::cs::set_typing{.user_id = id_.address,
+                                                  .room_id = room,
+                                                  .body = {.typing = on,
+                                                           .timeout = on ? std::optional<std::int64_t>(30000)
+                                                                         : std::nullopt}});
+    });
+  }
   // A room joined, by its id or an alias, through the servers `via` names:
   // it comes with the next sync.
   void join(std::string room, std::vector<std::string> via) {

@@ -171,6 +171,7 @@ struct xmpp_account {
   // Whether the people one talks to are told a message was read. Nothing
   // said is yes.
   std::optional<bool> read_receipts;
+  std::optional<bool> send_typing;  // others' typing is always shown
   // The name of the proxy profile it connects through, where it has one.
   std::optional<std::string> proxy;
   friend bool operator==(const xmpp_account&, const xmpp_account&) = default;
@@ -186,6 +187,7 @@ struct matrix_account {
   // What the server shows for this login among the account's devices.
   std::string device_name = "mux";
   std::optional<bool> read_receipts;
+  std::optional<bool> send_typing;  // others' typing is always shown
   std::optional<std::string> proxy;
   // The session the server gave, kept so the next start goes on with it.
   std::optional<std::string> access_token;
@@ -306,6 +308,13 @@ consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
 }
 [[nodiscard]] inline std::optional<bool>& read_receipts_in(account_t& one) {
   return std::visit([](auto& each) -> std::optional<bool>& { return each.read_receipts; }, one);
+}
+// Whether the account tells whom it talks to that the user is typing.
+[[nodiscard]] inline bool send_typing_of(const account_t& one) {
+  return std::visit([](const auto& each) { return each.send_typing.value_or(true); }, one);
+}
+[[nodiscard]] inline std::optional<bool>& send_typing_in(account_t& one) {
+  return std::visit([](auto& each) -> std::optional<bool>& { return each.send_typing; }, one);
 }
 [[nodiscard]] inline std::optional<std::string>& proxy_in(account_t& one) {
   return std::visit([](auto& each) -> std::optional<std::string>& { return each.proxy; }, one);

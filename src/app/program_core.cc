@@ -48,6 +48,10 @@ void app::woken() {
                                [&](const mux::change::devtools_text& shown) {
                                  root().show_devtools_text(shown.title, shown.text);
                                },
+                               // A directory searched: its rooms, in Explore.
+                               [&](const mux::change::directory_listed& listed) {
+                                 root().show_directory(listed.rooms, listed.server);
+                               },
                                [&](const mux::change::state_listed& listed) {
                                  root().show_room_state(listed.entries);
                                },

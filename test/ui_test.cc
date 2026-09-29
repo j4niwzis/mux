@@ -92,6 +92,11 @@ struct stub {
   void list_marks(mux::mark_kind_t) {}
   void go_to_mark(mux::mark_kind_t, std::string) {}
   void close_marks() {}
+  void open_explore() {}
+  void close_explore() {}
+  void search_rooms(std::string, std::string) {}
+  void join_directory_room(std::string, std::string) {}
+  void create_room(std::string, std::string, bool, std::string) {}
   void settings_notifications() {}
   void flip_notify(mux::config::notify_flag_t) {}
   void set_notify_backend(mux::config::notify_backend_t) {}

@@ -83,6 +83,12 @@ class account {
   void create_group(std::string name);
   // A link's preview, as the homeserver makes it.
   void fetch_preview(std::string url);
+  // A server's public directory searched -- the account's own where none is
+  // named -- for what matches, all of it where nothing is asked.
+  void search_directory(std::string server, std::string query);
+  // A room made, as Element's Create room makes one: named, about
+  // something, public -- with an address -- or private.
+  void create_room(std::string name, std::string topic, bool open, std::string alias);
   // A room's gap since the last run, from where the sync left it back to
   // the event it had last: read for mentions of the user and reactions to
   // theirs, and nothing else -- no message kept, nothing fetched.

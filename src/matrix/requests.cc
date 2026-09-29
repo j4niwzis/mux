@@ -15,6 +15,7 @@ import loom.cs.event_context;
 import loom.cs.receipts;
 import loom.cs.redaction;
 import loom.cs.room_summary;
+import loom.cs.list_public_rooms;
 import loom.cs.room_send;
 import loom.cs.rooms;
 import loom.cs.room_state;
@@ -298,6 +299,57 @@ void account<Sink>::fetch_preview(std::string url) {
     if (made.title.empty() && made.description.empty())
       return;
     sink_(change::preview_loaded{url, std::move(made)});
+  });
+}
+
+template <class Sink>
+void account<Sink>::search_directory(std::string server, std::string query) {
+  loop_->spawn([this, server = std::move(server), query = std::move(query)] {
+    if (!api_)
+      return;
+    using asked = loom::cs::query_public_rooms;
+    auto got = perform(*api_, asked{.server = server.empty() ? std::nullopt : std::optional<std::string>(server),
+                                    .body = {.limit = 50,
+                                             .filter = query.empty() ? std::nullopt
+                                                                     : std::optional<asked::body_t::filter_t>(
+                                                                           asked::body_t::filter_t{.generic_search_term = query})}});
+    if (!got) {
+      log(id_, "the directory of {}: {}", server.empty() ? std::string("the home server") : server, got.error().said());
+      sink_(change::directory_listed{id_, server, query, {}});
+      return;
+    }
+    std::vector<directory_room> rooms;
+    for (const auto& one : got->chunk)
+      rooms.push_back({.id = one.room_id,
+                       .name = one.name.value_or(""),
+                       .alias = one.canonical_alias.value_or(""),
+                       .topic = one.topic.value_or(""),
+                       .avatar = one.avatar_url,
+                       .members = one.num_joined_members});
+    sink_(change::directory_listed{id_, server, query, std::move(rooms)});
+  });
+}
+
+template <class Sink>
+void account<Sink>::create_room(std::string name, std::string topic, bool open, std::string alias) {
+  loop_->spawn([this, name = std::move(name), topic = std::move(topic), open, alias = std::move(alias)] {
+    if (!api_)
+      return;
+    using made_t = loom::cs::create_room::body_t;
+    auto made = perform(
+        *api_, loom::cs::create_room{
+                   .body = {.visibility = open ? made_t::visibility_t{made_t::visibility_values::public_{}}
+                                               : made_t::visibility_t{made_t::visibility_values::private_{}},
+                            .room_alias_name = alias.empty() ? std::nullopt : std::optional<std::string>(alias),
+                            .name = name,
+                            .topic = topic.empty() ? std::nullopt : std::optional<std::string>(topic),
+                            .preset = open ? made_t::preset_t{made_t::preset_values::public_chat{}}
+                                           : made_t::preset_t{made_t::preset_values::private_chat{}}}});
+    if (!made) {
+      log(id_, "could not make the room {}: {}", name, made.error().said());
+      return;
+    }
+    sink_(change::room_created{{id_, made->room_id}});
   });
 }
 

@@ -162,6 +162,22 @@ struct go_to_mark {
   std::string event;
 };
 struct close_marks {};
+struct open_explore {};
+struct close_explore {};
+struct search_rooms {
+  std::string server;
+  std::string query;
+};
+struct join_directory_room {
+  std::string room;
+  std::string server;
+};
+struct create_room {
+  std::string name;
+  std::string topic;
+  bool open = false;
+  std::string alias;
+};
 struct settings_notifications {};
 struct flip_notify {
   mux::config::notify_flag_t flag;
@@ -309,7 +325,7 @@ using request_t =
                  request::close_menu, request::menu_reply, request::menu_edit, request::menu_copy,
                  request::menu_delete, request::cancel_compose, request::open_url,
                  request::switch_account, request::submit_message, request::send_typed,
-                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_search, request::edit_last, request::reply_step, request::close_search, request::search_typed, request::search_step, request::open_member_info, request::reply_to, request::open_picture, request::open_avatar, request::close_picture, request::save_picture, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::flip_strip_metadata, request::flip_show_deleted, request::flip_rename_pictures, request::close_notice, request::close_person_info, request::close_room_card, request::join_room_card, request::jump_to_mark, request::list_marks, request::go_to_mark, request::close_marks, request::settings_notifications, request::flip_notify, request::set_notify_backend, request::flip_account_notify, request::flip_account_notify_sound, request::set_chat_notify, request::set_room_event_kind, request::toggle_emoji, request::close_emoji, request::insert_emoji, request::menu_save_gif, request::menu_pin, request::menu_reactions, request::close_reactions, request::open_manage, request::close_manage, request::room_act, request::menu_forward, request::close_forward, request::forward_to, request::menu_view_source, request::explore_state, request::open_send_custom, request::close_devtools, request::send_custom, request::open_new_chat, request::close_new_chat, request::start_direct, request::start_group, request::flip_room_events, request::flip_account_room_events, request::flip_chat_room_events, request::show_gifs, request::send_gif, request::send_sticker, request::play_audio,
+                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_search, request::edit_last, request::reply_step, request::close_search, request::search_typed, request::search_step, request::open_member_info, request::reply_to, request::open_picture, request::open_avatar, request::close_picture, request::save_picture, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::flip_strip_metadata, request::flip_show_deleted, request::flip_rename_pictures, request::close_notice, request::close_person_info, request::close_room_card, request::join_room_card, request::jump_to_mark, request::list_marks, request::go_to_mark, request::close_marks, request::open_explore, request::close_explore, request::search_rooms, request::join_directory_room, request::create_room, request::settings_notifications, request::flip_notify, request::set_notify_backend, request::flip_account_notify, request::flip_account_notify_sound, request::set_chat_notify, request::set_room_event_kind, request::toggle_emoji, request::close_emoji, request::insert_emoji, request::menu_save_gif, request::menu_pin, request::menu_reactions, request::close_reactions, request::open_manage, request::close_manage, request::room_act, request::menu_forward, request::close_forward, request::forward_to, request::menu_view_source, request::explore_state, request::open_send_custom, request::close_devtools, request::send_custom, request::open_new_chat, request::close_new_chat, request::start_direct, request::start_group, request::flip_room_events, request::flip_account_room_events, request::flip_chat_room_events, request::show_gifs, request::send_gif, request::send_sticker, request::play_audio,
                  request::resize_info, request::choose_new_proxy, request::toggle_mute, request::close_account_pages,
                  request::accounts_back, request::account_page, request::flip_account_receipts, request::flip_account_typing, request::typing,
                  request::proxy_kind, request::choose_account_proxy, request::manage_proxies,
@@ -423,6 +439,17 @@ struct actions {
     requests.emplace_back(request::go_to_mark{kind, std::move(event)});
   }
   void close_marks() { requests.emplace_back(request::close_marks{}); }
+  void open_explore() { requests.emplace_back(request::open_explore{}); }
+  void close_explore() { requests.emplace_back(request::close_explore{}); }
+  void search_rooms(std::string server, std::string query) {
+    requests.emplace_back(request::search_rooms{std::move(server), std::move(query)});
+  }
+  void join_directory_room(std::string room, std::string server) {
+    requests.emplace_back(request::join_directory_room{std::move(room), std::move(server)});
+  }
+  void create_room(std::string name, std::string topic, bool open, std::string alias) {
+    requests.emplace_back(request::create_room{std::move(name), std::move(topic), open, std::move(alias)});
+  }
   void settings_notifications() { requests.emplace_back(request::settings_notifications{}); }
   void flip_notify(mux::config::notify_flag_t flag) { requests.emplace_back(request::flip_notify{flag}); }
   void set_notify_backend(mux::config::notify_backend_t backend) {

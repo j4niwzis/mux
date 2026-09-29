@@ -60,6 +60,8 @@ struct window : scene::Node {
       widgets::Dialog<forward_box<Actions>> forwarding;
       // A new chat: someone to message, or a group to make.
       widgets::Dialog<new_chat_box<Actions>> new_chat;
+      // A server's public rooms, searched.
+      widgets::Dialog<explore_box<Actions>> explore;
       // The developer tools.
       widgets::Dialog<devtools_box<Actions>> devtools;
       widgets::Dialog<send_box<Actions>> sending;
@@ -84,7 +86,7 @@ struct window : scene::Node {
     explicit layers(Actions* a)
         : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a))},
           actions_of(a) {
-      auto& [backdrop, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, devtools, sending,
+      auto& [backdrop, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, explore, devtools, sending,
              emoji, menu, viewer] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
@@ -113,6 +115,8 @@ struct window : scene::Node {
       forwarding.setSize(400.0f, 520.0f);
       new_chat.setSheetColour(sidebar_colour);
       new_chat.setWidthFittingContent(420.0f);
+      explore.setSheetColour(sidebar_colour);
+      explore.setSize(640.0f, 560.0f);
       devtools.setSheetColour(sidebar_colour);
       devtools.setSize(560.0f, 560.0f);
     }
@@ -168,6 +172,7 @@ struct window : scene::Node {
     layer().manage.dropClosed();
     layer().forwarding.dropClosed();
     layer().new_chat.dropClosed();
+    layer().explore.dropClosed();
     layer().devtools.dropClosed();
     layer().sending.dropClosed();
   }
@@ -242,6 +247,15 @@ struct window : scene::Node {
     layer().new_chat.open(actions);
   }
   void close_new_chat() { layer().new_chat.close(); }
+  void open_explore(const std::string& own_server) {
+    layer().new_chat.close();
+    layer().explore.open(actions, own_server);
+  }
+  void close_explore() { layer().explore.close(); }
+  void show_directory(const std::vector<directory_room>& rooms, const std::string& server) {
+    if (auto* up = layer().explore.shown())
+      up->show(rooms, server);
+  }
   void show_devtools_text(std::string title, std::string text) {
     layer().devtools.open(actions, std::move(title), std::move(text));
   }

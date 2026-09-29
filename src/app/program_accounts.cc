@@ -6,6 +6,7 @@ import std;
 import knot;
 import skia;
 import mux.core;
+import mux.logic.links;
 import mux.logic.room_events;
 import mux.config;
 import mux.net;
@@ -67,6 +68,59 @@ void app::apply(const request::start_direct& one) {
     }
   net->create_direct(*current, one.user);
   root().show_message("New chat", "Starting a chat with " + one.user + "…");
+}
+std::optional<mux::account_id> app::matrix_account() {
+  if (const auto& current = root().main().current; current && mux::is_matrix(current->speaks))
+    return current;
+  for (const auto& [id, account] : model->accounts())
+    if (mux::is_matrix(id.speaks))
+      return id;
+  return std::nullopt;
+}
+// Explore rooms: opened on the account's own server.
+void app::apply(const request::open_explore&) {
+  const auto by = this->matrix_account();
+  const std::string own = by ? by->address.substr(by->address.find(':') + 1) : std::string();
+  root().open_explore(own);
+}
+void app::apply(const request::close_explore&) { root().close_explore(); }
+// A search: an address typed in is gone to, as a link to it would be --
+// its card, or the room where joined; else the directory asked.
+void app::apply(const request::search_rooms& one) {
+  if (auto link = mux::logic::matrix_id_of(one.query)) {
+    root().close_explore();
+    this->follow(*link);
+    return;
+  }
+  const auto by = this->matrix_account();
+  if (!by || shared.demo())
+    return;
+  net->search_directory(*by, one.server, one.query);
+}
+// A room of the directory joined, through the server it was listed by, and
+// opened when it comes.
+void app::apply(const request::join_directory_room& one) {
+  const auto by = this->matrix_account();
+  if (!by || shared.demo())
+    return;
+  std::vector<std::string> via;
+  if (!one.server.empty())
+    via.push_back(one.server);
+  joining = mux::logic::link::room{one.room, std::nullopt, via};
+  net->join(*by, one.room, via);
+  root().close_explore();
+}
+// A room made, and opened once the model has it.
+void app::apply(const request::create_room& one) {
+  const auto by = this->matrix_account();
+  if (!by || shared.demo())
+    return;
+  root().close_new_chat();
+  std::string alias = one.alias;
+  if (alias.starts_with('#'))
+    alias = alias.substr(1, alias.find(':') == std::string::npos ? std::string::npos : alias.find(':') - 1);
+  net->create_room(*by, one.name, one.topic, one.open, one.open ? alias : std::string());
+  root().show_message("New room", "Making " + one.name + "\u2026");
 }
 void app::apply(const request::start_group& one) {
   const auto& current = root().main().current;

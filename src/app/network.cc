@@ -330,6 +330,30 @@ struct network {
             one.account);
     });
   }
+  // A server's public directory, searched by the account named.
+  void search_directory(const mux::account_id& by, std::string server, std::string query) {
+    loop.post([this, by, server = std::move(server), query = std::move(query)] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == by)
+                account->search_directory(server, query);
+            },
+            one.account);
+    });
+  }
+  // A room made by the account named, as Element's Create room.
+  void create_room(const mux::account_id& by, std::string name, std::string topic, bool open, std::string alias) {
+    loop.post([this, by, name = std::move(name), topic = std::move(topic), open, alias = std::move(alias)] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == by)
+                account->create_room(name, topic, open, alias);
+            },
+            one.account);
+    });
+  }
   // A room not joined, looked up by the account named.
   void preview_room(const mux::account_id& by, std::string room, std::vector<std::string> via) {
     loop.post([this, by, room = std::move(room), via = std::move(via)] {

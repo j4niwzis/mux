@@ -13,6 +13,7 @@ import skiff.nodes.scroll;
 import skiff.nodes.text;
 import skiff.widgets.pill;
 import skiff.widgets.button;
+import skiff.widgets.sliderbar;
 import skiff.widgets.textbox;
 import skiff.widgets.textarea;
 import mux.core;
@@ -795,39 +796,194 @@ struct new_chat_box : nodes::Stack {
         box->actions->start_direct(user);
     }
   };
-  struct group_press {
+  // Element's Create room: its name, what it is about, public -- with an
+  // address anyone can join it by -- or private.
+  struct create_press {
     new_chat_box* box;
     void operator()() const {
       const std::string& name = box->parts.group.text();
       if (!name.empty())
-        box->actions->start_group(name);
+        box->actions->create_room(name, box->parts.topic.text(), box->open_room, box->parts.address.text());
+    }
+  };
+  struct flip_open {
+    new_chat_box* box;
+    void operator()() const {
+      box->open_room = !box->open_room;
+      box->parts.address.setVisible(box->open_room);
+      box->invalidateLayout();
+    }
+  };
+  bool open_room = false;
+  // Public or not: a switch beside what it means.
+  struct open_row : nodes::Stack {
+    struct parts_t {
+      nodes::Text label{"Public: anyone can find and join it", 14.0f, text_colour};
+      widgets::Toggle<flip_open> toggle;
+    } parts;
+    explicit open_row(new_chat_box* box) : parts{.toggle = widgets::Toggle<flip_open>({box})} {
+      this->setHorizontal();
+      this->setGap(12.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 10.0f, 4.0f, 10.0f}});
+      parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      parts.toggle.apply({.alignSelf = scene::align::kMiddle});
     }
   };
   using header_t = page_header<nothing_back, close_it>;
   struct parts_t {
     header_t header;
+    widgets::Button<ask<Actions, &Actions::open_explore>> explore;
     field person;
     widgets::Button<direct_press> message;
     field group;
-    widgets::Button<group_press> create;
-    nodes::Text note{"A direct chat invites them at once; a group is private, and people are invited to it from "
-                     "Manage in its info.",
+    field topic;
+    open_row open;
+    field address;
+    widgets::Button<create_press> create;
+    nodes::Text note{"A direct chat invites them at once. A private room is joined by invitation, from Manage in "
+                     "its info; a public one by anyone, by its address or from the directory.",
                      13.0f, dim_colour};
   } parts;
   explicit new_chat_box(Actions* a)
       : actions(a),
         parts{.header = header_t("New chat", {}, {a}, false, true),
+              .explore = widgets::Button<ask<Actions, &Actions::open_explore>>("Explore rooms", {a}),
               .person = field("Message someone", "@someone:server"),
               .message = widgets::Button<direct_press>("Message", {this}),
-              .group = field("New group", "The group's name"),
-              .create = widgets::Button<group_press>("Create group", {this})} {
+              .group = field("Create a room", "Name"),
+              .topic = field("Topic (optional)", "What it is about"),
+              .open = open_row(this),
+              .address = field("Address", "the-room (becomes #the-room:your.server)"),
+              .create = widgets::Button<create_press>("Create room", {this})} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 18.0f, 12.0f}});
     parts.message.setPrimary(true);
-    for (scene::Node* button : std::initializer_list<scene::Node*>{&parts.message, &parts.create})
+    parts.address.setVisible(false);
+    for (scene::Node* button : std::initializer_list<scene::Node*>{&parts.explore, &parts.message, &parts.create})
       button->apply({.width = 140.0f, .height = 34.0f, .margin = {0.0f, 10.0f, 8.0f, 10.0f}});
     parts.note.setWrapped(true);
     parts.note.apply({.fillX = true, .margin = {6.0f, 10.0f, 0.0f, 10.0f}});
+  }
+};
+
+// Element's Explore rooms: a server's public directory, searched -- one's
+// own, or another named -- each room with its picture, name, address, how
+// many are in it and what it is about, and Join. An address typed in is
+// gone to at once.
+template <class Actions>
+struct explore_box : nodes::Stack {
+  Actions* actions = nullptr;
+  struct close_it {
+    Actions* actions;
+    void operator()() const { actions->close_explore(); }
+  };
+  struct nothing_back {
+    void operator()() const {}
+  };
+  struct search_press {
+    explore_box* box;
+    void operator()() const {
+      box->parts.status.setText("Searching\u2026");
+      box->parts.status.setVisible(true);
+      box->actions->search_rooms(box->parts.search.parts.server.text(), box->parts.search.parts.query.text());
+    }
+  };
+  struct join_press {
+    Actions* actions;
+    std::string room;
+    std::string server;
+    void operator()() const { actions->join_directory_room(room, server); }
+  };
+  struct result_row : nodes::Stack {
+    struct texts_t : nodes::Stack {
+      struct parts_t {
+        nodes::Text name;
+        nodes::Text line;
+        nodes::Text topic;
+      } parts;
+      explicit texts_t(const directory_room& one)
+          : parts{.name = nodes::Text(one.name.empty() ? (one.alias.empty() ? one.id : one.alias) : one.name, 14.0f,
+                                      text_colour, true),
+                  .line = nodes::Text(std::format("{}{}{} member{}", one.alias, one.alias.empty() ? "" : " \u00b7 ",
+                                                  one.members, one.members == 1 ? "" : "s"),
+                                      12.0f, dim_colour),
+                  .topic = nodes::Text(one.topic, 13.0f, text_colour)} {
+        this->setGap(2.0f);
+        fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .shrink = scene::axes::kX,
+                      .alignSelf = scene::align::kMiddle});
+        parts.name.setElided(true);
+        parts.line.setElided(true);
+        parts.topic.setElided(true);
+        parts.topic.setVisible(!one.topic.empty());
+        for (nodes::Text* each : {&parts.name, &parts.line, &parts.topic})
+          each->apply({.fillX = true});
+      }
+    };
+    struct parts_t {
+      avatar_mark face;
+      texts_t texts;
+      widgets::Button<join_press> join;
+    } parts;
+    result_row(Actions* a, const directory_room& one, const std::string& server)
+        : parts{.face = avatar_mark(one.id, one.name.empty() ? one.alias : one.name, 40.0f),
+                .texts = texts_t(one),
+                .join = widgets::Button<join_press>("Join", {a, one.alias.empty() ? one.id : one.alias, server})} {
+      this->setHorizontal();
+      this->setGap(12.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 16.0f, 8.0f, 16.0f}});
+      parts.join.setPrimary(true);
+      parts.join.apply({.width = 70.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle});
+    }
+  };
+  using header_t = page_header<nothing_back, close_it>;
+  struct search_row : nodes::Stack {
+    struct parts_t {
+      field query;
+      field server;
+      widgets::Button<search_press> search;
+    } parts;
+    search_row(explore_box* box, const std::string& own)
+        : parts{.query = field("Find a room", "Name, topic, or #address:server"),
+                .server = field("Server", own, own),
+                .search = widgets::Button<search_press>("Search", {box})} {
+      this->setHorizontal();
+      this->setGap(8.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 6.0f, 0.0f, 6.0f}});
+      parts.query.apply({.fillX = false, .grow = scene::axes::kX});
+      parts.server.apply({.fillX = false, .width = 170.0f});
+      parts.search.setPrimary(true);
+      parts.search.apply({.width = 90.0f, .height = 34.0f, .alignSelf = scene::align::kEnd,
+                          .margin = {0.0f, 0.0f, 2.0f, 0.0f}});
+    }
+  };
+  using rows_t = nodes::Flow<std::vector<result_row>>;
+  struct parts_t {
+    header_t header;
+    search_row search;
+    nodes::Text status{"", 13.0f, dim_colour};
+    nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
+  } parts;
+  // The row's fields, by their names, for what reads them.
+  field& query_field() { return parts.search.parts.query; }
+  explore_box(Actions* a, const std::string& own_server)
+      : actions(a), parts{.header = header_t("Explore rooms", {}, {a}, false, true), .search = search_row(this, own_server)} {
+    fState.apply({.fillX = true, .height = 560.0f, .padding = {0.0f, 12.0f, 12.0f, 12.0f}});
+    parts.status.setWrapped(true);
+    parts.status.apply({.fillX = true, .margin = {6.0f, 10.0f, 4.0f, 10.0f}});
+    parts.status.setVisible(false);
+    parts.list.apply({.fillX = true, .grow = scene::axes::kY});
+    std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
+  }
+  // What the directory listed.
+  void show(const std::vector<directory_room>& rooms, const std::string& server) {
+    auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
+    rows.clear();
+    rows.reserve(rooms.size());
+    for (const directory_room& one : rooms)
+      rows.emplace_back(actions, one, server);
+    parts.status.setText(rooms.empty() ? std::string("No rooms found.") : std::format("{} rooms", rooms.size()));
+    parts.status.setVisible(true);
+    this->invalidateLayout();
   }
 };
 

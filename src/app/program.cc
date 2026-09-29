@@ -245,6 +245,14 @@ struct app : kept_settings {
   void apply(const request::list_marks& one);
   void apply(const request::go_to_mark& one);
   void apply(const request::close_marks&);
+  void apply(const request::open_explore&);
+  void apply(const request::close_explore&);
+  void apply(const request::search_rooms& one);
+  void apply(const request::join_directory_room& one);
+  void apply(const request::create_room& one);
+  // The Matrix account rooms are found and made by: the one in view, else
+  // the first.
+  [[nodiscard]] std::optional<mux::account_id> matrix_account();
   void apply(const request::settings_notifications&);
   void apply(const request::flip_notify& one);
   void apply(const request::set_notify_backend& one);

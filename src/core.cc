@@ -491,6 +491,17 @@ struct reaction {};
 }  // namespace mark_kind
 using mark_kind_t = std::variant<mark_kind::mention, mark_kind::reaction>;
 
+// A room of a server's public directory, as it lists it.
+struct directory_room {
+  std::string id;
+  std::string name;
+  std::string alias;
+  std::string topic;
+  std::optional<std::string> avatar;
+  std::int64_t members = 0;
+  friend bool operator==(const directory_room&, const directory_room&) = default;
+};
+
 // Someone mentioned in what is sent: the name as written in it, and who.
 struct mention {
   std::string name;
@@ -885,6 +896,13 @@ struct reacted_to_mine {
   std::string target;
   std::chrono::sys_time<std::chrono::milliseconds> at{};
 };
+// A server's public directory, searched: what it listed.
+struct directory_listed {
+  account_id by;
+  std::string server;
+  std::string query;
+  std::vector<directory_room> rooms;
+};
 // A mark of a kind, gone to: the one named, else the oldest.
 struct mark_taken {
   conversation_id in;
@@ -914,7 +932,8 @@ using change_t = std::variant<change::connection_changed, change::account_remove
                               change::window_opened, change::window_extended, change::media_progress,
                               change::room_created, change::preview_loaded, change::devtools_text,
                               change::state_listed, change::room_previewed, change::mentioned,
-                              change::marks_shown, change::mark_taken, change::reacted_to_mine>;
+                              change::marks_shown, change::mark_taken, change::reacted_to_mine,
+                              change::directory_listed>;
 
 // The model: every account, and every change applied to it.
 class model {
@@ -1156,6 +1175,7 @@ class model {
       marks.erase(marks.begin());
   }
   void on(const change::mentioned& one) { keep_mark(of(one.in).unread_mentions, {one.event, one.event, one.at}); }
+  void on(const change::directory_listed&) {}  // the window's: the Explore dialog
   void on(const change::reacted_to_mine& one) {
     keep_mark(of(one.in).unread_reactions, {one.event, one.target, one.at});
   }

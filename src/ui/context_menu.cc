@@ -636,7 +636,6 @@ struct context_menu : scene::Node {
     struct parts_t {
       quick_row quick;
       nodes::Box<> quick_band{band_colour};
-      std::optional<emoji_panel<react_with<Actions>>> emoji;
       reply_row reply;
       edit_row edit;
       pin_row pin;
@@ -651,19 +650,40 @@ struct context_menu : scene::Node {
       nodes::Box<> seen_band{band_colour};
       row_item<nothing> seen;
       std::vector<nodes::Text> seen_names;
+      // Every emoji, once asked for: over the items, out of their flow, and
+      // after them, so drawn on top of them and pressed first.
+      std::optional<emoji_panel<react_with<Actions>>> emoji;
     } parts;
     void expand() {
-      auto& [quick, quick_band, emoji, reply, edit, pin, copy, copy_link, save, save_gif, reactions, forward, source,
-             remove, seen_band, seen, seen_names] = parts;
+      auto& [quick, quick_band, reply, edit, pin, copy, copy_link, save, save_gif, reactions, forward, source,
+             remove, seen_band, seen, seen_names, emoji] = parts;
       if (emoji)
         return;
+      // As Telegram's: the list takes the room the items had under the
+      // quick reactions, and unrolls down over them from the top; they stay
+      // under it until it is down, and the menu keeps its size -- grown only
+      // where the items left too little room for a list.
+      const skia::SkRect box = fState.contentBox();
+      const float under = box.fBottom - quick_band.bounds().fBottom;
+      rolled = std::max(under, kEmojiLeast);
+      fState.apply({.minHeight = this->bounds().height() + (rolled - under)});
       emoji.emplace(react_with<Actions>{actions_of});
-      // Unrolled from the top, as Telegram's: its height from nothing to its
-      // own, what is under it clipped meanwhile.
-      emoji->apply({.fillX = true, .height = 0.0f, .masking = true});
+      emoji->apply({.place = scene::anchor::kTopLeft,
+                     .y = quick_band.bounds().fBottom - box.fTop,
+                     .fillX = true,
+                     .height = 0.0f,
+                     .background = sidebar_colour,
+                     .masking = true});
       unroll.jump(0.0f);
-      unroll.setTarget(kEmojiHeight);
+      unroll.setTarget(rolled);
       quick.parts.more.setVisible(false);
+      this->invalidateLayout();
+    }
+    // The items, once the list is down over them: gone, the menu keeping
+    // its size by its least height.
+    void hide_items() {
+      auto& [quick, quick_band, reply, edit, pin, copy, copy_link, save, save_gif, reactions, forward, source, remove,
+             seen_band, seen, seen_names, emoji] = parts;
       for (scene::Node* item : std::initializer_list<scene::Node*>{&reply, &edit, &pin, &copy, &copy_link, &save,
                                                                    &save_gif, &reactions, &forward, &source,
                                                                    &remove, &seen_band, &seen})
@@ -672,12 +692,15 @@ struct context_menu : scene::Node {
         name.setVisible(false);
       this->invalidateLayout();
     }
-    static constexpr float kEmojiHeight = 300.0f;
-    skiff::paint::Tween unroll{kEmojiHeight, 220.0f};
+    static constexpr float kEmojiLeast = 220.0f;
+    float rolled = 0.0f;
+    skiff::paint::Tween unroll{0.0f, 220.0f};
     [[nodiscard]] bool settling() const { return unroll.moving(); }
     void update(double now_ms) {
       if (unroll.step(now_ms) && parts.emoji) {
         parts.emoji->apply({.height = unroll.value()});
+        if (!unroll.moving())
+          this->hide_items();
         this->invalidateLayout();
       }
     }
@@ -712,8 +735,8 @@ struct context_menu : scene::Node {
                 .seen = row_item<nothing>(facts.seen.empty() ? std::string("Not seen yet")
                                                              : std::format("Seen by {}", facts.seen.size()),
                                           {}, icon::check{})} {
-      auto& [quick, quick_band, emoji, reply, edit, pin, copy, copy_link, save, save_gif, reactions, forward, source,
-             remove, seen_band, seen, seen_names] = parts;
+      auto& [quick, quick_band, reply, edit, pin, copy, copy_link, save, save_gif, reactions, forward, source,
+             remove, seen_band, seen, seen_names, emoji] = parts;
       const std::vector<std::string>& readers = facts.seen;
       quick_band.apply({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 4.0f, 0.0f}});
       edit.setVisible(facts.own && !facts.text.empty() && !facts.media);

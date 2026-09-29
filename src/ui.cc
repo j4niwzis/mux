@@ -941,32 +941,26 @@ struct message_bubble : scene::Node {
 
 // Something not there yet, said in a box over the window.
 template <class Actions>
-struct notice_box : scene::Node {
+struct notice_box : nodes::Stack {
   nodes::Text title;
   nodes::Text note;
   widgets::Button<ask<Actions, &Actions::close_notice>> ok;
 
   notice_box(Actions* a, std::string heading, std::string text)
       : title(std::move(heading), 17.0f, text_colour, true), note(std::move(text), 14.0f, dim_colour), ok("OK", {a}) {
-    fState.apply({.fill = true});
+    fState.apply({.fill = true, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
+    this->setGap(10.0f);
+    title.setWrapped(true);
+    title.apply({.fillX = true});
     note.setWrapped(true);
+    note.apply({.fillX = true});
     ok.setPrimary(true);
-    ok.apply({.width = 90.0f, .height = 34.0f});
+    ok.apply({.width = 90.0f, .height = 34.0f, .alignSelf = scene::align::kEnd});
   }
   void forEachChild(auto&& f) {
     f(title);
     f(note);
     f(ok);
-  }
-  void layoutChildren() {
-    const skia::SkRect box = scene::inset(fState.contentBox(), 22.0f, 20.0f);
-    title.fState.arrange(0.0f, 0.0f);
-    scene::layout(title, box);
-    note.setMaxWidth(box.width());
-    note.fState.arrange(0.0f, title.bounds().height() + 10.0f);
-    scene::layout(note, box);
-    ok.fState.arrange(0.0f, 0.0f, scene::anchor::kBottomRight, scene::anchor::kBottomRight);
-    scene::layout(ok, box);
   }
 };
 
@@ -2249,7 +2243,7 @@ struct choose_account_page {
 // An account's pages, in place of the list of accounts once one is chosen: a
 // line for each page of its settings, the one shown lit.
 template <class Actions>
-struct account_pages : scene::Node {
+struct account_pages : nodes::Stack {
   row_item<choose_account_page<Actions>> connection;
   row_item<choose_account_page<Actions>> privacy;
   row_item<choose_account_page<Actions>> proxy;
@@ -2258,6 +2252,7 @@ struct account_pages : scene::Node {
       : connection("Connection", {a, 0}, icon::sliders{}),
         privacy("Privacy", {a, 1}, icon::eye{}),
         proxy("Proxy", {a, 2}, icon::gear{}) {
+    fState.apply({.padding = {6.0f, 0.0f, 0.0f, 0.0f}});
     this->light(0);
   }
   void light(int page) {
@@ -2270,13 +2265,6 @@ struct account_pages : scene::Node {
     f(privacy);
     f(proxy);
   }
-  void layoutChildren() {
-    column_stack stack{fState.contentBox()};
-    stack.y = 6.0f;
-    stack(connection, 0.0f);
-    stack(privacy, 0.0f);
-    stack(proxy, 0.0f);
-  }
 };
 
 // A section's title on a settings page, as Gajim sets them: small, bold, dim.
@@ -2284,7 +2272,7 @@ inline nodes::Text section_title(std::string text) { return nodes::Text(std::mov
 
 // An account's Privacy page: whether it sends read receipts.
 template <class Actions>
-struct account_privacy : scene::Node {
+struct account_privacy : nodes::Stack {
   nodes::Text title = section_title("PRIVACY");
   switch_row<ask<Actions, &Actions::flip_account_receipts>> receipts;
   nodes::Text note{"Off, the people you talk to through this account are not told when you have read their "
@@ -2292,6 +2280,8 @@ struct account_privacy : scene::Node {
                    13.0f, dim_colour};
 
   account_privacy(Actions* a, bool on) : receipts("Send read receipts", {a}) {
+    this->setGap(8.0f);
+    note.apply({.fillX = true});
     fState.apply({.fill = true});
     note.setWrapped(true);
     receipts.toggle.setOnNow(on);
@@ -2302,13 +2292,6 @@ struct account_privacy : scene::Node {
     f(title);
     f(receipts);
     f(note);
-  }
-  void layoutChildren() {
-    column_stack stack{fState.contentBox()};
-    stack(title, 4.0f);
-    stack(receipts, 8.0f);
-    note.setMaxWidth(stack.column.width());
-    stack(note, 0.0f);
   }
 };
 
@@ -2323,13 +2306,15 @@ struct choose_account_proxy {
 // An account's Proxy page, as Gajim's: which of the program's proxy profiles
 // it connects through, or none; and the way to the profiles themselves.
 template <class Actions>
-struct account_proxy : scene::Node {
+struct account_proxy : nodes::Stack {
   nodes::Text title = section_title("PROXY");
   std::vector<row_item<choose_account_proxy<Actions>>> choices;
   row_item<ask<Actions, &Actions::manage_proxies>> manage;
 
   account_proxy(Actions* a, const std::vector<config::proxy_settings>& all, const std::optional<std::string>& current)
       : manage("Manage proxies…", {a}, icon::gear{}) {
+    title.apply({.margin = {0.0f, 0.0f, 4.0f, 0.0f}});
+    manage.apply({.margin = {8.0f, 0.0f, 0.0f, 0.0f}});
     fState.apply({.fill = true});
     choices.emplace_back("No proxy", choose_account_proxy<Actions>{a, -1}, icon::none{}, !current.has_value());
     for (std::size_t i = 0; i < all.size(); ++i)
@@ -2344,14 +2329,6 @@ struct account_proxy : scene::Node {
     f(title);
     f(choices);
     f(manage);
-  }
-  void layoutChildren() {
-    column_stack stack{fState.contentBox()};
-    stack(title, 4.0f);
-    for (auto& one : choices)
-      stack(one, 0.0f);
-    stack.y += 8.0f;
-    stack(manage, 0.0f);
   }
 };
 
@@ -2699,7 +2676,7 @@ struct drawer_panel : scene::Node {
 // Settings, as Telegram Desktop shows them: a box over the window, a list of
 // sections, and each section a page of the same box.
 template <class Actions>
-struct settings_home : scene::Node {
+struct settings_home : nodes::Stack {
   page_header<ask<Actions, &Actions::close_settings>, ask<Actions, &Actions::close_settings>> header;
   row_item<ask<Actions, &Actions::open_accounts>> accounts;
   row_item<ask<Actions, &Actions::settings_animations>> animations;
@@ -2714,6 +2691,7 @@ struct settings_home : scene::Node {
         proxies("Proxies", {a}, icon::gear{}),
         appearance("Appearance", {a}, icon::eye{}),
         rendering("Rendering", {a}, icon::sliders{}) {
+    // Declared: the header, then the lines, one under another.
     fState.apply({.fill = true});
   }
 
@@ -2727,21 +2705,12 @@ struct settings_home : scene::Node {
   }
   void show_motion(std::string_view) {}
   void show_receipts(bool) {}
-  void layoutChildren() {
-    column_stack stack{fState.contentBox()};
-    stack(header, 6.0f);
-    stack(accounts, 0.0f);
-    stack(animations, 0.0f);
-    stack(appearance, 0.0f);
-    stack(rendering, 0.0f);
-    stack(proxies, 0.0f);
-  }
 };
 
 
 
 template <class Actions>
-struct animations_page : scene::Node {
+struct animations_page : nodes::Stack {
   page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>> header;
   nodes::Text note{"How much the window moves. Reduced keeps the small movements, such as a section unfolding, "
                    "and shows panels at once.",
@@ -2755,6 +2724,7 @@ struct animations_page : scene::Node {
         full("Full", {a, kMotions[0]}, icon::none{}, false),
         reduced("Reduced", {a, kMotions[1]}, icon::none{}, false),
         none("None", {a, kMotions[2]}, icon::none{}, false) {
+    note.apply({.fillX = true, .margin = {4.0f, 20.0f, 12.0f, 20.0f}});
     fState.apply({.fill = true});
     note.setWrapped(true);
   }
@@ -2771,17 +2741,6 @@ struct animations_page : scene::Node {
     full.set_chosen(level == kMotions[0]);
     reduced.set_chosen(level == kMotions[1]);
     none.set_chosen(level == kMotions[2]);
-  }
-  void layoutChildren() {
-    column_stack stack{fState.contentBox()};
-    stack(header, 4.0f);
-    note.setMaxWidth(std::max(0.0f, stack.column.width() - 40.0f));
-    note.fState.arrange(20.0f, stack.y);
-    scene::layout(note, stack.column);
-    stack.y += note.bounds().height() + 12.0f;
-    stack(full, 0.0f);
-    stack(reduced, 0.0f);
-    stack(none, 0.0f);
   }
 };
 
@@ -2803,7 +2762,7 @@ struct choose_proxy_kind {
 // Settings' Proxies page, as Gajim's Manage Proxies: the profiles, and a way
 // to add one.
 template <class Actions>
-struct proxies_page : scene::Node {
+struct proxies_page : nodes::Stack {
   page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>> header;
   std::vector<row_item<edit_proxy<Actions>>> profiles;
   row_item<ask<Actions, &Actions::add_proxy>> add;
@@ -2812,6 +2771,8 @@ struct proxies_page : scene::Node {
   // With a way back to the settings' list where it was opened from there.
   proxies_page(Actions* a, const std::vector<config::proxy_settings>& all, bool with_back)
       : header("Proxies", {a}, {a}, with_back, true), add("Add proxy", {a}, icon::plus{}) {
+    empty.setWrapped(true);
+    empty.apply({.fillX = true, .margin = {8.0f, 20.0f, 0.0f, 20.0f}});
     fState.apply({.fill = true});
     for (std::size_t i = 0; i < all.size(); ++i)
       profiles.emplace_back(std::format("{} ({} {}:{})", all[i].name, config::label_of(config::proxy_kind_of(all[i].kind)),
@@ -2827,51 +2788,106 @@ struct proxies_page : scene::Node {
     f(add);
     f(empty);
   }
-  void layoutChildren() {
-    column_stack stack{fState.contentBox()};
-    stack(header, 4.0f);
-    for (auto& one : profiles)
-      stack(one, 0.0f);
-    stack(add, 8.0f);
-    empty.fState.arrange(20.0f, stack.y);
-    scene::layout(empty, stack.column);
+};
+
+// SOCKS5 | HTTP: two segments in a frame, the chosen one lit by a plate
+// that slides from one to the other.
+template <class Actions>
+struct kind_switch : nodes::Stack {
+  segment<choose_proxy_kind<Actions>> socks;
+  segment<choose_proxy_kind<Actions>> http;
+  skiff::paint::Tween slide{0.0f, 180.0f, skiff::paint::movement::subtle{}};
+
+  explicit kind_switch(Actions* a)
+      : socks("SOCKS5", {a, config::proxy_kind::socks5{}}), http("HTTP", {a, config::proxy_kind::http{}}) {
+    this->setHorizontal();
+    this->setGap(1.0f);
+    fState.apply({.autoSize = scene::axes::kBoth, .padding = {1.0f, 1.0f, 1.0f, 1.0f}});
+  }
+  void show(const config::proxy_kind_t& kind, bool at_once) {
+    const float to = std::visit(overloaded{[](config::proxy_kind::socks5) { return 0.0f; },
+                                           [](config::proxy_kind::http) { return 1.0f; }},
+                                kind);
+    if (at_once)
+      slide.jump(to);
+    else
+      slide.setTarget(to);
+    this->markDamaged();
+  }
+  void forEachChild(auto&& f) {
+    f(socks);
+    f(http);
+  }
+  [[nodiscard]] bool settling() const { return slide.moving(); }
+  void update(double now_ms) {
+    if (slide.step(now_ms))
+      this->markDamaged();
+  }
+  void drawSelf(skia::SkCanvas* canvas, float alpha) {
+    skia::SkFont* font = skiff::paint::defaultFont();
+    if (font == nullptr)
+      return;
+    const skiff::paint::Painter p(canvas, *font);
+    p.fillRounded(fState.fBounds, 0.0f, chosen_colour, alpha);
+    const skia::SkRect& a = socks.bounds();
+    const skia::SkRect& b = http.bounds();
+    const float x = a.fLeft + (b.fLeft - a.fLeft) * slide.value();
+    p.fillRounded(skia::SkRect::MakeXYWH(x, a.fTop, a.width(), a.height()), 0.0f, accent_colour, alpha);
+  }
+};
+
+// Buttons side by side, as a form ends.
+template <class... Buttons>
+struct button_row : nodes::Stack {
+  std::tuple<Buttons...> buttons;
+  explicit button_row(Buttons... all) : buttons(std::move(all)...) {
+    this->setHorizontal();
+    this->setGap(10.0f);
+    fState.apply({.autoSize = scene::axes::kBoth});
+  }
+  void forEachChild(auto&& f) {
+    std::apply([&](auto&... each) { (f(each), ...); }, buttons);
   }
 };
 
 // One proxy profile's page: its name, SOCKS5 or HTTP, where, and who to be
-// there; saved or deleted with its buttons.
+// there; saved or deleted with its buttons. Declared: a column of these,
+// nothing placed by hand.
 template <class Actions>
-struct proxy_editor : scene::Node {
+struct proxy_editor : nodes::Stack {
   int index = -1;  // in the list; -1 for a new one
   config::proxy_kind_t kind = config::proxy_kind::socks5{};
-  // The highlight of the kind chosen, sliding from one segment to the other.
-  skiff::paint::Tween slide{0.0f, 180.0f, skiff::paint::movement::subtle{}};
   page_header<ask<Actions, &Actions::settings_proxies>, ask<Actions, &Actions::close_settings>> header;
   field name{"Name", "Home, Tor, Work…"};
-  nodes::Box<> frame{chosen_colour};
-  segment<choose_proxy_kind<Actions>> socks;
-  segment<choose_proxy_kind<Actions>> http;
+  kind_switch<Actions> kinds;
   field host{"Host", "proxy.example.com"};
   field port{"Port", "1080"};
   field username{"User name", "none"};
   field password{"Password", "none"};
   nodes::Text message{"", 13.0f, dim_colour};
-  widgets::Button<ask<Actions, &Actions::save_proxy_profile>> save;
-  widgets::Button<ask<Actions, &Actions::delete_proxy_profile>> remove;
+  button_row<widgets::Button<ask<Actions, &Actions::save_proxy_profile>>,
+             widgets::Button<ask<Actions, &Actions::delete_proxy_profile>>>
+      buttons;
 
   proxy_editor(Actions* a, const std::optional<config::proxy_settings>& from, int at)
-      : index(at), header(from ? from->name : std::string("New proxy"), {a}, {a}, true, true),
-        socks("SOCKS5", {a, config::proxy_kind::socks5{}}), http("HTTP", {a, config::proxy_kind::http{}}),
-        save("Save", {a}), remove("Delete", {a}) {
+      : index(at), header(from ? from->name : std::string("New proxy"), {a}, {a}, true, true), kinds(a),
+        buttons(widgets::Button<ask<Actions, &Actions::save_proxy_profile>>("Save", {a}),
+                widgets::Button<ask<Actions, &Actions::delete_proxy_profile>>("Delete", {a})) {
     fState.apply({.fill = true});
-    frame.setVisible(false);
-    frame.apply({.width = 2.0f * 92.0f + 3.0f, .height = 30.0f});
-    password.box.setMasked(true);
+    this->setGap(8.0f);
+    const auto inset = scene::Margin::horizontal(16.0f);
+    for (field* one : {&name, &host, &port, &username, &password})
+      one->apply({.margin = inset});
+    kinds.apply({.margin = {4.0f, 0.0f, 4.0f, 16.0f}});
+    message.setWrapped(true);
+    message.apply({.fillX = true, .margin = inset});
+    buttons.apply({.margin = inset});
+    auto& [save, remove] = buttons.buttons;
     save.setPrimary(true);
     save.apply({.width = 110.0f, .height = 34.0f});
     remove.apply({.width = 110.0f, .height = 34.0f});
     remove.setVisible(from.has_value());
-    message.setWrapped(true);
+    password.box.setMasked(true);
     if (from) {
       name.box.setText(from->name);
       host.box.setText(from->host);
@@ -2879,23 +2895,13 @@ struct proxy_editor : scene::Node {
       username.box.setText(from->username.value_or(""));
       password.box.setText(from->password.value_or(""));
     }
-    this->set_kind(from ? config::proxy_kind_of(from->kind) : config::proxy_kind_t{config::proxy_kind::socks5{}});
-    slide.jump(slide.target());
+    kind = from ? config::proxy_kind_of(from->kind) : config::proxy_kind_t{config::proxy_kind::socks5{}};
+    kinds.show(kind, true);
   }
 
   void set_kind(const config::proxy_kind_t& to) {
     kind = to;
-    std::visit(overloaded{[this](config::proxy_kind::socks5) { slide.setTarget(0.0f); },
-                          [this](config::proxy_kind::http) { slide.setTarget(1.0f); }},
-               kind);
-    socks.set_active(false);
-    http.set_active(false);
-    this->invalidateLayout();
-  }
-  [[nodiscard]] bool settling() const { return slide.moving(); }
-  void update(double now_ms) {
-    if (slide.step(now_ms))
-      this->markDamaged();
+    kinds.show(kind, false);
   }
 
   // The profile as typed, or what is wrong with it.
@@ -2922,60 +2928,20 @@ struct proxy_editor : scene::Node {
   }
   void show_motion(std::string_view) {}
   void show_receipts(bool) {}
-  // The kind chosen, lit: a plate between the two segments' places, where
-  // the slide has it.
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    skia::SkFont* font = skiff::paint::defaultFont();
-    if (font == nullptr)
-      return;
-    const skia::SkRect& a = socks.bounds();
-    const skia::SkRect& b = http.bounds();
-    const float x = a.fLeft + (b.fLeft - a.fLeft) * slide.value();
-    const skiff::paint::Painter p(canvas, *font);
-    p.fillRounded(skia::SkRect::MakeLTRB(a.fLeft - 1.0f, a.fTop - 1.0f, b.fRight + 1.0f, b.fBottom + 1.0f), 0.0f,
-                  chosen_colour, alpha);
-    p.fillRounded(skia::SkRect::MakeXYWH(x, a.fTop, a.width(), a.height()), 0.0f, accent_colour, alpha);
-  }
 
   void forEachChild(auto&& f) {
     f(header);
     f(name);
-    f(frame);
-    f(socks);
-    f(http);
+    f(kinds);
     f(host);
     f(port);
     f(username);
     f(password);
     f(message);
-    f(save);
-    f(remove);
-  }
-  void layoutChildren() {
-    column_stack stack{scene::inset(fState.contentBox(), 16.0f, 0.0f)};
-    header.fState.arrange(0.0f, 0.0f);
-    scene::layout(header, fState.contentBox());
-    stack.y = header.kHeight + 4.0f;
-    stack(name, 10.0f);
-    frame.fState.arrange(0.0f, stack.y);
-    scene::layout(frame, stack.column);
-    socks.fState.arrange(1.0f, stack.y + 1.0f);
-    scene::layout(socks, stack.column);
-    http.fState.arrange(94.0f, stack.y + 1.0f);
-    scene::layout(http, stack.column);
-    stack.y += 30.0f + 12.0f;
-    stack(host, 6.0f);
-    stack(port, 6.0f);
-    stack(username, 6.0f);
-    stack(password, 10.0f);
-    message.setMaxWidth(stack.column.width());
-    stack(message, 6.0f);
-    save.fState.arrange(0.0f, stack.y);
-    scene::layout(save, stack.column);
-    remove.fState.arrange(save.bounds().width() + 10.0f, stack.y);
-    scene::layout(remove, stack.column);
+    f(buttons);
   }
 };
+
 
 // A theme chosen on the Appearance page, a renderer on the Rendering page.
 template <class Actions>
@@ -2993,7 +2959,7 @@ struct choose_renderer {
 
 // Settings' Appearance page: the theme, which changes at once.
 template <class Actions>
-struct appearance_page : scene::Node {
+struct appearance_page : nodes::Stack {
   page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>> header;
   nodes::Text theme_title = section_title("THEME");
   row_item<choose_theme<Actions>> dark;
@@ -3003,6 +2969,7 @@ struct appearance_page : scene::Node {
       : header("Appearance", {a}, {a}, true, true),
         dark("Dark", {a, config::theme::dark{}}, icon::none{}, false),
         light("Light", {a, config::theme::light{}}, icon::none{}, false) {
+    theme_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
     fState.apply({.fill = true});
     this->show(theme);
   }
@@ -3018,20 +2985,11 @@ struct appearance_page : scene::Node {
     f(dark);
     f(light);
   }
-  void layoutChildren() {
-    column_stack stack{fState.contentBox()};
-    stack(header, 6.0f);
-    theme_title.fState.arrange(20.0f, stack.y);
-    scene::layout(theme_title, stack.column);
-    stack.y += theme_title.bounds().height() + 4.0f;
-    stack(dark, 0.0f);
-    stack(light, 0.0f);
-  }
 };
 
 // Settings' Rendering page: what draws the window, from the next start.
 template <class Actions>
-struct rendering_page : scene::Node {
+struct rendering_page : nodes::Stack {
   page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>> header;
   row_item<choose_renderer<Actions>> gpu;
   row_item<choose_renderer<Actions>> cpu;
@@ -3041,6 +2999,7 @@ struct rendering_page : scene::Node {
       : header("Rendering", {a}, {a}, true, true),
         gpu("OpenGL (the graphics card)", {a, config::renderer::opengl{}}, icon::none{}, false),
         cpu("Software (the processor)", {a, config::renderer::software{}}, icon::none{}, false) {
+    note.apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
     fState.apply({.fill = true});
     note.setWrapped(true);
     this->show(renderer);
@@ -3056,15 +3015,6 @@ struct rendering_page : scene::Node {
     f(gpu);
     f(cpu);
     f(note);
-  }
-  void layoutChildren() {
-    column_stack stack{fState.contentBox()};
-    stack(header, 6.0f);
-    stack(gpu, 0.0f);
-    stack(cpu, 10.0f);
-    note.setMaxWidth(std::max(0.0f, stack.column.width() - 40.0f));
-    note.fState.arrange(20.0f, stack.y);
-    scene::layout(note, stack.column);
   }
 };
 

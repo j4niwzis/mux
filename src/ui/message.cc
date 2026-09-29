@@ -23,11 +23,7 @@ export namespace mux::ui {
 struct link_card : nodes::Stack {
   std::string url;
   struct bar : scene::Node {
-    bar() { fState.apply({.width = 3.0f, .height = 36.0f}); }
-    void drawSelf(skia::SkCanvas* canvas, float alpha) {
-      if (skia::SkFont* font = skiff::paint::defaultFont())
-        skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 1.5f, accent_colour, alpha);
-    }
+    bar() { fState.apply({.width = 3.0f, .height = 36.0f, .cornerRadius = 1.5f, .background = accent_colour}); }
   } line;
   avatar_mark face;
   struct texts_column : nodes::Stack {
@@ -378,11 +374,7 @@ struct message_bubble : nodes::Stack {
   struct quote_row : nodes::Stack {
     struct bar : scene::Node {
       skia::SkColor colour;
-      explicit bar(skia::SkColor c) : colour(c) { fState.apply({.width = 3.0f, .height = 32.0f}); }
-      void drawSelf(skia::SkCanvas* canvas, float alpha) {
-        if (skia::SkFont* font = skiff::paint::defaultFont())
-          skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 1.5f, colour, alpha);
-      }
+      explicit bar(skia::SkColor c) : colour(c) { fState.apply({.width = 3.0f, .height = 32.0f, .cornerRadius = 1.5f, .background = c}); }
     } line;
     // Who said it over a line of it, each cut at the bubble's width.
     struct said_column : nodes::Stack {
@@ -463,7 +455,7 @@ struct message_bubble : nodes::Stack {
                                                                            mine ? sent_time_colour : dim_colour) {
       this->setGap(2.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
-                    .padding = {kPadY, kPadX, 5.0f, kPadX}});
+                    .padding = {kPadY, kPadX, 5.0f, kPadX}, .cornerRadius = 12.0f, .background = mine ? out_bubble_colour : bubble_colour});
       text.setWrapped(true);
       text.setShrinksToLines(true);
       time.apply({.alignSelf = scene::align::kEnd});
@@ -477,11 +469,6 @@ struct message_bubble : nodes::Stack {
       f(cards);
       f(reactions);
       f(time);
-    }
-    void drawSelf(skia::SkCanvas* canvas, float alpha) {
-      if (skia::SkFont* font = skiff::paint::defaultFont())
-        skiff::paint::Painter(canvas, *font)
-            .fillRounded(fState.fBounds, 12.0f, outgoing ? out_bubble_colour : bubble_colour, alpha);
     }
   } body;
 

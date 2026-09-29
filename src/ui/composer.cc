@@ -166,7 +166,7 @@ struct composer_bar : nodes::Stack {
   // Declared: the divider, the answer's line where there is one, the row.
   explicit composer_bar(Actions* a) : context_line(a), input(a) {
     context_line.setVisible(false);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .background = sidebar_colour});
     divider.apply({.fillX = true, .height = 1.0f});
   }
 
@@ -187,10 +187,6 @@ struct composer_bar : nodes::Stack {
     f(divider);
     f(context_line);
     f(input);
-  }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    if (skia::SkFont* font = skiff::paint::defaultFont())
-      skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 0.0f, sidebar_colour, alpha);
   }
 };
 

@@ -36,15 +36,11 @@ struct add_account_pane : nodes::Stack {
     explicit protocol_switch(Actions* a) : xmpp_tab("XMPP", {a}), matrix_tab("Matrix", {a}) {
       this->setHorizontal();
       this->setGap(1.0f);
-      fState.apply({.autoSize = scene::axes::kBoth, .padding = {1.0f, 1.0f, 1.0f, 1.0f}});
+      fState.apply({.autoSize = scene::axes::kBoth, .padding = {1.0f, 1.0f, 1.0f, 1.0f}, .background = chosen_colour});
     }
     void forEachChild(auto&& f) {
       f(xmpp_tab);
       f(matrix_tab);
-    }
-    void drawSelf(skia::SkCanvas* canvas, float alpha) {
-      if (skia::SkFont* font = skiff::paint::defaultFont())
-        skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 0.0f, chosen_colour, alpha);
     }
   } tabs;
   nodes::Text note{"", 13.0f, dim_colour};

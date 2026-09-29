@@ -97,17 +97,13 @@ struct chat_header : nodes::Stack {
 
   // Declared: the row over a line dividing it from the messages.
   chat_header(Actions* a, const view& shown) : row(a, shown) {
-    fState.apply({.fill = true});
+    fState.apply({.fill = true, .background = sidebar_colour});
     divider.apply({.fillX = true, .height = 1.0f});
   }
 
   void forEachChild(auto&& f) {
     f(row);
     f(divider);
-  }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    if (skia::SkFont* font = skiff::paint::defaultFont())
-      skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 0.0f, sidebar_colour, alpha);
   }
 };
 

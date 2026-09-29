@@ -24,7 +24,7 @@ struct action_tile : nodes::Stack {
   // Declared: the icon at the top, the name at the bottom.
   action_tile(std::string text, icon_t icon, Act what = {})
       : act(std::move(what)), mark(icon), label(std::move(text), 12.0f, text_colour) {
-    fState.apply({.height = 58.0f, .padding = {6.0f, 0.0f, 8.0f, 0.0f}});
+    fState.apply({.height = 58.0f, .padding = {6.0f, 0.0f, 8.0f, 0.0f}, .cornerRadius = 8.0f, .background = tile_colour, .hoverBackground = chosen_colour, .focusBackground = chosen_colour});
     fStack.justify = nodes::justify::space_between{};
     mark.colour = text_colour;
     mark.apply({.height = 24.0f});
@@ -34,11 +34,6 @@ struct action_tile : nodes::Stack {
   void forEachChild(auto&& f) {
     f(mark);
     f(label);
-  }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    if (skia::SkFont* font = skiff::paint::defaultFont())
-      skiff::paint::Painter(canvas, *font)
-          .fillRounded(fState.fBounds, 8.0f, fState.fHovered || this->showsFocus() ? chosen_colour : tile_colour, alpha);
   }
 
   [[nodiscard]] bool acceptsInput() const { return true; }
@@ -113,7 +108,7 @@ struct member_row : nodes::Stack {
         texts(one.name.empty() ? one.id : one.name, std::move(how)), pill(one.role.value_or("")) {
     this->setHorizontal();
     this->setGap(12.0f);
-    fState.apply({.fillX = true, .height = 54.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}});
+    fState.apply({.fillX = true, .height = 54.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}, .hoverBackground = chosen_colour});
     pill.setVisible(one.role.has_value());
   }
 
@@ -121,10 +116,6 @@ struct member_row : nodes::Stack {
     f(face);
     f(texts);
     f(pill);
-  }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    if (skia::SkFont* font = skiff::paint::defaultFont(); font && fState.fHovered)
-      skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 0.0f, chosen_colour, alpha);
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
@@ -259,7 +250,7 @@ struct info_panel : nodes::Stack {
       nodes::Text label{"ID", 12.0f, dim_colour};
       explicit id_line(std::string text) : id(std::move(text), 14.0f, accent_colour) {
         this->setGap(2.0f);
-        fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 20.0f, 8.0f, 20.0f}});
+        fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 20.0f, 8.0f, 20.0f}, .hoverBackground = chosen_colour, .focusBackground = chosen_colour});
         fState.setCursor(scene::cursor::hand{});
         id.setWrapped(true);
         id.apply({.fillX = true});
@@ -267,10 +258,6 @@ struct info_panel : nodes::Stack {
       void forEachChild(auto&& f) {
         f(id);
         f(label);
-      }
-      void drawSelf(skia::SkCanvas* canvas, float alpha) {
-        if (skia::SkFont* font = skiff::paint::defaultFont(); font && (fState.fHovered || this->showsFocus()))
-          skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 0.0f, chosen_colour, alpha);
       }
       [[nodiscard]] bool acceptsInput() const { return true; }
       [[nodiscard]] bool hoverChangesAppearance() const { return true; }

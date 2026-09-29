@@ -46,7 +46,7 @@ struct drawer_account : nodes::Stack {
         texts(address, "", 14.0f, 3.0f) {
     this->setHorizontal();
     this->setGap(14.0f);
-    fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}});
+    fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}, .hoverBackground = chosen_colour, .selectedBackground = chosen_colour, .focusBackground = chosen_colour, .selected = current});
     const auto [how, failed] = state_of(saved, now);
     texts.state.setText(std::format("{} · {}", config::protocol_name(saved), how));
     texts.state.setColour(failed ? error_colour : dim_colour);
@@ -58,10 +58,6 @@ struct drawer_account : nodes::Stack {
     f(face);
     f(texts);
     f(tick);
-  }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    if (skia::SkFont* font = skiff::paint::defaultFont(); font && (current || fState.fHovered || this->showsFocus()))
-      skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 0.0f, chosen_colour, alpha);
   }
 
   [[nodiscard]] bool acceptsInput() const { return true; }

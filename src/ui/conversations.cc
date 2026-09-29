@@ -136,7 +136,7 @@ struct conversations_screen : nodes::Stack {
     nodes::ScrollContainer<nodes::Flow<std::vector<conversation_row<Actions>>>> list{
         nodes::Flow<std::vector<conversation_row<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
     explicit side_column(Actions* a) : head(a) {
-      fState.apply({.fillY = true});
+      fState.apply({.fillY = true, .background = sidebar_colour});
       no_chats.apply({.margin = {12.0f, 16.0f, 0.0f, 16.0f}});
       folders.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {0.0f, 8.0f, 6.0f, 8.0f}});
       list.apply({.fillX = true, .grow = scene::axes::kY});
@@ -153,10 +153,6 @@ struct conversations_screen : nodes::Stack {
       f(folders);
       f(no_chats);
       f(list);
-    }
-    void drawSelf(skia::SkCanvas* canvas, float alpha) {
-      if (skia::SkFont* font = skiff::paint::defaultFont())
-        skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 0.0f, sidebar_colour, alpha);
     }
   } side;
   drag_edge<resize_sidebar_to<Actions>> edge;
@@ -215,7 +211,7 @@ struct conversations_screen : nodes::Stack {
     explicit chat_column(Actions* a) : search(a), area(a), line(a), empty(a) {
       header.apply({.fillX = true, .height = chat_header<Actions>::kHeight});
       header.show({}, [a](const auto& shown) { return chat_header<Actions>(a, shown); });
-      fState.apply({.fillY = true, .grow = scene::axes::kX});
+      fState.apply({.fillY = true, .grow = scene::axes::kX, .background = chat_colour});
       area.apply({.fillX = true, .grow = scene::axes::kY});
     }
     void forEachChild(auto&& f) {
@@ -227,10 +223,6 @@ struct conversations_screen : nodes::Stack {
       f(hint);
     }
     // The theme's wallpaper, as its colour, behind the messages.
-    void drawSelf(skia::SkCanvas* canvas, float alpha) {
-      if (skia::SkFont* font = skiff::paint::defaultFont())
-        skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 0.0f, chat_colour, alpha);
-    }
   } chat;
   drag_edge<resize_info_to<Actions>> info_edge;
   info_panel<Actions> info;

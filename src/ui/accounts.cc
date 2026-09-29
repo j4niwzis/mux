@@ -53,7 +53,7 @@ struct account_entry : nodes::Stack {
       : actions(a), address(config::address_of(saved)), selected(is_selected),
         name(address, 15.0f, text_colour, true), state("", 13.0f, dim_colour) {
     this->setGap(4.0f);
-    fState.apply({.fillX = true, .height = 52.0f, .padding = {7.0f, 10.0f, 7.0f, 10.0f}});
+    fState.apply({.fillX = true, .height = 52.0f, .padding = {7.0f, 10.0f, 7.0f, 10.0f}, .background = sidebar_colour, .selectedBackground = chosen_colour, .selected = selected});
     const auto [how, failed] = state_of(saved, now);
     state.setText(std::format("{} · {}", config::protocol_name(saved), how));
     state.setColour(failed ? error_colour : dim_colour);
@@ -66,11 +66,6 @@ struct account_entry : nodes::Stack {
   void forEachChild(auto&& f) {
     f(name);
     f(state);
-  }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    if (skia::SkFont* font = skiff::paint::defaultFont())
-      skiff::paint::Painter(canvas, *font)
-          .fillRounded(fState.fBounds, 0.0f, selected ? chosen_colour : sidebar_colour, alpha);
   }
 
   [[nodiscard]] bool acceptsInput() const { return true; }
@@ -300,7 +295,7 @@ struct accounts_panel : closes_on_escape<Actions> {
       nodes::ScrollContainer<nodes::Flow<std::vector<account_entry<Actions>>>> list{
           nodes::Flow<std::vector<account_entry<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
       explicit side_column(Actions* a) : add("Add account", {a}, icon::plus{}), pages(a) {
-        fState.apply({.fillY = true, .width = kListWidth});
+        fState.apply({.fillY = true, .width = kListWidth, .background = sidebar_colour});
         pages.setVisible(false);
         pages.apply({.fillX = true, .autoSize = scene::axes::kY});
         message.setWrapped(true);
@@ -313,10 +308,6 @@ struct accounts_panel : closes_on_escape<Actions> {
         f(pages);
         f(message);
         f(list);
-      }
-      void drawSelf(skia::SkCanvas* canvas, float alpha) {
-        if (skia::SkFont* font = skiff::paint::defaultFont())
-          skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 0.0f, sidebar_colour, alpha);
       }
     } side;
     struct detail_column : nodes::Stack {

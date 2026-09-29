@@ -83,7 +83,7 @@ struct row_item : nodes::Stack {
       : act(std::move(what)), radio(choice), mark(icon), label(std::move(text), 15.0f, text_colour) {
     this->setHorizontal();
     this->setGap(16.0f);
-    fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
+    fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}, .hoverBackground = chosen_colour, .selectedBackground = chosen_colour, .focusBackground = chosen_colour});
     mark.setVisible(std::visit([](auto one) { return drawn(one); }, icon));
     label.setElided(true);
     label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
@@ -100,6 +100,7 @@ struct row_item : nodes::Stack {
   // Lit as the line whose page is shown beside the list.
   void set_lit(bool on) {
     lit = on;
+    fState.apply({.selected = on});
     this->markDamaged();
   }
   bool lit = false;
@@ -108,10 +109,6 @@ struct row_item : nodes::Stack {
     f(mark);
     f(label);
     f(dot);
-  }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    if (skia::SkFont* font = skiff::paint::defaultFont(); font && (lit || fState.fHovered || this->showsFocus()))
-      skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 0.0f, chosen_colour, alpha);
   }
 
   [[nodiscard]] bool acceptsInput() const { return true; }

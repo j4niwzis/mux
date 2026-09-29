@@ -87,6 +87,9 @@ struct stub {
   void open_member_info(std::string) {}
   void close_notice() {}
   void close_person_info() {}
+  void toggle_emoji() {}
+  void close_emoji() {}
+  void insert_emoji(std::string) {}
   void resize_info(float) {}
   void choose_new_proxy(int) {}
   void toggle_mute() {}

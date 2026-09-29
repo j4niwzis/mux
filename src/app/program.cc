@@ -219,6 +219,9 @@ struct app : kept_settings {
   void apply(const request::not_implemented& one);
   void apply(const request::close_notice&);
   void apply(const request::close_person_info&);
+  void apply(const request::toggle_emoji&);
+  void apply(const request::close_emoji&);
+  void apply(const request::insert_emoji& one);
   void apply(const request::resize_info& one);
   void apply(const request::choose_new_proxy& one);
   // The chosen chat muted, or not: kept in the file.

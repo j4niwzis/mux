@@ -133,17 +133,21 @@ struct composer_bar : nodes::Stack {
   struct input_row : nodes::Stack {
     using attach_button = icon_button<ask<Actions, &Actions::attach_files>>;
     using field_t = widgets::TextArea<submit_message<Actions>>;
+    using emoji_button = icon_button<ask<Actions, &Actions::toggle_emoji>>;
     using send_button = icon_button<ask<Actions, &Actions::send_typed>>;
     struct parts_t {
       attach_button attach;
       field_t field;
+      emoji_button emoji;
       send_button send;
     } parts;
     explicit input_row(Actions* a)
         : parts{.attach = attach_button(icon::clip{}, {a}),
                 .field = field_t("Write a message…", {a}),
+                .emoji = emoji_button(icon::smile{}, {a}),
                 .send = send_button(icon::send{}, {a})} {
-      auto& [attach, field, send] = parts;
+      auto& [attach, field, emoji, send] = parts;
+      emoji.apply({.alignSelf = scene::align::kEnd});
       this->setHorizontal();
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {9.0f, 8.0f, 9.0f, 8.0f}});

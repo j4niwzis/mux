@@ -34,6 +34,23 @@ void app::apply(const request::open_member_info& one) {
 
 void app::apply(const request::close_person_info&) { root().close_person(); }
 
+// The input's emoji panel: opened over the chat above its button, or closed.
+void app::apply(const request::toggle_emoji&) {
+  if (root().emoji_open()) {
+    root().close_emoji();
+    return;
+  }
+  const auto at = root().main().line.parts.input.parts.emoji.bounds();
+  root().open_emoji(at.fRight, at.fTop - 6.0f);
+}
+void app::apply(const request::close_emoji&) { root().close_emoji(); }
+// An emoji picked: into what is written, where the caret is; the input keeps
+// the keys.
+void app::apply(const request::insert_emoji& one) {
+  root().main().line.parts.input.parts.field.insertText(one.text);
+  scene.focus(root().main().line.field);
+}
+
 void app::apply(const request::not_implemented& one) { root().show_notice(one.what); }
 
 void app::apply(const request::close_notice&) { root().close_notice(); }

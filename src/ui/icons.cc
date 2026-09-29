@@ -43,6 +43,7 @@ struct up {};      // a chevron up
 struct down {};    // a chevron down
 struct reply {};   // tdesktop's historyReplyIcon: an arrow turned back
 struct pencil {};  // tdesktop's historyEditIcon
+struct smile {};   // tdesktop's historyEmojiIcon: a round face
 // A filled dot of a colour of its own, as a proxy profile's.
 struct dot {
   skia::SkColor colour;
@@ -51,7 +52,7 @@ struct dot {
 using icon_t = std::variant<icon::none, icon::person, icon::gear, icon::power, icon::plus, icon::motion, icon::back,
                             icon::close, icon::info, icon::people, icon::add_person, icon::bell, icon::sliders,
                             icon::leave, icon::check, icon::clip, icon::send, icon::eye, icon::dot, icon::minus,
-                            icon::reply, icon::pencil, icon::search, icon::up, icon::down>;
+                            icon::reply, icon::pencil, icon::search, icon::up, icon::down, icon::smile>;
 
 // Each icon's shape, as data, in points from the middle of its box -- about
 // 20 across -- for nodes::Icon to draw.
@@ -168,6 +169,13 @@ namespace steps = nodes::path_step;
 }
 [[nodiscard]] inline IconShape shape_of(icon::down) {
   return {{{marks::line{-6.0f, -3.0f, 0.0f, 3.0f}, 2.0f}, {marks::line{0.0f, 3.0f, 6.0f, -3.0f}, 2.0f}}};
+}
+// A face: its round, two eyes, a smile.
+[[nodiscard]] inline IconShape shape_of(icon::smile) {
+  return {{{marks::circle{0.0f, 0.0f, 9.0f}, 1.7f},
+           {marks::circle{-3.3f, -2.5f, 1.2f}, 0.0f, true},
+           {marks::circle{3.3f, -2.5f, 1.2f}, 0.0f, true},
+           {marks::arc{-5.0f, -4.0f, 5.0f, 5.5f, 20.0f, 140.0f}, 1.7f}}};
 }
 [[nodiscard]] inline IconShape shape_of(const icon_t& which) {
   return std::visit([](auto one) { return shape_of(one); }, which);

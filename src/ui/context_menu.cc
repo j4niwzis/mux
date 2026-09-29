@@ -15,33 +15,56 @@ export import :settings;
 
 export namespace mux::ui {
 
-// Every emoji, to react with: as tdesktop's panel -- a search at its top,
-// the groups as tabs by their first emoji, and a grid of the one chosen or
-// of what the search finds; a press reacts with it.
-template <class Actions>
+// Every emoji, as tdesktop's panel lists them (chat_helpers.style): a search
+// at its top; the groups one under another in one list that scrolls, each a
+// semibold header over its emoji, 37 across (desiredSize); and a footer of
+// the groups' tabs, 36 high, that brings each into view and is lit for the
+// one in view. A press on an emoji gives it to Pick: a reaction, from a
+// message's menu; text in the input, from the input's own button.
+template <class Pick>
 struct emoji_panel : nodes::Stack {
-  Actions* actions;
-  // One emoji of the grid.
+  Pick pick;
+  static constexpr float kCell = 37.0f;
+  // One emoji of the list.
   struct cell : nodes::Stack {
-    Actions* actions;
+    emoji_panel* panel;
     std::string glyph;
     struct parts_t {
       nodes::Text face;
     } parts;
-    cell(Actions* a, std::string g) : actions(a), glyph(g), parts{.face = nodes::Text(std::move(g), 20.0f, text_colour)} {
-      auto& face = parts.face;
+    cell(emoji_panel* p, std::string g)
+        : panel(p), glyph(g), parts{.face = nodes::Text(std::move(g), 22.0f, text_colour)} {
       this->setHorizontal();
       fStack.justify = nodes::justify::middle{};
-      fState.apply({.width = 30.0f, .height = 30.0f, .cornerRadius = 6.0f, .hoverBackground = chosen_colour});
-      face.apply({.alignSelf = scene::align::kMiddle});
+      fState.apply({.width = kCell, .height = kCell, .cornerRadius = 6.0f, .hoverBackground = chosen_colour});
+      parts.face.apply({.alignSelf = scene::align::kMiddle});
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
+    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
-      actions->menu_react(glyph);
+      panel->pick(glyph);
       return true;
     }
   };
-  // A group's tab: its first emoji.
+  // A group: its name over its emoji (headerTop 10, headerLeft 14).
+  struct section : nodes::Stack {
+    using cells_t = nodes::Flow<std::vector<cell>>;
+    struct parts_t {
+      nodes::Text title;
+      cells_t cells{{.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, {}};
+    } parts;
+    section(emoji_panel* p, std::string_view name, const std::vector<const alef::emoji*>& all)
+        : parts{.title = nodes::Text(std::string(name), 13.0f, dim_colour, true)} {
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+      parts.title.apply({.margin = {10.0f, 0.0f, 6.0f, 7.0f}});
+      parts.cells.apply({.fillX = true, .autoSize = scene::axes::kY});
+      auto& cells = std::get<0>(parts.cells.fChildren);
+      cells.reserve(all.size());
+      for (const alef::emoji* one : all)
+        cells.emplace_back(p, logic::emoji_text(*one));
+    }
+  };
+  // A group's tab in the footer: its first emoji (iconArea 28).
   struct tab : nodes::Stack {
     emoji_panel* panel;
     std::size_t group;
@@ -51,16 +74,15 @@ struct emoji_panel : nodes::Stack {
     tab(emoji_panel* p, std::size_t g)
         : panel(p), group(g),
           parts{.face = nodes::Text(logic::emoji_text(alef::emoji_groups[g].all.front()), 16.0f, text_colour)} {
-      auto& face = parts.face;
       this->setHorizontal();
       fStack.justify = nodes::justify::middle{};
-      fState.apply({.width = 25.0f, .height = 26.0f, .cornerRadius = 6.0f, .hoverBackground = chosen_colour,
-                    .selectedBackground = tile_colour});
-      face.apply({.alignSelf = scene::align::kMiddle});
+      fState.apply({.width = 28.0f, .height = 28.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 6.0f,
+                    .hoverBackground = chosen_colour, .selectedBackground = tile_colour});
+      parts.face.apply({.alignSelf = scene::align::kMiddle});
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
-      panel->show_group(group);
+      panel->bring(group);
       return true;
     }
   };
@@ -68,51 +90,150 @@ struct emoji_panel : nodes::Stack {
     emoji_panel* panel;
     void operator()(std::string_view text) const { panel->search(text); }
   };
-  struct tabs_row : nodes::Stack {
+  struct footer_row : nodes::Stack {
     struct parts_t {
       std::vector<tab> each;
     } parts;
   };
-  using grid_t = nodes::ScrollContainer<nodes::Flow<std::vector<cell>>>;
+  using field_t = widgets::TextBox<searched>;
+  using list_t = nodes::ScrollContainer<nodes::Flow<std::vector<section>>>;
   struct parts_t {
-    widgets::TextBox<searched> field;
-    tabs_row tabs;
-    grid_t grid{nodes::Flow<std::vector<cell>>(
-        {.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, {})};
+    field_t field;
+    list_t list{nodes::Flow<std::vector<section>>({.spacingY = 0.0f, .wrap = false}, {})};
+    footer_row footer;
   } parts;
+  // Whether a search is shown, not the groups: no tab is lit then.
+  bool searching = false;
 
-  explicit emoji_panel(Actions* a) : actions(a), parts{.field = widgets::TextBox<searched>("Search emoji", {this})} {
-    auto& [field, tabs, grid] = parts;
+  // Sized by where it is shown.
+  explicit emoji_panel(Pick what) : pick(std::move(what)), parts{.field = field_t("Search emoji", {this})} {
+    auto& [field, list, footer] = parts;
     this->setGap(4.0f);
-    fState.apply({.fillX = true, .height = 300.0f, .padding = {2.0f, 8.0f, 2.0f, 8.0f}});
+    fState.apply({.padding = {7.0f, 0.0f, 4.0f, 7.0f}});
     field.setSearchIcon(true);
-    field.apply({.fillX = true, .height = 32.0f});
-    tabs.setHorizontal();
-    tabs.apply({.fillX = true, .autoSize = scene::axes::kY});
+    field.apply({.fillX = true, .height = 32.0f, .margin = {0.0f, 7.0f, 0.0f, 0.0f}});
+    list.apply({.fillX = true, .grow = scene::axes::kY});
+    std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
+    footer.setHorizontal();
+    footer.setGap(4.0f);
+    footer.apply({.fillX = true, .height = 36.0f});
     for (std::size_t g = 0; g < alef::emoji_groups.size(); ++g)
-      tabs.parts.each.emplace_back(this, g);
-    grid.apply({.fillX = true, .grow = scene::axes::kY});
-    this->show_group(0);
+      footer.parts.each.emplace_back(this, g);
+    this->show_all();
   }
-  void show(const std::vector<const alef::emoji*>& found) {
-    auto& grid = parts.grid;
-    auto& cells = std::get<0>(std::get<0>(grid.fChildren).fChildren);
-    cells.clear();
-    for (const alef::emoji* one : found)
-      cells.emplace_back(actions, logic::emoji_text(*one));
-    grid.invalidateLayout();
-    grid.scrollTo(0.0f);
-  }
-  void show_group(std::size_t group) {
-    for (tab& each : parts.tabs.parts.each)
-      each.fState.apply({.selected = each.group == group});
-    this->show(logic::emoji_of_group(group));
+  [[nodiscard]] std::vector<section>& sections() { return std::get<0>(std::get<0>(parts.list.fChildren).fChildren); }
+  // Every group, one under another.
+  void show_all() {
+    auto& all = this->sections();
+    all.clear();
+    all.reserve(alef::emoji_groups.size());
+    for (std::size_t g = 0; g < alef::emoji_groups.size(); ++g)
+      all.emplace_back(this, alef::emoji_groups[g].name, logic::emoji_of_group(g));
+    searching = false;
+    parts.list.invalidateLayout();
+    parts.list.scrollTo(0.0f);
   }
   void search(std::string_view query) {
-    if (query.empty())
-      this->show_group(0);
-    else
-      this->show(logic::emoji_found(query));
+    if (query.empty()) {
+      this->show_all();
+      return;
+    }
+    auto& all = this->sections();
+    all.clear();
+    all.emplace_back(this, "Search results", logic::emoji_found(query));
+    searching = true;
+    parts.list.invalidateLayout();
+    parts.list.scrollTo(0.0f);
+  }
+  // A group brought to the top of the list, as its tab does.
+  void bring(std::size_t group) {
+    if (searching)
+      parts.field.setText({});
+    auto& all = this->sections();
+    if (group >= all.size() || all[group].bounds().isEmpty())
+      return;
+    auto& list = parts.list;
+    list.scrollTo(std::max(0.0f, list.current() + (all[group].bounds().fTop - list.bounds().fTop)));
+  }
+  // The tab of the group at the top of the list lit.
+  void update(double) {
+    auto& all = this->sections();
+    std::size_t lit = 0;
+    const float top = parts.list.bounds().fTop + 1.0f;
+    for (std::size_t g = 0; g < all.size(); ++g)
+      if (!all[g].bounds().isEmpty() && all[g].bounds().fTop <= top)
+        lit = g;
+    for (tab& each : parts.footer.parts.each)
+      if (const bool on = !searching && each.group == lit; on != each.fState.selected())
+        each.fState.apply({.selected = on});
+  }
+};
+
+// What the menu's emoji do: react with it.
+template <class Actions>
+struct react_with {
+  Actions* actions = nullptr;
+  void operator()(const std::string& glyph) const { actions->menu_react(glyph); }
+};
+// What the input's emoji do: go into what is written.
+template <class Actions>
+struct insert_emoji_into {
+  Actions* actions = nullptr;
+  void operator()(const std::string& glyph) const { actions->insert_emoji(glyph); }
+};
+
+// The input's emoji, as tdesktop's panel: a card over the chat, 345 wide
+// (emojiPanWidth), 278 to 640 high, rounded 8, its bottom right at the top
+// right of the button that opened it; a press off it closes it. It stays
+// open while emoji are picked, and the input keeps the keys.
+template <class Actions>
+struct emoji_popup : scene::Node {
+  struct card_t : nodes::Stack {
+    using panel_t = emoji_panel<insert_emoji_into<Actions>>;
+    struct parts_t {
+      panel_t panel;
+    } parts;
+    explicit card_t(Actions* a) : parts{.panel = panel_t(insert_emoji_into<Actions>{a})} {
+      fState.apply({.width = 345.0f, .height = 360.0f, .cornerRadius = 8.0f, .background = sidebar_colour,
+                    .border = scene::Border{band_colour, 1.0f},
+                    .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
+      parts.panel.apply({.fill = true});
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+  };
+  struct parts_t {
+    card_t card;
+  } parts;
+  Actions* actions = nullptr;
+  // Where the button that opened it is: its right, its top.
+  float right = 0.0f, bottom = 0.0f;
+  float placed_x = -1.0f, placed_y = -1.0f, placed_h = -1.0f;
+
+  emoji_popup(Actions* a, float at_right, float at_bottom)
+      : parts{.card = card_t(a)}, actions(a), right(at_right), bottom(at_bottom) {
+    fState.apply({.fill = true});
+  }
+  void layoutChildren() {
+    const skia::SkRect box = fState.contentBox();
+    constexpr float kWidth = 345.0f, kEdge = 10.0f;
+    const float room = std::max(0.0f, bottom - box.fTop - kEdge);
+    const float h = std::min(std::clamp(box.height() * 0.6f, 278.0f, 640.0f), room);
+    const float x = std::clamp(right - kWidth, kEdge, std::max(kEdge, box.width() - kWidth - kEdge));
+    const float y = std::max(box.fTop + kEdge, bottom - h) - box.fTop;
+    if (x != placed_x || y != placed_y || h != placed_h) {
+      placed_x = x;
+      placed_y = y;
+      placed_h = h;
+      parts.card.apply({.x = x, .y = y, .height = h});
+    }
+    scene::layoutChildrenInContentBox(*this);
+  }
+  // A press off it closes it.
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  using Node::onPointer;
+  void onPointer(scene::phase::target, const scene::pointer::down&, scene::PointerReply& reply) {
+    actions->close_emoji();
+    reply.handle();
   }
 };
 
@@ -177,7 +298,7 @@ struct context_menu : scene::Node {
     struct parts_t {
       quick_row quick;
       nodes::Box<> quick_band{band_colour};
-      std::optional<emoji_panel<Actions>> emoji;
+      std::optional<emoji_panel<react_with<Actions>>> emoji;
       reply_row reply;
       edit_row edit;
       later_row pin;
@@ -195,7 +316,8 @@ struct context_menu : scene::Node {
              seen_names] = parts;
       if (emoji)
         return;
-      emoji.emplace(actions_of);
+      emoji.emplace(react_with<Actions>{actions_of});
+      emoji->apply({.fillX = true, .height = 300.0f});
       quick.parts.more.setVisible(false);
       for (scene::Node* item : std::initializer_list<scene::Node*>{&reply, &edit, &pin, &copy, &copy_link, &save,
                                                                    &forward, &remove, &seen_band, &seen})

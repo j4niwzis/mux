@@ -38,13 +38,14 @@ struct window : scene::Node {
       // A person's info, in the middle, as tdesktop's profile layer.
       widgets::Dialog<person_card<Actions>> person;
       widgets::Dialog<send_box<Actions>> sending;
+      std::optional<emoji_popup<Actions>> emoji;
       std::optional<context_menu<Actions>> menu;
       std::optional<picture_viewer<Actions>> viewer;
     } parts;
 
     explicit layers(Actions* a)
         : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a))} {
-      auto& [backdrop, frame, settings, notice, person, sending, menu, viewer] = parts;
+      auto& [backdrop, frame, settings, notice, person, sending, emoji, menu, viewer] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
       frame.setSheetColour(background);
@@ -132,6 +133,10 @@ struct window : scene::Node {
 
   void open_menu(const menu_facts& facts) { layer().menu.emplace(actions, facts); }
   void close_menu() { layer().menu.reset(); }
+  // The input's emoji panel, over the chat above its button.
+  void open_emoji(float right, float bottom) { layer().emoji.emplace(actions, right, bottom); }
+  void close_emoji() { layer().emoji.reset(); }
+  [[nodiscard]] bool emoji_open() { return layer().emoji.has_value(); }
   // The menu's card, where one is up: what takes the keys while it is.
   [[nodiscard]] scene::Node* menu_card() { return layer().menu ? &layer().menu->parts.menu : nullptr; }
 

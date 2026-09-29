@@ -336,7 +336,15 @@ class canvas_target {
   }
 
   // A surface of the window's size in pixels, made again when it changes.
+  // Its GL context made current first: another window's drawing -- a
+  // notification's, through SDL's window surface, which SDL may accelerate
+  // with a GL context of its own -- leaves that one current, and the window
+  // then drew into nothing it shows.
   skia::SkSurface* surface() {
+#if defined(SK_GANESH)
+    if (gl_)
+      SDL_GL_MakeCurrent(window_, gl_);
+#endif
     int width = 0, height = 0;
     SDL_GetWindowSizeInPixels(window_, &width, &height);
     if (surface_ && width == width_ && height == height_)

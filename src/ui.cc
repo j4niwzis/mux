@@ -1291,12 +1291,32 @@ struct message_bubble : nodes::Stack {
     // A flash over it, fading, where it was jumped to.
     skiff::paint::Tween flash{0.0f, 1200.0f};
     [[nodiscard]] bool settling() const { return flash.moving(); }
+    // The time goes in the last line of the text where that line leaves room
+    // for it, as Telegram's does; on a line of its own where it does not.
+    // Decided from the last layout; a change is laid out at the next.
     void update(double now_ms) {
       if (flash.step(now_ms))
         this->markDamaged();
+      if (text.bounds().isEmpty() || links.size() > 0 || reactions)
+        return;
+      skia::SkFont* font = skiff::paint::defaultFont();
+      if (font == nullptr)
+        return;
+      const float room = fState.contentBox().width();
+      const float needs = text.lastLineWidth() + skiff::paint::Painter(nullptr, *font).measure(time.text(), 11.0f) + 10.0f;
+      const bool inline_time = needs <= room;
+      if (inline_time == time.visible())
+        time.setVisible(!inline_time);
     }
     void draw(skia::SkCanvas* canvas, float alpha) {
       scene::drawDefault(*this, canvas, alpha);
+      if (!time.visible())
+        if (skia::SkFont* font = skiff::paint::defaultFont()) {
+          const skiff::paint::Painter p(canvas, *font);
+          const skia::SkRect inside = fState.contentBox();
+          const float width = p.measure(time.text(), 11.0f);
+          p.text(time.text(), inside.fRight - width, text.bounds().fBottom - 3.0f, 11.0f, time.colour(), alpha);
+        }
       if (flash.value() > 0.0f)
         if (skia::SkFont* font = skiff::paint::defaultFont())
           skiff::paint::Painter(canvas, *font)

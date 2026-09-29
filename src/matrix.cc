@@ -17,6 +17,7 @@ import loom.cs.redaction;
 import loom.cs.room_send;
 import loom.cs.sync;
 import loom.cs.wellknown;
+import mux.config;
 import mux.core;
 import mux.http;
 import mux.net;
@@ -308,6 +309,10 @@ class account {
       return;
     }
     say(connection::online{});
+    // Where the last run left the sync: its rooms at once, and the sync goes
+    // on from there rather than asking for every room again.
+    this->load_kept();
+    auto saved_at = std::chrono::steady_clock::now();
 
     std::chrono::seconds backoff(1);
     while (!stopping_) {
@@ -362,10 +367,88 @@ class account {
       }
       state_.apply(*got);
       tell(*got);
+      // Written every half a minute, and at the end: a restart goes on from
+      // at most that far back.
+      if (first || std::chrono::steady_clock::now() - saved_at > std::chrono::seconds(30)) {
+        this->save_kept();
+        saved_at = std::chrono::steady_clock::now();
+      }
     }
+    this->save_kept();
     api_ = nullptr;
     log(id_, "disconnected");
     say(connection::offline{});
+  }
+
+  // The file the sync is kept in, for this account.
+  std::filesystem::path kept_file() const {
+    std::string name;
+    for (const char c : id_.address)
+      name += std::isalnum(static_cast<unsigned char>(c)) || c == '@' || c == '.' || c == '-' ? c : '_';
+    return config::state_path(name + ".sync.json");
+  }
+  // The sync as it stands, as a sync's answer: every joined room's state,
+  // its timeline since its last gap and where that pages back from, its
+  // summary, unread counts and data; the account's data; and the token to
+  // go on from. Read back, it is applied as an answer is.
+  void save_kept() const {
+    if (!state_.since)
+      return;
+    using response = loom::cs::sync::response;
+    using joined_t = response::rooms_t::joined_room_t;
+    response out;
+    out.next_batch = *state_.since;
+    std::map<std::string, joined_t> join;
+    for (const auto& [room, kept] : state_.joined) {
+      joined_t one;
+      std::vector<loom::ev::timeline_event> state_events;
+      for (const auto& [key, event] : kept.state.events)
+        state_events.push_back(event);
+      one.state = joined_t::state_t{.events = std::move(state_events)};
+      one.timeline = joined_t::timeline_t{.limited = true, .prev_batch = kept.prev_batch, .events = kept.timeline};
+      one.summary = joined_t::room_summary_t{.m_heroes = kept.summary.heroes,
+                                             .m_joined_member_count = kept.summary.joined_members,
+                                             .m_invited_member_count = kept.summary.invited_members};
+      one.unread_notifications = joined_t::unread_notification_counts_t{.highlight_count = kept.unread.highlight,
+                                                                        .notification_count = kept.unread.notification};
+      std::vector<loom::client::other_event> data;
+      for (const auto& [type, event] : kept.account_data)
+        data.push_back(event);
+      one.account_data = joined_t::account_data_t{.events = std::move(data)};
+      join.emplace(room, std::move(one));
+    }
+    out.rooms = response::rooms_t{.join = std::move(join)};
+    std::vector<loom::client::other_event> data;
+    for (const auto& [type, event] : state_.account_data)
+      data.push_back(event);
+    out.account_data = response::account_data_t{.events = std::move(data)};
+    const std::filesystem::path where = this->kept_file();
+    std::error_code failed;
+    std::filesystem::create_directories(where.parent_path(), failed);
+    const std::filesystem::path fresh = where.string() + ".new";
+    {
+      std::ofstream file(fresh, std::ios::binary | std::ios::trunc);
+      file << knot::to_json_string(out);
+      if (!file) {
+        log(id_, "the sync could not be kept in {}", where.string());
+        return;
+      }
+    }
+    std::filesystem::rename(fresh, where, failed);
+  }
+  void load_kept() {
+    std::ifstream file(this->kept_file(), std::ios::binary);
+    if (!file)
+      return;
+    const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    auto saved = knot::try_read<loom::cs::sync::response>(std::string_view(text));
+    if (!saved) {
+      log(id_, "the sync kept could not be read: starting afresh");
+      return;
+    }
+    state_.apply(*saved);
+    tell(*saved);
+    log(id_, "the sync kept: {} rooms, going on from there", state_.joined.size());
   }
 
   // What the rooms a sync named look like now, and what their timelines

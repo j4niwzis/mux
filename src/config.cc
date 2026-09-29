@@ -346,6 +346,16 @@ std::optional<std::string> check(const account_t& one) {
   return std::visit([](const auto& each) { return check(each); }, one);
 }
 
+// Where what the program keeps between runs, and could make again, is put:
+// $XDG_STATE_HOME/mux, or ~/.local/state/mux.
+std::filesystem::path state_path(std::string_view name) {
+  if (const char* xdg = std::getenv("XDG_STATE_HOME"); xdg && *xdg)
+    return std::filesystem::path(xdg) / "mux" / name;
+  if (const char* home = std::getenv("HOME"); home && *home)
+    return std::filesystem::path(home) / ".local" / "state" / "mux" / name;
+  return std::filesystem::path(std::format("mux-{}", name));
+}
+
 std::filesystem::path default_path() {
   if (const char* xdg = std::getenv("XDG_CONFIG_HOME"); xdg && *xdg)
     return std::filesystem::path(xdg) / "mux" / "accounts.json";

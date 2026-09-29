@@ -7,6 +7,7 @@ module;
 #include <stddef.h>
 #if __has_include(<sys/un.h>)
 #include <sys/socket.h>
+#include <sys/time.h>  // timeval, for the reply wait
 #include <sys/un.h>
 #include <unistd.h>
 #endif

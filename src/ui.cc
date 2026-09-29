@@ -371,7 +371,7 @@ inline void draw_icon(skia::SkCanvas* canvas, const icon_t& which, const skia::S
 // what is out is read from the disk again when it is wanted.
 class avatar_cache {
  public:
-  static constexpr std::size_t kBudget = 64u << 20;
+  static constexpr std::size_t kBudget = 32u << 20;
 
   // A picture, counted as used now.
   [[nodiscard]] const skia::Sp<skia::SkImage>* find(std::string_view key) {

@@ -88,6 +88,10 @@ struct conversations_screen : nodes::Stack {
   std::optional<conversation_id> chosen;
   // The account whose chats are listed.
   std::optional<account_id> current;
+  // Which of the chat's pins the bar shows: counted back from the newest,
+  // one on at each press, round.
+  std::size_t pinned_step = 0;
+  std::optional<conversation_id> pinned_of;
   // The messages a bubble was made for: one made for the first time, while
   // its chat is being read, has just come.
   std::set<std::string> appeared;
@@ -181,8 +185,19 @@ struct conversations_screen : nodes::Stack {
   };
   // The chat: its header, its messages, and where one writes; or, with no
   // account at all, what to do about it.
+  // The pinned bar pressed: to the pinned message, and the bar to the one
+  // pinned before it.
+  struct pinned_press {
+    conversations_screen* screen;
+    std::string id;
+    void operator()() const {
+      screen->actions->jump_to_message(id);
+      ++screen->pinned_step;
+    }
+  };
   struct chat_column : nodes::Stack {
     using header_t = nodes::Memo<typename chat_header<Actions>::view, chat_header<Actions>>;
+    using pinned_t = nodes::Memo<pinned_view, pinned_bar<pinned_press>>;
     struct empty_state : nodes::Stack {
       using add_button = widgets::Button<ask<Actions, &Actions::open_new_account>>;
       struct parts_t {
@@ -221,6 +236,8 @@ struct conversations_screen : nodes::Stack {
       // The head, as a function of the chat shown.
       header_t header;
       search_bar<Actions> search;
+      // The pinned message, under the head, where the chat has any.
+      pinned_t pinned;
       timeline_area<Actions> area;
       composer_bar<Actions> line;
       empty_state empty;
@@ -239,6 +256,8 @@ struct conversations_screen : nodes::Stack {
                 .line = composer_bar<Actions>(a),
                 .empty = empty_state(a)} {
       header.apply({.fillX = true, .height = chat_header<Actions>::kHeight});
+      parts.pinned.apply({.fillX = true, .height = pinned_bar<pinned_press>::kHeight});
+      parts.pinned.setVisible(false);
       header.show({}, [a](const auto& shown) { return chat_header<Actions>(a, shown); });
       fState.apply({.fillY = true, .grow = scene::axes::kX, .background = chat_colour});
       area.apply({.fillX = true, .grow = scene::axes::kY});
@@ -737,6 +756,35 @@ struct conversations_screen : nodes::Stack {
     const conversation* one = chosen ? now.find(*chosen) : nullptr;
     header.show(chat_header<Actions>::view_of(one, now),
                 [this](const auto& shown) { return chat_header<Actions>(actions, shown); });
+    // The pinned bar: the chat's pins, newest first, the one stepped to.
+    {
+      if (pinned_of != chosen) {
+        pinned_of = chosen;
+        pinned_step = 0;
+      }
+      auto& bar = chat.parts.pinned;
+      if (!one || one->pinned.empty()) {
+        bar.setVisible(false);
+      } else {
+        const std::size_t count = one->pinned.size();
+        const std::size_t at = count - 1 - pinned_step % count;
+        const std::string& id = one->pinned[at];
+        pinned_view shown{id, count == 1 ? std::string("Pinned message")
+                                         : std::format("Pinned message #{} of {}", at + 1, count),
+                          "A message"};
+        const auto found = std::ranges::find(one->timeline, id, &message::id);
+        const message* said = found != one->timeline.end() ? &*found : nullptr;
+        if (!said)
+          if (const auto aside = one->quoted.find(id); aside != one->quoted.end())
+            said = &aside->second;
+        if (said) {
+          shown.line = said->body.plain.empty() && said->attachment ? std::string("Photo") : said->body.plain;
+          std::ranges::replace(shown.line, '\n', ' ');
+        }
+        bar.setVisible(true);
+        bar.show(shown, [this](const pinned_view& view) { return pinned_bar<pinned_press>({this, view.id}, view); });
+      }
+    }
     history_from = one ? one->history_from : std::nullopt;
     this->show_info();
     if (!one) {

@@ -141,6 +141,13 @@ class pictures_part {
             for (const auto& [reaction, who] : one.timeline[i].reactions)
               if (reaction.starts_with("mxc://"))
                 want(id, reaction, reaction);
+          // The chat's pinned messages not loaded: fetched on their own, as
+          // a quoted one is, for the pinned bar.
+          for (const std::string& pinned : one.pinned)
+            if (!one.quoted.contains(pinned) &&
+                std::ranges::find(one.timeline, pinned, &message::id) == one.timeline.end() &&
+                quotes_asked_.insert(pinned).second)
+              s_->net->fetch_quoted(one.id, pinned);
           // The chat's own custom emoji, for its panels.
           for (const emote& custom : one.emotes)
             want(id, custom.url, custom.url);

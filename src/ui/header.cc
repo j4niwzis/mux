@@ -112,6 +112,44 @@ struct chat_header : nodes::Stack {
   }
 };
 
+// The pinned message, as tdesktop's bar under a chat's head: a stripe in
+// the accent, "Pinned message" -- "#2 of 3" where there are more -- over a
+// line of it. A press goes to it, and the bar to the one pinned before it,
+// round, as Telegram's.
+struct pinned_view {
+  std::string id;
+  std::string title;
+  std::string line;
+  friend bool operator==(const pinned_view&, const pinned_view&) = default;
+};
+template <class Press>
+struct pinned_bar : nodes::Stack {
+  Press press;
+  struct parts_t {
+    nodes::Box<> stripe{accent_colour};
+    two_lines texts;
+    nodes::Box<> divider{band_colour};
+  } parts;
+  static constexpr float kHeight = 46.0f;
+  pinned_bar(Press what, const pinned_view& shown)
+      : press(std::move(what)), parts{.texts = two_lines(shown.title, shown.line, 13.0f, 2.0f)} {
+    this->setHorizontal();
+    this->setGap(10.0f);
+    fState.apply({.fill = true, .padding = {6.0f, 16.0f, 7.0f, 18.0f}, .background = sidebar_colour,
+                  .hoverBackground = chosen_colour});
+    fState.setCursor(scene::cursor::hand{});
+    parts.stripe.apply({.width = 2.0f, .fillY = true, .cornerRadius = 1.0f});
+    parts.texts.parts.name.setColour(accent_colour);
+    parts.divider.apply({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f});
+  }
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+  [[nodiscard]] bool onClick(float, float) {
+    press();
+    return true;
+  }
+};
+
 // Finding in a chat, as tdesktop's search in a chat: in place of the head,
 // a field with the magnifier, how many are found and which is shown ("3 of
 // 12"), the arrows to the newer and the older, and ✕. Enter goes to the

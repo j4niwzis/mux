@@ -108,6 +108,8 @@ using html_tag_t = std::variant<html_tag::line_break, html_tag::block_end, html_
   return "&" + std::string(name) + ";";
 }
 
+[[nodiscard]] inline std::vector<nodes::Text::Link> link_spans_in(std::string_view text);
+
 [[nodiscard]] inline formatted read_html(std::string_view html) {
   formatted out;
   std::string open_href;
@@ -172,6 +174,19 @@ using html_tag_t = std::variant<html_tag::line_break, html_tag::block_end, html_
   }
   while (!out.text.empty() && out.text.back() == '\n')
     out.text.pop_back();
+  // And the addresses written in it bare, as in a plain text: a message's
+  // HTML has an <a> only where its client made one, and an edited message
+  // comes with HTML -- a link typed into it was not a link.
+  for (const auto& bare : link_spans_in(out.text)) {
+    const bool inside = std::ranges::any_of(out.spans, [&](const auto& span) {
+      return bare.first < span.last && bare.last > span.first;
+    });
+    if (inside)
+      continue;
+    out.links.emplace_back(out.text.substr(bare.first, bare.last - bare.first), bare.target);
+    out.spans.push_back(bare);
+  }
+  std::ranges::sort(out.spans, {}, &nodes::Text::Link::first);
   return out;
 }
 

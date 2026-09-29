@@ -225,6 +225,9 @@ class account {
   // Older messages of a conversation, from the server's archive (XEP-0313):
   // one's own archive with a contact, a room's own for a room. `before` is
   // the archive id to page back from, or empty for the latest page.
+  // No window around a message here: a jump pages back instead.
+  void load_context(std::string, std::string) {}
+  void load_newer(std::string, std::string) {}
   void load_older(std::string with, std::string before) {
     loop_->spawn([this, with = std::move(with), before = std::move(before)] {
       if (!session_)

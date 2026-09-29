@@ -50,13 +50,25 @@ void app::follow(const mux::logic::link_t& where) {
              mux::logic::where_to(*model, where, screen.chosen, screen.current));
 }
 
+void app::apply(const request::load_context& one) {
+  if (!ask.demo)
+    net->load_context(one.in, one.target);
+}
+
+void app::apply(const request::load_newer& one) {
+  if (!ask.demo)
+    net->load_newer(one.in, one.from);
+}
+
 void app::apply(const request::load_older& one) {
   if (ask.demo)
     return;
   const mux::conversation* chat = model->find(one.in);
   const auto before = chat && !chat->timeline.empty() ? chat->timeline.front().at
                                                       : message_store::time_point::max();
-  if (auto kept = store.older(one.in, before, 100); !kept.empty()) {
+  // From the disk first -- but not before a window of the history, whose
+  // messages the disk may not have up to: from the server, from its token.
+  if (auto kept = chat && chat->detached ? std::vector<mux::message>() : store.older(one.in, before, 100); !kept.empty()) {
     for (auto it = kept.rbegin(); it != kept.rend(); ++it)
       model->apply(mux::change_t{mux::change::message_added{.message = std::move(*it), .where = mux::placement::at_start{}}});
     // The window may ask again: there may be more on the disk.

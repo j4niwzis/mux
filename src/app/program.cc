@@ -214,6 +214,9 @@ struct app : kept_settings {
   // Older messages of a chat: from the disk while it has some from before
   // the oldest in memory, from the server past that.
   void apply(const request::load_older& one);
+  // A window around a message jumped to, and a window paged forward.
+  void apply(const request::load_context& one);
+  void apply(const request::load_newer& one);
   void apply(const request::resize_sidebar& one);
   // A member written to: their direct chat, where there is one already.
   void apply(const request::message_person& one);

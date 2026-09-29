@@ -258,6 +258,28 @@ struct network {
     });
   }
   // Older messages of a conversation, from `from` back.
+  void load_context(const mux::conversation_id& in, std::string target) {
+    loop.post([this, in, target = std::move(target)] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == in.account)
+                account->load_context(in.id, target);
+            },
+            one.account);
+    });
+  }
+  void load_newer(const mux::conversation_id& in, std::string from) {
+    loop.post([this, in, from = std::move(from)] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == in.account)
+                account->load_newer(in.id, from);
+            },
+            one.account);
+    });
+  }
   void load_older(const mux::conversation_id& in, std::string from) {
     loop.post([this, in, from = std::move(from)] {
       for (auto& one : accounts)

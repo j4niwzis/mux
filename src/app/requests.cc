@@ -74,6 +74,14 @@ struct cancel_compose {};
 struct open_url {
   std::string url;
 };
+struct load_context {
+  mux::conversation_id in;
+  std::string target;
+};
+struct load_newer {
+  mux::conversation_id in;
+  std::string from;
+};
 struct load_older {
   mux::conversation_id in;
   std::string from;
@@ -191,7 +199,7 @@ using request_t =
                  request::toggle_plain, request::submit_login, request::flip_enabled, request::remove_account,
                  request::open_drawer, request::show_account, request::set_motion, request::quit,
                  request::open_settings, request::close_settings, request::settings_home,
-                 request::settings_animations, request::pop_panel, request::toggle_info, request::load_older, request::jump_to_end, request::message_menu, request::menu_copy_link, request::menu_save, request::react, request::menu_react,
+                 request::settings_animations, request::pop_panel, request::toggle_info, request::load_older, request::load_context, request::load_newer, request::jump_to_end, request::message_menu, request::menu_copy_link, request::menu_save, request::react, request::menu_react,
                  request::close_menu, request::menu_reply, request::menu_edit, request::menu_copy,
                  request::menu_delete, request::cancel_compose, request::open_url,
                  request::switch_account, request::submit_message, request::send_typed,
@@ -259,6 +267,12 @@ struct actions {
   void menu_delete() { requests.emplace_back(request::menu_delete{}); }
   void cancel_compose() { requests.emplace_back(request::cancel_compose{}); }
   void open_url(std::string url) { requests.emplace_back(request::open_url{std::move(url)}); }
+  void load_context(const mux::conversation_id& in, std::string target) {
+    requests.emplace_back(request::load_context{in, std::move(target)});
+  }
+  void load_newer(const mux::conversation_id& in, std::string from) {
+    requests.emplace_back(request::load_newer{in, std::move(from)});
+  }
   void load_older(const mux::conversation_id& in, std::string from) {
     requests.emplace_back(request::load_older{in, std::move(from)});
   }

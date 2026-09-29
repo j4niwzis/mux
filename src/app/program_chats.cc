@@ -143,7 +143,19 @@ void app::apply(const request::quit&) { mux::host::request_quit(); }
 
 void app::apply(const request::toggle_info&) { root().main().toggle_info(); }
 
-void app::apply(const request::jump_to_end&) { root().main().jump_to_end(); }
+// To the newest: where the chat is a window away from it, back to the
+// newest from the disk first -- live again -- then to its end.
+void app::apply(const request::jump_to_end&) {
+  auto& screen = root().main();
+  if (const mux::conversation* chat = screen.chosen ? model->find(*screen.chosen) : nullptr; chat && chat->detached) {
+    const mux::conversation_id in = chat->id;
+    model->apply(mux::change_t{mux::change::window_opened{in, std::string(), std::nullopt}});
+    for (auto& one : store.older(in, message_store::time_point::max(), 80))
+      model->apply(mux::change_t{mux::change::message_added{.message = std::move(one), .where = mux::placement::in_window{}}});
+    this->refresh();
+  }
+  screen.jump_to_end();
+}
 
 void app::apply(const request::message_menu& one) {
   menu_target = one;

@@ -63,6 +63,10 @@ class account {
   // Older messages of a room, paged back from `from`: before the rest, and
   // where to page back from next -- nothing where the beginning is reached.
   void load_older(std::string room, std::string from);
+  // A window of a room's history around a message (/context), in place of
+  // its timeline; and a window paged forward, to the newest.
+  void load_context(std::string room, std::string target);
+  void load_newer(std::string room, std::string from);
 
   // An avatar's picture: the server's thumbnail of an mxc:// URI, at the size
   // it is drawn at twice over, handed on for `key`. The authenticated media

@@ -54,6 +54,8 @@ struct stub {
   void cancel_compose() {}
   void open_url(std::string) {}
   void load_older(const mux::conversation_id&, std::string) {}
+  void load_context(const mux::conversation_id&, std::string) {}
+  void load_newer(const mux::conversation_id&, std::string) {}
   void switch_account(std::string) {}
   void submit_message(std::string text) { sent.push_back(std::move(text)); }
   void send_typed() {}

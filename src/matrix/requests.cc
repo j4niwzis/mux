@@ -11,6 +11,7 @@ import loom.cs.joining;
 import loom.cs.leaving;
 import loom.cs.login;
 import loom.cs.message_pagination;
+import loom.cs.event_context;
 import loom.cs.receipts;
 import loom.cs.redaction;
 import loom.cs.room_send;
@@ -68,6 +69,55 @@ void account<Sink>::load_older(std::string room, std::string from) {
     for (const auto& one : got->chunk)  // newest first: each goes before the rest
       event(in, one, placement::at_start{});
     sink_(change::history_position{in, got->end});
+  });
+}
+
+template <class Sink>
+void account<Sink>::load_context(std::string room, std::string target) {
+  loop_->spawn([this, room = std::move(room), target = std::move(target)] {
+    if (!api_)
+      return;
+    auto got = perform(*api_, loom::cs::get_event_context{.room_id = room, .event_id = target, .limit = 60});
+    if (!got) {
+      log(id_, "context of {} in {}: {}", target, room, got.error().said());
+      return;
+    }
+    const conversation_id in{id_, room};
+    sink_(change::window_opened{in, got->start, got->end});
+    // Before it, newest first: given oldest first.
+    if (got->events_before)
+      for (auto it = got->events_before->rbegin(); it != got->events_before->rend(); ++it)
+        event(in, *it, placement::in_window{});
+    // It, read as a timeline event from what the server gave.
+    if (got->event)
+      if (auto one = knot::try_read<loom::ev::timeline_event>(knot::to_json_string(knot::to_value(*got->event))))
+        event(in, *one, placement::in_window{});
+    if (got->events_after)
+      for (const auto& one : *got->events_after)
+        event(in, one, placement::in_window{});
+    log(id_, "context of {} in {}: {} before, {} after", target, room,
+        got->events_before ? got->events_before->size() : 0, got->events_after ? got->events_after->size() : 0);
+  });
+}
+
+template <class Sink>
+void account<Sink>::load_newer(std::string room, std::string from) {
+  loop_->spawn([this, room = std::move(room), from = std::move(from)] {
+    if (!api_)
+      return;
+    auto got = perform(*api_, loom::cs::get_room_events{.room_id = room,
+                                                        .from = from,
+                                                        .dir = loom::cs::get_room_events::dir_values::f{},
+                                                        .limit = 40});
+    if (!got) {
+      log(id_, "newer in {}: {}", room, got.error().said());
+      return;
+    }
+    const conversation_id in{id_, room};
+    for (const auto& one : got->chunk)  // oldest first: each after the rest
+      event(in, one, placement::in_window{});
+    // Nothing more, or no token on: the newest is met, and it is live.
+    sink_(change::window_extended{in, got->chunk.empty() ? std::nullopt : got->end});
   });
 }
 

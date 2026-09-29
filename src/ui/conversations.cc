@@ -394,6 +394,9 @@ struct conversations_screen : nodes::Stack {
   // A message to bring into view, once it is made and laid out.
   std::optional<std::string> jumping_to;
   int jump_tries = 0;
+  // The window asked around a message, and the page forward asked: not
+  // asked twice.
+  std::optional<std::string> context_asked, newer_asked;
 
   void jump_to(std::string id) {
     if (!chosen || !last_model)
@@ -404,6 +407,7 @@ struct conversations_screen : nodes::Stack {
     // Made, loaded or paged back to at the next frames, as update() finds it.
     jumping_to = std::move(id);
     jump_tries = 0;
+    context_asked.reset();
   }
 
   void update(double) {
@@ -432,6 +436,15 @@ struct conversations_screen : nodes::Stack {
           this->set_made(one->timeline, at > 40 ? at - 40 : 0, at + 40);
           this->show_conversation(*last_model);
         }
+      } else if (is_matrix(chosen->account.speaks)) {
+        // Not here: a window of the history around it, from the server --
+        // not all of it from here to there.
+        if (context_asked != jumping_to) {
+          context_asked = jumping_to;
+          actions->load_context(*chosen, *jumping_to);
+        } else if (++jump_tries > 600) {
+          jumping_to.reset();  // it did not come
+        }
       } else if (history_from && history_asked != history_from) {
         history_asked = history_from;
         actions->load_older(*chosen, *history_from);
@@ -449,7 +462,9 @@ struct conversations_screen : nodes::Stack {
       searched = side.search.field.text();
       this->show(*last_model);
     }
-    const bool away = !timeline.atEnd(40.0f);
+    // Away from the newest: scrolled up, or in a window of the history.
+    const conversation* shown_one = chosen && last_model ? last_model->find(*chosen) : nullptr;
+    const bool away = !timeline.atEnd(40.0f) || (shown_one && shown_one->detached);
     if (away != chat.area.jump.visible())
       chat.area.jump.setVisible(away);
     if (!away && unseen != 0) {
@@ -470,6 +485,11 @@ struct conversations_screen : nodes::Stack {
         } else if (timeline.current() <= 4.0f && from == 0 && history_from && history_asked != history_from) {
           history_asked = history_from;
           actions->load_older(*chosen, *history_from);
+        } else if (made.to_end && one->detached && one->future_from && newer_asked != one->future_from &&
+                   timeline.current() >= timeline.extent() - 300.0f) {
+          // At the end of a window: paged forward, toward the newest.
+          newer_asked = one->future_from;
+          actions->load_newer(*chosen, *one->future_from);
         } else if (!made.to_end && timeline.current() >= timeline.extent() - 300.0f) {
           to = std::min(one->timeline.size(), to + kMadeStep);
           from = to > kMostMade && to - from > kMostMade ? to - kMostMade : from;

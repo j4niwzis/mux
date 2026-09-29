@@ -187,14 +187,16 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
 
 template <class Sink>
 void account<Sink>::service(const conversation_id& in, const loom::ev::timeline_event& one,
-                            std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where, std::string said) {
+                            std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where, std::string said,
+                            room_event_t kind) {
   sink_(change::message_added{message{.in = in,
                                       .id = one.event_id,
                                       .sender = one.sender,
                                       .at = at,
                                       .body = {std::move(said), std::nullopt},
                                       .outgoing = one.sender == id_.address,
-                                      .service = true},
+                                      .service = true,
+                                      .event_kind = kind},
                               where});
 }
 
@@ -219,7 +221,7 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
     return of ? text(member(*of, key)) : std::optional<std::string>();
   };
   const std::string who = name_in(in.id, one.sender);
-  const auto say = [&](std::string said) { service(in, one, at, where, std::move(said)); };
+  const auto say = [&](room_event_t kind, std::string said) { service(in, one, at, where, std::move(said), kind); };
   std::visit(
       overloaded{
           [&](event_type::member) {
@@ -231,55 +233,55 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
             const bool self = one.sender == target_id;
             std::visit(overloaded{[&](membership::join) {
                                     if (!was_in) {
-                                      say(std::format("{} joined", target));
+                                      say(room_event::joins{}, std::format("{} joined", target));
                                     } else if (const auto old = field(before, "displayname"); old && *old != target) {
-                                      say(std::format("{} changed their name to {}", *old, target));
+                                      say(room_event::names{}, std::format("{} changed their name to {}", *old, target));
                                     } else {
-                                      say(std::format("{} changed their picture", target));
+                                      say(room_event::avatars{}, std::format("{} changed their picture", target));
                                     }
                                   },
                                   [&](membership::leave) {
-                                    std::visit(overloaded{[&](membership::ban) { say(std::format("{} unbanned {}", who, target)); },
+                                    std::visit(overloaded{[&](membership::ban) { say(room_event::invites{}, std::format("{} unbanned {}", who, target)); },
                                                           [&](membership::invite) {
-                                                            say(self ? std::format("{} declined the invitation", target)
+                                                            say(room_event::invites{}, self ? std::format("{} declined the invitation", target)
                                                                      : std::format("{} withdrew {}'s invitation", who, target));
                                                           },
                                                           [&](const auto&) {
-                                                            say(self ? std::format("{} left", target)
+                                                            say(self ? room_event_t{room_event::joins{}} : room_event_t{room_event::invites{}}, self ? std::format("{} left", target)
                                                                      : std::format("{} removed {}", who, target));
                                                           }},
                                                was);
                                   },
-                                  [&](membership::invite) { say(std::format("{} invited {}", who, target)); },
-                                  [&](membership::ban) { say(std::format("{} banned {}", who, target)); },
-                                  [&](membership::knock) { say(std::format("{} asked to join", target)); },
-                                  [&](membership::other) { say(std::format("{} changed {}'s membership", who, target)); }},
+                                  [&](membership::invite) { say(room_event::invites{}, std::format("{} invited {}", who, target)); },
+                                  [&](membership::ban) { say(room_event::invites{}, std::format("{} banned {}", who, target)); },
+                                  [&](membership::knock) { say(room_event::invites{}, std::format("{} asked to join", target)); },
+                                  [&](membership::other) { say(room_event::invites{}, std::format("{} changed {}'s membership", who, target)); }},
                        now);
           },
           [&](event_type::room_name) {
             const auto name = field(content, "name").value_or("");
-            say(name.empty() ? std::format("{} removed the room's name", who)
+            say(room_event::room_name{}, name.empty() ? std::format("{} removed the room's name", who)
                              : std::format("{} renamed the room to “{}”", who, name));
           },
           [&](event_type::topic) {
             const auto topic = field(content, "topic").value_or("");
-            say(topic.empty() ? std::format("{} removed the topic", who)
+            say(room_event::topic{}, topic.empty() ? std::format("{} removed the topic", who)
                               : std::format("{} changed the topic to “{}”", who, topic));
           },
-          [&](event_type::room_avatar) { say(std::format("{} changed the room's picture", who)); },
-          [&](event_type::create) { say(std::format("{} created the room", who)); },
-          [&](event_type::power_levels) { say(std::format("{} changed who may do what here", who)); },
-          [&](event_type::pinned) { say(std::format("{} changed the pinned messages", who)); },
+          [&](event_type::room_avatar) { say(room_event::room_avatar{}, std::format("{} changed the room's picture", who)); },
+          [&](event_type::create) { say(room_event::other{}, std::format("{} created the room", who)); },
+          [&](event_type::power_levels) { say(room_event::permissions{}, std::format("{} changed who may do what here", who)); },
+          [&](event_type::pinned) { say(room_event::pins{}, std::format("{} changed the pinned messages", who)); },
           [&](event_type::join_rules) {
-            say(std::format("{} set who may join to “{}”", who, field(content, "join_rule").value_or("?")));
+            say(room_event::access{}, std::format("{} set who may join to “{}”", who, field(content, "join_rule").value_or("?")));
           },
           [&](event_type::history_visibility) {
-            say(std::format("{} set who may read the history to “{}”", who,
+            say(room_event::access{}, std::format("{} set who may read the history to “{}”", who,
                             field(content, "history_visibility").value_or("?")));
           },
           [&](event_type::canonical_alias) {
             const auto alias = field(content, "alias").value_or("");
-            say(alias.empty() ? std::format("{} removed the room's address", who)
+            say(room_event::address{}, alias.empty() ? std::format("{} removed the room's address", who)
                               : std::format("{} set the room's address to {}", who, alias));
           },
           // A sticker: a picture, as a message with one is shown.
@@ -304,13 +306,13 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
             }
             carried.kind = attachment_kind::image{.moves = moving_type(carried.mimetype)};
             if (carried.source.empty()) {
-              say(std::format("{} sent a sticker", who));
+              say(room_event::other{}, std::format("{} sent a sticker", who));
               return;
             }
             made.attachment = std::move(carried);
             sink_(change::message_added{std::move(made), where});
           },
-          [&](const auto&) { say(std::format("{} sent {}", who, one.type)); }},
+          [&](const auto&) { say(room_event::other{}, std::format("{} sent {}", who, one.type)); }},
       type);
 }
 

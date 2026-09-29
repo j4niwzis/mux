@@ -95,11 +95,10 @@ struct conversations_screen : nodes::Stack {
   // The messages a bubble was made for: one made for the first time, while
   // its chat is being read, has just come.
   std::set<std::string> appeared;
-  // Whether a chat shows what is done in it, as the program's settings say.
-  // Whether a chat shows what is done in it, as the program's settings say:
-  // by chat, set by the program before it shows the model; a chat not in it
-  // shows them.
-  std::map<conversation_id, bool> events_shown;
+  // Which room events a chat shows, kind by kind, as the program's settings
+  // say: set by the program before it shows the model; a chat not in it
+  // shows them all.
+  std::map<conversation_id, room_event_filter> event_filters;
   // The @ list: the chat's members matching what follows an @ at the end of
   // what is written, as Telegram's; who was picked from it, to be sent as
   // mentions with the message.
@@ -1014,14 +1013,15 @@ struct conversations_screen : nodes::Stack {
     // A room's event -- a join, an address set -- is a line of its own and
     // ends a run: the message after it has its sender's name again. Where
     // the room's events are hidden, a run goes on past them.
-    const auto events_choice = events_shown.find(one->id);
-    const bool events_here = events_choice == events_shown.end() || events_choice->second;
+    const auto filter_found = event_filters.find(one->id);
+    const room_event_filter filter = filter_found == event_filters.end() ? room_event_filter{} : filter_found->second;
+    const auto shows = [&](const message& said) { return !said.service || filter.shows(said.event_kind); };
     const auto neighbour = [&](std::size_t i, bool forward) -> std::optional<std::size_t> {
       for (std::size_t j = i;;) {
         if (forward ? j + 1 >= all.size() : j == 0)
           return std::nullopt;
         j = forward ? j + 1 : j - 1;
-        if (events_here || !all[j].service)
+        if (shows(all[j]))
           return j;
       }
     };
@@ -1045,8 +1045,6 @@ struct conversations_screen : nodes::Stack {
     // those of a chat just opened do not. One's own, once the server has it,
     // is the same message under its new id, and does not come in twice.
     const bool same_chat = shown_chat == chosen;
-    const auto chosen_events = events_shown.find(one->id);
-    const bool events = chosen_events == events_shown.end() || chosen_events->second;
     const auto arrives = [&](std::size_t i) {
       const bool known = !appeared.insert(all[i].id).second;
       const bool acknowledged = all[i].outgoing && std::visit(overloaded{[](const delivery::sent&) { return true; },
@@ -1060,7 +1058,7 @@ struct conversations_screen : nodes::Stack {
             entries, std::views::iota(first_made, last_made),
             [&](std::size_t i) { return all[i].id; }, [](const message_bubble& row) { return row.message_id; },
             [&](std::size_t i) {
-              message_bubble made(*one, all[i], first_of_run(i), last_of_run(i), &now, events);
+              message_bubble made(*one, all[i], first_of_run(i), last_of_run(i), &now, shows(all[i]));
               if (arrives(i))
                 made.appear();
               return made;
@@ -1071,7 +1069,7 @@ struct conversations_screen : nodes::Stack {
               const auto link = first_link_of(all[i]);
               const bool preview_known = link && now.previews.contains(*link);
               return row.said == all[i] && row.first == first_of_run(i) && row.last == last_of_run(i) &&
-                     row.quote_known == quote_known && row.events_shown == events &&
+                     row.quote_known == quote_known && row.events_shown == shows(all[i]) &&
                      row.preview_known == preview_known;
             }))
       timeline.invalidateLayout();

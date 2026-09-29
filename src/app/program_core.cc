@@ -260,11 +260,11 @@ void app::refresh() {
   pictures.ask();
   root().main().muted = muted;
   // Which chats show what is done in them, as the settings say now.
-  auto& events = root().main().events_shown;
-  events.clear();
+  auto& filters = root().main().event_filters;
+  filters.clear();
   for (const auto& [id, account] : model->accounts())
     for (const auto& [key, one] : account.conversations)
-      events.emplace(one.id, this->room_events_shown(one.id));
+      filters.emplace(one.id, this->room_event_filter_of(one.id));
   root().show(saved, *model);
   root().main().show(*model);
   if (auto* up = root().open_panel())

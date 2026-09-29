@@ -133,9 +133,13 @@ int main(int argc, char** argv) {
   program.model->show_deleted = program.history.show_deleted;
   program.settings.apply_limits();
   program.proxies = proxies;
-  for (const auto& one : saved.room_events.value_or(std::vector<mux::config::room_events_choice>{}))
-    program.room_events.insert_or_assign(
-        mux::conversation_id{{mux::ui::protocol_of(one.account), one.account}, one.conversation}, one.show);
+  for (const auto& one : saved.room_events.value_or(std::vector<mux::config::room_events_choice>{})) {
+    const mux::conversation_id chat{{mux::ui::protocol_of(one.account), one.account}, one.conversation};
+    if (one.show)
+      program.room_events.insert_or_assign(chat, *one.show);
+    if (one.kinds)
+      program.room_event_kinds.insert_or_assign(chat, *one.kinds);
+  }
   for (const auto& one : saved.muted.value_or(std::vector<mux::config::muted_chat>{}))
     program.muted.insert({{mux::ui::protocol_of(one.account), one.account}, one.conversation});
   skiff::paint::motionLevel() = motion_of(saved.motion);

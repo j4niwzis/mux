@@ -9,6 +9,7 @@ export module mux.app.kept;
 import std;
 import mux.core;
 import mux.config;
+import mux.logic.room_events;
 
 export namespace mux::app {
 
@@ -35,6 +36,8 @@ struct kept_settings {
   std::set<conversation_id> muted;
   // The chats that chose for themselves whether their room events show.
   std::map<conversation_id, bool> room_events;
+  // And each kind of them, where a chat chose apart.
+  std::map<conversation_id, mux::config::room_event_kinds> room_event_kinds;
   std::vector<mux::config::proxy_settings> proxies;
   // Why the accounts file could not be read, when it could not: then it is
   // not written over either.
@@ -62,6 +65,20 @@ struct kept_settings {
     return history.show_room_events;
   }
 
+  // Which room events a chat shows, kind by kind: its own choices, its
+  // account's, every account's.
+  [[nodiscard]] mux::room_event_filter room_event_filter_of(const conversation_id& chat) {
+    const mux::config::account_t* account = this->settings_of(chat.account.address);
+    const auto own_all = room_events.find(chat);
+    const auto own_kinds = room_event_kinds.find(chat);
+    return mux::logic::filter_of(
+        own_kinds == room_event_kinds.end() ? std::nullopt : std::optional<mux::config::room_event_kinds>(own_kinds->second),
+        own_all == room_events.end() ? std::nullopt : std::optional<bool>(own_all->second),
+        account ? mux::config::room_event_kinds_of(*account) : std::nullopt,
+        account ? mux::config::room_events_of(*account) : std::nullopt, history.room_event_kinds,
+        history.show_room_events);
+  }
+
   // The file as all of this says it.
   [[nodiscard]] mux::config::file file() const {
     auto out = mux::config::file_of(saved);
@@ -77,11 +94,23 @@ struct kept_settings {
     out.cache = limits;
     out.sending = sending;
     out.history = history;
-    if (!room_events.empty()) {
-      std::vector<mux::config::room_events_choice> chosen;
-      for (const auto& [chat, show] : room_events)
-        chosen.push_back({chat.account.address, chat.id, show});
-      out.room_events = std::move(chosen);
+    if (!room_events.empty() || !room_event_kinds.empty()) {
+      std::map<conversation_id, mux::config::room_events_choice> chosen;
+      for (const auto& [chat, show] : room_events) {
+        auto& one = chosen[chat];
+        one.account = chat.account.address;
+        one.conversation = chat.id;
+        one.show = show;
+      }
+      for (const auto& [chat, kinds] : room_event_kinds) {
+        auto& one = chosen[chat];
+        one.account = chat.account.address;
+        one.conversation = chat.id;
+        one.kinds = kinds;
+      }
+      out.room_events.emplace();
+      for (auto& [chat, one] : chosen)
+        out.room_events->push_back(std::move(one));
     }
     if (!muted.empty()) {
       std::vector<mux::config::muted_chat> kept;

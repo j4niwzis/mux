@@ -163,6 +163,15 @@ struct proxy_settings {
   friend bool operator==(const proxy_settings&, const proxy_settings&) = default;
 };
 
+// Which kinds of room events show, each as chosen: nothing said is as the
+// level under says -- a chat's its account's, an account's every one's.
+struct room_event_kinds {
+  std::optional<bool> joins, invites, names, avatars, room_name, topic, room_avatar, address, pins, permissions,
+      access, encryption, other;
+  friend bool operator==(const room_event_kinds&, const room_event_kinds&) = default;
+};
+consteval auto json_schema(knot::type<room_event_kinds>) { return knot::schema<room_event_kinds>(); }
+
 // An XMPP account: a JID and how to reach its server.
 struct xmpp_account {
   std::string address;  // user@domain
@@ -180,6 +189,7 @@ struct xmpp_account {
   std::optional<bool> read_receipts;
   std::optional<bool> send_typing;  // others' typing is always shown
   std::optional<bool> room_events;  // as matrix_account's
+  std::optional<room_event_kinds> room_event_kinds;
   // The name of the proxy profile it connects through, where it has one.
   std::optional<std::string> proxy;
   friend bool operator==(const xmpp_account&, const xmpp_account&) = default;
@@ -199,6 +209,7 @@ struct matrix_account {
   // Whether its chats show what is done in them (joins, renames, ...);
   // nothing said is as the settings say for every account.
   std::optional<bool> room_events;
+  std::optional<room_event_kinds> room_event_kinds;
   std::optional<std::string> proxy;
   // The session the server gave, kept so the next start goes on with it.
   std::optional<std::string> access_token;
@@ -213,7 +224,8 @@ using account_t = std::variant<xmpp_account, matrix_account>;
 struct room_events_choice {
   std::string account;       // the account's address
   std::string conversation;  // the chat's id in it
-  bool show = true;
+  std::optional<bool> show;  // all of them
+  std::optional<room_event_kinds> kinds;  // each kind
   friend bool operator==(const room_events_choice&, const room_events_choice&) = default;
 };
 consteval auto json_schema(knot::type<room_events_choice>) { return knot::schema<room_events_choice>(); }
@@ -311,6 +323,8 @@ struct history_settings {
   // events nothing here reads -- shown as lines of their own, or not. Kept
   // either way; an account's choice, and a room's own, come first.
   bool show_room_events = true;
+  // And each kind of them, where chosen apart.
+  std::optional<room_event_kinds> room_event_kinds;
   friend bool operator==(const history_settings&, const history_settings&) = default;
 };
 consteval auto json_schema(knot::type<history_settings>) { return knot::schema<history_settings>(); }
@@ -383,6 +397,12 @@ consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
 }
 [[nodiscard]] inline std::optional<bool>& room_events_in(account_t& one) {
   return std::visit([](auto& each) -> std::optional<bool>& { return each.room_events; }, one);
+}
+[[nodiscard]] inline const std::optional<room_event_kinds>& room_event_kinds_of(const account_t& one) {
+  return std::visit([](const auto& each) -> const std::optional<room_event_kinds>& { return each.room_event_kinds; }, one);
+}
+[[nodiscard]] inline std::optional<room_event_kinds>& room_event_kinds_in(account_t& one) {
+  return std::visit([](auto& each) -> std::optional<room_event_kinds>& { return each.room_event_kinds; }, one);
 }
 [[nodiscard]] inline std::optional<std::string>& proxy_in(account_t& one) {
   return std::visit([](auto& each) -> std::optional<std::string>& { return each.proxy; }, one);

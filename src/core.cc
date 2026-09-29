@@ -198,6 +198,48 @@ struct attachment {
   friend bool operator==(const attachment&, const attachment&) = default;
 };
 
+// What a room event is, for choosing which to show, as Element splits them.
+namespace room_event {
+struct joins {};        // joins and leaves
+struct invites {};      // invitations, removals, bans, knocks
+struct names {};        // members' names changed
+struct avatars {};      // members' pictures changed
+struct room_name {};
+struct topic {};
+struct room_avatar {};
+struct address {};
+struct pins {};
+struct permissions {};  // power levels
+struct access {};       // who may join, who may read the history
+struct encryption {};
+struct other {};        // the room made, and what nothing here reads
+}  // namespace room_event
+using room_event_t =
+    std::variant<room_event::joins, room_event::invites, room_event::names, room_event::avatars, room_event::room_name,
+                 room_event::topic, room_event::room_avatar, room_event::address, room_event::pins,
+                 room_event::permissions, room_event::access, room_event::encryption, room_event::other>;
+inline constexpr std::size_t kRoomEventKinds = std::variant_size_v<room_event_t>;
+inline const std::array<room_event_t, kRoomEventKinds> all_room_events{
+    room_event::joins{},     room_event::invites{}, room_event::names{},       room_event::avatars{},
+    room_event::room_name{}, room_event::topic{},   room_event::room_avatar{}, room_event::address{},
+    room_event::pins{},      room_event::permissions{}, room_event::access{},  room_event::encryption{},
+    room_event::other{}};
+// Which kinds of room event a chat shows, as its choices resolve: each by
+// its place in room_event_t.
+struct room_event_filter {
+  std::array<bool, kRoomEventKinds> shown;
+  room_event_filter() { shown.fill(true); }
+  [[nodiscard]] bool shows(const room_event_t& kind) const { return shown[kind.index()]; }
+  friend bool operator==(const room_event_filter&, const room_event_filter&) = default;
+};
+// Where a choice is made: for every account, for one, for one chat.
+namespace choice_level {
+struct everywhere {};
+struct account {};
+struct chat {};
+}  // namespace choice_level
+using choice_level_t = std::variant<choice_level::everywhere, choice_level::account, choice_level::chat>;
+
 struct message {
   conversation_id in;
   // The protocol's own id: an XMPP stanza id (or origin-id), a Matrix event
@@ -214,6 +256,7 @@ struct message {
   // renamed, an event nothing here reads -- shown as a line of its own in
   // the middle, as tdesktop shows its service messages.
   bool service = false;
+  room_event_t event_kind = room_event::other{};  // what is done, where it is that
   // A reaction, as a reply quotes it: its replies_to is the message it
   // reacted to, where a press on the quote goes.
   bool reaction = false;

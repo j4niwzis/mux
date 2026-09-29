@@ -41,8 +41,10 @@ struct room_settings_facts {
   history_rule_t history = history_rule::shared{};
   std::string version;
   bool muted = false;
-  // Whether it shows joins, renames and other room events, for this user.
-  bool events_shown = true;
+  // Which of its room events it shows, as chosen for it: none chosen is as
+  // its account's.
+  std::optional<bool> events_all;
+  std::optional<config::room_event_kinds> event_kinds;
   // The user's own level, and what each thing done asks.
   std::int64_t mine = 0;
   power_needs needs;
@@ -338,7 +340,8 @@ struct room_settings : nodes::Stack {
       nodes::Text others_title{"Other published addresses:", 14.0f, text_colour};
       std::vector<nodes::Text> others;
       nodes::Text other = part_heading("Other");
-      toggle_line<ask<Actions, &Actions::flip_chat_room_events>> events;
+      nodes::Text events_about = explained("Room events shown in this room, for you: Default is as your account's.");
+      event_kind_list<Actions> events;
       nodes::Text leave_heading = part_heading("Leave room");
       widgets::Button<ask<Actions, &Actions::leave_chat>> leave;
     } parts;
@@ -350,8 +353,7 @@ struct room_settings : nodes::Stack {
                 .main_address = nodes::Text(
                     facts.alias ? std::format("Main address: {}", *facts.alias) : std::string("Main address: none"), 14.0f,
                     text_colour),
-                .events = toggle_line<ask<Actions, &Actions::flip_chat_room_events>>(
-                    "Show joins, renames and other room events (only affects you)", {a}, facts.events_shown, true),
+                .events = event_kind_list<Actions>(a, choice_level::chat{}, facts.events_all, facts.event_kinds),
                 .leave = widgets::Button<ask<Actions, &Actions::leave_chat>>("Leave room", {a})} {
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});

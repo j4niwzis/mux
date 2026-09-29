@@ -6,6 +6,7 @@ import std;
 import knot;
 import skia;
 import mux.core;
+import mux.logic.room_events;
 import mux.config;
 import mux.net;
 import mux.xmpp;
@@ -96,7 +97,12 @@ void app::apply(const request::open_manage&) {
                                      .history = chat->history,
                                      .version = chat->version,
                                      .muted = muted.contains(chat->id),
-                                     .events_shown = this->room_events_shown(chat->id),
+                                     .events_all = room_events.contains(chat->id)
+                                                       ? std::optional<bool>(room_events.at(chat->id))
+                                                       : std::nullopt,
+                                     .event_kinds = room_event_kinds.contains(chat->id)
+                                                        ? std::optional<mux::config::room_event_kinds>(room_event_kinds.at(chat->id))
+                                                        : std::nullopt,
                                      .mine = level_of(chat->id.account.address),
                                      .needs = chat->needs};
   // Element's privileged users: those the power levels name with a level of
@@ -216,14 +222,51 @@ void app::apply(const request::flip_account_typing&) {
   });
 }
 
+// Which room events show, as chosen at a level: all of them, or one kind --
+// none said, as the level under says.
+void app::apply(const request::set_room_event_kind& one) {
+  const auto set_kind = [&](std::optional<mux::config::room_event_kinds>& kinds) {
+    if (!kinds)
+      kinds.emplace();
+    mux::logic::choice_in(*kinds, *one.kind) = one.show;
+  };
+  std::visit(mux::overloaded{[&](mux::choice_level::everywhere) {
+                               if (one.kind)
+                                 set_kind(history.room_event_kinds);
+                               else
+                                 history.show_room_events = one.show.value_or(true);
+                             },
+                             [&](mux::choice_level::account) {
+                               this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+                                 if (one.kind)
+                                   set_kind(mux::config::room_event_kinds_in(account));
+                                 else
+                                   mux::config::room_events_in(account) = one.show;
+                               });
+                             },
+                             [&](mux::choice_level::chat) {
+                               const auto& chosen = root().main().chosen;
+                               if (!chosen)
+                                 return;
+                               if (one.kind)
+                                 mux::logic::choice_in(room_event_kinds[*chosen], *one.kind) = one.show;
+                               else if (one.show)
+                                 room_events.insert_or_assign(*chosen, *one.show);
+                               else
+                                 room_events.erase(*chosen);
+                             }},
+             one.level);
+  (void)this->write();
+  this->refresh();
+}
+
 // Room events, for the chosen account's chats: shown or not from now on,
 // whatever every account's is.
 void app::apply(const request::flip_account_room_events&) {
   this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
     auto& kept = mux::config::room_events_in(account);
     kept = !kept.value_or(history.show_room_events);
-    if (auto* page = panel.privacy())
-      page->show_events(*kept);
+
     (void)this->write();
     this->refresh();
   });

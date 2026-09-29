@@ -57,7 +57,6 @@ struct storage_page : nodes::Stack {
   };
   using clear_row = row_item<ask<Actions, &Actions::clear_stored>>;
   using keep_row = switch_row<ask<Actions, &Actions::flip_show_deleted>>;
-  using events_row = switch_row<ask<Actions, &Actions::flip_room_events>>;
   // What is under the header: it scrolls where the dialog is too low for it.
   struct body : nodes::Stack {
     struct parts_t {
@@ -75,7 +74,7 @@ struct storage_page : nodes::Stack {
       keep_row show_deleted;
       stepper deleted_on_disk;
       nodes::Text events_title = section_title("ROOM EVENTS");
-      events_row show_events;
+      event_kind_list<Actions> events;
       nodes::Text history_note{"Deleted messages are kept on disk, apart from the rest and up to their own size, the "
                                "oldest going first past it. Shown, one stays where it was, with all it said and its "
                                "time, marked removed.",
@@ -89,7 +88,8 @@ struct storage_page : nodes::Stack {
                 .clear = clear_row("Clear stored messages and pictures", {a}, icon::close{}),
                 .show_deleted = keep_row("Show deleted messages", {a}),
                 .deleted_on_disk = stepper(a, "On disk", config::limit::deleted_on_disk{}),
-                .show_events = events_row("Show joins, renames and other room events", {a})} {
+                .events = event_kind_list<Actions>(a, choice_level::everywhere{}, history.show_room_events,
+                                                   history.room_event_kinds)} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
       parts.memory_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
       parts.disk_title.apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
@@ -99,7 +99,6 @@ struct storage_page : nodes::Stack {
         each->apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
       }
       parts.show_deleted.parts.toggle.setOnNow(history.show_deleted);
-      parts.show_events.parts.toggle.setOnNow(history.show_room_events);
       parts.events_title.apply({.margin = {14.0f, 0.0f, 4.0f, 20.0f}});
     }
   };

@@ -11,6 +11,7 @@ import skiff.nodes.icon;
 import skiff.nodes.text;
 import skiff.widgets.avatar;
 import mux.core;
+import mux.logic.room_events;
 import mux.config;
 import :base;
 import :icons;
@@ -296,6 +297,85 @@ struct menu_button : scene::Node {
     out.fLabel = "Menu";
     out.fActions = {scene::semantic_action::focus{}, scene::semantic_action::activate{}};
     return out;
+  }
+};
+
+// A kind of room event, as its row names it.
+[[nodiscard]] constexpr std::string_view label_of(room_event::joins) { return "Joins and leaves"; }
+[[nodiscard]] constexpr std::string_view label_of(room_event::invites) { return "Invitations, removals and bans"; }
+[[nodiscard]] constexpr std::string_view label_of(room_event::names) { return "Name changes"; }
+[[nodiscard]] constexpr std::string_view label_of(room_event::avatars) { return "Picture changes"; }
+[[nodiscard]] constexpr std::string_view label_of(room_event::room_name) { return "Room name"; }
+[[nodiscard]] constexpr std::string_view label_of(room_event::topic) { return "Topic"; }
+[[nodiscard]] constexpr std::string_view label_of(room_event::room_avatar) { return "Room picture"; }
+[[nodiscard]] constexpr std::string_view label_of(room_event::address) { return "Room address"; }
+[[nodiscard]] constexpr std::string_view label_of(room_event::pins) { return "Pinned messages"; }
+[[nodiscard]] constexpr std::string_view label_of(room_event::permissions) { return "Permissions"; }
+[[nodiscard]] constexpr std::string_view label_of(room_event::access) { return "Who can join and read"; }
+[[nodiscard]] constexpr std::string_view label_of(room_event::encryption) { return "Encryption"; }
+[[nodiscard]] constexpr std::string_view label_of(room_event::other) { return "Everything else"; }
+
+// Which room events show, at one level -- every account's, one's, a chat's:
+// a row for all of them, then one for each kind, each with Show and Hide
+// and, where a level under decides for it, Default. One node for every
+// level; a choice goes to the program as it is made.
+template <class Actions>
+struct event_kind_list : nodes::Stack {
+  struct row;
+  struct choose {
+    row* in = nullptr;
+    std::optional<bool> show;
+    void operator()() const { in->chose(show); }
+  };
+  struct row : nodes::Stack {
+    Actions* actions = nullptr;
+    choice_level_t level;
+    std::optional<room_event_t> kind;
+    struct parts_t {
+      nodes::Text label;
+      segment<choose> fallback, show, hide;
+    } parts;
+    row(Actions* a, choice_level_t at, std::optional<room_event_t> which, std::string_view text,
+        std::optional<bool> now, bool with_default)
+        : actions(a), level(at), kind(which),
+          parts{.label = nodes::Text(std::string(text), 14.0f, text_colour),
+                .fallback = segment<choose>("Default", {this, std::nullopt}),
+                .show = segment<choose>("Show", {this, true}),
+                .hide = segment<choose>("Hide", {this, false})} {
+      this->setHorizontal();
+      this->setGap(4.0f);
+      fState.apply({.fillX = true, .height = 36.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
+      parts.label.setElided(true);
+      parts.label.apply({.grow = scene::axes::kX, .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      for (segment<choose>* each : {&parts.fallback, &parts.show, &parts.hide})
+        each->apply({.width = 70.0f, .alignSelf = scene::align::kMiddle});
+      parts.fallback.setVisible(with_default);
+      this->show_choice(with_default ? now : std::optional<bool>(now.value_or(true)));
+    }
+    void show_choice(std::optional<bool> now) {
+      parts.fallback.set_active(!now);
+      parts.show.set_active(now == true);
+      parts.hide.set_active(now == false);
+    }
+    void chose(std::optional<bool> now) {
+      this->show_choice(now);
+      actions->set_room_event_kind(level, kind, now);
+    }
+  };
+  struct parts_t {
+    std::vector<row> rows;
+  } parts;
+  event_kind_list(Actions* a, choice_level_t level, std::optional<bool> all,
+                  const std::optional<config::room_event_kinds>& kinds) {
+    const bool everywhere =
+        std::visit(overloaded{[](choice_level::everywhere) { return true; }, [](const auto&) { return false; }}, level);
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    // Made where they stay: each row's switches know it by its address.
+    parts.rows.reserve(1 + kRoomEventKinds);
+    parts.rows.emplace_back(a, level, std::nullopt, "All room events", all, !everywhere);
+    for (const room_event_t& kind : all_room_events)
+      parts.rows.emplace_back(a, level, kind, std::visit([](auto one) { return label_of(one); }, kind),
+                              logic::choice_of(kinds, kind), true);
   }
 };
 

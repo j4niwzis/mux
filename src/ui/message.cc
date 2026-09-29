@@ -501,9 +501,6 @@ struct message_bubble : nodes::Stack {
       // room for it, as Telegram's: out of the column's flow, at its end.
       nodes::Text inline_time;
     } parts;
-    // A flash over it, fading, where it was jumped to: its background
-    // going to the accent and back.
-    skiff::paint::Tween flash{0.0f, 1200.0f};
     skia::SkColor plate = bubble_colour;
     // Its least width as the message asks it (a quote's), and as the time
     // beside the last line asks it: the bubble widened to hold both.
@@ -513,7 +510,7 @@ struct message_bubble : nodes::Stack {
     // has, the bubble asks for frames, for a window at rest updates nothing
     // and the time stayed under the text.
     bool time_placed = false;
-    [[nodiscard]] bool settling() const { return flash.moving() || !time_placed; }
+    [[nodiscard]] bool settling() const { return !time_placed; }
     [[nodiscard]] static skia::SkColor mixed(skia::SkColor from, skia::SkColor to, float amount) {
       const auto channel = [&](int shift) {
         const float a = static_cast<float>((from >> shift) & 0xFF), b = static_cast<float>((to >> shift) & 0xFF);
@@ -527,8 +524,6 @@ struct message_bubble : nodes::Stack {
     // Decided from the last layout; a change is laid out at the next.
     void update(double now_ms) {
       auto& [name, quote, picture, file, text, cards, reactions, time, inline_time] = parts;
-      if (flash.step(now_ms))
-        fState.apply({.background = mixed(plate, accent_colour, 0.35f * flash.value())});
       if (!text.visible() || !cards.empty() || reactions) {
         time_placed = true;  // under it, as it is
         return;
@@ -719,8 +714,27 @@ struct message_bubble : nodes::Stack {
   // enough.
   skiff::paint::Tween swipe{0.0f, 180.0f, skiff::paint::movement::subtle{}};
   static constexpr float kSwipeToReply = 70.0f;
-  [[nodiscard]] bool settling() const { return swipe.moving(); }
+  // Where it was jumped to: the whole row -- from the message to the edges,
+  // as Telegram's -- washed in the accent, fading.
+  skiff::paint::Tween flash{0.0f, 1200.0f};
+  // A message that has just come: in from below, fading in, as Telegram's.
+  // Unseen until its first frame is laid out, so the time is where it goes
+  // when it is first seen -- not under the text, then beside it.
+  skiff::paint::Tween appearing{1.0f, 220.0f};
+  void appear() {
+    appearing.jump(0.0f);
+    appearing.setTarget(1.0f);
+    fState.apply({.alpha = 0.0f, .shiftY = 12.0f});
+  }
+  [[nodiscard]] bool settling() const { return swipe.moving() || flash.moving() || appearing.moving(); }
   void update(double now_ms) {
+    if (flash.step(now_ms))
+      fState.apply({.background = (accent_colour & 0x00FFFFFFu) |
+                                  (static_cast<skia::SkColor>(std::lround(80.0f * flash.value())) << 24)});
+    if (appearing.step(now_ms)) {
+      const float shown = appearing.value();
+      fState.apply({.alpha = shown, .shiftY = (1.0f - shown) * 12.0f});
+    }
     if (!swipe.step(now_ms))
       return;
     auto& [face, body, swipe_mark] = parts;

@@ -88,6 +88,9 @@ struct conversations_screen : nodes::Stack {
   std::optional<conversation_id> chosen;
   // The account whose chats are listed.
   std::optional<account_id> current;
+  // The messages a bubble was made for: one made for the first time, while
+  // its chat is being read, has just come.
+  std::set<std::string> appeared;
   // The account to list once the model has it: the one shown last, kept.
   // Taken the first time it is there; dropped when an account is chosen.
   std::optional<account_id> wanted;
@@ -575,8 +578,8 @@ struct conversations_screen : nodes::Stack {
           aimed_at = to;
         } else if (!timeline.moving()) {
           if (!aim_quiet) {
-            it->parts.body.flash.jump(1.0f);
-            it->parts.body.flash.setTarget(0.0f);
+            it->flash.jump(1.0f);
+            it->flash.setTarget(0.0f);
             it->parts.body.markDamaged();
           }
           aiming.reset();
@@ -758,12 +761,29 @@ struct conversations_screen : nodes::Stack {
     }
     const auto [first_made, last_made] = this->made_indices(all);
     this->set_made(all, first_made, last_made);
+    // A message that has just come into the chat being read comes in moving;
+    // one made again -- changed, or scrolled back into what is made -- and
+    // those of a chat just opened do not. One's own, once the server has it,
+    // is the same message under its new id, and does not come in twice.
+    const bool same_chat = shown_chat == chosen;
+    const auto arrives = [&](std::size_t i) {
+      const bool known = !appeared.insert(all[i].id).second;
+      const bool acknowledged = all[i].outgoing && std::visit(overloaded{[](const delivery::sent&) { return true; },
+                                                                         [](const auto&) { return false; }},
+                                                              all[i].delivery);
+      return same_chat && !known && !acknowledged && i + 3 >= all.size();
+    };
     // The bubbles, as a function of the messages: those that show the same
     // are kept -- with a selection in them -- and only the new are made.
     if (nodes::reconcile(
             entries, std::views::iota(first_made, last_made),
             [&](std::size_t i) { return all[i].id; }, [](const message_bubble& row) { return row.message_id; },
-            [&](std::size_t i) { return message_bubble(*one, all[i], first_of_run(i), last_of_run(i), &now); },
+            [&](std::size_t i) {
+              message_bubble made(*one, all[i], first_of_run(i), last_of_run(i), &now);
+              if (arrives(i))
+                made.appear();
+              return made;
+            },
             [&](const message_bubble& row, std::size_t i) {
               return row.said == all[i] && row.first == first_of_run(i) && row.last == last_of_run(i);
             }))

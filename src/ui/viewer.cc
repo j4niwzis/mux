@@ -77,6 +77,7 @@ struct picture_viewer : nodes::Stack {
     // The picture: the whole one where it has come, its thumbnail until then.
     struct parts_t {
       nodes::Image picture;
+      widgets::RadialLoader loader;  // while the whole picture is coming
     } parts;
     explicit stage(picture_viewer* v)
         : viewer(v), parts{.picture = nodes::Image([v] {
@@ -84,6 +85,12 @@ struct picture_viewer : nodes::Stack {
                             return one && *one ? one : thumbnails().find(v->source);
                           })} {
       fState.apply({.fillX = true, .grow = scene::axes::kY, .masking = true});
+      parts.loader.apply({.place = scene::anchor::kCentre});
+    }
+    void update(double) {
+      const bool coming = !whole_pictures().has(viewer->source);
+      if (coming != parts.loader.visible())
+        parts.loader.setVisible(coming);
     }
     // Where the picture goes: fitted, zoomed, moved -- laid out there, not
     // drawn there by hand.

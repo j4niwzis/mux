@@ -9,6 +9,7 @@ import mux.logic.reading;
 import mux.logic.drafts;
 import mux.logic.links;
 import mux.logic.messages;
+import mux.logic.blurhash;
 
 #include "gtest/gtest-macros.h"
 
@@ -141,6 +142,16 @@ TEST(Messages, AReplysLineIsOneLineOrWhatItCarries) {
   auto picture = said("1", "");
   picture.attachment = attachment{.kind = attachment_kind::image{}, .name = "cat.jpg"};
   EXPECT_EQ(logic::reply_line(&picture, ""), "Photo");
+}
+
+TEST(Blurhash, DecodesAndRefusesWhatIsNotOne) {
+  // blurha.sh's own example.
+  const auto pixels = logic::blurhash_pixels("LEHV6nWB2yk8pyo0adR*.7kCMdnj", 32, 24);
+  ASSERT_TRUE(pixels.has_value());
+  EXPECT_EQ(pixels->size(), 32u * 24u * 4u);
+  EXPECT_EQ((*pixels)[3], 255);
+  EXPECT_FALSE(logic::blurhash_pixels("not a hash", 32, 24).has_value());
+  EXPECT_FALSE(logic::blurhash_pixels("LEHV6n", 32, 24).has_value());
 }
 
 }  // namespace

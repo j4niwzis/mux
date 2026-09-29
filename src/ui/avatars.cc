@@ -147,6 +147,11 @@ inline image_cache& thumbnails() {
   static image_cache images;
   return images;
 }
+// A picture's blurred preview, from its blurhash, by its source.
+inline image_cache& previews() {
+  static image_cache images;
+  return images;
+}
 inline image_cache& whole_pictures() {
   static image_cache images;
   return images;

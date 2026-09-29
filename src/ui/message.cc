@@ -89,16 +89,28 @@ struct picture_view : scene::Node {
     void forEachChild(auto&& f) { f(label); }
   };
   struct parts_t {
+    nodes::Image preview;  // blurred, from its blurhash, until it comes
     nodes::Image picture;
+    widgets::RadialLoader loader;  // while it is coming
     time_pill time;
   } parts;
 
   // Rounded; a plate until the thumbnail comes, then the thumbnail covering
   // it, cut at the middle where the proportions differ by a rounding.
   picture_view(std::string where, int w, int h)
-      : source(where), width(w), height(h), parts{.picture = nodes::Image([where] { return thumbnails().find(where); })} {
+      : source(where), width(w), height(h),
+        parts{.preview = nodes::Image([where] { return previews().find(where); }),
+              .picture = nodes::Image([where] { return thumbnails().find(where); })} {
     fState.apply({.cornerRadius = 10.0f, .background = tile_colour, .masking = true});
+    parts.preview.apply({.fill = true, .cornerRadius = 10.0f});
     parts.picture.apply({.fill = true, .cornerRadius = 10.0f});
+    parts.loader.apply({.place = scene::anchor::kCentre});
+  }
+  // The loader while the picture has not come.
+  void update(double) {
+    const bool coming = !thumbnails().has(source);
+    if (coming != parts.loader.visible())
+      parts.loader.setVisible(coming);
   }
   void show_time(std::string when) {
     parts.time.label.setText(when);

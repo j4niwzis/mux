@@ -199,6 +199,7 @@ class message_store {
         a.source = text_of(c, "source").value_or("");
         a.name = text_of(c, "name").value_or("");
         a.mimetype = text_of(c, "mimetype").value_or("");
+        a.blurhash = text_of(c, "blurhash");
         a.size = number("size");
         a.width = static_cast<int>(number("w"));
         a.height = static_cast<int>(number("h"));
@@ -246,6 +247,8 @@ class message_store {
       carried.emplace("name", knot::value(one.attachment->name));
       carried.emplace("mimetype", knot::value(one.attachment->mimetype));
       carried.emplace("size", knot::value(one.attachment->size));
+      if (one.attachment->blurhash)
+        carried.emplace("blurhash", knot::value(*one.attachment->blurhash));
       carried.emplace("w", knot::value(static_cast<std::int64_t>(one.attachment->width)));
       carried.emplace("h", knot::value(static_cast<std::int64_t>(one.attachment->height)));
       line.emplace("attachment", knot::value(std::move(carried)));

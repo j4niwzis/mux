@@ -15,6 +15,7 @@ import mux.ui;
 import mux.app.network;
 import mux.app.requests;
 import mux.app.services;
+import mux.logic.blurhash;
 
 export namespace mux::app {
 
@@ -110,8 +111,10 @@ class pictures_part {
           const auto [from, to] = screen.made_indices(one.timeline);
           for (std::size_t i = from; i < to && i < one.timeline.size(); ++i) {
             const message& said = one.timeline[i];
-            if (said.attachment && is_picture(said.attachment->kind))
+            if (said.attachment && is_picture(said.attachment->kind)) {
               this->want_thumbnail(id, said.attachment->source);
+              this->make_preview(*said.attachment);
+            }
             // And of a picture a message made quotes, for its quote.
             if (said.replies_to)
               if (const auto quoted = std::ranges::find(one.timeline, *said.replies_to, &message::id);
@@ -197,6 +200,19 @@ class pictures_part {
     std::filesystem::last_write_time(*where, std::filesystem::file_time_type::clock::now(), failed);  // used now
     this->take(change::avatar_loaded{use, source, std::move(bytes)}, false);
     return true;
+  }
+
+  // A picture's blurred preview, from its blurhash, until its thumbnail
+  // comes: 32 across, in its proportions.
+  static void make_preview(const attachment& picture) {
+    if (!picture.blurhash || mux::ui::thumbnails().has(picture.source) || mux::ui::previews().has(picture.source))
+      return;
+    const int width = 32;
+    const int height = picture.width > 0 && picture.height > 0
+                           ? std::clamp(width * picture.height / picture.width, 8, 96)
+                           : 24;
+    if (const auto pixels = logic::blurhash_pixels(*picture.blurhash, width, height))
+      mux::ui::previews().put(picture.source, skia::imageFromRGBA(width, height, pixels->data()));
   }
 
   // A message's picture's thumbnail: from the disk where it was fetched

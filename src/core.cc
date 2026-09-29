@@ -174,6 +174,9 @@ struct attachment {
   std::string mimetype;
   std::int64_t size = 0;   // in bytes, where said
   int width = 0, height = 0;  // a picture's, where said
+  // A picture's blurhash, where its sender gave one: what is shown until
+  // the picture comes.
+  std::optional<std::string> blurhash;
   friend bool operator==(const attachment&, const attachment&) = default;
 };
 

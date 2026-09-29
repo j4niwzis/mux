@@ -70,6 +70,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
         carried.size = number("size");
         carried.width = static_cast<int>(number("w"));
         carried.height = static_cast<int>(number("h"));
+        carried.blurhash = text(member(*info, "xyz.amorgan.blurhash"));
       }
       if (!carried.source.empty()) {
         made.attachment = std::move(carried);

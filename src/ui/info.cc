@@ -25,6 +25,7 @@ import :themes;
 import :names;
 import :forms;
 import :message;
+import :html;
 
 export namespace mux::ui {
 
@@ -156,8 +157,10 @@ struct id_line : nodes::Stack {
   } parts;
   std::string copied;
   bool a_link = false;  // what is copied is a link to it, not the ID
-  id_line(std::string text, std::string link)
-      : parts{.id = nodes::Text(text, 14.0f, accent_colour)}, copied(link.empty() ? text : link), a_link(!link.empty()) {
+  std::string named;    // what it is: ID, Address
+  id_line(std::string text, std::string link, std::string label = "ID")
+      : parts{.id = nodes::Text(text, 14.0f, accent_colour), .label = nodes::Text(label, 12.0f, dim_colour)},
+        copied(link.empty() ? text : link), a_link(!link.empty()), named(std::move(label)) {
     this->setGap(2.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 20.0f, 8.0f, 20.0f}, .hoverBackground = chosen_colour, .focusBackground = chosen_colour});
     fState.setCursor(scene::cursor::hand{});
@@ -168,7 +171,7 @@ struct id_line : nodes::Stack {
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
     skiff::scene::setClipboardText(copied);
-    parts.label.setText(a_link ? "ID · link copied, with its servers" : "ID · copied");
+    parts.label.setText(a_link ? named + " · link copied, with its servers" : named + " · copied");
     return true;
   }
 };
@@ -791,6 +794,10 @@ struct info_panel : nodes::Stack {
     // What copying the ID gives: for a Matrix room, a link to it with the
     // servers to join through; else the ID.
     std::string copied;
+    // What it is about, and the addresses it publishes: shown as
+    // Telegram shows a group's description and its link.
+    std::string topic;
+    std::vector<std::string> addresses;
     friend bool operator==(const view&, const view&) = default;
   };
 
@@ -845,6 +852,22 @@ struct info_panel : nodes::Stack {
         parts.message.apply({.grow = scene::axes::kX});
       }
     };
+    // What the chat is about, as Telegram's group description: its text,
+    // links in it pressed as any, and what it is under it, dim.
+    struct about_block : nodes::Stack {
+      struct parts_t {
+        nodes::Text text;
+        nodes::Text label{"Description", 12.0f, dim_colour};
+      } parts;
+      explicit about_block(const std::string& said) : parts{.text = nodes::Text(said, 14.0f, text_colour)} {
+        this->setGap(2.0f);
+        fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 20.0f, 8.0f, 20.0f}});
+        parts.text.setWrapped(true);
+        parts.text.setSelectable(true);
+        parts.text.setLinks(link_spans_in(said), accent_colour);
+        parts.text.apply({.fillX = true});
+      }
+    };
     struct parts_t {
       top_row top;
       avatar_button<Actions> avatar;
@@ -853,6 +876,8 @@ struct info_panel : nodes::Stack {
       std::optional<tiles_row> tiles;
       std::optional<person_row> person_tiles;
       nodes::Box<> band_1 = section_band();
+      about_block about;
+      std::vector<id_line> addresses;
       id_line id_text;
     } parts;
 
@@ -861,8 +886,12 @@ struct info_panel : nodes::Stack {
                 .avatar = avatar_button<Actions>(a, shown.key, shown.name, 96.0f),
                 .name = nodes::Text(shown.name, 17.0f, text_colour, true),
                 .status = nodes::Text(shown.status, 13.0f, dim_colour),
+                .about = about_block(shown.topic),
                 .id_text = id_line(shown.key, shown.copied)} {
-      auto& [top, avatar, name, status, tiles, person_tiles, band_1, id_text] = parts;
+      auto& [top, avatar, name, status, tiles, person_tiles, band_1, about, addresses, id_text] = parts;
+      about.setVisible(!shown.topic.empty());
+      for (const std::string& address : shown.addresses)
+        addresses.emplace_back(address, "", "Address");
       this->setGap(2.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
       if (shown.of_person)
@@ -938,6 +967,10 @@ struct info_panel : nodes::Stack {
                   false};
     if (group && is_matrix(one.id.account.speaks))
       group_view.copied = logic::room_link(one);
+    group_view.topic = one.topic.value_or("");
+    if (one.alias)
+      group_view.addresses.push_back(*one.alias);
+    std::ranges::copy(one.other_aliases, std::back_inserter(group_view.addresses));
     // Its members made again only where they changed -- or another chat's
     // are shown: a big room has thousands, and every refresh rebuilt them.
     const bool same_members = members_of == one.id && members_revision == one.members_revision;

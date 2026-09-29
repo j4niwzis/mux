@@ -9,6 +9,7 @@ import mux.core;
 import mux.ui;
 import mux.app.store;
 import mux.app.requests;
+import mux.app.screens;
 import mux.app.services;
 import mux.app.workers;
 import mux.logic.search;

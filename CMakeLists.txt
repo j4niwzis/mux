@@ -208,11 +208,12 @@ if(MUX_UI)
   # The program's own parts: its network, its demo, what it keeps on disk,
   # the requests of its window, the names it reads, and the program itself.
   target_sources(mux PRIVATE FILE_SET CXX_MODULES BASE_DIRS src
-    FILES src/app/network.cc src/app/workers.cc src/app/demo.cc src/app/store.cc src/app/requests.cc src/app/words.cc
+    FILES src/app/network.cc src/app/workers.cc src/app/screens.cc src/app/demo.cc src/app/store.cc src/app/requests.cc src/app/words.cc
           src/app/kept.cc src/app/services.cc src/app/search.cc src/app/pictures.cc src/app/drafts.cc src/app/reading.cc src/app/outbox.cc src/app/settings.cc src/app/menu.cc
           src/app/program.cc)
   # What the program does, a part each: the module's implementation units.
-  target_sources(mux PRIVATE src/app/program_core.cc src/app/program_media.cc
+  target_sources(mux PRIVATE src/app/screens_chat.cc src/app/screens_layers.cc src/app/screens_accounts.cc src/app/screens_settings.cc
+    src/app/program_core.cc src/app/program_media.cc
     src/app/program_chats.cc src/app/program_links.cc src/app/program_accounts.cc
     src/app/program_settings.cc src/app/program_sending.cc src/app/program_forms.cc)
   target_link_libraries(mux PRIVATE mux_modules)

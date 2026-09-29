@@ -452,6 +452,16 @@ struct aside {};      // not in the timeline: a message a reply quotes, fetched 
 }  // namespace placement
 using placement_t = std::variant<placement::at_end, placement::at_start, placement::in_window, placement::aside>;
 
+// What a link in a message is, as its page says (Open Graph): the site, the
+// title, a line about it, and its picture, kept on the server.
+struct link_preview {
+  std::string site;
+  std::string title;
+  std::string description;
+  std::optional<std::string> image;
+  friend bool operator==(const link_preview&, const link_preview&) = default;
+};
+
 namespace change {
 
 struct connection_changed {
@@ -505,15 +515,6 @@ struct avatar_loaded {
 
 // How far a picture or a file being fetched whole has come, 0 to 1, by the
 // source it is fetched by: for its loader to show.
-// What a link in a message is, as its page says (Open Graph): the site, the
-// title, a line about it, and its picture, kept on the server.
-struct link_preview {
-  std::string site;
-  std::string title;
-  std::string description;
-  std::optional<std::string> image;
-  friend bool operator==(const link_preview&, const link_preview&) = default;
-};
 struct preview_loaded {
   std::string url;
   link_preview preview;

@@ -73,10 +73,10 @@ void account<Sink>::fetch_media(std::string source, media_use_t use, int size, b
 
 template <class Sink>
 void account<Sink>::send_file(std::string room, std::string local, std::string bytes, std::string name, std::string mimetype,
-                 bool image, int width, int height, std::string caption) {
+                 bool image, int width, int height, std::string caption, std::optional<std::string> reply_to) {
   loop_->spawn([this, room = std::move(room), local = std::move(local), bytes = std::move(bytes),
                 name = std::move(name), mimetype = std::move(mimetype), image, width, height,
-                caption = std::move(caption)] {
+                caption = std::move(caption), reply_to = std::move(reply_to)] {
     const conversation_id in{id_, room};
     mux::attachment carried;
     if (image)
@@ -93,6 +93,7 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
                                         .at = std::chrono::time_point_cast<std::chrono::milliseconds>(
                                             std::chrono::system_clock::now()),
                                         .body = {caption, std::nullopt},
+                                        .replies_to = reply_to,
                                         .outgoing = true,
                                         .delivery = delivery::sending{},
                                         .attachment = carried}});
@@ -135,6 +136,14 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
       info.emplace("h", knot::value(static_cast<std::int64_t>(height)));
     }
     content.emplace("info", knot::value(std::move(info)));
+    // An answer, as any message may be one: a picture or a file too.
+    if (reply_to) {
+      knot::value::object target;
+      target.emplace("event_id", knot::value(*reply_to));
+      knot::value::object relates;
+      relates.emplace("m.in_reply_to", knot::value(std::move(target)));
+      content.emplace("m.relates_to", knot::value(std::move(relates)));
+    }
     auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.room.message",
                                                       .txn_id = local,

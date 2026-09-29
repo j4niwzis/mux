@@ -107,9 +107,19 @@ class outbox_part {
     if (!chosen || !box || to_send_.empty())
       return;
     std::string caption = box->parts.caption.text();
+    // Sent while answering: the first of them the answer, as Element sends.
+    std::optional<std::string> reply_to =
+        std::visit(overloaded{[](const compose::reply& r) { return std::optional<std::string>(r.id); },
+                              [](const auto&) { return std::optional<std::string>(); }},
+                   composing_);
     for (file& one : to_send_)
       s_->net->send_file(*chosen, one.local, std::move(one.as.bytes), one.as.name, one.as.mimetype,
-                         one.as.picture.has_value(), one.width, one.height, std::exchange(caption, std::string()));
+                         one.as.picture.has_value(), one.width, one.height, std::exchange(caption, std::string()),
+                         std::exchange(reply_to, std::nullopt));
+    if (std::visit(overloaded{[](const compose::reply&) { return true; }, [](const auto&) { return false; }}, composing_)) {
+      composing_ = compose::plain{};
+      s_->root().main().line.show_context(std::nullopt);
+    }
     to_send_.clear();
     s_->root().close_send_box();
   }

@@ -109,7 +109,8 @@ class account {
   // sent as m.image or m.file -- its caption the body, its name apart
   // (Matrix 1.10) -- then known by the event the server gives it.
   void send_file(std::string room, std::string local, std::string bytes, std::string name, std::string mimetype,
-                 bool image, int width, int height, std::string caption);
+                 bool image, int width, int height, std::string caption,
+                 std::optional<std::string> reply_to = std::nullopt);
 
   // A message of one's own edited (m.replace): the new text in its place.
   void edit(std::string room, std::string event, std::string text);

@@ -11,7 +11,7 @@ export namespace mux::logic {
 
 // An emoji's text, as the window's text takes it.
 [[nodiscard]] inline std::string emoji_text(const emoji_entry& one) {
-  return std::string(reinterpret_cast<const char*>(one.glyph.data()), one.glyph.size());
+  return std::string(one.glyph);
 }
 
 // A variant of another for a skin tone (the table says which) is shown

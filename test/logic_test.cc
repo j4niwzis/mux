@@ -9,6 +9,8 @@ import mux.logic.reading;
 import mux.logic.drafts;
 import mux.logic.links;
 
+#include "gtest/gtest-macros.h"
+
 namespace {
 
 using namespace mux;

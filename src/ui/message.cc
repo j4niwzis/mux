@@ -935,7 +935,11 @@ struct message_bubble : nodes::Stack {
     // has, the bubble asks for frames, for a window at rest updates nothing
     // and the time stayed under the text.
     bool time_placed = false;
-    [[nodiscard]] bool settling() const { return !time_placed; }
+    // Frames asked for only once it has been laid out, and until the time is
+    // placed: a bubble made but not laid out yet -- out of view, of the
+    // eighty made around it -- asked for frames forever, and every frame
+    // repainted the chat and the list beside it.
+    [[nodiscard]] bool settling() const { return !time_placed && !fState.fBounds.isEmpty(); }
     [[nodiscard]] static skia::SkColor mixed(skia::SkColor from, skia::SkColor to, float amount) {
       const auto channel = [&](int shift) {
         const float a = static_cast<float>((from >> shift) & 0xFF), b = static_cast<float>((to >> shift) & 0xFF);

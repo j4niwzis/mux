@@ -98,8 +98,9 @@ class menu_part {
     std::ranges::stable_sort(events, {}, &message::reaction_event::at);
     std::vector<mux::ui::reaction_entry> entries;
     for (const auto& one : events)
-      entries.push_back({one.event, one.who, mux::ui::sender_name(*chat, one.who), one.key, mux::ui::clock_of(one.at)});
-    s_->root().open_reactions(entries);
+      entries.push_back(
+          {one.event, one.who, mux::ui::sender_name(*chat, one.who), one.key, one.at, one.who == chat->id.account.address});
+    s_->root().open_reactions(*chat, entries, &*s_->model);
   }
   void apply(const request::close_reactions&) { s_->root().close_reactions(); }
   // Forward: the chats of the account, to choose where; then sent there.

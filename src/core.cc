@@ -819,9 +819,21 @@ class model {
                           [&](placement::at_start) { where.timeline.insert(where.timeline.begin(), one.message); },
                           [&](placement::in_window) { where.timeline.push_back(one.message); },
                           [&](placement::aside) {
-                            constexpr std::size_t kQuotedKept = 200;
-                            if (where.quoted.size() >= kQuotedKept)
-                              where.quoted.clear();
+                            // Held to a number: what nothing here quotes or
+                            // pins goes first, then one more -- never all at
+                            // once, which lost every quote shown, a second
+                            // after it came, in a chat that quotes much.
+                            constexpr std::size_t kQuotedKept = 500;
+                            if (where.quoted.size() >= kQuotedKept) {
+                              std::erase_if(where.quoted, [&](const auto& kept) {
+                                return !std::ranges::contains(where.pinned, kept.first) &&
+                                       std::ranges::none_of(where.timeline, [&](const message& said) {
+                                         return said.replies_to == kept.first;
+                                       });
+                              });
+                              if (where.quoted.size() >= kQuotedKept)
+                                where.quoted.erase(where.quoted.begin());
+                            }
                             where.quoted.insert_or_assign(one.message.id, one.message);
                           }},
                one.where);

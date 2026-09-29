@@ -148,7 +148,7 @@ class pictures_part {
           for (const std::string& pinned : one.pinned)
             if (!one.quoted.contains(pinned) &&
                 std::ranges::find(one.timeline, pinned, &message::id) == one.timeline.end() &&
-                quotes_asked_.insert(pinned).second)
+                this->quote_due(pinned))
               s_->net->fetch_quoted(one.id, pinned);
           // The chat's own custom emoji and stickers, for its panels.
           for (const emote& custom : one.emotes)
@@ -199,7 +199,7 @@ class pictures_part {
             // fetched on its own, once.
             if (said.replies_to && !one.quoted.contains(*said.replies_to) &&
                 std::ranges::find(one.timeline, *said.replies_to, &message::id) == one.timeline.end() &&
-                quotes_asked_.insert(*said.replies_to).second)
+                this->quote_due(*said.replies_to))
               s_->net->fetch_quoted(one.id, *said.replies_to);
             // And of a picture a message made quotes, for its quote.
             if (said.replies_to)
@@ -536,7 +536,19 @@ class pictures_part {
   // The saved GIFs being decoded, not to be decoded twice.
   std::set<std::string> gifs_decoding_;
   // The quoted messages asked for, not to be asked twice.
-  std::set<std::string> quotes_asked_;
+  // The quotes asked for, and when: asked again where one has not come
+  // in a while -- a fetch that failed, or one dropped since.
+  std::map<std::string, std::chrono::steady_clock::time_point> quotes_asked_;
+  [[nodiscard]] bool quote_due(const std::string& id) {
+    const auto now = std::chrono::steady_clock::now();
+    const auto [at, fresh] = quotes_asked_.try_emplace(id, now);
+    if (fresh)
+      return true;
+    if (now - at->second < std::chrono::seconds(30))
+      return false;
+    at->second = now;
+    return true;
+  }
   // The links whose previews were asked for, not to be asked twice.
   std::set<std::string> links_asked_;
   std::size_t written_ = 0;

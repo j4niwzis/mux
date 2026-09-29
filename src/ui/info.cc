@@ -24,6 +24,7 @@ import :controls;
 import :themes;
 import :names;
 import :forms;
+import :message;
 
 export namespace mux::ui {
 
@@ -327,7 +328,8 @@ struct reaction_entry {
   std::string who;
   std::string name;
   std::string key;
-  std::string when;
+  std::chrono::sys_time<std::chrono::milliseconds> at{};
+  bool mine = false;
 };
 
 // A message's reactions as events, as Matrix has them: a box in the middle,
@@ -349,22 +351,29 @@ struct reactions_box : nodes::Stack {
       parts.close.apply({.alignSelf = scene::align::kMiddle});
     }
   };
+  // A reaction as the chat would show it: a bubble from who reacted,
+  // saying what they reacted with, in runs as the chat's bubbles are.
+  // Pressed, it is answered.
   struct row : nodes::Stack {
     Actions* actions;
     reaction_entry entry;
     struct parts_t {
-      avatar_mark face;
-      two_lines texts;
+      message_bubble bubble;
     } parts;
-    row(Actions* a, reaction_entry one)
-        : actions(a), entry(one),
-          parts{.face = avatar_mark(one.who, one.name, 36.0f),
-                .texts = two_lines(one.name, std::format("reacted {} · {}", one.key, one.when), 14.0f, 2.0f)} {
-      this->setHorizontal();
-      this->setGap(12.0f);
-      fState.apply({.fillX = true, .height = 52.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f},
+    row(Actions* a, const conversation& in, reaction_entry one, bool first, bool last, const model* now)
+        : actions(a), entry(one), parts{.bubble = message_bubble(in, message_of(in, one), first, last, now)} {
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 0.0f, 12.0f},
                     .hoverBackground = chosen_colour});
       fState.setCursor(scene::cursor::hand{});
+    }
+    // What it said, as a message: its key; a picture's, as a custom emoji
+    // in HTML, as a message would carry it.
+    [[nodiscard]] static message message_of(const conversation& in, const reaction_entry& one) {
+      message out{.in = in.id, .id = one.event, .sender = one.who, .at = one.at, .body = {one.key, std::nullopt},
+                  .outgoing = one.mine};
+      if (one.key.starts_with("mxc://"))
+        out.body = {":emoji:", std::format("<img data-mx-emoticon src=\"{}\" alt=\":emoji:\" height=\"32\">", one.key)};
+      return out;
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
@@ -380,15 +389,17 @@ struct reactions_box : nodes::Stack {
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
   } parts;
 
-  reactions_box(Actions* a, const std::vector<reaction_entry>& entries) : parts{.top = top_bar(a)} {
+  reactions_box(Actions* a, const conversation& in, const std::vector<reaction_entry>& entries, const model* now)
+      : parts{.top = top_bar(a)} {
     fState.apply({.fillX = true, .height = 420.0f, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
     parts.list.apply({.fillX = true, .grow = scene::axes::kY});
     auto& flow = std::get<0>(parts.list.fChildren);
     flow.apply({.fillX = true, .autoSize = scene::axes::kY});
     auto& rows = std::get<0>(flow.fChildren);
     rows.reserve(entries.size());
-    for (const reaction_entry& one : entries)
-      rows.emplace_back(a, one);
+    for (std::size_t i = 0; i < entries.size(); ++i)
+      rows.emplace_back(a, in, entries[i], i == 0 || entries[i - 1].who != entries[i].who,
+                        i + 1 == entries.size() || entries[i + 1].who != entries[i].who, now);
   }
 };
 

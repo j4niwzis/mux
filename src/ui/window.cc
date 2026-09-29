@@ -100,7 +100,7 @@ struct window : scene::Node {
       room.setSheetColour(sidebar_colour);
       room.setWidthFittingContent(392.0f);
       room.setPlace(widgets::dialog_place::near_top{});
-      reactions.setSheetColour(sidebar_colour);
+      reactions.setSheetColour(chat_colour);  // its bubbles, as in the chat
       reactions.setSize(392.0f, 420.0f);
       manage.setSheetColour(sidebar_colour);
       manage.setSize(480.0f, 600.0f);
@@ -219,7 +219,9 @@ struct window : scene::Node {
   }
   void close_room_card() { layer().room.close(); }
   [[nodiscard]] bool room_card_up() { return layer().room.shown() != nullptr; }
-  void open_reactions(const std::vector<reaction_entry>& entries) { layer().reactions.open(actions, entries); }
+  void open_reactions(const conversation& in, const std::vector<reaction_entry>& entries, const model* now) {
+    layer().reactions.open(actions, in, entries, now);
+  }
   void close_reactions() { layer().reactions.close(); }
   void open_manage(const manage_facts& facts) { layer().manage.open(actions, facts); }
   void close_manage() { layer().manage.close(); }

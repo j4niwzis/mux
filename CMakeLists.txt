@@ -185,8 +185,16 @@ if(MUX_UI)
   cme_find_package(Opus REQUIRED)
   cme_find_package(Vorbis REQUIRED)
   # Video, as tdesktop plays it: FFmpeg -- the system's where it has one,
-  # else built with only what a chat's videos are in and made of.
-  cme_find_package(FFmpeg COMPONENTS mp4 matroska h264 hevc vp9 aac opus mp3 REQUIRED)
+  # else built with only what a chat's videos are in and made of. Off, the
+  # client has no FFmpeg, and a video is played by the system's player.
+  option(MUX_VIDEO "Videos played in the window, through FFmpeg" ON)
+  set(mux_video_source src/video_off.cc)
+  set(mux_video_libraries)
+  if(MUX_VIDEO)
+    cme_find_package(FFmpeg COMPONENTS mp4 matroska h264 hevc vp9 aac opus mp3 REQUIRED)
+    set(mux_video_source src/video.cc)
+    set(mux_video_libraries FFmpeg::avformat FFmpeg::avcodec FFmpeg::swscale FFmpeg::swresample FFmpeg::avutil)
+  endif()
   cme_find_package(skiff COMPONENTS ${mux_skiff_components} REQUIRED)
   cme_find_package(skiff-widgets REQUIRED)
   # skiff's modules are C++23 and do not carry the family's flags, so they
@@ -222,10 +230,10 @@ if(MUX_UI)
   set_property(SOURCE src/emoji_font.cc APPEND PROPERTY COMPILE_OPTIONS --embed-dir=${mux_emoji_dir})
   set_property(SOURCE src/emoji_font.cc APPEND PROPERTY OBJECT_DEPENDS ${mux_emoji_font})
   target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
-    FILES src/host.cc src/audio.cc src/video.cc src/dbus.cc src/ui.cc
+    FILES src/host.cc src/audio.cc ${mux_video_source} src/dbus.cc src/ui.cc
           src/ui/base.cc src/ui/icons.cc src/ui/avatars.cc src/ui/controls.cc src/ui/themes.cc src/ui/names.cc src/ui/html.cc src/ui/chat_list.cc src/ui/message.cc src/ui/header.cc src/ui/info.cc src/ui/room_settings.cc src/ui/composer.cc src/ui/timeline.cc src/ui/conversations.cc src/ui/forms.cc src/ui/add_account.cc src/ui/accounts.cc src/ui/drawer.cc src/ui/proxies.cc src/ui/appearance.cc src/ui/storage.cc src/ui/settings.cc src/ui/context_menu.cc src/ui/sending.cc src/ui/viewer.cc src/ui/window.cc)
   target_link_libraries(mux_modules PUBLIC SDL3::SDL3 skiff::skiff skiff::widgets Opus::opus Vorbis::vorbisfile
-    FFmpeg::avformat FFmpeg::avcodec FFmpeg::swscale FFmpeg::swresample FFmpeg::avutil)
+    ${mux_video_libraries})
   add_executable(mux src/main.cc)
   # The program's own parts: its network, its demo, what it keeps on disk,
   # the requests of its window, the names it reads, and the program itself.

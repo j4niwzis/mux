@@ -10,6 +10,7 @@ import skiff.nodes.flow;
 import skiff.nodes.scroll;
 import skiff.widgets.loader;
 import mux.core;
+import mux.video;
 import mux.config;
 import mux.logic.links;
 import :base;
@@ -207,7 +208,13 @@ struct timeline_area : scene::Node {
     } press{x, y};
       for (const message_bubble& one : this->bubbles()) {
         // A picture: seen whole. A file: saved and opened.
-        // A video, shown by its thumbnail: played in the viewer.
+        // A video, shown by its thumbnail: played in the viewer -- or, built
+        // without video, by the system's player, as a file is opened.
+        if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y) &&
+            one.said.attachment && one.said.attachment->video && !mux::video::kPlays) {
+          actions->open_file(*one.said.attachment->video, one.said.attachment->name);
+          return true;
+        }
         if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y) &&
             one.said.attachment && one.said.attachment->video) {
           const conversation* chat = seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr;

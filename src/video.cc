@@ -70,6 +70,9 @@ struct stream_closer {
 
 export namespace mux::video {
 
+// Whether videos play in the window, in this build.
+inline constexpr bool kPlays = true;
+
 // The sound it plays: interleaved float stereo, at this rate.
 inline constexpr int kRate = 48000;
 

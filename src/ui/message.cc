@@ -552,8 +552,9 @@ struct reaction_row : nodes::Flow<std::vector<reaction_chip>> {
 // names in place of the IDs, and its links with it.
 // Rooms not joined here whose server said they are there, by the address a
 // message names them by: shown as pills; one not said to be is plain text.
-inline std::set<std::string, std::less<>>& rooms_found() {
-  static std::set<std::string, std::less<>> kept;
+// And each one's name, as its server gave it.
+inline std::map<std::string, std::string, std::less<>>& rooms_found() {
+  static std::map<std::string, std::string, std::less<>> kept;
   return kept;
 }
 struct mentioned {
@@ -578,6 +579,10 @@ struct mentioned {
                                      if (const auto chat = logic::chat_of(*now, what))
                                        if (const conversation* found = now->find(*chat))
                                          return std::pair(display_name(*found), found->id.id);
+                                   // Not joined, but its server named it.
+                                   if (const auto named = rooms_found().find(one.id);
+                                       named != rooms_found().end() && !named->second.empty())
+                                     return std::pair(named->second, one.id);
                                    return std::pair(one.id, one.id);
                                  },
                                  [](const logic::link::xmpp_address& one) { return std::pair(one.jid, one.jid); }},
@@ -673,7 +678,10 @@ struct mentioned {
       } else {
         if (!pictured)
           out.waiting.push_back(target);
-        shown = (pictured ? std::string("\u2002\u2002") : std::string()) + (span.as_written ? words : name);
+        // An address written in the text stays as written -- but a room's
+        // id (!…) is no name for anyone: shown by the room's name.
+        const bool by_address = span.as_written && !span.as_written->starts_with('!');
+        shown = (pictured ? std::string("\u2002\u2002") : std::string()) + (by_address ? words : name);
         pill = nodes::Text::Link{span.first, span.first + shown.size(), "https://matrix.to/#/" + target, true};
       }
     } else if (span.pill) {

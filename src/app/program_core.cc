@@ -63,7 +63,7 @@ void app::woken() {
                                  if (pictures.pill_rooms.contains(shown.asked) &&
                                      !(previewing && previewing->step.room == shown.asked)) {
                                    if (!shown.preview.id.empty()) {
-                                     mux::ui::rooms_found().insert(shown.asked);
+                                     mux::ui::rooms_found().insert_or_assign(shown.asked, shown.preview.name);
                                      if (shown.preview.avatar)
                                        net->fetch_avatar(shown.by, *shown.preview.avatar, shown.asked);
                                    }

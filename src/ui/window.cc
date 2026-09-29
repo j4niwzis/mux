@@ -53,8 +53,22 @@ struct window : scene::Node {
       std::optional<picture_viewer<Actions>> viewer;
     } parts;
 
+    Actions* actions_of = nullptr;
+    // Esc closes the emoji popup first, whatever has the keys: the input
+    // keeps them while the popup is open, so the press comes down to it
+    // through here -- caught on its way, before the chat reads Esc as
+    // letting an answer go.
+    using Node::onKey;
+    void onKey(scene::phase::capture, const scene::key::down& press, scene::Reply& reply) {
+      if (press.key == scene::keys::kEscape && parts.emoji) {
+        actions_of->close_emoji();
+        reply.handle();
+      }
+    }
+
     explicit layers(Actions* a)
-        : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a))} {
+        : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a))},
+          actions_of(a) {
       auto& [backdrop, frame, settings, notice, person, sending, emoji, menu, viewer] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});

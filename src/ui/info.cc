@@ -523,7 +523,8 @@ struct devtools_box : nodes::Stack {
     auto& text = std::get<0>(parts.reading.fChildren);
     text.setWrapped(true);
     text.setSelectable(true);
-    text.apply({.fillX = true, .padding = {6.0f, 16.0f, 12.0f, 16.0f}});
+    // A margin, not padding: a text draws from its own edge.
+    text.apply({.fillX = true, .margin = {6.0f, 16.0f, 12.0f, 16.0f}});
     std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
   }
   void show_text(std::string text) {

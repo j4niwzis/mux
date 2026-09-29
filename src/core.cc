@@ -155,6 +155,7 @@ struct message {
   bool outgoing = false;
   delivery_t delivery = delivery::sent{};
   std::map<std::string, std::set<std::string>> reactions;  // key -> who
+  friend bool operator==(const message&, const message&) = default;
 };
 
 // Someone in a group: their id (a JID in the room, a Matrix user id), the

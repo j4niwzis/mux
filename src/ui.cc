@@ -957,8 +957,23 @@ struct conversation_row : nodes::Stack {
 
   // Declared: the avatar, then the name and time over the last message and
   // how many are unread.
+  // What a row shows of its chat: while that is the same, the row is kept.
+  struct view {
+    std::string name;
+    std::optional<message> last;
+    std::int64_t unread = 0;
+    bool chosen = false, muted = false;
+    friend bool operator==(const view&, const view&) = default;
+  };
+  [[nodiscard]] static view view_of(const conversation& one, bool is_chosen, bool is_muted) {
+    return {display_name(one), one.timeline.empty() ? std::nullopt : std::optional<message>(one.timeline.back()),
+            one.unread, is_chosen, is_muted};
+  }
+  view shown;
+
   conversation_row(Actions* a, const conversation& one, bool is_chosen, bool is_muted)
-      : actions(a), id(one.id), chosen(is_chosen), muted(is_muted), face(one.id.id, display_name(one), 46.0f),
+      : actions(a), id(one.id), chosen(is_chosen), muted(is_muted), shown(view_of(one, is_chosen, is_muted)),
+        face(one.id.id, display_name(one), 46.0f),
         lines(display_name(one), one.unread, is_chosen, is_muted) {
     this->setHorizontal();
     this->setGap(12.0f);
@@ -1133,6 +1148,10 @@ struct link_line : nodes::Stack {
 // the sender's name in their colour over the first of a run and their
 // avatar beside its last; the time in the bubble's corner.
 struct message_bubble : nodes::Stack {
+  // The message as it was shown, and where in its sender's run: while
+  // these are the same, the bubble is kept.
+  message said;
+  bool first = false, last = false;
   // The message: its id and text, for its menu.
   std::string message_id;
   std::string plain;
@@ -1224,8 +1243,8 @@ struct message_bubble : nodes::Stack {
   // one's own; the bubble a column of the name, the quote, the text, the
   // links, the reactions and the time.
   message_bubble(const conversation& in, const message& said, bool first_of_run, bool last_of_run)
-      : message_id(said.id), plain(said.body.plain), outgoing(said.outgoing), sender(said.sender),
-        face(said.sender, sender_name(in, said.sender), kAvatar),
+      : said(said), first(first_of_run), last(last_of_run), message_id(said.id), plain(said.body.plain),
+        outgoing(said.outgoing), sender(said.sender), face(said.sender, sender_name(in, said.sender), kAvatar),
         body(said.outgoing, said.redacted ? std::string("(removed)") : said.body.plain + (said.edited ? " (edited)" : ""),
              clock_of(said.at)) {
     this->setHorizontal();
@@ -1433,6 +1452,9 @@ struct action_tile : nodes::Stack {
 // role in a pill. Pressed, they are shown on a page of their own.
 template <class Open>
 struct member_row : nodes::Stack {
+  // Who it shows and how they are: while the same, the row is kept.
+  member who;
+  std::string how_shown;
   Open open;
   std::string id;
   std::optional<std::string> role;
@@ -1477,7 +1499,7 @@ struct member_row : nodes::Stack {
 
   // Declared: the avatar, the name over how they are, the role at the end.
   member_row(const member& one, std::string how, Open what)
-      : open(std::move(what)), id(one.id), role(one.role),
+      : who(one), how_shown(how), open(std::move(what)), id(one.id), role(one.role),
         face(one.id, one.name.empty() ? one.id : one.name, 40.0f),
         texts(one.name.empty() ? one.id : one.name, std::move(how)), pill(one.role.value_or("")) {
     this->setHorizontal();
@@ -1659,9 +1681,17 @@ struct info_panel : nodes::Stack {
     id_text.setText(one.id.id);
     members_header.title.setText(std::format("{} MEMBER{}", one.members.size(), one.members.size() == 1 ? "" : "S"));
     auto& rows = std::get<0>(std::get<0>(members.fChildren).fChildren);
-    rows.clear();
-    for (const member& each : one.members)
-      rows.emplace_back(each, presence_of(now, one.id.account, each.id), open_person{this});
+    // The rows, as a function of the members.
+    if (nodes::reconcile(
+            rows, one.members, [](const member& each) { return each.id; },
+            [](const member_row<open_person>& row) { return row.id; },
+            [&](const member& each) {
+              return member_row<open_person>(each, presence_of(now, one.id.account, each.id), open_person{this});
+            },
+            [&](const member_row<open_person>& row, const member& each) {
+              return row.who == each && row.how_shown == presence_of(now, one.id.account, each.id);
+            }))
+      members.invalidateLayout();
     group_name = name.text();
     group_status = status.text();
     this->show_group();
@@ -2253,7 +2283,6 @@ struct conversations_screen : nodes::Stack {
     if (!current || !now.accounts().contains(*current))
       current = now.accounts().empty() ? std::nullopt : std::optional<account_id>(now.accounts().begin()->first);
     auto& rows = std::get<0>(std::get<0>(list.fChildren).fChildren);
-    rows.clear();
     std::vector<const conversation*> chats;
     // What is searched for, in any case: in a name or an address.
     const auto lower = [](std::string text) {
@@ -2304,8 +2333,19 @@ struct conversations_screen : nodes::Stack {
     std::ranges::sort(chats, std::ranges::greater{}, [](const conversation* one) {
       return one->timeline.empty() ? std::chrono::sys_time<std::chrono::milliseconds>{} : one->timeline.back().at;
     });
-    for (const conversation* one : chats)
-      rows.emplace_back(actions, *one, chosen && *chosen == one->id, muted.contains(one->id));
+    // The rows, as a function of the chats: those whose chat shows the same
+    // are kept as they are.
+    const auto is_chosen = [&](const conversation* one) { return chosen && *chosen == one->id; };
+    if (nodes::reconcile(
+            rows, chats, [](const conversation* one) { return one->id; },
+            [](const conversation_row<Actions>& row) { return row.id; },
+            [&](const conversation* one) {
+              return conversation_row<Actions>(actions, *one, is_chosen(one), muted.contains(one->id));
+            },
+            [&](const conversation_row<Actions>& row, const conversation* one) {
+              return row.shown == conversation_row<Actions>::view_of(*one, is_chosen(one), muted.contains(one->id));
+            }))
+      list.invalidateLayout();
     const bool none = now.accounts().empty();
     for (scene::Node* shown : std::initializer_list<scene::Node*>{&header, &timeline, &line})
       shown->setVisible(!none);
@@ -2322,21 +2362,33 @@ struct conversations_screen : nodes::Stack {
     const bool was_at_end = timeline.atEnd(40.0f);
     const float left_at = timeline.current();
     auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
-    entries.clear();
     const conversation* one = chosen ? now.find(*chosen) : nullptr;
     header.show(one, now);
     history_from = one ? one->history_from : std::nullopt;
     this->show_info();
-    if (!one)
+    if (!one) {
+      entries.clear();
       return;
+    }
     info.show(*one, now, muted.contains(one->id));
     const auto& all = one->timeline;
-    for (std::size_t i = 0; i < all.size(); ++i) {
-      const auto same = [&](std::size_t j) {
-        return j < all.size() && all[j].sender == all[i].sender && all[j].outgoing == all[i].outgoing;
-      };
-      entries.emplace_back(*one, all[i], i == 0 || !same(i - 1), !same(i + 1));
-    }
+    // Where each message is in its sender's run: the first has the name,
+    // the last the avatar.
+    const auto same = [&](std::size_t i, std::size_t j) {
+      return j < all.size() && all[j].sender == all[i].sender && all[j].outgoing == all[i].outgoing;
+    };
+    const auto first_of_run = [&](std::size_t i) { return i == 0 || !same(i, i - 1); };
+    const auto last_of_run = [&](std::size_t i) { return !same(i, i + 1); };
+    // The bubbles, as a function of the messages: those that show the same
+    // are kept -- with a selection in them -- and only the new are made.
+    if (nodes::reconcile(
+            entries, std::views::iota(std::size_t{0}, all.size()),
+            [&](std::size_t i) { return all[i].id; }, [](const message_bubble& row) { return row.message_id; },
+            [&](std::size_t i) { return message_bubble(*one, all[i], first_of_run(i), last_of_run(i)); },
+            [&](const message_bubble& row, std::size_t i) {
+              return row.said == all[i] && row.first == first_of_run(i) && row.last == last_of_run(i);
+            }))
+      timeline.invalidateLayout();
     // The newest is at the bottom: the view follows it where the reader was
     // there or the chat is new to the view; otherwise what came after the
     // last one seen is counted on the way down.

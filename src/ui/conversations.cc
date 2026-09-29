@@ -569,10 +569,10 @@ struct conversations_screen : nodes::Stack {
       // line is hidden, as the chat's settings say: landed on the nearest
       // shown after it, else before it, as its place.
       if (it != entries.end() && !it->visible()) {
-        auto shown = std::find_if(it, entries.end(), [](const message_bubble& one) { return one.visible(); });
+        auto shown = std::find_if(it, entries.end(), [](const message_bubble& row) { return row.visible(); });
         if (shown == entries.end()) {
           const auto back = std::find_if(std::make_reverse_iterator(it), entries.rend(),
-                                         [](const message_bubble& one) { return one.visible(); });
+                                         [](const message_bubble& row) { return row.visible(); });
           shown = back == entries.rend() ? entries.end() : std::prev(back.base());
         }
         if (shown != entries.end()) {

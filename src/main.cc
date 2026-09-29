@@ -397,6 +397,9 @@ struct send_typed {};
 struct resize_sidebar {
   float x = 0.0f;
 };
+struct message_person {
+  mux::conversation_id who;
+};
 struct not_implemented {
   std::string what;
 };
@@ -458,7 +461,7 @@ using request_t =
                  request::close_menu, request::menu_reply, request::menu_edit, request::menu_copy,
                  request::menu_delete, request::cancel_compose, request::open_url,
                  request::switch_account, request::submit_message, request::send_typed,
-                 request::resize_sidebar, request::not_implemented, request::close_notice,
+                 request::resize_sidebar, request::not_implemented, request::message_person, request::close_notice,
                  request::resize_info, request::choose_new_proxy, request::toggle_mute, request::close_account_pages,
                  request::accounts_back, request::account_page, request::flip_account_receipts,
                  request::proxy_kind, request::choose_account_proxy, request::manage_proxies,
@@ -526,6 +529,7 @@ struct actions {
   void submit_message(std::string text) { requests.emplace_back(request::submit_message{std::move(text)}); }
   void send_typed() { requests.emplace_back(request::send_typed{}); }
   void resize_sidebar(float x) { requests.emplace_back(request::resize_sidebar{x}); }
+  void message_person(const mux::conversation_id& who) { requests.emplace_back(request::message_person{who}); }
   void not_implemented(std::string what) { requests.emplace_back(request::not_implemented{std::move(what)}); }
   void close_notice() { requests.emplace_back(request::close_notice{}); }
   void resize_info(float x) { requests.emplace_back(request::resize_info{x}); }
@@ -883,6 +887,13 @@ struct app {
   }
   void apply(const request::submit_message& one) { this->send_message(one.text); }
   void apply(const request::resize_sidebar& one) { root().main().resize_sidebar(one.x); }
+  // A member written to: their direct chat, where there is one already.
+  void apply(const request::message_person& one) {
+    if (model->find(one.who) != nullptr)
+      this->apply(request::choose{one.who});
+    else
+      root().show_notice("Starting a new chat");
+  }
   void apply(const request::not_implemented& one) { root().show_notice(one.what); }
   void apply(const request::close_notice&) { root().close_notice(); }
   void apply(const request::resize_info& one) { root().main().resize_info(one.x); }

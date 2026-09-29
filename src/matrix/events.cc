@@ -90,6 +90,26 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       reactions_[one.event_id] = {*content.m_relates_to->event_id, *content.m_relates_to->key, one.sender};
       sink_(change::reaction_changed{in, *content.m_relates_to->event_id, *content.m_relates_to->key, one.sender,
                                      true, one.event_id, at});
+      // Fetched on its own, as what a reply quotes: a message of its own for
+      // the quote, whether reactions are shown as events or not -- "Reacted
+      // with" its key -- pointing at what it reacted to.
+      const std::string& key = *content.m_relates_to->key;
+      std::visit(overloaded{[&](placement::aside) {
+                              message made{.in = in,
+                                           .id = one.event_id,
+                                           .sender = one.sender,
+                                           .at = at,
+                                           .body = {std::format("Reacted with {}", key.starts_with("mxc://")
+                                                                                       ? std::string("a custom emoji")
+                                                                                       : key),
+                                                    std::nullopt},
+                                           .replies_to = content.m_relates_to->event_id,
+                                           .outgoing = one.sender == id_.address,
+                                           .reaction = true};
+                              sink_(change::message_added{std::move(made), where});
+                            },
+                            [](const auto&) {}},
+                 where);
     }
   } else {
     // The rest, by its type: loom's timeline union does not have their

@@ -214,6 +214,9 @@ struct message {
   // renamed, an event nothing here reads -- shown as a line of its own in
   // the middle, as tdesktop shows its service messages.
   bool service = false;
+  // A reaction, as a reply quotes it: its replies_to is the message it
+  // reacted to, where a press on the quote goes.
+  bool reaction = false;
   delivery_t delivery = delivery::sent{};
   std::map<std::string, std::set<std::string>> reactions;  // key -> who
   // The same reactions as the events they are, where the protocol has

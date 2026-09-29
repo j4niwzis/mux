@@ -122,6 +122,17 @@ void app::apply(const request::message_person& one) {
     root().show_notice("Starting a new chat");
 }
 
-void app::apply(const request::jump_to_message& one) { root().main().jump_to(one.id, one.fragment); }
+// A quote pressed: to what it quotes -- or, a reaction's, to the message it
+// reacted to, as any quote's.
+void app::apply(const request::jump_to_message& one) {
+  if (const auto& chosen = root().main().chosen)
+    if (const mux::conversation* in = model->find(*chosen))
+      if (const auto aside = in->quoted.find(one.id);
+          aside != in->quoted.end() && aside->second.reaction && aside->second.replies_to) {
+        root().main().jump_to(*aside->second.replies_to, std::nullopt);
+        return;
+      }
+  root().main().jump_to(one.id, one.fragment);
+}
 
 }  // namespace mux::app

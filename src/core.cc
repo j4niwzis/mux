@@ -195,6 +195,10 @@ struct attachment {
   // A picture's blurhash, where its sender gave one: what is shown until
   // the picture comes.
   std::optional<std::string> blurhash;
+  // A video's file, where it is one -- the source above is then its
+  // thumbnail, shown as a picture is -- and how long it runs.
+  std::optional<std::string> video;
+  std::int64_t duration_ms = 0;
   friend bool operator==(const attachment&, const attachment&) = default;
 };
 

@@ -219,6 +219,39 @@ struct picture_view : scene::Node {
   // Its own proportions: as its message says them, and as its picture has
   // them once it has come -- never another's.
   int width = 0, height = 0;
+  // Over a video's thumbnail, as Telegram's: a dark disc with the play mark
+  // in the middle, and its length on a dark pill at the top left.
+  struct video_marks : nodes::Stack {
+    struct disc : nodes::Stack {
+      struct parts_t {
+        nodes::Icon mark{shape_of(icon::play{}), skia::colorSetARGB(255, 255, 255, 255)};
+      } parts;
+      disc() {
+        fStack.justify = nodes::justify::middle{};
+        fState.apply({.place = scene::anchor::kCentre, .width = 44.0f, .height = 44.0f, .cornerRadius = 22.0f,
+                      .background = skia::colorSetARGB(0x54, 0, 0, 0)});
+        parts.mark.apply({.width = 18.0f, .height = 18.0f, .alignSelf = scene::align::kMiddle});
+      }
+    };
+    struct length : nodes::Stack {
+      struct parts_t {
+        nodes::Text label;
+      } parts;
+      explicit length(std::int64_t ms)
+          : parts{.label = nodes::Text(std::format("{}:{:02}", ms / 60000, (ms / 1000) % 60), 11.0f,
+                                       skia::colorSetARGB(255, 255, 255, 255))} {
+        fState.apply({.place = scene::anchor::kTopLeft, .autoSize = scene::axes::kBoth,
+                      .margin = {6.0f, 0.0f, 0.0f, 6.0f}, .padding = {2.0f, 8.0f, 2.0f, 8.0f}, .cornerRadius = 9.0f,
+                      .background = skia::colorSetARGB(0x54, 0, 0, 0)});
+        this->setVisible(ms > 0);
+      }
+    };
+    struct parts_t {
+      disc play;
+      length runs;
+    } parts;
+    explicit video_marks(std::int64_t ms) : parts{.runs = length(ms)} { fState.apply({.fill = true}); }
+  };
   // The time on a dark pill over its corner, where there is no caption.
   struct time_pill : nodes::Stack {
     struct parts_t {
@@ -239,7 +272,13 @@ struct picture_view : scene::Node {
     nodes::Image<from_moving_thumbnail> picture;
     widgets::RadialLoader<> loader{};  // while it is coming
     time_pill time{};
+    // A video's: the play mark in the middle, its length at the top left.
+    std::optional<video_marks> video;
   } parts;
+  void show_video(std::int64_t duration_ms) {
+    parts.video.emplace(duration_ms);
+    this->invalidateLayout();
+  }
 
   // Rounded; a plate until the thumbnail comes, then the thumbnail covering
   // it, cut at the middle where the proportions differ by a rounding.
@@ -1125,6 +1164,8 @@ struct message_bubble : nodes::Stack {
       const mux::attachment& carried = *said.attachment;
       std::visit(overloaded{[&](attachment_kind::image) {
                               body.parts.picture.emplace(carried.source, carried.width, carried.height);
+                              if (carried.video)
+                                body.parts.picture->show_video(carried.duration_ms);
                             },
                             [&](attachment_kind::file) {
                               body.parts.file.emplace(carried.source, carried.name, carried.size,

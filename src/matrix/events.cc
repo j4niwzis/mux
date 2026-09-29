@@ -71,6 +71,22 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
         carried.width = static_cast<int>(number("w"));
         carried.height = static_cast<int>(number("h"));
         carried.blurhash = text(member(*info, "xyz.amorgan.blurhash"));
+        // A video: shown by its thumbnail, as a picture, until it can be
+        // played here; its own size where the video gives none.
+        const bool video = std::visit(overloaded{[](msgtype::video) { return true; }, [](const auto&) { return false; }},
+                                      msgtype_of(content.msgtype));
+        if (const auto thumbnail = text(member(*info, "thumbnail_url")); video && thumbnail) {
+          carried.video = carried.source;
+          carried.source = *thumbnail;
+          carried.duration_ms = number("duration");
+          carried.kind = attachment_kind::image{};
+          if (const knot::value* thumb = member(*info, "thumbnail_info"); thumb && (carried.width == 0 || carried.height == 0)) {
+            const knot::value* w = member(*thumb, "w");
+            const knot::value* h = member(*thumb, "h");
+            carried.width = w && w->is<std::int64_t>() ? static_cast<int>(w->as<std::int64_t>()) : 0;
+            carried.height = h && h->is<std::int64_t>() ? static_cast<int>(h->as<std::int64_t>()) : 0;
+          }
+        }
       }
       if (picture)
         carried.kind = attachment_kind::image{.moves = moving_type(carried.mimetype)};

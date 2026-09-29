@@ -295,6 +295,8 @@ class message_store {
     a.size = number("size");
     a.width = static_cast<int>(number("w"));
     a.height = static_cast<int>(number("h"));
+    a.video = text_of(c, "video");
+    a.duration_ms = number("duration");
     return a;
   }
   static knot::value::object object_of(const mux::attachment& carried_one) {
@@ -310,6 +312,10 @@ class message_store {
       carried.emplace("blurhash", knot::value(*carried_one.blurhash));
     carried.emplace("w", knot::value(static_cast<std::int64_t>(carried_one.width)));
     carried.emplace("h", knot::value(static_cast<std::int64_t>(carried_one.height)));
+    if (carried_one.video) {
+      carried.emplace("video", knot::value(*carried_one.video));
+      carried.emplace("duration", knot::value(carried_one.duration_ms));
+    }
     return carried;
   }
   static std::string line_of(const mux::message& one) {

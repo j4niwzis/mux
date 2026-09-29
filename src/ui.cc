@@ -2118,7 +2118,11 @@ struct info_panel : nodes::Stack {
   // The upper part as a function of the group's view and the member open.
   void render() {
     view shown = group_view;
-    if (person)
+    if (person) {
+      // Anyone's page: a member's, with how they are and their role; or,
+      // for someone the chat does not list -- the other side of a direct
+      // chat, a sender from further back -- by their address.
+      shown = {*person, *person, std::string("not a member of this chat"), group_view.group, group_view.muted, true};
       if (const auto found = std::ranges::find(shown_members, *person, [](const auto& each) { return each.first.id; });
           found != shown_members.end()) {
         const member& who = found->first;
@@ -2128,7 +2132,11 @@ struct info_panel : nodes::Stack {
                  group_view.group,
                  group_view.muted,
                  true};
+      } else if (!group_view.group && *person == key) {
+        shown.name = group_view.name;
+        shown.status = group_view.status;
       }
+    }
     upper.show(shown, [this](const view& v) { return head(actions, this, v); });
     const bool list = shown.group && !shown.of_person;
     band_2.setVisible(list);
@@ -2481,15 +2489,14 @@ struct timeline_area : scene::Node {
 
   // A right press on a message: its menu, where it was pressed.
   using Node::onPointer;
-  void onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
-    if (press.button == 1) {
+  // A press on what is in a message -- a picture, a file, a reply's quote,
+  // its sender -- as a click: it comes here from what was pressed when that
+  // did not take it, at once or, in a list that scrolls, on the release.
+  [[nodiscard]] bool onClick(float x, float y) {
+    const struct {
+      float x, y;
+    } press{x, y};
       for (const message_bubble& one : std::get<0>(std::get<0>(timeline.fChildren).fChildren)) {
-        for (const link_line& link : one.body.links)
-          if (link.id() == reply.fTarget) {
-            actions->open_url(link.url);
-            reply.handle();
-            return;
-          }
         // A picture: seen whole. A file: saved and opened.
         if (one.body.picture && one.body.picture->bounds().contains(press.x, press.y)) {
           const conversation* chat = seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr;
@@ -2497,30 +2504,29 @@ struct timeline_area : scene::Node {
           actions->open_picture(one.body.picture->source, one.sender,
                                 chat ? sender_name(*chat, one.sender) : one.sender,
                                 std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day}, clock_of(one.said.at)));
-          reply.handle();
-          return;
+          return true;
         }
         if (one.body.file && one.body.file->bounds().contains(press.x, press.y) && one.said.attachment) {
           actions->open_file(one.body.file->source, one.said.attachment->name);
-          reply.handle();
-          return;
+          return true;
         }
         // The quote: to the message it quotes.
         if (one.body.quote && one.said.replies_to && one.body.quote->bounds().contains(press.x, press.y)) {
           actions->jump_to_message(*one.said.replies_to);
-          reply.handle();
-          return;
+          return true;
         }
         // The sender, by their avatar or their name: their page.
         if ((one.face.visible() && one.face.fState.fAlpha > 0.0f && one.face.bounds().contains(press.x, press.y)) ||
             (one.body.name && one.body.name->bounds().contains(press.x, press.y))) {
           actions->open_member_info(one.sender);
-          reply.handle();
-          return;
+          return true;
         }
       }
-      return;
-    }
+    return false;
+  }
+  void onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
+    if (press.button == 1)
+      return;  // the main button's presses come as clicks, above
     if (press.button != 3)
       return;
     // Whichever message's row the press is in -- its text, its bubble or the

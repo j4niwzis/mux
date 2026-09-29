@@ -142,6 +142,13 @@ target_link_libraries(mux_modules PUBLIC tern loom Boost::asio Boost::beast Boos
 
 # The accounts kept between runs: a library of its own, on knot alone, so
 # that it builds and is tested without the protocols.
+# Outside a release build, Asio completion handlers erased to their
+# signature (net.cc, kErasedHandlers): the network operations made once
+# each, not once per place awaited. A release build keeps them static.
+option(MUX_ERASE_HANDLERS "Outside a release build, erase Asio completion handlers" ON)
+target_compile_definitions(mux_modules PUBLIC
+  $<$<AND:$<BOOL:${MUX_ERASE_HANDLERS}>,$<NOT:$<CONFIG:Release>>>:MUX_ERASED_HANDLERS>)
+
 add_library(mux_config)
 target_sources(mux_config PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES src/config.cc)
 target_compile_features(mux_config PUBLIC cxx_std_26)

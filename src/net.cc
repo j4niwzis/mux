@@ -30,6 +30,14 @@ export module mux.net;
 import std;
 import tern;
 
+// Whether completion handlers are erased (outside a release build): CMake
+// says which build this is; C++ cannot see it.
+#ifdef MUX_ERASED_HANDLERS
+inline constexpr bool kErasedHandlers = true;
+#else
+inline constexpr bool kErasedHandlers = false;
+#endif
+
 export namespace mux::net {
 
 namespace asio = boost::asio;
@@ -137,10 +145,18 @@ class loop {
     if (!self)
       throw std::logic_error("mux::net::loop::await outside a fiber");
     std::optional<std::tuple<error_code, Values...>> got;
-    start([this, self, &got](error_code error, Values... values) {
+    auto done = [this, self, &got](error_code error, Values... values) {
       got.emplace(error, std::move(values)...);
       wake(self);
-    });
+    };
+    // Outside a release build, the handler erased to its signature: every
+    // Asio, Beast and TLS operation under it is then made once for each
+    // signature, not once for each place it is awaited from -- most of a
+    // build. A release build keeps the handler's own type, all of it inlined.
+    if constexpr (kErasedHandlers)
+      start(asio::any_completion_handler<void(error_code, Values...)>(std::move(done)));
+    else
+      start(std::move(done));
     while (!got)
       park();
     return std::move(*got);

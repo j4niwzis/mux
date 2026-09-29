@@ -124,13 +124,16 @@ if(MUX_UI)
   # skiff and skiff-widgets say the rest of what they are in their own trees.
   cme_declare_port(NAME skiff PROVIDES skiff
     GITHUB_REPOSITORY j4niwzis/skiff
-    GIT_TAG e9c71fdc625530a55cb32f670bcd993898c26659)
+    GIT_TAG 5e7ccaab525d1fdc9d6194be5c1f06213783f6e5)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
     GIT_TAG 617b9b3097fe66a67fe6be3912c789db67e172ef)
   # Skia as skiff draws with it, on GL, with the system's fonts read from
   # their directory.
   set(SKIFF_SKIA_COMPONENTS gl fontmgr-directory CACHE STRING "" FORCE)
+  # Text shaped by HarfBuzz and laid out by Unicode's rules through alef:
+  # Arabic and Hebrew, Indic scripts, emoji sequences, CJK line breaks.
+  set(SKIFF_TEXT_SHAPING ON CACHE BOOL "" FORCE)
   cme_find_package(Skia REQUIRED COMPONENTS gl png jpeg freetype fontmgr-directory)
   cme_find_package(SDL3 REQUIRED)
   cme_find_package(skiff-widgets REQUIRED)

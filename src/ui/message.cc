@@ -404,49 +404,53 @@ struct message_bubble : nodes::Stack {
     std::vector<link_card> cards;
     std::optional<reaction_row> reactions;
     nodes::Text time;
-    // A flash over it, fading, where it was jumped to.
+    // The time inside the last line of the text, where that line leaves
+    // room for it, as Telegram's: out of the column's flow, at its end.
+    nodes::Text inline_time;
+    // A flash over it, fading, where it was jumped to: its background
+    // going to the accent and back.
     skiff::paint::Tween flash{0.0f, 1200.0f};
+    skia::SkColor plate = bubble_colour;
     [[nodiscard]] bool settling() const { return flash.moving(); }
+    [[nodiscard]] static skia::SkColor mixed(skia::SkColor from, skia::SkColor to, float amount) {
+      const auto channel = [&](int shift) {
+        const float a = static_cast<float>((from >> shift) & 0xFF), b = static_cast<float>((to >> shift) & 0xFF);
+        return static_cast<skia::SkColor>(std::lround(a + (b - a) * amount)) << shift;
+      };
+      return (from & 0xFF000000u) | channel(16) | channel(8) | channel(0);
+    }
     // The time goes in the last line of the text where that line leaves room
-    // for it, as Telegram's does; on a line of its own where it does not.
-    // Decided from the last layout; a change is laid out at the next.
+    // for it; on a line of its own where it does not. Decided from the last
+    // layout; a change is laid out at the next.
     void update(double now_ms) {
       if (flash.step(now_ms))
-        this->markDamaged();
+        fState.apply({.background = mixed(plate, accent_colour, 0.35f * flash.value())});
       if (!text.visible() || text.bounds().isEmpty() || !cards.empty() || reactions)
         return;
       skia::SkFont* font = skiff::paint::defaultFont();
       if (font == nullptr)
         return;
       const float room = fState.contentBox().width();
-      const float needs = text.lastLineWidth() + skiff::paint::Painter(nullptr, *font).measure(time.text(), 11.0f) + 10.0f;
-      const bool inline_time = needs <= room;
-      if (inline_time == time.visible())
-        time.setVisible(!inline_time);
-    }
-    void draw(skia::SkCanvas* canvas, float alpha) {
-      scene::drawDefault(*this, canvas, alpha);
-      if (!time.visible())
-        if (skia::SkFont* font = skiff::paint::defaultFont()) {
-          const skiff::paint::Painter p(canvas, *font);
-          const skia::SkRect inside = fState.contentBox();
-          const float width = p.measure(time.text(), 11.0f);
-          p.text(time.text(), inside.fRight - width, text.bounds().fBottom - 3.0f, 11.0f, time.colour(), alpha);
-        }
-      if (flash.value() > 0.0f)
-        if (skia::SkFont* font = skiff::paint::defaultFont())
-          skiff::paint::Painter(canvas, *font)
-              .fillRounded(fState.fBounds, 12.0f, (accent_colour & 0x00FFFFFFu) | (90u << 24), alpha * flash.value());
+      const float needs =
+          text.lastLineWidth() + skiff::paint::Painter(nullptr, *font).measure(inline_time.text(), 11.0f) + 10.0f;
+      const bool inside = needs <= room;
+      if (inside == time.visible()) {
+        time.setVisible(!inside);
+        inline_time.setVisible(inside);
+      }
     }
     body_column(bool mine, std::string said, std::string when)
-        : outgoing(mine), text(std::move(said), 13.0f, text_colour), time(std::move(when), 11.0f,
-                                                                           mine ? sent_time_colour : dim_colour) {
+        : outgoing(mine), text(std::move(said), 13.0f, text_colour), time(when, 11.0f, mine ? sent_time_colour : dim_colour),
+          inline_time(when, 11.0f, mine ? sent_time_colour : dim_colour), plate(mine ? out_bubble_colour : bubble_colour) {
       this->setGap(2.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
                     .padding = {kPadY, kPadX, 5.0f, kPadX}, .cornerRadius = 12.0f, .background = mine ? out_bubble_colour : bubble_colour});
       text.setWrapped(true);
       text.setShrinksToLines(true);
       time.apply({.alignSelf = scene::align::kEnd});
+      // Shown once the last line is found to leave room for it.
+      inline_time.apply({.place = scene::anchor::kBottomRight});
+      inline_time.setVisible(false);
     }
     void forEachChild(auto&& f) {
       f(name);
@@ -457,6 +461,7 @@ struct message_bubble : nodes::Stack {
       f(cards);
       f(reactions);
       f(time);
+      f(inline_time);
     }
   } body;
 
@@ -469,6 +474,13 @@ struct message_bubble : nodes::Stack {
         outgoing(said.outgoing), sender(said.sender), face(said.sender, sender_name(in, said.sender), kAvatar),
         body(said.outgoing, said.redacted ? std::string("(removed)") : said.body.plain + (said.edited ? " (edited)" : ""),
              clock_of(said.at)) {
+    swipe_mark.apply({.place = scene::anchor::kCentreRight,
+                      .x = -6.0f,
+                      .width = 28.0f,
+                      .height = 28.0f,
+                      .cornerRadius = 14.0f,
+                      .background = tile_colour,
+                      .alpha = 0.0f});
     this->setHorizontal();
     this->setGap(8.0f);
     // As tdesktop: a sender's messages one under the other nearly touch;
@@ -551,38 +563,30 @@ struct message_bubble : nodes::Stack {
     }
   }
 
+  // Swiped to the left to answer it: how far, following the pointer, and
+  // back to its place when let go. Its avatar and bubble drawn moved --
+  // where they are laid out does not change -- and the arrow of a reply
+  // coming in at the right, out of the row's flow, lit once it is far
+  // enough.
+  skiff::paint::Tween swipe{0.0f, 180.0f, skiff::paint::movement::subtle{}};
+  static constexpr float kSwipeToReply = 70.0f;
+  nodes::Icon swipe_mark{shape_of(icon::back{}), dim_colour};
+  [[nodiscard]] bool settling() const { return swipe.moving(); }
+  void update(double now_ms) {
+    if (!swipe.step(now_ms))
+      return;
+    const float shift = swipe.value();
+    const float reached = std::clamp(-shift / kSwipeToReply, 0.0f, 1.0f);
+    face.apply({.shiftX = shift});
+    body.apply({.shiftX = shift});
+    swipe_mark.apply({.background = reached >= 1.0f ? accent_colour : tile_colour, .alpha = reached});
+    swipe_mark.setColour(reached >= 1.0f ? on_accent_colour : dim_colour);
+  }
+
   void forEachChild(auto&& f) {
     f(face);
     f(body);
-  }
-
-  // Swiped to the left to answer it: how far, following the pointer, and
-  // back to its place when let go. Drawn moved, with the arrow of a reply
-  // coming in at the right; where it is laid out does not change.
-  skiff::paint::Tween swipe{0.0f, 180.0f, skiff::paint::movement::subtle{}};
-  static constexpr float kSwipeToReply = 70.0f;
-  [[nodiscard]] bool settling() const { return swipe.moving(); }
-  void update(double now_ms) {
-    if (swipe.step(now_ms))
-      this->markDamaged();
-  }
-  void draw(skia::SkCanvas* canvas, float alpha) {
-    const float shift = swipe.value();
-    if (shift == 0.0f) {
-      scene::drawDefault(*this, canvas, alpha);
-      return;
-    }
-    const int saved = canvas->save();
-    canvas->translate(shift, 0.0f);
-    scene::drawDefault(*this, canvas, alpha);
-    canvas->restoreToCount(saved);
-    const float reached = std::clamp(-shift / kSwipeToReply, 0.0f, 1.0f);
-    const skia::SkRect& box = fState.fBounds;
-    const skia::SkRect disc = skia::SkRect::MakeXYWH(box.fRight - 34.0f, box.centerY() - 14.0f, 28.0f, 28.0f);
-    if (skia::SkFont* font = skiff::paint::defaultFont())
-      skiff::paint::Painter(canvas, *font).fillRounded(disc, 14.0f, reached >= 1.0f ? accent_colour : tile_colour,
-                                                       alpha * reached);
-    draw_icon(canvas, icon::back{}, disc, reached >= 1.0f ? on_accent_colour : dim_colour, alpha * reached);
+    f(swipe_mark);
   }
   // Pressed with the right button, it asks for its menu.
   [[nodiscard]] bool acceptsInput() const { return true; }

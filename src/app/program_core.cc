@@ -50,9 +50,6 @@ void app::woken() {
   // Messages held to a number in all, least recently read out first.
   model->trim(static_cast<std::size_t>(limits.messages_in_memory), root().main().chosen);
   this->refresh();
-  // What comes into the chat being read, at its end, is read.
-  if (const auto& chosen = root().main().chosen; chosen && root().main().timeline.atEnd(40.0f))
-    reading.mark_read(*chosen);
   // A room joined from a link: opened once it is here.
   if (joining)
     if (const auto found = mux::logic::chat_of(*model, *joining)) {
@@ -125,6 +122,12 @@ void app::wire() {
 void app::before_frame() {
   ++mux::ui::image_cache::frame();
   root().drop_closed();
+  // What has been on screen in the chat shown is read, as far as it goes,
+  // as in tdesktop: the chat list's counts go down as it is read, not all
+  // at once when it is opened or left.
+  if (const auto& chosen = root().main().chosen; chosen && !root().open_panel() && !root().settings_up())
+    if (const auto seen = root().main().last_seen(); seen && reading.mark_seen(*chosen, *seen))
+      this->refresh();
   // The input has the keyboard's focus whenever nothing else does -- at the
   // start, after a panel or a search closes -- so typing always goes to it,
   // as in tdesktop.

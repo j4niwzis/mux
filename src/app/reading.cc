@@ -30,14 +30,33 @@ class reading_part {
     const conversation* one = s_->model->find(which);
     if (!one)
       return;
-    const auto id = logic::to_mark_read(*one);
+    if (const auto id = logic::to_mark_read(*one))
+      this->read_to(which, *id);
+  }
+
+  // A chat read as far as the user has seen it on screen: true where that
+  // moved what is read, and the counts are to be shown again.
+  bool mark_seen(const conversation_id& which, std::string_view seen) {
+    if (s_->demo())
+      return false;
+    const conversation* one = s_->model->find(which);
+    if (!one)
+      return false;
+    const auto id = logic::read_up_to_seen(*one, seen);
     if (!id)
-      return;
-    s_->model->read_up_to(which, *id);
+      return false;
+    this->read_to(which, *id);
+    return true;
+  }
+
+  // Read up to a message: kept, and sent where the account's privacy lets
+  // it.
+  void read_to(const conversation_id& which, const std::string& id) {
+    s_->model->read_up_to(which, id);
     s_->store->keep_reads(which, *s_->model->find(which));
     if (const auto* account = s_->settings_of(which.account.address);
         account && mux::config::read_receipts_of(*account))
-      s_->net->mark_read(which, *id);
+      s_->net->mark_read(which, id);
   }
 
   // The user typing in the chosen chat, or not: said as the logic of it

@@ -54,7 +54,6 @@ void app::apply(const request::choose& one) {
     net->fetch_members(one.which);
   root().main().chosen = one.which;
   root().main().show(*model);
-  reading.mark_read(one.which);
 }
 
 void app::apply(const request::leave_chat&) {

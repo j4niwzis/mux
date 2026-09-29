@@ -417,9 +417,29 @@ struct conversations_screen : nodes::Stack {
     made.to = to > 0 ? std::optional<std::string>(all[to - 1].id) : std::nullopt;
     made.to_end = to == all.size();
   }
-  // A message to bring into view, once it is made and laid out.
+  // A message to bring into view, once it is made and laid out -- flashed,
+  // unless it is where a chat opened, at what it was read up to.
   std::optional<std::string> jumping_to;
+  bool jump_quiet = false;
   int jump_tries = 0;
+
+  // The newest message whose end is on screen in the chat shown: how far it
+  // has been read. None while a jump is on its way, as what is passed on the
+  // way is not read.
+  [[nodiscard]] std::optional<std::string> last_seen() {
+    if (jumping_to)
+      return std::nullopt;
+    const skia::SkRect view = timeline.bounds();
+    const auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
+    for (auto it = entries.rbegin(); it != entries.rend(); ++it) {
+      const skia::SkRect box = it->bounds();
+      if (it->message_id.empty() || box.isEmpty())
+        continue;
+      if (box.fBottom <= view.fBottom + 1.0f && box.fBottom > view.fTop)
+        return it->message_id;
+    }
+    return std::nullopt;
+  }
   // The window asked around a message, and the page forward asked: not
   // asked twice.
   std::optional<std::string> context_asked, newer_asked;
@@ -432,6 +452,7 @@ struct conversations_screen : nodes::Stack {
       return;
     // Made, loaded or paged back to at the next frames, as update() finds it.
     jumping_to = std::move(id);
+    jump_quiet = false;
     jump_tries = 0;
     context_asked.reset();
   }
@@ -447,9 +468,11 @@ struct conversations_screen : nodes::Stack {
       if (it != entries.end() && !it->bounds().isEmpty()) {
         const float to = timeline.current() + (it->bounds().fTop - timeline.bounds().fTop) - 60.0f;
         timeline.scrollTo(std::max(0.0f, to));
-        it->body.flash.jump(1.0f);
-        it->body.flash.setTarget(0.0f);
-        it->body.markDamaged();
+        if (!jump_quiet) {
+          it->body.flash.jump(1.0f);
+          it->body.flash.setTarget(0.0f);
+          it->body.markDamaged();
+        }
         jumping_to.reset();
       } else if (one == nullptr) {
         jumping_to.reset();
@@ -663,7 +686,15 @@ struct conversations_screen : nodes::Stack {
       if (shown_chat)
         scrolled[*shown_chat] = was_at_end ? -1.0f : left_at;
       const auto kept = scrolled.find(*chosen);
-      if (kept == scrolled.end() || kept->second < 0.0f)
+      if (one->read_up_to && one->unread_here() > 0) {
+        // Unread in it: opened where it was read up to, as tdesktop opens
+        // a chat at its first unread, and read on from there as it is seen.
+        timeline.scrollToEnd(false);
+        jumping_to = *one->read_up_to;
+        jump_quiet = true;
+        jump_tries = 0;
+        context_asked.reset();
+      } else if (kept == scrolled.end() || kept->second < 0.0f)
         timeline.scrollToEnd(false);  // a chat opened starts at its newest
       else
         timeline.setCurrent(kept->second);

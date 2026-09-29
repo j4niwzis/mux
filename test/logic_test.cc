@@ -68,6 +68,24 @@ TEST(Reading, ReadUpToTheNewestFromSomeoneElse) {
   EXPECT_EQ(logic::to_mark_read(chat), std::nullopt);
 }
 
+// Read as far as it was seen: the newest from someone else up to what was
+// on screen, and never back from what was read.
+TEST(Reading, ReadUpToWhatWasSeenOnly) {
+  conversation chat;
+  chat.timeline = {said("1", "hi", false), said("2", "hello", false), said("3", "mine", true),
+                   said("4", "later", false)};
+  chat.read_up_to = "1";
+  EXPECT_EQ(logic::read_up_to_seen(chat, "3"), std::optional<std::string>("2"));
+  EXPECT_EQ(logic::read_up_to_seen(chat, "1"), std::nullopt);
+  EXPECT_EQ(logic::read_up_to_seen(chat, "4"), std::optional<std::string>("4"));
+  chat.read_up_to = "4";
+  EXPECT_EQ(logic::read_up_to_seen(chat, "2"), std::nullopt);
+  // A window away from the newest, without what is read: nothing said.
+  chat.read_up_to = "9";
+  chat.detached = true;
+  EXPECT_EQ(logic::read_up_to_seen(chat, "4"), std::nullopt);
+}
+
 TEST(Reading, TypingSaidAtMostEveryTwentySeconds) {
   using clock = std::chrono::steady_clock;
   const auto yes = [](const conversation_id&) { return true; };

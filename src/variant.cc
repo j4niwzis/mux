@@ -36,6 +36,18 @@ inline constexpr bool kVariantTables = true;
 inline constexpr bool kVariantTables = false;
 #endif
 
+// How a known alternative is read at runtime, by the compiler: clang drops
+// a check of what was just written only when the object is read from the
+// buffer (std::launder is free there; through the pointer it reloads the
+// pointer, its tag lost when inlining); gcc only when it is read through the
+// pointer (its std::launder is a barrier nothing is carried across). C++
+// cannot see which compiler it is; only the compiler's own macro says.
+#if defined(__clang__)
+inline constexpr bool kReadsBuffer = true;
+#else
+inline constexpr bool kReadsBuffer = false;
+#endif
+
 // What every alternative is held in: one base for the pointer, empty.
 struct held {};
 template <class T>
@@ -315,16 +327,20 @@ class variant {
   [[nodiscard]] constexpr T& value() noexcept {
     if consteval {
       return detail::value_of<T>(fObject);
-    } else {
+    } else if constexpr (detail::kReadsBuffer) {
       return std::launder(reinterpret_cast<detail::holder<T>*>(fBuffer))->value;
+    } else {
+      return detail::value_of<T>(fObject);
     }
   }
   template <class T>
   [[nodiscard]] constexpr const T& value() const noexcept {
     if consteval {
       return detail::value_of<T>(static_cast<const detail::held*>(fObject));
-    } else {
+    } else if constexpr (detail::kReadsBuffer) {
       return std::launder(reinterpret_cast<const detail::holder<T>*>(fBuffer))->value;
+    } else {
+      return detail::value_of<T>(static_cast<const detail::held*>(fObject));
     }
   }
 
@@ -349,7 +365,11 @@ class variant {
     if consteval {
       delete static_cast<detail::holder<T>*>(self.fObject);
     } else {
-      std::launder(reinterpret_cast<detail::holder<T>*>(self.fBuffer))->~holder();
+      if constexpr (detail::kReadsBuffer) {
+        std::launder(reinterpret_cast<detail::holder<T>*>(self.fBuffer))->~holder();
+      } else {
+        static_cast<detail::holder<T>*>(self.fObject)->~holder();
+      }
     }
   }
   // Each operation for the one held: through its table, or its layer.

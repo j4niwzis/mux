@@ -16,6 +16,7 @@ import :controls;
 import :themes;
 import :names;
 import :html;
+import :message;
 
 export namespace mux::ui {
 
@@ -56,16 +57,25 @@ struct conversation_row : nodes::Stack {
                              .padX = 7.0f,
                              .bold = true}) {}
       };
+      // tdesktop's line: who said it -- "You:", a member's name, "Draft:"
+      // -- in its own colour (dialogsTextFgService), then what was said,
+      // its mentions as the bubble draws them: pills with their avatars.
       struct parts_t {
-        nodes::Text preview;
+        nodes::Text sender;
+        nodes::BasicText<message_pictures> preview;
         badge unread;
       } parts;
       bottom_line(std::int64_t count, bool chosen, bool muted)
-          : parts{.preview = nodes::Text("", 13.0f, chosen ? selected_text_colour : dim_colour),
+          : parts{.sender = nodes::Text("", 13.0f, chosen ? selected_text_colour : accent_colour),
+                  .preview = nodes::BasicText<message_pictures>("", 13.0f, chosen ? selected_text_colour : dim_colour),
                   .unread = badge(count, chosen, muted)} {
         this->setHorizontal();
         this->setGap(8.0f);
         fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+        this->setGap(4.0f);
+        parts.sender.apply({.alignSelf = scene::align::kMiddle});
+        parts.unread.apply({.margin = {0.0f, 0.0f, 0.0f, 4.0f}});
+        parts.sender.setVisible(false);
         parts.preview.setElided(true);
         parts.preview.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
         parts.unread.setVisible(count > 0);
@@ -111,27 +121,44 @@ struct conversation_row : nodes::Stack {
               .lines = lines_column(display_name(one), one.unread_here(), is_chosen, is_muted)} {
     auto& time = parts.lines.parts.top.parts.time;
     auto& preview = parts.lines.parts.bottom.parts.preview;
+    auto& sender = parts.lines.parts.bottom.parts.sender;
+    const auto said_by = [&](std::string who, skia::SkColor colour) {
+      sender.setText(std::move(who) + ":");
+      if (!is_chosen)
+        sender.setColour(colour);
+      sender.setVisible(true);
+    };
     this->setHorizontal();
     this->setGap(12.0f);
     fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = chosen_colour, .selectedBackground = selected_colour, .focusBackground = chosen_colour, .selected = chosen});
     if (const message* newest_one = newest(one)) {
       const message& last = *newest_one;
       time.setText(clock_of(last.at));
-      // What it says, as drawn: an HTML one's text, not its tags.
-      std::string text = last.body.html ? read_html(*last.body.html).text : last.body.plain;
-      std::ranges::replace(text, '\n', ' ');
+      // What it says, as drawn: an HTML one's text, not its tags, and
+      // its mentions by name, as pills.
+      mentioned shown;
+      if (last.body.html) {
+        auto read = read_html(*last.body.html);
+        shown = with_mentions(std::move(read.text), std::move(read.spans), one, nullptr);
+      } else {
+        shown = with_mentions(last.body.plain, link_spans_in(last.body.plain), one, nullptr);
+      }
+      std::ranges::replace(shown.text, '\n', ' ');
+      std::erase_if(shown.links, [](const nodes::Text::Link& link) { return !link.pill; });
       if (last.outgoing)
-        text = "You: " + text;
+        said_by("You", accent_colour);
       else if (is_group(one))
-        text = sender_name(one, last.sender) + ": " + text;
-      preview.setText(std::move(text));
+        said_by(sender_name(one, last.sender), accent_colour);
+      preview.setText(std::move(shown.text));
+      preview.setLinks(std::move(shown.links), accent_colour);
     }
     // A draft left in it: said instead, as tdesktop says it, in red.
     if (!shown.draft.empty() && !is_chosen) {
       std::string text = shown.draft;
       std::ranges::replace(text, '\n', ' ');
-      preview.setText("Draft: " + text);
-      preview.setColour(error_colour);
+      said_by("Draft", error_colour);
+      preview.setText(std::move(text));
+      preview.setLinks({}, accent_colour);
     }
   }
 

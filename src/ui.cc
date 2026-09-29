@@ -85,6 +85,8 @@ inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 //   void send_typed()                -- the send arrow: what is in the field
 //   void toggle_info()               -- the chosen chat's info, beside it
 //   void message_person(const conversation_id&)  -- a member's direct chat
+//   void jump_to_message(std::string id)  -- a quoted message, scrolled to
+//   void open_member_info(std::string id)  -- a sender's page, in the info
 //   void load_older(const conversation_id&, std::string from)  -- its history
 //   void jump_to_end()               -- back to a chat's newest message
 //   void open_url(std::string)       -- a link, in the browser
@@ -1214,6 +1216,20 @@ struct message_bubble : nodes::Stack {
     std::vector<link_line> links;
     std::optional<nodes::Text> reactions;
     nodes::Text time;
+    // A flash over it, fading, where it was jumped to.
+    skiff::paint::Tween flash{0.0f, 1200.0f};
+    [[nodiscard]] bool settling() const { return flash.moving(); }
+    void update(double now_ms) {
+      if (flash.step(now_ms))
+        this->markDamaged();
+    }
+    void draw(skia::SkCanvas* canvas, float alpha) {
+      scene::drawDefault(*this, canvas, alpha);
+      if (flash.value() > 0.0f)
+        if (skia::SkFont* font = skiff::paint::defaultFont())
+          skiff::paint::Painter(canvas, *font)
+              .fillRounded(fState.fBounds, 12.0f, (accent_colour & 0x00FFFFFFu) | (90u << 24), alpha * flash.value());
+    }
     body_column(bool mine, std::string said, std::string when)
         : outgoing(mine), text(std::move(said), 13.0f, text_colour), time(std::move(when), 11.0f,
                                                                            mine ? sent_time_colour : dim_colour) {
@@ -1988,7 +2004,10 @@ struct timeline_area : scene::Node {
   Actions* actions = nullptr;
   explicit timeline_area(Actions* a) : jump(a), actions(a) {
     timeline.apply({.fill = true});
-    std::get<0>(timeline.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
+    // The room around the messages is inside what scrolls, so the bar is at
+    // the window's edge.
+    std::get<0>(timeline.fChildren).apply(
+        {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 12.0f, 8.0f, 12.0f}});
     jump.setVisible(false);
   }
   void forEachChild(auto&& f) {
@@ -1999,13 +2018,27 @@ struct timeline_area : scene::Node {
   using Node::onPointer;
   void onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
     if (press.button == 1) {
-      for (const message_bubble& one : std::get<0>(std::get<0>(timeline.fChildren).fChildren))
+      for (const message_bubble& one : std::get<0>(std::get<0>(timeline.fChildren).fChildren)) {
         for (const link_line& link : one.body.links)
           if (link.id() == reply.fTarget) {
             actions->open_url(link.url);
             reply.handle();
             return;
           }
+        // The quote: to the message it quotes.
+        if (one.body.quote && one.said.replies_to && one.body.quote->bounds().contains(press.x, press.y)) {
+          actions->jump_to_message(*one.said.replies_to);
+          reply.handle();
+          return;
+        }
+        // The sender, by their avatar or their name: their page.
+        if ((one.face.visible() && one.face.fState.fAlpha > 0.0f && one.face.bounds().contains(press.x, press.y)) ||
+            (one.body.name && one.body.name->bounds().contains(press.x, press.y))) {
+          actions->open_member_info(one.sender);
+          reply.handle();
+          return;
+        }
+      }
       return;
     }
     if (press.button != 3)
@@ -2195,7 +2228,7 @@ struct conversations_screen : nodes::Stack {
       header.apply({.fillX = true, .height = chat_header<Actions>::kHeight});
       header.show({}, [a](const auto& shown) { return chat_header<Actions>(a, shown); });
       fState.apply({.fillY = true, .grow = scene::axes::kX});
-      area.apply({.fillX = true, .grow = scene::axes::kY, .margin = {8.0f, 12.0f, 8.0f, 12.0f}});
+      area.apply({.fillX = true, .grow = scene::axes::kY});
     }
     void forEachChild(auto&& f) {
       f(header);
@@ -2298,7 +2331,54 @@ struct conversations_screen : nodes::Stack {
   std::string searched;
   const model* last_model = nullptr;
 
+  // How many of the chat's newest messages are made into bubbles: the
+  // newest few dozen, and more as the reader scrolls up to them. What is
+  // made is what every frame walks, so a long chat is not all made at once.
+  static constexpr std::size_t kWindow = 80;
+  static constexpr std::size_t kWindowStep = 60;
+  std::size_t window = kWindow;
+  // A message to bring into view, once it is made and laid out.
+  std::optional<std::string> jumping_to;
+  int jump_tries = 0;
+
+  void jump_to(std::string id) {
+    if (!chosen || !last_model)
+      return;
+    const conversation* one = last_model->find(*chosen);
+    if (!one)
+      return;
+    const auto found = std::ranges::find(one->timeline, id, &message::id);
+    if (found != one->timeline.end()) {
+      const auto from_end = static_cast<std::size_t>(one->timeline.end() - found);
+      if (from_end + 10 > window) {
+        window = from_end + 10;
+        this->show_conversation(*last_model);
+      }
+    } else if (history_from) {
+      // Not loaded yet: the history is paged back until it is.
+      history_asked = history_from;
+      actions->load_older(*chosen, *history_from);
+    }
+    jumping_to = std::move(id);
+    jump_tries = 0;
+  }
+
   void update(double) {
+    // A message jumped to: into view, flashed, once it is laid out.
+    if (jumping_to) {
+      auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
+      const auto it = std::ranges::find(entries, *jumping_to, &message_bubble::message_id);
+      if (it != entries.end() && !it->bounds().isEmpty()) {
+        const float to = timeline.current() + (it->bounds().fTop - timeline.bounds().fTop) - 60.0f;
+        timeline.scrollTo(std::max(0.0f, to));
+        it->body.flash.jump(1.0f);
+        it->body.flash.setTarget(0.0f);
+        it->body.markDamaged();
+        jumping_to.reset();
+      } else if (++jump_tries > 600) {
+        jumping_to.reset();  // ten seconds of frames, and it never came
+      }
+    }
     if (side.search.field.text() != searched && last_model) {
       searched = side.search.field.text();
       this->show(*last_model);
@@ -2310,9 +2390,17 @@ struct conversations_screen : nodes::Stack {
       unseen = 0;
       chat.area.jump.set_unseen(0);
     }
-    if (chosen && history_from && history_asked != history_from && timeline.current() <= 4.0f) {
-      history_asked = history_from;
-      actions->load_older(*chosen, *history_from);
+    // Near the top: more of what is loaded made into bubbles, and past all
+    // of it, the history paged back.
+    if (chosen && last_model && timeline.current() <= 300.0f) {
+      const conversation* one = last_model->find(*chosen);
+      if (one && window < one->timeline.size()) {
+        window += kWindowStep;
+        this->show_conversation(*last_model);
+      } else if (history_from && history_asked != history_from && timeline.current() <= 4.0f) {
+        history_asked = history_from;
+        actions->load_older(*chosen, *history_from);
+      }
     }
   }
 
@@ -2418,10 +2506,14 @@ struct conversations_screen : nodes::Stack {
     };
     const auto first_of_run = [&](std::size_t i) { return i == 0 || !same(i, i - 1); };
     const auto last_of_run = [&](std::size_t i) { return !same(i, i + 1); };
+    // A chat shown anew starts from its newest few dozen.
+    if (shown_chat != chosen)
+      window = kWindow;
+    const std::size_t first_made = all.size() > window ? all.size() - window : 0;
     // The bubbles, as a function of the messages: those that show the same
     // are kept -- with a selection in them -- and only the new are made.
     if (nodes::reconcile(
-            entries, std::views::iota(std::size_t{0}, all.size()),
+            entries, std::views::iota(first_made, all.size()),
             [&](std::size_t i) { return all[i].id; }, [](const message_bubble& row) { return row.message_id; },
             [&](std::size_t i) { return message_bubble(*one, all[i], first_of_run(i), last_of_run(i)); },
             [&](const message_bubble& row, std::size_t i) {

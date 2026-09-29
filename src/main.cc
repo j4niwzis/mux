@@ -400,6 +400,12 @@ struct resize_sidebar {
 struct message_person {
   mux::conversation_id who;
 };
+struct jump_to_message {
+  std::string id;
+};
+struct open_member_info {
+  std::string id;
+};
 struct not_implemented {
   std::string what;
 };
@@ -461,7 +467,7 @@ using request_t =
                  request::close_menu, request::menu_reply, request::menu_edit, request::menu_copy,
                  request::menu_delete, request::cancel_compose, request::open_url,
                  request::switch_account, request::submit_message, request::send_typed,
-                 request::resize_sidebar, request::not_implemented, request::message_person, request::close_notice,
+                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_member_info, request::close_notice,
                  request::resize_info, request::choose_new_proxy, request::toggle_mute, request::close_account_pages,
                  request::accounts_back, request::account_page, request::flip_account_receipts,
                  request::proxy_kind, request::choose_account_proxy, request::manage_proxies,
@@ -530,6 +536,8 @@ struct actions {
   void send_typed() { requests.emplace_back(request::send_typed{}); }
   void resize_sidebar(float x) { requests.emplace_back(request::resize_sidebar{x}); }
   void message_person(const mux::conversation_id& who) { requests.emplace_back(request::message_person{who}); }
+  void jump_to_message(std::string id) { requests.emplace_back(request::jump_to_message{std::move(id)}); }
+  void open_member_info(std::string id) { requests.emplace_back(request::open_member_info{std::move(id)}); }
   void not_implemented(std::string what) { requests.emplace_back(request::not_implemented{std::move(what)}); }
   void close_notice() { requests.emplace_back(request::close_notice{}); }
   void resize_info(float x) { requests.emplace_back(request::resize_info{x}); }
@@ -893,6 +901,14 @@ struct app {
       this->apply(request::choose{one.who});
     else
       root().show_notice("Starting a new chat");
+  }
+  void apply(const request::jump_to_message& one) { root().main().jump_to(one.id); }
+  // A sender pressed in the messages: their page, in the chat's info.
+  void apply(const request::open_member_info& one) {
+    auto& screen = root().main();
+    if (!screen.info_open)
+      screen.toggle_info();
+    screen.info.open_member(one.id);
   }
   void apply(const request::not_implemented& one) { root().show_notice(one.what); }
   void apply(const request::close_notice&) { root().close_notice(); }

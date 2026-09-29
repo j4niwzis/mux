@@ -56,6 +56,8 @@ struct stub {
   void resize_sidebar(float) {}
   void not_implemented(std::string) {}
   void message_person(const mux::conversation_id&) {}
+  void jump_to_message(std::string) {}
+  void open_member_info(std::string) {}
   void close_notice() {}
   void resize_info(float) {}
   void choose_new_proxy(int) {}

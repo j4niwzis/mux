@@ -9,6 +9,7 @@ import knot;
 import loom.api;
 import loom.ev;
 import loom.state;
+import loom.cs.joining;
 import loom.cs.leaving;
 import loom.cs.login;
 import loom.cs.message_pagination;
@@ -570,7 +571,8 @@ class account {
                                        .highlights = kept.unread.highlight,
                                        .space = space(kept),
                                        .children = children_of(kept),
-                                       .member_count = kept.summary.joined_members});
+                                       .member_count = kept.summary.joined_members,
+                                       .alias = kept.state.canonical_alias()});
   }
 
   // Whether a room is a space: its creation says so, by its type.
@@ -620,6 +622,21 @@ class account {
     for (auto& [id, one] : who)
       out.push_back(std::move(one));
     sink_(change::members_changed{in, std::move(out)});
+  }
+  // A room joined, by its id or an alias, through the servers `via` names:
+  // it comes with the next sync.
+  void join(std::string room, std::vector<std::string> via) {
+    loop_->spawn([this, room = std::move(room), via = std::move(via)] {
+      if (!api_)
+        return;
+      auto got = perform(*api_, loom::cs::join_room{.room_id_or_alias = room,
+                                                    .via = via.empty() ? std::nullopt
+                                                                       : std::optional<std::vector<std::string>>(via)});
+      if (got)
+        log(id_, "joined {} ({})", room, got->room_id);
+      else
+        log(id_, "could not join {}: {}", room, got.error().said());
+    });
   }
   // A room's members, all of them, from the server: kept, and said.
   void fetch_members(std::string room) {

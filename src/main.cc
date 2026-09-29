@@ -184,6 +184,18 @@ struct network {
             one.account);
     });
   }
+  // A room joined by the account named, through the servers named.
+  void join(const mux::account_id& by, std::string room, std::vector<std::string> via) {
+    loop.post([this, by, room = std::move(room), via = std::move(via)] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == by)
+                account->join(room, via);
+            },
+            one.account);
+    });
+  }
   // All the members of a room, from its server.
   void fetch_members(const mux::conversation_id& in) {
     loop.post([this, in] {
@@ -852,6 +864,12 @@ struct app {
     // Messages held to a number in all, least recently read out first.
     model->trim(static_cast<std::size_t>(limits.messages_in_memory), root().main().chosen);
     this->refresh();
+    // A room joined from a link: opened once it is here.
+    if (pending_link)
+      if (const auto found = this->chat_of(*pending_link)) {
+        const auto where = std::exchange(pending_link, std::nullopt);
+        this->open_chat(*found, where->event);
+      }
   }
 
   // -- avatars: what the chats and the people in them look like
@@ -1215,7 +1233,165 @@ struct app {
     else
       net->remove_message(*chosen, menu_target.id);
   }
-  void apply(const request::open_url& one) { mux::host::open_url(one.url); }
+  // A link pressed: to a user, a room or a message, in here -- matrix.to,
+  // matrix: and xmpp: links -- and anywhere else, in the browser.
+  void apply(const request::open_url& one) {
+    if (auto where = link_target_of(one.url)) {
+      this->go_to(*where);
+      return;
+    }
+    mux::host::open_url(one.url);
+  }
+
+  // What a link points at, in here.
+  struct link_target {
+    std::string id;                    // @user, !room, #alias, or a JID
+    std::optional<std::string> event;  // $event, in the room
+    std::vector<std::string> via;      // the servers to join through
+    bool xmpp = false;
+  };
+  static std::string percent_decoded(std::string_view text) {
+    std::string out;
+    for (std::size_t at = 0; at < text.size(); ++at) {
+      if (text[at] == '%' && at + 2 < text.size() + 0 && at + 2 <= text.size() - 1) {
+        unsigned value = 0;
+        if (std::from_chars(text.data() + at + 1, text.data() + at + 3, value, 16).ec == std::errc{}) {
+          out += static_cast<char>(value);
+          at += 2;
+          continue;
+        }
+      }
+      out += text[at];
+    }
+    return out;
+  }
+  static std::optional<link_target> link_target_of(std::string_view url) {
+    link_target out;
+    std::string_view query;
+    const auto split_query = [&](std::string_view& path) {
+      if (const auto mark = path.find('?'); mark != std::string_view::npos) {
+        query = path.substr(mark + 1);
+        path = path.substr(0, mark);
+      }
+    };
+    const auto read_via = [&] {
+      for (std::size_t at = 0; at < query.size();) {
+        auto end = query.find('&', at);
+        if (end == std::string_view::npos)
+          end = query.size();
+        const std::string_view pair = query.substr(at, end - at);
+        if (pair.starts_with("via="))
+          out.via.push_back(percent_decoded(pair.substr(4)));
+        at = end + 1;
+      }
+    };
+    if (url.starts_with("https://matrix.to/#/")) {
+      std::string_view path = url.substr(20);
+      split_query(path);
+      read_via();
+      const auto slash = path.find('/');
+      out.id = percent_decoded(path.substr(0, slash));
+      if (slash != std::string_view::npos)
+        out.event = percent_decoded(path.substr(slash + 1));
+    } else if (url.starts_with("matrix:")) {
+      std::string_view path = url.substr(7);
+      split_query(path);
+      read_via();
+      const auto part = [&]() {
+        const auto slash = path.find('/');
+        const std::string_view one = path.substr(0, slash);
+        path = slash == std::string_view::npos ? std::string_view() : path.substr(slash + 1);
+        return one;
+      };
+      const std::string_view kind = part();
+      const std::string name = percent_decoded(part());
+      if (kind == "u")
+        out.id = "@" + name;
+      else if (kind == "r")
+        out.id = "#" + name;
+      else if (kind == "roomid")
+        out.id = "!" + name;
+      else
+        return std::nullopt;
+      if (part() == "e")
+        out.event = "$" + percent_decoded(part());
+    } else if (url.starts_with("xmpp:")) {
+      std::string_view path = url.substr(5);
+      split_query(path);
+      out.id = percent_decoded(path);
+      out.xmpp = true;
+    } else {
+      return std::nullopt;
+    }
+    if (out.id.empty() || (!out.xmpp && !std::string_view("@!#").contains(out.id.front())))
+      return std::nullopt;
+    return out;
+  }
+
+  // A link followed: the chat it names, opened -- and the message in it,
+  // jumped to -- or the person, their page; a room not joined yet, joined,
+  // and opened when it comes.
+  std::optional<link_target> pending_link;
+  void open_chat(const mux::conversation_id& which, const std::optional<std::string>& event) {
+    auto& screen = root().main();
+    screen.current = which.account;
+    this->apply(request::choose{which});
+    if (event)
+      screen.jump_to(*event);
+  }
+  std::optional<mux::conversation_id> chat_of(const link_target& where) const {
+    for (const auto& [account, one] : model->accounts())
+      for (const auto& [key, chat] : one.conversations) {
+        const bool matrix = std::holds_alternative<mux::protocol::matrix>(account.speaks);
+        if (where.xmpp != !matrix)
+          continue;
+        if (chat.id.id == where.id || (chat.alias && *chat.alias == where.id))
+          return chat.id;
+      }
+    return std::nullopt;
+  }
+  void go_to(const link_target& where) {
+    auto& screen = root().main();
+    if (!where.xmpp && where.id.front() == '@') {
+      // In the chat being read: their page. Elsewhere: a chat with them.
+      if (const mux::conversation* here = screen.chosen ? model->find(*screen.chosen) : nullptr;
+          here && std::ranges::contains(here->members, where.id, &mux::member::id)) {
+        this->apply(request::open_member_info{where.id});
+        return;
+      }
+      for (const auto& [account, one] : model->accounts())
+        for (const auto& [key, chat] : one.conversations)
+          if (std::holds_alternative<mux::conversation_kind::direct>(chat.kind) &&
+              std::ranges::contains(chat.members, where.id, &mux::member::id)) {
+            this->open_chat(chat.id, std::nullopt);
+            return;
+          }
+      root().show_message("No chat yet", std::format("There is no chat with {} yet.", where.id));
+      return;
+    }
+    if (const auto found = this->chat_of(where)) {
+      this->open_chat(*found, where.event);
+      return;
+    }
+    if (where.xmpp) {
+      root().show_message("Not joined", std::format("{} is not in your list.", where.id));
+      return;
+    }
+    // A Matrix room not joined: joined through the account in view, or the
+    // first Matrix one, and opened when it comes.
+    std::optional<mux::account_id> by;
+    if (screen.current && std::holds_alternative<mux::protocol::matrix>(screen.current->speaks))
+      by = screen.current;
+    for (const auto& [account, one] : model->accounts())
+      if (!by && std::holds_alternative<mux::protocol::matrix>(account.speaks))
+        by = account;
+    if (!by) {
+      root().show_message("No Matrix account", "A Matrix account is needed to open that room.");
+      return;
+    }
+    pending_link = where;
+    net->join(*by, where.id, where.via);
+  }
   void apply(const request::cancel_compose&) {
     composing = compose::plain{};
     root().main().line.show_context(std::nullopt);
@@ -1778,6 +1954,11 @@ int main(int argc, char** argv) {
   program.box = &box;
   program.model = &model;
   program.net = &net;
+  // A link pressed in a message's text: routed as a link is.
+  skiff::scene::linkOpener() = {+[](void* self, std::string_view url) {
+                                  static_cast<app*>(self)->ask.open_url(std::string(url));
+                                },
+                                &program};
   program.ask.net = &net;
   program.ask.demo = demo;
   program.ask.box = &box;

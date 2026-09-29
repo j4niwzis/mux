@@ -983,6 +983,134 @@ inline void use_theme(const config::theme_t& chosen, const config::accent_t& acc
 
 // One chat in the list, as Telegram Desktop draws it: a round avatar, the
 // name, the time of the last message, a line of it, and how many are unread.
+// A message's HTML (Matrix's org.matrix.custom.html) read into what is
+// drawn: its text -- tags gone, line breaks and paragraphs as newlines,
+// list items bulleted, quotes marked, the common entities decoded -- and
+// its links, each a place to open.
+struct formatted {
+  std::string text;
+  std::vector<std::pair<std::string, std::string>> links;  // what it says, where it goes
+  std::vector<nodes::Text::Link> spans;                    // where in the text each is
+};
+[[nodiscard]] inline formatted read_html(std::string_view html) {
+  formatted out;
+  std::string open_href;
+  std::size_t link_start = 0;
+  const auto entity = [](std::string_view name) -> std::string {
+    if (name == "amp")
+      return "&";
+    if (name == "lt")
+      return "<";
+    if (name == "gt")
+      return ">";
+    if (name == "quot")
+      return "\"";
+    if (name == "apos" || name == "#39")
+      return "'";
+    if (name == "nbsp")
+      return " ";
+    return "&" + std::string(name) + ";";
+  };
+  std::size_t at = 0;
+  while (at < html.size()) {
+    const char c = html[at];
+    if (c == '<') {
+      const auto end = html.find('>', at);
+      if (end == std::string_view::npos)
+        break;
+      std::string tag(html.substr(at + 1, end - at - 1));
+      std::string name;
+      for (const char t : tag) {
+        if (t == ' ' || t == '/' && !name.empty())
+          break;
+        name += static_cast<char>(std::tolower(static_cast<unsigned char>(t)));
+      }
+      if (name == "br" || name == "br/")
+        out.text += '\n';
+      else if (name == "/p" || name == "/div" || name == "/blockquote" || name == "/li" || name == "/h1" ||
+               name == "/h2" || name == "/h3" || name == "/pre")
+        out.text += '\n';
+      else if (name == "li")
+        out.text += "• ";
+      else if (name == "blockquote")
+        out.text += "│ ";
+      else if (name == "mx-reply") {
+        // The quoted message a reply carries: not shown twice.
+        const auto close = html.find("</mx-reply>", end);
+        at = close == std::string_view::npos ? html.size() : close + 11;
+        continue;
+      } else if (name == "a") {
+        const auto href = tag.find("href=");
+        if (href != std::string::npos && href + 6 < tag.size()) {
+          const char quote = tag[href + 5];
+          const auto stop = tag.find(quote, href + 6);
+          open_href = tag.substr(href + 6, stop == std::string::npos ? std::string::npos : stop - href - 6);
+          link_start = out.text.size();
+        }
+      } else if (name == "/a" && !open_href.empty()) {
+        out.links.emplace_back(out.text.substr(link_start), open_href);
+        if (out.text.size() > link_start)
+          out.spans.push_back({link_start, out.text.size(), open_href});
+        open_href.clear();
+      }
+      at = end + 1;
+    } else if (c == '&') {
+      const auto end = html.find(';', at);
+      if (end == std::string_view::npos || end - at > 8) {
+        out.text += c;
+        ++at;
+        continue;
+      }
+      out.text += entity(html.substr(at + 1, end - at - 1));
+      at = end + 1;
+    } else {
+      out.text += c;
+      ++at;
+    }
+  }
+  while (!out.text.empty() && out.text.back() == '\n')
+    out.text.pop_back();
+  return out;
+}
+
+// Where the links of a plain text are: what starts with http:// or
+// https://, up to a space.
+[[nodiscard]] inline std::vector<nodes::Text::Link> link_spans_in(std::string_view text) {
+  std::vector<nodes::Text::Link> out;
+  for (std::size_t at = 0; at < text.size();) {
+    const auto found = std::min(text.find("https://", at), text.find("http://", at));
+    if (found == std::string_view::npos)
+      break;
+    auto end = text.find_first_of(" \n\t", found);
+    if (end == std::string_view::npos)
+      end = text.size();
+    // A sentence's end is not the link's.
+    while (end > found && std::string_view(".,;:!?)\"'").contains(text[end - 1]))
+      --end;
+    out.push_back({found, end, std::string(text.substr(found, end - found))});
+    at = std::max(end, found + 1);
+  }
+  return out;
+}
+
+// The links of a plain text: what starts with http:// or https://, up to a
+// space.
+[[nodiscard]] inline std::vector<std::pair<std::string, std::string>> links_in(std::string_view text) {
+  std::vector<std::pair<std::string, std::string>> out;
+  for (std::size_t at = 0; at < text.size();) {
+    const auto found = std::min(text.find("https://", at), text.find("http://", at));
+    if (found == std::string_view::npos)
+      break;
+    auto end = text.find_first_of(" \n\t", found);
+    if (end == std::string_view::npos)
+      end = text.size();
+    const std::string url(text.substr(found, end - found));
+    out.emplace_back(url, url);
+    at = end;
+  }
+  return out;
+}
+
 template <class Actions>
 struct conversation_row : nodes::Stack {
   Actions* actions = nullptr;
@@ -1089,7 +1217,10 @@ struct conversation_row : nodes::Stack {
     if (!one.timeline.empty()) {
       const message& last = one.timeline.back();
       lines.top.time.setText(clock_of(last.at));
-      std::string text = last.redacted ? "(removed)" : last.body.plain;
+      // What it says, as drawn: an HTML one's text, not its tags.
+      std::string text = last.redacted ? "(removed)"
+                         : last.body.html ? read_html(*last.body.html).text
+                                          : last.body.plain;
       std::ranges::replace(text, '\n', ' ');
       if (last.outgoing)
         text = "You: " + text;
@@ -1129,111 +1260,6 @@ struct conversation_row : nodes::Stack {
     return out;
   }
 };
-
-// A message's HTML (Matrix's org.matrix.custom.html) read into what is
-// drawn: its text -- tags gone, line breaks and paragraphs as newlines,
-// list items bulleted, quotes marked, the common entities decoded -- and
-// its links, each a place to open.
-struct formatted {
-  std::string text;
-  std::vector<std::pair<std::string, std::string>> links;  // what it says, where it goes
-};
-[[nodiscard]] inline formatted read_html(std::string_view html) {
-  formatted out;
-  std::string open_href;
-  std::size_t link_start = 0;
-  const auto entity = [](std::string_view name) -> std::string {
-    if (name == "amp")
-      return "&";
-    if (name == "lt")
-      return "<";
-    if (name == "gt")
-      return ">";
-    if (name == "quot")
-      return "\"";
-    if (name == "apos" || name == "#39")
-      return "'";
-    if (name == "nbsp")
-      return " ";
-    return "&" + std::string(name) + ";";
-  };
-  std::size_t at = 0;
-  while (at < html.size()) {
-    const char c = html[at];
-    if (c == '<') {
-      const auto end = html.find('>', at);
-      if (end == std::string_view::npos)
-        break;
-      std::string tag(html.substr(at + 1, end - at - 1));
-      std::string name;
-      for (const char t : tag) {
-        if (t == ' ' || t == '/' && !name.empty())
-          break;
-        name += static_cast<char>(std::tolower(static_cast<unsigned char>(t)));
-      }
-      if (name == "br" || name == "br/")
-        out.text += '\n';
-      else if (name == "/p" || name == "/div" || name == "/blockquote" || name == "/li" || name == "/h1" ||
-               name == "/h2" || name == "/h3" || name == "/pre")
-        out.text += '\n';
-      else if (name == "li")
-        out.text += "• ";
-      else if (name == "blockquote")
-        out.text += "│ ";
-      else if (name == "mx-reply") {
-        // The quoted message a reply carries: not shown twice.
-        const auto close = html.find("</mx-reply>", end);
-        at = close == std::string_view::npos ? html.size() : close + 11;
-        continue;
-      } else if (name == "a") {
-        const auto href = tag.find("href=");
-        if (href != std::string::npos && href + 6 < tag.size()) {
-          const char quote = tag[href + 5];
-          const auto stop = tag.find(quote, href + 6);
-          open_href = tag.substr(href + 6, stop == std::string::npos ? std::string::npos : stop - href - 6);
-          link_start = out.text.size();
-        }
-      } else if (name == "/a" && !open_href.empty()) {
-        out.links.emplace_back(out.text.substr(link_start), open_href);
-        open_href.clear();
-      }
-      at = end + 1;
-    } else if (c == '&') {
-      const auto end = html.find(';', at);
-      if (end == std::string_view::npos || end - at > 8) {
-        out.text += c;
-        ++at;
-        continue;
-      }
-      out.text += entity(html.substr(at + 1, end - at - 1));
-      at = end + 1;
-    } else {
-      out.text += c;
-      ++at;
-    }
-  }
-  while (!out.text.empty() && out.text.back() == '\n')
-    out.text.pop_back();
-  return out;
-}
-
-// The links of a plain text: what starts with http:// or https://, up to a
-// space.
-[[nodiscard]] inline std::vector<std::pair<std::string, std::string>> links_in(std::string_view text) {
-  std::vector<std::pair<std::string, std::string>> out;
-  for (std::size_t at = 0; at < text.size();) {
-    const auto found = std::min(text.find("https://", at), text.find("http://", at));
-    if (found == std::string_view::npos)
-      break;
-    auto end = text.find_first_of(" \n\t", found);
-    if (end == std::string_view::npos)
-      end = text.size();
-    const std::string url(text.substr(found, end - found));
-    out.emplace_back(url, url);
-    at = end;
-  }
-  return out;
-}
 
 // A link under a message: what it says, in the accent. A press on it is
 // seen by the messages' list, which opens it.
@@ -1415,14 +1441,14 @@ struct message_bubble : nodes::Stack {
     body.time.setText(std::move(when));
     // Formatted, it is drawn from its HTML: its text, and its links; plain,
     // its links are the URLs in it.
+    // Its links in its text, where they stand: an <a>'s label going where
+    // its href says, and the addresses in a plain text.
     if (said.body.html && !said.redacted) {
       auto read = read_html(*said.body.html);
       body.text.setText(read.text + (said.edited ? " (edited)" : ""));
-      for (auto& [what, where] : read.links)
-        body.links.emplace_back(std::move(what), std::move(where));
+      body.text.setLinks(std::move(read.spans), accent_colour);
     } else if (!said.redacted) {
-      for (auto& [what, where] : links_in(said.body.plain))
-        body.links.emplace_back(std::move(what), std::move(where));
+      body.text.setLinks(link_spans_in(said.body.plain), accent_colour);
     }
     if (said.replies_to) {
       const auto found = std::ranges::find(in.timeline, *said.replies_to, &message::id);

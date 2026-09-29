@@ -102,7 +102,7 @@ cme_find_package(alef COMPONENTS precis idna grapheme line bidi REQUIRED)
 cme_find_package(tern REQUIRED)
 # Of loom, what mux uses: the state a sync leaves, and the parts of the API it
 # calls -- logging in, sending, syncing, finding the homeserver.
-cme_find_package(loom COMPONENTS state cs-leaving cs-login cs-message_pagination cs-receipts cs-redaction cs-room_send cs-rooms cs-sync cs-wellknown REQUIRED)
+cme_find_package(loom COMPONENTS state cs-joining cs-leaving cs-login cs-message_pagination cs-receipts cs-redaction cs-room_send cs-rooms cs-sync cs-wellknown REQUIRED)
 
 # One library of mux's modules, as the libraries it stands on have: modules
 # are what separates them. The window's two join it where the window is
@@ -136,7 +136,7 @@ if(MUX_UI)
   # skiff and skiff-widgets say the rest of what they are in their own trees.
   cme_declare_port(NAME skiff PROVIDES skiff
     GITHUB_REPOSITORY j4niwzis/skiff
-    GIT_TAG 506b569bb6f2c9b0812f21725234f50c6bb59ddd)
+    GIT_TAG aa9a4458ecb70dce36f5f2582e7550b41f0e7da7)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
     GIT_TAG 7d88dc417839cc95be6d191531137692225b449c)

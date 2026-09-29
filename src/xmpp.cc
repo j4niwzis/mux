@@ -173,6 +173,8 @@ class account {
   void fetch_avatar(std::string, std::string) {}
   // A room's occupants come with its presence; nothing to ask for.
   void fetch_members(std::string) {}
+  // Rooms are joined through their bookmarks; not from a link yet.
+  void join(std::string, std::vector<std::string>) {}
 
   void mark_read(std::string to, std::string id) {
     loop_->spawn([this, to = std::move(to), id = std::move(id)] {

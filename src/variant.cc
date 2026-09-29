@@ -327,20 +327,24 @@ class variant {
   [[nodiscard]] constexpr T& value() noexcept {
     if consteval {
       return detail::value_of<T>(fObject);
-    } else if constexpr (detail::kReadsBuffer) {
-      return std::launder(reinterpret_cast<detail::holder<T>*>(fBuffer))->value;
     } else {
-      return detail::value_of<T>(fObject);
+      if constexpr (detail::kReadsBuffer) {
+        return std::launder(reinterpret_cast<detail::holder<T>*>(fBuffer))->value;
+      } else {
+        return detail::value_of<T>(fObject);
+      }
     }
   }
   template <class T>
   [[nodiscard]] constexpr const T& value() const noexcept {
     if consteval {
       return detail::value_of<T>(static_cast<const detail::held*>(fObject));
-    } else if constexpr (detail::kReadsBuffer) {
-      return std::launder(reinterpret_cast<const detail::holder<T>*>(fBuffer))->value;
     } else {
-      return detail::value_of<T>(static_cast<const detail::held*>(fObject));
+      if constexpr (detail::kReadsBuffer) {
+        return std::launder(reinterpret_cast<const detail::holder<T>*>(fBuffer))->value;
+      } else {
+        return detail::value_of<T>(static_cast<const detail::held*>(fObject));
+      }
     }
   }
 

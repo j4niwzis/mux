@@ -248,8 +248,10 @@ void app::refresh() {
 void app::bring_up_to_date(accounts& panel) {
   panel.proxies = proxies;
   panel.show(saved, *model);
-  if (auto* pane = panel.adding())
+  if (auto* pane = panel.adding()) {
+    pane->set_proxies(proxies);
     std::visit([this](auto& form) { this->watch_login(form); }, pane->parts.form);
+  }
 }
 
 }  // namespace mux::app

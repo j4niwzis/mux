@@ -98,6 +98,7 @@ void app::apply(const request::save_proxy_profile&) {
   }
   this->reconnect_through(name);
   up->show_proxies(proxies);
+  this->refresh();  // the new account's row of proxies, where it is being added
 }
 
 void app::apply(const request::delete_proxy_profile&) {

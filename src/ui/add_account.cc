@@ -46,13 +46,16 @@ struct add_account_pane : nodes::Stack {
       fState.apply({.autoSize = scene::axes::kBoth, .padding = {1.0f, 1.0f, 1.0f, 1.0f}, .background = chosen_colour});
     }
   };
-  // The proxy the new account goes through: none, or one of the profiles.
+  // The proxy the new account goes through: none, or one of the profiles --
+  // and, always there, a way to make one.
   struct proxy_row : nodes::Stack {
+    using add_button = segment<ask<Actions, &Actions::manage_proxies>>;
     struct parts_t {
       nodes::Text title{"Proxy", 13.0f, dim_colour};
       std::vector<segment<choose_new_proxy<Actions>>> choices;
+      add_button add;
     } parts;
-    proxy_row() {
+    explicit proxy_row(Actions* a) : parts{.add = add_button("Add proxy\u2026", {a})} {
       this->setHorizontal();
       this->setGap(4.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -72,19 +75,14 @@ struct add_account_pane : nodes::Stack {
 
   add_account_pane(Actions* a, const std::vector<config::proxy_settings>& proxies)
       : actions(a),
-        parts{.tabs = protocol_switch(a), .form = account_form<Actions>(std::in_place_index<0>, a, std::nullopt)} {
+        parts{.tabs = protocol_switch(a),
+              .proxies_row = proxy_row(a),
+              .form = account_form<Actions>(std::in_place_index<0>, a, std::nullopt)} {
     fState.apply({.fill = true});
     this->setGap(12.0f);
     parts.note.setWrapped(true);
     parts.note.apply({.fillX = true});
-    auto& choices = parts.proxies_row.parts.choices;
-    choices.emplace_back("None", choose_new_proxy<Actions>{a, -1});
-    for (std::size_t k = 0; k < proxies.size(); ++k) {
-      proxy_names.push_back(proxies[k].name);
-      choices.emplace_back(proxies[k].name, choose_new_proxy<Actions>{a, static_cast<int>(k)});
-    }
-    parts.proxies_row.setVisible(!proxies.empty());
-    this->set_proxy(-1);
+    this->set_proxies(proxies);
     this->light();
   }
 
@@ -97,6 +95,25 @@ struct add_account_pane : nodes::Stack {
     parts.form.template emplace<1>(this->actions, std::nullopt);
     this->begin_swap();
     this->light();
+  }
+  // The profiles to choose from, as they are now: one made or dropped in the
+  // settings meanwhile is there, and what was chosen stays so while it is.
+  void set_proxies(const std::vector<config::proxy_settings>& proxies) {
+    std::vector<std::string> names;
+    for (const auto& one : proxies)
+      names.push_back(one.name);
+    auto& choices = parts.proxies_row.parts.choices;
+    if (names == proxy_names && !choices.empty())
+      return;
+    const auto chosen = proxy;
+    proxy_names = std::move(names);
+    choices.clear();
+    choices.emplace_back("None", choose_new_proxy<Actions>{actions, -1});
+    for (std::size_t k = 0; k < proxy_names.size(); ++k)
+      choices.emplace_back(proxy_names[k], choose_new_proxy<Actions>{actions, static_cast<int>(k)});
+    const auto at = chosen ? std::ranges::find(proxy_names, *chosen) : proxy_names.end();
+    this->set_proxy(at == proxy_names.end() ? -1 : static_cast<int>(at - proxy_names.begin()));
+    this->invalidateLayout();
   }
   // The proxy chosen for the new account: -1 for none.
   void set_proxy(int index) {

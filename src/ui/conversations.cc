@@ -649,6 +649,21 @@ struct conversations_screen : nodes::Stack {
   // The newest message whose end is on screen in the chat shown: how far it
   // has been read. None while a jump is on its way, as what is passed on the
   // way is not read.
+  // Every message wholly or partly on screen now, not while a jump is on its
+  // way: what the user can be said to see.
+  [[nodiscard]] std::vector<std::string> shown_now() {
+    std::vector<std::string> out;
+    if (jumping_to)
+      return out;
+    const skia::SkRect view = timeline.bounds();
+    for (const message_bubble& row : std::get<0>(std::get<0>(timeline.fChildren).fChildren)) {
+      const skia::SkRect box = row.bounds();
+      if (!row.message_id.empty() && !box.isEmpty() && row.visible() && box.fBottom > view.fTop + 8.0f &&
+          box.fTop < view.fBottom - 8.0f)
+        out.push_back(row.message_id);
+    }
+    return out;
+  }
   [[nodiscard]] std::optional<std::string> last_seen() {
     if (jumping_to || aiming)
       return std::nullopt;

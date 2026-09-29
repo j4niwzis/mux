@@ -790,11 +790,12 @@ struct mentioned {
   std::string event;
   std::chrono::sys_time<std::chrono::milliseconds> at{};
 };
-// The newest message of a chat the user has seen: what is for them up to
-// it is seen.
-struct marks_seen {
+// The messages of a chat on screen now: what is for the user in them is
+// seen -- as tdesktop marks a mention read, once it is shown, not when the
+// chat is scrolled past it.
+struct marks_shown {
   conversation_id in;
-  std::string up_to;
+  std::vector<std::string> shown;
 };
 // The oldest mark of a kind, gone to.
 struct mark_taken {
@@ -824,7 +825,7 @@ using change_t = std::variant<change::connection_changed, change::account_remove
                               change::window_opened, change::window_extended, change::media_progress,
                               change::room_created, change::preview_loaded, change::devtools_text,
                               change::state_listed, change::room_previewed, change::mentioned,
-                              change::marks_seen, change::mark_taken>;
+                              change::marks_shown, change::mark_taken>;
 
 // The model: every account, and every change applied to it.
 class model {
@@ -1066,17 +1067,11 @@ class model {
       marks.erase(marks.begin());
   }
   void on(const change::mentioned& one) { keep_mark(of(one.in).unread_mentions, {one.event, one.event, one.at}); }
-  void on(const change::marks_seen& one) {
+  void on(const change::marks_shown& one) {
     conversation& where = of(one.in);
-    const message* seen = message_in(where, one.up_to);
-    if (seen == nullptr)
-      return;
-    const auto seen_at = seen->at;
-    std::erase_if(where.unread_mentions, [&](const unread_mark& mark) { return mark.at <= seen_at; });
-    std::erase_if(where.unread_reactions, [&](const unread_mark& mark) {
-      const message* target = message_in(where, mark.target);
-      return target != nullptr && target->at <= seen_at;
-    });
+    const auto shown = [&](const unread_mark& mark) { return std::ranges::contains(one.shown, mark.target); };
+    std::erase_if(where.unread_mentions, shown);
+    std::erase_if(where.unread_reactions, shown);
   }
   void on(const change::mark_taken& one) {
     conversation& where = of(one.in);

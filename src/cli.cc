@@ -92,7 +92,7 @@ std::string of(const change::media_progress& one) {
 std::string of(const change::preview_loaded& one) { return std::format("a preview of {}", one.url); }
 std::string of(const change::devtools_text& one) { return one.title + "\n" + one.text; }
 std::string of(const change::mentioned& one) { return std::format("mentioned in {}", one.in.id); }
-std::string of(const change::marks_seen&) { return std::string(); }
+std::string of(const change::marks_shown&) { return std::string(); }
 std::string of(const change::mark_taken&) { return std::string(); }
 std::string of(const change::room_previewed& one) {
   return std::format("{}: {}", one.asked, one.preview.name.empty() ? one.preview.note : one.preview.name);

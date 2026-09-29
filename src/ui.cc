@@ -1168,6 +1168,10 @@ struct message_bubble : scene::Node {
     if (group && !outgoing && first_of_run)
       name.emplace(sender_name(in, said.sender), 13.0f, avatar_colour(said.sender), true);
     text.setWrapped(true);
+    // Anyone's words can be selected and copied, as in Telegram.
+    text.setSelectable(true);
+    text.setSelectionColour(skia::colorSetARGB(110, skia::colorGetR(accent_colour), skia::colorGetG(accent_colour),
+                                               skia::colorGetB(accent_colour)));
     time += std::visit(overloaded{[](const delivery::sending&) { return " · sending"; },
                                   [](const delivery::failed&) { return " · not sent"; },
                                   [](const auto&) { return ""; }},

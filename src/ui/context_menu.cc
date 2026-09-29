@@ -10,9 +10,104 @@ import skiff.nodes;
 import skiff.widgets;
 import mux.core;
 import mux.config;
+import mux.logic.emoji;
 export import :settings;
 
 export namespace mux::ui {
+
+// Every emoji, to react with: as tdesktop's panel -- a search at its top,
+// the groups as tabs by their first emoji, and a grid of the one chosen or
+// of what the search finds; a press reacts with it.
+template <class Actions>
+struct emoji_panel : nodes::Stack {
+  Actions* actions;
+  // One emoji of the grid.
+  struct cell : nodes::Stack {
+    Actions* actions;
+    std::string glyph;
+    nodes::Text face;
+    cell(Actions* a, std::string g) : actions(a), glyph(g), face(std::move(g), 20.0f, text_colour) {
+      this->setHorizontal();
+      fStack.justify = nodes::justify::middle{};
+      fState.apply({.width = 30.0f, .height = 30.0f, .cornerRadius = 6.0f, .hoverBackground = chosen_colour});
+      face.apply({.alignSelf = scene::align::kMiddle});
+    }
+    void forEachChild(auto&& f) { f(face); }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+    [[nodiscard]] bool onClick(float, float) {
+      actions->menu_react(glyph);
+      return true;
+    }
+  };
+  // A group's tab: its first emoji.
+  struct tab : nodes::Stack {
+    emoji_panel* panel;
+    std::size_t group;
+    nodes::Text face;
+    tab(emoji_panel* p, std::size_t g)
+        : panel(p), group(g), face(logic::emoji_text(logic::emoji_groups[g].entries.front()), 16.0f, text_colour) {
+      this->setHorizontal();
+      fStack.justify = nodes::justify::middle{};
+      fState.apply({.width = 25.0f, .height = 26.0f, .cornerRadius = 6.0f, .hoverBackground = chosen_colour,
+                    .selectedBackground = tile_colour});
+      face.apply({.alignSelf = scene::align::kMiddle});
+    }
+    void forEachChild(auto&& f) { f(face); }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+    [[nodiscard]] bool onClick(float, float) {
+      panel->show_group(group);
+      return true;
+    }
+  };
+  struct searched {
+    emoji_panel* panel;
+    void operator()(std::string_view text) const { panel->search(text); }
+  };
+  widgets::TextBox<searched> field;
+  struct tabs_row : nodes::Stack {
+    std::vector<tab> each;
+    void forEachChild(auto&& f) { f(each); }
+  } tabs;
+  nodes::ScrollContainer<nodes::Flow<std::vector<cell>>> grid{nodes::Flow<std::vector<cell>>(
+      {.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, {})};
+
+  explicit emoji_panel(Actions* a) : actions(a), field("Search emoji", {this}) {
+    this->setGap(4.0f);
+    fState.apply({.fillX = true, .height = 300.0f, .padding = {2.0f, 8.0f, 2.0f, 8.0f}});
+    field.setSearchIcon(true);
+    field.apply({.fillX = true, .height = 32.0f});
+    tabs.setHorizontal();
+    tabs.apply({.fillX = true, .autoSize = scene::axes::kY});
+    for (std::size_t g = 0; g < std::size(logic::emoji_groups); ++g)
+      tabs.each.emplace_back(this, g);
+    grid.apply({.fillX = true, .grow = scene::axes::kY});
+    this->show_group(0);
+  }
+  void forEachChild(auto&& f) {
+    f(field);
+    f(tabs);
+    f(grid);
+  }
+  void show(const std::vector<const logic::emoji_entry*>& found) {
+    auto& cells = std::get<0>(std::get<0>(grid.fChildren).fChildren);
+    cells.clear();
+    for (const logic::emoji_entry* one : found)
+      cells.emplace_back(actions, logic::emoji_text(*one));
+    grid.invalidateLayout();
+    grid.scrollTo(0.0f);
+  }
+  void show_group(std::size_t group) {
+    for (tab& each : tabs.each)
+      each.fState.apply({.selected = each.group == group});
+    this->show(logic::emoji_of_group(group));
+  }
+  void search(std::string_view query) {
+    if (query.empty())
+      this->show_group(0);
+    else
+      this->show(logic::emoji_found(query));
+  }
+};
 
 // What is done with a message from its menu, as the program keeps it.
 template <class Actions>
@@ -45,17 +140,42 @@ struct context_menu : scene::Node {
         return true;
       }
     };
+    // The six, and at their end the way to every emoji, as tdesktop's.
+    struct expand_emoji {
+      card* of;
+      void operator()() const { of->expand(); }
+    };
     struct quick_row : nodes::Stack {
       std::vector<quick_reaction> each;
-      explicit quick_row(Actions* a) {
+      icon_button<expand_emoji> more;
+      quick_row(Actions* a, card* of) : more(icon::down{}, {of}) {
         this->setHorizontal();
         this->setGap(2.0f);
         fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {2.0f, 8.0f, 4.0f, 8.0f}});
         for (const char* key : {"👍", "❤️", "😂", "😮", "😢", "🙏"})
           each.emplace_back(a, key);
+        more.apply({.width = 30.0f, .height = 34.0f});
       }
-      void forEachChild(auto&& f) { f(each); }
+      void forEachChild(auto&& f) {
+        f(each);
+        f(more);
+      }
     } quick;
+    Actions* actions_of = nullptr;
+    // Every emoji, in place of the rest of the menu once asked for.
+    std::optional<emoji_panel<Actions>> emoji;
+    void expand() {
+      if (emoji)
+        return;
+      emoji.emplace(actions_of);
+      quick.more.setVisible(false);
+      for (scene::Node* item : std::initializer_list<scene::Node*>{&reply, &edit, &pin, &copy, &copy_link, &save,
+                                                                   &forward, &remove, &seen_band, &seen})
+        item->setVisible(false);
+      for (auto& name : seen_names)
+        name.setVisible(false);
+      this->invalidateLayout();
+    }
     nodes::Box<> quick_band{band_colour};
     // Who has seen it, as Telegram's menu says at its top: how many, and
     // their names under it.
@@ -66,7 +186,7 @@ struct context_menu : scene::Node {
     // out: Reply, Edit, Pin, Copy, Copy Message Link, Save As, Forward,
     // Delete; and who has seen it, at the foot.
     card(Actions* a, const menu_facts& facts)
-        : quick(a), reply("Reply", {a}, icon::back{}), edit("Edit", {a}, icon::sliders{}),
+        : quick(a, this), actions_of(a), reply("Reply", {a}, icon::back{}), edit("Edit", {a}, icon::sliders{}),
           pin("Pin", {a, "Pinning messages"}, icon::check{}),
           copy(facts.selection ? "Copy Selected Text" : "Copy Text", {a}, icon::clip{}),
           copy_link("Copy Message Link", {a}, icon::info{}), save("Save As…", {a}, icon::send{}),
@@ -96,6 +216,7 @@ struct context_menu : scene::Node {
     void forEachChild(auto&& f) {
       f(quick);
       f(quick_band);
+      f(emoji);
       f(reply);
       f(edit);
       f(pin);

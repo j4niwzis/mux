@@ -32,9 +32,9 @@ struct field : nodes::Stack {
       : parts{.caption = nodes::Text(std::move(label), 13.0f, dim_colour), .box = widgets::TextArea<>(std::move(placeholder))} {
     auto& box = parts.box;
     this->setGap(4.0f);
-    fState.apply({.fillX = true, .height = 64.0f});
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     box.setSingleLine(true);
-    box.apply({.fillX = true, .margin = {0.0f, 10.0f, 0.0f, 10.0f}, .cornerRadius = 6.0f, .background = tile_colour,
+    box.apply({.fillX = true, .padding = {0.0f, 10.0f, 0.0f, 10.0f}, .cornerRadius = 6.0f, .background = tile_colour,
                .border = scene::Border{band_colour, 1.0f}});
     box.setText(std::move(text));
   }

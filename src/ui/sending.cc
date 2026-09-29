@@ -27,21 +27,13 @@ template <class Actions>
 struct send_box : nodes::Stack {
   nodes::Text title;
   struct previews_column : nodes::Stack {
-    struct picture_preview : scene::Node {
+    // A picture to be sent, as it will look: rounded, its thumbnail by its
+    // local id.
+    struct picture_preview : nodes::Image {
       std::string key;
-      picture_preview(std::string k, float width, float height) : key(std::move(k)) {
-        fState.apply({.width = width, .height = height, .alignSelf = scene::align::kMiddle});
-      }
-      void drawSelf(skia::SkCanvas* canvas, float alpha) {
-        const skia::SkRect& box = fState.fBounds;
-        const int saved = canvas->save();
-        canvas->clipRRect(skia::SkRRect::MakeRectXY(box, 10.0f, 10.0f), true);
-        if (const skia::Sp<skia::SkImage>* image = thumbnails().find(key); image && *image) {
-          skia::SkPaint paint;
-          paint.setAlphaf(alpha);
-          canvas->drawImageRect(*image, box, skia::SkSamplingOptions(skia::SkFilterMode::kLinear), &paint);
-        }
-        canvas->restoreToCount(saved);
+      picture_preview(std::string k, float width, float height)
+          : nodes::Image([k] { return thumbnails().find(k); }), key(std::move(k)) {
+        fState.apply({.width = width, .height = height, .alignSelf = scene::align::kMiddle, .cornerRadius = 10.0f});
       }
     };
     std::vector<picture_preview> pictures;

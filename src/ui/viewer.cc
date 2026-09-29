@@ -72,7 +72,25 @@ struct picture_viewer : nodes::Stack {
   // Where the picture is drawn: fitted, zoomed, moved.
   struct stage : scene::Node {
     picture_viewer* viewer;
-    explicit stage(picture_viewer* v) : viewer(v) { fState.apply({.fillX = true, .grow = scene::axes::kY}); }
+    // The picture: the whole one where it has come, its thumbnail until then.
+    struct parts_t {
+      nodes::Image picture;
+    } parts;
+    explicit stage(picture_viewer* v)
+        : viewer(v), parts{.picture = nodes::Image([v] {
+                            const skia::Sp<skia::SkImage>* one = whole_pictures().find(v->source);
+                            return one && *one ? one : thumbnails().find(v->source);
+                          })} {
+      fState.apply({.fillX = true, .grow = scene::axes::kY, .masking = true});
+    }
+    // Where the picture goes: fitted, zoomed, moved -- laid out there, not
+    // drawn there by hand.
+    void layoutChildren() {
+      const skia::SkRect at = this->where();
+      const skia::SkRect& box = fState.fBounds;
+      parts.picture.apply({.x = at.fLeft - box.fLeft, .y = at.fTop - box.fTop, .width = at.width(), .height = at.height()});
+      scene::layoutChildrenInContentBox(*this);
+    }
     [[nodiscard]] const skia::Sp<skia::SkImage>* image() const {
       const skia::Sp<skia::SkImage>* one = whole_pictures().find(viewer->source);
       if (!one || !*one)
@@ -89,17 +107,6 @@ struct picture_viewer : nodes::Stack {
       const float scale = fit * viewer->zoom;
       return skia::SkRect::MakeXYWH(box.centerX() - w * scale * 0.5f + viewer->pan_x,
                                     box.centerY() - h * scale * 0.5f + viewer->pan_y, w * scale, h * scale);
-    }
-    void drawSelf(skia::SkCanvas* canvas, float alpha) {
-      const skia::Sp<skia::SkImage>* one = this->image();
-      if (!one)
-        return;
-      const int saved = canvas->save();
-      canvas->clipRect(fState.fBounds);
-      skia::SkPaint paint;
-      paint.setAlphaf(alpha);
-      canvas->drawImageRect(*one, this->where(), skia::SkSamplingOptions(skia::SkFilterMode::kLinear), &paint);
-      canvas->restoreToCount(saved);
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool onScroll(float ticks) {
@@ -129,7 +136,7 @@ struct picture_viewer : nodes::Stack {
       viewer->pan_y += at.y - last_y;
       last_x = at.x;
       last_y = at.y;
-      this->markDamaged();
+      this->invalidateLayout();
       reply.handle();
     }
     void onPointer(scene::phase::target, const scene::pointer::up&, scene::PointerReply& reply) {
@@ -145,7 +152,7 @@ struct picture_viewer : nodes::Stack {
     zoom = std::clamp(wanted, 1.0f, 8.0f);
     if (zoom == 1.0f)
       pan_x = pan_y = 0.0f;
-    view.markDamaged();
+    view.invalidateLayout();
   }
 
   picture_viewer(Actions* a, std::string where, std::string sender, std::string name, std::string when)

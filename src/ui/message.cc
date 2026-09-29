@@ -70,30 +70,48 @@ struct link_card : nodes::Stack {
 // the time is on a dark pill over its corner (msgDateImgBg).
 struct picture_view : scene::Node {
   std::string source;
-  std::string time;  // drawn over it where there is no caption
   static constexpr float kMax = 430.0f, kMin = 100.0f;
   // Its own proportions: as its message says them, and as its picture has
   // them once it has come -- never another's.
   int width = 0, height = 0;
-  bool had_picture = false;
-  void update(double) {
-    if (!had_picture && thumbnails().has(source)) {
-      had_picture = true;
-      this->invalidateLayout();  // measured again, by the picture's proportions
+  // The time on a dark pill over its corner, where there is no caption.
+  struct time_pill : nodes::Stack {
+    nodes::Text label{"", 11.0f, skia::colorSetARGB(255, 255, 255, 255)};
+    time_pill() {
+      fState.apply({.place = scene::anchor::kBottomRight,
+                    .autoSize = scene::axes::kBoth,
+                    .margin = {0.0f, 6.0f, 6.0f, 0.0f},
+                    .padding = {2.0f, 8.0f, 2.0f, 8.0f},
+                    .cornerRadius = 9.0f,
+                    .background = skia::colorSetARGB(0x54, 0, 0, 0)});
+      this->setVisible(false);
     }
+    void forEachChild(auto&& f) { f(label); }
+  };
+  struct parts_t {
+    nodes::Image picture;
+    time_pill time;
+  } parts;
+
+  // Rounded; a plate until the thumbnail comes, then the thumbnail covering
+  // it, cut at the middle where the proportions differ by a rounding.
+  picture_view(std::string where, int w, int h)
+      : source(where), width(w), height(h), parts{.picture = nodes::Image([where] { return thumbnails().find(where); })} {
+    fState.apply({.cornerRadius = 10.0f, .background = tile_colour, .masking = true});
+    parts.picture.apply({.fill = true, .cornerRadius = 10.0f});
   }
-  picture_view(std::string where, int w, int h) : source(std::move(where)), width(w), height(h) {}
+  void show_time(std::string when) {
+    parts.time.label.setText(when);
+    parts.time.setVisible(!when.empty());
+  }
   // Fitted into 430 by 430 and into the room there is, its proportions
   // kept; no side under 100 where the room allows.
   void measure(const skia::SkRect& parent) {
     float w = width > 0 ? static_cast<float>(width) : 320.0f;
     float h = height > 0 ? static_cast<float>(height) : 240.0f;
-    if (const skia::Sp<skia::SkImage>* image = thumbnails().find(source); image && *image) {
-      // The picture's own proportions, where the message said none or others.
-      const float ratio = static_cast<float>((*image)->width()) / static_cast<float>((*image)->height());
-      if (width <= 0 || height <= 0 || std::abs(w / h - ratio) > 0.01f)
-        h = w / ratio;
-    }
+    // The picture's own proportions, where the message said none or others.
+    if (const auto ratio = parts.picture.ratio(); ratio && (width <= 0 || height <= 0 || std::abs(w / h - *ratio) > 0.01f))
+      h = w / *ratio;
     const float room = parent.width() > 0.0f ? parent.width() : kMax;
     const float scale = std::min({1.0f, kMax / w, kMax / h, room / w});
     w *= scale;
@@ -105,34 +123,6 @@ struct picture_view : scene::Node {
     }
     fState.fWidth = std::floor(w);
     fState.fHeight = std::floor(h);
-  }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    const skia::SkRect& box = fState.fBounds;
-    const int saved = canvas->save();
-    canvas->clipRRect(skia::SkRRect::MakeRectXY(box, 10.0f, 10.0f), true);
-    if (const skia::Sp<skia::SkImage>* image = thumbnails().find(source); image && *image) {
-      // Covering the box, cut at the middle where the proportions differ
-      // by a rounding: never stretched.
-      const float iw = static_cast<float>((*image)->width()), ih = static_cast<float>((*image)->height());
-      const float scale = std::max(box.width() / iw, box.height() / ih);
-      const float sw = box.width() / scale, sh = box.height() / scale;
-      const skia::SkRect from = skia::SkRect::MakeXYWH((iw - sw) * 0.5f, (ih - sh) * 0.5f, sw, sh);
-      skia::SkPaint paint;
-      paint.setAlphaf(alpha);
-      canvas->drawImageRect(*image, from, box, skia::SkSamplingOptions(skia::SkFilterMode::kLinear), &paint,
-                            skia::SkCanvas::kFast_SrcRectConstraint);
-    } else if (skia::SkFont* font = skiff::paint::defaultFont()) {
-      skiff::paint::Painter(canvas, *font).fillRounded(box, 10.0f, tile_colour, alpha);
-    }
-    canvas->restoreToCount(saved);
-    if (!time.empty())
-      if (skia::SkFont* font = skiff::paint::defaultFont()) {
-        const skiff::paint::Painter p(canvas, *font);
-        const float width = p.measure(time, 11.0f) + 16.0f;
-        const skia::SkRect pill = skia::SkRect::MakeXYWH(box.fRight - width - 6.0f, box.fBottom - 24.0f, width, 18.0f);
-        p.fillRounded(pill, 9.0f, skia::colorSetARGB(0x54, 0, 0, 0), alpha);
-        p.textIn(pill, time, 11.0f, skia::colorSetARGB(255, 255, 255, 255), alpha, false, 8.0f);
-      }
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
 };
@@ -520,7 +510,7 @@ struct message_bubble : nodes::Stack {
       if (said.body.plain.empty() && !said.body.html) {
         body.text.setVisible(false);
         if (body.picture) {
-          body.picture->time = when;
+          body.picture->show_time(when);
           body.time.setVisible(false);
           body.apply({.padding = {3.0f, 3.0f, 3.0f, 3.0f}});
         }

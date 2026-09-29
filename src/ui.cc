@@ -404,6 +404,25 @@ struct avatar_mark : scene::Node {
   }
   void drawSelf(skia::SkCanvas* canvas, float alpha) { draw_avatar(canvas, fState.fBounds, key, name, alpha); }
 };
+// A name over how it is: two lines, each cut where it runs out of room,
+// taking what their row leaves them.
+struct two_lines : nodes::Stack {
+  nodes::Text name;
+  nodes::Text state;
+  two_lines(std::string first, std::string second, float size, float gap)
+      : name(std::move(first), size, text_colour, true), state(std::move(second), size - 2.0f, dim_colour) {
+    this->setGap(gap);
+    fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+    for (nodes::Text* each : {&name, &state}) {
+      each->setElided(true);
+      each->apply({.fillX = true});
+    }
+  }
+  void forEachChild(auto&& f) {
+    f(name);
+    f(state);
+  }
+};
 
 template <class Act>
 struct row_item : nodes::Stack {
@@ -998,19 +1017,16 @@ struct formatted {
 
 // A link under a message: what it says, in the accent. A press on it is
 // seen by the messages' list, which opens it.
-struct link_line : scene::Node {
+struct link_line : nodes::Stack {
   std::string url;
   nodes::Text label;
   link_line(std::string said, std::string where) : url(std::move(where)), label("🔗 " + std::move(said), 13.0f, accent_colour) {
     fState.apply({.height = 20.0f});
     label.setElided(true);
+    label.apply({.fillX = true});
     fState.setCursor(scene::cursor::hand{});
   }
   void forEachChild(auto&& f) { f(label); }
-  void layoutChildren() {
-    label.setMaxWidth(fState.contentBox().width());
-    scene::layout(label, fState.contentBox());
-  }
   [[nodiscard]] bool acceptsInput() const { return true; }
 };
 
@@ -1302,29 +1318,29 @@ struct chat_header : scene::Node {
 
 // One of the square buttons of a chat's info: its icon over its name.
 template <class Act>
-struct action_tile : scene::Node {
+struct action_tile : nodes::Stack {
   Act act;
-  icon_t icon;
+  icon_mark mark;
   nodes::Text label;
 
-  action_tile(std::string text, icon_t mark, Act what = {})
-      : act(std::move(what)), icon(mark), label(std::move(text), 12.0f, text_colour) {
-    fState.apply({.height = 58.0f});
+  // Declared: the icon at the top, the name at the bottom.
+  action_tile(std::string text, icon_t icon, Act what = {})
+      : act(std::move(what)), mark(icon), label(std::move(text), 12.0f, text_colour) {
+    fState.apply({.height = 58.0f, .padding = {6.0f, 0.0f, 8.0f, 0.0f}});
+    fStack.justify = nodes::justify::space_between{};
+    mark.colour = text_colour;
+    mark.apply({.height = 24.0f});
+    label.apply({.alignSelf = scene::align::kMiddle});
   }
 
-  void forEachChild(auto&& f) { f(label); }
-  void layoutChildren() {
-    label.fState.arrange(0.0f, -8.0f, scene::anchor::kBottomCentre, scene::anchor::kBottomCentre);
-    scene::layout(label, fState.contentBox());
+  void forEachChild(auto&& f) {
+    f(mark);
+    f(label);
   }
   void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    skia::SkFont* font = skiff::paint::defaultFont();
-    if (font == nullptr)
-      return;
-    const skiff::paint::Painter p(canvas, *font);
-    const skia::SkRect& box = fState.fBounds;
-    p.fillRounded(box, 8.0f, fState.fHovered || this->showsFocus() ? chosen_colour : tile_colour, alpha);
-    draw_icon(canvas, icon, skia::SkRect::MakeXYWH(box.fLeft, box.fTop + 6.0f, box.width(), 24.0f), text_colour, alpha);
+    if (skia::SkFont* font = skiff::paint::defaultFont())
+      skiff::paint::Painter(canvas, *font)
+          .fillRounded(fState.fBounds, 8.0f, fState.fHovered || this->showsFocus() ? chosen_colour : tile_colour, alpha);
   }
 
   [[nodiscard]] bool acceptsInput() const { return true; }
@@ -2278,39 +2294,33 @@ struct conversations_screen : nodes::Stack {
 
 // ---- a form row: a caption and a field -----------------------------------
 
-struct field : scene::Node {
+struct field : nodes::Stack {
   nodes::Text caption;
   widgets::TextArea<> box;
-  // Where the text is, as the last layout put it: the plate drawn under it.
-  skia::SkRect plate = skia::SkRect::MakeEmpty();
 
+  // Declared: the caption over the field, which sits on a plate.
   field(std::string label, std::string placeholder, std::string text = {})
       : caption(std::move(label), 13.0f, dim_colour), box(std::move(placeholder)) {
+    this->setGap(4.0f);
     fState.apply({.fillX = true, .height = 64.0f});
     box.setSingleLine(true);
-    box.apply({.fillX = true});
+    box.apply({.fillX = true, .margin = {0.0f, 10.0f, 0.0f, 10.0f}});
     box.setText(std::move(text));
-  }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    skia::SkFont* font = skiff::paint::defaultFont();
-    if (font == nullptr || plate.isEmpty())
-      return;
-    const skiff::paint::Painter p(canvas, *font);
-    p.fillRounded(plate, 6.0f, tile_colour, alpha);
-    p.strokeRounded(plate, 6.0f, box.focused() ? accent_colour : band_colour, 1.0f, alpha);
   }
   void forEachChild(auto&& f) {
     f(caption);
     f(box);
   }
-  void layoutChildren() {
-    const skia::SkRect area = fState.contentBox();
-    caption.fState.arrange(0.0f, 0.0f);
-    scene::layout(caption, area);
-    const float top = caption.bounds().fBottom + 4.0f;
-    box.fState.arrange(0.0f, 0.0f);
-    scene::layout(box, skia::SkRect::MakeLTRB(area.fLeft + 10.0f, top, area.fRight - 10.0f, area.fBottom));
-    plate = skia::SkRect::MakeLTRB(area.fLeft, top, area.fRight, box.bounds().fBottom);
+  // The plate is where the field is, out to the row's edges.
+  void drawSelf(skia::SkCanvas* canvas, float alpha) {
+    skia::SkFont* font = skiff::paint::defaultFont();
+    const skia::SkRect& at = box.bounds();
+    if (font == nullptr || at.isEmpty())
+      return;
+    const skia::SkRect plate = skia::SkRect::MakeLTRB(fState.fBounds.fLeft, at.fTop, fState.fBounds.fRight, at.fBottom);
+    const skiff::paint::Painter p(canvas, *font);
+    p.fillRounded(plate, 6.0f, tile_colour, alpha);
+    p.strokeRounded(plate, 6.0f, box.focused() ? accent_colour : band_colour, 1.0f, alpha);
   }
 };
 
@@ -2756,42 +2766,37 @@ struct add_account_pane : nodes::Stack {
 // One account in the list: its address, protocol and state. A click shows
 // its settings beside the list.
 template <class Actions>
-struct account_entry : scene::Node {
+struct account_entry : nodes::Stack {
   Actions* actions = nullptr;
   std::string address;
   bool selected = false;
-  nodes::Box<> plate{sidebar_colour};
   nodes::Text name;
   nodes::Text state;
 
+  // Declared: its address over its protocol and state, on a plate lit
+  // while it is the one chosen.
   account_entry(Actions* a, const config::account_t& saved, const model& now, bool is_selected)
       : actions(a), address(config::address_of(saved)), selected(is_selected),
         name(address, 15.0f, text_colour, true), state("", 13.0f, dim_colour) {
-    fState.apply({.fillX = true, .height = 52.0f});
-    plate.apply({.fill = true});
-    plate.setColour(selected ? chosen_colour : sidebar_colour);
+    this->setGap(4.0f);
+    fState.apply({.fillX = true, .height = 52.0f, .padding = {7.0f, 10.0f, 7.0f, 10.0f}});
     const auto [how, failed] = state_of(saved, now);
     state.setText(std::format("{} · {}", config::protocol_name(saved), how));
     state.setColour(failed ? error_colour : dim_colour);
-    name.setElided(true);
-    state.setElided(true);
+    for (nodes::Text* each : {&name, &state}) {
+      each->setElided(true);
+      each->apply({.fillX = true});
+    }
   }
 
   void forEachChild(auto&& f) {
-    f(plate);
     f(name);
     f(state);
   }
-  void layoutChildren() {
-    const skia::SkRect box = fState.contentBox();
-    scene::layout(plate, box);
-    const skia::SkRect inner = scene::inset(box, 10.0f, 7.0f);
-    name.setMaxWidth(inner.width());
-    name.fState.arrange(0.0f, 0.0f);
-    scene::layout(name, inner);
-    state.setMaxWidth(inner.width());
-    state.fState.arrange(0.0f, name.bounds().height() + 4.0f);
-    scene::layout(state, inner);
+  void drawSelf(skia::SkCanvas* canvas, float alpha) {
+    if (skia::SkFont* font = skiff::paint::defaultFont())
+      skiff::paint::Painter(canvas, *font)
+          .fillRounded(fState.fBounds, 0.0f, selected ? chosen_colour : sidebar_colour, alpha);
   }
 
   [[nodiscard]] bool acceptsInput() const { return true; }
@@ -2870,24 +2875,22 @@ struct account_editor : nodes::Stack {
 
 // A line with a switch on its right: its text, and the switch.
 template <class Act>
-struct switch_row : scene::Node {
+struct switch_row : nodes::Stack {
   nodes::Text label;
   widgets::Toggle<Act> toggle;
 
+  // Declared: the text taking the room, the switch at the end.
   switch_row(std::string text, Act what) : label(std::move(text), 15.0f, text_colour), toggle(std::move(what)) {
-    fState.apply({.fillX = true, .height = row_item<nothing>::kHeight});
+    this->setHorizontal();
+    this->setGap(16.0f);
+    fState.apply({.fillX = true, .height = row_item<nothing>::kHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
+    label.setElided(true);
+    label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+    toggle.apply({.alignSelf = scene::align::kMiddle});
   }
   void forEachChild(auto&& f) {
     f(label);
     f(toggle);
-  }
-  void layoutChildren() {
-    const skia::SkRect box = fState.contentBox();
-    toggle.fState.arrange(-20.0f, 0.0f, scene::anchor::kCentreRight, scene::anchor::kCentreRight);
-    scene::layout(toggle, box);
-    label.setMaxWidth(std::max(0.0f, box.width() - 90.0f));
-    label.fState.arrange(20.0f, 0.0f, scene::anchor::kCentreLeft, scene::anchor::kCentreLeft);
-    scene::layout(label, box);
   }
 };
 
@@ -3216,52 +3219,37 @@ struct choose_motion {
 // and its protocol and state. A press makes it the current account, whose
 // chats are the ones shown; the current one is lit and ticked.
 template <class Actions>
-struct drawer_account : scene::Node {
+struct drawer_account : nodes::Stack {
   Actions* actions = nullptr;
   std::string address;
   bool current = false;
-  nodes::Text name;
-  nodes::Text state;
+  avatar_mark face;
+  two_lines texts;
+  // The account whose chats are shown: a tick at the end.
+  icon_mark tick{icon::check{}};
 
+  // Declared: the avatar, the address over its state, the tick.
   drawer_account(Actions* a, const config::account_t& saved, const model& now, bool is_current)
-      : actions(a), address(config::address_of(saved)), current(is_current), name(address, 14.0f, text_colour, true),
-        state("", 12.0f, dim_colour) {
-    fState.apply({.fillX = true, .height = 56.0f});
+      : actions(a), address(config::address_of(saved)), current(is_current), face(address, address, 38.0f),
+        texts(address, "", 14.0f, 3.0f) {
+    this->setHorizontal();
+    this->setGap(14.0f);
+    fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}});
     const auto [how, failed] = state_of(saved, now);
-    state.setText(std::format("{} · {}", config::protocol_name(saved), how));
-    state.setColour(failed ? error_colour : dim_colour);
-    name.setElided(true);
-    state.setElided(true);
+    texts.state.setText(std::format("{} · {}", config::protocol_name(saved), how));
+    texts.state.setColour(failed ? error_colour : dim_colour);
+    tick.colour = accent_colour;
+    tick.setVisible(current);
   }
 
   void forEachChild(auto&& f) {
-    f(name);
-    f(state);
-  }
-  void layoutChildren() {
-    const skia::SkRect box = fState.contentBox();
-    const skia::SkRect inner = skia::SkRect::MakeLTRB(box.fLeft + 68.0f, box.fTop + 9.0f, box.fRight - 48.0f, box.fBottom);
-    name.setMaxWidth(inner.width());
-    name.fState.arrange(0.0f, 0.0f);
-    scene::layout(name, inner);
-    state.setMaxWidth(inner.width());
-    state.fState.arrange(0.0f, name.bounds().height() + 3.0f);
-    scene::layout(state, inner);
+    f(face);
+    f(texts);
+    f(tick);
   }
   void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    skia::SkFont* font = skiff::paint::defaultFont();
-    if (font == nullptr)
-      return;
-    const skiff::paint::Painter p(canvas, *font);
-    const skia::SkRect& box = fState.fBounds;
-    if (current || fState.fHovered || this->showsFocus())
-      p.fillRounded(box, 0.0f, chosen_colour, alpha);
-    draw_avatar(canvas, skia::SkRect::MakeXYWH(box.fLeft + 16.0f, box.centerY() - 19.0f, 38.0f, 38.0f), address,
-                address, alpha);
-    // The account whose chats are shown: a tick on the right.
-    if (current)
-      draw_icon(canvas, icon::check{}, skia::SkRect::MakeXYWH(box.fRight - 40.0f, box.fTop, 24.0f, box.height()),
-                accent_colour, alpha);
+    if (skia::SkFont* font = skiff::paint::defaultFont(); font && (current || fState.fHovered || this->showsFocus()))
+      skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 0.0f, chosen_colour, alpha);
   }
 
   [[nodiscard]] bool acceptsInput() const { return true; }

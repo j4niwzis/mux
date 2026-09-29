@@ -40,6 +40,8 @@ void app::woken() {
                                  pictures.take(picture, true);
                                  mux::ui::download_progress().erase(picture.source);
                                },
+                               // A room the user made: shown, once the model has it.
+                               [&](const mux::change::room_created& made) { made_room_ = made.id; },
                                [&](const mux::change::media_progress& how) {
                                  mux::ui::download_progress().insert_or_assign(how.source, how.done);
                                  scene.state().markDamaged();
@@ -65,6 +67,9 @@ void app::woken() {
   // Messages held to a number in all, least recently read out first.
   model->trim(static_cast<std::size_t>(limits.messages_in_memory), root().main().chosen);
   this->refresh();
+  // A room the user made: opened once the model has it.
+  if (made_room_ && model->find(*made_room_))
+    this->open_chat(*std::exchange(made_room_, std::nullopt), std::nullopt);
   // A room joined from a link: opened once it is here.
   if (joining)
     if (const auto found = mux::logic::chat_of(*model, *joining)) {

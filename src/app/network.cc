@@ -196,6 +196,29 @@ struct network {
             one.account);
     });
   }
+  // A room made by an account: a direct chat with someone, or a group.
+  void create_direct(const mux::account_id& by, std::string user) {
+    loop.post([this, by, user = std::move(user)] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == by)
+                account->create_direct(user);
+            },
+            one.account);
+    });
+  }
+  void create_group(const mux::account_id& by, std::string name) {
+    loop.post([this, by, name = std::move(name)] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == by)
+                account->create_group(name);
+            },
+            one.account);
+    });
+  }
   // A message forwarded, within the account it is of.
   void forward(const mux::conversation_id& from, std::string event, const mux::conversation_id& to) {
     loop.post([this, from, event = std::move(event), to] {

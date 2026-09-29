@@ -48,6 +48,33 @@ void app::apply(const request::toggle_emoji&) {
 }
 void app::apply(const request::close_emoji&) { root().close_emoji(); }
 
+// A new chat: its box; a direct chat or a group asked of the account whose
+// chats are listed -- or, for a direct chat with someone it already has
+// one with, that chat shown.
+void app::apply(const request::open_new_chat&) { root().open_new_chat(); }
+void app::apply(const request::close_new_chat&) { root().close_new_chat(); }
+void app::apply(const request::start_direct& one) {
+  const auto& current = root().main().current;
+  if (!current || shared.demo())
+    return;
+  root().close_new_chat();
+  for (const auto& [key, chat] : model->accounts().at(*current).conversations)
+    if (!mux::ui::is_group(chat) && mux::ui::contact_of(chat) == one.user) {
+      this->open_chat(chat.id, std::nullopt);
+      return;
+    }
+  net->create_direct(*current, one.user);
+  root().show_message("New chat", "Starting a chat with " + one.user + "…");
+}
+void app::apply(const request::start_group& one) {
+  const auto& current = root().main().current;
+  if (!current || shared.demo())
+    return;
+  root().close_new_chat();
+  net->create_group(*current, one.name);
+  root().show_message("New group", "Making " + one.name + "…");
+}
+
 // The room's management: made from what the model knows of it now.
 void app::apply(const request::open_manage&) {
   const auto& chosen = root().main().chosen;

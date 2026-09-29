@@ -199,6 +199,9 @@ class account {
   void fetch_members(std::string) {}
   // Reactions (XEP-0444) are not sent yet.
   void react(std::string, std::string, std::string, bool) {}
+  // New chats and groups are made over Matrix alone for now.
+  void create_direct(std::string) {}
+  void create_group(std::string) {}
   // Forwarding is over Matrix alone for now.
   void forward(std::string, std::string, std::string) {}
   // Rooms are managed over Matrix alone for now.

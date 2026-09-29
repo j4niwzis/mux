@@ -98,6 +98,8 @@ struct app : kept_settings {
   // The drawer, left open under a page coming in over it, to go when the
   // page is in.
   bool drawer_waits = false;
+  // A room the user made, to be shown as soon as the model has it.
+  std::optional<mux::conversation_id> made_room_;
   // The account being added that a login is waiting to hear about.
   std::optional<std::string> pending_login;
   actions ask;
@@ -228,6 +230,10 @@ struct app : kept_settings {
   void apply(const request::close_emoji&);
   void apply(const request::insert_emoji& one);
   void apply(const request::open_manage&);
+  void apply(const request::open_new_chat&);
+  void apply(const request::close_new_chat&);
+  void apply(const request::start_direct& one);
+  void apply(const request::start_group& one);
   void apply(const request::flip_account_room_events&);
   void apply(const request::flip_chat_room_events&);
   void apply(const request::close_manage&);

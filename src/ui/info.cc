@@ -405,6 +405,62 @@ struct forward_box : nodes::Stack {
   }
 };
 
+// A new chat, as tdesktop's New Message and New Group: someone's address,
+// for a direct chat with them; or a name, for a group.
+template <class Actions>
+struct new_chat_box : nodes::Stack {
+  Actions* actions = nullptr;
+  struct close_it {
+    Actions* actions;
+    void operator()() const { actions->close_new_chat(); }
+  };
+  struct nothing_back {
+    void operator()() const {}
+  };
+  struct direct_press {
+    new_chat_box* box;
+    void operator()() const {
+      const std::string& user = box->parts.person.text();
+      if (!user.empty())
+        box->actions->start_direct(user);
+    }
+  };
+  struct group_press {
+    new_chat_box* box;
+    void operator()() const {
+      const std::string& name = box->parts.group.text();
+      if (!name.empty())
+        box->actions->start_group(name);
+    }
+  };
+  using header_t = page_header<nothing_back, close_it>;
+  struct parts_t {
+    header_t header;
+    field person;
+    widgets::Button<direct_press> message;
+    field group;
+    widgets::Button<group_press> create;
+    nodes::Text note{"A direct chat invites them at once; a group is private, and people are invited to it from "
+                     "Manage in its info.",
+                     13.0f, dim_colour};
+  } parts;
+  explicit new_chat_box(Actions* a)
+      : actions(a),
+        parts{.header = header_t("New chat", {}, {a}, false, true),
+              .person = field("Message someone", "@someone:server"),
+              .message = widgets::Button<direct_press>("Message", {this}),
+              .group = field("New group", "The group's name"),
+              .create = widgets::Button<group_press>("Create group", {this})} {
+    this->setGap(8.0f);
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 18.0f, 12.0f}});
+    parts.message.setPrimary(true);
+    for (scene::Node* button : std::initializer_list<scene::Node*>{&parts.message, &parts.create})
+      button->apply({.width = 140.0f, .height = 34.0f, .margin = {0.0f, 10.0f, 8.0f, 10.0f}});
+    parts.note.setWrapped(true);
+    parts.note.apply({.fillX = true, .margin = {6.0f, 10.0f, 0.0f, 10.0f}});
+  }
+};
+
 // What the management of a room shows: as it is now.
 struct manage_facts {
   std::string name;

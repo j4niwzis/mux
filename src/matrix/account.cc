@@ -15,6 +15,8 @@ import loom.cs.receipts;
 import loom.cs.redaction;
 import loom.cs.room_send;
 import loom.cs.rooms;
+import loom.cs.create_room;
+import loom.cs.account_data;
 import loom.cs.sync;
 import loom.cs.typing;
 import loom.cs.wellknown;
@@ -75,6 +77,10 @@ class account {
   // or a file's URL with it, so nothing is uploaded again -- less what tied
   // it to its own room (the reply it was).
   void forward(std::string from, std::string event, std::string to);
+  // A room made: a direct chat with someone -- written into m.direct, as
+  // other clients know it is one -- or a group, private, with a name.
+  void create_direct(std::string user);
+  void create_group(std::string name);
   void load_newer(std::string room, std::string from);
 
   // An avatar's picture: the server's thumbnail of an mxc:// URI, at the size

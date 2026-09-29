@@ -165,6 +165,16 @@ struct flip_room_events {};
 struct flip_account_room_events {};
 struct flip_chat_room_events {};
 // Forwarding: the box of chats to forward to, closed, and a chat chosen.
+// A new chat: its box opened and closed; a direct chat with someone, or a
+// group, asked for.
+struct open_new_chat {};
+struct close_new_chat {};
+struct start_direct {
+  std::string user;
+};
+struct start_group {
+  std::string name;
+};
 struct menu_forward {};
 struct close_forward {};
 struct forward_to {
@@ -247,7 +257,7 @@ using request_t =
                  request::close_menu, request::menu_reply, request::menu_edit, request::menu_copy,
                  request::menu_delete, request::cancel_compose, request::open_url,
                  request::switch_account, request::submit_message, request::send_typed,
-                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_search, request::edit_last, request::reply_step, request::close_search, request::search_typed, request::search_step, request::open_member_info, request::reply_to, request::open_picture, request::open_avatar, request::close_picture, request::save_picture, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::flip_strip_metadata, request::flip_show_deleted, request::flip_rename_pictures, request::close_notice, request::close_person_info, request::toggle_emoji, request::close_emoji, request::insert_emoji, request::menu_save_gif, request::menu_pin, request::menu_reactions, request::close_reactions, request::open_manage, request::close_manage, request::room_act, request::menu_forward, request::close_forward, request::forward_to, request::flip_room_events, request::flip_account_room_events, request::flip_chat_room_events, request::show_gifs, request::send_gif,
+                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_search, request::edit_last, request::reply_step, request::close_search, request::search_typed, request::search_step, request::open_member_info, request::reply_to, request::open_picture, request::open_avatar, request::close_picture, request::save_picture, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::flip_strip_metadata, request::flip_show_deleted, request::flip_rename_pictures, request::close_notice, request::close_person_info, request::toggle_emoji, request::close_emoji, request::insert_emoji, request::menu_save_gif, request::menu_pin, request::menu_reactions, request::close_reactions, request::open_manage, request::close_manage, request::room_act, request::menu_forward, request::close_forward, request::forward_to, request::open_new_chat, request::close_new_chat, request::start_direct, request::start_group, request::flip_room_events, request::flip_account_room_events, request::flip_chat_room_events, request::show_gifs, request::send_gif,
                  request::resize_info, request::choose_new_proxy, request::toggle_mute, request::close_account_pages,
                  request::accounts_back, request::account_page, request::flip_account_receipts, request::flip_account_typing, request::typing,
                  request::proxy_kind, request::choose_account_proxy, request::manage_proxies,
@@ -359,6 +369,10 @@ struct actions {
   void menu_reactions() { requests.emplace_back(request::menu_reactions{}); }
   void open_manage() { requests.emplace_back(request::open_manage{}); }
   void menu_forward() { requests.emplace_back(request::menu_forward{}); }
+  void open_new_chat() { requests.emplace_back(request::open_new_chat{}); }
+  void close_new_chat() { requests.emplace_back(request::close_new_chat{}); }
+  void start_direct(std::string user) { requests.emplace_back(request::start_direct{std::move(user)}); }
+  void start_group(std::string name) { requests.emplace_back(request::start_group{std::move(name)}); }
   void close_forward() { requests.emplace_back(request::close_forward{}); }
   void forward_to(mux::conversation_id to) { requests.emplace_back(request::forward_to{std::move(to)}); }
   void flip_room_events() { requests.emplace_back(request::flip_room_events{}); }

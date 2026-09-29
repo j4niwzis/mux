@@ -53,6 +53,8 @@ struct window : scene::Node {
       widgets::Dialog<room_manage<Actions>> manage;
       // Where a message is forwarded to.
       widgets::Dialog<forward_box<Actions>> forwarding;
+      // A new chat: someone to message, or a group to make.
+      widgets::Dialog<new_chat_box<Actions>> new_chat;
       widgets::Dialog<send_box<Actions>> sending;
       std::optional<emoji_popup<Actions>> emoji;
       std::optional<context_menu<Actions>> menu;
@@ -75,8 +77,8 @@ struct window : scene::Node {
     explicit layers(Actions* a)
         : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a))},
           actions_of(a) {
-      auto& [backdrop, frame, settings, notice, person, reactions, manage, forwarding, sending, emoji, menu, viewer] =
-          parts;
+      auto& [backdrop, frame, settings, notice, person, reactions, manage, forwarding, new_chat, sending, emoji, menu,
+             viewer] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
       frame.setSheetColour(background);
@@ -97,6 +99,8 @@ struct window : scene::Node {
       manage.setSize(480.0f, 600.0f);
       forwarding.setSheetColour(sidebar_colour);
       forwarding.setSize(400.0f, 520.0f);
+      new_chat.setSheetColour(sidebar_colour);
+      new_chat.setWidthFittingContent(420.0f);
     }
   };
 
@@ -147,6 +151,7 @@ struct window : scene::Node {
     layer().reactions.dropClosed();
     layer().manage.dropClosed();
     layer().forwarding.dropClosed();
+    layer().new_chat.dropClosed();
     layer().sending.dropClosed();
   }
 
@@ -203,6 +208,11 @@ struct window : scene::Node {
   void close_manage() { layer().manage.close(); }
   void open_forward(const std::vector<forward_target>& chats) { layer().forwarding.open(actions, chats); }
   void close_forward() { layer().forwarding.close(); }
+  void open_new_chat() {
+    close_drawer();
+    layer().new_chat.open(actions);
+  }
+  void close_new_chat() { layer().new_chat.close(); }
 
   void show(const std::vector<config::account_t>& saved, const model& now) {
     const auto& current = layer().frame.base().base().current;

@@ -81,6 +81,7 @@ struct drawer_account : nodes::Stack {
 template <class Actions>
 struct drawer_panel : nodes::Stack {
   using manage_row = row_item<ask<Actions, &Actions::open_accounts>>;
+  using new_chat_row = row_item<ask<Actions, &Actions::open_new_chat>>;
   using settings_row = row_item<ask<Actions, &Actions::open_settings>>;
   using quit_row = row_item<ask<Actions, &Actions::quit>>;
   struct parts_t {
@@ -88,12 +89,14 @@ struct drawer_panel : nodes::Stack {
     std::vector<drawer_account<Actions>> accounts;
     manage_row manage;
     nodes::Box<> rule_1{chosen_colour};
+    new_chat_row new_chat;
     settings_row settings;
     quit_row quit;
   } parts;
 
   explicit drawer_panel(Actions* a)
       : parts{.manage = manage_row("Manage accounts", {a}, icon::person{}),
+              .new_chat = new_chat_row("New chat", {a}, icon::people{}),
               .settings = settings_row("Settings", {a}, icon::gear{}),
               .quit = quit_row("Quit", {a}, icon::power{})} {
     parts.title.apply({.margin = {18.0f, 20.0f, 14.0f, 20.0f}});

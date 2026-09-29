@@ -17,6 +17,8 @@ import loom.cs.redaction;
 import loom.cs.room_send;
 import loom.cs.rooms;
 import loom.cs.room_state;
+import loom.cs.create_room;
+import loom.cs.account_data;
 import loom.cs.kicking;
 import loom.cs.banning;
 import loom.cs.inviting;
@@ -137,6 +139,51 @@ void account<Sink>::manage(std::string room, room_action_t action) {
               set("m.room.power_levels", std::move(content));
             }},
         action);
+  });
+}
+
+template <class Sink>
+void account<Sink>::create_direct(std::string user) {
+  loop_->spawn([this, user = std::move(user)] {
+    if (!api_)
+      return;
+    auto made = perform(*api_, loom::cs::create_room{.body = {.invite = std::vector<std::string>{user},
+                                                              .preset = loom::cs::create_room::body_t::preset_values::trusted_private_chat{},
+                                                              .is_direct = true}});
+    if (!made) {
+      log(id_, "could not start a chat with {}: {}", user, made.error().said());
+      return;
+    }
+    // m.direct as it is, with the new room under its person.
+    knot::value::object direct;
+    if (const auto found = state_.account_data.find("m.direct"); found != state_.account_data.end()) {
+      const knot::value tree = knot::to_value(found->second);
+      if (const knot::value* content = member(tree, "content"); content && content->is<knot::value::object>())
+        direct = content->as<knot::value::object>();
+    }
+    knot::value::array rooms;
+    if (const auto theirs = direct.find(user); theirs != direct.end() && theirs->second.is<knot::value::array>())
+      rooms = theirs->second.as<knot::value::array>();
+    rooms.push_back(knot::value(made->room_id));
+    direct.insert_or_assign(user, knot::value(std::move(rooms)));
+    (void)perform(*api_, loom::cs::set_account_data{.user_id = id_.address, .type = "m.direct",
+                                                    .body = knot::value(std::move(direct))});
+    sink_(change::room_created{{id_, made->room_id}});
+  });
+}
+
+template <class Sink>
+void account<Sink>::create_group(std::string name) {
+  loop_->spawn([this, name = std::move(name)] {
+    if (!api_)
+      return;
+    auto made = perform(*api_, loom::cs::create_room{.body = {.name = name,
+                                                              .preset = loom::cs::create_room::body_t::preset_values::private_chat{}}});
+    if (!made) {
+      log(id_, "could not make the room {}: {}", name, made.error().said());
+      return;
+    }
+    sink_(change::room_created{{id_, made->room_id}});
   });
 }
 

@@ -485,6 +485,11 @@ struct avatar_loaded {
 
 // How far a picture or a file being fetched whole has come, 0 to 1, by the
 // source it is fetched by: for its loader to show.
+// A room the user made, to be shown once it is: a direct chat or a group.
+struct room_created {
+  conversation_id id;
+};
+
 struct media_progress {
   std::string source;
   float done = 0.0f;
@@ -593,7 +598,8 @@ using change_t = std::variant<change::connection_changed, change::account_remove
                               change::message_redacted, change::message_acknowledged, change::delivery_changed, change::reaction_changed,
                               change::typing_changed, change::history_position, change::members_changed,
                               change::session_given, change::avatar_loaded, change::receipts_changed,
-                              change::window_opened, change::window_extended, change::media_progress>;
+                              change::window_opened, change::window_extended, change::media_progress,
+                              change::room_created>;
 
 // The model: every account, and every change applied to it.
 class model {
@@ -813,6 +819,7 @@ class model {
   void on(const change::session_given&) {}  // the program's to keep, not the model's
   void on(const change::avatar_loaded&) {}  // the window's to show, not the model's
   void on(const change::media_progress&) {}  // the window's too
+  void on(const change::room_created&) {}    // the program's: it shows it
   void on(const change::receipts_changed& one) {
     conversation& kept = of(one.in);
     for (const auto& [user, event] : one.read_by)

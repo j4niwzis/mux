@@ -99,6 +99,10 @@ struct stub {
   void open_avatar(std::string) {}
   void open_manage() {}
   void menu_forward() {}
+  void open_new_chat() {}
+  void close_new_chat() {}
+  void start_direct(std::string) {}
+  void start_group(std::string) {}
   void close_forward() {}
   void forward_to(mux::conversation_id) {}
   void flip_room_events() {}

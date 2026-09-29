@@ -66,9 +66,20 @@ struct chat_header : nodes::Stack {
     const auto count = std::max<std::int64_t>(static_cast<std::int64_t>(one->members.size()), one->member_count);
     std::string about = is_group(*one) ? std::format("{} member{}", count, count == 1 ? "" : "s")
                                        : presence_of(now, one->id.account, contact_of(*one));
-    if (!one->typing.empty())
-      about = one->typing.size() == 1 ? sender_name(*one, one->typing.front()) + " is typing…"
-                                      : std::format("{} are typing…", one->typing.size());
+    // Who is typing, by their names, as Telegram says it: one, two ("A and
+    // B"), three ("A, B and C"); past three, the first two and how many more.
+    if (!one->typing.empty()) {
+      std::vector<std::string> names;
+      for (const std::string& who : one->typing)
+        names.push_back(sender_name(*one, who));
+      switch (names.size()) {
+        case 1: about = names[0] + " is typing…"; break;
+        case 2: about = std::format("{} and {} are typing…", names[0], names[1]); break;
+        case 3: about = std::format("{}, {} and {} are typing…", names[0], names[1], names[2]); break;
+        default:
+          about = std::format("{}, {} and {} more are typing…", names[0], names[1], names.size() - 2);
+      }
+    }
     return {one->id.id, display_name(*one), std::move(about)};
   }
 

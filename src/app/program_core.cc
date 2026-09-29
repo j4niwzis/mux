@@ -61,6 +61,15 @@ void app::woken() {
                                  if (!previewing || !root().room_card_up() || previewing->step.by != shown.by ||
                                      previewing->step.room != shown.asked)
                                    return;
+                                 // A room joined after all -- by an address not
+                                 // known here: opened, not offered to join.
+                                 for (const auto& [id, account] : model->accounts())
+                                   for (const auto& [key, chat] : account.conversations)
+                                     if (!shown.preview.id.empty() && chat.id.id == shown.preview.id) {
+                                       root().close_room_card();
+                                       this->open_chat(chat.id, std::nullopt);
+                                       return;
+                                     }
                                  if (shown.preview.avatar && !shown.preview.id.empty())
                                    net->fetch_avatar(shown.by, *shown.preview.avatar, shown.preview.id);
                                  root().open_room_card(shown.asked, shown.preview);

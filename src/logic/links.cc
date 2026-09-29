@@ -221,7 +221,9 @@ using link_step_t = std::variant<link_step::open_chat, link_step::member_page, l
   const auto named = [&](bool matrix, std::string_view id) -> std::optional<conversation_id> {
     for (const auto& [account, one] : now.accounts())
       for (const auto& [key, chat] : one.conversations)
-        if (is_matrix(account.speaks) == matrix && (chat.id.id == id || (chat.alias && *chat.alias == id)))
+        // By its id, its main address, or any other it publishes.
+        if (is_matrix(account.speaks) == matrix &&
+            (chat.id.id == id || (chat.alias && *chat.alias == id) || std::ranges::contains(chat.other_aliases, id)))
           return chat.id;
     return std::nullopt;
   };

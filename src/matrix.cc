@@ -11,6 +11,7 @@ import loom.ev;
 import loom.state;
 import loom.cs.leaving;
 import loom.cs.login;
+import loom.cs.message_pagination;
 import loom.cs.receipts;
 import loom.cs.room_send;
 import loom.cs.sync;
@@ -104,6 +105,25 @@ class account {
         (void)perform(*api_, loom::cs::post_receipt{.room_id = room,
                                                     .receipt_type = loom::cs::post_receipt::receipt_type_values::m_read{},
                                                     .event_id = event});
+    });
+  }
+
+  // Older messages of a room, paged back from `from`: before the rest, and
+  // where to page back from next -- nothing where the beginning is reached.
+  void load_older(std::string room, std::string from) {
+    loop_->spawn([this, room = std::move(room), from = std::move(from)] {
+      if (!api_)
+        return;
+      auto got = perform(*api_, loom::cs::get_room_events{.room_id = room,
+                                                          .from = from,
+                                                          .dir = loom::cs::get_room_events::dir_values::b{},
+                                                          .limit = 40});
+      if (!got)
+        return;
+      const conversation_id in{id_, room};
+      for (const auto& one : got->chunk)  // newest first: each goes before the rest
+        event(in, one, true);
+      sink_(change::history_position{in, got->end});
     });
   }
 
@@ -285,6 +305,9 @@ class account {
         const conversation_id in{id_, room};
         conversation(in, found->second);
         members(in, found->second);
+        // Where to page back from: the first time a room is seen.
+        if (part.timeline && part.timeline->prev_batch && paged_.insert(room).second)
+          sink_(change::history_position{in, *part.timeline->prev_batch});
         if (part.timeline)
           for (const auto& one : part.timeline->events)
             event(in, one);
@@ -349,7 +372,9 @@ class account {
     sink_(change::members_changed{in, std::move(who)});
   }
 
-  void event(const conversation_id& in, const loom::ev::timeline_event& one) {
+  // An event of a room's timeline, as changes: at the end, or before the
+  // rest where it is history paged back to.
+  void event(const conversation_id& in, const loom::ev::timeline_event& one, bool history = false) {
     const auto at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(one.origin_server_ts));
     if (one.content.template is<loom::ev::m_room_message_content_t>()) {
       const auto& content = one.content.template as<loom::ev::m_room_message_content_t>();
@@ -373,7 +398,7 @@ class account {
       if (relates)
         if (const knot::value* reply = member(*relates, "m.in_reply_to"))
           made.replies_to = text(member(*reply, "event_id"));
-      sink_(change::message_added{std::move(made)});
+      sink_(change::message_added{std::move(made), history});
     } else if (one.type == "m.room.encrypted") {
       // By its type: loom's timeline union does not have its content yet.
       sink_(change::message_added{message{.in = in,
@@ -381,7 +406,8 @@ class account {
                                           .sender = one.sender,
                                           .at = at,
                                           .body = {"🔒 an encrypted message (not yet readable here)", std::nullopt},
-                                          .outgoing = one.sender == id_.address}});
+                                          .outgoing = one.sender == id_.address},
+                                  history});
     } else if (one.content.template is<loom::ev::m_reaction_content_t>()) {
       const auto& content = one.content.template as<loom::ev::m_reaction_content_t>();
       if (content.m_relates_to && content.m_relates_to->event_id && content.m_relates_to->key) {
@@ -434,6 +460,8 @@ class account {
   account_id id_;
   std::string localpart_, server_name_;
   std::optional<std::string> token_;
+  // The rooms whose place to page back from was told.
+  std::set<std::string> paged_;
   http::connection* api_ = nullptr;
   loom::client::state state_;
   std::map<std::string, reaction> reactions_;

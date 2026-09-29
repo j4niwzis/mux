@@ -40,6 +40,7 @@ struct stub {
   void settings_animations() {}
   void pop_panel() {}
   void toggle_info() {}
+  void load_older(const mux::conversation_id&, std::string) {}
   void switch_account(std::string) {}
   void submit_message(std::string text) { sent.push_back(std::move(text)); }
   void send_typed() {}

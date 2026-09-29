@@ -78,6 +78,7 @@ inline skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110);
 //   void submit_message(std::string text)  -- Enter in the message field
 //   void send_typed()                -- the send arrow: what is in the field
 //   void toggle_info()               -- the chosen chat's info, beside it
+//   void load_older(const conversation_id&, std::string from)  -- its history
 //   void switch_account(std::string address)  -- whose chats are listed
 //   void pop_panel()                 -- back from the top panel to what is under it
 //   void open_settings(), close_settings(), settings_home(), settings_animations()
@@ -1546,6 +1547,18 @@ struct conversations_screen : scene::Node {
   // the chosen one.
   // The chats muted, as the program keeps them.
   std::set<conversation_id> muted;
+  // Where the chosen chat pages back from, and where it was last asked to:
+  // scrolled to its top, the older messages are asked for, once for each.
+  std::optional<std::string> history_from;
+  std::optional<std::string> history_asked;
+
+  [[nodiscard]] bool settling() const { return false; }
+  void update(double) {
+    if (chosen && history_from && history_asked != history_from && timeline.current() <= 4.0f) {
+      history_asked = history_from;
+      actions->load_older(*chosen, *history_from);
+    }
+  }
 
   void show(const model& now) {
     if (!current || !now.accounts().contains(*current))
@@ -1577,6 +1590,7 @@ struct conversations_screen : scene::Node {
     entries.clear();
     const conversation* one = chosen ? now.find(*chosen) : nullptr;
     header.show(one, now);
+    history_from = one ? one->history_from : std::nullopt;
     if (!one)
       return;
     info.show(*one, now, muted.contains(one->id));

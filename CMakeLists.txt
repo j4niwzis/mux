@@ -90,7 +90,7 @@ cme_find_package(OpenSSL REQUIRED)
 cme_find_package(tern REQUIRED)
 # Of loom, what mux uses: the state a sync leaves, and the parts of the API it
 # calls -- logging in, sending, syncing, finding the homeserver.
-cme_find_package(loom COMPONENTS state cs-leaving cs-login cs-receipts cs-room_send cs-sync cs-wellknown REQUIRED)
+cme_find_package(loom COMPONENTS state cs-leaving cs-login cs-message_pagination cs-receipts cs-room_send cs-sync cs-wellknown REQUIRED)
 
 # One library of mux's modules, as the libraries it stands on have: modules
 # are what separates them. The window's two join it where the window is

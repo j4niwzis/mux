@@ -185,6 +185,58 @@ class account {
     });
   }
 
+  // Older messages of a conversation, from the server's archive (XEP-0313):
+  // one's own archive with a contact, a room's own for a room. `before` is
+  // the archive id to page back from, or empty for the latest page.
+  void load_older(std::string with, std::string before) {
+    loop_->spawn([this, with = std::move(with), before = std::move(before)] {
+      if (!session_)
+        return;
+      const bool room = rooms_.contains(with);
+      tern::mam::query asked{.filter = tern::mam::filter(room ? std::nullopt : std::optional<std::string>(with)),
+                             .page = tern::rsm::set{.max = 40, .before = before}};
+      auto page = session_->try_archive(std::move(asked), room ? std::optional<std::string>(with) : std::nullopt);
+      if (!page)
+        return;
+      const conversation_id in{id_, with};
+      // Oldest first in the page: each put before the rest, newest first.
+      for (auto it = page->results.rbegin(); it != page->results.rend(); ++it)
+        this->archived(in, *it, room);
+      std::optional<std::string> next;
+      if (!page->fin.complete.value_or(false) && page->fin.page && page->fin.page->first)
+        next = page->fin.page->first;
+      sink_(change::history_position{in, next});
+    });
+  }
+
+  // A message of the archive, as history: under its own id, so that one
+  // already had live is the same message.
+  void archived(const conversation_id& in, const tern::mam::result& one, bool room) {
+    if (!one.forwarded.message)
+      return;
+    const auto take = [&](const auto* got) {
+      if (!got || !got->body || !got->from)
+        return;
+      const std::string nick = resource_of(*got->from);
+      const auto found = rooms_.find(in.id);
+      message made{.in = in,
+                   .id = got->id.value_or(one.id),
+                   .sender = room ? *got->from : bare(*got->from),
+                   .at = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()),
+                   .body = {*got->body, std::nullopt},
+                   .outgoing = room ? (found != rooms_.end() && nick == found->second.nick)
+                                    : bare(*got->from) == id_.address};
+      if (one.forwarded.delay)
+        if (const auto at = stamp_of(one.forwarded.delay->stamp))
+          made.at = *at;
+      sink_(change::message_added{std::move(made), true});
+    };
+    const auto& got = *one.forwarded.message;
+    take(got.template get_if<tern::basic::message_chat<tern::forward::plain>>());
+    take(got.template get_if<tern::basic::message_normal<tern::forward::plain>>());
+    take(got.template get_if<tern::basic::message_groupchat<tern::forward::plain>>());
+  }
+
   // A room left: unavailable to it, and the conversation gone.
   void leave(std::string room) {
     loop_->spawn([this, room = std::move(room)] {
@@ -308,6 +360,7 @@ class account {
     sink_(change::conversation_updated{.id = {id_, jid},
                                        .kind = conversation_kind::group{},
                                        .name = mark.name.value_or(jid)});
+    sink_(change::history_position{{id_, jid}, std::string()});
     if (tern::bookmarks::autojoins(mark))
       this->join(jid, mark.nick.value_or(user_));
   }
@@ -322,6 +375,8 @@ class account {
     sink_(change::conversation_updated{.id = {id_, item.jid},
                                        .kind = conversation_kind::direct{},
                                        .name = item.name.value_or(item.jid)});
+    // Its archive, paged back from the latest.
+    sink_(change::history_position{{id_, item.jid}, std::string()});
   }
 
   void on(const proto::stanza_t& one) {

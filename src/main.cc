@@ -160,6 +160,18 @@ struct network {
             one.account);
     });
   }
+  // Older messages of a conversation, from `from` back.
+  void load_older(const mux::conversation_id& in, std::string from) {
+    loop.post([this, in, from = std::move(from)] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == in.account)
+                account->load_older(in.id, from);
+            },
+            one.account);
+    });
+  }
   void leave(const mux::conversation_id& in) {
     loop.post([this, in] {
       for (auto& one : accounts)
@@ -324,6 +336,10 @@ struct quit {};
 struct open_settings {};
 struct pop_panel {};
 struct toggle_info {};
+struct load_older {
+  mux::conversation_id in;
+  std::string from;
+};
 struct submit_message {
   std::string text;
 };
@@ -385,7 +401,7 @@ using request_t =
                  request::toggle_plain, request::submit_login, request::flip_enabled, request::remove_account,
                  request::open_drawer, request::show_account, request::set_motion, request::quit,
                  request::open_settings, request::close_settings, request::settings_home,
-                 request::settings_animations, request::pop_panel, request::toggle_info,
+                 request::settings_animations, request::pop_panel, request::toggle_info, request::load_older,
                  request::switch_account, request::submit_message, request::send_typed,
                  request::resize_sidebar, request::not_implemented, request::close_notice,
                  request::resize_info, request::choose_new_proxy, request::toggle_mute, request::close_account_pages,
@@ -438,6 +454,9 @@ struct actions {
   void open_settings() { requests.emplace_back(request::open_settings{}); }
   void pop_panel() { requests.emplace_back(request::pop_panel{}); }
   void toggle_info() { requests.emplace_back(request::toggle_info{}); }
+  void load_older(const mux::conversation_id& in, std::string from) {
+    requests.emplace_back(request::load_older{in, std::move(from)});
+  }
   void submit_message(std::string text) { requests.emplace_back(request::submit_message{std::move(text)}); }
   void send_typed() { requests.emplace_back(request::send_typed{}); }
   void resize_sidebar(float x) { requests.emplace_back(request::resize_sidebar{x}); }
@@ -746,6 +765,10 @@ struct app {
   }
   void apply(const request::close_settings&) { root().close_settings(); }
   void apply(const request::toggle_info&) { root().main().toggle_info(); }
+  void apply(const request::load_older& one) {
+    if (!ask.demo)
+      net->load_older(one.in, one.from);
+  }
   void apply(const request::submit_message& one) { this->send_message(one.text); }
   void apply(const request::resize_sidebar& one) { root().main().resize_sidebar(one.x); }
   void apply(const request::not_implemented& one) { root().show_notice(one.what); }

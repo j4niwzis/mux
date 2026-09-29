@@ -302,6 +302,86 @@ void account<Sink>::fetch_preview(std::string url) {
 }
 
 template <class Sink>
+void account<Sink>::catch_up(std::string room, std::string from, std::string until) {
+  loop_->spawn([this, room = std::move(room), from = std::move(from), until = std::move(until)] {
+    const conversation_id in{id_, room};
+    std::map<std::string, std::string> sender_of;  // of every event the pages held
+    struct reaction_found {
+      std::string event, target;
+      std::chrono::sys_time<std::chrono::milliseconds> at;
+    };
+    std::vector<reaction_found> reactions;
+    std::optional<std::string> token = from;
+    std::size_t read = 0, mentions = 0;
+    // At most ten pages of a hundred: a gap longer than that is the
+    // history's, paged back to when read.
+    for (int page = 0; page < 10 && api_ && token; ++page) {
+      auto got = perform(*api_, loom::cs::get_room_events{.room_id = room,
+                                                          .from = token,
+                                                          .dir = loom::cs::get_room_events::dir_values::b{},
+                                                          .limit = 100});
+      if (!got || got->chunk.empty())
+        break;
+      bool reached = false;
+      for (const auto& one : got->chunk) {
+        if (one.event_id == until) {
+          reached = true;
+          break;
+        }
+        ++read;
+        sender_of.emplace(one.event_id, one.sender);
+        if (one.sender == id_.address)
+          continue;
+        const auto at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(one.origin_server_ts));
+        if (one.content.template is<loom::ev::m_room_message_content_t>()) {
+          const auto& content = one.content.template as<loom::ev::m_room_message_content_t>();
+          bool me = content.body.find(id_.address) != std::string::npos;
+          if (const knot::value* said = extra(content.rest, one.content, "m.mentions")) {
+            me = false;
+            if (const knot::value* users = member(*said, "user_ids"); users && users->is<knot::value::array>())
+              for (const knot::value& user : users->as<knot::value::array>())
+                me = me || (user.is<std::string>() && user.as<std::string>() == id_.address);
+            if (const knot::value* everyone = member(*said, "room"); everyone && everyone->is<bool>())
+              me = me || everyone->as<bool>();
+          }
+          if (me) {
+            ++mentions;
+            sink_(change::mentioned{in, one.event_id, at});
+          }
+        } else if (one.content.template is<loom::ev::m_reaction_content_t>()) {
+          const auto& content = one.content.template as<loom::ev::m_reaction_content_t>();
+          if (content.m_relates_to && content.m_relates_to->event_id)
+            reactions.push_back({one.event_id, *content.m_relates_to->event_id, at});
+        }
+      }
+      if (reached)
+        break;
+      token = got->end;
+    }
+    // The reactions to what the user sent: known by who sent it, where the
+    // pages or the room's last events held it.
+    const auto kept = state_.joined.find(room);
+    const auto mine = [&](const std::string& target) {
+      if (const auto found = sender_of.find(target); found != sender_of.end())
+        return found->second == id_.address;
+      if (kept != state_.joined.end())
+        for (const auto& one : kept->second.timeline)
+          if (one.event_id == target)
+            return one.sender == id_.address;
+      return false;
+    };
+    std::size_t to_mine = 0;
+    for (const auto& one : reactions)
+      if (mine(one.target)) {
+        ++to_mine;
+        sink_(change::reacted_to_mine{in, one.event, one.target, one.at});
+      }
+    log(id_, "caught up on {}: {} event{}, {} mention{}, {} reaction{} to yours", room, read, read == 1 ? "" : "s",
+        mentions, mentions == 1 ? "" : "s", to_mine, to_mine == 1 ? "" : "s");
+  });
+}
+
+template <class Sink>
 void account<Sink>::preview_room(std::string room, std::vector<std::string> via) {
   loop_->spawn([this, room = std::move(room), via = std::move(via)] {
     if (!api_)

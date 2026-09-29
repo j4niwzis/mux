@@ -133,6 +133,7 @@ int main(int argc, char** argv) {
   program.model->show_deleted = program.history.show_deleted;
   program.settings.apply_limits();
   program.proxies = proxies;
+  program.load_marks();
   for (const auto& one : saved.room_events.value_or(std::vector<mux::config::room_events_choice>{})) {
     const mux::conversation_id chat{{mux::ui::protocol_of(one.account), one.account}, one.conversation};
     if (one.show)

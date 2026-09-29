@@ -877,6 +877,14 @@ struct marks_shown {
   conversation_id in;
   std::vector<std::string> shown;
 };
+// A reaction to one of the user's messages, found catching up: marked even
+// where that message is not loaded.
+struct reacted_to_mine {
+  conversation_id in;
+  std::string event;
+  std::string target;
+  std::chrono::sys_time<std::chrono::milliseconds> at{};
+};
 // A mark of a kind, gone to: the one named, else the oldest.
 struct mark_taken {
   conversation_id in;
@@ -906,7 +914,7 @@ using change_t = std::variant<change::connection_changed, change::account_remove
                               change::window_opened, change::window_extended, change::media_progress,
                               change::room_created, change::preview_loaded, change::devtools_text,
                               change::state_listed, change::room_previewed, change::mentioned,
-                              change::marks_shown, change::mark_taken>;
+                              change::marks_shown, change::mark_taken, change::reacted_to_mine>;
 
 // The model: every account, and every change applied to it.
 class model {
@@ -1148,6 +1156,9 @@ class model {
       marks.erase(marks.begin());
   }
   void on(const change::mentioned& one) { keep_mark(of(one.in).unread_mentions, {one.event, one.event, one.at}); }
+  void on(const change::reacted_to_mine& one) {
+    keep_mark(of(one.in).unread_reactions, {one.event, one.target, one.at});
+  }
   void on(const change::marks_shown& one) {
     conversation& where = of(one.in);
     const auto shown = [&](const unread_mark& mark) { return std::ranges::contains(one.shown, mark.target); };

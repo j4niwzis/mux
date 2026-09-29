@@ -151,8 +151,18 @@ void account<Sink>::run() {
       const std::size_t joined = got->rooms && got->rooms->join ? got->rooms->join->size() : 0;
       log(id_, "first sync: {} room{}", joined, joined == 1 ? "" : "s");
     }
+    // The rooms whose news the sync cut short, since the last run: where
+    // each had got to, to catch up on the gap between.
+    std::vector<std::tuple<std::string, std::string, std::string>> gaps;
+    if (!first && got->rooms && got->rooms->join)
+      for (const auto& [room, part] : *got->rooms->join)
+        if (part.timeline && part.timeline->limited.value_or(false) && part.timeline->prev_batch)
+          if (const auto had = state_.joined.find(room); had != state_.joined.end() && !had->second.timeline.empty())
+            gaps.emplace_back(room, *part.timeline->prev_batch, had->second.timeline.back().event_id);
     state_.apply(*got);
     tell(*got);
+    for (auto& [room, from, until] : gaps)
+      this->catch_up(std::move(room), std::move(from), std::move(until));
     // Written every half a minute, and at the end: a restart goes on from
     // at most that far back.
     if (first || std::chrono::steady_clock::now() - saved_at > std::chrono::seconds(30)) {

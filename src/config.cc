@@ -172,6 +172,28 @@ struct room_event_kinds {
 };
 consteval auto json_schema(knot::type<room_event_kinds>) { return knot::schema<room_event_kinds>(); }
 
+// The mentions and reactions not yet seen, kept between runs, by chat.
+struct kept_mark {
+  std::string event;
+  std::string target;
+  std::int64_t at = 0;  // milliseconds since the epoch
+  friend bool operator==(const kept_mark&, const kept_mark&) = default;
+};
+struct chat_marks {
+  std::string account;
+  std::string conversation;
+  std::vector<kept_mark> mentions;
+  std::vector<kept_mark> reactions;
+  friend bool operator==(const chat_marks&, const chat_marks&) = default;
+};
+struct marks_file {
+  std::vector<chat_marks> chats;
+  friend bool operator==(const marks_file&, const marks_file&) = default;
+};
+consteval auto json_schema(knot::type<kept_mark>) { return knot::schema<kept_mark>(); }
+consteval auto json_schema(knot::type<chat_marks>) { return knot::schema<chat_marks>(); }
+consteval auto json_schema(knot::type<marks_file>) { return knot::schema<marks_file>(); }
+
 // An XMPP account: a JID and how to reach its server.
 struct xmpp_account {
   std::string address;  // user@domain

@@ -237,6 +237,11 @@ struct app : kept_settings {
   void apply(const request::close_person_info&);
   void apply(const request::close_room_card&);
   void apply(const request::jump_to_mark& one);
+  // The mentions and reactions not yet seen, written as they change and read
+  // back at the start -- each put in once its chat is there.
+  void save_marks();
+  void load_marks();
+  std::vector<std::pair<mux::conversation_id, mux::change_t>> pending_marks;
   void apply(const request::list_marks& one);
   void apply(const request::go_to_mark& one);
   void apply(const request::close_marks&);

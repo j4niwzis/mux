@@ -81,6 +81,23 @@ void app::woken() {
     model->apply(one);
     this->keep_on_disk(one);
   }
+  // Marks read back from the disk, put in once their chats are here; and
+  // the marks written again where they changed.
+  std::erase_if(pending_marks, [&](const auto& waiting) {
+    if (model->find(waiting.first) == nullptr)
+      return false;
+    model->apply(waiting.second);
+    return true;
+  });
+  const bool marks_changed = std::ranges::any_of(changes, [](const mux::change_t& one) {
+    return std::visit(mux::overloaded{[](const mux::change::mentioned&) { return true; },
+                                      [](const mux::change::reacted_to_mine&) { return true; },
+                                      [](const mux::change::reaction_changed& c) { return c.live; },
+                                      [](const auto&) { return false; }},
+                      one);
+  });
+  if (marks_changed)
+    this->save_marks();
   // Messages held to a number in all, least recently read out first.
   model->trim(static_cast<std::size_t>(limits.messages_in_memory), root().main().chosen);
   this->refresh();
@@ -93,6 +110,46 @@ void app::woken() {
       const auto room = std::exchange(joining, std::nullopt);
       this->open_chat(*found, room->event);
     }
+}
+
+void app::save_marks() {
+  if (ask.demo)
+    return;
+  mux::config::marks_file out;
+  const auto kept = [](const mux::unread_mark& mark) {
+    return mux::config::kept_mark{mark.event, mark.target, static_cast<std::int64_t>(mark.at.time_since_epoch().count())};
+  };
+  for (const auto& [id, account] : model->accounts())
+    for (const auto& [key, one] : account.conversations) {
+      if (one.unread_mentions.empty() && one.unread_reactions.empty())
+        continue;
+      mux::config::chat_marks chat{.account = id.address, .conversation = one.id.id};
+      std::ranges::transform(one.unread_mentions, std::back_inserter(chat.mentions), kept);
+      std::ranges::transform(one.unread_reactions, std::back_inserter(chat.reactions), kept);
+      out.chats.push_back(std::move(chat));
+    }
+  std::ofstream(mux::config::state_path("marks.json"), std::ios::binary | std::ios::trunc)
+      << knot::to_json_string(knot::to_value(out));
+}
+
+void app::load_marks() {
+  std::ifstream in(mux::config::state_path("marks.json"), std::ios::binary);
+  if (!in)
+    return;
+  const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  const auto read = knot::try_read<mux::config::marks_file>(std::string_view(text));
+  if (!read)
+    return;
+  for (const mux::config::chat_marks& chat : read->chats) {
+    const mux::conversation_id id{{mux::ui::protocol_of(chat.account), chat.account}, chat.conversation};
+    const auto at = [](std::int64_t ms) {
+      return std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(ms));
+    };
+    for (const auto& mark : chat.mentions)
+      pending_marks.emplace_back(id, mux::change_t{mux::change::mentioned{id, mark.event, at(mark.at)}});
+    for (const auto& mark : chat.reactions)
+      pending_marks.emplace_back(id, mux::change_t{mux::change::reacted_to_mine{id, mark.event, mark.target, at(mark.at)}});
+  }
 }
 
 void app::keep_on_disk(const mux::change_t& one) {
@@ -177,6 +234,7 @@ void app::before_frame() {
       const auto marked = [&](const mux::unread_mark& mark) { return std::ranges::contains(shown, mark.target); };
       if (std::ranges::any_of(chat->unread_mentions, marked) || std::ranges::any_of(chat->unread_reactions, marked)) {
         model->apply(mux::change_t{mux::change::marks_shown{*chosen, std::move(shown)}});
+        this->save_marks();
         this->refresh();
       }
     }

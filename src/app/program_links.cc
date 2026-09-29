@@ -84,6 +84,7 @@ void app::apply(const request::jump_to_mark& one) {
     return;
   const std::string target = marks.front().target;
   model->apply(mux::change_t{mux::change::mark_taken{*chosen, one.kind}});
+  this->save_marks();
   root().main().jump_to(target);
   this->refresh();
 }
@@ -140,6 +141,7 @@ void app::apply(const request::go_to_mark& one) {
     return;
   const std::string target = found->target;
   model->apply(mux::change_t{mux::change::mark_taken{*chosen, one.kind, one.event}});
+  this->save_marks();
   root().main().jump_to(target);
   this->refresh();
 }

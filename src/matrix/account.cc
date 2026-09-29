@@ -83,6 +83,10 @@ class account {
   void create_group(std::string name);
   // A link's preview, as the homeserver makes it.
   void fetch_preview(std::string url);
+  // A room's gap since the last run, from where the sync left it back to
+  // the event it had last: read for mentions of the user and reactions to
+  // theirs, and nothing else -- no message kept, nothing fetched.
+  void catch_up(std::string room, std::string from, std::string until);
   // A room not joined, as its server tells of it, before it is joined.
   void preview_room(std::string room, std::vector<std::string> via);
   // The developer tools, as Element's: an event as the server has it; the

@@ -77,22 +77,22 @@ inline std::optional<std::string> text(const knot::value* of) {
 // Each type says what it means as its members, read by visiting.
 namespace msgtype {
 struct image {
-  static constexpr bool carries = true, picture = true, emote = false;
+  static constexpr bool carries = true, picture = true, is_emote = false;
 };
 struct file {
-  static constexpr bool carries = true, picture = false, emote = false;
+  static constexpr bool carries = true, picture = false, is_emote = false;
 };
 struct video {
-  static constexpr bool carries = true, picture = false, emote = false;
+  static constexpr bool carries = true, picture = false, is_emote = false;
 };
 struct audio {
-  static constexpr bool carries = true, picture = false, emote = false;
+  static constexpr bool carries = true, picture = false, is_emote = false;
 };
 struct emote {
-  static constexpr bool carries = false, picture = false, emote = true;
+  static constexpr bool carries = false, picture = false, is_emote = true;
 };
 struct other {  // m.text, m.notice, and what is not known
-  static constexpr bool carries = false, picture = false, emote = false;
+  static constexpr bool carries = false, picture = false, is_emote = false;
 };
 }  // namespace msgtype
 using msgtype_t = std::variant<msgtype::image, msgtype::file, msgtype::video, msgtype::audio, msgtype::emote,
@@ -983,7 +983,7 @@ class account {
                    .body = body_of(content.body, content.rest, one.content),
                    .outgoing = one.sender == id_.address};
       const auto [carries, picture, emote] = std::visit(
-          [](auto of) { return std::tuple(of.carries, of.picture, of.emote); }, msgtype_of(content.msgtype));
+          [](auto of) { return std::tuple(of.carries, of.picture, of.is_emote); }, msgtype_of(content.msgtype));
       if (emote)
         made.body.plain = "* " + made.body.plain;
       // A picture or a file: where it is kept, its name, what it is; its

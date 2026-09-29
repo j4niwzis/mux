@@ -141,13 +141,13 @@ using png_chunk_t = std::variant<png_chunk::metadata, png_chunk::end, png_chunk:
 // out, the VP8X header whose flags are set to what is left, or kept.
 namespace webp_chunk {
 struct metadata {  // EXIF, XMP
-  static constexpr bool keep = false, header = false;
+  static constexpr bool keep = false, is_vp8x = false;
 };
 struct header {  // VP8X
-  static constexpr bool keep = true, header = true;
+  static constexpr bool keep = true, is_vp8x = true;
 };
 struct kept {
-  static constexpr bool keep = true, header = false;
+  static constexpr bool keep = true, is_vp8x = false;
 };
 }  // namespace webp_chunk
 using webp_chunk_t = std::variant<webp_chunk::metadata, webp_chunk::header, webp_chunk::kept>;
@@ -169,7 +169,7 @@ using webp_chunk_t = std::variant<webp_chunk::metadata, webp_chunk::header, webp
     const std::size_t padded = length + (length & 1);
     if (at + 8 + length > in.size())
       return std::string(in);
-    const auto [keep, header] = std::visit([](auto chunk) { return std::pair(chunk.keep, chunk.header); },
+    const auto [keep, header] = std::visit([](auto chunk) { return std::pair(chunk.keep, chunk.is_vp8x); },
                                            webp_chunk_of(in.substr(at, 4)));
     if (header)
       vp8x = out.size();

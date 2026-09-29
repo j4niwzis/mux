@@ -266,6 +266,9 @@ inline skiff::scene::Modifiers modifiers_of(SDL_Keymod held) {
 class canvas_target {
  public:
   canvas_target(SDL_Window* window, bool software) : window_(window) {
+    // GL where the Skia has Ganesh -- its own define says -- and the window
+    // was made for it.
+#if defined(SK_GANESH)
     if (!software && (SDL_GetWindowFlags(window) & SDL_WINDOW_OPENGL)) {
       gl_ = SDL_GL_CreateContext(window);
       if (gl_) {
@@ -284,17 +287,29 @@ class canvas_target {
         gl_ = nullptr;
       }
     }
-    std::println(std::cerr, "[mux] drawing {}", context_ ? "with OpenGL" : "in software");
+#else
+    (void)software;
+#endif
+    std::println(std::cerr, "[mux] drawing {}", this->on_gpu() ? "with OpenGL" : "in software");
+  }
+  [[nodiscard]] bool on_gpu() const {
+#if defined(SK_GANESH)
+    return context_ != nullptr;
+#else
+    return false;
+#endif
   }
   canvas_target(const canvas_target&) = delete;
   canvas_target& operator=(const canvas_target&) = delete;
   ~canvas_target() {
     surface_.reset();
+#if defined(SK_GANESH)
     if (context_)
       context_->abandonContext();
     context_.reset();
     if (gl_)
       SDL_GL_DestroyContext(gl_);
+#endif
   }
 
   // A surface of the window's size in pixels, made again when it changes.
@@ -308,6 +323,7 @@ class canvas_target {
     surface_.reset();
     if (width <= 0 || height <= 0)
       return nullptr;
+#if defined(SK_GANESH)
     if (context_) {
       skia::GrGLFramebufferInfo info;
       info.fFBOID = 0;
@@ -315,9 +331,10 @@ class canvas_target {
       auto target = skia::MakeGL(width, height, 0, 8, info);
       surface_ = skia::WrapBackendRenderTarget(context_.get(), target, skia::kBottomLeft_GrSurfaceOrigin,
                                                skia::kRGBA_8888_SkColorType, nullptr, nullptr);
-    } else {
-      surface_ = skia::Raster(skia::SkImageInfo::MakeN32Premul(width, height));
+      return surface_.get();
     }
+#endif
+    surface_ = skia::Raster(skia::SkImageInfo::MakeN32Premul(width, height));
     return surface_.get();
   }
 
@@ -325,11 +342,13 @@ class canvas_target {
   void present() {
     if (!surface_)
       return;
+#if defined(SK_GANESH)
     if (context_) {
       context_->flushAndSubmit(surface_.get());
       SDL_GL_SwapWindow(window_);
       return;
     }
+#endif
     SDL_Surface* shown = SDL_GetWindowSurface(window_);
     if (!shown)
       return;
@@ -347,8 +366,10 @@ class canvas_target {
 
  private:
   SDL_Window* window_;
+#if defined(SK_GANESH)
   SDL_GLContext gl_ = nullptr;
   skia::Sp<skia::GrDirectContext> context_;
+#endif
   skia::Sp<skia::SkSurface> surface_;
   int width_ = 0, height_ = 0;
 };
@@ -378,8 +399,14 @@ int run(App& app, const options& how) {
   SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
   const SDL_WindowFlags base = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
-  SDL_Window* window =
-      how.software ? nullptr : SDL_CreateWindow(how.title.c_str(), how.width, how.height, base | SDL_WINDOW_OPENGL);
+#if defined(SK_GANESH)
+  constexpr bool can_use_gl = true;
+#else
+  constexpr bool can_use_gl = false;  // a Skia without Ganesh draws in software
+#endif
+  SDL_Window* window = how.software || !can_use_gl
+                           ? nullptr
+                           : SDL_CreateWindow(how.title.c_str(), how.width, how.height, base | SDL_WINDOW_OPENGL);
   if (!window)
     window = SDL_CreateWindow(how.title.c_str(), how.width, how.height, base);
   if (!window) {

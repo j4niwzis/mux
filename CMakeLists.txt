@@ -141,17 +141,40 @@ if(MUX_UI)
   # skiff and skiff-widgets say the rest of what they are in their own trees.
   cme_declare_port(NAME skiff PROVIDES skiff
     GITHUB_REPOSITORY j4niwzis/skiff
-    GIT_TAG 28a706e225e9cddd95bbfa900a7b7b28df579861)
+    GIT_TAG a2c7d736d7c26f53d8ab49afbbe30dfaa5f14adb)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
     GIT_TAG 35e459539865362c6919c946488cd71640511b1c)
-  # Skia as skiff draws with it, on GL, with the system's fonts read from
-  # their directory.
-  set(SKIFF_SKIA_COMPONENTS gl fontmgr-directory CACHE STRING "" FORCE)
+  # Skia's features, each an option asking for its component: GL to draw on
+  # the GPU (the software renderer is there either way), and the pictures
+  # decoded. A system Skia without one is taken where its option is off.
+  option(MUX_GL "Draw on the GPU through OpenGL, besides in software" ON)
+  option(MUX_PNG "Pictures in PNG" ON)
+  option(MUX_JPEG "Pictures in JPEG" ON)
+  option(MUX_GIF "Pictures in GIF, played where they move (Skia with Wuffs)" OFF)
+  option(MUX_WEBP "Pictures in WebP, played where they move (Skia with libwebp)" OFF)
+  set(mux_skia_components freetype fontmgr-directory)
+  if(MUX_GL)
+    list(APPEND mux_skia_components gl)
+  endif()
+  foreach(codec IN ITEMS png jpeg gif webp)
+    string(TOUPPER ${codec} option_name)
+    set(SKIFF_${option_name} ${MUX_${option_name}} CACHE BOOL "" FORCE)
+    if(MUX_${option_name})
+      list(APPEND mux_skia_components ${codec})
+    endif()
+  endforeach()
+  # Skia as skiff draws with it, with the system's fonts read from their
+  # directory, on GL where it is asked for.
+  set(skiff_backend fontmgr-directory)
+  if(MUX_GL)
+    list(APPEND skiff_backend gl)
+  endif()
+  set(SKIFF_SKIA_COMPONENTS ${skiff_backend} CACHE STRING "" FORCE)
   # Text shaped by HarfBuzz and laid out by Unicode's rules through alef:
   # Arabic and Hebrew, Indic scripts, emoji sequences, CJK line breaks.
   set(SKIFF_TEXT_SHAPING ON CACHE BOOL "" FORCE)
-  cme_find_package(Skia REQUIRED COMPONENTS gl png jpeg freetype fontmgr-directory)
+  cme_find_package(Skia REQUIRED COMPONENTS ${mux_skia_components})
   cme_find_package(SDL3 REQUIRED)
   cme_find_package(skiff-widgets REQUIRED)
   # skiff's modules are C++23 and do not carry the family's flags, so they

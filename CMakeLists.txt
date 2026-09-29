@@ -64,14 +64,14 @@ endforeach()
 # The libraries of this family, each pinned to a commit.
 cme_declare_port(NAME tern PROVIDES tern
   GITHUB_REPOSITORY j4niwzis/tern
-  GIT_TAG 2c757bbed2011e1b0c948d3dd75fe1ef585c4ba1eb6bc17dd8c7017a09a1fc645a5383cd6b90c7ba
+  GIT_TAG eb6bc17dd8c7017a09a1fc645a5383cd6b90c7ba
   LICENSE AGPL-3.0-only
   SYSTEM NEVER
   TARGETS tern)
 cme_options(tern "TERN_TESTS OFF" "TERN_EXAMPLES OFF")
 cme_declare_port(NAME loom PROVIDES loom
   GITHUB_REPOSITORY j4niwzis/loom
-  GIT_TAG 2c757bbed2011e1b0c948d3dd75fe1ef585c4ba1c78b519b0c8cf26213134d3dc166725e3b9038b8
+  GIT_TAG c78b519b0c8cf26213134d3dc166725e3b9038b8
   LICENSE AGPL-3.0-only
   SYSTEM NEVER
   TARGETS loom)
@@ -92,7 +92,7 @@ cme_find_package(OpenSSL REQUIRED)
 # for more of it finds it already built without that, and stops.
 cme_declare_port(NAME alef PROVIDES alef
   GITHUB_REPOSITORY j4niwzis/alef
-  GIT_TAG 2c757bbed2011e1b0c948d3dd75fe1ef585c4ba1583c3a85adfecf60e68dccd2742e7ad97e667645
+  GIT_TAG 583c3a85adfecf60e68dccd2742e7ad97e667645
   LICENSE AGPL-3.0-only
   SYSTEM NEVER
   TARGETS alef)
@@ -136,10 +136,10 @@ if(MUX_UI)
   # skiff and skiff-widgets say the rest of what they are in their own trees.
   cme_declare_port(NAME skiff PROVIDES skiff
     GITHUB_REPOSITORY j4niwzis/skiff
-    GIT_TAG 2c757bbed2011e1b0c948d3dd75fe1ef585c4ba19c16927eeaeda6329d6d75dca4415b0d2382a12c)
+    GIT_TAG 2c757bbed2011e1b0c948d3dd75fe1ef585c4ba1)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
-    GIT_TAG 2c757bbed2011e1b0c948d3dd75fe1ef585c4ba17d88dc417839cc95be6d191531137692225b449c)
+    GIT_TAG 7d88dc417839cc95be6d191531137692225b449c)
   # Skia as skiff draws with it, on GL, with the system's fonts read from
   # their directory.
   set(SKIFF_SKIA_COMPONENTS gl fontmgr-directory CACHE STRING "" FORCE)

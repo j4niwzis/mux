@@ -232,15 +232,15 @@ struct network {
             one.account);
     });
   }
-  // What a message carries, fetched by the account it is of, for `key`: a
+  // What a message carries, fetched by the account it is of, for `use`: a
   // picture's thumbnail at `size`, or all of a file where `size` is 0.
-  void fetch_media(const mux::account_id& of, std::string source, std::string key, int size) {
-    loop.post([this, of, source = std::move(source), key = std::move(key), size] {
+  void fetch_media(const mux::account_id& of, std::string source, mux::media_use_t use, int size) {
+    loop.post([this, of, source = std::move(source), use = std::move(use), size] {
       for (auto& one : accounts)
         std::visit(
             [&](auto& account) {
               if (account->id() == of)
-                account->fetch_media(source, key, size);
+                account->fetch_media(source, use, size);
             },
             one.account);
     });

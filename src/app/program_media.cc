@@ -56,9 +56,10 @@ void app::files_given(std::vector<std::string> paths, bool dropped) {
           one.bytes = mux::media::without_metadata(one.bytes);
         if (dropped && sending.rename)
           one.name = std::format("image.{}", mux::media::extension_of(*type));
-        one.key = std::format("thumb:local:mux-file-{}-{}", std::chrono::system_clock::now().time_since_epoch().count(),
+        // Its local id, under which its thumbnail is shown while it goes.
+        one.key = std::format("mux-file-{}-{}", std::chrono::system_clock::now().time_since_epoch().count(),
                               ++files_made);
-        mux::ui::avatar_images().put(one.key, std::move(image));
+        mux::ui::thumbnails().put(one.key, std::move(image));
       }
     }
     to_send.push_back(std::move(one));
@@ -81,7 +82,7 @@ void app::apply(const request::send_files&) {
     // Its local id is its picture's, so the window shows it while it goes.
     std::string local = one.key.empty() ? std::format("mux-file-{}-{}", std::chrono::system_clock::now().time_since_epoch().count(),
                                                       ++files_made)
-                                        : one.key.substr(std::string_view("thumb:local:").size());
+                                        : one.key;
     net->send_file(*chosen, std::move(local), std::move(one.bytes), one.name, one.mimetype, one.image, one.width,
                    one.height, std::exchange(caption, std::string()));
   }
@@ -92,21 +93,22 @@ void app::apply(const request::send_files&) {
 void app::apply(const request::open_picture& one) {
   root().open_picture(one.source, one.sender, one.name, one.when);
   const auto& chosen = root().main().chosen;
-  if (chosen && !mux::ui::avatar_images().has("full:" + one.source) && avatars_fetched.insert("full:" + one.source).second)
-    net->fetch_media(chosen->account, one.source, "full:" + one.source, 0);
+  if (chosen && !mux::ui::whole_pictures().has(one.source) && !this->read_back(mux::media_use::whole{}, one.source) &&
+      wholes_fetched.insert(one.source).second)
+    net->fetch_media(chosen->account, one.source, mux::media_use::whole{}, 0);
 }
 
 void app::apply(const request::close_picture&) { root().close_picture(); }
 
 void app::apply(const request::save_picture& one) {
-  const auto kept = avatar_file("full:" + one.source);
-  if (std::ifstream file{kept, std::ios::binary}) {
-    std::string bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-    this->save_download(bytes, "image", false);
-    return;
-  }
+  if (const auto kept = kept_file(mux::media_use::whole{}, one.source))
+    if (std::ifstream file{*kept, std::ios::binary}) {
+      std::string bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+      this->save_download(bytes, "image", false);
+      return;
+    }
   if (const auto& chosen = root().main().chosen)
-    net->fetch_media(chosen->account, one.source, "save:" + one.source, 0);
+    net->fetch_media(chosen->account, one.source, mux::media_use::to_save{"image"}, 0);
 }
 
 void app::save_download(const std::string& bytes, std::string name, bool open) {
@@ -129,7 +131,7 @@ void app::apply(const request::open_file& one) {
   const auto& chosen = root().main().chosen;
   if (!chosen)
     return;
-  net->fetch_media(chosen->account, one.source, "file:" + one.name, 0);
+  net->fetch_media(chosen->account, one.source, mux::media_use::to_open{one.name}, 0);
 }
 
 auto app::downloads() -> std::filesystem::path {
@@ -209,15 +211,15 @@ void app::apply(const request::menu_save&) {
   root().close_menu();
   if (!menu_target.media)
     return;
-  const auto kept = avatar_file("full:" + *menu_target.media);
-  if (std::ifstream file{kept, std::ios::binary}) {
-    std::string bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-    this->save_download(bytes, menu_target.media_name.empty() ? std::string("image") : menu_target.media_name, false);
-    return;
-  }
+  const std::string name = menu_target.media_name.empty() ? std::string("image") : menu_target.media_name;
+  if (const auto kept = kept_file(mux::media_use::whole{}, *menu_target.media))
+    if (std::ifstream file{*kept, std::ios::binary}) {
+      std::string bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+      this->save_download(bytes, name, false);
+      return;
+    }
   if (const auto& chosen = root().main().chosen)
-    net->fetch_media(chosen->account, *menu_target.media,
-                     "save:" + (menu_target.media_name.empty() ? std::string("image") : menu_target.media_name), 0);
+    net->fetch_media(chosen->account, *menu_target.media, mux::media_use::to_save{name}, 0);
 }
 
 void app::apply(const request::menu_delete&) {

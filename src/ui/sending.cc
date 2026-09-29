@@ -19,7 +19,7 @@ export namespace mux::ui {
 // and Send.
 struct pending_file {
   std::string name;
-  std::string key;  // its picture's, where it is one: "thumb:local:..."
+  std::string key;  // its picture's, where it is one: its local id, in thumbnails()
   std::int64_t size = 0;
   bool image = false;
 };
@@ -36,7 +36,7 @@ struct send_box : nodes::Stack {
         const skia::SkRect& box = fState.fBounds;
         const int saved = canvas->save();
         canvas->clipRRect(skia::SkRRect::MakeRectXY(box, 10.0f, 10.0f), true);
-        if (const skia::Sp<skia::SkImage>* image = avatar_images().find(key); image && *image) {
+        if (const skia::Sp<skia::SkImage>* image = thumbnails().find(key); image && *image) {
           skia::SkPaint paint;
           paint.setAlphaf(alpha);
           canvas->drawImageRect(*image, box, skia::SkSamplingOptions(skia::SkFilterMode::kLinear), &paint);
@@ -51,7 +51,7 @@ struct send_box : nodes::Stack {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
       for (const pending_file& one : all) {
         if (one.image) {
-          const skia::Sp<skia::SkImage>* image = avatar_images().find(one.key);
+          const skia::Sp<skia::SkImage>* image = thumbnails().find(one.key);
           float w = image && *image ? static_cast<float>((*image)->width()) : 380.0f;
           float h = image && *image ? static_cast<float>((*image)->height()) : 240.0f;
           const float scale = std::min({1.0f, 380.0f / w, (all.size() > 1 ? 160.0f : 300.0f) / h});

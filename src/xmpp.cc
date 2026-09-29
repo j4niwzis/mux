@@ -194,7 +194,7 @@ class account {
   // sees it was read.
   // Avatars of XMPP contacts (XEP-0084) are not fetched yet.
   void fetch_avatar(std::string, std::string) {}
-  void fetch_media(std::string, std::string, int, bool = false) {}
+  void fetch_media(std::string, media_use_t, int, bool = false) {}
   // A room's occupants come with its presence; nothing to ask for.
   void fetch_members(std::string) {}
   // Reactions (XEP-0444) are not sent yet.
@@ -485,18 +485,23 @@ class account {
   }
 
   void on(const proto::stanza_t& one) {
-    if (const auto* message = std::get_if<proto::message_t>(&one)) {
-      std::visit([this](const auto& got) { on_message(got); }, *message);
-    } else if (const auto* presence = std::get_if<proto::presence_t>(&one)) {
-      std::visit([this](const auto& got) { on_presence(got); }, *presence);
-    } else if (const auto* iq = std::get_if<proto::iq_t>(&one)) {
-      // A roster push, handed out once tern has answered it.
-      if (const auto* set = std::get_if<proto::iq::set>(iq))
-        if (roster_.apply(*set))
-          for (const auto& [jid, item] : roster_.items)
-            contact(item);
-    }
+    std::visit(overloaded{[this](const proto::message_t& message) {
+                            std::visit([this](const auto& got) { on_message(got); }, message);
+                          },
+                          [this](const proto::presence_t& presence) {
+                            std::visit([this](const auto& got) { on_presence(got); }, presence);
+                          },
+                          [this](const proto::iq_t& iq) { std::visit([this](const auto& got) { on_iq(got); }, iq); }},
+               one);
   }
+  // A roster push, handed out once tern has answered it; the other iqs are
+  // tern's to answer.
+  void on_iq(const proto::iq::set& set) {
+    if (roster_.apply(set))
+      for (const auto& [jid, item] : roster_.items)
+        contact(item);
+  }
+  void on_iq(const auto&) {}
 
   // A chat or a normal message with a body is a message; anything else is
   // not the conversation's.

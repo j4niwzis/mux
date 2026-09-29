@@ -74,9 +74,9 @@ struct picture_viewer : nodes::Stack {
     picture_viewer* viewer;
     explicit stage(picture_viewer* v) : viewer(v) { fState.apply({.fillX = true, .grow = scene::axes::kY}); }
     [[nodiscard]] const skia::Sp<skia::SkImage>* image() const {
-      const skia::Sp<skia::SkImage>* one = avatar_images().find("full:" + viewer->source);
+      const skia::Sp<skia::SkImage>* one = whole_pictures().find(viewer->source);
       if (!one || !*one)
-        one = avatar_images().find("thumb:" + viewer->source);
+        one = thumbnails().find(viewer->source);
       return one && *one ? one : nullptr;
     }
     [[nodiscard]] skia::SkRect where() const {

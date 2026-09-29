@@ -85,7 +85,9 @@ struct window : scene::Node {
   template <class Panel>
   Panel& open() {
     if (panel_type* up = p->frame.shown())
-      if (Panel* same = std::get_if<Panel>(up))
+      if (Panel* same = std::visit(overloaded{[](Panel& one) -> Panel* { return &one; },
+                                              [](auto&) -> Panel* { return nullptr; }},
+                                   *up))
         return *same;
     return std::get<Panel>(p->frame.open(std::in_place_type<Panel>, actions));
   }

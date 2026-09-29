@@ -72,7 +72,9 @@ void account<Sink>::load_older(std::string room, std::string from) {
 }
 
 template <class Sink>
-void account<Sink>::fetch_avatar(std::string source, std::string key) { this->fetch_media(std::move(source), std::move(key), 96, true); }
+void account<Sink>::fetch_avatar(std::string source, std::string of) {
+  this->fetch_media(std::move(source), media_use::avatar{std::move(of)}, 96, true);
+}
 
 template <class Sink>
 void account<Sink>::edit(std::string room, std::string event, std::string text) {

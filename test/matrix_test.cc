@@ -83,14 +83,16 @@ struct recorder {
 };
 
 void sink::operator()(mux::change_t one) const {
-  if (const auto* changed = std::get_if<mux::change::connection_changed>(&one)) {
-    to->states.push_back(changed->state);
-    if (std::visit(mux::overloaded{[](const mux::connection::offline&) { return true; },
-                                   [](const mux::connection::failed&) { return true; },
-                                   [](const auto&) { return false; }},
-                   changed->state))
-      to->running->stop();
-  }
+  std::visit(mux::overloaded{[&](const mux::change::connection_changed& changed) {
+                               to->states.push_back(changed.state);
+                               if (std::visit(mux::overloaded{[](const mux::connection::offline&) { return true; },
+                                                              [](const mux::connection::failed&) { return true; },
+                                                              [](const auto&) { return false; }},
+                                              changed.state))
+                                 to->running->stop();
+                             },
+                             [](const auto&) {}},
+             one);
   // A message sent once the room is there.
   const bool room_there = std::visit(mux::overloaded{[](const mux::change::conversation_updated&) { return true; },
                                                      [](const auto&) { return false; }},

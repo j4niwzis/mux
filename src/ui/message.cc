@@ -47,7 +47,7 @@ struct picture_view : scene::Node {
   int width = 0, height = 0;
   bool had_picture = false;
   void update(double) {
-    if (!had_picture && avatar_images().has("thumb:" + source)) {
+    if (!had_picture && thumbnails().has(source)) {
       had_picture = true;
       this->invalidateLayout();  // measured again, by the picture's proportions
     }
@@ -58,7 +58,7 @@ struct picture_view : scene::Node {
   void measure(const skia::SkRect& parent) {
     float w = width > 0 ? static_cast<float>(width) : 320.0f;
     float h = height > 0 ? static_cast<float>(height) : 240.0f;
-    if (const skia::Sp<skia::SkImage>* image = avatar_images().find("thumb:" + source); image && *image) {
+    if (const skia::Sp<skia::SkImage>* image = thumbnails().find(source); image && *image) {
       // The picture's own proportions, where the message said none or others.
       const float ratio = static_cast<float>((*image)->width()) / static_cast<float>((*image)->height());
       if (width <= 0 || height <= 0 || std::abs(w / h - ratio) > 0.01f)
@@ -80,7 +80,7 @@ struct picture_view : scene::Node {
     const skia::SkRect& box = fState.fBounds;
     const int saved = canvas->save();
     canvas->clipRRect(skia::SkRRect::MakeRectXY(box, 10.0f, 10.0f), true);
-    if (const skia::Sp<skia::SkImage>* image = avatar_images().find("thumb:" + source); image && *image) {
+    if (const skia::Sp<skia::SkImage>* image = thumbnails().find(source); image && *image) {
       // Covering the box, cut at the middle where the proportions differ
       // by a rounding: never stretched.
       const float iw = static_cast<float>((*image)->width()), ih = static_cast<float>((*image)->height());

@@ -28,8 +28,8 @@ import :account;
 namespace mux::matrix {
 
 template <class Sink>
-void account<Sink>::fetch_media(std::string source, std::string key, int size, bool crop) {
-  loop_->spawn([this, source = std::move(source), key = std::move(key), size, crop] {
+void account<Sink>::fetch_media(std::string source, media_use_t use, int size, bool crop) {
+  loop_->spawn([this, source = std::move(source), use = std::move(use), size, crop] {
     if (!api_ || !source.starts_with("mxc://"))
       return;
     const std::string_view rest = std::string_view(source).substr(6);
@@ -49,7 +49,7 @@ void account<Sink>::fetch_media(std::string source, std::string key, int size, b
         const auto got = api_->request("GET", base + server + "/" + media + query, {},
                                        token_ ? std::optional<std::string_view>(*token_) : std::nullopt);
         if (got.status == 200 && !got.body.empty()) {
-          sink_(change::avatar_loaded{key, source, got.body});
+          sink_(change::avatar_loaded{use, source, got.body});
           return;
         }
       } catch (const net::failure&) {

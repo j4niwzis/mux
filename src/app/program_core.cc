@@ -24,7 +24,12 @@ import mux.app.words;
 namespace mux::app {
 
 void app::apply_limits() {
-  mux::ui::avatar_images().budget = static_cast<std::size_t>(limits.pictures_in_memory_mb) << 20;
+  // The pictures of messages under the limit set, their thumbnails and the
+  // whole ones apart; avatars under a quarter of it, never under 16 MiB.
+  const std::size_t pictures = static_cast<std::size_t>(limits.pictures_in_memory_mb) << 20;
+  mux::ui::thumbnails().budget = pictures;
+  mux::ui::whole_pictures().budget = pictures / 2;
+  mux::ui::avatar_images().budget = std::max<std::size_t>(pictures / 4, 16u << 20);
   store.budget = static_cast<std::uintmax_t>(limits.messages_on_disk_mb) << 20;
 }
 
@@ -35,10 +40,12 @@ void app::woken() {
   if (changes.empty())
     return;
   for (const auto& one : changes) {
-    if (const auto* given = std::get_if<mux::change::session_given>(&one))
-      this->keep_session(*given);
-    if (const auto* picture = std::get_if<mux::change::avatar_loaded>(&one))
-      this->take_avatar(*picture, true);
+    // What the program itself does with a change, besides the model: a
+    // session kept, a picture shown.
+    std::visit(mux::overloaded{[&](const mux::change::session_given& given) { this->keep_session(given); },
+                               [&](const mux::change::avatar_loaded& picture) { this->take_avatar(picture, true); },
+                               [](const auto&) {}},
+               one);
     model->apply(one);
     this->keep_on_disk(one);
   }

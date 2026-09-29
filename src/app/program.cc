@@ -81,10 +81,18 @@ struct app {
   void keep_on_disk(const mux::change_t& one);
 
   std::set<mux::conversation_id> members_fetched;
-  // What is being fetched from a server, not to be asked for twice.
-  std::set<std::string> avatars_fetched;
+  // What is being fetched from a server, not to be asked for twice: avatars
+  // by their source, thumbnails and whole pictures by theirs.
+  std::set<std::string> avatars_fetched, thumbnails_fetched, wholes_fetched;
   static std::filesystem::path avatar_file(std::string_view source);
+  // Where each kind of picture is kept on disk, by its source; nothing for
+  // a file fetched to be saved, which goes to Downloads instead.
+  static std::optional<std::filesystem::path> kept_file(const mux::media_use_t& use, std::string_view source);
+  // The bytes of a picture or a file fetched: shown, kept, or saved -- as
+  // what it was fetched for says.
   void take_avatar(const mux::change::avatar_loaded& picture, bool fresh);
+  // A picture read back from the disk, where it was kept: shown again.
+  bool read_back(const mux::media_use_t& use, const std::string& source);
   // The pictures on disk held to a size: the least recently used go first,
   // a file's time being when it was last read or written.
   std::size_t avatars_written = 0;
@@ -419,13 +427,15 @@ struct app {
     // And a Matrix session: the same user on the same homeserver goes on
     // with the device it has, rather than logging in as a new one at every
     // Save.
-    if (auto* now = std::get_if<mux::config::matrix_account>(&account))
-      if (const auto* before = std::get_if<mux::config::matrix_account>(&*old);
-          before && before->user_id == now->user_id && before->homeserver == now->homeserver &&
-          before->password == now->password) {
-        now->access_token = before->access_token;
-        now->device_id = before->device_id;
-      }
+    std::visit(mux::overloaded{[](mux::config::matrix_account& now, const mux::config::matrix_account& before) {
+                                 if (before.user_id == now.user_id && before.homeserver == now.homeserver &&
+                                     before.password == now.password) {
+                                   now.access_token = before.access_token;
+                                   now.device_id = before.device_id;
+                                 }
+                               },
+                               [](auto&, const auto&) {}},
+               account, std::as_const(*old));
     // Nothing changed: saved as it is, and the connection left alone.
     const bool same = account == *old;
     *old = account;

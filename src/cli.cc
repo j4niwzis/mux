@@ -88,7 +88,7 @@ std::string of(const change::typing_changed& one) {
 std::string of(const change::history_position&) { return std::string(); }
 std::string of(const change::session_given& one) { return one.account.address + " was given a session"; }
 std::string of(const change::receipts_changed& one) { return std::format("{}: {} receipts", one.in.id, one.read_by.size()); }
-std::string of(const change::avatar_loaded& one) { return std::format("a picture for {}, {} bytes", one.key, one.bytes.size()); }
+std::string of(const change::avatar_loaded& one) { return std::format("a picture from {}, {} bytes", one.source, one.bytes.size()); }
 std::string of(const change::members_changed& one) {
   return std::format("{} has {} member{}", one.in.id, one.members.size(), one.members.size() == 1 ? "" : "s");
 }

@@ -67,12 +67,12 @@ class account {
   // An avatar's picture: the server's thumbnail of an mxc:// URI, at the size
   // it is drawn at twice over, handed on for `key`. The authenticated media
   // API first (v1.11), the older one where the server has no such thing.
-  void fetch_avatar(std::string source, std::string key);
+  void fetch_avatar(std::string source, std::string of);
   // What an mxc:// URI keeps: its thumbnail at `size` (cropped to a square,
   // or scaled to fit), or, where `size` is 0, the whole of it -- handed on
   // for `key`. The authenticated media API first, the older one where the
   // server has no such thing.
-  void fetch_media(std::string source, std::string key, int size, bool crop = false);
+  void fetch_media(std::string source, media_use_t use, int size, bool crop = false);
 
   // A file sent: shown at once under `local` (its picture, where it is one,
   // already known to the window), uploaded to the media repository, and

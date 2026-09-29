@@ -79,8 +79,9 @@ TEST(Xmpp, AScriptedSession) {
   // Connecting, online, and offline at the end of the stream.
   std::vector<mux::connection_t> states;
   for (const auto& one : said)
-    if (const auto* changed = std::get_if<mux::change::connection_changed>(&one))
-      states.push_back(changed->state);
+    std::visit(mux::overloaded{[&](const mux::change::connection_changed& changed) { states.push_back(changed.state); },
+                               [](const auto&) {}},
+               one);
   EXPECT_EQ(states, (std::vector<mux::connection_t>{mux::connection::connecting{}, mux::connection::online{},
                                                     mux::connection::offline{}}));
   ASSERT_TRUE(model.accounts().contains(me));

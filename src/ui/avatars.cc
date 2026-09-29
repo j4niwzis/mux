@@ -69,9 +69,11 @@ export namespace mux::ui {
 }
 
 // A round avatar: the colour of `id`, and the initials of `name` in it.
-// The pictures fetched for avatars, decoded, by what they are of: a chat's
-// id, a person's. Least recently drawn first out, past a number of bytes;
-// what is out is read from the disk again when it is wanted.
+// Pictures fetched, decoded, by what they are of. Least recently drawn
+// first out, past a number of bytes; what is out is read from the disk
+// again when it is wanted. Three of them, so that one kind never pushes
+// another out: avatars (by a chat's id, a person's), the thumbnails of the
+// pictures in messages, and whole pictures (both by their source).
 class avatar_cache {
  public:
   // Held to this many bytes; set from Storage.
@@ -121,8 +123,17 @@ class avatar_cache {
   std::map<std::string, entry, std::less<>> images_;
   std::size_t bytes_ = 0;
 };
-inline avatar_cache& avatar_images() {
-  static avatar_cache images;
+using image_cache = avatar_cache;
+inline image_cache& avatar_images() {
+  static image_cache images;
+  return images;
+}
+inline image_cache& thumbnails() {
+  static image_cache images;
+  return images;
+}
+inline image_cache& whole_pictures() {
+  static image_cache images;
   return images;
 }
 

@@ -206,7 +206,7 @@ struct room_settings : nodes::Stack {
   };
   struct save_general {
     room_settings* box;
-    void operator()() const { box->save_general(); }
+    void operator()() const { box->store_general(); }
   };
   struct cancel_general {
     room_settings* box;
@@ -690,7 +690,7 @@ struct room_settings : nodes::Stack {
   }
 
   // What is done: asked of the program, and the facts kept as they will be.
-  void save_general() {
+  void store_general() {
     std::visit(overloaded{[&](general_page& page) {
                             const std::string& name = page.parts.name.text();
                             const std::string& topic = page.parts.topic.text();

@@ -80,7 +80,12 @@ void app::keep_on_disk(const mux::change_t& one) {
   };
   std::visit(mux::overloaded{[&](const mux::change::message_added& c) { added(c); },
                              [&](const mux::change::message_edited& c) { as_now(c.in, c.id); },
-                             [&](const mux::change::message_redacted& c) { as_now(c.in, c.id); },
+                             [&](const mux::change::message_redacted& c) {
+                               if (model->keep_deleted)
+                                 as_now(c.in, c.id);
+                               else
+                                 store.forget(c.in, c.id);
+                             },
                              [&](const mux::change::reaction_changed& c) { as_now(c.in, c.id); },
                              [&](const mux::change::receipts_changed& c) {
                                if (const mux::conversation* chat = model->find(c.in))

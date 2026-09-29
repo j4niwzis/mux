@@ -110,9 +110,7 @@ struct conversation_row : nodes::Stack {
       const message& last = *newest_one;
       lines.top.time.setText(clock_of(last.at));
       // What it says, as drawn: an HTML one's text, not its tags.
-      std::string text = last.redacted ? "(removed)"
-                         : last.body.html ? read_html(*last.body.html).text
-                                          : last.body.plain;
+      std::string text = last.body.html ? read_html(*last.body.html).text : last.body.plain;
       std::ranges::replace(text, '\n', ' ');
       if (last.outgoing)
         text = "You: " + text;

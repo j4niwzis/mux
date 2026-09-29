@@ -274,6 +274,15 @@ struct sending_settings {
 };
 consteval auto json_schema(knot::type<sending_settings>) { return knot::schema<sending_settings>(); }
 
+// What is kept of the history beyond what the servers keep.
+struct history_settings {
+  // A message deleted stays where it was, all it said, marked; off, it is
+  // gone from the chat and from the disk.
+  bool keep_deleted = false;
+  friend bool operator==(const history_settings&, const history_settings&) = default;
+};
+consteval auto json_schema(knot::type<history_settings>) { return knot::schema<history_settings>(); }
+
 struct file {
   std::vector<xmpp_account> xmpp;
   std::vector<matrix_account> matrix;
@@ -290,6 +299,7 @@ struct file {
   std::optional<std::string> renderer;
   std::optional<cache_limits> cache;
   std::optional<sending_settings> sending;
+  std::optional<history_settings> history;
   friend bool operator==(const file&, const file&) = default;
 };
 

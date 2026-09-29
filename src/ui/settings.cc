@@ -64,8 +64,8 @@ struct settings_dialog : scene::Node {
     page.template emplace<7>(actions, now);
     this->begin_swap(1.0f);
   }
-  void show_storage(const config::cache_limits& limits) {
-    page.template emplace<6>(actions, limits);
+  void show_storage(const config::cache_limits& limits, const config::history_settings& history) {
+    page.template emplace<6>(actions, limits, history);
     this->begin_swap(1.0f);
   }
   [[nodiscard]] storage_page<Actions>* storage() {

@@ -15,6 +15,12 @@ export import :chat_list;
 
 export namespace mux::ui {
 
+// What became of a message, said to the left of its time as tdesktop says
+// "edited": removed (kept, as the settings say), or edited.
+[[nodiscard]] inline std::string mark_of(const message& said) {
+  return said.redacted ? std::string("removed ") : said.edited ? std::string("edited ") : std::string();
+}
+
 // A link to a room or to a message in one, under the message that has it,
 // as a card: a bar in the accent, the room's avatar, its name -- or
 // "Message from" it -- over a second line: what the room is, or who said
@@ -148,8 +154,30 @@ struct file_view : nodes::Stack {
       fState.apply({.width = 44.0f, .height = 44.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 22.0f,
                     .background = accent_colour});
     }
-  } icon;
-  two_lines texts;
+  };
+  // Its name over its size, each as wide as it reads, up to a limit: sized
+  // by what they say, so that the bubble is (a block that only grew took
+  // nothing in a bubble sized by its content, and showed neither).
+  struct texts_column : nodes::Stack {
+    struct parts_t {
+      nodes::Text name;
+      nodes::Text size;
+    } parts;
+    texts_column(std::string name, std::string size)
+        : parts{.name = nodes::Text(std::move(name), 14.0f, text_colour, true),
+                .size = nodes::Text(std::move(size), 12.0f, dim_colour)} {
+      this->setGap(4.0f);
+      fState.apply({.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle});
+      for (nodes::Text* each : {&parts.name, &parts.size}) {
+        each->setElided(true);
+        each->setMaxWidth(360.0f);
+      }
+    }
+  };
+  struct parts_t {
+    disc icon;
+    texts_column texts;
+  } parts;
   [[nodiscard]] static std::string size_text(std::int64_t bytes) {
     if (bytes <= 0)
       return "File";
@@ -160,18 +188,11 @@ struct file_view : nodes::Stack {
     return std::format("{:.1f} MB", static_cast<double>(bytes) / (1024.0 * 1024.0));
   }
   file_view(std::string where, std::string name, std::int64_t bytes)
-      : source(std::move(where)), texts(std::move(name), size_text(bytes), 14.0f, 4.0f) {
+      : source(std::move(where)), parts{.texts = texts_column(std::move(name), size_text(bytes))} {
     this->setHorizontal();
     this->setGap(11.0f);
     fState.apply({.autoSize = scene::axes::kBoth, .minWidth = 268.0f - 24.0f, .padding = {2.0f, 0.0f, 2.0f, 0.0f}});
-    texts.apply({.grow = scene::axes::kNone, .maxWidth = 360.0f});
-    texts.name.setMaxWidth(360.0f);
-    texts.state.setMaxWidth(360.0f);
     fState.setCursor(scene::cursor::hand{});
-  }
-  void forEachChild(auto&& f) {
-    f(icon);
-    f(texts);
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
 };
@@ -496,8 +517,7 @@ struct message_bubble : nodes::Stack {
                  const model* now = nullptr)
       : said(said), first(first_of_run), last(last_of_run), message_id(said.id), plain(said.body.plain),
         outgoing(said.outgoing), sender(said.sender), face(said.sender, sender_name(in, said.sender), kAvatar),
-        body(said.outgoing, said.redacted ? std::string("(removed)") : said.body.plain + (said.edited ? " (edited)" : ""),
-             clock_of(said.at)) {
+        body(said.outgoing, said.body.plain, mark_of(said) + clock_of(said.at)) {
     swipe_mark.apply({.place = scene::anchor::kCentreRight,
                       .x = -6.0f,
                       .width = 28.0f,
@@ -526,14 +546,14 @@ struct message_bubble : nodes::Stack {
     // Anyone's words can be selected and copied, as in Telegram.
     body.text.setSelectable(true);
     body.text.setSelectionColour((accent_colour & 0x00FFFFFFu) | (110u << 24));  // the accent, see-through
-    std::string when = clock_of(said.at);
+    std::string when = mark_of(said) + clock_of(said.at);
     when += std::visit(overloaded{[](const delivery::sending&) { return " · sending"; },
                                   [](const delivery::failed&) { return " · not sent"; },
                                   [](const auto&) { return ""; }},
                        said.delivery);
     body.time.setText(when);
     // What it carries: a picture, sized as tdesktop's; or a file's row.
-    if (said.attachment && !said.redacted) {
+    if (said.attachment) {
       const mux::attachment& carried = *said.attachment;
       std::visit(overloaded{[&](attachment_kind::image) {
                               body.picture.emplace(carried.source, carried.width, carried.height);
@@ -555,16 +575,16 @@ struct message_bubble : nodes::Stack {
     // Its links in its text, where they stand: an <a>'s label going where
     // its href says, and the addresses in a plain text.
     mentioned shown;
-    if (said.body.html && !said.redacted) {
+    if (said.body.html) {
       auto read = read_html(*said.body.html);
       shown = with_mentions(std::move(read.text), std::move(read.spans), in, now);
-    } else if (!said.redacted) {
+    } else {
       shown = with_mentions(said.body.plain, link_spans_in(said.body.plain), in, now);
     }
-    if (!said.redacted) {
-      body.text.setText(shown.text + (said.edited ? " (edited)" : ""));
+    {
+      body.text.setText(shown.text);
       body.text.setLinks(std::move(shown.links), accent_colour);
-      body.text.setVisible(!shown.text.empty() || said.edited);
+      body.text.setVisible(!shown.text.empty());
       for (const auto& [url, room] : shown.cards)
         body.cards.push_back(card_of(url, room, now));
     }

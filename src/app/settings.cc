@@ -88,7 +88,7 @@ class settings_part {
   // of it cleared.
   void apply(const request::settings_storage&) {
     if (auto* up = s_->root().settings_up())
-      up->show_storage(k_->limits);
+      up->show_storage(k_->limits, k_->history);
   }
   void apply(const request::change_limit& one) {
     std::int64_t& value = mux::config::value_of(k_->limits, one.which);
@@ -113,6 +113,12 @@ class settings_part {
   void apply(const request::settings_files&) {
     if (auto* up = s_->root().settings_up())
       up->show_files(k_->sending);
+  }
+  // Deleted messages kept where they were, marked, or taken out.
+  void apply(const request::flip_keep_deleted&) {
+    k_->history.keep_deleted = !k_->history.keep_deleted;
+    s_->model->keep_deleted = k_->history.keep_deleted;
+    (void)k_->write();
   }
   void apply(const request::flip_strip_metadata&) {
     k_->sending.strip_metadata = !k_->sending.strip_metadata;

@@ -71,6 +71,7 @@ inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 //   void settings_appearance(), settings_rendering(), settings_storage()
 //   void change_limit(config::limit_t, bool more), clear_stored()  -- Storage
 //   void settings_files(), flip_strip_metadata(), flip_rename_pictures()  -- Files
+//   void flip_keep_deleted()  -- Storage: deleted messages kept, marked
 //   void set_theme(config::theme_t), set_accent(config::accent_t), set_renderer(config::renderer_t)
 //   void proxy_kind(config::proxy_kind_t)
 //   void not_implemented(std::string what)  -- a box saying it is not there yet

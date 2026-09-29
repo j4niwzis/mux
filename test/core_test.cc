@@ -86,11 +86,13 @@ TEST(Model, Messages) {
   EXPECT_TRUE(one->timeline[1].edited);
   EXPECT_EQ(one->timeline[1].reactions.at("❤"), (std::set<std::string>{"juliet@example.com"}));
 
+  // Deleted, where deleted messages are kept: in its place, all it said
+  // kept, marked.
+  kept.keep_deleted = true;
   kept.apply(change::message_redacted{with_juliet, "1"});
   one = kept.find(with_juliet);
   EXPECT_TRUE(one->timeline[1].redacted);
-  EXPECT_TRUE(one->timeline[1].body.plain.empty());
-  EXPECT_TRUE(one->timeline[1].reactions.empty());
+  EXPECT_EQ(one->timeline[1].body.plain, "hello there");
 
   kept.apply(change::delivery_changed{with_juliet, "2", delivery::read{}});
   kept.apply(change::typing_changed{with_juliet, {"juliet@example.com"}});
@@ -105,6 +107,25 @@ TEST(Model, Messages) {
   ASSERT_EQ(one->members.size(), 2u);
   EXPECT_EQ(one->members[0].role, "owner");
   EXPECT_EQ(one->members[1].name, "Nurse");
+}
+
+// Deleted, where deleted messages are not kept: gone from the chat; and a
+// deleted one read back from the disk is not put back.
+TEST(Model, ADeletedMessageGoesWhereNotKept) {
+  model kept;
+  const conversation_id in{account_id{protocol::xmpp{}, "romeo@example.net"}, "juliet@example.com"};
+  message first{.in = in, .id = "1", .body = {"hi", std::nullopt}};
+  message second{.in = in, .id = "2", .body = {"there", std::nullopt}};
+  kept.apply(change::message_added{first});
+  kept.apply(change::message_added{second});
+  kept.apply(change::message_redacted{in, "1"});
+  const conversation* one = kept.find(in);
+  ASSERT_EQ(one->timeline.size(), 1u);
+  EXPECT_EQ(one->timeline[0].id, "2");
+  message back = first;
+  back.redacted = true;
+  kept.apply(change::message_added{back});
+  EXPECT_EQ(kept.find(in)->timeline.size(), 1u);
 }
 
 TEST(Model, Acknowledged) {

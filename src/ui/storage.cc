@@ -24,78 +24,80 @@ struct step_limit {
 };
 
 // Settings' Storage page: how much is kept in memory and on disk, each a
-// line with its number and a step down and up; and a way to clear what is
-// kept on disk.
+// line with its number and a step down and up; a way to clear what is kept
+// on disk; and whether deleted messages are kept.
 template <class Actions>
 struct storage_page : nodes::Stack {
-  page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>> header;
+  using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
   struct stepper : nodes::Stack {
-    nodes::Text label;
-    nodes::Text value{"", 14.0f, accent_colour, true};
-    icon_button<step_limit<Actions>> less;
-    icon_button<step_limit<Actions>> more;
+    using step_button = icon_button<step_limit<Actions>>;
+    struct parts_t {
+      nodes::Text label;
+      nodes::Text value{"", 14.0f, accent_colour, true};
+      step_button less;
+      step_button more;
+    } parts;
     stepper(Actions* a, std::string what, config::limit_t which)
-        : label(std::move(what), 15.0f, text_colour), less(icon::minus{}, {a, which, false}),
-          more(icon::plus{}, {a, which, true}) {
+        : parts{.label = nodes::Text(std::move(what), 15.0f, text_colour),
+                .less = step_button(icon::minus{}, {a, which, false}),
+                .more = step_button(icon::plus{}, {a, which, true})} {
       this->setHorizontal();
       this->setGap(6.0f);
       fState.apply({.fillX = true, .height = 50.0f, .padding = {0.0f, 12.0f, 0.0f, 20.0f}});
-      label.setElided(true);
-      label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      for (scene::Node* middle : std::initializer_list<scene::Node*>{&value, &less, &more})
+      parts.label.setElided(true);
+      parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      for (scene::Node* middle : std::initializer_list<scene::Node*>{&parts.value, &parts.less, &parts.more})
         middle->apply({.alignSelf = scene::align::kMiddle});
     }
-    void forEachChild(auto&& f) {
-      f(label);
-      f(value);
-      f(less);
-      f(more);
-    }
   };
-  nodes::Text memory_title = section_title("IN MEMORY");
-  stepper messages_in_memory;
-  stepper pictures_in_memory;
-  nodes::Text disk_title = section_title("ON DISK");
-  stepper messages_on_disk;
-  stepper pictures_on_disk;
-  row_item<ask<Actions, &Actions::clear_stored>> clear;
-  nodes::Text note{"Memory holds the newest of the chats read lately; the disk holds the rest, and what is scrolled "
-                   "back to comes from there before the server. Past a limit, what was used longest ago goes first.",
-                   13.0f, dim_colour};
+  using clear_row = row_item<ask<Actions, &Actions::clear_stored>>;
+  using keep_row = switch_row<ask<Actions, &Actions::flip_keep_deleted>>;
+  struct parts_t {
+    header_t header;
+    nodes::Text memory_title = section_title("IN MEMORY");
+    stepper messages_in_memory;
+    stepper pictures_in_memory;
+    nodes::Text disk_title = section_title("ON DISK");
+    stepper messages_on_disk;
+    stepper pictures_on_disk;
+    clear_row clear;
+    nodes::Text note{"Memory holds the newest of the chats read lately; the disk holds the rest, and what is scrolled "
+                     "back to comes from there before the server. Past a limit, what was used longest ago goes first.",
+                     13.0f, dim_colour};
+    nodes::Text history_title = section_title("HISTORY");
+    keep_row keep_deleted;
+    nodes::Text history_note{"On, a message deleted stays where it was, with all it said and its time, marked removed, "
+                             "and is kept on disk. Off, it is gone.",
+                             13.0f, dim_colour};
+  } parts;
 
-  storage_page(Actions* a, const config::cache_limits& limits)
-      : header("Storage", {a}, {a}, true, true),
-        messages_in_memory(a, "Messages", config::limit::messages_in_memory{}),
-        pictures_in_memory(a, "Pictures", config::limit::pictures_in_memory{}),
-        messages_on_disk(a, "Messages", config::limit::messages_on_disk{}),
-        pictures_on_disk(a, "Pictures", config::limit::pictures_on_disk{}),
-        clear("Clear stored messages and pictures", {a}, icon::close{}) {
+  storage_page(Actions* a, const config::cache_limits& limits, const config::history_settings& history)
+      : parts{.header = header_t("Storage", {a}, {a}, true, true),
+              .messages_in_memory = stepper(a, "Messages", config::limit::messages_in_memory{}),
+              .pictures_in_memory = stepper(a, "Pictures", config::limit::pictures_in_memory{}),
+              .messages_on_disk = stepper(a, "Messages", config::limit::messages_on_disk{}),
+              .pictures_on_disk = stepper(a, "Pictures", config::limit::pictures_on_disk{}),
+              .clear = clear_row("Clear stored messages and pictures", {a}, icon::close{}),
+              .keep_deleted = keep_row("Keep deleted messages", {a})} {
     fState.apply({.fill = true});
-    memory_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
-    disk_title.apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
-    note.setWrapped(true);
-    note.apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
+    parts.memory_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
+    parts.disk_title.apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
+    parts.history_title.apply({.margin = {14.0f, 0.0f, 4.0f, 20.0f}});
+    for (nodes::Text* each : {&parts.note, &parts.history_note}) {
+      each->setWrapped(true);
+      each->apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
+    }
+    parts.keep_deleted.parts.toggle.setOnNow(history.keep_deleted);
     this->show(limits);
   }
   void show(const config::cache_limits& limits) {
-    messages_in_memory.value.setText(std::format("{} messages", limits.messages_in_memory));
-    pictures_in_memory.value.setText(std::format("{} MB", limits.pictures_in_memory_mb));
-    messages_on_disk.value.setText(std::format("{} MB", limits.messages_on_disk_mb));
-    pictures_on_disk.value.setText(std::format("{} MB", limits.pictures_on_disk_mb));
+    parts.messages_in_memory.parts.value.setText(std::format("{} messages", limits.messages_in_memory));
+    parts.pictures_in_memory.parts.value.setText(std::format("{} MB", limits.pictures_in_memory_mb));
+    parts.messages_on_disk.parts.value.setText(std::format("{} MB", limits.messages_on_disk_mb));
+    parts.pictures_on_disk.parts.value.setText(std::format("{} MB", limits.pictures_on_disk_mb));
   }
   void show_motion(std::string_view) {}
   void show_receipts(bool) {}
-  void forEachChild(auto&& f) {
-    f(header);
-    f(memory_title);
-    f(messages_in_memory);
-    f(pictures_in_memory);
-    f(disk_title);
-    f(messages_on_disk);
-    f(pictures_on_disk);
-    f(clear);
-    f(note);
-  }
 };
 
 // Settings' Files page: what is done to a picture dropped on the window

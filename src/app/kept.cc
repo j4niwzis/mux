@@ -25,6 +25,8 @@ struct kept_settings {
   mux::config::cache_limits limits;
   // What is done to a picture dropped before it is sent.
   mux::config::sending_settings sending;
+  // What is kept of the history: deleted messages, or not.
+  mux::config::history_settings history;
   // The chats muted, and the proxy profiles.
   std::set<conversation_id> muted;
   std::vector<mux::config::proxy_settings> proxies;
@@ -55,6 +57,7 @@ struct kept_settings {
     out.renderer = mux::config::word_of(renderer);
     out.cache = limits;
     out.sending = sending;
+    out.history = history;
     if (!muted.empty()) {
       std::vector<mux::config::muted_chat> kept;
       for (const auto& one : muted)

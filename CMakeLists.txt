@@ -141,7 +141,7 @@ if(MUX_UI)
   # skiff and skiff-widgets say the rest of what they are in their own trees.
   cme_declare_port(NAME skiff PROVIDES skiff
     GITHUB_REPOSITORY j4niwzis/skiff
-    GIT_TAG 7932c9dbc411ee19c24efd6a8ebbedc442bbda63)
+    GIT_TAG 3f9bfb3afbe3ab2f40437812f7fcc8469bd9d92a)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
     GIT_TAG 35e459539865362c6919c946488cd71640511b1c)
@@ -153,31 +153,23 @@ if(MUX_UI)
   option(MUX_JPEG "Pictures in JPEG" ON)
   option(MUX_GIF "Pictures in GIF, played where they move (Skia with Wuffs)" OFF)
   option(MUX_WEBP "Pictures in WebP, played where they move (Skia with libwebp)" OFF)
+  # skiff's components as mux draws with them: the system's fonts read from
+  # their directory, text shaped by HarfBuzz and laid out by Unicode's rules
+  # through alef (Arabic and Hebrew, Indic scripts, emoji sequences, CJK line
+  # breaks), GL where asked for, and the pictures mux decodes. skiff asks Skia
+  # for what they need; Skia is asked for the same here.
+  set(mux_skiff_components fontmgr-directory text-shaping)
   set(mux_skia_components freetype fontmgr-directory)
-  if(MUX_GL)
-    list(APPEND mux_skia_components gl)
-  endif()
-  foreach(codec IN ITEMS png jpeg gif webp)
-    string(TOUPPER ${codec} option_name)
+  foreach(feature IN ITEMS gl png jpeg gif webp)
+    string(TOUPPER ${feature} option_name)
     if(MUX_${option_name})
-      list(APPEND mux_skia_components ${codec})
+      list(APPEND mux_skiff_components ${feature})
+      list(APPEND mux_skia_components ${feature})
     endif()
   endforeach()
-  # skiff as mux draws with it, through its port's options -- set for that
-  # port alone, not as the whole build's: Skia on GL where asked for, the
-  # system's fonts read from their directory, the pictures mux decodes, and
-  # text shaped by HarfBuzz and laid out by Unicode's rules through alef
-  # (Arabic and Hebrew, Indic scripts, emoji sequences, CJK line breaks).
-  cme_options(skiff
-    "SKIFF_GL ${MUX_GL}"
-    "SKIFF_FONTMGR_DIRECTORY ON"
-    "SKIFF_PNG ${MUX_PNG}"
-    "SKIFF_JPEG ${MUX_JPEG}"
-    "SKIFF_GIF ${MUX_GIF}"
-    "SKIFF_WEBP ${MUX_WEBP}"
-    "SKIFF_TEXT_SHAPING ON")
   cme_find_package(Skia REQUIRED COMPONENTS ${mux_skia_components})
   cme_find_package(SDL3 REQUIRED)
+  cme_find_package(skiff COMPONENTS ${mux_skiff_components} REQUIRED)
   cme_find_package(skiff-widgets REQUIRED)
   # skiff's modules are C++23 and do not carry the family's flags, so they
   # would be built with a std module of their own: given the same standard

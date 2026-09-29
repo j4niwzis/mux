@@ -354,21 +354,44 @@ inline void draw_icon(skia::SkCanvas* canvas, const icon_t& which, const skia::S
 // time for the same name, so an account's choice is known at a glance.
 [[nodiscard]] inline skia::SkColor proxy_colour(std::string_view name) { return avatar_colour(name); }
 
-// Up to two letters for an avatar: the first of each of the first two words
-// of a name, or of an address's local part.
+// Up to two letters for an avatar: the first character of each of the first
+// two words of a name, or of an address's local part -- in any script, whole
+// (a Cyrillic name has Cyrillic initials, not a question mark).
 [[nodiscard]] inline std::string initials_of(std::string_view name) {
   if (name.starts_with('@'))
     name.remove_prefix(1);
   name = name.substr(0, name.find_first_of("@:"));
   std::string out;
+  int taken = 0;
   bool start = true;
-  for (const char c : name) {
-    const bool letter = std::isalnum(static_cast<unsigned char>(c)) != 0 || (static_cast<unsigned char>(c) & 0x80) != 0;
-    if (letter && start && out.size() < 2 && (static_cast<unsigned char>(c) & 0x80) == 0)
-      out += static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+  for (std::size_t at = 0; at < name.size() && taken < 2;) {
+    const auto lead = static_cast<unsigned char>(name[at]);
+    const std::size_t length = lead < 0x80 ? 1 : lead >= 0xF0 ? 4 : lead >= 0xE0 ? 3 : lead >= 0xC0 ? 2 : 1;
+    const bool letter = lead >= 0x80 || std::isalnum(lead) != 0;
+    if (letter && start) {
+      out += lead < 0x80 ? std::string(1, static_cast<char>(std::toupper(lead))) : std::string(name.substr(at, length));
+      ++taken;
+    }
     start = !letter;
+    at += length;
   }
   return out.empty() ? std::string("?") : out;
+}
+
+// Telegram's userpics for those with no picture: a gradient, top to bottom,
+// of one of its seven pairs (tdesktop's historyPeerNUserpicBg and Bg2), the
+// same for the same id, with the initials in white.
+[[nodiscard]] inline std::pair<skia::SkColor, skia::SkColor> userpic_colours(std::string_view id) {
+  static constexpr std::array<std::pair<skia::SkColor, skia::SkColor>, 7> pairs{{
+      {skia::colorSetARGB(255, 0xff, 0x84, 0x5e), skia::colorSetARGB(255, 0xd4, 0x52, 0x46)},  // red
+      {skia::colorSetARGB(255, 0xfe, 0xbb, 0x5b), skia::colorSetARGB(255, 0xf6, 0x81, 0x36)},  // orange
+      {skia::colorSetARGB(255, 0xb6, 0x94, 0xf9), skia::colorSetARGB(255, 0x6c, 0x61, 0xdf)},  // violet
+      {skia::colorSetARGB(255, 0x9a, 0xd1, 0x64), skia::colorSetARGB(255, 0x46, 0xba, 0x43)},  // green
+      {skia::colorSetARGB(255, 0x5b, 0xcb, 0xe3), skia::colorSetARGB(255, 0x35, 0x9a, 0xd4)},  // cyan
+      {skia::colorSetARGB(255, 0x5c, 0xaf, 0xfa), skia::colorSetARGB(255, 0x40, 0x8a, 0xcf)},  // blue
+      {skia::colorSetARGB(255, 0xff, 0x8a, 0xac), skia::colorSetARGB(255, 0xd9, 0x55, 0x74)},  // pink
+  }};
+  return pairs[std::hash<std::string_view>{}(id) % pairs.size()];
 }
 
 // A round avatar: the colour of `id`, and the initials of `name` in it.
@@ -444,11 +467,15 @@ inline void draw_avatar(skia::SkCanvas* canvas, const skia::SkRect& disc, std::s
   if (font == nullptr)
     return;
   const skiff::paint::Painter p(canvas, *font);
-  p.fillRounded(disc, disc.width() * 0.5f, avatar_colour(id), alpha);
+  const auto [top, bottom] = userpic_colours(id);
+  const int saved = canvas->save();
+  canvas->clipRRect(skia::SkRRect::MakeOval(disc), true);
+  skiff::paint::verticalGradient(canvas, disc, top, bottom, alpha);
+  canvas->restoreToCount(saved);
   const std::string letters = initials_of(name);
-  const float size = disc.width() * 0.38f;
+  const float size = disc.width() * 0.4f;
   const float width = p.measure(letters, size, true);
-  p.textIn(disc, letters, size, text_colour, alpha, true, (disc.width() - width) * 0.5f);
+  p.textIn(disc, letters, size, skia::colorSetARGB(255, 255, 255, 255), alpha, true, (disc.width() - width) * 0.5f);
 }
 
 // A line of a list or a menu, as wide as what holds it and square: an icon

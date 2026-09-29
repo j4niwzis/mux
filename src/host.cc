@@ -148,6 +148,29 @@ inline void choose_files() {
       nullptr, the_window(), nullptr, 0, nullptr, true);
 }
 
+// A path chosen to save a file to, handed to the window's thread as an event
+// of its own, as the files opened are.
+inline std::uint32_t save_event() {
+  static const std::uint32_t registered = SDL_RegisterEvents(1);
+  return registered;
+}
+// The system's dialog for saving a file, the name offered filled in (a path
+// or a name). What is offered is kept until the dialog has read it.
+inline void choose_save_path(std::string offered) {
+  static std::string kept;
+  kept = std::move(offered);
+  SDL_ShowSaveFileDialog(
+      +[](void*, const char* const* list, int) {
+        if (!list || !*list)
+          return;
+        SDL_Event event{};
+        event.type = save_event();
+        event.user.data1 = new std::string(*list);
+        SDL_PushEvent(&event);
+      },
+      nullptr, the_window(), nullptr, 0, kept.empty() ? nullptr : kept.c_str());
+}
+
 // The window asked to close, as its close button would: from the window's
 // thread, between events or in a handler.
 inline void request_quit() {
@@ -384,6 +407,7 @@ inline double now_ms() {
 //   window()        the scene: a skiff::scene::Scene<...>, whatever its root
 //   woken()         another thread woke the window
 //   files_given(paths, dropped)  files chosen in the dialog, or dropped
+//   save_path_chosen(path)  where to save a file, chosen in the dialog
 //   before_frame()  between events: what the screens asked for, applied
 //                   where no handler is running
 //   closing()       the window is going away
@@ -395,6 +419,7 @@ int run(App& app, const options& how) {
   }
   (void)wake_event();
   (void)files_event();
+  (void)save_event();
   load_fonts(how.fonts);
   SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
@@ -503,6 +528,9 @@ int run(App& app, const options& how) {
             else if (event.type == files_event()) {
               std::unique_ptr<std::vector<std::string>> chosen(static_cast<std::vector<std::string>*>(event.user.data1));
               app.files_given(std::move(*chosen), false);
+            } else if (event.type == save_event()) {
+              std::unique_ptr<std::string> chosen(static_cast<std::string*>(event.user.data1));
+              app.save_path_chosen(std::move(*chosen));
             }
             break;
         }

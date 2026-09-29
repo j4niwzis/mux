@@ -59,6 +59,23 @@ struct avatar_mark : widgets::Avatar {
     widgets::Avatar::show(initials_of(shown), picture_of(key), gradient_of(key));
   }
 };
+// An avatar that opens: pressed, its picture in the viewer, where it can be
+// looked at whole and saved -- a person's in their card, a chat's in its
+// info.
+template <class Actions>
+struct avatar_button : avatar_mark {
+  Actions* actions = nullptr;
+  avatar_button(Actions* a, std::string id, std::string shown, float size)
+      : avatar_mark(std::move(id), shown, size), actions(a) {
+    fState.setCursor(scene::cursor::hand{});
+  }
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  [[nodiscard]] bool onClick(float, float) {
+    if (!key.empty())
+      actions->open_avatar(key);
+    return true;
+  }
+};
 // A name over how it is: two lines, each cut where it runs out of room,
 // taking what their row leaves them.
 struct two_lines : nodes::Stack {

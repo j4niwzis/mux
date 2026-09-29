@@ -54,6 +54,8 @@ struct app : kept_settings {
   workers work;
   // Files chosen in the dialog, or dropped on the window: to the outbox.
   void files_given(std::vector<std::string> paths, bool dropped) { outbox.files_given(std::move(paths), dropped); }
+  // Where Save As… was asked to put what it saves: to the pictures part.
+  void save_path_chosen(std::string path) { pictures.save_to(std::move(path)); }
   // What the parts share, pointed at the program's own: once the program
   // is given its model, network and mailbox.
   void wire();

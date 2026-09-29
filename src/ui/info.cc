@@ -217,11 +217,12 @@ struct person_card : nodes::Stack {
   // tdesktop's cover: 108 high, a 72 photo, the name and status beside it.
   struct cover : nodes::Stack {
     struct parts_t {
-      avatar_mark photo;
+      avatar_button<Actions> photo;
       two_lines texts;
     } parts;
-    cover(const std::string& key, const person_facts& facts)
-        : parts{.photo = avatar_mark(key, facts.name, 72.0f), .texts = two_lines(facts.name, facts.status, 17.0f, 6.0f)} {
+    cover(Actions* a, const std::string& key, const person_facts& facts)
+        : parts{.photo = avatar_button<Actions>(a, key, facts.name, 72.0f),
+                .texts = two_lines(facts.name, facts.status, 17.0f, 6.0f)} {
       this->setHorizontal();
       this->setGap(16.0f);
       fState.apply({.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}});
@@ -237,7 +238,7 @@ struct person_card : nodes::Stack {
 
   person_card(Actions* a, const account_id& account, const std::string& key, const person_facts& facts)
       : parts{.top = top_bar(a),
-              .face = cover(key, facts),
+              .face = cover(a, key, facts),
               .id = id_line(key, ""),
               .message = action_tile<message_them>("Message", icon::send{}, {a, conversation_id{account, key}})} {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}});
@@ -345,7 +346,7 @@ struct info_panel : nodes::Stack {
     };
     struct parts_t {
       top_row top;
-      big_avatar avatar;
+      avatar_button<Actions> avatar;
       nodes::Text name;
       nodes::Text status;
       std::optional<tiles_row> tiles;
@@ -356,13 +357,13 @@ struct info_panel : nodes::Stack {
 
     head(Actions* a, info_panel* panel, const view& shown)
         : parts{.top = top_row(a, panel, shown.of_person),
+                .avatar = avatar_button<Actions>(a, shown.key, shown.name, 96.0f),
                 .name = nodes::Text(shown.name, 17.0f, text_colour, true),
                 .status = nodes::Text(shown.status, 13.0f, dim_colour),
                 .id_text = id_line(shown.key, shown.copied)} {
       auto& [top, avatar, name, status, tiles, person_tiles, band_1, id_text] = parts;
       this->setGap(2.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-      avatar.show(shown.key, shown.name);
       if (shown.of_person)
         person_tiles.emplace(a, panel);
       else

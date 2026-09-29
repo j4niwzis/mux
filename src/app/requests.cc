@@ -110,6 +110,11 @@ struct open_picture {
 struct save_picture {
   std::string source;
 };
+// An avatar pressed -- a person's, by their id, or a chat's: its picture in
+// the viewer, as a message's picture opens, to be looked at or saved.
+struct open_avatar {
+  std::string key;
+};
 struct close_picture {};
 struct open_file {
   std::string source;
@@ -221,7 +226,7 @@ using request_t =
                  request::close_menu, request::menu_reply, request::menu_edit, request::menu_copy,
                  request::menu_delete, request::cancel_compose, request::open_url,
                  request::switch_account, request::submit_message, request::send_typed,
-                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_search, request::edit_last, request::reply_step, request::close_search, request::search_typed, request::search_step, request::open_member_info, request::reply_to, request::open_picture, request::close_picture, request::save_picture, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::flip_strip_metadata, request::flip_show_deleted, request::flip_rename_pictures, request::close_notice, request::close_person_info, request::toggle_emoji, request::close_emoji, request::insert_emoji, request::menu_save_gif, request::show_gifs, request::send_gif,
+                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_search, request::edit_last, request::reply_step, request::close_search, request::search_typed, request::search_step, request::open_member_info, request::reply_to, request::open_picture, request::open_avatar, request::close_picture, request::save_picture, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::flip_strip_metadata, request::flip_show_deleted, request::flip_rename_pictures, request::close_notice, request::close_person_info, request::toggle_emoji, request::close_emoji, request::insert_emoji, request::menu_save_gif, request::show_gifs, request::send_gif,
                  request::resize_info, request::choose_new_proxy, request::toggle_mute, request::close_account_pages,
                  request::accounts_back, request::account_page, request::flip_account_receipts, request::flip_account_typing, request::typing,
                  request::proxy_kind, request::choose_account_proxy, request::manage_proxies,
@@ -305,6 +310,7 @@ struct actions {
   void flip_rename_pictures() { requests.emplace_back(request::flip_rename_pictures{}); }
   void close_send_box() { requests.emplace_back(request::close_send_box{}); }
   void send_files() { requests.emplace_back(request::send_files{}); }
+  void open_avatar(std::string key) { requests.emplace_back(request::open_avatar{std::move(key)}); }
   void open_picture(std::string source, std::string sender, std::string name, std::string when) {
     requests.emplace_back(request::open_picture{std::move(source), std::move(sender), std::move(name), std::move(when)});
   }

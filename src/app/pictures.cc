@@ -84,7 +84,13 @@ class pictures_part {
                           // A file fetched to be saved: into Downloads, a number
                           // added where the name is taken, and opened; or only saved.
                           [&](const media_use::to_open& one) { this->save_download(picture.bytes, one.name, true); },
-                          [&](const media_use::to_save& one) { this->save_download(picture.bytes, one.name, false); }},
+                          // Saved where the dialog said, where it said; else into Downloads.
+                          [&](const media_use::to_save& one) {
+                            if (save_path_)
+                              this->write_chosen(picture.bytes, *std::exchange(save_path_, std::nullopt));
+                            else
+                              this->save_download(picture.bytes, one.name, false);
+                          }},
                picture.use);
     if (!fresh)
       return;
@@ -236,20 +242,80 @@ class pictures_part {
   // which is pruned.
   static std::filesystem::path gifs() { return mux::config::state_path("gifs"); }
 
-  // A picture or a file saved to Downloads under `name`: from the disk
-  // where the whole of it is kept, from the account where not.
+  // A picture or a file saved where the user says: the system's dialog
+  // first, offering Downloads and its name -- a picture's type added where
+  // the name has none and the bytes are here to tell it -- then the bytes,
+  // from the disk where the whole of it is kept, from the account where not.
   void save(const std::string& source, const std::string& name) {
-    if (const auto kept = kept_file(media_use::whole{}, source))
-      if (std::ifstream file{*kept, std::ios::binary}) {
-        std::string bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-        this->save_download(bytes, name, false);
-        return;
-      }
+    std::string offered = name;
+    if (const auto bytes = this->kept_whole(source))
+      if (const auto type = mux::media::picture_of(*bytes); type && !offered.contains('.'))
+        offered += std::format(".{}", mux::media::extension_of(*type));
+    pending_save_ = std::pair{source, name};
+    mux::host::choose_save_path((downloads() / std::filesystem::path(offered).filename()).string());
+  }
+  // The path chosen: what was asked to be saved, written there.
+  void save_to(std::string path) {
+    if (!pending_save_)
+      return;
+    const auto [source, name] = *std::exchange(pending_save_, std::nullopt);
+    if (const auto bytes = this->kept_whole(source)) {
+      this->write_chosen(*bytes, path);
+      return;
+    }
+    save_path_ = std::move(path);
     if (const auto& chosen = s_->root().main().chosen)
       s_->net->fetch_media(chosen->account, source, media_use::to_save{name}, 0);
   }
+  // An avatar pressed: its picture in the viewer. A chat's by the chat's id;
+  // a person's by theirs, as the chat being read knows them -- a member, or
+  // the other side of a direct chat, whose avatar is the chat's.
+  void apply(const request::open_avatar& one) {
+    const auto& chosen = s_->root().main().chosen;
+    const conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
+    if (!chat)
+      return;
+    std::optional<std::string> source;
+    std::string shown = one.key;
+    if (one.key == chat->id.id) {
+      source = chat->avatar;
+      shown = mux::ui::display_name(*chat);
+    } else if (const auto found = std::ranges::find(chat->members, one.key, &member::id); found != chat->members.end()) {
+      source = found->avatar;
+      if (!found->name.empty())
+        shown = found->name;
+    }
+    if ((!source || source->empty()) && !mux::ui::is_group(*chat) && one.key == mux::ui::contact_of(*chat)) {
+      source = chat->avatar;
+      shown = mux::ui::display_name(*chat);
+    }
+    if (!source || source->empty())
+      return;
+    this->apply(request::open_picture{*source, shown, "avatar", ""});
+  }
 
  private:
+  // The whole of a picture, where it is kept on disk.
+  std::optional<std::string> kept_whole(const std::string& source) const {
+    const auto kept = kept_file(media_use::whole{}, source);
+    if (!kept)
+      return std::nullopt;
+    std::ifstream file{*kept, std::ios::binary};
+    if (!file.is_open())
+      return std::nullopt;
+    return std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+  }
+  // Bytes written where the dialog said, and said.
+  void write_chosen(const std::string& bytes, const std::string& path) {
+    std::ofstream out(path, std::ios::binary);
+    out << bytes;
+    s_->root().show_message("Saved", out ? std::format("Saved to {}", path) : std::format("Could not write {}", path));
+  }
+  // What Save As… was asked for, until the dialog answers; and where the
+  // bytes go when they have to be fetched first.
+  std::optional<std::pair<std::string, std::string>> pending_save_;
+  std::optional<std::string> save_path_;
+
   // Where a kind of picture is kept on disk, by its source; nothing for a
   // file fetched to be saved, which goes to Downloads instead. Named as
   // before -- an avatar by its source, a thumbnail and a whole picture with

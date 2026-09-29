@@ -527,7 +527,15 @@ struct conversations_screen : nodes::Stack {
   // asked twice.
   std::optional<std::string> context_asked, newer_asked;
 
+  // The part of the message jumped to that a reply quoted: marked in it,
+  // and aimed at rather than its top.
+  std::optional<std::string> jump_fragment;
+  void jump_to(std::string id, std::optional<std::string> fragment) {
+    this->jump_to(std::move(id));
+    jump_fragment = std::move(fragment);
+  }
   void jump_to(std::string id) {
+    jump_fragment.reset();
     if (!chosen || !last_model)
       return;
     const conversation* one = last_model->find(*chosen);
@@ -598,7 +606,18 @@ struct conversations_screen : nodes::Stack {
         const float above = aim_quiet ? 60.0f
                             : box.height() < view.height() ? (view.height() - box.height()) * 0.5f
                                                            : 0.0f;
-        const float to = std::max(0.0f, timeline.current() + (box.fTop - view.fTop) - above);
+        float to = std::max(0.0f, timeline.current() + (box.fTop - view.fTop) - above);
+        // Where a reply quoted a part of it: that part marked, and its line
+        // brought to the view's upper middle -- the right place of a message
+        // taller than the view.
+        if (aimed_at < 0.0f && jump_fragment) {
+          if (const auto at = it->mark(*jump_fragment)) {
+            const auto& text = it->parts.body.parts.text;
+            const float line = text.bounds().fTop + text.lineTopOf(*at);
+            to = std::max(0.0f, timeline.current() + (line - view.fTop) - view.height() * 0.4f);
+          }
+          jump_fragment.reset();
+        }
         // The first aim: flashed at once, where it is -- not once all above
         // it has settled, which can be never, and the flash was lost. Far
         // away -- a window just loaded around it -- put there at once, not

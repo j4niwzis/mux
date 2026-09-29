@@ -89,6 +89,44 @@ struct link_card : nodes::Stack {
   return std::nullopt;
 }
 
+// What a reply quoted of the message it answers, where it quoted some: the
+// first quote in its own text -- its HTML's blockquote, or its plain lines
+// after "> " -- and not the fallback that repeats who was answered.
+[[nodiscard]] inline std::optional<std::string> quoted_fragment(const message& said) {
+  std::string out;
+  if (said.body.html) {
+    const auto read = read_html(*said.body.html);
+    for (const auto& style : read.styles)
+      if (style.quote) {
+        out = read.text.substr(style.first, style.last - style.first);
+        break;
+      }
+  } else {
+    for (std::size_t at = 0; at < said.body.plain.size();) {
+      const auto end = said.body.plain.find('\n', at);
+      const std::string_view line =
+          std::string_view(said.body.plain).substr(at, end == std::string::npos ? std::string::npos : end - at);
+      if (line.starts_with("> ") && !line.starts_with("> <")) {
+        if (!out.empty())
+          out += '\n';
+        out += line.substr(2);
+      } else if (!out.empty()) {
+        break;
+      }
+      if (end == std::string::npos)
+        break;
+      at = end + 1;
+    }
+  }
+  while (!out.empty() && std::isspace(static_cast<unsigned char>(out.back())))
+    out.pop_back();
+  while (!out.empty() && std::isspace(static_cast<unsigned char>(out.front())))
+    out.erase(out.begin());
+  if (out.empty())
+    return std::nullopt;
+  return out;
+}
+
 // A link's preview, as Telegram's: under the text, a stripe in the accent,
 // the site's name in it, the page's title and a few lines about it, and its
 // picture on the right.
@@ -872,6 +910,29 @@ struct message_bubble : nodes::Stack {
   // Unseen until its first frame is laid out, so the time is where it goes
   // when it is first seen -- not under the text, then beside it.
   skiff::paint::Tween appearing{1.0f, 220.0f};
+  // A stretch of its text marked -- what a reply quoted of it -- while it
+  // is flashed; let go as the flash ends.
+  bool marked = false;
+  // Marks what is found of `fragment` in its text; where, as the offset in
+  // it, or nothing.
+  std::optional<std::size_t> mark(std::string_view fragment) {
+    auto& text = parts.body.parts.text;
+    const auto at = std::string_view(text.text()).find(fragment);
+    if (fragment.empty() || at == std::string_view::npos)
+      return std::nullopt;
+    auto styles = text.styles();
+    styles.push_back({.first = at, .last = at + fragment.size(), .marked = true});
+    text.setStyles(std::move(styles), accent_colour);
+    marked = true;
+    return at;
+  }
+  void unmark() {
+    auto& text = parts.body.parts.text;
+    auto styles = text.styles();
+    std::erase_if(styles, [](const auto& one) { return one.marked; });
+    text.setStyles(std::move(styles), accent_colour);
+    marked = false;
+  }
   void appear() {
     appearing.jump(0.0f);
     appearing.setTarget(1.0f);
@@ -881,12 +942,14 @@ struct message_bubble : nodes::Stack {
   // does not move, and the bubble followed only once it was let go.
   float swipe_drawn = 0.0f;
   [[nodiscard]] bool settling() const {
-    return swipe.moving() || swipe.value() != swipe_drawn || flash.moving() || appearing.moving();
+    return swipe.moving() || swipe.value() != swipe_drawn || flash.moving() || appearing.moving() || marked;
   }
   void update(double now_ms) {
     if (flash.step(now_ms))
       fState.apply({.background = (accent_colour & 0x00FFFFFFu) |
                                   (static_cast<skia::SkColor>(std::lround(80.0f * flash.value())) << 24)});
+    if (marked && !flash.moving())
+      this->unmark();
     if (appearing.step(now_ms)) {
       const float shown = appearing.value();
       fState.apply({.alpha = shown, .shiftY = (1.0f - shown) * 12.0f});

@@ -103,6 +103,6 @@ void app::apply(const request::message_person& one) {
     root().show_notice("Starting a new chat");
 }
 
-void app::apply(const request::jump_to_message& one) { root().main().jump_to(one.id); }
+void app::apply(const request::jump_to_message& one) { root().main().jump_to(one.id, one.fragment); }
 
 }  // namespace mux::app

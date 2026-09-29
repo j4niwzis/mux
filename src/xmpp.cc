@@ -411,7 +411,8 @@ class account {
   void contact(const tern::roster_item& item) {
     sink_(change::conversation_updated{.id = {id_, item.jid},
                                        .kind = conversation_kind::direct{},
-                                       .name = item.name.value_or(item.jid)});
+                                       .name = item.name.value_or(item.jid),
+                                       .groups = item.group});
     // Its archive, paged back from the latest.
     sink_(change::history_position{{id_, item.jid}, std::string()});
   }

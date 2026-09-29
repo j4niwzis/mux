@@ -405,7 +405,34 @@ class account {
                                        .topic = kept.state.topic(),
                                        .encrypted = kept.state.encrypted(),
                                        .unread = kept.unread.notification,
-                                       .highlights = kept.unread.highlight});
+                                       .highlights = kept.unread.highlight,
+                                       .space = space(kept),
+                                       .children = children_of(kept)});
+  }
+
+  // Whether a room is a space: its creation says so, by its type.
+  static bool space(const loom::client::joined_room& kept) {
+    const auto* created = kept.state.find("m.room.create");
+    if (!created)
+      return false;
+    const knot::value tree = knot::to_value(*created);
+    const knot::value* content = member(tree, "content");
+    const knot::value* type = content ? member(*content, "type") : nullptr;
+    return type && type->is<std::string>() && type->as<std::string>() == "m.space";
+  }
+  // The rooms a space holds: an m.space.child for each, whose content is
+  // not empty -- an emptied one is a child taken out.
+  static std::vector<std::string> children_of(const loom::client::joined_room& kept) {
+    std::vector<std::string> out;
+    for (const auto& [key, one] : kept.state.events) {
+      if (key.first != "m.space.child")
+        continue;
+      const knot::value tree = knot::to_value(one);
+      const knot::value* content = member(tree, "content");
+      if (content && content->is<knot::value::object>() && !content->as<knot::value::object>().empty())
+        out.push_back(key.second);
+    }
+    return out;
   }
 
   // Who is in a room, as its state says: those joined, by their names there.

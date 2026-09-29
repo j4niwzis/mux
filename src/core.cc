@@ -182,6 +182,11 @@ struct conversation {
   // Where to page back from, in the protocol's terms: a MAM id, a Matrix
   // prev_batch. Nothing where the beginning has been reached.
   std::optional<std::string> history_from;
+  // A Matrix space, and the rooms it holds: a folder of chats, not a chat.
+  bool space = false;
+  std::vector<std::string> children;
+  // The named groups it is in, as an XMPP roster's.
+  std::vector<std::string> groups;
 };
 
 struct account {
@@ -217,6 +222,9 @@ struct conversation_updated {
   bool encrypted = false;
   std::int64_t unread = 0;
   std::int64_t highlights = 0;
+  bool space = false;
+  std::vector<std::string> children;
+  std::vector<std::string> groups;
 };
 
 // A session an account was given -- a Matrix access token and device -- to
@@ -361,6 +369,9 @@ class model {
     kept.encrypted = one.encrypted;
     kept.unread = one.unread;
     kept.highlights = one.highlights;
+    kept.space = one.space;
+    kept.children = one.children;
+    kept.groups = one.groups;
   }
   void on(const change::conversation_removed& one) { of(one.id.account).conversations.erase(one.id.id); }
   void on(const change::presence_changed& one) { of(one.account).presences[one.contact] = one.now; }

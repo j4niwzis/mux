@@ -1837,6 +1837,61 @@ struct timeline_area : scene::Node {
   }
 };
 
+// What the chat list shows: all the chats, those of a Matrix space, or
+// those of an XMPP roster group.
+namespace folder {
+struct all {
+  friend bool operator==(all, all) = default;
+};
+struct space {
+  std::string room;
+  friend bool operator==(const space&, const space&) = default;
+};
+struct group {
+  std::string name;
+  friend bool operator==(const group&, const group&) = default;
+};
+}  // namespace folder
+using folder_t = std::variant<folder::all, folder::space, folder::group>;
+
+// A folder's tab over the chat list, as Telegram's: its name, and under
+// the one chosen a line in the accent.
+template <class Pick>
+struct folder_tab : scene::Node {
+  Pick pick;
+  folder_t which;
+  bool chosen = false;
+  nodes::Text label;
+  folder_tab(std::string name, folder_t what, bool is_chosen, Pick act)
+      : pick(std::move(act)), which(std::move(what)), chosen(is_chosen),
+        label(std::move(name), 13.0f, is_chosen ? accent_colour : dim_colour, true) {
+    fState.apply({.autoSize = scene::axes::kX, .height = 32.0f, .padding = {0.0f, 10.0f, 0.0f, 10.0f}});
+    label.setMaxWidth(160.0f);
+    label.setElided(true);
+    label.apply({.anchor = scene::anchor::kCentreLeft, .origin = scene::anchor::kCentreLeft});
+  }
+  void forEachChild(auto&& f) { f(label); }
+  void drawSelf(skia::SkCanvas* canvas, float alpha) {
+    skia::SkFont* font = skiff::paint::defaultFont();
+    if (font == nullptr)
+      return;
+    const skiff::paint::Painter p(canvas, *font);
+    const skia::SkRect& box = fState.fBounds;
+    if (fState.fHovered || this->showsFocus())
+      p.fillRounded(box, 6.0f, chosen_colour, alpha);
+    if (chosen)
+      p.fillRounded(skia::SkRect::MakeLTRB(box.fLeft + 6.0f, box.fBottom - 3.0f, box.fRight - 6.0f, box.fBottom), 1.5f,
+                    accent_colour, alpha);
+  }
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+  [[nodiscard]] bool focusChangesAppearance() const { return true; }
+  [[nodiscard]] bool onClick(float, float) {
+    pick(which);
+    return true;
+  }
+};
+
 template <class Actions>
 struct conversations_screen : nodes::Stack {
   Actions* actions = nullptr;
@@ -1850,6 +1905,18 @@ struct conversations_screen : nodes::Stack {
   float info_width = 340.0f;
 
   static constexpr float kMinSidebar = 240.0f;
+
+  // The folder whose chats are listed.
+  folder_t folder = folder::all{};
+  struct pick_folder {
+    conversations_screen* screen;
+    void operator()(const folder_t& which) const { screen->choose_folder(which); }
+  };
+  void choose_folder(const folder_t& which) {
+    folder = which;
+    if (last_model)
+      this->show(*last_model);
+  }
 
   // The chat list: the drawer's button and the name, then the chats.
   struct side_column : nodes::Stack {
@@ -1885,12 +1952,16 @@ struct conversations_screen : nodes::Stack {
               .fillRounded(fState.fBounds, 18.0f, field.focused() ? chosen_colour : tile_colour, alpha);
       }
     } search;
+    // The folders, where the account has spaces or groups: a line of tabs.
+    nodes::Flow<std::vector<folder_tab<pick_folder>>> folders{
+        {.direction = nodes::direction::horizontal{}, .spacingX = 2.0f, .spacingY = 2.0f}, {}};
     nodes::Text no_chats{"No chats yet.", 13.0f, dim_colour};
     nodes::ScrollContainer<nodes::Flow<std::vector<conversation_row<Actions>>>> list{
         nodes::Flow<std::vector<conversation_row<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
     explicit side_column(Actions* a) : head(a) {
       fState.apply({.fillY = true});
       no_chats.apply({.margin = {12.0f, 16.0f, 0.0f, 16.0f}});
+      folders.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {0.0f, 8.0f, 6.0f, 8.0f}});
       list.apply({.fillX = true, .grow = scene::axes::kY});
       std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
     }
@@ -1902,6 +1973,7 @@ struct conversations_screen : nodes::Stack {
     void forEachChild(auto&& f) {
       f(head);
       f(search);
+      f(folders);
       f(no_chats);
       f(list);
     }
@@ -2065,9 +2137,44 @@ struct conversations_screen : nodes::Stack {
       return text;
     };
     const std::string wanted = lower(side.search.field.text());
-    if (current)
-      for (const auto& [key, one] : now.accounts().at(*current).conversations)
-        if (wanted.empty() || lower(display_name(one)).contains(wanted) || lower(one.id.id).contains(wanted))
+    // The folders the account has: its spaces, then its groups.
+    std::vector<std::pair<std::string, folder_t>> folders{{"All", folder::all{}}};
+    if (current) {
+      std::set<std::string> groups;
+      for (const auto& [key, one] : now.accounts().at(*current).conversations) {
+        if (one.space)
+          folders.emplace_back(display_name(one), folder::space{one.id.id});
+        groups.insert(one.groups.begin(), one.groups.end());
+      }
+      for (const std::string& name : groups)
+        folders.emplace_back(name, folder::group{name});
+    }
+    if (std::ranges::find(folders, folder, &std::pair<std::string, folder_t>::second) == folders.end())
+      folder = folder::all{};
+    auto& tabs = std::get<0>(side.folders.fChildren);
+    tabs.clear();
+    for (auto& [name, which] : folders)
+      tabs.emplace_back(name, which, which == folder, pick_folder{this});
+    side.folders.setVisible(folders.size() > 1);
+    // Whether a chat is in the folder chosen. A space is a folder, not a
+    // chat: it is never listed.
+    const account* in = current ? &now.accounts().at(*current) : nullptr;
+    const auto in_folder = [&](const conversation& one) {
+      if (one.space)
+        return false;
+      return std::visit(overloaded{[](const folder::all&) { return true; },
+                                   [&](const folder::space& s) {
+                                     const auto found = in->conversations.find(s.room);
+                                     return found != in->conversations.end() &&
+                                            std::ranges::contains(found->second.children, one.id.id);
+                                   },
+                                   [&](const folder::group& g) { return std::ranges::contains(one.groups, g.name); }},
+                        folder);
+    };
+    if (in)
+      for (const auto& [key, one] : in->conversations)
+        if (in_folder(one) &&
+            (wanted.empty() || lower(display_name(one)).contains(wanted) || lower(one.id.id).contains(wanted)))
           chats.push_back(&one);
     std::ranges::sort(chats, std::ranges::greater{}, [](const conversation* one) {
       return one->timeline.empty() ? std::chrono::sys_time<std::chrono::milliseconds>{} : one->timeline.back().at;

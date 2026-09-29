@@ -32,6 +32,12 @@ inline skia::SkColor text_colour = skia::colorSetARGB(255, 235, 240, 243);
 inline skia::SkColor dim_colour = skia::colorSetARGB(255, 150, 162, 170);
 inline skia::SkColor accent_colour = skia::colorSetARGB(255, 102, 204, 255);
 inline skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110);
+// The chosen chat's text, on the chosen colour; one's own bubbles; the
+// chat's background, as the theme's wallpaper; text on the accent.
+inline skia::SkColor selected_text_colour = skia::colorSetARGB(255, 255, 255, 255);
+inline skia::SkColor out_bubble_colour = skia::colorSetARGB(255, 43, 82, 120);
+inline skia::SkColor chat_colour = skia::colorSetARGB(255, 14, 22, 33);
+inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 
 // The protocol an address speaks: a Matrix user ID starts with '@', and a JID
 // cannot.
@@ -667,12 +673,6 @@ inline skia::SkColor section_colour = skia::colorSetARGB(255, 26, 29, 33);
 inline skia::SkColor tile_colour = skia::colorSetARGB(255, 40, 45, 50);
 inline skia::SkColor bubble_colour = skia::colorSetARGB(255, 33, 41, 52);
 inline skia::SkColor sent_time_colour = skia::colorSetARGB(255, 170, 200, 230);
-// The chosen chat's text, on the chosen colour; one's own bubbles; the
-// chat's background, as the theme's wallpaper; text on the accent.
-inline skia::SkColor selected_text_colour = skia::colorSetARGB(255, 255, 255, 255);
-inline skia::SkColor out_bubble_colour = skia::colorSetARGB(255, 43, 82, 120);
-inline skia::SkColor chat_colour = skia::colorSetARGB(255, 14, 22, 33);
-inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 
 // The colours of a theme, "dark" or "light", put in place: mux.ui's and
 // skiff-widgets'. What is made takes its colours then: the window is made

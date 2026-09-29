@@ -245,6 +245,13 @@ struct timeline_area : scene::Node {
           actions->open_url(preview->url);
           return true;
         }
+        // A reaction shown as a line: pressed anywhere, to what it is on.
+        if (one.said.service && one.said.replies_to && one.parts.body.bounds().contains(press.x, press.y) &&
+            std::visit(overloaded{[](room_event::reactions) { return true; }, [](const auto&) { return false; }},
+                       one.said.event_kind)) {
+          actions->jump_to_message(*one.said.replies_to);
+          return true;
+        }
         // The quote: to the message it quotes.
         if (one.parts.body.parts.quote && one.said.replies_to && one.parts.body.parts.quote->bounds().contains(press.x, press.y)) {
           actions->jump_to_message(*one.said.replies_to, quoted_fragment(one.said));

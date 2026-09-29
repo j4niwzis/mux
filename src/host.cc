@@ -684,8 +684,11 @@ int run(App& app, const options& how) {
       for (auto& url : std::exchange(work.links, {}))
         app.open_link(std::move(url));
       // The notifications mux shows itself, put up; the old ones gone.
-      for (const auto& due : std::exchange(app.toasts_due, {}))
-        shown_toasts.show(due);
+      // The newest three at most: a window made for each only to be closed
+      // at once, where many came together, was the whole of a frame.
+      auto due_now = std::exchange(app.toasts_due, {});
+      for (std::size_t i = due_now.size() > 3 ? due_now.size() - 3 : 0; i < due_now.size(); ++i)
+        shown_toasts.show(due_now[i]);
       shown_toasts.frame();
       app.before_frame();
       scene.update(detail::now_ms());

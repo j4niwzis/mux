@@ -138,7 +138,12 @@ void app::woken() {
                                        mux::overloaded{[](mux::placement::at_end) { return true; },
                                                        [](const auto&) { return false; }},
                                        added.where);
-                                   if (live && !added.message.outgoing && !added.message.service)
+                                   // New: said since mux started (a minute's grace for
+                                   // clocks) -- not a chat's last messages, which the
+                                   // first sync puts at its end too, as tdesktop
+                                   // notifies nothing of what it catches up on.
+                                   const bool fresh = added.message.at >= started_at - std::chrono::minutes(1);
+                                   if (live && fresh && !added.message.outgoing && !added.message.service)
                                      this->notify_of(added.message, mentioning.contains(added.message.id));
                                  },
                                  [](const auto&) {}},

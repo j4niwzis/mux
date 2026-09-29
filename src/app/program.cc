@@ -273,6 +273,9 @@ struct app : kept_settings {
   };
   using toast_card = mux::ui::toast_card;
   std::vector<toast_due> toasts_due;
+  // When mux started: what was said before it is caught up on, not notified.
+  std::chrono::sys_time<std::chrono::milliseconds> started_at =
+      std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
   void open_notified(const mux::conversation_id& chat) { this->open_chat(chat, std::nullopt); }
   void focus_changed(bool on) { window_focused = on; }
   // A message come as it happened, notified as the settings say.

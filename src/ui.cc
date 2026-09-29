@@ -1170,8 +1170,7 @@ struct message_bubble : scene::Node {
     text.setWrapped(true);
     // Anyone's words can be selected and copied, as in Telegram.
     text.setSelectable(true);
-    text.setSelectionColour(skia::colorSetARGB(110, skia::colorGetR(accent_colour), skia::colorGetG(accent_colour),
-                                               skia::colorGetB(accent_colour)));
+    text.setSelectionColour((accent_colour & 0x00FFFFFFu) | (110u << 24));  // the accent, see-through
     time += std::visit(overloaded{[](const delivery::sending&) { return " · sending"; },
                                   [](const delivery::failed&) { return " · not sent"; },
                                   [](const auto&) { return ""; }},

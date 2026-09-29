@@ -289,9 +289,8 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
         std::map<std::string, std::string> read_by;
         for (const auto& event : *part.ephemeral->events) {
           const bool receipt = std::visit(overloaded{[](event_type::receipt) { return true; },
-                                                     [](event_type::encrypted) { return false; },
-                                                     [](event_type::redaction) { return false; },
-                                                     [](event_type::other) { return false; }},
+                                                     // Every other type an ephemeral event can have.
+                                                     [](const auto&) { return false; }},
                                           event_type_of(event.type));
           if (!receipt)
             continue;

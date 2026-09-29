@@ -354,9 +354,11 @@ struct album_view : nodes::Stack {
 // name over its size; pressed, it is saved and opened.
 struct file_view : nodes::Stack {
   std::string source;
+  // tdesktop's msgFileSize: the icon, and so the row, is this high.
+  static constexpr float kIcon = 44.0f;
   struct disc : nodes::Icon {
     disc() : nodes::Icon(shape_of(icon::clip{}), on_accent_colour) {
-      fState.apply({.width = 44.0f, .height = 44.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 22.0f,
+      fState.apply({.width = kIcon, .height = kIcon, .alignSelf = scene::align::kMiddle, .cornerRadius = kIcon / 2.0f,
                     .background = accent_colour});
     }
   };

@@ -46,16 +46,31 @@ struct send_box : nodes::Stack {
       std::vector<picture_preview> pictures;
       std::vector<file_view> files;
     } parts;
+    static constexpr float kGap = 8.0f;
+    // A picture's size in the box: its own, scaled down to fit -- lower
+    // where there are several.
+    [[nodiscard]] static std::pair<float, float> size_of(const pending_file& one, std::size_t count) {
+      const skia::Sp<skia::SkImage>* image = thumbnails().find(one.key);
+      const float w = image && *image ? static_cast<float>((*image)->width()) : 380.0f;
+      const float h = image && *image ? static_cast<float>((*image)->height()) : 240.0f;
+      const float scale = std::min({1.0f, 380.0f / w, (count > 1 ? 160.0f : 300.0f) / h});
+      return {w * scale, h * scale};
+    }
+    // As high as what it holds: its pictures' heights and its files' rows,
+    // with the gaps between -- so the box is as high as it needs.
+    [[nodiscard]] static float height_of(const std::vector<pending_file>& all) {
+      float total = all.empty() ? 0.0f : static_cast<float>(all.size() - 1) * kGap;
+      for (const pending_file& one : all)
+        total += one.image ? size_of(one, all.size()).second : file_view::kIcon;
+      return total;
+    }
     explicit previews_column(const std::vector<pending_file>& all) {
-      this->setGap(8.0f);
+      this->setGap(kGap);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
       for (const pending_file& one : all) {
         if (one.image) {
-          const skia::Sp<skia::SkImage>* image = thumbnails().find(one.key);
-          float w = image && *image ? static_cast<float>((*image)->width()) : 380.0f;
-          float h = image && *image ? static_cast<float>((*image)->height()) : 240.0f;
-          const float scale = std::min({1.0f, 380.0f / w, (all.size() > 1 ? 160.0f : 300.0f) / h});
-          parts.pictures.emplace_back(one.key, w * scale, h * scale);
+          const auto [w, h] = size_of(one, all.size());
+          parts.pictures.emplace_back(one.key, w, h);
         } else {
           parts.files.emplace_back(std::string(), one.name, one.size);
         }
@@ -85,6 +100,10 @@ struct send_box : nodes::Stack {
                            : std::format("Send {} {}", all.size(),
                                          std::ranges::all_of(all, &pending_file::image) ? "photos" : "files");
   }
+  // How high the previews go before they scroll: tdesktop's
+  // sendMediaPreviewHeightMax is 1280, more than a window; this keeps the
+  // caption and buttons in view on a laptop's.
+  static constexpr float kMostPreviews = 420.0f;
   struct parts_t {
     nodes::Text title;
     nodes::ScrollContainer<previews_column> previews;
@@ -97,8 +116,10 @@ struct send_box : nodes::Stack {
               .previews = nodes::ScrollContainer<previews_column>(previews_column(all)),
               .buttons = buttons_row(a)} {
     this->setGap(12.0f);
-    fState.apply({.fill = true, .padding = {18.0f, 20.0f, 16.0f, 20.0f}});
-    parts.previews.apply({.fillX = true, .grow = scene::axes::kY});
+    // Sized by what it holds, not by the window: the dialog fits it (up to
+    // most of the window, the previews scrolling past what fits of them).
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {18.0f, 20.0f, 16.0f, 20.0f}});
+    parts.previews.apply({.fillX = true, .height = std::min(previews_column::height_of(all), kMostPreviews)});
     parts.caption.apply({.fillX = true});
   }
 };

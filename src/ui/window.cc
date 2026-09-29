@@ -182,7 +182,7 @@ struct window : scene::Node {
     layer().viewer.emplace(actions, std::move(source), std::move(sender), std::move(name), std::move(when));
   }
   void open_send_box(const std::vector<pending_file>& files) {
-    layer().sending.setSize(440.0f, 560.0f);
+    layer().sending.setWidthFittingContent(440.0f);
     layer().sending.open(actions, files);
   }
   void close_send_box() { layer().sending.close(); }

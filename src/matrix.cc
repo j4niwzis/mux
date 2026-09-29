@@ -310,10 +310,23 @@ class account {
 
     std::chrono::seconds backoff(1);
     while (!stopping_) {
+      // Lighter than the server's whole state: a room's last messages (the
+      // rest is paged back to) and only the members who speak in them. The
+      // first sync still gathers every room, and on a large account the
+      // server takes minutes over it -- it is given them, where a later
+      // one is given the long poll and half a minute.
+      static constexpr std::string_view kFilter =
+          R"({"room":{"timeline":{"limit":20},"state":{"lazy_load_members":true}}})";
+      const bool first = !state_.since.has_value();
+      if (first)
+        log(id_, "the first sync: asking for every room (on a large account, this takes a while)");
       auto got = perform(syncing,
-                         loom::cs::sync{.since = state_.since,
-                                        .timeout = state_.since ? how_.sync_timeout.count() : 0},
-                         std::chrono::duration_cast<std::chrono::seconds>(how_.sync_timeout) + std::chrono::seconds(30));
+                         loom::cs::sync{.filter = std::string(kFilter),
+                                        .since = state_.since,
+                                        .timeout = first ? 0 : how_.sync_timeout.count()},
+                         first ? std::chrono::seconds(600)
+                               : std::chrono::duration_cast<std::chrono::seconds>(how_.sync_timeout) +
+                                     std::chrono::seconds(30));
       if (!got) {
         const failure& why = got.error();
         if (why.server && (why.server->errcode == "M_UNKNOWN_TOKEN" || why.server->errcode == "M_FORBIDDEN")) {
@@ -328,7 +341,7 @@ class account {
           say(connection::failed{why.said()});
           break;
         }
-        log(id_, "sync failed: {}; trying again", why.said());
+        log(id_, "{} failed: {}; trying again", state_.since ? "sync" : "the first sync", why.said());
         say(connection::connecting{why.said()});
         const auto wait = why.server && why.server->retry_after_ms
                               ? std::chrono::milliseconds(*why.server->retry_after_ms)

@@ -181,7 +181,7 @@ struct timeline_area : scene::Node {
       if (const auto theirs = at.find(event); theirs != at.end()) {
         if (theirs->second >= mine->second)
           out.push_back(sender_name(*chat, user));
-      } else if (const auto read = chat->read_at.find(user); read != chat->read_at.end() && read->second >= when) {
+      } else if (const auto read = chat->receipt_times.find(user); read != chat->receipt_times.end() && read->second >= when) {
         out.push_back(sender_name(*chat, user));
       }
     }

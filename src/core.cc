@@ -520,7 +520,7 @@ struct conversation {
   // their receipts say; and the user's own, kept here whether it is sent or
   // not -- what is unread is counted from it.
   std::map<std::string, std::string> read_by;
-  std::map<std::string, std::chrono::sys_time<std::chrono::milliseconds>> read_at;
+  std::map<std::string, std::chrono::sys_time<std::chrono::milliseconds>> receipt_times;
   std::optional<std::string> read_up_to;
   // What is unread, as counted here from the user's own position where there
   // is one, and as the server counts it where not.
@@ -1156,7 +1156,7 @@ class model {
     for (const auto& [user, event] : one.read_by)
       kept.read_by.insert_or_assign(user, event);
     for (const auto& [user, when] : one.read_at)
-      kept.read_at.insert_or_assign(user, when);
+      kept.receipt_times.insert_or_assign(user, when);
   }
 
   std::map<account_id, account> accounts_;

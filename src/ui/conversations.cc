@@ -563,8 +563,23 @@ struct conversations_screen : nodes::Stack {
     // and once it is laid out, brought into view and flashed.
     if (jumping_to && chosen && last_model) {
       auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
-      const auto it = std::ranges::find(entries, *jumping_to, &message_bubble::message_id);
+      auto it = std::ranges::find(entries, *jumping_to, &message_bubble::message_id);
       const conversation* one = last_model->find(*chosen);
+      // A reply to something done in the room -- a join, a rename -- whose
+      // line is hidden, as the chat's settings say: landed on the nearest
+      // shown after it, else before it, as its place.
+      if (it != entries.end() && !it->visible()) {
+        auto shown = std::find_if(it, entries.end(), [](const message_bubble& one) { return one.visible(); });
+        if (shown == entries.end()) {
+          const auto back = std::find_if(std::make_reverse_iterator(it), entries.rend(),
+                                         [](const message_bubble& one) { return one.visible(); });
+          shown = back == entries.rend() ? entries.end() : std::prev(back.base());
+        }
+        if (shown != entries.end()) {
+          jumping_to = shown->message_id;
+          it = shown;
+        }
+      }
       if (it != entries.end() && !it->bounds().isEmpty()) {
         aiming = std::exchange(jumping_to, std::nullopt);
         aim_quiet = jump_quiet;

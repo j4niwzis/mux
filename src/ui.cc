@@ -170,6 +170,8 @@ struct clip {};
 struct send {};
 struct eye {};
 struct minus {};
+struct reply {};   // tdesktop's historyReplyIcon: an arrow turned back
+struct pencil {};  // tdesktop's historyEditIcon
 // A filled dot of a colour of its own, as a proxy profile's.
 struct dot {
   skia::SkColor colour;
@@ -177,7 +179,8 @@ struct dot {
 }  // namespace icon
 using icon_t = std::variant<icon::none, icon::person, icon::gear, icon::power, icon::plus, icon::motion, icon::back,
                             icon::close, icon::info, icon::people, icon::add_person, icon::bell, icon::sliders,
-                            icon::leave, icon::check, icon::clip, icon::send, icon::eye, icon::dot, icon::minus>;
+                            icon::leave, icon::check, icon::clip, icon::send, icon::eye, icon::dot, icon::minus,
+                            icon::reply, icon::pencil>;
 
 [[nodiscard]] inline skia::SkPaint pen(skia::SkColor colour, float alpha, float width = 1.8f) {
   skia::SkPaint out;
@@ -342,6 +345,35 @@ inline void draw_icon(skia::SkCanvas* canvas, icon::dot which, const skia::SkRec
 inline void draw_icon(skia::SkCanvas* canvas, icon::minus, const skia::SkRect& box, skia::SkColor colour, float alpha) {
   const float x = box.centerX(), y = box.centerY();
   canvas->drawLine(x - 7.0f, y, x + 7.0f, y, pen(colour, alpha, 2.0f));
+}
+inline void draw_icon(skia::SkCanvas* canvas, icon::reply, const skia::SkRect& box, skia::SkColor colour, float alpha) {
+  // An arrow pointing left, its shaft bending down to the right.
+  const auto p = pen(colour, alpha, 2.0f);
+  const float x = box.centerX(), y = box.centerY();
+  skia::SkPathBuilder arrow;
+  arrow.moveTo(x - 3.0f, y - 8.0f);
+  arrow.lineTo(x - 9.0f, y - 2.5f);
+  arrow.lineTo(x - 3.0f, y + 3.0f);
+  canvas->drawPath(arrow.detach(), p);
+  skia::SkPathBuilder shaft;
+  shaft.moveTo(x - 9.0f, y - 2.5f);
+  shaft.lineTo(x + 1.0f, y - 2.5f);
+  shaft.cubicTo(x + 6.0f, y - 2.5f, x + 9.0f, y + 1.0f, x + 9.0f, y + 8.0f);
+  canvas->drawPath(shaft.detach(), p);
+}
+inline void draw_icon(skia::SkCanvas* canvas, icon::pencil, const skia::SkRect& box, skia::SkColor colour, float alpha) {
+  const auto p = pen(colour, alpha, 1.8f);
+  const int save = canvas->save();
+  canvas->translate(box.centerX(), box.centerY());
+  canvas->rotate(45.0f);
+  canvas->drawRect(skia::SkRect::MakeLTRB(-2.5f, -10.0f, 2.5f, 5.0f), p);
+  canvas->drawLine(-2.5f, -6.5f, 2.5f, -6.5f, p);
+  skia::SkPathBuilder tip;
+  tip.moveTo(-2.5f, 5.0f);
+  tip.lineTo(0.0f, 9.5f);
+  tip.lineTo(2.5f, 5.0f);
+  canvas->drawPath(tip.detach(), p);
+  canvas->restoreToCount(save);
 }
 // Whether an icon draws anything: all but none.
 [[nodiscard]] constexpr bool drawn(icon::none) { return false; }
@@ -2404,28 +2436,59 @@ struct submit_message {
   void operator()(std::string_view text) const { actions->submit_message(std::string(text)); }
 };
 
+// What a message being written answers or edits, as shown over the field:
+// its icon, its title ("Reply to <name>", "Edit message"), a line of it.
+struct compose_context {
+  icon_t mark;
+  std::string title;
+  std::string line;
+};
+
 // Where a message is written, across the bottom of a chat as in Telegram
 // Desktop: a line over it, a paperclip on the left, the text growing with
 // what is written, and the send arrow on the right.
 template <class Actions>
 struct composer_bar : nodes::Stack {
   nodes::Box<> divider{band_colour};
-  // What is written answers or edits: said over the field, and ✕ to go back
-  // to a plain message.
+  // What is written answers or edits, as tdesktop's FieldHeader shows it:
+  // its icon in the left column (historyReplySkip wide), then two lines --
+  // "Reply to <name>" or "Edit message" in the accent, semibold, over a
+  // line of the message -- and ✕ on the right to go back to a plain one.
   struct context_row : nodes::Stack {
-    nodes::Text context{"", 13.0f, accent_colour};
+    static constexpr float kHeight = 49.0f;  // historyReplyHeight
+    static constexpr float kSkip = 51.0f;    // historyReplySkip
+    icon_t mark = icon::none{};
+    struct lines_column : nodes::Stack {
+      nodes::Text title{"", 13.0f, accent_colour, true};
+      nodes::Text line{"", 13.0f, text_colour};
+      lines_column() {
+        this->setGap(2.0f);
+        title.setElided(true);
+        line.setElided(true);
+        title.apply({.fillX = true});
+        line.apply({.fillX = true});
+      }
+      void forEachChild(auto&& f) {
+        f(title);
+        f(line);
+      }
+    } lines;
     icon_button<ask<Actions, &Actions::cancel_compose>> cancel;
     explicit context_row(Actions* a) : cancel(icon::close{}, {a}) {
       this->setHorizontal();
       this->setGap(8.0f);
-      fState.apply({.fillX = true, .height = 30.0f, .padding = {0.0f, 8.0f, 0.0f, 50.0f}});
-      context.setElided(true);
-      context.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 8.0f, 0.0f, kSkip}});
+      lines.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
       cancel.apply({.alignSelf = scene::align::kMiddle});
     }
     void forEachChild(auto&& f) {
-      f(context);
+      f(lines);
       f(cancel);
+    }
+    void drawSelf(skia::SkCanvas* canvas, float alpha) {
+      const skia::SkRect& at = fState.fBounds;
+      draw_icon(canvas, mark, skia::SkRect::MakeLTRB(at.left(), at.top(), at.left() + kSkip, at.bottom()), accent_colour,
+                alpha);
     }
   } context_line;
   // The paperclip, the field growing with what is written in it, the arrow.
@@ -2460,10 +2523,13 @@ struct composer_bar : nodes::Stack {
   }
 
   [[nodiscard]] const std::string& text() const { return input.field.text(); }
-  // What is written answers or edits something, said; or nothing.
-  void show_context(std::optional<std::string> said) {
+  // What is written answers or edits something, shown; or nothing.
+  void show_context(std::optional<compose_context> said) {
     context_line.setVisible(said.has_value());
-    context_line.context.setText(said.value_or(""));
+    context_line.mark = said ? said->mark : icon_t{icon::none{}};
+    context_line.lines.title.setText(said ? said->title : std::string());
+    context_line.lines.line.setText(said ? said->line : std::string());
+    context_line.markDamaged();
     this->invalidateLayout();
   }
   void set_text(std::string text) { input.field.setText(std::move(text)); }

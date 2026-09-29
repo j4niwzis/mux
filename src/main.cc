@@ -1663,14 +1663,28 @@ struct app {
   void apply(const request::menu_reply&) {
     root().close_menu();
     composing = compose::reply{menu_target.id};
+    // As tdesktop's: "Reply to <name>" over a line of the message -- its
+    // text, or what it carries where it has none.
+    std::string title = "Reply";
     std::string line = menu_target.text;
+    if (const auto& chosen = root().main().chosen)
+      if (const mux::conversation* chat = model->find(*chosen)) {
+        const auto said = std::ranges::find(chat->timeline, menu_target.id, &mux::message::id);
+        if (said != chat->timeline.end()) {
+          title = "Reply to " + mux::ui::sender_name(*chat, said->sender);
+          if (line.empty() && said->attachment)
+            line = mux::is_picture(said->attachment->kind) ? std::string("Photo") : said->attachment->name;
+        }
+      }
     std::ranges::replace(line, '\n', ' ');
-    root().main().line.show_context("Reply: " + line);
+    root().main().line.show_context(mux::ui::compose_context{mux::ui::icon::reply{}, std::move(title), std::move(line)});
   }
   void apply(const request::menu_edit&) {
     root().close_menu();
     composing = compose::edit{menu_target.id};
-    root().main().line.show_context(std::string("Editing"));
+    std::string line = menu_target.text;
+    std::ranges::replace(line, '\n', ' ');
+    root().main().line.show_context(mux::ui::compose_context{mux::ui::icon::pencil{}, "Edit message", std::move(line)});
     root().main().line.set_text(menu_target.text);
   }
   void apply(const request::menu_copy&) {

@@ -172,9 +172,14 @@ if(MUX_UI)
   target_link_libraries(mux_modules PUBLIC SDL3::SDL3 skiff::skiff skiff::widgets)
   add_executable(mux src/main.cc)
   # The program's own parts: its network, its demo, what it keeps on disk,
-  # the requests of its window, and the names it reads.
+  # the requests of its window, the names it reads, and the program itself.
   target_sources(mux PRIVATE FILE_SET CXX_MODULES BASE_DIRS src
-    FILES src/app/network.cc src/app/demo.cc src/app/store.cc src/app/requests.cc src/app/words.cc)
+    FILES src/app/network.cc src/app/demo.cc src/app/store.cc src/app/requests.cc src/app/words.cc
+          src/app/program.cc)
+  # What the program does, a part each: the module's implementation units.
+  target_sources(mux PRIVATE src/app/program_core.cc src/app/program_pictures.cc src/app/program_media.cc
+    src/app/program_chats.cc src/app/program_links.cc src/app/program_search.cc src/app/program_accounts.cc
+    src/app/program_settings.cc src/app/program_sending.cc src/app/program_forms.cc)
   target_link_libraries(mux PRIVATE mux_modules)
 endif()
 

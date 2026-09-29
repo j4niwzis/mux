@@ -99,9 +99,16 @@ class pictures_part {
           // Those on screen and near it, at twice the size they are drawn
           // at -- not every picture in its history, which pushed the rest out.
           const auto [from, to] = screen.made_indices(one.timeline);
-          for (std::size_t i = from; i < to && i < one.timeline.size(); ++i)
-            if (const message& said = one.timeline[i]; said.attachment && is_picture(said.attachment->kind))
+          for (std::size_t i = from; i < to && i < one.timeline.size(); ++i) {
+            const message& said = one.timeline[i];
+            if (said.attachment && is_picture(said.attachment->kind))
               this->want_thumbnail(id, said.attachment->source);
+            // And of a picture a message made quotes, for its quote.
+            if (said.replies_to)
+              if (const auto quoted = std::ranges::find(one.timeline, *said.replies_to, &message::id);
+                  quoted != one.timeline.end() && quoted->attachment && is_picture(quoted->attachment->kind))
+                this->want_thumbnail(id, quoted->attachment->source);
+          }
         }
       }
   }

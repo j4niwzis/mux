@@ -111,11 +111,35 @@ struct context_menu : scene::Node {
   } menu;
   Actions* actions = nullptr;
 
-  explicit context_menu(Actions* a, const menu_facts& facts) : menu(a, facts), actions(a) {
-    const float x = facts.x, y = facts.y;
+  // Where it was asked for: the pointer.
+  float at_x = 0.0f, at_y = 0.0f;
+  explicit context_menu(Actions* a, const menu_facts& facts) : menu(a, facts), actions(a), at_x(facts.x), at_y(facts.y) {
     fState.apply({.fill = true});
-    menu.apply({.x = x, .y = y});
+    menu.apply({.x = at_x, .y = at_y});
   }
+  // As tdesktop's popup menu: at the pointer, going down and right -- up
+  // where it would pass the window's bottom, left where it would pass its
+  // right -- and kept inside the window.
+  void layoutChildren() {
+    scene::layoutChildrenInContentBox(*this);
+    const skia::SkRect box = fState.contentBox();
+    const float w = menu.bounds().width(), h = menu.bounds().height();
+    constexpr float kEdge = 8.0f;
+    float x = at_x, y = at_y;
+    if (box.fTop + y + h > box.fBottom - kEdge)
+      y = at_y - h;
+    if (box.fLeft + x + w > box.fRight - kEdge)
+      x = at_x - w;
+    x = std::clamp(x, kEdge, std::max(kEdge, box.width() - w - kEdge));
+    y = std::clamp(y, kEdge, std::max(kEdge, box.height() - h - kEdge));
+    if (x != placed_x || y != placed_y) {
+      placed_x = x;
+      placed_y = y;
+      menu.apply({.x = x, .y = y});
+      scene::layoutChildrenInContentBox(*this);
+    }
+  }
+  float placed_x = -1.0f, placed_y = -1.0f;
   void forEachChild(auto&& f) { f(menu); }
   // A press off the menu closes it.
   [[nodiscard]] bool acceptsInput() const { return true; }

@@ -373,14 +373,22 @@ struct message_bubble : nodes::Stack {
         f(said);
       }
     } texts;
-    quote_row(skia::SkColor colour, std::string who, std::string said)
+    // A picture quoted: its thumbnail, small and rounded, as tdesktop's.
+    std::optional<nodes::Image> thumb;
+    quote_row(skia::SkColor colour, std::string who, std::string said, std::optional<std::string> picture = std::nullopt)
         : line(colour), texts(colour, std::move(who), std::move(said)) {
       this->setHorizontal();
       this->setGap(7.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .margin = {2.0f, 0.0f, 4.0f, 0.0f}});
+      if (picture) {
+        thumb.emplace([source = *picture] { return thumbnails().find(source); });
+        thumb->apply({.width = 32.0f, .height = 32.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 4.0f,
+                      .background = tile_colour});
+      }
     }
     void forEachChild(auto&& f) {
       f(line);
+      f(thumb);
       f(texts);
     }
   };
@@ -538,12 +546,21 @@ struct message_bubble : nodes::Stack {
     if (said.replies_to) {
       const auto found = std::ranges::find(in.timeline, *said.replies_to, &message::id);
       const bool known = found != in.timeline.end();
+      // A picture's: its thumbnail, and its caption or "Photo"; a file's:
+      // its name; else its text.
+      std::optional<std::string> picture;
       std::string line = known ? found->body.plain : std::string("not loaded");
+      if (known && found->attachment) {
+        if (is_picture(found->attachment->kind))
+          picture = found->attachment->source;
+        if (line.empty())
+          line = is_picture(found->attachment->kind) ? std::string("Photo") : found->attachment->name;
+      }
       std::ranges::replace(line, '\n', ' ');
       body.quote.emplace(known ? avatar_colour(found->sender) : accent_colour,
                          known ? (found->outgoing ? std::string("You") : sender_name(in, found->sender))
                                : std::string("A message"),
-                         std::move(line));
+                         std::move(line), std::move(picture));
       body.apply({.minWidth = 160.0f});
     }
     if (!said.reactions.empty()) {

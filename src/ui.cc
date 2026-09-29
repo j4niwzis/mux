@@ -374,25 +374,66 @@ inline void draw_avatar(skia::SkCanvas* canvas, const skia::SkRect& disc, std::s
 // A line of a list or a menu, as wide as what holds it and square: an icon
 // on the left, its text, and a radio mark on the right where it is one of a
 // choice. It lights under the pointer; a press does `act`.
-template <class Act>
-struct row_item : scene::Node {
-  Act act;
+// An icon on its own, in a row: drawn, not pressed.
+struct icon_mark : scene::Node {
   icon_t icon;
+  skia::SkColor colour = dim_colour;
+  explicit icon_mark(icon_t mark = icon::none{}) : icon(mark) {
+    fState.apply({.width = 28.0f, .height = 36.0f, .alignSelf = scene::align::kMiddle});
+  }
+  void drawSelf(skia::SkCanvas* canvas, float alpha) { draw_icon(canvas, icon, fState.fBounds, colour, alpha); }
+};
+// A radio's ring, with a dot in it while it is the one chosen.
+struct radio_mark : scene::Node {
+  bool on = false;
+  radio_mark() { fState.apply({.width = 20.0f, .height = 20.0f, .alignSelf = scene::align::kMiddle}); }
+  void drawSelf(skia::SkCanvas* canvas, float alpha) {
+    const float x = fState.fBounds.centerX(), y = fState.fBounds.centerY();
+    canvas->drawCircle(x, y, 8.0f, pen(on ? accent_colour : dim_colour, alpha, 2.0f));
+    if (skia::SkFont* font = skiff::paint::defaultFont(); font && on)
+      skiff::paint::Painter(canvas, *font)
+          .fillRounded(skia::SkRect::MakeLTRB(x - 4.0f, y - 4.0f, x + 4.0f, y + 4.0f), 4.0f, accent_colour, alpha);
+  }
+};
+// A round avatar of a size, in a row.
+struct avatar_mark : scene::Node {
+  std::string key;
+  std::string name;
+  avatar_mark(std::string id, std::string shown, float size) : key(std::move(id)), name(std::move(shown)) {
+    fState.apply({.width = size, .height = size, .alignSelf = scene::align::kMiddle});
+  }
+  void drawSelf(skia::SkCanvas* canvas, float alpha) { draw_avatar(canvas, fState.fBounds, key, name, alpha); }
+};
+
+template <class Act>
+struct row_item : nodes::Stack {
+  Act act;
   // Whether it is one of a choice, and the chosen one.
   std::optional<bool> radio;
+  icon_mark mark;
   nodes::Text label;
+  radio_mark dot;
 
   static constexpr float kHeight = 46.0f;
 
-  row_item(std::string text, Act what, icon_t mark = icon::none{}, std::optional<bool> choice = std::nullopt)
-      : act(std::move(what)), icon(mark), radio(choice), label(std::move(text), 15.0f, text_colour) {
-    fState.apply({.fillX = true, .height = kHeight});
+  // Declared: its icon, its text taking the room, and a radio at the end.
+  row_item(std::string text, Act what, icon_t icon = icon::none{}, std::optional<bool> choice = std::nullopt)
+      : act(std::move(what)), radio(choice), mark(icon), label(std::move(text), 15.0f, text_colour) {
+    this->setHorizontal();
+    this->setGap(16.0f);
+    fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
+    mark.setVisible(!std::holds_alternative<icon::none>(icon));
     label.setElided(true);
+    label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+    dot.on = choice.value_or(false);
+    dot.setVisible(choice.has_value());
   }
 
   void set_chosen(bool on) {
     radio = on;
-    this->markDamaged();
+    dot.on = on;
+    dot.setVisible(true);
+    dot.markDamaged();
   }
   // Lit as the line whose page is shown beside the list.
   void set_lit(bool on) {
@@ -401,29 +442,14 @@ struct row_item : scene::Node {
   }
   bool lit = false;
 
-  void forEachChild(auto&& f) { f(label); }
-  void layoutChildren() {
-    const skia::SkRect box = fState.contentBox();
-    const float left = std::visit(overloaded{[](icon::none) { return 20.0f; }, [](auto) { return 64.0f; }}, icon);
-    label.setMaxWidth(std::max(0.0f, box.width() - left - (radio ? 52.0f : 16.0f)));
-    label.fState.arrange(left, 0.0f, scene::anchor::kCentreLeft, scene::anchor::kCentreLeft);
-    scene::layout(label, box);
+  void forEachChild(auto&& f) {
+    f(mark);
+    f(label);
+    f(dot);
   }
   void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    skia::SkFont* font = skiff::paint::defaultFont();
-    if (font == nullptr)
-      return;
-    const skiff::paint::Painter p(canvas, *font);
-    const skia::SkRect& box = fState.fBounds;
-    if (lit || fState.fHovered || this->showsFocus())
-      p.fillRounded(box, 0.0f, chosen_colour, alpha);
-    draw_icon(canvas, icon, skia::SkRect::MakeXYWH(box.fLeft + 20.0f, box.fTop, 24.0f, box.height()), dim_colour, alpha);
-    if (radio) {
-      const float x = box.fRight - 30.0f, y = box.centerY();
-      canvas->drawCircle(x, y, 8.0f, pen(*radio ? accent_colour : dim_colour, alpha, 2.0f));
-      if (*radio)
-        p.fillRounded(skia::SkRect::MakeLTRB(x - 4.0f, y - 4.0f, x + 4.0f, y + 4.0f), 4.0f, accent_colour, alpha);
-    }
+    if (skia::SkFont* font = skiff::paint::defaultFont(); font && (lit || fState.fHovered || this->showsFocus()))
+      skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 0.0f, chosen_colour, alpha);
   }
 
   [[nodiscard]] bool acceptsInput() const { return true; }
@@ -483,7 +509,7 @@ struct icon_button : scene::Node {
 // The head of a page: ← on the left where there is somewhere to go back to,
 // the page's name, and ✕ on the right where the page closes.
 template <class Back, class Close>
-struct page_header : scene::Node {
+struct page_header : nodes::Stack {
   icon_button<Back> back;
   nodes::Text title;
   icon_button<Close> close;
@@ -493,10 +519,16 @@ struct page_header : scene::Node {
   page_header(std::string name, Back to, Close shut, bool has_back, bool has_close)
       : back(icon::back{}, std::move(to)), title(std::move(name), 17.0f, text_colour, true),
         close(icon::close{}, std::move(shut)) {
-    fState.apply({.fillX = true, .height = kHeight});
+    this->setHorizontal();
+    this->setGap(12.0f);
+    fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}});
     back.setVisible(has_back);
     close.setVisible(has_close);
+    back.apply({.alignSelf = scene::align::kMiddle});
+    close.apply({.alignSelf = scene::align::kMiddle});
     title.setElided(true);
+    title.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle,
+                 .margin = {0.0f, 0.0f, 0.0f, has_back ? 0.0f : 10.0f}});
   }
 
   void forEachChild(auto&& f) {
@@ -504,29 +536,20 @@ struct page_header : scene::Node {
     f(title);
     f(close);
   }
-  void layoutChildren() {
-    const skia::SkRect box = scene::inset(fState.contentBox(), 10.0f, 0.0f);
-    back.fState.arrange(0.0f, 0.0f, scene::anchor::kCentreLeft, scene::anchor::kCentreLeft);
-    scene::layout(back, box);
-    close.fState.arrange(0.0f, 0.0f, scene::anchor::kCentreRight, scene::anchor::kCentreRight);
-    scene::layout(close, box);
-    const float left = back.visible() ? back.bounds().width() + 12.0f : 10.0f;
-    title.setMaxWidth(std::max(0.0f, box.width() - left - 48.0f));
-    title.fState.arrange(left, 0.0f, scene::anchor::kCentreLeft, scene::anchor::kCentreLeft);
-    scene::layout(title, box);
-  }
 };
 
 // One segment of a segmented control: square, its text centred, filled
 // with the accent while it is the one chosen.
 template <class Act>
-struct segment : scene::Node {
+struct segment : nodes::Stack {
   Act act;
   bool active = false;
   nodes::Text label;
 
   segment(std::string text, Act what) : act(std::move(what)), label(std::move(text), 13.0f, text_colour, true) {
     fState.apply({.width = 92.0f, .height = 28.0f});
+    fStack.justify = nodes::justify::middle{};
+    label.apply({.alignSelf = scene::align::kMiddle});
   }
 
   void set_active(bool on) {
@@ -536,10 +559,6 @@ struct segment : scene::Node {
   }
 
   void forEachChild(auto&& f) { f(label); }
-  void layoutChildren() {
-    label.fState.arrange(0.0f, 0.0f, scene::anchor::kCentre, scene::anchor::kCentre);
-    scene::layout(label, fState.contentBox());
-  }
   void drawSelf(skia::SkCanvas* canvas, float alpha) {
     skia::SkFont* font = skiff::paint::defaultFont();
     if (font == nullptr)
@@ -1327,51 +1346,68 @@ struct action_tile : scene::Node {
 // Someone in a group, in its info: avatar, name, how they are, and their
 // role in a pill. Pressed, they are shown on a page of their own.
 template <class Open>
-struct member_row : scene::Node {
+struct member_row : nodes::Stack {
   Open open;
   std::string id;
   std::optional<std::string> role;
-  nodes::Text name;
-  nodes::Text state;
+  avatar_mark face;
+  // Their name, and how they are under it.
+  struct texts_column : nodes::Stack {
+    nodes::Text name;
+    nodes::Text state;
+    texts_column(std::string shown, std::string how)
+        : name(std::move(shown), 14.0f, text_colour, true), state(std::move(how), 12.0f, dim_colour) {
+      this->setGap(4.0f);
+      fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      for (nodes::Text* each : {&name, &state}) {
+        each->setElided(true);
+        each->apply({.fillX = true});
+      }
+    }
+    void forEachChild(auto&& f) {
+      f(name);
+      f(state);
+    }
+  } texts;
+  // Their role, in a pill beside their name.
+  struct role_pill : scene::Node {
+    std::string text;
+    explicit role_pill(std::string what) : text(std::move(what)) {
+      fState.apply({.height = 20.0f, .alignSelf = scene::align::kStart, .margin = {10.0f, 0.0f, 0.0f, 0.0f}});
+    }
+    void measure(const skia::SkRect&) {
+      if (skia::SkFont* font = skiff::paint::defaultFont())
+        fState.fWidth = skiff::paint::Painter(nullptr, *font).measure(text, 12.0f) + 16.0f;
+    }
+    void drawSelf(skia::SkCanvas* canvas, float alpha) {
+      skia::SkFont* font = skiff::paint::defaultFont();
+      if (font == nullptr)
+        return;
+      const skiff::paint::Painter p(canvas, *font);
+      p.fillRounded(fState.fBounds, 10.0f, skia::colorSetARGB(255, 62, 52, 96), alpha);
+      p.textIn(fState.fBounds, text, 12.0f, skia::colorSetARGB(255, 190, 170, 250), alpha, false, 8.0f);
+    }
+  } pill;
 
+  // Declared: the avatar, the name over how they are, the role at the end.
   member_row(const member& one, std::string how, Open what)
-      : open(std::move(what)), id(one.id), role(one.role), name(one.name.empty() ? one.id : one.name, 14.0f, text_colour, true),
-        state(std::move(how), 12.0f, dim_colour) {
-    fState.apply({.fillX = true, .height = 54.0f});
-    name.setElided(true);
-    state.setElided(true);
+      : open(std::move(what)), id(one.id), role(one.role),
+        face(one.id, one.name.empty() ? one.id : one.name, 40.0f),
+        texts(one.name.empty() ? one.id : one.name, std::move(how)), pill(one.role.value_or("")) {
+    this->setHorizontal();
+    this->setGap(12.0f);
+    fState.apply({.fillX = true, .height = 54.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}});
+    pill.setVisible(one.role.has_value());
   }
 
   void forEachChild(auto&& f) {
-    f(name);
-    f(state);
-  }
-  void layoutChildren() {
-    const skia::SkRect box = fState.contentBox();
-    const float room = std::max(0.0f, box.width() - 68.0f - (role ? 80.0f : 16.0f));
-    name.setMaxWidth(room);
-    name.fState.arrange(68.0f, 9.0f);
-    scene::layout(name, box);
-    state.setMaxWidth(room);
-    state.fState.arrange(68.0f, 30.0f);
-    scene::layout(state, box);
+    f(face);
+    f(texts);
+    f(pill);
   }
   void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    skia::SkFont* font = skiff::paint::defaultFont();
-    if (font == nullptr)
-      return;
-    const skiff::paint::Painter p(canvas, *font);
-    const skia::SkRect& box = fState.fBounds;
-    if (fState.fHovered)
-      p.fillRounded(box, 0.0f, chosen_colour, alpha);
-    draw_avatar(canvas, skia::SkRect::MakeXYWH(box.fLeft + 16.0f, box.centerY() - 20.0f, 40.0f, 40.0f), id,
-                name.text(), alpha);
-    if (role) {
-      const float width = p.measure(*role, 12.0f) + 16.0f;
-      const skia::SkRect pill = skia::SkRect::MakeXYWH(box.fRight - 16.0f - width, box.fTop + 10.0f, width, 20.0f);
-      p.fillRounded(pill, 10.0f, skia::colorSetARGB(255, 62, 52, 96), alpha);
-      p.textIn(pill, *role, 12.0f, skia::colorSetARGB(255, 190, 170, 250), alpha, false, 8.0f);
-    }
+    if (skia::SkFont* font = skiff::paint::defaultFont(); font && fState.fHovered)
+      skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 0.0f, chosen_colour, alpha);
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
@@ -1551,10 +1587,10 @@ struct info_panel : nodes::Stack {
   void show_person(const Row& row) {
     person = row.id;
     avatar.key = row.id;
-    avatar.name = row.name.text();
+    avatar.name = row.texts.name.text();
     avatar.markDamaged();
-    name.setText(row.name.text());
-    status.setText(row.role ? std::format("{} · {}", row.state.text(), *row.role) : row.state.text());
+    name.setText(row.texts.name.text());
+    status.setText(row.role ? std::format("{} · {}", row.texts.state.text(), *row.role) : row.texts.state.text());
     id_text.setText(row.id);
     this->show_parts(true);
   }

@@ -1417,7 +1417,10 @@ struct message_bubble : nodes::Stack {
              clock_of(said.at)) {
     this->setHorizontal();
     this->setGap(8.0f);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 2.0f, 0.0f}});
+    // As tdesktop: a sender's messages one under the other nearly touch;
+    // where the sender changes, a gap.
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY,
+                  .padding = {first_of_run ? 8.0f : 1.0f, 0.0f, 1.0f, 0.0f}});
     if (outgoing)
       fStack.justify = nodes::justify::end{};
     const bool group = is_group(in);
@@ -2174,7 +2177,7 @@ struct jump_button : scene::Node {
 template <class Actions>
 struct timeline_area : scene::Node {
   nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>> timeline{
-      nodes::Flow<std::vector<message_bubble>>({.spacingY = 3.0f, .wrap = false}, {})};
+      nodes::Flow<std::vector<message_bubble>>({.spacingY = 0.0f, .wrap = false}, {})};
   jump_button<Actions> jump;
   Actions* actions = nullptr;
   explicit timeline_area(Actions* a) : jump(a), actions(a) {
@@ -2499,7 +2502,7 @@ struct conversations_screen : nodes::Stack {
   [[nodiscard]] bool settling() const { return false; }
   // Back to the newest, and nothing unseen.
   void jump_to_end() {
-    timeline.scrollTo(std::numeric_limits<float>::max());
+    timeline.scrollToEnd();
     unseen = 0;
     chat.area.jump.set_unseen(0);
   }
@@ -2713,12 +2716,12 @@ struct conversations_screen : nodes::Stack {
         scrolled[*shown_chat] = was_at_end ? -1.0f : left_at;
       const auto kept = scrolled.find(*chosen);
       if (kept == scrolled.end() || kept->second < 0.0f)
-        timeline.scrollTo(std::numeric_limits<float>::max());
+        timeline.scrollToEnd(false);  // a chat opened starts at its newest
       else
         timeline.setCurrent(kept->second);
       unseen = 0;
     } else if (was_at_end) {
-      timeline.scrollTo(std::numeric_limits<float>::max());
+      timeline.scrollToEnd();
       unseen = 0;
     } else if (last != shown_last) {
       int after = 0;

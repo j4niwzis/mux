@@ -623,6 +623,7 @@ class account {
       out.push_back(std::move(one));
     sink_(change::members_changed{in, std::move(out)});
   }
+ public:
   // A room joined, by its id or an alias, through the servers `via` names:
   // it comes with the next sync.
   void join(std::string room, std::vector<std::string> via) {
@@ -655,6 +656,8 @@ class account {
     });
   }
   std::map<std::string, std::map<std::string, mux::member>> full_members_;
+
+ private:
 
   // An event of a room's timeline, as changes: at the end, or before the
   // rest where it is history paged back to.

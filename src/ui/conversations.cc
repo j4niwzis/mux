@@ -38,10 +38,15 @@ struct folder_tab : scene::Node {
   Pick pick;
   folder_t which;
   bool chosen = false;
-  nodes::Text label;
+  struct parts_t {
+    nodes::Text label;
+    // The line under the one chosen, in the accent.
+    nodes::Box<> underline{accent_colour};
+  } parts;
   folder_tab(std::string name, folder_t what, bool is_chosen, Pick act)
       : pick(std::move(act)), which(std::move(what)), chosen(is_chosen),
-        label(std::move(name), 13.0f, is_chosen ? accent_colour : dim_colour, true) {
+        parts{.label = nodes::Text(std::move(name), 13.0f, is_chosen ? accent_colour : dim_colour, true)} {
+    auto& [label, underline] = parts;
     fState.apply({.height = 32.0f,
                   .autoSize = scene::axes::kX,
                   .padding = {0.0f, 10.0f, 0.0f, 10.0f},
@@ -53,12 +58,6 @@ struct folder_tab : scene::Node {
     label.setMaxWidth(160.0f);
     label.setElided(true);
     label.apply({.anchor = scene::anchor::kCentreLeft, .origin = scene::anchor::kCentreLeft});
-  }
-  // The line under the one chosen, in the accent.
-  nodes::Box<> underline{accent_colour};
-  void forEachChild(auto&& f) {
-    f(label);
-    f(underline);
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
@@ -99,43 +98,53 @@ struct conversations_screen : nodes::Stack {
   struct side_column : nodes::Stack {
     float wanted = 300.0f;
     struct head_row : nodes::Stack {
-      menu_button<Actions> menu;
-      nodes::Text name{"mux", 17.0f, text_colour, true};
-      explicit head_row(Actions* a) : menu(a) {
+      struct parts_t {
+        menu_button<Actions> menu;
+        nodes::Text name{"mux", 17.0f, text_colour, true};
+      } parts;
+      explicit head_row(Actions* a) : parts{.menu = menu_button<Actions>(a)} {
         this->setHorizontal();
         this->setGap(10.0f);
         fState.apply({.fillX = true, .height = 52.0f, .padding = {8.0f, 8.0f, 8.0f, 8.0f}});
-        name.apply({.alignSelf = scene::align::kMiddle});
+        parts.name.apply({.alignSelf = scene::align::kMiddle});
       }
-      void forEachChild(auto&& f) {
-        f(menu);
-        f(name);
-      }
-    } head;
+    };
     // Search: the chats listed are those whose name or address has what is
     // typed here.
     struct search_box : scene::Node {
-      widgets::TextArea<> field{"Search"};
+      struct parts_t {
+        widgets::TextArea<> field{"Search"};
+      } parts;
+      widgets::TextArea<>& field = parts.field;
       search_box() {
         fState.apply({.fillX = true, .height = 36.0f, .margin = {0.0f, 10.0f, 8.0f, 10.0f}, .cornerRadius = 18.0f, .background = tile_colour, .selectedBackground = chosen_colour});
         field.setSingleLine(true);
         field.setFontSize(14.0f);
         field.apply({.fillX = true, .margin = {2.0f, 14.0f, 0.0f, 14.0f}});
       }
-      void forEachChild(auto&& f) { f(field); }
       // Lit while its field has the focus.
       void update(double) {
         if (field.focused() != fState.selected())
           fState.apply({.selected = field.focused()});
       }
-    } search;
-    // The folders, where the account has spaces or groups: a line of tabs.
-    nodes::Flow<std::vector<folder_tab<pick_folder>>> folders{
-        {.direction = nodes::direction::horizontal{}, .spacingX = 2.0f, .spacingY = 2.0f}, {}};
-    nodes::Text no_chats{"No chats yet.", 13.0f, dim_colour};
-    nodes::ScrollContainer<nodes::Flow<std::vector<conversation_row<Actions>>>> list{
-        nodes::Flow<std::vector<conversation_row<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
-    explicit side_column(Actions* a) : head(a) {
+    };
+    using list_t = nodes::ScrollContainer<nodes::Flow<std::vector<conversation_row<Actions>>>>;
+    struct parts_t {
+      head_row head;
+      search_box search;
+      // The folders, where the account has spaces or groups: a line of tabs.
+      nodes::Flow<std::vector<folder_tab<pick_folder>>> folders{
+          {.direction = nodes::direction::horizontal{}, .spacingX = 2.0f, .spacingY = 2.0f}, {}};
+      nodes::Text no_chats{"No chats yet.", 13.0f, dim_colour};
+      list_t list{nodes::Flow<std::vector<conversation_row<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
+    } parts;
+    // Its parts by their names, for what reads them: it is never moved.
+    head_row& head = parts.head;
+    search_box& search = parts.search;
+    nodes::Flow<std::vector<folder_tab<pick_folder>>>& folders = parts.folders;
+    nodes::Text& no_chats = parts.no_chats;
+    list_t& list = parts.list;
+    explicit side_column(Actions* a) : parts{.head = head_row(a)} {
       fState.apply({.fillY = true, .background = sidebar_colour});
       no_chats.apply({.margin = {12.0f, 16.0f, 0.0f, 16.0f}});
       folders.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {0.0f, 8.0f, 6.0f, 8.0f}});
@@ -147,41 +156,27 @@ struct conversations_screen : nodes::Stack {
       fState.fWidth = std::clamp(wanted, std::min(kMinSidebar, parent.width()),
                                  std::max(kMinSidebar, parent.width() * 0.6f));
     }
-    void forEachChild(auto&& f) {
-      f(head);
-      f(search);
-      f(folders);
-      f(no_chats);
-      f(list);
-    }
-  } side;
-  drag_edge<resize_sidebar_to<Actions>> edge;
+  };
   // The chat: its header, its messages, and where one writes; or, with no
   // account at all, what to do about it.
   struct chat_column : nodes::Stack {
-    // The head, as a function of the chat shown.
-    nodes::Memo<typename chat_header<Actions>::view, chat_header<Actions>> header;
-    search_bar<Actions> search;
-    timeline_area<Actions> area;
-    composer_bar<Actions> line;
+    using header_t = nodes::Memo<typename chat_header<Actions>::view, chat_header<Actions>>;
     struct empty_state : nodes::Stack {
-      nodes::Text title{"No accounts yet", 22.0f, text_colour, true};
-      nodes::Text note{"Add an XMPP or a Matrix account, and its chats will be here.", 14.0f, dim_colour};
-      widgets::Button<ask<Actions, &Actions::open_new_account>> add;
-      explicit empty_state(Actions* a) : add("Add account", {a}) {
+      using add_button = widgets::Button<ask<Actions, &Actions::open_new_account>>;
+      struct parts_t {
+        nodes::Text title{"No accounts yet", 22.0f, text_colour, true};
+        nodes::Text note{"Add an XMPP or a Matrix account, and its chats will be here.", 14.0f, dim_colour};
+        add_button add;
+      } parts;
+      explicit empty_state(Actions* a) : parts{.add = add_button("Add account", {a})} {
         this->setGap(12.0f);
         fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {120.0f, 48.0f, 0.0f, 48.0f}});
-        note.setWrapped(true);
-        note.apply({.fillX = true});
-        add.setPrimary(true);
-        add.apply({.width = 140.0f, .height = 36.0f});
+        parts.note.setWrapped(true);
+        parts.note.apply({.fillX = true});
+        parts.add.setPrimary(true);
+        parts.add.apply({.width = 140.0f, .height = 36.0f});
       }
-      void forEachChild(auto&& f) {
-        f(title);
-        f(note);
-        f(add);
-      }
-    } empty;
+    };
     // No chat chosen: the wallpaper, and in its middle a small pill saying
     // what to do, as tdesktop's (its service message look).
     struct select_hint : nodes::Stack {
@@ -191,31 +186,57 @@ struct conversations_screen : nodes::Stack {
                             {.plate = skia::colorSetARGB(0x66, 0, 0, 0), .size = 13.0f, .height = 26.0f, .padX = 12.0f}) {
           fState.apply({.alignSelf = scene::align::kMiddle});
         }
-      } shown;
+      };
+      struct parts_t {
+        pill shown;
+      } parts;
       select_hint() {
         fStack.justify = nodes::justify::middle{};
         fState.apply({.fillX = true, .grow = scene::axes::kY});
       }
-      void forEachChild(auto&& f) { f(shown); }
-    } hint;
-    explicit chat_column(Actions* a) : search(a), area(a), line(a), empty(a) {
+    };
+    struct parts_t {
+      // The head, as a function of the chat shown.
+      header_t header;
+      search_bar<Actions> search;
+      timeline_area<Actions> area;
+      composer_bar<Actions> line;
+      empty_state empty;
+      select_hint hint;
+    } parts;
+    // Its parts by their names, for what reads them: it is never moved.
+    header_t& header = parts.header;
+    search_bar<Actions>& search = parts.search;
+    timeline_area<Actions>& area = parts.area;
+    composer_bar<Actions>& line = parts.line;
+    empty_state& empty = parts.empty;
+    select_hint& hint = parts.hint;
+    explicit chat_column(Actions* a)
+        : parts{.search = search_bar<Actions>(a),
+                .area = timeline_area<Actions>(a),
+                .line = composer_bar<Actions>(a),
+                .empty = empty_state(a)} {
       header.apply({.fillX = true, .height = chat_header<Actions>::kHeight});
       header.show({}, [a](const auto& shown) { return chat_header<Actions>(a, shown); });
       fState.apply({.fillY = true, .grow = scene::axes::kX, .background = chat_colour});
       area.apply({.fillX = true, .grow = scene::axes::kY});
     }
-    void forEachChild(auto&& f) {
-      f(header);
-      f(search);
-      f(area);
-      f(line);
-      f(empty);
-      f(hint);
-    }
-    // The theme's wallpaper, as its colour, behind the messages.
-  } chat;
-  drag_edge<resize_info_to<Actions>> info_edge;
-  info_panel<Actions> info;
+  };
+  using side_edge = drag_edge<resize_sidebar_to<Actions>>;
+  using info_edge_t = drag_edge<resize_info_to<Actions>>;
+  struct parts_t {
+    side_column side;
+    side_edge edge;
+    chat_column chat;
+    info_edge_t info_edge;
+    info_panel<Actions> info;
+  } parts;
+  // Its parts by their names, for what reads them: the screen is never moved.
+  side_column& side = parts.side;
+  side_edge& edge = parts.edge;
+  chat_column& chat = parts.chat;
+  info_edge_t& info_edge = parts.info_edge;
+  info_panel<Actions>& info = parts.info;
 
   // The old names, for what is kept in the parts.
   nodes::ScrollContainer<nodes::Flow<std::vector<conversation_row<Actions>>>>& list = side.list;
@@ -295,7 +316,12 @@ struct conversations_screen : nodes::Stack {
   composer_bar<Actions>& line = chat.line;
 
   explicit conversations_screen(Actions* a)
-      : actions(a), side(a), edge({a}), chat(a), info_edge({a}, false), info(a) {
+      : actions(a),
+        parts{.side = side_column(a),
+              .edge = side_edge(resize_sidebar_to<Actions>{a}),
+              .chat = chat_column(a),
+              .info_edge = info_edge_t(resize_info_to<Actions>{a}, false),
+              .info = info_panel<Actions>(a)} {
     fState.apply({.fill = true});
     this->setHorizontal();
     // The edges take a pixel between the columns, their line, and are
@@ -306,13 +332,6 @@ struct conversations_screen : nodes::Stack {
     this->show_info();
   }
 
-  void forEachChild(auto&& f) {
-    f(side);
-    f(edge);
-    f(chat);
-    f(info_edge);
-    f(info);
-  }
 
   // The chat list as wide as `x`, where its edge was dragged to.
   void resize_sidebar(float x) {

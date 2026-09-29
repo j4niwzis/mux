@@ -39,13 +39,17 @@ struct radio_mark : scene::Node {
   }
 };
 // A round avatar of a size, in a row.
-struct avatar_mark : scene::Node {
+struct avatar_mark : widgets::Avatar {
   std::string key;
-  std::string name;
-  avatar_mark(std::string id, std::string shown, float size) : key(std::move(id)), name(std::move(shown)) {
-    fState.apply({.width = size, .height = size, .alignSelf = scene::align::kMiddle});
+  avatar_mark(std::string id, std::string shown, float size)
+      : widgets::Avatar(initials_of(shown), size, picture_of(id), gradient_of(id)), key(std::move(id)) {
+    fState.apply({.alignSelf = scene::align::kMiddle});
   }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) { draw_avatar(canvas, fState.fBounds, key, name, alpha); }
+  // Another's: a chat's or a person's, by their id and name.
+  void show(std::string id, std::string_view shown) {
+    key = std::move(id);
+    widgets::Avatar::show(initials_of(shown), picture_of(key), gradient_of(key));
+  }
 };
 // A name over how it is: two lines, each cut where it runs out of room,
 // taking what their row leaves them.

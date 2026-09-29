@@ -137,6 +137,17 @@ inline image_cache& whole_pictures() {
   return images;
 }
 
+// Where a chat's or a person's picture comes from: the avatars kept, by
+// their id -- asked for each frame, so one that comes later is shown.
+[[nodiscard]] inline nodes::ImageSource picture_of(std::string id) {
+  return [id = std::move(id)] { return avatar_images().find(id); };
+}
+// Their colours where they have no picture: Telegram's pair for their id.
+[[nodiscard]] inline scene::Gradient gradient_of(std::string_view id) {
+  const auto [top, bottom] = userpic_colours(id);
+  return scene::Gradient{top, bottom};
+}
+
 inline void draw_avatar(skia::SkCanvas* canvas, const skia::SkRect& disc, std::string_view id, std::string_view name,
                         float alpha) {
   if (const skia::Sp<skia::SkImage>* found = avatar_images().find(id); found && *found) {

@@ -126,11 +126,8 @@ struct member_row : nodes::Stack {
 };
 
 // A round avatar on its own: the chat's, big, over its name.
-struct big_avatar : scene::Node {
-  std::string key;
-  std::string name;
-  big_avatar() { fState.apply({.width = 96.0f, .height = 96.0f, .alignSelf = scene::align::kMiddle}); }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) { draw_avatar(canvas, fState.fBounds, key, name, alpha); }
+struct big_avatar : avatar_mark {
+  big_avatar() : avatar_mark(std::string(), std::string(), 96.0f) {}
 };
 // An icon on its own, not to be pressed.
 struct icon_view : scene::Node {
@@ -273,8 +270,7 @@ struct info_panel : nodes::Stack {
           status(shown.status, 13.0f, dim_colour), id_text(shown.key) {
       this->setGap(2.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-      avatar.key = shown.key;
-      avatar.name = shown.name;
+      avatar.show(shown.key, shown.name);
       if (shown.of_person)
         person_tiles.emplace(a, panel);
       else

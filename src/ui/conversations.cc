@@ -88,6 +88,9 @@ struct conversations_screen : nodes::Stack {
   std::optional<conversation_id> chosen;
   // The account whose chats are listed.
   std::optional<account_id> current;
+  // The account to list once the model has it: the one shown last, kept.
+  // Taken the first time it is there; dropped when an account is chosen.
+  std::optional<account_id> wanted;
   bool info_open = false;
   // How wide the chat list and the chat's info are: their own, whatever the
   // window's size, until their edges are dragged.
@@ -634,8 +637,11 @@ struct conversations_screen : nodes::Stack {
 
   void show(const model& now) {
     last_model = &now;
-    if (!current || !now.accounts().contains(*current))
+    if (wanted && now.accounts().contains(*wanted)) {
+      current = std::exchange(wanted, std::nullopt);
+    } else if (!current || !now.accounts().contains(*current)) {
       current = now.accounts().empty() ? std::nullopt : std::optional<account_id>(now.accounts().begin()->first);
+    }
     auto& rows = std::get<0>(std::get<0>(list.fChildren).fChildren);
     std::vector<const conversation*> chats;
     // What is searched for, in any case: in a name or an address.

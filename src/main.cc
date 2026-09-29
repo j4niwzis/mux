@@ -126,6 +126,11 @@ int main(int argc, char** argv) {
   program.keeps_nothing = demo;
   program.saved = mux::config::accounts_of(saved);
   program.motion = saved.motion;
+  // The account shown last, shown again once it is in the model: accounts
+  // arrive after the first frame, and the first one there is not the one.
+  program.last_account = saved.last_account;
+  if (saved.last_account)
+    program.root().main().wanted = mux::account_id{mux::ui::protocol_of(*saved.last_account), *saved.last_account};
   program.theme = mux::config::theme_of(saved.theme);
   program.accent = mux::config::accent_of(saved.accent);
   program.renderer = mux::config::renderer_of(saved.renderer);

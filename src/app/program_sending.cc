@@ -26,7 +26,10 @@ namespace mux::app {
 void app::apply(const request::switch_account& one) {
   auto& screen = root().main();
   screen.current = mux::account_id{mux::ui::protocol_of(one.address), one.address};
+  screen.wanted.reset();
   screen.chosen.reset();
+  this->last_account = one.address;
+  (void)this->write();
   root().close_drawer();
   this->refresh();
 }

@@ -27,6 +27,11 @@ namespace mux::app {
 void app::open_chat(const mux::conversation_id& which, const std::optional<std::string>& event) {
   auto& screen = root().main();
   screen.current = which.account;
+  screen.wanted.reset();
+  if (this->last_account != which.account.address) {
+    this->last_account = which.account.address;
+    (void)this->write();
+  }
   this->apply(request::choose{which});
   if (event)
     screen.jump_to(*event);

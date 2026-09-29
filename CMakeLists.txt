@@ -251,7 +251,8 @@ if(MUX_UI)
     set(mux_erased $<NOT:$<CONFIG:Release>>)
   endif()
   # The accounts, each in a unit of its own, beside network.cc.
-  target_sources(mux PRIVATE src/app/accounts_matrix.cc src/app/accounts_xmpp.cc)
+  target_sources(mux PRIVATE src/app/accounts_matrix_sync.cc src/app/accounts_matrix_requests.cc
+    src/app/accounts_matrix_events.cc src/app/accounts_matrix_media.cc src/app/accounts_xmpp.cc)
   target_sources(mux PRIVATE
     $<${mux_erased}:src/app/walks_window.cc>
     $<${mux_erased}:src/app/walks_chats.cc>

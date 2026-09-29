@@ -58,7 +58,7 @@ struct chat_header : nodes::Stack {
       return {};
     const auto count = std::max<std::int64_t>(static_cast<std::int64_t>(one->members.size()), one->member_count);
     std::string about = is_group(*one) ? std::format("{} member{}", count, count == 1 ? "" : "s")
-                                       : presence_of(now, one->id.account, one->id.id);
+                                       : presence_of(now, one->id.account, contact_of(*one));
     if (!one->typing.empty())
       about = one->typing.size() == 1 ? sender_name(*one, one->typing.front()) + " is typing…"
                                       : std::format("{} are typing…", one->typing.size());

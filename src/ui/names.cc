@@ -24,12 +24,31 @@ export namespace mux::ui {
                                [](const availability::offline&) { return std::string("offline"); }},
                     state);
 }
+// A contact's presence, in a word or two. One never heard of is offline on
+// XMPP, whose roster says who is there; on Matrix it is nothing, as servers
+// may keep presence off, and "offline" would then be said of everyone.
 [[nodiscard]] inline std::string presence_of(const model& now, const account_id& account, const std::string& contact) {
+  const auto unknown = [&] {
+    return std::visit(overloaded{[](const protocol::xmpp&) { return std::string("offline"); },
+                                 [](const protocol::matrix&) { return std::string(); }},
+                      account.speaks);
+  };
   const auto found = now.accounts().find(account);
   if (found == now.accounts().end())
-    return "offline";
+    return unknown();
   const auto kept = found->second.presences.find(contact);
-  return kept == found->second.presences.end() ? std::string("offline") : presence_text(kept->second.state);
+  return kept == found->second.presences.end() ? unknown() : presence_text(kept->second.state);
+}
+// Whom a direct chat is with: on XMPP, its address; on Matrix it is a room,
+// so the member who is not the account itself.
+[[nodiscard]] inline std::string contact_of(const conversation& one) {
+  return std::visit(overloaded{[&](const protocol::xmpp&) { return one.id.id; },
+                               [&](const protocol::matrix&) {
+                                 const auto other = std::ranges::find_if(
+                                     one.members, [&](const member& each) { return each.id != one.id.account.address; });
+                                 return other == one.members.end() ? std::string() : other->id;
+                               }},
+                    one.id.account.speaks);
 }
 
 [[nodiscard]] inline bool is_group(const conversation& one) {

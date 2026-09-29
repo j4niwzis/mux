@@ -237,8 +237,29 @@ void account<Sink>::load_kept() {
   log(id_, "the sync kept: {} rooms, going on from there", state_.joined.size());
 }
 
+// What an m.presence says, as mux's presence: unavailable is away, and a
+// value the spec does not name is taken as offline.
+[[nodiscard]] inline mux::presence presence_from(const loom::ev::m_presence_content_t& content) {
+  using values = loom::ev::m_presence_content_t::presence_values;
+  return {std::visit(overloaded{[](values::online) -> mux::availability_t { return mux::availability::online{}; },
+                                [](values::unavailable) -> mux::availability_t { return mux::availability::away{}; },
+                                [](values::offline) -> mux::availability_t { return mux::availability::offline{}; },
+                                [](const std::string&) -> mux::availability_t { return mux::availability::offline{}; }},
+                     content.presence),
+          content.status_msg};
+}
+
 template <class Sink>
 void account<Sink>::tell(const loom::cs::sync::response& got) {
+  // Presence: each m.presence is sent by the user it is about.
+  if (got.presence && got.presence->events)
+    for (const auto& event : *got.presence->events)
+      if (event.sender)
+        std::visit(overloaded{[&](const loom::ev::m_presence_content_t& content) {
+                                sink_(change::presence_changed{id_, *event.sender, presence_from(content)});
+                              },
+                              [](const auto&) {}},
+                   event.content.data());
   if (!got.rooms)
     return;
   const auto& rooms = *got.rooms;
@@ -256,7 +277,12 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
       if (part.timeline)
         for (const auto& one : part.timeline->events)
           event(in, one);
-      sink_(change::typing_changed{in, found->second.typing});
+      // Who is typing, but the account itself: its own typing, from this or
+      // another device, is not news to it (as in Telegram).
+      std::vector<std::string> typing;
+      std::ranges::copy_if(found->second.typing, std::back_inserter(typing),
+                           [&](const std::string& who) { return who != id_.address; });
+      sink_(change::typing_changed{in, std::move(typing)});
       // Receipts: m.receipt's content is event -> kind -> user; the public
       // and the private m.read both say how far someone has read.
       if (part.ephemeral && part.ephemeral->events) {

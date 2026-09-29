@@ -344,7 +344,7 @@ struct info_panel : nodes::Stack {
                   display_name(one),
                   group ? std::format("{} member{}", std::max<std::int64_t>(static_cast<std::int64_t>(one.members.size()), one.member_count),
                                       std::max<std::int64_t>(static_cast<std::int64_t>(one.members.size()), one.member_count) == 1 ? "" : "s")
-                        : presence_of(now, one.id.account, one.id.id),
+                        : presence_of(now, one.id.account, contact_of(one)),
                   group,
                   muted,
                   false};

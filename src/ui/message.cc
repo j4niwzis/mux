@@ -785,20 +785,28 @@ struct message_bubble : nodes::Stack {
     // Decided from the last layout; a change is laid out at the next.
     void update(double now_ms) {
       auto& [name, quote, picture, file, text, cards, preview, reactions, time, inline_time] = parts;
-      if (!text.visible() || !cards.empty() || preview || reactions) {
+      if (!cards.empty() || preview || (!text.visible() && !reactions)) {
         time_placed = true;  // under it, as it is
         return;
       }
       skia::SkFont* font = skiff::paint::defaultFont();
       if (font == nullptr)
         return;
-      if (text.bounds().isEmpty()) {
+      if (!reactions && text.bounds().isEmpty()) {
         this->guess_time(*font);
         return;
       }
+      // What the time goes beside: the reactions where there are some, as
+      // Telegram puts it on their line, else the text's last line.
+      const skia::SkRect last = reactions ? reactions->bounds() : text.bounds();
+      if (last.isEmpty())
+        return;
       time_placed = true;
+      float last_width = text.lastLineWidth();
+      if (reactions)
+        last_width = reactions->chips().empty() ? 0.0f : reactions->chips().back().bounds().fRight - last.fLeft;
       const float needs =
-          text.lastLineWidth() + skiff::paint::Painter(nullptr, *font).measure(inline_time.text(), 11.0f) + 10.0f;
+          last_width + skiff::paint::Painter(nullptr, *font).measure(inline_time.text(), 11.0f) + 10.0f;
       const bool inside = needs <= kMaxWidth;
       const float widest = inside ? std::ceil(needs) + 2.0f * kPadX : 0.0f;
       if (inside == time.visible() || widest != widened) {
@@ -812,7 +820,7 @@ struct message_bubble : nodes::Stack {
       // ends in the bubble -- anchored to the bubble's bottom alone, it stood
       // above the line it is beside.
       if (inside) {
-        const float drop = text.bounds().fBottom - fState.contentBox().fBottom;
+        const float drop = last.fBottom - fState.contentBox().fBottom;
         if (std::abs(drop - time_drop) > 0.25f) {
           time_drop = drop;
           inline_time.apply({.y = drop + kTimeLower});

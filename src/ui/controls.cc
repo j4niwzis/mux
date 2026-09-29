@@ -18,24 +18,28 @@ export namespace mux::ui {
 // on the left, its text, and a radio mark on the right where it is one of a
 // choice. It lights under the pointer; a press does `act`.
 // An icon on its own, in a row: drawn, not pressed.
-struct icon_mark : scene::Node {
-  icon_t icon;
-  skia::SkColor colour = dim_colour;
-  explicit icon_mark(icon_t mark = icon::none{}) : icon(mark) {
+struct icon_mark : nodes::Icon {
+  explicit icon_mark(icon_t mark = icon::none{}) : nodes::Icon(shape_of(mark), dim_colour) {
     fState.apply({.width = 28.0f, .height = 36.0f, .alignSelf = scene::align::kMiddle});
   }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) { draw_icon(canvas, icon, fState.fBounds, colour, alpha); }
 };
 // A radio's ring, with a dot in it while it is the one chosen.
-struct radio_mark : scene::Node {
+struct radio_mark : nodes::Icon {
   bool on = false;
-  radio_mark() { fState.apply({.width = 20.0f, .height = 20.0f, .alignSelf = scene::align::kMiddle}); }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    const float x = fState.fBounds.centerX(), y = fState.fBounds.centerY();
-    canvas->drawCircle(x, y, 8.0f, pen(on ? accent_colour : dim_colour, alpha, 2.0f));
-    if (skia::SkFont* font = skiff::paint::defaultFont(); font && on)
-      skiff::paint::Painter(canvas, *font)
-          .fillRounded(skia::SkRect::MakeLTRB(x - 4.0f, y - 4.0f, x + 4.0f, y + 4.0f), 4.0f, accent_colour, alpha);
+  radio_mark() : nodes::Icon(shape(false), dim_colour) {
+    fState.apply({.width = 20.0f, .height = 20.0f, .alignSelf = scene::align::kMiddle});
+  }
+  // A ring, and a dot in it while chosen.
+  static IconShape shape(bool chosen) {
+    IconShape out{{{nodes::mark::circle{0.0f, 0.0f, 8.0f}, 2.0f}}};
+    if (chosen)
+      out.marks.push_back({nodes::mark::circle{0.0f, 0.0f, 4.0f}, 0.0f, true});
+    return out;
+  }
+  void set_on(bool chosen) {
+    on = chosen;
+    this->setShape(shape(chosen));
+    this->setColour(chosen ? accent_colour : dim_colour);
   }
 };
 // A round avatar of a size, in a row.
@@ -91,13 +95,13 @@ struct row_item : nodes::Stack {
     mark.setVisible(std::visit([](auto one) { return drawn(one); }, icon));
     label.setElided(true);
     label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-    dot.on = choice.value_or(false);
+    dot.set_on(choice.value_or(false));
     dot.setVisible(choice.has_value());
   }
 
   void set_chosen(bool on) {
     radio = on;
-    dot.on = on;
+    dot.set_on(on);
     dot.setVisible(true);
     dot.markDamaged();
   }
@@ -136,23 +140,20 @@ struct row_item : nodes::Stack {
 template <class Act>
 struct icon_button : scene::Node {
   Act act;
-  icon_t icon;
-  skia::SkColor colour = text_colour;
+  struct parts_t {
+    nodes::Icon mark;
+  } parts;
 
-  icon_button(icon_t mark, Act what) : act(std::move(what)), icon(mark) {
-    fState.apply({.width = 36.0f, .height = 36.0f});
+  // Round, lit under the pointer or the keyboard's focus.
+  icon_button(icon_t mark, Act what) : act(std::move(what)), parts{.mark = nodes::Icon(shape_of(mark), text_colour)} {
+    fState.apply({.width = 36.0f,
+                  .height = 36.0f,
+                  .cornerRadius = 18.0f,
+                  .hoverBackground = chosen_colour,
+                  .focusBackground = chosen_colour});
+    parts.mark.apply({.fill = true});
   }
-
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    skia::SkFont* font = skiff::paint::defaultFont();
-    if (font == nullptr)
-      return;
-    const skiff::paint::Painter p(canvas, *font);
-    const skia::SkRect& box = fState.fBounds;
-    if (fState.fHovered || this->showsFocus())
-      p.fillRounded(box, box.width() * 0.5f, chosen_colour, alpha);
-    draw_icon(canvas, icon, box, colour, alpha);
-  }
+  void set_colour(skia::SkColor colour) { parts.mark.setColour(colour); }
 
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }

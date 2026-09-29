@@ -131,12 +131,10 @@ struct picture_view : scene::Node {
 // name over its size; pressed, it is saved and opened.
 struct file_view : nodes::Stack {
   std::string source;
-  struct disc : scene::Node {
-    disc() { fState.apply({.width = 44.0f, .height = 44.0f, .alignSelf = scene::align::kMiddle}); }
-    void drawSelf(skia::SkCanvas* canvas, float alpha) {
-      if (skia::SkFont* font = skiff::paint::defaultFont())
-        skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 22.0f, accent_colour, alpha);
-      draw_icon(canvas, icon::clip{}, fState.fBounds, on_accent_colour, alpha);
+  struct disc : nodes::Icon {
+    disc() : nodes::Icon(shape_of(icon::clip{}), on_accent_colour) {
+      fState.apply({.width = 44.0f, .height = 44.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 22.0f,
+                    .background = accent_colour});
     }
   } icon;
   two_lines texts;

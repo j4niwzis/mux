@@ -105,7 +105,7 @@ struct composer_bar : nodes::Stack {
   struct context_row : nodes::Stack {
     static constexpr float kHeight = 49.0f;  // historyReplyHeight
     static constexpr float kSkip = 51.0f;    // historyReplySkip
-    icon_t mark = icon::none{};
+    nodes::Icon mark{IconShape{}, accent_colour};  // in the left column
     struct lines_column : nodes::Stack {
       nodes::Text title{"", 13.0f, accent_colour, true};
       nodes::Text line{"", 13.0f, text_colour};
@@ -125,18 +125,15 @@ struct composer_bar : nodes::Stack {
     explicit context_row(Actions* a) : cancel(icon::close{}, {a}) {
       this->setHorizontal();
       this->setGap(8.0f);
-      fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 8.0f, 0.0f, kSkip}});
+      fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 8.0f, 0.0f, 0.0f}});
+      mark.apply({.width = kSkip - 8.0f, .fillY = true});
       lines.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
       cancel.apply({.alignSelf = scene::align::kMiddle});
     }
     void forEachChild(auto&& f) {
+      f(mark);
       f(lines);
       f(cancel);
-    }
-    void drawSelf(skia::SkCanvas* canvas, float alpha) {
-      const skia::SkRect& at = fState.fBounds;
-      draw_icon(canvas, mark, skia::SkRect::MakeLTRB(at.left(), at.top(), at.left() + kSkip, at.bottom()), accent_colour,
-                alpha);
     }
   } context_line;
   // The paperclip, the field growing with what is written in it, the arrow.
@@ -152,7 +149,7 @@ struct composer_bar : nodes::Stack {
       attach.apply({.alignSelf = scene::align::kEnd});
       send.apply({.alignSelf = scene::align::kEnd});
       field.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      send.colour = accent_colour;
+      send.set_colour(accent_colour);
     }
     void forEachChild(auto&& f) {
       f(attach);
@@ -174,7 +171,7 @@ struct composer_bar : nodes::Stack {
   // What is written answers or edits something, shown; or nothing.
   void show_context(std::optional<compose_context> said) {
     context_line.setVisible(said.has_value());
-    context_line.mark = said ? said->mark : icon_t{icon::none{}};
+    context_line.mark.setShape(said ? shape_of(said->mark) : IconShape{});
     context_line.lines.title.setText(said ? said->title : std::string());
     context_line.lines.line.setText(said ? said->line : std::string());
     context_line.markDamaged();
@@ -195,32 +192,46 @@ template <class Actions>
 struct jump_button : scene::Node {
   Actions* actions = nullptr;
   int unseen = 0;
+  // A round plate with a chevron down, and over its top the count of what
+  // came while the reader was above, on a badge in the accent.
+  struct badge_t : nodes::Stack {
+    nodes::Text count{"", 11.0f, on_accent_colour, true};
+    badge_t() {
+      fState.apply({.place = scene::anchor::kTopCentre,
+                     .y = -10.0f,
+                     .height = 18.0f,
+                     .autoSize = scene::axes::kX,
+                     .minWidth = 20.0f,
+                     .padding = {1.0f, 5.0f, 1.0f, 5.0f},
+                     .cornerRadius = 9.0f,
+                     .background = accent_colour});
+      fStack.justify = nodes::justify::middle{};
+      count.apply({.alignSelf = scene::align::kMiddle});
+      this->setVisible(false);
+    }
+    void forEachChild(auto&& f) { f(count); }
+  };
+  struct parts_t {
+    nodes::Icon chevron;
+    badge_t badge;
+  } parts{.chevron = nodes::Icon(shape_of(icon::down{}), text_colour)};
   explicit jump_button(Actions* a) : actions(a) {
-    fState.apply({.place = scene::anchor::kBottomRight, .x = -18.0f, .y = -12.0f, .width = 42.0f, .height = 42.0f});
+    fState.apply({.place = scene::anchor::kBottomRight,
+                  .x = -18.0f,
+                  .y = -12.0f,
+                  .width = 42.0f,
+                  .height = 42.0f,
+                  .cornerRadius = 21.0f,
+                  .background = sidebar_colour,
+                  .hoverBackground = chosen_colour,
+                  .border = scene::Border{band_colour, 1.0f}});
+    parts.chevron.apply({.fill = true});
   }
   void set_unseen(int count) {
     unseen = count;
-    this->markDamaged();
-  }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    skia::SkFont* font = skiff::paint::defaultFont();
-    if (font == nullptr)
-      return;
-    const skiff::paint::Painter p(canvas, *font);
-    const skia::SkRect& box = fState.fBounds;
-    p.fillRounded(box, box.width() * 0.5f, fState.fHovered ? chosen_colour : sidebar_colour, alpha);
-    p.strokeRounded(box, box.width() * 0.5f, band_colour, 1.0f, alpha);
-    const float x = box.centerX(), y = box.centerY() + 2.0f;
-    const auto line = pen(text_colour, alpha, 2.0f);
-    canvas->drawLine(x - 7.0f, y - 4.0f, x, y + 3.0f, line);
-    canvas->drawLine(x, y + 3.0f, x + 7.0f, y - 4.0f, line);
-    if (unseen > 0) {
-      const std::string count = std::to_string(unseen);
-      const float width = std::max(20.0f, p.measure(count, 11.0f, true) + 10.0f);
-      const skia::SkRect badge = skia::SkRect::MakeXYWH(x - width * 0.5f, box.fTop - 10.0f, width, 18.0f);
-      p.fillRounded(badge, 9.0f, accent_colour, alpha);
-      p.textIn(badge, count, 11.0f, on_accent_colour, alpha, true, (width - p.measure(count, 11.0f, true)) * 0.5f);
-    }
+    parts.badge.count.setText(std::to_string(count));
+    parts.badge.setVisible(count > 0);
+    this->invalidateLayout();
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }

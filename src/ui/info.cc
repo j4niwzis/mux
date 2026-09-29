@@ -26,7 +26,7 @@ struct action_tile : nodes::Stack {
       : act(std::move(what)), mark(icon), label(std::move(text), 12.0f, text_colour) {
     fState.apply({.height = 58.0f, .padding = {6.0f, 0.0f, 8.0f, 0.0f}, .cornerRadius = 8.0f, .background = tile_colour, .hoverBackground = chosen_colour, .focusBackground = chosen_colour});
     fStack.justify = nodes::justify::space_between{};
-    mark.colour = text_colour;
+    mark.setColour(text_colour);
     mark.apply({.height = 24.0f});
     label.apply({.alignSelf = scene::align::kMiddle});
   }
@@ -130,10 +130,8 @@ struct big_avatar : avatar_mark {
   big_avatar() : avatar_mark(std::string(), std::string(), 96.0f) {}
 };
 // An icon on its own, not to be pressed.
-struct icon_view : scene::Node {
-  icon_t icon;
-  explicit icon_view(icon_t mark) : icon(mark) { fState.apply({.width = 28.0f, .height = 36.0f}); }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) { draw_icon(canvas, icon, fState.fBounds, dim_colour, alpha); }
+struct icon_view : nodes::Icon {
+  explicit icon_view(icon_t mark) : nodes::Icon(shape_of(mark), dim_colour) { fState.apply({.width = 28.0f, .height = 36.0f}); }
 };
 // A band between sections: just darker than the panel.
 inline nodes::Box<> section_band() {

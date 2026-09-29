@@ -50,7 +50,7 @@ struct drawer_account : nodes::Stack {
     const auto [how, failed] = state_of(saved, now);
     texts.state.setText(std::format("{} · {}", config::protocol_name(saved), how));
     texts.state.setColour(failed ? error_colour : dim_colour);
-    tick.colour = accent_colour;
+    tick.setColour(accent_colour);
     tick.setVisible(current);
   }
 

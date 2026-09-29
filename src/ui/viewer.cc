@@ -55,7 +55,7 @@ struct picture_viewer : nodes::Stack {
       gap.apply({.height = 1.0f, .grow = scene::axes::kX});
       for (auto* button : {&smaller.colour, &larger.colour, &close.colour})
         *button = skia::colorSetARGB(255, 255, 255, 255);
-      save.colour = skia::colorSetARGB(255, 255, 255, 255);
+      save.set_colour(skia::colorSetARGB(255, 255, 255, 255));
       for (scene::Node* middle : std::initializer_list<scene::Node*>{&smaller, &larger, &save, &close})
         middle->apply({.alignSelf = scene::align::kMiddle});
     }

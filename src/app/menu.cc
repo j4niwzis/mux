@@ -10,7 +10,6 @@ import mux.core;
 import mux.ui;
 import mux.app.network;
 import mux.app.requests;
-import mux.app.screens;
 import mux.app.services;
 import mux.app.outbox;
 import mux.app.pictures;

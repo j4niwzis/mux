@@ -12,7 +12,6 @@ import mux.host;
 import mux.ui;
 import mux.app.network;
 import mux.app.requests;
-import mux.app.screens;
 import mux.app.services;
 import mux.app.drafts;
 import mux.logic.sending;

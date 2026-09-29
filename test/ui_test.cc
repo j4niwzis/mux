@@ -266,7 +266,15 @@ TEST(Timeline, ScrollsALongChatAtSixtyFrames) {
 
   // A message at the bottom, while the reader is up in the history.
   updating = laying = drawing = 0.0;
-  const float reading = screen.timeline.current();
+  // What is being read: a message in view, and where it is on the screen.
+  auto& bubbles = std::get<0>(std::get<0>(screen.timeline.fChildren).fChildren);
+  const skia::SkRect view = screen.timeline.bounds();
+  const auto read = std::ranges::find_if(bubbles, [&](const auto& one) {
+    return one.bounds().fTop >= view.fTop && one.bounds().fBottom <= view.fBottom;
+  });
+  ASSERT_NE(read, bubbles.end());
+  const std::string reading_id = read->message_id;
+  const float reading = read->bounds().fTop;
   add(kMessages);
   const auto shown = clock::now();
   screen.show(model);
@@ -275,7 +283,12 @@ TEST(Timeline, ScrollsALongChatAtSixtyFrames) {
   std::println("a new message: show {:.2f} ms, then update {:.2f} ms, layout {:.2f} ms, draw {:.2f} ms", showing,
                updating, laying, drawing);
   EXPECT_LT(showing + updating + laying + drawing, 16.0);
-  EXPECT_NEAR(screen.timeline.current(), reading, 1.0f) << "the view moved when a message came below it";
+  // The same message where it was: what is read does not move, whatever
+  // the list does above it -- the oldest bubble made goes as the newest
+  // comes, and the offset follows what is shown.
+  const auto again = std::ranges::find(bubbles, reading_id, &mux::ui::message_bubble::message_id);
+  ASSERT_NE(again, bubbles.end());
+  EXPECT_NEAR(again->bounds().fTop, reading, 1.0f) << "what was read moved when a message came below it";
   skiff::paint::defaultFont() = nullptr;
 }
 

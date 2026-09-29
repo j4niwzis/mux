@@ -336,6 +336,7 @@ struct quit {};
 struct open_settings {};
 struct pop_panel {};
 struct toggle_info {};
+struct jump_to_end {};
 struct load_older {
   mux::conversation_id in;
   std::string from;
@@ -401,7 +402,7 @@ using request_t =
                  request::toggle_plain, request::submit_login, request::flip_enabled, request::remove_account,
                  request::open_drawer, request::show_account, request::set_motion, request::quit,
                  request::open_settings, request::close_settings, request::settings_home,
-                 request::settings_animations, request::pop_panel, request::toggle_info, request::load_older,
+                 request::settings_animations, request::pop_panel, request::toggle_info, request::load_older, request::jump_to_end,
                  request::switch_account, request::submit_message, request::send_typed,
                  request::resize_sidebar, request::not_implemented, request::close_notice,
                  request::resize_info, request::choose_new_proxy, request::toggle_mute, request::close_account_pages,
@@ -454,6 +455,7 @@ struct actions {
   void open_settings() { requests.emplace_back(request::open_settings{}); }
   void pop_panel() { requests.emplace_back(request::pop_panel{}); }
   void toggle_info() { requests.emplace_back(request::toggle_info{}); }
+  void jump_to_end() { requests.emplace_back(request::jump_to_end{}); }
   void load_older(const mux::conversation_id& in, std::string from) {
     requests.emplace_back(request::load_older{in, std::move(from)});
   }
@@ -765,6 +767,7 @@ struct app {
   }
   void apply(const request::close_settings&) { root().close_settings(); }
   void apply(const request::toggle_info&) { root().main().toggle_info(); }
+  void apply(const request::jump_to_end&) { root().main().jump_to_end(); }
   void apply(const request::load_older& one) {
     if (!ask.demo)
       net->load_older(one.in, one.from);

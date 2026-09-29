@@ -79,6 +79,7 @@ inline skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110);
 //   void send_typed()                -- the send arrow: what is in the field
 //   void toggle_info()               -- the chosen chat's info, beside it
 //   void load_older(const conversation_id&, std::string from)  -- its history
+//   void jump_to_end()               -- back to a chat's newest message
 //   void switch_account(std::string address)  -- whose chats are listed
 //   void pop_panel()                 -- back from the top panel to what is under it
 //   void open_settings(), close_settings(), settings_home(), settings_animations()
@@ -823,6 +824,10 @@ struct message_bubble : scene::Node {
   std::string sender;
   std::string time;
   std::optional<nodes::Text> name;
+  // What it answers, quoted over it: who said it, and a line of it.
+  std::optional<nodes::Text> quote_name;
+  std::optional<nodes::Text> quote_text;
+  std::string quote_sender;
   nodes::Text text;
   std::optional<nodes::Text> reactions;
   // The bubble itself, as the last layout placed it.
@@ -848,6 +853,18 @@ struct message_bubble : scene::Node {
                                   [](const delivery::failed&) { return " · not sent"; },
                                   [](const auto&) { return ""; }},
                        said.delivery);
+    if (said.replies_to) {
+      const auto found = std::ranges::find(in.timeline, *said.replies_to, &message::id);
+      quote_sender = found != in.timeline.end() ? found->sender : std::string();
+      quote_name.emplace(found != in.timeline.end() ? (found->outgoing ? std::string("You") : sender_name(in, found->sender))
+                                                    : std::string("A message"),
+                         12.5f, found != in.timeline.end() ? avatar_colour(found->sender) : accent_colour, true);
+      std::string line = found != in.timeline.end() ? found->body.plain : std::string("not loaded");
+      std::ranges::replace(line, '\n', ' ');
+      quote_text.emplace(std::move(line), 12.5f, dim_colour);
+      quote_name->setElided(true);
+      quote_text->setElided(true);
+    }
     if (!said.reactions.empty()) {
       std::string line;
       for (const auto& [key, who] : said.reactions)
@@ -858,6 +875,8 @@ struct message_bubble : scene::Node {
 
   void forEachChild(auto&& f) {
     f(name);
+    f(quote_name);
+    f(quote_text);
     f(text);
     f(reactions);
   }
@@ -890,18 +909,21 @@ struct message_bubble : scene::Node {
   // row.
   void measure(const skia::SkRect& parent) {
     const float room = this->inner_width(parent.width());
-    const float width = std::min(room, this->natural_width() + 1.0f);
+    const float width = std::min(room, std::max(this->natural_width() + 1.0f, quote_name ? 160.0f : 0.0f));
     text.setMaxWidth(width);
     text.measure(parent);
     float height = 2.0f * kPadY + text.fState.fHeight + 14.0f;
     if (name)
       height += 18.0f;
+    if (quote_name)
+      height += 38.0f;
     if (reactions)
       height += 18.0f;
     fState.fHeight = height + 2.0f;
     bubble_width = width + 2.0f * kPadX;
   }
   float bubble_width = 0.0f;
+  float quote_top = 0.0f;
 
   void layoutChildren() {
     const skia::SkRect box = fState.contentBox();
@@ -913,6 +935,16 @@ struct message_bubble : scene::Node {
       name->fState.arrange(left + kPadX, y);
       scene::layout(*name, box);
       y += 18.0f;
+    }
+    if (quote_name) {
+      quote_top = y;
+      for (nodes::Text* one : {&*quote_name, &*quote_text}) {
+        one->setMaxWidth(bubble_width - 2.0f * kPadX - 10.0f);
+        one->fState.arrange(left + kPadX + 10.0f, y + 2.0f);
+        scene::layout(*one, box);
+        y += 17.0f;
+      }
+      y += 4.0f;
     }
     text.fState.arrange(left + kPadX, y);
     scene::layout(text, box);
@@ -929,6 +961,9 @@ struct message_bubble : scene::Node {
       return;
     const skiff::paint::Painter p(canvas, *font);
     p.fillRounded(bubble, 12.0f, outgoing ? selected_colour : bubble_colour, alpha);
+    if (quote_name)
+      p.fillRounded(skia::SkRect::MakeXYWH(bubble.fLeft + kPadX, fState.fBounds.fTop + quote_top + 2.0f, 3.0f, 32.0f),
+                    1.5f, quote_sender.empty() ? accent_colour : avatar_colour(quote_sender), alpha);
     const float width = p.measure(time, 11.0f);
     p.text(time, bubble.fRight - kPadX - width, bubble.fBottom - 6.0f, 11.0f,
            outgoing ? sent_time_colour : dim_colour, alpha);
@@ -1404,6 +1439,64 @@ struct composer_bar : scene::Node {
   }
 };
 
+// "↓": back to the newest, with how many came while one read above them.
+template <class Actions>
+struct jump_button : scene::Node {
+  Actions* actions = nullptr;
+  int unseen = 0;
+  explicit jump_button(Actions* a) : actions(a) {
+    fState.apply({.place = scene::anchor::kBottomRight, .x = -18.0f, .y = -12.0f, .width = 42.0f, .height = 42.0f});
+  }
+  void set_unseen(int count) {
+    unseen = count;
+    this->markDamaged();
+  }
+  void drawSelf(skia::SkCanvas* canvas, float alpha) {
+    skia::SkFont* font = skiff::paint::defaultFont();
+    if (font == nullptr)
+      return;
+    const skiff::paint::Painter p(canvas, *font);
+    const skia::SkRect& box = fState.fBounds;
+    p.fillRounded(box, box.width() * 0.5f, fState.fHovered ? chosen_colour : sidebar_colour, alpha);
+    p.strokeRounded(box, box.width() * 0.5f, band_colour, 1.0f, alpha);
+    const float x = box.centerX(), y = box.centerY() + 2.0f;
+    const auto line = pen(text_colour, alpha, 2.0f);
+    canvas->drawLine(x - 7.0f, y - 4.0f, x, y + 3.0f, line);
+    canvas->drawLine(x, y + 3.0f, x + 7.0f, y - 4.0f, line);
+    if (unseen > 0) {
+      const std::string count = std::to_string(unseen);
+      const float width = std::max(20.0f, p.measure(count, 11.0f, true) + 10.0f);
+      const skia::SkRect badge = skia::SkRect::MakeXYWH(x - width * 0.5f, box.fTop - 10.0f, width, 18.0f);
+      p.fillRounded(badge, 9.0f, accent_colour, alpha);
+      p.textIn(badge, count, 11.0f, background, alpha, true, (width - p.measure(count, 11.0f, true)) * 0.5f);
+    }
+  }
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+  [[nodiscard]] bool onClick(float, float) {
+    actions->jump_to_end();
+    return true;
+  }
+};
+
+// The messages, and over them, where one has scrolled up from the newest,
+// the way back down. Each is placed by its own spec.
+template <class Actions>
+struct timeline_area : scene::Node {
+  nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>> timeline{
+      nodes::Flow<std::vector<message_bubble>>({.spacingY = 3.0f, .wrap = false}, {})};
+  jump_button<Actions> jump;
+  explicit timeline_area(Actions* a) : jump(a) {
+    timeline.apply({.fill = true});
+    std::get<0>(timeline.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
+    jump.setVisible(false);
+  }
+  void forEachChild(auto&& f) {
+    f(timeline);
+    f(jump);
+  }
+};
+
 template <class Actions>
 struct conversations_screen : nodes::Stack {
   Actions* actions = nullptr;
@@ -1464,8 +1557,7 @@ struct conversations_screen : nodes::Stack {
   // account at all, what to do about it.
   struct chat_column : nodes::Stack {
     chat_header<Actions> header;
-    nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>> timeline{
-        nodes::Flow<std::vector<message_bubble>>({.spacingY = 3.0f, .wrap = false}, {})};
+    timeline_area<Actions> area;
     composer_bar<Actions> line;
     struct empty_state : nodes::Stack {
       nodes::Text title{"No accounts yet", 22.0f, text_colour, true};
@@ -1485,14 +1577,13 @@ struct conversations_screen : nodes::Stack {
         f(add);
       }
     } empty;
-    explicit chat_column(Actions* a) : header(a), line(a), empty(a) {
+    explicit chat_column(Actions* a) : header(a), area(a), line(a), empty(a) {
       fState.apply({.fillY = true, .grow = scene::axes::kX});
-      timeline.apply({.fillX = true, .grow = scene::axes::kY, .margin = {8.0f, 12.0f, 8.0f, 12.0f}});
-      std::get<0>(timeline.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
+      area.apply({.fillX = true, .grow = scene::axes::kY, .margin = {8.0f, 12.0f, 8.0f, 12.0f}});
     }
     void forEachChild(auto&& f) {
       f(header);
-      f(timeline);
+      f(area);
       f(line);
       f(empty);
     }
@@ -1504,7 +1595,12 @@ struct conversations_screen : nodes::Stack {
   nodes::ScrollContainer<nodes::Flow<std::vector<conversation_row<Actions>>>>& list = side.list;
   nodes::Text& no_chats = side.no_chats;
   chat_header<Actions>& header = chat.header;
-  nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>>& timeline = chat.timeline;
+  nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>>& timeline = chat.area.timeline;
+  // The chat whose messages are shown, how many, and how many came while
+  // the view was above the newest.
+  std::optional<conversation_id> shown_chat;
+  std::string shown_last;
+  int unseen = 0;
   composer_bar<Actions>& line = chat.line;
 
   explicit conversations_screen(Actions* a)
@@ -1565,7 +1661,21 @@ struct conversations_screen : nodes::Stack {
   std::optional<std::string> history_asked;
 
   [[nodiscard]] bool settling() const { return false; }
+  // Back to the newest, and nothing unseen.
+  void jump_to_end() {
+    timeline.scrollTo(std::numeric_limits<float>::max());
+    unseen = 0;
+    chat.area.jump.set_unseen(0);
+  }
+
   void update(double) {
+    const bool away = !timeline.atEnd(40.0f);
+    if (away != chat.area.jump.visible())
+      chat.area.jump.setVisible(away);
+    if (!away && unseen != 0) {
+      unseen = 0;
+      chat.area.jump.set_unseen(0);
+    }
     if (chosen && history_from && history_asked != history_from && timeline.current() <= 4.0f) {
       history_asked = history_from;
       actions->load_older(*chosen, *history_from);
@@ -1597,6 +1707,8 @@ struct conversations_screen : nodes::Stack {
   }
 
   void show_conversation(const model& now) {
+    // Whether the reader was at the newest: then the view follows it.
+    const bool was_at_end = timeline.atEnd(40.0f);
     auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
     entries.clear();
     const conversation* one = chosen ? now.find(*chosen) : nullptr;
@@ -1613,8 +1725,22 @@ struct conversations_screen : nodes::Stack {
       };
       entries.emplace_back(*one, all[i], i == 0 || !same(i - 1), !same(i + 1));
     }
-    // The newest is at the bottom, and that is where the reader is.
-    timeline.scrollTo(std::numeric_limits<float>::max());
+    // The newest is at the bottom: the view follows it where the reader was
+    // there or the chat is new to the view; otherwise what came after the
+    // last one seen is counted on the way down.
+    const std::string last = all.empty() ? std::string() : all.back().id;
+    if (shown_chat != chosen || was_at_end) {
+      timeline.scrollTo(std::numeric_limits<float>::max());
+      unseen = 0;
+    } else if (last != shown_last) {
+      int after = 0;
+      for (auto it = all.rbegin(); it != all.rend() && it->id != shown_last; ++it)
+        ++after;
+      unseen += after;
+    }
+    chat.area.jump.set_unseen(unseen);
+    shown_chat = chosen;
+    shown_last = last;
   }
 };
 

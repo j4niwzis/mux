@@ -36,41 +36,39 @@ struct picture_viewer : nodes::Stack {
     void operator()() const { actions->save_picture(source); }
   };
   struct top_bar : nodes::Stack {
-    avatar_mark face;
-    two_lines texts;
-    nodes::Box<> gap{skia::colorSetARGB(0, 0, 0, 0)};
-    icon_button<zoom_by> smaller;
-    icon_button<zoom_by> larger;
-    icon_button<save_it> save;
-    icon_button<ask<Actions, &Actions::close_picture>> close;
+    using close_button = icon_button<ask<Actions, &Actions::close_picture>>;
+    struct parts_t {
+      avatar_mark face;
+      two_lines texts;
+      nodes::Box<> gap{skia::colorSetARGB(0, 0, 0, 0)};
+      icon_button<zoom_by> smaller;
+      icon_button<zoom_by> larger;
+      icon_button<save_it> save;
+      close_button close;
+    } parts;
     top_bar(Actions* a, picture_viewer* viewer, const std::string& source, const std::string& sender,
             const std::string& name, const std::string& when)
-        : face(sender, name, 36.0f), texts(name, when, 14.0f, 2.0f), smaller(icon::minus{}, {viewer, 1.0f / 1.25f}),
-          larger(icon::plus{}, {viewer, 1.25f}), save(icon::send{}, {a, source}), close(icon::close{}, {a}) {
+        : parts{.face = avatar_mark(sender, name, 36.0f),
+                .texts = two_lines(name, when, 14.0f, 2.0f),
+                .smaller = icon_button<zoom_by>(icon::minus{}, {viewer, 1.0f / 1.25f}),
+                .larger = icon_button<zoom_by>(icon::plus{}, {viewer, 1.25f}),
+                .save = icon_button<save_it>(icon::send{}, {a, source}),
+                .close = close_button(icon::close{}, {a})} {
       this->setHorizontal();
       this->setGap(8.0f);
       fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 16.0f}});
-      texts.name.setColour(skia::colorSetARGB(255, 255, 255, 255));
-      texts.state.setColour(skia::colorSetARGB(255, 200, 200, 200));
-      gap.apply({.height = 1.0f, .grow = scene::axes::kX});
+      parts.texts.name.setColour(skia::colorSetARGB(255, 255, 255, 255));
+      parts.texts.state.setColour(skia::colorSetARGB(255, 200, 200, 200));
+      parts.gap.apply({.height = 1.0f, .grow = scene::axes::kX});
       // White on the dark of the viewer.
-      smaller.set_colour(skia::colorSetARGB(255, 255, 255, 255));
-      larger.set_colour(skia::colorSetARGB(255, 255, 255, 255));
-      close.set_colour(skia::colorSetARGB(255, 255, 255, 255));
-      save.set_colour(skia::colorSetARGB(255, 255, 255, 255));
-      for (scene::Node* middle : std::initializer_list<scene::Node*>{&smaller, &larger, &save, &close})
+      for (auto* white : {&parts.smaller, &parts.larger})
+        white->set_colour(skia::colorSetARGB(255, 255, 255, 255));
+      parts.close.set_colour(skia::colorSetARGB(255, 255, 255, 255));
+      parts.save.set_colour(skia::colorSetARGB(255, 255, 255, 255));
+      for (scene::Node* middle : std::initializer_list<scene::Node*>{&parts.smaller, &parts.larger, &parts.save, &parts.close})
         middle->apply({.alignSelf = scene::align::kMiddle});
     }
-    void forEachChild(auto&& f) {
-      f(face);
-      f(texts);
-      f(gap);
-      f(smaller);
-      f(larger);
-      f(save);
-      f(close);
-    }
-  } top;
+  };
   // Where the picture is drawn: fitted, zoomed, moved.
   struct stage : scene::Node {
     picture_viewer* viewer;
@@ -156,23 +154,23 @@ struct picture_viewer : nodes::Stack {
         reply.releasePointer();
       }
     }
-  } view;
+  };
+  struct parts_t {
+    top_bar top;
+    stage view;
+  } parts;
   float zoom = 1.0f;
   float pan_x = 0.0f, pan_y = 0.0f;
   void zoom_to(float wanted) {
     zoom = std::clamp(wanted, 1.0f, 8.0f);
     if (zoom == 1.0f)
       pan_x = pan_y = 0.0f;
-    view.invalidateLayout();
+    parts.view.invalidateLayout();
   }
 
   picture_viewer(Actions* a, std::string where, std::string sender, std::string name, std::string when)
-      : actions(a), source(std::move(where)), top(a, this, source, sender, name, when), view(this) {
+      : actions(a), source(std::move(where)), parts{.top = top_bar(a, this, source, sender, name, when), .view = stage(this)} {
     fState.apply({.fill = true, .background = skia::colorSetARGB(0xe6, 0, 0, 0)});
-  }
-  void forEachChild(auto&& f) {
-    f(top);
-    f(view);
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
 };

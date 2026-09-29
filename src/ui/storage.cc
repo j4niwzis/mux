@@ -108,34 +108,34 @@ struct storage_page : nodes::Stack {
 // before it is sent.
 template <class Actions>
 struct files_page : nodes::Stack {
-  page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>> header;
-  nodes::Text title = section_title("PICTURES DROPPED ON THE WINDOW");
-  switch_row<ask<Actions, &Actions::flip_strip_metadata>> strip;
-  switch_row<ask<Actions, &Actions::flip_rename_pictures>> rename;
-  nodes::Text note{"Metadata is where and when a picture was taken, with what, by whom: EXIF, XMP and the like. "
-                   "It is cut out of the file; the picture itself is sent as it is, not compressed again.",
-                   13.0f, dim_colour};
+  using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
+  using strip_row = switch_row<ask<Actions, &Actions::flip_strip_metadata>>;
+  using rename_row = switch_row<ask<Actions, &Actions::flip_rename_pictures>>;
+  struct parts_t {
+    header_t header;
+    nodes::Text title = section_title("PICTURES DROPPED ON THE WINDOW");
+    strip_row strip;
+    rename_row rename;
+    nodes::Text note{"Metadata is where and when a picture was taken, with what, by whom: EXIF, XMP and the like. "
+                     "It is cut out of the file; the picture itself is sent as it is, not compressed again.",
+                     13.0f, dim_colour};
+  } parts;
   files_page(Actions* a, const config::sending_settings& now)
-      : header("Files", {a}, {a}, true, true), strip("Remove metadata", {a}), rename("Name them image.<type>", {a}) {
+      : parts{.header = header_t("Files", {a}, {a}, true, true),
+              .strip = strip_row("Remove metadata", {a}),
+              .rename = rename_row("Name them image.<type>", {a})} {
     fState.apply({.fill = true});
-    title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
-    note.setWrapped(true);
-    note.apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
+    parts.title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
+    parts.note.setWrapped(true);
+    parts.note.apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
     this->show(now);
   }
   void show(const config::sending_settings& now) {
-    strip.parts.toggle.setOnNow(now.strip_metadata);
-    rename.parts.toggle.setOnNow(now.rename);
+    parts.strip.parts.toggle.setOnNow(now.strip_metadata);
+    parts.rename.parts.toggle.setOnNow(now.rename);
   }
   void show_motion(std::string_view) {}
   void show_receipts(bool) {}
-  void forEachChild(auto&& f) {
-    f(header);
-    f(title);
-    f(strip);
-    f(rename);
-    f(note);
-  }
 };
 
 }  // namespace mux::ui

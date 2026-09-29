@@ -313,7 +313,6 @@ class canvas_target {
 #else
     (void)software;
 #endif
-    std::println(std::cerr, "[mux] drawing {}", this->on_gpu() ? "with OpenGL" : "in software");
   }
   [[nodiscard]] bool on_gpu() const {
 #if defined(SK_GANESH)
@@ -542,6 +541,9 @@ int run(App& app, const options& how) {
   int result = 0;
   {
     detail::canvas_target target(window, how.software);
+    // Said once, for the window -- not for each notification's, drawn in
+    // software on purpose.
+    std::println(std::cerr, "[mux] drawing {}", target.on_gpu() ? "with OpenGL" : "in software");
     detail::pointer_shapes shapes;
     auto& scene = app.window();
     skiff::scene::InputRouter router;

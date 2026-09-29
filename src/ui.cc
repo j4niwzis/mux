@@ -1394,148 +1394,155 @@ struct composer_bar : scene::Node {
 };
 
 template <class Actions>
-struct conversations_screen : scene::Node {
+struct conversations_screen : nodes::Stack {
   Actions* actions = nullptr;
   std::optional<conversation_id> chosen;
   // The account whose chats are listed.
   std::optional<account_id> current;
   bool info_open = false;
-  // How wide the chat list is: its own, whatever the window's size, until
-  // its edge is dragged.
+  // How wide the chat list and the chat's info are: their own, whatever the
+  // window's size, until their edges are dragged.
   float side_width = 300.0f;
-
-  nodes::Box<> sidebar{sidebar_colour};
-  drag_edge<resize_sidebar_to<Actions>> edge;
-  drag_edge<resize_info_to<Actions>> info_edge;
-  // How wide the chat's info is, until its edge is dragged.
   float info_width = 340.0f;
-  menu_button<Actions> menu;
-  nodes::Text name{"mux", 17.0f, text_colour, true};
-  nodes::Text no_chats{"No chats yet.", 13.0f, dim_colour};
-  nodes::ScrollContainer<nodes::Flow<std::vector<conversation_row<Actions>>>> list{
-      nodes::Flow<std::vector<conversation_row<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
-  chat_header<Actions> header;
-  nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>> timeline{
-      nodes::Flow<std::vector<message_bubble>>({.spacingY = 3.0f, .wrap = false}, {})};
-  composer_bar<Actions> line;
-  info_panel<Actions> info;
-  // What the main area says with no account at all.
-  nodes::Text empty_title{"No accounts yet", 22.0f, text_colour, true};
-  nodes::Text empty_note{"Add an XMPP or a Matrix account, and its chats will be here.", 14.0f, dim_colour};
-  widgets::Button<ask<Actions, &Actions::open_new_account>> empty_add;
 
   static constexpr float kMinSidebar = 240.0f;
-  static constexpr float kHeader = 52.0f;
-  static constexpr float kPad = 8.0f;
+
+  // The chat list: the drawer's button and the name, then the chats.
+  struct side_column : nodes::Stack {
+    float wanted = 300.0f;
+    struct head_row : nodes::Stack {
+      menu_button<Actions> menu;
+      nodes::Text name{"mux", 17.0f, text_colour, true};
+      explicit head_row(Actions* a) : menu(a) {
+        this->setHorizontal();
+        this->setGap(10.0f);
+        fState.apply({.fillX = true, .height = 52.0f, .padding = {8.0f, 8.0f, 8.0f, 8.0f}});
+        name.apply({.alignSelf = scene::align::kMiddle});
+      }
+      void forEachChild(auto&& f) {
+        f(menu);
+        f(name);
+      }
+    } head;
+    nodes::Text no_chats{"No chats yet.", 13.0f, dim_colour};
+    nodes::ScrollContainer<nodes::Flow<std::vector<conversation_row<Actions>>>> list{
+        nodes::Flow<std::vector<conversation_row<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
+    explicit side_column(Actions* a) : head(a) {
+      fState.apply({.fillY = true});
+      no_chats.apply({.margin = {12.0f, 16.0f, 0.0f, 16.0f}});
+      list.apply({.fillX = true, .grow = scene::axes::kY});
+      std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
+    }
+    // Its own width, as far as the window has room for it.
+    void measure(const skia::SkRect& parent) {
+      fState.fWidth = std::clamp(wanted, std::min(kMinSidebar, parent.width()),
+                                 std::max(kMinSidebar, parent.width() * 0.6f));
+    }
+    void forEachChild(auto&& f) {
+      f(head);
+      f(no_chats);
+      f(list);
+    }
+    void drawSelf(skia::SkCanvas* canvas, float alpha) {
+      if (skia::SkFont* font = skiff::paint::defaultFont())
+        skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 0.0f, sidebar_colour, alpha);
+    }
+  } side;
+  drag_edge<resize_sidebar_to<Actions>> edge;
+  // The chat: its header, its messages, and where one writes; or, with no
+  // account at all, what to do about it.
+  struct chat_column : nodes::Stack {
+    chat_header<Actions> header;
+    nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>> timeline{
+        nodes::Flow<std::vector<message_bubble>>({.spacingY = 3.0f, .wrap = false}, {})};
+    composer_bar<Actions> line;
+    struct empty_state : nodes::Stack {
+      nodes::Text title{"No accounts yet", 22.0f, text_colour, true};
+      nodes::Text note{"Add an XMPP or a Matrix account, and its chats will be here.", 14.0f, dim_colour};
+      widgets::Button<ask<Actions, &Actions::open_new_account>> add;
+      explicit empty_state(Actions* a) : add("Add account", {a}) {
+        this->setGap(12.0f);
+        fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {120.0f, 48.0f, 0.0f, 48.0f}});
+        note.setWrapped(true);
+        note.apply({.fillX = true});
+        add.setPrimary(true);
+        add.apply({.width = 140.0f, .height = 36.0f});
+      }
+      void forEachChild(auto&& f) {
+        f(title);
+        f(note);
+        f(add);
+      }
+    } empty;
+    explicit chat_column(Actions* a) : header(a), line(a), empty(a) {
+      fState.apply({.fillY = true, .grow = scene::axes::kX});
+      timeline.apply({.fillX = true, .grow = scene::axes::kY, .margin = {8.0f, 12.0f, 8.0f, 12.0f}});
+      std::get<0>(timeline.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
+    }
+    void forEachChild(auto&& f) {
+      f(header);
+      f(timeline);
+      f(line);
+      f(empty);
+    }
+  } chat;
+  drag_edge<resize_info_to<Actions>> info_edge;
+  info_panel<Actions> info;
+
+  // The old names, for what is kept in the parts.
+  nodes::ScrollContainer<nodes::Flow<std::vector<conversation_row<Actions>>>>& list = side.list;
+  nodes::Text& no_chats = side.no_chats;
+  chat_header<Actions>& header = chat.header;
+  nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>>& timeline = chat.timeline;
+  composer_bar<Actions>& line = chat.line;
 
   explicit conversations_screen(Actions* a)
-      : actions(a), edge({a}), info_edge({a}, false), menu(a), header(a), line(a), info(a), empty_add("Add account", {a}) {
+      : actions(a), side(a), edge({a}), chat(a), info_edge({a}, false), info(a) {
     fState.apply({.fill = true});
-    sidebar.apply({.fill = true});
-    empty_add.setPrimary(true);
-    empty_add.apply({.width = 140.0f, .height = 36.0f});
-    empty_note.setWrapped(true);
-    std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
-    std::get<0>(timeline.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
-    info.setVisible(false);
+    this->setHorizontal();
+    edge.apply({.fillY = true, .width = 7.0f});
+    info_edge.apply({.fillY = true, .width = 7.0f});
+    info.apply({.fillY = true, .width = info_width});
+    this->show_info();
   }
 
   void forEachChild(auto&& f) {
-    f(sidebar);
-    f(menu);
-    f(name);
-    f(no_chats);
-    f(list);
-    f(header);
-    f(timeline);
-    f(line);
-    f(info);
-    f(empty_title);
-    f(empty_note);
-    f(empty_add);
-    f(edge);  // last: over the list and the chat, where they meet
+    f(side);
+    f(edge);
+    f(chat);
     f(info_edge);
+    f(info);
   }
 
   // The chat list as wide as `x`, where its edge was dragged to.
   void resize_sidebar(float x) {
     side_width = x - fState.contentBox().fLeft;
-    this->invalidateLayout();
+    side.wanted = side_width;
+    side.invalidateLayout();
   }
 
   // The chat's info as wide as from `x` to the window's right.
   void resize_info(float x) {
-    info_width = fState.contentBox().fRight - x;
-    this->invalidateLayout();
+    info_width = std::clamp(fState.contentBox().fRight - x, 260.0f,
+                            std::max(260.0f, fState.contentBox().width() - side_width - 300.0f));
+    info.apply({.width = info_width});
+  }
+
+  // The chat's info beside it where it is open and a chat is chosen.
+  void show_info() {
+    const bool shown = info_open && chosen.has_value();
+    info.setVisible(shown);
+    info_edge.setVisible(shown);
+    side.wanted = side_width;
+    info.apply({.width = info_width});
   }
 
   void toggle_info() {
     info_open = !info_open;
-    this->invalidateLayout();
+    this->show_info();
   }
 
-  void layoutChildren() {
-    const skia::SkRect box = fState.contentBox();
-    // Its own width, as far as the window has room for it.
-    const float width = std::clamp(side_width, std::min(kMinSidebar, box.width()), std::max(kMinSidebar, box.width() * 0.6f));
-    const skia::SkRect side = skia::SkRect::MakeLTRB(box.fLeft, box.fTop, box.fLeft + width, box.fBottom);
-    skia::SkRect main = skia::SkRect::MakeLTRB(side.fRight, box.fTop, box.fRight, box.fBottom);
-    scene::layout(sidebar, side);
-    edge.apply({.width = 7.0f, .height = side.height()});
-    edge.fState.arrange(side.fRight - box.fLeft - 3.5f, 0.0f);
-    scene::layout(edge, box);
 
-    // The header: the drawer's button, and the name beside it.
-    const skia::SkRect head = skia::SkRect::MakeLTRB(side.fLeft + kPad, side.fTop, side.fRight - kPad, side.fTop + kHeader);
-    menu.fState.arrange(0.0f, 0.0f, scene::anchor::kCentreLeft, scene::anchor::kCentreLeft);
-    scene::layout(menu, head);
-    name.fState.arrange(menu.bounds().width() + 10.0f, 0.0f, scene::anchor::kCentreLeft, scene::anchor::kCentreLeft);
-    scene::layout(name, head);
-
-    const skia::SkRect below = skia::SkRect::MakeLTRB(side.fLeft, head.fBottom, side.fRight, side.fBottom);
-    no_chats.fState.arrange(16.0f, 12.0f);
-    scene::layout(no_chats, below);
-    list.apply({.width = below.width(), .height = std::max(0.0f, below.height())});
-    list.fState.arrange(0.0f, 0.0f);
-    scene::layout(list, below);
-
-    // No account at all: what to do about it, in the middle of the rest, a
-    // little above its centre.
-    if (empty_title.visible()) {
-      column_stack stack{form_column(main, 420.0f, std::max(24.0f, main.height() * 0.3f))};
-      empty_note.setMaxWidth(stack.column.width());
-      stack(empty_title, 10.0f);
-      stack(empty_note, 20.0f);
-      stack(empty_add, 0.0f);
-      return;
-    }
-
-    // The chat's info, beside it, where there is room for it.
-    const float info_room = std::clamp(info_width, 260.0f, std::max(260.0f, main.width() - 300.0f));
-    const bool with_info = info_open && chosen.has_value() && main.width() > 260.0f + 240.0f;
-    info.setVisible(with_info);
-    info_edge.setVisible(with_info);
-    if (with_info) {
-      const skia::SkRect right = skia::SkRect::MakeLTRB(main.fRight - info_room, main.fTop, main.fRight, main.fBottom);
-      info_edge.apply({.width = 7.0f, .height = right.height()});
-      info_edge.fState.arrange(right.fLeft - box.fLeft - 3.5f, 0.0f);
-      scene::layout(info_edge, box);
-      info.apply({.width = right.width(), .height = right.height()});
-      info.fState.arrange(0.0f, 0.0f);
-      scene::layout(info, right);
-      main.fRight = right.fLeft;
-    }
-
-    header.fState.arrange(0.0f, 0.0f);
-    scene::layout(header, main);
-    line.fState.arrange(0.0f, 0.0f, scene::anchor::kBottomLeft, scene::anchor::kBottomLeft);
-    scene::layout(line, main);
-    const skia::SkRect inner = skia::SkRect::MakeLTRB(main.fLeft + 12.0f, header.bounds().fBottom + 8.0f,
-                                                      main.fRight - 12.0f, line.bounds().fTop - 8.0f);
-    timeline.apply({.width = inner.width(), .height = std::max(0.0f, inner.height())});
-    timeline.fState.arrange(inner.fLeft - box.fLeft, inner.fTop - box.fTop);
-    scene::layout(timeline, box);
-  }
 
   // The model as it is now: the current account's chats, newest first, and
   // the chosen one.
@@ -1572,9 +1579,8 @@ struct conversations_screen : scene::Node {
     for (scene::Node* shown : std::initializer_list<scene::Node*>{&header, &timeline, &line})
       shown->setVisible(!none);
     no_chats.setVisible(!none && chats.empty());
-    empty_title.setVisible(none);
-    empty_note.setVisible(none);
-    empty_add.setVisible(none);
+    chat.empty.setVisible(none);
+    this->show_info();
     this->invalidateLayout();
     this->show_conversation(now);
   }
@@ -1585,6 +1591,7 @@ struct conversations_screen : scene::Node {
     const conversation* one = chosen ? now.find(*chosen) : nullptr;
     header.show(one, now);
     history_from = one ? one->history_from : std::nullopt;
+    this->show_info();
     if (!one)
       return;
     info.show(*one, now, muted.contains(one->id));

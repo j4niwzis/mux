@@ -58,6 +58,9 @@ struct stub {
   void message_person(const mux::conversation_id&) {}
   void jump_to_message(std::string) {}
   void reply_to(std::string, std::string) {}
+  void open_picture(std::string) {}
+  void close_picture() {}
+  void open_file(std::string, std::string) {}
   void open_member_info(std::string) {}
   void close_notice() {}
   void resize_info(float) {}

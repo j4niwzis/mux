@@ -141,6 +141,27 @@ struct failed {
 }  // namespace delivery
 using delivery_t = std::variant<delivery::sending, delivery::sent, delivery::delivered, delivery::read, delivery::failed>;
 
+// What a message carries besides its text: a picture, shown in it, or a
+// file, offered to be saved -- by where its protocol keeps it (an mxc://).
+namespace attachment_kind {
+struct image {
+  friend bool operator==(image, image) = default;
+};
+struct file {
+  friend bool operator==(file, file) = default;
+};
+}  // namespace attachment_kind
+using attachment_kind_t = std::variant<attachment_kind::image, attachment_kind::file>;
+struct attachment {
+  attachment_kind_t kind = attachment_kind::file{};
+  std::string source;      // where it is kept: an mxc:// URI
+  std::string name;        // its file's name
+  std::string mimetype;
+  std::int64_t size = 0;   // in bytes, where said
+  int width = 0, height = 0;  // a picture's, where said
+  friend bool operator==(const attachment&, const attachment&) = default;
+};
+
 struct message {
   conversation_id in;
   // The protocol's own id: an XMPP stanza id (or origin-id), a Matrix event
@@ -155,6 +176,7 @@ struct message {
   bool outgoing = false;
   delivery_t delivery = delivery::sent{};
   std::map<std::string, std::set<std::string>> reactions;  // key -> who
+  std::optional<mux::attachment> attachment;
   friend bool operator==(const message&, const message&) = default;
 };
 

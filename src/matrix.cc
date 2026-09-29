@@ -139,8 +139,13 @@ class account {
   // An avatar's picture: the server's thumbnail of an mxc:// URI, at the size
   // it is drawn at twice over, handed on for `key`. The authenticated media
   // API first (v1.11), the older one where the server has no such thing.
-  void fetch_avatar(std::string source, std::string key) {
-    loop_->spawn([this, source = std::move(source), key = std::move(key)] {
+  void fetch_avatar(std::string source, std::string key) { this->fetch_media(std::move(source), std::move(key), 96, true); }
+  // What an mxc:// URI keeps: its thumbnail at `size` (cropped to a square,
+  // or scaled to fit), or, where `size` is 0, the whole of it -- handed on
+  // for `key`. The authenticated media API first, the older one where the
+  // server has no such thing.
+  void fetch_media(std::string source, std::string key, int size, bool crop = false) {
+    loop_->spawn([this, source = std::move(source), key = std::move(key), size, crop] {
       if (!api_ || !source.starts_with("mxc://"))
         return;
       const std::string_view rest = std::string_view(source).substr(6);
@@ -149,9 +154,13 @@ class account {
         return;
       const std::string server(rest.substr(0, slash));
       const std::string media(rest.substr(slash + 1));
-      const std::string query = "?width=96&height=96&method=crop";
-      for (const std::string& base : {std::string("/_matrix/client/v1/media/thumbnail/"),
-                                      std::string("/_matrix/media/v3/thumbnail/")}) {
+      const std::string query =
+          size > 0 ? std::format("?width={0}&height={0}&method={1}", size, crop ? "crop" : "scale") : std::string();
+      const auto bases = size > 0 ? std::array<std::string, 2>{"/_matrix/client/v1/media/thumbnail/",
+                                                               "/_matrix/media/v3/thumbnail/"}
+                                  : std::array<std::string, 2>{"/_matrix/client/v1/media/download/",
+                                                               "/_matrix/media/v3/download/"};
+      for (const std::string& base : bases) {
         try {
           const auto got = api_->request("GET", base + server + "/" + media + query, {},
                                          token_ ? std::optional<std::string_view>(*token_) : std::nullopt);
@@ -682,6 +691,32 @@ class account {
                    .outgoing = one.sender == id_.address};
       if (content.msgtype == "m.emote")
         made.body.plain = "* " + made.body.plain;
+      // A picture or a file: where it is kept, its name, what it is; its
+      // body a caption where a file name is given apart from it.
+      if (content.msgtype == "m.image" || content.msgtype == "m.file" || content.msgtype == "m.video" ||
+          content.msgtype == "m.audio") {
+        mux::attachment carried;
+        if (content.msgtype == "m.image")
+          carried.kind = attachment_kind::image{};
+        carried.source = text(extra(content.rest, one.content, "url")).value_or("");
+        const auto file_name = text(extra(content.rest, one.content, "filename"));
+        carried.name = file_name.value_or(content.body);
+        if (const knot::value* info = extra(content.rest, one.content, "info")) {
+          const auto number = [&](std::string_view key) -> std::int64_t {
+            const knot::value* got = member(*info, key);
+            return got && got->is<std::int64_t>() ? got->as<std::int64_t>() : 0;
+          };
+          carried.mimetype = text(member(*info, "mimetype")).value_or("");
+          carried.size = number("size");
+          carried.width = static_cast<int>(number("w"));
+          carried.height = static_cast<int>(number("h"));
+        }
+        if (!carried.source.empty()) {
+          made.attachment = std::move(carried);
+          if (!file_name || *file_name == content.body)
+            made.body = {};  // no caption: the body was the file's name
+        }
+      }
       if (relates)
         if (const knot::value* reply = member(*relates, "m.in_reply_to"))
           made.replies_to = text(member(*reply, "event_id"));

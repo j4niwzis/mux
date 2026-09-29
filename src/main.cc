@@ -208,6 +208,19 @@ struct network {
             one.account);
     });
   }
+  // What a message carries, fetched by the account it is of, for `key`: a
+  // picture's thumbnail at `size`, or all of a file where `size` is 0.
+  void fetch_media(const mux::account_id& of, std::string source, std::string key, int size) {
+    loop.post([this, of, source = std::move(source), key = std::move(key), size] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == of)
+                account->fetch_media(source, key, size);
+            },
+            one.account);
+    });
+  }
   // An avatar's picture, fetched by the account it is of, for `key`.
   void fetch_avatar(const mux::account_id& of, std::string source, std::string key) {
     loop.post([this, of, source = std::move(source), key = std::move(key)] {
@@ -508,6 +521,24 @@ class message_store {
       one.edited = flag_of(o, "edited");
       one.redacted = flag_of(o, "redacted");
       one.outgoing = flag_of(o, "out");
+      if (const auto carried = o.find("attachment");
+          carried != o.end() && carried->second.is<knot::value::object>()) {
+        const auto& c = carried->second.as<knot::value::object>();
+        const auto number = [&](std::string_view key) -> std::int64_t {
+          const auto found = c.find(key);
+          return found != c.end() && found->second.is<std::int64_t>() ? found->second.as<std::int64_t>() : 0;
+        };
+        mux::attachment a;
+        if (flag_of(c, "image"))
+          a.kind = mux::attachment_kind::image{};
+        a.source = text_of(c, "source").value_or("");
+        a.name = text_of(c, "name").value_or("");
+        a.mimetype = text_of(c, "mimetype").value_or("");
+        a.size = number("size");
+        a.width = static_cast<int>(number("w"));
+        a.height = static_cast<int>(number("h"));
+        one.attachment = std::move(a);
+      }
       all.insert_or_assign(*id, std::move(one));
     }
     if (lines > 2 * all.size() + 64) {
@@ -543,6 +574,17 @@ class message_store {
       line.emplace("redacted", knot::value(true));
     if (one.outgoing)
       line.emplace("out", knot::value(true));
+    if (one.attachment) {
+      knot::value::object carried;
+      carried.emplace("image", knot::value(std::holds_alternative<mux::attachment_kind::image>(one.attachment->kind)));
+      carried.emplace("source", knot::value(one.attachment->source));
+      carried.emplace("name", knot::value(one.attachment->name));
+      carried.emplace("mimetype", knot::value(one.attachment->mimetype));
+      carried.emplace("size", knot::value(one.attachment->size));
+      carried.emplace("w", knot::value(static_cast<std::int64_t>(one.attachment->width)));
+      carried.emplace("h", knot::value(static_cast<std::int64_t>(one.attachment->height)));
+      line.emplace("attachment", knot::value(std::move(carried)));
+    }
     return knot::to_json_string(knot::value(std::move(line)));
   }
 };
@@ -610,6 +652,14 @@ struct resize_sidebar {
 };
 struct message_person {
   mux::conversation_id who;
+};
+struct open_picture {
+  std::string source;
+};
+struct close_picture {};
+struct open_file {
+  std::string source;
+  std::string name;
 };
 struct reply_to {
   std::string id;
@@ -688,7 +738,7 @@ using request_t =
                  request::close_menu, request::menu_reply, request::menu_edit, request::menu_copy,
                  request::menu_delete, request::cancel_compose, request::open_url,
                  request::switch_account, request::submit_message, request::send_typed,
-                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_member_info, request::reply_to, request::close_notice,
+                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_member_info, request::reply_to, request::open_picture, request::close_picture, request::open_file, request::close_notice,
                  request::resize_info, request::choose_new_proxy, request::toggle_mute, request::close_account_pages,
                  request::accounts_back, request::account_page, request::flip_account_receipts,
                  request::proxy_kind, request::choose_account_proxy, request::manage_proxies,
@@ -757,6 +807,11 @@ struct actions {
   void send_typed() { requests.emplace_back(request::send_typed{}); }
   void resize_sidebar(float x) { requests.emplace_back(request::resize_sidebar{x}); }
   void message_person(const mux::conversation_id& who) { requests.emplace_back(request::message_person{who}); }
+  void open_picture(std::string source) { requests.emplace_back(request::open_picture{std::move(source)}); }
+  void close_picture() { requests.emplace_back(request::close_picture{}); }
+  void open_file(std::string source, std::string name) {
+    requests.emplace_back(request::open_file{std::move(source), std::move(name)});
+  }
   void reply_to(std::string id, std::string text) { requests.emplace_back(request::reply_to{std::move(id), std::move(text)}); }
   void jump_to_message(std::string id) { requests.emplace_back(request::jump_to_message{std::move(id)}); }
   void open_member_info(std::string id) { requests.emplace_back(request::open_member_info{std::move(id)}); }
@@ -912,16 +967,34 @@ struct app {
     return mux::config::cache_path("avatars") / name;
   }
   void take_avatar(const mux::change::avatar_loaded& picture, bool fresh) {
+    // A file fetched to be saved: into Downloads, a number added where the
+    // name is taken, and opened.
+    if (picture.key.starts_with("file:")) {
+      const std::filesystem::path name = std::filesystem::path(picture.key.substr(5)).filename();
+      std::error_code failed;
+      std::filesystem::create_directories(downloads(), failed);
+      auto where = downloads() / (name.empty() ? std::filesystem::path("file") : name);
+      for (int n = 1; std::filesystem::exists(where, failed); ++n)
+        where = downloads() / std::format("{} ({}){}", name.stem().string(), n, name.extension().string());
+      std::ofstream(where, std::ios::binary) << picture.bytes;
+      mux::host::open_url("file://" + where.string());
+      return;
+    }
     if (auto image = skia::decodeImage(picture.bytes.data(), picture.bytes.size())) {
       mux::ui::avatar_images().put(picture.key, std::move(image));
       scene.state().markDamaged();
     }
     if (fresh) {
-      const auto where = avatar_file(picture.source);
+      // A thumbnail or a whole picture under its key; an avatar under its
+      // source, whoever it is of.
+      const auto where = avatar_file(picture.key.starts_with("thumb:") || picture.key.starts_with("full:")
+                                         ? picture.key
+                                         : picture.source);
       std::error_code failed;
       std::filesystem::create_directories(where.parent_path(), failed);
       std::ofstream(where, std::ios::binary) << picture.bytes;
       avatars_fetched.erase(picture.source);
+      avatars_fetched.erase(picture.key);
       if (++avatars_written % 50 == 1)
         prune_avatar_files();
     }
@@ -952,6 +1025,23 @@ struct app {
         total -= size;
     }
   }
+  // A message's picture's thumbnail: from the disk where it was fetched
+  // before, from the account where not.
+  void want_picture(const mux::account_id& of, const std::string& source) {
+    const std::string key = "thumb:" + source;
+    if (source.empty() || mux::ui::avatar_images().has(key) || avatars_fetched.contains(key))
+      return;
+    const auto where = avatar_file(key);
+    if (std::ifstream file{where, std::ios::binary}) {
+      std::string bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+      std::error_code failed;
+      std::filesystem::last_write_time(where, std::filesystem::file_time_type::clock::now(), failed);
+      this->take_avatar(mux::change::avatar_loaded{key, source, std::move(bytes)}, false);
+      return;
+    }
+    avatars_fetched.insert(key);
+    net->fetch_media(of, source, key, 860);
+  }
   // What the model has pictures of and the window has not: from the disk
   // where they were fetched before, from the account where not.
   void ask_avatars() {
@@ -976,9 +1066,14 @@ struct app {
       for (const auto& [key, one] : account.conversations) {
         want(id, one.avatar, one.id.id);
         // The people of the chat being read: its members' pictures.
-        if (root().main().chosen == one.id)
+        if (root().main().chosen == one.id) {
           for (const mux::member& each : one.members)
             want(id, each.avatar, each.id);
+          // Its pictures' thumbnails, at twice the size they are drawn at.
+          for (const mux::message& said : one.timeline)
+            if (said.attachment && std::holds_alternative<mux::attachment_kind::image>(said.attachment->kind))
+              want_picture(id, said.attachment->source);
+        }
       }
   }
 
@@ -1211,6 +1306,28 @@ struct app {
     root().open_menu(one.own, one.x, one.y);
   }
   void apply(const request::close_menu&) { root().close_menu(); }
+  // A picture seen whole: over the window at once, the thumbnail until all
+  // of it has come.
+  void apply(const request::open_picture& one) {
+    root().open_picture(one.source);
+    const auto& chosen = root().main().chosen;
+    if (chosen && !mux::ui::avatar_images().has("full:" + one.source) && avatars_fetched.insert("full:" + one.source).second)
+      net->fetch_media(chosen->account, one.source, "full:" + one.source, 0);
+  }
+  void apply(const request::close_picture&) { root().close_picture(); }
+  // A file saved -- into ~/Downloads, under its name -- and opened.
+  void apply(const request::open_file& one) {
+    const auto& chosen = root().main().chosen;
+    if (!chosen)
+      return;
+    net->fetch_media(chosen->account, one.source, "file:" + one.name, 0);
+  }
+  static std::filesystem::path downloads() {
+    if (const char* home = std::getenv("HOME"); home && *home)
+      return std::filesystem::path(home) / "Downloads";
+    return std::filesystem::current_path();
+  }
+
   // A message swiped to the left: answered, as its menu's Reply does.
   void apply(const request::reply_to& one) {
     menu_target.id = one.id;

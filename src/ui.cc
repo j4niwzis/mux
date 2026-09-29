@@ -88,6 +88,7 @@ inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 //   void message_person(const conversation_id&)  -- a member's direct chat
 //   void jump_to_message(std::string id)  -- a quoted message, scrolled to
 //   void reply_to(std::string id, std::string text)  -- a message swiped left
+//   void open_picture(std::string source), close_picture(), open_file(std::string source, std::string name)
 //   void open_member_info(std::string id)  -- a sender's page, in the info
 //   void load_older(const conversation_id&, std::string from)  -- its history
 //   void jump_to_end()               -- back to a chat's newest message
@@ -1282,6 +1283,85 @@ struct link_line : nodes::Stack {
 // and blue for what was sent from here, on the left otherwise; in a group,
 // the sender's name in their colour over the first of a run and their
 // avatar beside its last; the time in the bubble's corner.
+// A picture in a message, as tdesktop sizes one: its own size fitted into
+// 430 by 430 (maxMediaSize), no side under 100 (minPhotoSize); rounded, the
+// thumbnail drawn when it has come, a plate until then. With no caption,
+// the time is on a dark pill over its corner (msgDateImgBg).
+struct picture_view : scene::Node {
+  std::string source;
+  std::string time;  // drawn over it where there is no caption
+  static constexpr float kMax = 430.0f, kMin = 100.0f;
+  picture_view(std::string where, int width, int height) : source(std::move(where)) {
+    float w = width > 0 ? static_cast<float>(width) : 320.0f;
+    float h = height > 0 ? static_cast<float>(height) : 240.0f;
+    const float scale = std::min({1.0f, kMax / w, kMax / h});
+    w = std::max(kMin, w * scale);
+    h = std::max(kMin, h * scale);
+    fState.apply({.width = w, .height = h});
+  }
+  void drawSelf(skia::SkCanvas* canvas, float alpha) {
+    const skia::SkRect& box = fState.fBounds;
+    const int saved = canvas->save();
+    canvas->clipRRect(skia::SkRRect::MakeRectXY(box, 10.0f, 10.0f), true);
+    if (const skia::Sp<skia::SkImage>* image = avatar_images().find("thumb:" + source); image && *image) {
+      skia::SkPaint paint;
+      paint.setAlphaf(alpha);
+      canvas->drawImageRect(*image, box, skia::SkSamplingOptions(skia::SkFilterMode::kLinear), &paint);
+    } else if (skia::SkFont* font = skiff::paint::defaultFont()) {
+      skiff::paint::Painter(canvas, *font).fillRounded(box, 10.0f, tile_colour, alpha);
+    }
+    canvas->restoreToCount(saved);
+    if (!time.empty())
+      if (skia::SkFont* font = skiff::paint::defaultFont()) {
+        const skiff::paint::Painter p(canvas, *font);
+        const float width = p.measure(time, 11.0f) + 16.0f;
+        const skia::SkRect pill = skia::SkRect::MakeXYWH(box.fRight - width - 6.0f, box.fBottom - 24.0f, width, 18.0f);
+        p.fillRounded(pill, 9.0f, skia::colorSetARGB(0x54, 0, 0, 0), alpha);
+        p.textIn(pill, time, 11.0f, skia::colorSetARGB(255, 255, 255, 255), alpha, false, 8.0f);
+      }
+  }
+  [[nodiscard]] bool acceptsInput() const { return true; }
+};
+
+// A file in a message, as tdesktop's row: a round icon in the accent, the
+// name over its size; pressed, it is saved and opened.
+struct file_view : nodes::Stack {
+  std::string source;
+  struct disc : scene::Node {
+    disc() { fState.apply({.width = 44.0f, .height = 44.0f, .alignSelf = scene::align::kMiddle}); }
+    void drawSelf(skia::SkCanvas* canvas, float alpha) {
+      if (skia::SkFont* font = skiff::paint::defaultFont())
+        skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 22.0f, accent_colour, alpha);
+      draw_icon(canvas, icon::clip{}, fState.fBounds, on_accent_colour, alpha);
+    }
+  } icon;
+  two_lines texts;
+  [[nodiscard]] static std::string size_text(std::int64_t bytes) {
+    if (bytes <= 0)
+      return "File";
+    if (bytes < 1024)
+      return std::format("{} B", bytes);
+    if (bytes < 1024 * 1024)
+      return std::format("{:.1f} KB", static_cast<double>(bytes) / 1024.0);
+    return std::format("{:.1f} MB", static_cast<double>(bytes) / (1024.0 * 1024.0));
+  }
+  file_view(std::string where, std::string name, std::int64_t bytes)
+      : source(std::move(where)), texts(std::move(name), size_text(bytes), 14.0f, 4.0f) {
+    this->setHorizontal();
+    this->setGap(11.0f);
+    fState.apply({.autoSize = scene::axes::kBoth, .minWidth = 268.0f - 24.0f, .padding = {2.0f, 0.0f, 2.0f, 0.0f}});
+    texts.apply({.grow = scene::axes::kNone, .maxWidth = 360.0f});
+    texts.name.setMaxWidth(360.0f);
+    texts.state.setMaxWidth(360.0f);
+    fState.setCursor(scene::cursor::hand{});
+  }
+  void forEachChild(auto&& f) {
+    f(icon);
+    f(texts);
+  }
+  [[nodiscard]] bool acceptsInput() const { return true; }
+};
+
 struct message_bubble : nodes::Stack {
   // The message as it was shown, and where in its sender's run: while
   // these are the same, the bubble is kept.
@@ -1345,6 +1425,8 @@ struct message_bubble : nodes::Stack {
     bool outgoing = false;
     std::optional<nodes::Text> name;
     std::optional<quote_row> quote;
+    std::optional<picture_view> picture;
+    std::optional<file_view> file;
     nodes::Text text;
     std::vector<link_line> links;
     std::optional<nodes::Text> reactions;
@@ -1358,7 +1440,7 @@ struct message_bubble : nodes::Stack {
     void update(double now_ms) {
       if (flash.step(now_ms))
         this->markDamaged();
-      if (text.bounds().isEmpty() || links.size() > 0 || reactions)
+      if (!text.visible() || text.bounds().isEmpty() || links.size() > 0 || reactions)
         return;
       skia::SkFont* font = skiff::paint::defaultFont();
       if (font == nullptr)
@@ -1396,6 +1478,8 @@ struct message_bubble : nodes::Stack {
     void forEachChild(auto&& f) {
       f(name);
       f(quote);
+      f(picture);
+      f(file);
       f(text);
       f(links);
       f(reactions);
@@ -1442,7 +1526,24 @@ struct message_bubble : nodes::Stack {
                                   [](const delivery::failed&) { return " · not sent"; },
                                   [](const auto&) { return ""; }},
                        said.delivery);
-    body.time.setText(std::move(when));
+    body.time.setText(when);
+    // What it carries: a picture, sized as tdesktop's; or a file's row.
+    if (said.attachment && !said.redacted) {
+      const mux::attachment& carried = *said.attachment;
+      if (std::holds_alternative<attachment_kind::image>(carried.kind))
+        body.picture.emplace(carried.source, carried.width, carried.height);
+      else
+        body.file.emplace(carried.source, carried.name, carried.size);
+      // No caption: the text goes, and a picture has its time over it.
+      if (said.body.plain.empty() && !said.body.html) {
+        body.text.setVisible(false);
+        if (body.picture) {
+          body.picture->time = when;
+          body.time.setVisible(false);
+          body.apply({.padding = {3.0f, 3.0f, 3.0f, 3.0f}});
+        }
+      }
+    }
     // Formatted, it is drawn from its HTML: its text, and its links; plain,
     // its links are the URLs in it.
     // Its links in its text, where they stand: an <a>'s label going where
@@ -2312,6 +2413,17 @@ struct timeline_area : scene::Node {
             reply.handle();
             return;
           }
+        // A picture: seen whole. A file: saved and opened.
+        if (one.body.picture && one.body.picture->bounds().contains(press.x, press.y)) {
+          actions->open_picture(one.body.picture->source);
+          reply.handle();
+          return;
+        }
+        if (one.body.file && one.body.file->bounds().contains(press.x, press.y) && one.said.attachment) {
+          actions->open_file(one.body.file->source, one.said.attachment->name);
+          reply.handle();
+          return;
+        }
         // The quote: to the message it quotes.
         if (one.body.quote && one.said.replies_to && one.body.quote->bounds().contains(press.x, press.y)) {
           actions->jump_to_message(*one.said.replies_to);
@@ -4540,6 +4652,43 @@ struct context_menu : scene::Node {
   }
 };
 
+// A picture seen whole, over the window: dimmed behind, fitted in with a
+// margin, the thumbnail until the whole picture has come; a press anywhere
+// closes it.
+template <class Actions>
+struct picture_viewer : scene::Node {
+  Actions* actions = nullptr;
+  std::string source;
+  picture_viewer(Actions* a, std::string where) : actions(a), source(std::move(where)) {
+    fState.apply({.fill = true});
+  }
+  void drawSelf(skia::SkCanvas* canvas, float alpha) {
+    const skia::SkRect& box = fState.fBounds;
+    skia::SkPaint dim;
+    dim.setColor(skia::colorSetARGB(0xd9, 0, 0, 0));
+    dim.setAlphaf(dim.getAlphaf() * alpha);
+    canvas->drawRect(box, dim);
+    const skia::Sp<skia::SkImage>* image = avatar_images().find("full:" + source);
+    if (!image || !*image)
+      image = avatar_images().find("thumb:" + source);
+    if (!image || !*image)
+      return;
+    const float w = static_cast<float>((*image)->width()), h = static_cast<float>((*image)->height());
+    const float scale = std::min({1.0f, (box.width() - 80.0f) / w, (box.height() - 80.0f) / h});
+    const skia::SkRect at = skia::SkRect::MakeXYWH(box.centerX() - w * scale * 0.5f, box.centerY() - h * scale * 0.5f,
+                                                   w * scale, h * scale);
+    skia::SkPaint paint;
+    paint.setAlphaf(alpha);
+    canvas->drawImageRect(*image, at, skia::SkSamplingOptions(skia::SkFilterMode::kLinear), &paint);
+  }
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  using Node::onPointer;
+  void onPointer(scene::phase::target, const scene::pointer::down&, scene::PointerReply& reply) {
+    actions->close_picture();
+    reply.handle();
+  }
+};
+
 // ---- the window -------------------------------------------------------------------
 
 // The conversations; over them the panel that is open, if one is, sliding in
@@ -4560,6 +4709,7 @@ struct window : scene::Node {
     widgets::Dialog<settings_dialog<Actions>> settings;
     widgets::Dialog<notice_box<Actions>> notice;
     std::optional<context_menu<Actions>> menu;
+    std::optional<picture_viewer<Actions>> viewer;
 
     explicit parts(Actions* a) : frame(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a)) {
       backdrop.apply({.fill = true});
@@ -4594,6 +4744,7 @@ struct window : scene::Node {
     f(p->settings);
     f(p->notice);
     f(p->menu);
+    f(p->viewer);
   }
 
   [[nodiscard]] conversations_screen<Actions>& main() { return p->frame.base().base(); }
@@ -4621,6 +4772,8 @@ struct window : scene::Node {
   }
 
   void open_settings(std::string motion) { p->settings.open(actions, std::move(motion)); }
+  void open_picture(std::string source) { p->viewer.emplace(actions, std::move(source)); }
+  void close_picture() { p->viewer.reset(); }
   void close_settings() { p->settings.close(); }
   [[nodiscard]] settings_dialog<Actions>* settings_up() { return p->settings.shown(); }
 

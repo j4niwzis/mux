@@ -171,6 +171,7 @@ class account {
   // sees it was read.
   // Avatars of XMPP contacts (XEP-0084) are not fetched yet.
   void fetch_avatar(std::string, std::string) {}
+  void fetch_media(std::string, std::string, int, bool = false) {}
   // A room's occupants come with its presence; nothing to ask for.
   void fetch_members(std::string) {}
   // Rooms are joined through their bookmarks; not from a link yet.

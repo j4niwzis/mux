@@ -953,6 +953,20 @@ struct message_bubble : nodes::Stack {
     }
   };
 
+  // tdesktop's bar over the first unread: its words in the middle of a band
+  // the width of the chat.
+  struct unread_bar_t : nodes::Stack {
+    static constexpr float kHeight = 26.0f;
+    struct parts_t {
+      nodes::Text label{"Unread messages", 13.0f, dim_colour, true};
+    } parts;
+    unread_bar_t() {
+      fStack.justify = nodes::justify::middle{};
+      fState.apply({.place = scene::anchor::kTopLeft, .y = -(kHeight + 4.0f), .fillX = true, .height = kHeight,
+                    .background = sidebar_colour});
+      parts.label.apply({.alignSelf = scene::align::kMiddle});
+    }
+  };
   struct parts_t {
     // The sender's avatar, beside the last of their run in a group; the
     // same room, empty, beside the rest.
@@ -960,7 +974,19 @@ struct message_bubble : nodes::Stack {
     body_column body;
     // The arrow a swipe shows, filling as it reaches its mark.
     nodes::Icon swipe_mark{shape_of(icon::back{}), dim_colour};
+    // Over the first unread message of a chat opened: tdesktop's bar.
+    std::optional<unread_bar_t> unread_bar;
   } parts;
+  // Whether it has the bar: kept while the chat's first unread is it.
+  bool unread_start = false;
+  // tdesktop's "Unread messages" bar, across the whole row, over it.
+  void mark_unread_start() {
+    unread_start = true;
+    parts.unread_bar.emplace();
+    fState.apply({.padding = {fState.fPadding.fTop + unread_bar_t::kHeight + 6.0f, fState.fPadding.fRight,
+                              fState.fPadding.fBottom, fState.fPadding.fLeft}});
+    this->invalidateLayout();
+  }
 
   // Declared: the avatar's room and the bubble, at the right where it is
   // one's own; the bubble a column of the name, the quote, the text, the
@@ -971,7 +997,7 @@ struct message_bubble : nodes::Stack {
         outgoing(said.outgoing), sender(said.sender),
         parts{.face = avatar_mark(said.sender, sender_name(in, said.sender), kAvatar),
               .body = body_column(said.outgoing, said.body.plain, mark_of(said) + clock_of(said.at))} {
-    auto& [face, body, swipe_mark] = parts;
+    auto& [face, body, swipe_mark, unread_bar] = parts;
     swipe_mark.apply({.place = scene::anchor::kCentreRight,
                       .x = -6.0f,
                       .width = 28.0f,
@@ -1202,7 +1228,7 @@ struct message_bubble : nodes::Stack {
     const bool stepped = swipe.step(now_ms);
     if (!stepped && swipe.value() == swipe_drawn)
       return;
-    auto& [face, body, swipe_mark] = parts;
+    auto& [face, body, swipe_mark, unread_bar] = parts;
     const float shift = swipe.value();
     swipe_drawn = shift;
     const float reached = std::clamp(-shift / kSwipeToReply, 0.0f, 1.0f);

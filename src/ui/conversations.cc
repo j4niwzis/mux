@@ -629,6 +629,9 @@ struct conversations_screen : nodes::Stack {
   // The chat the jump is in: one asked with a chat's opening -- a link to
   // a message there -- is kept when the chat is first shown.
   std::optional<conversation_id> jump_chat;
+  // The chat's first unread message as it was opened: the bar goes over it,
+  // and the view opens with it at its top.
+  std::optional<std::string> unread_from;
   bool jump_quiet = false;
   int jump_tries = 0;
   // Frames a jump has been on its way: the loader shows past a few.
@@ -773,7 +776,7 @@ struct conversations_screen : nodes::Stack {
       } else {
         const skia::SkRect view = timeline.bounds();
         const skia::SkRect box = it->bounds();
-        const float above = aim_quiet ? 60.0f
+        const float above = aim_quiet ? (unread_from && *aiming == *unread_from ? 0.0f : 60.0f)
                             : box.height() < view.height() ? (view.height() - box.height()) * 0.5f
                                                            : 0.0f;
         float to = std::max(0.0f, timeline.current() + (box.fTop - view.fTop) - above);
@@ -1059,6 +1062,8 @@ struct conversations_screen : nodes::Stack {
             [&](std::size_t i) { return all[i].id; }, [](const message_bubble& row) { return row.message_id; },
             [&](std::size_t i) {
               message_bubble made(*one, all[i], first_of_run(i), last_of_run(i), &now, shows(all[i]));
+              if (unread_from && all[i].id == *unread_from)
+                made.mark_unread_start();
               if (arrives(i))
                 made.appear();
               return made;
@@ -1069,7 +1074,7 @@ struct conversations_screen : nodes::Stack {
               const auto link = first_link_of(all[i]);
               const bool preview_known = link && now.previews.contains(*link);
               return row.said == all[i] && row.first == first_of_run(i) && row.last == last_of_run(i) &&
-                     row.quote_known == quote_known && row.events_shown == shows(all[i]) &&
+                     row.quote_known == quote_known && row.events_shown == shows(all[i]) && row.unread_start == (unread_from && all[i].id == *unread_from) &&
                      row.preview_known == preview_known;
             }))
       timeline.invalidateLayout();
@@ -1086,13 +1091,22 @@ struct conversations_screen : nodes::Stack {
       // view goes: not the unread, nor where it was left, first.
       if (jumping_to && jump_chat != chosen)
         jumping_to.reset();
+      unread_from.reset();
       if (jumping_to) {
         timeline.scrollToEnd(false);
       } else if (one->read_up_to && one->unread_here() > 0) {
-        // Unread in it: opened where it was read up to, as tdesktop opens
-        // a chat at its first unread, and read on from there as it is seen.
+        // Unread in it: opened at its first unread, at the view's top under
+        // tdesktop's bar, and read on from there as it is seen -- where the
+        // message read up to is not here, first what is around it.
         timeline.scrollToEnd(false);
-        jumping_to = *one->read_up_to;
+        unread_from.reset();
+        if (const auto read = std::ranges::find(all, *one->read_up_to, &message::id); read != all.end())
+          for (auto it = std::next(read); it != all.end(); ++it)
+            if (!it->outgoing) {
+              unread_from = it->id;
+              break;
+            }
+        jumping_to = unread_from ? *unread_from : *one->read_up_to;
         jump_chat = chosen;
         jump_quiet = true;
         jump_tries = 0;

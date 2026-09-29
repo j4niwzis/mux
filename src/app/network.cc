@@ -327,6 +327,18 @@ struct network {
             one.account);
     });
   }
+  // A room not joined, looked up by the account named.
+  void preview_room(const mux::account_id& by, std::string room, std::vector<std::string> via) {
+    loop.post([this, by, room = std::move(room), via = std::move(via)] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == by)
+                account->preview_room(room, via);
+            },
+            one.account);
+    });
+  }
   // A room joined by the account named, through the servers named.
   void join(const mux::account_id& by, std::string room, std::vector<std::string> via) {
     loop.post([this, by, room = std::move(room), via = std::move(via)] {

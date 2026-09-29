@@ -47,6 +47,8 @@ struct window : scene::Node {
       widgets::Dialog<notice_box<Actions>> notice;
       // A person's info, in the middle, as tdesktop's profile layer.
       widgets::Dialog<person_card<Actions>> person;
+      // A room not joined, from a link: its card, as a person's.
+      widgets::Dialog<room_card<Actions>> room;
       // A message's reactions as events.
       widgets::Dialog<reactions_box<Actions>> reactions;
       // A room's management.
@@ -79,7 +81,7 @@ struct window : scene::Node {
     explicit layers(Actions* a)
         : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a))},
           actions_of(a) {
-      auto& [backdrop, frame, settings, notice, person, reactions, manage, forwarding, new_chat, devtools, sending,
+      auto& [backdrop, frame, settings, notice, person, room, reactions, manage, forwarding, new_chat, devtools, sending,
              emoji, menu, viewer] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
@@ -95,6 +97,9 @@ struct window : scene::Node {
       // what it shows, a 24th of the window down within 20 and 40.
       person.setWidthFittingContent(392.0f);
       person.setPlace(widgets::dialog_place::near_top{});
+      room.setSheetColour(sidebar_colour);
+      room.setWidthFittingContent(392.0f);
+      room.setPlace(widgets::dialog_place::near_top{});
       reactions.setSheetColour(sidebar_colour);
       reactions.setSize(392.0f, 420.0f);
       manage.setSheetColour(sidebar_colour);
@@ -152,6 +157,7 @@ struct window : scene::Node {
     layer().settings.dropClosed();
     layer().notice.dropClosed();
     layer().person.dropClosed();
+    layer().room.dropClosed();
     layer().reactions.dropClosed();
     layer().manage.dropClosed();
     layer().forwarding.dropClosed();
@@ -207,6 +213,12 @@ struct window : scene::Node {
     layer().person.open(actions, account, key, facts);
   }
   void close_person() { layer().person.close(); }
+  // Opened again while up, it takes what is known now in place.
+  void open_room_card(const std::string& asked, const room_preview& known) {
+    layer().room.open(actions, asked, known);
+  }
+  void close_room_card() { layer().room.close(); }
+  [[nodiscard]] bool room_card_up() { return layer().room.shown() != nullptr; }
   void open_reactions(const std::vector<reaction_entry>& entries) { layer().reactions.open(actions, entries); }
   void close_reactions() { layer().reactions.close(); }
   void open_manage(const manage_facts& facts) { layer().manage.open(actions, facts); }

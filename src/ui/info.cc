@@ -250,6 +250,77 @@ struct person_card : nodes::Stack {
   }
 };
 
+// A room not joined, as a link names it, in the person card's layout: its
+// photo beside its name and how many are in it, what it is about, its ID to
+// copy, and a button to join it. What its server says (/room_summary) fills
+// it when it comes; till then, or where it says nothing, the address alone.
+template <class Actions>
+struct room_card : nodes::Stack {
+  struct join_it {
+    Actions* actions = nullptr;
+    void operator()() const { actions->join_room_card(); }
+  };
+  using close_button = icon_button<ask<Actions, &Actions::close_room_card>>;
+  struct top_bar : nodes::Stack {
+    struct parts_t {
+      nodes::Text title{"Room info", 16.0f, text_colour, true};
+      close_button close;
+    } parts;
+    explicit top_bar(Actions* a) : parts{.close = close_button(icon::close{}, {a})} {
+      this->setHorizontal();
+      fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 10.0f, 0.0f, 22.0f}});
+      parts.title.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      parts.close.apply({.alignSelf = scene::align::kMiddle});
+    }
+  };
+  struct cover : nodes::Stack {
+    struct parts_t {
+      avatar_mark photo;
+      two_lines texts;
+    } parts;
+    cover(const std::string& key, const std::string& name, const std::string& line)
+        : parts{.photo = avatar_mark(key, name, 72.0f), .texts = two_lines(name, line, 17.0f, 6.0f)} {
+      this->setHorizontal();
+      this->setGap(16.0f);
+      fState.apply({.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}});
+    }
+  };
+  // Its name, else its address, else what the link said.
+  static std::string name_of(const std::string& asked, const room_preview& known) {
+    return !known.name.empty() ? known.name : !known.alias.empty() ? known.alias : asked;
+  }
+  // Under the name: the address, where the name is not it, and how many.
+  static std::string line_of(const std::string& asked, const room_preview& known) {
+    std::string out = known.alias.empty() ? (known.name.empty() ? std::string() : asked) : known.alias;
+    if (out == name_of(asked, known))
+      out.clear();
+    if (known.members)
+      out += std::format("{}{} {}", out.empty() ? "" : " · ", *known.members, *known.members == 1 ? "member" : "members");
+    return out.empty() ? std::string("Matrix room") : out;
+  }
+  struct parts_t {
+    top_bar top;
+    cover face;
+    nodes::Box<> band = section_band();
+    nodes::Text about;
+    id_line id;
+    action_tile<join_it> join;
+  } parts;
+
+  room_card(Actions* a, const std::string& asked, const room_preview& known)
+      : parts{.top = top_bar(a),
+              .face = cover(known.id.empty() ? asked : known.id, name_of(asked, known), line_of(asked, known)),
+              .about = nodes::Text(known.topic.empty() ? known.note : known.topic, 14.0f,
+                                   known.topic.empty() ? dim_colour : text_colour),
+              .id = id_line(known.id.empty() ? asked : known.id, ""),
+              .join = action_tile<join_it>("Join", icon::plus{}, {a})} {
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}});
+    parts.about.setWrapped(true);
+    parts.about.apply({.fillX = true, .margin = {2.0f, 22.0f, 8.0f, 22.0f}});
+    parts.join.apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
+  }
+};
+
 // A reaction as the event it is: who, with what, when.
 struct reaction_entry {
   std::string event;

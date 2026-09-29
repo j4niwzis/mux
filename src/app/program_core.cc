@@ -49,6 +49,16 @@ void app::woken() {
                                [&](const mux::change::state_listed& listed) {
                                  root().show_room_state(listed.entries);
                                },
+                               // A room looked up: its card filled, while it
+                               // is up for that room still.
+                               [&](const mux::change::room_previewed& shown) {
+                                 if (!previewing || !root().room_card_up() || previewing->step.by != shown.by ||
+                                     previewing->step.room != shown.asked)
+                                   return;
+                                 if (shown.preview.avatar && !shown.preview.id.empty())
+                                   net->fetch_avatar(shown.by, *shown.preview.avatar, shown.preview.id);
+                                 root().open_room_card(shown.asked, shown.preview);
+                               },
                                [&](const mux::change::media_progress& how) {
                                  mux::ui::download_progress().insert_or_assign(how.source, how.done);
                                  scene.state().markDamaged();

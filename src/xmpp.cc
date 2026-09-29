@@ -207,6 +207,7 @@ class account {
   void send_sticker(std::string, mux::emote) {}
   // Link previews come from a Matrix homeserver alone.
   void fetch_preview(std::string) {}
+  void preview_room(std::string, std::vector<std::string>) {}
   // New chats and groups are made over Matrix alone for now.
   void create_direct(std::string) {}
   void create_group(std::string) {}

@@ -45,14 +45,33 @@ void app::follow(const mux::logic::link_t& where) {
                              },
                              [&](const mux::logic::link_step::say& step) { root().show_message(step.title, step.text); },
                              [&](const mux::logic::link_step::join& step) {
-                               // Opened when it comes, in woken().
-                               joining = std::visit(
-                                   mux::overloaded{[](const mux::logic::link::room& room) { return std::optional(room); },
-                                                   [](const auto&) { return std::optional<mux::logic::link::room>(); }},
-                                   where);
-                               net->join(step.by, step.room, step.via);
+                               // Its card first, as a person's: filled when
+                               // its server answers, in woken(), and joined
+                               // from there.
+                               previewing = room_looked_up{
+                                   step, std::visit(mux::overloaded{
+                                                        [](const mux::logic::link::room& room) { return std::optional(room); },
+                                                        [](const auto&) { return std::optional<mux::logic::link::room>(); }},
+                                                    where)};
+                               root().open_room_card(step.room, mux::room_preview{.note = "Looking it up…"});
+                               net->preview_room(step.by, step.room, step.via);
                              }},
              mux::logic::where_to(*model, where, screen.chosen, screen.current));
+}
+
+// The room of the card joined: opened when it comes, in woken().
+void app::apply(const request::join_room_card&) {
+  if (!previewing)
+    return;
+  const auto looked = *std::exchange(previewing, std::nullopt);
+  joining = looked.link;
+  net->join(looked.step.by, looked.step.room, looked.step.via);
+  root().close_room_card();
+}
+
+void app::apply(const request::close_room_card&) {
+  previewing.reset();
+  root().close_room_card();
 }
 
 void app::apply(const request::load_context& one) {

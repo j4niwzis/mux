@@ -14,6 +14,7 @@ import loom.cs.message_pagination;
 import loom.cs.event_context;
 import loom.cs.receipts;
 import loom.cs.redaction;
+import loom.cs.room_summary;
 import loom.cs.room_send;
 import loom.cs.rooms;
 import loom.cs.room_state;
@@ -266,6 +267,28 @@ void account<Sink>::fetch_preview(std::string url) {
     if (made.title.empty() && made.description.empty())
       return;
     sink_(change::preview_loaded{url, std::move(made)});
+  });
+}
+
+template <class Sink>
+void account<Sink>::preview_room(std::string room, std::vector<std::string> via) {
+  loop_->spawn([this, room = std::move(room), via = std::move(via)] {
+    if (!api_)
+      return;
+    auto got = perform(*api_, loom::cs::get_room_summary{
+                                  .room_id_or_alias = room,
+                                  .via = via.empty() ? std::nullopt : std::optional<std::vector<std::string>>(via)});
+    if (!got) {
+      sink_(change::room_previewed{id_, room, {.note = "Its server tells nothing of it: " + got.error().said()}});
+      return;
+    }
+    sink_(change::room_previewed{id_, room,
+                                 {.id = got->room_id,
+                                  .name = got->name.value_or(""),
+                                  .alias = got->canonical_alias.value_or(""),
+                                  .topic = got->topic.value_or(""),
+                                  .avatar = got->avatar_url,
+                                  .members = got->num_joined_members}});
   });
 }
 

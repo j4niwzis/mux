@@ -208,6 +208,13 @@ struct app : kept_settings {
   // in it jumped to -- a person's page, a word said, or a room joined, and
   // opened when it comes.
   std::optional<mux::logic::link::room> joining;
+  // A room not joined, looked up from a link: its card up, until it is
+  // joined from there or closed.
+  struct room_looked_up {
+    mux::logic::link_step::join step;
+    std::optional<mux::logic::link::room> link;
+  };
+  std::optional<room_looked_up> previewing;
   void follow(const mux::logic::link_t& where);
   void open_chat(const mux::conversation_id& which, const std::optional<std::string>& event);
   // Older messages of a chat: from the disk while it has some from before
@@ -226,6 +233,8 @@ struct app : kept_settings {
   void apply(const request::not_implemented& one);
   void apply(const request::close_notice&);
   void apply(const request::close_person_info&);
+  void apply(const request::close_room_card&);
+  void apply(const request::join_room_card&);
   void apply(const request::toggle_emoji&);
   void apply(const request::close_emoji&);
   void apply(const request::insert_emoji& one);

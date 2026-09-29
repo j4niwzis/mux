@@ -91,6 +91,9 @@ std::string of(const change::media_progress& one) {
 }
 std::string of(const change::preview_loaded& one) { return std::format("a preview of {}", one.url); }
 std::string of(const change::devtools_text& one) { return one.title + "\n" + one.text; }
+std::string of(const change::room_previewed& one) {
+  return std::format("{}: {}", one.asked, one.preview.name.empty() ? one.preview.note : one.preview.name);
+}
 std::string of(const change::state_listed& one) {
   return std::format("{} state events of {}", one.entries.size(), one.in.id);
 }

@@ -462,6 +462,20 @@ struct link_preview {
   friend bool operator==(const link_preview&, const link_preview&) = default;
 };
 
+// A room the user is not in, as its server tells of it (/room_summary): its
+// ID, name, address, what it is about, its picture and how many are in it --
+// or, where it tells nothing, why.
+struct room_preview {
+  std::string id;
+  std::string name;
+  std::string alias;
+  std::string topic;
+  std::optional<std::string> avatar;
+  std::optional<std::int64_t> members;
+  std::string note;
+  friend bool operator==(const room_preview&, const room_preview&) = default;
+};
+
 namespace change {
 
 struct connection_changed {
@@ -518,6 +532,14 @@ struct avatar_loaded {
 struct preview_loaded {
   std::string url;
   link_preview preview;
+};
+
+// A room looked up before joining it: by whom, as the link named it, and
+// what came of it.
+struct room_previewed {
+  account_id by;
+  std::string asked;
+  room_preview preview;
 };
 
 // What the developer tools show: a title over some JSON or an answer; and a
@@ -651,7 +673,7 @@ using change_t = std::variant<change::connection_changed, change::account_remove
                               change::session_given, change::avatar_loaded, change::receipts_changed,
                               change::window_opened, change::window_extended, change::media_progress,
                               change::room_created, change::preview_loaded, change::devtools_text,
-                              change::state_listed>;
+                              change::state_listed, change::room_previewed>;
 
 // The model: every account, and every change applied to it.
 class model {
@@ -877,6 +899,7 @@ class model {
   void on(const change::room_created&) {}    // the program's: it shows it
   void on(const change::devtools_text&) {}   // the window's
   void on(const change::state_listed&) {}    // the window's
+  void on(const change::room_previewed&) {}  // the window's: the room's card
   void on(const change::preview_loaded& one) { previews.insert_or_assign(one.url, one.preview); }
   void on(const change::receipts_changed& one) {
     conversation& kept = of(one.in);

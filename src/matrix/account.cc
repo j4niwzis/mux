@@ -83,6 +83,8 @@ class account {
   void create_group(std::string name);
   // A link's preview, as the homeserver makes it.
   void fetch_preview(std::string url);
+  // A room not joined, as its server tells of it, before it is joined.
+  void preview_room(std::string room, std::vector<std::string> via);
   // The developer tools, as Element's: an event as the server has it; the
   // room's state, every event of it; and an event of any type sent.
   void view_source(std::string room, std::string event);

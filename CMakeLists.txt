@@ -141,7 +141,7 @@ if(MUX_UI)
   # skiff and skiff-widgets say the rest of what they are in their own trees.
   cme_declare_port(NAME skiff PROVIDES skiff
     GITHUB_REPOSITORY j4niwzis/skiff
-    GIT_TAG a2c7d736d7c26f53d8ab49afbbe30dfaa5f14adb)
+    GIT_TAG 7932c9dbc411ee19c24efd6a8ebbedc442bbda63)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
     GIT_TAG 35e459539865362c6919c946488cd71640511b1c)
@@ -159,21 +159,23 @@ if(MUX_UI)
   endif()
   foreach(codec IN ITEMS png jpeg gif webp)
     string(TOUPPER ${codec} option_name)
-    set(SKIFF_${option_name} ${MUX_${option_name}} CACHE BOOL "" FORCE)
     if(MUX_${option_name})
       list(APPEND mux_skia_components ${codec})
     endif()
   endforeach()
-  # Skia as skiff draws with it, with the system's fonts read from their
-  # directory, on GL where it is asked for.
-  set(skiff_backend fontmgr-directory)
-  if(MUX_GL)
-    list(APPEND skiff_backend gl)
-  endif()
-  set(SKIFF_SKIA_COMPONENTS ${skiff_backend} CACHE STRING "" FORCE)
-  # Text shaped by HarfBuzz and laid out by Unicode's rules through alef:
-  # Arabic and Hebrew, Indic scripts, emoji sequences, CJK line breaks.
-  set(SKIFF_TEXT_SHAPING ON CACHE BOOL "" FORCE)
+  # skiff as mux draws with it, through its port's options -- set for that
+  # port alone, not as the whole build's: Skia on GL where asked for, the
+  # system's fonts read from their directory, the pictures mux decodes, and
+  # text shaped by HarfBuzz and laid out by Unicode's rules through alef
+  # (Arabic and Hebrew, Indic scripts, emoji sequences, CJK line breaks).
+  cme_options(skiff
+    "SKIFF_GL ${MUX_GL}"
+    "SKIFF_FONTMGR_DIRECTORY ON"
+    "SKIFF_PNG ${MUX_PNG}"
+    "SKIFF_JPEG ${MUX_JPEG}"
+    "SKIFF_GIF ${MUX_GIF}"
+    "SKIFF_WEBP ${MUX_WEBP}"
+    "SKIFF_TEXT_SHAPING ON")
   cme_find_package(Skia REQUIRED COMPONENTS ${mux_skia_components})
   cme_find_package(SDL3 REQUIRED)
   cme_find_package(skiff-widgets REQUIRED)

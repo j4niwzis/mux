@@ -102,6 +102,10 @@ class outbox_part {
     if (!screen.chosen || !logic::sendable(text))
       return;
     const conversation_id to = *screen.chosen;
+    // What is sent goes at the chat's end: the chat back to its newest
+    // first, where it is a window elsewhere, or it would not be shown.
+    s_->go_live(to);
+    screen.jump_to_end();
     std::visit(overloaded{[&](const compose::plain&) { s_->ask->send(to, std::move(text)); },
                           [&](const compose::reply& one) {
                             if (s_->demo())

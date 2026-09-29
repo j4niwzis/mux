@@ -179,6 +179,7 @@ struct app : kept_settings {
   void apply(const request::quit&);
   void apply(const request::toggle_info&);
   void apply(const request::jump_to_end&);
+  void go_live(const mux::conversation_id& in);
 
   // A message's menu, and what is chosen from it.
   // -- files to send: chosen with the paperclip, or dropped on the window

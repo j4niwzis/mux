@@ -28,6 +28,9 @@ struct services {
   // An account's settings, as saved -- its privacy, its proxy -- by its
   // address; none for one not saved.
   std::function<const mux::config::account_t*(std::string_view address)> settings_of;
+  // A chat that is a window of its history away from its newest: back to
+  // its newest, live -- before anything is put at its end.
+  std::function<void(const conversation_id&)> go_live;
 
   [[nodiscard]] window_type& root() const { return scene->root(); }
   // The demo: no network, and nothing kept.

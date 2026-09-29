@@ -62,7 +62,19 @@ void app::keep_on_disk(const mux::change_t& one) {
       if (const auto found = std::ranges::find(chat->timeline, id, &mux::message::id); found != chat->timeline.end())
         store.record(*found);
   };
-  std::visit(mux::overloaded{[&](const mux::change::message_added& c) { as_now(c.message.in, c.message.id); },
+  // A message added is kept as it is now in the timeline -- or, where it is
+  // not in it (it came live while the chat is a window elsewhere), as it
+  // came: kept either way, or it would be lost on going back to the newest.
+  const auto added = [&](const mux::change::message_added& c) {
+    const mux::conversation* chat = model->find(c.message.in);
+    const bool in_timeline =
+        chat && std::ranges::find(chat->timeline, c.message.id, &mux::message::id) != chat->timeline.end();
+    if (in_timeline)
+      as_now(c.message.in, c.message.id);
+    else if (!c.message.id.empty())
+      store.record(c.message);
+  };
+  std::visit(mux::overloaded{[&](const mux::change::message_added& c) { added(c); },
                              [&](const mux::change::message_edited& c) { as_now(c.in, c.id); },
                              [&](const mux::change::message_redacted& c) { as_now(c.in, c.id); },
                              [&](const mux::change::reaction_changed& c) { as_now(c.in, c.id); },
@@ -99,7 +111,8 @@ void app::wire() {
                     .ask = &ask,
                     .scene = &scene,
                     .refresh = [this] { this->refresh(); },
-                    .settings_of = [this](std::string_view address) { return this->settings_of(address); }};
+                    .settings_of = [this](std::string_view address) { return this->settings_of(address); },
+                    .go_live = [this](const mux::conversation_id& in) { this->go_live(in); }};
 }
 
 void app::before_frame() {

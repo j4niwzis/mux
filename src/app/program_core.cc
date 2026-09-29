@@ -49,7 +49,7 @@ void app::woken() {
   this->refresh();
   // What comes into the chat being read, at its end, is read.
   if (const auto& chosen = root().main().chosen; chosen && root().main().timeline.atEnd(40.0f))
-    this->mark_read(*chosen);
+    reading.mark_read(*chosen);
   // A room joined from a link: opened once it is here.
   if (pending_link)
     if (const auto found = this->chat_of(*pending_link)) {
@@ -102,7 +102,11 @@ void app::wire() {
                     .box = box,
                     .ask = &ask,
                     .scene = &scene,
-                    .refresh = [this] { this->refresh(); }};
+                    .refresh = [this] { this->refresh(); },
+                    .settings_of = [this](std::string_view address) -> const mux::config::account_t* {
+                      const auto found = this->find(address);
+                      return found == saved.end() ? nullptr : &*found;
+                    }};
 }
 
 void app::before_frame() {
@@ -118,46 +122,8 @@ void app::before_frame() {
 
 void app::closing() {
   if (const auto& chosen = root().main().chosen)
-    this->keep_draft(*chosen, root().main().line.text());
+    drafts.keep(*chosen, root().main().line.text());
   net->shutdown();
-}
-
-void app::keep_draft(const mux::conversation_id& in, const std::string& text) {
-  auto& drafts = root().main().drafts;
-  const bool blank = std::ranges::all_of(text, [](unsigned char c) { return std::isspace(c) != 0; });
-  const auto found = drafts.find(in);
-  if (blank ? found == drafts.end() : (found != drafts.end() && found->second == text))
-    return;
-  if (blank)
-    drafts.erase(in);
-  else
-    drafts.insert_or_assign(in, text);
-  if (ask.demo)
-    return;
-  knot::value::object all;
-  for (const auto& [id, draft] : drafts)
-    all.emplace(id.account.address + "\n" + id.id, knot::value(draft));
-  const auto where = mux::config::state_path("drafts.json");
-  std::error_code failed;
-  std::filesystem::create_directories(where.parent_path(), failed);
-  std::ofstream(where, std::ios::binary | std::ios::trunc) << knot::to_json_string(knot::value(std::move(all)));
-}
-
-void app::load_drafts() {
-  std::ifstream file(mux::config::state_path("drafts.json"), std::ios::binary);
-  const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-  auto parsed = knot::try_read<knot::value>(std::string_view(text));
-  if (!parsed || !parsed->is<knot::value::object>())
-    return;
-  for (const auto& [key, draft] : parsed->as<knot::value::object>()) {
-    const auto cut = key.find('\n');
-    if (cut == std::string::npos || !draft.is<std::string>())
-      continue;
-    const std::string address = key.substr(0, cut);
-    root().main().drafts.insert_or_assign(
-        mux::conversation_id{mux::account_id{mux::ui::protocol_of(address), address}, key.substr(cut + 1)},
-        draft.as<std::string>());
-  }
 }
 
 auto app::root() -> window_type& { return scene.root(); }

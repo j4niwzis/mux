@@ -131,7 +131,7 @@ int main(int argc, char** argv) {
   program.renderer = mux::config::renderer_of(saved.renderer);
   program.limits = saved.cache.value_or(mux::config::cache_limits{});
   if (!demo)
-    program.load_drafts();
+    program.drafts.load();
   program.sending = saved.sending.value_or(mux::config::sending_settings{});
   program.apply_limits();
   program.proxies = proxies;

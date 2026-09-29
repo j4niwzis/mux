@@ -25,6 +25,8 @@ import mux.app.words;
 import mux.app.services;
 import mux.app.search;
 import mux.app.pictures;
+import mux.app.drafts;
+import mux.app.reading;
 
 export namespace mux::app {
 
@@ -35,6 +37,8 @@ struct app {
   services shared;
   search_part search{shared};
   pictures_part pictures{shared};
+  drafts_part drafts{shared};
+  reading_part reading{shared};
   // What the parts share, pointed at the program's own: once the program
   // is given its model, network and mailbox.
   void wire();
@@ -55,8 +59,8 @@ struct app {
   static constexpr bool takes = requires(Part& part, const Request& one) { part.apply(one); };
   template <class Request>
   void route(const Request& one) {
-    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<app, Request>, "a request no part of the program takes");
-    if (!offer(search, one) && !offer(pictures, one))
+    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<app, Request>, "a request no part of the program takes");
+    if (!offer(search, one) && !offer(pictures, one) && !offer(reading, one))
       offer(*this, one);
   }
 
@@ -120,8 +124,6 @@ struct app {
   void closing();
   // Drafts: in the screen, and on disk in one small file, written anew
   // when one changes.
-  void keep_draft(const mux::conversation_id& in, const std::string& text);
-  void load_drafts();
 
   // -- the window
   window_type& root();
@@ -166,7 +168,6 @@ struct app {
   // people in it told so where read receipts are on.
   // The user's own read position: kept here always -- in the model and on
   // disk -- and told to the server only where the account's privacy lets it.
-  void mark_read(const mux::conversation_id& which);
 
   // The chosen chat left: a Matrix room here; XMPP rooms are not there yet.
   void apply(const request::leave_chat&);
@@ -288,12 +289,6 @@ struct app {
   void apply(const request::account_page& one);
   void apply(const request::flip_account_receipts&);
   void apply(const request::flip_account_typing&);
-  // The user typing in the chosen chat, or not: said, where the account's
-  // privacy lets it -- 'typing' at most every twenty seconds while it goes
-  // on (it lasts thirty), 'stopped' when the field is emptied or sent.
-  std::optional<mux::conversation_id> typing_in;
-  std::chrono::steady_clock::time_point typing_said{};
-  void apply(const request::typing& one);
   void apply(const request::proxy_kind& one);
   // The chosen account through a profile, or none: kept, and connected again.
   void apply(const request::choose_account_proxy& one);

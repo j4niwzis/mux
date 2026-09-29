@@ -47,7 +47,7 @@ void app::send_message(std::string text) {
   composing = compose::plain{};
   screen.line.show_context(std::nullopt);
   screen.line.clear();
-  this->keep_draft(to, std::string());
+  drafts.keep(to, std::string());
 }
 
 void app::apply(const request::switch_account& one) {

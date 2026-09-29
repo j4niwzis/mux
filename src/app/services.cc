@@ -8,6 +8,7 @@ export module mux.app.services;
 import std;
 import skiff.scene;
 import mux.core;
+import mux.config;
 import mux.ui;
 import mux.app.network;
 import mux.app.store;
@@ -24,6 +25,9 @@ struct services {
   skiff::scene::Scene<window_type>* scene = nullptr;
   // The window brought up to date with the model, after a part changed it.
   std::function<void()> refresh;
+  // An account's settings, as saved -- its privacy, its proxy -- by its
+  // address; none for one not saved.
+  std::function<const mux::config::account_t*(std::string_view address)> settings_of;
 
   [[nodiscard]] window_type& root() const { return scene->root(); }
   // The demo: no network, and nothing kept.

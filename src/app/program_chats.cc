@@ -29,7 +29,7 @@ void app::apply(const request::choose& one) {
   auto& screen = root().main();
   search.chat_chosen(one.which);
   if (screen.chosen && *screen.chosen != one.which) {
-    this->keep_draft(*screen.chosen, screen.line.text());
+    drafts.keep(*screen.chosen, screen.line.text());
     screen.line.set_text(screen.draft_of(one.which));
   } else if (!screen.chosen) {
     screen.line.set_text(screen.draft_of(one.which));
@@ -54,27 +54,7 @@ void app::apply(const request::choose& one) {
     net->fetch_members(one.which);
   root().main().chosen = one.which;
   root().main().show(*model);
-  this->mark_read(one.which);
-}
-
-void app::mark_read(const mux::conversation_id& which) {
-  if (ask.demo)
-    return;
-  const mux::conversation* one = model->find(which);
-  if (!one)
-    return;
-  for (auto it = one->timeline.rbegin(); it != one->timeline.rend(); ++it)
-    if (!it->outgoing && !it->id.empty()) {
-      if (one->read_up_to == it->id)
-        return;
-      const std::string id = it->id;
-      model->read_up_to(which, id);
-      store.keep_reads(which, *model->find(which));
-      if (const auto account = this->find(which.account.address);
-          account != saved.end() && mux::config::read_receipts_of(*account))
-        net->mark_read(which, id);
-      return;
-    }
+  reading.mark_read(one.which);
 }
 
 void app::apply(const request::leave_chat&) {

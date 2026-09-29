@@ -101,28 +101,6 @@ void app::apply(const request::flip_account_typing&) {
   });
 }
 
-void app::apply(const request::typing& one) {
-  if (ask.demo)
-    return;
-  const auto& chosen = root().main().chosen;
-  const auto now = std::chrono::steady_clock::now();
-  const auto allowed = [&](const mux::conversation_id& in) {
-    const auto account = this->find(in.account.address);
-    return account != saved.end() && mux::config::send_typing_of(*account);
-  };
-  if (typing_in && (!one.on || typing_in != chosen)) {
-    if (allowed(*typing_in))
-      net->typing(*typing_in, false);
-    typing_in.reset();
-  }
-  if (one.on && chosen && allowed(*chosen) &&
-      (typing_in != chosen || now - typing_said > std::chrono::seconds(20))) {
-    net->typing(*chosen, true);
-    typing_in = chosen;
-    typing_said = now;
-  }
-}
-
 void app::apply(const request::proxy_kind& one) {
   if (auto* up = root().settings_up())
     if (auto* editor = up->editor())

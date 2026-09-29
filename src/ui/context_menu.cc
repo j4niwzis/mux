@@ -298,8 +298,17 @@ struct emoji_panel : nodes::Stack {
     all.clear();
     all.reserve(alef::emoji_groups.size() + 1);
     first_group = 0;
-    if (!recent_emoji().empty()) {
-      all.emplace_back(this, "Recently used", recent_emoji());
+    {
+      // tdesktop's: what was picked lately first, then its default list
+      // (lib_ui's GetDefaultRecent), up to the section's number -- so the
+      // section is full from the first run, as Telegram's.
+      std::vector<std::string> shown = recent_emoji();
+      for (const char* one : {"😂", "😘", "❤️", "😍", "😊", "😁", "👍", "☺️", "😔", "😄", "😭", "💋",
+                              "😒", "😳", "😜", "🙈", "😉", "😃", "😢", "😝", "😱", "😡", "😏", "😞",
+                              "😅", "😚", "🙊", "😌", "😀", "😋", "😆", "👌", "😐", "😕"})
+        if (shown.size() < 42 && std::ranges::find(shown, std::string(one)) == shown.end())
+          shown.emplace_back(one);
+      all.emplace_back(this, "Recently used", shown);
       ++first_group;
     }
     if (!chat_emotes().empty()) {

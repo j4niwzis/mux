@@ -50,7 +50,7 @@ struct emoji_panel : nodes::Stack {
     } parts;
     tab(emoji_panel* p, std::size_t g)
         : panel(p), group(g),
-          parts{.face = nodes::Text(logic::emoji_text(logic::emoji_groups[g].entries.front()), 16.0f, text_colour)} {
+          parts{.face = nodes::Text(logic::emoji_text(alef::emoji_groups[g].all.front()), 16.0f, text_colour)} {
       auto& face = parts.face;
       this->setHorizontal();
       fStack.justify = nodes::justify::middle{};
@@ -89,16 +89,16 @@ struct emoji_panel : nodes::Stack {
     field.apply({.fillX = true, .height = 32.0f});
     tabs.setHorizontal();
     tabs.apply({.fillX = true, .autoSize = scene::axes::kY});
-    for (std::size_t g = 0; g < std::size(logic::emoji_groups); ++g)
+    for (std::size_t g = 0; g < alef::emoji_groups.size(); ++g)
       tabs.parts.each.emplace_back(this, g);
     grid.apply({.fillX = true, .grow = scene::axes::kY});
     this->show_group(0);
   }
-  void show(const std::vector<const logic::emoji_entry*>& found) {
+  void show(const std::vector<const alef::emoji*>& found) {
     auto& grid = parts.grid;
     auto& cells = std::get<0>(std::get<0>(grid.fChildren).fChildren);
     cells.clear();
-    for (const logic::emoji_entry* one : found)
+    for (const alef::emoji* one : found)
       cells.emplace_back(actions, logic::emoji_text(*one));
     grid.invalidateLayout();
     grid.scrollTo(0.0f);

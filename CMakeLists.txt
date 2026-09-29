@@ -92,12 +92,12 @@ cme_find_package(OpenSSL REQUIRED)
 # for more of it finds it already built without that, and stops.
 cme_declare_port(NAME alef PROVIDES alef
   GITHUB_REPOSITORY j4niwzis/alef
-  GIT_TAG 583c3a85adfecf60e68dccd2742e7ad97e667645
+  GIT_TAG a345c5485d2c16125f00b10c42728725d8aa71c6
   LICENSE AGPL-3.0-only
   SYSTEM NEVER
   TARGETS alef)
 cme_options(alef "ALEF_TESTS OFF")
-cme_find_package(alef COMPONENTS precis idna grapheme line bidi REQUIRED)
+cme_find_package(alef COMPONENTS precis idna grapheme line bidi emoji REQUIRED)
 
 cme_find_package(tern REQUIRED)
 # Of loom, what mux uses: the state a sync leaves, and the parts of the API it
@@ -114,7 +114,7 @@ target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
         src/matrix/events.cc src/matrix/media.cc
         src/logic/text.cc src/logic/search.cc src/logic/reading.cc src/logic/drafts.cc
         src/logic/links.cc src/logic/sending.cc src/logic/messages.cc
-        src/logic/blurhash.cc src/logic/emoji_list.cc src/logic/emoji.cc)
+        src/logic/blurhash.cc src/logic/emoji.cc)
 target_compile_features(mux_modules PUBLIC cxx_std_26)
 # The flags that decide which std module a target gets: the same on every
 # library of modules in the build, or two std modules meet in one importer.

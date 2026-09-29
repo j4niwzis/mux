@@ -1278,7 +1278,7 @@ struct message_bubble : nodes::Stack {
       return std::nullopt;
     auto styles = text.styles();
     styles.push_back({.first = at, .last = at + fragment.size(), .marked = true});
-    text.setStyles(std::move(styles), accent_colour);
+    text.setStyles(std::move(styles), outgoing ? text_colour : accent_colour);
     marked = true;
     return at;
   }
@@ -1286,7 +1286,7 @@ struct message_bubble : nodes::Stack {
     auto& text = parts.body.parts.text;
     auto styles = text.styles();
     std::erase_if(styles, [](const auto& one) { return one.marked; });
-    text.setStyles(std::move(styles), accent_colour);
+    text.setStyles(std::move(styles), outgoing ? text_colour : accent_colour);
     marked = false;
   }
   void appear() {

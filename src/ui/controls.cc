@@ -47,16 +47,16 @@ struct radio_mark : nodes::Icon {
   }
 };
 // A round avatar of a size, in a row.
-struct avatar_mark : widgets::Avatar {
+struct avatar_mark : widgets::Avatar<from_avatars> {
   std::string key;
   avatar_mark(std::string id, std::string shown, float size)
-      : widgets::Avatar(initials_of(shown), size, picture_of(id), gradient_of(id)), key(std::move(id)) {
+      : widgets::Avatar<from_avatars>(initials_of(shown), size, picture_of(id), gradient_of(id)), key(std::move(id)) {
     fState.apply({.alignSelf = scene::align::kMiddle});
   }
   // Another's: a chat's or a person's, by their id and name.
   void show(std::string id, std::string_view shown) {
     key = std::move(id);
-    widgets::Avatar::show(initials_of(shown), picture_of(key), gradient_of(key));
+    widgets::Avatar<from_avatars>::show(initials_of(shown), picture_of(key), gradient_of(key));
   }
 };
 // An avatar that opens: pressed, its picture in the viewer, where it can be

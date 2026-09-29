@@ -79,14 +79,19 @@ struct picture_viewer : nodes::Stack {
     picture_viewer* viewer;
     // The picture: the whole one where it has come, its thumbnail until then.
     struct parts_t {
-      nodes::Image picture;
+      // The picture shown: whole where it has come, else its thumbnail.
+      struct shown_picture {
+        picture_viewer* viewer;
+        const skia::Sp<skia::SkImage>* operator()() const {
+          const skia::Sp<skia::SkImage>* one = whole_pictures().find(viewer->source);
+          return one && *one ? one : thumbnails().find(viewer->source);
+        }
+      };
+      nodes::Image<shown_picture> picture;
       widgets::RadialLoader loader{};  // while the whole picture is coming
     } parts;
     explicit stage(picture_viewer* v)
-        : viewer(v), parts{.picture = nodes::Image([v] {
-                            const skia::Sp<skia::SkImage>* one = whole_pictures().find(v->source);
-                            return one && *one ? one : thumbnails().find(v->source);
-                          })} {
+        : viewer(v), parts{.picture = nodes::Image<typename parts_t::shown_picture>({v})} {
       fState.apply({.fillX = true, .grow = scene::axes::kY, .masking = true});
       parts.loader.apply({.place = scene::anchor::kCentre});
     }

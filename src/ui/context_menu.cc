@@ -63,10 +63,10 @@ struct sticker_grid : nodes::Stack {
     Actions* actions;
     emote sticker;
     struct parts_t {
-      nodes::Image picture;
+      nodes::Image<from_avatars> picture;
     } parts;
     cell(Actions* a, emote one)
-        : actions(a), sticker(one), parts{.picture = nodes::Image([url = one.url] { return avatar_images().find(url); })} {
+        : actions(a), sticker(one), parts{.picture = nodes::Image<from_avatars>({one.url})} {
       fState.apply({.width = 80.0f, .height = 80.0f, .margin = {2.0f, 2.0f, 2.0f, 2.0f}, .cornerRadius = 6.0f,
                     .hoverBackground = chosen_colour});
       parts.picture.apply({.fill = true});
@@ -128,7 +128,7 @@ struct emoji_panel : nodes::Stack {
     // while what goes into the text is its :shortcode:.
     std::string picture_url;
     struct parts_t {
-      std::optional<nodes::Image> picture;
+      std::optional<nodes::Image<from_avatars>> picture;
       nodes::Text face;
     } parts;
     cell(emoji_panel* p, std::string g, const alef::emoji* from = nullptr)
@@ -144,7 +144,7 @@ struct emoji_panel : nodes::Stack {
     cell(emoji_panel* p, const emote& custom) : cell(p, ":" + custom.shortcode + ":") {
       picture_url = custom.url;
       parts.face.setVisible(false);
-      parts.picture.emplace([url = custom.url] { return avatar_images().find(url); });
+      parts.picture.emplace(from_avatars{custom.url});
       parts.picture->apply({.width = 26.0f, .height = 26.0f, .alignSelf = scene::align::kMiddle});
     }
     [[nodiscard]] bool onClick(float, float) {
@@ -392,16 +392,11 @@ struct gif_grid : nodes::Stack {
     std::string path;
     std::string key;
     struct parts_t {
-      nodes::Image picture;
+      nodes::Image<from_moving_whole> picture;
     } parts;
     gif_cell(Actions* a, std::string p)
         : actions(a), path(p), key("gif:" + p),
-          parts{.picture = nodes::Image([k = "gif:" + p] {
-            // Its frame for now, where it moves; else it, still.
-            if (const skia::Sp<skia::SkImage>* moving = animations().at(k, animation_clock()))
-              return moving;
-            return whole_pictures().find(k);
-          })} {
+          parts{.picture = nodes::Image<from_moving_whole>({"gif:" + p})} {
       fState.apply({.width = 104.0f, .height = 104.0f, .margin = {2.0f, 2.0f, 2.0f, 2.0f}, .cornerRadius = 6.0f,
                     .background = tile_colour, .masking = true});
       parts.picture.apply({.fill = true, .cornerRadius = 6.0f});

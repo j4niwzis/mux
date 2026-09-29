@@ -35,10 +35,10 @@ struct send_box : nodes::Stack {
   struct previews_column : nodes::Stack {
     // A picture to be sent, as it will look: rounded, its thumbnail by its
     // local id.
-    struct picture_preview : nodes::Image {
+    struct picture_preview : nodes::Image<from_thumbnails> {
       std::string key;
       picture_preview(std::string k, float width, float height)
-          : nodes::Image([k] { return thumbnails().find(k); }), key(std::move(k)) {
+          : nodes::Image<from_thumbnails>({k}), key(std::move(k)) {
         fState.apply({.width = width, .height = height, .alignSelf = scene::align::kMiddle, .cornerRadius = 10.0f});
       }
     };

@@ -240,11 +240,43 @@ inline animation_cache& animations() {
   return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
+// Where a picture comes from, as an Image's source: a key, and where it is
+// looked up -- asked for each frame, so one that comes later is shown.
+// Values of types of their own, not functions kept.
+using picture_ptr = const skia::Sp<skia::SkImage>*;
+struct from_avatars {  // a chat's or a person's, a custom emoji's, a sticker's
+  std::string key;
+  picture_ptr operator()() const { return avatar_images().find(key); }
+};
+struct from_previews {  // blurred, from a blurhash, until the picture comes
+  std::string key;
+  picture_ptr operator()() const { return previews().find(key); }
+};
+struct from_thumbnails {
+  std::string key;
+  picture_ptr operator()() const { return thumbnails().find(key); }
+};
+// Where it moves, the frame for now; else its thumbnail.
+struct from_moving_thumbnail {
+  std::string key;
+  picture_ptr operator()() const {
+    if (picture_ptr moving = animations().at(key, animation_clock()))
+      return moving;
+    return thumbnails().find(key);
+  }
+};
+// Where it moves, the frame for now; else it whole.
+struct from_moving_whole {
+  std::string key;
+  picture_ptr operator()() const {
+    if (picture_ptr moving = animations().at(key, animation_clock()))
+      return moving;
+    return whole_pictures().find(key);
+  }
+};
 // Where a chat's or a person's picture comes from: the avatars kept, by
-// their id -- asked for each frame, so one that comes later is shown.
-[[nodiscard]] inline nodes::ImageSource picture_of(std::string id) {
-  return [id = std::move(id)] { return avatar_images().find(id); };
-}
+// their id.
+[[nodiscard]] inline from_avatars picture_of(std::string id) { return {std::move(id)}; }
 // Their colours where they have no picture: Telegram's pair for their id.
 [[nodiscard]] inline scene::Gradient gradient_of(std::string_view id) {
   const auto [top, bottom] = userpic_colours(id);

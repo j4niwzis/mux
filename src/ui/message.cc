@@ -156,7 +156,7 @@ struct page_preview : nodes::Stack {
   struct parts_t {
     nodes::Box<> stripe{accent_colour};
     column texts;
-    std::optional<nodes::Image> picture;
+    std::optional<nodes::Image<from_avatars>> picture;
   } parts;
   explicit page_preview(const link_preview& shown) : parts{.texts = column(shown)} {
     this->setHorizontal();
@@ -166,7 +166,7 @@ struct page_preview : nodes::Stack {
                   .background = (accent_colour & 0x00FFFFFFu) | (0x18u << 24)});
     parts.stripe.apply({.fillY = true, .width = 3.0f, .cornerRadius = 1.5f});
     if (shown.image) {
-      parts.picture.emplace([url = *shown.image] { return avatar_images().find(url); });
+      parts.picture.emplace(from_avatars{*shown.image});
       parts.picture->apply({.width = 56.0f, .height = 56.0f, .cornerRadius = 6.0f});
     }
   }
@@ -202,8 +202,8 @@ struct picture_view : scene::Node {
     }
   };
   struct parts_t {
-    nodes::Image preview;  // blurred, from its blurhash, until it comes
-    nodes::Image picture;
+    nodes::Image<from_previews> preview;  // blurred, from its blurhash, until it comes
+    nodes::Image<from_moving_thumbnail> picture;
     widgets::RadialLoader loader{};  // while it is coming
     time_pill time{};
   } parts;
@@ -212,13 +212,8 @@ struct picture_view : scene::Node {
   // it, cut at the middle where the proportions differ by a rounding.
   picture_view(std::string where, int w, int h)
       : source(where), width(w), height(h),
-        parts{.preview = nodes::Image([where] { return previews().find(where); }),
-              .picture = nodes::Image([where] {
-                // Where it moves, the frame for now; else the thumbnail.
-                if (const skia::Sp<skia::SkImage>* moving = animations().at(where, animation_clock()))
-                  return moving;
-                return thumbnails().find(where);
-              })} {
+        parts{.preview = nodes::Image<from_previews>({where}),
+              .picture = nodes::Image<from_moving_thumbnail>({where})} {
     fState.apply({.cornerRadius = 10.0f, .background = tile_colour, .masking = true});
     parts.preview.apply({.fill = true, .cornerRadius = 10.0f});
     parts.picture.apply({.fill = true, .cornerRadius = 10.0f});
@@ -356,7 +351,7 @@ struct reaction_chip : nodes::Stack {
   std::size_t count = 0;
   bool mine = false;
   struct parts_t {
-    std::optional<nodes::Image> picture;
+    std::optional<nodes::Image<from_avatars>> picture;
     nodes::Text label;
     // Who reacted, as Telegram shows them: their avatars in place of the
     // count, where they are three or fewer.
@@ -388,7 +383,7 @@ struct reaction_chip : nodes::Stack {
     fState.apply({.height = 26.0f, .autoSize = scene::axes::kX, .minWidth = 26.0f, .padding = {0.0f, 9.0f, 0.0f, 9.0f},
                   .cornerRadius = 13.0f, .background = own ? accent_colour : tile_colour});
     if (pictured(key)) {
-      parts.picture.emplace([k = key] { return avatar_images().find(k); });
+      parts.picture.emplace(from_avatars{key});
       parts.picture->apply({.width = 18.0f, .height = 18.0f, .alignSelf = scene::align::kMiddle});
     }
     parts.label.apply({.alignSelf = scene::align::kMiddle});
@@ -673,7 +668,7 @@ struct message_bubble : nodes::Stack {
     struct parts_t {
       nodes::Box<> bar;
       // A picture quoted: its thumbnail.
-      std::optional<nodes::Image> thumb;
+      std::optional<nodes::Image<from_thumbnails>> thumb;
       said_column texts;
     } parts;
     quote_row(skia::SkColor colour, std::string who, std::string said, std::optional<std::string> picture = std::nullopt)
@@ -690,7 +685,7 @@ struct message_bubble : nodes::Stack {
                     .masking = true});
       bar.apply({.place = scene::anchor::kTopLeft, .x = picture ? -7.0f : -11.0f, .y = -2.0f, .fillY = true, .width = 3.0f});
       if (picture) {
-        thumb.emplace([source = *picture] { return thumbnails().find(source); });
+        thumb.emplace(from_thumbnails{*picture});
         thumb->apply({.width = 32.0f, .height = 32.0f, .alignSelf = scene::align::kMiddle,
                       .margin = {2.0f, 0.0f, 2.0f, 0.0f}, .cornerRadius = 3.0f, .background = tile_colour});
       }

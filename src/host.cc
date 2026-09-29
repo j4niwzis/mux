@@ -294,7 +294,7 @@ class canvas_target {
   }
   [[nodiscard]] bool on_gpu() const {
 #if defined(SK_GANESH)
-    return static_cast<bool>(context_);
+    return context_ != nullptr;
 #else
     return false;
 #endif

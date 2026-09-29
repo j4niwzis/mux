@@ -200,20 +200,48 @@ struct attachment {
 
 // What a room event is, for choosing which to show, as Element splits them.
 namespace room_event {
-struct joins {};        // joins and leaves
-struct invites {};      // invitations, removals, bans, knocks
-struct names {};        // members' names changed
-struct avatars {};      // members' pictures changed
-struct room_name {};
-struct topic {};
-struct room_avatar {};
-struct address {};
-struct pins {};
-struct permissions {};  // power levels
-struct access {};       // who may join, who may read the history
-struct encryption {};
-struct other {};        // the room made, and what nothing here reads
-struct reactions {};    // each reaction, as a line of its own: hidden unless chosen
+struct joins {
+  friend bool operator==(joins, joins) = default;
+};        // joins and leaves
+struct invites {
+  friend bool operator==(invites, invites) = default;
+};      // invitations, removals, bans, knocks
+struct names {
+  friend bool operator==(names, names) = default;
+};        // members' names changed
+struct avatars {
+  friend bool operator==(avatars, avatars) = default;
+};      // members' pictures changed
+struct room_name {
+  friend bool operator==(room_name, room_name) = default;
+};
+struct topic {
+  friend bool operator==(topic, topic) = default;
+};
+struct room_avatar {
+  friend bool operator==(room_avatar, room_avatar) = default;
+};
+struct address {
+  friend bool operator==(address, address) = default;
+};
+struct pins {
+  friend bool operator==(pins, pins) = default;
+};
+struct permissions {
+  friend bool operator==(permissions, permissions) = default;
+};  // power levels
+struct access {
+  friend bool operator==(access, access) = default;
+};       // who may join, who may read the history
+struct encryption {
+  friend bool operator==(encryption, encryption) = default;
+};
+struct other {
+  friend bool operator==(other, other) = default;
+};        // the room made, and what nothing here reads
+struct reactions {
+  friend bool operator==(reactions, reactions) = default;
+};    // each reaction, as a line of its own: hidden unless chosen
 }  // namespace room_event
 using room_event_t =
     std::variant<room_event::joins, room_event::invites, room_event::names, room_event::avatars, room_event::room_name,

@@ -23,12 +23,16 @@ import mux.app.words;
 
 namespace mux::app {
 
+// A person's info: a box in the middle of the window, as tdesktop's.
 void app::apply(const request::open_member_info& one) {
-  auto& screen = root().main();
-  if (!screen.info_open)
-    screen.toggle_info();
-  screen.info.open_member(one.id);
+  const auto& chosen = root().main().chosen;
+  if (!chosen)
+    return;
+  const mux::conversation* in = model->find(*chosen);
+  root().open_person(chosen->account, one.id, mux::ui::person_of(in, *model, chosen->account, one.id));
 }
+
+void app::apply(const request::close_person_info&) { root().close_person(); }
 
 void app::apply(const request::not_implemented& one) { root().show_notice(one.what); }
 

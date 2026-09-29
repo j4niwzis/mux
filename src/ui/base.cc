@@ -88,7 +88,8 @@ inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 //   void open_picture(std::string source, std::string sender, std::string name, std::string when)
 //   void close_picture(), save_picture(std::string source), open_file(std::string source, std::string name)
 //   void attach_files(), close_send_box(), send_files()  -- what is sent with the paperclip
-//   void open_member_info(std::string id)  -- a sender's page, in the info
+//   void open_member_info(std::string id)  -- a person's info, in the middle
+//   void close_person_info()
 //   void load_older(const conversation_id&, std::string from)  -- its history
 //   void jump_to_end()               -- back to a chat's newest message
 //   void open_search(), close_search(), search_typed(std::string), search_step(bool older)  -- finding in a chat

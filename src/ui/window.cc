@@ -33,6 +33,8 @@ struct window : scene::Node {
     widgets::SlideOver<with_drawer, panel_type> frame;
     widgets::Dialog<settings_dialog<Actions>> settings;
     widgets::Dialog<notice_box<Actions>> notice;
+    // A person's info, in the middle, as tdesktop's profile layer.
+    widgets::Dialog<person_card<Actions>> person;
     std::optional<context_menu<Actions>> menu;
     std::optional<picture_viewer<Actions>> viewer;
     widgets::Dialog<send_box<Actions>> sending;
@@ -46,6 +48,8 @@ struct window : scene::Node {
       settings.setSize(440.0f, 520.0f);
       notice.setSheetColour(sidebar_colour);
       notice.setSize(440.0f, 240.0f);
+      person.setSheetColour(sidebar_colour);
+      person.setSize(392.0f, 300.0f);
     }
   };
 
@@ -70,6 +74,7 @@ struct window : scene::Node {
     f(p->frame);
     f(p->settings);
     f(p->notice);
+    f(p->person);
     f(p->sending);
     f(p->menu);
     f(p->viewer);
@@ -99,6 +104,7 @@ struct window : scene::Node {
     p->frame.dropClosed();
     p->settings.dropClosed();
     p->notice.dropClosed();
+    p->person.dropClosed();
     p->sending.dropClosed();
   }
 
@@ -133,6 +139,11 @@ struct window : scene::Node {
     p->notice.open(actions, std::move(heading), std::move(text));
   }
   void close_notice() { p->notice.close(); }
+
+  void open_person(const account_id& account, const std::string& key, const person_facts& facts) {
+    p->person.open(actions, account, key, facts);
+  }
+  void close_person() { p->person.close(); }
 
   void show(const std::vector<config::account_t>& saved, const model& now) {
     const auto& current = p->frame.base().base().current;

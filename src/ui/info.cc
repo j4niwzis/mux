@@ -136,6 +136,111 @@ inline nodes::Box<> section_band() {
 // A chat's info, beside it, as Telegram Desktop shows it: a big avatar, the
 // name and who is in it, three square buttons, its ID, and its members.
 // Declared: a column of these, nothing placed by hand.
+// An ID, whole -- wrapped, never cut -- and copied when pressed: a chat's
+// or a person's.
+struct id_line : nodes::Stack {
+  struct parts_t {
+    nodes::Text id;
+    nodes::Text label{"ID", 12.0f, dim_colour};
+  } parts;
+  std::string copied;
+  bool a_link = false;  // what is copied is a link to it, not the ID
+  id_line(std::string text, std::string link)
+      : parts{.id = nodes::Text(text, 14.0f, accent_colour)}, copied(link.empty() ? text : link), a_link(!link.empty()) {
+    this->setGap(2.0f);
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 20.0f, 8.0f, 20.0f}, .hoverBackground = chosen_colour, .focusBackground = chosen_colour});
+    fState.setCursor(scene::cursor::hand{});
+    parts.id.setWrapped(true);
+    parts.id.apply({.fillX = true});
+  }
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+  [[nodiscard]] bool onClick(float, float) {
+    skiff::scene::setClipboardText(copied);
+    parts.label.setText(a_link ? "ID · link copied, with its servers" : "ID · copied");
+    return true;
+  }
+};
+
+// A person's name and how they are, as a chat knows them: a member's, with
+// their role; the other side of a direct chat; anyone else by their address.
+struct person_facts {
+  std::string name;
+  std::string status;
+};
+[[nodiscard]] inline person_facts person_of(const conversation* in, const model& now, const account_id& account,
+                                            const std::string& id) {
+  person_facts out{id, presence_of(now, account, id)};
+  if (in == nullptr)
+    return out;
+  if (const auto found = std::ranges::find(in->members, id, &member::id); found != in->members.end()) {
+    if (!found->name.empty())
+      out.name = found->name;
+    if (found->role)
+      out.status = out.status.empty() ? *found->role : std::format("{} · {}", out.status, *found->role);
+  } else if (!is_group(*in) && id == contact_of(*in)) {
+    out.name = display_name(*in);
+  }
+  return out;
+}
+
+// A person's info, as tdesktop's profile layer: a box in the middle of the
+// window over the chats -- a bar with its title and ✕, their photo beside
+// their name and how they are, their ID to copy, and a message to them.
+template <class Actions>
+struct person_card : nodes::Stack {
+  struct message_them {
+    Actions* actions = nullptr;
+    conversation_id who;
+    void operator()() const {
+      actions->message_person(who);
+      actions->close_person_info();
+    }
+  };
+  using close_button = icon_button<ask<Actions, &Actions::close_person_info>>;
+  struct top_bar : nodes::Stack {
+    struct parts_t {
+      nodes::Text title{"User info", 16.0f, text_colour, true};
+      close_button close;
+    } parts;
+    explicit top_bar(Actions* a) : parts{.close = close_button(icon::close{}, {a})} {
+      this->setHorizontal();
+      fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 10.0f, 0.0f, 22.0f}});
+      parts.title.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      parts.close.apply({.alignSelf = scene::align::kMiddle});
+    }
+  };
+  // tdesktop's cover: 108 high, a 72 photo, the name and status beside it.
+  struct cover : nodes::Stack {
+    struct parts_t {
+      avatar_mark photo;
+      two_lines texts;
+    } parts;
+    cover(const std::string& key, const person_facts& facts)
+        : parts{.photo = avatar_mark(key, facts.name, 72.0f), .texts = two_lines(facts.name, facts.status, 17.0f, 6.0f)} {
+      this->setHorizontal();
+      this->setGap(16.0f);
+      fState.apply({.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}});
+    }
+  };
+  struct parts_t {
+    top_bar top;
+    cover face;
+    nodes::Box<> band = section_band();
+    id_line id;
+    action_tile<message_them> message;
+  } parts;
+
+  person_card(Actions* a, const account_id& account, const std::string& key, const person_facts& facts)
+      : parts{.top = top_bar(a),
+              .face = cover(key, facts),
+              .id = id_line(key, ""),
+              .message = action_tile<message_them>("Message", icon::send{}, {a, conversation_id{account, key}})} {
+    fState.apply({.fill = true, .padding = {0.0f, 0.0f, 16.0f, 0.0f}});
+    parts.message.apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
+  }
+};
+
 template <class Actions>
 struct info_panel : nodes::Stack {
   nodes::Box<> edge{band_colour};  // its left edge
@@ -155,7 +260,7 @@ struct info_panel : nodes::Stack {
   // pages are made again.
   struct open_person {
     info_panel* panel;
-    void operator()(const auto& row) const { panel->open_member(row.id); }
+    void operator()(const auto& row) const { panel->actions->open_member_info(row.id); }
   };
   struct back_to_group {
     info_panel* panel;
@@ -239,32 +344,7 @@ struct info_panel : nodes::Stack {
     std::optional<tiles_row> tiles;
     std::optional<person_row> person_tiles;
     nodes::Box<> band_1 = section_band();
-    // The ID, whole -- wrapped, never cut -- and copied when pressed.
-    struct id_line : nodes::Stack {
-      nodes::Text id;
-      nodes::Text label{"ID", 12.0f, dim_colour};
-      std::string copied;
-      bool a_link = false;  // what is copied is a link to it, not the ID
-      id_line(std::string text, std::string link)
-          : id(text, 14.0f, accent_colour), copied(link.empty() ? text : link), a_link(!link.empty()) {
-        this->setGap(2.0f);
-        fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 20.0f, 8.0f, 20.0f}, .hoverBackground = chosen_colour, .focusBackground = chosen_colour});
-        fState.setCursor(scene::cursor::hand{});
-        id.setWrapped(true);
-        id.apply({.fillX = true});
-      }
-      void forEachChild(auto&& f) {
-        f(id);
-        f(label);
-      }
-      [[nodiscard]] bool acceptsInput() const { return true; }
-      [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-      [[nodiscard]] bool onClick(float, float) {
-        skiff::scene::setClipboardText(copied);
-        label.setText(a_link ? "ID · link copied, with its servers" : "ID · copied");
-        return true;
-      }
-    } id_text;
+    id_line id_text;
 
     head(Actions* a, info_panel* panel, const view& shown)
         : top(a, panel, shown.of_person), name(shown.name, 17.0f, text_colour, true),

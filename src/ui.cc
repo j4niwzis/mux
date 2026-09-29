@@ -811,87 +811,118 @@ inline void use_theme(const config::theme_t& chosen, const config::accent_t& acc
 // One chat in the list, as Telegram Desktop draws it: a round avatar, the
 // name, the time of the last message, a line of it, and how many are unread.
 template <class Actions>
-struct conversation_row : scene::Node {
+struct conversation_row : nodes::Stack {
   Actions* actions = nullptr;
   conversation_id id;
   bool chosen = false;
-  std::int64_t unread = 0;
-  nodes::Text name;
-  nodes::Text time;
-  nodes::Text preview;
+  bool muted = false;
+  avatar_mark face;
+  // The name and the time over the last message and the unread count.
+  struct lines_column : nodes::Stack {
+    struct top_line : nodes::Stack {
+      nodes::Text name;
+      nodes::Text time;
+      top_line(std::string shown, bool chosen)
+          : name(std::move(shown), 14.0f, text_colour, true), time("", 12.0f, chosen ? text_colour : dim_colour) {
+        this->setHorizontal();
+        this->setGap(8.0f);
+        fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+        name.setElided(true);
+        name.apply({.grow = scene::axes::kX});
+      }
+      void forEachChild(auto&& f) {
+        f(name);
+        f(time);
+      }
+    } top;
+    struct bottom_line : nodes::Stack {
+      nodes::Text preview;
+      // The chats' unread count, in a pill.
+      struct badge : scene::Node {
+        std::int64_t count = 0;
+        bool chosen = false, muted = false;
+        badge(std::int64_t n, bool is_chosen, bool is_muted) : count(n), chosen(is_chosen), muted(is_muted) {
+          fState.apply({.height = 21.0f});
+        }
+        void measure(const skia::SkRect&) {
+          if (skia::SkFont* font = skiff::paint::defaultFont())
+            fState.fWidth =
+                std::max(22.0f, skiff::paint::Painter(nullptr, *font).measure(std::to_string(count), 12.0f, true) + 14.0f);
+        }
+        void drawSelf(skia::SkCanvas* canvas, float alpha) {
+          skia::SkFont* font = skiff::paint::defaultFont();
+          if (font == nullptr)
+            return;
+          const skiff::paint::Painter p(canvas, *font);
+          const skia::SkRect& pill = fState.fBounds;
+          p.fillRounded(pill, 10.5f,
+                        chosen ? text_colour : muted ? skia::colorSetARGB(255, 90, 98, 106) : accent_colour, alpha);
+          const std::string text = std::to_string(count);
+          p.textIn(pill, text, 12.0f, chosen ? selected_colour : background, alpha, true,
+                   (pill.width() - p.measure(text, 12.0f, true)) * 0.5f);
+        }
+      } unread;
+      bottom_line(std::int64_t count, bool chosen, bool muted)
+          : preview("", 13.0f, chosen ? text_colour : dim_colour), unread(count, chosen, muted) {
+        this->setHorizontal();
+        this->setGap(8.0f);
+        fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+        preview.setElided(true);
+        preview.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+        unread.setVisible(count > 0);
+      }
+      void forEachChild(auto&& f) {
+        f(preview);
+        f(unread);
+      }
+    } bottom;
+    lines_column(std::string shown, std::int64_t count, bool chosen, bool muted)
+        : top(std::move(shown), chosen), bottom(count, chosen, muted) {
+      this->setGap(6.0f);
+      fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+    }
+    void forEachChild(auto&& f) {
+      f(top);
+      f(bottom);
+    }
+  } lines;
 
   static constexpr float kHeight = 62.0f;
-  static constexpr float kTextLeft = 68.0f;
 
-  bool muted = false;
-
+  // Declared: the avatar, then the name and time over the last message and
+  // how many are unread.
   conversation_row(Actions* a, const conversation& one, bool is_chosen, bool is_muted)
-      : actions(a), id(one.id), chosen(is_chosen), unread(one.unread), muted(is_muted),
-        name(display_name(one), 14.0f, text_colour, true), time("", 12.0f, is_chosen ? text_colour : dim_colour),
-        preview("", 13.0f, is_chosen ? text_colour : dim_colour) {
-    fState.apply({.fillX = true, .height = kHeight});
-    name.setElided(true);
-    preview.setElided(true);
+      : actions(a), id(one.id), chosen(is_chosen), muted(is_muted), face(one.id.id, display_name(one), 46.0f),
+        lines(display_name(one), one.unread, is_chosen, is_muted) {
+    this->setHorizontal();
+    this->setGap(12.0f);
+    fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 12.0f, 0.0f, 10.0f}});
     if (!one.timeline.empty()) {
       const message& last = one.timeline.back();
-      time.setText(clock_of(last.at));
+      lines.top.time.setText(clock_of(last.at));
       std::string text = last.redacted ? "(removed)" : last.body.plain;
       std::ranges::replace(text, '\n', ' ');
       if (last.outgoing)
         text = "You: " + text;
       else if (is_group(one))
         text = sender_name(one, last.sender) + ": " + text;
-      preview.setText(std::move(text));
+      lines.bottom.preview.setText(std::move(text));
     }
   }
 
   void forEachChild(auto&& f) {
-    f(name);
-    f(time);
-    f(preview);
+    f(face);
+    f(lines);
   }
-
-  [[nodiscard]] float badge_width() const {
-    skia::SkFont* font = skiff::paint::defaultFont();
-    if (font == nullptr || unread <= 0)
-      return 0.0f;
-    const skiff::paint::Painter p(nullptr, *font);
-    return std::max(22.0f, p.measure(std::to_string(unread), 12.0f, true) + 14.0f);
-  }
-
-  void layoutChildren() {
-    const skia::SkRect box = fState.contentBox();
-    time.fState.arrange(-12.0f, 12.0f, scene::anchor::kTopRight, scene::anchor::kTopRight);
-    scene::layout(time, box);
-    name.setMaxWidth(std::max(0.0f, time.bounds().fLeft - box.fLeft - kTextLeft - 8.0f));
-    name.fState.arrange(kTextLeft, 11.0f);
-    scene::layout(name, box);
-    const float badge = this->badge_width();
-    preview.setMaxWidth(std::max(0.0f, box.width() - kTextLeft - 12.0f - (badge > 0.0f ? badge + 8.0f : 0.0f)));
-    preview.fState.arrange(kTextLeft, 34.0f);
-    scene::layout(preview, box);
-  }
-
   void drawSelf(skia::SkCanvas* canvas, float alpha) {
     skia::SkFont* font = skiff::paint::defaultFont();
     if (font == nullptr)
       return;
     const skiff::paint::Painter p(canvas, *font);
-    const skia::SkRect& box = fState.fBounds;
     if (chosen)
-      p.fillRounded(box, 0.0f, selected_colour, alpha);
+      p.fillRounded(fState.fBounds, 0.0f, selected_colour, alpha);
     else if (fState.fHovered || this->showsFocus())
-      p.fillRounded(box, 0.0f, chosen_colour, alpha);
-    draw_avatar(canvas, skia::SkRect::MakeXYWH(box.fLeft + 10.0f, box.centerY() - 23.0f, 46.0f, 46.0f), id.id,
-                name.text(), alpha);
-    if (const float badge = this->badge_width(); badge > 0.0f) {
-      const skia::SkRect pill = skia::SkRect::MakeXYWH(box.fRight - 12.0f - badge, box.fTop + 33.0f, badge, 21.0f);
-      p.fillRounded(pill, 10.5f, chosen ? text_colour : muted ? skia::colorSetARGB(255, 90, 98, 106) : accent_colour,
-                    alpha);
-      const std::string count = std::to_string(unread);
-      p.textIn(pill, count, 12.0f, chosen ? selected_colour : background, alpha, true,
-               (badge - p.measure(count, 12.0f, true)) * 0.5f);
-    }
+      p.fillRounded(fState.fBounds, 0.0f, chosen_colour, alpha);
   }
 
   [[nodiscard]] bool acceptsInput() const { return true; }
@@ -903,7 +934,7 @@ struct conversation_row : scene::Node {
   [[nodiscard]] scene::Semantics semantics() const {
     scene::Semantics out;
     out.fRole = scene::semantic_role::list_item{};
-    out.fLabel = name.text();
+    out.fLabel = lines.top.name.text();
     out.fSelected = chosen;
     out.fActions = {scene::semantic_action::focus{}, scene::semantic_action::activate{}};
     return out;
@@ -1248,24 +1279,42 @@ struct notice_box : nodes::Stack {
 // is in it or how they are, a line under it, and the button that opens its
 // info beside it.
 template <class Actions>
-struct chat_header : scene::Node {
+struct chat_header : nodes::Stack {
   std::string key;
-  nodes::Text title{"", 15.0f, text_colour, true};
-  nodes::Text status{"", 13.0f, dim_colour};
-  icon_button<ask<Actions, &Actions::toggle_info>> info;
+  // The chat's avatar, its name over how it is, and the button to its info.
+  struct head_row : nodes::Stack {
+    avatar_mark face{"", "", 38.0f};
+    two_lines texts{"", "", 15.0f, 3.0f};
+    icon_button<ask<Actions, &Actions::toggle_info>> info;
+    explicit head_row(Actions* a) : info(icon::info{}, {a}) {
+      this->setHorizontal();
+      this->setGap(12.0f);
+      fState.apply({.fillX = true, .grow = scene::axes::kY, .padding = {0.0f, 10.0f, 0.0f, 14.0f}});
+      info.apply({.alignSelf = scene::align::kMiddle});
+    }
+    void forEachChild(auto&& f) {
+      f(face);
+      f(texts);
+      f(info);
+    }
+  } row;
   nodes::Box<> divider{band_colour};
+  nodes::Text& title = row.texts.name;
+  nodes::Text& status = row.texts.state;
+  icon_button<ask<Actions, &Actions::toggle_info>>& info = row.info;
 
   static constexpr float kHeight = 56.0f;
 
-  explicit chat_header(Actions* a) : info(icon::info{}, {a}) {
+  // Declared: the row over a line dividing it from the messages.
+  explicit chat_header(Actions* a) : row(a) {
     fState.apply({.fillX = true, .height = kHeight});
     divider.apply({.fillX = true, .height = 1.0f});
-    title.setElided(true);
-    status.setElided(true);
   }
 
   void show(const conversation* one, const model& now) {
     info.setVisible(one != nullptr);
+    row.face.setVisible(one != nullptr);
+    status.setVisible(one != nullptr);
     if (one == nullptr) {
       key.clear();
       title.setText("Choose a chat");
@@ -1273,6 +1322,9 @@ struct chat_header : scene::Node {
       return;
     }
     key = one->id.id;
+    row.face.key = key;
+    row.face.name = display_name(*one);
+    row.face.markDamaged();
     title.setText(display_name(*one));
     std::string about = is_group(*one) ? std::format("{} member{}", one->members.size(),
                                                      one->members.size() == 1 ? "" : "s")
@@ -1284,35 +1336,12 @@ struct chat_header : scene::Node {
   }
 
   void forEachChild(auto&& f) {
-    f(title);
-    f(status);
-    f(info);
+    f(row);
     f(divider);
   }
-  void layoutChildren() {
-    const skia::SkRect box = fState.contentBox();
-    const float left = key.empty() ? 16.0f : 64.0f;
-    info.fState.arrange(-10.0f, 0.0f, scene::anchor::kCentreRight, scene::anchor::kCentreRight);
-    scene::layout(info, box);
-    title.setMaxWidth(std::max(0.0f, box.width() - left - 60.0f));
-    title.fState.arrange(left, key.empty() ? 17.0f : 9.0f);
-    scene::layout(title, box);
-    status.setMaxWidth(std::max(0.0f, box.width() - left - 60.0f));
-    status.fState.arrange(left, 31.0f);
-    scene::layout(status, box);
-    divider.fState.arrange(0.0f, 0.0f, scene::anchor::kBottomLeft, scene::anchor::kBottomLeft);
-    scene::layout(divider, box);
-  }
   void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    skia::SkFont* font = skiff::paint::defaultFont();
-    if (font == nullptr)
-      return;
-    const skiff::paint::Painter p(canvas, *font);
-    const skia::SkRect& box = fState.fBounds;
-    p.fillRounded(box, 0.0f, sidebar_colour, alpha);
-    if (!key.empty())
-      draw_avatar(canvas, skia::SkRect::MakeXYWH(box.fLeft + 14.0f, box.centerY() - 19.0f, 38.0f, 38.0f), key,
-                  title.text(), alpha);
+    if (skia::SkFont* font = skiff::paint::defaultFont())
+      skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 0.0f, sidebar_colour, alpha);
   }
 };
 

@@ -199,6 +199,18 @@ struct network {
             one.account);
     });
   }
+  // A reaction to a message put or taken back, by the account it is of.
+  void react(const mux::conversation_id& in, std::string target, std::string key, bool on) {
+    loop.post([this, in, target = std::move(target), key = std::move(key), on] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == in.account)
+                account->react(in.id, target, key, on);
+            },
+            one.account);
+    });
+  }
   // Whether the user is typing in a chat, told to it.
   void typing(const mux::conversation_id& in, bool on) {
     loop.post([this, in, on] {
@@ -690,6 +702,13 @@ struct toggle_info {};
 struct jump_to_end {};
 using message_menu = mux::ui::menu_facts;
 struct menu_copy_link {};
+struct react {
+  std::string id;
+  std::string key;
+};
+struct menu_react {
+  std::string key;
+};
 struct menu_save {};
 struct close_menu {};
 struct menu_reply {};
@@ -809,7 +828,7 @@ using request_t =
                  request::toggle_plain, request::submit_login, request::flip_enabled, request::remove_account,
                  request::open_drawer, request::show_account, request::set_motion, request::quit,
                  request::open_settings, request::close_settings, request::settings_home,
-                 request::settings_animations, request::pop_panel, request::toggle_info, request::load_older, request::jump_to_end, request::message_menu, request::menu_copy_link, request::menu_save,
+                 request::settings_animations, request::pop_panel, request::toggle_info, request::load_older, request::jump_to_end, request::message_menu, request::menu_copy_link, request::menu_save, request::react, request::menu_react,
                  request::close_menu, request::menu_reply, request::menu_edit, request::menu_copy,
                  request::menu_delete, request::cancel_compose, request::open_url,
                  request::switch_account, request::submit_message, request::send_typed,
@@ -867,6 +886,8 @@ struct actions {
   void jump_to_end() { requests.emplace_back(request::jump_to_end{}); }
   void message_menu(mux::ui::menu_facts facts) { requests.emplace_back(std::move(facts)); }
   void menu_copy_link() { requests.emplace_back(request::menu_copy_link{}); }
+  void react(std::string id, std::string key) { requests.emplace_back(request::react{std::move(id), std::move(key)}); }
+  void menu_react(std::string key) { requests.emplace_back(request::menu_react{std::move(key)}); }
   void menu_save() { requests.emplace_back(request::menu_save{}); }
   void close_menu() { requests.emplace_back(request::close_menu{}); }
   void menu_reply() { requests.emplace_back(request::menu_reply{}); }
@@ -1570,6 +1591,28 @@ struct app {
   void apply(const request::menu_copy&) {
     root().close_menu();
     skiff::scene::setClipboardText(menu_target.copied.empty() ? menu_target.text : menu_target.copied);
+  }
+  // A reaction: the user's own put where it is not, taken back where it
+  // is -- shown at once, and told to the server.
+  void apply(const request::react& one) {
+    const auto& chosen = root().main().chosen;
+    const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
+    if (!chat)
+      return;
+    const auto said = std::ranges::find(chat->timeline, one.id, &mux::message::id);
+    if (said == chat->timeline.end())
+      return;
+    const std::string& me = chosen->account.address;
+    const auto who = said->reactions.find(one.key);
+    const bool on = who == said->reactions.end() || !who->second.contains(me);
+    model->apply(mux::change_t{mux::change::reaction_changed{*chosen, one.id, one.key, me, on}});
+    if (!ask.demo)
+      net->react(*chosen, one.id, one.key, on);
+    this->refresh();
+  }
+  void apply(const request::menu_react& one) {
+    root().close_menu();
+    this->apply(request::react{menu_target.id, one.key});
   }
   void apply(const request::menu_copy_link&) {
     root().close_menu();

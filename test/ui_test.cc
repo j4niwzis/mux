@@ -44,6 +44,8 @@ struct stub {
   void message_menu(mux::ui::menu_facts) {}
   void menu_copy_link() {}
   void menu_save() {}
+  void menu_react(std::string) {}
+  void react(std::string, std::string) {}
   void close_menu() {}
   void menu_reply() {}
   void menu_edit() {}

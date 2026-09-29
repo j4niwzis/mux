@@ -290,6 +290,35 @@ class account {
     });
   }
 
+  // A reaction to a message put, or taken back: m.reaction with its key,
+  // or the redaction of the account's own.
+  void react(std::string room, std::string target, std::string key, bool on) {
+    loop_->spawn([this, room = std::move(room), target = std::move(target), key = std::move(key), on] {
+      if (!api_)
+        return;
+      if (on) {
+        knot::value::object relates;
+        relates.emplace("rel_type", knot::value(std::string("m.annotation")));
+        relates.emplace("event_id", knot::value(target));
+        relates.emplace("key", knot::value(key));
+        knot::value::object content;
+        content.emplace("m.relates_to", knot::value(std::move(relates)));
+        (void)perform(*api_, loom::cs::send_message{.room_id = room,
+                                                    .event_type = "m.reaction",
+                                                    .txn_id = "mux" + std::to_string(++transactions_),
+                                                    .body = knot::value(std::move(content))});
+        return;
+      }
+      for (const auto& [event, one] : reactions_)
+        if (one.target == target && one.key == key && one.who == id_.address) {
+          (void)perform(*api_, loom::cs::redact_event{.room_id = room,
+                                                      .event_id = event,
+                                                      .txn_id = "mux" + std::to_string(++transactions_)});
+          return;
+        }
+    });
+  }
+
   // The account leaves a room; the next sync says it has, and the room goes.
   void leave(std::string room) {
     loop_->spawn([this, room = std::move(room)] {

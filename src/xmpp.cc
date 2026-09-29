@@ -174,6 +174,8 @@ class account {
   void fetch_media(std::string, std::string, int, bool = false) {}
   // A room's occupants come with its presence; nothing to ask for.
   void fetch_members(std::string) {}
+  // Reactions (XEP-0444) are not sent yet.
+  void react(std::string, std::string, std::string, bool) {}
   // Chat states (XEP-0085) are not sent yet.
   void typing(std::string, bool) {}
   // Rooms are joined through their bookmarks; not from a link yet.

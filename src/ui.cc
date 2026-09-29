@@ -89,7 +89,8 @@ inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 //   void toggle_info()               -- the chosen chat's info, beside it
 //   void message_person(const conversation_id&)  -- a member's direct chat
 //   void jump_to_message(std::string id)  -- a quoted message, scrolled to
-//   void message_menu(menu_facts), menu_copy_link(), menu_save()  -- a message's menu
+//   void message_menu(menu_facts), menu_copy_link(), menu_save(), menu_react(std::string key)  -- a message's menu
+//   void react(std::string id, std::string key)  -- a reaction put or taken back
 //   void reply_to(std::string id, std::string text)  -- a message swiped left
 //   void open_picture(std::string source, std::string sender, std::string name, std::string when)
 //   void close_picture(), save_picture(std::string source), open_file(std::string source, std::string name)
@@ -1400,6 +1401,41 @@ struct file_view : nodes::Stack {
   [[nodiscard]] bool acceptsInput() const { return true; }
 };
 
+// A message's reactions, as tdesktop's: a chip for each, its emoji and
+// how many, the user's own in the accent; a press on one puts or takes back
+// the user's.
+struct reaction_chip : scene::Node {
+  std::string key;
+  std::size_t count = 0;
+  bool mine = false;
+  reaction_chip(std::string k, std::size_t n, bool own) : key(std::move(k)), count(n), mine(own) {
+    fState.apply({.height = 26.0f});
+  }
+  [[nodiscard]] std::string label() const { return std::format("{} {}", key, count); }
+  void measure(const skia::SkRect&) {
+    if (skia::SkFont* font = skiff::paint::defaultFont())
+      fState.fWidth = skiff::paint::Painter(nullptr, *font).measure(this->label(), 13.0f) + 18.0f;
+  }
+  void drawSelf(skia::SkCanvas* canvas, float alpha) {
+    skia::SkFont* font = skiff::paint::defaultFont();
+    if (font == nullptr)
+      return;
+    const skiff::paint::Painter p(canvas, *font);
+    p.fillRounded(fState.fBounds, 13.0f, mine ? accent_colour : tile_colour, alpha);
+    p.textIn(fState.fBounds, this->label(), 13.0f, mine ? on_accent_colour : text_colour, alpha, false, 9.0f);
+  }
+  [[nodiscard]] bool acceptsInput() const { return true; }
+};
+struct reaction_row : nodes::Flow<std::vector<reaction_chip>> {
+  reaction_row() : nodes::Flow<std::vector<reaction_chip>>({.direction = nodes::direction::horizontal{}, .spacingX = 4.0f,
+                                                             .spacingY = 4.0f},
+                                                            {}) {
+    fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = 430.0f, .margin = {4.0f, 0.0f, 2.0f, 0.0f}});
+  }
+  std::vector<reaction_chip>& chips() { return std::get<0>(fChildren); }
+  const std::vector<reaction_chip>& chips() const { return std::get<0>(fChildren); }
+};
+
 struct message_bubble : nodes::Stack {
   // The message as it was shown, and where in its sender's run: while
   // these are the same, the bubble is kept.
@@ -1467,7 +1503,7 @@ struct message_bubble : nodes::Stack {
     std::optional<file_view> file;
     nodes::Text text;
     std::vector<link_line> links;
-    std::optional<nodes::Text> reactions;
+    std::optional<reaction_row> reactions;
     nodes::Text time;
     // A flash over it, fading, where it was jumped to.
     skiff::paint::Tween flash{0.0f, 1200.0f};
@@ -1605,10 +1641,10 @@ struct message_bubble : nodes::Stack {
       body.apply({.minWidth = 160.0f});
     }
     if (!said.reactions.empty()) {
-      std::string line;
+      body.reactions.emplace();
       for (const auto& [key, who] : said.reactions)
-        line += std::format("{} {}  ", key, who.size());
-      body.reactions.emplace(std::move(line), 13.0f, dim_colour);
+        if (!who.empty())
+          body.reactions->chips().emplace_back(key, who.size(), who.contains(said.in.account.address));
     }
   }
 
@@ -2510,6 +2546,13 @@ struct timeline_area : scene::Node {
           actions->open_file(one.body.file->source, one.said.attachment->name);
           return true;
         }
+        // A reaction's chip: the user's own put or taken back.
+        if (one.body.reactions)
+          for (const reaction_chip& chip : one.body.reactions->chips())
+            if (chip.bounds().contains(press.x, press.y)) {
+              actions->react(one.message_id, chip.key);
+              return true;
+            }
         // The quote: to the message it quotes.
         if (one.body.quote && one.said.replies_to && one.body.quote->bounds().contains(press.x, press.y)) {
           actions->jump_to_message(*one.said.replies_to);
@@ -4859,6 +4902,42 @@ struct context_menu : scene::Node {
     row_item<ask<Actions, &Actions::menu_save>> save;
     row_item<not_yet<Actions>> forward;
     row_item<ask<Actions, &Actions::menu_delete>> remove;
+    // Quick reactions, as tdesktop's menu has them at its top.
+    struct quick_reaction : scene::Node {
+      Actions* actions;
+      std::string key;
+      quick_reaction(Actions* a, std::string k) : actions(a), key(std::move(k)) {
+        fState.apply({.width = 34.0f, .height = 34.0f});
+      }
+      void drawSelf(skia::SkCanvas* canvas, float alpha) {
+        skia::SkFont* font = skiff::paint::defaultFont();
+        if (font == nullptr)
+          return;
+        const skiff::paint::Painter p(canvas, *font);
+        if (fState.fHovered)
+          p.fillRounded(fState.fBounds, 17.0f, chosen_colour, alpha);
+        const float width = p.measure(key, 18.0f);
+        p.textIn(fState.fBounds, key, 18.0f, text_colour, alpha, false, (fState.fBounds.width() - width) * 0.5f);
+      }
+      [[nodiscard]] bool acceptsInput() const { return true; }
+      [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+      [[nodiscard]] bool onClick(float, float) {
+        actions->menu_react(key);
+        return true;
+      }
+    };
+    struct quick_row : nodes::Stack {
+      std::vector<quick_reaction> each;
+      explicit quick_row(Actions* a) {
+        this->setHorizontal();
+        this->setGap(2.0f);
+        fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {2.0f, 8.0f, 4.0f, 8.0f}});
+        for (const char* key : {"👍", "❤️", "😂", "😮", "😢", "🙏"})
+          each.emplace_back(a, key);
+      }
+      void forEachChild(auto&& f) { f(each); }
+    } quick;
+    nodes::Box<> quick_band{band_colour};
     // Who has seen it, as Telegram's menu says at its top: how many, and
     // their names under it.
     row_item<nothing> seen;
@@ -4868,7 +4947,7 @@ struct context_menu : scene::Node {
     // out: Reply, Edit, Pin, Copy, Copy Message Link, Save As, Forward,
     // Delete; and who has seen it, at the foot.
     card(Actions* a, const menu_facts& facts)
-        : reply("Reply", {a}, icon::back{}), edit("Edit", {a}, icon::sliders{}),
+        : quick(a), reply("Reply", {a}, icon::back{}), edit("Edit", {a}, icon::sliders{}),
           pin("Pin", {a, "Pinning messages"}, icon::check{}),
           copy(facts.selection ? "Copy Selected Text" : "Copy Text", {a}, icon::clip{}),
           copy_link("Copy Message Link", {a}, icon::info{}), save("Save As…", {a}, icon::send{}),
@@ -4876,6 +4955,7 @@ struct context_menu : scene::Node {
           seen(facts.seen.empty() ? std::string("Not seen yet") : std::format("Seen by {}", facts.seen.size()), {},
                icon::check{}) {
       const std::vector<std::string>& readers = facts.seen;
+      quick_band.apply({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 4.0f, 0.0f}});
       edit.setVisible(facts.own && !facts.text.empty() && !facts.media);
       copy.setVisible(!facts.copied.empty());
       copy_link.setVisible(!facts.link.empty());
@@ -4894,6 +4974,8 @@ struct context_menu : scene::Node {
       fState.apply({.width = 230.0f, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}});
     }
     void forEachChild(auto&& f) {
+      f(quick);
+      f(quick_band);
       f(reply);
       f(edit);
       f(pin);

@@ -53,33 +53,31 @@ struct settings_home : nodes::Stack {
 
 template <class Actions>
 struct animations_page : nodes::Stack {
-  page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>> header;
-  nodes::Text note{"How much the window moves. Reduced keeps the small movements, such as a section unfolding, "
-                   "and shows panels at once.",
-                   13.0f, dim_colour};
-  row_item<choose_motion<Actions>> full;
-  row_item<choose_motion<Actions>> reduced;
-  row_item<choose_motion<Actions>> none;
+  using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
+  using choice = row_item<choose_motion<Actions>>;
+  struct parts_t {
+    header_t header;
+    nodes::Text note{"How much the window moves. Reduced keeps the small movements, such as a section unfolding, "
+                     "and shows panels at once.",
+                     13.0f, dim_colour};
+    choice full;
+    choice reduced;
+    choice none;
+  } parts;
 
   explicit animations_page(Actions* a)
-      : header("Animations", {a}, {a}, true, true),
-        full("Full", {a, kMotions[0]}, icon::none{}, false),
-        reduced("Reduced", {a, kMotions[1]}, icon::none{}, false),
-        none("None", {a, kMotions[2]}, icon::none{}, false) {
-    note.apply({.fillX = true, .margin = {4.0f, 20.0f, 12.0f, 20.0f}});
+      : parts{.header = header_t("Animations", {a}, {a}, true, true),
+              .full = choice("Full", {a, kMotions[0]}, icon::none{}, false),
+              .reduced = choice("Reduced", {a, kMotions[1]}, icon::none{}, false),
+              .none = choice("None", {a, kMotions[2]}, icon::none{}, false)} {
+    parts.note.apply({.fillX = true, .margin = {4.0f, 20.0f, 12.0f, 20.0f}});
     fState.apply({.fill = true});
-    note.setWrapped(true);
+    parts.note.setWrapped(true);
   }
 
-  void forEachChild(auto&& f) {
-    f(header);
-    f(note);
-    f(full);
-    f(reduced);
-    f(none);
-  }
   void show_receipts(bool) {}
   void show_motion(std::string_view level) {
+    auto& [header, note, full, reduced, none] = parts;
     full.set_chosen(level == kMotions[0]);
     reduced.set_chosen(level == kMotions[1]);
     none.set_chosen(level == kMotions[2]);
@@ -105,14 +103,19 @@ struct choose_proxy_kind {
 // to add one.
 template <class Actions>
 struct proxies_page : nodes::Stack {
-  page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>> header;
-  std::vector<row_item<edit_proxy<Actions>>> profiles;
-  row_item<ask<Actions, &Actions::add_proxy>> add;
-  nodes::Text empty{"No proxies yet. Accounts connect directly.", 13.0f, dim_colour};
+  using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
+  using add_row = row_item<ask<Actions, &Actions::add_proxy>>;
+  struct parts_t {
+    header_t header;
+    std::vector<row_item<edit_proxy<Actions>>> profiles;
+    add_row add;
+    nodes::Text empty{"No proxies yet. Accounts connect directly.", 13.0f, dim_colour};
+  } parts;
 
   // With a way back to the settings' list where it was opened from there.
   proxies_page(Actions* a, const std::vector<config::proxy_settings>& all, bool with_back)
-      : header("Proxies", {a}, {a}, with_back, true), add("Add proxy", {a}, icon::plus{}) {
+      : parts{.header = header_t("Proxies", {a}, {a}, with_back, true), .add = add_row("Add proxy", {a}, icon::plus{})} {
+    auto& [header, profiles, add, empty] = parts;
     empty.setWrapped(true);
     empty.apply({.fillX = true, .margin = {8.0f, 20.0f, 0.0f, 20.0f}});
     fState.apply({.fill = true});
@@ -124,12 +127,6 @@ struct proxies_page : nodes::Stack {
   }
   void show_motion(std::string_view) {}
   void show_receipts(bool) {}
-  void forEachChild(auto&& f) {
-    f(header);
-    f(profiles);
-    f(add);
-    f(empty);
-  }
 };
 
 // SOCKS5 | HTTP: two segments in a frame, the chosen one lit by a plate
@@ -138,17 +135,21 @@ template <class Actions>
 struct kind_switch : nodes::Stack {
   // The highlight that slides from one to the other: under them, out of
   // their flow, shifted as far as the slide has come.
-  nodes::Box<> highlight{accent_colour};
-  segment<choose_proxy_kind<Actions>> socks;
-  segment<choose_proxy_kind<Actions>> http;
+  using kind_segment = segment<choose_proxy_kind<Actions>>;
+  struct parts_t {
+    nodes::Box<> highlight{accent_colour};
+    kind_segment socks;
+    kind_segment http;
+  } parts;
   skiff::paint::Tween slide{0.0f, 180.0f, skiff::paint::movement::subtle{}};
 
   explicit kind_switch(Actions* a)
-      : socks("SOCKS5", {a, config::proxy_kind::socks5{}}), http("HTTP", {a, config::proxy_kind::http{}}) {
+      : parts{.socks = kind_segment("SOCKS5", {a, config::proxy_kind::socks5{}}),
+              .http = kind_segment("HTTP", {a, config::proxy_kind::http{}})} {
     this->setHorizontal();
     this->setGap(1.0f);
     fState.apply({.autoSize = scene::axes::kBoth, .padding = {1.0f, 1.0f, 1.0f, 1.0f}, .background = chosen_colour});
-    highlight.apply({.place = scene::anchor::kTopLeft, .width = 92.0f, .height = 28.0f});
+    parts.highlight.apply({.place = scene::anchor::kTopLeft, .width = 92.0f, .height = 28.0f});
   }
   void show(const config::proxy_kind_t& kind, bool at_once) {
     const float to = std::visit(overloaded{[](config::proxy_kind::socks5) { return 0.0f; },
@@ -160,13 +161,9 @@ struct kind_switch : nodes::Stack {
       slide.setTarget(to);
     this->markDamaged();
   }
-  void forEachChild(auto&& f) {
-    f(highlight);
-    f(socks);
-    f(http);
-  }
   [[nodiscard]] bool settling() const { return slide.moving(); }
   void update(double now_ms) {
+    auto& [highlight, socks, http] = parts;
     if (slide.step(now_ms))
       highlight.apply({.shiftX = (http.bounds().fLeft - socks.bounds().fLeft) * slide.value()});
   }
@@ -180,22 +177,27 @@ template <class Actions>
 struct proxy_editor : nodes::Stack {
   int index = -1;  // in the list; -1 for a new one
   config::proxy_kind_t kind = config::proxy_kind::socks5{};
-  page_header<ask<Actions, &Actions::settings_proxies>, ask<Actions, &Actions::close_settings>> header;
-  field name{"Name", "Home, Tor, Work…"};
-  kind_switch<Actions> kinds;
-  field host{"Host", "proxy.example.com"};
-  field port{"Port", "1080"};
-  field username{"User name", "none"};
-  field password{"Password", "none"};
-  nodes::Text message{"", 13.0f, dim_colour};
-  button_row<widgets::Button<ask<Actions, &Actions::save_proxy_profile>>,
-             widgets::Button<ask<Actions, &Actions::delete_proxy_profile>>>
-      buttons;
+  using header_t = page_header<ask<Actions, &Actions::settings_proxies>, ask<Actions, &Actions::close_settings>>;
+  using save_button = widgets::Button<ask<Actions, &Actions::save_proxy_profile>>;
+  using delete_button = widgets::Button<ask<Actions, &Actions::delete_proxy_profile>>;
+  struct parts_t {
+    header_t header;
+    field name{"Name", "Home, Tor, Work…"};
+    kind_switch<Actions> kinds;
+    field host{"Host", "proxy.example.com"};
+    field port{"Port", "1080"};
+    field username{"User name", "none"};
+    field password{"Password", "none"};
+    nodes::Text message{"", 13.0f, dim_colour};
+    button_row<save_button, delete_button> buttons;
+  } parts;
 
   proxy_editor(Actions* a, const std::optional<config::proxy_settings>& from, int at)
-      : index(at), header(from ? from->name : std::string("New proxy"), {a}, {a}, true, true), kinds(a),
-        buttons(widgets::Button<ask<Actions, &Actions::save_proxy_profile>>("Save", {a}),
-                widgets::Button<ask<Actions, &Actions::delete_proxy_profile>>("Delete", {a})) {
+      : index(at),
+        parts{.header = header_t(from ? from->name : std::string("New proxy"), {a}, {a}, true, true),
+              .kinds = kind_switch<Actions>(a),
+              .buttons = button_row<save_button, delete_button>(save_button("Save", {a}), delete_button("Delete", {a}))} {
+    auto& [header, name, kinds, host, port, username, password, message, buttons] = parts;
     fState.apply({.fill = true});
     this->setGap(8.0f);
     const auto inset = scene::Margin::horizontal(16.0f);
@@ -224,11 +226,12 @@ struct proxy_editor : nodes::Stack {
 
   void set_kind(const config::proxy_kind_t& to) {
     kind = to;
-    kinds.show(kind, false);
+    parts.kinds.show(kind, false);
   }
 
   // The profile as typed, or what is wrong with it.
   [[nodiscard]] std::expected<config::proxy_settings, std::string> proxy() const {
+    const auto& [header, name, kinds, host, port, username, password, message, buttons] = parts;
     config::proxy_settings out{.name = name.box.text(), .kind = config::word_of(kind), .host = host.box.text()};
     if (out.name.empty())
       return std::unexpected("Name the proxy");
@@ -246,23 +249,11 @@ struct proxy_editor : nodes::Stack {
   }
 
   void say(std::string text, bool error) {
-    message.setText(std::move(text));
-    message.setColour(error ? error_colour : dim_colour);
+    parts.message.setText(std::move(text));
+    parts.message.setColour(error ? error_colour : dim_colour);
   }
   void show_motion(std::string_view) {}
   void show_receipts(bool) {}
-
-  void forEachChild(auto&& f) {
-    f(header);
-    f(name);
-    f(kinds);
-    f(host);
-    f(port);
-    f(username);
-    f(password);
-    f(message);
-    f(buttons);
-  }
 };
 
 }  // namespace mux::ui

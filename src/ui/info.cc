@@ -310,7 +310,7 @@ struct room_card : nodes::Stack {
   room_card(Actions* a, const std::string& asked, const room_preview& known)
       : parts{.top = top_bar(a),
               .face = cover(known.id.empty() ? asked : known.id, name_of(asked, known), line_of(asked, known)),
-              .about = nodes::Text(known.topic.empty() ? known.note : known.topic, 14.0f,
+              .about = nodes::Text(!known.topic.empty() ? known.topic : !known.note.empty() ? known.note : std::string("No description"), 14.0f,
                                    known.topic.empty() ? dim_colour : text_colour),
               .id = id_line(known.id.empty() ? asked : known.id, ""),
               .join = action_tile<join_it>("Join", icon::plus{}, {a})} {

@@ -245,10 +245,10 @@ struct conversations_screen : nodes::Stack {
       actions->edit_last();
     } else if (press.key == keys::kC && control) {
       auto& bubbles = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
-      const auto selected = std::ranges::find_if(bubbles, [](message_bubble& one) { return one.body.text.hasSelection(); });
+      const auto selected = std::ranges::find_if(bubbles, [](message_bubble& one) { return one.parts.body.parts.text.hasSelection(); });
       if (selected == bubbles.end())
         return;
-      skiff::scene::setClipboardText(selected->body.text.selected());
+      skiff::scene::setClipboardText(selected->parts.body.parts.text.selected());
     } else if (press.key == keys::kEscape && !any && line.answering()) {
       actions->cancel_compose();
     } else if ((press.key == keys::kTab && control) ||
@@ -529,9 +529,9 @@ struct conversations_screen : nodes::Stack {
           aimed_at = to;
         } else if (!timeline.moving()) {
           if (!aim_quiet) {
-            it->body.flash.jump(1.0f);
-            it->body.flash.setTarget(0.0f);
-            it->body.markDamaged();
+            it->parts.body.flash.jump(1.0f);
+            it->parts.body.flash.setTarget(0.0f);
+            it->parts.body.markDamaged();
           }
           aiming.reset();
         }

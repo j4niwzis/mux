@@ -30,38 +30,37 @@ struct link_card : nodes::Stack {
   std::string url;
   struct bar : scene::Node {
     bar() { fState.apply({.width = 3.0f, .height = 36.0f, .cornerRadius = 1.5f, .background = accent_colour}); }
-  } line;
-  avatar_mark face;
+  };
   struct texts_column : nodes::Stack {
-    nodes::Text title;
-    nodes::Text said;
+    struct parts_t {
+      nodes::Text title;
+      nodes::Text said;
+    } parts;
     texts_column(std::string t, std::string s)
-        : title(std::move(t), 13.0f, accent_colour, true), said(std::move(s), 13.0f, dim_colour) {
+        : parts{.title = nodes::Text(std::move(t), 13.0f, accent_colour, true),
+                .said = nodes::Text(std::move(s), 13.0f, dim_colour)} {
       this->setGap(1.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle});
-      for (nodes::Text* each : {&title, &said}) {
+      for (nodes::Text* each : {&parts.title, &parts.said}) {
         each->setElided(true);
         each->setMaxWidth(360.0f);
       }
     }
-    void forEachChild(auto&& f) {
-      f(title);
-      f(said);
-    }
-  } texts;
+  };
+  struct parts_t {
+    bar line;
+    avatar_mark face;
+    texts_column texts;
+  } parts;
   link_card(std::string where, std::string avatar_id, std::string avatar_name, std::string title, std::string said)
-      : url(std::move(where)), face(std::move(avatar_id), std::move(avatar_name), 32.0f),
-        texts(std::move(title), std::move(said)) {
+      : url(std::move(where)),
+        parts{.face = avatar_mark(std::move(avatar_id), std::move(avatar_name), 32.0f),
+              .texts = texts_column(std::move(title), std::move(said))} {
     this->setHorizontal();
     this->setGap(8.0f);
     fState.apply({.autoSize = scene::axes::kBoth, .margin = {4.0f, 0.0f, 2.0f, 0.0f}});
-    face.apply({.alignSelf = scene::align::kMiddle});
+    parts.face.apply({.alignSelf = scene::align::kMiddle});
     fState.setCursor(scene::cursor::hand{});
-  }
-  void forEachChild(auto&& f) {
-    f(line);
-    f(face);
-    f(texts);
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
 };
@@ -82,7 +81,9 @@ struct picture_view : scene::Node {
   int width = 0, height = 0;
   // The time on a dark pill over its corner, where there is no caption.
   struct time_pill : nodes::Stack {
-    nodes::Text label{"", 11.0f, skia::colorSetARGB(255, 255, 255, 255)};
+    struct parts_t {
+      nodes::Text label{"", 11.0f, skia::colorSetARGB(255, 255, 255, 255)};
+    } parts;
     time_pill() {
       fState.apply({.place = scene::anchor::kBottomRight,
                     .autoSize = scene::axes::kBoth,
@@ -92,7 +93,6 @@ struct picture_view : scene::Node {
                     .background = skia::colorSetARGB(0x54, 0, 0, 0)});
       this->setVisible(false);
     }
-    void forEachChild(auto&& f) { f(label); }
   };
   struct parts_t {
     nodes::Image preview;  // blurred, from its blurhash, until it comes
@@ -119,7 +119,7 @@ struct picture_view : scene::Node {
       parts.loader.setVisible(coming);
   }
   void show_time(std::string when) {
-    parts.time.label.setText(when);
+    parts.time.parts.label.setText(when);
     parts.time.setVisible(!when.empty());
   }
   // Fitted into 430 by 430 and into the room there is, its proportions
@@ -378,9 +378,6 @@ struct message_bubble : nodes::Stack {
   static constexpr float kAvatar = 34.0f;
   static constexpr float kMaxWidth = 480.0f;
 
-  // The sender's avatar, beside the last of their run in a group; the
-  // same room, empty, beside the rest.
-  avatar_mark face;
   // What it answers, as tdesktop's reply (history_view_reply.cpp): a block
   // tinted with the sender's colour (at 0.12), rounded 5, with a bar of it
   // down its left (3, at 0.9); the sender's name in it, semibold, over a
@@ -392,13 +389,16 @@ struct message_bubble : nodes::Stack {
     return (colour & 0x00FFFFFFu) | (static_cast<skia::SkColor>(std::lround(alpha * 255.0f)) << 24);
   }
   struct quote_row : nodes::Stack {
-    nodes::Box<> bar;
     // Who said it over a line of it, each cut at the bubble's width.
     struct said_column : nodes::Stack {
-      nodes::Text who;
-      nodes::Text said;
+      struct parts_t {
+        nodes::Text who;
+        nodes::Text said;
+      } parts;
       said_column(skia::SkColor colour, std::string name, std::string line)
-          : who(std::move(name), 13.0f, colour, true), said(std::move(line), 13.0f, text_colour) {
+          : parts{.who = nodes::Text(std::move(name), 13.0f, colour, true),
+                  .said = nodes::Text(std::move(line), 13.0f, text_colour)} {
+        auto& [who, said] = parts;
         fState.apply({.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle});
         // The name as wide as it is, the line of the message at most
         // maxSignatureSize (240) -- so a short answer to a long message does
@@ -408,15 +408,16 @@ struct message_bubble : nodes::Stack {
         said.setElided(true);
         said.setMaxWidth(kReplyLineMax);
       }
-      void forEachChild(auto&& f) {
-        f(who);
-        f(said);
-      }
-    } texts;
-    // A picture quoted: its thumbnail.
-    std::optional<nodes::Image> thumb;
+    };
+    struct parts_t {
+      nodes::Box<> bar;
+      // A picture quoted: its thumbnail.
+      std::optional<nodes::Image> thumb;
+      said_column texts;
+    } parts;
     quote_row(skia::SkColor colour, std::string who, std::string said, std::optional<std::string> picture = std::nullopt)
-        : bar(with_alpha(colour, 0.9f)), texts(colour, std::move(who), std::move(said)) {
+        : parts{.bar = nodes::Box<>(with_alpha(colour, 0.9f)), .texts = said_column(colour, std::move(who), std::move(said))} {
+      auto& [bar, thumb, texts] = parts;
       this->setHorizontal();
       this->setGap(4.0f);
       fState.apply({.autoSize = scene::axes::kBoth,
@@ -432,26 +433,23 @@ struct message_bubble : nodes::Stack {
                       .margin = {2.0f, 0.0f, 2.0f, 0.0f}, .cornerRadius = 3.0f, .background = tile_colour});
       }
     }
-    void forEachChild(auto&& f) {
-      f(bar);
-      f(thumb);
-      f(texts);
-    }
   };
   // The bubble: as wide as what it says, up to its largest.
   struct body_column : nodes::Stack {
     bool outgoing = false;
-    std::optional<nodes::Text> name;
-    std::optional<quote_row> quote;
-    std::optional<picture_view> picture;
-    std::optional<file_view> file;
-    nodes::Text text;
-    std::vector<link_card> cards;
-    std::optional<reaction_row> reactions;
-    nodes::Text time;
-    // The time inside the last line of the text, where that line leaves
-    // room for it, as Telegram's: out of the column's flow, at its end.
-    nodes::Text inline_time;
+    struct parts_t {
+      std::optional<nodes::Text> name;
+      std::optional<quote_row> quote;
+      std::optional<picture_view> picture;
+      std::optional<file_view> file;
+      nodes::Text text;
+      std::vector<link_card> cards;
+      std::optional<reaction_row> reactions;
+      nodes::Text time;
+      // The time inside the last line of the text, where that line leaves
+      // room for it, as Telegram's: out of the column's flow, at its end.
+      nodes::Text inline_time;
+    } parts;
     // A flash over it, fading, where it was jumped to: its background
     // going to the accent and back.
     skiff::paint::Tween flash{0.0f, 1200.0f};
@@ -468,6 +466,7 @@ struct message_bubble : nodes::Stack {
     // for it; on a line of its own where it does not. Decided from the last
     // layout; a change is laid out at the next.
     void update(double now_ms) {
+      auto& [name, quote, picture, file, text, cards, reactions, time, inline_time] = parts;
       if (flash.step(now_ms))
         fState.apply({.background = mixed(plate, accent_colour, 0.35f * flash.value())});
       if (!text.visible() || text.bounds().isEmpty() || !cards.empty() || reactions)
@@ -485,8 +484,12 @@ struct message_bubble : nodes::Stack {
       }
     }
     body_column(bool mine, std::string said, std::string when)
-        : outgoing(mine), text(std::move(said), 13.0f, text_colour), time(when, 11.0f, mine ? sent_time_colour : dim_colour),
-          inline_time(when, 11.0f, mine ? sent_time_colour : dim_colour), plate(mine ? out_bubble_colour : bubble_colour) {
+        : outgoing(mine),
+          parts{.text = nodes::Text(std::move(said), 13.0f, text_colour),
+                .time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour),
+                .inline_time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour)},
+          plate(mine ? out_bubble_colour : bubble_colour) {
+      auto& [name, quote, picture, file, text, cards, reactions, time, inline_time] = parts;
       this->setGap(2.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
                     .padding = {kPadY, kPadX, 5.0f, kPadX}, .cornerRadius = 12.0f, .background = mine ? out_bubble_colour : bubble_colour});
@@ -497,18 +500,16 @@ struct message_bubble : nodes::Stack {
       inline_time.apply({.place = scene::anchor::kBottomRight});
       inline_time.setVisible(false);
     }
-    void forEachChild(auto&& f) {
-      f(name);
-      f(quote);
-      f(picture);
-      f(file);
-      f(text);
-      f(cards);
-      f(reactions);
-      f(time);
-      f(inline_time);
-    }
-  } body;
+  };
+
+  struct parts_t {
+    // The sender's avatar, beside the last of their run in a group; the
+    // same room, empty, beside the rest.
+    avatar_mark face;
+    body_column body;
+    // The arrow a swipe shows, filling as it reaches its mark.
+    nodes::Icon swipe_mark{shape_of(icon::back{}), dim_colour};
+  } parts;
 
   // Declared: the avatar's room and the bubble, at the right where it is
   // one's own; the bubble a column of the name, the quote, the text, the
@@ -516,8 +517,10 @@ struct message_bubble : nodes::Stack {
   message_bubble(const conversation& in, const message& said, bool first_of_run, bool last_of_run,
                  const model* now = nullptr)
       : said(said), first(first_of_run), last(last_of_run), message_id(said.id), plain(said.body.plain),
-        outgoing(said.outgoing), sender(said.sender), face(said.sender, sender_name(in, said.sender), kAvatar),
-        body(said.outgoing, said.body.plain, mark_of(said) + clock_of(said.at)) {
+        outgoing(said.outgoing), sender(said.sender),
+        parts{.face = avatar_mark(said.sender, sender_name(in, said.sender), kAvatar),
+              .body = body_column(said.outgoing, said.body.plain, mark_of(said) + clock_of(said.at))} {
+    auto& [face, body, swipe_mark] = parts;
     swipe_mark.apply({.place = scene::anchor::kCentreRight,
                       .x = -6.0f,
                       .width = 28.0f,
@@ -539,33 +542,33 @@ struct message_bubble : nodes::Stack {
     if (!(group && !outgoing && last_of_run))
       face.fState.setAlpha(0.0f);  // its room kept, so the run's bubbles line up
     if (group && !outgoing && first_of_run) {
-      body.name.emplace(sender_name(in, said.sender), 13.0f, avatar_colour(said.sender), true);
-      body.name->setElided(true);
-      body.name->setMaxWidth(kMaxWidth);
+      body.parts.name.emplace(sender_name(in, said.sender), 13.0f, avatar_colour(said.sender), true);
+      body.parts.name->setElided(true);
+      body.parts.name->setMaxWidth(kMaxWidth);
     }
     // Anyone's words can be selected and copied, as in Telegram.
-    body.text.setSelectable(true);
-    body.text.setSelectionColour((accent_colour & 0x00FFFFFFu) | (110u << 24));  // the accent, see-through
+    body.parts.text.setSelectable(true);
+    body.parts.text.setSelectionColour((accent_colour & 0x00FFFFFFu) | (110u << 24));  // the accent, see-through
     std::string when = mark_of(said) + clock_of(said.at);
     when += std::visit(overloaded{[](const delivery::sending&) { return " · sending"; },
                                   [](const delivery::failed&) { return " · not sent"; },
                                   [](const auto&) { return ""; }},
                        said.delivery);
-    body.time.setText(when);
+    body.parts.time.setText(when);
     // What it carries: a picture, sized as tdesktop's; or a file's row.
     if (said.attachment) {
       const mux::attachment& carried = *said.attachment;
       std::visit(overloaded{[&](attachment_kind::image) {
-                              body.picture.emplace(carried.source, carried.width, carried.height);
+                              body.parts.picture.emplace(carried.source, carried.width, carried.height);
                             },
-                            [&](attachment_kind::file) { body.file.emplace(carried.source, carried.name, carried.size); }},
+                            [&](attachment_kind::file) { body.parts.file.emplace(carried.source, carried.name, carried.size); }},
                  carried.kind);
       // No caption: the text goes, and a picture has its time over it.
       if (said.body.plain.empty() && !said.body.html) {
-        body.text.setVisible(false);
-        if (body.picture) {
-          body.picture->show_time(when);
-          body.time.setVisible(false);
+        body.parts.text.setVisible(false);
+        if (body.parts.picture) {
+          body.parts.picture->show_time(when);
+          body.parts.time.setVisible(false);
           body.apply({.padding = {3.0f, 3.0f, 3.0f, 3.0f}});
         }
       }
@@ -582,11 +585,11 @@ struct message_bubble : nodes::Stack {
       shown = with_mentions(said.body.plain, link_spans_in(said.body.plain), in, now);
     }
     {
-      body.text.setText(shown.text);
-      body.text.setLinks(std::move(shown.links), accent_colour);
-      body.text.setVisible(!shown.text.empty());
+      body.parts.text.setText(shown.text);
+      body.parts.text.setLinks(std::move(shown.links), accent_colour);
+      body.parts.text.setVisible(!shown.text.empty());
       for (const auto& [url, room] : shown.cards)
-        body.cards.push_back(card_of(url, room, now));
+        body.parts.cards.push_back(card_of(url, room, now));
     }
     if (said.replies_to) {
       const auto found = std::ranges::find(in.timeline, *said.replies_to, &message::id);
@@ -602,17 +605,17 @@ struct message_bubble : nodes::Stack {
           line = is_picture(found->attachment->kind) ? std::string("Photo") : found->attachment->name;
       }
       std::ranges::replace(line, '\n', ' ');
-      body.quote.emplace(known ? avatar_colour(found->sender) : accent_colour,
+      body.parts.quote.emplace(known ? avatar_colour(found->sender) : accent_colour,
                          known ? (found->outgoing ? std::string("You") : sender_name(in, found->sender))
                                : std::string("A message"),
                          std::move(line), std::move(picture));
       body.apply({.minWidth = 160.0f});
     }
     if (!said.reactions.empty()) {
-      body.reactions.emplace();
+      body.parts.reactions.emplace();
       for (const auto& [key, who] : said.reactions)
         if (!who.empty())
-          body.reactions->chips().emplace_back(key, who.size(), who.contains(said.in.account.address));
+          body.parts.reactions->chips().emplace_back(key, who.size(), who.contains(said.in.account.address));
     }
   }
 
@@ -623,11 +626,11 @@ struct message_bubble : nodes::Stack {
   // enough.
   skiff::paint::Tween swipe{0.0f, 180.0f, skiff::paint::movement::subtle{}};
   static constexpr float kSwipeToReply = 70.0f;
-  nodes::Icon swipe_mark{shape_of(icon::back{}), dim_colour};
   [[nodiscard]] bool settling() const { return swipe.moving(); }
   void update(double now_ms) {
     if (!swipe.step(now_ms))
       return;
+    auto& [face, body, swipe_mark] = parts;
     const float shift = swipe.value();
     const float reached = std::clamp(-shift / kSwipeToReply, 0.0f, 1.0f);
     face.apply({.shiftX = shift});
@@ -636,11 +639,6 @@ struct message_bubble : nodes::Stack {
     swipe_mark.setColour(reached >= 1.0f ? on_accent_colour : dim_colour);
   }
 
-  void forEachChild(auto&& f) {
-    f(face);
-    f(body);
-    f(swipe_mark);
-  }
   // Pressed with the right button, it asks for its menu.
   [[nodiscard]] bool acceptsInput() const { return true; }
 };

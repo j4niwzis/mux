@@ -177,39 +177,39 @@ struct timeline_area : scene::Node {
     } press{x, y};
       for (const message_bubble& one : this->bubbles()) {
         // A picture: seen whole. A file: saved and opened.
-        if (one.body.picture && one.body.picture->bounds().contains(press.x, press.y)) {
+        if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y)) {
           const conversation* chat = seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr;
           const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
-          actions->open_picture(one.body.picture->source, one.sender,
+          actions->open_picture(one.parts.body.parts.picture->source, one.sender,
                                 chat ? sender_name(*chat, one.sender) : one.sender,
                                 std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day}, clock_of(one.said.at)));
           return true;
         }
-        if (one.body.file && one.body.file->bounds().contains(press.x, press.y) && one.said.attachment) {
-          actions->open_file(one.body.file->source, one.said.attachment->name);
+        if (one.parts.body.parts.file && one.parts.body.parts.file->bounds().contains(press.x, press.y) && one.said.attachment) {
+          actions->open_file(one.parts.body.parts.file->source, one.said.attachment->name);
           return true;
         }
         // A reaction's chip: the user's own put or taken back.
-        if (one.body.reactions)
-          for (const reaction_chip& chip : one.body.reactions->chips())
+        if (one.parts.body.parts.reactions)
+          for (const reaction_chip& chip : one.parts.body.parts.reactions->chips())
             if (chip.bounds().contains(press.x, press.y)) {
               actions->react(one.message_id, chip.key);
               return true;
             }
         // A card of a link to a room or a message: followed.
-        for (const link_card& card : one.body.cards)
+        for (const link_card& card : one.parts.body.parts.cards)
           if (card.bounds().contains(press.x, press.y)) {
             actions->open_url(card.url);
             return true;
           }
         // The quote: to the message it quotes.
-        if (one.body.quote && one.said.replies_to && one.body.quote->bounds().contains(press.x, press.y)) {
+        if (one.parts.body.parts.quote && one.said.replies_to && one.parts.body.parts.quote->bounds().contains(press.x, press.y)) {
           actions->jump_to_message(*one.said.replies_to);
           return true;
         }
         // The sender, by their avatar or their name: their page.
-        if ((one.face.visible() && one.face.fState.fAlpha > 0.0f && one.face.bounds().contains(press.x, press.y)) ||
-            (one.body.name && one.body.name->bounds().contains(press.x, press.y))) {
+        if ((one.parts.face.visible() && one.parts.face.fState.fAlpha > 0.0f && one.parts.face.bounds().contains(press.x, press.y)) ||
+            (one.parts.body.parts.name && one.parts.body.parts.name->bounds().contains(press.x, press.y))) {
           actions->open_member_info(one.sender);
           return true;
         }
@@ -230,8 +230,8 @@ struct timeline_area : scene::Node {
         facts.id = one.message_id;
         facts.own = one.outgoing;
         facts.text = one.plain;
-        facts.selection = one.body.text.hasSelection();
-        facts.copied = facts.selection ? one.body.text.selected() : one.plain;
+        facts.selection = one.parts.body.parts.text.hasSelection();
+        facts.copied = facts.selection ? one.parts.body.parts.text.selected() : one.plain;
         facts.seen = this->seen_by(one.message_id, one.sender);
         if (one.said.attachment) {
           facts.media = one.said.attachment->source;

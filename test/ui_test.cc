@@ -345,8 +345,8 @@ TEST(Timeline, APicturePressedIsOpened) {
   }
   auto& bubbles = std::get<0>(std::get<0>(screen.timeline.fChildren).fChildren);
   ASSERT_EQ(bubbles.size(), 1u);
-  ASSERT_TRUE(bubbles.front().body.picture);
-  const skia::SkRect picture = bubbles.front().body.picture->bounds();
+  ASSERT_TRUE(bubbles.front().parts.body.parts.picture);
+  const skia::SkRect picture = bubbles.front().parts.body.parts.picture->bounds();
   ASSERT_FALSE(picture.isEmpty());
   scene::InputRouter router;
   const std::array layers{scene::InputRouter::Layer{window.handle(), false}};

@@ -58,6 +58,83 @@ struct gifs {};
 }  // namespace popup_page
 using popup_page_t = std::variant<popup_page::emoji, popup_page::stickers, popup_page::gifs>;
 
+// What the mouse rests on in a panel of emoji or stickers, shown large over
+// it, as Telegram's preview: its picture (or its glyph) and its name. Cells
+// say it here as the mouse stays on them, and let it go as it leaves; the
+// panel shows what is said -- no pointer between them.
+struct previewed {
+  std::string key;    // a picture's source, or a glyph
+  std::string label;  // its :shortcode:, or nothing
+  bool picture = false;
+  friend bool operator==(const previewed&, const previewed&) = default;
+};
+inline std::optional<previewed>& previewed_emote() {
+  static std::optional<previewed> now;
+  return now;
+}
+// How long the mouse rests on one before it is shown large.
+inline constexpr double kPreviewAfterMs = 450.0;
+// A cell's resting: said once the mouse has stayed long enough, let go as
+// it leaves. Kept by each cell.
+struct dwell {
+  std::optional<double> since;
+  bool said = false;
+  // While it counts, frames are wanted.
+  [[nodiscard]] bool counting(bool hovered) const { return hovered && !said; }
+  void step(bool hovered, double now, const previewed& what) {
+    if (!hovered) {
+      since.reset();
+      if (said && previewed_emote() == what)
+        previewed_emote().reset();
+      said = false;
+      return;
+    }
+    if (!since)
+      since = now;
+    if (!said && now - *since >= kPreviewAfterMs) {
+      said = true;
+      previewed_emote() = what;
+    }
+  }
+};
+// The preview, over a panel: a dark plate, the picture or glyph large, its
+// name under it.
+struct emote_preview : nodes::Stack {
+  static constexpr float kSide = 200.0f;
+  struct parts_t {
+    std::optional<nodes::Image<from_avatars>> picture;
+    nodes::Text glyph;
+    nodes::Text label;
+  } parts;
+  explicit emote_preview(const previewed& shown)
+      : parts{.glyph = nodes::Text(shown.picture ? std::string() : shown.key, 120.0f, text_colour),
+              .label = nodes::Text(shown.label, 14.0f, text_colour)} {
+    this->setGap(8.0f);
+    fStack.justify = nodes::justify::middle{};
+    fState.apply({.place = scene::anchor::kCentre, .autoSize = scene::axes::kBoth,
+                  .padding = {16.0f, 16.0f, 16.0f, 16.0f}, .cornerRadius = 14.0f,
+                  .background = (sidebar_colour & 0x00FFFFFFu) | (0xF0u << 24)});
+    if (shown.picture) {
+      parts.picture.emplace(from_avatars{shown.key});
+      parts.picture->apply({.width = kSide, .height = kSide, .alignSelf = scene::align::kMiddle});
+    }
+    parts.glyph.setVisible(!shown.picture);
+    parts.glyph.apply({.alignSelf = scene::align::kMiddle});
+    parts.label.setVisible(!shown.label.empty());
+    parts.label.apply({.alignSelf = scene::align::kMiddle});
+  }
+};
+// A panel's preview kept to what the cells say: made anew as it changes.
+inline bool follow_preview(std::optional<emote_preview>& shown, std::optional<previewed>& of) {
+  if (of == previewed_emote())
+    return false;
+  of = previewed_emote();
+  shown.reset();
+  if (of)
+    shown.emplace(*of);
+  return true;
+}
+
 // The chat's stickers, as tdesktop's tab: a grid of them; a press sends one.
 template <class Actions>
 struct sticker_grid : nodes::Stack {
@@ -73,6 +150,9 @@ struct sticker_grid : nodes::Stack {
                     .hoverBackground = chosen_colour});
       parts.picture.apply({.fill = true});
     }
+    dwell resting;
+    [[nodiscard]] bool settling() const { return resting.counting(this->hovered()); }
+    void update(double now) { resting.step(this->hovered(), now, {sticker.url, ":" + sticker.shortcode + ":", true}); }
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
@@ -85,7 +165,15 @@ struct sticker_grid : nodes::Stack {
     nodes::Text empty;
     nodes::ScrollContainer<cells_t> list{
         cells_t({.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, {})};
+    // Over the rest: the sticker the mouse rests on, large.
+    std::optional<emote_preview> preview;
   } parts;
+  std::optional<previewed> preview_of;
+  [[nodiscard]] bool settling() const { return previewed_emote() != preview_of; }
+  void update(double) {
+    if (follow_preview(parts.preview, preview_of))
+      this->invalidateLayout();
+  }
   explicit sticker_grid(Actions* a)
       : parts{.empty = nodes::Text("No stickers here. A room's sticker packs, and yours, show here.", 13.0f, dim_colour)} {
     fState.apply({.padding = {4.0f, 4.0f, 4.0f, 4.0f}});
@@ -134,6 +222,12 @@ struct emoji_panel : nodes::Stack {
       std::optional<nodes::Image<from_avatars>> picture;
       nodes::Text face;
     } parts;
+    dwell resting;
+    [[nodiscard]] bool settling() const { return resting.counting(this->hovered()); }
+    void update(double now) {
+      resting.step(this->hovered(), now,
+                   picture_url.empty() ? previewed{glyph, std::string(), false} : previewed{picture_url, glyph, true});
+    }
     cell(emoji_panel* p, std::string g, const alef::emoji* from = nullptr)
         : panel(p), glyph(g), source(from), parts{.face = nodes::Text(std::move(g), 22.0f, text_colour)} {
       this->setHorizontal();
@@ -268,7 +362,10 @@ struct emoji_panel : nodes::Stack {
     footer_row footer;
     // Over the rest: an emoji's tones, while they are asked for.
     std::optional<tone_strip> tones;
+    // And the emoji the mouse rests on, large.
+    std::optional<emote_preview> preview;
   } parts;
+  std::optional<previewed> preview_of;
   // A pick made: the tones, if open, closed at the next frame -- not now,
   // from inside one of their own cells.
   bool tones_done = false;
@@ -279,7 +376,7 @@ struct emoji_panel : nodes::Stack {
 
   // Sized by where it is shown.
   explicit emoji_panel(Pick what) : pick(std::move(what)), parts{.field = field_t("Search emoji", {this})} {
-    auto& [field, list, footer, tones] = parts;
+    auto& [field, list, footer, tones, preview] = parts;
     this->setGap(4.0f);
     fState.apply({.padding = {7.0f, 0.0f, 4.0f, 7.0f}});
     field.setSearchIcon(true);
@@ -361,8 +458,12 @@ struct emoji_panel : nodes::Stack {
     this->invalidateLayout();
     return true;
   }
-  // The tab of the group at the top of the list lit.
+  [[nodiscard]] bool settling() const { return previewed_emote() != preview_of; }
+  // The tab of the group at the top of the list lit; the preview kept to
+  // what the cells say.
   void update(double) {
+    if (follow_preview(parts.preview, preview_of))
+      this->invalidateLayout();
     if (tones_done) {
       tones_done = false;
       if (parts.tones) {

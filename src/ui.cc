@@ -1842,6 +1842,8 @@ struct conversations_screen : nodes::Stack {
   // the view was above the newest.
   std::optional<conversation_id> shown_chat;
   std::string shown_last;
+  // Where each chat was scrolled to when it was left: it comes back there.
+  std::map<conversation_id, float> scrolled;
   int unseen = 0;
   composer_bar<Actions>& line = chat.line;
 
@@ -1949,8 +1951,10 @@ struct conversations_screen : nodes::Stack {
   }
 
   void show_conversation(const model& now) {
-    // Whether the reader was at the newest: then the view follows it.
+    // Whether the reader was at the newest: then the view follows it; and
+    // where the view was, for the chat being left.
     const bool was_at_end = timeline.atEnd(40.0f);
+    const float left_at = timeline.current();
     auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
     entries.clear();
     const conversation* one = chosen ? now.find(*chosen) : nullptr;
@@ -1971,7 +1975,16 @@ struct conversations_screen : nodes::Stack {
     // there or the chat is new to the view; otherwise what came after the
     // last one seen is counted on the way down.
     const std::string last = all.empty() ? std::string() : all.back().id;
-    if (shown_chat != chosen || was_at_end) {
+    if (shown_chat != chosen) {
+      if (shown_chat)
+        scrolled[*shown_chat] = was_at_end ? -1.0f : left_at;
+      const auto kept = scrolled.find(*chosen);
+      if (kept == scrolled.end() || kept->second < 0.0f)
+        timeline.scrollTo(std::numeric_limits<float>::max());
+      else
+        timeline.setCurrent(kept->second);
+      unseen = 0;
+    } else if (was_at_end) {
       timeline.scrollTo(std::numeric_limits<float>::max());
       unseen = 0;
     } else if (last != shown_last) {

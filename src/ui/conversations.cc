@@ -834,6 +834,16 @@ struct conversations_screen : nodes::Stack {
         if (at < from || at >= to) {
           this->set_made(one->timeline, at > 40 ? at - 40 : 0, at + 40);
           this->show_conversation(*last_model);
+        } else if (it != entries.end() && it->visible() && !timeline.moving()) {
+          // Made, but not laid out: more than a screen from the view, where
+          // the list lays nothing out. The view stepped a screen toward it,
+          // until it is laid out and aimed at.
+          const auto laid = std::ranges::find_if(entries, [](const message_bubble& row) { return !row.bounds().isEmpty(); });
+          if (laid != entries.end()) {
+            const bool above = it < laid;
+            const float page = timeline.bounds().height();
+            timeline.setCurrent(std::max(0.0f, timeline.current() + (above ? -page : page)));
+          }
         }
       } else if (is_matrix(chosen->account.speaks) && !jump_paging) {
         // Not here: a window of the history around it, from the server --

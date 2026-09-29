@@ -605,6 +605,22 @@ struct mentioned {
   return link_card(url, id, name, "Message from " + name, said);
 }
 
+
+// What a message's text draws of the program's: a pill's avatar -- the one
+// of what it names, else its initials on its colours -- and a custom
+// emoji's picture, fetched as an avatar is. Given to its text as a type.
+struct message_pictures {
+  static std::optional<skiff::scene::PillPicture> pill(std::string_view target) {
+    const auto at = target.find("#/");
+    const std::string_view id = at == std::string_view::npos ? target : target.substr(at + 2);
+    const auto [top, bottom] = userpic_colours(id);
+    return skiff::scene::PillPicture{avatar_images().find(id), top, bottom, initials_of(id)};
+  }
+  static const skia::Sp<skia::SkImage>* picture(std::string_view target) {
+    return avatar_images().find(std::string(target));
+  }
+};
+
 struct message_bubble : nodes::Stack {
   // The message as it was shown, and where in its sender's run: while
   // these are the same, the bubble is kept.
@@ -685,7 +701,7 @@ struct message_bubble : nodes::Stack {
       std::optional<quote_row> quote;
       std::optional<picture_view> picture;
       std::optional<file_view> file;
-      nodes::Text text;
+      nodes::BasicText<message_pictures> text;
       std::vector<link_card> cards;
       std::optional<page_preview> preview;
       std::optional<reaction_row> reactions;
@@ -778,7 +794,7 @@ struct message_bubble : nodes::Stack {
     }
     body_column(bool mine, std::string said, std::string when)
         : outgoing(mine),
-          parts{.text = nodes::Text(std::move(said), 13.0f, text_colour),
+          parts{.text = nodes::BasicText<message_pictures>(std::move(said), 13.0f, text_colour),
                 .time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour),
                 .inline_time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour)},
           plate(mine ? out_bubble_colour : bubble_colour) {

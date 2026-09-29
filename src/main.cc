@@ -106,23 +106,6 @@ int main(int argc, char** argv) {
   program.box = &box;
   program.model = &model;
   program.net = &net;
-  // A pill's avatar in a message's text: the one of what it names.
-  skiff::scene::pillPicture() = [](std::string_view target) -> std::optional<skiff::scene::PillPicture> {
-    const auto at = target.find("#/");
-    const std::string_view id = at == std::string_view::npos ? target : target.substr(at + 2);
-    const auto [top, bottom] = mux::ui::userpic_colours(id);
-    return skiff::scene::PillPicture{mux::ui::avatar_images().find(id), top, bottom, mux::ui::initials_of(id)};
-  };
-  // What the layout puts past the edge of its parent, said where it can be
-  // seen: once a node, until it fits again.
-  skiff::scene::overflowReport() = [](const skiff::scene::Overflow& one) {
-    std::println(std::cerr, "[layout] {} sticks out of {} by {:.1f} across, {:.1f} down", one.node, one.parent, one.x,
-                 one.y);
-  };
-  // A custom emoji in a message's text: its picture, fetched as an avatar is.
-  skiff::scene::inlinePicture() = [](std::string_view target) -> const skia::Sp<skia::SkImage>* {
-    return mux::ui::avatar_images().find(std::string(target));
-  };
   // A link pressed in a message's text: routed as a link is.
   skiff::scene::linkOpener() = {+[](void* self, std::string_view url) {
                                   static_cast<app*>(self)->ask.open_url(std::string(url));

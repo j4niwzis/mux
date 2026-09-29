@@ -548,6 +548,11 @@ int run(App& app, const options& how) {
       app.before_frame();
       scene.update(detail::now_ms());
       scene.layoutIfNeeded(skia::SkRect::MakeWH(width, height));
+      // What the layout put past the edge of its parent, said where it can
+      // be seen: once a node, until it fits again.
+      for (const auto& one : std::exchange(skiff::scene::overflows(), {}))
+        std::println(std::cerr, "[layout] {} sticks out of {} by {:.1f} across, {:.1f} down", one.node, one.parent,
+                     one.x, one.y);
       shapes.show(scene.cursor());
       const skiff::scene::FrameResult frame = scene.finishFrame();
       animating = frame.fWantsAnotherFrame;

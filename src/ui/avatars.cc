@@ -262,7 +262,11 @@ struct from_moving_thumbnail {
   picture_ptr operator()() const {
     if (picture_ptr moving = animations().at(key, animation_clock()))
       return moving;
-    return thumbnails().find(key);
+    // Its thumbnail; else the whole of it, where that came first -- opened
+    // in the viewer before its thumbnail was fetched.
+    if (picture_ptr small = thumbnails().find(key); small && *small)
+      return small;
+    return whole_pictures().find(key);
   }
 };
 // Where it moves, the frame for now; else it whole.

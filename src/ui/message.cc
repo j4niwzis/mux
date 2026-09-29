@@ -257,7 +257,7 @@ struct picture_view : scene::Node {
   [[nodiscard]] bool settling() const { return animations().has(source); }
   void update(double) {
     const bool moving = animations().has(source);
-    const bool coming = !moving && !thumbnails().has(source);
+    const bool coming = !moving && !thumbnails().has(source) && !whole_pictures().has(source);
     if (coming != parts.loader.visible())
       parts.loader.setVisible(coming);
     if (moving)

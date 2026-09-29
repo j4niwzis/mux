@@ -178,6 +178,10 @@ struct id_line : nodes::Stack {
 struct person_facts {
   std::string name;
   std::string status;
+  // What the user may do to them in the chat being read, as its power
+  // levels allow: only above them, and only where the room lets them.
+  bool may_kick = false;
+  bool may_ban = false;
 };
 [[nodiscard]] inline person_facts person_of(const conversation* in, const model& now, const account_id& account,
                                             const std::string& id) {
@@ -185,6 +189,13 @@ struct person_facts {
   if (in == nullptr)
     return out;
   if (const auto found = std::ranges::find(in->members, id, &member::id); found != in->members.end()) {
+    const auto level_of = [&](const std::string& who) {
+      const auto level = in->powers.find(who);
+      return level == in->powers.end() ? in->power_default : level->second;
+    };
+    const std::int64_t mine = level_of(account.address), theirs = level_of(id);
+    out.may_kick = id != account.address && mine > theirs && mine >= in->needs.of(power_need::kick{});
+    out.may_ban = id != account.address && mine > theirs && mine >= in->needs.of(power_need::ban{});
     if (!found->name.empty())
       out.name = found->name;
     if (found->role)
@@ -235,21 +246,38 @@ struct person_card : nodes::Stack {
       fState.apply({.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}});
     }
   };
+  // What a moderator does to them, as Element's user info offers it.
+  struct to_them {
+    Actions* actions = nullptr;
+    room_action_t action;
+    void operator()() const {
+      actions->room_act(action);
+      actions->close_person_info();
+    }
+  };
   struct parts_t {
     top_bar top;
     cover face;
     nodes::Box<> band = section_band();
     id_line id;
     action_tile<message_them> message;
+    action_tile<to_them> remove;
+    action_tile<to_them> ban;
   } parts;
 
   person_card(Actions* a, const account_id& account, const std::string& key, const person_facts& facts)
       : parts{.top = top_bar(a),
               .face = cover(a, key, facts),
               .id = id_line(key, ""),
-              .message = action_tile<message_them>("Message", icon::send{}, {a, conversation_id{account, key}})} {
+              .message = action_tile<message_them>("Message", icon::send{}, {a, conversation_id{account, key}}),
+              .remove = action_tile<to_them>("Remove from room", icon::leave{}, {a, room_action::kick{key}}),
+              .ban = action_tile<to_them>("Ban from room", icon::close{}, {a, room_action::ban{key}})} {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}});
-    parts.message.apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
+    for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.message, &parts.remove, &parts.ban})
+      each->apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
+    // Offered only where the user may: no button for what they cannot do.
+    parts.remove.setVisible(facts.may_kick);
+    parts.ban.setVisible(facts.may_ban);
   }
 };
 

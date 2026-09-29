@@ -847,7 +847,7 @@ struct app {
   void apply(const request::manage_proxies&) {
     root().open_settings(motion.value_or("full"));
     if (auto* up = root().settings_up())
-      up->show_proxies(proxies);
+      up->show_proxies(proxies, false);
   }
   void apply(const request::settings_proxies&) {
     if (auto* up = root().settings_up())
@@ -1087,13 +1087,26 @@ int main(int argc, char** argv) {
   const std::filesystem::path config_path = mux::config::default_path();
   mux::config::file saved;
   std::optional<std::string> config_error;
+  std::optional<std::string> config_note;
   if (demo) {
     saved = mux::config::file_of(fake::accounts());
     fake::fill(model);
   } else if (auto loaded = mux::config::load(config_path))
     saved = std::move(*loaded);
   else {
-    config_error = loaded.error();
+    // Not a file this mux can read -- one of an older mux, most likely: kept
+    // aside, where it can be looked at, and a new one begun, so that what is
+    // set from now on is saved. Refusing to save instead lost every change
+    // without a word.
+    std::filesystem::path aside = config_path;
+    aside += ".unreadable";
+    std::error_code moved;
+    std::filesystem::rename(config_path, aside, moved);
+    if (moved) {
+      config_error = loaded.error();
+    } else {
+      config_note = std::format("{}\n\nIt was kept as {}, and a new one begun.", loaded.error(), aside.string());
+    }
     std::println(std::cerr, "[mux] {}", loaded.error());
   }
 
@@ -1145,6 +1158,8 @@ int main(int argc, char** argv) {
   program.config_error = std::move(config_error);
   program.refresh();
 
+  if (config_note)
+    program.root().show_message("The accounts file could not be read", *config_note);
   const int code = mux::host::run(program, {.software = saved.renderer == "software"});
   net.thread.join();
   return code;

@@ -932,12 +932,12 @@ struct message_bubble : scene::Node {
 // Something not there yet, said in a box over the window.
 template <class Actions>
 struct notice_box : scene::Node {
-  nodes::Text title{"Not implemented yet", 17.0f, text_colour, true};
+  nodes::Text title;
   nodes::Text note;
   widgets::Button<ask<Actions, &Actions::close_notice>> ok;
 
-  notice_box(Actions* a, std::string what)
-      : note(std::format("{} isn't implemented yet.", what), 14.0f, dim_colour), ok("OK", {a}) {
+  notice_box(Actions* a, std::string heading, std::string text)
+      : title(std::move(heading), 17.0f, text_colour, true), note(std::move(text), 14.0f, dim_colour), ok("OK", {a}) {
     fState.apply({.fill = true});
     note.setWrapped(true);
     ok.setPrimary(true);
@@ -2723,8 +2723,9 @@ struct proxies_page : scene::Node {
   row_item<ask<Actions, &Actions::add_proxy>> add;
   nodes::Text empty{"No proxies yet. Accounts connect directly.", 13.0f, dim_colour};
 
-  proxies_page(Actions* a, const std::vector<config::proxy_settings>& all)
-      : header("Proxies", {a}, {a}, true, true), add("Add proxy", {a}, icon::plus{}) {
+  // With a way back to the settings' list where it was opened from there.
+  proxies_page(Actions* a, const std::vector<config::proxy_settings>& all, bool with_back)
+      : header("Proxies", {a}, {a}, with_back, true), add("Add proxy", {a}, icon::plus{}) {
     fState.apply({.fill = true});
     for (std::size_t i = 0; i < all.size(); ++i)
       profiles.emplace_back(std::format("{} ({} {}:{})", all[i].name, all[i].kind == "http" ? "HTTP" : "SOCKS5",
@@ -2961,7 +2962,9 @@ struct settings_dialog : scene::Node {
                                  [](auto&) -> appearance_page<Actions>* { return nullptr; }},
                       page);
   }
-  void show_proxies(const std::vector<config::proxy_settings>& all) { page.template emplace<2>(actions, all); }
+  void show_proxies(const std::vector<config::proxy_settings>& all, bool with_back = true) {
+    page.template emplace<2>(actions, all, with_back);
+  }
   void show_proxy(const std::optional<config::proxy_settings>& from, int index) {
     page.template emplace<3>(actions, from, index);
   }
@@ -3013,7 +3016,7 @@ struct window : scene::Node {
       settings.setSheetColour(sidebar_colour);
       settings.setSize(440.0f, 520.0f);
       notice.setSheetColour(sidebar_colour);
-      notice.setSize(360.0f, 160.0f);
+      notice.setSize(440.0f, 240.0f);
     }
   };
 
@@ -3075,7 +3078,12 @@ struct window : scene::Node {
   // Whether the pages are still moving.
   [[nodiscard]] bool pages_moving() { return p->frame.settling(); }
 
-  void show_notice(std::string what) { p->notice.open(actions, std::move(what)); }
+  void show_notice(std::string what) {
+    p->notice.open(actions, "Not implemented yet", std::format("{} isn't implemented yet.", what));
+  }
+  void show_message(std::string heading, std::string text) {
+    p->notice.open(actions, std::move(heading), std::move(text));
+  }
   void close_notice() { p->notice.close(); }
 
   void show(const std::vector<config::account_t>& saved, const model& now) {

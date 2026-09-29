@@ -53,8 +53,10 @@ struct picture_viewer : nodes::Stack {
       texts.name.setColour(skia::colorSetARGB(255, 255, 255, 255));
       texts.state.setColour(skia::colorSetARGB(255, 200, 200, 200));
       gap.apply({.height = 1.0f, .grow = scene::axes::kX});
-      for (auto* button : {&smaller.colour, &larger.colour, &close.colour})
-        *button = skia::colorSetARGB(255, 255, 255, 255);
+      // White on the dark of the viewer.
+      smaller.set_colour(skia::colorSetARGB(255, 255, 255, 255));
+      larger.set_colour(skia::colorSetARGB(255, 255, 255, 255));
+      close.set_colour(skia::colorSetARGB(255, 255, 255, 255));
       save.set_colour(skia::colorSetARGB(255, 255, 255, 255));
       for (scene::Node* middle : std::initializer_list<scene::Node*>{&smaller, &larger, &save, &close})
         middle->apply({.alignSelf = scene::align::kMiddle});

@@ -233,21 +233,13 @@ using link_step_t = std::variant<link_step::open_chat, link_step::member_page, l
 
 // Where a link leads, from the chat being read and the account in view.
 [[nodiscard]] inline link_step_t where_to(const model& now, const link_t& where,
-                                          const std::optional<conversation_id>& chosen,
                                           const std::optional<account_id>& current) {
   return std::visit(
       overloaded{
-          // In the chat being read: their page. Elsewhere: a chat with them.
-          [&](const link::person& one) -> link_step_t {
-            if (const conversation* here = chosen ? now.find(*chosen) : nullptr;
-                here && std::ranges::contains(here->members, one.id, &member::id))
-              return link_step::member_page{one.id};
-            for (const auto& [account, kept] : now.accounts())
-              for (const auto& [key, chat] : kept.conversations)
-                if (one_to_one(chat.kind) && std::ranges::contains(chat.members, one.id, &member::id))
-                  return link_step::open_chat{chat.id, std::nullopt};
-            return link_step::say{"No chat yet", std::format("There is no chat with {} yet.", one.id)};
-          },
+          // A person: their card, as Telegram opens a mention's profile --
+          // a member of the chat being read or not; a message to them is
+          // one press from there.
+          [&](const link::person& one) -> link_step_t { return link_step::member_page{one.id}; },
           // Joined: opened. Not: joined through the account in view, or the
           // first Matrix one.
           [&](const link::room& one) -> link_step_t {

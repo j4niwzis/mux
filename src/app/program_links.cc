@@ -56,7 +56,7 @@ void app::follow(const mux::logic::link_t& where) {
                                root().open_room_card(step.room, mux::room_preview{.note = "Looking it up…"});
                                net->preview_room(step.by, step.room, step.via);
                              }},
-             mux::logic::where_to(*model, where, screen.chosen, screen.current));
+             mux::logic::where_to(*model, where, screen.current));
 }
 
 // The room of the card joined: opened when it comes, in woken().

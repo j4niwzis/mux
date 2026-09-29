@@ -35,7 +35,8 @@ struct notice_box : nodes::Stack {
       : parts{.title = nodes::Text(std::move(heading), 17.0f, text_colour, true),
               .note = nodes::Text(std::move(text), 14.0f, dim_colour),
               .ok = ok_button("OK", {a})} {
-    fState.apply({.fill = true, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
+    // As high as what it says: no room left empty under its button.
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
     this->setGap(10.0f);
     for (nodes::Text* each : {&parts.title, &parts.note}) {
       each->setWrapped(true);

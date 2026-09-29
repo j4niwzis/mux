@@ -10,23 +10,57 @@ import skiff.nodes;
 import skiff.widgets;
 import mux.core;
 import mux.config;
+import mux.logic.links;
 export import :chat_list;
 
 export namespace mux::ui {
 
-// A link under a message: what it says, in the accent. A press on it is
-// seen by the messages' list, which opens it.
-struct link_line : nodes::Stack {
+// A link to a room or to a message in one, under the message that has it,
+// as a card: a bar in the accent, the room's avatar, its name -- or
+// "Message from" it -- over a second line: what the room is, or who said
+// the message and a line of it where it is here. A press on it is seen by
+// the messages' list, which follows it.
+struct link_card : nodes::Stack {
   std::string url;
-  nodes::Text label;
-  link_line(std::string said, std::string where) : url(std::move(where)), label("🔗 " + std::move(said), 13.0f, accent_colour) {
-    // As wide as it says, up to a bubble's width: cut there.
-    fState.apply({.height = 20.0f, .autoSize = scene::axes::kX});
-    label.setElided(true);
-    label.setMaxWidth(480.0f);
+  struct bar : scene::Node {
+    bar() { fState.apply({.width = 3.0f, .height = 36.0f}); }
+    void drawSelf(skia::SkCanvas* canvas, float alpha) {
+      if (skia::SkFont* font = skiff::paint::defaultFont())
+        skiff::paint::Painter(canvas, *font).fillRounded(fState.fBounds, 1.5f, accent_colour, alpha);
+    }
+  } line;
+  avatar_mark face;
+  struct texts_column : nodes::Stack {
+    nodes::Text title;
+    nodes::Text said;
+    texts_column(std::string t, std::string s)
+        : title(std::move(t), 13.0f, accent_colour, true), said(std::move(s), 13.0f, dim_colour) {
+      this->setGap(1.0f);
+      fState.apply({.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle});
+      for (nodes::Text* each : {&title, &said}) {
+        each->setElided(true);
+        each->setMaxWidth(360.0f);
+      }
+    }
+    void forEachChild(auto&& f) {
+      f(title);
+      f(said);
+    }
+  } texts;
+  link_card(std::string where, std::string avatar_id, std::string avatar_name, std::string title, std::string said)
+      : url(std::move(where)), face(std::move(avatar_id), std::move(avatar_name), 32.0f),
+        texts(std::move(title), std::move(said)) {
+    this->setHorizontal();
+    this->setGap(8.0f);
+    fState.apply({.autoSize = scene::axes::kBoth, .margin = {4.0f, 0.0f, 2.0f, 0.0f}});
+    face.apply({.alignSelf = scene::align::kMiddle});
     fState.setCursor(scene::cursor::hand{});
   }
-  void forEachChild(auto&& f) { f(label); }
+  void forEachChild(auto&& f) {
+    f(line);
+    f(face);
+    f(texts);
+  }
   [[nodiscard]] bool acceptsInput() const { return true; }
 };
 
@@ -186,84 +220,139 @@ struct reaction_row : nodes::Flow<std::vector<reaction_chip>> {
 // drawn as a pill with a small avatar and the name it goes by here (a
 // room's name, a member's), a link to it. The text is given back with the
 // names in place of the IDs, and its links with it.
-[[nodiscard]] inline std::pair<std::string, std::vector<nodes::Text::Link>> with_mentions(
-    std::string text, std::vector<nodes::Text::Link> links, const conversation& in, const model* now) {
-  const auto name_of = [&](const std::string& id) -> std::pair<std::string, std::string> {  // name, id to link to
-    if (id.starts_with('@'))
-      return {sender_name(in, id), id};
-    if (now)
-      for (const auto& [account, one] : now->accounts())
-        for (const auto& [key, chat] : one.conversations)
-          if (chat.id.id == id || (chat.alias && *chat.alias == id))
-            return {display_name(chat), chat.id.id};
-    return {id, id};
+struct mentioned {
+  std::string text;
+  std::vector<nodes::Text::Link> links;
+  std::vector<std::pair<std::string, logic::link::room>> cards;  // the link, and the room it is of
+};
+[[nodiscard]] inline mentioned with_mentions(std::string text, std::vector<nodes::Text::Link> links,
+                                             const conversation& in, const model* now) {
+  // What a mention is called here, and what it links to: a person by their
+  // name in the chat, a room by its name where it is known.
+  const auto name_of = [&](const logic::link_t& what) -> std::pair<std::string, std::string> {
+    return std::visit(overloaded{[&](const logic::link::person& one) { return std::pair(sender_name(in, one.id), one.id); },
+                                 [&](const logic::link::room& one) {
+                                   if (now)
+                                     if (const auto chat = logic::chat_of(*now, what))
+                                       if (const conversation* found = now->find(*chat))
+                                         return std::pair(display_name(*found), found->id.id);
+                                   return std::pair(one.id, one.id);
+                                 },
+                                 [](const logic::link::xmpp_address& one) { return std::pair(one.jid, one.jid); }},
+                      what);
   };
-  const auto is_id = [](std::string_view word) {
-    if (word.size() < 4 || !std::string_view("@#!").contains(word.front()))
-      return false;
+  // A word shaped as a Matrix ID: a sigil, a name, a colon, a server.
+  const auto id_in = [](std::string_view word) -> std::optional<logic::link_t> {
     const auto colon = word.find(':');
-    return colon != std::string_view::npos && colon > 1 && colon + 1 < word.size();
+    if (word.size() < 4 || colon == std::string_view::npos || colon < 2 || colon + 1 >= word.size())
+      return std::nullopt;
+    return logic::matrix_id_of(std::string(word));
   };
-  // Where the pills go: the HTML's links to an ID, and the IDs standing in
-  // the text on their own.
-  struct pill_at {
+  // What in the text is replaced: by a pill, or by nothing where it is
+  // shown as a card instead.
+  struct replaced {
     std::size_t first, last;
-    std::string id;
+    std::optional<logic::link_t> pill;
   };
-  std::vector<pill_at> pills;
+  std::vector<replaced> spans;
   std::vector<nodes::Text::Link> kept;
+  mentioned out;
   for (auto& link : links) {
-    constexpr std::string_view to = "https://matrix.to/#/";
-    if (link.target.starts_with(to)) {
-      std::string id = link.target.substr(to.size());
-      id = id.substr(0, id.find_first_of("/?"));
-      if (is_id(id)) {
-        pills.push_back({link.first, link.last, id});
-        continue;
-      }
+    const auto what = logic::link_of(link.target);
+    const std::string_view label = std::string_view(text).substr(link.first, link.last - link.first);
+    const bool bare = label == link.target;  // the URL itself, not words over it
+    if (!what) {
+      kept.push_back(std::move(link));
+      continue;
     }
-    kept.push_back(std::move(link));
+    // A person: a pill. A room named by words over it: a pill; given as
+    // its URL, or a message in it: a card, the URL out of the text. An
+    // XMPP address: a link as it is.
+    std::visit(overloaded{[&](const logic::link::person&) { spans.push_back({link.first, link.last, what}); },
+                          [&](const logic::link::room& one) {
+                            if (bare || one.event) {
+                              spans.push_back({link.first, link.last, std::nullopt});
+                              out.cards.emplace_back(link.target, one);
+                            } else {
+                              spans.push_back({link.first, link.last, what});
+                            }
+                          },
+                          [&](const logic::link::xmpp_address&) { kept.push_back(link); }},
+               *what);
   }
   for (std::size_t at = 0; at < text.size();) {
     const bool starts = at == 0 || std::string_view(" \n\t(").contains(text[at - 1]);
-    if (starts && std::string_view("@#!").contains(text[at])) {
-      std::size_t end = at + 1;
+    if (starts) {
+      std::size_t end = at;
       while (end < text.size() && !std::string_view(" \n\t,;)").contains(text[end]))
         ++end;
       while (end > at && std::string_view(".!?").contains(text[end - 1]))
         --end;
-      const std::string_view word = std::string_view(text).substr(at, end - at);
-      const bool inside = std::ranges::any_of(pills, [&](const pill_at& p) { return at < p.last && end > p.first; }) ||
+      const bool inside = std::ranges::any_of(spans, [&](const replaced& p) { return at < p.last && end > p.first; }) ||
                           std::ranges::any_of(kept, [&](const auto& l) { return at < l.last && end > l.first; });
-      if (is_id(word) && !inside) {
-        pills.push_back({at, end, std::string(word)});
-        at = end;
-        continue;
-      }
+      if (end > at && !inside)
+        if (auto what = id_in(std::string_view(text).substr(at, end - at))) {
+          spans.push_back({at, end, std::move(what)});
+          at = end;
+          continue;
+        }
     }
     ++at;
   }
   // Replaced from the end, so what comes before keeps its place; links
   // after a replaced stretch move with it.
-  std::ranges::sort(pills, std::ranges::greater{}, &pill_at::first);
-  std::vector<nodes::Text::Link> out;
-  for (const pill_at& pill : pills) {
-    const auto [name, target] = name_of(pill.id);
-    const std::string shown = "\u2002\u2002" + name;  // room for its avatar
+  std::ranges::sort(spans, std::ranges::greater{}, &replaced::first);
+  for (const replaced& span : spans) {
+    std::string shown;
+    std::optional<nodes::Text::Link> pill;
+    if (span.pill) {
+      const auto [name, target] = name_of(*span.pill);
+      shown = "\u2002\u2002" + name;  // room for its avatar
+      pill = nodes::Text::Link{span.first, span.first + shown.size(), "https://matrix.to/#/" + target, true};
+    }
     const std::ptrdiff_t grew =
-        static_cast<std::ptrdiff_t>(shown.size()) - static_cast<std::ptrdiff_t>(pill.last - pill.first);
-    text.replace(pill.first, pill.last - pill.first, shown);
-    for (auto* list : {&kept, &out})
+        static_cast<std::ptrdiff_t>(shown.size()) - static_cast<std::ptrdiff_t>(span.last - span.first);
+    text.replace(span.first, span.last - span.first, shown);
+    for (auto* list : {&kept, &out.links})
       for (auto& link : *list)
-        if (link.first >= pill.last) {
+        if (link.first >= span.last) {
           link.first = static_cast<std::size_t>(static_cast<std::ptrdiff_t>(link.first) + grew);
           link.last = static_cast<std::size_t>(static_cast<std::ptrdiff_t>(link.last) + grew);
         }
-    out.push_back({pill.first, pill.first + shown.size(), "https://matrix.to/#/" + target, true});
+    if (pill)
+      out.links.push_back(std::move(*pill));
   }
   for (auto& link : kept)
-    out.push_back(std::move(link));
-  return {std::move(text), std::move(out)};
+    out.links.push_back(std::move(link));
+  // What is left of the text: without the space a card's link stood in.
+  while (!text.empty() && std::isspace(static_cast<unsigned char>(text.back())))
+    text.pop_back();
+  out.text = std::move(text);
+  return out;
+}
+
+// A card for a link to a room, or to a message in one: as the chat it is of
+// is known here, or as a room not joined.
+[[nodiscard]] inline link_card card_of(const std::string& url, const logic::link::room& room, const model* now) {
+  const conversation* chat = nullptr;
+  if (now)
+    if (const auto found = logic::chat_of(*now, room))
+      chat = now->find(*found);
+  const std::string name = chat ? display_name(*chat) : room.id;
+  const std::string id = chat ? chat->id.id : room.id;
+  if (!room.event) {
+    const std::string what =
+        chat ? (chat->member_count > 0 ? std::format("Room · {} members", chat->member_count) : std::string("Room"))
+             : std::string("Room · not joined");
+    return link_card(url, id, name, name, what);
+  }
+  std::string said = "A message";
+  if (chat)
+    if (const auto it = std::ranges::find(chat->timeline, *room.event, &message::id); it != chat->timeline.end()) {
+      said = (it->outgoing ? std::string("You") : sender_name(*chat, it->sender)) + ": " + it->body.plain;
+      std::ranges::replace(said, '\n', ' ');
+    }
+  return link_card(url, id, name, "Message from " + name, said);
 }
 
 struct message_bubble : nodes::Stack {
@@ -332,7 +421,7 @@ struct message_bubble : nodes::Stack {
     std::optional<picture_view> picture;
     std::optional<file_view> file;
     nodes::Text text;
-    std::vector<link_line> links;
+    std::vector<link_card> cards;
     std::optional<reaction_row> reactions;
     nodes::Text time;
     // A flash over it, fading, where it was jumped to.
@@ -344,7 +433,7 @@ struct message_bubble : nodes::Stack {
     void update(double now_ms) {
       if (flash.step(now_ms))
         this->markDamaged();
-      if (!text.visible() || text.bounds().isEmpty() || links.size() > 0 || reactions)
+      if (!text.visible() || text.bounds().isEmpty() || !cards.empty() || reactions)
         return;
       skia::SkFont* font = skiff::paint::defaultFont();
       if (font == nullptr)
@@ -385,7 +474,7 @@ struct message_bubble : nodes::Stack {
       f(picture);
       f(file);
       f(text);
-      f(links);
+      f(cards);
       f(reactions);
       f(time);
     }
@@ -454,15 +543,19 @@ struct message_bubble : nodes::Stack {
     // its links are the URLs in it.
     // Its links in its text, where they stand: an <a>'s label going where
     // its href says, and the addresses in a plain text.
+    mentioned shown;
     if (said.body.html && !said.redacted) {
       auto read = read_html(*said.body.html);
-      auto [text, links] = with_mentions(std::move(read.text), std::move(read.spans), in, now);
-      body.text.setText(text + (said.edited ? " (edited)" : ""));
-      body.text.setLinks(std::move(links), accent_colour);
+      shown = with_mentions(std::move(read.text), std::move(read.spans), in, now);
     } else if (!said.redacted) {
-      auto [text, links] = with_mentions(said.body.plain, link_spans_in(said.body.plain), in, now);
-      body.text.setText(text + (said.edited ? " (edited)" : ""));
-      body.text.setLinks(std::move(links), accent_colour);
+      shown = with_mentions(said.body.plain, link_spans_in(said.body.plain), in, now);
+    }
+    if (!said.redacted) {
+      body.text.setText(shown.text + (said.edited ? " (edited)" : ""));
+      body.text.setLinks(std::move(shown.links), accent_colour);
+      body.text.setVisible(!shown.text.empty() || said.edited);
+      for (const auto& [url, room] : shown.cards)
+        body.cards.push_back(card_of(url, room, now));
     }
     if (said.replies_to) {
       const auto found = std::ranges::find(in.timeline, *said.replies_to, &message::id);

@@ -189,6 +189,12 @@ struct timeline_area : scene::Node {
               actions->react(one.message_id, chip.key);
               return true;
             }
+        // A card of a link to a room or a message: followed.
+        for (const link_card& card : one.body.cards)
+          if (card.bounds().contains(press.x, press.y)) {
+            actions->open_url(card.url);
+            return true;
+          }
         // The quote: to the message it quotes.
         if (one.body.quote && one.said.replies_to && one.body.quote->bounds().contains(press.x, press.y)) {
           actions->jump_to_message(*one.said.replies_to);

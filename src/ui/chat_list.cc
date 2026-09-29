@@ -108,7 +108,7 @@ struct conversation_row : nodes::Stack {
     friend bool operator==(const view&, const view&) = default;
   };
   [[nodiscard]] static view view_of(const conversation& one, bool is_chosen, bool is_muted, std::string draft = {}) {
-    return {display_name(one), one.timeline.empty() ? std::nullopt : std::optional<message>(one.timeline.back()),
+    return {display_name(one), newest(one) ? std::optional<message>(*newest(one)) : std::nullopt,
             one.unread_here(), is_chosen, is_muted, std::move(draft)};
   }
   view shown;
@@ -120,8 +120,8 @@ struct conversation_row : nodes::Stack {
     this->setHorizontal();
     this->setGap(12.0f);
     fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 12.0f, 0.0f, 10.0f}});
-    if (!one.timeline.empty()) {
-      const message& last = one.timeline.back();
+    if (const message* newest_one = newest(one)) {
+      const message& last = *newest_one;
       lines.top.time.setText(clock_of(last.at));
       // What it says, as drawn: an HTML one's text, not its tags.
       std::string text = last.redacted ? "(removed)"

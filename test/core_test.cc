@@ -36,12 +36,37 @@ TEST(Model, Conversation) {
   EXPECT_EQ(one->unread, 2);
 }
 
+// A window of history opened away from the newest: what is live comes
+// only as the latest, until paging forward meets the newest.
+TEST(Model, AWindowAwayFromTheNewest) {
+  model kept;
+  kept.apply(change::message_added{said("1", "hello")});
+  kept.apply(change::window_opened{with_juliet, std::string("back"), std::string("forward")});
+  kept.apply(change::message_added{said("a", "long ago"), placement::in_window{}});
+  kept.apply(change::message_added{said("b", "live, meanwhile")});
+  const conversation* one = kept.find(with_juliet);
+  ASSERT_NE(one, nullptr);
+  EXPECT_TRUE(one->detached);
+  ASSERT_EQ(one->timeline.size(), 1u);
+  EXPECT_EQ(one->timeline[0].id, "a");
+  ASSERT_NE(newest(*one), nullptr);
+  EXPECT_EQ(newest(*one)->id, "b");
+  // Paged forward to the newest: live again, what comes goes in.
+  kept.apply(change::message_added{said("b", "live, meanwhile"), placement::in_window{}});
+  kept.apply(change::window_extended{with_juliet, std::nullopt});
+  kept.apply(change::message_added{said("c", "now")});
+  one = kept.find(with_juliet);
+  EXPECT_FALSE(one->detached);
+  ASSERT_EQ(one->timeline.size(), 3u);
+  EXPECT_EQ(one->timeline.back().id, "c");
+}
+
 TEST(Model, Messages) {
   model kept;
   kept.apply(change::message_added{said("1", "hello")});
   kept.apply(change::message_added{said("2", "hi", true)});
   // History goes before what is there.
-  kept.apply(change::message_added{said("0", "earlier"), true});
+  kept.apply(change::message_added{said("0", "earlier"), placement::at_start{}});
   // The echo of one sent replaces it rather than adding a second.
   auto echo = said("2", "hi", true);
   echo.delivery = delivery::delivered{};

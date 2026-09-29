@@ -28,7 +28,7 @@ import :account;
 namespace mux::matrix {
 
 template <class Sink>
-void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_event& one, bool history) {
+void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where) {
   const auto at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(one.origin_server_ts));
   if (one.content.template is<loom::ev::m_room_message_content_t>()) {
     const auto& content = one.content.template as<loom::ev::m_room_message_content_t>();
@@ -80,7 +80,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     if (relates)
       if (const knot::value* reply = member(*relates, "m.in_reply_to"))
         made.replies_to = text(member(*reply, "event_id"));
-    sink_(change::message_added{std::move(made), history});
+    sink_(change::message_added{std::move(made), where});
   } else if (one.content.template is<loom::ev::m_reaction_content_t>()) {
     const auto& content = one.content.template as<loom::ev::m_reaction_content_t>();
     if (content.m_relates_to && content.m_relates_to->event_id && content.m_relates_to->key) {
@@ -91,7 +91,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
   } else {
     // The rest, by its type: loom's timeline union does not have their
     // content yet.
-    std::visit(overloaded{[&](event_type::encrypted) { encrypted(in, one, at, history); },
+    std::visit(overloaded{[&](event_type::encrypted) { encrypted(in, one, at, where); },
                           [&](event_type::redaction) { redaction(in, one); },
                           [](event_type::receipt) {},
                           [](event_type::other) {}},
@@ -101,7 +101,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
 
 template <class Sink>
 void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timeline_event& one,
-                 std::chrono::sys_time<std::chrono::milliseconds> at, bool history) {
+                 std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where) {
   // By its type: loom's timeline union does not have its content yet.
   sink_(change::message_added{message{.in = in,
                                       .id = one.event_id,
@@ -109,7 +109,7 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
                                       .at = at,
                                       .body = {"🔒 an encrypted message (not yet readable here)", std::nullopt},
                                       .outgoing = one.sender == id_.address},
-                              history});
+                              where});
 }
 
 template <class Sink>

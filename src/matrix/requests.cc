@@ -66,7 +66,7 @@ void account<Sink>::load_older(std::string room, std::string from) {
     log(id_, "history of {}: {} event{}", room, got->chunk.size(), got->chunk.size() == 1 ? "" : "s");
     const conversation_id in{id_, room};
     for (const auto& one : got->chunk)  // newest first: each goes before the rest
-      event(in, one, true);
+      event(in, one, placement::at_start{});
     sink_(change::history_position{in, got->end});
   });
 }

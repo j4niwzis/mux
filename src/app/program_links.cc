@@ -175,7 +175,7 @@ void app::apply(const request::load_older& one) {
                                                       : message_store::time_point::max();
   if (auto kept = store.older(one.in, before, 100); !kept.empty()) {
     for (auto it = kept.rbegin(); it != kept.rend(); ++it)
-      model->apply(mux::change_t{mux::change::message_added{.message = std::move(*it), .history = true}});
+      model->apply(mux::change_t{mux::change::message_added{.message = std::move(*it), .where = mux::placement::at_start{}}});
     // The window may ask again: there may be more on the disk.
     root().main().history_asked.reset();
     this->refresh();

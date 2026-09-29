@@ -250,7 +250,23 @@ struct conversation {
   std::vector<std::string> children;
   // The named groups it is in, as an XMPP roster's.
   std::vector<std::string> groups;
+  // A window of its history, away from its newest -- a message jumped to
+  // and what is around it -- rather than all of it from there to the
+  // newest: `future_from` is where to page forward from, and what arrives
+  // meanwhile is not put in it but only kept as `latest`, until paging
+  // forward meets the newest and it is live again.
+  bool detached = false;
+  std::optional<std::string> future_from;
+  std::optional<message> latest;
 };
+
+// Its newest message, as the chat list shows it and sorts by: the last of
+// its timeline, or the newest that came while it is a window elsewhere.
+[[nodiscard]] inline const message* newest(const conversation& one) {
+  if (one.latest && (one.detached || one.timeline.empty() || one.latest->at > one.timeline.back().at))
+    return &*one.latest;
+  return one.timeline.empty() ? nullptr : &one.timeline.back();
+}
 
 struct account {
   account_id id;
@@ -366,10 +382,31 @@ struct presence_changed {
 
 // A message that arrived, or was sent from here; one with an id already
 // kept replaces it (the echo of one sent, a corrected one).
+namespace placement {
+struct at_end {};     // live: after the rest -- but not into a window away from the newest
+struct at_start {};   // history paged back: before the rest
+struct in_window {};  // a window's own: loaded around a message, or paged forward
+}  // namespace placement
+using placement_t = std::variant<placement::at_end, placement::at_start, placement::in_window>;
 struct message_added {
   mux::message message;
-  // Where it goes: at the end (live), or at the beginning (history).
-  bool history = false;
+  placement_t where = placement::at_end{};
+};
+
+// A window of a chat's history opened in place of its timeline: emptied,
+// to be filled by the messages in_window that follow, and paged back from
+// `history_from` and forward from `future_from` -- none where it reaches
+// the newest, and is live.
+struct window_opened {
+  conversation_id in;
+  std::optional<std::string> history_from;
+  std::optional<std::string> future_from;
+};
+// A window paged forward: where to go on from, or none where the newest
+// was met and it is live again.
+struct window_extended {
+  conversation_id in;
+  std::optional<std::string> future_from;
 };
 
 struct message_edited {
@@ -424,7 +461,8 @@ using change_t = std::variant<change::connection_changed, change::account_remove
                               change::presence_changed, change::message_added, change::message_edited,
                               change::message_redacted, change::message_acknowledged, change::delivery_changed, change::reaction_changed,
                               change::typing_changed, change::history_position, change::members_changed,
-                              change::session_given, change::avatar_loaded, change::receipts_changed>;
+                              change::session_given, change::avatar_loaded, change::receipts_changed,
+                              change::window_opened, change::window_extended>;
 
 // The model: every account, and every change applied to it.
 class model {
@@ -483,7 +521,12 @@ class model {
       if (held <= budget)
         break;
       held -= chat->timeline.size() - 1;
-      chat->timeline.erase(chat->timeline.begin(), chat->timeline.end() - 1);
+      // Its newest kept -- the newest there is, where it is a window away
+      // from it, which is let go with the rest: it is live again.
+      const message last = newest(*chat) ? *newest(*chat) : chat->timeline.back();
+      chat->timeline.assign(1, last);
+      chat->detached = false;
+      chat->future_from.reset();
       chat->history_from = std::string();  // from the newest
     }
   }
@@ -534,10 +577,27 @@ class model {
       *kept = one.message;
       return;
     }
-    if (one.history)
-      where.timeline.insert(where.timeline.begin(), one.message);
-    else
-      where.timeline.push_back(one.message);
+    std::visit(overloaded{[&](placement::at_end) {
+                            if (!where.latest || one.message.at >= where.latest->at)
+                              where.latest = one.message;
+                            if (!where.detached)
+                              where.timeline.push_back(one.message);
+                          },
+                          [&](placement::at_start) { where.timeline.insert(where.timeline.begin(), one.message); },
+                          [&](placement::in_window) { where.timeline.push_back(one.message); }},
+               one.where);
+  }
+  void on(const change::window_opened& one) {
+    conversation& where = of(one.in);
+    where.timeline.clear();
+    where.history_from = one.history_from;
+    where.future_from = one.future_from;
+    where.detached = one.future_from.has_value();
+  }
+  void on(const change::window_extended& one) {
+    conversation& where = of(one.in);
+    where.future_from = one.future_from;
+    where.detached = one.future_from.has_value();
   }
   void on(const change::message_edited& one) {
     if (message* kept = message_in(of(one.in), one.id)) {

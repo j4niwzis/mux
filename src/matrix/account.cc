@@ -181,11 +181,11 @@ class account {
 
   // An event of a room's timeline, as changes: at the end, or before the
   // rest where it is history paged back to.
-  void event(const conversation_id& in, const loom::ev::timeline_event& one, bool history = false);
+  void event(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where = placement::at_end{});
 
   // An encrypted message: said to be there, not yet readable.
   void encrypted(const conversation_id& in, const loom::ev::timeline_event& one,
-                 std::chrono::sys_time<std::chrono::milliseconds> at, bool history);
+                 std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where);
   // A redaction: a reaction taken back, or a message removed.
   void redaction(const conversation_id& in, const loom::ev::timeline_event& one);
 

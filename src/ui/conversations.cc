@@ -532,7 +532,8 @@ struct conversations_screen : nodes::Stack {
             (wanted.empty() || lower(display_name(one)).contains(wanted) || lower(one.id.id).contains(wanted)))
           chats.push_back(&one);
     std::ranges::sort(chats, std::ranges::greater{}, [](const conversation* one) {
-      return one->timeline.empty() ? std::chrono::sys_time<std::chrono::milliseconds>{} : one->timeline.back().at;
+      const message* last = newest(*one);
+      return last ? last->at : std::chrono::sys_time<std::chrono::milliseconds>{};
     });
     // The rows, as a function of the chats: those whose chat shows the same
     // are kept as they are.

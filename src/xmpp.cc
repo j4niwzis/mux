@@ -271,7 +271,7 @@ class account {
       if (one.forwarded.delay)
         if (const auto at = stamp_of(one.forwarded.delay->stamp))
           made.at = *at;
-      sink_(change::message_added{std::move(made), true});
+      sink_(change::message_added{std::move(made), placement::at_start{}});
     };
     const auto& got = *one.forwarded.message;
     take(got.template get_if<tern::basic::message_chat<tern::forward::plain>>());

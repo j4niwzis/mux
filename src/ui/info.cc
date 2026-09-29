@@ -246,6 +246,77 @@ struct person_card : nodes::Stack {
   }
 };
 
+// A reaction as the event it is: who, with what, when.
+struct reaction_entry {
+  std::string event;
+  std::string who;
+  std::string name;
+  std::string key;
+  std::string when;
+};
+
+// A message's reactions as events, as Matrix has them: a box in the middle,
+// a row for each -- the person's avatar and name over what they reacted
+// with and when. A press on one answers it: the reaction is an event, and a
+// message can reply to it.
+template <class Actions>
+struct reactions_box : nodes::Stack {
+  using close_button = icon_button<ask<Actions, &Actions::close_reactions>>;
+  struct top_bar : nodes::Stack {
+    struct parts_t {
+      nodes::Text title{"Reactions", 16.0f, text_colour, true};
+      close_button close;
+    } parts;
+    explicit top_bar(Actions* a) : parts{.close = close_button(icon::close{}, {a})} {
+      this->setHorizontal();
+      fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 10.0f, 0.0f, 22.0f}});
+      parts.title.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      parts.close.apply({.alignSelf = scene::align::kMiddle});
+    }
+  };
+  struct row : nodes::Stack {
+    Actions* actions;
+    reaction_entry entry;
+    struct parts_t {
+      avatar_mark face;
+      two_lines texts;
+    } parts;
+    row(Actions* a, reaction_entry one)
+        : actions(a), entry(one),
+          parts{.face = avatar_mark(one.who, one.name, 36.0f),
+                .texts = two_lines(one.name, std::format("reacted {} · {}", one.key, one.when), 14.0f, 2.0f)} {
+      this->setHorizontal();
+      this->setGap(12.0f);
+      fState.apply({.fillX = true, .height = 52.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f},
+                    .hoverBackground = chosen_colour});
+      fState.setCursor(scene::cursor::hand{});
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+    [[nodiscard]] bool onClick(float, float) {
+      actions->reply_to(entry.event, std::format("{} reacted {}", entry.name, entry.key));
+      actions->close_reactions();
+      return true;
+    }
+  };
+  using rows_t = nodes::Flow<std::vector<row>>;
+  struct parts_t {
+    top_bar top;
+    nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
+  } parts;
+
+  reactions_box(Actions* a, const std::vector<reaction_entry>& entries) : parts{.top = top_bar(a)} {
+    fState.apply({.fillX = true, .height = 420.0f, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
+    parts.list.apply({.fillX = true, .grow = scene::axes::kY});
+    auto& flow = std::get<0>(parts.list.fChildren);
+    flow.apply({.fillX = true, .autoSize = scene::axes::kY});
+    auto& rows = std::get<0>(flow.fChildren);
+    rows.reserve(entries.size());
+    for (const reaction_entry& one : entries)
+      rows.emplace_back(a, one);
+  }
+};
+
 template <class Actions>
 struct info_panel : nodes::Stack {
   Actions* actions = nullptr;

@@ -77,6 +77,24 @@ class menu_part {
       return;
     s_->net->pin(*chosen, target_.id, !target_.pinned);
   }
+  // The message's reactions as the events they are, newest last.
+  void apply(const request::menu_reactions&) {
+    s_->root().close_menu();
+    const auto& chosen = s_->root().main().chosen;
+    const conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
+    if (!chat)
+      return;
+    const auto said = std::ranges::find(chat->timeline, target_.id, &message::id);
+    if (said == chat->timeline.end())
+      return;
+    auto events = said->reaction_events;
+    std::ranges::stable_sort(events, {}, &message::reaction_event::at);
+    std::vector<mux::ui::reaction_entry> entries;
+    for (const auto& one : events)
+      entries.push_back({one.event, one.who, mux::ui::sender_name(*chat, one.who), one.key, mux::ui::clock_of(one.at)});
+    s_->root().open_reactions(entries);
+  }
+  void apply(const request::close_reactions&) { s_->root().close_reactions(); }
   // A GIF kept among the saved ones, for the input's GIF tab.
   void apply(const request::menu_save_gif&) {
     s_->root().close_menu();

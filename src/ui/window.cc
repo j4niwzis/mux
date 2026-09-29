@@ -47,6 +47,8 @@ struct window : scene::Node {
       widgets::Dialog<notice_box<Actions>> notice;
       // A person's info, in the middle, as tdesktop's profile layer.
       widgets::Dialog<person_card<Actions>> person;
+      // A message's reactions as events.
+      widgets::Dialog<reactions_box<Actions>> reactions;
       widgets::Dialog<send_box<Actions>> sending;
       std::optional<emoji_popup<Actions>> emoji;
       std::optional<context_menu<Actions>> menu;
@@ -69,7 +71,7 @@ struct window : scene::Node {
     explicit layers(Actions* a)
         : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a))},
           actions_of(a) {
-      auto& [backdrop, frame, settings, notice, person, sending, emoji, menu, viewer] = parts;
+      auto& [backdrop, frame, settings, notice, person, reactions, sending, emoji, menu, viewer] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
       frame.setSheetColour(background);
@@ -84,6 +86,8 @@ struct window : scene::Node {
       // what it shows, a 24th of the window down within 20 and 40.
       person.setWidthFittingContent(392.0f);
       person.setPlace(widgets::dialog_place::near_top{});
+      reactions.setSheetColour(sidebar_colour);
+      reactions.setSize(392.0f, 420.0f);
     }
   };
 
@@ -131,6 +135,7 @@ struct window : scene::Node {
     layer().settings.dropClosed();
     layer().notice.dropClosed();
     layer().person.dropClosed();
+    layer().reactions.dropClosed();
     layer().sending.dropClosed();
   }
 
@@ -181,6 +186,8 @@ struct window : scene::Node {
     layer().person.open(actions, account, key, facts);
   }
   void close_person() { layer().person.close(); }
+  void open_reactions(const std::vector<reaction_entry>& entries) { layer().reactions.open(actions, entries); }
+  void close_reactions() { layer().reactions.close(); }
 
   void show(const std::vector<config::account_t>& saved, const model& now) {
     const auto& current = layer().frame.base().base().current;

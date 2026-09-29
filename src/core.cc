@@ -207,6 +207,17 @@ struct message {
   bool outgoing = false;
   delivery_t delivery = delivery::sent{};
   std::map<std::string, std::set<std::string>> reactions;  // key -> who
+  // The same reactions as the events they are, where the protocol has
+  // them as events (Matrix): who, with what, when -- to be listed, and
+  // answered, one by one.
+  struct reaction_event {
+    std::string event;
+    std::string key;
+    std::string who;
+    std::chrono::sys_time<std::chrono::milliseconds> at{};
+    friend bool operator==(const reaction_event&, const reaction_event&) = default;
+  };
+  std::vector<reaction_event> reaction_events;
   std::optional<mux::attachment> attachment;
   friend bool operator==(const message&, const message&) = default;
 };
@@ -474,6 +485,9 @@ struct reaction_changed {
   std::string key;
   std::string who;
   bool added = true;
+  // The reaction's own event, and when it was sent, where it is one.
+  std::string event{};
+  std::chrono::sys_time<std::chrono::milliseconds> at{};
 };
 
 struct typing_changed {
@@ -678,9 +692,14 @@ class model {
   void on(const change::reaction_changed& one) {
     if (message* kept = message_in(of(one.in), one.id)) {
       auto& who = kept->reactions[one.key];
-      if (one.added)
+      std::erase_if(kept->reaction_events, [&](const message::reaction_event& each) {
+        return each.key == one.key && each.who == one.who;
+      });
+      if (one.added) {
         who.insert(one.who);
-      else {
+        if (!one.event.empty())
+          kept->reaction_events.push_back({one.event, one.key, one.who, one.at});
+      } else {
         who.erase(one.who);
         if (who.empty())
           kept->reactions.erase(one.key);

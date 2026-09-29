@@ -156,6 +156,9 @@ struct insert_emoji {
 // panel, and one of them sent.
 struct menu_save_gif {};
 struct menu_pin {};
+// A message's reactions as the events they are, in a window of their own.
+struct menu_reactions {};
+struct close_reactions {};
 struct show_gifs {};
 struct send_gif {
   std::string path;
@@ -227,7 +230,7 @@ using request_t =
                  request::close_menu, request::menu_reply, request::menu_edit, request::menu_copy,
                  request::menu_delete, request::cancel_compose, request::open_url,
                  request::switch_account, request::submit_message, request::send_typed,
-                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_search, request::edit_last, request::reply_step, request::close_search, request::search_typed, request::search_step, request::open_member_info, request::reply_to, request::open_picture, request::open_avatar, request::close_picture, request::save_picture, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::flip_strip_metadata, request::flip_show_deleted, request::flip_rename_pictures, request::close_notice, request::close_person_info, request::toggle_emoji, request::close_emoji, request::insert_emoji, request::menu_save_gif, request::menu_pin, request::show_gifs, request::send_gif,
+                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_search, request::edit_last, request::reply_step, request::close_search, request::search_typed, request::search_step, request::open_member_info, request::reply_to, request::open_picture, request::open_avatar, request::close_picture, request::save_picture, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::flip_strip_metadata, request::flip_show_deleted, request::flip_rename_pictures, request::close_notice, request::close_person_info, request::toggle_emoji, request::close_emoji, request::insert_emoji, request::menu_save_gif, request::menu_pin, request::menu_reactions, request::close_reactions, request::show_gifs, request::send_gif,
                  request::resize_info, request::choose_new_proxy, request::toggle_mute, request::close_account_pages,
                  request::accounts_back, request::account_page, request::flip_account_receipts, request::flip_account_typing, request::typing,
                  request::proxy_kind, request::choose_account_proxy, request::manage_proxies,
@@ -336,6 +339,8 @@ struct actions {
   void close_emoji() { requests.emplace_back(request::close_emoji{}); }
   void menu_save_gif() { requests.emplace_back(request::menu_save_gif{}); }
   void menu_pin() { requests.emplace_back(request::menu_pin{}); }
+  void menu_reactions() { requests.emplace_back(request::menu_reactions{}); }
+  void close_reactions() { requests.emplace_back(request::close_reactions{}); }
   void show_gifs() { requests.emplace_back(request::show_gifs{}); }
   void send_gif(std::string path) { requests.emplace_back(request::send_gif{std::move(path)}); }
   void insert_emoji(std::string text) { requests.emplace_back(request::insert_emoji{std::move(text)}); }

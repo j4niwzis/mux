@@ -89,7 +89,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     if (content.m_relates_to && content.m_relates_to->event_id && content.m_relates_to->key) {
       reactions_[one.event_id] = {*content.m_relates_to->event_id, *content.m_relates_to->key, one.sender};
       sink_(change::reaction_changed{in, *content.m_relates_to->event_id, *content.m_relates_to->key, one.sender,
-                                     true});
+                                     true, one.event_id, at});
     }
   } else {
     // The rest, by its type: loom's timeline union does not have their

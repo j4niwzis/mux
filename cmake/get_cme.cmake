@@ -21,10 +21,10 @@
 # archive/<ref>.tar.gz: the generated one is made on request, and when the
 # compression behind it changed every digest pinned against it broke at once.
 # A file uploaded to a release is stored as it was uploaded.
-set(CME_PINNED "v0.2.12")
-set(CME_PINNED_SHA256 "e694c3c6b1ece6e063ae734b278eb9b96b4180b5e435e6b34516668f4692c3ba")
+set(CME_PINNED "v0.2.13")
+set(CME_PINNED_SHA256 "a4753bbb0be9103aae4e4f1537796a33ec985f526b5bf5c0c2857cfb2bd81d71")
 set(CME_PINNED_URL
-  "https://github.com/j4niwzis/cmake-everywhere/releases/download/v0.2.12/cmake-everywhere-0.2.12.tar.gz")
+  "https://github.com/j4niwzis/cmake-everywhere/releases/download/v0.2.13/cmake-everywhere-0.2.13.tar.gz")
 if(NOT "${CME_PIN_APPLIED}" STREQUAL "${CME_PINNED}")
   set(CME_VERSION "${CME_PINNED}" CACHE STRING
     "cmake-everywhere release" FORCE)

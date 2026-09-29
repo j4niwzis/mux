@@ -1340,17 +1340,41 @@ struct notice_box : nodes::Stack {
 // info beside it.
 template <class Actions>
 struct chat_header : nodes::Stack {
-  std::string key;
+  // What the head shows: the chat's key and name, and how it is -- or no
+  // chat. The head is made from it, nothing set in it afterwards.
+  struct view {
+    std::optional<std::string> key;
+    std::string title = "Choose a chat";
+    std::string status;
+    friend bool operator==(const view&, const view&) = default;
+  };
+  [[nodiscard]] static view view_of(const conversation* one, const model& now) {
+    if (one == nullptr)
+      return {};
+    std::string about = is_group(*one) ? std::format("{} member{}", one->members.size(),
+                                                     one->members.size() == 1 ? "" : "s")
+                                       : presence_of(now, one->id.account, one->id.id);
+    if (!one->typing.empty())
+      about = one->typing.size() == 1 ? sender_name(*one, one->typing.front()) + " is typing…"
+                                      : std::format("{} are typing…", one->typing.size());
+    return {one->id.id, display_name(*one), std::move(about)};
+  }
+
   // The chat's avatar, its name over how it is, and the button to its info.
   struct head_row : nodes::Stack {
-    avatar_mark face{"", "", 38.0f};
-    two_lines texts{"", "", 15.0f, 3.0f};
+    avatar_mark face;
+    two_lines texts;
     icon_button<ask<Actions, &Actions::toggle_info>> info;
-    explicit head_row(Actions* a) : info(icon::info{}, {a}) {
+    head_row(Actions* a, const view& shown)
+        : face(shown.key.value_or(""), shown.title, 38.0f), texts(shown.title, shown.status, 15.0f, 3.0f),
+          info(icon::info{}, {a}) {
       this->setHorizontal();
       this->setGap(12.0f);
       fState.apply({.fillX = true, .grow = scene::axes::kY, .padding = {0.0f, 10.0f, 0.0f, 14.0f}});
       info.apply({.alignSelf = scene::align::kMiddle});
+      face.setVisible(shown.key.has_value());
+      info.setVisible(shown.key.has_value());
+      texts.state.setVisible(shown.key.has_value());
     }
     void forEachChild(auto&& f) {
       f(face);
@@ -1359,40 +1383,13 @@ struct chat_header : nodes::Stack {
     }
   } row;
   nodes::Box<> divider{band_colour};
-  nodes::Text& title = row.texts.name;
-  nodes::Text& status = row.texts.state;
-  icon_button<ask<Actions, &Actions::toggle_info>>& info = row.info;
 
   static constexpr float kHeight = 56.0f;
 
   // Declared: the row over a line dividing it from the messages.
-  explicit chat_header(Actions* a) : row(a) {
-    fState.apply({.fillX = true, .height = kHeight});
+  chat_header(Actions* a, const view& shown) : row(a, shown) {
+    fState.apply({.fill = true});
     divider.apply({.fillX = true, .height = 1.0f});
-  }
-
-  void show(const conversation* one, const model& now) {
-    info.setVisible(one != nullptr);
-    row.face.setVisible(one != nullptr);
-    status.setVisible(one != nullptr);
-    if (one == nullptr) {
-      key.clear();
-      title.setText("Choose a chat");
-      status.setText("");
-      return;
-    }
-    key = one->id.id;
-    row.face.key = key;
-    row.face.name = display_name(*one);
-    row.face.markDamaged();
-    title.setText(display_name(*one));
-    std::string about = is_group(*one) ? std::format("{} member{}", one->members.size(),
-                                                     one->members.size() == 1 ? "" : "s")
-                                       : presence_of(now, one->id.account, one->id.id);
-    if (!one->typing.empty())
-      about = one->typing.size() == 1 ? sender_name(*one, one->typing.front()) + " is typing…"
-                                      : std::format("{} are typing…", one->typing.size());
-    status.setText(std::move(about));
   }
 
   void forEachChild(auto&& f) {
@@ -2134,7 +2131,8 @@ struct conversations_screen : nodes::Stack {
   // The chat: its header, its messages, and where one writes; or, with no
   // account at all, what to do about it.
   struct chat_column : nodes::Stack {
-    chat_header<Actions> header;
+    // The head, as a function of the chat shown.
+    nodes::Memo<typename chat_header<Actions>::view, chat_header<Actions>> header;
     timeline_area<Actions> area;
     composer_bar<Actions> line;
     struct empty_state : nodes::Stack {
@@ -2155,7 +2153,9 @@ struct conversations_screen : nodes::Stack {
         f(add);
       }
     } empty;
-    explicit chat_column(Actions* a) : header(a), area(a), line(a), empty(a) {
+    explicit chat_column(Actions* a) : area(a), line(a), empty(a) {
+      header.apply({.fillX = true, .height = chat_header<Actions>::kHeight});
+      header.show({}, [a](const auto& shown) { return chat_header<Actions>(a, shown); });
       fState.apply({.fillY = true, .grow = scene::axes::kX});
       area.apply({.fillX = true, .grow = scene::axes::kY, .margin = {8.0f, 12.0f, 8.0f, 12.0f}});
     }
@@ -2177,7 +2177,7 @@ struct conversations_screen : nodes::Stack {
   // The old names, for what is kept in the parts.
   nodes::ScrollContainer<nodes::Flow<std::vector<conversation_row<Actions>>>>& list = side.list;
   nodes::Text& no_chats = side.no_chats;
-  chat_header<Actions>& header = chat.header;
+  nodes::Memo<typename chat_header<Actions>::view, chat_header<Actions>>& header = chat.header;
   nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>>& timeline = chat.area.timeline;
   // The chat whose messages are shown, how many, and how many came while
   // the view was above the newest.
@@ -2363,7 +2363,8 @@ struct conversations_screen : nodes::Stack {
     const float left_at = timeline.current();
     auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
     const conversation* one = chosen ? now.find(*chosen) : nullptr;
-    header.show(one, now);
+    header.show(chat_header<Actions>::view_of(one, now),
+                [this](const auto& shown) { return chat_header<Actions>(actions, shown); });
     history_from = one ? one->history_from : std::nullopt;
     this->show_info();
     if (!one) {

@@ -3,6 +3,7 @@
 module mux.app.program;
 
 import std;
+import mux.variant;
 import knot;
 import skia;
 import mux.core;
@@ -333,7 +334,7 @@ void app::before_frame() {
     scene.focus(root().main().line.field);
   auto pending = std::exchange(ask.requests, {});
   for (const request_t& one : pending)
-    std::visit([this](const auto& group) { std::visit([this](const auto& each) { this->route(each); }, group); }, one);
+    mux::visit([this](const auto& each) { this->route(each); }, one);
   // What the parts left to do: the window made again, brought up to date;
   // the emoji picked lately kept.
   if (std::exchange(shared.rebuild_due, false))

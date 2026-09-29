@@ -14,6 +14,7 @@ import mux.app.network;
 import mux.app.workers;
 import mux.app.store;
 import mux.app.requests;
+import mux.app.kept;
 
 export namespace mux::app {
 
@@ -24,18 +25,31 @@ struct services {
   mailbox_type* box = nullptr;
   actions* ask = nullptr;
   skiff::scene::Scene<window_type>* scene = nullptr;
-  // The window brought up to date with the model, after a part changed it.
-  std::function<void()> refresh;
-  // An account's settings, as saved -- its privacy, its proxy -- by its
-  // address; none for one not saved.
-  std::function<const mux::config::account_t*(std::string_view address)> settings_of;
-  // A chat that is a window of its history away from its newest: back to
-  // its newest, live -- before anything is put at its end.
-  std::function<void(const conversation_id&)> go_live;
+  // What a part leaves the program to do once it is done, as data: the
+  // window brought up to date with the model a part changed; the window
+  // made again, in a theme or an accent chosen.
+  bool refresh_due = false;
+  bool rebuild_due = false;
+  // The settings as saved -- an account's privacy, its proxy, by its
+  // address -- the program's.
+  kept_settings* kept = nullptr;
   // Work off the UI's thread.
   workers* work = nullptr;
 
   [[nodiscard]] window_type& root() const { return scene->root(); }
+  // A chat that is a window of its history away from its newest: back to
+  // its newest, live -- before anything is put at its end. Its newest from
+  // the disk, where all that came meanwhile is kept.
+  void go_live(const conversation_id& in) {
+    const mux::conversation* chat = model->find(in);
+    if (!chat || !chat->detached)
+      return;
+    model->apply(mux::change_t{mux::change::window_opened{in, std::string(), std::nullopt}});
+    for (auto& one : store->older(in, message_store::time_point::max(), 80))
+      model->apply(
+          mux::change_t{mux::change::message_added{.message = std::move(one), .where = mux::placement::in_window{}}});
+    refresh_due = true;
+  }
   // The demo: no network, and nothing kept.
   [[nodiscard]] bool demo() const { return ask->demo; }
 };

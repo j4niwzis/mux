@@ -96,7 +96,10 @@ struct conversations_screen : nodes::Stack {
   // its chat is being read, has just come.
   std::set<std::string> appeared;
   // Whether a chat shows what is done in it, as the program's settings say.
-  std::function<bool(const conversation_id&)> events_shown;
+  // Whether a chat shows what is done in it, as the program's settings say:
+  // by chat, set by the program before it shows the model; a chat not in it
+  // shows them.
+  std::map<conversation_id, bool> events_shown;
   // The account to list once the model has it: the one shown last, kept.
   // Taken the first time it is there; dropped when an account is chosen.
   std::optional<account_id> wanted;
@@ -850,7 +853,8 @@ struct conversations_screen : nodes::Stack {
     // those of a chat just opened do not. One's own, once the server has it,
     // is the same message under its new id, and does not come in twice.
     const bool same_chat = shown_chat == chosen;
-    const bool events = events_shown ? events_shown(one->id) : true;
+    const auto chosen_events = events_shown.find(one->id);
+    const bool events = chosen_events == events_shown.end() || chosen_events->second;
     const auto arrives = [&](std::size_t i) {
       const bool known = !appeared.insert(all[i].id).second;
       const bool acknowledged = all[i].outgoing && std::visit(overloaded{[](const delivery::sent&) { return true; },

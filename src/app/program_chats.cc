@@ -161,13 +161,9 @@ void app::apply(const request::jump_to_end&) {
 // A chat that is a window away from its newest: its newest from the disk,
 // where all that came meanwhile is kept, and live again.
 void app::go_live(const mux::conversation_id& in) {
-  const mux::conversation* chat = model->find(in);
-  if (!chat || !chat->detached)
-    return;
-  model->apply(mux::change_t{mux::change::window_opened{in, std::string(), std::nullopt}});
-  for (auto& one : store.older(in, message_store::time_point::max(), 80))
-    model->apply(mux::change_t{mux::change::message_added{.message = std::move(one), .where = mux::placement::in_window{}}});
-  this->refresh();
+  shared.go_live(in);
+  if (std::exchange(shared.refresh_due, false))
+    this->refresh();
 }
 
 }  // namespace mux::app

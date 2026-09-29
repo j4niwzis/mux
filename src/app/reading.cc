@@ -54,7 +54,7 @@ class reading_part {
   void read_to(const conversation_id& which, const std::string& id) {
     s_->model->read_up_to(which, id);
     s_->store->keep_reads(which, *s_->model->find(which));
-    if (const auto* account = s_->settings_of(which.account.address);
+    if (const auto* account = s_->kept->settings_of(which.account.address);
         account && mux::config::read_receipts_of(*account))
       s_->net->mark_read(which, id);
   }
@@ -65,7 +65,7 @@ class reading_part {
     if (s_->demo())
       return;
     const auto allowed = [&](const conversation_id& in) {
-      const auto* account = s_->settings_of(in.account.address);
+      const auto* account = s_->kept->settings_of(in.account.address);
       return account && mux::config::send_typing_of(*account);
     };
     auto step = logic::typing_after(typing_, one.on, s_->root().main().chosen, std::chrono::steady_clock::now(), allowed);

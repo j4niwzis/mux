@@ -155,9 +155,7 @@ void app::wire() {
                     .box = box,
                     .ask = &ask,
                     .scene = &scene,
-                    .refresh = [this] { this->refresh(); },
-                    .settings_of = [this](std::string_view address) { return this->settings_of(address); },
-                    .go_live = [this](const mux::conversation_id& in) { this->go_live(in); },
+                    .kept = this,
                     .work = &work};
 }
 
@@ -178,6 +176,16 @@ void app::before_frame() {
   auto pending = std::exchange(ask.requests, {});
   for (const request_t& one : pending)
     std::visit([this](const auto& each) { this->route(each); }, one);
+  // What the parts left to do: the window made again, brought up to date;
+  // the emoji picked lately kept.
+  if (std::exchange(shared.rebuild_due, false))
+    this->rebuild_in_theme();
+  if (std::exchange(shared.refresh_due, false))
+    this->refresh();
+  if (std::exchange(mux::ui::recent_emoji_changed(), false)) {
+    recent_emoji = mux::ui::recent_emoji();
+    (void)this->write();
+  }
   if (drawer_waits && !root().pages_moving()) {
     root().close_drawer_now();
     drawer_waits = false;
@@ -239,6 +247,12 @@ auto app::xmpp_form_up() -> mux::ui::xmpp_form<actions>* {
 void app::refresh() {
   pictures.ask();
   root().main().muted = muted;
+  // Which chats show what is done in them, as the settings say now.
+  auto& events = root().main().events_shown;
+  events.clear();
+  for (const auto& [id, account] : model->accounts())
+    for (const auto& [key, one] : account.conversations)
+      events.emplace(one.id, this->room_events_shown(one.id));
   root().show(saved, *model);
   root().main().show(*model);
   if (auto* up = root().open_panel())

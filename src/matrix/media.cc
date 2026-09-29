@@ -48,7 +48,7 @@ void account<Sink>::fetch_media(std::string source, media_use_t use, int size, b
       try {
         // A download whole says how far it has come, a twentieth at a time.
         int said = -1;
-        const http::progress_t progress = [&](std::size_t read, std::optional<std::size_t> total) {
+        const auto progress = [&](std::size_t read, std::optional<std::size_t> total) {
           if (!total || *total == 0)
             return;
           const int now = static_cast<int>(20 * read / *total);

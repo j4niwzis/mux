@@ -172,7 +172,7 @@ class menu_part {
     s_->model->apply(change_t{change::reaction_changed{*chosen, one.id, one.key, me, on}});
     if (!s_->demo())
       s_->net->react(*chosen, one.id, one.key, on);
-    s_->refresh();
+    s_->refresh_due = true;
   }
 
  private:

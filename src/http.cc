@@ -74,7 +74,10 @@ struct url {
 
 // How far a response's body has come: bytes read, of how many where the
 // server said. Called as it comes, for a download's progress to be shown.
-using progress_t = std::function<void(std::size_t read, std::optional<std::size_t> total)>;
+// Given as a type: any callable of (read, total); none by default.
+struct no_progress {
+  void operator()(std::size_t, std::optional<std::size_t>) const {}
+};
 
 struct response {
   int status = 0;
@@ -100,10 +103,11 @@ class connection {
   // bearer token goes in Authorization where there is one. A connection the
   // server closed since the last request is opened again, once.
   // `type` is the body's, where it is not JSON: an upload's.
+  template <class Progress = no_progress>
   response request(std::string_view method, std::string_view target, std::string_view body = {},
                    std::optional<std::string_view> bearer = std::nullopt,
                    std::chrono::seconds timeout = std::chrono::seconds(60), std::string_view type = {},
-                   const progress_t* progress = nullptr) {
+                   const Progress* progress = nullptr) {
     const turn mine(*this);
     const bool reused = stream_.has_value();
     try {
@@ -156,9 +160,10 @@ class connection {
   // a token or a filter.
   static std::string_view path_of(std::string_view target) { return target.substr(0, target.find('?')); }
 
+  template <class Progress = no_progress>
   response once(std::string_view method, std::string_view target, std::string_view body,
                 std::optional<std::string_view> bearer, std::chrono::seconds timeout, std::string_view type = {},
-                const progress_t* progress = nullptr) {
+                const Progress* progress = nullptr) {
     if (!stream_)
       open();
     beast::http::request<beast::http::string_body> out;
@@ -286,10 +291,11 @@ class pool {
 
   const url& where() const noexcept { return where_; }
 
+  template <class Progress = no_progress>
   response request(std::string_view method, std::string_view target, std::string_view body = {},
                    std::optional<std::string_view> bearer = std::nullopt,
                    std::chrono::seconds timeout = std::chrono::seconds(60), std::string_view type = {},
-                   const progress_t* progress = nullptr) {
+                   const Progress* progress = nullptr) {
     connection* free = this->take();
     while (free == nullptr) {
       if (std::ranges::find(waiting_, owner_->current()) == waiting_.end())

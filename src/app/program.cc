@@ -49,7 +49,7 @@ struct app : kept_settings {
   reading_part reading{shared};
   outbox_part outbox{shared, drafts, sending};
   menu_part menu{shared, outbox, pictures};
-  settings_part settings{shared, *this, pictures, [this] { this->rebuild_in_theme(); }};
+  settings_part settings{shared, *this, pictures};
   // Work off the UI's thread: decoding pictures, reading the disk.
   workers work;
   // Files chosen in the dialog, or dropped on the window: to the outbox.

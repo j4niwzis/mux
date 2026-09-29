@@ -120,10 +120,6 @@ int main(int argc, char** argv) {
   // The emoji picked lately: shown first in the panels, and kept as picked.
   program.recent_emoji = saved.recent_emoji.value_or(std::vector<std::string>{});
   mux::ui::recent_emoji() = program.recent_emoji;
-  mux::ui::on_recent_emoji() = [&program] {
-    program.recent_emoji = mux::ui::recent_emoji();
-    (void)program.write();
-  };
   if (saved.last_account)
     program.root().main().wanted = mux::account_id{mux::ui::protocol_of(*saved.last_account), *saved.last_account};
   program.theme = mux::config::theme_of(saved.theme);
@@ -140,9 +136,6 @@ int main(int argc, char** argv) {
   for (const auto& one : saved.room_events.value_or(std::vector<mux::config::room_events_choice>{}))
     program.room_events.insert_or_assign(
         mux::conversation_id{{mux::ui::protocol_of(one.account), one.account}, one.conversation}, one.show);
-  program.root().main().events_shown = [&program](const mux::conversation_id& chat) {
-    return program.room_events_shown(chat);
-  };
   for (const auto& one : saved.muted.value_or(std::vector<mux::config::muted_chat>{}))
     program.muted.insert({{mux::ui::protocol_of(one.account), one.account}, one.conversation});
   skiff::paint::motionLevel() = motion_of(saved.motion);

@@ -22,8 +22,8 @@ export namespace mux::app {
 class settings_part {
  public:
   // `rebuild`: the window made anew in the theme, as the program keeps it.
-  settings_part(services& shared, kept_settings& kept, pictures_part& pictures, std::function<void()> rebuild)
-      : s_(&shared), k_(&kept), pictures_(&pictures), rebuild_(std::move(rebuild)) {}
+  settings_part(services& shared, kept_settings& kept, pictures_part& pictures)
+      : s_(&shared), k_(&kept), pictures_(&pictures) {}
 
   // The limits, as kept: to the caches and the disk.
   void apply_limits() {
@@ -66,12 +66,12 @@ class settings_part {
   void apply(const request::set_theme& one) {
     k_->theme = one.theme;
     (void)k_->write();
-    rebuild_();
+    s_->rebuild_due = true;
   }
   void apply(const request::set_accent& one) {
     k_->accent = one.accent;
     (void)k_->write();
-    rebuild_();
+    s_->rebuild_due = true;
   }
   // The renderer: for the next start, kept.
   void apply(const request::set_renderer& one) {
@@ -107,7 +107,7 @@ class settings_part {
     std::filesystem::remove_all(mux::config::state_path("messages"), failed);
     pictures_->clear();
     s_->root().show_message("Storage", "The stored messages and pictures are cleared.");
-    s_->refresh();
+    s_->refresh_due = true;
   }
 
   // Files sent: their metadata cut out, their names made plain.
@@ -125,7 +125,7 @@ class settings_part {
   void apply(const request::flip_room_events&) {
     k_->history.show_room_events = !k_->history.show_room_events;
     (void)k_->write();
-    s_->refresh();
+    s_->refresh_due = true;
   }
   void apply(const request::flip_strip_metadata&) {
     k_->sending.strip_metadata = !k_->sending.strip_metadata;
@@ -140,7 +140,6 @@ class settings_part {
   services* s_;
   kept_settings* k_;
   pictures_part* pictures_;
-  std::function<void()> rebuild_;
 };
 
 }  // namespace mux::app

@@ -67,9 +67,9 @@ struct typing_step {
 // where it was said somewhere and has stopped or the chat was left;
 // 'started' where there is text and it was not said here in the last twenty
 // seconds -- each only where `allowed` says the account's privacy lets it.
-[[nodiscard]] inline typing_step typing_after(typing_state now, bool on, const std::optional<conversation_id>& chosen,
-                                              std::chrono::steady_clock::time_point at,
-                                              const std::function<bool(const conversation_id&)>& allowed) {
+template <std::predicate<const conversation_id&> Allowed>
+[[nodiscard]] typing_step typing_after(typing_state now, bool on, const std::optional<conversation_id>& chosen,
+                                       std::chrono::steady_clock::time_point at, const Allowed& allowed) {
   typing_step out;
   if (now.in && (!on || now.in != chosen)) {
     if (allowed(*now.in))

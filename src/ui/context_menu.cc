@@ -33,9 +33,11 @@ inline std::vector<std::string>& recent_emoji() {
   static std::vector<std::string> kept;
   return kept;
 }
-inline std::function<void()>& on_recent_emoji() {
-  static std::function<void()> told;
-  return told;
+// Whether the list changed since the program last kept it: the program
+// reads it, and keeps the list.
+inline bool& recent_emoji_changed() {
+  static bool changed = false;
+  return changed;
 }
 // The custom emoji of the chat the panel is opened over, as the program says.
 inline std::vector<emote>& chat_emotes() {
@@ -103,8 +105,7 @@ inline void remember_emoji(const std::string& glyph) {
   all.insert(all.begin(), glyph);
   if (all.size() > kKept)
     all.resize(kKept);
-  if (const auto& told = on_recent_emoji())
-    told();
+  recent_emoji_changed() = true;
 }
 
 // Every emoji, as tdesktop's panel lists them (chat_helpers.style): a search

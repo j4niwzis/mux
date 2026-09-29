@@ -584,7 +584,7 @@ struct context_menu : scene::Node {
         auto& face = parts.face;
         this->setHorizontal();
         fStack.justify = nodes::justify::middle{};
-        fState.apply({.width = 34.0f, .height = 34.0f, .cornerRadius = 17.0f, .hoverBackground = chosen_colour});
+        fState.apply({.width = 32.0f, .height = 32.0f, .cornerRadius = 16.0f, .hoverBackground = chosen_colour});
         face.apply({.alignSelf = scene::align::kMiddle});
       }
       [[nodiscard]] bool acceptsInput() const { return true; }
@@ -606,12 +606,14 @@ struct context_menu : scene::Node {
       } parts;
       quick_row(Actions* a, card* of) : parts{.more = icon_button<expand_emoji>(icon::down{}, {of})} {
         auto& [each, more] = parts;
+        // Six of 32 and the arrow's 28, a gap of 1 between, in the card's
+        // 240 less its padding: the arrow had run out past the card's edge.
         this->setHorizontal();
-        this->setGap(2.0f);
-        fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {2.0f, 8.0f, 4.0f, 8.0f}});
+        this->setGap(1.0f);
+        fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {2.0f, 6.0f, 4.0f, 6.0f}});
         for (const char* key : {"👍", "❤️", "😂", "😮", "😢", "🙏"})
           each.emplace_back(a, key);
-        more.apply({.width = 30.0f, .height = 34.0f});
+        more.apply({.width = 28.0f, .height = 32.0f, .cornerRadius = 14.0f});
       }
     };
     Actions* actions_of = nullptr;
@@ -729,7 +731,7 @@ struct context_menu : scene::Node {
         seen_names.back().apply({.fillX = true, .margin = {0.0f, 16.0f, 2.0f, 64.0f}});
       }
       seen_band.apply({.fillX = true, .height = 1.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f}});
-      fState.apply({.width = 230.0f, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .cornerRadius = 10.0f, .background = sidebar_colour, .border = scene::Border{band_colour, 1.0f},
+      fState.apply({.width = 240.0f, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .cornerRadius = 10.0f, .background = sidebar_colour, .border = scene::Border{band_colour, 1.0f},
                     .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
     }
   };

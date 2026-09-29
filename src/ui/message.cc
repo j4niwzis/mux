@@ -576,7 +576,7 @@ struct message_bubble : nodes::Stack {
   // one's own; the bubble a column of the name, the quote, the text, the
   // links, the reactions and the time.
   message_bubble(const conversation& in, const message& said, bool first_of_run, bool last_of_run,
-                 const model* now = nullptr)
+                 const model* now = nullptr, bool show_events = true)
       : said(said), first(first_of_run), last(last_of_run), message_id(said.id), plain(said.body.plain),
         outgoing(said.outgoing), sender(said.sender),
         parts{.face = avatar_mark(said.sender, sender_name(in, said.sender), kAvatar),
@@ -618,6 +618,10 @@ struct message_bubble : nodes::Stack {
       fStack.justify = nodes::justify::middle{};
       face.setVisible(false);
       body.apply({.cornerRadius = 12.0f, .background = tile_colour});
+      // Not shown where the chat's settings say so: kept, and out of the
+      // flow, taking no room.
+      events_shown = show_events;
+      this->setVisible(show_events);
     }
     // Anyone's words can be selected and copied, as in Telegram.
     body.parts.text.setSelectable(true);
@@ -720,6 +724,9 @@ struct message_bubble : nodes::Stack {
   // Whether the message its reply quotes was there to quote when it was
   // made: made again once it is, from the timeline or fetched beside it.
   bool quote_known = true;
+  // Whether room events were shown when it was made: made again when that
+  // changes.
+  bool events_shown = true;
   skiff::paint::Tween swipe{0.0f, 180.0f, skiff::paint::movement::subtle{}};
   static constexpr float kSwipeToReply = 70.0f;
   // Where it was jumped to: the whole row -- from the message to the edges,

@@ -98,6 +98,9 @@ struct stub {
   void close_reactions() {}
   void open_avatar(std::string) {}
   void open_manage() {}
+  void flip_room_events() {}
+  void flip_account_room_events() {}
+  void flip_chat_room_events() {}
   void close_manage() {}
   void room_act(mux::room_action_t) {}
   void resize_info(float) {}

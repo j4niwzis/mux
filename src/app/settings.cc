@@ -121,6 +121,12 @@ class settings_part {
     s_->model->show_deleted = k_->history.show_deleted;
     (void)k_->write();
   }
+  // Room events, for every chat that has not chosen, nor its account.
+  void apply(const request::flip_room_events&) {
+    k_->history.show_room_events = !k_->history.show_room_events;
+    (void)k_->write();
+    s_->refresh();
+  }
   void apply(const request::flip_strip_metadata&) {
     k_->sending.strip_metadata = !k_->sending.strip_metadata;
     (void)k_->write();

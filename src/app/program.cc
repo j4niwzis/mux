@@ -228,6 +228,8 @@ struct app : kept_settings {
   void apply(const request::close_emoji&);
   void apply(const request::insert_emoji& one);
   void apply(const request::open_manage&);
+  void apply(const request::flip_account_room_events&);
+  void apply(const request::flip_chat_room_events&);
   void apply(const request::close_manage&);
   void apply(const request::room_act& one);
   void apply(const request::resize_info& one);

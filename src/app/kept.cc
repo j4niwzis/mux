@@ -33,6 +33,8 @@ struct kept_settings {
   mux::config::history_settings history;
   // The chats muted, and the proxy profiles.
   std::set<conversation_id> muted;
+  // The chats that chose for themselves whether their room events show.
+  std::map<conversation_id, bool> room_events;
   std::vector<mux::config::proxy_settings> proxies;
   // Why the accounts file could not be read, when it could not: then it is
   // not written over either.
@@ -48,6 +50,16 @@ struct kept_settings {
   [[nodiscard]] const mux::config::account_t* settings_of(std::string_view address) {
     const auto found = this->find(address);
     return found == saved.end() ? nullptr : &*found;
+  }
+  // Whether a chat shows what is done in it: its own choice, else its
+  // account's, else every account's.
+  [[nodiscard]] bool room_events_shown(const conversation_id& chat) {
+    if (const auto own = room_events.find(chat); own != room_events.end())
+      return own->second;
+    if (const auto* account = this->settings_of(chat.account.address))
+      if (const auto& chosen = mux::config::room_events_of(*account))
+        return *chosen;
+    return history.show_room_events;
   }
 
   // The file as all of this says it.
@@ -65,6 +77,12 @@ struct kept_settings {
     out.cache = limits;
     out.sending = sending;
     out.history = history;
+    if (!room_events.empty()) {
+      std::vector<mux::config::room_events_choice> chosen;
+      for (const auto& [chat, show] : room_events)
+        chosen.push_back({chat.account.address, chat.id, show});
+      out.room_events = std::move(chosen);
+    }
     if (!muted.empty()) {
       std::vector<mux::config::muted_chat> kept;
       for (const auto& one : muted)

@@ -150,6 +150,31 @@ void app::apply(const request::flip_account_typing&) {
   });
 }
 
+// Room events, for the chosen account's chats: shown or not from now on,
+// whatever every account's is.
+void app::apply(const request::flip_account_room_events&) {
+  this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
+    auto& kept = mux::config::room_events_in(account);
+    kept = !kept.value_or(history.show_room_events);
+    if (auto* page = panel.privacy())
+      page->show_events(*kept);
+    (void)this->write();
+    this->refresh();
+  });
+}
+// Room events, for the chat being read, whatever its account's are.
+void app::apply(const request::flip_chat_room_events&) {
+  const auto& chosen = root().main().chosen;
+  if (!chosen)
+    return;
+  const bool now = this->room_events_shown(*chosen);
+  room_events.insert_or_assign(*chosen, !now);
+  (void)this->write();
+  root().show_message("Room events", !now ? "Joins, renames and other room events are shown in this chat."
+                                          : "Room events are hidden in this chat.");
+  this->refresh();
+}
+
 void app::apply(const request::proxy_kind& one) {
   if (auto* up = root().settings_up())
     if (auto* editor = up->editor())

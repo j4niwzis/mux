@@ -91,6 +91,8 @@ struct conversations_screen : nodes::Stack {
   // The messages a bubble was made for: one made for the first time, while
   // its chat is being read, has just come.
   std::set<std::string> appeared;
+  // Whether a chat shows what is done in it, as the program's settings say.
+  std::function<bool(const conversation_id&)> events_shown;
   // The account to list once the model has it: the one shown last, kept.
   // Taken the first time it is there; dropped when an account is chosen.
   std::optional<account_id> wanted;
@@ -766,6 +768,7 @@ struct conversations_screen : nodes::Stack {
     // those of a chat just opened do not. One's own, once the server has it,
     // is the same message under its new id, and does not come in twice.
     const bool same_chat = shown_chat == chosen;
+    const bool events = events_shown ? events_shown(one->id) : true;
     const auto arrives = [&](std::size_t i) {
       const bool known = !appeared.insert(all[i].id).second;
       const bool acknowledged = all[i].outgoing && std::visit(overloaded{[](const delivery::sent&) { return true; },
@@ -779,7 +782,7 @@ struct conversations_screen : nodes::Stack {
             entries, std::views::iota(first_made, last_made),
             [&](std::size_t i) { return all[i].id; }, [](const message_bubble& row) { return row.message_id; },
             [&](std::size_t i) {
-              message_bubble made(*one, all[i], first_of_run(i), last_of_run(i), &now);
+              message_bubble made(*one, all[i], first_of_run(i), last_of_run(i), &now, events);
               if (arrives(i))
                 made.appear();
               return made;
@@ -788,7 +791,7 @@ struct conversations_screen : nodes::Stack {
               const bool quote_known = !all[i].replies_to || one->quoted.contains(*all[i].replies_to) ||
                                        std::ranges::find(all, *all[i].replies_to, &message::id) != all.end();
               return row.said == all[i] && row.first == first_of_run(i) && row.last == last_of_run(i) &&
-                     row.quote_known == quote_known;
+                     row.quote_known == quote_known && row.events_shown == events;
             }))
       timeline.invalidateLayout();
     // The newest is at the bottom: the view follows it where the reader was

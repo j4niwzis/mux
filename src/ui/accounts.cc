@@ -204,24 +204,31 @@ template <class Actions>
 struct account_privacy : nodes::Stack {
   using receipts_row = switch_row<ask<Actions, &Actions::flip_account_receipts>>;
   using typing_row = switch_row<ask<Actions, &Actions::flip_account_typing>>;
+  using events_row = switch_row<ask<Actions, &Actions::flip_account_room_events>>;
   struct parts_t {
     nodes::Text title = section_title("PRIVACY");
     receipts_row receipts;
     typing_row typing;
+    // Its chats' room events: as every account's, until chosen here.
+    events_row events;
     nodes::Text note{"Off, the people you talk to through this account are not told when you have read their "
                      "messages, or that you are typing. Theirs are still shown, and receipts are still kept here.",
                      13.0f, dim_colour};
   } parts;
 
-  account_privacy(Actions* a, bool receipts_on, bool typing_on)
-      : parts{.receipts = receipts_row("Send read receipts", {a}), .typing = typing_row("Send typing notifications", {a})} {
+  account_privacy(Actions* a, bool receipts_on, bool typing_on, bool events_on = true)
+      : parts{.receipts = receipts_row("Send read receipts", {a}),
+              .typing = typing_row("Send typing notifications", {a}),
+              .events = events_row("Show room events in its chats", {a})} {
     this->setGap(8.0f);
     parts.note.apply({.fillX = true});
     fState.apply({.fill = true});
     parts.note.setWrapped(true);
     parts.receipts.parts.toggle.setOnNow(receipts_on);
     parts.typing.parts.toggle.setOnNow(typing_on);
+    parts.events.parts.toggle.setOnNow(events_on);
   }
+  void show_events(bool on) { parts.events.parts.toggle.setOn(on); }
   void show(bool receipts_on, bool typing_on) {
     parts.receipts.parts.toggle.setOn(receipts_on);
     parts.typing.parts.toggle.setOn(typing_on);
@@ -393,7 +400,8 @@ struct accounts_panel : closes_on_escape<Actions> {
                  const std::vector<config::proxy_settings>& proxies = {}) {
     pages.light(page);
     if (page == 1) {
-      detail.template emplace<3>(this->actions, config::read_receipts_of(one), config::send_typing_of(one));
+      detail.template emplace<3>(this->actions, config::read_receipts_of(one), config::send_typing_of(one),
+                                   config::room_events_of(one).value_or(true));
     } else if (page == 2) {
       detail.template emplace<4>(this->actions, proxies, config::proxy_of(one));
     } else {

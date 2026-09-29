@@ -179,6 +179,7 @@ struct xmpp_account {
   // said is yes.
   std::optional<bool> read_receipts;
   std::optional<bool> send_typing;  // others' typing is always shown
+  std::optional<bool> room_events;  // as matrix_account's
   // The name of the proxy profile it connects through, where it has one.
   std::optional<std::string> proxy;
   friend bool operator==(const xmpp_account&, const xmpp_account&) = default;
@@ -195,6 +196,9 @@ struct matrix_account {
   std::string device_name = "mux";
   std::optional<bool> read_receipts;
   std::optional<bool> send_typing;  // others' typing is always shown
+  // Whether its chats show what is done in them (joins, renames, ...);
+  // nothing said is as the settings say for every account.
+  std::optional<bool> room_events;
   std::optional<std::string> proxy;
   // The session the server gave, kept so the next start goes on with it.
   std::optional<std::string> access_token;
@@ -204,6 +208,15 @@ struct matrix_account {
 
 // One saved account, of either protocol.
 using account_t = std::variant<xmpp_account, matrix_account>;
+
+// A chat's own choice of whether what is done in it is shown.
+struct room_events_choice {
+  std::string account;       // the account's address
+  std::string conversation;  // the chat's id in it
+  bool show = true;
+  friend bool operator==(const room_events_choice&, const room_events_choice&) = default;
+};
+consteval auto json_schema(knot::type<room_events_choice>) { return knot::schema<room_events_choice>(); }
 
 // A chat muted: no notifications from it, its unread count in grey.
 struct muted_chat {
@@ -294,6 +307,10 @@ struct history_settings {
   // A message deleted is shown where it was, all it said, marked; off, it
   // is gone from the chat. Either way it is kept on disk.
   bool show_deleted = false;
+  // What is done in a room -- joins and leaves, a name or a picture changed,
+  // events nothing here reads -- shown as lines of their own, or not. Kept
+  // either way; an account's choice, and a room's own, come first.
+  bool show_room_events = true;
   friend bool operator==(const history_settings&, const history_settings&) = default;
 };
 consteval auto json_schema(knot::type<history_settings>) { return knot::schema<history_settings>(); }
@@ -309,6 +326,8 @@ struct file {
   // The emoji picked lately, newest first.
   std::optional<std::vector<std::string>> recent_emoji;
   std::optional<std::vector<muted_chat>> muted;
+  // The chats that chose for themselves whether their room events show.
+  std::optional<std::vector<room_events_choice>> room_events;
   // The proxy profiles accounts choose from.
   std::optional<std::vector<proxy_settings>> proxies;
   // The theme, "dark" or "light", and what draws the window, "opengl" or
@@ -356,6 +375,14 @@ consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
 }
 [[nodiscard]] inline std::optional<bool>& send_typing_in(account_t& one) {
   return std::visit([](auto& each) -> std::optional<bool>& { return each.send_typing; }, one);
+}
+// Whether the account's chats show their room events: its own choice, if
+// it made one.
+[[nodiscard]] inline const std::optional<bool>& room_events_of(const account_t& one) {
+  return std::visit([](const auto& each) -> const std::optional<bool>& { return each.room_events; }, one);
+}
+[[nodiscard]] inline std::optional<bool>& room_events_in(account_t& one) {
+  return std::visit([](auto& each) -> std::optional<bool>& { return each.room_events; }, one);
 }
 [[nodiscard]] inline std::optional<std::string>& proxy_in(account_t& one) {
   return std::visit([](auto& each) -> std::optional<std::string>& { return each.proxy; }, one);

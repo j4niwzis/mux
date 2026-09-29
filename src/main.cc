@@ -20,6 +20,7 @@ import mux.config;
 import mux.net;
 import mux.xmpp;
 import mux.matrix;
+import mux.media;
 import mux.host;
 import mux.ui;
 import skiff.paint;
@@ -668,6 +669,9 @@ struct message_person {
   mux::conversation_id who;
 };
 struct attach_files {};
+struct settings_files {};
+struct flip_strip_metadata {};
+struct flip_rename_pictures {};
 struct close_send_box {};
 struct send_files {};
 struct open_picture {
@@ -755,7 +759,7 @@ using request_t =
                  request::close_menu, request::menu_reply, request::menu_edit, request::menu_copy,
                  request::menu_delete, request::cancel_compose, request::open_url,
                  request::switch_account, request::submit_message, request::send_typed,
-                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_member_info, request::reply_to, request::open_picture, request::close_picture, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::close_notice,
+                 request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_member_info, request::reply_to, request::open_picture, request::close_picture, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::flip_strip_metadata, request::flip_rename_pictures, request::close_notice,
                  request::resize_info, request::choose_new_proxy, request::toggle_mute, request::close_account_pages,
                  request::accounts_back, request::account_page, request::flip_account_receipts,
                  request::proxy_kind, request::choose_account_proxy, request::manage_proxies,
@@ -825,6 +829,9 @@ struct actions {
   void resize_sidebar(float x) { requests.emplace_back(request::resize_sidebar{x}); }
   void message_person(const mux::conversation_id& who) { requests.emplace_back(request::message_person{who}); }
   void attach_files() { requests.emplace_back(request::attach_files{}); }
+  void settings_files() { requests.emplace_back(request::settings_files{}); }
+  void flip_strip_metadata() { requests.emplace_back(request::flip_strip_metadata{}); }
+  void flip_rename_pictures() { requests.emplace_back(request::flip_rename_pictures{}); }
   void close_send_box() { requests.emplace_back(request::close_send_box{}); }
   void send_files() { requests.emplace_back(request::send_files{}); }
   void open_picture(std::string source) { requests.emplace_back(request::open_picture{std::move(source)}); }
@@ -902,6 +909,8 @@ struct app {
   mux::config::renderer_t renderer = mux::config::renderer::opengl{};
   // How much is kept, in memory and on disk.
   mux::config::cache_limits limits;
+  // What is done to a picture dropped before it is sent.
+  mux::config::sending_settings sending;
   void apply_limits() {
     mux::ui::avatar_images().budget = static_cast<std::size_t>(limits.pictures_in_memory_mb) << 20;
     store.budget = static_cast<std::uintmax_t>(limits.messages_on_disk_mb) << 20;
@@ -1345,18 +1354,6 @@ struct app {
     to_send.clear();
     root().close_send_box();
   }
-  // What a file is, by its first bytes: a picture's type, where it is one.
-  static std::optional<std::pair<std::string, std::string>> picture_type_of(std::string_view bytes) {
-    if (bytes.starts_with("\x89PNG"))
-      return std::pair<std::string, std::string>{"image/png", "png"};
-    if (bytes.starts_with("\xFF\xD8\xFF"))
-      return std::pair<std::string, std::string>{"image/jpeg", "jpg"};
-    if (bytes.starts_with("GIF8"))
-      return std::pair<std::string, std::string>{"image/gif", "gif"};
-    if (bytes.size() > 12 && bytes.starts_with("RIFF") && bytes.substr(8, 4) == "WEBP")
-      return std::pair<std::string, std::string>{"image/webp", "webp"};
-    return std::nullopt;
-  }
   // Files given: read, a picture known by its bytes; a picture dropped on
   // the window written anew from its pixels -- nothing of its file, its
   // metadata among it, goes with it -- and named image.<its type>. Then the
@@ -1372,22 +1369,18 @@ struct app {
       one.bytes.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
       one.name = std::filesystem::path(path).filename().string();
       one.mimetype = "application/octet-stream";
-      if (const auto type = picture_type_of(one.bytes)) {
+      if (const auto type = mux::media::picture_of(one.bytes)) {
         if (auto image = skia::decodeImage(one.bytes.data(), one.bytes.size())) {
           one.image = true;
           one.width = image->width();
           one.height = image->height();
-          one.mimetype = type->first;
-          if (dropped) {
-            // Animated GIFs keep their frames; the rest are written anew.
-            const bool jpeg = type->second == "jpg";
-            if (type->second != "gif")
-              if (auto fresh = skia::encodeImage(*image, jpeg); !fresh.empty()) {
-                one.bytes = std::move(fresh);
-                one.mimetype = jpeg ? "image/jpeg" : "image/png";
-              }
-            one.name = std::format("image.{}", type->second == "gif" ? "gif" : jpeg ? "jpg" : "png");
-          }
+          one.mimetype = std::string(mux::media::mimetype_of(*type));
+          // Dropped: its metadata cut out of the file, the picture's bytes
+          // as they were, and named image.<type> -- as Settings says.
+          if (dropped && sending.strip_metadata)
+            one.bytes = mux::media::without_metadata(one.bytes);
+          if (dropped && sending.rename)
+            one.name = std::format("image.{}", mux::media::extension_of(*type));
           one.key = std::format("thumb:local:mux-file-{}-{}", std::chrono::system_clock::now().time_since_epoch().count(),
                                 ++files_made);
           mux::ui::avatar_images().put(one.key, std::move(image));
@@ -1778,6 +1771,18 @@ struct app {
     if (auto* up = root().settings_up())
       up->show_appearance(theme, accent);
   }
+  void apply(const request::settings_files&) {
+    if (auto* up = root().settings_up())
+      up->show_files(sending);
+  }
+  void apply(const request::flip_strip_metadata&) {
+    sending.strip_metadata = !sending.strip_metadata;
+    (void)this->write();
+  }
+  void apply(const request::flip_rename_pictures&) {
+    sending.rename = !sending.rename;
+    (void)this->write();
+  }
   void apply(const request::settings_storage&) {
     if (auto* up = root().settings_up())
       up->show_storage(limits);
@@ -2112,6 +2117,7 @@ struct app {
     file.accent = mux::config::word_of(accent);
     file.renderer = mux::config::word_of(renderer);
     file.cache = limits;
+    file.sending = sending;
     if (!muted.empty()) {
       std::vector<mux::config::muted_chat> kept;
       for (const auto& one : muted)
@@ -2212,6 +2218,7 @@ int main(int argc, char** argv) {
   program.accent = mux::config::accent_of(saved.accent);
   program.renderer = mux::config::renderer_of(saved.renderer);
   program.limits = saved.cache.value_or(mux::config::cache_limits{});
+  program.sending = saved.sending.value_or(mux::config::sending_settings{});
   program.apply_limits();
   program.proxies = proxies;
   for (const auto& one : saved.muted.value_or(std::vector<mux::config::muted_chat>{}))

@@ -76,6 +76,7 @@ inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 //        save_proxy_profile(), delete_proxy_profile()
 //   void settings_appearance(), settings_rendering(), settings_storage()
 //   void change_limit(config::limit_t, bool more), clear_stored()  -- Storage
+//   void settings_files(), flip_strip_metadata(), flip_rename_pictures()  -- Files
 //   void set_theme(config::theme_t), set_accent(config::accent_t), set_renderer(config::renderer_t)
 //   void proxy_kind(config::proxy_kind_t)
 //   void not_implemented(std::string what)  -- a box saying it is not there yet
@@ -3986,6 +3987,7 @@ struct settings_home : nodes::Stack {
   row_item<ask<Actions, &Actions::settings_appearance>> appearance;
   row_item<ask<Actions, &Actions::settings_rendering>> rendering;
   row_item<ask<Actions, &Actions::settings_storage>> storage;
+  row_item<ask<Actions, &Actions::settings_files>> files;
 
   explicit settings_home(Actions* a)
       : header("Settings", {a}, {a}, false, true),
@@ -3993,7 +3995,8 @@ struct settings_home : nodes::Stack {
         animations("Animations", {a}, icon::motion{}),
         proxies("Proxies", {a}, icon::gear{}),
         appearance("Appearance", {a}, icon::eye{}),
-        rendering("Rendering", {a}, icon::sliders{}), storage("Storage", {a}, icon::clip{}) {
+        rendering("Rendering", {a}, icon::sliders{}), storage("Storage", {a}, icon::clip{}),
+        files("Files", {a}, icon::send{}) {
     // Declared: the header, then the lines, one under another.
     fState.apply({.fill = true});
   }
@@ -4005,6 +4008,7 @@ struct settings_home : nodes::Stack {
     f(appearance);
     f(rendering);
     f(storage);
+    f(files);
     f(proxies);
   }
   void show_motion(std::string_view) {}
@@ -4506,12 +4510,46 @@ struct storage_page : nodes::Stack {
   }
 };
 
+// Settings' Files page: what is done to a picture dropped on the window
+// before it is sent.
+template <class Actions>
+struct files_page : nodes::Stack {
+  page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>> header;
+  nodes::Text title = section_title("PICTURES DROPPED ON THE WINDOW");
+  switch_row<ask<Actions, &Actions::flip_strip_metadata>> strip;
+  switch_row<ask<Actions, &Actions::flip_rename_pictures>> rename;
+  nodes::Text note{"Metadata is where and when a picture was taken, with what, by whom: EXIF, XMP and the like. "
+                   "It is cut out of the file; the picture itself is sent as it is, not compressed again.",
+                   13.0f, dim_colour};
+  files_page(Actions* a, const config::sending_settings& now)
+      : header("Files", {a}, {a}, true, true), strip("Remove metadata", {a}), rename("Name them image.<type>", {a}) {
+    fState.apply({.fill = true});
+    title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
+    note.setWrapped(true);
+    note.apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
+    this->show(now);
+  }
+  void show(const config::sending_settings& now) {
+    strip.toggle.setOnNow(now.strip_metadata);
+    rename.toggle.setOnNow(now.rename);
+  }
+  void show_motion(std::string_view) {}
+  void show_receipts(bool) {}
+  void forEachChild(auto&& f) {
+    f(header);
+    f(title);
+    f(strip);
+    f(rename);
+    f(note);
+  }
+};
+
 template <class Actions>
 struct settings_dialog : scene::Node {
   Actions* actions = nullptr;
   std::string motion;
   std::variant<settings_home<Actions>, animations_page<Actions>, proxies_page<Actions>, proxy_editor<Actions>,
-               appearance_page<Actions>, rendering_page<Actions>, storage_page<Actions>>
+               appearance_page<Actions>, rendering_page<Actions>, storage_page<Actions>, files_page<Actions>>
       page;
   // What is up coming in from the side, fading in, when the page changes.
   skiff::paint::Tween swap{1.0f, 200.0f, skiff::paint::movement::subtle{}};
@@ -4550,6 +4588,10 @@ struct settings_dialog : scene::Node {
   }
   void show_rendering(const config::renderer_t& renderer) {
     page.template emplace<5>(actions, renderer);
+    this->begin_swap(1.0f);
+  }
+  void show_files(const config::sending_settings& now) {
+    page.template emplace<7>(actions, now);
     this->begin_swap(1.0f);
   }
   void show_storage(const config::cache_limits& limits) {

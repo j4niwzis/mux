@@ -62,6 +62,9 @@ struct stub {
   void close_picture() {}
   void open_file(std::string, std::string) {}
   void attach_files() {}
+  void settings_files() {}
+  void flip_strip_metadata() {}
+  void flip_rename_pictures() {}
   void close_send_box() {}
   void send_files() {}
   void open_member_info(std::string) {}

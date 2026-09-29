@@ -252,6 +252,14 @@ using limit_t = std::variant<limit::messages_in_memory, limit::messages_on_disk,
                                                                   : std::pair<std::int64_t, std::int64_t>{4, 65536};
 }
 
+// What is done to a picture dropped on the window before it is sent.
+struct sending_settings {
+  bool strip_metadata = true;  // its EXIF, XMP, text and the like cut out
+  bool rename = true;          // named image.<its type>
+  friend bool operator==(const sending_settings&, const sending_settings&) = default;
+};
+consteval auto json_schema(knot::type<sending_settings>) { return knot::schema<sending_settings>(); }
+
 struct file {
   std::vector<xmpp_account> xmpp;
   std::vector<matrix_account> matrix;
@@ -267,6 +275,7 @@ struct file {
   std::optional<std::string> accent;
   std::optional<std::string> renderer;
   std::optional<cache_limits> cache;
+  std::optional<sending_settings> sending;
   friend bool operator==(const file&, const file&) = default;
 };
 

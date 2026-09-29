@@ -109,7 +109,7 @@ cme_find_package(loom COMPONENTS state cs-joining cs-leaving cs-login cs-message
 # built.
 add_library(mux_modules)
 target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
-  FILES src/core.cc src/net.cc src/xmpp.cc src/http.cc src/matrix.cc)
+  FILES src/core.cc src/net.cc src/xmpp.cc src/http.cc src/matrix.cc src/media.cc)
 target_compile_features(mux_modules PUBLIC cxx_std_26)
 # The flags that decide which std module a target gets: the same on every
 # library of modules in the build, or two std modules meet in one importer.
@@ -128,7 +128,7 @@ target_compile_features(mux_config PUBLIC cxx_std_26)
 target_compile_options(mux_config PUBLIC ${mux_std_flags})
 target_link_libraries(mux_config PUBLIC knot)
 target_link_libraries(mux_modules PUBLIC mux_config)
-foreach(name IN ITEMS core net xmpp http matrix)
+foreach(name IN ITEMS core net xmpp http matrix media)
   add_library(mux_${name} ALIAS mux_modules)
 endforeach()
 

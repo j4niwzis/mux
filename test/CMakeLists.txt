@@ -36,7 +36,7 @@ target_compile_options(mux_test_certificate PUBLIC
   $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=${MUX_CONSTEXPR_STEPS}>
   $<$<AND:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,23>>:-fno-experimental-new-constant-interpreter>)
 
-foreach(one IN ITEMS core net xmpp matrix)
+foreach(one IN ITEMS core net xmpp matrix media)
   add_executable(mux-${one}-test ${one}_test.cc)
   target_link_libraries(mux-${one}-test PRIVATE mux_${one} ${mux_gtest})
   add_test(NAME ${one} COMMAND mux-${one}-test)

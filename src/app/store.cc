@@ -5,6 +5,7 @@ export module mux.app.store;
 import std;
 import knot;
 import mux.core;
+import mux.logic.room_events;
 import mux.config;
 
 export namespace mux::app {
@@ -264,28 +265,52 @@ class message_store {
       one.redacted = flag_of(o, "redacted");
       one.outgoing = flag_of(o, "out");
       one.service = flag_of(o, "service");
+      if (const auto kind = text_of(o, "kind"))
+        one.event_kind = mux::logic::room_event_of(*kind);
       if (const auto carried = o.find("attachment");
-          carried != o.end() && carried->second.is<knot::value::object>()) {
-        const auto& c = carried->second.as<knot::value::object>();
-        const auto number = [&](std::string_view key) -> std::int64_t {
-          const auto found = c.find(key);
-          return found != c.end() && found->second.is<std::int64_t>() ? found->second.as<std::int64_t>() : 0;
-        };
-        mux::attachment a;
-        if (flag_of(c, "image"))
-          a.kind = mux::attachment_kind::image{.moves = flag_of(c, "moves")};
-        a.source = text_of(c, "source").value_or("");
-        a.name = text_of(c, "name").value_or("");
-        a.mimetype = text_of(c, "mimetype").value_or("");
-        a.blurhash = text_of(c, "blurhash");
-        a.size = number("size");
-        a.width = static_cast<int>(number("w"));
-        a.height = static_cast<int>(number("h"));
-        one.attachment = std::move(a);
-      }
+          carried != o.end() && carried->second.is<knot::value::object>())
+        one.attachment = attachment_of(carried->second.as<knot::value::object>());
+      // A gallery's pictures, each as an attachment is.
+      if (const auto album = o.find("album"); album != o.end() && album->second.is<knot::value::array>())
+        for (const knot::value& each : album->second.as<knot::value::array>())
+          if (each.is<knot::value::object>())
+            one.album.push_back(attachment_of(each.as<knot::value::object>()));
       all.insert_or_assign(*id, std::move(one));
     }
     return lines;
+  }
+  // An attachment as a line keeps it, and read back.
+  static mux::attachment attachment_of(const knot::value::object& c) {
+    const auto number = [&](std::string_view key) -> std::int64_t {
+      const auto found = c.find(key);
+      return found != c.end() && found->second.is<std::int64_t>() ? found->second.as<std::int64_t>() : 0;
+    };
+    mux::attachment a;
+    if (flag_of(c, "image"))
+      a.kind = mux::attachment_kind::image{.moves = flag_of(c, "moves")};
+    a.source = text_of(c, "source").value_or("");
+    a.name = text_of(c, "name").value_or("");
+    a.mimetype = text_of(c, "mimetype").value_or("");
+    a.blurhash = text_of(c, "blurhash");
+    a.size = number("size");
+    a.width = static_cast<int>(number("w"));
+    a.height = static_cast<int>(number("h"));
+    return a;
+  }
+  static knot::value::object object_of(const mux::attachment& carried_one) {
+    knot::value::object carried;
+    carried.emplace("image", knot::value(mux::is_picture(carried_one.kind)));
+    if (mux::moves(carried_one.kind))
+      carried.emplace("moves", knot::value(true));
+    carried.emplace("source", knot::value(carried_one.source));
+    carried.emplace("name", knot::value(carried_one.name));
+    carried.emplace("mimetype", knot::value(carried_one.mimetype));
+    carried.emplace("size", knot::value(carried_one.size));
+    if (carried_one.blurhash)
+      carried.emplace("blurhash", knot::value(*carried_one.blurhash));
+    carried.emplace("w", knot::value(static_cast<std::int64_t>(carried_one.width)));
+    carried.emplace("h", knot::value(static_cast<std::int64_t>(carried_one.height)));
+    return carried;
   }
   static std::string line_of(const mux::message& one) {
     knot::value::object line;
@@ -304,22 +329,18 @@ class message_store {
     if (one.outgoing)
       line.emplace("out", knot::value(true));
     // Something done, not said: read back as a line of its own again.
-    if (one.service)
+    if (one.service) {
       line.emplace("service", knot::value(true));
-    if (one.attachment) {
-      knot::value::object carried;
-      carried.emplace("image", knot::value(mux::is_picture(one.attachment->kind)));
-      if (mux::moves(one.attachment->kind))
-        carried.emplace("moves", knot::value(true));
-      carried.emplace("source", knot::value(one.attachment->source));
-      carried.emplace("name", knot::value(one.attachment->name));
-      carried.emplace("mimetype", knot::value(one.attachment->mimetype));
-      carried.emplace("size", knot::value(one.attachment->size));
-      if (one.attachment->blurhash)
-        carried.emplace("blurhash", knot::value(*one.attachment->blurhash));
-      carried.emplace("w", knot::value(static_cast<std::int64_t>(one.attachment->width)));
-      carried.emplace("h", knot::value(static_cast<std::int64_t>(one.attachment->height)));
-      line.emplace("attachment", knot::value(std::move(carried)));
+      // Which kind of room event, for which are shown.
+      line.emplace("kind", knot::value(std::string(mux::logic::word_of(one.event_kind))));
+    }
+    if (one.attachment)
+      line.emplace("attachment", knot::value(object_of(*one.attachment)));
+    if (!one.album.empty()) {
+      knot::value::array album;
+      for (const mux::attachment& each : one.album)
+        album.push_back(knot::value(object_of(each)));
+      line.emplace("album", knot::value(std::move(album)));
     }
     return knot::to_json_string(knot::value(std::move(line)));
   }

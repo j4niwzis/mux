@@ -31,6 +31,32 @@ using kinds_t = config::room_event_kinds;
 [[nodiscard]] constexpr bool shown_unless_chosen(room_event::reactions) { return false; }
 [[nodiscard]] constexpr bool shown_unless_chosen(const auto&) { return true; }
 
+// A kind's word, as it is kept on disk -- the name of its member -- and a
+// word read back into its kind, "other" where it is none of them.
+[[nodiscard]] constexpr std::string_view word_of(room_event::joins) { return "joins"; }
+[[nodiscard]] constexpr std::string_view word_of(room_event::invites) { return "invites"; }
+[[nodiscard]] constexpr std::string_view word_of(room_event::names) { return "names"; }
+[[nodiscard]] constexpr std::string_view word_of(room_event::avatars) { return "avatars"; }
+[[nodiscard]] constexpr std::string_view word_of(room_event::room_name) { return "room_name"; }
+[[nodiscard]] constexpr std::string_view word_of(room_event::topic) { return "topic"; }
+[[nodiscard]] constexpr std::string_view word_of(room_event::room_avatar) { return "room_avatar"; }
+[[nodiscard]] constexpr std::string_view word_of(room_event::address) { return "address"; }
+[[nodiscard]] constexpr std::string_view word_of(room_event::pins) { return "pins"; }
+[[nodiscard]] constexpr std::string_view word_of(room_event::permissions) { return "permissions"; }
+[[nodiscard]] constexpr std::string_view word_of(room_event::access) { return "access"; }
+[[nodiscard]] constexpr std::string_view word_of(room_event::encryption) { return "encryption"; }
+[[nodiscard]] constexpr std::string_view word_of(room_event::other) { return "other"; }
+[[nodiscard]] constexpr std::string_view word_of(room_event::reactions) { return "reactions"; }
+[[nodiscard]] inline std::string_view word_of(const room_event_t& kind) {
+  return std::visit([](auto one) { return word_of(one); }, kind);
+}
+[[nodiscard]] inline room_event_t room_event_of(std::string_view word) {
+  for (const room_event_t& kind : all_room_events)
+    if (word_of(kind) == word)
+      return kind;
+  return room_event::other{};
+}
+
 [[nodiscard]] inline std::optional<bool>& choice_in(kinds_t& in, const room_event_t& kind) {
   return in.*std::visit([](auto one) { return member_of(one); }, kind);
 }

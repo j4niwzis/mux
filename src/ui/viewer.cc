@@ -219,7 +219,7 @@ struct picture_viewer : nodes::Stack {
         this->setHorizontal();
         fState.apply({.height = 4.0f, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle, .cornerRadius = 2.0f,
                       .background = skia::colorSetARGB(0x60, 255, 255, 255)});
-        parts.played.apply({.width = 0.0f, .fillY = true, .cornerRadius = 2.0f});
+        parts.played.apply({.fillY = true, .width = 0.0f, .cornerRadius = 2.0f});
       }
     };
     struct parts_t {

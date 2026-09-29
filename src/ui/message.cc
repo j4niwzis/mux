@@ -399,14 +399,13 @@ struct message_bubble : nodes::Stack {
           : parts{.who = nodes::Text(std::move(name), 13.0f, colour, true),
                   .said = nodes::Text(std::move(line), 13.0f, text_colour)} {
         auto& [who, said] = parts;
-        fState.apply({.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle});
-        // The name as wide as it is, the line of the message at most
-        // maxSignatureSize (240) -- so a short answer to a long message does
-        // not stretch its bubble to the full width.
-        who.setElided(true);
-        who.setMaxWidth(kMaxWidth - 10.0f);
-        said.setElided(true);
-        said.setMaxWidth(kReplyLineMax);
+        fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+        // Both as wide as the quote, cut where it ends: the quote is as wide
+        // as its bubble.
+        for (nodes::Text* each : {&who, &said}) {
+          each->setElided(true);
+          each->apply({.fillX = true});
+        }
       }
     };
     struct parts_t {
@@ -420,7 +419,8 @@ struct message_bubble : nodes::Stack {
       auto& [bar, thumb, texts] = parts;
       this->setHorizontal();
       this->setGap(4.0f);
-      fState.apply({.autoSize = scene::axes::kBoth,
+      fState.apply({.fillX = true,
+                    .autoSize = scene::axes::kY,
                     .margin = {2.0f, 0.0f, 4.0f, 0.0f},
                     .padding = {2.0f, 6.0f, 2.0f, picture ? 7.0f : 11.0f},
                     .cornerRadius = 5.0f,
@@ -454,6 +454,10 @@ struct message_bubble : nodes::Stack {
     // going to the accent and back.
     skiff::paint::Tween flash{0.0f, 1200.0f};
     skia::SkColor plate = bubble_colour;
+    // Its least width as the message asks it (a quote's), and as the time
+    // beside the last line asks it: the bubble widened to hold both.
+    float base_min = 0.0f;
+    float widened = 0.0f;
     [[nodiscard]] bool settling() const { return flash.moving(); }
     [[nodiscard]] static skia::SkColor mixed(skia::SkColor from, skia::SkColor to, float amount) {
       const auto channel = [&](int shift) {
@@ -462,9 +466,10 @@ struct message_bubble : nodes::Stack {
       };
       return (from & 0xFF000000u) | channel(16) | channel(8) | channel(0);
     }
-    // The time goes in the last line of the text where that line leaves room
-    // for it; on a line of its own where it does not. Decided from the last
-    // layout; a change is laid out at the next.
+    // The time goes beside the last line of the text wherever the two fit in
+    // the bubble at its widest, as tdesktop's -- the bubble widened to them
+    // where it is narrower; on a line of its own only where they do not.
+    // Decided from the last layout; a change is laid out at the next.
     void update(double now_ms) {
       auto& [name, quote, picture, file, text, cards, reactions, time, inline_time] = parts;
       if (flash.step(now_ms))
@@ -474,13 +479,16 @@ struct message_bubble : nodes::Stack {
       skia::SkFont* font = skiff::paint::defaultFont();
       if (font == nullptr)
         return;
-      const float room = fState.contentBox().width();
       const float needs =
           text.lastLineWidth() + skiff::paint::Painter(nullptr, *font).measure(inline_time.text(), 11.0f) + 10.0f;
-      const bool inside = needs <= room;
-      if (inside == time.visible()) {
+      const bool inside = needs <= kMaxWidth;
+      const float widest = inside ? std::ceil(needs) + 2.0f * kPadX : 0.0f;
+      if (inside == time.visible() || widest != widened) {
         time.setVisible(!inside);
         inline_time.setVisible(inside);
+        widened = widest;
+        fState.apply({.minWidth = std::max(base_min, widest)});
+        this->invalidateLayout();
       }
     }
     body_column(bool mine, std::string said, std::string when)
@@ -605,11 +613,26 @@ struct message_bubble : nodes::Stack {
           line = is_picture(found->attachment->kind) ? std::string("Photo") : found->attachment->name;
       }
       std::ranges::replace(line, '\n', ' ');
+      const bool with_picture = picture.has_value();
       body.parts.quote.emplace(known ? avatar_colour(found->sender) : accent_colour,
                          known ? (found->outgoing ? std::string("You") : sender_name(in, found->sender))
                                : std::string("A message"),
                          std::move(line), std::move(picture));
-      body.apply({.minWidth = 160.0f});
+      // The quote spans its bubble, as tdesktop's; the bubble is at least as
+      // wide as the quote asks -- its name and its line, the line counted up
+      // to maxSignatureSize (240), so that a short answer to a long message
+      // does not stretch its bubble to the full width.
+      float asks = 160.0f;
+      if (skia::SkFont* font = skiff::paint::defaultFont()) {
+        skiff::paint::Painter measure(nullptr, *font);
+        const auto& texts = body.parts.quote->parts.texts.parts;
+        const float words = std::max(measure.measure(texts.who.text(), 13.0f),
+                                     std::min(measure.measure(texts.said.text(), 13.0f), kReplyLineMax));
+        const float around = (with_picture ? 7.0f + 32.0f + 4.0f : 11.0f) + 6.0f + 2.0f * kPadX;
+        asks = std::min(std::ceil(words) + around, kMaxWidth + 2.0f * kPadX);
+      }
+      body.base_min = asks;
+      body.apply({.minWidth = asks});
     }
     if (!said.reactions.empty()) {
       body.parts.reactions.emplace();

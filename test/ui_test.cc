@@ -318,6 +318,64 @@ TEST(Timeline, ScrollsALongChatAtSixtyFrames) {
   skiff::paint::defaultFont() = nullptr;
 }
 
+// A short answer to a long message, as tdesktop sets it: the bubble as wide
+// as the answer and the quote ask (the quote's line counted up to 240), not
+// its widest; the quote spanning it; the answer one line, the time beside it.
+TEST(Timeline, AShortReplyToALongMessageIsNarrow) {
+  auto manager = skia::SkFontMgr_New_Custom_Directory("/usr/share/fonts");
+  skia::Sp<skia::SkTypeface> face;
+  for (const char* family : {"DejaVu Sans", "Noto Sans", "Liberation Sans"})
+    if (manager && !face)
+      face = manager->matchFamilyStyle(family, skia::SkFontStyle());
+  if (face)
+    skiff::paint::fonts().setPrimary(face);
+  skia::SkFont font(face);
+  skiff::paint::defaultFont() = &font;
+  stub program;
+  scene::Scene<mux::ui::window<stub>> window{std::in_place, &program};
+  const mux::account_id alice{mux::protocol::matrix{}, "@alice:example.com"};
+  const mux::conversation_id room{alice, "!room:example.com"};
+  mux::model model;
+  model.apply(mux::change_t{mux::change::connection_changed{alice, mux::connection::online{}}});
+  model.apply(mux::change_t{mux::change::conversation_updated{.id = room, .name = "Replies"}});
+  mux::message asked;
+  asked.in = room;
+  asked.id = "$long";
+  asked.sender = "@bob:example.com";
+  asked.body.plain = "A long message about one more feature, which goes on and on, well past the width of a "
+                     "reply's line, and further still, so that it has to be cut where it is quoted.";
+  model.apply(mux::change_t{mux::change::message_added{.message = std::move(asked)}});
+  mux::message answer;
+  answer.in = room;
+  answer.id = "$short";
+  answer.sender = "@carol:example.com";
+  answer.body.plain = "where does it get it";
+  answer.replies_to = "$long";
+  model.apply(mux::change_t{mux::change::message_added{.message = std::move(answer)}});
+  auto& screen = window.root().main();
+  screen.chosen = room;
+  screen.show(model);
+  const skia::SkRect viewport = skia::SkRect::MakeWH(1100.0f, 720.0f);
+  for (int i = 0; i < 6; ++i) {
+    window.update(1000.0 + 16.0 * i);
+    window.layoutIfNeeded(viewport);
+    (void)window.finishFrame();
+  }
+  auto& bubbles = std::get<0>(std::get<0>(screen.timeline.fChildren).fChildren);
+  ASSERT_EQ(bubbles.size(), 2u);
+  const auto& body = bubbles.back().parts.body;
+  ASSERT_TRUE(body.parts.quote);
+  const skia::SkRect bubble = body.bounds();
+  const skia::SkRect quote = body.parts.quote->bounds();
+  const skia::SkRect text = body.parts.text.bounds();
+  EXPECT_LT(bubble.width(), 360.0f) << "the bubble: " << bubble.width() << " wide, the quote " << quote.width()
+                                    << ", the text " << text.width();
+  EXPECT_NEAR(quote.width(), bubble.width() - 2.0f * mux::ui::message_bubble::kPadX, 1.0f) << "the quote spans it";
+  EXPECT_LT(text.height(), 24.0f) << "the answer is one line: " << text.height() << " high";
+  EXPECT_TRUE(body.parts.inline_time.visible()) << "the time beside the answer";
+  skiff::paint::defaultFont() = nullptr;
+}
+
 // A picture in a message, pressed: the viewer is asked for, with it.
 TEST(Timeline, APicturePressedIsOpened) {
   skia::SkFont font;

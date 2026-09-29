@@ -124,7 +124,7 @@ cme_find_package(loom COMPONENTS state cs-joining cs-leaving cs-login cs-message
 # built.
 add_library(mux_modules)
 target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
-  FILES src/variant.cc src/core.cc src/net.cc src/xmpp.cc src/http.cc src/matrix.cc src/media.cc
+  FILES src/core.cc src/net.cc src/xmpp.cc src/http.cc src/matrix.cc src/media.cc
         src/matrix/base.cc src/matrix/names.cc src/matrix/account.cc src/matrix/requests.cc src/matrix/sync.cc
         src/matrix/events.cc src/matrix/media.cc
         src/logic/text.cc src/logic/search.cc src/logic/reading.cc src/logic/drafts.cc
@@ -147,16 +147,24 @@ target_link_libraries(mux_modules PUBLIC tern loom Boost::asio Boost::beast Boos
 # each, not once per place awaited. A release build keeps them static.
 option(MUX_ERASE_HANDLERS "Outside a release build, erase Asio completion handlers" ON)
 target_compile_definitions(mux_modules PUBLIC
-  $<$<AND:$<BOOL:${MUX_ERASE_HANDLERS}>,$<NOT:$<CONFIG:Release>>>:MUX_ERASED_HANDLERS>
-  # And mux::variant's alternatives through tables, not the folded onion.
+  $<$<AND:$<BOOL:${MUX_ERASE_HANDLERS}>,$<NOT:$<CONFIG:Release>>>:MUX_ERASED_HANDLERS>)
+
+# mux::variant: a library of its own, under both the accounts kept (their
+# settings are variants) and the rest -- the one module both import.
+add_library(mux_variant)
+target_sources(mux_variant PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES src/variant.cc)
+target_compile_features(mux_variant PUBLIC cxx_std_26)
+target_compile_options(mux_variant PUBLIC ${mux_std_flags})
+# Its alternatives through tables outside a release build, halved to in one.
+target_compile_definitions(mux_variant PUBLIC
   $<$<AND:$<BOOL:${MUX_ERASE_HANDLERS}>,$<NOT:$<CONFIG:Release>>>:MUX_ERASED>)
 
 add_library(mux_config)
 target_sources(mux_config PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES src/config.cc)
 target_compile_features(mux_config PUBLIC cxx_std_26)
 target_compile_options(mux_config PUBLIC ${mux_std_flags})
-target_link_libraries(mux_config PUBLIC knot)
-target_link_libraries(mux_modules PUBLIC mux_config)
+target_link_libraries(mux_config PUBLIC knot mux_variant)
+target_link_libraries(mux_modules PUBLIC mux_config mux_variant)
 foreach(name IN ITEMS core net xmpp http matrix media logic)
   add_library(mux_${name} ALIAS mux_modules)
 endforeach()

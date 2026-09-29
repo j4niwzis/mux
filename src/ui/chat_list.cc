@@ -45,29 +45,15 @@ struct conversation_row : nodes::Stack {
     struct bottom_line : nodes::Stack {
       nodes::Text preview;
       // The chats' unread count, in a pill.
-      struct badge : scene::Node {
-        std::int64_t count = 0;
-        bool chosen = false, muted = false;
-        badge(std::int64_t n, bool is_chosen, bool is_muted) : count(n), chosen(is_chosen), muted(is_muted) {
-          fState.apply({.height = 21.0f});
-        }
-        void measure(const skia::SkRect&) {
-          if (skia::SkFont* font = skiff::paint::defaultFont())
-            fState.fWidth =
-                std::max(22.0f, skiff::paint::Painter(nullptr, *font).measure(std::to_string(count), 12.0f, true) + 14.0f);
-        }
-        void drawSelf(skia::SkCanvas* canvas, float alpha) {
-          skia::SkFont* font = skiff::paint::defaultFont();
-          if (font == nullptr)
-            return;
-          const skiff::paint::Painter p(canvas, *font);
-          const skia::SkRect& pill = fState.fBounds;
-          p.fillRounded(pill, 10.5f,
-                        chosen ? selected_text_colour : muted ? dim_colour : accent_colour, alpha);
-          const std::string text = std::to_string(count);
-          p.textIn(pill, text, 12.0f, chosen ? selected_colour : on_accent_colour, alpha, true,
-                   (pill.width() - p.measure(text, 12.0f, true)) * 0.5f);
-        }
+      struct badge : widgets::Pill {
+        badge(std::int64_t n, bool is_chosen, bool is_muted)
+            : widgets::Pill(std::to_string(n),
+                            {.plate = is_chosen ? selected_text_colour : is_muted ? dim_colour : accent_colour,
+                             .text = is_chosen ? selected_colour : on_accent_colour,
+                             .size = 12.0f,
+                             .height = 21.0f,
+                             .padX = 7.0f,
+                             .bold = true}) {}
       } unread;
       bottom_line(std::int64_t count, bool chosen, bool muted)
           : preview("", 13.0f, chosen ? selected_text_colour : dim_colour), unread(count, chosen, muted) {
@@ -119,7 +105,7 @@ struct conversation_row : nodes::Stack {
         lines(display_name(one), one.unread_here(), is_chosen, is_muted) {
     this->setHorizontal();
     this->setGap(12.0f);
-    fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 12.0f, 0.0f, 10.0f}});
+    fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = chosen_colour, .selectedBackground = selected_colour, .focusBackground = chosen_colour, .selected = chosen});
     if (const message* newest_one = newest(one)) {
       const message& last = *newest_one;
       lines.top.time.setText(clock_of(last.at));
@@ -146,16 +132,6 @@ struct conversation_row : nodes::Stack {
   void forEachChild(auto&& f) {
     f(face);
     f(lines);
-  }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    skia::SkFont* font = skiff::paint::defaultFont();
-    if (font == nullptr)
-      return;
-    const skiff::paint::Painter p(canvas, *font);
-    if (chosen)
-      p.fillRounded(fState.fBounds, 0.0f, selected_colour, alpha);
-    else if (fState.fHovered || this->showsFocus())
-      p.fillRounded(fState.fBounds, 0.0f, chosen_colour, alpha);
   }
 
   [[nodiscard]] bool acceptsInput() const { return true; }

@@ -82,83 +82,15 @@ struct member_row : nodes::Stack {
     }
   } texts;
   // Their role, in a pill beside their name.
-  struct role_pill : scene::Node {
-    std::string text;
-    explicit role_pill(std::string what) : text(std::move(what)) {
-      fState.apply({.height = 20.0f, .alignSelf = scene::align::kStart, .margin = {10.0f, 0.0f, 0.0f, 0.0f}});
+  struct role_pill : widgets::Pill {
+    explicit role_pill(std::string what)
+        : widgets::Pill(std::move(what), {.plate = skia::colorSetARGB(255, 62, 52, 96),
+                                          .text = skia::colorSetARGB(255, 190, 170, 250),
+                                          .size = 12.0f,
+                                          .height = 20.0f,
+                                          .padX = 8.0f}) {
+      fState.apply({.alignSelf = scene::align::kStart, .margin = {10.0f, 0.0f, 0.0f, 0.0f}});
     }
-    void measure(const skia::SkRect&) {
-      if (skia::SkFont* font = skiff::paint::defaultFont())
-        fState.fWidth = skiff::paint::Painter(nullptr, *font).measure(text, 12.0f) + 16.0f;
-    }
-    void drawSelf(skia::SkCanvas* canvas, float alpha) {
-      skia::SkFont* font = skiff::paint::defaultFont();
-      if (font == nullptr)
-        return;
-      const skiff::paint::Painter p(canvas, *font);
-      p.fillRounded(fState.fBounds, 10.0f, skia::colorSetARGB(255, 62, 52, 96), alpha);
-      p.textIn(fState.fBounds, text, 12.0f, skia::colorSetARGB(255, 190, 170, 250), alpha, false, 8.0f);
-    }
-  } pill;
-
-  // Declared: the avatar, the name over how they are, the role at the end.
-  member_row(const member& one, std::string how, Open what)
-      : who(one), how_shown(how), open(std::move(what)), id(one.id), role(one.role),
-        face(one.id, one.name.empty() ? one.id : one.name, 40.0f),
-        texts(one.name.empty() ? one.id : one.name, std::move(how)), pill(one.role.value_or("")) {
-    this->setHorizontal();
-    this->setGap(12.0f);
-    fState.apply({.fillX = true, .height = 54.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}, .hoverBackground = chosen_colour});
-    pill.setVisible(one.role.has_value());
-  }
-
-  void forEachChild(auto&& f) {
-    f(face);
-    f(texts);
-    f(pill);
-  }
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    open(*this);
-    return true;
-  }
-};
-
-// A round avatar on its own: the chat's, big, over its name.
-struct big_avatar : avatar_mark {
-  big_avatar() : avatar_mark(std::string(), std::string(), 96.0f) {}
-};
-// An icon on its own, not to be pressed.
-struct icon_view : nodes::Icon {
-  explicit icon_view(icon_t mark) : nodes::Icon(shape_of(mark), dim_colour) { fState.apply({.width = 28.0f, .height = 36.0f}); }
-};
-// A band between sections: just darker than the panel.
-inline nodes::Box<> section_band() {
-  nodes::Box<> out{section_colour};
-  out.apply({.fillX = true, .height = 6.0f, .margin = {6.0f, 0.0f, 6.0f, 0.0f}});
-  return out;
-}
-
-// A chat's info, beside it, as Telegram Desktop shows it: a big avatar, the
-// name and who is in it, three square buttons, its ID, and its members.
-// Declared: a column of these, nothing placed by hand.
-template <class Actions>
-struct info_panel : nodes::Stack {
-  Actions* actions = nullptr;
-  account_id account;
-  std::string key;
-  // The member shown on a page of their own, over the group's, if one is:
-  // the panel's own state, which the page is made from.
-  std::optional<std::string> person;
-  // The members as last shown, and how each is.
-  std::vector<std::pair<member, std::string>> shown_members;
-
-  // What a press does, to the panel -- which stays where it is while its
-  // pages are made again.
-  struct open_person {
-    info_panel* panel;
-    void operator()(const auto& row) const { panel->open_member(row.id); }
   };
   struct back_to_group {
     info_panel* panel;

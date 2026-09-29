@@ -157,17 +157,11 @@ struct picture_viewer : nodes::Stack {
 
   picture_viewer(Actions* a, std::string where, std::string sender, std::string name, std::string when)
       : actions(a), source(std::move(where)), top(a, this, source, sender, name, when), view(this) {
-    fState.apply({.fill = true});
+    fState.apply({.fill = true, .background = skia::colorSetARGB(0xe6, 0, 0, 0)});
   }
   void forEachChild(auto&& f) {
     f(top);
     f(view);
-  }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    skia::SkPaint dim;
-    dim.setColor(skia::colorSetARGB(0xe6, 0, 0, 0));
-    dim.setAlphaf(dim.getAlphaf() * alpha);
-    canvas->drawRect(fState.fBounds, dim);
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
 };

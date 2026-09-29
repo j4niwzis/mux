@@ -167,26 +167,17 @@ struct file_view : nodes::Stack {
 // A message's reactions, as tdesktop's: a chip for each, its emoji and
 // how many, the user's own in the accent; a press on one puts or takes back
 // the user's.
-struct reaction_chip : scene::Node {
+struct reaction_chip : widgets::Pill {
   std::string key;
   std::size_t count = 0;
   bool mine = false;
-  reaction_chip(std::string k, std::size_t n, bool own) : key(std::move(k)), count(n), mine(own) {
-    fState.apply({.height = 26.0f});
-  }
-  [[nodiscard]] std::string label() const { return std::format("{} {}", key, count); }
-  void measure(const skia::SkRect&) {
-    if (skia::SkFont* font = skiff::paint::defaultFont())
-      fState.fWidth = skiff::paint::Painter(nullptr, *font).measure(this->label(), 13.0f) + 18.0f;
-  }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    skia::SkFont* font = skiff::paint::defaultFont();
-    if (font == nullptr)
-      return;
-    const skiff::paint::Painter p(canvas, *font);
-    p.fillRounded(fState.fBounds, 13.0f, mine ? accent_colour : tile_colour, alpha);
-    p.textIn(fState.fBounds, this->label(), 13.0f, mine ? on_accent_colour : text_colour, alpha, false, 9.0f);
-  }
+  reaction_chip(std::string k, std::size_t n, bool own)
+      : widgets::Pill(std::format("{} {}", k, n), {.plate = own ? accent_colour : tile_colour,
+                                                   .text = own ? on_accent_colour : text_colour,
+                                                   .size = 13.0f,
+                                                   .height = 26.0f,
+                                                   .padX = 9.0f}),
+        key(std::move(k)), count(n), mine(own) {}
   [[nodiscard]] bool acceptsInput() const { return true; }
 };
 struct reaction_row : nodes::Flow<std::vector<reaction_chip>> {

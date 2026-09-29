@@ -211,7 +211,7 @@ struct segment : nodes::Stack {
   nodes::Text label;
 
   segment(std::string text, Act what) : act(std::move(what)), label(std::move(text), 13.0f, text_colour, true) {
-    fState.apply({.width = 92.0f, .height = 28.0f});
+    fState.apply({.width = 92.0f, .height = 28.0f, .hoverBackground = chosen_colour, .selectedBackground = accent_colour, .focusBackground = chosen_colour});
     fStack.justify = nodes::justify::middle{};
     label.apply({.alignSelf = scene::align::kMiddle});
   }
@@ -219,20 +219,10 @@ struct segment : nodes::Stack {
   void set_active(bool on) {
     active = on;
     label.setColour(on ? on_accent_colour : text_colour);
-    this->markDamaged();
+    fState.apply({.selected = on});
   }
 
   void forEachChild(auto&& f) { f(label); }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    skia::SkFont* font = skiff::paint::defaultFont();
-    if (font == nullptr)
-      return;
-    const skiff::paint::Painter p(canvas, *font);
-    if (active)
-      p.fillRounded(fState.fBounds, 0.0f, accent_colour, alpha);
-    else if (fState.fHovered || this->showsFocus())
-      p.fillRounded(fState.fBounds, 0.0f, chosen_colour, alpha);
-  }
 
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }

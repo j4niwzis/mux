@@ -27,22 +27,17 @@ struct context_menu : scene::Node {
     row_item<not_yet<Actions>> forward;
     row_item<ask<Actions, &Actions::menu_delete>> remove;
     // Quick reactions, as tdesktop's menu has them at its top.
-    struct quick_reaction : scene::Node {
+    struct quick_reaction : nodes::Stack {
       Actions* actions;
       std::string key;
-      quick_reaction(Actions* a, std::string k) : actions(a), key(std::move(k)) {
-        fState.apply({.width = 34.0f, .height = 34.0f});
+      nodes::Text face;
+      quick_reaction(Actions* a, std::string k) : actions(a), key(k), face(std::move(k), 18.0f, text_colour) {
+        this->setHorizontal();
+        fStack.justify = nodes::justify::middle{};
+        fState.apply({.width = 34.0f, .height = 34.0f, .cornerRadius = 17.0f, .hoverBackground = chosen_colour});
+        face.apply({.alignSelf = scene::align::kMiddle});
       }
-      void drawSelf(skia::SkCanvas* canvas, float alpha) {
-        skia::SkFont* font = skiff::paint::defaultFont();
-        if (font == nullptr)
-          return;
-        const skiff::paint::Painter p(canvas, *font);
-        if (fState.fHovered)
-          p.fillRounded(fState.fBounds, 17.0f, chosen_colour, alpha);
-        const float width = p.measure(key, 18.0f);
-        p.textIn(fState.fBounds, key, 18.0f, text_colour, alpha, false, (fState.fBounds.width() - width) * 0.5f);
-      }
+      void forEachChild(auto&& f) { f(face); }
       [[nodiscard]] bool acceptsInput() const { return true; }
       [[nodiscard]] bool hoverChangesAppearance() const { return true; }
       [[nodiscard]] bool onClick(float, float) {
@@ -95,7 +90,8 @@ struct context_menu : scene::Node {
         seen_names.back().apply({.fillX = true, .margin = {0.0f, 16.0f, 2.0f, 64.0f}});
       }
       seen_band.apply({.fillX = true, .height = 1.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f}});
-      fState.apply({.width = 230.0f, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}});
+      fState.apply({.width = 230.0f, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .cornerRadius = 10.0f, .background = sidebar_colour, .border = scene::Border{band_colour, 1.0f},
+                    .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
     }
     void forEachChild(auto&& f) {
       f(quick);
@@ -111,17 +107,6 @@ struct context_menu : scene::Node {
       f(seen_band);
       f(seen);
       f(seen_names);
-    }
-    void drawSelf(skia::SkCanvas* canvas, float alpha) {
-      skia::SkFont* font = skiff::paint::defaultFont();
-      if (font == nullptr)
-        return;
-      const skiff::paint::Painter p(canvas, *font);
-      const skia::SkRect& box = fState.fBounds;
-      p.fillRounded(skia::SkRect::MakeLTRB(box.fLeft, box.fTop + 3.0f, box.fRight, box.fBottom + 3.0f), 10.0f,
-                    skia::colorSetARGB(70, 0, 0, 0), alpha);
-      p.fillRounded(box, 10.0f, sidebar_colour, alpha);
-      p.strokeRounded(box, 10.0f, band_colour, 1.0f, alpha);
     }
   } menu;
   Actions* actions = nullptr;

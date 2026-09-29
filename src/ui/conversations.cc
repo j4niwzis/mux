@@ -42,23 +42,23 @@ struct folder_tab : scene::Node {
   folder_tab(std::string name, folder_t what, bool is_chosen, Pick act)
       : pick(std::move(act)), which(std::move(what)), chosen(is_chosen),
         label(std::move(name), 13.0f, is_chosen ? accent_colour : dim_colour, true) {
-    fState.apply({.height = 32.0f, .autoSize = scene::axes::kX, .padding = {0.0f, 10.0f, 0.0f, 10.0f}});
+    fState.apply({.height = 32.0f,
+                  .autoSize = scene::axes::kX,
+                  .padding = {0.0f, 10.0f, 0.0f, 10.0f},
+                  .cornerRadius = 6.0f,
+                  .hoverBackground = chosen_colour,
+                  .focusBackground = chosen_colour});
+    underline.apply({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 3.0f, .cornerRadius = 1.5f});
+    underline.setVisible(is_chosen);
     label.setMaxWidth(160.0f);
     label.setElided(true);
     label.apply({.anchor = scene::anchor::kCentreLeft, .origin = scene::anchor::kCentreLeft});
   }
-  void forEachChild(auto&& f) { f(label); }
-  void drawSelf(skia::SkCanvas* canvas, float alpha) {
-    skia::SkFont* font = skiff::paint::defaultFont();
-    if (font == nullptr)
-      return;
-    const skiff::paint::Painter p(canvas, *font);
-    const skia::SkRect& box = fState.fBounds;
-    if (fState.fHovered || this->showsFocus())
-      p.fillRounded(box, 6.0f, chosen_colour, alpha);
-    if (chosen)
-      p.fillRounded(skia::SkRect::MakeLTRB(box.fLeft + 6.0f, box.fBottom - 3.0f, box.fRight - 6.0f, box.fBottom), 1.5f,
-                    accent_colour, alpha);
+  // The line under the one chosen, in the accent.
+  nodes::Box<> underline{accent_colour};
+  void forEachChild(auto&& f) {
+    f(label);
+    f(underline);
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
@@ -117,16 +117,16 @@ struct conversations_screen : nodes::Stack {
     struct search_box : scene::Node {
       widgets::TextArea<> field{"Search"};
       search_box() {
-        fState.apply({.fillX = true, .height = 36.0f, .margin = {0.0f, 10.0f, 8.0f, 10.0f}});
+        fState.apply({.fillX = true, .height = 36.0f, .margin = {0.0f, 10.0f, 8.0f, 10.0f}, .cornerRadius = 18.0f, .background = tile_colour, .selectedBackground = chosen_colour});
         field.setSingleLine(true);
         field.setFontSize(14.0f);
         field.apply({.fillX = true, .margin = {2.0f, 14.0f, 0.0f, 14.0f}});
       }
       void forEachChild(auto&& f) { f(field); }
-      void drawSelf(skia::SkCanvas* canvas, float alpha) {
-        if (skia::SkFont* font = skiff::paint::defaultFont())
-          skiff::paint::Painter(canvas, *font)
-              .fillRounded(fState.fBounds, 18.0f, field.focused() ? chosen_colour : tile_colour, alpha);
+      // Lit while its field has the focus.
+      void update(double) {
+        if (field.focused() != fState.selected())
+          fState.apply({.selected = field.focused()});
       }
     } search;
     // The folders, where the account has spaces or groups: a line of tabs.
@@ -185,21 +185,11 @@ struct conversations_screen : nodes::Stack {
     // No chat chosen: the wallpaper, and in its middle a small pill saying
     // what to do, as tdesktop's (its service message look).
     struct select_hint : nodes::Stack {
-      struct pill : scene::Node {
-        std::string text = "Select a chat to start messaging";
-        pill() { fState.apply({.alignSelf = scene::align::kMiddle}); }
-        void measure(const skia::SkRect&) {
-          if (skia::SkFont* font = skiff::paint::defaultFont()) {
-            fState.fWidth = skiff::paint::Painter(nullptr, *font).measure(text, 13.0f) + 24.0f;
-            fState.fHeight = 26.0f;
-          }
-        }
-        void drawSelf(skia::SkCanvas* canvas, float alpha) {
-          if (skia::SkFont* font = skiff::paint::defaultFont()) {
-            const skiff::paint::Painter p(canvas, *font);
-            p.fillRounded(fState.fBounds, 13.0f, skia::colorSetARGB(0x66, 0, 0, 0), alpha);
-            p.textIn(fState.fBounds, text, 13.0f, skia::colorSetARGB(255, 255, 255, 255), alpha, false, 12.0f);
-          }
+      struct pill : widgets::Pill {
+        pill()
+            : widgets::Pill("Select a chat to start messaging",
+                            {.plate = skia::colorSetARGB(0x66, 0, 0, 0), .size = 13.0f, .height = 26.0f, .padX = 12.0f}) {
+          fState.apply({.alignSelf = scene::align::kMiddle});
         }
       } shown;
       select_hint() {

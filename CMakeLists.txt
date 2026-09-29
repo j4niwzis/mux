@@ -23,12 +23,10 @@ endif()
 project(mux VERSION 0.1 LANGUAGES C CXX)
 
 # A release build is optimised across its units (ThinLTO with clang), where
-# the toolchain can.
+# the toolchain can: mux's own targets, set at the end -- not the libraries
+# fetched for it, whose archives the system's ar cannot index as bitcode.
 include(CheckIPOSupported)
-check_ipo_supported(RESULT mux_ipo OUTPUT mux_ipo_said LANGUAGES C CXX)
-if(mux_ipo)
-  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
-endif()
+check_ipo_supported(RESULT mux_ipo OUTPUT mux_ipo_said LANGUAGES CXX)
 
 if(NOT COMMAND cme_provider)
   message(FATAL_ERROR
@@ -246,4 +244,21 @@ target_link_libraries(mux-cli PRIVATE mux_modules)
 if(MUX_TESTS)
   enable_testing()
   add_subdirectory(test)
+endif()
+
+# LTO for what is mux's: the targets made here and in test/.
+if(mux_ipo)
+  set(mux_dirs ${CMAKE_CURRENT_SOURCE_DIR})
+  if(MUX_TESTS)
+    list(APPEND mux_dirs ${CMAKE_CURRENT_SOURCE_DIR}/test)
+  endif()
+  foreach(dir IN LISTS mux_dirs)
+    get_property(mux_targets DIRECTORY ${dir} PROPERTY BUILDSYSTEM_TARGETS)
+    foreach(target IN LISTS mux_targets)
+      get_target_property(kind ${target} TYPE)
+      if(kind MATCHES "^(EXECUTABLE|STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY|OBJECT_LIBRARY)$")
+        set_property(TARGET ${target} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+      endif()
+    endforeach()
+  endforeach()
 endif()

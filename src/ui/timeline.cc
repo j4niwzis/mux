@@ -35,6 +35,7 @@ struct menu_facts {
   bool pinned = false;  // pinned in its chat: the menu offers Unpin
   bool pinnable = false;  // in a chat where pins are kept: a Matrix room
   bool reaction_events = false;  // reacted to, the reactions being events
+  std::size_t reaction_count = 0;  // how many reactions it has, of anyone
   std::string link;  // a link to it, where it has one
   float x = 0.0f, y = 0.0f;
 };
@@ -170,11 +171,19 @@ struct timeline_area : scene::Node {
     const auto mine = at.find(id);
     if (mine == at.end())
       return out;
+    const auto when = chat->timeline[mine->second].at;
     for (const auto& [user, event] : chat->read_by) {
       if (user == sender || user == chat->id.account.address)
         continue;
-      if (const auto theirs = at.find(event); theirs != at.end() && theirs->second >= mine->second)
+      // Read up to a message here at or after it; else, the receipt pointing
+      // at what is not among these -- a reaction, a state event -- read at
+      // or after it was sent.
+      if (const auto theirs = at.find(event); theirs != at.end()) {
+        if (theirs->second >= mine->second)
+          out.push_back(sender_name(*chat, user));
+      } else if (const auto read = chat->read_at.find(user); read != chat->read_at.end() && read->second >= when) {
         out.push_back(sender_name(*chat, user));
+      }
     }
     std::ranges::sort(out);
     return out;
@@ -276,6 +285,8 @@ struct timeline_area : scene::Node {
           facts.pinned = std::ranges::contains(chat->pinned, one.message_id);
           facts.pinnable = is_matrix(chat->id.account.speaks) && one.message_id.starts_with('$');
           facts.reaction_events = !one.said.reaction_events.empty();
+          for (const auto& [key, who] : one.said.reactions)
+            facts.reaction_count += who.size();
         }
         // A Matrix message's link: matrix.to, to it in its room.
         if (seen_chat && is_matrix(seen_chat->account.speaks) &&

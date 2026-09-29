@@ -287,6 +287,7 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
       // and the private m.read both say how far someone has read.
       if (part.ephemeral && part.ephemeral->events) {
         std::map<std::string, std::string> read_by;
+        std::map<std::string, std::chrono::sys_time<std::chrono::milliseconds>> read_at;
         for (const auto& event : *part.ephemeral->events) {
           const bool receipt = std::visit(overloaded{[](event_type::receipt) { return true; },
                                                      // Every other type an ephemeral event can have.
@@ -304,12 +305,16 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
             for (const auto& [kind, users] : kinds.as<knot::value::object>())
               if (std::visit([](auto of) { return of.read_up_to; }, receipt_kind_of(kind)) &&
                   users.is<knot::value::object>())
-                for (const auto& [user, when] : users.as<knot::value::object>())
+                for (const auto& [user, when] : users.as<knot::value::object>()) {
                   read_by.insert_or_assign(user, event_id);
+                  if (const knot::value* ts = member(when, "ts"); ts && ts->is<std::int64_t>())
+                    read_at.insert_or_assign(user, std::chrono::sys_time<std::chrono::milliseconds>(
+                                                       std::chrono::milliseconds(ts->as<std::int64_t>())));
+                }
           }
         }
         if (!read_by.empty())
-          sink_(change::receipts_changed{in, std::move(read_by)});
+          sink_(change::receipts_changed{in, std::move(read_by), std::move(read_at)});
       }
     }
   if (rooms.invite)

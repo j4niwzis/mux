@@ -733,7 +733,9 @@ struct context_menu : scene::Node {
                 .copy_link = link_row("Copy Message Link", {a}, icon::info{}),
                 .save = save_row("Save As…", {a}, icon::send{}),
                 .save_gif = gif_row("Save GIF", {a}, icon::check{}),
-                .reactions = reactions_row("Show Reactions as Events", {a}, icon::people{}),
+                .reactions = reactions_row(facts.reaction_count == 1 ? std::string("1 reaction")
+                                                                     : std::format("{} reactions", facts.reaction_count),
+                                           {a}, icon::people{}),
                 .forward = forward_row("Forward", {a}, icon::send{}),
                 .source = source_row("View Source", {a}, icon::info{}),
                 .remove = delete_row("Delete", {a}, icon::close{}),
@@ -752,7 +754,8 @@ struct context_menu : scene::Node {
       remove.setVisible(facts.own);
       pin.setVisible(facts.pinnable);
       source.setVisible(facts.pinnable);
-      reactions.setVisible(facts.reaction_events);
+      // Who reacted, as Telegram's menu lists them: wherever there are any.
+      reactions.setVisible(facts.reaction_count > 0);
       for (std::size_t i = 0; i < readers.size() && i < 10; ++i) {
         seen_names.emplace_back(readers[i], 13.0f, dim_colour);
         seen_names.back().setElided(true);

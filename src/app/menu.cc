@@ -100,6 +100,13 @@ class menu_part {
     for (const auto& one : events)
       entries.push_back(
           {one.event, one.who, mux::ui::sender_name(*chat, one.who), one.key, one.at, one.who == chat->id.account.address});
+    // Those whose reaction came without its event -- read back from the
+    // history -- listed too, at the message's time.
+    for (const auto& [key, who] : said->reactions)
+      for (const std::string& user : who)
+        if (std::ranges::none_of(events, [&](const auto& one) { return one.key == key && one.who == user; }))
+          entries.push_back({std::string(), user, mux::ui::sender_name(*chat, user), key, said->at,
+                             user == chat->id.account.address});
     s_->root().open_reactions(*chat, entries, &*s_->model);
   }
   void apply(const request::close_reactions&) { s_->root().close_reactions(); }

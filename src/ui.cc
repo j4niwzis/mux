@@ -2492,7 +2492,9 @@ struct conversations_screen : nodes::Stack {
             }))
       list.invalidateLayout();
     const bool none = now.accounts().empty();
-    for (scene::Node* shown : std::initializer_list<scene::Node*>{&header, &timeline, &line})
+    // The messages' area, not only its list: hidden, it no longer takes the
+    // column's height and pushes what is said instead to the bottom.
+    for (scene::Node* shown : std::initializer_list<scene::Node*>{&header, &chat.area, &line})
       shown->setVisible(!none);
     no_chats.setVisible(!none && chats.empty());
     chat.empty.setVisible(none);

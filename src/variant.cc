@@ -8,7 +8,8 @@
 //
 // Here: which one it is, a buffer as large as the largest, and a pointer to
 // the object in it -- what the compiler sees the object through, not the
-// buffer's bytes. The object is held in a holder<T>, derived from one empty
+// buffer's bytes, read once before each dispatch (see visit_as). The
+// object is held in a holder<T>, derived from one empty
 // base the pointer is kept as: a base pointer cast down to its holder is a
 // constant expression everywhere, where a void* cast back is not. In
 // constant evaluation the holder is allocated instead: placement into a
@@ -34,18 +35,6 @@ namespace mux::detail {
 inline constexpr bool kVariantTables = true;
 #else
 inline constexpr bool kVariantTables = false;
-#endif
-
-// How a known alternative is read at runtime, by the compiler: clang drops
-// a check of what was just written only when the object is read from the
-// buffer (std::launder is free there; through the pointer it reloads the
-// pointer, its tag lost when inlining); gcc only when it is read through the
-// pointer (its std::launder is a barrier nothing is carried across). C++
-// cannot see which compiler it is; only the compiler's own macro says.
-#if defined(__clang__)
-inline constexpr bool kReadsBuffer = true;
-#else
-inline constexpr bool kReadsBuffer = false;
 #endif
 
 // What every alternative is held in: one base for the pointer, empty.
@@ -262,29 +251,43 @@ class variant {
  private:
   using onion = decltype((detail::peel<Ts>{} | ... | detail::core{}));
 
+  // How the object is reached, at runtime: through fObject, read ONCE, before
+  // the dispatch, and that pointer handed to whichever arm runs. Read inside
+  // each arm instead, the load is conditional; clang's ArgumentPromotion,
+  // promoting a caller's `variant&` argument, then speculates it into the
+  // caller and drops its TBAA tag -- and with the pointer untagged, a store
+  // through it may have changed fObject itself, as far as alias analysis
+  // can tell: a visit writing a field and the next reading it reloads both
+  // and keeps the check. Read once, the load is unconditional and keeps its
+  // tag, on clang and gcc alike; std::launder on the buffer, the other way
+  // out, folds on clang but is an optimisation barrier on gcc.
+  // (docs/missed-optimisation-argument-promotion.md: the reproducer, the
+  // pass, the IR.)
+
   // `f` given the one held, as it is referred to (a const variant's is const):
   // what it gives back, of the first's type, or R where one is asked for.
   template <class R, bool Deduced, class F>
   constexpr decltype(auto) visit_as(F& f) {
     using Out = std::conditional_t<Deduced, std::invoke_result_t<F&, first&>, R>;
+    detail::held* const object = fObject;  // once, before the dispatch
     if constexpr (detail::kVariantTables) {
       static constexpr std::array<Out (*)(F&, detail::held*), kSize> table{
           +[](F& g, detail::held* p) -> Out { return std::invoke(g, detail::value_of<Ts>(p)); }...};
       if consteval {
-        return table[fIndex](f, fObject);
+        return table[fIndex](f, object);
       } else {
         static const auto* volatile opaque = table.data();
-        return opaque[fIndex](f, this->object());
+        return opaque[fIndex](f, object);
       }
     } else {
-      auto at = [&]<class T>(std::type_identity<T>) -> Out { return std::invoke(f, this->template value<T>()); };
+      auto at = [&f, object]<class T>(std::type_identity<T>) -> Out { return std::invoke(f, detail::value_of<T>(object)); };
       return detail::halve_to<0, kSize, decltype(at), Ts...>(fIndex, at);
     }
   }
   template <class R, bool Deduced, class F>
   constexpr decltype(auto) visit_as(F& f) const {
     using Out = std::conditional_t<Deduced, std::invoke_result_t<F&, const first&>, R>;
-    const detail::held* object = this->object();
+    const detail::held* const object = fObject;  // once, before the dispatch
     if constexpr (detail::kVariantTables) {
       static constexpr std::array<Out (*)(F&, const detail::held*), kSize> table{
           +[](F& g, const detail::held* p) -> Out { return std::invoke(g, detail::value_of<Ts>(p)); }...};
@@ -295,57 +298,20 @@ class variant {
         return opaque[fIndex](f, object);
       }
     } else {
-      auto at = [&]<class T>(std::type_identity<T>) -> Out { return std::invoke(f, this->template value<T>()); };
+      auto at = [&f, object]<class T>(std::type_identity<T>) -> Out { return std::invoke(f, detail::value_of<T>(object)); };
       return detail::halve_to<0, kSize, decltype(at), Ts...>(fIndex, at);
     }
   }
 
-  // The object held. At runtime it is always the holder made in the buffer,
-  // its empty base at the buffer's start: said so, for the optimiser to
-  // take the buffer's address rather than load the pointer.
-  [[nodiscard]] constexpr detail::held* object() noexcept {
-    if consteval {
-      return fObject;
-    } else {
-      [[assume(static_cast<void*>(fObject) == static_cast<void*>(fBuffer))]];
-      return fObject;
-    }
-  }
-  [[nodiscard]] constexpr const detail::held* object() const noexcept {
-    if consteval {
-      return fObject;
-    } else {
-      [[assume(static_cast<const void*>(fObject) == static_cast<const void*>(fBuffer))]];
-      return fObject;
-    }
-  }
-
-  // The one held, as a T, where its type is known: at runtime the holder in
-  // the buffer itself (laundered, as placement new made it), so nothing is
-  // loaded to reach it; in constant evaluation, through the pointer.
+  // The one held, as a T, where its type is known and nothing branches on
+  // it (get_if): through the pointer.
   template <class T>
   [[nodiscard]] constexpr T& value() noexcept {
-    if consteval {
-      return detail::value_of<T>(fObject);
-    } else {
-      if constexpr (detail::kReadsBuffer) {
-        return std::launder(reinterpret_cast<detail::holder<T>*>(fBuffer))->value;
-      } else {
-        return detail::value_of<T>(fObject);
-      }
-    }
+    return detail::value_of<T>(fObject);
   }
   template <class T>
   [[nodiscard]] constexpr const T& value() const noexcept {
-    if consteval {
-      return detail::value_of<T>(static_cast<const detail::held*>(fObject));
-    } else {
-      if constexpr (detail::kReadsBuffer) {
-        return std::launder(reinterpret_cast<const detail::holder<T>*>(fBuffer))->value;
-      } else {
-        return detail::value_of<T>(static_cast<const detail::held*>(fObject));
-      }
-    }
+    return detail::value_of<T>(static_cast<const detail::held*>(fObject));
   }
 
   template <class T, class... Args>
@@ -356,66 +322,67 @@ class variant {
       fObject = ::new (static_cast<void*>(fBuffer)) detail::holder<T>(std::in_place, std::forward<Args>(args)...);
     }
   }
+  // Moving, copying, destroying: given the other's (or own) object as read
+  // once before the dispatch, as a visit is.
   template <class T>
-  static constexpr void move_one(variant& to, variant& from) {
-    to.template make<T>(std::move(from.template value<T>()));
+  static constexpr void move_one(variant& to, detail::held* from) {
+    to.template make<T>(std::move(detail::value_of<T>(from)));
   }
   template <class T>
-  static constexpr void copy_one(variant& to, const variant& from) {
-    to.template make<T>(from.template value<T>());
+  static constexpr void copy_one(variant& to, const detail::held* from) {
+    to.template make<T>(detail::value_of<T>(from));
   }
   template <class T>
-  static constexpr void destroy_one(variant& self) {
+  static constexpr void destroy_one(detail::held* object) {
     if consteval {
-      delete static_cast<detail::holder<T>*>(self.fObject);
+      delete static_cast<detail::holder<T>*>(object);
     } else {
-      if constexpr (detail::kReadsBuffer) {
-        std::launder(reinterpret_cast<detail::holder<T>*>(self.fBuffer))->~holder();
-      } else {
-        static_cast<detail::holder<T>*>(self.fObject)->~holder();
-      }
+      static_cast<detail::holder<T>*>(object)->~holder();
     }
   }
   // Each operation for the one held: through its table, or its layer.
   constexpr void move_from(variant& other) {
+    detail::held* const from = other.fObject;
     if constexpr (detail::kVariantTables) {
-      static constexpr std::array<void (*)(variant&, variant&), kSize> table{&move_one<Ts>...};
+      static constexpr std::array<void (*)(variant&, detail::held*), kSize> table{&move_one<Ts>...};
       if consteval {
-        table[fIndex](*this, other);
+        table[fIndex](*this, from);
       } else {
         static const auto* volatile opaque = table.data();
-        opaque[fIndex](*this, other);
+        opaque[fIndex](*this, from);
       }
     } else {
-      auto at = [&]<class T>(std::type_identity<T>) { move_one<T>(*this, other); };
+      auto at = [this, from]<class T>(std::type_identity<T>) { move_one<T>(*this, from); };
       detail::halve_to<0, kSize, decltype(at), Ts...>(fIndex, at);
     }
   }
   constexpr void copy_from(const variant& other) {
+    const detail::held* const from = other.fObject;
     if constexpr (detail::kVariantTables) {
-      static constexpr std::array<void (*)(variant&, const variant&), kSize> table{&copy_one<Ts>...};
+      static constexpr std::array<void (*)(variant&, const detail::held*), kSize> table{&copy_one<Ts>...};
       if consteval {
-        table[fIndex](*this, other);
+        table[fIndex](*this, from);
       } else {
         static const auto* volatile opaque = table.data();
-        opaque[fIndex](*this, other);
+        opaque[fIndex](*this, from);
       }
     } else {
-      auto at = [&]<class T>(std::type_identity<T>) { copy_one<T>(*this, other); };
+      auto at = [this, from]<class T>(std::type_identity<T>) { copy_one<T>(*this, from); };
       detail::halve_to<0, kSize, decltype(at), Ts...>(fIndex, at);
     }
   }
   constexpr void destroy() {
+    detail::held* const object = fObject;
     if constexpr (detail::kVariantTables) {
-      static constexpr std::array<void (*)(variant&), kSize> table{&destroy_one<Ts>...};
+      static constexpr std::array<void (*)(detail::held*), kSize> table{&destroy_one<Ts>...};
       if consteval {
-        table[fIndex](*this);
+        table[fIndex](object);
       } else {
         static const auto* volatile opaque = table.data();
-        opaque[fIndex](*this);
+        opaque[fIndex](object);
       }
     } else {
-      auto at = [&]<class T>(std::type_identity<T>) { destroy_one<T>(*this); };
+      auto at = [object]<class T>(std::type_identity<T>) { destroy_one<T>(object); };
       detail::halve_to<0, kSize, decltype(at), Ts...>(fIndex, at);
     }
   }

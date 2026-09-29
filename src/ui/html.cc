@@ -159,6 +159,17 @@ using html_tag_t = std::variant<html_tag::line_break, html_tag::block_end, html_
   std::string open_href;
   std::size_t link_start = 0;
   std::size_t at = 0;
+  // A line ended: once, as a browser's blocks are -- never an empty line
+  // between two, nor one at the start. Inside code, every line kept.
+  const auto in_code = [&] {
+    return std::ranges::any_of(opened, [](const auto& one) {
+      return std::visit(overloaded{[](text_style::code) { return true; }, [](const auto&) { return false; }}, one.first);
+    });
+  };
+  const auto end_line = [&] {
+    if (!out.text.empty() && out.text.back() != '\n')
+      out.text += '\n';
+  };
   while (at < html.size()) {
     const char c = html[at];
     if (c == '<') {
@@ -168,15 +179,12 @@ using html_tag_t = std::variant<html_tag::line_break, html_tag::block_end, html_
       html_tag_t read = tag_of(html.substr(at + 1, end - at - 1));
       at = end + 1;
       std::visit(overloaded{[&](html_tag::line_break) { out.text += '\n'; },
-                            [&](html_tag::block_end) { out.text += '\n'; },
+                            [&](html_tag::block_end) { end_line(); },
                             [&](html_tag::list_item) { out.text += "• "; },
                             [&](html_tag::quote) {},
                             [&](html_tag::style_open& open) {
                               // A quote and a block of code start on a line of their own.
-                              std::visit(overloaded{[&](text_style::quote) {
-                                                      if (!out.text.empty() && out.text.back() != '\n')
-                                                        out.text += '\n';
-                                                    },
+                              std::visit(overloaded{[&](text_style::quote) { end_line(); },
                                                     [](const auto&) {}},
                                          open.style);
                               opened.emplace_back(open.style, out.text.size());
@@ -191,7 +199,7 @@ using html_tag_t = std::variant<html_tag::line_break, html_tag::block_end, html_
                                   opened.erase(std::next(it).base());
                                   break;
                                 }
-                              std::visit(overloaded{[&](text_style::quote) { out.text += '\n'; }, [](const auto&) {}},
+                              std::visit(overloaded{[&](text_style::quote) { end_line(); }, [](const auto&) {}},
                                          close.style);
                             },
                             [&](html_tag::reply) {
@@ -234,6 +242,9 @@ using html_tag_t = std::variant<html_tag::line_break, html_tag::block_end, html_
       }
       out.text += entity_of(html.substr(at + 1, end - at - 1));
       at = end + 1;
+    } else if (c == '\n' && !in_code()) {
+      end_line();
+      ++at;
     } else {
       out.text += c;
       ++at;

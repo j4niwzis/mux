@@ -137,13 +137,35 @@ struct network {
       box->push(mux::change_t{mux::change::account_removed{{mux::ui::protocol_of(address), address}}});
     });
   }
-  void send(const mux::conversation_id& to, std::string text) {
-    loop.post([this, to, text = std::move(text)] {
+  void send(const mux::conversation_id& to, std::string text, std::optional<std::string> reply_to = std::nullopt) {
+    loop.post([this, to, text = std::move(text), reply_to = std::move(reply_to)] {
       for (auto& one : accounts)
         std::visit(
             [&](auto& account) {
               if (account->id() == to.account)
-                account->send(to.id, text);
+                account->send(to.id, text, reply_to);
+            },
+            one.account);
+    });
+  }
+  void edit(const mux::conversation_id& in, std::string id, std::string text) {
+    loop.post([this, in, id = std::move(id), text = std::move(text)] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == in.account)
+                account->edit(in.id, id, text);
+            },
+            one.account);
+    });
+  }
+  void remove_message(const mux::conversation_id& in, std::string id) {
+    loop.post([this, in, id = std::move(id)] {
+      for (auto& one : accounts)
+        std::visit(
+            [&](auto& account) {
+              if (account->id() == in.account)
+                account->remove(in.id, id);
             },
             one.account);
     });
@@ -303,6 +325,18 @@ inline void fill(mux::model& into) {
 
 }  // namespace fake
 
+// What the message field's text is for.
+namespace compose {
+struct plain {};
+struct reply {
+  std::string id;
+};
+struct edit {
+  std::string id;
+};
+}  // namespace compose
+using compose_t = std::variant<compose::plain, compose::reply, compose::edit>;
+
 // What the window asks: requests, applied between events.
 namespace request {
 struct choose {
@@ -337,6 +371,18 @@ struct open_settings {};
 struct pop_panel {};
 struct toggle_info {};
 struct jump_to_end {};
+struct message_menu {
+  std::string id;
+  bool own = false;
+  std::string text;
+  float x = 0.0f, y = 0.0f;
+};
+struct close_menu {};
+struct menu_reply {};
+struct menu_edit {};
+struct menu_copy {};
+struct menu_delete {};
+struct cancel_compose {};
 struct load_older {
   mux::conversation_id in;
   std::string from;
@@ -402,7 +448,9 @@ using request_t =
                  request::toggle_plain, request::submit_login, request::flip_enabled, request::remove_account,
                  request::open_drawer, request::show_account, request::set_motion, request::quit,
                  request::open_settings, request::close_settings, request::settings_home,
-                 request::settings_animations, request::pop_panel, request::toggle_info, request::load_older, request::jump_to_end,
+                 request::settings_animations, request::pop_panel, request::toggle_info, request::load_older, request::jump_to_end, request::message_menu,
+                 request::close_menu, request::menu_reply, request::menu_edit, request::menu_copy,
+                 request::menu_delete, request::cancel_compose,
                  request::switch_account, request::submit_message, request::send_typed,
                  request::resize_sidebar, request::not_implemented, request::close_notice,
                  request::resize_info, request::choose_new_proxy, request::toggle_mute, request::close_account_pages,
@@ -456,6 +504,15 @@ struct actions {
   void pop_panel() { requests.emplace_back(request::pop_panel{}); }
   void toggle_info() { requests.emplace_back(request::toggle_info{}); }
   void jump_to_end() { requests.emplace_back(request::jump_to_end{}); }
+  void message_menu(std::string id, bool own, std::string text, float x, float y) {
+    requests.emplace_back(request::message_menu{std::move(id), own, std::move(text), x, y});
+  }
+  void close_menu() { requests.emplace_back(request::close_menu{}); }
+  void menu_reply() { requests.emplace_back(request::menu_reply{}); }
+  void menu_edit() { requests.emplace_back(request::menu_edit{}); }
+  void menu_copy() { requests.emplace_back(request::menu_copy{}); }
+  void menu_delete() { requests.emplace_back(request::menu_delete{}); }
+  void cancel_compose() { requests.emplace_back(request::cancel_compose{}); }
   void load_older(const mux::conversation_id& in, std::string from) {
     requests.emplace_back(request::load_older{in, std::move(from)});
   }
@@ -524,6 +581,10 @@ struct app {
   mux::config::renderer_t renderer = mux::config::renderer::opengl{};
   // The proxy chosen for the account being added, as it is added.
   std::optional<std::string> new_proxy;
+  // What the message field's text is: a new message, an answer to one, or
+  // one edited; and the message whose menu is up.
+  compose_t composing = compose::plain{};
+  request::message_menu menu_target;
   // The chats muted, and the proxy profiles: kept in the file.
   std::set<mux::conversation_id> muted;
   std::vector<mux::config::proxy_settings> proxies;
@@ -768,6 +829,44 @@ struct app {
   void apply(const request::close_settings&) { root().close_settings(); }
   void apply(const request::toggle_info&) { root().main().toggle_info(); }
   void apply(const request::jump_to_end&) { root().main().jump_to_end(); }
+
+  // A message's menu, and what is chosen from it.
+  void apply(const request::message_menu& one) {
+    menu_target = one;
+    root().open_menu(one.own, one.x, one.y);
+  }
+  void apply(const request::close_menu&) { root().close_menu(); }
+  void apply(const request::menu_reply&) {
+    root().close_menu();
+    composing = compose::reply{menu_target.id};
+    std::string line = menu_target.text;
+    std::ranges::replace(line, '\n', ' ');
+    root().main().line.show_context("Reply: " + line);
+  }
+  void apply(const request::menu_edit&) {
+    root().close_menu();
+    composing = compose::edit{menu_target.id};
+    root().main().line.show_context(std::string("Editing"));
+    root().main().line.set_text(menu_target.text);
+  }
+  void apply(const request::menu_copy&) {
+    root().close_menu();
+    skiff::scene::setClipboardText(menu_target.text);
+  }
+  void apply(const request::menu_delete&) {
+    root().close_menu();
+    const auto& chosen = root().main().chosen;
+    if (!chosen)
+      return;
+    if (ask.demo)
+      box->push(mux::change_t{mux::change::message_redacted{*chosen, menu_target.id}});
+    else
+      net->remove_message(*chosen, menu_target.id);
+  }
+  void apply(const request::cancel_compose&) {
+    composing = compose::plain{};
+    root().main().line.show_context(std::nullopt);
+  }
   void apply(const request::load_older& one) {
     if (!ask.demo)
       net->load_older(one.in, one.from);
@@ -993,13 +1092,31 @@ struct app {
 
 
   void apply(const request::send_typed&) { this->send_message(root().main().line.text()); }
-  // What is in the message field, to the chosen chat; the field emptied.
+  // What is in the message field, to the chosen chat -- a new message, an
+  // answer to one, or one edited -- and the field emptied.
   void send_message(std::string text) {
     auto& screen = root().main();
     const auto blank = [](unsigned char c) { return std::isspace(c) != 0; };
     if (!screen.chosen || std::ranges::all_of(text, blank))
       return;
-    ask.send(*screen.chosen, std::move(text));
+    const mux::conversation_id to = *screen.chosen;
+    std::visit(mux::overloaded{[&](const compose::plain&) { ask.send(to, std::move(text)); },
+                               [&](const compose::reply& one) {
+                                 if (ask.demo)
+                                   ask.send(to, std::move(text));
+                                 else
+                                   net->send(to, std::move(text), one.id);
+                               },
+                               [&](const compose::edit& one) {
+                                 if (ask.demo)
+                                   box->push(mux::change_t{
+                                       mux::change::message_edited{to, one.id, mux::body{std::move(text), std::nullopt}}});
+                                 else
+                                   net->edit(to, one.id, std::move(text));
+                               }},
+               composing);
+    composing = compose::plain{};
+    screen.line.show_context(std::nullopt);
     screen.line.clear();
   }
   // Another account's chats listed: the drawer goes back, and no chat is

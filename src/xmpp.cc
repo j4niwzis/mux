@@ -250,8 +250,8 @@ class account {
     });
   }
 
-  void send(std::string to, std::string text) {
-    loop_->spawn([this, to = bare(to), text = std::move(text)] {
+  void send(std::string to, std::string text, std::optional<std::string> reply_to = std::nullopt) {
+    loop_->spawn([this, to = bare(to), text = std::move(text), reply_to = std::move(reply_to)] {
       message out{.in = {id_, to},
                   .id = "mux-" + std::to_string(++sent_),
                   .sender = id_.address,
@@ -259,17 +259,54 @@ class account {
                   .body = {text, std::nullopt},
                   .outgoing = true,
                   .delivery = delivery::sending{}};
+      out.replies_to = reply_to;
       sink_(change::message_added{out});
       if (!session_) {
         sink_(change::delivery_changed{out.in, out.id, delivery::failed{}});
         return;
       }
-      if (rooms_.contains(to))
-        session_->send(proto::message::groupchat{.to = to, .id = out.id, .body = text});
-      else
-        session_->send(proto::message::chat{.to = to, .id = out.id, .body = text});
+      this->send_to(to, out.id, text, [&](auto& one) {
+        if (reply_to)
+          one.payload.emplace_back(tern::replies::reply{.id = *reply_to});
+      });
       sink_(change::delivery_changed{out.in, out.id, wire_ && !wire_->failed() ? delivery_t{delivery::sent{}} : delivery_t{delivery::failed{}}});
     });
+  }
+
+  // A message of one's own corrected (XEP-0308): the new text in its place.
+  void edit(std::string to, std::string id, std::string text) {
+    loop_->spawn([this, to = bare(to), id = std::move(id), text = std::move(text)] {
+      if (!session_)
+        return;
+      this->send_to(to, "mux-" + std::to_string(++sent_), text,
+                    [&](auto& one) { one.payload.emplace_back(tern::corrections::replace{.id = id}); });
+      sink_(change::message_edited{{id_, to}, id, body{text, std::nullopt}});
+    });
+  }
+  // A message of one's own taken back (XEP-0424).
+  void remove(std::string to, std::string id) {
+    loop_->spawn([this, to = bare(to), id = std::move(id)] {
+      if (!session_)
+        return;
+      this->send_to(to, "mux-" + std::to_string(++sent_), "This message was retracted.",
+                    [&](auto& one) { one.payload.emplace_back(tern::retractions::retract{.id = id}); });
+      sink_(change::message_redacted{{id_, to}, id});
+    });
+  }
+
+  // A message to a contact or a room, as chat or groupchat, with what
+  // `extra` puts in it.
+  template <class Extra>
+  void send_to(const std::string& to, std::string id, const std::string& text, Extra&& extra) {
+    if (rooms_.contains(to)) {
+      proto::message::groupchat one{.to = to, .id = std::move(id), .body = text};
+      extra(one);
+      session_->send(one);
+    } else {
+      proto::message::chat one{.to = to, .id = std::move(id), .body = text};
+      extra(one);
+      session_->send(one);
+    }
   }
 
   // Unavailable, and the stream closed.
@@ -413,11 +450,7 @@ class account {
                .at = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()),
                .body = {*got.body, std::nullopt},
                .outgoing = nick == found->second.nick};
-    for (const auto& carried : got.payload)
-      if (const auto* delayed = carried.template get_if<tern::delay>())
-        if (const auto at = stamp_of(delayed->stamp))
-          in.at = *at;
-    sink_(change::message_added{std::move(in)});
+    this->arrived(got, std::move(in));
   }
   template <class Other>
   void on_message(const Other&) {}
@@ -432,10 +465,28 @@ class account {
                .sender = from,
                .at = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()),
                .body = {*got.body, std::nullopt}};
-    for (const auto& carried : got.payload)
+    this->arrived(got, std::move(in));
+  }
+
+  // A message come: a correction or a retraction of an earlier one, or one
+  // of its own -- a reply, where it answers another.
+  template <class Message>
+  void arrived(const Message& got, message in) {
+    for (const auto& carried : got.payload) {
       if (const auto* delayed = carried.template get_if<tern::delay>())
         if (const auto at = stamp_of(delayed->stamp))
           in.at = *at;
+      if (const auto* correction = carried.template get_if<tern::corrections::replace>()) {
+        sink_(change::message_edited{in.in, correction->id, in.body});
+        return;
+      }
+      if (const auto* taken = carried.template get_if<tern::retractions::retract>()) {
+        sink_(change::message_redacted{in.in, taken->id});
+        return;
+      }
+      if (const auto* reply = carried.template get_if<tern::replies::reply>())
+        in.replies_to = reply->id;
+    }
     sink_(change::message_added{std::move(in)});
   }
 

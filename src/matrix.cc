@@ -13,6 +13,7 @@ import loom.cs.leaving;
 import loom.cs.login;
 import loom.cs.message_pagination;
 import loom.cs.receipts;
+import loom.cs.redaction;
 import loom.cs.room_send;
 import loom.cs.sync;
 import loom.cs.wellknown;
@@ -127,6 +128,41 @@ class account {
     });
   }
 
+  // A message of one's own edited (m.replace): the new text in its place.
+  void edit(std::string room, std::string event, std::string text) {
+    loop_->spawn([this, room = std::move(room), event = std::move(event), text = std::move(text)] {
+      if (!api_)
+        return;
+      knot::value::object now;
+      now.emplace("msgtype", knot::value(std::string("m.text")));
+      now.emplace("body", knot::value(text));
+      knot::value::object relates;
+      relates.emplace("rel_type", knot::value(std::string("m.replace")));
+      relates.emplace("event_id", knot::value(event));
+      knot::value::object content;
+      content.emplace("msgtype", knot::value(std::string("m.text")));
+      content.emplace("body", knot::value("* " + text));
+      content.emplace("m.new_content", knot::value(std::move(now)));
+      content.emplace("m.relates_to", knot::value(std::move(relates)));
+      if (perform(*api_, loom::cs::send_message{.room_id = room,
+                                                .event_type = "m.room.message",
+                                                .txn_id = "mux" + std::to_string(++transactions_),
+                                                .body = knot::value(std::move(content))}))
+        sink_(change::message_edited{{id_, room}, event, body{text, std::nullopt}});
+    });
+  }
+  // A message removed (redacted).
+  void remove(std::string room, std::string event) {
+    loop_->spawn([this, room = std::move(room), event = std::move(event)] {
+      if (!api_)
+        return;
+      if (perform(*api_, loom::cs::redact_event{.room_id = room,
+                                                .event_id = event,
+                                                .txn_id = "mux" + std::to_string(++transactions_)}))
+        sink_(change::message_redacted{{id_, room}, event});
+    });
+  }
+
   // The account leaves a room; the next sync says it has, and the room goes.
   void leave(std::string room) {
     loop_->spawn([this, room = std::move(room)] {
@@ -138,8 +174,8 @@ class account {
   // A text message sent to a room, from a fiber of its own. It is in the
   // conversation at once, under its transaction id; the server's answer
   // gives it its event id, and the echo in the next sync is the same message.
-  void send(std::string room, std::string body) {
-    loop_->spawn([this, room = std::move(room), body = std::move(body)] {
+  void send(std::string room, std::string body, std::optional<std::string> reply_to = std::nullopt) {
+    loop_->spawn([this, room = std::move(room), body = std::move(body), reply_to = std::move(reply_to)] {
       const std::string txn = "mux" + std::to_string(++transactions_);
       const conversation_id in{id_, room};
       sink_(change::message_added{message{
@@ -148,6 +184,7 @@ class account {
           .sender = id_.address,
           .at = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()),
           .body = {body, std::nullopt},
+          .replies_to = reply_to,
           .outgoing = true,
           .delivery = delivery::sending{}}});
       if (!api_) {
@@ -157,6 +194,13 @@ class account {
       knot::value::object content;
       content.emplace("msgtype", knot::value(std::string("m.text")));
       content.emplace("body", knot::value(body));
+      if (reply_to) {
+        knot::value::object target;
+        target.emplace("event_id", knot::value(*reply_to));
+        knot::value::object relates;
+        relates.emplace("m.in_reply_to", knot::value(std::move(target)));
+        content.emplace("m.relates_to", knot::value(std::move(relates)));
+      }
       auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
                                                         .event_type = "m.room.message",
                                                         .txn_id = txn,

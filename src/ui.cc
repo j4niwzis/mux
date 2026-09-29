@@ -818,6 +818,9 @@ struct conversation_row : scene::Node {
 // the sender's name in their colour over the first of a run and their
 // avatar beside its last; the time in the bubble's corner.
 struct message_bubble : scene::Node {
+  // The message: its id and text, for its menu.
+  std::string message_id;
+  std::string plain;
   bool outgoing = false;
   bool with_avatar = false;
   bool avatar_space = false;
@@ -839,7 +842,7 @@ struct message_bubble : scene::Node {
   static constexpr float kMaxWidth = 480.0f;
 
   message_bubble(const conversation& in, const message& said, bool first_of_run, bool last_of_run)
-      : outgoing(said.outgoing), sender(said.sender), time(clock_of(said.at)),
+      : message_id(said.id), plain(said.body.plain), outgoing(said.outgoing), sender(said.sender), time(clock_of(said.at)),
         text(said.redacted ? std::string("(removed)") : said.body.plain + (said.edited ? " (edited)" : ""), 14.5f,
              text_colour) {
     fState.apply({.fillX = true});
@@ -954,6 +957,9 @@ struct message_bubble : scene::Node {
       scene::layout(*reactions, box);
     }
   }
+
+  // Pressed with the right button, it asks for its menu.
+  [[nodiscard]] bool acceptsInput() const { return true; }
 
   void drawSelf(skia::SkCanvas* canvas, float alpha) {
     skia::SkFont* font = skiff::paint::defaultFont();
@@ -1390,6 +1396,10 @@ struct submit_message {
 template <class Actions>
 struct composer_bar : scene::Node {
   nodes::Box<> divider{band_colour};
+  // What is written answers or edits: said over the field, and ✕ to go back
+  // to a plain message.
+  nodes::Text context{"", 13.0f, accent_colour};
+  icon_button<ask<Actions, &Actions::cancel_compose>> cancel;
   icon_button<not_yet<Actions>> attach;
   widgets::TextArea<submit_message<Actions>> field;
   icon_button<ask<Actions, &Actions::send_typed>> send;
@@ -1398,16 +1408,30 @@ struct composer_bar : scene::Node {
   static constexpr float kPadY = 9.0f;
 
   explicit composer_bar(Actions* a)
-      : attach(icon::clip{}, {a, "Sending files"}), field("Write a message…", {a}), send(icon::send{}, {a}) {
+      : cancel(icon::close{}, {a}), attach(icon::clip{}, {a, "Sending files"}), field("Write a message…", {a}),
+        send(icon::send{}, {a}) {
+    context.setElided(true);
+    context.setVisible(false);
+    cancel.setVisible(false);
     fState.apply({.fillX = true});
     divider.apply({.fillX = true, .height = 1.0f});
     send.colour = accent_colour;
   }
 
   [[nodiscard]] const std::string& text() const { return field.text(); }
+  // What is written answers or edits something, said; or nothing.
+  void show_context(std::optional<std::string> said) {
+    context.setVisible(said.has_value());
+    cancel.setVisible(said.has_value());
+    context.setText(said.value_or(""));
+    this->invalidateLayout();
+  }
+  void set_text(std::string text) { field.setText(std::move(text)); }
   void clear() { field.setText({}); }
 
   void forEachChild(auto&& f) {
+    f(context);
+    f(cancel);
     f(divider);
     f(attach);
     f(field);
@@ -1418,7 +1442,7 @@ struct composer_bar : scene::Node {
   void measure(const skia::SkRect& parent) {
     field.apply({.width = std::max(0.0f, parent.width() - 2.0f * kSide)});
     field.measure(parent);
-    fState.fHeight = std::max(field.fState.fHeight + 2.0f * kPadY, 54.0f);
+    fState.fHeight = std::max(field.fState.fHeight + 2.0f * kPadY, 54.0f) + (context.visible() ? 30.0f : 0.0f);
   }
   void layoutChildren() {
     const skia::SkRect box = fState.contentBox();
@@ -1428,7 +1452,15 @@ struct composer_bar : scene::Node {
     scene::layout(attach, box);
     send.fState.arrange(-8.0f, -9.0f, scene::anchor::kBottomRight, scene::anchor::kBottomRight);
     scene::layout(send, box);
-    field.fState.arrange(kSide, kPadY);
+    const float extra = context.visible() ? 30.0f : 0.0f;
+    if (context.visible()) {
+      cancel.fState.arrange(-8.0f, 0.0f, scene::anchor::kTopRight, scene::anchor::kTopRight);
+      scene::layout(cancel, box);
+      context.setMaxWidth(std::max(0.0f, box.width() - kSide - 56.0f));
+      context.fState.arrange(kSide, 9.0f);
+      scene::layout(context, box);
+    }
+    field.fState.arrange(kSide, kPadY + extra);
     scene::layout(field, box);
   }
   void drawSelf(skia::SkCanvas* canvas, float alpha) {
@@ -1486,7 +1518,8 @@ struct timeline_area : scene::Node {
   nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>> timeline{
       nodes::Flow<std::vector<message_bubble>>({.spacingY = 3.0f, .wrap = false}, {})};
   jump_button<Actions> jump;
-  explicit timeline_area(Actions* a) : jump(a) {
+  Actions* actions = nullptr;
+  explicit timeline_area(Actions* a) : jump(a), actions(a) {
     timeline.apply({.fill = true});
     std::get<0>(timeline.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
     jump.setVisible(false);
@@ -1494,6 +1527,18 @@ struct timeline_area : scene::Node {
   void forEachChild(auto&& f) {
     f(timeline);
     f(jump);
+  }
+  // A right press on a message: its menu, where it was pressed.
+  using Node::onPointer;
+  void onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
+    if (press.button != 3)
+      return;
+    for (const message_bubble& one : std::get<0>(std::get<0>(timeline.fChildren).fChildren))
+      if (one.id() == reply.fTarget) {
+        actions->message_menu(one.message_id, one.outgoing, one.plain, press.x, press.y);
+        reply.handle();
+        return;
+      }
   }
 };
 
@@ -3209,6 +3254,55 @@ struct settings_dialog : scene::Node {
   }
 };
 
+// What is done with a message from its menu, as the program keeps it.
+template <class Actions>
+struct context_menu : scene::Node {
+  struct card : nodes::Stack {
+    row_item<ask<Actions, &Actions::menu_reply>> reply;
+    row_item<ask<Actions, &Actions::menu_edit>> edit;
+    row_item<ask<Actions, &Actions::menu_copy>> copy;
+    row_item<ask<Actions, &Actions::menu_delete>> remove;
+    card(Actions* a, bool own)
+        : reply("Reply", {a}, icon::back{}), edit("Edit", {a}, icon::sliders{}), copy("Copy text", {a}, icon::clip{}),
+          remove("Delete", {a}, icon::close{}) {
+      fState.apply({.width = 210.0f, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}});
+      edit.setVisible(own);
+      remove.setVisible(own);
+    }
+    void forEachChild(auto&& f) {
+      f(reply);
+      f(edit);
+      f(copy);
+      f(remove);
+    }
+    void drawSelf(skia::SkCanvas* canvas, float alpha) {
+      skia::SkFont* font = skiff::paint::defaultFont();
+      if (font == nullptr)
+        return;
+      const skiff::paint::Painter p(canvas, *font);
+      const skia::SkRect& box = fState.fBounds;
+      p.fillRounded(skia::SkRect::MakeLTRB(box.fLeft, box.fTop + 3.0f, box.fRight, box.fBottom + 3.0f), 10.0f,
+                    skia::colorSetARGB(70, 0, 0, 0), alpha);
+      p.fillRounded(box, 10.0f, sidebar_colour, alpha);
+      p.strokeRounded(box, 10.0f, band_colour, 1.0f, alpha);
+    }
+  } menu;
+  Actions* actions = nullptr;
+
+  context_menu(Actions* a, bool own, float x, float y) : menu(a, own), actions(a) {
+    fState.apply({.fill = true});
+    menu.apply({.x = x, .y = y});
+  }
+  void forEachChild(auto&& f) { f(menu); }
+  // A press off the menu closes it.
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  using Node::onPointer;
+  void onPointer(scene::phase::target, const scene::pointer::down&, scene::PointerReply& reply) {
+    actions->close_menu();
+    reply.handle();
+  }
+};
+
 // ---- the window -------------------------------------------------------------------
 
 // The conversations; over them the panel that is open, if one is, sliding in
@@ -3228,6 +3322,7 @@ struct window : scene::Node {
     widgets::SlideOver<with_drawer, panel_type> frame;
     widgets::Dialog<settings_dialog<Actions>> settings;
     widgets::Dialog<notice_box<Actions>> notice;
+    std::optional<context_menu<Actions>> menu;
 
     explicit parts(Actions* a) : frame(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a)) {
       backdrop.apply({.fill = true});
@@ -3261,6 +3356,7 @@ struct window : scene::Node {
     f(p->frame);
     f(p->settings);
     f(p->notice);
+    f(p->menu);
   }
 
   [[nodiscard]] conversations_screen<Actions>& main() { return p->frame.base().base(); }
@@ -3297,6 +3393,9 @@ struct window : scene::Node {
   [[nodiscard]] bool drawer_open() { return p->frame.base().isOpen(); }
   // Whether the pages are still moving.
   [[nodiscard]] bool pages_moving() { return p->frame.settling(); }
+
+  void open_menu(bool own, float x, float y) { p->menu.emplace(actions, own, x, y); }
+  void close_menu() { p->menu.reset(); }
 
   void show_notice(std::string what) {
     p->notice.open(actions, "Not implemented yet", std::format("{} isn't implemented yet.", what));

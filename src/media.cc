@@ -32,23 +32,20 @@ using picture_t = std::variant<picture::png, picture::jpeg, picture::gif, pictur
     return picture::webp{};
   return std::nullopt;
 }
+// A picture type's mimetype and file extension: one overload each.
+[[nodiscard]] inline std::string_view mimetype_of(picture::png) { return "image/png"; }
+[[nodiscard]] inline std::string_view mimetype_of(picture::jpeg) { return "image/jpeg"; }
+[[nodiscard]] inline std::string_view mimetype_of(picture::gif) { return "image/gif"; }
+[[nodiscard]] inline std::string_view mimetype_of(picture::webp) { return "image/webp"; }
 [[nodiscard]] inline std::string_view mimetype_of(const picture_t& type) {
-  return std::visit([](auto one) -> std::string_view {
-    using T = decltype(one);
-    if constexpr (std::same_as<T, picture::png>) return "image/png";
-    else if constexpr (std::same_as<T, picture::jpeg>) return "image/jpeg";
-    else if constexpr (std::same_as<T, picture::gif>) return "image/gif";
-    else return "image/webp";
-  }, type);
+  return std::visit([](auto one) { return mimetype_of(one); }, type);
 }
+[[nodiscard]] inline std::string_view extension_of(picture::png) { return "png"; }
+[[nodiscard]] inline std::string_view extension_of(picture::jpeg) { return "jpg"; }
+[[nodiscard]] inline std::string_view extension_of(picture::gif) { return "gif"; }
+[[nodiscard]] inline std::string_view extension_of(picture::webp) { return "webp"; }
 [[nodiscard]] inline std::string_view extension_of(const picture_t& type) {
-  return std::visit([](auto one) -> std::string_view {
-    using T = decltype(one);
-    if constexpr (std::same_as<T, picture::png>) return "png";
-    else if constexpr (std::same_as<T, picture::jpeg>) return "jpg";
-    else if constexpr (std::same_as<T, picture::gif>) return "gif";
-    else return "webp";
-  }, type);
+  return std::visit([](auto one) { return extension_of(one); }, type);
 }
 
 namespace detail {
@@ -98,6 +95,29 @@ inline void put_little32(std::string& b, std::size_t at, std::uint32_t v) {
   return std::string(in);
 }
 
+// A PNG chunk's type, read into what it is to stripping: metadata, the
+// end, or what is kept.
+// Each says whether it is kept, and whether it is the last.
+namespace png_chunk {
+struct metadata {  // tEXt, zTXt, iTXt, eXIf, tIME
+  static constexpr bool keep = false, last = false;
+};
+struct end {  // IEND
+  static constexpr bool keep = true, last = true;
+};
+struct kept {
+  static constexpr bool keep = true, last = false;
+};
+}  // namespace png_chunk
+using png_chunk_t = std::variant<png_chunk::metadata, png_chunk::end, png_chunk::kept>;
+[[nodiscard]] inline png_chunk_t png_chunk_of(std::string_view type) {
+  static const std::unordered_map<std::string_view, png_chunk_t> known = {
+      {"tEXt", png_chunk::metadata{}}, {"zTXt", png_chunk::metadata{}}, {"iTXt", png_chunk::metadata{}},
+      {"eXIf", png_chunk::metadata{}}, {"tIME", png_chunk::metadata{}}, {"IEND", png_chunk::end{}}};
+  const auto found = known.find(type);
+  return found == known.end() ? png_chunk_t{png_chunk::kept{}} : found->second;
+}
+
 // A PNG less its text, eXIf and tIME chunks.
 [[nodiscard]] inline std::string strip_png(std::string_view in) {
   std::string out(in.substr(0, 8));
@@ -106,15 +126,36 @@ inline void put_little32(std::string& b, std::size_t at, std::uint32_t v) {
     const std::size_t length = big32(in, at);
     if (at + 12 + length > in.size())
       return std::string(in);
-    const std::string_view type = in.substr(at + 4, 4);
-    const bool metadata = type == "tEXt" || type == "zTXt" || type == "iTXt" || type == "eXIf" || type == "tIME";
-    if (!metadata)
+    const png_chunk_t type = png_chunk_of(in.substr(at + 4, 4));
+    const auto [keep, last] = std::visit([](auto chunk) { return std::pair(chunk.keep, chunk.last); }, type);
+    if (keep)
       out.append(in.substr(at, 12 + length));
     at += 12 + length;
-    if (type == "IEND")
+    if (last)
       return out;
   }
   return std::string(in);
+}
+
+// A WebP chunk's FourCC, read into what it is to stripping: metadata cut
+// out, the VP8X header whose flags are set to what is left, or kept.
+namespace webp_chunk {
+struct metadata {  // EXIF, XMP
+  static constexpr bool keep = false, header = false;
+};
+struct header {  // VP8X
+  static constexpr bool keep = true, header = true;
+};
+struct kept {
+  static constexpr bool keep = true, header = false;
+};
+}  // namespace webp_chunk
+using webp_chunk_t = std::variant<webp_chunk::metadata, webp_chunk::header, webp_chunk::kept>;
+[[nodiscard]] inline webp_chunk_t webp_chunk_of(std::string_view type) {
+  static const std::unordered_map<std::string_view, webp_chunk_t> known = {
+      {"EXIF", webp_chunk::metadata{}}, {"XMP ", webp_chunk::metadata{}}, {"VP8X", webp_chunk::header{}}};
+  const auto found = known.find(type);
+  return found == known.end() ? webp_chunk_t{webp_chunk::kept{}} : found->second;
 }
 
 // A WebP less its EXIF and XMP chunks, its header's flags and size set to
@@ -128,12 +169,12 @@ inline void put_little32(std::string& b, std::size_t at, std::uint32_t v) {
     const std::size_t padded = length + (length & 1);
     if (at + 8 + length > in.size())
       return std::string(in);
-    const std::string_view type = in.substr(at, 4);
-    if (type != "EXIF" && type != "XMP ") {
-      if (type == "VP8X")
-        vp8x = out.size();
+    const auto [keep, header] = std::visit([](auto chunk) { return std::pair(chunk.keep, chunk.header); },
+                                           webp_chunk_of(in.substr(at, 4)));
+    if (header)
+      vp8x = out.size();
+    if (keep)
       out.append(in.substr(at, std::min(8 + padded, in.size() - at)));
-    }
     at += 8 + padded;
   }
   if (vp8x && *vp8x + 8 < out.size())
@@ -189,6 +230,11 @@ inline void put_little32(std::string& b, std::size_t at, std::uint32_t v) {
   }
   return std::string(in);
 }
+// Each picture type, stripped its own way.
+[[nodiscard]] inline std::string stripped(picture::png, std::string_view in) { return strip_png(in); }
+[[nodiscard]] inline std::string stripped(picture::jpeg, std::string_view in) { return strip_jpeg(in); }
+[[nodiscard]] inline std::string stripped(picture::gif, std::string_view in) { return strip_gif(in); }
+[[nodiscard]] inline std::string stripped(picture::webp, std::string_view in) { return strip_webp(in); }
 }  // namespace detail
 
 // A picture's file less its metadata, its pixels' bytes as they were; any
@@ -197,13 +243,7 @@ inline void put_little32(std::string& b, std::size_t at, std::uint32_t v) {
   const auto type = picture_of(bytes);
   if (!type)
     return std::string(bytes);
-  return std::visit([&](auto one) {
-    using T = decltype(one);
-    if constexpr (std::same_as<T, picture::png>) return detail::strip_png(bytes);
-    else if constexpr (std::same_as<T, picture::jpeg>) return detail::strip_jpeg(bytes);
-    else if constexpr (std::same_as<T, picture::gif>) return detail::strip_gif(bytes);
-    else return detail::strip_webp(bytes);
-  }, *type);
+  return std::visit([&](auto one) { return detail::stripped(one, bytes); }, *type);
 }
 
 }  // namespace mux::media

@@ -70,6 +70,149 @@ inline std::optional<std::string> text(const knot::value* of) {
 }
 
 // What a request failed with: the server's error, or the network's.
+// The names Matrix gives things, read into types where they come in: a
+// message's msgtype, an event's type, a relation, a receipt, a room's
+// type, a body's format. Each name is looked up once, in its *_of; what
+// follows works on the variant.
+// Each type says what it means as its members, read by visiting.
+namespace msgtype {
+struct image {
+  static constexpr bool carries = true, picture = true, emote = false;
+};
+struct file {
+  static constexpr bool carries = true, picture = false, emote = false;
+};
+struct video {
+  static constexpr bool carries = true, picture = false, emote = false;
+};
+struct audio {
+  static constexpr bool carries = true, picture = false, emote = false;
+};
+struct emote {
+  static constexpr bool carries = false, picture = false, emote = true;
+};
+struct other {  // m.text, m.notice, and what is not known
+  static constexpr bool carries = false, picture = false, emote = false;
+};
+}  // namespace msgtype
+using msgtype_t = std::variant<msgtype::image, msgtype::file, msgtype::video, msgtype::audio, msgtype::emote,
+                               msgtype::other>;
+namespace event_type {
+struct encrypted {};  // m.room.encrypted
+struct redaction {};  // m.room.redaction
+struct receipt {};    // m.receipt
+struct other {};
+}  // namespace event_type
+using event_type_t = std::variant<event_type::encrypted, event_type::redaction, event_type::receipt, event_type::other>;
+namespace relation {
+struct replace {  // m.replace
+  static constexpr bool edit = true;
+};
+struct other {
+  static constexpr bool edit = false;
+};
+}  // namespace relation
+using relation_t = std::variant<relation::replace, relation::other>;
+namespace receipt_kind {
+struct read {  // m.read, m.read.private
+  static constexpr bool read_up_to = true;
+};
+struct other {
+  static constexpr bool read_up_to = false;
+};
+}  // namespace receipt_kind
+using receipt_kind_t = std::variant<receipt_kind::read, receipt_kind::other>;
+namespace room_type {
+struct space {  // m.space
+  static constexpr bool is_space = true;
+};
+struct other {
+  static constexpr bool is_space = false;
+};
+}  // namespace room_type
+using room_type_t = std::variant<room_type::space, room_type::other>;
+namespace body_format {
+struct html {  // org.matrix.custom.html
+  static constexpr bool html_given = true;
+};
+struct other {
+  static constexpr bool html_given = false;
+};
+}  // namespace body_format
+using body_format_t = std::variant<body_format::html, body_format::other>;
+
+// A name looked up in a table of the ones known; Other where it is not.
+template <class Variant, class Other>
+[[nodiscard]] Variant named(const std::unordered_map<std::string_view, Variant>& known,
+                            std::optional<std::string_view> name) {
+  if (!name)
+    return Other{};
+  const auto found = known.find(*name);
+  return found == known.end() ? Variant{Other{}} : found->second;
+}
+[[nodiscard]] inline msgtype_t msgtype_of(std::optional<std::string_view> name) {
+  static const std::unordered_map<std::string_view, msgtype_t> known = {
+      {"m.image", msgtype::image{}}, {"m.file", msgtype::file{}},   {"m.video", msgtype::video{}},
+      {"m.audio", msgtype::audio{}}, {"m.emote", msgtype::emote{}},
+  };
+  return named<msgtype_t, msgtype::other>(known, name);
+}
+[[nodiscard]] inline event_type_t event_type_of(std::optional<std::string_view> name) {
+  static const std::unordered_map<std::string_view, event_type_t> known = {
+      {"m.room.encrypted", event_type::encrypted{}},
+      {"m.room.redaction", event_type::redaction{}},
+      {"m.receipt", event_type::receipt{}},
+  };
+  return named<event_type_t, event_type::other>(known, name);
+}
+[[nodiscard]] inline relation_t relation_of(std::optional<std::string_view> name) {
+  static const std::unordered_map<std::string_view, relation_t> known = {{"m.replace", relation::replace{}}};
+  return named<relation_t, relation::other>(known, name);
+}
+[[nodiscard]] inline receipt_kind_t receipt_kind_of(std::optional<std::string_view> name) {
+  static const std::unordered_map<std::string_view, receipt_kind_t> known = {
+      {"m.read", receipt_kind::read{}}, {"m.read.private", receipt_kind::read{}}};
+  return named<receipt_kind_t, receipt_kind::other>(known, name);
+}
+[[nodiscard]] inline room_type_t room_type_of(std::optional<std::string_view> name) {
+  static const std::unordered_map<std::string_view, room_type_t> known = {{"m.space", room_type::space{}}};
+  return named<room_type_t, room_type::other>(known, name);
+}
+[[nodiscard]] inline body_format_t body_format_of(std::optional<std::string_view> name) {
+  static const std::unordered_map<std::string_view, body_format_t> known = {
+      {"org.matrix.custom.html", body_format::html{}}};
+  return named<body_format_t, body_format::other>(known, name);
+}
+
+namespace state_type {
+struct space_child {  // m.space.child
+  static constexpr bool child = true;
+};
+struct other {
+  static constexpr bool child = false;
+};
+}  // namespace state_type
+using state_type_t = std::variant<state_type::space_child, state_type::other>;
+[[nodiscard]] inline state_type_t state_type_of(std::optional<std::string_view> name) {
+  static const std::unordered_map<std::string_view, state_type_t> known = {{"m.space.child", state_type::space_child{}}};
+  return named<state_type_t, state_type::other>(known, name);
+}
+// A server's errcode: the ones that say the session is gone, and the rest.
+namespace errcode {
+struct session_gone {  // M_UNKNOWN_TOKEN, M_FORBIDDEN
+  static constexpr bool gone = true;
+};
+struct other {
+  static constexpr bool gone = false;
+};
+}  // namespace errcode
+using errcode_t = std::variant<errcode::session_gone, errcode::other>;
+[[nodiscard]] inline errcode_t errcode_of(std::optional<std::string_view> name) {
+  static const std::unordered_map<std::string_view, errcode_t> known = {
+      {"M_UNKNOWN_TOKEN", errcode::session_gone{}}, {"M_FORBIDDEN", errcode::session_gone{}}};
+  return named<errcode_t, errcode::other>(known, name);
+}
+
 struct failure {
   std::optional<loom::error> server;
   std::string network;
@@ -487,7 +630,7 @@ class account {
                                      std::chrono::seconds(30));
       if (!got) {
         const failure& why = got.error();
-        if (why.server && (why.server->errcode == "M_UNKNOWN_TOKEN" || why.server->errcode == "M_FORBIDDEN")) {
+        if (why.server && std::visit([](auto code) { return code.gone; }, errcode_of(why.server->errcode))) {
           // A kept session no longer good: logged in again, once.
           if (kept) {
             log(id_, "the session kept is no longer good: logging in again");
@@ -629,7 +772,12 @@ class account {
         if (part.ephemeral && part.ephemeral->events) {
           std::map<std::string, std::string> read_by;
           for (const auto& event : *part.ephemeral->events) {
-            if (event.type != "m.receipt")
+            const bool receipt = std::visit(overloaded{[](event_type::receipt) { return true; },
+                                                       [](event_type::encrypted) { return false; },
+                                                       [](event_type::redaction) { return false; },
+                                                       [](event_type::other) { return false; }},
+                                            event_type_of(event.type));
+            if (!receipt)
               continue;
             const knot::value tree = knot::to_value(event);
             const knot::value* content = member(tree, "content");
@@ -639,7 +787,8 @@ class account {
               if (!kinds.is<knot::value::object>())
                 continue;
               for (const auto& [kind, users] : kinds.as<knot::value::object>())
-                if ((kind == "m.read" || kind == "m.read.private") && users.is<knot::value::object>())
+                if (std::visit([](auto of) { return of.read_up_to; }, receipt_kind_of(kind)) &&
+                    users.is<knot::value::object>())
                   for (const auto& [user, when] : users.as<knot::value::object>())
                     read_by.insert_or_assign(user, event_id);
             }
@@ -724,14 +873,14 @@ class account {
     const knot::value tree = knot::to_value(*created);
     const knot::value* content = member(tree, "content");
     const knot::value* type = content ? member(*content, "type") : nullptr;
-    return type && type->is<std::string>() && type->as<std::string>() == "m.space";
+    return std::visit([](auto of) { return of.is_space; }, room_type_of(text(type)));
   }
   // The rooms a space holds: an m.space.child for each, whose content is
   // not empty -- an emptied one is a child taken out.
   static std::vector<std::string> children_of(const loom::client::joined_room& kept) {
     std::vector<std::string> out;
     for (const auto& [key, one] : kept.state.events) {
-      if (key.first != "m.space.child")
+      if (!std::visit([](auto of) { return of.child; }, state_type_of(key.first)))
         continue;
       const knot::value tree = knot::to_value(one);
       const knot::value* content = member(tree, "content");
@@ -819,7 +968,8 @@ class account {
       const auto& content = one.content.template as<loom::ev::m_room_message_content_t>();
       const knot::value* relates = extra(content.rest, one.content, "m.relates_to");
       // An edit: the event it replaces takes its new content.
-      if (text(member(relates ? *relates : knot::value(), "rel_type")) == "m.replace") {
+      if (std::visit([](auto of) { return of.edit; },
+                     relation_of(text(member(relates ? *relates : knot::value(), "rel_type"))))) {
         const auto target = text(member(*relates, "event_id"));
         const knot::value* now = extra(content.rest, one.content, "m.new_content");
         if (target && now)
@@ -832,14 +982,15 @@ class account {
                    .at = at,
                    .body = body_of(content.body, content.rest, one.content),
                    .outgoing = one.sender == id_.address};
-      if (content.msgtype == "m.emote")
+      const auto [carries, picture, emote] = std::visit(
+          [](auto of) { return std::tuple(of.carries, of.picture, of.emote); }, msgtype_of(content.msgtype));
+      if (emote)
         made.body.plain = "* " + made.body.plain;
       // A picture or a file: where it is kept, its name, what it is; its
       // body a caption where a file name is given apart from it.
-      if (content.msgtype == "m.image" || content.msgtype == "m.file" || content.msgtype == "m.video" ||
-          content.msgtype == "m.audio") {
+      if (carries) {
         mux::attachment carried;
-        if (content.msgtype == "m.image")
+        if (picture)
           carried.kind = attachment_kind::image{};
         carried.source = text(extra(content.rest, one.content, "url")).value_or("");
         const auto file_name = text(extra(content.rest, one.content, "filename"));
@@ -864,15 +1015,6 @@ class account {
         if (const knot::value* reply = member(*relates, "m.in_reply_to"))
           made.replies_to = text(member(*reply, "event_id"));
       sink_(change::message_added{std::move(made), history});
-    } else if (one.type == "m.room.encrypted") {
-      // By its type: loom's timeline union does not have its content yet.
-      sink_(change::message_added{message{.in = in,
-                                          .id = one.event_id,
-                                          .sender = one.sender,
-                                          .at = at,
-                                          .body = {"🔒 an encrypted message (not yet readable here)", std::nullopt},
-                                          .outgoing = one.sender == id_.address},
-                                  history});
     } else if (one.content.template is<loom::ev::m_reaction_content_t>()) {
       const auto& content = one.content.template as<loom::ev::m_reaction_content_t>();
       if (content.m_relates_to && content.m_relates_to->event_id && content.m_relates_to->key) {
@@ -880,21 +1022,44 @@ class account {
         sink_(change::reaction_changed{in, *content.m_relates_to->event_id, *content.m_relates_to->key, one.sender,
                                        true});
       }
-    } else if (one.type == "m.room.redaction") {
-      std::optional<std::string> target = one.redacts;
-      if (one.content.template is<loom::ev::m_room_redaction_content_t>())
-        if (const auto& redacts = one.content.template as<loom::ev::m_room_redaction_content_t>().redacts)
-          target = redacts;
-      if (!target)
-        return;
-      // A reaction taken back, or a message removed.
-      if (const auto reaction = reactions_.find(*target); reaction != reactions_.end()) {
-        sink_(change::reaction_changed{in, reaction->second.target, reaction->second.key, reaction->second.who,
-                                       false});
-        reactions_.erase(reaction);
-      } else {
-        sink_(change::message_redacted{in, *target});
-      }
+    } else {
+      // The rest, by its type: loom's timeline union does not have their
+      // content yet.
+      std::visit(overloaded{[&](event_type::encrypted) { encrypted(in, one, at, history); },
+                            [&](event_type::redaction) { redaction(in, one); },
+                            [](event_type::receipt) {},
+                            [](event_type::other) {}},
+                 event_type_of(one.type));
+    }
+  }
+
+  // An encrypted message: said to be there, not yet readable.
+  void encrypted(const conversation_id& in, const loom::ev::timeline_event& one,
+                 std::chrono::sys_time<std::chrono::milliseconds> at, bool history) {
+    // By its type: loom's timeline union does not have its content yet.
+    sink_(change::message_added{message{.in = in,
+                                        .id = one.event_id,
+                                        .sender = one.sender,
+                                        .at = at,
+                                        .body = {"🔒 an encrypted message (not yet readable here)", std::nullopt},
+                                        .outgoing = one.sender == id_.address},
+                                history});
+  }
+  // A redaction: a reaction taken back, or a message removed.
+  void redaction(const conversation_id& in, const loom::ev::timeline_event& one) {
+    std::optional<std::string> target = one.redacts;
+    if (one.content.template is<loom::ev::m_room_redaction_content_t>())
+      if (const auto& redacts = one.content.template as<loom::ev::m_room_redaction_content_t>().redacts)
+        target = redacts;
+    if (!target)
+      return;
+    // A reaction taken back, or a message removed.
+    if (const auto reaction = reactions_.find(*target); reaction != reactions_.end()) {
+      sink_(change::reaction_changed{in, reaction->second.target, reaction->second.key, reaction->second.who,
+                                     false});
+      reactions_.erase(reaction);
+    } else {
+      sink_(change::message_redacted{in, *target});
     }
   }
 
@@ -902,14 +1067,14 @@ class account {
   // org.matrix.custom.html.
   static body body_of(std::string plain, const knot::value& content) {
     body made{std::move(plain), std::nullopt};
-    if (text(member(content, "format")) == "org.matrix.custom.html")
+    if (std::visit([](auto of) { return of.html_given; }, body_format_of(text(member(content, "format")))))
       made.html = text(member(content, "formatted_body"));
     return made;
   }
   template <class Tagged>
   static body body_of(std::string plain, const knot::value& rest, const Tagged& content) {
     body made{std::move(plain), std::nullopt};
-    if (text(extra(rest, content, "format")) == "org.matrix.custom.html")
+    if (std::visit([](auto of) { return of.html_given; }, body_format_of(text(extra(rest, content, "format")))))
       made.html = text(extra(rest, content, "formatted_body"));
     return made;
   }

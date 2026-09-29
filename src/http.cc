@@ -156,7 +156,9 @@ class connection {
     if (!stream_)
       open();
     beast::http::request<beast::http::string_body> out;
-    out.method(beast::http::string_to_verb(method));
+    // The method, read into Beast's verb once; what follows asks the verb.
+    const beast::http::verb verb = beast::http::string_to_verb(method);
+    out.method(verb);
     out.target(where_.path + std::string(target));
     out.version(11);
     out.set(beast::http::field::host,
@@ -165,7 +167,7 @@ class connection {
     out.set(beast::http::field::accept, "application/json");
     if (bearer)
       out.set(beast::http::field::authorization, "Bearer " + std::string(*bearer));
-    if (!body.empty() || method == "POST" || method == "PUT") {
+    if (!body.empty() || verb == beast::http::verb::post || verb == beast::http::verb::put) {
       out.set(beast::http::field::content_type, type.empty() ? std::string_view("application/json") : type);
       out.body() = std::string(body);
     }

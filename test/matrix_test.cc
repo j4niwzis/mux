@@ -92,7 +92,10 @@ void sink::operator()(mux::change_t one) const {
       to->running->stop();
   }
   // A message sent once the room is there.
-  if (std::holds_alternative<mux::change::conversation_updated>(one) && !to->sent) {
+  const bool room_there = std::visit(mux::overloaded{[](const mux::change::conversation_updated&) { return true; },
+                                                     [](const auto&) { return false; }},
+                                     one);
+  if (room_there && !to->sent) {
     to->sent = true;
     to->account->send("!r:x.org", "from mux");
   }

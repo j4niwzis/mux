@@ -25,13 +25,18 @@ overloaded(Fs...) -> overloaded<Fs...>;
 // class.
 namespace protocol {
 struct xmpp {
+  static constexpr bool is_matrix = false;
   friend auto operator<=>(const xmpp&, const xmpp&) = default;
 };
 struct matrix {
+  static constexpr bool is_matrix = true;
   friend auto operator<=>(const matrix&, const matrix&) = default;
 };
 }  // namespace protocol
 using protocol_t = std::variant<protocol::xmpp, protocol::matrix>;
+[[nodiscard]] inline bool is_matrix(const protocol_t& speaks) {
+  return std::visit([](auto one) { return one.is_matrix; }, speaks);
+}
 
 // An account, as the user names it: user@example.com, or @user:example.org.
 struct account_id {
@@ -52,13 +57,18 @@ struct conversation_id {
 
 namespace conversation_kind {
 struct direct {
+  static constexpr bool one_to_one = true;
   friend bool operator==(const direct&, const direct&) = default;
 };
 struct group {
+  static constexpr bool one_to_one = false;
   friend bool operator==(const group&, const group&) = default;
 };
 }  // namespace conversation_kind
 using conversation_kind_t = std::variant<conversation_kind::direct, conversation_kind::group>;
+[[nodiscard]] inline bool one_to_one(const conversation_kind_t& kind) {
+  return std::visit([](auto one) { return one.one_to_one; }, kind);
+}
 
 // Where an account is with its server. A failure says why; a connection
 // being made again may say why too.
@@ -145,13 +155,18 @@ using delivery_t = std::variant<delivery::sending, delivery::sent, delivery::del
 // file, offered to be saved -- by where its protocol keeps it (an mxc://).
 namespace attachment_kind {
 struct image {
+  static constexpr bool picture = true;
   friend bool operator==(image, image) = default;
 };
 struct file {
+  static constexpr bool picture = false;
   friend bool operator==(file, file) = default;
 };
 }  // namespace attachment_kind
 using attachment_kind_t = std::variant<attachment_kind::image, attachment_kind::file>;
+[[nodiscard]] inline bool is_picture(const attachment_kind_t& kind) {
+  return std::visit([](auto one) { return one.picture; }, kind);
+}
 struct attachment {
   attachment_kind_t kind = attachment_kind::file{};
   std::string source;      // where it is kept: an mxc:// URI

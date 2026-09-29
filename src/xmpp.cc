@@ -16,6 +16,31 @@ import mux.net;
 
 export namespace mux::xmpp {
 
+// A MUC occupant's affiliation or role (XEP-0045), where it is one shown
+// beside their name: read into a type once, where it comes in.
+// Each says whether it is shown when it is an affiliation, and when it is
+// a role.
+namespace muc_rank {
+struct owner_or_admin {  // owner, admin
+  static constexpr bool shown_as_affiliation = true, shown_as_role = false;
+};
+struct moderator {
+  static constexpr bool shown_as_affiliation = false, shown_as_role = true;
+};
+struct other {
+  static constexpr bool shown_as_affiliation = false, shown_as_role = false;
+};
+}  // namespace muc_rank
+using muc_rank_t = std::variant<muc_rank::owner_or_admin, muc_rank::moderator, muc_rank::other>;
+[[nodiscard]] inline muc_rank_t muc_rank_of(std::optional<std::string_view> name) {
+  static const std::unordered_map<std::string_view, muc_rank_t> known = {
+      {"owner", muc_rank::owner_or_admin{}}, {"admin", muc_rank::owner_or_admin{}}, {"moderator", muc_rank::moderator{}}};
+  if (!name)
+    return muc_rank::other{};
+  const auto found = known.find(*name);
+  return found == known.end() ? muc_rank_t{muc_rank::other{}} : found->second;
+}
+
 struct settings {
   std::string address;  // user@domain
   std::string password;
@@ -46,15 +71,13 @@ inline std::string resource_of(std::string_view jid) {
 inline availability_t availability_of(const std::optional<std::string>& show) {
   if (!show)
     return availability::online{};
-  if (*show == "away")
-    return availability::away{};
-  if (*show == "xa")
-    return availability::extended_away{};
-  if (*show == "dnd")
-    return availability::do_not_disturb{};
-  if (*show == "chat")
-    return availability::chat{};
-  return availability::online{};
+  static const std::unordered_map<std::string_view, availability_t> known = {
+      {"away", availability::away{}},
+      {"xa", availability::extended_away{}},
+      {"dnd", availability::do_not_disturb{}},
+      {"chat", availability::chat{}}};
+  const auto found = known.find(*show);
+  return found == known.end() ? availability_t{availability::online{}} : found->second;
 }
 
 // XEP-0203's stamp, XEP-0082's DateTime: CCYY-MM-DDThh:mm:ss[.sss](Z|+hh:mm|-hh:mm)
@@ -565,9 +588,9 @@ class account {
       for (const auto& carried : got.payload)
         if (const auto* user = carried.template get_if<tern::muc::user>())
           for (const auto& item : user->items) {
-            if (item.affiliation == "owner" || item.affiliation == "admin")
+            if (std::visit([](auto rank) { return rank.shown_as_affiliation; }, muc_rank_of(item.affiliation)))
               one.role = item.affiliation;
-            else if (item.role == "moderator")
+            else if (std::visit([](auto rank) { return rank.shown_as_role; }, muc_rank_of(item.role)))
               one.role = item.role;
           }
       occupants[nick] = std::move(one);

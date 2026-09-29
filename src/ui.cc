@@ -343,6 +343,9 @@ inline void draw_icon(skia::SkCanvas* canvas, icon::minus, const skia::SkRect& b
   const float x = box.centerX(), y = box.centerY();
   canvas->drawLine(x - 7.0f, y, x + 7.0f, y, pen(colour, alpha, 2.0f));
 }
+// Whether an icon draws anything: all but none.
+[[nodiscard]] constexpr bool drawn(icon::none) { return false; }
+[[nodiscard]] constexpr bool drawn(const auto&) { return true; }
 inline void draw_icon(skia::SkCanvas* canvas, const icon_t& which, const skia::SkRect& box, skia::SkColor colour,
                       float alpha) {
   std::visit([&](auto one) { draw_icon(canvas, one, box, colour, alpha); }, which);
@@ -556,7 +559,7 @@ struct row_item : nodes::Stack {
     this->setHorizontal();
     this->setGap(16.0f);
     fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
-    mark.setVisible(!std::holds_alternative<icon::none>(icon));
+    mark.setVisible(std::visit([](auto one) { return drawn(one); }, icon));
     label.setElided(true);
     label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
     dot.on = choice.value_or(false);
@@ -916,8 +919,7 @@ inline void use_theme(const config::theme_t& chosen) {
   std::visit([](auto one) { use_theme(one); }, chosen);
   // The scroll bars, as tdesktop's scrollBarBg and scrollBarBgOver: dark on
   // the light themes, light on the dark.
-  const bool light = std::holds_alternative<config::theme::classic>(chosen) ||
-                     std::holds_alternative<config::theme::day>(chosen);
+  const bool light = std::visit([](auto one) { return one.light; }, chosen);
   nodes::scrollBarColours() = light ? nodes::ScrollBarColours{skia::colorSetARGB(0x53, 0, 0, 0), skia::colorSetARGB(0x7a, 0, 0, 0)}
                                     : nodes::ScrollBarColours{skia::colorSetARGB(0x53, 255, 255, 255),
                                                               skia::colorSetARGB(0x7a, 255, 255, 255)};
@@ -1000,25 +1002,71 @@ struct formatted {
   std::vector<std::pair<std::string, std::string>> links;  // what it says, where it goes
   std::vector<nodes::Text::Link> spans;                    // where in the text each is
 };
+// An HTML tag, as read: what it does to the text, told by its type. Its
+// name is looked up once, where it is read (tag_of); what follows works on
+// the variant.
+namespace html_tag {
+struct line_break {};  // <br>
+struct block_end {};   // </p>, </div>, </li>, </blockquote>, </h1>..</h3>, </pre>
+struct list_item {};   // <li>
+struct quote {};       // <blockquote>
+struct reply {};       // <mx-reply>: the quoted message a reply carries
+struct link_open {     // <a href="...">
+  std::string href;
+};
+struct link_close {};  // </a>
+struct other {};       // anything else: dropped
+}  // namespace html_tag
+using html_tag_t = std::variant<html_tag::line_break, html_tag::block_end, html_tag::list_item, html_tag::quote,
+                                html_tag::reply, html_tag::link_open, html_tag::link_close, html_tag::other>;
+
+// A tag's inside (between < and >) read into what it is.
+[[nodiscard]] inline html_tag_t tag_of(std::string_view inside) {
+  std::string name;
+  for (const char t : inside) {
+    if (t == ' ' || t == '/' && !name.empty())
+      break;
+    name += static_cast<char>(std::tolower(static_cast<unsigned char>(t)));
+  }
+  static const std::unordered_map<std::string_view, html_tag_t> known = {
+      {"br", html_tag::line_break{}},   {"/p", html_tag::block_end{}},    {"/div", html_tag::block_end{}},
+      {"/blockquote", html_tag::block_end{}}, {"/li", html_tag::block_end{}}, {"/h1", html_tag::block_end{}},
+      {"/h2", html_tag::block_end{}},   {"/h3", html_tag::block_end{}},   {"/pre", html_tag::block_end{}},
+      {"li", html_tag::list_item{}},    {"blockquote", html_tag::quote{}}, {"mx-reply", html_tag::reply{}},
+      {"a", html_tag::link_open{}},     {"/a", html_tag::link_close{}},
+  };
+  const auto found = known.find(name);
+  if (found == known.end())
+    return html_tag::other{};
+  // A link takes where it goes from its href; the rest are as found.
+  return std::visit(overloaded{[&](html_tag::link_open) -> html_tag_t {
+                                 const auto href = inside.find("href=");
+                                 if (href == std::string_view::npos || href + 6 >= inside.size())
+                                   return html_tag::other{};
+                                 const char quote = inside[href + 5];
+                                 const auto stop = inside.find(quote, href + 6);
+                                 return html_tag::link_open{std::string(inside.substr(
+                                     href + 6, stop == std::string_view::npos ? std::string_view::npos : stop - href - 6))};
+                               },
+                               [](const auto& as_found) -> html_tag_t { return as_found; }},
+                    found->second);
+}
+
+// An entity's name (between & and ;) read into what it stands for; one not
+// known is kept as it was written.
+[[nodiscard]] inline std::string entity_of(std::string_view name) {
+  static const std::unordered_map<std::string_view, std::string_view> known = {
+      {"amp", "&"}, {"lt", "<"}, {"gt", ">"}, {"quot", "\""}, {"apos", "'"}, {"#39", "'"}, {"nbsp", " "},
+  };
+  if (const auto found = known.find(name); found != known.end())
+    return std::string(found->second);
+  return "&" + std::string(name) + ";";
+}
+
 [[nodiscard]] inline formatted read_html(std::string_view html) {
   formatted out;
   std::string open_href;
   std::size_t link_start = 0;
-  const auto entity = [](std::string_view name) -> std::string {
-    if (name == "amp")
-      return "&";
-    if (name == "lt")
-      return "<";
-    if (name == "gt")
-      return ">";
-    if (name == "quot")
-      return "\"";
-    if (name == "apos" || name == "#39")
-      return "'";
-    if (name == "nbsp")
-      return " ";
-    return "&" + std::string(name) + ";";
-  };
   std::size_t at = 0;
   while (at < html.size()) {
     const char c = html[at];
@@ -1026,42 +1074,31 @@ struct formatted {
       const auto end = html.find('>', at);
       if (end == std::string_view::npos)
         break;
-      std::string tag(html.substr(at + 1, end - at - 1));
-      std::string name;
-      for (const char t : tag) {
-        if (t == ' ' || t == '/' && !name.empty())
-          break;
-        name += static_cast<char>(std::tolower(static_cast<unsigned char>(t)));
-      }
-      if (name == "br" || name == "br/")
-        out.text += '\n';
-      else if (name == "/p" || name == "/div" || name == "/blockquote" || name == "/li" || name == "/h1" ||
-               name == "/h2" || name == "/h3" || name == "/pre")
-        out.text += '\n';
-      else if (name == "li")
-        out.text += "• ";
-      else if (name == "blockquote")
-        out.text += "│ ";
-      else if (name == "mx-reply") {
-        // The quoted message a reply carries: not shown twice.
-        const auto close = html.find("</mx-reply>", end);
-        at = close == std::string_view::npos ? html.size() : close + 11;
-        continue;
-      } else if (name == "a") {
-        const auto href = tag.find("href=");
-        if (href != std::string::npos && href + 6 < tag.size()) {
-          const char quote = tag[href + 5];
-          const auto stop = tag.find(quote, href + 6);
-          open_href = tag.substr(href + 6, stop == std::string::npos ? std::string::npos : stop - href - 6);
-          link_start = out.text.size();
-        }
-      } else if (name == "/a" && !open_href.empty()) {
-        out.links.emplace_back(out.text.substr(link_start), open_href);
-        if (out.text.size() > link_start)
-          out.spans.push_back({link_start, out.text.size(), open_href});
-        open_href.clear();
-      }
+      html_tag_t read = tag_of(html.substr(at + 1, end - at - 1));
       at = end + 1;
+      std::visit(overloaded{[&](html_tag::line_break) { out.text += '\n'; },
+                            [&](html_tag::block_end) { out.text += '\n'; },
+                            [&](html_tag::list_item) { out.text += "• "; },
+                            [&](html_tag::quote) { out.text += "│ "; },
+                            [&](html_tag::reply) {
+                              // The quoted message: not shown twice.
+                              const auto close = html.find("</mx-reply>", end);
+                              at = close == std::string_view::npos ? html.size() : close + 11;
+                            },
+                            [&](html_tag::link_open& link) {
+                              open_href = std::move(link.href);
+                              link_start = out.text.size();
+                            },
+                            [&](html_tag::link_close) {
+                              if (open_href.empty())
+                                return;
+                              out.links.emplace_back(out.text.substr(link_start), open_href);
+                              if (out.text.size() > link_start)
+                                out.spans.push_back({link_start, out.text.size(), open_href});
+                              open_href.clear();
+                            },
+                            [](html_tag::other) {}},
+                 read);
     } else if (c == '&') {
       const auto end = html.find(';', at);
       if (end == std::string_view::npos || end - at > 8) {
@@ -1069,7 +1106,7 @@ struct formatted {
         ++at;
         continue;
       }
-      out.text += entity(html.substr(at + 1, end - at - 1));
+      out.text += entity_of(html.substr(at + 1, end - at - 1));
       at = end + 1;
     } else {
       out.text += c;
@@ -1698,10 +1735,11 @@ struct message_bubble : nodes::Stack {
     // What it carries: a picture, sized as tdesktop's; or a file's row.
     if (said.attachment && !said.redacted) {
       const mux::attachment& carried = *said.attachment;
-      if (std::holds_alternative<attachment_kind::image>(carried.kind))
-        body.picture.emplace(carried.source, carried.width, carried.height);
-      else
-        body.file.emplace(carried.source, carried.name, carried.size);
+      std::visit(overloaded{[&](attachment_kind::image) {
+                              body.picture.emplace(carried.source, carried.width, carried.height);
+                            },
+                            [&](attachment_kind::file) { body.file.emplace(carried.source, carried.name, carried.size); }},
+                 carried.kind);
       // No caption: the text goes, and a picture has its time over it.
       if (said.body.plain.empty() && !said.body.html) {
         body.text.setVisible(false);
@@ -2531,19 +2569,13 @@ struct timeline_area : scene::Node {
     const auto it = std::ranges::find(entries, *swiping, &message_bubble::message_id);
     return it == entries.end() ? nullptr : &*it;
   }
-  template <class Phase>
-  void onPointer(const Phase&, const scene::pointer::down& press, scene::PointerReply&)
-    requires(std::same_as<Phase, scene::phase::capture> || std::same_as<Phase, scene::phase::target>)
-  {
+  void swipe_down(const scene::pointer::down& press) {
     swipe_armed = press.button <= 1;
     swipe_x = press.x;
     swipe_y = press.y;
     swipe_pressed = std::chrono::steady_clock::now();
   }
-  template <class Phase>
-  void onPointer(const Phase&, const scene::pointer::move& at, scene::PointerReply& reply)
-    requires(std::same_as<Phase, scene::phase::capture> || std::same_as<Phase, scene::phase::target>)
-  {
+  void swipe_move(const scene::pointer::move& at, scene::PointerReply& reply) {
     if (message_bubble* one = this->swiped()) {
       one->swipe.jump(std::clamp(at.x - swipe_x, -120.0f, 0.0f));
       one->markDamaged();
@@ -2569,10 +2601,7 @@ struct timeline_area : scene::Node {
         return;
       }
   }
-  template <class Phase>
-  void onPointer(const Phase&, const scene::pointer::up&, scene::PointerReply& reply)
-    requires(std::same_as<Phase, scene::phase::capture> || std::same_as<Phase, scene::phase::target>)
-  {
+  void swipe_up(scene::PointerReply& reply) {
     swipe_armed = false;
     if (message_bubble* one = this->swiped()) {
       if (one->swipe.value() <= -message_bubble::kSwipeToReply)
@@ -2583,16 +2612,32 @@ struct timeline_area : scene::Node {
       reply.handle();
     }
   }
-  template <class Phase>
-  void onPointer(const Phase&, const scene::pointer::cancel&, scene::PointerReply& reply)
-    requires(std::same_as<Phase, scene::phase::capture> || std::same_as<Phase, scene::phase::target>)
-  {
+  void swipe_cancel(scene::PointerReply& reply) {
     swipe_armed = false;
     if (message_bubble* one = this->swiped()) {
       one->swipe.setTarget(0.0f);
       swiping.reset();
       reply.releasePointer();
     }
+  }
+
+  // The swipe is followed on the way down (capture) and at the list itself
+  // (target): the same for both, one overload each.
+  void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply&) { swipe_down(press); }
+  void onPointer(scene::phase::target, const scene::pointer::down& press, scene::PointerReply&) { swipe_down(press); }
+  void onPointer(scene::phase::capture, const scene::pointer::move& at, scene::PointerReply& reply) {
+    swipe_move(at, reply);
+  }
+  void onPointer(scene::phase::target, const scene::pointer::move& at, scene::PointerReply& reply) {
+    swipe_move(at, reply);
+  }
+  void onPointer(scene::phase::capture, const scene::pointer::up&, scene::PointerReply& reply) { swipe_up(reply); }
+  void onPointer(scene::phase::target, const scene::pointer::up&, scene::PointerReply& reply) { swipe_up(reply); }
+  void onPointer(scene::phase::capture, const scene::pointer::cancel&, scene::PointerReply& reply) {
+    swipe_cancel(reply);
+  }
+  void onPointer(scene::phase::target, const scene::pointer::cancel&, scene::PointerReply& reply) {
+    swipe_cancel(reply);
   }
 
   // Who has read a message: those whose receipt is for it or for one after
@@ -2686,7 +2731,7 @@ struct timeline_area : scene::Node {
           facts.media_name = one.said.attachment->name;
         }
         // A Matrix message's link: matrix.to, to it in its room.
-        if (seen_chat && std::holds_alternative<protocol::matrix>(seen_chat->account.speaks) &&
+        if (seen_chat && is_matrix(seen_chat->account.speaks) &&
             one.message_id.starts_with('$'))
           facts.link = std::format("https://matrix.to/#/{}/{}", seen_chat->id, one.message_id);
         facts.x = press.x;

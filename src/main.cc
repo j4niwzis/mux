@@ -654,7 +654,7 @@ class message_store {
       line.emplace("out", knot::value(true));
     if (one.attachment) {
       knot::value::object carried;
-      carried.emplace("image", knot::value(std::holds_alternative<mux::attachment_kind::image>(one.attachment->kind)));
+      carried.emplace("image", knot::value(mux::is_picture(one.attachment->kind)));
       carried.emplace("source", knot::value(one.attachment->source));
       carried.emplace("name", knot::value(one.attachment->name));
       carried.emplace("mimetype", knot::value(one.attachment->mimetype));
@@ -956,15 +956,49 @@ struct actions {
 
 using window_type = mux::ui::window<actions>;
 
+// The parts of a matrix: URI (MSC2312), by the name that leads each.
+// Each says the sigil of the ID it names, and whether it names an event.
+namespace uri_part {
+struct user {  // u
+  static constexpr std::optional<char> sigil = '@';
+  static constexpr bool names_event = false;
+};
+struct alias {  // r
+  static constexpr std::optional<char> sigil = '#';
+  static constexpr bool names_event = false;
+};
+struct room_id {  // roomid
+  static constexpr std::optional<char> sigil = '!';
+  static constexpr bool names_event = false;
+};
+struct event {  // e
+  static constexpr std::optional<char> sigil = std::nullopt;
+  static constexpr bool names_event = true;
+};
+struct other {
+  static constexpr std::optional<char> sigil = std::nullopt;
+  static constexpr bool names_event = false;
+};
+}  // namespace uri_part
+using uri_part_t = std::variant<uri_part::user, uri_part::alias, uri_part::room_id, uri_part::event, uri_part::other>;
+uri_part_t uri_part_of(std::string_view name) {
+  static const std::unordered_map<std::string_view, uri_part_t> known = {
+      {"u", uri_part::user{}}, {"r", uri_part::alias{}}, {"roomid", uri_part::room_id{}}, {"e", uri_part::event{}}};
+  const auto found = known.find(name);
+  return found == known.end() ? uri_part_t{uri_part::other{}} : found->second;
+}
+
 // How much moves, as the accounts file says: "none", "reduced" or "full"
 // (and full where it says nothing, or what it says is none of these).
 skiff::paint::Motion motion_of(const std::optional<std::string>& said) {
-  if (!said || *said == "full")
+  if (!said)
     return skiff::paint::motion::full{};
-  if (*said == "reduced")
-    return skiff::paint::motion::reduced{};
-  if (*said == "none")
-    return skiff::paint::motion::none{};
+  static const std::unordered_map<std::string_view, skiff::paint::Motion> known = {
+      {"full", skiff::paint::motion::full{}},
+      {"reduced", skiff::paint::motion::reduced{}},
+      {"none", skiff::paint::motion::none{}}};
+  if (const auto found = known.find(*said); found != known.end())
+    return found->second;
   std::println(std::cerr, "[mux] motion is \"none\", \"reduced\" or \"full\", not \"{}\": full it is", *said);
   return skiff::paint::motion::full{};
 }
@@ -1186,7 +1220,7 @@ struct app {
             want(id, each.avatar, each.id);
           // Its pictures' thumbnails, at twice the size they are drawn at.
           for (const mux::message& said : one.timeline)
-            if (said.attachment && std::holds_alternative<mux::attachment_kind::image>(said.attachment->kind))
+            if (said.attachment && mux::is_picture(said.attachment->kind))
               want_picture(id, said.attachment->source);
         }
       }
@@ -1764,17 +1798,14 @@ struct app {
         path = slash == std::string_view::npos ? std::string_view() : path.substr(slash + 1);
         return one;
       };
-      const std::string_view kind = part();
+      // Its parts' names (MSC2312), read into what they are.
+      const uri_part_t kind = uri_part_of(part());
       const std::string name = percent_decoded(part());
-      if (kind == "u")
-        out.id = "@" + name;
-      else if (kind == "r")
-        out.id = "#" + name;
-      else if (kind == "roomid")
-        out.id = "!" + name;
-      else
+      const std::optional<char> sigil = std::visit([](auto of) { return of.sigil; }, kind);
+      if (!sigil)
         return std::nullopt;
-      if (part() == "e")
+      out.id = *sigil + name;
+      if (std::visit([](auto of) { return of.names_event; }, uri_part_of(part())))
         out.event = "$" + percent_decoded(part());
     } else if (url.starts_with("xmpp:")) {
       std::string_view path = url.substr(5);
@@ -1803,7 +1834,7 @@ struct app {
   std::optional<mux::conversation_id> chat_of(const link_target& where) const {
     for (const auto& [account, one] : model->accounts())
       for (const auto& [key, chat] : one.conversations) {
-        const bool matrix = std::holds_alternative<mux::protocol::matrix>(account.speaks);
+        const bool matrix = mux::is_matrix(account.speaks);
         if (where.xmpp != !matrix)
           continue;
         if (chat.id.id == where.id || (chat.alias && *chat.alias == where.id))
@@ -1822,7 +1853,7 @@ struct app {
       }
       for (const auto& [account, one] : model->accounts())
         for (const auto& [key, chat] : one.conversations)
-          if (std::holds_alternative<mux::conversation_kind::direct>(chat.kind) &&
+          if (mux::one_to_one(chat.kind) &&
               std::ranges::contains(chat.members, where.id, &mux::member::id)) {
             this->open_chat(chat.id, std::nullopt);
             return;
@@ -1841,10 +1872,10 @@ struct app {
     // A Matrix room not joined: joined through the account in view, or the
     // first Matrix one, and opened when it comes.
     std::optional<mux::account_id> by;
-    if (screen.current && std::holds_alternative<mux::protocol::matrix>(screen.current->speaks))
+    if (screen.current && mux::is_matrix(screen.current->speaks))
       by = screen.current;
     for (const auto& [account, one] : model->accounts())
-      if (!by && std::holds_alternative<mux::protocol::matrix>(account.speaks))
+      if (!by && mux::is_matrix(account.speaks))
         by = account;
     if (!by) {
       root().show_message("No Matrix account", "A Matrix account is needed to open that room.");

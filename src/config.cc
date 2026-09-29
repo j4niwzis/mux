@@ -16,15 +16,19 @@ export namespace mux::config {
 namespace theme {
 // Telegram Desktop's four: its base palette, day-blue, night, night-green.
 struct classic {
+  static constexpr bool light = true;
   friend bool operator==(classic, classic) = default;
 };
 struct day {
+  static constexpr bool light = true;
   friend bool operator==(day, day) = default;
 };
 struct tinted {
+  static constexpr bool light = false;
   friend bool operator==(tinted, tinted) = default;
 };
 struct night {
+  static constexpr bool light = false;
   friend bool operator==(night, night) = default;
 };
 }  // namespace theme
@@ -82,39 +86,42 @@ struct http {
 using proxy_kind_t = std::variant<proxy_kind::socks5, proxy_kind::http>;
 
 // The words of the file, and what they mean: anything else is the default.
+// A word of the file looked up in a table of the ones known; the default
+// where it is none of them, or not there.
+template <class Variant>
+[[nodiscard]] Variant word_of(const std::unordered_map<std::string_view, Variant>& known,
+                              std::optional<std::string_view> word, Variant otherwise) {
+  if (!word)
+    return otherwise;
+  const auto found = known.find(*word);
+  return found == known.end() ? otherwise : found->second;
+}
 [[nodiscard]] inline theme_t theme_of(const std::optional<std::string>& word) {
-  if (word == "classic")
-    return theme::classic{};
-  if (word == "day" || word == "light")  // "light": mux's own light, before
-    return theme::day{};
-  if (word == "night" || word == "dark")  // "dark": mux's own dark, before
-    return theme::night{};
-  return theme::tinted{};
+  static const std::unordered_map<std::string_view, theme_t> known = {
+      {"classic", theme::classic{}},
+      {"day", theme::day{}},
+      {"light", theme::day{}},  // mux's own light, before
+      {"night", theme::night{}},
+      {"dark", theme::night{}},  // mux's own dark, before
+      {"tinted", theme::tinted{}}};
+  return word_of<theme_t>(known, word, theme::tinted{});
 }
 [[nodiscard]] inline accent_t accent_of(const std::optional<std::string>& word) {
-  if (word == "blue" || word == "cyan")
-    return accent::blue{};
-  if (word == "green")
-    return accent::green{};
-  if (word == "pink")
-    return accent::pink{};
-  if (word == "orange")
-    return accent::orange{};
-  if (word == "purple")
-    return accent::purple{};
-  if (word == "red")
-    return accent::red{};
-  if (word == "grey")
-    return accent::grey{};
-  if (word == "gold")
-    return accent::gold{};
-  return accent::theme_own{};
+  static const std::unordered_map<std::string_view, accent_t> known = {
+      {"blue", accent::blue{}},     {"cyan", accent::blue{}},   {"green", accent::green{}},
+      {"pink", accent::pink{}},     {"orange", accent::orange{}}, {"purple", accent::purple{}},
+      {"red", accent::red{}},       {"grey", accent::grey{}},   {"gold", accent::gold{}}};
+  return word_of<accent_t>(known, word, accent::theme_own{});
 }
 [[nodiscard]] inline renderer_t renderer_of(const std::optional<std::string>& word) {
-  return word == "software" ? renderer_t{renderer::software{}} : renderer_t{renderer::opengl{}};
+  static const std::unordered_map<std::string_view, renderer_t> known = {{"software", renderer::software{}},
+                                                                         {"opengl", renderer::opengl{}}};
+  return word_of<renderer_t>(known, word, renderer::opengl{});
 }
 [[nodiscard]] inline proxy_kind_t proxy_kind_of(std::string_view word) {
-  return word == "http" ? proxy_kind_t{proxy_kind::http{}} : proxy_kind_t{proxy_kind::socks5{}};
+  static const std::unordered_map<std::string_view, proxy_kind_t> known = {{"http", proxy_kind::http{}},
+                                                                           {"socks5", proxy_kind::socks5{}}};
+  return word_of<proxy_kind_t>(known, word, proxy_kind::socks5{});
 }
 [[nodiscard]] constexpr std::string_view word_of(theme::classic) { return "classic"; }
 [[nodiscard]] constexpr std::string_view word_of(theme::day) { return "day"; }
@@ -234,24 +241,29 @@ struct pictures_on_disk {
 using limit_t = std::variant<limit::messages_in_memory, limit::messages_on_disk, limit::pictures_in_memory,
                              limit::pictures_on_disk>;
 // A limit's number, and its bounds: what it can be halved or doubled to.
-[[nodiscard]] inline std::int64_t& value_of(cache_limits& all, const limit_t& which) {
-  return std::visit(
-      [&](auto one) -> std::int64_t& {
-        using T = decltype(one);
-        if constexpr (std::same_as<T, limit::messages_in_memory>)
-          return all.messages_in_memory;
-        else if constexpr (std::same_as<T, limit::messages_on_disk>)
-          return all.messages_on_disk_mb;
-        else if constexpr (std::same_as<T, limit::pictures_in_memory>)
-          return all.pictures_in_memory_mb;
-        else
-          return all.pictures_on_disk_mb;
-      },
-      which);
+// Each limit's, by overloads; a limit_t's, by visiting them.
+[[nodiscard]] inline std::int64_t& value_of(cache_limits& all, limit::messages_in_memory) {
+  return all.messages_in_memory;
 }
+[[nodiscard]] inline std::int64_t& value_of(cache_limits& all, limit::messages_on_disk) {
+  return all.messages_on_disk_mb;
+}
+[[nodiscard]] inline std::int64_t& value_of(cache_limits& all, limit::pictures_in_memory) {
+  return all.pictures_in_memory_mb;
+}
+[[nodiscard]] inline std::int64_t& value_of(cache_limits& all, limit::pictures_on_disk) {
+  return all.pictures_on_disk_mb;
+}
+[[nodiscard]] inline std::int64_t& value_of(cache_limits& all, const limit_t& which) {
+  return std::visit([&](auto one) -> std::int64_t& { return value_of(all, one); }, which);
+}
+// Messages are counted, pictures weighed in MiB.
+[[nodiscard]] inline std::pair<std::int64_t, std::int64_t> bounds_of(limit::messages_in_memory) { return {250, 200000}; }
+[[nodiscard]] inline std::pair<std::int64_t, std::int64_t> bounds_of(limit::messages_on_disk) { return {4, 65536}; }
+[[nodiscard]] inline std::pair<std::int64_t, std::int64_t> bounds_of(limit::pictures_in_memory) { return {4, 65536}; }
+[[nodiscard]] inline std::pair<std::int64_t, std::int64_t> bounds_of(limit::pictures_on_disk) { return {4, 65536}; }
 [[nodiscard]] inline std::pair<std::int64_t, std::int64_t> bounds_of(const limit_t& which) {
-  return std::holds_alternative<limit::messages_in_memory>(which) ? std::pair<std::int64_t, std::int64_t>{250, 200000}
-                                                                  : std::pair<std::int64_t, std::int64_t>{4, 65536};
+  return std::visit([](auto one) { return bounds_of(one); }, which);
 }
 
 // What is done to a picture dropped on the window before it is sent.

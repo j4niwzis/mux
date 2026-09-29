@@ -383,6 +383,9 @@ struct menu_edit {};
 struct menu_copy {};
 struct menu_delete {};
 struct cancel_compose {};
+struct open_url {
+  std::string url;
+};
 struct load_older {
   mux::conversation_id in;
   std::string from;
@@ -453,7 +456,7 @@ using request_t =
                  request::open_settings, request::close_settings, request::settings_home,
                  request::settings_animations, request::pop_panel, request::toggle_info, request::load_older, request::jump_to_end, request::message_menu,
                  request::close_menu, request::menu_reply, request::menu_edit, request::menu_copy,
-                 request::menu_delete, request::cancel_compose,
+                 request::menu_delete, request::cancel_compose, request::open_url,
                  request::switch_account, request::submit_message, request::send_typed,
                  request::resize_sidebar, request::not_implemented, request::close_notice,
                  request::resize_info, request::choose_new_proxy, request::toggle_mute, request::close_account_pages,
@@ -516,6 +519,7 @@ struct actions {
   void menu_copy() { requests.emplace_back(request::menu_copy{}); }
   void menu_delete() { requests.emplace_back(request::menu_delete{}); }
   void cancel_compose() { requests.emplace_back(request::cancel_compose{}); }
+  void open_url(std::string url) { requests.emplace_back(request::open_url{std::move(url)}); }
   void load_older(const mux::conversation_id& in, std::string from) {
     requests.emplace_back(request::load_older{in, std::move(from)});
   }
@@ -868,6 +872,7 @@ struct app {
     else
       net->remove_message(*chosen, menu_target.id);
   }
+  void apply(const request::open_url& one) { mux::host::open_url(one.url); }
   void apply(const request::cancel_compose&) {
     composing = compose::plain{};
     root().main().line.show_context(std::nullopt);

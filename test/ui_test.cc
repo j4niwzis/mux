@@ -48,6 +48,7 @@ struct stub {
   void menu_copy() {}
   void menu_delete() {}
   void cancel_compose() {}
+  void open_url(std::string) {}
   void load_older(const mux::conversation_id&, std::string) {}
   void switch_account(std::string) {}
   void submit_message(std::string text) { sent.push_back(std::move(text)); }

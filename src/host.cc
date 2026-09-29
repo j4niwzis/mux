@@ -72,6 +72,9 @@ inline void load_fonts(const std::string& directory) {
   }
 }
 
+// A link opened in what the system opens links with.
+inline void open_url(const std::string& url) { SDL_OpenURL(url.c_str()); }
+
 // The window asked to close, as its close button would: from the window's
 // thread, between events or in a handler.
 inline void request_quit() {

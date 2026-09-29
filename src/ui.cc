@@ -80,6 +80,7 @@ inline skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110);
 //   void toggle_info()               -- the chosen chat's info, beside it
 //   void load_older(const conversation_id&, std::string from)  -- its history
 //   void jump_to_end()               -- back to a chat's newest message
+//   void open_url(std::string)       -- a link, in the browser
 //   void switch_account(std::string address)  -- whose chats are listed
 //   void pop_panel()                 -- back from the top panel to what is under it
 //   void open_settings(), close_settings(), settings_home(), settings_animations()
@@ -855,6 +856,129 @@ struct conversation_row : scene::Node {
   }
 };
 
+// A message's HTML (Matrix's org.matrix.custom.html) read into what is
+// drawn: its text -- tags gone, line breaks and paragraphs as newlines,
+// list items bulleted, quotes marked, the common entities decoded -- and
+// its links, each a place to open.
+struct formatted {
+  std::string text;
+  std::vector<std::pair<std::string, std::string>> links;  // what it says, where it goes
+};
+[[nodiscard]] inline formatted read_html(std::string_view html) {
+  formatted out;
+  std::string open_href;
+  std::size_t link_start = 0;
+  const auto entity = [](std::string_view name) -> std::string {
+    if (name == "amp")
+      return "&";
+    if (name == "lt")
+      return "<";
+    if (name == "gt")
+      return ">";
+    if (name == "quot")
+      return "\"";
+    if (name == "apos" || name == "#39")
+      return "'";
+    if (name == "nbsp")
+      return " ";
+    return "&" + std::string(name) + ";";
+  };
+  std::size_t at = 0;
+  while (at < html.size()) {
+    const char c = html[at];
+    if (c == '<') {
+      const auto end = html.find('>', at);
+      if (end == std::string_view::npos)
+        break;
+      std::string tag(html.substr(at + 1, end - at - 1));
+      std::string name;
+      for (const char t : tag) {
+        if (t == ' ' || t == '/' && !name.empty())
+          break;
+        name += static_cast<char>(std::tolower(static_cast<unsigned char>(t)));
+      }
+      if (name == "br" || name == "br/")
+        out.text += '\n';
+      else if (name == "/p" || name == "/div" || name == "/blockquote" || name == "/li" || name == "/h1" ||
+               name == "/h2" || name == "/h3" || name == "/pre")
+        out.text += '\n';
+      else if (name == "li")
+        out.text += "• ";
+      else if (name == "blockquote")
+        out.text += "│ ";
+      else if (name == "mx-reply") {
+        // The quoted message a reply carries: not shown twice.
+        const auto close = html.find("</mx-reply>", end);
+        at = close == std::string_view::npos ? html.size() : close + 11;
+        continue;
+      } else if (name == "a") {
+        const auto href = tag.find("href=");
+        if (href != std::string::npos && href + 6 < tag.size()) {
+          const char quote = tag[href + 5];
+          const auto stop = tag.find(quote, href + 6);
+          open_href = tag.substr(href + 6, stop == std::string::npos ? std::string::npos : stop - href - 6);
+          link_start = out.text.size();
+        }
+      } else if (name == "/a" && !open_href.empty()) {
+        out.links.emplace_back(out.text.substr(link_start), open_href);
+        open_href.clear();
+      }
+      at = end + 1;
+    } else if (c == '&') {
+      const auto end = html.find(';', at);
+      if (end == std::string_view::npos || end - at > 8) {
+        out.text += c;
+        ++at;
+        continue;
+      }
+      out.text += entity(html.substr(at + 1, end - at - 1));
+      at = end + 1;
+    } else {
+      out.text += c;
+      ++at;
+    }
+  }
+  while (!out.text.empty() && out.text.back() == '\n')
+    out.text.pop_back();
+  return out;
+}
+
+// The links of a plain text: what starts with http:// or https://, up to a
+// space.
+[[nodiscard]] inline std::vector<std::pair<std::string, std::string>> links_in(std::string_view text) {
+  std::vector<std::pair<std::string, std::string>> out;
+  for (std::size_t at = 0; at < text.size();) {
+    const auto found = std::min(text.find("https://", at), text.find("http://", at));
+    if (found == std::string_view::npos)
+      break;
+    auto end = text.find_first_of(" \n\t", found);
+    if (end == std::string_view::npos)
+      end = text.size();
+    const std::string url(text.substr(found, end - found));
+    out.emplace_back(url, url);
+    at = end;
+  }
+  return out;
+}
+
+// A link under a message: what it says, in the accent. A press on it is
+// seen by the messages' list, which opens it.
+struct link_line : scene::Node {
+  std::string url;
+  nodes::Text label;
+  link_line(std::string said, std::string where) : url(std::move(where)), label("🔗 " + std::move(said), 13.0f, accent_colour) {
+    fState.apply({.height = 20.0f});
+    label.setElided(true);
+    fState.setCursor(scene::cursor::hand{});
+  }
+  void forEachChild(auto&& f) { f(label); }
+  void layoutChildren() {
+    label.setMaxWidth(fState.contentBox().width());
+    scene::layout(label, fState.contentBox());
+  }
+  [[nodiscard]] bool acceptsInput() const { return true; }
+};
+
 // One message, as Telegram Desktop shows it: a rounded bubble, on the right
 // and blue for what was sent from here, on the left otherwise; in a group,
 // the sender's name in their colour over the first of a run and their
@@ -875,6 +999,8 @@ struct message_bubble : scene::Node {
   std::string quote_sender;
   nodes::Text text;
   std::optional<nodes::Text> reactions;
+  // Its links, each a line under its text.
+  std::vector<link_line> links;
   // The bubble itself, as the last layout placed it.
   skia::SkRect bubble = skia::SkRect::MakeEmpty();
 
@@ -898,6 +1024,17 @@ struct message_bubble : scene::Node {
                                   [](const delivery::failed&) { return " · not sent"; },
                                   [](const auto&) { return ""; }},
                        said.delivery);
+    // Formatted, it is drawn from its HTML: its text, and its links; plain,
+    // its links are the URLs in it.
+    if (said.body.html && !said.redacted) {
+      auto read = read_html(*said.body.html);
+      text.setText(read.text + (said.edited ? " (edited)" : ""));
+      for (auto& [what, where] : read.links)
+        links.emplace_back(std::move(what), std::move(where));
+    } else if (!said.redacted) {
+      for (auto& [what, where] : links_in(said.body.plain))
+        links.emplace_back(std::move(what), std::move(where));
+    }
     if (said.replies_to) {
       const auto found = std::ranges::find(in.timeline, *said.replies_to, &message::id);
       quote_sender = found != in.timeline.end() ? found->sender : std::string();
@@ -924,6 +1061,7 @@ struct message_bubble : scene::Node {
     f(quote_text);
     f(text);
     f(reactions);
+    f(links);
   }
 
   [[nodiscard]] float inner_width(float row) const {
@@ -964,6 +1102,7 @@ struct message_bubble : scene::Node {
       height += 38.0f;
     if (reactions)
       height += 18.0f;
+    height += 20.0f * static_cast<float>(links.size());
     fState.fHeight = height + 2.0f;
     bubble_width = width + 2.0f * kPadX;
   }
@@ -994,6 +1133,12 @@ struct message_bubble : scene::Node {
     text.fState.arrange(left + kPadX, y);
     scene::layout(text, box);
     y += text.bounds().height();
+    for (link_line& one : links) {
+      one.apply({.width = bubble_width - 2.0f * kPadX});
+      one.fState.arrange(left + kPadX, y);
+      scene::layout(one, box);
+      y += 20.0f;
+    }
     if (reactions) {
       reactions->fState.arrange(left + kPadX, y + 2.0f);
       scene::layout(*reactions, box);
@@ -1573,6 +1718,16 @@ struct timeline_area : scene::Node {
   // A right press on a message: its menu, where it was pressed.
   using Node::onPointer;
   void onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
+    if (press.button == 1) {
+      for (const message_bubble& one : std::get<0>(std::get<0>(timeline.fChildren).fChildren))
+        for (const link_line& link : one.links)
+          if (link.id() == reply.fTarget) {
+            actions->open_url(link.url);
+            reply.handle();
+            return;
+          }
+      return;
+    }
     if (press.button != 3)
       return;
     for (const message_bubble& one : std::get<0>(std::get<0>(timeline.fChildren).fChildren))

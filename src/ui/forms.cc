@@ -17,12 +17,15 @@ export namespace mux::ui {
 // ---- a form row: a caption and a field -----------------------------------
 
 struct field : nodes::Stack {
-  nodes::Text caption;
-  widgets::TextArea<> box;
+  struct parts_t {
+    nodes::Text caption;
+    widgets::TextArea<> box;
+  } parts;
 
   // Declared: the caption over the field, which sits on a plate.
   field(std::string label, std::string placeholder, std::string text = {})
-      : caption(std::move(label), 13.0f, dim_colour), box(std::move(placeholder)) {
+      : parts{.caption = nodes::Text(std::move(label), 13.0f, dim_colour), .box = widgets::TextArea<>(std::move(placeholder))} {
+    auto& box = parts.box;
     this->setGap(4.0f);
     fState.apply({.fillX = true, .height = 64.0f});
     box.setSingleLine(true);
@@ -33,15 +36,14 @@ struct field : nodes::Stack {
   // Its border in the accent while it has the focus.
   bool lit = false;
   void update(double) {
+    auto& box = parts.box;
     if (box.focused() == lit)
       return;
     lit = box.focused();
     box.apply({.border = scene::Border{lit ? accent_colour : band_colour, 1.0f}});
   }
-  void forEachChild(auto&& f) {
-    f(caption);
-    f(box);
-  }
+  // What is typed in it.
+  [[nodiscard]] const std::string& text() const { return parts.box.text(); }
 };
 
 // ---- the account forms ---------------------------------------------------------
@@ -49,14 +51,13 @@ struct field : nodes::Stack {
 // Buttons side by side, as a form ends.
 template <class... Buttons>
 struct button_row : nodes::Stack {
-  std::tuple<Buttons...> buttons;
-  explicit button_row(Buttons... all) : buttons(std::move(all)...) {
+  struct parts_t {
+    std::tuple<Buttons...> buttons;
+  } parts;
+  explicit button_row(Buttons... all) : parts{.buttons = std::tuple<Buttons...>(std::move(all)...)} {
     this->setHorizontal();
     this->setGap(10.0f);
     fState.apply({.autoSize = scene::axes::kBoth});
-  }
-  void forEachChild(auto&& f) {
-    std::apply([&](auto&... each) { (f(each), ...); }, buttons);
   }
 };
 
@@ -64,16 +65,20 @@ struct button_row : nodes::Stack {
 // and its buttons. Enter in any of the form's fields submits it.
 template <class Actions>
 struct form_end : nodes::Stack {
-  nodes::Text message{"", 13.0f, error_colour};
-  button_row<widgets::Button<ask<Actions, &Actions::submit_login>>, widgets::Button<ask<Actions, &Actions::pop_panel>>>
-      buttons;
+  using submit_button = widgets::Button<ask<Actions, &Actions::submit_login>>;
+  using close_button = widgets::Button<ask<Actions, &Actions::pop_panel>>;
+  struct parts_t {
+    nodes::Text message{"", 13.0f, error_colour};
+    button_row<submit_button, close_button> buttons;
+  } parts;
 
   form_end(Actions* a, bool editing)
-      : buttons(widgets::Button<ask<Actions, &Actions::submit_login>>(editing ? "Save" : "Log in", {a}),
-                widgets::Button<ask<Actions, &Actions::pop_panel>>("Close", {a})) {
+      : parts{.buttons = button_row<submit_button, close_button>(submit_button(editing ? "Save" : "Log in", {a}),
+                                                                 close_button("Close", {a}))} {
+    auto& message = parts.message;
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     this->setGap(12.0f);
-    auto& [submit, close] = buttons.buttons;
+    auto& [submit, close] = parts.buttons.parts.buttons;
     submit.setPrimary(true);
     submit.apply({.width = 120.0f, .height = 36.0f});
     close.apply({.width = 120.0f, .height = 36.0f});
@@ -82,14 +87,9 @@ struct form_end : nodes::Stack {
     message.apply({.fillX = true});
   }
 
-  void forEachChild(auto&& f) {
-    f(message);
-    f(buttons);
-  }
-
   void say(std::string text, bool error) {
-    message.setText(std::move(text));
-    message.setColour(error ? error_colour : dim_colour);
+    parts.message.setText(std::move(text));
+    parts.message.setColour(error ? error_colour : dim_colour);
   }
 };
 
@@ -104,38 +104,35 @@ struct form_end : nodes::Stack {
 // and PLAIN without TLS. Its height is what its last layout took.
 template <class Actions>
 struct xmpp_advanced : nodes::Stack {
-  field resource{"Device name (resource)", "mux", "mux"};
-  field host{"Host", "from the domain's SRV records"};
-  field port{"Port", "5222"};
+  using plain_toggle = widgets::Toggle<ask<Actions, &Actions::toggle_plain>>;
   // The switch and what it says, side by side.
   struct plain_row : nodes::Stack {
-    widgets::Toggle<ask<Actions, &Actions::toggle_plain>> plain;
-    nodes::Text label{"Allow PLAIN without TLS. Only for a test server on this machine: never over a network.",
-                      13.0f, error_colour};
-    explicit plain_row(Actions* a) : plain({a}) {
+    struct parts_t {
+      plain_toggle plain;
+      nodes::Text label{"Allow PLAIN without TLS. Only for a test server on this machine: never over a network.",
+                        13.0f, error_colour};
+    } parts;
+    explicit plain_row(Actions* a) : parts{.plain = plain_toggle({a})} {
       this->setHorizontal();
       this->setGap(10.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-      label.setWrapped(true);
-      label.apply({.grow = scene::axes::kX});
+      parts.label.setWrapped(true);
+      parts.label.apply({.grow = scene::axes::kX});
     }
-    void forEachChild(auto&& f) {
-      f(plain);
-      f(label);
-    }
-  } row;
-  widgets::Toggle<ask<Actions, &Actions::toggle_plain>>& plain = row.plain;
+  };
+  struct parts_t {
+    field resource{"Device name (resource)", "mux", "mux"};
+    field host{"Host", "from the domain's SRV records"};
+    field port{"Port", "5222"};
+    plain_row row;
+  } parts;
 
-  explicit xmpp_advanced(Actions* a) : row(a) {
+  explicit xmpp_advanced(Actions* a) : parts{.row = plain_row(a)} {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
     this->setGap(8.0f);
   }
-  void forEachChild(auto&& f) {
-    f(resource);
-    f(host);
-    f(port);
-    f(row);
-  }
+  [[nodiscard]] plain_toggle& plain() { return parts.row.parts.plain; }
+  [[nodiscard]] const plain_toggle& plain() const { return parts.row.parts.plain; }
 };
 
 // An XMPP account's settings: its JID and password, and "Advanced" folds out
@@ -147,58 +144,59 @@ struct xmpp_form : nodes::Stack {
   std::optional<std::string> editing;
   bool advanced = false;
 
-  field address{"Address (JID)", "user@example.com"};
-  field password{"Password", "Password"};
-  widgets::Button<ask<Actions, &Actions::toggle_advanced>> advanced_button;
-  widgets::Collapsible<xmpp_advanced<Actions>> more;
-  form_end<Actions> end;
+  using advanced_button_t = widgets::Button<ask<Actions, &Actions::toggle_advanced>>;
+  struct parts_t {
+    field address{"Address (JID)", "user@example.com"};
+    field password{"Password", "Password"};
+    advanced_button_t advanced_button;
+    widgets::Collapsible<xmpp_advanced<Actions>> more;
+    form_end<Actions> end;
+  } parts;
 
   xmpp_form(Actions* a, const std::optional<config::xmpp_account>& from)
-      : actions(a), advanced_button("Advanced", {a}), more(a), end(a, from.has_value()) {
+      : actions(a),
+        parts{.advanced_button = advanced_button_t("Advanced", {a}),
+              .more = widgets::Collapsible<xmpp_advanced<Actions>>(a),
+              .end = form_end<Actions>(a, from.has_value())} {
+    auto& [address, password, advanced_button, more, end] = parts;
+    auto& folded = more.child().parts;
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     this->setGap(12.0f);
-    password.box.setMasked(true);
+    password.parts.box.setMasked(true);
     advanced_button.apply({.width = 120.0f, .height = 36.0f});
     if (from) {
       editing = from->address;
-      address.box.setText(from->address);
-      password.box.setText(from->password);
-      more.child().resource.box.setText(from->resource);
+      address.parts.box.setText(from->address);
+      password.parts.box.setText(from->password);
+      folded.resource.parts.box.setText(from->resource);
       if (from->host)
-        more.child().host.box.setText(*from->host);
+        folded.host.parts.box.setText(*from->host);
       if (from->port)
-        more.child().port.box.setText(std::to_string(*from->port));
-      more.child().plain.setOn(from->plain_without_tls);
+        folded.port.parts.box.setText(std::to_string(*from->port));
+      more.child().plain().setOn(from->plain_without_tls);
       advanced = from->resource != "mux" || from->host || from->port || from->plain_without_tls;
     }
     more.setOpenNow(advanced);
   }
 
-  void forEachChild(auto&& f) {
-    f(address);
-    f(password);
-    f(advanced_button);
-    f(more);
-    f(end);
-  }
-
   // Folded out or away: smoothly, where things move.
   void show_advanced(bool shown) {
     advanced = shown;
-    more.setOpen(shown);
+    parts.more.setOpen(shown);
   }
 
-  void flip_plain() { more.child().plain.setOn(!more.child().plain.on()); }
+  void flip_plain() { parts.more.child().plain().setOn(!parts.more.child().plain().on()); }
 
   // The account as typed, or what is wrong with it. What is folded away is
   // kept as it is: folding is not clearing.
   [[nodiscard]] std::expected<config::xmpp_account, std::string> account() const {
-    config::xmpp_account out{.address = address.box.text(),
-                             .password = password.box.text(),
-                             .resource = more.child().resource.box.text(),
-                             .host = typed_or_nothing(more.child().host.box.text()),
-                             .plain_without_tls = more.child().plain.on()};
-    if (const std::string& text = more.child().port.box.text(); !text.empty()) {
+    const auto& folded = parts.more.child().parts;
+    config::xmpp_account out{.address = parts.address.text(),
+                             .password = parts.password.text(),
+                             .resource = folded.resource.text(),
+                             .host = typed_or_nothing(folded.host.text()),
+                             .plain_without_tls = parts.more.child().plain().on()};
+    if (const std::string& text = folded.port.text(); !text.empty()) {
       std::int64_t number = 0;
       const auto [last, failed] = std::from_chars(text.data(), text.data() + text.size(), number);
       if (failed != std::errc{} || last != text.data() + text.size())
@@ -210,7 +208,7 @@ struct xmpp_form : nodes::Stack {
     return out;
   }
 
-  void say(std::string text, bool error) { end.say(std::move(text), error); }
+  void say(std::string text, bool error) { parts.end.say(std::move(text), error); }
 
   using Node::onKey;
   void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
@@ -230,46 +228,41 @@ struct matrix_form : nodes::Stack {
   Actions* actions = nullptr;
   std::optional<std::string> editing;
 
-  field user_id{"User ID", "@user:example.org"};
-  field password{"Password", "Password"};
-  field homeserver{"Homeserver", "found through the server's .well-known"};
-  field device_name{"Device name", "mux", "mux"};
-  form_end<Actions> end;
+  struct parts_t {
+    field user_id{"User ID", "@user:example.org"};
+    field password{"Password", "Password"};
+    field homeserver{"Homeserver", "found through the server's .well-known"};
+    field device_name{"Device name", "mux", "mux"};
+    form_end<Actions> end;
+  } parts;
 
   matrix_form(Actions* a, const std::optional<config::matrix_account>& from)
-      : actions(a), end(a, from.has_value()) {
+      : actions(a), parts{.end = form_end<Actions>(a, from.has_value())} {
+    auto& [user_id, password, homeserver, device_name, end] = parts;
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     this->setGap(12.0f);
-    password.box.setMasked(true);
+    password.parts.box.setMasked(true);
     if (from) {
       editing = from->user_id;
-      user_id.box.setText(from->user_id);
-      password.box.setText(from->password);
+      user_id.parts.box.setText(from->user_id);
+      password.parts.box.setText(from->password);
       if (from->homeserver)
-        homeserver.box.setText(*from->homeserver);
-      device_name.box.setText(from->device_name);
+        homeserver.parts.box.setText(*from->homeserver);
+      device_name.parts.box.setText(from->device_name);
     }
   }
 
-  void forEachChild(auto&& f) {
-    f(user_id);
-    f(password);
-    f(homeserver);
-    f(device_name);
-    f(end);
-  }
-
   [[nodiscard]] std::expected<config::matrix_account, std::string> account() const {
-    config::matrix_account out{.user_id = user_id.box.text(),
-                               .password = password.box.text(),
-                               .homeserver = typed_or_nothing(homeserver.box.text()),
-                               .device_name = device_name.box.text()};
+    config::matrix_account out{.user_id = parts.user_id.text(),
+                               .password = parts.password.text(),
+                               .homeserver = typed_or_nothing(parts.homeserver.text()),
+                               .device_name = parts.device_name.text()};
     if (auto wrong = config::check(out))
       return std::unexpected(*wrong);
     return out;
   }
 
-  void say(std::string text, bool error) { end.say(std::move(text), error); }
+  void say(std::string text, bool error) { parts.end.say(std::move(text), error); }
 
   using Node::onKey;
   void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {

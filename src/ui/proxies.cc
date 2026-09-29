@@ -207,18 +207,18 @@ struct proxy_editor : nodes::Stack {
     message.setWrapped(true);
     message.apply({.fillX = true, .margin = inset});
     buttons.apply({.margin = inset});
-    auto& [save, remove] = buttons.buttons;
+    auto& [save, remove] = buttons.parts.buttons;
     save.setPrimary(true);
     save.apply({.width = 110.0f, .height = 34.0f});
     remove.apply({.width = 110.0f, .height = 34.0f});
     remove.setVisible(from.has_value());
-    password.box.setMasked(true);
+    password.parts.box.setMasked(true);
     if (from) {
-      name.box.setText(from->name);
-      host.box.setText(from->host);
-      port.box.setText(std::to_string(from->port));
-      username.box.setText(from->username.value_or(""));
-      password.box.setText(from->password.value_or(""));
+      name.parts.box.setText(from->name);
+      host.parts.box.setText(from->host);
+      port.parts.box.setText(std::to_string(from->port));
+      username.parts.box.setText(from->username.value_or(""));
+      password.parts.box.setText(from->password.value_or(""));
     }
     kind = from ? config::proxy_kind_of(from->kind) : config::proxy_kind_t{config::proxy_kind::socks5{}};
     kinds.show(kind, true);
@@ -232,19 +232,19 @@ struct proxy_editor : nodes::Stack {
   // The profile as typed, or what is wrong with it.
   [[nodiscard]] std::expected<config::proxy_settings, std::string> proxy() const {
     const auto& [header, name, kinds, host, port, username, password, message, buttons] = parts;
-    config::proxy_settings out{.name = name.box.text(), .kind = config::word_of(kind), .host = host.box.text()};
+    config::proxy_settings out{.name = name.parts.box.text(), .kind = config::word_of(kind), .host = host.parts.box.text()};
     if (out.name.empty())
       return std::unexpected("Name the proxy");
     if (out.host.empty())
       return std::unexpected("Type the proxy's host");
-    const std::string& text = port.box.text();
+    const std::string& text = port.parts.box.text();
     std::int64_t number = 0;
     const auto [last, failed] = std::from_chars(text.data(), text.data() + text.size(), number);
     if (text.empty() || failed != std::errc{} || last != text.data() + text.size() || number < 1 || number > 65535)
       return std::unexpected("A port is a number from 1 to 65535");
     out.port = number;
-    out.username = typed_or_nothing(username.box.text());
-    out.password = typed_or_nothing(password.box.text());
+    out.username = typed_or_nothing(username.parts.box.text());
+    out.password = typed_or_nothing(password.parts.box.text());
     return out;
   }
 

@@ -158,12 +158,16 @@ struct page_preview : nodes::Stack {
     column texts;
     std::optional<nodes::Image<from_avatars>> picture;
   } parts;
-  explicit page_preview(const link_preview& shown) : parts{.texts = column(shown)} {
+  // The link it is the preview of: pressed, it is followed.
+  std::string url;
+  page_preview(const link_preview& shown, std::string where) : parts{.texts = column(shown)}, url(std::move(where)) {
     this->setHorizontal();
     this->setGap(8.0f);
+    // Lit under the pointer, as a link is: it is one.
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {6.0f, 0.0f, 2.0f, 0.0f},
                   .padding = {4.0f, 6.0f, 4.0f, 0.0f}, .cornerRadius = 4.0f,
-                  .background = (accent_colour & 0x00FFFFFFu) | (0x18u << 24)});
+                  .background = (accent_colour & 0x00FFFFFFu) | (0x18u << 24),
+                  .hoverBackground = (accent_colour & 0x00FFFFFFu) | (0x34u << 24)});
     parts.stripe.apply({.fillY = true, .width = 3.0f, .cornerRadius = 1.5f});
     if (shown.image) {
       parts.picture.emplace(from_avatars{*shown.image});
@@ -922,7 +926,7 @@ struct message_bubble : nodes::Stack {
     // The first link's preview, where it has come.
     if (const auto link = first_link_of(said); link && now)
       if (const auto found = now->previews.find(*link); found != now->previews.end()) {
-        body.parts.preview.emplace(found->second);
+        body.parts.preview.emplace(found->second, *link);
         preview_known = true;
       }
     if (said.replies_to) {

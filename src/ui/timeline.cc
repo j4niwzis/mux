@@ -213,6 +213,11 @@ struct timeline_area : scene::Node {
             actions->open_url(card.url);
             return true;
           }
+        // A link's preview: the link, followed.
+        if (const auto& preview = one.parts.body.parts.preview; preview && preview->bounds().contains(press.x, press.y)) {
+          actions->open_url(preview->url);
+          return true;
+        }
         // The quote: to the message it quotes.
         if (one.parts.body.parts.quote && one.said.replies_to && one.parts.body.parts.quote->bounds().contains(press.x, press.y)) {
           actions->jump_to_message(*one.said.replies_to, quoted_fragment(one.said));

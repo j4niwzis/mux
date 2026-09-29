@@ -195,13 +195,7 @@ void app::apply(const request::change_limit& one) {
 void app::apply(const request::clear_stored&) {
   std::error_code failed;
   std::filesystem::remove_all(mux::config::state_path("messages"), failed);
-  std::filesystem::remove_all(mux::config::cache_path("avatars"), failed);
-  mux::ui::avatar_images().clear();
-  mux::ui::thumbnails().clear();
-  mux::ui::whole_pictures().clear();
-  avatars_fetched.clear();
-  thumbnails_fetched.clear();
-  wholes_fetched.clear();
+  pictures.clear();
   root().show_message("Storage", "The stored messages and pictures are cleared.");
   this->refresh();
 }

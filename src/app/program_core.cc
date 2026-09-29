@@ -24,12 +24,7 @@ import mux.app.words;
 namespace mux::app {
 
 void app::apply_limits() {
-  // The pictures of messages under the limit set, their thumbnails and the
-  // whole ones apart; avatars under a quarter of it, never under 16 MiB.
-  const std::size_t pictures = static_cast<std::size_t>(limits.pictures_in_memory_mb) << 20;
-  mux::ui::thumbnails().budget = pictures;
-  mux::ui::whole_pictures().budget = pictures / 2;
-  mux::ui::avatar_images().budget = std::max<std::size_t>(pictures / 4, 16u << 20);
+  pictures.set_limits(limits);
   store.budget = static_cast<std::uintmax_t>(limits.messages_on_disk_mb) << 20;
 }
 
@@ -43,7 +38,7 @@ void app::woken() {
     // What the program itself does with a change, besides the model: a
     // session kept, a picture shown.
     std::visit(mux::overloaded{[&](const mux::change::session_given& given) { this->keep_session(given); },
-                               [&](const mux::change::avatar_loaded& picture) { this->take_avatar(picture, true); },
+                               [&](const mux::change::avatar_loaded& picture) { pictures.take(picture, true); },
                                [](const auto&) {}},
                one);
     model->apply(one);
@@ -218,7 +213,7 @@ auto app::xmpp_form_up() -> mux::ui::xmpp_form<actions>* {
 }
 
 void app::refresh() {
-  this->ask_avatars();
+  pictures.ask();
   root().main().muted = muted;
   root().show(saved, *model);
   root().main().show(*model);

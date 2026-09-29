@@ -90,56 +90,6 @@ void app::apply(const request::send_files&) {
   root().close_send_box();
 }
 
-void app::apply(const request::open_picture& one) {
-  root().open_picture(one.source, one.sender, one.name, one.when);
-  const auto& chosen = root().main().chosen;
-  if (chosen && !mux::ui::whole_pictures().has(one.source) && !this->read_back(mux::media_use::whole{}, one.source) &&
-      wholes_fetched.insert(one.source).second)
-    net->fetch_media(chosen->account, one.source, mux::media_use::whole{}, 0);
-}
-
-void app::apply(const request::close_picture&) { root().close_picture(); }
-
-void app::apply(const request::save_picture& one) {
-  if (const auto kept = kept_file(mux::media_use::whole{}, one.source))
-    if (std::ifstream file{*kept, std::ios::binary}) {
-      std::string bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-      this->save_download(bytes, "image", false);
-      return;
-    }
-  if (const auto& chosen = root().main().chosen)
-    net->fetch_media(chosen->account, one.source, mux::media_use::to_save{"image"}, 0);
-}
-
-void app::save_download(const std::string& bytes, std::string name, bool open) {
-  if (const auto type = mux::media::picture_of(bytes); type && !name.contains('.'))
-    name += std::format(".{}", mux::media::extension_of(*type));
-  const std::filesystem::path base = std::filesystem::path(name).filename();
-  std::error_code failed;
-  std::filesystem::create_directories(downloads(), failed);
-  auto where = downloads() / (base.empty() ? std::filesystem::path("file") : base);
-  for (int n = 1; std::filesystem::exists(where, failed); ++n)
-    where = downloads() / std::format("{} ({}){}", base.stem().string(), n, base.extension().string());
-  std::ofstream(where, std::ios::binary) << bytes;
-  if (open)
-    mux::host::open_url("file://" + where.string());
-  else
-    root().show_message("Saved", std::format("Saved to {}", where.string()));
-}
-
-void app::apply(const request::open_file& one) {
-  const auto& chosen = root().main().chosen;
-  if (!chosen)
-    return;
-  net->fetch_media(chosen->account, one.source, mux::media_use::to_open{one.name}, 0);
-}
-
-auto app::downloads() -> std::filesystem::path {
-  if (const char* home = std::getenv("HOME"); home && *home)
-    return std::filesystem::path(home) / "Downloads";
-  return std::filesystem::current_path();
-}
-
 void app::apply(const request::reply_to& one) {
   menu_target.id = one.id;
   menu_target.text = one.text;
@@ -209,17 +159,8 @@ void app::apply(const request::menu_copy_link&) {
 
 void app::apply(const request::menu_save&) {
   root().close_menu();
-  if (!menu_target.media)
-    return;
-  const std::string name = menu_target.media_name.empty() ? std::string("image") : menu_target.media_name;
-  if (const auto kept = kept_file(mux::media_use::whole{}, *menu_target.media))
-    if (std::ifstream file{*kept, std::ios::binary}) {
-      std::string bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-      this->save_download(bytes, name, false);
-      return;
-    }
-  if (const auto& chosen = root().main().chosen)
-    net->fetch_media(chosen->account, *menu_target.media, mux::media_use::to_save{name}, 0);
+  if (menu_target.media)
+    pictures.save(*menu_target.media, menu_target.media_name.empty() ? std::string("image") : menu_target.media_name);
 }
 
 void app::apply(const request::menu_delete&) {

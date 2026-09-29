@@ -24,6 +24,7 @@ import mux.app.requests;
 import mux.app.words;
 import mux.app.services;
 import mux.app.search;
+import mux.app.pictures;
 
 export namespace mux::app {
 
@@ -33,6 +34,7 @@ struct app {
   // they share
   services shared;
   search_part search{shared};
+  pictures_part pictures{shared};
   // What the parts share, pointed at the program's own: once the program
   // is given its model, network and mailbox.
   void wire();
@@ -53,8 +55,8 @@ struct app {
   static constexpr bool takes = requires(Part& part, const Request& one) { part.apply(one); };
   template <class Request>
   void route(const Request& one) {
-    static_assert(takes<search_part, Request> || takes<app, Request>, "a request no part of the program takes");
-    if (!offer(search, one))
+    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<app, Request>, "a request no part of the program takes");
+    if (!offer(search, one) && !offer(pictures, one))
       offer(*this, one);
   }
 
@@ -104,36 +106,11 @@ struct app {
 
   void woken();
 
-  // -- avatars: what the chats and the people in them look like
-  // Fetched once each, kept on disk under the cache, shown by what they are
-  // of: a chat by its id, a person by theirs.
   // -- messages on disk: every change to one written as it is now
   message_store store;
   void keep_on_disk(const mux::change_t& one);
 
   std::set<mux::conversation_id> members_fetched;
-  // What is being fetched from a server, not to be asked for twice: avatars
-  // by their source, thumbnails and whole pictures by theirs.
-  std::set<std::string> avatars_fetched, thumbnails_fetched, wholes_fetched;
-  static std::filesystem::path avatar_file(std::string_view source);
-  // Where each kind of picture is kept on disk, by its source; nothing for
-  // a file fetched to be saved, which goes to Downloads instead.
-  static std::optional<std::filesystem::path> kept_file(const mux::media_use_t& use, std::string_view source);
-  // The bytes of a picture or a file fetched: shown, kept, or saved -- as
-  // what it was fetched for says.
-  void take_avatar(const mux::change::avatar_loaded& picture, bool fresh);
-  // A picture read back from the disk, where it was kept: shown again.
-  bool read_back(const mux::media_use_t& use, const std::string& source);
-  // The pictures on disk held to a size: the least recently used go first,
-  // a file's time being when it was last read or written.
-  std::size_t avatars_written = 0;
-  void prune_avatar_files();
-  // A message's picture's thumbnail: from the disk where it was fetched
-  // before, from the account where not.
-  void want_picture(const mux::account_id& of, const std::string& source);
-  // What the model has pictures of and the window has not: from the disk
-  // where they were fetched before, from the account where not.
-  void ask_avatars();
 
   // A Matrix session given: kept with its account, for the next start.
   void keep_session(const mux::change::session_given& given);
@@ -236,20 +213,6 @@ struct app {
   void files_given(std::vector<std::string> paths, bool dropped);
   // Sent: each file, the caption with the first; the box closed.
   void apply(const request::send_files&);
-
-  // A picture seen whole: over the window at once, the thumbnail until all
-  // of it has come.
-  void apply(const request::open_picture& one);
-  void apply(const request::close_picture&);
-  // A picture saved into Downloads: from the disk where it was fetched
-  // whole, fetched whole where not; named as the picture's type says.
-  void apply(const request::save_picture& one);
-  // Bytes saved into Downloads under a name -- a picture's with its type's
-  // extension, a number added where the name is taken -- and opened, or not.
-  void save_download(const std::string& bytes, std::string name, bool open);
-  // A file saved -- into ~/Downloads, under its name -- and opened.
-  void apply(const request::open_file& one);
-  static std::filesystem::path downloads();
 
   // A message swiped to the left: answered, as its menu's Reply does.
   void apply(const request::reply_to& one);

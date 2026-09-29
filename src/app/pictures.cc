@@ -191,7 +191,7 @@ class pictures_part {
               if (const auto found = s_->model->previews.find(*link); found != s_->model->previews.end()) {
                 if (found->second.image)
                   want(id, found->second.image, *found->second.image);
-              } else if (previews_asked_.insert(*link).second) {
+              } else if (links_asked_.insert(*link).second) {
                 s_->net->fetch_preview(id, *link);
               }
             }
@@ -538,7 +538,7 @@ class pictures_part {
   // The quoted messages asked for, not to be asked twice.
   std::set<std::string> quotes_asked_;
   // The links whose previews were asked for, not to be asked twice.
-  std::set<std::string> previews_asked_;
+  std::set<std::string> links_asked_;
   std::size_t written_ = 0;
   std::uintmax_t on_disk_ = 512u << 20;
 };

@@ -219,21 +219,21 @@ class message_store {
     return all;
   }
   // One file's lines, into `all`: how many there were.
+  static std::optional<std::string> text_of(const knot::value::object& o, std::string_view key) {
+    const auto found = o.find(key);
+    if (found == o.end() || !found->second.is<std::string>())
+      return std::nullopt;
+    return found->second.as<std::string>();
+  }
+  static bool flag_of(const knot::value::object& o, std::string_view key) {
+    const auto found = o.find(key);
+    return found != o.end() && found->second.is<bool>() && found->second.as<bool>();
+  }
   static std::size_t read_lines(const std::filesystem::path& where, const mux::conversation_id& in,
                                 std::map<std::string, mux::message>& all) {
     std::ifstream file(where, std::ios::binary);
     std::string text;
     std::size_t lines = 0;
-    const auto text_of = [](const knot::value::object& o, std::string_view key) -> std::optional<std::string> {
-      const auto found = o.find(key);
-      if (found == o.end() || !found->second.is<std::string>())
-        return std::nullopt;
-      return found->second.as<std::string>();
-    };
-    const auto flag_of = [](const knot::value::object& o, std::string_view key) {
-      const auto found = o.find(key);
-      return found != o.end() && found->second.is<bool>() && found->second.as<bool>();
-    };
     while (std::getline(file, text)) {
       ++lines;
       auto parsed = knot::try_read<knot::value>(std::string_view(text));

@@ -61,9 +61,9 @@ struct timeline_area : scene::Node {
   Actions* actions = nullptr;
   explicit timeline_area(Actions* a)
       : parts{.jump = jump_button<Actions>(a),
-              .loading = widgets::RadialLoader<stop_jump>(44.0f, {a}),
               .mentions = mark_button<Actions>(a, mark_kind::mention{}, "@"),
-              .reactions = mark_button<Actions>(a, mark_kind::reaction{}, "\u2665")},
+              .reactions = mark_button<Actions>(a, mark_kind::reaction{}, "\u2665"),
+              .loading = widgets::RadialLoader<stop_jump>(44.0f, {a})},
         actions(a) {
     parts.timeline.apply({.fill = true});
     // The room around the messages is inside what scrolls, so the bar is at

@@ -29,6 +29,7 @@ import mux.app.pictures;
 import mux.app.drafts;
 import mux.app.reading;
 import mux.app.outbox;
+import mux.app.settings;
 import mux.logic.links;
 
 export namespace mux::app {
@@ -45,6 +46,7 @@ struct app : kept_settings {
   drafts_part drafts{shared};
   reading_part reading{shared};
   outbox_part outbox{shared, drafts, sending};
+  settings_part settings{shared, *this, pictures, [this] { this->rebuild_in_theme(); }};
   // Files chosen in the dialog, or dropped on the window: to the outbox.
   void files_given(std::vector<std::string> paths, bool dropped) { outbox.files_given(std::move(paths), dropped); }
   // What the parts share, pointed at the program's own: once the program
@@ -67,8 +69,9 @@ struct app : kept_settings {
   static constexpr bool takes = requires(Part& part, const Request& one) { part.apply(one); };
   template <class Request>
   void route(const Request& one) {
-    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<app, Request>, "a request no part of the program takes");
-    if (!offer(search, one) && !offer(pictures, one) && !offer(reading, one) && !offer(outbox, one))
+    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<app, Request>, "a request no part of the program takes");
+    if (!offer(search, one) && !offer(pictures, one) && !offer(reading, one) && !offer(outbox, one) &&
+        !offer(settings, one))
       offer(*this, one);
   }
 
@@ -80,7 +83,6 @@ struct app : kept_settings {
   mailbox_type* box = nullptr;
   mux::model* model = nullptr;
   network* net = nullptr;
-  void apply_limits();
   // The proxy chosen for the account being added, as it is added.
   std::optional<std::string> new_proxy;
   // What the message field's text is: a new message, an answer to one, or
@@ -172,10 +174,7 @@ struct app : kept_settings {
   void apply(const request::remove_account& one);
   void apply(const request::open_drawer&);
   void apply(const request::show_account& one);
-  void apply(const request::set_motion& one);
   void apply(const request::quit&);
-  void apply(const request::open_settings&);
-  void apply(const request::close_settings&);
   void apply(const request::toggle_info&);
   void apply(const request::jump_to_end&);
 
@@ -256,29 +255,17 @@ struct app : kept_settings {
   void reconnect(const mux::config::account_t& account);
   // The accounts going through a profile, connected again.
   void reconnect_through(const std::string& name);
-  void apply(const request::settings_appearance&);
-  void apply(const request::settings_files&);
-  void apply(const request::flip_strip_metadata&);
-  void apply(const request::flip_rename_pictures&);
-  void apply(const request::settings_storage&);
   // A limit halved or doubled, within its bounds: kept, and in force at once.
-  void apply(const request::change_limit& one);
   // What is kept on disk, gone: the stored messages and the pictures, and
   // the pictures in memory, to be fetched again as they are wanted.
-  void apply(const request::clear_stored&);
-  void apply(const request::settings_rendering&);
   // The theme or the renderer chosen: kept, for the next start.
   // A theme chosen: its colours in place, and the window made again in them,
   // as it was -- the chats, the one chosen, the widths -- with Settings open
   // where it was.
-  void apply(const request::set_theme& one);
   // An accent chosen: the same as a theme, over it.
-  void apply(const request::set_accent& one);
   // The theme and accent now chosen put in place, and the window made again
   // in them, as it was, with Settings open on Appearance.
   void rebuild_in_theme();
-  void apply(const request::set_renderer& one);
-  void show_appearance_choices();
   void apply(const request::manage_proxies&);
   void apply(const request::settings_proxies&);
   void apply(const request::add_proxy&);
@@ -296,11 +283,8 @@ struct app : kept_settings {
   // chosen.
   void apply(const request::switch_account& one);
   void apply(const request::pop_panel&);
-  void apply(const request::settings_home&);
-  void apply(const request::settings_animations&);
 
   // How much moves, from now on and in the file.
-  void set_motion(std::string level);
 
   void switch_form(void (adding::*to)());
 

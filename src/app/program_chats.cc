@@ -139,16 +139,7 @@ void app::apply(const request::open_drawer&) { root().open_drawer(); }
 
 void app::apply(const request::show_account& one) { (void)this->show_account(one.address); }
 
-void app::apply(const request::set_motion& one) { this->set_motion(one.level); }
-
 void app::apply(const request::quit&) { mux::host::request_quit(); }
-
-void app::apply(const request::open_settings&) {
-  root().close_drawer();
-  root().open_settings(motion.value_or("full"));
-}
-
-void app::apply(const request::close_settings&) { root().close_settings(); }
 
 void app::apply(const request::toggle_info&) { root().main().toggle_info(); }
 

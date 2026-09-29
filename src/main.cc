@@ -134,7 +134,7 @@ int main(int argc, char** argv) {
   if (!demo)
     program.drafts.load();
   program.sending = saved.sending.value_or(mux::config::sending_settings{});
-  program.apply_limits();
+  program.settings.apply_limits();
   program.proxies = proxies;
   for (const auto& one : saved.muted.value_or(std::vector<mux::config::muted_chat>{}))
     program.muted.insert({{mux::ui::protocol_of(one.account), one.account}, one.conversation});

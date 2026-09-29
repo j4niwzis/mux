@@ -24,11 +24,6 @@ import mux.logic.links;
 
 namespace mux::app {
 
-void app::apply_limits() {
-  pictures.set_limits(limits);
-  store.budget = static_cast<std::uintmax_t>(limits.messages_on_disk_mb) << 20;
-}
-
 auto app::window() -> skiff::scene::Scene<window_type>& { return scene; }
 
 void app::woken() {

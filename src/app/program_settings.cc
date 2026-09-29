@@ -46,21 +46,6 @@ void app::rebuild_in_theme() {
     up->show_appearance(theme, accent);
 }
 
-void app::apply(const request::set_renderer& one) {
-  renderer = one.renderer;
-  this->show_appearance_choices();
-  (void)this->write();
-}
-
-void app::show_appearance_choices() {
-  if (auto* up = root().settings_up()) {
-    if (auto* page = up->appearance())
-      page->show(theme, accent);
-    if (auto* page = up->rendering())
-      page->show(renderer);
-  }
-}
-
 void app::apply(const request::manage_proxies&) {
   root().open_settings(motion.value_or("full"));
   if (auto* up = root().settings_up())

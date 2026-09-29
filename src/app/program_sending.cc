@@ -37,21 +37,4 @@ void app::apply(const request::pop_panel&) {
   this->refresh();
 }
 
-void app::apply(const request::settings_home&) {
-  if (auto* up = root().settings_up())
-    up->show_home();
-}
-
-void app::apply(const request::settings_animations&) {
-  if (auto* up = root().settings_up())
-    up->show_animations();
-}
-
-void app::set_motion(std::string level) {
-  skiff::paint::motionLevel() = motion_of(level);
-  root().show_motion(level);
-  motion = std::move(level);
-  (void)this->write();
-}
-
 }  // namespace mux::app

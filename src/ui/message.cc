@@ -295,10 +295,11 @@ struct picture_view : scene::Node {
   // The loader while the picture has not come; where it moves, drawn again
   // each frame for the next of its frames.
   [[nodiscard]] bool settling() const { return animations().has(source); }
-  // Ticked while the picture is coming, moves, or has only its thumbnail.
-  [[nodiscard]] bool wantsTick() const {
-    return parts.loader.visible() || animations().has(source) || !whole_pictures().has(source);
-  }
+  // Ticked while the picture is coming or moves. Its thumbnail coming is
+  // seen by the picture itself, which marks this; every picture message
+  // was ticked at every frame for as long as its whole picture was not
+  // fetched -- that is, nearly always.
+  [[nodiscard]] bool wantsTick() const { return parts.loader.visible() || animations().has(source); }
   void update(double) {
     const bool moving = animations().has(source);
     const bool coming = !moving && !thumbnails().has(source) && !whole_pictures().has(source);

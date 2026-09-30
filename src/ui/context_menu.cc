@@ -211,6 +211,45 @@ template <class Pick>
 struct emoji_panel : nodes::Stack {
   Pick pick;
   static constexpr float kCell = 37.0f;
+  // A reaction that is text -- Matrix takes any -- as SchildiChat offers one:
+  // what is searched, itself, at the top of the results, where the panel
+  // reacts rather than writes.
+  struct text_chip : nodes::Stack {
+    emoji_panel* panel;
+    std::string text;
+    struct parts_t {
+      nodes::Text label{"", 13.0f, text_colour};
+    } parts;
+    explicit text_chip(emoji_panel* p) : panel(p) {
+      this->setHorizontal();
+      fState.apply({.fillX = true, .height = 34.0f, .margin = {4.0f, 7.0f, 2.0f, 0.0f}, .padding = {0.0f, 12.0f, 0.0f, 12.0f},
+                    .cornerRadius = 17.0f, .background = tile_colour, .hoverBackground = chosen_colour});
+      parts.label.setElided(true);
+      parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      this->setVisible(false);
+    }
+    // What is typed, its spaces at either end cut: offered where there is
+    // any.
+    void show(std::string_view typed) {
+      const auto space = [](char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; };
+      while (!typed.empty() && space(typed.front()))
+        typed.remove_prefix(1);
+      while (!typed.empty() && space(typed.back()))
+        typed.remove_suffix(1);
+      text = std::string(typed);
+      parts.label.setText(std::format("React with \u201C{}\u201D", text));
+      if (this->visible() != !text.empty())
+        this->setVisible(!text.empty());
+      this->invalidateLayout();
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+    [[nodiscard]] bool onClick(float, float) {
+      panel->tones_done = true;
+      panel->pick(text, text);
+      return true;
+    }
+  };
   // One emoji of the list.
   struct cell : nodes::Stack {
     emoji_panel* panel;
@@ -362,6 +401,7 @@ struct emoji_panel : nodes::Stack {
   using list_t = nodes::ScrollContainer<nodes::Flow<std::vector<section>>>;
   struct parts_t {
     field_t field;
+    text_chip text_option;
     list_t list{nodes::Flow<std::vector<section>>({.spacingY = 0.0f, .wrap = false}, {})};
     footer_row footer;
     // Over the rest: an emoji's tones, while they are asked for.
@@ -379,8 +419,9 @@ struct emoji_panel : nodes::Stack {
   std::size_t first_group = 0;
 
   // Sized by where it is shown.
-  explicit emoji_panel(Pick what) : pick(std::move(what)), parts{.field = field_t("Search emoji", {this})} {
-    auto& [field, list, footer, tones, preview] = parts;
+  explicit emoji_panel(Pick what)
+      : pick(std::move(what)), parts{.field = field_t("Search emoji", {this}), .text_option = text_chip(this)} {
+    auto& [field, text_option, list, footer, tones, preview] = parts;
     this->setGap(4.0f);
     fState.apply({.padding = {7.0f, 0.0f, 4.0f, 7.0f}});
     field.setSearchIcon(true);
@@ -421,6 +462,7 @@ struct emoji_panel : nodes::Stack {
     for (std::size_t g = 0; g < alef::emoji_groups.size(); ++g)
       all.emplace_back(this, alef::emoji_groups[g].name, logic::emoji_of_group(g));
     searching = false;
+    parts.text_option.show({});
     parts.list.invalidateLayout();
     parts.list.scrollTo(0.0f);
   }
@@ -433,6 +475,9 @@ struct emoji_panel : nodes::Stack {
     all.clear();
     all.emplace_back(this, "Search results", logic::emoji_found(query));
     searching = true;
+    // Where it reacts: what is typed, as a reaction of text.
+    if (Pick::takes_text())
+      parts.text_option.show(query);
     parts.list.invalidateLayout();
     parts.list.scrollTo(0.0f);
   }
@@ -493,12 +538,15 @@ struct emoji_panel : nodes::Stack {
 template <class Actions>
 struct react_with {
   Actions* actions = nullptr;
+  // What is typed in its search, a reaction too: Matrix takes any text.
+  [[nodiscard]] static constexpr bool takes_text() { return true; }
   void operator()(const std::string&, const std::string& key) const { actions->menu_react(key); }
 };
 // What the input's emoji do: go into what is written.
 template <class Actions>
 struct insert_emoji_into {
   Actions* actions = nullptr;
+  [[nodiscard]] static constexpr bool takes_text() { return false; }
   // A glyph as itself; a custom emoji (its key its picture's, not its
   // text) as its picture.
   void operator()(const std::string& text, const std::string& key) const {

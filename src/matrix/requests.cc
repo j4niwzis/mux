@@ -806,10 +806,13 @@ void account<Sink>::remove(std::string room, std::string event) {
   loop_->spawn([this, room = std::move(room), event = std::move(event)] {
     if (!api_)
       return;
-    if (perform(*api_, loom::cs::redact_event{.room_id = room,
-                                              .event_id = event,
-                                              .txn_id = this->transaction()}))
+    // Taken out only where the server did it; else why not, said.
+    if (auto done = perform(*api_, loom::cs::redact_event{.room_id = room,
+                                                          .event_id = event,
+                                                          .txn_id = this->transaction()}))
       sink_(change::message_redacted{{id_, room}, event});
+    else
+      sink_(change::refused{id_, std::format("The message was not deleted: {}", done.error().said())});
   });
 }
 

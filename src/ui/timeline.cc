@@ -47,6 +47,7 @@ struct menu_facts {
   bool moving = false;  // a GIF or a moving WebP: one that can be saved to the GIFs
   bool pinned = false;  // pinned in its chat: the menu offers Unpin
   bool pinnable = false;  // in a chat where pins are kept: a Matrix room
+  bool deletable = false;  // one may take it away: one's own, or another's with the power to
   bool reaction_events = false;  // reacted to, the reactions being events
   std::size_t reaction_count = 0;  // how many reactions it has, of anyone
   std::string link;  // a link to it, where it has one
@@ -369,6 +370,16 @@ struct timeline_area : scene::Node {
         if (const conversation* chat = seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr) {
           facts.pinned = std::ranges::contains(chat->pinned, one.message_id);
           facts.pinnable = is_matrix(chat->id.account.speaks) && one.message_id.starts_with('$');
+          // Delete as the room's power levels allow it: one's own where one
+          // may send a redaction; another's where one may also redact.
+          facts.deletable = one.outgoing;
+          if (is_matrix(chat->id.account.speaks)) {
+            const auto mine = chat->powers.find(chat->id.account.address);
+            const std::int64_t level = mine != chat->powers.end() ? mine->second : chat->power_default;
+            const auto redaction = chat->needs.events.find("m.room.redaction");
+            const std::int64_t send = redaction != chat->needs.events.end() ? redaction->second : chat->needs.events_default;
+            facts.deletable = level >= send && (one.outgoing || level >= chat->needs.redact);
+          }
           facts.reaction_events = !one.said.reaction_events.empty();
           for (const auto& [key, who] : one.said.reactions)
             facts.reaction_count += who.size();

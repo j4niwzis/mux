@@ -1064,7 +1064,7 @@ struct context_menu : scene::Node {
       copy_image.setVisible(facts.picture.has_value());
       save.setVisible(facts.media.has_value());
       save_gif.setVisible(facts.media.has_value() && facts.moving);
-      remove.setVisible(facts.own);
+      remove.setVisible(facts.deletable);
       pin.setVisible(facts.pinnable);
       source.setVisible(facts.pinnable);
       // Who reacted, as Telegram's menu lists them: wherever there are any.

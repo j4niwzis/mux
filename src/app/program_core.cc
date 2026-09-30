@@ -59,6 +59,8 @@ void app::woken() {
                                [&](const mux::change::pack_picture_uploaded& uploaded) {
                                  root().pack_picture_uploaded(uploaded.picture, uploaded.done);
                                },
+                               // Something the server refused: a notice saying why.
+                               [&](const mux::change::refused& said) { root().show_message("Not done", said.what); },
                                // People found: in Start chat, while it asks for them.
                                [&](const mux::change::people_found& found) {
                                  root().show_found_people(found.people, found.query);

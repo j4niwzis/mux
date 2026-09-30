@@ -100,6 +100,7 @@ std::string of(const change::pack_saved& one) {
   return std::format("pack {} {}", one.pack.name, one.done ? (one.removed ? "deleted" : "saved") : "not saved");
 }
 std::string of(const change::pack_picture_uploaded& one) { return std::format("uploaded {}", one.picture.url); }
+std::string of(const change::refused& one) { return one.what; }
 std::string of(const change::people_found& one) {
   return std::format("{} found for {}", one.people.size(), one.query);
 }

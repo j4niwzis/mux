@@ -753,6 +753,13 @@ struct connection_changed {
   connection_t state;
 };
 
+// Something asked of the server that it refused: said to the user, as a
+// notice, with what the server gave as its reason.
+struct refused {
+  account_id by;
+  std::string what;
+};
+
 // An account the program no longer has: everything of it goes.
 struct account_removed {
   account_id account;
@@ -1016,7 +1023,7 @@ struct history_position {
 
 }  // namespace change
 
-using change_t = splice::variant<change::connection_changed, change::account_removed, change::conversation_updated,
+using change_t = splice::variant<change::connection_changed, change::refused, change::account_removed, change::conversation_updated,
                               change::conversation_removed,
                               change::presence_changed, change::message_added, change::message_edited,
                               change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed,
@@ -1298,6 +1305,7 @@ class model {
   }
   void on(const change::directory_listed&) {}  // the window's: the Explore dialog
   void on(const change::people_found&) {}  // the window's: the Start chat dialog
+  void on(const change::refused&) {}  // the window's: a notice
   void on(const change::packs_listed&) {}  // the window's: the packs' dialog
   void on(const change::pack_saved&) {}
   void on(const change::pack_picture_uploaded&) {}

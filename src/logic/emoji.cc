@@ -8,6 +8,58 @@ import std;
 import mux.logic.text;
 export import alef.emoji;
 
+// The emoji's keywords, as Unicode's CLDR annotates them (emoji_keywords.cc).
+extern "C++" {
+extern const unsigned char mux_cldr_en[];
+extern const decltype(sizeof 0) mux_cldr_en_size;
+extern const unsigned char mux_cldr_ru[];
+extern const decltype(sizeof 0) mux_cldr_ru_size;
+}
+
+namespace mux::logic {
+// An emoji as the annotations key it: without its variation selector.
+[[nodiscard]] inline std::string bare_emoji(std::string_view text) {
+  std::string out;
+  for (std::size_t at = 0; at < text.size();) {
+    if (text.substr(at).starts_with("\xEF\xB8\x8F")) {
+      at += 3;
+      continue;
+    }
+    out += text[at++];
+  }
+  return out;
+}
+// Each emoji's keywords, folded, one after another: read once from the
+// annotations -- each "<annotation cp=\"X\">a | b | c</annotation>"; the
+// ones with a type (tts) are the names, already searched.
+[[nodiscard]] inline const std::unordered_map<std::string, std::string>& emoji_keywords() {
+  static const std::unordered_map<std::string, std::string> read = [] {
+    std::unordered_map<std::string, std::string> out;
+    const std::array<std::string_view, 2> files{
+        std::string_view(reinterpret_cast<const char*>(mux_cldr_en), mux_cldr_en_size),
+        std::string_view(reinterpret_cast<const char*>(mux_cldr_ru), mux_cldr_ru_size)};
+    static constexpr std::string_view kOpen = "<annotation cp=\"";
+    for (const std::string_view xml : files)
+      for (std::size_t at = xml.find(kOpen); at != std::string_view::npos; at = xml.find(kOpen, at)) {
+        at += kOpen.size();
+        const std::size_t quote = xml.find('"', at);
+        const std::size_t close = quote == std::string_view::npos ? quote : xml.find('>', quote);
+        const std::size_t end = close == std::string_view::npos ? close : xml.find("</annotation>", close);
+        if (end == std::string_view::npos)
+          break;
+        if (!xml.substr(quote, close - quote).contains("type=")) {
+          std::string& words = out[bare_emoji(xml.substr(at, quote - at))];
+          words += " | ";
+          words += folded(xml.substr(close + 1, end - close - 1));
+        }
+        at = end;
+      }
+    return out;
+  }();
+  return read;
+}
+}  // namespace mux::logic
+
 export namespace mux::logic {
 
 // An emoji's text, as the window's text takes it.
@@ -50,8 +102,9 @@ export namespace mux::logic {
   return out;
 }
 
-// Those whose names have what is asked, in any case, in Unicode's order; at
-// most `most` of them.
+// Those whose names -- or keywords, English or Russian, as CLDR has them --
+// have what is asked, in any case, in Unicode's order; at most `most` of
+// them.
 [[nodiscard]] inline std::vector<const alef::emoji*> emoji_found(std::string_view query, std::size_t most = 200) {
   std::vector<const alef::emoji*> out;
   const std::string asked = folded(query);
@@ -59,7 +112,10 @@ export namespace mux::logic {
     return out;
   for (const alef::emoji_group& group : alef::emoji_groups)
     for (const alef::emoji& one : group.all)
-      if (!one.toned && folded(one.name).contains(asked)) {
+      if (!one.toned && (folded(one.name).contains(asked) || [&] {
+            const auto words = emoji_keywords().find(bare_emoji(one.text));
+            return words != emoji_keywords().end() && words->second.contains(asked);
+          }())) {
         out.push_back(&one);
         if (out.size() == most)
           return out;

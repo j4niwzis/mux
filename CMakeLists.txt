@@ -145,6 +145,26 @@ target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
         src/logic/links.cc src/logic/sending.cc src/logic/messages.cc
         src/logic/blurhash.cc src/logic/emoji.cc src/logic/markdown.cc src/logic/room_events.cc)
 target_compile_features(mux_modules PUBLIC cxx_std_26)
+# The emoji's keywords, as Unicode's CLDR annotates them in English and in
+# Russian -- what the emoji search matches besides the names, as Telegram's
+# does ("100" finds the hundred points): fetched once at a pinned commit and
+# checked, and put in the binary by emoji_keywords.cc's #embed.
+set(mux_cldr_dir ${CMAKE_BINARY_DIR}/cldr)
+foreach(pair "en;514bc93ac647211d0f422f63978d1eeec6aa759d0cd8c3e8c5da6cf5a536784b"
+             "ru;e8b2257e3139029b1c04dd15dcc50b818bf1830687cfd6fd40f0b5ad336aaa83")
+  list(GET pair 0 language)
+  list(GET pair 1 hash)
+  if(NOT EXISTS ${mux_cldr_dir}/${language}.xml)
+    file(DOWNLOAD
+      https://raw.githubusercontent.com/unicode-org/cldr/90e46ed15ee4716196d3299f669eff6259ec1dca/common/annotations/${language}.xml
+      ${mux_cldr_dir}/${language}.xml
+      EXPECTED_HASH SHA256=${hash}
+      TLS_VERIFY ON)
+  endif()
+endforeach()
+target_sources(mux_modules PRIVATE src/emoji_keywords.cc)
+set_property(SOURCE src/emoji_keywords.cc APPEND PROPERTY COMPILE_OPTIONS --embed-dir=${mux_cldr_dir})
+set_property(SOURCE src/emoji_keywords.cc APPEND PROPERTY OBJECT_DEPENDS "${mux_cldr_dir}/en.xml;${mux_cldr_dir}/ru.xml")
 # The flags that decide which std module a target gets: the same on every
 # library of modules in the build, or two std modules meet in one importer.
 set(mux_std_flags

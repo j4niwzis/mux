@@ -105,6 +105,9 @@ struct stub {
   void find_people(std::string) {}
   void open_packs() {}
   void toggle_threads() {}
+  void open_wallpaper(mux::choice_level_t) {}
+  void close_wallpaper() {}
+  void set_wallpaper(mux::choice_level_t, mux::config::wallpaper_pick_t) {}
   void open_thread(std::string) {}
   void close_thread() {}
   void send_in_thread(std::string, std::string) {}

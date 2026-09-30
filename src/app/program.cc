@@ -59,6 +59,12 @@ struct app : kept_settings {
       this->pack_files(paths);
       return;
     }
+    if (picking_wallpaper && !dropped) {
+      if (!paths.empty())
+        this->wallpaper_file(paths.front());
+      picking_wallpaper.reset();
+      return;
+    }
     outbox.files_given(std::move(paths), dropped);
   }
   // Where Save As… was asked to put what it saves: to the pictures part.
@@ -305,6 +311,12 @@ struct app : kept_settings {
   void apply(const request::open_new_chat&);
   void apply(const request::find_people& one);
   void apply(const request::open_new_room&);
+  void apply(const request::open_wallpaper& one);
+  void apply(const request::close_wallpaper&);
+  void apply(const request::set_wallpaper& one);
+  // A picture being chosen for a background: at which level.
+  std::optional<mux::choice_level_t> picking_wallpaper;
+  void wallpaper_file(const std::string& path);
   void apply(const request::toggle_threads&);
   void apply(const request::open_thread& one);
   void apply(const request::close_thread&);

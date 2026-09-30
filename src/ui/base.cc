@@ -33,6 +33,24 @@ inline skia::SkColor chat_colour = skia::colorSetARGB(255, 14, 22, 33);
 // The chat's wallpaper, as Telegram's are: a gradient from the top down to
 // chat_colour at the bottom.
 inline skia::SkColor chat_top_colour = skia::colorSetARGB(255, 22, 38, 58);
+// A chat background's dialog, for a level.
+template <class Actions>
+struct open_wallpaper_at {
+  Actions* actions = nullptr;
+  choice_level_t level;
+  void operator()() const { actions->open_wallpaper(level); }
+};
+// A background's picture, read from where mux keeps it and decoded once.
+inline skia::Sp<skia::SkImage> wallpaper_picture(const std::string& path) {
+  static std::map<std::string, skia::Sp<skia::SkImage>> read;
+  if (const auto found = read.find(path); found != read.end())
+    return found->second;
+  std::ifstream in(path, std::ios::binary);
+  std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  auto image = bytes.empty() ? skia::Sp<skia::SkImage>() : skia::decodeImage(bytes.data(), bytes.size());
+  read.insert_or_assign(path, image);
+  return image;
+}
 // The images of the pack being edited: fetched as avatars are, keyed by
 // their mxc://, while its dialog shows them.
 inline std::vector<std::string>& pack_pictures_shown() {

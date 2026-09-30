@@ -161,15 +161,21 @@ struct appearance_page : nodes::Stack {
     cards_row cards;
     nodes::Text accent_title = section_title("ACCENT");
     circles_row circles;
+    nodes::Text wallpaper_title = section_title("CHAT BACKGROUND");
+    widgets::Button<open_wallpaper_at<Actions>> wallpaper;
   } parts;
 
   appearance_page(Actions* a, const config::theme_t& theme, const config::accent_t& accent)
       : parts{.header = header_t("Appearance", {a}, {a}, true, true),
               .cards = cards_row(a),
-              .circles = circles_row(a, theme)} {
+              .circles = circles_row(a, theme),
+              .wallpaper = widgets::Button<open_wallpaper_at<Actions>>("Chat background\u2026",
+                                                                      {a, choice_level::everywhere{}})} {
     fState.apply({.fill = true});
     parts.theme_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
     parts.accent_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
+    parts.wallpaper_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
+    parts.wallpaper.apply({.width = 200.0f, .height = 34.0f, .margin = {0.0f, 0.0f, 0.0f, 20.0f}});
     this->show(theme, accent);
   }
   void show(const config::theme_t& theme, const config::accent_t& accent) {

@@ -82,8 +82,8 @@ struct timeline_area : scene::Node {
               .reactions = mark_button<Actions>(a, mark_kind::reaction{}, "\u2665"),
               .loading = widgets::RadialLoader<stop_jump>(44.0f, {a})},
         actions(a) {
-    parts.wall.apply({.fill = true, .gradient = scene::Gradient{chat_top_colour, chat_colour}});
-    parts.wall.setPattern(telegram_pattern(), pattern_colour);
+    parts.wall.apply({.fill = true});
+    this->show_wallpaper(config::wallpaper::theme{});
     parts.timeline.apply({.fill = true});
     // Over the wallpaper's gradient, which stays where it is: a scroll step
     // repainted, not copied.
@@ -97,6 +97,27 @@ struct timeline_area : scene::Node {
     parts.jump.setVisible(false);
     parts.loading.apply({.place = scene::anchor::kCentre});
     parts.loading.setVisible(false);
+  }
+  // The chat's background: the theme's gradient and Telegram's pattern, a
+  // plain colour (what is behind showing), or a picture.
+  void show_wallpaper(const config::wallpaper_t& chosen) {
+    auto& wall = parts.wall;
+    splice::visit(splice::overloaded{[&](config::wallpaper::theme) {
+                                       wall.setPicture(nullptr);
+                                       wall.setGradient(scene::Gradient{chat_top_colour, chat_colour});
+                                       wall.setPattern(telegram_pattern(), pattern_colour);
+                                     },
+                                     [&](config::wallpaper::plain) {
+                                       wall.setPicture(nullptr);
+                                       wall.setGradient(std::nullopt);
+                                       wall.setPattern(nullptr, 0);
+                                     },
+                                     [&](const config::wallpaper::picture& at) {
+                                       wall.setGradient(std::nullopt);
+                                       wall.setPattern(nullptr, 0);
+                                       wall.setPicture(wallpaper_picture(at.path));
+                                     }},
+                  chosen);
   }
   // The bubbles in the list, as they are made.
   [[nodiscard]] std::vector<message_bubble>& bubbles() {

@@ -64,6 +64,8 @@ struct window : scene::Node {
       widgets::Dialog<create_room_box<Actions>> new_room;
       // Emojis & Stickers: a room's packs, or one's own.
       widgets::Dialog<packs_box<Actions>> packs;
+      // A chat background chosen, at a level.
+      widgets::Dialog<wallpaper_box<Actions>> wallpaper;
       // A server's public rooms, searched.
       widgets::Dialog<explore_box<Actions>> explore;
       // The developer tools.
@@ -90,7 +92,7 @@ struct window : scene::Node {
     explicit layers(Actions* a)
         : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a))},
           actions_of(a) {
-      auto& [backdrop, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, explore, devtools, sending,
+      auto& [backdrop, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, devtools, sending,
              emoji, menu, viewer] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
@@ -123,6 +125,8 @@ struct window : scene::Node {
       new_room.setWidthFittingContent(480.0f);
       packs.setSheetColour(sidebar_colour);
       packs.setSize(620.0f, 600.0f);
+      wallpaper.setSheetColour(sidebar_colour);
+      wallpaper.setWidthFittingContent(380.0f);
       explore.setSheetColour(sidebar_colour);
       explore.setSize(640.0f, 560.0f);
       devtools.setSheetColour(sidebar_colour);
@@ -181,6 +185,7 @@ struct window : scene::Node {
     layer().new_chat.dropClosed();
     layer().new_room.dropClosed();
     layer().packs.dropClosed();
+    layer().wallpaper.dropClosed();
     layer().explore.dropClosed();
     layer().devtools.dropClosed();
     layer().sending.dropClosed();
@@ -277,6 +282,8 @@ struct window : scene::Node {
   void close_new_room() { layer().new_room.close(); }
   void open_packs(std::optional<std::string> room, bool editable) { layer().packs.open(actions, std::move(room), editable); }
   void close_packs() { layer().packs.close(); }
+  void open_wallpaper(choice_level_t level) { layer().wallpaper.open(actions, level); }
+  void close_wallpaper() { layer().wallpaper.close(); }
   void show_packs(std::vector<emote_pack> packs) {
     if (auto* up = layer().packs.shown())
       up->show_packs(std::move(packs));

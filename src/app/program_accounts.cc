@@ -83,6 +83,78 @@ void app::apply(const request::open_new_room&) {
 }
 void app::apply(const request::close_new_room&) { root().close_new_room(); }
 
+// A chat's background, at a level: every chat's, the chosen account's (on
+// its page), or the chat's own -- as the level over it says, the theme's,
+// plain, or a picture chosen, copied into mux's data so that it stays.
+void app::apply(const request::open_wallpaper& one) { root().open_wallpaper(one.level); }
+void app::apply(const request::close_wallpaper&) { root().close_wallpaper(); }
+void app::apply(const request::set_wallpaper& one) {
+  const auto set = [&](std::optional<mux::config::wallpaper_t> chosen) {
+    splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) { wallpaper = chosen; },
+                                     [&](mux::choice_level::account) {
+                                       this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+                                         mux::config::wallpaper_in(account) =
+                                             chosen ? std::optional<std::string>(mux::config::word_of(*chosen)) : std::nullopt;
+                                       });
+                                     },
+                                     [&](mux::choice_level::chat) {
+                                       const auto& chosen_chat = root().main().chosen;
+                                       if (!chosen_chat)
+                                         return;
+                                       if (chosen)
+                                         wallpaper_in.insert_or_assign(*chosen_chat, *chosen);
+                                       else
+                                         wallpaper_in.erase(*chosen_chat);
+                                     }},
+                  one.level);
+    (void)this->write();
+    root().close_wallpaper();
+    this->refresh();
+  };
+  splice::visit(splice::overloaded{[&](mux::config::wallpaper_pick::inherit) { set(std::nullopt); },
+                                   [&](mux::config::wallpaper_pick::theme) { set(mux::config::wallpaper::theme{}); },
+                                   [&](mux::config::wallpaper_pick::plain) { set(mux::config::wallpaper::plain{}); },
+                                   [&](mux::config::wallpaper_pick::picture) {
+                                     picking_wallpaper = one.level;
+                                     mux::host::choose_files();
+                                   }},
+                one.pick);
+}
+// The picture chosen for a background: copied into mux's data, by a name
+// its bytes give, and set at the level it was chosen for.
+void app::wallpaper_file(const std::string& path) {
+  const auto level = *picking_wallpaper;
+  std::ifstream in(path, std::ios::binary);
+  if (!in)
+    return;
+  std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  const auto type = mux::media::picture_of(bytes);
+  if (!type || !skia::decodeImage(bytes.data(), bytes.size())) {
+    root().show_message("Chat background", "That file is not a picture mux can show.");
+    return;
+  }
+  const auto folder = mux::config::state_path("wallpapers");
+  std::error_code failed;
+  std::filesystem::create_directories(folder, failed);
+  const auto kept = folder / std::format("{:016x}.{}", std::hash<std::string>{}(bytes), mux::media::extension_of(*type));
+  std::ofstream(kept, std::ios::binary) << bytes;
+  const mux::config::wallpaper_t chosen = mux::config::wallpaper::picture{kept.string()};
+  splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) { wallpaper = chosen; },
+                                   [&](mux::choice_level::account) {
+                                     this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+                                       mux::config::wallpaper_in(account) = mux::config::word_of(chosen);
+                                     });
+                                   },
+                                   [&](mux::choice_level::chat) {
+                                     if (const auto& chat = root().main().chosen)
+                                       wallpaper_in.insert_or_assign(*chat, chosen);
+                                   }},
+                level);
+  (void)this->write();
+  root().close_wallpaper();
+  this->refresh();
+}
+
 // Threads, as Element's panel: opened in place of the chat's info, the
 // room's listed by the server as it opens; one opened, its answers fetched
 // (and its root, where it is not held); an answer sent in the one open --

@@ -1205,6 +1205,62 @@ struct create_room_box : nodes::Stack {
   }
 };
 
+// A chat's background, chosen: for every chat, an account's, or one chat
+// -- as the level over it says, the theme's (its gradient and Telegram's
+// pattern), a plain colour, or a picture of one's own.
+template <class Actions>
+struct wallpaper_box : nodes::Stack {
+  struct close_it {
+    Actions* actions;
+    void operator()() const { actions->close_wallpaper(); }
+  };
+  struct nothing_back {
+    void operator()() const {}
+  };
+  struct pick {
+    Actions* actions;
+    choice_level_t level;
+    config::wallpaper_pick_t chosen;
+    void operator()() const { actions->set_wallpaper(level, chosen); }
+  };
+  using header_t = page_header<nothing_back, close_it>;
+  struct parts_t {
+    header_t header;
+    nodes::Text note;
+    widgets::Button<pick> inherit;
+    widgets::Button<pick> theme;
+    widgets::Button<pick> plain;
+    widgets::Button<pick> picture;
+  } parts;
+  [[nodiscard]] static std::string note_of(const choice_level_t& level) {
+    return splice::visit(splice::overloaded{[](choice_level::everywhere) { return std::string("Behind the messages of every chat."); },
+                                            [](choice_level::account) { return std::string("Behind the messages of this account's chats."); },
+                                            [](choice_level::chat) { return std::string("Behind the messages of this chat."); }},
+                         level);
+  }
+  wallpaper_box(Actions* a, choice_level_t level)
+      : parts{.header = header_t("Chat background", {}, {a}, false, true),
+              .note = nodes::Text(note_of(level), 13.0f, dim_colour),
+              .inherit = widgets::Button<pick>(splice::visit(splice::overloaded{[](choice_level::chat) { return "As its account's"; },
+                                                                                [](const auto&) { return "As every chat's"; }},
+                                                             level),
+                                               {a, level, config::wallpaper_pick::inherit{}}),
+              .theme = widgets::Button<pick>("Theme default", {a, level, config::wallpaper_pick::theme{}}),
+              .plain = widgets::Button<pick>("Plain colour", {a, level, config::wallpaper_pick::plain{}}),
+              .picture = widgets::Button<pick>("Choose image\u2026", {a, level, config::wallpaper_pick::picture{}})} {
+    this->setGap(8.0f);
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 18.0f, 12.0f}});
+    parts.note.setWrapped(true);
+    parts.note.apply({.fillX = true, .margin = {0.0f, 10.0f, 4.0f, 10.0f}});
+    parts.inherit.setVisible(splice::visit(splice::overloaded{[](choice_level::everywhere) { return false; },
+                                                             [](const auto&) { return true; }},
+                                           level));
+    parts.picture.setPrimary(true);
+    for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.inherit, &parts.theme, &parts.plain, &parts.picture})
+      each->apply({.fillX = true, .height = 36.0f, .margin = {0.0f, 10.0f, 0.0f, 10.0f}});
+  }
+};
+
 // Threads, as Element's panel has them: in place of the chat's info, the
 // room's threads -- each root, who wrote it and what, how many answers and
 // when the latest came -- and one opened: its root, its answers, and a
@@ -2009,20 +2065,24 @@ struct info_panel : nodes::Stack {
       using mute_tile = action_tile<ask<Actions, &Actions::toggle_mute>>;
       using manage_tile = action_tile<ask<Actions, &Actions::open_manage>>;
       using leave_tile = action_tile<ask<Actions, &Actions::leave_chat>>;
+      using wallpaper_tile = action_tile<open_wallpaper_at<Actions>>;
       struct parts_t {
         mute_tile mute;
         manage_tile manage;
+        wallpaper_tile wallpaper;
         leave_tile leave;
       } parts;
       tiles_row(Actions* a, bool muted)
           : parts{.mute = mute_tile(muted ? "Unmute" : "Mute", icon::bell{}, {a}),
                   .manage = manage_tile("Manage", icon::sliders{}, {a}),
+                  .wallpaper = wallpaper_tile("Background", icon::eye{}, {a, choice_level::chat{}}),
                   .leave = leave_tile("Leave", icon::leave{}, {a})} {
         this->setHorizontal();
         this->setGap(8.0f);
         fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}});
         parts.mute.apply({.grow = scene::axes::kX});
         parts.manage.apply({.grow = scene::axes::kX});
+        parts.wallpaper.apply({.grow = scene::axes::kX});
         parts.leave.apply({.grow = scene::axes::kX});
       }
     };

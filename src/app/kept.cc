@@ -47,6 +47,19 @@ struct kept_settings {
   std::map<conversation_id, bool> receipts_shown_in;
   // Chats' own choice of link previews.
   std::map<conversation_id, bool> previews_shown_in;
+  // Every chat's background, and chats' own.
+  std::optional<mux::config::wallpaper_t> wallpaper;
+  std::map<conversation_id, mux::config::wallpaper_t> wallpaper_in;
+  // A chat's background: its own, else its account's, else every chat's,
+  // else the theme's.
+  [[nodiscard]] mux::config::wallpaper_t wallpaper_of(const conversation_id& chat) {
+    if (const auto own = wallpaper_in.find(chat); own != wallpaper_in.end())
+      return own->second;
+    if (const auto* account = this->settings_of(chat.account.address))
+      if (const auto& chosen = mux::config::wallpaper_of(*account))
+        return mux::config::wallpaper_of(std::string_view(*chosen));
+    return wallpaper.value_or(mux::config::wallpaper_t{mux::config::wallpaper::theme{}});
+  }
   // Chats' own limit on a jump's search, in events; 0 no limit.
   std::map<conversation_id, std::int64_t> jump_search_in;
   // And each kind of them, where a chat chose apart.
@@ -161,6 +174,8 @@ struct kept_settings {
     if (!proxies.empty())
       out.proxies = proxies;
     out.theme = mux::config::word_of(theme);
+    if (wallpaper)
+      out.wallpaper = mux::config::word_of(*wallpaper);
     out.accent = mux::config::word_of(accent);
     out.renderer = mux::config::word_of(renderer);
     if (partial_redraw)
@@ -180,7 +195,8 @@ struct kept_settings {
       for (const auto& [chat, mode] : notify_modes)
         out.chat_notify->push_back({chat.account.address, chat.id, mux::config::word_of(mode)});
     }
-    if (!room_events.empty() || !room_event_kinds.empty() || !receipts_shown_in.empty() || !jump_search_in.empty() || !previews_shown_in.empty()) {
+    if (!room_events.empty() || !room_event_kinds.empty() || !receipts_shown_in.empty() || !jump_search_in.empty() ||
+        !previews_shown_in.empty() || !wallpaper_in.empty()) {
       std::map<conversation_id, mux::config::room_events_choice> chosen;
       for (const auto& [chat, show] : room_events) {
         auto& one = chosen[chat];
@@ -211,6 +227,12 @@ struct kept_settings {
         one.account = chat.account.address;
         one.conversation = chat.id;
         one.receipts = show;
+      }
+      for (const auto& [chat, chosen_wallpaper] : wallpaper_in) {
+        auto& one = chosen[chat];
+        one.account = chat.account.address;
+        one.conversation = chat.id;
+        one.wallpaper = mux::config::word_of(chosen_wallpaper);
       }
       out.room_events.emplace();
       for (auto& [chat, one] : chosen)

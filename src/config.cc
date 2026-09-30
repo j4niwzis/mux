@@ -300,6 +300,7 @@ struct xmpp_account {
   std::optional<room_event_kinds> room_event_kinds;
   std::optional<bool> show_receipts;  // as matrix_account's
   std::optional<bool> link_previews;  // as matrix_account's
+  std::optional<std::string> wallpaper;  // its chats' background, as matrix_account's
   std::optional<std::int64_t> jump_search;  // as matrix_account's
   // Its notifications, on the desktop and heard: as every account's, until
   // chosen.
@@ -327,6 +328,9 @@ struct matrix_account {
   std::optional<room_event_kinds> room_event_kinds;
   // Whether its chats show who has read up to where, as Element's faces
   // under a message: its own choice, else every account's.
+  // Its chats' background, as word_of(wallpaper_t) says it: its own choice,
+  // else every chat's.
+  std::optional<std::string> wallpaper;
   std::optional<bool> show_receipts;
   // Whether its chats show a card for a message's first link: its own
   // choice, else every account's.
@@ -348,6 +352,47 @@ struct matrix_account {
 // One saved account, of either protocol.
 using account_t = std::variant<xmpp_account, matrix_account>;
 
+// What a chat's background is: the theme's own -- its gradient and
+// Telegram's pattern -- a plain colour, or a picture of the user's (kept in
+// mux's data, by its path there). Kept as a word: "theme", "plain", or the
+// picture's path; read once into the variant.
+namespace wallpaper {
+struct theme {
+  friend bool operator==(theme, theme) = default;
+};
+struct plain {
+  friend bool operator==(plain, plain) = default;
+};
+struct picture {
+  std::string path;
+  friend bool operator==(const picture&, const picture&) = default;
+};
+}  // namespace wallpaper
+using wallpaper_t = splice::variant<wallpaper::theme, wallpaper::plain, wallpaper::picture>;
+[[nodiscard]] inline std::string word_of(const wallpaper_t& one) {
+  return splice::visit(splice::overloaded{[](wallpaper::theme) { return std::string("theme"); },
+                                          [](wallpaper::plain) { return std::string("plain"); },
+                                          [](const wallpaper::picture& at) { return at.path; }},
+                       one);
+}
+[[nodiscard]] inline wallpaper_t wallpaper_of(std::string_view word) {
+  static constexpr std::array<std::pair<std::string_view, bool>, 2> kWords{{{"theme", true}, {"plain", false}}};
+  for (const auto& [name, theme] : kWords)
+    if (word == name)
+      return theme ? wallpaper_t{wallpaper::theme{}} : wallpaper_t{wallpaper::plain{}};
+  return wallpaper::picture{std::string(word)};
+}
+// What is asked of a background at a level: as the level over it says, the
+// theme's, plain, or a picture to choose.
+namespace wallpaper_pick {
+struct inherit {};
+struct theme {};
+struct plain {};
+struct picture {};
+}  // namespace wallpaper_pick
+using wallpaper_pick_t =
+    splice::variant<wallpaper_pick::inherit, wallpaper_pick::theme, wallpaper_pick::plain, wallpaper_pick::picture>;
+
 // A chat's own choice of whether what is done in it is shown.
 struct room_events_choice {
   std::string account;       // the account's address
@@ -357,6 +402,7 @@ struct room_events_choice {
   std::optional<bool> receipts;  // who has read up to where, as faces
   std::optional<bool> previews;  // a card for a message's first link
   std::optional<std::int64_t> jump_search;  // events paged back looking for one; 0 no limit
+  std::optional<std::string> wallpaper;  // its background, as word_of(wallpaper_t) says it
   friend bool operator==(const room_events_choice&, const room_events_choice&) = default;
 };
 consteval auto json_schema(knot::type<room_events_choice>) { return knot::schema<room_events_choice>(); }
@@ -488,6 +534,8 @@ struct file {
   // "software". Nothing said is dark and OpenGL.
   std::optional<std::string> theme;
   std::optional<std::string> accent;
+  // Every chat's background, as word_of(wallpaper_t) says it; none, the theme's.
+  std::optional<std::string> wallpaper;
   std::optional<std::string> renderer;
   // Only what changed repainted, into a frame kept between them.
   std::optional<bool> partial_redraw;
@@ -547,6 +595,13 @@ consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
 }
 [[nodiscard]] inline std::optional<std::int64_t>& jump_search_in(account_t& one) {
   return splice::visit([](auto& each) -> std::optional<std::int64_t>& { return each.jump_search; }, one);
+}
+// An account's chats' background, as word_of(wallpaper_t) says it.
+[[nodiscard]] inline const std::optional<std::string>& wallpaper_of(const account_t& one) {
+  return splice::visit([](const auto& each) -> const std::optional<std::string>& { return each.wallpaper; }, one);
+}
+[[nodiscard]] inline std::optional<std::string>& wallpaper_in(account_t& one) {
+  return splice::visit([](auto& each) -> std::optional<std::string>& { return each.wallpaper; }, one);
 }
 [[nodiscard]] inline const std::optional<bool>& link_previews_of(const account_t& one) {
   return splice::visit([](const auto& each) -> const std::optional<bool>& { return each.link_previews; }, one);

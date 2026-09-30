@@ -586,6 +586,8 @@ struct conversations_screen : nodes::Stack {
     parts.threads.apply({.width = info_width});
   }
   bool threads_open = false;
+  // The chosen chat's background, as the program resolves it.
+  config::wallpaper_t wallpaper = config::wallpaper::theme{};
   // The threads' panel opened or closed: whether it is open now.
   bool toggle_threads() {
     threads_open = !threads_open;
@@ -1314,6 +1316,7 @@ struct conversations_screen : nodes::Stack {
       return;
     }
     info.show(*one, now, muted.contains(one->id));
+    chat.area.show_wallpaper(wallpaper);
     if (parts.threads.visible())
       parts.threads.show(*one, &now);
     // Whether the reader may post here: their power against what a message

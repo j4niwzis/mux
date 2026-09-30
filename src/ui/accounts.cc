@@ -218,6 +218,8 @@ struct account_privacy : nodes::Stack {
     receipts_choice<Actions> faces;
     previews_choice<Actions> previews;
     jump_search_choice<Actions> jump_search;
+    // Its chats' background.
+    widgets::Button<open_wallpaper_at<Actions>> wallpaper;
     nodes::Text note{"Off, the people you talk to through this account are not told when you have read their "
                      "messages, or that you are typing. Theirs are still shown, and receipts are still kept here.",
                      13.0f, dim_colour};
@@ -234,7 +236,9 @@ struct account_privacy : nodes::Stack {
               .events = event_kind_list<Actions>(a, choice_level::account{}, events_all, kinds),
               .faces = receipts_choice<Actions>(a, choice_level::account{}, faces_on),
               .previews = previews_choice<Actions>(a, choice_level::account{}, previews_on),
-              .jump_search = jump_search_choice<Actions>(a, choice_level::account{}, jump_most)} {
+              .jump_search = jump_search_choice<Actions>(a, choice_level::account{}, jump_most),
+              .wallpaper = widgets::Button<open_wallpaper_at<Actions>>("Chat background\u2026", {a, choice_level::account{}})} {
+    parts.wallpaper.apply({.width = 200.0f, .height = 34.0f});
     this->setGap(8.0f);
     parts.note.apply({.fillX = true});
     fState.apply({.fill = true});

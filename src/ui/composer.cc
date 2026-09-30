@@ -97,6 +97,109 @@ struct compose_context {
 };
 
 // Where a message is written, across the bottom of a chat as in Telegram
+// Quotes in the field, as Telegram's: a paragraph starting "> " -- a "> "
+// for each level -- is shown as a quote. Its marks are hidden, its lines
+// stand in by 12 for each level with room at the right for the quote's mark,
+// and each level lies on a rounded plate of its own, faint in the level's
+// colour, with a bar at its left and the mark at its top right: a quote
+// inside a quote on both tints. Shift+Enter goes on in the quote, or ends it
+// on an empty line; Backspace right after the marks takes a level off;
+// Ctrl+Down leaves the quote for what is under it. The field's `Blocks`.
+struct field_quotes {
+  static constexpr float kIndent = 12.0f, kRight = 18.0f, kRadius = 5.0f;
+  // How deep a paragraph is in quotes: how many "> " it starts with.
+  [[nodiscard]] static int depth(std::string_view text, std::size_t start) {
+    int depth = 0;
+    while (text.substr(start).starts_with("> ")) {
+      ++depth;
+      start += 2;
+    }
+    return depth;
+  }
+  // Where the paragraph an offset is in starts.
+  [[nodiscard]] static std::size_t start_of(std::string_view text, std::size_t at) {
+    const std::size_t before = at == 0 ? std::string_view::npos : text.rfind('\n', at - 1);
+    return before == std::string_view::npos ? 0 : before + 1;
+  }
+  // A level's colour: the accent at the first, then its channels taken
+  // round, as a message's quotes are coloured by depth.
+  [[nodiscard]] static skia::SkColor colour(skia::SkColor accent, int level) {
+    const unsigned a = (accent >> 24) & 0xFF, r = (accent >> 16) & 0xFF, g = (accent >> 8) & 0xFF, b = accent & 0xFF;
+    return level % 3 == 1 ? (a << 24) | (g << 16) | (b << 8) | r : level % 3 == 2 ? (a << 24) | (b << 16) | (r << 8) | g : accent;
+  }
+
+  [[nodiscard]] static widgets::BlockLook look(std::string_view text, std::size_t start) {
+    const int deep = depth(text, start);
+    if (deep == 0)
+      return {};
+    return {.hidden = 2 * static_cast<std::size_t>(deep), .indent = kIndent * static_cast<float>(deep), .right = kRight};
+  }
+  static void drawBehind(skia::SkCanvas* canvas, const skiff::paint::Painter& p, std::string_view text,
+                         std::span<const widgets::ShownLine> lines, const skia::SkRect& box, const widgets::Theme& theme,
+                         float size, float alpha) {
+    int deepest = 0;
+    for (const widgets::ShownLine& line : lines)
+      deepest = std::max(deepest, depth(text, line.paragraph));
+    const auto deep = [&](std::size_t i) { return depth(text, lines[i].paragraph); };
+    for (int level = 0; level < deepest; ++level) {
+      const skia::SkColor tint = colour(theme.fAccent, level);
+      // Each run of lines this deep or deeper: one plate.
+      for (std::size_t i = 0; i < lines.size();) {
+        if (deep(i) <= level) {
+          ++i;
+          continue;
+        }
+        std::size_t j = i;
+        while (j < lines.size() && deep(j) > level)
+          ++j;
+        const float left = box.fLeft + static_cast<float>(level) * kIndent;
+        const skia::SkRect plate = skia::SkRect::MakeLTRB(left, lines[i].top, box.fRight, lines[j - 1].bottom);
+        const int save = canvas->save();
+        canvas->clipRRect(skia::SkRRect::MakeRectXY(plate, kRadius, kRadius), true);
+        p.fillRect(plate, (tint & 0x00FFFFFFu) | 0x1F000000u, alpha);
+        p.fillRect(skia::SkRect::MakeXYWH(left, plate.fTop, 3.0f, plate.height()), tint, alpha);
+        canvas->restoreToCount(save);
+        p.text("\u201D", box.fRight - kRight + 5.0f, plate.fTop + size, size, tint, alpha);
+        i = j;
+      }
+    }
+  }
+  [[nodiscard]] static std::optional<widgets::TextEdit> key(std::string_view text, std::size_t caret,
+                                                            const scene::key::down& press) {
+    namespace keys = scene::keys;
+    namespace modifier = scene::modifier;
+    const std::size_t start = start_of(text, caret);
+    const int deep = depth(text, start);
+    if (deep == 0)
+      return std::nullopt;
+    const std::size_t marks = start + 2 * static_cast<std::size_t>(deep);
+    const bool control = press.modifiers.has<modifier::control>();
+    if (press.key == keys::kEnter && press.modifiers.has<modifier::shift>()) {
+      // An empty quoted line: the quote ends there.
+      if (caret == marks && (caret == text.size() || text[caret] == '\n'))
+        return widgets::TextEdit{.from = start, .to = marks, .with = "", .caret = start};
+      std::string next = "\n";
+      for (int level = 0; level < deep; ++level)
+        next += "> ";
+      return widgets::TextEdit{.from = caret, .to = caret, .with = next, .caret = caret + next.size()};
+    }
+    // Right after the marks: a level taken off, the text kept.
+    if (press.key == keys::kBackspace && !control && caret == marks)
+      return widgets::TextEdit{.from = marks - 2, .to = marks, .with = "", .caret = marks - 2};
+    // Out of the quote, to the start of what is under it -- text, or a
+    // quote less deep; a new line after it where the quote is last.
+    if (press.key == keys::kDown && control) {
+      std::size_t end = text.find('\n', caret);
+      while (end != std::string_view::npos && depth(text, end + 1) >= deep)
+        end = text.find('\n', end + 1);
+      if (end == std::string_view::npos)
+        return widgets::TextEdit{.from = text.size(), .to = text.size(), .with = "\n", .caret = text.size() + 1};
+      return widgets::TextEdit{.from = caret, .to = caret, .with = "", .caret = end + 1};
+    }
+    return std::nullopt;
+  }
+};
+
 // Desktop: a line over it, a paperclip on the left, the text growing with
 // what is written, and the send arrow on the right.
 template <class Actions>
@@ -139,7 +242,7 @@ struct composer_bar : nodes::Stack {
   // The paperclip, the field growing with what is written in it, the arrow.
   struct input_row : nodes::Stack {
     using attach_button = icon_button<ask<Actions, &Actions::attach_files>>;
-    using field_t = widgets::TextArea<submit_message<Actions>, message_pictures>;
+    using field_t = widgets::TextArea<submit_message<Actions>, message_pictures, field_quotes>;
     using emoji_button = icon_button<ask<Actions, &Actions::toggle_emoji>>;
     using send_button = icon_button<ask<Actions, &Actions::send_typed>>;
     struct parts_t {

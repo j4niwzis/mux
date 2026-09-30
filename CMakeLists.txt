@@ -112,7 +112,7 @@ cme_find_package(alef COMPONENTS precis idna grapheme line bidi emoji REQUIRED)
 set(SPLICE_ERASE ${MUX_ERASE_HANDLERS} CACHE BOOL "splice::variant through tables outside a release build, as mux's handlers")
 cme_declare_port(NAME splice PROVIDES splice
   GITHUB_REPOSITORY j4niwzis/splice
-  GIT_TAG 4668680e970afb6bafa83c908551c3b84bd1adf3
+  GIT_TAG bd60a0f5c1cdcca8fb7b4076a9354b090b572780
   LICENSE GPL-3.0-only
   SYSTEM NEVER
   TARGETS splice)
@@ -177,10 +177,10 @@ if(MUX_UI)
   # skiff and skiff-widgets say the rest of what they are in their own trees.
   cme_declare_port(NAME skiff PROVIDES skiff
     GITHUB_REPOSITORY j4niwzis/skiff
-    GIT_TAG 67a93b1ad67e638607b65cf5b479c0452a08f510)
+    GIT_TAG 201337b9c2390ca978a3e05cf936c51f80350dd9)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
-    GIT_TAG 12855ef163db2f9b56d222b4e966c104988bd067)
+    GIT_TAG b3d766850026fbb01dc5d0e36e494bb708c99955)
   # Skia's features, each an option asking for its component: GL to draw on
   # the GPU (the software renderer is there either way), and the pictures
   # decoded. A system Skia without one is taken where its option is off.

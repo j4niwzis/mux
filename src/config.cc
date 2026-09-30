@@ -424,7 +424,7 @@ struct bubble_look {
   const std::string_view name = word.substr(0, word.find(':'));
   for (const auto& [each, index] : kKinds)
     if (name == each) {
-      static constexpr std::array<bubbles_t, 4> kinds{bubbles::solid{}, bubbles::translucent{}, bubbles::frosted{},
+      static const std::array<bubbles_t, 4> kinds{bubbles::solid{}, bubbles::translucent{}, bubbles::frosted{},
                                                       bubbles::glass{}};
       out.kind = kinds[static_cast<std::size_t>(index)];
     }

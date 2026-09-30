@@ -365,7 +365,14 @@ class canvas_target {
           interface = skia::GrGLMakeAssembledInterface(nullptr, [](void*, const char name[]) -> skia::GrGLFuncPtr {
             return reinterpret_cast<skia::GrGLFuncPtr>(SDL_GL_GetProcAddress(name));
           });
-        if (interface && interface->fFunctions.fGetString)
+        // Asked of the context SDL made, through SDL's own loader: Skia's
+        // native interface goes through GLX's, which answers nothing for a
+        // context made through EGL (Wayland, GLES) -- the renderer said
+        // "unknown" while drawing went on.
+        using get_string_t = const unsigned char* (*)(unsigned int);
+        if (const auto get_string = reinterpret_cast<get_string_t>(SDL_GL_GetProcAddress("glGetString")))
+          say_gl_renderer(reinterpret_cast<const char*>(get_string(0x1F01 /* GL_RENDERER */)));
+        else if (interface && interface->fFunctions.fGetString)
           say_gl_renderer(reinterpret_cast<const char*>(interface->fFunctions.fGetString(0x1F01 /* GL_RENDERER */)));
         if (interface)
           context_ = skia::MakeGL(std::move(interface));

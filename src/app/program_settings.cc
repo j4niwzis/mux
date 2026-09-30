@@ -30,6 +30,7 @@ void app::rebuild_in_theme() {
   const float side_width = before.side_width;
   const float info_width = before.info_width;
   const bool info_open = before.info_open;
+  const float settings_at = root().settings_up() ? root().settings_up()->offset() : 0.0f;
   mux::ui::use_theme(theme, accent);
   pending_login.reset();
   drawer_waits = false;
@@ -42,8 +43,10 @@ void app::rebuild_in_theme() {
   after.info_open = info_open;
   this->refresh();
   root().open_settings(motion.value_or("full"));
-  if (auto* up = root().settings_up())
+  if (auto* up = root().settings_up()) {
     up->show_appearance(theme, accent);
+    up->keep_offset(settings_at);
+  }
 }
 
 void app::apply(const request::manage_proxies&) {

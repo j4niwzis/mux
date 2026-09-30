@@ -38,10 +38,35 @@ struct settings_dialog : scene::Node {
         [](auto& one) {
           one.fState.apply({.relativeSize = scene::axes::kX});
           one.fState.apply({.autoSize = scene::axes::kY});
+          raise_header(one);
         },
         this->page());
     parts.scroll.scrollToStart();
   }
+  // A page's header pinned at the top while what is under it scrolls: drawn
+  // over the rest, on the dialog's colour, moved down by the offset. The
+  // view is repainted at each step of a scroll, not copied, so it is not
+  // carried along with what scrolls.
+  template <class P>
+    requires requires(P& page) { page.parts.header; }
+  static void raise_header(P& page) {
+    page.parts.header.apply({.depth = 1.0f, .background = sidebar_colour});
+  }
+  static void raise_header(auto&) {}
+  template <class P>
+    requires requires(P& page) { page.parts.header; }
+  static void pin_header(P& page, float offset) {
+    page.parts.header.fState.setShift(0.0f, offset);
+  }
+  static void pin_header(auto&, float) {}
+  void draw(skia::SkCanvas* canvas, float alpha) {
+    const float offset = -parts.scroll.contentsShift();
+    splice::visit([&](auto& one) { pin_header(one, offset); }, this->page());
+    skiff::scene::drawDefault(*this, canvas, alpha);
+  }
+  // Where the page is scrolled to, to be kept as it is made again.
+  [[nodiscard]] float offset() const { return parts.scroll.current(); }
+  void keep_offset(float at) { parts.scroll.setCurrent(at); }
   // What is up coming in from the side, fading in, when the page changes.
   skiff::paint::Tween swap{1.0f, 200.0f, skiff::paint::movement::subtle{}};
   float swap_from = 1.0f;
@@ -64,6 +89,7 @@ struct settings_dialog : scene::Node {
         parts{.scroll = nodes::ScrollContainer<page_t>(page_t(std::in_place_index<0>, a))} {
     fState.apply({.fill = true});
     parts.scroll.apply({.fill = true});
+    parts.scroll.setCopiesOnScroll(false);
     this->fit_page();
   }
 
@@ -77,9 +103,19 @@ struct settings_dialog : scene::Node {
     this->page().template emplace<1>(actions);
     this->show_motion(motion);
   }
+  // Made again where it is up -- a choice on it changed -- where it was
+  // scrolled to, not slid in again from its top.
   void show_appearance(const config::theme_t& theme, const config::accent_t& accent) {
+    const bool again = this->appearance() != nullptr;
+    const float at = parts.scroll.current();
     this->page().template emplace<4>(actions, theme, accent);
-    this->begin_swap(1.0f);
+    if (again) {
+      this->fit_page();
+      parts.scroll.setCurrent(at);
+      this->invalidateLayout();
+    } else {
+      this->begin_swap(1.0f);
+    }
   }
   void show_rendering(const config::renderer_t& renderer, bool partial, bool flash, bool vsync, bool fps) {
     this->page().template emplace<5>(actions, renderer, partial, flash, vsync, fps);

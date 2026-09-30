@@ -447,6 +447,30 @@ void app::refresh(std::source_location from) {
                                                    : panels.value_or(mux::config::bubble_look{});
   if (mux::ui::show_panels(mux::ui::panel_look_now()))
     root().markDamaged();
+  // What each level holds of the looks, for the choices to show: every
+  // chat's; the chosen chat's own, and its account's.
+  {
+    mux::ui::looks_at(mux::choice_level::everywhere{}) = {wallpaper, bubbles, panels};
+    mux::ui::looks_held account_held, chat_held;
+    if (const auto& chosen = root().main().chosen) {
+      if (const auto own = wallpaper_in.find(*chosen); own != wallpaper_in.end())
+        chat_held.wallpaper = own->second;
+      if (const auto own = bubbles_in.find(*chosen); own != bubbles_in.end())
+        chat_held.bubbles = own->second;
+      if (const auto own = panels_in.find(*chosen); own != panels_in.end())
+        chat_held.panels = own->second;
+      if (const auto* account = this->settings_of(chosen->account.address)) {
+        if (const auto& word = mux::config::wallpaper_of(*account))
+          account_held.wallpaper = mux::config::wallpaper_of(std::string_view(*word));
+        if (const auto& word = mux::config::bubbles_of(*account))
+          account_held.bubbles = mux::config::bubble_look_of(*word);
+        if (const auto& word = mux::config::panels_of(*account))
+          account_held.panels = mux::config::bubble_look_of(*word);
+      }
+    }
+    mux::ui::looks_at(mux::choice_level::account{}) = std::move(account_held);
+    mux::ui::looks_at(mux::choice_level::chat{}) = std::move(chat_held);
+  }
   // The chosen chat's background, as its levels say.
   root().main().wallpaper = root().main().chosen ? this->wallpaper_of(*root().main().chosen)
                                                  : mux::config::wallpaper_t{mux::config::wallpaper::theme{}};

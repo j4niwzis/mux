@@ -1211,6 +1211,88 @@ struct create_room_box : nodes::Stack {
 // A chat's background, chosen: for every chat, an account's, or one chat
 // -- as the level over it says, the theme's (its gradient and Telegram's
 // pattern), a plain colour, or a picture of one's own.
+// A choice among a few, as a dropdown: a button saying the one in use and
+// a chevron; pressed, the options open under it, in the page, the one in
+// use marked; one pressed, chosen, and the list closed. The menu takes the
+// presses its parts let by -- it holds whether it is open, and nothing of
+// it is pointed at from its parts.
+template <class Choose>
+struct choice_menu : nodes::Stack {
+  Choose choose;  // told the index of the option pressed
+  bool open = false;
+  struct head_t : nodes::Stack {
+    struct parts_t {
+      nodes::Text label;
+      nodes::Text value;
+      nodes::Icon chevron;
+    } parts;
+    head_t(std::string label, std::string value)
+        : parts{.label = nodes::Text(std::move(label), 13.0f, dim_colour),
+                .value = nodes::Text(std::move(value), 14.0f, text_colour),
+                .chevron = nodes::Icon(shape_of(icon::down{}), dim_colour)} {
+      this->setHorizontal();
+      this->setGap(8.0f);
+      fState.apply({.fillX = true, .height = 36.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 6.0f,
+                    .background = tile_colour, .hoverBackground = chosen_colour, .border = scene::Border{band_colour, 1.0f}});
+      parts.label.apply({.alignSelf = scene::align::kMiddle});
+      parts.label.setVisible(!parts.label.text().empty());
+      parts.value.setElided(true);
+      parts.value.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      parts.chevron.apply({.width = 16.0f, .height = 16.0f, .alignSelf = scene::align::kMiddle});
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+  };
+  struct option_t : nodes::Stack {
+    struct parts_t {
+      nodes::Text name;
+    } parts;
+    option_t(std::string name, bool chosen) : parts{.name = nodes::Text(std::move(name), 14.0f, chosen ? accent_colour : text_colour, chosen)} {
+      this->setHorizontal();
+      fState.apply({.fillX = true, .height = 32.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 6.0f,
+                    .hoverBackground = chosen_colour});
+      parts.name.apply({.alignSelf = scene::align::kMiddle});
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+  };
+  struct parts_t {
+    head_t head;
+    std::vector<option_t> options;
+  } parts;
+  choice_menu(std::string label, const std::vector<std::string>& names, std::size_t current, Choose c)
+      : choose(std::move(c)), parts{.head = head_t(std::move(label), current < names.size() ? names[current] : std::string())} {
+    this->setGap(2.0f);
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    parts.options.reserve(names.size());
+    for (std::size_t i = 0; i < names.size(); ++i) {
+      parts.options.emplace_back(names[i], i == current);
+      parts.options.back().setVisible(false);
+    }
+  }
+  void show_options(bool on) {
+    open = on;
+    for (option_t& each : parts.options)
+      each.setVisible(on);
+    this->invalidateLayout();
+    this->markDamaged();
+  }
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  [[nodiscard]] bool onClick(float x, float y) {
+    if (parts.head.bounds().contains(x, y)) {
+      this->show_options(!open);
+      return true;
+    }
+    for (std::size_t i = 0; i < parts.options.size(); ++i)
+      if (parts.options[i].visible() && parts.options[i].bounds().contains(x, y)) {
+        this->show_options(false);
+        choose(i);
+        return true;
+      }
+    return false;
+  }
+};
+
 // How bubbles -- or the panels -- look, at a level: as the level over it
 // (where there is one), or a kind -- the one in use marked -- and how
 // opaque, on a slider told when it is let go: made again once, not at each
@@ -1328,6 +1410,54 @@ struct bubbles_picker : nodes::Stack {
       parts.bar.apply({.margin = {4.0f, 8.0f, 6.0f, 8.0f}});
     }
   };
+  // Whether the level has one over it to be as.
+  [[nodiscard]] static bool inherits(const choice_level_t& level) {
+    return splice::visit(splice::overloaded{[](choice_level::everywhere) { return false; }, [](const auto&) { return true; }}, level);
+  }
+  [[nodiscard]] static std::vector<std::string> kind_names(const choice_level_t& level) {
+    std::vector<std::string> out;
+    if (inherits(level))
+      out.emplace_back(splice::visit(splice::overloaded{[](choice_level::chat) { return "As its account's"; },
+                                                        [](const auto&) { return "As every chat's"; }},
+                                     level));
+    for (const char* name : {"Solid", "Translucent", "Frosted", "Glass"})
+      out.emplace_back(name);
+    return out;
+  }
+  // The option in use: what the level holds, else as the level over it.
+  [[nodiscard]] static std::size_t kind_index(const choice_level_t& level, const config::look_part_t& part) {
+    const looks_held& held = looks_at(level);
+    const std::optional<config::bubble_look>& own =
+        splice::visit(splice::overloaded{[&](config::look_part::bubbles) -> const std::optional<config::bubble_look>& { return held.bubbles; },
+                                         [&](config::look_part::panels) -> const std::optional<config::bubble_look>& { return held.panels; }},
+                      part);
+    const std::size_t shift = inherits(level) ? 1 : 0;
+    if (!own)
+      return 0;
+    return shift + own->kind.index();
+  }
+  struct pick_kind_at {
+    Actions* actions;
+    choice_level_t level;
+    config::look_part_t part;
+    bool inherit;
+    void operator()(std::size_t index) const {
+      if (!usable(part))
+        return;
+      if (inherit && index == 0) {
+        actions->set_bubbles(level, std::nullopt, part);
+        return;
+      }
+      static const std::array<config::bubbles_t, 4> kinds{config::bubbles::solid{}, config::bubbles::translucent{},
+                                                         config::bubbles::frosted{}, config::bubbles::glass{}};
+      const std::size_t at = index - (inherit ? 1 : 0);
+      if (at >= kinds.size())
+        return;
+      config::bubble_look look = current(level, part);
+      look.kind = kinds[at];
+      actions->set_bubbles(level, look, part);
+    }
+  };
   struct kinds_row : nodes::Stack {
     struct parts_t {
       widgets::Button<pick_kind> solid, translucent, frosted, glass;
@@ -1352,8 +1482,7 @@ struct bubbles_picker : nodes::Stack {
   struct parts_t {
     nodes::Text title;
     nodes::Text why;
-    widgets::Button<inherit_it> inherit;
-    kinds_row kinds;
+    choice_menu<pick_kind_at> kinds;
     nodes::Text opacity_label;
     widgets::SliderBar<scene::NoAction, opacity_done> opacity;
     // The bubbles' only: what else is in a chat, each apart where chosen.
@@ -1368,11 +1497,8 @@ struct bubbles_picker : nodes::Stack {
               .why = nodes::Text("The chat list, the bars and the side panels: only over a background behind the whole "
                                  "window (Appearance \u2192 Chat background \u2192 Behind the whole window).",
                                  12.0f, dim_colour),
-              .inherit = widgets::Button<inherit_it>(splice::visit(splice::overloaded{[](choice_level::chat) { return "As its account's"; },
-                                                                                      [](const auto&) { return "As every chat's"; }},
-                                                                   level),
-                                                     {a, level, part}),
-              .kinds = kinds_row(a, level, part),
+              .kinds = choice_menu<pick_kind_at>("", kind_names(level), kind_index(level, part),
+                                                 pick_kind_at{a, level, part, inherits(level)}),
               .opacity_label = nodes::Text("Opacity", 13.0f, text_colour),
               .opacity = widgets::SliderBar<scene::NoAction, opacity_done>({}, opacity_done{a, level, part})} {
     this->setGap(8.0f);
@@ -1382,10 +1508,6 @@ struct bubbles_picker : nodes::Stack {
     parts.why.setVisible(splice::visit(splice::overloaded{[](config::look_part::panels) { return true; },
                                                           [](const auto&) { return false; }},
                                        part));
-    parts.inherit.setVisible(splice::visit(splice::overloaded{[](choice_level::everywhere) { return false; },
-                                                             [](const auto&) { return true; }},
-                                           level));
-    parts.inherit.apply({.fillX = true, .height = 36.0f, .disabled = !usable(part)});
     const int opacity = current(level, part).opacity;
     parts.opacity_label.setText(std::format("Opacity: {}%", opacity));
     parts.opacity.setFraction(static_cast<float>(opacity - 10) / 90.0f);
@@ -1402,7 +1524,7 @@ struct bubbles_picker : nodes::Stack {
     }
     // Greyed where it does nothing.
     if (!usable(part))
-      for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.kinds, &parts.opacity_label, &parts.opacity, &parts.inherit})
+      for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.kinds, &parts.opacity_label, &parts.opacity})
         each->apply({.alpha = 0.4f});
   }
 };
@@ -1412,19 +1534,44 @@ struct bubbles_picker : nodes::Stack {
 // room's Manage (its own).
 template <class Actions>
 struct look_choices : nodes::Stack {
-  struct pick {
+  [[nodiscard]] static bool inherits(const choice_level_t& level) {
+    return splice::visit(splice::overloaded{[](choice_level::everywhere) { return false; }, [](const auto&) { return true; }}, level);
+  }
+  struct pick_wallpaper_at {
     Actions* actions;
     choice_level_t level;
-    config::wallpaper_pick_t chosen;
-    void operator()() const { actions->set_wallpaper(level, chosen); }
+    bool inherit;
+    void operator()(std::size_t index) const {
+      if (inherit && index == 0) {
+        actions->set_wallpaper(level, config::wallpaper_pick::inherit{});
+        return;
+      }
+      static const std::array<config::wallpaper_pick_t, 3> picks{config::wallpaper_pick::theme{}, config::wallpaper_pick::plain{},
+                                                                config::wallpaper_pick::picture{}};
+      if (const std::size_t at = index - (inherit ? 1 : 0); at < picks.size())
+        actions->set_wallpaper(level, picks[at]);
+    }
   };
+  [[nodiscard]] static std::vector<std::string> background_names(const choice_level_t& level) {
+    std::vector<std::string> out;
+    if (inherits(level))
+      out.emplace_back(splice::visit(splice::overloaded{[](choice_level::chat) { return "As its account's"; },
+                                                        [](const auto&) { return "As every chat's"; }},
+                                     level));
+    for (const char* name : {"Theme default", "Plain colour", "Image\u2026"})
+      out.emplace_back(name);
+    return out;
+  }
+  [[nodiscard]] static std::size_t background_index(const choice_level_t& level) {
+    const auto& own = looks_at(level).wallpaper;
+    if (!own)
+      return 0;
+    return (inherits(level) ? 1 : 0) + own->index();
+  }
   struct parts_t {
     nodes::Text background_title{"BACKGROUND", 13.0f, dim_colour, true};
     nodes::Text note;
-    widgets::Button<pick> inherit;
-    widgets::Button<pick> theme;
-    widgets::Button<pick> plain;
-    widgets::Button<pick> picture;
+    choice_menu<pick_wallpaper_at> background;
     bubbles_picker<Actions> bubbles;
     bubbles_picker<Actions> panels;
   } parts;
@@ -1437,13 +1584,8 @@ struct look_choices : nodes::Stack {
   }
   look_choices(Actions* a, choice_level_t level)
       : parts{.note = nodes::Text(note_of(level), 13.0f, dim_colour),
-              .inherit = widgets::Button<pick>(splice::visit(splice::overloaded{[](choice_level::chat) { return "As its account's"; },
-                                                                                [](const auto&) { return "As every chat's"; }},
-                                                             level),
-                                               {a, level, config::wallpaper_pick::inherit{}}),
-              .theme = widgets::Button<pick>("Theme default", {a, level, config::wallpaper_pick::theme{}}),
-              .plain = widgets::Button<pick>("Plain colour", {a, level, config::wallpaper_pick::plain{}}),
-              .picture = widgets::Button<pick>("Choose image\u2026", {a, level, config::wallpaper_pick::picture{}}),
+              .background = choice_menu<pick_wallpaper_at>("", background_names(level), background_index(level),
+                                                           pick_wallpaper_at{a, level, inherits(level)}),
               .bubbles = bubbles_picker<Actions>(a, level, config::look_part::bubbles{}),
               .panels = bubbles_picker<Actions>(a, level, config::look_part::panels{})} {
     this->setGap(8.0f);
@@ -1451,12 +1593,7 @@ struct look_choices : nodes::Stack {
     parts.background_title.apply({.margin = {0.0f, 10.0f, 0.0f, 10.0f}});
     parts.note.setWrapped(true);
     parts.note.apply({.fillX = true, .margin = {0.0f, 10.0f, 4.0f, 10.0f}});
-    parts.inherit.setVisible(splice::visit(splice::overloaded{[](choice_level::everywhere) { return false; },
-                                                             [](const auto&) { return true; }},
-                                           level));
-    parts.picture.setPrimary(true);
-    for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.inherit, &parts.theme, &parts.plain, &parts.picture})
-      each->apply({.fillX = true, .height = 36.0f, .margin = {0.0f, 10.0f, 0.0f, 10.0f}});
+    parts.background.apply({.margin = {0.0f, 10.0f, 0.0f, 10.0f}});
     parts.bubbles.apply({.margin = {10.0f, 0.0f, 0.0f, 0.0f}});
     parts.panels.apply({.margin = {10.0f, 0.0f, 0.0f, 0.0f}});
   }

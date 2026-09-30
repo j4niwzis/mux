@@ -70,6 +70,20 @@ inline config::bubble_look& bubble_look_everywhere() {
   static config::bubble_look look;
   return look;
 }
+// What each level holds of the looks, as the program last said: none, as
+// the level over it. For the choices to show what is chosen where.
+struct looks_held {
+  std::optional<config::wallpaper_t> wallpaper;
+  std::optional<config::bubble_look> bubbles;
+  std::optional<config::bubble_look> panels;
+};
+inline looks_held& looks_at(const choice_level_t& level) {
+  static looks_held everywhere, account, chat;
+  return splice::visit(splice::overloaded{[](choice_level::everywhere) -> looks_held& { return everywhere; },
+                                          [](choice_level::account) -> looks_held& { return account; },
+                                          [](choice_level::chat) -> looks_held& { return chat; }},
+                       level);
+}
 // And the panels': every chat's, and the chosen chat's.
 inline config::bubble_look& panel_look_everywhere() {
   static config::bubble_look look;

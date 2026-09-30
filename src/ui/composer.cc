@@ -10,6 +10,7 @@ import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.icon;
 import skiff.nodes.text;
+import skiff.widgets.button;
 import skiff.widgets.textarea;
 import mux.core;
 import mux.config;
@@ -275,16 +276,46 @@ struct composer_bar : nodes::Stack {
       send.set_colour(accent_colour);
     }
   };
+  // Element's bar over the field while messages here were not sent
+  // (RoomStatusBar's): a warning, and "Delete all" and "Retry all".
+  struct unsent_row : nodes::Stack {
+    using delete_button = widgets::Button<ask<Actions, &Actions::discard_unsent>>;
+    using retry_button = widgets::Button<ask<Actions, &Actions::retry_unsent>>;
+    struct parts_t {
+      nodes::Text said;
+      delete_button remove;
+      retry_button retry;
+    } parts;
+    explicit unsent_row(Actions* a)
+        : parts{.said = nodes::Text("Some of your messages have not been sent", 13.0f, error_colour),
+                .remove = delete_button("Delete all", {a}),
+                .retry = retry_button("Retry all", {a})} {
+      this->setHorizontal();
+      this->setGap(8.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 12.0f, 6.0f, 12.0f}});
+      parts.said.setElided(true);
+      parts.said.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      parts.retry.setPrimary(true);
+    }
+  };
   struct parts_t {
     nodes::Box<> divider{band_colour};
+    unsent_row unsent;
     context_row context_line;
     input_row input;
+    // Where the reader may not post: said in place of the field, as Element
+    // says it.
+    nodes::Text no_post{"You don't have permission to post in this chat", 13.0f, dim_colour};
   } parts;
   // The old name, for what reads it.
   typename input_row::field_t& field = parts.input.parts.field;
 
-  // Declared: the divider, the answer's line where there is one, the row.
-  explicit composer_bar(Actions* a) : parts{.context_line = context_row(a), .input = input_row(a)} {
+  // Declared: the divider, the unsent bar, the answer's line where there is
+  // one, the row -- or, where the reader may not post, the line saying so.
+  explicit composer_bar(Actions* a) : parts{.unsent = unsent_row(a), .context_line = context_row(a), .input = input_row(a)} {
+    parts.unsent.setVisible(false);
+    parts.no_post.setVisible(false);
+    parts.no_post.apply({.alignSelf = scene::align::kMiddle, .margin = {18.0f, 0.0f, 18.0f, 0.0f}});
     parts.context_line.setVisible(false);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .background = sidebar_colour});
     parts.divider.apply({.fillX = true, .height = 1.0f});
@@ -311,6 +342,20 @@ struct composer_bar : nodes::Stack {
     // Taken apart with Backspace: its user's id, not the name it is sent by.
     field.insertAtom("\u2002\u2002" + name, user, name, false, user);
     field.insertText(" ");
+  }
+  // The unsent bar up while any message here was not sent.
+  void show_unsent(bool any) {
+    if (any != parts.unsent.visible())
+      parts.unsent.setVisible(any);
+  }
+  // The field, or the line that the reader may not post here.
+  void set_can_post(bool can) {
+    if (can == parts.input.visible())
+      return;
+    parts.input.setVisible(can);
+    parts.no_post.setVisible(!can);
+    if (!can)
+      parts.context_line.setVisible(false);
   }
   // Whether what is written answers or edits something.
   [[nodiscard]] bool answering() const { return parts.context_line.visible(); }

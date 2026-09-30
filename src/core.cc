@@ -882,6 +882,13 @@ struct delivery_changed {
   delivery_t now;
 };
 
+// A message sent from here that the server never took, let go: taken out
+// of the chat, as Element's "Delete" does with one not sent.
+struct message_discarded {
+  conversation_id in;
+  std::string id;
+};
+
 struct reaction_changed {
   conversation_id in;
   std::string id;
@@ -951,7 +958,7 @@ struct history_position {
 using change_t = splice::variant<change::connection_changed, change::account_removed, change::conversation_updated,
                               change::conversation_removed,
                               change::presence_changed, change::message_added, change::message_edited,
-                              change::message_redacted, change::message_acknowledged, change::delivery_changed, change::reaction_changed,
+                              change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed,
                               change::typing_changed, change::history_position, change::members_changed,
                               change::session_given, change::avatar_loaded, change::receipts_changed,
                               change::window_opened, change::window_extended, change::media_progress,
@@ -1168,6 +1175,12 @@ class model {
   void on(const change::delivery_changed& one) {
     if (message* kept = message_in(of(one.in), one.id))
       kept->delivery = one.now;
+  }
+  void on(const change::message_discarded& one) {
+    conversation& where = of(one.in);
+    std::erase_if(where.timeline, [&](const message& each) { return each.id == one.id; });
+    if (where.latest && where.latest->id == one.id)
+      where.latest.reset();
   }
   void on(const change::reaction_changed& one) {
     if (message* kept = message_in(of(one.in), one.id)) {

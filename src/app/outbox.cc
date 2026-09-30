@@ -121,6 +121,32 @@ class outbox_part {
                                           : mux::ui::quote_line_of(*next, *chat, s_->model));
     screen.jump_to(next->id);
   }
+  // Element's unsent bar: what the server did not take here -- sent again,
+  // each anew at the end and the one not sent let go; or let go.
+  [[nodiscard]] std::vector<mux::message> unsent_here() const {
+    std::vector<mux::message> out;
+    const auto& chosen = s_->root().main().chosen;
+    if (const mux::conversation* chat = chosen ? s_->model->find(*chosen) : nullptr)
+      for (const mux::message& one : chat->timeline)
+        if (one.outgoing &&
+            splice::visit(splice::overloaded{[](const mux::delivery::failed&) { return true; }, [](const auto&) { return false; }},
+                          one.delivery))
+          out.push_back(one);
+    return out;
+  }
+  void apply(const request::retry_unsent&) {
+    for (const mux::message& one : this->unsent_here()) {
+      s_->box->push(change_t{change::message_discarded{one.in, one.id}});
+      if (s_->demo())
+        s_->ask->send(one.in, one.body.plain);
+      else
+        s_->net->send(one.in, one.body.plain, one.replies_to, {});
+    }
+  }
+  void apply(const request::discard_unsent&) {
+    for (const mux::message& one : this->unsent_here())
+      s_->box->push(change_t{change::message_discarded{one.in, one.id}});
+  }
   // An edit let go: the field back to what was written before it, not the
   // edited message's text left in it to be sent as a new one.
   void apply(const request::cancel_compose&) {

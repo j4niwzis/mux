@@ -80,6 +80,7 @@ std::string of(const change::message_edited& one) { return std::format("{} edite
 std::string of(const change::message_redacted& one) { return std::format("{} removed {}", one.in.id, one.id); }
 std::string of(const change::message_acknowledged& one) { return std::format("{} is {}", one.local_id, one.id); }
 std::string of(const change::delivery_changed& one) { return std::format("{} {}", one.id, name_of(one.now)); }
+std::string of(const change::message_discarded& one) { return std::format("{} let go {}", one.in.id, one.id); }
 std::string of(const change::reaction_changed& one) {
   return std::format("{} {} {} on {}", one.who, one.added ? "reacted" : "took back", one.key, one.id);
 }

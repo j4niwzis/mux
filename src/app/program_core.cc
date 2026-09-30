@@ -278,6 +278,7 @@ void app::keep_on_disk(const mux::change_t& one) {
   };
   splice::visit(splice::overloaded{[&](const mux::change::message_added& c) { added(c); },
                              [&](const mux::change::message_edited& c) { as_now(c.in, c.id); },
+                             [&](const mux::change::message_discarded& c) { store.forget(c.in, c.id); },
                              [&](const mux::change::reaction_changed& c) { as_now(c.in, c.id); },
                              [&](const mux::change::receipts_changed& c) {
                                if (const mux::conversation* chat = model->find(c.in))

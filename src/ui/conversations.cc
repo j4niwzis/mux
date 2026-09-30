@@ -1275,6 +1275,21 @@ struct conversations_screen : nodes::Stack {
       return;
     }
     info.show(*one, now, muted.contains(one->id));
+    // Whether the reader may post here: their power against what a message
+    // asks, as the room's power levels say; and whether any message of
+    // theirs here was not sent.
+    {
+      const auto mine = one->powers.find(one->id.account.address);
+      const std::int64_t level = mine != one->powers.end() ? mine->second : one->power_default;
+      const auto asked = one->needs.events.find("m.room.message");
+      const std::int64_t needs = asked != one->needs.events.end() ? asked->second : one->needs.events_default;
+      chat.line.set_can_post(level >= needs);
+      chat.line.show_unsent(std::ranges::any_of(one->timeline, [](const message& said) {
+        return said.outgoing &&
+               splice::visit(splice::overloaded{[](const delivery::failed&) { return true; }, [](const auto&) { return false; }},
+                             said.delivery);
+      }));
+    }
     chat.area.seen_model = &now;
     chat.area.seen_chat = one->id;
     const auto& all = one->timeline;

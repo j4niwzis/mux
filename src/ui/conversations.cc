@@ -623,7 +623,10 @@ struct conversations_screen : nodes::Stack {
   };
   made_range made;
   std::map<conversation_id, made_range> made_of;
-  static constexpr std::size_t kFirstMade = 80, kMostMade = 240, kMadeStep = 60;
+  // Slid a little at a time, well before the reader reaches its edge: sixty
+  // bubbles made in one frame -- made, measured, laid out -- was a frame of
+  // 25 ms at every slide, felt as the scroll growing slower further up.
+  static constexpr std::size_t kFirstMade = 80, kMostMade = 240, kMadeStep = 16;
   [[nodiscard]] std::pair<std::size_t, std::size_t> made_indices(const std::vector<message>& all) const {
     const auto index_of = [&](const std::optional<std::string>& id) -> std::optional<std::size_t> {
       if (!id)
@@ -1048,7 +1051,9 @@ struct conversations_screen : nodes::Stack {
     if (chosen && last_model && !jumping_to)
       if (const conversation* one = last_model->find(*chosen)) {
         auto [from, to] = this->made_indices(one->timeline);
-        if (timeline.current() <= 300.0f && from > 0) {
+        // Slid while a screen and a half is still made beyond the view.
+        const float ahead = std::max(300.0f, timeline.bounds().height() * 1.5f);
+        if (timeline.current() <= ahead && from > 0) {
           from = from > kMadeStep ? from - kMadeStep : 0;
           to = std::min(to, from + kMostMade);
           this->set_made(one->timeline, from, to);
@@ -1061,7 +1066,7 @@ struct conversations_screen : nodes::Stack {
           // At the end of a window: paged forward, toward the newest.
           newer_asked = one->future_from;
           actions->load_newer(*chosen, *one->future_from);
-        } else if (!made.to_end && timeline.current() >= timeline.extent() - 300.0f) {
+        } else if (!made.to_end && timeline.current() >= timeline.extent() - ahead) {
           to = std::min(one->timeline.size(), to + kMadeStep);
           from = to > kMostMade && to - from > kMostMade ? to - kMostMade : from;
           this->set_made(one->timeline, from, to);

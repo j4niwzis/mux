@@ -25,23 +25,26 @@ inline bool keep_draft(drafts_t& drafts, const conversation_id& in, const std::s
   return true;
 }
 
-// The file's text: an object of "<account>\n<chat>" to the draft.
+// The file's text: an object of "<account>\n<chat>" to the draft, read and
+// written as that map.
+using drafts_file = std::map<std::string, std::string>;
+
 [[nodiscard]] inline std::string drafts_text(const drafts_t& drafts) {
-  knot::value::object all;
+  drafts_file all;
   for (const auto& [id, draft] : drafts)
-    all.emplace(id.account.address + "\n" + id.id, knot::value(draft));
-  return knot::to_json_string(knot::value(std::move(all)));
+    all.emplace(id.account.address + "\n" + id.id, draft);
+  return knot::to_json_string(all);
 }
 [[nodiscard]] inline drafts_t drafts_from(std::string_view text) {
   drafts_t out;
-  auto parsed = knot::try_read<knot::value>(text);
-  if (!parsed || !parsed->is<knot::value::object>())
+  auto parsed = knot::try_read<drafts_file>(text);
+  if (!parsed)
     return out;
-  for (const auto& [key, draft] : parsed->as<knot::value::object>()) {
+  for (auto& [key, draft] : *parsed) {
     const auto cut = key.find('\n');
-    if (cut == std::string::npos || !draft.is<std::string>())
+    if (cut == std::string::npos)
       continue;
-    out.insert_or_assign(conversation_id{account_of(key.substr(0, cut)), key.substr(cut + 1)}, draft.as<std::string>());
+    out.insert_or_assign(conversation_id{account_of(key.substr(0, cut)), key.substr(cut + 1)}, std::move(draft));
   }
   return out;
 }

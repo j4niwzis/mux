@@ -10,6 +10,56 @@ import mux.config;
 
 export namespace mux::app {
 
+// The store's files, as their lines say them: read and written by knot, each
+// straight into its type.
+namespace store_file {
+
+// An attachment as a message's line keeps it.
+struct attachment_line {
+  bool image = false;
+  std::optional<bool> moves;
+  std::string source, name, mimetype;
+  std::int64_t size = 0;
+  std::optional<std::string> blurhash;
+  std::int64_t w = 0, h = 0;
+  std::optional<std::string> video;
+  std::optional<std::int64_t> duration;
+};
+consteval auto json_schema(knot::type<attachment_line>) { return knot::schema<attachment_line>(); }
+
+// A line of a chat's messages: a message, or only its id and that it is
+// deleted or gone.
+struct message_line {
+  std::string id;
+  std::optional<bool> gone;
+  std::optional<bool> deleted;
+  std::optional<std::string> sender;
+  std::optional<std::int64_t> at;
+  std::optional<std::string> plain;
+  std::optional<std::string> html;
+  std::optional<std::string> reply;
+  std::optional<bool> edited;
+  std::optional<bool> redacted;
+  std::optional<bool> out;
+  std::optional<bool> service;
+  std::optional<std::string> kind;
+  std::optional<attachment_line> attachment;
+  std::optional<std::vector<attachment_line>> album;
+};
+consteval auto json_schema(knot::type<message_line>) { return knot::schema<message_line>(); }
+
+// Who has read up to where in a chat, and the user.
+struct reads_file {
+  std::map<std::string, std::string> users;
+  std::optional<std::string> me;
+};
+consteval auto json_schema(knot::type<reads_file>) { return knot::schema<reads_file>(); }
+
+// A flag as a line keeps it: there only when set.
+constexpr std::optional<bool> flag(bool on) { return on ? std::optional<bool>(true) : std::nullopt; }
+
+}  // namespace store_file
+
 // ---- the messages kept on disk ---------------------------------------------
 // Every message of every chat, a line of JSON each, appended as it comes, is
 // sent, edited or goes: the last line for an id is what it is, a "gone" one
@@ -29,17 +79,11 @@ class message_store {
   // beside its messages, written anew when it changes, read when the chat
   // is opened.
   void keep_reads(const mux::conversation_id& in, const mux::conversation& chat) {
-    knot::value::object users;
-    for (const auto& [user, event] : chat.read_by)
-      users.emplace(user, knot::value(event));
-    knot::value::object all;
-    all.emplace("users", knot::value(std::move(users)));
-    if (chat.read_up_to)
-      all.emplace("me", knot::value(*chat.read_up_to));
+    const store_file::reads_file all{.users = chat.read_by, .me = chat.read_up_to};
     const auto where = reads_file_of(in);
     std::error_code failed;
     std::filesystem::create_directories(where.parent_path(), failed);
-    std::ofstream(where, std::ios::binary | std::ios::trunc) << knot::to_json_string(knot::value(std::move(all)));
+    std::ofstream(where, std::ios::binary | std::ios::trunc) << knot::to_json_string(all);
   }
   struct reads {
     std::map<std::string, std::string> read_by;
@@ -49,26 +93,18 @@ class message_store {
     reads out;
     std::ifstream file(reads_file_of(in), std::ios::binary);
     const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-    auto parsed = knot::try_read<knot::value>(std::string_view(text));
-    if (!parsed || !parsed->is<knot::value::object>())
+    auto parsed = knot::try_read<store_file::reads_file>(std::string_view(text));
+    if (!parsed)
       return out;
-    const auto& all = parsed->as<knot::value::object>();
-    if (const auto users = all.find("users"); users != all.end() && users->second.is<knot::value::object>())
-      for (const auto& [user, event] : users->second.as<knot::value::object>())
-        if (event.is<std::string>())
-          out.read_by.emplace(user, event.as<std::string>());
-    if (const auto me = all.find("me"); me != all.end() && me->second.is<std::string>())
-      out.me = me->second.as<std::string>();
+    out.read_by = std::move(parsed->users);
+    out.me = std::move(parsed->me);
     return out;
   }
   // A message deleted: marked where it is kept, and kept whole in the
   // archive of deleted messages, which the cache's limit does not reach --
   // as it was where that is given, else as the disk has it.
   void mark_deleted(const mux::conversation_id& in, const std::string& id, std::optional<mux::message> whole) {
-    knot::value::object line;
-    line.emplace("id", knot::value(id));
-    line.emplace("deleted", knot::value(true));
-    append(in, knot::to_json_string(knot::value(std::move(line))));
+    append(in, knot::to_json_string(store_file::message_line{.id = id, .deleted = true}));
     if (!whole) {
       auto all = read(in);
       if (const auto found = all.find(id); found != all.end())
@@ -87,10 +123,7 @@ class message_store {
     prune(mux::config::state_path("deleted"), deleted_budget, where);
   }
   void forget(const mux::conversation_id& in, const std::string& id) {
-    knot::value::object line;
-    line.emplace("id", knot::value(id));
-    line.emplace("gone", knot::value(true));
-    append(in, knot::to_json_string(knot::value(std::move(line))));
+    append(in, knot::to_json_string(store_file::message_line{.id = id, .gone = true}));
   }
 
   // All of a chat's messages kept, by id. From any thread: a worker's.
@@ -219,16 +252,6 @@ class message_store {
     return all;
   }
   // One file's lines, into `all`: how many there were.
-  static std::optional<std::string> text_of(const knot::value::object& o, std::string_view key) {
-    const auto found = o.find(key);
-    if (found == o.end() || !found->second.is<std::string>())
-      return std::nullopt;
-    return found->second.as<std::string>();
-  }
-  static bool flag_of(const knot::value::object& o, std::string_view key) {
-    const auto found = o.find(key);
-    return found != o.end() && found->second.is<bool>() && found->second.as<bool>();
-  }
   static std::size_t read_lines(const std::filesystem::path& where, const mux::conversation_id& in,
                                 std::map<std::string, mux::message>& all) {
     std::ifstream file(where, std::ios::binary);
@@ -236,119 +259,96 @@ class message_store {
     std::size_t lines = 0;
     while (std::getline(file, text)) {
       ++lines;
-      auto parsed = knot::try_read<knot::value>(std::string_view(text));
-      if (!parsed || !parsed->is<knot::value::object>())
+      auto parsed = knot::try_read<store_file::message_line>(std::string_view(text));
+      if (!parsed)
         continue;
-      const auto& o = parsed->as<knot::value::object>();
-      const auto id = text_of(o, "id");
-      if (!id)
-        continue;
-      if (flag_of(o, "gone")) {
-        all.erase(*id);
+      auto& o = *parsed;
+      if (o.gone.value_or(false)) {
+        all.erase(o.id);
         continue;
       }
-      if (flag_of(o, "deleted")) {
-        if (const auto found = all.find(*id); found != all.end())
+      if (o.deleted.value_or(false)) {
+        if (const auto found = all.find(o.id); found != all.end())
           found->second.redacted = true;
         continue;
       }
       mux::message one;
       one.in = in;
-      one.id = *id;
-      one.sender = text_of(o, "sender").value_or("");
-      if (const auto at = o.find("at"); at != o.end() && at->second.is<std::int64_t>())
-        one.at = time_point(std::chrono::milliseconds(at->second.as<std::int64_t>()));
-      one.body.plain = text_of(o, "plain").value_or("");
-      one.body.html = text_of(o, "html");
-      one.replies_to = text_of(o, "reply");
-      one.edited = flag_of(o, "edited");
-      one.redacted = flag_of(o, "redacted");
-      one.outgoing = flag_of(o, "out");
-      one.service = flag_of(o, "service");
-      if (const auto kind = text_of(o, "kind"))
-        one.event_kind = mux::logic::room_event_of(*kind);
-      if (const auto carried = o.find("attachment");
-          carried != o.end() && carried->second.is<knot::value::object>())
-        one.attachment = attachment_of(carried->second.as<knot::value::object>());
+      one.id = o.id;
+      one.sender = o.sender.value_or("");
+      if (o.at)
+        one.at = time_point(std::chrono::milliseconds(*o.at));
+      one.body.plain = o.plain.value_or("");
+      one.body.html = std::move(o.html);
+      one.replies_to = std::move(o.reply);
+      one.edited = o.edited.value_or(false);
+      one.redacted = o.redacted.value_or(false);
+      one.outgoing = o.out.value_or(false);
+      one.service = o.service.value_or(false);
+      if (o.kind)
+        one.event_kind = mux::logic::room_event_of(*o.kind);
+      if (o.attachment)
+        one.attachment = attachment_of(*o.attachment);
       // A gallery's pictures, each as an attachment is.
-      if (const auto album = o.find("album"); album != o.end() && album->second.is<knot::value::array>())
-        for (const knot::value& each : album->second.as<knot::value::array>())
-          if (each.is<knot::value::object>())
-            one.album.push_back(attachment_of(each.as<knot::value::object>()));
-      all.insert_or_assign(*id, std::move(one));
+      if (o.album)
+        for (const auto& each : *o.album)
+          one.album.push_back(attachment_of(each));
+      all.insert_or_assign(o.id, std::move(one));
     }
     return lines;
   }
   // An attachment as a line keeps it, and read back.
-  static mux::attachment attachment_of(const knot::value::object& c) {
-    const auto number = [&](std::string_view key) -> std::int64_t {
-      const auto found = c.find(key);
-      return found != c.end() && found->second.is<std::int64_t>() ? found->second.as<std::int64_t>() : 0;
-    };
+  static mux::attachment attachment_of(const store_file::attachment_line& c) {
     mux::attachment a;
-    if (flag_of(c, "image"))
-      a.kind = mux::attachment_kind::image{.moves = flag_of(c, "moves")};
-    a.source = text_of(c, "source").value_or("");
-    a.name = text_of(c, "name").value_or("");
-    a.mimetype = text_of(c, "mimetype").value_or("");
-    a.blurhash = text_of(c, "blurhash");
-    a.size = number("size");
-    a.width = static_cast<int>(number("w"));
-    a.height = static_cast<int>(number("h"));
-    a.video = text_of(c, "video");
-    a.duration_ms = number("duration");
+    if (c.image)
+      a.kind = mux::attachment_kind::image{.moves = c.moves.value_or(false)};
+    a.source = c.source;
+    a.name = c.name;
+    a.mimetype = c.mimetype;
+    a.blurhash = c.blurhash;
+    a.size = c.size;
+    a.width = static_cast<int>(c.w);
+    a.height = static_cast<int>(c.h);
+    a.video = c.video;
+    a.duration_ms = c.duration.value_or(0);
     return a;
   }
-  static knot::value::object object_of(const mux::attachment& carried_one) {
-    knot::value::object carried;
-    carried.emplace("image", knot::value(mux::is_picture(carried_one.kind)));
-    if (mux::moves(carried_one.kind))
-      carried.emplace("moves", knot::value(true));
-    carried.emplace("source", knot::value(carried_one.source));
-    carried.emplace("name", knot::value(carried_one.name));
-    carried.emplace("mimetype", knot::value(carried_one.mimetype));
-    carried.emplace("size", knot::value(carried_one.size));
-    if (carried_one.blurhash)
-      carried.emplace("blurhash", knot::value(*carried_one.blurhash));
-    carried.emplace("w", knot::value(static_cast<std::int64_t>(carried_one.width)));
-    carried.emplace("h", knot::value(static_cast<std::int64_t>(carried_one.height)));
-    if (carried_one.video) {
-      carried.emplace("video", knot::value(*carried_one.video));
-      carried.emplace("duration", knot::value(carried_one.duration_ms));
-    }
-    return carried;
+  static store_file::attachment_line line_of(const mux::attachment& a) {
+    return {.image = mux::is_picture(a.kind),
+            .moves = store_file::flag(mux::moves(a.kind)),
+            .source = a.source,
+            .name = a.name,
+            .mimetype = a.mimetype,
+            .size = a.size,
+            .blurhash = a.blurhash,
+            .w = a.width,
+            .h = a.height,
+            .video = a.video,
+            .duration = a.video ? std::optional<std::int64_t>(a.duration_ms) : std::nullopt};
   }
   static std::string line_of(const mux::message& one) {
-    knot::value::object line;
-    line.emplace("id", knot::value(one.id));
-    line.emplace("sender", knot::value(one.sender));
-    line.emplace("at", knot::value(static_cast<std::int64_t>(one.at.time_since_epoch().count())));
-    line.emplace("plain", knot::value(one.body.plain));
-    if (one.body.html)
-      line.emplace("html", knot::value(*one.body.html));
-    if (one.replies_to)
-      line.emplace("reply", knot::value(*one.replies_to));
-    if (one.edited)
-      line.emplace("edited", knot::value(true));
-    if (one.redacted)
-      line.emplace("redacted", knot::value(true));
-    if (one.outgoing)
-      line.emplace("out", knot::value(true));
-    // Something done, not said: read back as a line of its own again.
-    if (one.service) {
-      line.emplace("service", knot::value(true));
-      // Which kind of room event, for which are shown.
-      line.emplace("kind", knot::value(std::string(mux::logic::word_of(one.event_kind))));
-    }
-    if (one.attachment)
-      line.emplace("attachment", knot::value(object_of(*one.attachment)));
+    store_file::message_line line{
+        .id = one.id,
+        .sender = one.sender,
+        .at = static_cast<std::int64_t>(one.at.time_since_epoch().count()),
+        .plain = one.body.plain,
+        .html = one.body.html,
+        .reply = one.replies_to,
+        .edited = store_file::flag(one.edited),
+        .redacted = store_file::flag(one.redacted),
+        .out = store_file::flag(one.outgoing),
+        // Something done, not said: read back as a line of its own again,
+        // with which kind of room event, for which are shown.
+        .service = store_file::flag(one.service),
+        .kind = one.service ? std::optional<std::string>(mux::logic::word_of(one.event_kind)) : std::nullopt,
+        .attachment = one.attachment ? std::optional(line_of(*one.attachment)) : std::nullopt,
+    };
     if (!one.album.empty()) {
-      knot::value::array album;
+      line.album.emplace();
       for (const mux::attachment& each : one.album)
-        album.push_back(knot::value(object_of(each)));
-      line.emplace("album", knot::value(std::move(album)));
+        line.album->push_back(line_of(each));
     }
-    return knot::to_json_string(knot::value(std::move(line)));
+    return knot::to_json_string(line);
   }
 };
 

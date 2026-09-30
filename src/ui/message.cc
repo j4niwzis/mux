@@ -1043,6 +1043,21 @@ struct message_bubble : nodes::Stack {
     // Decided from the last layout; a change is laid out at the next.
     void update(double now_ms) {
       auto& [name, quote, picture, album, file, text, cards, preview, reactions, time, inline_time, tail] = parts;
+      // Nothing left of the text -- all of it the quote the header shows --
+      // and nothing else under the header: the time on a line of its own,
+      // as Telegram's, not beside an empty last line, drawn over the quote.
+      if (text.visible() && text.text().empty() && !reactions) {
+        time_placed = true;
+        text.setVisible(false);
+        if (!time.visible() || inline_time.visible()) {
+          time.setVisible(true);
+          inline_time.setVisible(false);
+          widened = 0.0f;
+          fState.apply({.minWidth = base_min});
+          this->invalidateLayout();
+        }
+        return;
+      }
       if (!cards.empty() || preview || (!text.visible() && !reactions)) {
         time_placed = true;  // under it, as it is
         return;

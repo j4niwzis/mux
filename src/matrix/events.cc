@@ -226,11 +226,13 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
                                            .id = one.event_id,
                                            .sender = one.sender,
                                            .at = at,
-                                           .body = pictured
-                                                       ? mux::body{std::format("{} reacted :emoji:", name_in(in.id, one.sender)),
-                                                              escaped(name_in(in.id, one.sender)) + " reacted " + emote}
-                                                       : mux::body{std::format("{} reacted {}", name_in(in.id, one.sender), key),
-                                                              std::nullopt},
+                                           // Who reacted as a person -- a pill, as in the
+                                           // member lines -- then what with.
+                                           .body = mux::body{pictured ? std::format("{} reacted :emoji:", name_in(in.id, one.sender))
+                                                                      : std::format("{} reacted {}", name_in(in.id, one.sender), key),
+                                                             std::format(R"(<a href="https://matrix.to/#/{}">{}</a> reacted )",
+                                                                         escaped(one.sender), escaped(name_in(in.id, one.sender))) +
+                                                                 (pictured ? emote : escaped(key))},
                                            .replies_to = content.m_relates_to->event_id,
                                            .outgoing = one.sender == id_.address,
                                            .service = true,

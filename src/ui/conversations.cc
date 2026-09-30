@@ -915,8 +915,18 @@ struct conversations_screen : nodes::Stack {
   // named and not yet come -- and else looked at only as what it watches
   // changes: the view scrolled, the composer or the search typed into, the
   // model shown, each of which marks it. It was run at every frame.
+  // Away from the newest: scrolled up, in a window of the history, or with
+  // a way back from a jump to go.
+  [[nodiscard]] bool away() const {
+    const conversation* shown_one = chosen && last_model ? last_model->find(*chosen) : nullptr;
+    return !timeline.atEnd(40.0f) || (shown_one && shown_one->detached) || this->has_return();
+  }
+  // Ticked too while "↓" says otherwise than where the view is: the scroll
+  // that brought the view to the end stopped in a frame whose tick had gone
+  // by here already, and nothing ticked this again -- the arrow stayed.
   [[nodiscard]] bool wantsTick() const {
-    return jumping_to.has_value() || aiming.has_value() || jump_age != 0 || timeline.moving() ||
+    return this->away() != chat.area.parts.jump.visible() ||
+           jumping_to.has_value() || aiming.has_value() || jump_age != 0 || timeline.moving() ||
            !rooms_waiting.empty() || !rooms_unfound.empty();
   }
   void update(double) {
@@ -1096,9 +1106,10 @@ struct conversations_screen : nodes::Stack {
       searched = side.search.field.text();
       this->show(*last_model);
     }
-    // Away from the newest: scrolled up, or in a window of the history.
-    const conversation* shown_one = chosen && last_model ? last_model->find(*chosen) : nullptr;
-    const bool away = !timeline.atEnd(40.0f) || (shown_one && shown_one->detached) || this->has_return();
+    // Scrolled to the newest by hand: the way back from a jump is done.
+    if (chosen && timeline.atEnd(40.0f) && !timeline.moving() && this->has_return())
+      returns.erase(*chosen);
+    const bool away = this->away();
     if (away != chat.area.parts.jump.visible())
       chat.area.parts.jump.setVisible(away);
     // The @ and the heart, stacked over "↓" where it is up.

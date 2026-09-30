@@ -16,6 +16,11 @@ import mux.net;
 import mux.matrix;
 
 namespace mux::matrix {
+// Defined in the class, but a member of a module's class is not inline: the
+// extern template in network.cc leaves them to be made here, as the rest.
+template account<mux::app::post_change>::account(mux::net::loop& loop, mux::net::tls& tls, settings how, mux::app::post_change sink);
+template auto account<mux::app::post_change>::transaction() -> std::string;
+template void account<mux::app::post_change>::cancel_media(std::string source);
 template void account<mux::app::post_change>::say(connection_t state);
 template auto account<mux::app::post_change>::homeserver() -> std::optional<http::url>;
 template void account<mux::app::post_change>::run();

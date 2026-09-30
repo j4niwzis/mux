@@ -20,6 +20,8 @@ struct reply {
 };
 struct edit {
   std::string id;
+  // What the field held before the edit began: put back when it is let go.
+  std::string before;
 };
 }  // namespace compose
 using compose_t = splice::variant<compose::plain, compose::reply, compose::edit>;

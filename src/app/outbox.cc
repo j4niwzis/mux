@@ -31,7 +31,13 @@ class outbox_part {
     s_->root().main().line.show_context(mux::ui::compose_context{mux::ui::icon::reply{}, std::move(title), std::move(line)});
   }
   void edit(std::string id, const std::string& text) {
-    composing_ = compose::edit{std::move(id)};
+    // What was being written kept, to be put back when the edit is let go --
+    // from before the first edit, where one edit steps to another.
+    std::string before = splice::visit(
+        splice::overloaded{[](const compose::edit& e) { return e.before; },
+                           [&](const auto&) { return s_->root().main().line.plain(); }},
+        composing_);
+    composing_ = compose::edit{std::move(id), std::move(before)};
     std::string line = text;
     std::ranges::replace(line, '\n', ' ');
     s_->root().main().line.show_context(mux::ui::compose_context{mux::ui::icon::pencil{}, "Edit message", std::move(line)});
@@ -79,7 +85,6 @@ class outbox_part {
       }
       if (!next) {
         this->apply(request::cancel_compose{});
-        screen.line.clear();
         return;
       }
       this->edit(next->id, next->body.plain);
@@ -116,7 +121,12 @@ class outbox_part {
                                           : mux::ui::quote_line_of(*next, *chat, s_->model));
     screen.jump_to(next->id);
   }
+  // An edit let go: the field back to what was written before it, not the
+  // edited message's text left in it to be sent as a new one.
   void apply(const request::cancel_compose&) {
+    splice::visit(splice::overloaded{[&](const compose::edit& e) { s_->root().main().line.set_text(e.before); },
+                                     [](const auto&) {}},
+                  composing_);
     composing_ = compose::plain{};
     s_->root().main().line.show_context(std::nullopt);
   }

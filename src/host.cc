@@ -729,7 +729,8 @@ int run(App& app, const options& how) {
           int status = 0;
           char* name = abi::__cxa_demangle(one.type->name(), nullptr, nullptr, &status);
           std::cerr << "    damaged by " << (name ? name : one.type->name()) << " at " << one.rect.fLeft << ","
-                    << one.rect.fTop << " " << one.rect.width() << "x" << one.rect.height() << "\n";
+                    << one.rect.fTop << " " << one.rect.width() << "x" << one.rect.height()
+                    << (one.relaid ? " (laid out again)" : " (its look)") << "\n";
           std::free(name);
         }
       // And which nodes keep asking for frames, by type: said when that

@@ -34,46 +34,6 @@ struct user_field {
   friend consteval auto json_schema(knot::type<user_field>) { return knot::schema<user_field>(); }
 };
 
-// m.receipt's content: event, then kind, then user, to when.
-struct receipt_event {
-  struct at_t {
-    std::optional<std::int64_t> ts;
-    friend consteval auto json_schema(knot::type<at_t>) { return knot::schema<at_t>(); }
-  };
-  std::map<std::string, std::map<std::string, std::map<std::string, at_t>>> content;
-  friend consteval auto json_schema(knot::type<receipt_event>) { return knot::schema<receipt_event>(); }
-};
-
-// A pack of images (MSC2545): as the room's state, or the user's own.
-struct pack_event {
-  struct image_t {
-    std::optional<std::string> url;
-    std::optional<std::vector<std::string>> usage;
-    friend consteval auto json_schema(knot::type<image_t>) { return knot::schema<image_t>(); }
-  };
-  struct pack_t {
-    std::optional<std::vector<std::string>> usage;
-    friend consteval auto json_schema(knot::type<pack_t>) { return knot::schema<pack_t>(); }
-  };
-  struct content_t {
-    std::optional<std::map<std::string, image_t>> images;
-    std::optional<pack_t> pack;
-    friend consteval auto json_schema(knot::type<content_t>) { return knot::schema<content_t>(); }
-  };
-  content_t content;
-  friend consteval auto json_schema(knot::type<pack_event>) { return knot::schema<pack_event>(); }
-};
-
-// im.ponies.emote_rooms: room, then the state keys of its packs.
-struct emote_rooms_event {
-  struct content_t {
-    std::optional<std::map<std::string, std::map<std::string, knot::raw>>> rooms;
-    friend consteval auto json_schema(knot::type<content_t>) { return knot::schema<content_t>(); }
-  };
-  content_t content;
-  friend consteval auto json_schema(knot::type<emote_rooms_event>) { return knot::schema<emote_rooms_event>(); }
-};
-
 // A rule's word, as loom reads it: its text, for mux's own table.
 template <class Content, class Rule>
 std::optional<std::string> rule_text(const Content* content, Rule Content::* rule) {
@@ -349,26 +309,13 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
       if (part.ephemeral && part.ephemeral->events) {
         std::map<std::string, std::string> read_by;
         std::map<std::string, std::chrono::sys_time<std::chrono::milliseconds>> read_at;
-        for (const auto& event : *part.ephemeral->events) {
-          const bool receipt = splice::visit(splice::overloaded{[](event_type::receipt) { return true; },
-                                                     // Every other type an ephemeral event can have.
-                                                     [](const auto&) { return false; }},
-                                          event_type_of(event.type));
-          if (!receipt)
-            continue;
-          const auto receipts = read_as<receipt_event>(event);
-          if (!receipts)
-            continue;
-          for (const auto& [event_id, kinds] : receipts->content)
-            for (const auto& [kind, users] : kinds)
-              if (splice::visit([](auto of) { return of.read_up_to; }, receipt_kind_of(kind)))
-                for (const auto& [user, when] : users) {
-                  read_by.insert_or_assign(user, event_id);
-                  if (when.ts)
-                    read_at.insert_or_assign(user, std::chrono::sys_time<std::chrono::milliseconds>(
-                                                       std::chrono::milliseconds(*when.ts)));
-                }
-        }
+        for (const auto& event : *part.ephemeral->events)
+          for (const loom::client::read_receipt& one : loom::client::receipts_of(event)) {
+            read_by.insert_or_assign(one.user, one.event_id);
+            if (one.ts)
+              read_at.insert_or_assign(one.user, std::chrono::sys_time<std::chrono::milliseconds>(
+                                                     std::chrono::milliseconds(*one.ts)));
+          }
         if (!read_by.empty())
           sink_(change::receipts_changed{in, std::move(read_by), std::move(read_at)});
       }
@@ -448,11 +395,7 @@ auto account<Sink>::name_of(const std::string& room, const loom::client::joined_
 
 template <class Sink>
 auto account<Sink>::direct(const std::string& room) const -> bool {
-  const auto found = state_.account_data.find("m.direct");
-  if (found == state_.account_data.end())
-    return false;
-  const auto said = read_as<direct_event>(found->second);
-  return said && std::ranges::any_of(said->content, [&](const auto& one) { return std::ranges::contains(one.second, room); });
+  return loom::client::is_direct(state_, room);
 }
 
 template <class Sink>
@@ -486,63 +429,16 @@ void account<Sink>::conversation(const conversation_id& in, const loom::client::
 
 
 
-// Whether a usage list lets an image be an emoji: MSC2545's "usage", on the
-// image or else on its pack -- "emoticon", "sticker", or both where it is
-// missing or empty.
-using usage_t = std::optional<std::vector<std::string>>;
-inline bool usable_as_emoji(const usage_t& usage) {
-  return !usage || usage->empty() || std::ranges::any_of(*usage, [](const std::string& one) {
-    return splice::visit([](auto of) { return of.as_emoji; }, image_usage_of(one));
-  });
-}
-inline bool usable_as_sticker(const usage_t& usage) {
-  return !usage || usage->empty() || std::ranges::any_of(*usage, [](const std::string& one) {
-    return splice::visit([](auto of) { return of.as_sticker; }, image_usage_of(one));
-  });
-}
-
-// A pack's images, as MSC2545 has them: "images", shortcode to {"url"},
-// those that may be emoji -- or, asked for stickers, those that may be those.
-inline void emotes_from(const std::optional<pack_event>& said, std::vector<mux::emote>& into, bool stickers = false) {
-  if (!said || !said->content.images)
-    return;
-  const usage_t no_usage;
-  const usage_t& pack_usage = said->content.pack ? said->content.pack->usage : no_usage;
-  for (const auto& [shortcode, image] : *said->content.images) {
-    const usage_t& usage = image.usage ? image.usage : pack_usage;
-    if (!(stickers ? usable_as_sticker(usage) : usable_as_emoji(usage)))
-      continue;
-    if (image.url && image.url->starts_with("mxc://") &&
-        std::ranges::find(into, shortcode, &mux::emote::shortcode) == into.end())
-      into.push_back({shortcode, *image.url});
-  }
-}
-
+// The images of the packs the room offers (MSC2545), as loom finds them --
+// the user's own, the room's, and those taken everywhere -- as emoji, or
+// asked for stickers, as those.
 template <class Sink>
 auto account<Sink>::emotes_of(const loom::client::joined_room& kept, bool stickers) const -> std::vector<mux::emote> {
+  const loom::client::image_use_t use = stickers ? loom::client::image_use_t{loom::client::image_use::sticker{}}
+                                                 : loom::client::image_use_t{loom::client::image_use::emoticon{}};
   std::vector<mux::emote> out;
-  if (const auto own = state_.account_data.find("im.ponies.user_emotes"); own != state_.account_data.end()) {
-    emotes_from(read_as<pack_event>(own->second), out, stickers);
-  }
-  for (const auto& [key, one] : kept.state.events) {
-    if (!splice::visit([](auto of) { return of.emotes; }, state_type_of(key.first)))
-      continue;
-    emotes_from(read_as<pack_event>(one), out, stickers);
-  }
-  // And the packs of other rooms the user made usable everywhere, as Cinny
-  // and Sable do: im.ponies.emote_rooms, room to the state keys of its packs.
-  if (const auto chosen = state_.account_data.find("im.ponies.emote_rooms"); chosen != state_.account_data.end()) {
-    if (const auto said = read_as<emote_rooms_event>(chosen->second); said && said->content.rooms)
-      for (const auto& [room, packs] : *said->content.rooms) {
-        const auto joined = state_.joined.find(room);
-        if (joined == state_.joined.end())
-          continue;
-        for (const auto& [state_key, ignored] : packs)
-          for (const auto& [key, one] : joined->second.state.events)
-            if (key.second == state_key && splice::visit([](auto of) { return of.emotes; }, state_type_of(key.first)))
-              emotes_from(read_as<pack_event>(one), out, stickers);
-      }
-  }
+  for (loom::client::pack_image& one : loom::client::images(state_, kept, use))
+    out.push_back({std::move(one.shortcode), std::move(one.url)});
   return out;
 }
 

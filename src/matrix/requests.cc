@@ -107,7 +107,6 @@ struct link_facts {
   }
 };
 
-using text_content = loom::ev::m_room_message_m_text_content_t;
 using power_levels_content = loom::ev::m_room_power_levels_content_t;
 
 template <class Sink>
@@ -225,10 +224,7 @@ void account<Sink>::create_direct(std::string user) {
       return;
     }
     // m.direct as it is, with the new room under its person.
-    std::map<std::string, std::vector<std::string>> direct;
-    if (const auto found = state_.account_data.find("m.direct"); found != state_.account_data.end())
-      if (auto kept = knot::try_read<direct_event>(knot::to_json_string(found->second)))
-        direct = std::move(kept->content);
+    loom::client::direct_rooms_t direct = loom::client::direct_rooms(state_);
     direct[user].push_back(made->room_id);
     (void)perform(*api_, loom::cs::set_account_data{.user_id = id_.address, .type = "m.direct",
                                                     .body = as_body(direct)});
@@ -416,11 +412,7 @@ void account<Sink>::catch_up(std::string room, std::string from, std::string unt
         splice::visit(
             splice::overloaded{
                 [&](const loom::ev::m_room_message_content_t& content) {
-                  bool me = content.body.find(id_.address) != std::string::npos;
-                  if (const auto& said = content.m_mentions)
-                    me = (said->user_ids && std::ranges::contains(*said->user_ids, id_.address)) ||
-                         said->room.value_or(false);
-                  if (me) {
+                  if (loom::client::mentions(content, id_.address)) {
                     ++mentions;
                     sink_(change::mentioned{in, one.event_id, at});
                   }
@@ -597,22 +589,7 @@ void account<Sink>::edit(std::string room, std::string event, std::string text) 
       return;
     // Made HTML as a message sent is: its Markdown, the room's emoji.
     const auto html = html_of(text, emotes_in(room));
-    text_content content;
-    content.body = "* " + text;
-    if (html) {
-      content.format = "org.matrix.custom.html";
-      content.formatted_body = "* " + *html;
-    }
-    auto& now = content.m_new_content.emplace();
-    now.msgtype = "m.text";
-    now.body = text;
-    if (html) {
-      now.format = "org.matrix.custom.html";
-      now.formatted_body = *html;
-    }
-    auto& relates = content.m_relates_to.emplace();
-    relates.rel_type = text_content::m_relates_to_t::rel_type_values::m_replace{};
-    relates.event_id = event;
+    const auto content = loom::client::edit_message(event, text, html);
     if (perform(*api_, loom::cs::send_message{.room_id = room,
                                               .event_type = "m.room.message",
                                               .txn_id = this->transaction(),
@@ -639,11 +616,7 @@ void account<Sink>::react(std::string room, std::string target, std::string key,
     if (!api_)
       return;
     if (on) {
-      loom::ev::m_reaction_content_t content;
-      auto& relates = content.m_relates_to.emplace();
-      relates.rel_type = loom::ev::m_reaction_content_t::reaction_relates_to_t::rel_type_values::m_annotation{};
-      relates.event_id = target;
-      relates.key = key;
+      auto content = loom::client::reaction(target, key);
       if (key.starts_with("mxc://")) {
         const auto emotes = emotes_in(room);
         if (const auto found = std::ranges::find(emotes, key, &mux::emote::url); found != emotes.end())
@@ -813,20 +786,11 @@ void account<Sink>::send(std::string room, std::string body, std::optional<std::
       sink_(change::delivery_changed{in, txn, delivery::failed{}});
       return;
     }
-    text_content content;
-    content.body = body;
-    if (html) {
-      content.format = "org.matrix.custom.html";
-      content.formatted_body = *html;
-    }
-    if (reply_to)
-      content.m_relates_to.emplace().m_in_reply_to.emplace().event_id = *reply_to;
+    loom::client::text_said said{.body = body, .html = html, .reply_to = reply_to};
     // Who is mentioned, as Matrix 1.7 says it: what their clients notify by.
-    if (!mentions.empty()) {
-      auto& users = content.m_mentions.emplace().user_ids.emplace();
-      for (const mention& one : mentions)
-        users.push_back(one.user);
-    }
+    for (const mention& one : mentions)
+      said.mentions.push_back(one.user);
+    const auto content = loom::client::text_message(said);
     auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.room.message",
                                                       .txn_id = txn,

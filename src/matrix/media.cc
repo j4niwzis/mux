@@ -137,28 +137,14 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
     }
     // The message: a picture or a file, its caption its body; an answer, as
     // any message may be one.
-    const auto fill = [&](auto& content) {
-      content.body = caption.empty() ? name : caption;
-      content.filename = name;
-      content.url = *uri;
-      auto& info = content.info.emplace();
-      info.mimetype = mimetype;
-      info.size = static_cast<std::int64_t>(bytes.size());
-      if (reply_to)
-        content.m_relates_to.emplace().m_in_reply_to.emplace().event_id = *reply_to;
-    };
-    knot::raw message;
-    if (image) {
-      loom::ev::m_room_message_m_image_content_t content;
-      fill(content);
-      content.info->w = static_cast<std::int64_t>(width);
-      content.info->h = static_cast<std::int64_t>(height);
-      message = as_body(content);
-    } else {
-      loom::ev::m_room_message_m_file_content_t content;
-      fill(content);
-      message = as_body(content);
-    }
+    const loom::client::media_said said{.uri = *uri,
+                                        .name = name,
+                                        .caption = caption,
+                                        .mimetype = mimetype,
+                                        .size = static_cast<std::int64_t>(bytes.size()),
+                                        .reply_to = reply_to};
+    knot::raw message = image ? as_body(loom::client::picture_message(said, width, height))
+                              : as_body(loom::client::file_message(said));
     auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.room.message",
                                                       .txn_id = local,

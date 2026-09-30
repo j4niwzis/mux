@@ -112,15 +112,6 @@ struct other {
 };
 }  // namespace relation
 using relation_t = splice::variant<relation::replace, relation::other>;
-namespace receipt_kind {
-struct read {  // m.read, m.read.private
-  static constexpr bool read_up_to = true;
-};
-struct other {
-  static constexpr bool read_up_to = false;
-};
-}  // namespace receipt_kind
-using receipt_kind_t = splice::variant<receipt_kind::read, receipt_kind::other>;
 namespace room_type {
 struct space {  // m.space
   static constexpr bool is_space = true;
@@ -187,11 +178,6 @@ template <class Variant, class Other>
   static const std::unordered_map<std::string_view, relation_t> known = {{"m.replace", relation::replace{}}};
   return named<relation_t, relation::other>(known, name);
 }
-[[nodiscard]] inline receipt_kind_t receipt_kind_of(std::optional<std::string_view> name) {
-  static const std::unordered_map<std::string_view, receipt_kind_t> known = {
-      {"m.read", receipt_kind::read{}}, {"m.read.private", receipt_kind::read{}}};
-  return named<receipt_kind_t, receipt_kind::other>(known, name);
-}
 [[nodiscard]] inline room_type_t room_type_of(std::optional<std::string_view> name) {
   static const std::unordered_map<std::string_view, room_type_t> known = {{"m.space", room_type::space{}}};
   return named<room_type_t, room_type::other>(known, name);
@@ -247,26 +233,6 @@ using state_type_t = splice::variant<state_type::space_child, state_type::room_e
 [[nodiscard]] constexpr std::string_view word_of(mux::history_rule::world_readable) { return "world_readable"; }
 
 // What an image of a pack may be used as (MSC2545's "usage").
-namespace image_usage {
-struct emoticon {
-  static constexpr bool as_emoji = true;
-  static constexpr bool as_sticker = false;
-};
-struct sticker {
-  static constexpr bool as_emoji = false;
-  static constexpr bool as_sticker = true;
-};
-struct other {
-  static constexpr bool as_emoji = false;
-  static constexpr bool as_sticker = false;
-};
-}  // namespace image_usage
-using image_usage_t = splice::variant<image_usage::emoticon, image_usage::sticker, image_usage::other>;
-[[nodiscard]] inline image_usage_t image_usage_of(std::optional<std::string_view> name) {
-  static const std::unordered_map<std::string_view, image_usage_t> known = {
-      {"emoticon", image_usage::emoticon{}}, {"sticker", image_usage::sticker{}}};
-  return named<image_usage_t, image_usage::other>(known, name);
-}
 // A server's errcode: the ones that say the session is gone, and the rest.
 namespace errcode {
 struct session_gone {  // M_UNKNOWN_TOKEN, M_FORBIDDEN

@@ -77,7 +77,7 @@ cme_declare_port(NAME tern PROVIDES tern
 cme_options(tern "TERN_TESTS OFF" "TERN_EXAMPLES OFF")
 cme_declare_port(NAME loom PROVIDES loom
   GITHUB_REPOSITORY j4niwzis/loom
-  GIT_TAG 5e5fd30d89ff8d4a4b58dc53bf893761bdc142ba
+  GIT_TAG 9ec2fdd3f4f7cac93265a145fecccc4e53ab83cc
   LICENSE AGPL-3.0-only
   SYSTEM NEVER
   TARGETS loom)

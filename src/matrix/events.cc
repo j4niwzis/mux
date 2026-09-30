@@ -142,14 +142,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     // A message for the user, come as it happened: listed, as Telegram's @.
     // Who it mentions, as m.mentions says; before that, the user's ID in it.
     const bool live = splice::visit(splice::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
-    const auto mentions_me = [&] {
-      if (const auto& said = content.m_mentions) {
-        if (said->user_ids && std::ranges::contains(*said->user_ids, id_.address))
-          return true;
-        return said->room.value_or(false);
-      }
-      return made.body.plain.find(id_.address) != std::string::npos;
-    };
+    const auto mentions_me = [&] { return loom::client::mentions(content, id_.address); };
     if (live && !made.outgoing && mentions_me())
       sink_(change::mentioned{in, made.id, made.at});
     sink_(change::message_added{std::move(made), where});

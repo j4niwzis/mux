@@ -121,11 +121,10 @@ struct field_quotes {
     const std::size_t before = at == 0 ? std::string_view::npos : text.rfind('\n', at - 1);
     return before == std::string_view::npos ? 0 : before + 1;
   }
-  // A level's colour: the accent at the first, then its channels taken
-  // round, as a message's quotes are coloured by depth.
+  // A level's colour: the accent at the first, then Telegram's, as a
+  // message's quotes are coloured.
   [[nodiscard]] static skia::SkColor colour(skia::SkColor accent, int level) {
-    const unsigned a = (accent >> 24) & 0xFF, r = (accent >> 16) & 0xFF, g = (accent >> 8) & 0xFF, b = accent & 0xFF;
-    return level % 3 == 1 ? (a << 24) | (g << 16) | (b << 8) | r : level % 3 == 2 ? (a << 24) | (b << 16) | (r << 8) | g : accent;
+    return skiff::nodes::quoteLevelColour(accent, level + 1);
   }
 
   [[nodiscard]] static widgets::BlockLook look(std::string_view text, std::size_t start) {
@@ -186,15 +185,21 @@ struct field_quotes {
     // Right after the marks: a level taken off, the text kept.
     if (press.key == keys::kBackspace && !control && caret == marks)
       return widgets::TextEdit{.from = marks - 2, .to = marks, .with = "", .caret = marks - 2};
-    // Out of the quote, to the start of what is under it -- text, or a
-    // quote less deep; a new line after it where the quote is last.
+    // Out of this quote, one level: to the quote around it (or to plain
+    // text, from the outermost) -- the line under it where that is the
+    // level, else a new line of that level put right after it.
     if (press.key == keys::kDown && control) {
+      const int outer = deep - 1;
       std::size_t end = text.find('\n', caret);
       while (end != std::string_view::npos && depth(text, end + 1) >= deep)
         end = text.find('\n', end + 1);
-      if (end == std::string_view::npos)
-        return widgets::TextEdit{.from = text.size(), .to = text.size(), .with = "\n", .caret = text.size() + 1};
-      return widgets::TextEdit{.from = caret, .to = caret, .with = "", .caret = end + 1};
+      if (end != std::string_view::npos && depth(text, end + 1) == outer)
+        return widgets::TextEdit{.from = caret, .to = caret, .with = "", .caret = end + 1};
+      const std::size_t at = end == std::string_view::npos ? text.size() : end;
+      std::string line = "\n";
+      for (int level = 0; level < outer; ++level)
+        line += "> ";
+      return widgets::TextEdit{.from = at, .to = at, .with = line, .caret = at + line.size()};
     }
     return std::nullopt;
   }

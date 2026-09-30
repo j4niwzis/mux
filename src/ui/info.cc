@@ -666,7 +666,31 @@ struct devtools_box : nodes::Stack {
     else if (type_shown)
       this->show_keys(*type_shown);
   }
-  void update(double) {
+  // The other button over what it reads: copied -- what is selected, or
+  // all of it -- and said so in the title for a moment.
+  using scene::Node::onPointer;
+  void onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
+    if (press.button != 3 || !parts.reading.visible())
+      return;
+    const auto& text = std::get<0>(parts.reading.fChildren);
+    skiff::scene::setClipboardText(text.hasSelection() ? text.selected() : text.text());
+    auto& title = parts.header.parts.title;
+    if (!title_before)
+      title_before = title.text();
+    title.setText(text.hasSelection() ? "Selection copied" : "Copied");
+    title_back_at = 0.0;  // counted from the next frame
+    reply.handle();
+  }
+  std::optional<std::string> title_before;
+  double title_back_at = 0.0;
+  [[nodiscard]] bool wantsTick() const { return pending.has_value() || title_before.has_value(); }
+  void update(double now_ms) {
+    if (title_before) {
+      if (title_back_at == 0.0)
+        title_back_at = now_ms + 1200.0;
+      else if (now_ms >= title_back_at)
+        parts.header.parts.title.setText(*std::exchange(title_before, std::nullopt));
+    }
     if (!pending)
       return;
     const pick what = *std::exchange(pending, std::nullopt);

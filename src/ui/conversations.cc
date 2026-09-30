@@ -306,7 +306,9 @@ struct conversations_screen : nodes::Stack {
         field.setFontSize(14.0f);
         field.apply({.fillX = true, .margin = {2.0f, 14.0f, 0.0f, 14.0f}});
       }
-      // Lit while its field has the focus.
+      // Lit while its field has the focus: looked at as the focus moves --
+      // the field is marked then -- not at every frame.
+      [[nodiscard]] bool wantsTick() const { return field.focused() != fState.selected(); }
       void update(double) {
         if (field.focused() != fState.selected())
           fState.apply({.selected = field.focused()});
@@ -770,6 +772,7 @@ struct conversations_screen : nodes::Stack {
       return;
     // Made, loaded or paged back to at the next frames, as update() finds it.
     jumping_to = std::move(id);
+    scene::work::mark(fState.fId);  // update() looked at from the next frame, and ticked until it lands
     jump_chat = chosen;
     jump_quiet = false;
     jump_tries = 0;
@@ -850,6 +853,14 @@ struct conversations_screen : nodes::Stack {
     jump_paging = false;
     context_asked.reset();
     jump_tries = 0;
+  }
+  // Ticked while something is on its way -- a jump, an aim, a glide, rooms
+  // named and not yet come -- and else looked at only as what it watches
+  // changes: the view scrolled, the composer or the search typed into, the
+  // model shown, each of which marks it. It was run at every frame.
+  [[nodiscard]] bool wantsTick() const {
+    return jumping_to.has_value() || aiming.has_value() || jump_age != 0 || timeline.moving() ||
+           !rooms_waiting.empty() || !rooms_unfound.empty();
   }
   void update(double) {
     // A room a bubble names has come -- its picture, or word that it is

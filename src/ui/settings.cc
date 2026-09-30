@@ -37,6 +37,7 @@ struct settings_dialog : scene::Node {
     this->invalidateLayout();
   }
   [[nodiscard]] bool settling() const { return swap.moving(); }
+  [[nodiscard]] bool wantsTick() const { return swap.moving(); }
   void update(double now_ms) {
     if (swap.step(now_ms))
       this->invalidateLayout();

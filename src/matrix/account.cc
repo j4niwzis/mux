@@ -87,6 +87,9 @@ class account {
   // A server's public directory searched -- the account's own where none is
   // named -- for what matches, all of it where nothing is asked.
   void search_directory(std::string server, std::string query);
+  // What a space holds -- its rooms and spaces, joined or not -- as its
+  // server's hierarchy lists them, a level down.
+  void explore_space(std::string room);
   // A room made, as Element's Create room makes one: named, about
   // something, public -- with an address -- or private.
   void create_room(std::string name, std::string topic, bool open, std::string alias, bool federate = true);

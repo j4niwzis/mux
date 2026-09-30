@@ -344,6 +344,15 @@ void app::apply(const request::open_explore&) {
   }
 }
 void app::apply(const request::close_explore&) { root().close_explore(); }
+// A space's rooms and spaces, in Explore: asked of its account.
+void app::apply(const request::explore_space& one) {
+  const auto by = root().main().current;
+  if (!by || shared.demo())
+    return;
+  root().open_explore(by->address.substr(by->address.find(':') + 1));
+  root().explore_loading();
+  net->explore_space(*by, one.room);
+}
 // A search: an address typed in is gone to, as a link to it would be --
 // its card, or the room where joined; else the directory asked.
 void app::apply(const request::search_rooms& one) {

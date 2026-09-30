@@ -341,9 +341,10 @@ struct window : scene::Node {
       up->parts.status.setVisible(true);
     }
   }
-  void show_directory(const std::vector<directory_room>& rooms, const std::string& server) {
+  void show_directory(const std::vector<directory_room>& rooms, const std::string& server,
+                      const std::optional<std::string>& space = std::nullopt) {
     if (auto* up = layer().explore.shown())
-      up->show(rooms, server);
+      up->show(rooms, server, space);
   }
   void show_devtools_text(std::string title, std::string text) {
     layer().devtools.open(actions, std::move(title), std::move(text));

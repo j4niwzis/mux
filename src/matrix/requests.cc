@@ -20,6 +20,7 @@ import loom.cs.relations;
 import loom.cs.threads_list;
 import loom.cs.room_summary;
 import loom.cs.list_public_rooms;
+import loom.cs.space_hierarchy;
 import loom.cs.room_send;
 import loom.cs.rooms;
 import loom.cs.room_state;
@@ -362,6 +363,33 @@ void account<Sink>::search_directory(std::string server, std::string query) {
                        .avatar = one.avatar_url,
                        .members = one.num_joined_members});
     sink_(change::directory_listed{id_, server, query, std::move(rooms)});
+  });
+}
+
+template <class Sink>
+void account<Sink>::explore_space(std::string room) {
+  loop_->spawn([this, room = std::move(room)] {
+    if (!api_)
+      return;
+    auto got = perform(*api_, loom::cs::get_space_hierarchy{.room_id = room, .limit = 100, .max_depth = 1});
+    if (!got) {
+      log(id_, "the rooms of {}: {}", room, got.error().said());
+      sink_(change::directory_listed{id_, "", "", {}, room});
+      return;
+    }
+    // The space itself first in what the server says: its rooms after it.
+    std::vector<directory_room> rooms;
+    for (const auto& one : got->rooms)
+      if (one.room_id != room)
+        rooms.push_back({.id = one.room_id,
+                         .name = one.name.value_or(""),
+                         .alias = one.canonical_alias.value_or(""),
+                         .topic = one.topic.value_or(""),
+                         .avatar = one.avatar_url,
+                         .members = one.num_joined_members,
+                         .space = splice::visit([](auto of) { return of.is_space; },
+                                                room_type_of(one.room_type ? std::optional<std::string_view>(*one.room_type) : std::nullopt))});
+    sink_(change::directory_listed{id_, "", "", std::move(rooms), room});
   });
 }
 

@@ -51,7 +51,7 @@ void app::woken() {
                                },
                                // A directory searched: its rooms, in Explore.
                                [&](const mux::change::directory_listed& listed) {
-                                 root().show_directory(listed.rooms, listed.server);
+                                 root().show_directory(listed.rooms, listed.server, listed.space);
                                },
                                // Packs: listed, saved, an image uploaded -- in their dialog.
                                [&](const mux::change::packs_listed& listed) { root().show_packs(listed.packs); },

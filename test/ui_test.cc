@@ -100,6 +100,7 @@ struct stub {
   void open_explore() {}
   void close_explore() {}
   void search_rooms(std::string, std::string) {}
+  void explore_space(std::string) {}
   void join_directory_room(std::string, std::string) {}
   void create_room(std::string, std::string, bool, std::string, bool = true) {}
   void find_people(std::string) {}

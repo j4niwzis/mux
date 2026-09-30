@@ -2198,11 +2198,18 @@ struct explore_box : nodes::Stack {
       box->actions->search_rooms(box->parts.search.parts.server.text(), box->parts.search.parts.query.text());
     }
   };
+  // Join a room; a space in a space's listing, opened -- its own listed.
   struct join_press {
     Actions* actions;
     std::string room;
     std::string server;
-    void operator()() const { actions->join_directory_room(room, server); }
+    bool open = false;
+    void operator()() const {
+      if (open)
+        actions->explore_space(room);
+      else
+        actions->join_directory_room(room, server);
+    }
   };
   struct result_row : nodes::Stack {
     struct texts_t : nodes::Stack {
@@ -2237,7 +2244,8 @@ struct explore_box : nodes::Stack {
     result_row(Actions* a, const directory_room& one, const std::string& server)
         : parts{.face = avatar_mark(one.id, one.name.empty() ? one.alias : one.name, 40.0f),
                 .texts = texts_t(one),
-                .join = widgets::Button<join_press>("Join", {a, one.alias.empty() ? one.id : one.alias, server})} {
+                .join = widgets::Button<join_press>(one.space ? "Open" : "Join",
+                                                    {a, one.space ? one.id : (one.alias.empty() ? one.id : one.alias), server, one.space})} {
       this->setHorizontal();
       this->setGap(12.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 16.0f, 8.0f, 16.0f}});
@@ -2288,7 +2296,8 @@ struct explore_box : nodes::Stack {
     std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
   }
   // What the directory listed.
-  void show(const std::vector<directory_room>& rooms, const std::string& server) {
+  void show(const std::vector<directory_room>& rooms, const std::string& server,
+            const std::optional<std::string>& space = std::nullopt) {
     auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
     rows.clear();
     rows.reserve(rooms.size());
@@ -2298,7 +2307,10 @@ struct explore_box : nodes::Stack {
     for (const directory_room& one : rooms)
       if (one.avatar && !one.avatar->empty())
         listed_avatars().emplace_back(one.id, *one.avatar);
-    parts.status.setText(rooms.empty() ? std::string("No rooms found.") : std::format("{} rooms", rooms.size()));
+    parts.status.setText(space ? (rooms.empty() ? std::string("Nothing in this space, or its server would not say.")
+                                                : std::format("{} rooms and spaces in this space", rooms.size()))
+                               : rooms.empty() ? std::string("No rooms found.")
+                                               : std::format("{} rooms", rooms.size()));
     parts.status.setVisible(true);
     this->invalidateLayout();
   }

@@ -268,6 +268,7 @@ struct app : kept_settings {
   void apply(const request::open_explore&);
   void apply(const request::close_explore&);
   void apply(const request::search_rooms& one);
+  void apply(const request::explore_space& one);
   void apply(const request::join_directory_room& one);
   void apply(const request::create_room& one);
   // The Matrix account rooms are found and made by: the one in view, else

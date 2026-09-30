@@ -548,6 +548,7 @@ struct directory_room {
   std::string topic;
   std::optional<std::string> avatar;
   std::int64_t members = 0;
+  bool space = false;  // a space: browsed into, not only joined
   friend bool operator==(const directory_room&, const directory_room&) = default;
 };
 
@@ -1024,6 +1025,8 @@ struct directory_listed {
   std::string server;
   std::string query;
   std::vector<directory_room> rooms;
+  // A space's rooms and spaces, joined or not, where it is its listing.
+  std::optional<std::string> space;
 };
 // A mark of a kind, gone to: the one named, else the oldest.
 // Marks seen before, read back from the disk: not to be unread again.

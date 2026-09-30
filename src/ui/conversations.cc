@@ -421,13 +421,25 @@ struct conversations_screen : nodes::Stack {
       bool side = true, top = false;
       void operator()() const { actions->set_space_bars(account, item, side, top); }
     };
+    struct explore_act {
+      Actions* actions;
+      std::string room;
+      void operator()() const { actions->explore_space(room); }
+    };
     struct space_menu : nodes::Stack {
       struct parts_t {
         nodes::Text title;
+        widgets::Button<explore_act> explore;
         widgets::Button<set_bars_act> side, top, both, hide;
       } parts;
+      [[nodiscard]] static std::string room_of(const config::space_item_t& item) {
+        return splice::visit(splice::overloaded{[](const config::space_item::space& s) { return s.room; },
+                                                [](const auto&) { return std::string(); }},
+                             item);
+      }
       space_menu(Actions* a, const std::string& account, const config::space_item_t& item, std::string name)
           : parts{.title = nodes::Text(std::move(name), 13.0f, dim_colour, true),
+                  .explore = widgets::Button<explore_act>("Explore its rooms\u2026", {a, room_of(item)}),
                   .side = widgets::Button<set_bars_act>("Side bar only", {a, account, item, true, false}),
                   .top = widgets::Button<set_bars_act>("Top bar only", {a, account, item, false, true}),
                   .both = widgets::Button<set_bars_act>("Both bars", {a, account, item, true, true}),
@@ -438,8 +450,9 @@ struct conversations_screen : nodes::Stack {
                       .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
         parts.title.setElided(true);
         parts.title.apply({.fillX = true});
-        for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.side, &parts.top, &parts.both, &parts.hide})
+        for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.explore, &parts.side, &parts.top, &parts.both, &parts.hide})
           each->apply({.fillX = true, .height = 30.0f});
+        parts.explore.setVisible(!room_of(item).empty());
       }
     };
     struct parts_t {

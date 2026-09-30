@@ -362,6 +362,18 @@ struct network {
             one.account);
     });
   }
+  // A space's rooms, asked by the account named.
+  void explore_space(const mux::account_id& by, std::string room) {
+    loop.post([this, by, room = std::move(room)] {
+      for (auto& one : accounts)
+        splice::visit(
+            [&](auto& account) {
+              if (account->id() == by)
+                account->explore_space(room);
+            },
+            one.account);
+    });
+  }
   // A room made by the account named, as Element's Create room.
   void create_room(const mux::account_id& by, std::string name, std::string topic, bool open, std::string alias,
                    bool federate = true) {

@@ -1147,6 +1147,33 @@ struct conversations_screen : nodes::Stack {
     // Scrolled to the newest by hand: the way back from a jump is done.
     if (chosen && timeline.atEnd(40.0f) && !timeline.moving() && this->has_return())
       returns.erase(*chosen);
+    // And each message to come back to, as tdesktop lets one go
+    // (preloadHistoryIfNeeded): once the view has come down to it -- its top
+    // above the view's middle -- or past it, where it is not made and older
+    // than the newest made. The one under it is next, if it is not passed.
+    if (chosen && !jumping_to && !aiming && !timeline.moving())
+      if (const auto found = returns.find(*chosen); found != returns.end()) {
+        auto& stack = found->second;
+        const auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
+        const skia::SkRect view = timeline.bounds();
+        const conversation* one = last_model ? last_model->find(*chosen) : nullptr;
+        const auto newest = std::ranges::find_if(entries.rbegin(), entries.rend(),
+                                                 [](const message_bubble& row) { return !row.message_id.empty(); });
+        while (!stack.empty()) {
+          const auto it = std::ranges::find(entries, stack.back(), &message_bubble::message_id);
+          bool passed = false;
+          if (it != entries.end() && !it->bounds().isEmpty()) {
+            passed = timeline.toView(it->bounds()).fTop < view.centerY();
+          } else if (one && newest != entries.rend()) {
+            const auto at = std::ranges::find(one->timeline, stack.back(), &message::id);
+            const auto last = std::ranges::find(one->timeline, newest->message_id, &message::id);
+            passed = at != one->timeline.end() && last != one->timeline.end() && at < last;
+          }
+          if (!passed)
+            break;
+          stack.pop_back();
+        }
+      }
     const bool away = this->away();
     if (away != chat.area.parts.jump.visible())
       chat.area.parts.jump.setVisible(away);
@@ -1465,6 +1492,9 @@ struct conversations_screen : nodes::Stack {
     // last one seen is counted on the way down.
     const std::string last = all.empty() ? std::string() : all.back().id;
     if (shown_chat != chosen) {
+      // Another chat shown: the ways back from jumps in the one left gone,
+      // as tdesktop clears its reply returns (showHistory).
+      returns.clear();
       if (shown_chat)
         scrolled[*shown_chat] = was_at_end ? -1.0f : left_at;
       const auto kept = scrolled.find(*chosen);

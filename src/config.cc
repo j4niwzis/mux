@@ -873,23 +873,21 @@ std::filesystem::path state_path(std::string_view name) {
 // or ".." and nothing hidden. One name to one file: before, every other
 // character became '_', and "!a:b" and "!a_b" shared one.
 [[nodiscard]] inline std::string file_name_of(std::string_view name) {
-  std::string out;
-  for (std::size_t i = 0; i < name.size(); ++i) {
-    const auto c = static_cast<unsigned char>(name[i]);
-    const bool plain = std::isalnum(c) != 0 || c == '@' || c == '-' || c == '_' || (c == '.' && i > 0);
-    if (plain)
-      out += name[i];
-    else
-      out += std::format("%{:02X}", static_cast<unsigned>(c));
-  }
+  const auto as_file = [name](std::size_t at) {
+    const auto c = static_cast<unsigned char>(name[at]);
+    const bool plain = std::isalnum(c) != 0 || c == '@' || c == '-' || c == '_' || (c == '.' && at > 0);
+    return plain ? std::string(1, name[at]) : std::format("%{:02X}", static_cast<unsigned>(c));
+  };
+  std::string out = std::views::iota(std::size_t{0}, name.size()) | std::views::transform(as_file) | std::views::join |
+                    std::ranges::to<std::string>();
   return out.empty() ? std::string("%") : out;
 }
 // The name as files were named before: to find what was kept under it.
 [[nodiscard]] inline std::string old_file_name_of(std::string_view name) {
-  std::string out;
-  for (const char c : name)
-    out += std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '@' || c == '.' || c == '-' ? c : '_';
-  return out;
+  return name | std::views::transform([](char c) {
+           return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '@' || c == '.' || c == '-' ? c : '_';
+         }) |
+         std::ranges::to<std::string>();
 }
 // Where something is kept: what was kept where it was before moved there,
 // the first time it is asked for in a run -- looked for once, not at each

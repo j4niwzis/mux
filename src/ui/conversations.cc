@@ -981,6 +981,15 @@ struct conversations_screen : nodes::Stack {
     // A jump on its way for more than a few frames -- fetched, or paged back
     // to -- shows the loader turning in the middle of the list.
     jump_age = jumping_to ? jump_age + 1 : 0;
+    // A jump that has not got there in ten seconds of frames is let go:
+    // while one goes on, frames are asked for, and one that could not land
+    // -- a message not to be had, a bubble never laid out -- asked forever.
+    if (jump_age > 600) {
+      if (trace_jumps() && jumping_to)
+        std::cerr << "[jump] " << *jumping_to << " given up\n";
+      this->stop_jump();
+      jump_age = 0;
+    }
     if (const bool loading = jump_age > 6; loading != chat.area.parts.loading.visible())
       chat.area.parts.loading.setVisible(loading);
     this->find_mentions();

@@ -911,6 +911,7 @@ struct context_menu : scene::Node {
     };
     Actions* actions_of = nullptr;
     using reply_row = row_item<ask<Actions, &Actions::menu_reply>>;
+    using thread_row = row_item<ask<Actions, &Actions::menu_thread>>;
     using quote_reply_row = row_item<ask<Actions, &Actions::menu_quote_reply>>;
     using edit_row = row_item<ask<Actions, &Actions::menu_edit>>;
     using later_row = row_item<not_yet<Actions>>;
@@ -932,6 +933,8 @@ struct context_menu : scene::Node {
       quick_row quick;
       nodes::Box<> quick_band{band_colour};
       reply_row reply;
+      // Reply in thread, as Element's menu has it: a Matrix room's.
+      thread_row thread_reply;
       // What is selected of another's message, quoted in an answer.
       quote_reply_row quote_reply;
       edit_row edit;
@@ -952,7 +955,7 @@ struct context_menu : scene::Node {
       std::optional<emoji_panel<react_with<Actions>>> emoji;
     } parts;
     void expand() {
-      auto& [quick, quick_band, reply, quote_reply, edit, pin, copy, copy_link, copy_image, save, save_gif, reactions, forward, source,
+      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_image, save, save_gif, reactions, forward, source,
              remove, seen_band, seen, emoji] = parts;
       if (emoji)
         return;
@@ -979,9 +982,9 @@ struct context_menu : scene::Node {
     // The items, once the list is down over them: gone, the menu keeping
     // its size by its least height.
     void hide_items() {
-      auto& [quick, quick_band, reply, quote_reply, edit, pin, copy, copy_link, copy_image, save, save_gif, reactions, forward, source, remove,
+      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_image, save, save_gif, reactions, forward, source, remove,
              seen_band, seen, emoji] = parts;
-      for (scene::Node* item : std::initializer_list<scene::Node*>{&reply, &quote_reply, &edit, &pin, &copy, &copy_link, &copy_image, &save,
+      for (scene::Node* item : std::initializer_list<scene::Node*>{&reply, &thread_reply, &quote_reply, &edit, &pin, &copy, &copy_link, &copy_image, &save,
                                                                    &save_gif, &reactions, &forward, &source,
                                                                    &remove, &seen_band, &seen})
         item->setVisible(false);
@@ -1017,6 +1020,7 @@ struct context_menu : scene::Node {
         : actions_of(a),
           parts{.quick = quick_row(a, this),
                 .reply = reply_row("Reply", {a}, icon::back{}),
+                .thread_reply = thread_row("Reply in thread", {a}, icon::threads{}),
                 .quote_reply = quote_reply_row("Quote & Reply", {a}, icon::back{}),
                 .edit = edit_row("Edit", {a}, icon::sliders{}),
                 .pin = pin_row(facts.pinned ? "Unpin" : "Pin", {a}, icon::check{}),
@@ -1032,7 +1036,7 @@ struct context_menu : scene::Node {
                 .source = source_row("View Source", {a}, icon::info{}),
                 .remove = delete_row("Delete", {a}, icon::close{}),
                 .seen = seen_row(facts.seen)} {
-      auto& [quick, quick_band, reply, quote_reply, edit, pin, copy, copy_link, copy_image, save, save_gif, reactions, forward, source,
+      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_image, save, save_gif, reactions, forward, source,
              remove, seen_band, seen, emoji] = parts;
       quick_band.apply({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 4.0f, 0.0f}});
       // A menu's rows as tdesktop's menuWithIcons: 8 over and under the
@@ -1047,6 +1051,7 @@ struct context_menu : scene::Node {
       compact(quote_reply);
       compact(edit);
       compact(pin);
+      compact(thread_reply);
       compact(copy);
       compact(copy_link);
       compact(copy_image);
@@ -1066,6 +1071,7 @@ struct context_menu : scene::Node {
       save_gif.setVisible(facts.media.has_value() && facts.moving);
       remove.setVisible(facts.deletable);
       pin.setVisible(facts.pinnable);
+      thread_reply.setVisible(facts.pinnable);
       source.setVisible(facts.pinnable);
       // Who reacted, as Telegram's menu lists them: wherever there are any.
       reactions.setVisible(facts.reaction_count > 0);

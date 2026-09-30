@@ -1004,6 +1004,9 @@ struct message_bubble : nodes::Stack {
       std::vector<link_card> cards;
       std::optional<page_preview> preview;
       std::optional<reaction_row> reactions;
+      // A thread's root: its summary -- how many answers, the latest -- as
+      // Element shows it under the message; pressed, the thread.
+      std::optional<nodes::Text> thread;
       nodes::Text time;
       // The time inside the last line of the text, where that line leaves
       // room for it, as Telegram's: out of the column's flow, at its end.
@@ -1042,7 +1045,7 @@ struct message_bubble : nodes::Stack {
     // where it is narrower; on a line of its own only where they do not.
     // Decided from the last layout; a change is laid out at the next.
     void update(double now_ms) {
-      auto& [name, quote, picture, album, file, text, cards, preview, reactions, time, inline_time, tail] = parts;
+      auto& [name, quote, picture, album, file, text, cards, preview, reactions, thread, time, inline_time, tail] = parts;
       // Nothing left of the text -- all of it the quote the header shows --
       // or a text that ends in a quote, and nothing under it: the time on a
       // line of its own, as Telegram's -- not beside an empty last line, nor
@@ -1144,7 +1147,7 @@ struct message_bubble : nodes::Stack {
     // checks the guess, above.
     bool guessed = false;
     void guess_time(skia::SkFont& font) {
-      auto& [name, quote, picture, album, file, text, cards, preview, reactions, time, inline_time, tail] = parts;
+      auto& [name, quote, picture, album, file, text, cards, preview, reactions, thread, time, inline_time, tail] = parts;
       if (std::exchange(guessed, true) || text.text().empty())
         return;
       const skiff::paint::Painter p(nullptr, font);
@@ -1165,7 +1168,7 @@ struct message_bubble : nodes::Stack {
                 .time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour),
                 .inline_time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour)},
           plate(mine ? out_bubble_colour : bubble_colour) {
-      auto& [name, quote, picture, album, file, text, cards, preview, reactions, time, inline_time, tail] = parts;
+      auto& [name, quote, picture, album, file, text, cards, preview, reactions, thread, time, inline_time, tail] = parts;
       this->setGap(2.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
                     .padding = {kPadY, kPadX, kPadY, kPadX}, .cornerRadius = 12.0f, .background = mine ? out_bubble_colour : bubble_colour});
@@ -1417,6 +1420,16 @@ struct message_bubble : nodes::Stack {
       }
       body.base_min = asks;
       body.apply({.minWidth = asks});
+    }
+    if (said.threaded && said.threaded->count > 0) {
+      const thread_summary& summary = *said.threaded;
+      std::string line = std::format("\U0001F4AC {} {}", summary.count, summary.count == 1 ? "reply" : "replies");
+      if (!summary.last_text.empty())
+        line += std::format(" \u00b7 {}: {}", sender_name(in, summary.last_sender), summary.last_text);
+      std::ranges::replace(line, '\n', ' ');
+      body.parts.thread.emplace(std::move(line), 13.0f, accent_colour, true);
+      body.parts.thread->setElided(true);
+      body.parts.thread->apply({.fillX = true, .margin = {4.0f, 0.0f, 0.0f, 0.0f}});
     }
     if (!said.reactions.empty()) {
       body.parts.reactions.emplace();

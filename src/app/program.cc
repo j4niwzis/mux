@@ -305,6 +305,10 @@ struct app : kept_settings {
   void apply(const request::open_new_chat&);
   void apply(const request::find_people& one);
   void apply(const request::open_new_room&);
+  void apply(const request::toggle_threads&);
+  void apply(const request::open_thread& one);
+  void apply(const request::close_thread&);
+  void apply(const request::send_in_thread& one);
   void apply(const request::open_packs&);
   void apply(const request::open_room_packs&);
   void apply(const request::close_packs&);

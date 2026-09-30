@@ -99,6 +99,11 @@ class account {
   void save_pack(emote_pack pack);
   void delete_pack(std::string room, std::string state_key);
   void upload_pack_picture(pack_picture picture, std::string bytes);
+  // Threads (m.thread): a room's roots listed; a thread's answers loaded,
+  // each as a message in it; an answer sent in one.
+  void list_threads(std::string room);
+  void load_thread(std::string room, std::string root);
+  void send_in_thread(std::string room, std::string body, std::string root, std::string latest);
   // The user directory searched: people_found for what was asked.
   void search_people(std::string term);
   // A room's gap since the last run, from where the sync left it back to

@@ -38,6 +38,7 @@ struct message_line {
   std::optional<std::string> plain;
   std::optional<std::string> html;
   std::optional<std::string> reply;
+  std::optional<std::string> thread;
   std::optional<bool> edited;
   std::optional<bool> redacted;
   std::optional<bool> out;
@@ -281,6 +282,7 @@ class message_store {
       one.body.plain = o.plain.value_or("");
       one.body.html = std::move(o.html);
       one.replies_to = std::move(o.reply);
+      one.thread = std::move(o.thread);
       one.edited = o.edited.value_or(false);
       one.redacted = o.redacted.value_or(false);
       one.outgoing = o.out.value_or(false);
@@ -334,6 +336,7 @@ class message_store {
         .plain = one.body.plain,
         .html = one.body.html,
         .reply = one.replies_to,
+        .thread = one.thread,
         .edited = store_file::flag(one.edited),
         .redacted = store_file::flag(one.redacted),
         .out = store_file::flag(one.outgoing),

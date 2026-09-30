@@ -83,6 +83,45 @@ void app::apply(const request::open_new_room&) {
 }
 void app::apply(const request::close_new_room&) { root().close_new_room(); }
 
+// Threads, as Element's panel: opened in place of the chat's info, the
+// room's listed by the server as it opens; one opened, its answers fetched
+// (and its root, where it is not held); an answer sent in the one open --
+// falling back, for clients without threads, to its latest event.
+void app::apply(const request::toggle_threads&) {
+  auto& screen = root().main();
+  if (screen.toggle_threads() && screen.chosen && !shared.demo())
+    net->list_threads(*screen.chosen);
+  this->refresh();
+}
+void app::apply(const request::open_thread& one) {
+  auto& screen = root().main();
+  if (!screen.chosen)
+    return;
+  screen.open_thread(one.root);
+  if (!shared.demo()) {
+    net->load_thread(*screen.chosen, one.root);
+    if (const mux::conversation* chat = model->find(*screen.chosen);
+        chat && !chat->quoted.contains(one.root) &&
+        std::ranges::find(chat->timeline, one.root, &mux::message::id) == chat->timeline.end())
+      net->fetch_quoted(*screen.chosen, one.root);
+  }
+  this->refresh();
+}
+void app::apply(const request::close_thread&) {
+  root().main().close_thread();
+  this->refresh();
+}
+void app::apply(const request::send_in_thread& one) {
+  const auto& chosen = root().main().chosen;
+  const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
+  if (!chat || shared.demo())
+    return;
+  std::string latest = one.root;
+  if (const auto found = chat->threads.find(one.root); found != chat->threads.end() && !found->second.empty())
+    latest = found->second.back().id;
+  net->send_in_thread(*chosen, one.text, one.root, latest);
+}
+
 // Emojis & Stickers, as Cinny has them: one's own pack, from Settings; the
 // room's, from its settings -- editable where one's power there is what the
 // room's state asks.

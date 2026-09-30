@@ -88,21 +88,27 @@ struct chat_header : nodes::Stack {
   struct head_row : nodes::Stack {
     using find_button = icon_button<ask<Actions, &Actions::open_search>>;
     using info_button = icon_button<ask<Actions, &Actions::toggle_info>>;
+    using threads_button = icon_button<ask<Actions, &Actions::toggle_threads>>;
     struct parts_t {
       avatar_mark face;
       two_lines texts;
       find_button find;
+      // The room's threads, as Element's header has them.
+      threads_button threads;
       info_button info;
     } parts;
     head_row(Actions* a, const view& shown)
         : parts{.face = avatar_mark(shown.key.value_or(""), shown.title, 38.0f),
                 .texts = two_lines(shown.title, shown.status, 15.0f, 3.0f),
                 .find = find_button(icon::search{}, {a}),
+                .threads = threads_button(icon::threads{}, {a}),
                 .info = info_button(icon::info{}, {a})} {
       this->setHorizontal();
       this->setGap(12.0f);
       fState.apply({.fillX = true, .grow = scene::axes::kY, .padding = {0.0f, 16.0f, 0.0f, 22.0f}});
       parts.find.apply({.alignSelf = scene::align::kMiddle});
+      parts.threads.apply({.alignSelf = scene::align::kMiddle});
+      parts.threads.setVisible(shown.key.has_value());
       parts.info.apply({.alignSelf = scene::align::kMiddle});
       parts.face.setVisible(shown.key.has_value());
       parts.find.setVisible(shown.key.has_value());

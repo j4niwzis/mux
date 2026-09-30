@@ -438,6 +438,8 @@ struct conversations_screen : nodes::Stack {
     chat_column chat;
     info_edge_t info_edge;
     info_panel<Actions> info;
+    // Threads, in the info's place while they are open.
+    threads_panel<Actions> threads;
   } parts;
   // Its parts by their names, for what reads them: the screen is never moved.
   side_column& side = parts.side;
@@ -543,7 +545,8 @@ struct conversations_screen : nodes::Stack {
               .edge = side_edge(resize_sidebar_to<Actions>{a}),
               .chat = chat_column(a),
               .info_edge = info_edge_t(resize_info_to<Actions>{a}, false),
-              .info = info_panel<Actions>(a)} {
+              .info = info_panel<Actions>(a),
+              .threads = threads_panel<Actions>(a)} {
     fState.apply({.fill = true});
     this->setHorizontal();
     // The edges take a pixel between the columns, their line, and are
@@ -567,16 +570,34 @@ struct conversations_screen : nodes::Stack {
     info_width = std::clamp(fState.contentBox().fRight - x, 260.0f,
                             std::max(260.0f, fState.contentBox().width() - side_width - 300.0f));
     info.apply({.width = info_width});
+    parts.threads.apply({.width = info_width});
   }
 
-  // The chat's info beside it where it is open and a chat is chosen.
+  // The chat's info beside it where it is open and a chat is chosen -- or
+  // its threads in the info's place, where they are.
   void show_info() {
-    const bool shown = info_open && chosen.has_value();
-    info.setVisible(shown);
+    const bool shown = (info_open || threads_open) && chosen.has_value();
+    info.setVisible(shown && !threads_open);
+    parts.threads.setVisible(shown && threads_open);
     info_edge.setVisible(shown);
     side.wanted = side_width;
     info.apply({.width = info_width});
+    parts.threads.apply({.width = info_width});
   }
+  bool threads_open = false;
+  // The threads' panel opened or closed: whether it is open now.
+  bool toggle_threads() {
+    threads_open = !threads_open;
+    parts.threads.open.reset();
+    this->show_info();
+    return threads_open;
+  }
+  void open_thread(std::string root) {
+    threads_open = true;
+    parts.threads.open = std::move(root);
+    this->show_info();
+  }
+  void close_thread() { parts.threads.open.reset(); }
 
   void toggle_info() {
     info_open = !info_open;
@@ -1292,6 +1313,8 @@ struct conversations_screen : nodes::Stack {
       return;
     }
     info.show(*one, now, muted.contains(one->id));
+    if (parts.threads.visible())
+      parts.threads.show(*one, &now);
     // Whether the reader may post here: their power against what a message
     // asks, as the room's power levels say; and whether any message of
     // theirs here was not sent.
@@ -1364,6 +1387,8 @@ struct conversations_screen : nodes::Stack {
     const auto first_of_run = [&](std::size_t i) { return !same(i, neighbour(i, false)); };
     const auto last_of_run = [&](std::size_t i) { return !same(i, neighbour(i, true)); };
     // A chat shown anew: its stretch as it was left, or its newest.
+    if (shown_chat != chosen)
+      parts.threads.open.reset();
     if (shown_chat != chosen) {
       if (shown_chat)
         made_of[*shown_chat] = made;

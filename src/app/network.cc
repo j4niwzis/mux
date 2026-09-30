@@ -375,6 +375,40 @@ struct network {
             one.account);
     });
   }
+  // Threads: a room's listed, one loaded, an answer sent in one.
+  void list_threads(const mux::conversation_id& in) {
+    loop.post([this, in] {
+      for (auto& one : accounts)
+        splice::visit(
+            [&](auto& account) {
+              if (account->id() == in.account)
+                account->list_threads(in.id);
+            },
+            one.account);
+    });
+  }
+  void load_thread(const mux::conversation_id& in, std::string root) {
+    loop.post([this, in, root = std::move(root)] {
+      for (auto& one : accounts)
+        splice::visit(
+            [&](auto& account) {
+              if (account->id() == in.account)
+                account->load_thread(in.id, root);
+            },
+            one.account);
+    });
+  }
+  void send_in_thread(const mux::conversation_id& in, std::string body, std::string root, std::string latest) {
+    loop.post([this, in, body = std::move(body), root = std::move(root), latest = std::move(latest)] {
+      for (auto& one : accounts)
+        splice::visit(
+            [&](auto& account) {
+              if (account->id() == in.account)
+                account->send_in_thread(in.id, body, root, latest);
+            },
+            one.account);
+    });
+  }
   // Packs: listed, saved, taken away, an image uploaded -- by the account named.
   void list_packs(const mux::account_id& by, std::optional<std::string> room) {
     loop.post([this, by, room = std::move(room)] {

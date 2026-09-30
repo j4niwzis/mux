@@ -58,6 +58,16 @@ inline bool replaces(const loom::ev::m_room_message_content_t::m_relates_to_t& r
          splice::visit(splice::overloaded{[](values::m_replace) { return true; }, [](const auto&) { return false; }}, *relates.rel_type);
 }
 
+// The thread a message is in: its relation's root, where it is m.thread.
+inline std::optional<std::string> thread_of(const loom::ev::m_room_message_content_t::m_relates_to_t& relates) {
+  using values = loom::ev::m_room_message_content_t::m_relates_to_t::rel_type_values;
+  if (!relates.rel_type || !relates.event_id)
+    return std::nullopt;
+  return splice::visit(splice::overloaded{[&](values::m_thread) { return relates.event_id; },
+                                          [](const auto&) { return std::optional<std::string>(); }},
+                       *relates.rel_type);
+}
+
 template <class Sink>
 void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where) {
   const auto at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(one.origin_server_ts));
@@ -139,6 +149,24 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       made.body.plain = "Unsupported message (" + (content.msgtype.empty() ? std::string("no msgtype") : content.msgtype) + ")";
     if (relates && relates->m_in_reply_to)
       made.replies_to = relates->m_in_reply_to->event_id;
+    // In a thread: its root. Its answer to the thread's latest event, where
+    // it falls back, is for clients that do not know threads -- not one.
+    if (relates)
+      if ((made.thread = thread_of(*relates)) && relates->is_falling_back.value_or(false))
+        made.replies_to.reset();
+    // A thread's root: its summary, as the server counts it.
+    if (one.unsigned_ && one.unsigned_->m_relations && one.unsigned_->m_relations->m_thread) {
+      const auto& thread = *one.unsigned_->m_relations->m_thread;
+      thread_summary summary{.count = thread.count, .participated = thread.current_user_participated};
+      if (thread.latest_event) {
+        summary.last_id = thread.latest_event->event_id;
+        summary.last_sender = thread.latest_event->sender;
+        summary.last_text = thread.latest_event->content.body.value_or("");
+        summary.last_at = std::chrono::sys_time<std::chrono::milliseconds>(
+            std::chrono::milliseconds(thread.latest_event->origin_server_ts));
+      }
+      made.threaded = summary;
+    }
     // A message for the user, come as it happened: listed, as Telegram's @.
     // Who it mentions, as m.mentions says; before that, the user's ID in it.
     const bool live = splice::visit(splice::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);

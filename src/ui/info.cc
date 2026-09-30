@@ -1205,6 +1205,216 @@ struct create_room_box : nodes::Stack {
   }
 };
 
+// Threads, as Element's panel has them: in place of the chat's info, the
+// room's threads -- each root, who wrote it and what, how many answers and
+// when the latest came -- and one opened: its root, its answers, and a
+// field to answer in it.
+template <class Actions>
+struct threads_panel : nodes::Stack {
+  Actions* actions = nullptr;
+  std::optional<std::string> open;  // the thread open, else the list
+  std::vector<message> shown;       // what the open thread shows now
+  struct close_it {
+    Actions* actions;
+    void operator()() const { actions->toggle_threads(); }
+  };
+  struct back_it {
+    Actions* actions;
+    void operator()() const { actions->close_thread(); }
+  };
+  struct sent {
+    threads_panel* panel;
+    void operator()(std::string_view) const { panel->send(); }
+  };
+  struct send_press {
+    threads_panel* panel;
+    void operator()() const { panel->send(); }
+  };
+  // A thread in the list: its root's author and words, how many answers and
+  // the latest's time; pressed, opened.
+  struct thread_row : nodes::Stack {
+    Actions* actions;
+    std::string root;
+    struct lines_t : nodes::Stack {
+      struct parts_t {
+        nodes::Text name;
+        nodes::Text said;
+        nodes::Text meta;
+      } parts;
+      lines_t(std::string who, std::string words, std::string meta)
+          : parts{.name = nodes::Text(std::move(who), 13.0f, accent_colour, true),
+                  .said = nodes::Text(std::move(words), 13.0f, text_colour),
+                  .meta = nodes::Text(std::move(meta), 12.0f, dim_colour)} {
+        this->setGap(2.0f);
+        fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+        for (nodes::Text* each : {&parts.name, &parts.said, &parts.meta}) {
+          each->setElided(true);
+          each->apply({.fillX = true});
+        }
+      }
+    };
+    struct parts_t {
+      avatar_mark face;
+      lines_t lines;
+    } parts;
+    thread_row(Actions* a, const conversation& chat, const message& said)
+        : actions(a), root(said.id),
+          parts{.face = avatar_mark(said.sender, sender_name(chat, said.sender), 36.0f),
+                .lines = lines_t(sender_name(chat, said.sender), flat(said.body.plain), meta_of(chat, said))} {
+      this->setHorizontal();
+      this->setGap(10.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 12.0f, 8.0f, 12.0f}, .cornerRadius = 8.0f,
+                    .hoverBackground = chosen_colour});
+      parts.face.apply({.alignSelf = scene::align::kStart});
+    }
+    [[nodiscard]] static std::string flat(std::string text) {
+      std::ranges::replace(text, '\n', ' ');
+      return text;
+    }
+    // "3 replies · 12:34", the latest's author and words after it.
+    [[nodiscard]] static std::string meta_of(const conversation& chat, const message& said) {
+      const thread_summary summary = said.threaded.value_or(thread_summary{});
+      std::string out = std::format("{} {}", summary.count, summary.count == 1 ? "reply" : "replies");
+      if (!summary.last_id.empty())
+        out += std::format(" · {} · {}: {}", clock_of(summary.last_at), sender_name(chat, summary.last_sender),
+                           flat(summary.last_text));
+      return out;
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+    [[nodiscard]] bool onClick(float, float) {
+      actions->open_thread(root);
+      return true;
+    }
+  };
+  struct head_t : nodes::Stack {
+    struct parts_t {
+      icon_button<back_it> back;
+      nodes::Text title{"Threads", 15.0f, text_colour, true};
+      icon_button<close_it> close;
+    } parts;
+    explicit head_t(Actions* a) : parts{.back = icon_button<back_it>(icon::back{}, {a}), .close = icon_button<close_it>(icon::close{}, {a})} {
+      this->setHorizontal();
+      this->setGap(8.0f);
+      fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}});
+      parts.title.setElided(true);
+      parts.title.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      parts.back.apply({.alignSelf = scene::align::kMiddle});
+      parts.close.apply({.alignSelf = scene::align::kMiddle});
+    }
+  };
+  struct input_t : nodes::Stack {
+    struct parts_t {
+      widgets::TextArea<sent> field;
+      icon_button<send_press> send;
+    } parts;
+    explicit input_t(threads_panel* panel)
+        : parts{.field = widgets::TextArea<sent>("Reply in thread…", {panel}),
+                .send = icon_button<send_press>(icon::send{}, {panel})} {
+      this->setHorizontal();
+      this->setGap(6.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .minHeight = 48.0f, .padding = {6.0f, 8.0f, 6.0f, 12.0f},
+                    .background = sidebar_colour});
+      parts.field.setFontSize(13.0f);
+      parts.field.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      parts.send.set_colour(accent_colour);
+      parts.send.apply({.alignSelf = scene::align::kEnd});
+    }
+  };
+  using rows_t = nodes::Flow<std::vector<thread_row>>;
+  using answers_t = nodes::Flow<std::vector<message_bubble>>;
+  struct parts_t {
+    head_t head;
+    nodes::Box<> divider{band_colour};
+    nodes::Text empty{"No threads here yet.", 13.0f, dim_colour};
+    nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 2.0f, .wrap = false}, {})};
+    nodes::ScrollContainer<answers_t> answers{answers_t({.spacingY = 0.0f, .wrap = false}, {})};
+    input_t input;
+  } parts;
+  explicit threads_panel(Actions* a) : actions(a), parts{.head = head_t(a), .input = input_t(this)} {
+    fState.apply({.fillY = true, .background = sidebar_colour});
+    parts.divider.apply({.fillX = true, .height = 1.0f});
+    parts.empty.apply({.margin = {16.0f, 16.0f, 0.0f, 16.0f}});
+    for (auto* list : std::initializer_list<scene::Node*>{&parts.list, &parts.answers})
+      list->apply({.fillX = true, .grow = scene::axes::kY});
+    std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 4.0f, 4.0f, 4.0f}});
+    std::get<0>(parts.answers.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 4.0f, 8.0f, 4.0f}});
+    this->setVisible(false);
+  }
+  // Brought up to date with the chat: its threads listed, or the one open
+  // shown -- made again only where what it shows changed.
+  void show(const conversation& chat, const model* now) {
+    parts.head.parts.back.setVisible(open.has_value());
+    parts.head.parts.title.setText(open ? "Thread" : "Threads");
+    parts.list.setVisible(!open);
+    parts.answers.setVisible(open.has_value());
+    parts.input.setVisible(open.has_value());
+    const auto root_of = [&](const std::string& id) -> const message* {
+      for (auto it = chat.timeline.rbegin(); it != chat.timeline.rend(); ++it)
+        if (it->id == id)
+          return &*it;
+      const auto found = chat.quoted.find(id);
+      return found == chat.quoted.end() ? nullptr : &found->second;
+    };
+    if (!open) {
+      // The roots: those the server listed, those in view with a thread,
+      // and those threads are held of -- each once, the latest active first.
+      std::vector<const message*> roots;
+      const auto add = [&](const std::string& id) {
+        if (const message* one = root_of(id); one && std::ranges::find(roots, one) == roots.end())
+          roots.push_back(one);
+      };
+      for (const std::string& id : chat.thread_roots)
+        add(id);
+      for (const message& one : chat.timeline)
+        if (one.threaded && one.threaded->count > 0)
+          add(one.id);
+      for (const auto& [id, answers] : chat.threads)
+        add(id);
+      const auto latest = [](const message* one) { return one->threaded ? one->threaded->last_at : one->at; };
+      std::ranges::sort(roots, [&](const message* a, const message* b) { return latest(a) > latest(b); });
+      auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
+      rows.clear();
+      for (const message* one : roots)
+        rows.emplace_back(actions, chat, *one);
+      parts.empty.setVisible(roots.empty());
+      parts.list.invalidateLayout();
+      shown.clear();
+      return;
+    }
+    parts.empty.setVisible(false);
+    std::vector<message> now_shown;
+    if (const message* root = root_of(*open))
+      now_shown.push_back(*root);
+    if (const auto found = chat.threads.find(*open); found != chat.threads.end())
+      now_shown.insert(now_shown.end(), found->second.begin(), found->second.end());
+    if (now_shown == shown)
+      return;
+    const bool grew = now_shown.size() > shown.size();
+    shown = std::move(now_shown);
+    auto& bubbles = std::get<0>(std::get<0>(parts.answers.fChildren).fChildren);
+    bubbles.clear();
+    bubbles.reserve(shown.size());
+    for (std::size_t i = 0; i < shown.size(); ++i) {
+      const bool first = i == 0 || shown[i - 1].sender != shown[i].sender || i == 1;
+      const bool last = i + 1 == shown.size() || shown[i + 1].sender != shown[i].sender || i == 0;
+      bubbles.emplace_back(chat, shown[i], first, last, now);
+    }
+    parts.answers.invalidateLayout();
+    if (grew)
+      parts.answers.scrollToEnd(false);
+  }
+  // What is written, answered in the thread open.
+  void send() {
+    auto& field = parts.input.parts.field;
+    const std::string text = field.plainText();
+    if (!open || text.empty())
+      return;
+    actions->send_in_thread(*open, text);
+    field.setText({});
+  }
+};
+
 // Emojis & Stickers, as Cinny edits them (MSC2545): the packs of a room --
 // or one's own pack -- listed; a pack opened: its name, attribution and use
 // (as emoji, as stickers), and its images, each with its shortcode and use,

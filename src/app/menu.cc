@@ -97,6 +97,18 @@ class menu_part {
     if (target_.picture)
       pictures_->copy(*target_.picture);
   }
+  // Reply in thread: the message's thread opened -- begun, where it has
+  // none -- in the panel beside the chat.
+  void apply(const request::menu_thread&) {
+    s_->root().close_menu();
+    auto& screen = s_->root().main();
+    if (!screen.chosen)
+      return;
+    screen.open_thread(target_.id);
+    if (!s_->demo())
+      s_->net->load_thread(*screen.chosen, target_.id);
+    s_->refresh_due = true;
+  }
   void apply(const request::menu_save&) {
     s_->root().close_menu();
     if (target_.media)

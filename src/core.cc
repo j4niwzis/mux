@@ -270,6 +270,19 @@ struct chat {};
 }  // namespace choice_level
 using choice_level_t = splice::variant<choice_level::everywhere, choice_level::account, choice_level::chat>;
 
+// A thread's summary, on its root (m.relations' m.thread, or counted
+// here): how many answers, the latest -- who, what, when -- and whether the
+// user took part.
+struct thread_summary {
+  std::int64_t count = 0;
+  std::string last_id;
+  std::string last_sender;
+  std::string last_text;
+  std::chrono::sys_time<std::chrono::milliseconds> last_at{};
+  bool participated = false;
+  friend bool operator==(const thread_summary&, const thread_summary&) = default;
+};
+
 struct message {
   conversation_id in;
   // The protocol's own id: an XMPP stanza id (or origin-id), a Matrix event
@@ -307,6 +320,10 @@ struct message {
   // Several pictures or files in one message, as a gallery (MSC4274) carries
   // them: shown as an album.
   std::vector<mux::attachment> album;
+  // In a thread (m.thread): its root -- kept in the chat's threads, not in
+  // its timeline. And, where it is a thread's root, the thread's summary.
+  std::optional<std::string> thread;
+  std::optional<thread_summary> threaded;
   friend bool operator==(const message&, const message&) = default;
 };
 
@@ -590,6 +607,10 @@ struct conversation {
   // on their own for their quotes -- kept out of the timeline, and let go
   // once the timeline has them, or when too many have gathered.
   std::map<std::string, message> quoted;
+  // Each thread's answers, by its root, oldest first: kept apart from the
+  // timeline, as Element keeps them; and the roots the server listed.
+  std::map<std::string, std::vector<message>> threads;
+  std::vector<std::string> thread_roots;
   // Who has read up to where: each other person's last message read, as
   // their receipts say; and the user's own, kept here whether it is sent or
   // not -- what is unread is counted from it.
@@ -985,6 +1006,12 @@ struct pack_picture_uploaded {
   pack_picture picture;
   bool done = false;
 };
+// A room's threads, as the server lists them: their roots, newest first
+// (each root's own message comes aside, with its summary).
+struct threads_listed {
+  conversation_id in;
+  std::vector<std::string> roots;
+};
 // The user directory searched: who it found for what was asked.
 struct people_found {
   account_id by;
@@ -1033,7 +1060,7 @@ using change_t = splice::variant<change::connection_changed, change::refused, ch
                               change::room_created, change::preview_loaded, change::devtools_text,
                               change::state_listed, change::room_previewed, change::mentioned,
                               change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine,
-                              change::directory_listed, change::people_found, change::packs_listed, change::pack_saved,
+                              change::directory_listed, change::people_found, change::packs_listed, change::pack_saved, change::threads_listed,
                               change::pack_picture_uploaded>;
 
 // The model: every account, and every change applied to it.
@@ -1123,7 +1150,39 @@ class model {
     for (auto it = where.timeline.rbegin(); it != where.timeline.rend(); ++it)
       if (it->id == id)
         return &*it;
+    // Or an answer in a thread.
+    for (auto& [root, answers] : where.threads)
+      for (message& one : answers)
+        if (one.id == id)
+          return &one;
     return nullptr;
+  }
+  // A thread's root, where it is held: in the timeline, or fetched aside.
+  static message* root_of(conversation& where, const std::string& root) {
+    for (auto it = where.timeline.rbegin(); it != where.timeline.rend(); ++it)
+      if (it->id == root)
+        return &*it;
+    if (const auto found = where.quoted.find(root); found != where.quoted.end())
+      return &found->second;
+    return nullptr;
+  }
+  // An answer come to a thread: the root's summary brought up to date -- one
+  // more where it came live, else as many as are held at least.
+  static void note_answer(conversation& where, const std::string& root, const message& answer, bool counted) {
+    message* kept = root_of(where, root);
+    if (!kept)
+      return;
+    thread_summary summary = kept->threaded.value_or(thread_summary{});
+    const auto& answers = where.threads[root];
+    summary.count = counted ? summary.count + 1 : std::max<std::int64_t>(summary.count, static_cast<std::int64_t>(answers.size()));
+    if (answer.at >= summary.last_at) {
+      summary.last_id = answer.id;
+      summary.last_sender = answer.sender;
+      summary.last_text = answer.body.plain;
+      summary.last_at = answer.at;
+    }
+    summary.participated = summary.participated || answer.outgoing;
+    kept->threaded = summary;
   }
 
   void on(const change::connection_changed& one) {
@@ -1167,6 +1226,16 @@ class model {
     conversation& where = of(one.message.in);
     if (message* kept = one.message.id.empty() ? nullptr : message_in(where, one.message.id)) {
       *kept = one.message;
+      return;
+    }
+    // An answer in a thread: with the thread's, in time's order, not in the
+    // timeline; its root's summary brought up to date.
+    if (one.message.thread) {
+      auto& answers = where.threads[*one.message.thread];
+      answers.insert(std::ranges::upper_bound(answers, one.message.at, {}, &message::at), one.message);
+      const bool live = splice::visit(splice::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }},
+                                      one.where);
+      note_answer(where, *one.message.thread, one.message, live);
       return;
     }
     // In the timeline now: what was fetched for a quote is not needed.
@@ -1227,13 +1296,18 @@ class model {
       return;
     }
     std::erase_if(where.timeline, [&](const message& each) { return each.id == one.id; });
+    for (auto& [root, answers] : where.threads)
+      std::erase_if(answers, [&](const message& each) { return each.id == one.id; });
     if (where.latest && where.latest->id == one.id)
       where.latest.reset();
   }
+  void on(const change::threads_listed& one) { of(one.in).thread_roots = one.roots; }
   void on(const change::message_acknowledged& one) {
     conversation& where = of(one.in);
     if (message_in(where, one.id)) {
       std::erase_if(where.timeline, [&](const message& kept) { return kept.id == one.local_id; });
+      for (auto& [root, answers] : where.threads)
+        std::erase_if(answers, [&](const message& kept) { return kept.id == one.local_id; });
       return;
     }
     if (message* kept = message_in(where, one.local_id)) {

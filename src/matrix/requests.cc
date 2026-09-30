@@ -16,6 +16,8 @@ import loom.cs.event_context;
 import loom.cs.receipts;
 import loom.cs.redaction;
 import loom.cs.users;
+import loom.cs.relations;
+import loom.cs.threads_list;
 import loom.cs.room_summary;
 import loom.cs.list_public_rooms;
 import loom.cs.room_send;
@@ -997,6 +999,86 @@ void account<Sink>::send(std::string room, std::string body, std::optional<std::
     for (const mention& one : mentions)
       said.mentions.push_back(one.user);
     const auto content = loom::client::text_message(said);
+    auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
+                                                      .event_type = "m.room.message",
+                                                      .txn_id = txn,
+                                                      .body = as_body(content)});
+    if (!sent) {
+      sink_(change::delivery_changed{in, txn, delivery::failed{}});
+      return;
+    }
+    sink_(change::message_acknowledged{in, txn, sent->event_id});
+  });
+}
+
+template <class Sink>
+void account<Sink>::list_threads(std::string room) {
+  loop_->spawn([this, room = std::move(room)] {
+    if (!api_)
+      return;
+    using asked = loom::cs::get_thread_roots;
+    auto got = perform(*api_, asked{.room_id = room, .include = asked::include_t{asked::include_values::all{}}, .limit = 50});
+    if (!got) {
+      log(id_, "the threads of {}: {}", room, got.error().said());
+      return;
+    }
+    const conversation_id in{id_, room};
+    std::vector<std::string> roots;
+    for (const auto& one : got->chunk) {
+      roots.push_back(one.event_id);
+      this->event(in, one, placement::aside{});
+    }
+    sink_(change::threads_listed{in, std::move(roots)});
+  });
+}
+
+template <class Sink>
+void account<Sink>::load_thread(std::string room, std::string root) {
+  loop_->spawn([this, room = std::move(room), root = std::move(root)] {
+    if (!api_)
+      return;
+    using asked = loom::cs::get_relating_events_with_rel_type;
+    const conversation_id in{id_, room};
+    // Up to five pages of a hundred, newest first: each answer a message
+    // in the thread.
+    std::optional<std::string> from;
+    for (int page = 0; page < 5; ++page) {
+      auto got = perform(*api_, asked{.room_id = room, .event_id = root, .rel_type = "m.thread", .from = from, .limit = 100,
+                                      .dir = asked::dir_t{asked::dir_values::b{}}});
+      if (!got) {
+        log(id_, "the thread {}: {}", root, got.error().said());
+        return;
+      }
+      for (const auto& one : got->chunk)
+        this->event(in, one, placement::aside{});
+      if (!got->next_batch)
+        break;
+      from = got->next_batch;
+    }
+  });
+}
+
+template <class Sink>
+void account<Sink>::send_in_thread(std::string room, std::string body, std::string root, std::string latest) {
+  loop_->spawn([this, room = std::move(room), body = std::move(body), root = std::move(root), latest = std::move(latest)] {
+    const std::string txn = this->transaction();
+    const conversation_id in{id_, room};
+    const auto html = html_of(body, emotes_in(room));
+    sink_(change::message_added{message{.in = in,
+                                        .id = txn,
+                                        .sender = id_.address,
+                                        .at = std::chrono::time_point_cast<std::chrono::milliseconds>(
+                                            std::chrono::system_clock::now()),
+                                        .body = {body, html},
+                                        .outgoing = true,
+                                        .delivery = delivery::sending{},
+                                        .thread = root}});
+    if (!api_) {
+      sink_(change::delivery_changed{in, txn, delivery::failed{}});
+      return;
+    }
+    const auto content = loom::client::text_message(
+        loom::client::text_said{.body = body, .html = html, .thread = root, .thread_latest = latest});
     auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.room.message",
                                                       .txn_id = txn,

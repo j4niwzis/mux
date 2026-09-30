@@ -95,6 +95,7 @@ std::string of(const change::preview_loaded& one) { return std::format("a previe
 std::string of(const change::devtools_text& one) { return one.title + "\n" + one.text; }
 std::string of(const change::mentioned& one) { return std::format("mentioned in {}", one.in.id); }
 std::string of(const change::marks_shown&) { return std::string(); }
+std::string of(const change::threads_listed& one) { return std::format("{} threads in {}", one.roots.size(), one.in.id); }
 std::string of(const change::packs_listed& one) { return std::format("{} packs", one.packs.size()); }
 std::string of(const change::pack_saved& one) {
   return std::format("pack {} {}", one.pack.name, one.done ? (one.removed ? "deleted" : "saved") : "not saved");

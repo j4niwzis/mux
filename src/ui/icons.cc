@@ -42,7 +42,8 @@ struct search {};  // a magnifier
 struct up {};      // a chevron up
 struct down {};    // a chevron down
 struct download {};
-struct compass {};  // Explore rooms  // an arrow down onto a line: saved to the disk
+struct compass {};  // Explore rooms
+struct threads {};  // a room's threads  // an arrow down onto a line: saved to the disk
 struct reply {};   // tdesktop's historyReplyIcon: an arrow turned back
 struct pencil {};  // tdesktop's historyEditIcon
 struct smile {};   // tdesktop's historyEmojiIcon: a round face
@@ -57,7 +58,7 @@ using icon_t = splice::variant<icon::none, icon::person, icon::gear, icon::power
                             icon::close, icon::info, icon::people, icon::add_person, icon::bell, icon::sliders,
                             icon::leave, icon::check, icon::clip, icon::send, icon::eye, icon::dot, icon::minus,
                             icon::reply, icon::pencil, icon::search, icon::up, icon::down, icon::smile,
-                            icon::play, icon::pause, icon::download, icon::compass>;
+                            icon::play, icon::pause, icon::download, icon::compass, icon::threads>;
 
 // Each icon's shape, as data, in points from the middle of its box -- about
 // 20 across -- for nodes::Icon to draw.
@@ -165,6 +166,16 @@ namespace steps = nodes::path_step;
            {marks::line{-2.5f, -6.5f, 2.5f, -6.5f}, 1.8f},
            {marks::path{{steps::move{-2.5f, 5.0f}, steps::line{0.0f, 9.5f}, steps::line{2.5f, 5.0f}}}, 1.8f}},
           45.0f};
+}
+// Threads, as Element's: a bubble, its tail at the lower left, two lines
+// said in it.
+[[nodiscard]] inline IconShape shape_of(icon::threads) {
+  return {{{marks::path{{steps::move{-8.0f, -6.0f}, steps::line{8.0f, -6.0f}, steps::line{8.0f, 5.0f},
+                         steps::line{-3.0f, 5.0f}, steps::line{-7.0f, 8.5f}, steps::line{-7.0f, 5.0f},
+                         steps::line{-8.0f, 5.0f}, steps::close{}}},
+            1.6f},
+           {marks::line{-4.5f, -2.0f, 4.5f, -2.0f}, 1.6f},
+           {marks::line{-4.5f, 1.5f, 2.0f, 1.5f}, 1.6f}}};
 }
 // Explore rooms, as Element's: a compass -- a ring, its needle across it.
 [[nodiscard]] inline IconShape shape_of(icon::compass) {

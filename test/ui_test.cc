@@ -104,6 +104,11 @@ struct stub {
   void create_room(std::string, std::string, bool, std::string, bool = true) {}
   void find_people(std::string) {}
   void open_packs() {}
+  void toggle_threads() {}
+  void open_thread(std::string) {}
+  void close_thread() {}
+  void send_in_thread(std::string, std::string) {}
+  void menu_thread() {}
   void open_room_packs() {}
   void close_packs() {}
   void save_pack(mux::emote_pack) {}

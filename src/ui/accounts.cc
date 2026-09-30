@@ -181,12 +181,14 @@ struct account_pages : nodes::Stack {
   struct parts_t {
     row connection;
     row privacy;
+    row chats;
     row proxy;
   } parts;
 
   explicit account_pages(Actions* a)
       : parts{.connection = row("Connection", {a, 0}, icon::sliders{}),
               .privacy = row("Privacy", {a, 1}, icon::eye{}),
+              .chats = row("Chats", {a, 3}, icon::people{}),
               .proxy = row("Proxy", {a, 2}, icon::gear{})} {
     fState.apply({.padding = {6.0f, 0.0f, 0.0f, 0.0f}});
     this->light(0);
@@ -194,6 +196,7 @@ struct account_pages : nodes::Stack {
   void light(int page) {
     parts.connection.set_lit(page == 0);
     parts.privacy.set_lit(page == 1);
+    parts.chats.set_lit(page == 3);
     parts.proxy.set_lit(page == 2);
   }
 };
@@ -214,17 +217,6 @@ struct account_privacy : nodes::Stack {
     typing_row typing;
     notify_row notify;
     notify_sound_row notify_sound;
-    // Its chats' room events: as every account's, until chosen here.
-    event_kind_list<Actions> events;
-    receipts_choice<Actions> faces;
-    previews_choice<Actions> previews;
-    jump_search_choice<Actions> jump_search;
-    // Its chats' background, bubbles and panels, here as its other choices.
-    nodes::Text looks_title = section_title("LOOKS");
-    look_choices<Actions> looks;
-    // Its spaces' places in the bars.
-    nodes::Text spaces_title = section_title("SPACES");
-    spaces_choices<Actions> places;
     nodes::Text note{"Off, the people you talk to through this account are not told when you have read their "
                      "messages, or that you are typing. Theirs are still shown, and receipts are still kept here.",
                      13.0f, dim_colour};
@@ -237,14 +229,8 @@ struct account_privacy : nodes::Stack {
       : parts{.receipts = receipts_row("Send read receipts", {a}),
               .typing = typing_row("Send typing notifications", {a}),
               .notify = notify_row("Desktop notifications from it", {a}),
-              .notify_sound = notify_sound_row("Their sound", {a}),
-              .events = event_kind_list<Actions>(a, choice_level::account{}, events_all, kinds),
-              .faces = receipts_choice<Actions>(a, choice_level::account{}, faces_on),
-              .previews = previews_choice<Actions>(a, choice_level::account{}, previews_on),
-              .jump_search = jump_search_choice<Actions>(a, choice_level::account{}, jump_most),
-              .looks = look_choices<Actions>(a, choice_level::account{}),
-              .places = spaces_choices<Actions>(a)} {
-    parts.looks_title.apply({.margin = {10.0f, 0.0f, 0.0f, 0.0f}});
+              .notify_sound = notify_sound_row("Their sound", {a})} {
+    (void)events_all, (void)kinds, (void)faces_on, (void)jump_most, (void)previews_on;
     this->setGap(8.0f);
     parts.note.apply({.fillX = true});
     fState.apply({.fill = true});
@@ -257,6 +243,39 @@ struct account_privacy : nodes::Stack {
   void show(bool receipts_on, bool typing_on) {
     parts.receipts.parts.toggle.setOn(receipts_on);
     parts.typing.parts.toggle.setOn(typing_on);
+  }
+  void say(std::string, bool) {}
+};
+
+// An account's Chats page: how its chats are -- the room events they show,
+// who has read up to where, link previews, how far a jump looks back, their
+// looks, and its spaces in the bars. Each as every account's, until chosen
+// here; a chat of it may choose again.
+template <class Actions>
+struct account_chats : nodes::Stack {
+  struct parts_t {
+    nodes::Text title = section_title("CHATS");
+    event_kind_list<Actions> events;
+    receipts_choice<Actions> faces;
+    previews_choice<Actions> previews;
+    jump_search_choice<Actions> jump_search;
+    nodes::Text looks_title = section_title("LOOKS");
+    look_choices<Actions> looks;
+    nodes::Text spaces_title = section_title("SPACES");
+    spaces_choices<Actions> places;
+  } parts;
+  account_chats(Actions* a, std::optional<bool> events_all, const std::optional<config::room_event_kinds>& kinds,
+                std::optional<bool> faces_on, std::optional<std::int64_t> jump_most, std::optional<bool> previews_on)
+      : parts{.events = event_kind_list<Actions>(a, choice_level::account{}, events_all, kinds),
+              .faces = receipts_choice<Actions>(a, choice_level::account{}, faces_on),
+              .previews = previews_choice<Actions>(a, choice_level::account{}, previews_on),
+              .jump_search = jump_search_choice<Actions>(a, choice_level::account{}, jump_most),
+              .looks = look_choices<Actions>(a, choice_level::account{}),
+              .places = spaces_choices<Actions>(a)} {
+    this->setGap(8.0f);
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    for (nodes::Text* each : {&parts.looks_title, &parts.spaces_title})
+      each->apply({.margin = {10.0f, 0.0f, 0.0f, 0.0f}});
   }
   void say(std::string, bool) {}
 };
@@ -339,15 +358,17 @@ struct accounts_panel : closes_on_escape<Actions> {
         std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
       }
     };
+    using detail_t = splice::variant<nodes::Text, account_editor<Actions>, add_account_pane<Actions>, account_privacy<Actions>,
+                                     account_proxy<Actions>, account_chats<Actions>>;
     struct detail_column : nodes::Stack {
       // No account chosen, or the chosen one, or adding one.
       struct parts_t {
-        splice::variant<nodes::Text, account_editor<Actions>, add_account_pane<Actions>, account_privacy<Actions>,
-                     account_proxy<Actions>>
-            detail{std::in_place_index<0>, "Choose an account.", 15.0f, dim_colour};
+        // In a scroll view: a page taller than the window scrolls.
+        nodes::ScrollContainer<detail_t> scroll{detail_t{std::in_place_index<0>, "Choose an account.", 15.0f, dim_colour}};
       } parts;
       detail_column() {
         fState.apply({.fillY = true, .grow = scene::axes::kX, .padding = {24.0f, 28.0f, 24.0f, 28.0f}});
+        parts.scroll.apply({.fill = true});
       }
     };
     struct parts_t {
@@ -368,7 +389,18 @@ struct accounts_panel : closes_on_escape<Actions> {
   account_pages<Actions>& pages = parts.body.parts.side.pages;
   nodes::Text& message = parts.body.parts.side.message;
   decltype(body_row::side_column::parts_t::list)& list = parts.body.parts.side.list;
-  decltype(body_row::detail_column::parts_t::detail)& detail = parts.body.parts.main.parts.detail;
+  typename body_row::detail_t& detail = std::get<0>(parts.body.parts.main.parts.scroll.fChildren);
+  // The page shown: across the pane, as tall as what it holds -- scrolled
+  // from its top.
+  void fit_detail() {
+    splice::visit(
+        [](auto& one) {
+          one.fState.apply({.relativeSize = scene::axes::kX});
+          one.fState.apply({.autoSize = scene::axes::kY});
+        },
+        detail);
+    parts.body.parts.main.parts.scroll.scrollToStart();
+  }
 
   // What is beside the list coming in when another is chosen, fading in.
   skiff::paint::Tween swap{1.0f, 200.0f, skiff::paint::movement::subtle{}};
@@ -430,12 +462,16 @@ struct accounts_panel : closes_on_escape<Actions> {
                                    config::notify_of(one).value_or(true), config::notify_sound_of(one).value_or(true),
                                    config::show_receipts_of(one), config::jump_search_of(one),
                                    config::link_previews_of(one));
+    } else if (page == 3) {
+      detail.template emplace<5>(this->actions, config::room_events_of(one), config::room_event_kinds_of(one),
+                                   config::show_receipts_of(one), config::jump_search_of(one), config::link_previews_of(one));
     } else if (page == 2) {
       detail.template emplace<4>(this->actions, proxies, config::proxy_of(one));
     } else {
       detail.template emplace<1>(this->actions, one);
       splice::get<1>(detail).show(one, now);
     }
+    this->fit_detail();
     this->begin_swap();
     this->invalidateLayout();
   }
@@ -472,6 +508,7 @@ struct accounts_panel : closes_on_escape<Actions> {
     selected.reset();
     this->show_pages(false);
     detail.template emplace<0>("Choose an account.", 15.0f, dim_colour);
+    this->fit_detail();
     this->begin_swap();
   }
 
@@ -480,6 +517,7 @@ struct accounts_panel : closes_on_escape<Actions> {
     selected.reset();
     add.set_lit(true);
     detail.template emplace<2>(this->actions, proxies);
+    this->fit_detail();
     this->begin_swap();
     this->invalidateLayout();
   }

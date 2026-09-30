@@ -245,7 +245,39 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     // The rest, by its type: loom's timeline union does not have their
     // content yet.
     const event_type_t type = event_type_of(one.type);
+    // Redacted before it came here: its content emptied, so not read as its
+    // type's. A message is one deleted -- its thread's summary kept, as
+    // Element keeps it -- not "sent m.room.message"; a reaction, nothing.
+    const bool redacted = one.unsigned_ && one.unsigned_->redacted_because;
+    const auto deleted = [&] {
+      message made{.in = in, .id = one.event_id, .sender = one.sender, .at = at, .body = {},
+                   .outgoing = one.sender == id_.address};
+      if (one.unsigned_->m_relations && one.unsigned_->m_relations->m_thread) {
+        const auto& thread = *one.unsigned_->m_relations->m_thread;
+        thread_summary summary{.count = thread.count, .participated = thread.current_user_participated};
+        if (thread.latest_event) {
+          summary.last_id = thread.latest_event->event_id;
+          summary.last_sender = thread.latest_event->sender;
+          summary.last_text = thread.latest_event->content.body.value_or("");
+          summary.last_at = std::chrono::sys_time<std::chrono::milliseconds>(
+              std::chrono::milliseconds(thread.latest_event->origin_server_ts));
+        }
+        made.threaded = summary;
+      }
+      sink_(change::message_added{std::move(made), where});
+      sink_(change::message_redacted{in, one.event_id});
+    };
     splice::visit(splice::overloaded{[&](event_type::encrypted) { encrypted(in, one, at, where); },
+                          [&](event_type::message) {
+                            if (redacted)
+                              deleted();
+                            else
+                              done(in, one, type, at, where);
+                          },
+                          [&](event_type::reaction) {
+                            if (!redacted)
+                              done(in, one, type, at, where);
+                          },
                           [&](event_type::redaction) { redaction(in, one, at, where); },
                           [](event_type::receipt) {},
                           [&](const auto&) { done(in, one, type, at, where); }},

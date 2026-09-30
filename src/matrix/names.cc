@@ -73,13 +73,16 @@ struct join_rules {};          // m.room.join_rules
 struct history_visibility {};  // m.room.history_visibility
 struct canonical_alias {};     // m.room.canonical_alias
 struct sticker {};             // m.sticker
+struct message {};             // m.room.message, where its content was not read (redacted: emptied)
+struct reaction {};            // m.reaction, likewise
 struct other {};
 }  // namespace event_type
 using event_type_t =
     splice::variant<event_type::encrypted, event_type::redaction, event_type::receipt, event_type::member,
                  event_type::room_name, event_type::topic, event_type::room_avatar, event_type::create,
                  event_type::power_levels, event_type::pinned, event_type::join_rules,
-                 event_type::history_visibility, event_type::canonical_alias, event_type::sticker, event_type::other>;
+                 event_type::history_visibility, event_type::canonical_alias, event_type::sticker, event_type::message,
+                 event_type::reaction, event_type::other>;
 // Where someone stands in a room, as an m.room.member says.
 namespace membership {
 struct join {
@@ -151,6 +154,8 @@ template <class Variant, class Other>
 [[nodiscard]] inline event_type_t event_type_of(std::optional<std::string_view> name) {
   static const std::unordered_map<std::string_view, event_type_t> known = {
       {"m.room.encrypted", event_type::encrypted{}},
+      {"m.room.message", event_type::message{}},
+      {"m.reaction", event_type::reaction{}},
       {"m.room.redaction", event_type::redaction{}},
       {"m.receipt", event_type::receipt{}},
       {"m.room.member", event_type::member{}},

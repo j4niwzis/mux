@@ -10,7 +10,7 @@
 //   <address or room id> <the message>
 // is sent there; an empty line, or the end of input, stops the account.
 import std;
-import mux.variant;
+import splice;
 import mux.core;
 import mux.net;
 import mux.xmpp;
@@ -20,7 +20,7 @@ namespace {
 
 // Each change in a line, by its own overload.
 std::string name_of(const mux::connection_t& state) {
-  return mux::visit(mux::overloaded{
+  return splice::visit(splice::overloaded{
                         [](const mux::connection::offline&) { return std::string("offline"); },
                         [](const mux::connection::connecting& now) {
                           return "connecting" + (now.reason ? ": " + *now.reason : std::string());
@@ -31,7 +31,7 @@ std::string name_of(const mux::connection_t& state) {
                     state);
 }
 std::string name_of(const mux::availability_t& state) {
-  return mux::visit(mux::overloaded{
+  return splice::visit(splice::overloaded{
                         [](const mux::availability::offline&) { return "offline"; },
                         [](const mux::availability::online&) { return "online"; },
                         [](const mux::availability::away&) { return "away"; },
@@ -42,7 +42,7 @@ std::string name_of(const mux::availability_t& state) {
                     state);
 }
 std::string name_of(const mux::delivery_t& state) {
-  return mux::visit(mux::overloaded{
+  return splice::visit(splice::overloaded{
                         [](const mux::delivery::sending&) { return "sending"; },
                         [](const mux::delivery::sent&) { return "sent"; },
                         [](const mux::delivery::delivered&) { return "delivered"; },
@@ -52,7 +52,7 @@ std::string name_of(const mux::delivery_t& state) {
                     state);
 }
 std::string name_of(const mux::conversation_kind_t& kind) {
-  return mux::visit(mux::overloaded{[](const mux::conversation_kind::direct&) { return "contact"; },
+  return splice::visit(splice::overloaded{[](const mux::conversation_kind::direct&) { return "contact"; },
                                     [](const mux::conversation_kind::group&) { return "room"; }},
                     kind);
 }
@@ -119,7 +119,7 @@ std::string of(const change::members_changed& one) {
 }  // namespace said
 
 std::string describe(const mux::change_t& what) {
-  return mux::visit([](const auto& one) { return said::of(one); }, what);
+  return splice::visit([](const auto& one) { return said::of(one); }, what);
 }
 
 // What is typed, read by a fiber of its own and handed to the account.

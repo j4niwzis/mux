@@ -3,7 +3,7 @@
 export module mux.ui:add_account;
 
 import std;
-import mux.variant;
+import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
@@ -132,7 +132,7 @@ struct add_account_pane : nodes::Stack {
   }
   void fade() {
     const float value = swap.value();
-    mux::visit([value](auto& one) { one.fState.setAlpha(value); }, parts.form);
+    splice::visit([value](auto& one) { one.fState.setAlpha(value); }, parts.form);
   }
   [[nodiscard]] bool settling() const { return swap.moving(); }
   void update(double now_ms) {
@@ -144,7 +144,7 @@ struct add_account_pane : nodes::Stack {
 
   // The tab of the form that is up, lit, and what that protocol is.
   void light() {
-    mux::visit(overloaded{[this](const xmpp_form<Actions>&) {
+    splice::visit(splice::overloaded{[this](const xmpp_form<Actions>&) {
                             parts.tabs.parts.xmpp_tab.set_active(true);
                             parts.tabs.parts.matrix_tab.set_active(false);
                             parts.note.setText("An address like user@example.com, on a server such as Prosody or ejabberd.");

@@ -9,17 +9,9 @@
 export module mux.core;
 
 import std;
-import mux.variant;
+import splice;
 
 export namespace mux {
-
-// The overloaded pattern: a visitor made of several callables.
-template <class... Fs>
-struct overloaded : Fs... {
-  using Fs::operator()...;
-};
-template <class... Fs>
-overloaded(Fs...) -> overloaded<Fs...>;
 
 // Which protocol an account speaks. A closed set: what differs between them
 // is in the account types, dispatched with std::visit, not behind a base
@@ -34,9 +26,9 @@ struct matrix {
   friend auto operator<=>(const matrix&, const matrix&) = default;
 };
 }  // namespace protocol
-using protocol_t = mux::variant<protocol::xmpp, protocol::matrix>;
+using protocol_t = splice::variant<protocol::xmpp, protocol::matrix>;
 [[nodiscard]] inline bool is_matrix(const protocol_t& speaks) {
-  return mux::visit([](auto one) { return one.is_matrix; }, speaks);
+  return splice::visit([](auto one) { return one.is_matrix; }, speaks);
 }
 
 // An account, as the user names it: user@example.com, or @user:example.org.
@@ -66,9 +58,9 @@ struct group {
   friend bool operator==(const group&, const group&) = default;
 };
 }  // namespace conversation_kind
-using conversation_kind_t = mux::variant<conversation_kind::direct, conversation_kind::group>;
+using conversation_kind_t = splice::variant<conversation_kind::direct, conversation_kind::group>;
 [[nodiscard]] inline bool one_to_one(const conversation_kind_t& kind) {
-  return mux::visit([](auto one) { return one.one_to_one; }, kind);
+  return splice::visit([](auto one) { return one.one_to_one; }, kind);
 }
 
 // Where an account is with its server. A failure says why; a connection
@@ -89,10 +81,10 @@ struct failed {
   friend bool operator==(const failed&, const failed&) = default;
 };
 }  // namespace connection
-using connection_t = mux::variant<connection::offline, connection::connecting, connection::online, connection::failed>;
+using connection_t = splice::variant<connection::offline, connection::connecting, connection::online, connection::failed>;
 
 [[nodiscard]] inline bool is_online(const connection_t& state) {
-  return mux::visit(overloaded{[](const connection::online&) { return true; }, [](const auto&) { return false; }},
+  return splice::visit(splice::overloaded{[](const connection::online&) { return true; }, [](const auto&) { return false; }},
                     state);
 }
 
@@ -116,7 +108,7 @@ struct chat {
   friend bool operator==(const chat&, const chat&) = default;
 };
 }  // namespace availability
-using availability_t = mux::variant<availability::offline, availability::online, availability::away,
+using availability_t = splice::variant<availability::offline, availability::online, availability::away,
                                     availability::extended_away, availability::do_not_disturb, availability::chat>;
 
 struct presence {
@@ -150,7 +142,7 @@ struct failed {
   friend bool operator==(const failed&, const failed&) = default;
 };
 }  // namespace delivery
-using delivery_t = mux::variant<delivery::sending, delivery::sent, delivery::delivered, delivery::read, delivery::failed>;
+using delivery_t = splice::variant<delivery::sending, delivery::sent, delivery::delivered, delivery::read, delivery::failed>;
 
 // What a message carries besides its text: a picture, shown in it, or a
 // file, offered to be saved -- by where its protocol keeps it (an mxc://).
@@ -166,13 +158,13 @@ struct file {
   friend bool operator==(file, file) = default;
 };
 }  // namespace attachment_kind
-using attachment_kind_t = mux::variant<attachment_kind::image, attachment_kind::file>;
+using attachment_kind_t = splice::variant<attachment_kind::image, attachment_kind::file>;
 [[nodiscard]] inline bool is_picture(const attachment_kind_t& kind) {
-  return mux::visit([](auto one) { return one.picture; }, kind);
+  return splice::visit([](auto one) { return one.picture; }, kind);
 }
 // Whether it is a picture that moves.
 [[nodiscard]] inline bool moves(const attachment_kind_t& kind) {
-  return mux::visit(overloaded{[](attachment_kind::image one) { return one.moves; },
+  return splice::visit(splice::overloaded{[](attachment_kind::image one) { return one.moves; },
                                [](attachment_kind::file) { return false; }},
                     kind);
 }
@@ -249,11 +241,11 @@ struct reactions {
 };    // each reaction, as a line of its own: hidden unless chosen
 }  // namespace room_event
 using room_event_t =
-    mux::variant<room_event::joins, room_event::invites, room_event::names, room_event::avatars, room_event::room_name,
+    splice::variant<room_event::joins, room_event::invites, room_event::names, room_event::avatars, room_event::room_name,
                  room_event::topic, room_event::room_avatar, room_event::address, room_event::pins,
                  room_event::permissions, room_event::access, room_event::encryption, room_event::other,
                  room_event::reactions>;
-inline constexpr std::size_t kRoomEventKinds = mux::variant_size_v<room_event_t>;
+inline constexpr std::size_t kRoomEventKinds = splice::variant_size_v<room_event_t>;
 inline const std::array<room_event_t, kRoomEventKinds> all_room_events{
     room_event::joins{},     room_event::invites{}, room_event::names{},       room_event::avatars{},
     room_event::room_name{}, room_event::topic{},   room_event::room_avatar{}, room_event::address{},
@@ -273,7 +265,7 @@ struct everywhere {};
 struct account {};
 struct chat {};
 }  // namespace choice_level
-using choice_level_t = mux::variant<choice_level::everywhere, choice_level::account, choice_level::chat>;
+using choice_level_t = splice::variant<choice_level::everywhere, choice_level::account, choice_level::chat>;
 
 struct message {
   conversation_id in;
@@ -333,7 +325,7 @@ struct invite {};    // those invited
 struct knock {};     // those who ask, once let in
 struct other {};     // restricted, private -- a rule not offered here
 }  // namespace join_rule
-using join_rule_t = mux::variant<join_rule::open, join_rule::invite, join_rule::knock, join_rule::other>;
+using join_rule_t = splice::variant<join_rule::open, join_rule::invite, join_rule::knock, join_rule::other>;
 // Who may read a room's history.
 namespace history_rule {
 struct shared {};          // members, all of it
@@ -342,7 +334,7 @@ struct joined {};          // members, from when they joined
 struct world_readable {};  // anyone
 }  // namespace history_rule
 using history_rule_t =
-    mux::variant<history_rule::shared, history_rule::invited, history_rule::joined, history_rule::world_readable>;
+    splice::variant<history_rule::shared, history_rule::invited, history_rule::joined, history_rule::world_readable>;
 
 // What a room asks of those who do something in it: the level each needs,
 // as its power levels say (m.room.power_levels), Matrix's defaults where
@@ -393,7 +385,7 @@ struct pin {
 };
 }  // namespace power_need
 using power_need_t =
-    mux::variant<power_need::default_role, power_need::send_messages, power_need::invite, power_need::change_settings,
+    splice::variant<power_need::default_role, power_need::send_messages, power_need::invite, power_need::change_settings,
                  power_need::kick, power_need::ban, power_need::redact, power_need::notify_everyone,
                  power_need::rename, power_need::retopic, power_need::change_avatar, power_need::change_address,
                  power_need::change_history, power_need::change_access, power_need::change_permissions,
@@ -427,7 +419,7 @@ struct power_needs {
     return found == events.end() ? state_default : found->second;
   }
   [[nodiscard]] std::int64_t of(const power_need_t& need) const {
-    return mux::visit([this](auto one) { return this->of(one); }, need);
+    return splice::visit([this](auto one) { return this->of(one); }, need);
   }
 };
 
@@ -469,7 +461,7 @@ struct set_need {  // the level a thing done asks
 };
 }  // namespace room_action
 using room_action_t =
-    mux::variant<room_action::rename, room_action::retopic, room_action::set_join_rule, room_action::set_history,
+    splice::variant<room_action::rename, room_action::retopic, room_action::set_join_rule, room_action::set_history,
                  room_action::invite, room_action::kick, room_action::ban, room_action::unban, room_action::set_power,
                  room_action::encrypt, room_action::set_need>;
 
@@ -494,7 +486,7 @@ namespace mark_kind {
 struct mention {};
 struct reaction {};
 }  // namespace mark_kind
-using mark_kind_t = mux::variant<mark_kind::mention, mark_kind::reaction>;
+using mark_kind_t = splice::variant<mark_kind::mention, mark_kind::reaction>;
 
 // A room of a server's public directory, as it lists it.
 struct directory_room {
@@ -680,7 +672,7 @@ struct to_play {};
 // A video to watch: fetched whole into a file of its own, and played.
 struct to_watch {};
 }  // namespace media_use
-using media_use_t = mux::variant<media_use::avatar, media_use::thumbnail, media_use::whole, media_use::to_open,
+using media_use_t = splice::variant<media_use::avatar, media_use::thumbnail, media_use::whole, media_use::to_open,
                                  media_use::to_save, media_use::to_play, media_use::to_watch>;
 
 // Where a message goes among those of its chat.
@@ -690,7 +682,7 @@ struct at_start {};   // history paged back: before the rest
 struct in_window {};  // a window's own: loaded around a message, or paged forward
 struct aside {};      // not in the timeline: a message a reply quotes, fetched for its quote
 }  // namespace placement
-using placement_t = mux::variant<placement::at_end, placement::at_start, placement::in_window, placement::aside>;
+using placement_t = splice::variant<placement::at_end, placement::at_start, placement::in_window, placement::aside>;
 
 // What a link in a message is, as its page says (Open Graph): the site, the
 // title, a line about it, and its picture, kept on the server.
@@ -953,7 +945,7 @@ struct history_position {
 
 }  // namespace change
 
-using change_t = mux::variant<change::connection_changed, change::account_removed, change::conversation_updated,
+using change_t = splice::variant<change::connection_changed, change::account_removed, change::conversation_updated,
                               change::conversation_removed,
                               change::presence_changed, change::message_added, change::message_edited,
                               change::message_redacted, change::message_acknowledged, change::delivery_changed, change::reaction_changed,
@@ -991,7 +983,7 @@ class model {
   }
 
   void apply(const change_t& what) {
-    mux::visit([this](const auto& one) { on(one); }, what);
+    splice::visit([this](const auto& one) { on(one); }, what);
   }
 
   // The user has read a chat up to a message: kept, sent or not.
@@ -1100,7 +1092,7 @@ class model {
     }
     // In the timeline now: what was fetched for a quote is not needed.
     where.quoted.erase(one.message.id);
-    mux::visit(overloaded{[&](placement::at_end) {
+    splice::visit(splice::overloaded{[&](placement::at_end) {
                             if (!where.latest || one.message.at >= where.latest->at)
                               where.latest = one.message;
                             if (!where.detached)
@@ -1236,7 +1228,7 @@ class model {
   }
   void on(const change::mark_taken& one) {
     conversation& where = of(one.in);
-    auto& marks = mux::visit(overloaded{[&](mark_kind::mention) -> std::vector<unread_mark>& { return where.unread_mentions; },
+    auto& marks = splice::visit(splice::overloaded{[&](mark_kind::mention) -> std::vector<unread_mark>& { return where.unread_mentions; },
                                         [&](mark_kind::reaction) -> std::vector<unread_mark>& { return where.unread_reactions; }},
                              one.kind);
     if (one.event) {

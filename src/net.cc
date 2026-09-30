@@ -28,7 +28,7 @@ module;
 export module mux.net;
 
 import std;
-import mux.variant;
+import splice;
 import tern;
 
 // Whether completion handlers are erased (outside a release build): CMake
@@ -465,7 +465,7 @@ namespace proxy_kind {
 struct socks5 {};
 struct http {};
 }  // namespace proxy_kind
-using proxy_kind_t = mux::variant<proxy_kind::socks5, proxy_kind::http>;
+using proxy_kind_t = splice::variant<proxy_kind::socks5, proxy_kind::http>;
 
 struct proxy {
   proxy_kind_t kind = proxy_kind::socks5{};
@@ -597,19 +597,14 @@ inline void http_connect(loop& owner, tcp::socket& socket, const proxy& via, std
 
 }  // namespace detail
 
-template <class... F>
-struct overloaded_kind : F... {
-  using F::operator()...;
-};
-
 // A connection to host:port, through a proxy where one is given.
 inline tcp::socket connect(loop& owner, const std::optional<proxy>& via, std::string_view host, std::uint16_t port) {
   if (!via)
     return connect(owner, host, port);
   tcp::socket socket = connect(owner, via->host, via->port);
-  mux::visit(overloaded_kind{[&](proxy_kind::socks5) { detail::socks5(owner, socket, *via, host, port); },
-                             [&](proxy_kind::http) { detail::http_connect(owner, socket, *via, host, port); }},
-             via->kind);
+  splice::visit(splice::overloaded{[&](proxy_kind::socks5) { detail::socks5(owner, socket, *via, host, port); },
+                                   [&](proxy_kind::http) { detail::http_connect(owner, socket, *via, host, port); }},
+                via->kind);
   return socket;
 }
 

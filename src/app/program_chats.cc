@@ -3,7 +3,7 @@
 module mux.app.program;
 
 import std;
-import mux.variant;
+import splice;
 import knot;
 import skia;
 import mux.core;
@@ -70,7 +70,7 @@ void app::apply(const request::leave_chat&) {
     return;
   const mux::conversation* one = model->find(*chosen);
   const bool room = one && mux::ui::is_group(*one);
-  mux::visit(mux::overloaded{[&](mux::protocol::xmpp) {
+  splice::visit(splice::overloaded{[&](mux::protocol::xmpp) {
                                if (!room) {
                                  root().show_notice("Leaving a direct XMPP chat");
                                  return;
@@ -101,7 +101,7 @@ void app::apply(const request::select_account& one) {
   auto* up = root().open_panel();
   if (!up)
     return;
-  mux::visit(
+  splice::visit(
       [&](accounts& panel) {
         if (const auto found = this->find(one.address); found != saved.end()) {
           pending_login.reset();
@@ -126,13 +126,13 @@ void app::apply(const request::submit_login&) {
   auto* up = root().open_panel();
   if (!up)
     return;
-  mux::visit(
+  splice::visit(
       [this](accounts& panel) {
         if (auto* editor = panel.editor())
-          mux::visit([this](auto& form) { this->edit(form); }, editor->parts.form);
+          splice::visit([this](auto& form) { this->edit(form); }, editor->parts.form);
         else if (auto* pane = panel.adding()) {
           new_proxy = pane->proxy;
-          mux::visit([this](auto& form) { this->add(form); }, pane->parts.form);
+          splice::visit([this](auto& form) { this->add(form); }, pane->parts.form);
         }
       },
       *up);

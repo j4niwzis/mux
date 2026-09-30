@@ -51,7 +51,7 @@ option(MUX_UI "Build the window, and the mux program" ON)
 # there is one set of flags.
 set(MUX_CONSTEXPR_STEPS 300000000 CACHE STRING
   "clang's -fconstexpr-steps for mux and the family of libraries under it")
-foreach(family IN ITEMS ALEF CHEVRON TERN KNOT LOOM)
+foreach(family IN ITEMS ALEF CHEVRON TERN KNOT LOOM SPLICE)
   set(${family}_CONSTEXPR_STEPS ${MUX_CONSTEXPR_STEPS} CACHE STRING
     "clang's -fconstexpr-steps, as mux sets it for the whole family")
 endforeach()
@@ -105,6 +105,20 @@ cme_declare_port(NAME alef PROVIDES alef
 cme_options(alef "ALEF_TESTS OFF")
 cme_find_package(alef COMPONENTS precis idna grapheme line bidi emoji REQUIRED)
 
+# splice: what the family shares -- splice::variant (a variant built in time
+# linear in its alternatives; outside a release build, reached through
+# tables) and splice::overloaded. Its tables as mux's handlers are: erased
+# outside a release build where MUX_ERASE_HANDLERS says so.
+set(SPLICE_ERASE ${MUX_ERASE_HANDLERS} CACHE BOOL "splice::variant through tables outside a release build, as mux's handlers")
+cme_declare_port(NAME splice PROVIDES splice
+  GITHUB_REPOSITORY j4niwzis/splice
+  GIT_TAG 4668680e970afb6bafa83c908551c3b84bd1adf3
+  LICENSE GPL-3.0-only
+  SYSTEM NEVER
+  TARGETS splice)
+cme_options(splice "SPLICE_TESTS OFF")
+cme_find_package(splice REQUIRED)
+
 # knot, at knot::raw as a rest member (4903935): what is not typed kept as
 # its JSON text, no tree -- loom asks for the same. The project's pin is the
 # one taken.
@@ -149,22 +163,12 @@ option(MUX_ERASE_HANDLERS "Outside a release build, erase Asio completion handle
 target_compile_definitions(mux_modules PUBLIC
   $<$<AND:$<BOOL:${MUX_ERASE_HANDLERS}>,$<NOT:$<CONFIG:Release>>>:MUX_ERASED_HANDLERS>)
 
-# mux::variant: a library of its own, under both the accounts kept (their
-# settings are variants) and the rest -- the one module both import.
-add_library(mux_variant)
-target_sources(mux_variant PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES src/variant.cc)
-target_compile_features(mux_variant PUBLIC cxx_std_26)
-target_compile_options(mux_variant PUBLIC ${mux_std_flags})
-# Its alternatives through tables outside a release build, halved to in one.
-target_compile_definitions(mux_variant PUBLIC
-  $<$<AND:$<BOOL:${MUX_ERASE_HANDLERS}>,$<NOT:$<CONFIG:Release>>>:MUX_ERASED>)
-
 add_library(mux_config)
 target_sources(mux_config PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES src/config.cc)
 target_compile_features(mux_config PUBLIC cxx_std_26)
 target_compile_options(mux_config PUBLIC ${mux_std_flags})
-target_link_libraries(mux_config PUBLIC knot mux_variant)
-target_link_libraries(mux_modules PUBLIC mux_config mux_variant)
+target_link_libraries(mux_config PUBLIC knot splice)
+target_link_libraries(mux_modules PUBLIC mux_config splice)
 foreach(name IN ITEMS core net xmpp http matrix media logic)
   add_library(mux_${name} ALIAS mux_modules)
 endforeach()

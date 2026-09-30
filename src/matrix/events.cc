@@ -3,7 +3,7 @@
 export module mux.matrix:events;
 
 import std;
-import mux.variant;
+import splice;
 import knot;
 import loom.api;
 import loom.ev;
@@ -79,7 +79,7 @@ using member_content = loom::ev::m_room_member_content_t;
 // A membership as loom reads it, as mux's.
 inline membership_t membership_from(const member_content::membership_t& said) {
   using values = member_content::membership_values;
-  return std::visit(overloaded{[](values::join) -> membership_t { return membership::join{}; },
+  return splice::visit(splice::overloaded{[](values::join) -> membership_t { return membership::join{}; },
                                [](values::leave) -> membership_t { return membership::leave{}; },
                                [](values::invite) -> membership_t { return membership::invite{}; },
                                [](values::ban) -> membership_t { return membership::ban{}; },
@@ -92,7 +92,7 @@ inline membership_t membership_from(const member_content::membership_t& said) {
 inline bool replaces(const loom::ev::m_room_message_content_t::m_relates_to_t& relates) {
   using values = loom::ev::m_room_message_content_t::m_relates_to_t::rel_type_values;
   return relates.rel_type &&
-         std::visit(overloaded{[](values::m_replace) { return true; }, [](const auto&) { return false; }}, *relates.rel_type);
+         splice::visit(splice::overloaded{[](values::m_replace) { return true; }, [](const auto&) { return false; }}, *relates.rel_type);
 }
 
 template <class Sink>
@@ -115,7 +115,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
                  .at = at,
                  .body = body_of(content.body, content.format, content.formatted_body),
                  .outgoing = one.sender == id_.address};
-    const auto [carries, picture, emote] = mux::visit(
+    const auto [carries, picture, emote] = splice::visit(
         [](auto of) { return std::tuple(of.carries, of.picture, of.is_emote); }, msgtype_of(content.msgtype));
     if (emote)
       made.body.plain = "* " + made.body.plain;
@@ -133,7 +133,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
         carry_info(carried, *media.info);
         // A video: shown by its thumbnail, as a picture, until it can be
         // played here; its own size where the video gives none.
-        const bool video = mux::visit(overloaded{[](msgtype::video) { return true; }, [](const auto&) { return false; }},
+        const bool video = splice::visit(splice::overloaded{[](msgtype::video) { return true; }, [](const auto&) { return false; }},
                                       msgtype_of(content.msgtype));
         if (video && media.info->thumbnail_url) {
           carried.video = carried.source;
@@ -156,11 +156,11 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     }
     // A gallery (MSC4274): each of its itemtypes read as a picture or a file
     // alone is, its body the caption.
-    if (mux::visit(overloaded{[](msgtype::gallery) { return true; }, [](const auto&) { return false; }},
+    if (splice::visit(splice::overloaded{[](msgtype::gallery) { return true; }, [](const auto&) { return false; }},
                    msgtype_of(content.msgtype)) &&
         media.itemtypes)
       for (const gallery_item& item : *media.itemtypes) {
-        const bool is_picture_item = mux::visit([](auto of) { return of.picture; }, msgtype_of(item.itemtype));
+        const bool is_picture_item = splice::visit([](auto of) { return of.picture; }, msgtype_of(item.itemtype));
         mux::attachment carried;
         carried.source = item.url.value_or("");
         carried.name = item.filename.value_or(item.body.value_or(""));
@@ -179,7 +179,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       made.replies_to = relates->m_in_reply_to->event_id;
     // A message for the user, come as it happened: listed, as Telegram's @.
     // Who it mentions, as m.mentions says; before that, the user's ID in it.
-    const bool live = mux::visit(overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
+    const bool live = splice::visit(splice::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
     const auto mentions_me = [&] {
       if (const auto& said = content.m_mentions) {
         if (said->user_ids && std::ranges::contains(*said->user_ids, id_.address))
@@ -196,14 +196,14 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     if (content.m_relates_to && content.m_relates_to->event_id && content.m_relates_to->key) {
       reactions_[one.event_id] = {*content.m_relates_to->event_id, *content.m_relates_to->key, one.sender};
       const bool live =
-          mux::visit(overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
+          splice::visit(splice::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
       sink_(change::reaction_changed{in, *content.m_relates_to->event_id, *content.m_relates_to->key, one.sender,
                                      true, one.event_id, at, live});
       // Fetched on its own, as what a reply quotes: a message of its own for
       // the quote, whether reactions are shown as events or not -- "Reacted
       // with" its key -- pointing at what it reacted to.
       const std::string& key = *content.m_relates_to->key;
-      mux::visit(overloaded{[&](placement::aside) {
+      splice::visit(splice::overloaded{[&](placement::aside) {
                               message made{.in = in,
                                            .id = one.event_id,
                                            .sender = one.sender,
@@ -240,7 +240,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     // The rest, by its type: loom's timeline union does not have their
     // content yet.
     const event_type_t type = event_type_of(one.type);
-    mux::visit(overloaded{[&](event_type::encrypted) { encrypted(in, one, at, where); },
+    splice::visit(splice::overloaded{[&](event_type::encrypted) { encrypted(in, one, at, where); },
                           [&](event_type::redaction) { redaction(in, one); },
                           [](event_type::receipt) {},
                           [&](const auto&) { done(in, one, type, at, where); }},
@@ -291,8 +291,8 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
                          std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where) {
   const std::string who = name_in(in.id, one.sender);
   const auto say = [&](room_event_t kind, std::string said) { service(in, one, at, where, std::move(said), kind); };
-  std::visit(
-      overloaded{
+  splice::visit(
+      splice::overloaded{
           [&](const member_content& content) {
             const std::string target_id = one.state_key.value_or(one.sender);
             const std::string target = content.displayname.value_or(name_in(in.id, target_id));
@@ -303,9 +303,9 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
                 before = std::move(*got);
             const membership_t now = membership_from(content.membership);
             const membership_t was = before ? membership_from(before->membership) : membership_t{membership::other{}};
-            const bool was_in = mux::visit([](auto of) { return of.in; }, was);
+            const bool was_in = splice::visit([](auto of) { return of.in; }, was);
             const bool self = one.sender == target_id;
-            mux::visit(overloaded{[&](membership::join) {
+            splice::visit(splice::overloaded{[&](membership::join) {
                                     if (!was_in) {
                                       say(room_event::joins{}, std::format("{} joined", target));
                                     } else if (const auto old = before ? before->displayname : std::nullopt; old && *old != target) {
@@ -315,7 +315,7 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
                                     }
                                   },
                                   [&](membership::leave) {
-                                    mux::visit(overloaded{[&](membership::ban) { say(room_event::invites{}, std::format("{} unbanned {}", who, target)); },
+                                    splice::visit(splice::overloaded{[&](membership::ban) { say(room_event::invites{}, std::format("{} unbanned {}", who, target)); },
                                                           [&](membership::invite) {
                                                             say(room_event::invites{}, self ? std::format("{} declined the invitation", target)
                                                                      : std::format("{} withdrew {}'s invitation", who, target));
@@ -405,7 +405,7 @@ template <class Sink>
 auto account<Sink>::body_of(std::string plain, const std::optional<std::string>& format,
                             const std::optional<std::string>& formatted_body) -> body {
   body made{std::move(plain), std::nullopt};
-  if (mux::visit([](auto of) { return of.html_given; }, body_format_of(format)))
+  if (splice::visit([](auto of) { return of.html_given; }, body_format_of(format)))
     made.html = formatted_body;
   return made;
 }

@@ -3,7 +3,7 @@
 export module mux.matrix:sync;
 
 import std;
-import mux.variant;
+import splice;
 import knot;
 import loom.api;
 import loom.ev;
@@ -172,7 +172,7 @@ void account<Sink>::run() {
                                    std::chrono::seconds(30));
     if (!got) {
       const failure& why = got.error();
-      if (why.server && mux::visit([](auto code) { return code.gone; }, errcode_of(why.server->errcode))) {
+      if (why.server && splice::visit([](auto code) { return code.gone; }, errcode_of(why.server->errcode))) {
         // A kept session no longer good: logged in again, once.
         if (kept) {
           log(id_, "the session kept is no longer good: logging in again");
@@ -302,7 +302,7 @@ void account<Sink>::load_kept() {
 // value the spec does not name is taken as offline.
 [[nodiscard]] inline mux::presence presence_from(const loom::ev::m_presence_content_t& content) {
   using values = loom::ev::m_presence_content_t::presence_values;
-  return {mux::visit(overloaded{[](values::online) -> mux::availability_t { return mux::availability::online{}; },
+  return {splice::visit(splice::overloaded{[](values::online) -> mux::availability_t { return mux::availability::online{}; },
                                 [](values::unavailable) -> mux::availability_t { return mux::availability::away{}; },
                                 [](values::offline) -> mux::availability_t { return mux::availability::offline{}; },
                                 [](const std::string&) -> mux::availability_t { return mux::availability::offline{}; }},
@@ -316,7 +316,7 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
   if (got.presence && got.presence->events)
     for (const auto& event : *got.presence->events)
       if (event.sender)
-        mux::visit(overloaded{[&](const loom::ev::m_presence_content_t& content) {
+        splice::visit(splice::overloaded{[&](const loom::ev::m_presence_content_t& content) {
                                 sink_(change::presence_changed{id_, *event.sender, presence_from(content)});
                               },
                               [](const auto&) {}},
@@ -350,7 +350,7 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
         std::map<std::string, std::string> read_by;
         std::map<std::string, std::chrono::sys_time<std::chrono::milliseconds>> read_at;
         for (const auto& event : *part.ephemeral->events) {
-          const bool receipt = mux::visit(overloaded{[](event_type::receipt) { return true; },
+          const bool receipt = splice::visit(splice::overloaded{[](event_type::receipt) { return true; },
                                                      // Every other type an ephemeral event can have.
                                                      [](const auto&) { return false; }},
                                           event_type_of(event.type));
@@ -361,7 +361,7 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
             continue;
           for (const auto& [event_id, kinds] : receipts->content)
             for (const auto& [kind, users] : kinds)
-              if (mux::visit([](auto of) { return of.read_up_to; }, receipt_kind_of(kind)))
+              if (splice::visit([](auto of) { return of.read_up_to; }, receipt_kind_of(kind)))
                 for (const auto& [user, when] : users) {
                   read_by.insert_or_assign(user, event_id);
                   if (when.ts)
@@ -492,12 +492,12 @@ void account<Sink>::conversation(const conversation_id& in, const loom::client::
 using usage_t = std::optional<std::vector<std::string>>;
 inline bool usable_as_emoji(const usage_t& usage) {
   return !usage || usage->empty() || std::ranges::any_of(*usage, [](const std::string& one) {
-    return mux::visit([](auto of) { return of.as_emoji; }, image_usage_of(one));
+    return splice::visit([](auto of) { return of.as_emoji; }, image_usage_of(one));
   });
 }
 inline bool usable_as_sticker(const usage_t& usage) {
   return !usage || usage->empty() || std::ranges::any_of(*usage, [](const std::string& one) {
-    return mux::visit([](auto of) { return of.as_sticker; }, image_usage_of(one));
+    return splice::visit([](auto of) { return of.as_sticker; }, image_usage_of(one));
   });
 }
 
@@ -525,7 +525,7 @@ auto account<Sink>::emotes_of(const loom::client::joined_room& kept, bool sticke
     emotes_from(read_as<pack_event>(own->second), out, stickers);
   }
   for (const auto& [key, one] : kept.state.events) {
-    if (!mux::visit([](auto of) { return of.emotes; }, state_type_of(key.first)))
+    if (!splice::visit([](auto of) { return of.emotes; }, state_type_of(key.first)))
       continue;
     emotes_from(read_as<pack_event>(one), out, stickers);
   }
@@ -539,7 +539,7 @@ auto account<Sink>::emotes_of(const loom::client::joined_room& kept, bool sticke
           continue;
         for (const auto& [state_key, ignored] : packs)
           for (const auto& [key, one] : joined->second.state.events)
-            if (key.second == state_key && mux::visit([](auto of) { return of.emotes; }, state_type_of(key.first)))
+            if (key.second == state_key && splice::visit([](auto of) { return of.emotes; }, state_type_of(key.first)))
               emotes_from(read_as<pack_event>(one), out, stickers);
       }
   }
@@ -565,14 +565,14 @@ auto account<Sink>::pinned_of(const loom::client::joined_room& kept) -> std::vec
 template <class Sink>
 auto account<Sink>::space(const loom::client::joined_room& kept) -> bool {
   const auto* created = kept.state.template content<loom::ev::m_room_create_content_t>("m.room.create");
-  return created && mux::visit([](auto of) { return of.is_space; }, room_type_of(created->type));
+  return created && splice::visit([](auto of) { return of.is_space; }, room_type_of(created->type));
 }
 
 template <class Sink>
 auto account<Sink>::children_of(const loom::client::joined_room& kept) -> std::vector<std::string> {
   std::vector<std::string> out;
   for (const auto& [key, one] : kept.state.events) {
-    if (!mux::visit([](auto of) { return of.child; }, state_type_of(key.first)))
+    if (!splice::visit([](auto of) { return of.child; }, state_type_of(key.first)))
       continue;
     // A child taken out has its content emptied.
     if (const auto said = read_as<content_keys>(one); said && !said->content.empty())

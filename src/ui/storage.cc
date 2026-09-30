@@ -3,7 +3,7 @@
 export module mux.ui:storage;
 
 import std;
-import mux.variant;
+import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
@@ -199,7 +199,7 @@ struct notifications_page : nodes::Stack {
     parts.name.parts.toggle.setOnNow(now.show_name);
     parts.text.parts.toggle.setOnNow(now.show_text);
     parts.sound.parts.toggle.setOnNow(now.sound);
-    const bool native = mux::visit(overloaded{[](config::notify_backend::native) { return true; },
+    const bool native = splice::visit(splice::overloaded{[](config::notify_backend::native) { return true; },
                                               [](const auto&) { return false; }},
                                    config::notify_backend_of(now.backend));
     parts.backend.parts.native.set_active(native);

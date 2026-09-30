@@ -3,7 +3,7 @@
 module mux.app.program;
 
 import std;
-import mux.variant;
+import splice;
 import knot;
 import skia;
 import mux.core;
@@ -40,7 +40,7 @@ void app::open_chat(const mux::conversation_id& which, const std::optional<std::
 
 void app::follow(const mux::logic::link_t& where) {
   auto& screen = root().main();
-  mux::visit(mux::overloaded{[&](const mux::logic::link_step::open_chat& step) { this->open_chat(step.chat, step.event); },
+  splice::visit(splice::overloaded{[&](const mux::logic::link_step::open_chat& step) { this->open_chat(step.chat, step.event); },
                              [&](const mux::logic::link_step::member_page& step) {
                                this->apply(request::open_member_info{step.user});
                              },
@@ -50,7 +50,7 @@ void app::follow(const mux::logic::link_t& where) {
                                // its server answers, in woken(), and joined
                                // from there.
                                previewing = room_looked_up{
-                                   step, mux::visit(mux::overloaded{
+                                   step, splice::visit(splice::overloaded{
                                                         [](const mux::logic::link::room& room) { return std::optional(room); },
                                                         [](const auto&) { return std::optional<mux::logic::link::room>(); }},
                                                     where)};
@@ -78,7 +78,7 @@ void app::apply(const request::jump_to_mark& one) {
   if (chat == nullptr)
     return;
   const auto& marks =
-      mux::visit(mux::overloaded{[&](mux::mark_kind::mention) -> const std::vector<mux::unread_mark>& { return chat->unread_mentions; },
+      splice::visit(splice::overloaded{[&](mux::mark_kind::mention) -> const std::vector<mux::unread_mark>& { return chat->unread_mentions; },
                                  [&](mux::mark_kind::reaction) -> const std::vector<mux::unread_mark>& { return chat->unread_reactions; }},
                  one.kind);
   if (marks.empty())
@@ -102,7 +102,7 @@ void app::apply(const request::list_marks& one) {
   if (chat == nullptr)
     return;
   const auto& marks =
-      mux::visit(mux::overloaded{[&](mux::mark_kind::mention) -> const std::vector<mux::unread_mark>& { return chat->unread_mentions; },
+      splice::visit(splice::overloaded{[&](mux::mark_kind::mention) -> const std::vector<mux::unread_mark>& { return chat->unread_mentions; },
                                  [&](mux::mark_kind::reaction) -> const std::vector<mux::unread_mark>& { return chat->unread_reactions; }},
                  one.kind);
   const auto find = [&](const std::string& id) -> const mux::message* {
@@ -138,7 +138,7 @@ void app::apply(const request::go_to_mark& one) {
   if (chat == nullptr)
     return;
   const auto& marks =
-      mux::visit(mux::overloaded{[&](mux::mark_kind::mention) -> const std::vector<mux::unread_mark>& { return chat->unread_mentions; },
+      splice::visit(splice::overloaded{[&](mux::mark_kind::mention) -> const std::vector<mux::unread_mark>& { return chat->unread_mentions; },
                                  [&](mux::mark_kind::reaction) -> const std::vector<mux::unread_mark>& { return chat->unread_reactions; }},
                  one.kind);
   const auto found = std::ranges::find(marks, one.event, &mux::unread_mark::event);

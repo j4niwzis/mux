@@ -3,7 +3,7 @@
 export module mux.matrix:requests;
 
 import std;
-import mux.variant;
+import splice;
 import knot;
 import loom.api;
 import loom.ev;
@@ -133,8 +133,8 @@ void account<Sink>::manage(std::string room, room_action_t action) {
       if (!done)
         log(id_, "could not {} in {}: {}", what, room, done.error().said());
     };
-    mux::visit(
-        overloaded{
+    splice::visit(
+        splice::overloaded{
             [&](const room_action::rename& one) {
               loom::ev::m_room_name_content_t content;
               content.name = one.name;
@@ -147,12 +147,12 @@ void account<Sink>::manage(std::string room, room_action_t action) {
             },
             [&](const room_action::set_join_rule& one) {
               loom::ev::m_room_join_rules_content_t content;
-              content.join_rule = std::string(mux::visit([](auto of) { return word_of(of); }, one.rule));
+              content.join_rule = std::string(splice::visit([](auto of) { return word_of(of); }, one.rule));
               set("m.room.join_rules", content);
             },
             [&](const room_action::set_history& one) {
               loom::ev::m_room_history_visibility_content_t content;
-              content.history_visibility = std::string(mux::visit([](auto of) { return word_of(of); }, one.rule));
+              content.history_visibility = std::string(splice::visit([](auto of) { return word_of(of); }, one.rule));
               set("m.room.history_visibility", content);
             },
             [&](const room_action::invite& one) {
@@ -187,7 +187,7 @@ void account<Sink>::manage(std::string room, room_action_t action) {
               const auto top = [&](std::optional<std::int64_t> power_levels_content::* member) {
                 content.*member = static_cast<std::int64_t>(one.level);
               };
-              mux::visit(overloaded{[&](power_need::default_role) { top(&power_levels_content::users_default); },
+              splice::visit(splice::overloaded{[&](power_need::default_role) { top(&power_levels_content::users_default); },
                                     [&](power_need::send_messages) { top(&power_levels_content::events_default); },
                                     [&](power_need::change_settings) { top(&power_levels_content::state_default); },
                                     [&](power_need::invite) { top(&power_levels_content::invite); },

@@ -5,7 +5,7 @@
 export module mux.logic.links;
 
 import std;
-import mux.variant;
+import splice;
 import mux.core;
 
 export namespace mux::logic {
@@ -27,7 +27,7 @@ struct xmpp_address {  // a JID
   friend bool operator==(const xmpp_address&, const xmpp_address&) = default;
 };
 }  // namespace link
-using link_t = mux::variant<link::person, link::room, link::xmpp_address>;
+using link_t = splice::variant<link::person, link::room, link::xmpp_address>;
 
 // %xx decoded.
 [[nodiscard]] inline std::string percent_decoded(std::string_view text) {
@@ -214,7 +214,7 @@ struct join {  // a room not joined: joined through an account, then opened
   friend bool operator==(const join&, const join&) = default;
 };
 }  // namespace link_step
-using link_step_t = mux::variant<link_step::open_chat, link_step::member_page, link_step::say, link_step::join>;
+using link_step_t = splice::variant<link_step::open_chat, link_step::member_page, link_step::say, link_step::join>;
 
 // The chat a link names, where the model has it: a room by its id or alias,
 // an XMPP address by its JID -- in an account of the protocol it is of.
@@ -228,7 +228,7 @@ using link_step_t = mux::variant<link_step::open_chat, link_step::member_page, l
           return chat.id;
     return std::nullopt;
   };
-  return mux::visit(overloaded{[](const link::person&) { return std::optional<conversation_id>(); },
+  return splice::visit(splice::overloaded{[](const link::person&) { return std::optional<conversation_id>(); },
                                [&](const link::room& one) { return named(true, one.id); },
                                [&](const link::xmpp_address& one) { return named(false, one.jid); }},
                     where);
@@ -237,8 +237,8 @@ using link_step_t = mux::variant<link_step::open_chat, link_step::member_page, l
 // Where a link leads, from the chat being read and the account in view.
 [[nodiscard]] inline link_step_t where_to(const model& now, const link_t& where,
                                           const std::optional<account_id>& current) {
-  return mux::visit(
-      overloaded{
+  return splice::visit(
+      splice::overloaded{
           // A person: their card, as Telegram opens a mention's profile --
           // a member of the chat being read or not; a message to them is
           // one press from there.

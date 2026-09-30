@@ -3,7 +3,7 @@
 export module mux.ui:names;
 
 import std;
-import mux.variant;
+import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
@@ -15,7 +15,7 @@ export namespace mux::ui {
 
 // What a presence says, in a word or two.
 [[nodiscard]] inline std::string presence_text(const availability_t& state) {
-  return mux::visit(overloaded{[](const availability::online&) { return std::string("online"); },
+  return splice::visit(splice::overloaded{[](const availability::online&) { return std::string("online"); },
                                [](const availability::chat&) { return std::string("online"); },
                                [](const availability::away&) { return std::string("away"); },
                                [](const availability::extended_away&) { return std::string("away for a while"); },
@@ -28,7 +28,7 @@ export namespace mux::ui {
 // may keep presence off, and "offline" would then be said of everyone.
 [[nodiscard]] inline std::string presence_of(const model& now, const account_id& account, const std::string& contact) {
   const auto unknown = [&] {
-    return mux::visit(overloaded{[](const protocol::xmpp&) { return std::string("offline"); },
+    return splice::visit(splice::overloaded{[](const protocol::xmpp&) { return std::string("offline"); },
                                  [](const protocol::matrix&) { return std::string(); }},
                       account.speaks);
   };
@@ -41,7 +41,7 @@ export namespace mux::ui {
 // Whom a direct chat is with: on XMPP, its address; on Matrix it is a room,
 // so the member who is not the account itself.
 [[nodiscard]] inline std::string contact_of(const conversation& one) {
-  return mux::visit(overloaded{[&](const protocol::xmpp&) { return one.id.id; },
+  return splice::visit(splice::overloaded{[&](const protocol::xmpp&) { return one.id.id; },
                                [&](const protocol::matrix&) {
                                  const auto other = std::ranges::find_if(
                                      one.members, [&](const member& each) { return each.id != one.id.account.address; });
@@ -51,7 +51,7 @@ export namespace mux::ui {
 }
 
 [[nodiscard]] inline bool is_group(const conversation& one) {
-  return mux::visit(overloaded{[](const conversation_kind::direct&) { return false; }, [](const auto&) { return true; }},
+  return splice::visit(splice::overloaded{[](const conversation_kind::direct&) { return false; }, [](const auto&) { return true; }},
                     one.kind);
 }
 

@@ -3,7 +3,7 @@
 export module mux.ui:html;
 
 import std;
-import mux.variant;
+import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
@@ -33,7 +33,7 @@ struct code {};      // <code>, <pre>
 struct quote {};     // <blockquote>
 }  // namespace text_style
 using text_style_t =
-    mux::variant<text_style::strong, text_style::emphasis, text_style::struck, text_style::code, text_style::quote>;
+    splice::variant<text_style::strong, text_style::emphasis, text_style::struck, text_style::code, text_style::quote>;
 [[nodiscard]] inline nodes::Text::Styled styled(text_style::strong, std::size_t a, std::size_t b) {
   return {.first = a, .last = b, .strong = true};
 }
@@ -74,7 +74,7 @@ struct image {         // <img src="mxc://..." alt="..."> -- a custom emoji, in 
 };
 struct other {};  // anything else: dropped
 }  // namespace html_tag
-using html_tag_t = mux::variant<html_tag::line_break, html_tag::block_end, html_tag::list_item, html_tag::quote,
+using html_tag_t = splice::variant<html_tag::line_break, html_tag::block_end, html_tag::list_item, html_tag::quote,
                                 html_tag::reply, html_tag::link_open, html_tag::link_close, html_tag::image,
                                 html_tag::style_open, html_tag::style_close, html_tag::other>;
 
@@ -123,7 +123,7 @@ using html_tag_t = mux::variant<html_tag::line_break, html_tag::block_end, html_
   if (found == known.end())
     return html_tag::other{};
   // A link takes where it goes from its href; the rest are as found.
-  return mux::visit(overloaded{[&](html_tag::link_open) -> html_tag_t {
+  return splice::visit(splice::overloaded{[&](html_tag::link_open) -> html_tag_t {
                                  const auto href = inside.find("href=");
                                  if (href == std::string_view::npos || href + 6 >= inside.size())
                                    return html_tag::other{};
@@ -164,7 +164,7 @@ using html_tag_t = mux::variant<html_tag::line_break, html_tag::block_end, html_
   // between two, nor one at the start. Inside code, every line kept.
   const auto in_code = [&] {
     return std::ranges::any_of(opened, [](const auto& one) {
-      return mux::visit(overloaded{[](text_style::code) { return true; }, [](const auto&) { return false; }}, one.first);
+      return splice::visit(splice::overloaded{[](text_style::code) { return true; }, [](const auto&) { return false; }}, one.first);
     });
   };
   const auto end_line = [&] {
@@ -179,13 +179,13 @@ using html_tag_t = mux::variant<html_tag::line_break, html_tag::block_end, html_
         break;
       html_tag_t read = tag_of(html.substr(at + 1, end - at - 1));
       at = end + 1;
-      mux::visit(overloaded{[&](html_tag::line_break) { out.text += '\n'; },
+      splice::visit(splice::overloaded{[&](html_tag::line_break) { out.text += '\n'; },
                             [&](html_tag::block_end) { end_line(); },
                             [&](html_tag::list_item) { out.text += "• "; },
                             [&](html_tag::quote) {},
                             [&](html_tag::style_open& open) {
                               // A quote and a block of code start on a line of their own.
-                              mux::visit(overloaded{[&](text_style::quote) { end_line(); },
+                              splice::visit(splice::overloaded{[&](text_style::quote) { end_line(); },
                                                     [](const auto&) {}},
                                          open.style);
                               opened.emplace_back(open.style, out.text.size());
@@ -195,12 +195,12 @@ using html_tag_t = mux::variant<html_tag::line_break, html_tag::block_end, html_
                                 if (it->first.index() == close.style.index()) {
                                   const std::size_t from = it->second;
                                   if (out.text.size() > from)
-                                    out.styles.push_back(mux::visit(
+                                    out.styles.push_back(splice::visit(
                                         [&](auto kind) { return styled(kind, from, out.text.size()); }, close.style));
                                   opened.erase(std::next(it).base());
                                   break;
                                 }
-                              mux::visit(overloaded{[&](text_style::quote) { end_line(); }, [](const auto&) {}},
+                              splice::visit(splice::overloaded{[&](text_style::quote) { end_line(); }, [](const auto&) {}},
                                          close.style);
                             },
                             [&](html_tag::reply) {

@@ -3,7 +3,7 @@
 export module mux.ui:themes;
 
 import std;
-import mux.variant;
+import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
@@ -168,10 +168,10 @@ inline void use_theme(config::theme::night) {
   widget.fOnAccent = skia::colorSetARGB(255, 255, 255, 255);
 }
 inline void use_theme(const config::theme_t& chosen) {
-  mux::visit([](auto one) { use_theme(one); }, chosen);
+  splice::visit([](auto one) { use_theme(one); }, chosen);
   // The scroll bars, as tdesktop's scrollBarBg and scrollBarBgOver: dark on
   // the light themes, light on the dark.
-  const bool light = mux::visit([](auto one) { return one.light; }, chosen);
+  const bool light = splice::visit([](auto one) { return one.light; }, chosen);
   nodes::scrollBarColours() = light ? nodes::ScrollBarColours{skia::colorSetARGB(0x53, 0, 0, 0), skia::colorSetARGB(0x7a, 0, 0, 0)}
                                     : nodes::ScrollBarColours{skia::colorSetARGB(0x53, 255, 255, 255),
                                                               skia::colorSetARGB(0x7a, 255, 255, 255)};

@@ -3,7 +3,7 @@
 export module mux.ui:settings;
 
 import std;
-import mux.variant;
+import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
@@ -20,7 +20,7 @@ template <class Actions>
 struct settings_dialog : scene::Node {
   Actions* actions = nullptr;
   std::string motion;
-  using page_t = mux::variant<settings_home<Actions>, animations_page<Actions>, proxies_page<Actions>, proxy_editor<Actions>,
+  using page_t = splice::variant<settings_home<Actions>, animations_page<Actions>, proxies_page<Actions>, proxy_editor<Actions>,
                               appearance_page<Actions>, rendering_page<Actions>, storage_page<Actions>, files_page<Actions>,
                               notifications_page<Actions>>;
   // The page up: home, or one of its pages.
@@ -70,7 +70,7 @@ struct settings_dialog : scene::Node {
     this->begin_swap(1.0f);
   }
   [[nodiscard]] notifications_page<Actions>* notifications() {
-    return mux::visit(overloaded{[](notifications_page<Actions>& one) { return &one; },
+    return splice::visit(splice::overloaded{[](notifications_page<Actions>& one) { return &one; },
                                  [](auto&) -> notifications_page<Actions>* { return nullptr; }},
                       parts.page);
   }
@@ -83,17 +83,17 @@ struct settings_dialog : scene::Node {
     this->begin_swap(1.0f);
   }
   [[nodiscard]] storage_page<Actions>* storage() {
-    return mux::visit(overloaded{[](storage_page<Actions>& one) { return &one; },
+    return splice::visit(splice::overloaded{[](storage_page<Actions>& one) { return &one; },
                                  [](auto&) -> storage_page<Actions>* { return nullptr; }},
                       parts.page);
   }
   [[nodiscard]] rendering_page<Actions>* rendering() {
-    return mux::visit(overloaded{[](rendering_page<Actions>& one) { return &one; },
+    return splice::visit(splice::overloaded{[](rendering_page<Actions>& one) { return &one; },
                                  [](auto&) -> rendering_page<Actions>* { return nullptr; }},
                       parts.page);
   }
   [[nodiscard]] appearance_page<Actions>* appearance() {
-    return mux::visit(overloaded{[](appearance_page<Actions>& one) { return &one; },
+    return splice::visit(splice::overloaded{[](appearance_page<Actions>& one) { return &one; },
                                  [](auto&) -> appearance_page<Actions>* { return nullptr; }},
                       parts.page);
   }
@@ -106,18 +106,18 @@ struct settings_dialog : scene::Node {
     this->begin_swap(1.0f);
   }
   [[nodiscard]] proxy_editor<Actions>* editor() {
-    return mux::visit(overloaded{[](proxy_editor<Actions>& one) { return &one; },
+    return splice::visit(splice::overloaded{[](proxy_editor<Actions>& one) { return &one; },
                                  [](auto&) -> proxy_editor<Actions>* { return nullptr; }},
                       parts.page);
   }
   void show_motion(std::string level) {
     motion = std::move(level);
-    mux::visit([this](auto& one) { one.show_motion(motion); }, parts.page);
+    splice::visit([this](auto& one) { one.show_motion(motion); }, parts.page);
   }
 
 
   void layoutChildren() {
-    mux::visit(
+    splice::visit(
         [this](auto& one) {
           one.fState.arrange(0.0f, 0.0f);
           const float value = swap.value();

@@ -13,7 +13,7 @@ module;
 export module mux.host;
 
 import std;
-import mux.variant;
+import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
@@ -202,7 +202,7 @@ class pointer_shapes {
         SDL_DestroyCursor(one);
   }
   void show(const skiff::scene::Cursor& shape) {
-    const SDL_SystemCursor which = mux::visit([](auto one) { return system_cursor(one); }, shape);
+    const SDL_SystemCursor which = splice::visit([](auto one) { return system_cursor(one); }, shape);
     if (which == shown_)
       return;
     SDL_Cursor*& made = made_[static_cast<std::size_t>(which)];

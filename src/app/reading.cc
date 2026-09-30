@@ -7,7 +7,7 @@
 export module mux.app.reading;
 
 import std;
-import mux.variant;
+import splice;
 import mux.core;
 import mux.config;
 import mux.ui;
@@ -71,7 +71,7 @@ class reading_part {
     };
     auto step = logic::typing_after(typing_, one.on, s_->root().main().chosen, std::chrono::steady_clock::now(), allowed);
     for (const auto& said : step.say)
-      mux::visit(overloaded{[&](const logic::typing_said::started& it) { s_->net->typing(it.in, true); },
+      splice::visit(splice::overloaded{[&](const logic::typing_said::started& it) { s_->net->typing(it.in, true); },
                             [&](const logic::typing_said::stopped& it) { s_->net->typing(it.in, false); }},
                  said);
     typing_ = step.next;

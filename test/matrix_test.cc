@@ -5,7 +5,7 @@
 // a formatted message, a reply, an edit, a reaction and typing; a message
 // sent and acknowledged; a later sync; stopped.
 import std;
-import mux.variant;
+import splice;
 import mux.core;
 import mux.net;
 import mux.matrix;
@@ -84,9 +84,9 @@ struct recorder {
 };
 
 void sink::operator()(mux::change_t one) const {
-  mux::visit(mux::overloaded{[&](const mux::change::connection_changed& changed) {
+  splice::visit(splice::overloaded{[&](const mux::change::connection_changed& changed) {
                                to->states.push_back(changed.state);
-                               if (mux::visit(mux::overloaded{[](const mux::connection::offline&) { return true; },
+                               if (splice::visit(splice::overloaded{[](const mux::connection::offline&) { return true; },
                                                               [](const mux::connection::failed&) { return true; },
                                                               [](const auto&) { return false; }},
                                               changed.state))
@@ -95,7 +95,7 @@ void sink::operator()(mux::change_t one) const {
                              [](const auto&) {}},
              one);
   // A message sent once the room is there.
-  const bool room_there = mux::visit(mux::overloaded{[](const mux::change::conversation_updated&) { return true; },
+  const bool room_there = splice::visit(splice::overloaded{[](const mux::change::conversation_updated&) { return true; },
                                                      [](const auto&) { return false; }},
                                      one);
   if (room_there && !to->sent) {

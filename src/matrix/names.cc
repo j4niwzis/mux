@@ -3,7 +3,7 @@
 export module mux.matrix:names;
 
 import std;
-import mux.variant;
+import splice;
 import knot;
 import loom.api;
 import loom.ev;
@@ -56,7 +56,7 @@ struct gallery {  // MSC4274: several in one message, in its itemtypes
   static constexpr bool carries = false, picture = false, is_emote = false;
 };
 }  // namespace msgtype
-using msgtype_t = mux::variant<msgtype::image, msgtype::file, msgtype::video, msgtype::audio, msgtype::emote,
+using msgtype_t = splice::variant<msgtype::image, msgtype::file, msgtype::video, msgtype::audio, msgtype::emote,
                                msgtype::other, msgtype::gallery>;
 namespace event_type {
 struct encrypted {};           // m.room.encrypted
@@ -76,7 +76,7 @@ struct sticker {};             // m.sticker
 struct other {};
 }  // namespace event_type
 using event_type_t =
-    mux::variant<event_type::encrypted, event_type::redaction, event_type::receipt, event_type::member,
+    splice::variant<event_type::encrypted, event_type::redaction, event_type::receipt, event_type::member,
                  event_type::room_name, event_type::topic, event_type::room_avatar, event_type::create,
                  event_type::power_levels, event_type::pinned, event_type::join_rules,
                  event_type::history_visibility, event_type::canonical_alias, event_type::sticker, event_type::other>;
@@ -101,7 +101,7 @@ struct other {
   static constexpr bool in = false;
 };
 }  // namespace membership
-using membership_t = mux::variant<membership::join, membership::leave, membership::invite, membership::ban,
+using membership_t = splice::variant<membership::join, membership::leave, membership::invite, membership::ban,
                                   membership::knock, membership::other>;
 namespace relation {
 struct replace {  // m.replace
@@ -111,7 +111,7 @@ struct other {
   static constexpr bool edit = false;
 };
 }  // namespace relation
-using relation_t = mux::variant<relation::replace, relation::other>;
+using relation_t = splice::variant<relation::replace, relation::other>;
 namespace receipt_kind {
 struct read {  // m.read, m.read.private
   static constexpr bool read_up_to = true;
@@ -120,7 +120,7 @@ struct other {
   static constexpr bool read_up_to = false;
 };
 }  // namespace receipt_kind
-using receipt_kind_t = mux::variant<receipt_kind::read, receipt_kind::other>;
+using receipt_kind_t = splice::variant<receipt_kind::read, receipt_kind::other>;
 namespace room_type {
 struct space {  // m.space
   static constexpr bool is_space = true;
@@ -129,7 +129,7 @@ struct other {
   static constexpr bool is_space = false;
 };
 }  // namespace room_type
-using room_type_t = mux::variant<room_type::space, room_type::other>;
+using room_type_t = splice::variant<room_type::space, room_type::other>;
 namespace body_format {
 struct html {  // org.matrix.custom.html
   static constexpr bool html_given = true;
@@ -138,7 +138,7 @@ struct other {
   static constexpr bool html_given = false;
 };
 }  // namespace body_format
-using body_format_t = mux::variant<body_format::html, body_format::other>;
+using body_format_t = splice::variant<body_format::html, body_format::other>;
 
 // A name looked up in a table of the ones known; Other where it is not.
 template <class Variant, class Other>
@@ -216,7 +216,7 @@ struct other {
   static constexpr bool emotes = false;
 };
 }  // namespace state_type
-using state_type_t = mux::variant<state_type::space_child, state_type::room_emotes, state_type::other>;
+using state_type_t = splice::variant<state_type::space_child, state_type::room_emotes, state_type::other>;
 [[nodiscard]] inline state_type_t state_type_of(std::optional<std::string_view> name) {
   static const std::unordered_map<std::string_view, state_type_t> known = {
       {"m.space.child", state_type::space_child{}}, {"im.ponies.room_emotes", state_type::room_emotes{}}};
@@ -261,7 +261,7 @@ struct other {
   static constexpr bool as_sticker = false;
 };
 }  // namespace image_usage
-using image_usage_t = mux::variant<image_usage::emoticon, image_usage::sticker, image_usage::other>;
+using image_usage_t = splice::variant<image_usage::emoticon, image_usage::sticker, image_usage::other>;
 [[nodiscard]] inline image_usage_t image_usage_of(std::optional<std::string_view> name) {
   static const std::unordered_map<std::string_view, image_usage_t> known = {
       {"emoticon", image_usage::emoticon{}}, {"sticker", image_usage::sticker{}}};
@@ -276,7 +276,7 @@ struct other {
   static constexpr bool gone = false;
 };
 }  // namespace errcode
-using errcode_t = mux::variant<errcode::session_gone, errcode::other>;
+using errcode_t = splice::variant<errcode::session_gone, errcode::other>;
 [[nodiscard]] inline errcode_t errcode_of(std::optional<std::string_view> name) {
   static const std::unordered_map<std::string_view, errcode_t> known = {
       {"M_UNKNOWN_TOKEN", errcode::session_gone{}}, {"M_FORBIDDEN", errcode::session_gone{}}};

@@ -3,7 +3,7 @@
 // read into conversations, a chat message with its delay, presence, a
 // roster push, and the end of the stream -- all as mux.core's changes.
 import std;
-import mux.variant;
+import splice;
 import mux.core;
 import mux.net;
 import mux.xmpp;
@@ -80,7 +80,7 @@ TEST(Xmpp, AScriptedSession) {
   // Connecting, online, and offline at the end of the stream.
   std::vector<mux::connection_t> states;
   for (const auto& one : said)
-    mux::visit(mux::overloaded{[&](const mux::change::connection_changed& changed) { states.push_back(changed.state); },
+    splice::visit(splice::overloaded{[&](const mux::change::connection_changed& changed) { states.push_back(changed.state); },
                                [](const auto&) {}},
                one);
   EXPECT_EQ(states, (std::vector<mux::connection_t>{mux::connection::connecting{}, mux::connection::online{},

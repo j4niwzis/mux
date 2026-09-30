@@ -10,7 +10,7 @@
 export module mux.xmpp;
 
 import std;
-import mux.variant;
+import splice;
 import tern;
 import mux.core;
 import mux.net;
@@ -32,7 +32,7 @@ struct other {
   static constexpr bool shown_as_affiliation = false, shown_as_role = false;
 };
 }  // namespace muc_rank
-using muc_rank_t = mux::variant<muc_rank::owner_or_admin, muc_rank::moderator, muc_rank::other>;
+using muc_rank_t = splice::variant<muc_rank::owner_or_admin, muc_rank::moderator, muc_rank::other>;
 [[nodiscard]] inline muc_rank_t muc_rank_of(std::optional<std::string_view> name) {
   static const std::unordered_map<std::string_view, muc_rank_t> known = {
       {"owner", muc_rank::owner_or_admin{}}, {"admin", muc_rank::owner_or_admin{}}, {"moderator", muc_rank::moderator{}}};
@@ -514,13 +514,13 @@ class account {
   }
 
   void on(const proto::stanza_t& one) {
-    mux::visit(overloaded{[this](const proto::message_t& message) {
-                            mux::visit([this](const auto& got) { on_message(got); }, message);
+    splice::visit(splice::overloaded{[this](const proto::message_t& message) {
+                            splice::visit([this](const auto& got) { on_message(got); }, message);
                           },
                           [this](const proto::presence_t& presence) {
-                            mux::visit([this](const auto& got) { on_presence(got); }, presence);
+                            splice::visit([this](const auto& got) { on_presence(got); }, presence);
                           },
-                          [this](const proto::iq_t& iq) { mux::visit([this](const auto& got) { on_iq(got); }, iq); }},
+                          [this](const proto::iq_t& iq) { splice::visit([this](const auto& got) { on_iq(got); }, iq); }},
                one);
   }
   // A roster push, handed out once tern has answered it; the other iqs are
@@ -622,9 +622,9 @@ class account {
       for (const auto& carried : got.payload)
         if (const auto* user = carried.template get_if<tern::muc::user>())
           for (const auto& item : user->items) {
-            if (mux::visit([](auto rank) { return rank.shown_as_affiliation; }, muc_rank_of(item.affiliation)))
+            if (splice::visit([](auto rank) { return rank.shown_as_affiliation; }, muc_rank_of(item.affiliation)))
               one.role = item.affiliation;
-            else if (mux::visit([](auto rank) { return rank.shown_as_role; }, muc_rank_of(item.role)))
+            else if (splice::visit([](auto rank) { return rank.shown_as_role; }, muc_rank_of(item.role)))
               one.role = item.role;
           }
       occupants[nick] = std::move(one);

@@ -3,7 +3,7 @@
 export module mux.matrix:account;
 
 import std;
-import mux.variant;
+import splice;
 import knot;
 import loom.api;
 import loom.ev;

@@ -3,7 +3,7 @@
 export module mux.ui:message;
 
 import std;
-import mux.variant;
+import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
@@ -574,7 +574,7 @@ struct mentioned {
   // What a mention is called here, and what it links to: a person by their
   // name in the chat, a room by its name where it is known.
   const auto name_of = [&](const logic::link_t& what) -> std::pair<std::string, std::string> {
-    return mux::visit(overloaded{[&](const logic::link::person& one) { return std::pair(sender_name(in, one.id), one.id); },
+    return splice::visit(splice::overloaded{[&](const logic::link::person& one) { return std::pair(sender_name(in, one.id), one.id); },
                                  [&](const logic::link::room& one) {
                                    if (now)
                                      if (const auto chat = logic::chat_of(*now, what))
@@ -618,7 +618,7 @@ struct mentioned {
     // A person: a pill. A room named by words over it: a pill; given as
     // its URL, or a message in it: a card, the URL out of the text. An
     // XMPP address: a link as it is.
-    mux::visit(overloaded{[&](const logic::link::person&) { spans.push_back({link.first, link.last, what}); },
+    splice::visit(splice::overloaded{[&](const logic::link::person&) { spans.push_back({link.first, link.last, what}); },
                           [&](const logic::link::room& one) {
                             if (bare || one.event) {
                               spans.push_back({link.first, link.last, std::nullopt});
@@ -656,7 +656,7 @@ struct mentioned {
   for (const replaced& span : spans) {
     std::string shown;
     std::optional<nodes::Text::Link> pill;
-    const bool person = span.pill && mux::visit(overloaded{[](const logic::link::person&) { return true; },
+    const bool person = span.pill && splice::visit(splice::overloaded{[](const logic::link::person&) { return true; },
                                                            [](const auto&) { return false; }},
                                                 *span.pill);
     if (span.pill && !person) {
@@ -1170,7 +1170,7 @@ struct message_bubble : nodes::Stack {
     body.parts.text.setSelectable(true);
     body.parts.text.setSelectionColour((accent_colour & 0x00FFFFFFu) | (110u << 24));  // the accent, see-through
     std::string when = mark_of(said) + clock_of(said.at);
-    when += mux::visit(overloaded{[](const delivery::sending&) { return " · sending"; },
+    when += splice::visit(splice::overloaded{[](const delivery::sending&) { return " · sending"; },
                                   [](const delivery::failed&) { return " · not sent"; },
                                   [](const auto&) { return ""; }},
                        said.delivery);
@@ -1178,7 +1178,7 @@ struct message_bubble : nodes::Stack {
     // What it carries: a picture, sized as tdesktop's; or a file's row.
     if (said.attachment) {
       const mux::attachment& carried = *said.attachment;
-      mux::visit(overloaded{[&](attachment_kind::image) {
+      splice::visit(splice::overloaded{[&](attachment_kind::image) {
                               body.parts.picture.emplace(carried.source, carried.width, carried.height);
                               if (carried.video)
                                 body.parts.picture->show_video(carried.duration_ms);

@@ -3,7 +3,7 @@
 export module mux.ui:proxies;
 
 import std;
-import mux.variant;
+import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
@@ -162,7 +162,7 @@ struct kind_switch : nodes::Stack {
     parts.highlight.apply({.place = scene::anchor::kTopLeft, .width = 92.0f, .height = 28.0f});
   }
   void show(const config::proxy_kind_t& kind, bool at_once) {
-    const float to = mux::visit(overloaded{[](config::proxy_kind::socks5) { return 0.0f; },
+    const float to = splice::visit(splice::overloaded{[](config::proxy_kind::socks5) { return 0.0f; },
                                            [](config::proxy_kind::http) { return 1.0f; }},
                                 kind);
     if (at_once)

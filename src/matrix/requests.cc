@@ -87,10 +87,10 @@ void account<Sink>::load_older(std::string room, std::string from) {
 // Beeper's name of a custom emoji reacted with, beside the relation.
 struct reaction_shortcode {
   std::string shortcode;
+  friend consteval auto json_schema(knot::type<reaction_shortcode>) {
+    return knot::schema<reaction_shortcode>().member<"shortcode">(knot::key("com.beeper.reaction.shortcode"));
+  }
 };
-consteval auto json_schema(knot::type<reaction_shortcode>) {
-  return knot::schema<reaction_shortcode>().member<"shortcode">(knot::key("com.beeper.reaction.shortcode"));
-}
 
 // What a link preview says of the page (Open Graph).
 struct link_facts {
@@ -98,14 +98,14 @@ struct link_facts {
   std::optional<std::string> title;
   std::optional<std::string> description;
   std::optional<std::string> image;
+  friend consteval auto json_schema(knot::type<link_facts>) {
+    return knot::schema<link_facts>()
+    .member<"site">(knot::key("og:site_name"))
+    .member<"title">(knot::key("og:title"))
+    .member<"description">(knot::key("og:description"))
+    .member<"image">(knot::key("og:image"));
+  }
 };
-consteval auto json_schema(knot::type<link_facts>) {
-  return knot::schema<link_facts>()
-      .member<"site">(knot::key("og:site_name"))
-      .member<"title">(knot::key("og:title"))
-      .member<"description">(knot::key("og:description"))
-      .member<"image">(knot::key("og:image"));
-}
 
 using text_content = loom::ev::m_room_message_m_text_content_t;
 using power_levels_content = loom::ev::m_room_power_levels_content_t;

@@ -36,6 +36,7 @@ struct media_info {
   struct thumbnail_t {
     std::optional<std::int64_t> w;
     std::optional<std::int64_t> h;
+    friend consteval auto json_schema(knot::type<media_info::thumbnail_t>) { return knot::schema<media_info::thumbnail_t>(); }
   };
   std::optional<std::string> mimetype;
   std::optional<std::int64_t> size;
@@ -45,26 +46,25 @@ struct media_info {
   std::optional<std::string> thumbnail_url;
   std::optional<thumbnail_t> thumbnail_info;
   std::optional<std::string> blurhash;
+  friend consteval auto json_schema(knot::type<media_info>) {
+    return knot::schema<media_info>().member<"blurhash">(knot::key("xyz.amorgan.blurhash"));
+  }
 };
-consteval auto json_schema(knot::type<media_info::thumbnail_t>) { return knot::schema<media_info::thumbnail_t>(); }
-consteval auto json_schema(knot::type<media_info>) {
-  return knot::schema<media_info>().member<"blurhash">(knot::key("xyz.amorgan.blurhash"));
-}
 struct gallery_item {
   std::optional<std::string> itemtype;
   std::optional<std::string> url;
   std::optional<std::string> filename;
   std::optional<std::string> body;
   std::optional<media_info> info;
+  friend consteval auto json_schema(knot::type<gallery_item>) { return knot::schema<gallery_item>(); }
 };
-consteval auto json_schema(knot::type<gallery_item>) { return knot::schema<gallery_item>(); }
 struct message_media {
   std::optional<std::string> url;
   std::optional<std::string> filename;
   std::optional<media_info> info;
   std::optional<std::vector<gallery_item>> itemtypes;
+  friend consteval auto json_schema(knot::type<message_media>) { return knot::schema<message_media>(); }
 };
-consteval auto json_schema(knot::type<message_media>) { return knot::schema<message_media>(); }
 
 // A picture's or a file's facts, as an attachment keeps them.
 inline void carry_info(mux::attachment& carried, const media_info& info) {

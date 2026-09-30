@@ -31,38 +31,39 @@ namespace mux::matrix {
 // What the password login says of who: the user's local part.
 struct user_field {
   std::string user;
+  friend consteval auto json_schema(knot::type<user_field>) { return knot::schema<user_field>(); }
 };
-consteval auto json_schema(knot::type<user_field>) { return knot::schema<user_field>(); }
 
 // m.receipt's content: event, then kind, then user, to when.
 struct receipt_event {
   struct at_t {
     std::optional<std::int64_t> ts;
+    friend consteval auto json_schema(knot::type<receipt_event::at_t>) { return knot::schema<receipt_event::at_t>(); }
   };
   std::map<std::string, std::map<std::string, std::map<std::string, at_t>>> content;
+  friend consteval auto json_schema(knot::type<receipt_event>) { return knot::schema<receipt_event>(); }
 };
-consteval auto json_schema(knot::type<receipt_event::at_t>) { return knot::schema<receipt_event::at_t>(); }
-consteval auto json_schema(knot::type<receipt_event>) { return knot::schema<receipt_event>(); }
 
 // A pack of images (MSC2545): as the room's state, or the user's own.
 struct pack_event {
   struct image_t {
     std::optional<std::string> url;
     std::optional<std::vector<std::string>> usage;
+    friend consteval auto json_schema(knot::type<pack_event::image_t>) { return knot::schema<pack_event::image_t>(); }
   };
   struct pack_t {
     std::optional<std::vector<std::string>> usage;
+    friend consteval auto json_schema(knot::type<pack_event::pack_t>) { return knot::schema<pack_event::pack_t>(); }
   };
   struct content_t {
     std::optional<std::map<std::string, image_t>> images;
     std::optional<pack_t> pack;
+    friend consteval auto json_schema(knot::type<pack_event::content_t>) { return knot::schema<pack_event::content_t>(); }
+      friend consteval auto json_schema(knot::type<emote_rooms_event::content_t>) { return knot::schema<emote_rooms_event::content_t>(); }
   };
   content_t content;
+  friend consteval auto json_schema(knot::type<pack_event>) { return knot::schema<pack_event>(); }
 };
-consteval auto json_schema(knot::type<pack_event::image_t>) { return knot::schema<pack_event::image_t>(); }
-consteval auto json_schema(knot::type<pack_event::pack_t>) { return knot::schema<pack_event::pack_t>(); }
-consteval auto json_schema(knot::type<pack_event::content_t>) { return knot::schema<pack_event::content_t>(); }
-consteval auto json_schema(knot::type<pack_event>) { return knot::schema<pack_event>(); }
 
 // im.ponies.emote_rooms: room, then the state keys of its packs.
 struct emote_rooms_event {
@@ -70,9 +71,8 @@ struct emote_rooms_event {
     std::optional<std::map<std::string, std::map<std::string, knot::raw>>> rooms;
   };
   content_t content;
+  friend consteval auto json_schema(knot::type<emote_rooms_event>) { return knot::schema<emote_rooms_event>(); }
 };
-consteval auto json_schema(knot::type<emote_rooms_event::content_t>) { return knot::schema<emote_rooms_event::content_t>(); }
-consteval auto json_schema(knot::type<emote_rooms_event>) { return knot::schema<emote_rooms_event>(); }
 
 // A rule's word, as loom reads it: its text, for mux's own table.
 template <class Content, class Rule>

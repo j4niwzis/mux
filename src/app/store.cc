@@ -24,8 +24,8 @@ struct attachment_line {
   std::int64_t w = 0, h = 0;
   std::optional<std::string> video;
   std::optional<std::int64_t> duration;
+  friend consteval auto json_schema(knot::type<attachment_line>) { return knot::schema<attachment_line>(); }
 };
-consteval auto json_schema(knot::type<attachment_line>) { return knot::schema<attachment_line>(); }
 
 // A line of a chat's messages: a message, or only its id and that it is
 // deleted or gone.
@@ -45,15 +45,15 @@ struct message_line {
   std::optional<std::string> kind;
   std::optional<attachment_line> attachment;
   std::optional<std::vector<attachment_line>> album;
+  friend consteval auto json_schema(knot::type<message_line>) { return knot::schema<message_line>(); }
 };
-consteval auto json_schema(knot::type<message_line>) { return knot::schema<message_line>(); }
 
 // Who has read up to where in a chat, and the user.
 struct reads_file {
   std::map<std::string, std::string> users;
   std::optional<std::string> me;
+  friend consteval auto json_schema(knot::type<reads_file>) { return knot::schema<reads_file>(); }
 };
-consteval auto json_schema(knot::type<reads_file>) { return knot::schema<reads_file>(); }
 
 // A flag as a line keeps it: there only when set.
 constexpr std::optional<bool> flag(bool on) { return on ? std::optional<bool>(true) : std::nullopt; }

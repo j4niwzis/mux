@@ -48,15 +48,15 @@ inline knot::raw as_body(const auto& content) { return knot::raw{knot::to_json_s
 // m.direct's content: each person's direct rooms.
 struct direct_event {
   std::map<std::string, std::vector<std::string>> content;
+  friend consteval auto json_schema(knot::type<direct_event>) { return knot::schema<direct_event>(); }
 };
-consteval auto json_schema(knot::type<direct_event>) { return knot::schema<direct_event>(); }
 
 // An event's content as its keys, each kept as its text: for what is passed
 // on, or only asked whether it has any.
 struct content_keys {
   std::map<std::string, knot::raw> content;
+  friend consteval auto json_schema(knot::type<content_keys>) { return knot::schema<content_keys>(); }
 };
-consteval auto json_schema(knot::type<content_keys>) { return knot::schema<content_keys>(); }
 
 // An event of any type, read once into the shape given: what mux reads of
 // a content loom keeps as text (account data, packs of emoji, receipts).

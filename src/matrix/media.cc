@@ -30,8 +30,8 @@ namespace mux::matrix {
 // What an upload answers: where the file is kept now.
 struct upload_answer {
   std::string content_uri;
+  friend consteval auto json_schema(knot::type<upload_answer>) { return knot::schema<upload_answer>(); }
 };
-consteval auto json_schema(knot::type<upload_answer>) { return knot::schema<upload_answer>(); }
 
 template <class Sink>
 void account<Sink>::fetch_media(std::string source, media_use_t use, int size, bool crop) {

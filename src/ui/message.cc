@@ -565,6 +565,8 @@ inline std::map<std::string, std::string, std::less<>>& rooms_found() {
   static std::map<std::string, std::string, std::less<>> kept;
   return kept;
 }
+struct mentioned;
+[[nodiscard]] inline std::optional<std::string> take_opening_quote(mentioned& shown);
 struct mentioned {
   // Rooms named in it whose picture is still to come, and rooms not known
   // to be there: made again when the one comes or the other is found.
@@ -730,6 +732,46 @@ struct mentioned {
   return out;
 }
 
+// The quote a text opens with, where it is its only one: taken out of the
+// text -- with the spaces after it -- its links and styles moved back with
+// what is left; what it said, trimmed. Nothing where the text does not
+// open with a quote, or has another.
+[[nodiscard]] inline std::optional<std::string> take_opening_quote(mentioned& shown) {
+  std::size_t end = 0;
+  bool opens = false;
+  for (const auto& one : shown.styles) {
+    if (!one.quote)
+      continue;
+    if (one.first == 0 || (opens && one.first <= end)) {
+      opens = true;
+      end = std::max(end, one.last);
+    }
+  }
+  if (!opens || end == 0)
+    return std::nullopt;
+  for (const auto& one : shown.styles)
+    if (one.quote && one.first > end)
+      return std::nullopt;  // another quote after it
+  std::string quoted = shown.text.substr(0, end);
+  std::size_t cut = end;
+  while (cut < shown.text.size() && std::isspace(static_cast<unsigned char>(shown.text[cut])))
+    ++cut;
+  shown.text.erase(0, cut);
+  const auto moved = [cut](auto& spans) {
+    std::erase_if(spans, [cut](const auto& one) { return one.last <= cut; });
+    for (auto& one : spans) {
+      one.first = one.first > cut ? one.first - cut : 0;
+      one.last -= cut;
+    }
+  };
+  moved(shown.links);
+  moved(shown.styles);
+  while (!quoted.empty() && std::isspace(static_cast<unsigned char>(quoted.back())))
+    quoted.pop_back();
+  std::ranges::replace(quoted, '\n', ' ');
+  return quoted;
+}
+
 // A message's text as a quote's one line shows it: its HTML read, and its
 // mentions -- people, rooms -- by their names, as in the message itself,
 // not the raw addresses; without the room a pill's avatar takes.
@@ -871,10 +913,18 @@ struct message_bubble : nodes::Stack {
       // A picture quoted: its thumbnail.
       std::optional<nodes::Image<from_thumbnails>> thumb;
       said_column texts;
+      // "quoted", thin and grey at the top right: what it shows is the
+      // part the reply quoted, not the message's text.
+      std::optional<nodes::Text> tag;
     } parts;
-    quote_row(skia::SkColor colour, std::string who, std::string said, std::optional<std::string> picture = std::nullopt)
+    quote_row(skia::SkColor colour, std::string who, std::string said, std::optional<std::string> picture = std::nullopt,
+              bool quoted = false)
         : parts{.bar = nodes::Box<>(with_alpha(colour, 0.9f)), .texts = said_column(colour, std::move(who), std::move(said))} {
-      auto& [bar, thumb, texts] = parts;
+      auto& [bar, thumb, texts, tag] = parts;
+      if (quoted) {
+        tag.emplace("quoted", 11.0f, dim_colour);
+        tag->apply({.place = scene::anchor::kTopRight, .x = 0.0f, .y = 1.0f});
+      }
       this->setHorizontal();
       this->setGap(4.0f);
       fState.apply({.fillX = true,
@@ -1244,6 +1294,10 @@ struct message_bubble : nodes::Stack {
     }
     rooms_waiting = std::move(shown.waiting);
     rooms_unknown = std::move(shown.unknown);
+    // A reply whose text opens with its only quote: the quote shown in the
+    // reply's header, as the part answered, and not again in the text.
+    if (said.replies_to)
+      header_quote = take_opening_quote(shown);
     {
       body.parts.text.setText(shown.text);
       body.parts.text.setLinks(std::move(shown.links), accent_colour);
@@ -1278,7 +1332,7 @@ struct message_bubble : nodes::Stack {
       // A picture's: its thumbnail, and its caption or "Photo"; a file's:
       // its name; else its text.
       std::optional<std::string> picture;
-      std::string line = known ? quote_line_of(*found, in, now) : std::string("not loaded");
+      std::string line = header_quote ? *header_quote : known ? quote_line_of(*found, in, now) : std::string("not loaded");
       if (known && found->attachment) {
         if (is_picture(found->attachment->kind))
           picture = found->attachment->source;
@@ -1290,7 +1344,7 @@ struct message_bubble : nodes::Stack {
       body.parts.quote.emplace(known ? avatar_colour(found->sender) : accent_colour,
                          known ? (found->outgoing ? std::string("You") : sender_name(in, found->sender))
                                : std::string("A message"),
-                         std::move(line), std::move(picture));
+                         std::move(line), header_quote ? std::nullopt : std::move(picture), header_quote.has_value());
       // The quote spans its bubble, as tdesktop's; the bubble is at least as
       // wide as the quote asks -- its name and its line, the line counted up
       // to maxSignatureSize (240), so that a short answer to a long message
@@ -1358,6 +1412,9 @@ struct message_bubble : nodes::Stack {
   // A stretch of its text marked -- what a reply quoted of it -- while it
   // is flashed; let go as the flash ends.
   bool marked = false;
+  // The quote its text opened with, shown in its header instead: what a
+  // click on the header goes to, marked.
+  std::optional<std::string> header_quote;
   // Marks what is found of `fragment` in its text; where, as the offset in
   // it, or nothing.
   std::optional<std::size_t> mark(std::string_view fragment) {

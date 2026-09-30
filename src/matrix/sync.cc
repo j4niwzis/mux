@@ -395,7 +395,14 @@ auto account<Sink>::name_of(const std::string& room, const loom::client::joined_
 
 template <class Sink>
 auto account<Sink>::direct(const std::string& room) const -> bool {
-  return loom::client::is_direct(state_, room);
+  // m.direct read once a sync, not once a room: every room of a sync asks.
+  if (direct_rooms_since_ != state_.since) {
+    direct_rooms_.clear();
+    for (const auto& [user, rooms] : loom::client::direct_rooms(state_))
+      direct_rooms_.insert(rooms.begin(), rooms.end());
+    direct_rooms_since_ = state_.since;
+  }
+  return direct_rooms_.contains(room);
 }
 
 template <class Sink>

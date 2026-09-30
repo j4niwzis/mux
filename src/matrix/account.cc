@@ -287,6 +287,9 @@ class account {
   // from zero at every start sent "mux1" again after a restart, the answer
   // was the old message's event, and the message written -- shown for a
   // moment as it went -- merged into that old one and was never sent.
+  // The direct rooms, as m.direct said at the sync they were read at.
+  mutable std::set<std::string, std::less<>> direct_rooms_;
+  mutable std::optional<std::optional<std::string>> direct_rooms_since_;
   [[nodiscard]] std::string transaction() { return std::format("mux-{}-{}", run_, ++transactions_); }
   std::uint64_t transactions_ = 0;
   // When this run began, in the clock's ticks: what makes its ids its own.

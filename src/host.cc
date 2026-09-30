@@ -949,6 +949,21 @@ int run(App& app, const options& how) {
             skia::SkIRect from = to.makeOffset(0, -dy);
             if (!from.intersect(to))
               continue;
+            // The window's own pixels: their rows moved where they are, one
+            // copy -- not copied out and drawn back.
+            skia::SkPixmap in_place;
+            if (keeps && kept->peekPixels(&in_place)) {
+              const std::size_t bytes = static_cast<std::size_t>(from.width()) * 4u;
+              const auto row = [&](int y) { return static_cast<std::byte*>(in_place.writable_addr(from.fLeft, y)); };
+              if (dy > 0)
+                for (int y = from.fBottom - 1; y >= from.fTop; --y)
+                  std::memmove(row(y + dy), row(y), bytes);
+              else
+                for (int y = from.fTop; y < from.fBottom; ++y)
+                  std::memmove(row(y + dy), row(y), bytes);
+              changed.push_back(to);
+              continue;
+            }
             if (auto pixels = kept->makeImageSnapshot(from)) {
               into->drawImage(pixels, static_cast<float>(from.fLeft), static_cast<float>(from.fTop + dy));
               changed.push_back(to);

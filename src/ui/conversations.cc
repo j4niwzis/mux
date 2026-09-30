@@ -531,9 +531,13 @@ struct conversations_screen : nodes::Stack {
       top_bar.apply({.background = top ? chosen_colour : skia::SkColor{0}});
       side_bar.apply({.background = side ? chosen_colour : skia::SkColor{0}});
     }
+    void close_menu_soon() {
+      menu_close_due = true;
+      scene::work::mark(fState.fId);
+    }
     void drag_down(const scene::pointer::down& press, scene::PointerReply& reply) {
-      if (parts.menu && !parts.menu->bounds().contains(press.x, press.y))
-        menu_close_due = true;
+      if (parts.menu)
+        this->close_menu_soon();
       drag.reset();
       const space_icon<pick_folder>* one = this->icon_at(press.x, press.y);
       if (!one)
@@ -717,6 +721,10 @@ struct conversations_screen : nodes::Stack {
   using Node::onKey;
   void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
     namespace keys = scene::keys;
+    if (press.key == keys::kEscape && this->close_space_menu()) {
+      reply.handle();
+      return;
+    }
     const bool control = press.modifiers.template has<scene::modifier::control>();
     const bool any = control || press.modifiers.template has<scene::modifier::shift>() ||
                      press.modifiers.template has<scene::modifier::alt>();
@@ -962,6 +970,26 @@ struct conversations_screen : nodes::Stack {
     side.top_bar.setVisible(spaces_on && top_bar_on);
     if (!side.drag || !side.drag->moving)
       side.side_bar.setVisible(spaces_on && !side_items.empty());
+  }
+
+  // The space menu closed by any press off it, wherever on the screen: at
+  // once, where the press is not on it; one on it chooses first.
+  using Node::onPointer;
+  void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply&) {
+    if (side.parts.menu && !side.parts.menu->bounds().contains(press.x, press.y) && !side.bounds().contains(press.x, press.y)) {
+      side.parts.menu.reset();
+      side.invalidateLayout();
+      side.markDamaged();
+    }
+  }
+  // Esc too.
+  [[nodiscard]] bool close_space_menu() {
+    if (!side.parts.menu)
+      return false;
+    side.parts.menu.reset();
+    side.invalidateLayout();
+    side.markDamaged();
+    return true;
   }
 
   // The chat list as wide as `x`, where its edge was dragged to.

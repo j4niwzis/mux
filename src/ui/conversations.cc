@@ -424,8 +424,9 @@ struct conversations_screen : nodes::Stack {
       parts.pinned.apply({.fillX = true, .height = pinned_bar<pinned_press>::kHeight});
       parts.pinned.setVisible(false);
       header.show({}, [a](const auto& shown) { return chat_header<Actions>(a, shown); });
-      // The wallpaper: the theme's gradient, as Telegram's.
-      fState.apply({.fillY = true, .grow = scene::axes::kX, .gradient = scene::Gradient{chat_top_colour, chat_colour}});
+      // A plain colour: the wallpaper is the messages' own -- the timeline's
+      // Wallpaper -- not behind Select a chat, where Telegram has none.
+      fState.apply({.fillY = true, .grow = scene::axes::kX, .background = chat_colour});
       area.apply({.fillX = true, .grow = scene::axes::kY});
       parts.mentions.setVisible(false);
     }

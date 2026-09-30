@@ -298,6 +298,20 @@ struct composer_bar : nodes::Stack {
       parts.retry.setPrimary(true);
     }
   };
+  // Where the reader may not post: a row as high as the input's, its line
+  // in the middle -- padded inside it, not by a margin the bar's height
+  // leaves out.
+  struct no_post_row : nodes::Stack {
+    struct parts_t {
+      nodes::Text line{"You don't have permission to post in this chat", 13.0f, dim_colour};
+    } parts;
+    no_post_row() {
+      this->setHorizontal();
+      fStack.justify = nodes::justify::middle{};
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {18.0f, 12.0f, 18.0f, 12.0f}});
+      parts.line.apply({.alignSelf = scene::align::kMiddle});
+    }
+  };
   struct parts_t {
     nodes::Box<> divider{band_colour};
     unsent_row unsent;
@@ -305,7 +319,7 @@ struct composer_bar : nodes::Stack {
     input_row input;
     // Where the reader may not post: said in place of the field, as Element
     // says it.
-    nodes::Text no_post{"You don't have permission to post in this chat", 13.0f, dim_colour};
+    no_post_row no_post;
   } parts;
   // The old name, for what reads it.
   typename input_row::field_t& field = parts.input.parts.field;
@@ -315,7 +329,6 @@ struct composer_bar : nodes::Stack {
   explicit composer_bar(Actions* a) : parts{.unsent = unsent_row(a), .context_line = context_row(a), .input = input_row(a)} {
     parts.unsent.setVisible(false);
     parts.no_post.setVisible(false);
-    parts.no_post.apply({.alignSelf = scene::align::kMiddle, .margin = {18.0f, 0.0f, 18.0f, 0.0f}});
     parts.context_line.setVisible(false);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .background = sidebar_colour});
     parts.divider.apply({.fillX = true, .height = 1.0f});

@@ -585,7 +585,10 @@ struct conversations_screen : nodes::Stack {
   std::optional<std::string> history_from;
   std::optional<std::string> history_asked;
 
-  [[nodiscard]] bool settling() const { return false; }
+  // Frames wanted while a jump goes on: it is carried out a step a frame --
+  // made, paged back to, fetched around, aimed at -- and skiff draws the next
+  // frame only for what is still settling. Nothing else here asks for one.
+  [[nodiscard]] bool settling() const { return jumping_to.has_value() || aiming.has_value(); }
   // Back to the newest, and nothing unseen.
   void jump_to_end() {
     // To the newest: the stretch made at the end again.

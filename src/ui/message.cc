@@ -889,23 +889,44 @@ struct message_bubble : nodes::Stack {
     return (colour & 0x00FFFFFFu) | (static_cast<skia::SkColor>(std::lround(alpha * 255.0f)) << 24);
   }
   struct quote_row : nodes::Stack {
+    // Who said it, and "quoted" after the name -- thin and grey, at the
+    // right: what it shows is the part the reply quoted, not the message's
+    // text. In the line's flow, so the name is cut before it rather than
+    // drawn under it, and the quote is at least as wide as both.
+    struct who_row : nodes::Stack {
+      struct parts_t {
+        nodes::Text who;
+        std::optional<nodes::Text> tag;
+      } parts;
+      who_row(skia::SkColor colour, std::string name, bool quoted)
+          : parts{.who = nodes::Text(std::move(name), 13.0f, colour, true)} {
+        auto& [who, tag] = parts;
+        this->setHorizontal();
+        this->setGap(8.0f);
+        fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+        who.setElided(true);
+        who.apply({.grow = scene::axes::kX});
+        if (quoted) {
+          tag.emplace("quoted", 11.0f, dim_colour);
+          tag->apply({.alignSelf = scene::align::kStart, .margin = {1.0f, 0.0f, 0.0f, 0.0f}});
+        }
+      }
+    };
     // Who said it over a line of it, each cut at the bubble's width.
     struct said_column : nodes::Stack {
       struct parts_t {
-        nodes::Text who;
+        who_row who;
         nodes::Text said;
       } parts;
-      said_column(skia::SkColor colour, std::string name, std::string line)
-          : parts{.who = nodes::Text(std::move(name), 13.0f, colour, true),
+      said_column(skia::SkColor colour, std::string name, std::string line, bool quoted)
+          : parts{.who = who_row(colour, std::move(name), quoted),
                   .said = nodes::Text(std::move(line), 13.0f, text_colour)} {
         auto& [who, said] = parts;
         fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-        // Both as wide as the quote, cut where it ends: the quote is as wide
-        // as its bubble.
-        for (nodes::Text* each : {&who, &said}) {
-          each->setElided(true);
-          each->apply({.fillX = true});
-        }
+        // As wide as the quote, cut where it ends: the quote is as wide as
+        // its bubble.
+        said.setElided(true);
+        said.apply({.fillX = true});
       }
     };
     struct parts_t {
@@ -913,18 +934,12 @@ struct message_bubble : nodes::Stack {
       // A picture quoted: its thumbnail.
       std::optional<nodes::Image<from_thumbnails>> thumb;
       said_column texts;
-      // "quoted", thin and grey at the top right: what it shows is the
-      // part the reply quoted, not the message's text.
-      std::optional<nodes::Text> tag;
     } parts;
     quote_row(skia::SkColor colour, std::string who, std::string said, std::optional<std::string> picture = std::nullopt,
               bool quoted = false)
-        : parts{.bar = nodes::Box<>(with_alpha(colour, 0.9f)), .texts = said_column(colour, std::move(who), std::move(said))} {
-      auto& [bar, thumb, texts, tag] = parts;
-      if (quoted) {
-        tag.emplace("quoted", 11.0f, dim_colour);
-        tag->apply({.place = scene::anchor::kTopRight, .x = 0.0f, .y = 1.0f});
-      }
+        : parts{.bar = nodes::Box<>(with_alpha(colour, 0.9f)),
+                .texts = said_column(colour, std::move(who), std::move(said), quoted)} {
+      auto& [bar, thumb, texts] = parts;
       this->setHorizontal();
       this->setGap(4.0f);
       fState.apply({.fillX = true,
@@ -1357,8 +1372,12 @@ struct message_bubble : nodes::Stack {
       if (skia::SkFont* font = skiff::paint::defaultFont()) {
         skiff::paint::Painter measure(nullptr, *font);
         const auto& texts = body.parts.quote->parts.texts.parts;
-        const float words = std::max(measure.measure(texts.who.text(), 13.0f),
-                                     std::min(measure.measure(texts.said.text(), 13.0f), kReplyLineMax));
+        // The name line with "quoted" after it, whole: the bubble widened for
+        // the tag, rather than the tag drawn over the name.
+        const auto& tag = texts.who.parts.tag;
+        const float who = measure.measure(texts.who.parts.who.text(), 13.0f) +
+                          (tag ? 8.0f + std::ceil(measure.measure(tag->text(), 11.0f)) : 0.0f);
+        const float words = std::max(who, std::min(measure.measure(texts.said.text(), 13.0f), kReplyLineMax));
         const float around = (with_picture ? 7.0f + 32.0f + 4.0f : 11.0f) + 6.0f + 2.0f * kPadX;
         asks = std::min(std::ceil(words) + around, kMaxWidth + 2.0f * kPadX);
       }

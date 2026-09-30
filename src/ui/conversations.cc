@@ -49,6 +49,12 @@ struct direct {
 };
 }  // namespace folder
 using folder_t = splice::variant<folder::all, folder::space, folder::group, folder::direct>;
+// The space a folder is, where it is one.
+[[nodiscard]] inline std::optional<std::string> space_of(const folder_t& one) {
+  return splice::visit(splice::overloaded{[](const folder::space& s) { return std::optional<std::string>(s.room); },
+                                          [](const auto&) { return std::optional<std::string>(); }},
+                       one);
+}
 
 // An item of a space bar: Home, Direct messages, or a space -- round, its
 // picture or its mark, ringed in the accent while its chats are the ones
@@ -812,10 +818,71 @@ struct conversations_screen : nodes::Stack {
     std::vector<entry> all{{config::space_item::home{}, folder::all{}, "", "Home"},
                            {config::space_item::direct{}, folder::direct{}, "", "Direct messages"}};
     const std::string address = current ? current->address : std::string();
-    if (current)
-      for (const auto& [key, one] : now.accounts().at(*current).conversations)
+    // Spaces in spaces: each under the first space found holding it. Only
+    // those in none are items of the bars; the others show under theirs
+    // while it -- or one in it, at any depth -- is the one chosen.
+    std::map<std::string, std::string> parent_of;
+    std::map<std::string, std::vector<const conversation*>> spaces_in;
+    const auto* chats = current ? &now.accounts().at(*current).conversations : nullptr;
+    if (chats)
+      for (const auto& [key, one] : *chats)
         if (one.space)
+          for (const std::string& child : one.children)
+            if (const auto found = chats->find(child);
+                found != chats->end() && found->second.space && child != one.id.id && !parent_of.contains(child)) {
+              parent_of.emplace(child, one.id.id);
+              spaces_in[one.id.id].push_back(&found->second);
+            }
+    std::set<std::string> open;
+    if (const std::optional<std::string> chosen_room = space_of(folder))
+      for (std::string at = *chosen_room; open.insert(at).second;) {
+        const auto up = parent_of.find(at);
+        if (up == parent_of.end())
+          break;
+        at = up->second;
+      }
+    if (chats)
+      for (const auto& [key, one] : *chats)
+        if (one.space && !parent_of.contains(one.id.id))
           all.push_back({config::space_item::space{one.id.id}, folder::space{one.id.id}, one.id.id, display_name(one)});
+    // A bar's icons: its items, and under an open space its own spaces --
+    // smaller, a level at a time.
+    struct shown_icon {
+      const entry* top = nullptr;
+      const conversation* sub = nullptr;
+      int depth = 0;
+    };
+    std::vector<entry> subs_made;
+    const auto expanded = [&](const std::vector<const entry*>& items) {
+      std::vector<shown_icon> out;
+      for (const entry* one : items) {
+        out.push_back({one, nullptr, 0});
+        const std::optional<std::string> room = splice::visit(
+            splice::overloaded{[](const config::space_item::space& it) { return std::optional<std::string>(it.room); },
+                               [](const auto&) { return std::optional<std::string>(); }},
+            one->item);
+        if (!room || !open.contains(*room))
+          continue;
+        std::vector<std::pair<const conversation*, int>> todo;
+        const auto push_children = [&](const std::string& of, int depth) {
+          if (const auto found = spaces_in.find(of); found != spaces_in.end())
+            for (const conversation* sub : found->second | std::views::reverse)
+              todo.emplace_back(sub, depth);
+        };
+        push_children(*room, 1);
+        std::set<std::string> seen{*room};
+        while (!todo.empty()) {
+          const auto [sub, depth] = todo.back();
+          todo.pop_back();
+          if (!seen.insert(sub->id.id).second)
+            continue;
+          out.push_back({nullptr, sub, depth});
+          if (open.contains(sub->id.id))
+            push_children(sub->id.id, depth + 1);
+        }
+      }
+      return out;
+    };
     const std::vector<config::space_placed> mine = space_places |
                                                    std::views::filter([&](const config::space_placed& p) { return p.account == address; }) |
                                                    std::ranges::to<std::vector>();
@@ -847,9 +914,13 @@ struct conversations_screen : nodes::Stack {
     side.account = address;
     // Made again only where they changed.
     std::vector<std::string> made;
-    for (const auto& [items, mark] : {std::pair{&side_items, "s"}, std::pair{&top_items, "t"}})
-      for (const entry* one : *items)
-        made.push_back(std::format("{}|{}|{}|{}", mark, config::word_of(one->item), one->name, one->shows == folder));
+    const std::vector<shown_icon> side_shown = expanded(side_items);
+    const std::vector<shown_icon> top_shown = expanded(top_items);
+    for (const auto& [items, mark] : {std::pair{&side_shown, "s"}, std::pair{&top_shown, "t"}})
+      for (const shown_icon& one : *items)
+        made.push_back(one.top ? std::format("{}|{}|{}|{}", mark, config::word_of(one.top->item), one.top->name, one.top->shows == folder)
+                               : std::format("{}|{}|{}|{}|{}", mark, one.sub->id.id, display_name(*one.sub), one.depth,
+                                             folder == folder_t{folder::space{one.sub->id.id}}));
     made.push_back(std::format("{}{}", spaces_on, top_bar_on));
     if (made != shown_bars) {
       shown_bars = made;
@@ -857,14 +928,26 @@ struct conversations_screen : nodes::Stack {
       auto& top_icons = std::get<0>(side.top_bar.fChildren);
       side_icons.clear();
       top_icons.clear();
-      for (const entry* one : side_items)
-        side_icons.emplace_back(one->item, one->shows, config::space_bar::side{}, one->id, one->name, one->shows == folder, 40.0f,
-                                pick_folder{this});
-      for (const entry* one : top_items)
-        top_icons.emplace_back(one->item, one->shows, config::space_bar::top{}, one->id, one->name, one->shows == folder, 30.0f,
+      // A space in a space: smaller for each level down.
+      const auto emit = [&](auto& icons, const std::vector<shown_icon>& shown, const config::space_bar_t& bar, float size) {
+        for (const shown_icon& one : shown) {
+          if (one.top) {
+            icons.emplace_back(one.top->item, one.top->shows, bar, one.top->id, one.top->name, one.top->shows == folder, size,
                                pick_folder{this});
+            continue;
+          }
+          const folder_t shows = folder::space{one.sub->id.id};
+          icons.emplace_back(config::space_item::space{one.sub->id.id}, shows, bar, one.sub->id.id, display_name(*one.sub),
+                             shows == folder, std::max(20.0f, size - 6.0f * static_cast<float>(one.depth)), pick_folder{this});
+        }
+      };
+      emit(side_icons, side_shown, config::space_bar::side{}, 40.0f);
+      emit(top_icons, top_shown, config::space_bar::top{}, 30.0f);
       side.side_bar.invalidateLayout();
       side.top_bar.invalidateLayout();
+      // A space come or gone: the bars painted again whole.
+      side.side_bar.markDamaged();
+      side.top_bar.markDamaged();
     }
     // The top bar there unless turned off; the side one where it holds any.
     side.top_bar.setVisible(spaces_on && top_bar_on);
@@ -1589,15 +1672,30 @@ struct conversations_screen : nodes::Stack {
     // Whether a chat is in the folder chosen. A space is a folder, not a
     // chat: it is never listed.
     const account* in = current ? &now.accounts().at(*current) : nullptr;
+    // The rooms of the space chosen: its own, and those of the spaces in it,
+    // down every level -- each space once, however they hold each other.
+    std::set<std::string> in_space;
+    if (in)
+      if (const std::optional<std::string> chosen_room = space_of(folder)) {
+        std::set<std::string> seen;
+        std::vector<std::string> todo{*chosen_room};
+        while (!todo.empty()) {
+          const std::string at = std::move(todo.back());
+          todo.pop_back();
+          if (!seen.insert(at).second)
+            continue;
+          if (const auto found = in->conversations.find(at); found != in->conversations.end())
+            for (const std::string& child : found->second.children) {
+              in_space.insert(child);
+              todo.push_back(child);
+            }
+        }
+      }
     const auto in_folder = [&](const conversation& one) {
       if (one.space)
         return false;
       return splice::visit(splice::overloaded{[](const folder::all&) { return true; },
-                                   [&](const folder::space& s) {
-                                     const auto found = in->conversations.find(s.room);
-                                     return found != in->conversations.end() &&
-                                            std::ranges::contains(found->second.children, one.id.id);
-                                   },
+                                   [&](const folder::space&) { return in_space.contains(one.id.id); },
                                    [&](const folder::group& g) { return std::ranges::contains(one.groups, g.name); },
                                    [&](const folder::direct&) {
                                      return splice::visit(splice::overloaded{[](conversation_kind::direct) { return true; },
@@ -1624,6 +1722,8 @@ struct conversations_screen : nodes::Stack {
     // The rows, as a function of the chats: those whose chat shows the same
     // are kept as they are.
     const auto is_chosen = [&](const conversation* one) { return chosen && *chosen == one->id; };
+    const std::vector<conversation_id> listed_before =
+        rows | std::views::transform([](const conversation_row<Actions>& row) { return row.id; }) | std::ranges::to<std::vector>();
     if (nodes::reconcile(
             rows, chats, [](const conversation* one) { return one->id; },
             [](const conversation_row<Actions>& row) { return row.id; },
@@ -1635,8 +1735,13 @@ struct conversations_screen : nodes::Stack {
               return row.shown ==
                      conversation_row<Actions>::view_of(*one, is_chosen(one), muted.contains(one->id), draft_of(one->id),
                                                         events_of(one));
-            }))
+            })) {
       list.invalidateLayout();
+      // A chat come or gone -- or moved to another place: the whole list
+      // painted again, not only what says it moved.
+      if (!std::ranges::equal(listed_before, rows, {}, {}, [](const conversation_row<Actions>& row) { return row.id; }))
+        list.markDamaged();
+    }
     const bool none = now.accounts().empty();
     // The messages' area, not only its list: hidden, it no longer takes the
     // column's height and pushes what is said instead to the bottom.

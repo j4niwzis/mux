@@ -536,7 +536,9 @@ struct reaction_chip : nodes::Stack {
     this->setGap(4.0f);
     fStack.justify = nodes::justify::middle{};
     fState.apply({.height = 26.0f, .autoSize = scene::axes::kX, .minWidth = 26.0f, .padding = {0.0f, 9.0f, 0.0f, 9.0f},
-                  .cornerRadius = 13.0f, .background = own ? accent_colour : tile_colour});
+                  .cornerRadius = 13.0f,
+                  .background = at_opacity(own ? accent_colour : tile_colour,
+                                           element_opacity_of(bubble_look_now(), &config::element_opacity::reactions))});
     if (pictured(key)) {
       parts.picture.emplace(from_avatars{key});
       parts.picture->apply({.width = 18.0f, .height = 18.0f, .alignSelf = scene::align::kMiddle});
@@ -1305,6 +1307,8 @@ struct message_bubble : nodes::Stack {
     face.apply({.place = scene::anchor::kBottomLeft, .x = -(kAvatar + 8.0f), .y = -1.0f});
     if (!(group && !outgoing && last_of_run))
       face.fState.setAlpha(0.0f);  // its room kept, so the run's bubbles line up
+    else
+      face.fState.setAlpha(static_cast<float>(element_opacity_of(bubble_look_now(), &config::element_opacity::avatars)) / 100.0f);
     if (group && !outgoing && first_of_run && !said.service) {
       // Their role, where the room gives them a say: Matrix's 100 and 50.
       const auto level = in.powers.find(said.sender);
@@ -1317,7 +1321,8 @@ struct message_bubble : nodes::Stack {
     if (said.service) {
       fStack.justify = nodes::justify::middle{};
       face.setVisible(false);
-      body.apply({.cornerRadius = 12.0f, .background = tile_colour});
+      body.apply({.cornerRadius = 12.0f,
+                  .background = at_opacity(tile_colour, element_opacity_of(bubble_look_now(), &config::element_opacity::service))});
       // Not shown where the chat's settings say so: kept, and out of the
       // flow, taking no room.
       events_shown = show_events;
@@ -1358,6 +1363,14 @@ struct message_bubble : nodes::Stack {
     // A gallery: its pictures as an album, its body the caption under it.
     if (!said.album.empty())
       body.parts.album.emplace(said.album);
+    // Pictures at the chat's look's opacity for them.
+    if (const float images = static_cast<float>(element_opacity_of(bubble_look_now(), &config::element_opacity::images)) / 100.0f;
+        images < 1.0f) {
+      if (body.parts.picture)
+        body.parts.picture->apply({.alpha = images});
+      if (body.parts.album)
+        body.parts.album->apply({.alpha = images});
+    }
     // Formatted, it is drawn from its HTML: its text, and its links; plain,
     // its links are the URLs in it.
     // Its links in its text, where they stand: an <a>'s label going where

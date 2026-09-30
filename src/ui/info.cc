@@ -1273,6 +1273,61 @@ struct bubbles_picker : nodes::Stack {
       actions->set_bubbles(level, look, part);
     }
   };
+  // An element's opacity, apart from the bubbles': let go at, or given back
+  // to them.
+  using element_t = std::optional<int> config::element_opacity::*;
+  struct element_done {
+    Actions* actions;
+    choice_level_t level;
+    element_t which;
+    void operator()(float fraction) const {
+      config::bubble_look look = current(level, config::look_part::bubbles{});
+      look.elements.*which = static_cast<int>(std::lround(std::clamp(fraction, 0.0f, 1.0f) * 100.0f));
+      actions->set_bubbles(level, look, config::look_part::bubbles{});
+    }
+  };
+  struct element_reset {
+    Actions* actions;
+    choice_level_t level;
+    element_t which;
+    void operator()() const {
+      config::bubble_look look = current(level, config::look_part::bubbles{});
+      look.elements.*which = std::nullopt;
+      actions->set_bubbles(level, look, config::look_part::bubbles{});
+    }
+  };
+  struct element_row : nodes::Stack {
+    struct head_t : nodes::Stack {
+      struct parts_t {
+        nodes::Text label;
+        widgets::Button<element_reset> reset;
+      } parts;
+      head_t(std::string label, element_reset reset, bool own)
+          : parts{.label = nodes::Text(std::move(label), 13.0f, text_colour), .reset = widgets::Button<element_reset>("As bubbles", reset)} {
+        this->setHorizontal();
+        this->setGap(6.0f);
+        fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+        parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+        parts.reset.apply({.width = 96.0f, .height = 26.0f});
+        parts.reset.setVisible(own);
+      }
+    };
+    struct parts_t {
+      head_t head;
+      widgets::SliderBar<scene::NoAction, element_done> bar;
+    } parts;
+    element_row(Actions* a, const choice_level_t& level, std::string_view name, element_t which)
+        : parts{.head = head_t(std::format("{}: {}%{}", name, element_opacity_of(current(level, config::look_part::bubbles{}), which),
+                                           (current(level, config::look_part::bubbles{}).elements.*which) ? "" : " (as bubbles)"),
+                               element_reset{a, level, which},
+                               (current(level, config::look_part::bubbles{}).elements.*which).has_value()),
+                .bar = widgets::SliderBar<scene::NoAction, element_done>({}, element_done{a, level, which})} {
+      this->setGap(4.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+      parts.bar.setFraction(static_cast<float>(element_opacity_of(current(level, config::look_part::bubbles{}), which)) / 100.0f);
+      parts.bar.apply({.margin = {4.0f, 8.0f, 6.0f, 8.0f}});
+    }
+  };
   struct kinds_row : nodes::Stack {
     struct parts_t {
       widgets::Button<pick_kind> solid, translucent, frosted, glass;
@@ -1301,6 +1356,9 @@ struct bubbles_picker : nodes::Stack {
     kinds_row kinds;
     nodes::Text opacity_label;
     widgets::SliderBar<scene::NoAction, opacity_done> opacity;
+    // The bubbles' only: what else is in a chat, each apart where chosen.
+    nodes::Text elements_title{"EVERYTHING ELSE IN A CHAT", 12.0f, dim_colour, true};
+    std::vector<element_row> elements;
   } parts;
   bubbles_picker(Actions* a, const choice_level_t& level, const config::look_part_t& part = config::look_part::bubbles{})
       : parts{.title = nodes::Text(splice::visit(splice::overloaded{[](config::look_part::bubbles) { return "MESSAGE BUBBLES"; },
@@ -1332,6 +1390,16 @@ struct bubbles_picker : nodes::Stack {
     parts.opacity_label.setText(std::format("Opacity: {}%", opacity));
     parts.opacity.setFraction(static_cast<float>(opacity - 10) / 90.0f);
     parts.opacity.apply({.margin = {4.0f, 8.0f, 8.0f, 8.0f}});
+    const bool bubbles = splice::visit(splice::overloaded{[](config::look_part::bubbles) { return true; },
+                                                          [](const auto&) { return false; }},
+                                       part);
+    parts.elements_title.setVisible(bubbles);
+    if (bubbles) {
+      static constexpr std::array<std::string_view, 4> kLabels{"Service lines", "Images", "Avatars", "Reactions"};
+      parts.elements.reserve(config::kElementNames.size());
+      for (std::size_t i = 0; i < config::kElementNames.size(); ++i)
+        parts.elements.emplace_back(a, level, kLabels[i], config::kElementNames[i].second);
+    }
     // Greyed where it does nothing.
     if (!usable(part))
       for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.kinds, &parts.opacity_label, &parts.opacity, &parts.inherit})

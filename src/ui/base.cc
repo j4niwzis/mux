@@ -38,6 +38,14 @@ inline config::bubble_look& bubble_look_now() {
   static config::bubble_look now;
   return now;
 }
+// An element's opacity in a look, in percent: its own, else the bubbles'
+// -- all of it where they are solid.
+[[nodiscard]] inline int element_opacity_of(const config::bubble_look& look, std::optional<int> config::element_opacity::* which) {
+  if (const auto& own = look.elements.*which)
+    return *own;
+  return splice::visit(splice::overloaded{[](config::bubbles::solid) { return 100; }, [&](const auto&) { return look.opacity; }},
+                       look.kind);
+}
 // A colour at an opacity in percent.
 [[nodiscard]] inline skia::SkColor at_opacity(skia::SkColor colour, int percent) {
   const auto alpha = static_cast<unsigned>(std::lround(((colour >> 24) & 0xFF) * std::clamp(percent, 0, 100) / 100.0));

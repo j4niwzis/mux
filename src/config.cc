@@ -406,9 +406,25 @@ struct glass {
 };
 }  // namespace bubbles
 using bubbles_t = splice::variant<bubbles::solid, bubbles::translucent, bubbles::frosted, bubbles::glass>;
+// What is in a chat besides the bubbles, each at an opacity of its own
+// where one is chosen -- else the bubbles'.
+struct element_opacity {
+  std::optional<int> service;    // a line of something done: an invite, a join
+  std::optional<int> images;     // pictures, albums
+  std::optional<int> avatars;    // the faces beside the bubbles
+  std::optional<int> reactions;  // the reactions' chips
+  friend bool operator==(const element_opacity&, const element_opacity&) = default;
+};
+// The elements by their names in a look's word, for reading and writing it.
+inline constexpr std::array<std::pair<std::string_view, std::optional<int> element_opacity::*>, 4> kElementNames{
+    {{"service", &element_opacity::service},
+     {"images", &element_opacity::images},
+     {"avatars", &element_opacity::avatars},
+     {"reactions", &element_opacity::reactions}}};
 struct bubble_look {
   bubbles_t kind = bubbles::solid{};
   int opacity = 70;  // percent, where the kind has one
+  element_opacity elements;
   friend bool operator==(const bubble_look&, const bubble_look&) = default;
 };
 // What a look is chosen for: the messages' bubbles, or the panels round
@@ -428,7 +444,11 @@ using look_part_t = splice::variant<look_part::bubbles, look_part::panels>;
                                                                  [](bubbles::frosted) { return std::string_view("frosted"); },
                                                                  [](bubbles::glass) { return std::string_view("glass"); }},
                                               one.kind);
-  return std::format("{}:{}", kind, one.opacity);
+  std::string out = std::format("{}:{}", kind, one.opacity);
+  for (const auto& [name, member] : kElementNames)
+    if (const auto& own = one.elements.*member)
+      out += std::format(";{}={}", name, *own);
+  return out;
 }
 [[nodiscard]] inline bubble_look bubble_look_of(std::string_view word) {
   static constexpr std::array<std::pair<std::string_view, int>, 4> kKinds{
@@ -441,10 +461,24 @@ using look_part_t = splice::variant<look_part::bubbles, look_part::panels>;
                                                       bubbles::glass{}};
       out.kind = kinds[static_cast<std::size_t>(index)];
     }
-  if (const auto colon = word.find(':'); colon != std::string_view::npos) {
+  const std::string_view head = word.substr(0, word.find(';'));
+  if (const auto colon = head.find(':'); colon != std::string_view::npos) {
     int percent = out.opacity;
-    std::from_chars(word.data() + colon + 1, word.data() + word.size(), percent);
+    std::from_chars(head.data() + colon + 1, head.data() + head.size(), percent);
     out.opacity = std::clamp(percent, 10, 100);
+  }
+  // ";images=80;avatars=100": the elements chosen apart from the bubbles.
+  for (std::size_t at = word.find(';'); at != std::string_view::npos;) {
+    const std::size_t next = word.find(';', at + 1);
+    const std::string_view pair = word.substr(at + 1, next == std::string_view::npos ? std::string_view::npos : next - at - 1);
+    const std::size_t equals = pair.find('=');
+    for (const auto& [name, member] : kElementNames)
+      if (equals != std::string_view::npos && pair.substr(0, equals) == name) {
+        int percent = 100;
+        std::from_chars(pair.data() + equals + 1, pair.data() + pair.size(), percent);
+        out.elements.*member = std::clamp(percent, 0, 100);
+      }
+    at = next;
   }
   return out;
 }

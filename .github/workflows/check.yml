@@ -109,7 +109,8 @@ jobs:
             -DMUX_UI=ON
 
 
-          cmake --build build
+          # Every unit that fails, not only the first: a run shows them all.
+          cmake --build build -- -k 0
 
       # What this build was built from, for the next run to compare with:
       # only where it went through, so that what failed is built again.

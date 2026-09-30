@@ -333,8 +333,13 @@ TEST(Timeline, ScrollsALongChatAtSixtyFrames) {
     frame();
   }
   const double per_frame = (updating + laying + drawing) / kFrames;
-  std::println("scrolling {} messages, per frame: update {:.2f} ms, layout {:.2f} ms, draw {:.2f} ms, all {:.2f} ms",
-               kMessages, updating / kFrames, laying / kFrames, drawing / kFrames, per_frame);
+  // Formatted at run time: clang 23.1.2 (CI's build) crashes instantiating
+  // this format string's compile-time checks here.
+  const double update_ms = updating / kFrames, layout_ms = laying / kFrames, draw_ms = drawing / kFrames;
+  const auto messages = kMessages;
+  std::cout << std::vformat("scrolling {} messages, per frame: update {:.2f} ms, layout {:.2f} ms, draw {:.2f} ms, all {:.2f} ms",
+                            std::make_format_args(messages, update_ms, layout_ms, draw_ms, per_frame))
+            << '\n';
   EXPECT_NE(screen.timeline.current(), before) << "the wheel did not scroll the messages";
   EXPECT_LT(per_frame, 16.0) << "a frame of scrolling is longer than a frame of a 60 Hz screen";
 

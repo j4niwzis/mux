@@ -588,6 +588,8 @@ struct conversations_screen : nodes::Stack {
   bool threads_open = false;
   // The chosen chat's background, as the program resolves it.
   config::wallpaper_t wallpaper = config::wallpaper::theme{};
+  // And its bubbles' look: the bubbles made again where it changes.
+  config::bubble_look bubbles;
   // The threads' panel opened or closed: whether it is open now.
   bool toggle_threads() {
     threads_open = !threads_open;
@@ -1314,6 +1316,10 @@ struct conversations_screen : nodes::Stack {
     if (!one) {
       entries.clear();
       return;
+    }
+    if (bubbles != bubble_look_now()) {
+      bubble_look_now() = bubbles;
+      entries.clear();
     }
     info.show(*one, now, muted.contains(one->id));
     chat.area.show_wallpaper(wallpaper);

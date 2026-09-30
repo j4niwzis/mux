@@ -33,6 +33,16 @@ inline skia::SkColor chat_colour = skia::colorSetARGB(255, 14, 22, 33);
 // The chat's wallpaper, as Telegram's are: a gradient from the top down to
 // chat_colour at the bottom.
 inline skia::SkColor chat_top_colour = skia::colorSetARGB(255, 22, 38, 58);
+// How the bubbles of the chat shown look: set before its bubbles are made.
+inline config::bubble_look& bubble_look_now() {
+  static config::bubble_look now;
+  return now;
+}
+// A colour at an opacity in percent.
+[[nodiscard]] inline skia::SkColor at_opacity(skia::SkColor colour, int percent) {
+  const auto alpha = static_cast<unsigned>(std::lround(((colour >> 24) & 0xFF) * std::clamp(percent, 0, 100) / 100.0));
+  return (colour & 0x00FFFFFFu) | (alpha << 24);
+}
 // A chat background's dialog, for a level.
 template <class Actions>
 struct open_wallpaper_at {

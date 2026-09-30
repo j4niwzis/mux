@@ -314,6 +314,7 @@ struct app : kept_settings {
   void apply(const request::open_wallpaper& one);
   void apply(const request::close_wallpaper&);
   void apply(const request::set_wallpaper& one);
+  void apply(const request::set_bubbles& one);
   // A picture being chosen for a background: at which level.
   std::optional<mux::choice_level_t> picking_wallpaper;
   void wallpaper_file(const std::string& path);

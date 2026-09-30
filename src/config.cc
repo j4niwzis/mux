@@ -301,6 +301,7 @@ struct xmpp_account {
   std::optional<bool> show_receipts;  // as matrix_account's
   std::optional<bool> link_previews;  // as matrix_account's
   std::optional<std::string> wallpaper;  // its chats' background, as matrix_account's
+  std::optional<std::string> bubbles;    // its chats' bubbles, as matrix_account's
   std::optional<std::int64_t> jump_search;  // as matrix_account's
   // Its notifications, on the desktop and heard: as every account's, until
   // chosen.
@@ -331,6 +332,8 @@ struct matrix_account {
   // Its chats' background, as word_of(wallpaper_t) says it: its own choice,
   // else every chat's.
   std::optional<std::string> wallpaper;
+  // Its chats' bubbles, as word_of(bubble_look) says them.
+  std::optional<std::string> bubbles;
   std::optional<bool> show_receipts;
   // Whether its chats show a card for a message's first link: its own
   // choice, else every account's.
@@ -382,6 +385,57 @@ using wallpaper_t = splice::variant<wallpaper::theme, wallpaper::plain, wallpape
       return theme ? wallpaper_t{wallpaper::theme{}} : wallpaper_t{wallpaper::plain{}};
   return wallpaper::picture{std::string(word)};
 }
+// How message bubbles look: solid, as they always were; translucent (their
+// colour at an opacity); frosted (what is behind blurred, tinted with their
+// colour at an opacity); or glass (translucent, a light edge round it). Kept
+// as a word, "frosted:70" -- the kind and the opacity in percent.
+namespace bubbles {
+struct solid {
+  friend bool operator==(solid, solid) = default;
+};
+struct translucent {
+  friend bool operator==(translucent, translucent) = default;
+};
+struct frosted {
+  friend bool operator==(frosted, frosted) = default;
+};
+struct glass {
+  friend bool operator==(glass, glass) = default;
+};
+}  // namespace bubbles
+using bubbles_t = splice::variant<bubbles::solid, bubbles::translucent, bubbles::frosted, bubbles::glass>;
+struct bubble_look {
+  bubbles_t kind = bubbles::solid{};
+  int opacity = 70;  // percent, where the kind has one
+  friend bool operator==(const bubble_look&, const bubble_look&) = default;
+};
+[[nodiscard]] inline std::string word_of(const bubble_look& one) {
+  const std::string_view kind = splice::visit(splice::overloaded{[](bubbles::solid) { return std::string_view("solid"); },
+                                                                 [](bubbles::translucent) { return std::string_view("translucent"); },
+                                                                 [](bubbles::frosted) { return std::string_view("frosted"); },
+                                                                 [](bubbles::glass) { return std::string_view("glass"); }},
+                                              one.kind);
+  return std::format("{}:{}", kind, one.opacity);
+}
+[[nodiscard]] inline bubble_look bubble_look_of(std::string_view word) {
+  static constexpr std::array<std::pair<std::string_view, int>, 4> kKinds{
+      {{"solid", 0}, {"translucent", 1}, {"frosted", 2}, {"glass", 3}}};
+  bubble_look out;
+  const std::string_view name = word.substr(0, word.find(':'));
+  for (const auto& [each, index] : kKinds)
+    if (name == each) {
+      static constexpr std::array<bubbles_t, 4> kinds{bubbles::solid{}, bubbles::translucent{}, bubbles::frosted{},
+                                                      bubbles::glass{}};
+      out.kind = kinds[static_cast<std::size_t>(index)];
+    }
+  if (const auto colon = word.find(':'); colon != std::string_view::npos) {
+    int percent = out.opacity;
+    std::from_chars(word.data() + colon + 1, word.data() + word.size(), percent);
+    out.opacity = std::clamp(percent, 10, 100);
+  }
+  return out;
+}
+
 // What is asked of a background at a level: as the level over it says, the
 // theme's, plain, or a picture to choose.
 namespace wallpaper_pick {
@@ -403,6 +457,7 @@ struct room_events_choice {
   std::optional<bool> previews;  // a card for a message's first link
   std::optional<std::int64_t> jump_search;  // events paged back looking for one; 0 no limit
   std::optional<std::string> wallpaper;  // its background, as word_of(wallpaper_t) says it
+  std::optional<std::string> bubbles;    // its bubbles, as word_of(bubble_look) says them
   friend bool operator==(const room_events_choice&, const room_events_choice&) = default;
 };
 consteval auto json_schema(knot::type<room_events_choice>) { return knot::schema<room_events_choice>(); }
@@ -536,6 +591,8 @@ struct file {
   std::optional<std::string> accent;
   // Every chat's background, as word_of(wallpaper_t) says it; none, the theme's.
   std::optional<std::string> wallpaper;
+  // Every chat's bubbles, as word_of(bubble_look) says them; none, solid.
+  std::optional<std::string> bubbles;
   std::optional<std::string> renderer;
   // Only what changed repainted, into a frame kept between them.
   std::optional<bool> partial_redraw;
@@ -602,6 +659,12 @@ consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
 }
 [[nodiscard]] inline std::optional<std::string>& wallpaper_in(account_t& one) {
   return splice::visit([](auto& each) -> std::optional<std::string>& { return each.wallpaper; }, one);
+}
+[[nodiscard]] inline const std::optional<std::string>& bubbles_of(const account_t& one) {
+  return splice::visit([](const auto& each) -> const std::optional<std::string>& { return each.bubbles; }, one);
+}
+[[nodiscard]] inline std::optional<std::string>& bubbles_in(account_t& one) {
+  return splice::visit([](auto& each) -> std::optional<std::string>& { return each.bubbles; }, one);
 }
 [[nodiscard]] inline const std::optional<bool>& link_previews_of(const account_t& one) {
   return splice::visit([](const auto& each) -> const std::optional<bool>& { return each.link_previews; }, one);

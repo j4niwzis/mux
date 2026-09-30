@@ -1162,16 +1162,32 @@ struct message_bubble : nodes::Stack {
       widened = std::ceil(needs) + 2.0f * kPadX;
       fState.apply({.minWidth = std::max(base_min, widened)});
     }
+    // The bubble's colour as its chat's look has it: solid, or at its
+    // opacity -- over what is behind it, frosted where it is so.
+    [[nodiscard]] static skia::SkColor plate_of(bool mine) {
+      const skia::SkColor solid = mine ? out_bubble_colour : bubble_colour;
+      const config::bubble_look& look = bubble_look_now();
+      return splice::visit(splice::overloaded{[&](config::bubbles::solid) { return solid; },
+                                              [&](const auto&) { return at_opacity(solid, look.opacity); }},
+                           look.kind);
+    }
     body_column(bool mine, std::string said, std::string when)
         : outgoing(mine),
           parts{.text = nodes::BasicText<message_pictures>(std::move(said), 13.0f, text_colour),
                 .time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour),
                 .inline_time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour)},
-          plate(mine ? out_bubble_colour : bubble_colour) {
+          plate(plate_of(mine)) {
       auto& [name, quote, picture, album, file, text, cards, preview, reactions, thread, time, inline_time, tail] = parts;
       this->setGap(2.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
-                    .padding = {kPadY, kPadX, kPadY, kPadX}, .cornerRadius = 12.0f, .background = mine ? out_bubble_colour : bubble_colour});
+                    .padding = {kPadY, kPadX, kPadY, kPadX}, .cornerRadius = 12.0f, .background = plate});
+      // Frosted: what is behind blurred under the tint; glass: a light edge.
+      splice::visit(splice::overloaded{[&](config::bubbles::frosted) { fState.setBackdrop(true); },
+                                       [&](config::bubbles::glass) {
+                                         fState.apply({.border = scene::Border{skia::colorSetARGB(70, 255, 255, 255), 1.0f}});
+                                       },
+                                       [](const auto&) {}},
+                    bubble_look_now().kind);
       text.setWrapped(true);
       text.setShrinksToLines(true);
       // Wrapped at the bubble's width however wide the room it is first
@@ -1256,7 +1272,12 @@ struct message_bubble : nodes::Stack {
     // Not one with a picture or a file: a loader turns in it while it comes,
     // a picture may move -- recorded again at every frame, and where its
     // parts were last drawn left behind when history moved it.
-    fState.setRecorded(!said.attachment && said.album.empty());
+    // Frosted, its backdrop is where it is on the screen: drawn each time,
+    // not played back from where it was recorded.
+    const bool frosted = splice::visit(splice::overloaded{[](config::bubbles::frosted) { return true; },
+                                                          [](const auto&) { return false; }},
+                                       bubble_look_now().kind);
+    fState.setRecorded(!said.attachment && said.album.empty() && !frosted);
     auto& [face, body, swipe_mark, unread_bar, readers] = parts;
     swipe_mark.apply({.place = scene::anchor::kCentreRight,
                       .x = -6.0f,

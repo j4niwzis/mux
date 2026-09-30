@@ -439,6 +439,8 @@ void app::refresh(std::source_location from) {
   for (const auto& [id, account] : model->accounts())
     for (const auto& [key, one] : account.conversations)
       filters.emplace(one.id, this->room_event_filter_of(one.id));
+  // The chosen chat's bubbles, as its levels say.
+  root().main().bubbles = root().main().chosen ? this->bubbles_of(*root().main().chosen) : mux::config::bubble_look{};
   // The chosen chat's background, as its levels say.
   root().main().wallpaper = root().main().chosen ? this->wallpaper_of(*root().main().chosen)
                                                  : mux::config::wallpaper_t{mux::config::wallpaper::theme{}};

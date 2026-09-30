@@ -125,6 +125,8 @@ int main(int argc, char** argv) {
   program.theme = mux::config::theme_of(saved.theme);
   if (saved.wallpaper)
     program.wallpaper = mux::config::wallpaper_of(std::string_view(*saved.wallpaper));
+  if (saved.bubbles)
+    program.bubbles = mux::config::bubble_look_of(*saved.bubbles);
   program.accent = mux::config::accent_of(saved.accent);
   program.renderer = mux::config::renderer_of(saved.renderer);
   program.partial_redraw = saved.partial_redraw.value_or(false);
@@ -159,6 +161,8 @@ int main(int argc, char** argv) {
       program.jump_search_in.insert_or_assign(chat, *one.jump_search);
     if (one.wallpaper)
       program.wallpaper_in.insert_or_assign(chat, mux::config::wallpaper_of(std::string_view(*one.wallpaper)));
+    if (one.bubbles)
+      program.bubbles_in.insert_or_assign(chat, mux::config::bubble_look_of(*one.bubbles));
   }
   for (const auto& one : saved.muted.value_or(std::vector<mux::config::muted_chat>{}))
     program.muted.insert({{mux::ui::protocol_of(one.account), one.account}, one.conversation});

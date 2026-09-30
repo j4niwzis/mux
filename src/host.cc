@@ -822,7 +822,7 @@ int run(App& app, const options& how) {
             // dropped on the window -- not the text a field would paste.
             if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_V && (event.key.mod & SDL_KMOD_CTRL) != 0 &&
                 !event.key.repeat) {
-              if (std::optional<std::string> picture = detail::pasted_picture()) {
+              if (std::optional<std::string> picture = pasted_picture()) {
                 app.files_given(std::vector<std::string>{std::move(*picture)}, true);
                 break;
               }

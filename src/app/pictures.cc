@@ -40,41 +40,41 @@ class pictures_part {
   // The bytes of a picture or a file fetched: shown, kept, or saved -- as
   // what it was fetched for says.
   void take(const change::avatar_loaded& picture, bool fresh) {
-    // Decoded on a worker, put in its cache on the UI's thread.
-    auto* scene = s_->scene;
-    const auto shown = [&](mux::ui::image_cache& cache, const std::string& key) {
+    // Decoded on a worker -- no larger than it is shown, where that is
+    // known: `most` pixels on its longer side -- and put in its cache on the
+    // UI's thread. What waits for it is woken by the cache; the window was
+    // repainted whole for each picture that came.
+    const auto shown = [&](mux::ui::image_cache& cache, const std::string& key, int most) {
       auto bytes = std::make_shared<const std::string>(picture.bytes);
-      s_->work->run([bytes, target = &cache, key, scene]() -> workers::done_t {
-        auto image = skia::decodeImage(bytes->data(), bytes->size());
-        return [image = std::move(image), target, key, scene]() mutable {
-          if (image) {
+      s_->work->run([bytes, target = &cache, key, most]() -> workers::done_t {
+        auto image = skia::decodeImageAtMost(bytes->data(), bytes->size(), most);
+        return [image = std::move(image), target, key]() mutable {
+          if (image)
             target->put(key, std::move(image));
-            scene->state().markDamaged();
-          }
         };
       });
     };
     // A whole picture: its frames, where it moves; else it, still.
     const auto shown_whole = [&](const std::string& key) {
       auto bytes = std::make_shared<const std::string>(picture.bytes);
-      s_->work->run([bytes, key, scene]() -> workers::done_t {
+      s_->work->run([bytes, key]() -> workers::done_t {
         auto frames = skia::decodeFrames(bytes->data(), bytes->size());
-        return [frames = std::move(frames), key, scene]() mutable {
+        return [frames = std::move(frames), key]() mutable {
           if (frames.size() > 1)
             mux::ui::animations().put(key, std::move(frames));
           else if (!frames.empty())
             mux::ui::whole_pictures().put(key, std::move(frames.front().image));
-          scene->state().markDamaged();
         };
       });
     };
     splice::visit(splice::overloaded{[&](const media_use::avatar& one) {
-                            shown(mux::ui::avatar_images(), one.of);
+                            // An avatar is shown at 120 px at most -- twice that on a dense screen.
+                            shown(mux::ui::avatar_images(), one.of, 256);
                             if (fresh)
                               avatars_fetched_.erase(picture.source);
                           },
                           [&](const media_use::thumbnail&) {
-                            shown(mux::ui::thumbnails(), picture.source);
+                            shown(mux::ui::thumbnails(), picture.source, 0);
                             if (fresh)
                               thumbnails_fetched_.erase(picture.source);
                           },

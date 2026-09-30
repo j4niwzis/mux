@@ -528,7 +528,7 @@ struct room_settings : nodes::Stack {
       this->setHorizontal();
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-      parts.user.apply({.fillX = false, .grow = scene::axes::kX, .alignSelf = scene::align::kEnd});
+      parts.user.apply({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX, .alignSelf = scene::align::kEnd});
       parts.moderator.apply({.alignSelf = scene::align::kEnd, .margin = {0.0f, 0.0f, 4.0f, 0.0f}});
       parts.admin.apply({.alignSelf = scene::align::kEnd, .margin = {0.0f, 0.0f, 4.0f, 0.0f}});
       parts.apply.setPrimary(true);

@@ -975,8 +975,11 @@ struct explore_box : nodes::Stack {
       this->setHorizontal();
       this->setGap(8.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 6.0f, 0.0f, 6.0f}});
-      parts.query.apply({.fillX = false, .grow = scene::axes::kX});
-      parts.server.apply({.fillX = false, .width = 170.0f});
+      // Their full-width default let go -- fillX = false says nothing -- or
+      // the query, as wide as the row and growing too, lost its growing and
+      // pushed the rest out past the dialog's right edge.
+      parts.query.apply({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX});
+      parts.server.apply({.width = 170.0f, .relativeSize = scene::axes::kNone});
       parts.search.setPrimary(true);
       parts.search.apply({.width = 90.0f, .height = 34.0f, .alignSelf = scene::align::kEnd,
                           .margin = {0.0f, 0.0f, 2.0f, 0.0f}});

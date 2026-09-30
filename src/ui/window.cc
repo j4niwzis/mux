@@ -262,6 +262,13 @@ struct window : scene::Node {
     layer().explore.open(actions, own_server);
   }
   void close_explore() { layer().explore.close(); }
+  // Explore rooms asking its server's directory: said so until it answers.
+  void explore_loading() {
+    if (auto* up = layer().explore.shown()) {
+      up->parts.status.setText("Loading the rooms this server lists\u2026");
+      up->parts.status.setVisible(true);
+    }
+  }
   void show_directory(const std::vector<directory_room>& rooms, const std::string& server) {
     if (auto* up = layer().explore.shown())
       up->show(rooms, server);

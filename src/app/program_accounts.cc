@@ -83,6 +83,12 @@ void app::apply(const request::open_explore&) {
   const auto by = this->matrix_account();
   const std::string own = by ? by->address.substr(by->address.find(':') + 1) : std::string();
   root().open_explore(own);
+  // What the server lists, at once, as Cinny opens its explorer: its
+  // directory with nothing searched.
+  if (by && !shared.demo()) {
+    root().explore_loading();
+    net->search_directory(*by, own, std::string());
+  }
 }
 void app::apply(const request::close_explore&) { root().close_explore(); }
 // A search: an address typed in is gone to, as a link to it would be --

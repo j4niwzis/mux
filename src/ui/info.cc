@@ -1345,7 +1345,7 @@ struct bubbles_picker : nodes::Stack {
     choice_level_t level;
     config::look_part_t part;
     void operator()(float fraction) const {
-      if (!usable(part))
+      if (!usable(part) || !own_here(level, part))
         return;
       config::bubble_look look = current(level, part);
       look.kind = splice::visit(splice::overloaded{[](config::bubbles::solid) { return config::bubbles_t{config::bubbles::translucent{}}; },
@@ -1363,6 +1363,8 @@ struct bubbles_picker : nodes::Stack {
     choice_level_t level;
     element_t which;
     void operator()(float fraction) const {
+      if (!own_here(level, config::look_part::bubbles{}))
+        return;
       config::bubble_look look = current(level, config::look_part::bubbles{});
       look.elements.*which = static_cast<int>(std::lround(std::clamp(fraction, 0.0f, 1.0f) * 100.0f));
       actions->set_bubbles(level, look, config::look_part::bubbles{});
@@ -1373,6 +1375,8 @@ struct bubbles_picker : nodes::Stack {
     choice_level_t level;
     element_t which;
     void operator()() const {
+      if (!own_here(level, config::look_part::bubbles{}))
+        return;
       config::bubble_look look = current(level, config::look_part::bubbles{});
       look.elements.*which = std::nullopt;
       actions->set_bubbles(level, look, config::look_part::bubbles{});
@@ -1435,6 +1439,16 @@ struct bubbles_picker : nodes::Stack {
     if (!own)
       return 0;
     return shift + own->kind.index();
+  }
+  // Whether the level holds a look of its own: as above, what is under the
+  // choice of kind is the level over it's -- shown greyed, and left alone.
+  [[nodiscard]] static bool own_here(const choice_level_t& level, const config::look_part_t& part) {
+    if (!inherits(level))
+      return true;
+    const looks_held& held = looks_at(level);
+    return splice::visit(splice::overloaded{[&](config::look_part::bubbles) { return held.bubbles.has_value(); },
+                                            [&](config::look_part::panels) { return held.panels.has_value(); }},
+                         part);
   }
   struct pick_kind_at {
     Actions* actions;
@@ -1522,10 +1536,16 @@ struct bubbles_picker : nodes::Stack {
       for (std::size_t i = 0; i < config::kElementNames.size(); ++i)
         parts.elements.emplace_back(a, level, kLabels[i], config::kElementNames[i].second);
     }
-    // Greyed where it does nothing.
+    // Greyed where it does nothing: all of it where the panels have nothing
+    // behind them; under the kind, where the level is as above.
     if (!usable(part))
-      for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.kinds, &parts.opacity_label, &parts.opacity})
-        each->apply({.alpha = 0.4f});
+      parts.kinds.apply({.alpha = 0.4f});
+    if (!usable(part) || !own_here(level, part)) {
+      for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.opacity_label, &parts.opacity, &parts.elements_title})
+        each->apply({.alpha = 0.4f, .disabled = true});
+      for (element_row& each : parts.elements)
+        each.apply({.alpha = 0.4f, .disabled = true});
+    }
   }
 };
 

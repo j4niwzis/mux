@@ -718,6 +718,15 @@ int run(App& app, const options& how) {
                                           : SDL_WaitEvent(&event);
       // When the frame's work began: the events that woke it, first.
       const double frame_began = detail::now_ms();
+      // The pointer's moves, one a frame: only the last of them before the
+      // frame is given to the scene -- each ran the hover walk, a restyle
+      // and a hit test, and a quick mouse sends several a frame. Given
+      // before any other event, so that order is kept.
+      std::optional<skiff::scene::pointer::move> motion;
+      const auto give_motion = [&] {
+        if (motion)
+          router.pointer(*std::exchange(motion, std::nullopt));
+      };
       while (got) {
         const float scale = SDL_GetWindowDisplayScale(window);
         (void)scale;
@@ -733,6 +742,8 @@ int run(App& app, const options& how) {
           got = SDL_PollEvent(&event);
           continue;
         }
+        if (event.type != SDL_EVENT_MOUSE_MOTION)
+          give_motion();
         switch (event.type) {
           case SDL_EVENT_CLIPBOARD_UPDATE:
             read_clipboard();
@@ -754,7 +765,7 @@ int run(App& app, const options& how) {
             redraw = true;
             break;
           case SDL_EVENT_MOUSE_MOTION:
-            router.pointer(skiff::scene::pointer::move{event.motion.x, event.motion.y});
+            motion = skiff::scene::pointer::move{event.motion.x, event.motion.y};
             break;
           case SDL_EVENT_MOUSE_BUTTON_DOWN:
             router.pointer(skiff::scene::pointer::down{event.button.x, event.button.y, event.button.button});
@@ -804,6 +815,7 @@ int run(App& app, const options& how) {
         }
         got = SDL_PollEvent(&event);
       }
+      give_motion();
       if (!running)
         break;
 

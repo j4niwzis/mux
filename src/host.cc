@@ -150,6 +150,40 @@ inline void choose_files() {
       nullptr, the_window(), nullptr, 0, nullptr, true);
 }
 
+// A picture on the clipboard, for Ctrl+V: its bytes put in a file of its
+// own, to go where a picture dropped on the window goes. The first of the
+// kinds a picture comes as that the clipboard has.
+struct picture_kind {
+  const char* mime;
+  const char* extension;
+};
+inline constexpr std::array kPictureKinds{
+    picture_kind{"image/png", "png"},   picture_kind{"image/jpeg", "jpg"}, picture_kind{"image/gif", "gif"},
+    picture_kind{"image/webp", "webp"}, picture_kind{"image/bmp", "bmp"},
+};
+[[nodiscard]] inline std::optional<std::string> pasted_picture() {
+  static unsigned counter = 0;
+  for (const picture_kind& kind : kPictureKinds) {
+    if (!SDL_HasClipboardData(kind.mime))
+      continue;
+    std::size_t size = 0;
+    void* data = SDL_GetClipboardData(kind.mime, &size);
+    if (!data)
+      continue;
+    std::error_code failed;
+    const std::filesystem::path folder = std::filesystem::temp_directory_path(failed) / "mux-pasted";
+    std::filesystem::create_directories(folder, failed);
+    const std::filesystem::path path = folder / std::format("pasted-{}.{}", ++counter, kind.extension);
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    out.write(static_cast<const char*>(data), static_cast<std::streamsize>(size));
+    SDL_free(data);
+    if (!out)
+      return std::nullopt;
+    return path.string();
+  }
+  return std::nullopt;
+}
+
 // A path chosen to save a file to, handed to the window's thread as an event
 // of its own, as the files opened are.
 inline std::uint32_t save_event() {
@@ -784,6 +818,15 @@ int run(App& app, const options& how) {
               break;
             // Tab too: the router moves the focus on it itself.
             const skiff::scene::Modifiers held = detail::modifiers_of(event.key.mod);
+            // Ctrl+V with a picture on the clipboard: the picture, as if
+            // dropped on the window -- not the text a field would paste.
+            if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_V && (event.key.mod & SDL_KMOD_CTRL) != 0 &&
+                !event.key.repeat) {
+              if (std::optional<std::string> picture = detail::pasted_picture()) {
+                app.files_given(std::vector<std::string>{std::move(*picture)}, true);
+                break;
+              }
+            }
             if (event.type == SDL_EVENT_KEY_DOWN)
               router.key(skiff::scene::key::down{key, held, event.key.repeat});
             else

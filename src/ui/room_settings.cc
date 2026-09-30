@@ -361,7 +361,7 @@ struct room_settings : nodes::Stack {
                 .topic = field("Room Topic", "", facts.topic),
                 .buttons = buttons_row(box),
                 .main_address = nodes::Text(
-                    facts.alias ? std::format("Main address: {}", *facts.alias) : std::string("Main address: none"), 14.0f,
+                    "Main address: " + facts.alias.value_or("none"), 14.0f,
                     text_colour),
                 .events = event_kind_list<Actions>(a, choice_level::chat{}, facts.events_all, facts.event_kinds),
                 .receipts = receipts_choice<Actions>(a, choice_level::chat{}, facts.receipts),

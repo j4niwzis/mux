@@ -413,20 +413,24 @@ void account<Sink>::catch_up(std::string room, std::string from, std::string unt
         if (one.sender == id_.address)
           continue;
         const auto at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(one.origin_server_ts));
-        if (one.content.template is<loom::ev::m_room_message_content_t>()) {
-          const auto& content = one.content.template as<loom::ev::m_room_message_content_t>();
-          bool me = content.body.find(id_.address) != std::string::npos;
-          if (const auto& said = content.m_mentions)
-            me = (said->user_ids && std::ranges::contains(*said->user_ids, id_.address)) || said->room.value_or(false);
-          if (me) {
-            ++mentions;
-            sink_(change::mentioned{in, one.event_id, at});
-          }
-        } else if (one.content.template is<loom::ev::m_reaction_content_t>()) {
-          const auto& content = one.content.template as<loom::ev::m_reaction_content_t>();
-          if (content.m_relates_to && content.m_relates_to->event_id)
-            reactions.push_back({one.event_id, *content.m_relates_to->event_id, at});
-        }
+        splice::visit(
+            splice::overloaded{
+                [&](const loom::ev::m_room_message_content_t& content) {
+                  bool me = content.body.find(id_.address) != std::string::npos;
+                  if (const auto& said = content.m_mentions)
+                    me = (said->user_ids && std::ranges::contains(*said->user_ids, id_.address)) ||
+                         said->room.value_or(false);
+                  if (me) {
+                    ++mentions;
+                    sink_(change::mentioned{in, one.event_id, at});
+                  }
+                },
+                [&](const loom::ev::m_reaction_content_t& content) {
+                  if (content.m_relates_to && content.m_relates_to->event_id)
+                    reactions.push_back({one.event_id, *content.m_relates_to->event_id, at});
+                },
+                [](const auto&) {}},
+            one.content.data());
       }
       if (reached)
         break;

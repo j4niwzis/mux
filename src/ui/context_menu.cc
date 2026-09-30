@@ -720,15 +720,25 @@ struct seen_row : nodes::Stack {
       fState.apply({.fillX = true, .height = 44.0f, .padding = {7.0f, 17.0f, 7.0f, 13.0f}, .hoverBackground = chosen_colour});
     }
   };
+  // The readers, scrolling where there are more than fit: at most about
+  // seven rows tall.
   struct submenu_t : nodes::Stack {
+    static constexpr float kRow = 44.0f, kMostHeight = 320.0f, kWidth = 240.0f;
+    using rows_t = nodes::Flow<std::vector<reader_row>>;
     struct parts_t {
-      std::vector<reader_row> rows;
+      nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
     } parts;
     explicit submenu_t(const std::vector<seen_reader>& readers) {
+      auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
+      rows.reserve(readers.size());
       for (const seen_reader& one : readers)
-        parts.rows.emplace_back(one);
-      fState.apply({.autoSize = scene::axes::kBoth, .minWidth = 220.0f, .padding = {6.0f, 0.0f, 4.0f, 0.0f},
-                    .cornerRadius = 10.0f, .background = sidebar_colour, .border = scene::Border{band_colour, 1.0f}});
+        rows.emplace_back(one);
+      std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
+      parts.list.apply({.fill = true});
+      const float tall = std::min(kMostHeight, kRow * static_cast<float>(readers.size()) + 10.0f);
+      fState.apply({.width = kWidth, .height = tall, .padding = {6.0f, 0.0f, 4.0f, 0.0f},
+                    .cornerRadius = 10.0f, .background = sidebar_colour, .border = scene::Border{band_colour, 1.0f},
+                    .masking = true});
     }
   };
   std::vector<seen_reader> readers;
@@ -754,8 +764,9 @@ struct seen_row : nodes::Stack {
                   .height = kHeight,
                   .padding = {9.0f, kRight + (shown ? faces_width + 8.0f : 0.0f), 7.0f, 44.0f},
                   .hoverBackground = chosen_colour});
-    // The ticks 15 in and 7 down: out of the flow, back over the padding.
-    mark.apply({.place = scene::anchor::kTopLeft, .x = 15.0f - 44.0f, .y = 7.0f - 9.0f});
+    // The ticks 15 in, in the middle of the row's height: out of the flow,
+    // back over the padding.
+    mark.apply({.place = scene::anchor::kCentreLeft, .x = 15.0f - 44.0f});
     label.setElided(true);
     label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
     // The faces out of the flow, in the room at the right: the first the
@@ -767,14 +778,15 @@ struct seen_row : nodes::Stack {
                           .border = scene::Border{sidebar_colour, 2.0f}});
     }
   }
-  // The submenu while it is hovered, as tdesktop's opens under the pointer.
+  // The submenu while the row or the submenu is hovered, as tdesktop's opens
+  // under the pointer: moving over to it no longer closes it.
   void update(double) {
-    const bool open = fState.hovered() && !readers.empty();
+    const bool open = (fState.hovered() || (parts.submenu && parts.submenu->fState.hovered())) && !readers.empty();
     if (open == parts.submenu.has_value())
       return;
     if (open) {
       parts.submenu.emplace(readers);
-      parts.submenu->apply({.place = scene::anchor::kTopRight, .x = fState.fPadding.fRight + 4.0f + 220.0f, .y = -9.0f});
+      parts.submenu->apply({.place = scene::anchor::kTopRight, .x = fState.fPadding.fRight + 4.0f + submenu_t::kWidth, .y = -9.0f});
     } else {
       parts.submenu.reset();
     }

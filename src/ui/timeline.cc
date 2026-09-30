@@ -305,9 +305,10 @@ struct timeline_area : scene::Node {
           actions->jump_to_message(*one.said.replies_to, quoted_fragment(one.said));
           return true;
         }
-        // The quote: to the message it quotes.
+        // The reply's header: to the message it answers, as it is -- a part
+        // marked there only by a click on the quoted stretch itself.
         if (one.parts.body.parts.quote && one.said.replies_to && one.parts.body.parts.quote->bounds().contains(press.x, press.y)) {
-          actions->jump_to_message(*one.said.replies_to, quoted_fragment(one.said));
+          actions->jump_to_message(*one.said.replies_to);
           return true;
         }
         // The sender, by their avatar or their name: their page.

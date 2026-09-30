@@ -70,7 +70,9 @@ struct timeline_area : scene::Node {
     // The room around the messages is inside what scrolls, so the bar is at
     // the window's edge.
     std::get<0>(parts.timeline.fChildren).apply(
-        {.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 12.0f, 8.0f, 12.0f}});
+        {.fillX = true,
+         .autoSize = scene::axes::kY,
+         .padding = {8.0f, message_bubble::kListSide, 8.0f, message_bubble::kListSide}});
     parts.jump.setVisible(false);
     parts.loading.apply({.place = scene::anchor::kCentre});
     parts.loading.setVisible(false);

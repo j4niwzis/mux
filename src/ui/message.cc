@@ -1103,10 +1103,17 @@ struct message_bubble : nodes::Stack {
     this->invalidateLayout();
   }
   bool unread_start = false;
+  // The list's own room at its left and right, around every row.
+  static constexpr float kListSide = 12.0f;
   // tdesktop's "Unread messages" bar, across the whole row, over it.
   void mark_unread_start() {
     unread_start = true;
     parts.unread_bar.emplace();
+    // Across the whole list, not the row's content box: held out past the
+    // row's own padding (a group's room for the avatar) and the list's sides,
+    // which a relative width is measured inside of.
+    parts.unread_bar->apply({.margin = {0.0f, -(fState.fPadding.fRight + kListSide), 0.0f,
+                                        -(fState.fPadding.fLeft + kListSide)}});
     fState.apply({.padding = {fState.fPadding.fTop + unread_bar_t::kHeight + 6.0f, fState.fPadding.fRight,
                               fState.fPadding.fBottom, fState.fPadding.fLeft}});
     this->invalidateLayout();

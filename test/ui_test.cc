@@ -131,6 +131,7 @@ struct stub {
   void flip_account_notify_sound() {}
   void set_chat_notify(mux::config::notify_mode_t) {}
   void set_room_event_kind(mux::choice_level_t, std::optional<mux::room_event_t>, std::optional<bool>) {}
+  void set_room_events(mux::choice_level_t, std::optional<bool>, std::optional<mux::config::room_event_kinds>) {}
   void set_receipts_shown(mux::choice_level_t, std::optional<bool>) {}
   void set_link_previews(mux::choice_level_t, std::optional<bool>) {}
   void set_jump_search(mux::choice_level_t, std::optional<std::int64_t>) {}

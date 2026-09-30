@@ -299,6 +299,7 @@ struct app : kept_settings {
   // A message come as it happened, notified as the settings say.
   void notify_of(const mux::message& said, bool mentions_me);
   void apply(const request::set_room_event_kind& one);
+  void apply(const request::set_room_events& one);
   void apply(const request::join_room_card&);
   void apply(const request::toggle_emoji&);
   void apply(const request::close_emoji&);

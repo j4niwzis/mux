@@ -638,6 +638,36 @@ void app::apply(const request::set_room_event_kind& one) {
   this->refresh();
 }
 
+// How a level shows room events, as a whole: what it holds replaced.
+void app::apply(const request::set_room_events& one) {
+  splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) {
+                                     history.show_room_events = one.all.value_or(true);
+                                     history.room_event_kinds = one.kinds;
+                                   },
+                                   [&](mux::choice_level::account) {
+                                     this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+                                       mux::config::room_events_in(account) = one.all;
+                                       mux::config::room_event_kinds_in(account) = one.kinds;
+                                     });
+                                   },
+                                   [&](mux::choice_level::chat) {
+                                     const auto& chosen = root().main().chosen;
+                                     if (!chosen)
+                                       return;
+                                     if (one.all)
+                                       room_events.insert_or_assign(*chosen, *one.all);
+                                     else
+                                       room_events.erase(*chosen);
+                                     if (one.kinds)
+                                       room_event_kinds.insert_or_assign(*chosen, *one.kinds);
+                                     else
+                                       room_event_kinds.erase(*chosen);
+                                   }},
+                one.level);
+  (void)this->write();
+  this->refresh();
+}
+
 // How far a jump's search pages back, at a level.
 void app::apply(const request::set_jump_search& one) {
   splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) { history.jump_search = one.most.value_or(5000); },

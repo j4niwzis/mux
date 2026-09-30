@@ -471,6 +471,23 @@ void app::refresh(std::source_location from) {
     mux::ui::looks_at(mux::choice_level::account{}) = std::move(account_held);
     mux::ui::looks_at(mux::choice_level::chat{}) = std::move(chat_held);
   }
+  // And of room events, for their lists to show what is in effect.
+  {
+    mux::ui::room_events_at(mux::choice_level::everywhere{}) = {history.show_room_events, history.room_event_kinds};
+    mux::ui::room_events_held account_held, chat_held;
+    if (const auto& chosen = root().main().chosen) {
+      if (const auto own = room_events.find(*chosen); own != room_events.end())
+        chat_held.all = own->second;
+      if (const auto own = room_event_kinds.find(*chosen); own != room_event_kinds.end())
+        chat_held.kinds = own->second;
+      if (const auto* account = this->settings_of(chosen->account.address)) {
+        account_held.all = mux::config::room_events_of(*account);
+        account_held.kinds = mux::config::room_event_kinds_of(*account);
+      }
+    }
+    mux::ui::room_events_at(mux::choice_level::account{}) = std::move(account_held);
+    mux::ui::room_events_at(mux::choice_level::chat{}) = std::move(chat_held);
+  }
   // The chosen chat's background, as its levels say.
   root().main().wallpaper = root().main().chosen ? this->wallpaper_of(*root().main().chosen)
                                                  : mux::config::wallpaper_t{mux::config::wallpaper::theme{}};

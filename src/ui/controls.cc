@@ -319,31 +319,151 @@ struct menu_button : scene::Node {
 [[nodiscard]] constexpr std::string_view label_of(room_event::reactions) { return "Reactions, each as a line"; }
 [[nodiscard]] constexpr std::string_view label_of(room_event::unreactions) { return "Reactions taken back"; }
 
+// A choice among a few, as a dropdown: a button saying the one in use and
+// a chevron; pressed, the options open under it, in the page, the one in
+// use marked; one pressed, chosen, and the list closed. The menu takes the
+// presses its parts let by -- it holds whether it is open, and nothing of
+// it is pointed at from its parts.
+template <class Choose>
+struct choice_menu : nodes::Stack {
+  Choose choose;  // told the index of the option pressed
+  bool open = false;
+  struct head_t : nodes::Stack {
+    struct parts_t {
+      nodes::Text label;
+      nodes::Text value;
+      nodes::Icon chevron;
+    } parts;
+    head_t(std::string label, std::string value)
+        : parts{.label = nodes::Text(std::move(label), 13.0f, dim_colour),
+                .value = nodes::Text(std::move(value), 14.0f, text_colour),
+                .chevron = nodes::Icon(shape_of(icon::down{}), dim_colour)} {
+      this->setHorizontal();
+      this->setGap(8.0f);
+      fState.apply({.fillX = true, .height = 36.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 6.0f,
+                    .background = tile_colour, .hoverBackground = chosen_colour, .border = scene::Border{band_colour, 1.0f}});
+      parts.label.apply({.alignSelf = scene::align::kMiddle});
+      parts.label.setVisible(!parts.label.text().empty());
+      parts.value.setElided(true);
+      parts.value.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      parts.chevron.apply({.width = 16.0f, .height = 16.0f, .alignSelf = scene::align::kMiddle});
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+  };
+  struct option_t : nodes::Stack {
+    struct parts_t {
+      nodes::Text name;
+    } parts;
+    option_t(std::string name, bool chosen) : parts{.name = nodes::Text(std::move(name), 14.0f, chosen ? accent_colour : text_colour, chosen)} {
+      this->setHorizontal();
+      fState.apply({.fillX = true, .height = 32.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 6.0f,
+                    .hoverBackground = chosen_colour});
+      parts.name.apply({.alignSelf = scene::align::kMiddle});
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+  };
+  struct parts_t {
+    head_t head;
+    std::vector<option_t> options;
+  } parts;
+  choice_menu(std::string label, const std::vector<std::string>& names, std::size_t current, Choose c)
+      : choose(std::move(c)), parts{.head = head_t(std::move(label), current < names.size() ? names[current] : std::string())} {
+    this->setGap(2.0f);
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    parts.options.reserve(names.size());
+    for (std::size_t i = 0; i < names.size(); ++i) {
+      parts.options.emplace_back(names[i], i == current);
+      parts.options.back().setVisible(false);
+    }
+  }
+  void show_options(bool on) {
+    open = on;
+    for (option_t& each : parts.options)
+      each.setVisible(on);
+    this->invalidateLayout();
+    this->markDamaged();
+  }
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  [[nodiscard]] bool onClick(float x, float y) {
+    if (parts.head.bounds().contains(x, y)) {
+      this->show_options(!open);
+      return true;
+    }
+    for (std::size_t i = 0; i < parts.options.size(); ++i)
+      if (parts.options[i].visible() && parts.options[i].bounds().contains(x, y)) {
+        this->show_options(false);
+        choose(i);
+        return true;
+      }
+    return false;
+  }
+};
+
+// What each level holds of room events, as the program last said: for a
+// list to show what is in effect where a level is not its own.
+struct room_events_held {
+  std::optional<bool> all;
+  std::optional<config::room_event_kinds> kinds;
+};
+inline room_events_held& room_events_at(const choice_level_t& level) {
+  static room_events_held everywhere, account, chat;
+  return splice::visit(splice::overloaded{[](choice_level::everywhere) -> room_events_held& { return everywhere; },
+                                          [](choice_level::account) -> room_events_held& { return account; },
+                                          [](choice_level::chat) -> room_events_held& { return chat; }},
+                       level);
+}
+// What is shown with a level as it is, and the levels over it.
+[[nodiscard]] inline room_event_filter events_in_effect(const choice_level_t& level) {
+  const room_events_held& every = room_events_at(choice_level::everywhere{});
+  const room_events_held& account = room_events_at(choice_level::account{});
+  const room_events_held& chat = room_events_at(choice_level::chat{});
+  return splice::visit(
+      splice::overloaded{[&](choice_level::everywhere) {
+                           return logic::filter_of(std::nullopt, std::nullopt, std::nullopt, std::nullopt, every.kinds, every.all.value_or(true));
+                         },
+                         [&](choice_level::account) {
+                           return logic::filter_of(std::nullopt, std::nullopt, account.kinds, account.all, every.kinds, every.all.value_or(true));
+                         },
+                         [&](choice_level::chat) {
+                           return logic::filter_of(chat.kinds, chat.all, account.kinds, account.all, every.kinds, every.all.value_or(true));
+                         }},
+      level);
+}
+// And with the level as the one over it: what "As above" shows.
+[[nodiscard]] inline room_event_filter events_above(const choice_level_t& level) {
+  return splice::visit(splice::overloaded{[](choice_level::chat) { return events_in_effect(choice_level::account{}); },
+                                          [](const auto&) { return events_in_effect(choice_level::everywhere{}); }},
+                       level);
+}
+
 // Which room events show, at one level -- every account's, one's, a chat's:
-// a row for all of them, then one for each kind, each with Show and Hide
-// and, where a level under decides for it, Default. One node for every
-// level; a choice goes to the program as it is made.
+// how, as a dropdown -- As above (under the top), All events, Messages only,
+// or Custom -- and under it a row for each kind, Show or Hide. The rows say
+// what is in effect however the level is set; they are chosen only where
+// it is Custom, and greyed where not: nothing under a choice that overrides
+// it looks as if it did something. Custom starts from what was in effect.
 template <class Actions>
 struct event_kind_list : nodes::Stack {
   struct row;
   struct choose {
     row* in = nullptr;
-    std::optional<bool> show;
+    bool show = true;
     void operator()() const { in->chose(show); }
   };
   struct row : nodes::Stack {
     Actions* actions = nullptr;
     choice_level_t level;
-    std::optional<room_event_t> kind;
+    room_event_t kind;
+    bool live = false;
     struct parts_t {
       nodes::Text label;
-      segment<choose> fallback, show, hide;
+      segment<choose> show, hide;
     } parts;
-    row(Actions* a, choice_level_t at, std::optional<room_event_t> which, std::string_view text,
-        std::optional<bool> now, bool with_default)
+    row(Actions* a, choice_level_t at, room_event_t which, std::string_view text)
         : actions(a), level(at), kind(which),
           parts{.label = nodes::Text(std::string(text), 14.0f, text_colour),
-                .fallback = segment<choose>("Default", {this, std::nullopt}),
                 .show = segment<choose>("Show", {this, true}),
                 .hide = segment<choose>("Hide", {this, false})} {
       this->setHorizontal();
@@ -351,35 +471,105 @@ struct event_kind_list : nodes::Stack {
       fState.apply({.fillX = true, .height = 36.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
       parts.label.setElided(true);
       parts.label.apply({.grow = scene::axes::kX, .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      for (segment<choose>* each : {&parts.fallback, &parts.show, &parts.hide})
+      for (segment<choose>* each : {&parts.show, &parts.hide})
         each->apply({.width = 70.0f, .alignSelf = scene::align::kMiddle});
-      parts.fallback.setVisible(with_default);
-      this->show_choice(with_default ? now : std::optional<bool>(now.value_or(true)));
     }
-    void show_choice(std::optional<bool> now) {
-      parts.fallback.set_active(!now);
-      parts.show.set_active(now == true);
-      parts.hide.set_active(now == false);
+    void show_value(bool on) {
+      parts.show.set_active(on);
+      parts.hide.set_active(!on);
     }
-    void chose(std::optional<bool> now) {
-      this->show_choice(now);
-      actions->set_room_event_kind(level, kind, now);
+    void set_live(bool on) {
+      live = on;
+      fState.apply({.alpha = on ? 1.0f : 0.4f, .disabled = !on});
+    }
+    void chose(bool on) {
+      if (!live)
+        return;
+      this->show_value(on);
+      actions->set_room_event_kind(level, kind, on);
+    }
+  };
+  // The ways a level can be, in the dropdown's order, from As above.
+  static constexpr std::size_t kAbove = 0, kAll = 1, kMessages = 2, kCustom = 3;
+  [[nodiscard]] static bool inherits(const choice_level_t& level) {
+    return splice::visit(splice::overloaded{[](choice_level::everywhere) { return false; }, [](const auto&) { return true; }}, level);
+  }
+  [[nodiscard]] static std::size_t way_of(const choice_level_t& level, std::optional<bool> all,
+                                          const std::optional<config::room_event_kinds>& kinds) {
+    const bool custom = kinds && std::ranges::any_of(all_room_events, [&](const room_event_t& kind) {
+                          return logic::choice_of(kinds, kind).has_value();
+                        });
+    if (custom)
+      return kCustom;
+    if (!all)
+      return inherits(level) ? kAbove : kAll;
+    return *all ? kAll : kMessages;
+  }
+  // A way chosen: the rows shown so and let be chosen or not, and the
+  // program told what the level now holds.
+  struct pick_way {
+    Actions* actions;
+    choice_level_t level;
+    row* first;
+    std::size_t count;
+    void operator()(std::size_t index) const {
+      const std::size_t way = index + (inherits(level) ? 0 : 1);
+      const room_event_filter now = events_in_effect(level);
+      std::optional<bool> all;
+      std::optional<config::room_event_kinds> kinds;
+      room_event_filter shown = now;
+      if (way == kAbove) {
+        shown = events_above(level);
+      } else if (way == kAll) {
+        all = true;
+        shown.shown.fill(true);
+      } else if (way == kMessages) {
+        all = false;
+        shown.shown.fill(false);
+      } else {
+        kinds.emplace();
+        for (const room_event_t& kind : all_room_events)
+          logic::choice_in(*kinds, kind) = now.shows(kind);
+      }
+      for (row& each : std::span(first, count)) {
+        each.show_value(shown.shows(each.kind));
+        each.set_live(way == kCustom);
+      }
+      actions->set_room_events(level, all, kinds);
     }
   };
   struct parts_t {
+    std::optional<choice_menu<pick_way>> way;
     std::vector<row> rows;
   } parts;
   event_kind_list(Actions* a, choice_level_t level, std::optional<bool> all,
                   const std::optional<config::room_event_kinds>& kinds) {
-    const bool everywhere =
-        splice::visit(splice::overloaded{[](choice_level::everywhere) { return true; }, [](const auto&) { return false; }}, level);
+    this->setGap(4.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-    // Made where they stay: each row's switches know it by its address.
-    parts.rows.reserve(1 + kRoomEventKinds);
-    parts.rows.emplace_back(a, level, std::nullopt, "All room events", all, !everywhere);
-    for (const room_event_t& kind : all_room_events)
-      parts.rows.emplace_back(a, level, kind, splice::visit([](auto one) { return label_of(one); }, kind),
-                              logic::choice_of(kinds, kind), true);
+    // Made where they stay: each row's switches know it by its address,
+    // and the dropdown the rows by the first's.
+    parts.rows.reserve(kRoomEventKinds);
+    const std::size_t way = way_of(level, all, kinds);
+    const room_event_filter shown = way == kAbove ? events_above(level)
+                                    : way == kCustom ? events_in_effect(level)
+                                                     : [&] {
+                                                         room_event_filter one;
+                                                         one.shown.fill(way == kAll);
+                                                         return one;
+                                                       }();
+    for (const room_event_t& kind : all_room_events) {
+      parts.rows.emplace_back(a, level, kind, splice::visit([](auto one) { return label_of(one); }, kind));
+      parts.rows.back().show_value(shown.shows(kind));
+      parts.rows.back().set_live(way == kCustom);
+    }
+    std::vector<std::string> names;
+    if (inherits(level))
+      names.emplace_back("As above");
+    for (const char* name : {"All events", "Messages only", "Custom"})
+      names.emplace_back(name);
+    parts.way.emplace("Room events", names, way - (inherits(level) ? 0 : 1),
+                      pick_way{a, level, parts.rows.data(), parts.rows.size()});
+    parts.way->apply({.margin = {0.0f, 20.0f, 4.0f, 20.0f}});
   }
 };
 

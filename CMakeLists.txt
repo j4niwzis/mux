@@ -70,14 +70,14 @@ endforeach()
 # The libraries of this family, each pinned to a commit.
 cme_declare_port(NAME tern PROVIDES tern
   GITHUB_REPOSITORY j4niwzis/tern
-  GIT_TAG eb6bc17dd8c7017a09a1fc645a5383cd6b90c7ba
+  GIT_TAG 8144cacc26012dc1d349b75f6cf326f083c7a69b
   LICENSE AGPL-3.0-only
   SYSTEM NEVER
   TARGETS tern)
 cme_options(tern "TERN_TESTS OFF" "TERN_EXAMPLES OFF")
 cme_declare_port(NAME loom PROVIDES loom
   GITHUB_REPOSITORY j4niwzis/loom
-  GIT_TAG 72b7241ed2f7763beec039b68fb42d31b24162d9
+  GIT_TAG 3d01c27934f0e6cfcef647c9dce28dd7fec3c257
   LICENSE AGPL-3.0-only
   SYSTEM NEVER
   TARGETS loom)
@@ -98,7 +98,7 @@ cme_find_package(OpenSSL REQUIRED)
 # for more of it finds it already built without that, and stops.
 cme_declare_port(NAME alef PROVIDES alef
   GITHUB_REPOSITORY j4niwzis/alef
-  GIT_TAG a345c5485d2c16125f00b10c42728725d8aa71c6
+  GIT_TAG 902f701a1277335b228ca7252af9b6bf940468ac
   LICENSE AGPL-3.0-only
   SYSTEM NEVER
   TARGETS alef)
@@ -112,7 +112,7 @@ cme_find_package(alef COMPONENTS precis idna grapheme line bidi emoji REQUIRED)
 set(SPLICE_ERASE ${MUX_ERASE_HANDLERS} CACHE BOOL "splice::variant through tables outside a release build, as mux's handlers")
 cme_declare_port(NAME splice PROVIDES splice
   GITHUB_REPOSITORY j4niwzis/splice
-  GIT_TAG bd60a0f5c1cdcca8fb7b4076a9354b090b572780
+  GIT_TAG 39bc67a00185f488c989d3c18b98e5995e4dc8dd
   LICENSE GPL-3.0-only
   SYSTEM NEVER
   TARGETS splice)
@@ -124,7 +124,7 @@ cme_find_package(splice REQUIRED)
 # one taken.
 cme_declare_port(NAME knot PROVIDES knot
   GITHUB_REPOSITORY j4niwzis/knot
-  GIT_TAG 49039355f299e81a0c408c38d5cbf7b9b29b4e6f
+  GIT_TAG 18a59fda38de7a79dc93a2dd87bbc6f4d756261d
   LICENSE AGPL-3.0-only
   SYSTEM NEVER)
 

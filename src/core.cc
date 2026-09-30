@@ -500,6 +500,30 @@ struct found_person {
   std::optional<std::string> avatar;
   friend bool operator==(const found_person&, const found_person&) = default;
 };
+// A pack of custom emoji and stickers (MSC2545), as it is edited: one's own
+// (account data) or a room's (a state event, by its state key) -- its name,
+// picture, attribution and use, and its images.
+struct pack_picture {
+  std::string shortcode;
+  std::string url;  // mxc://
+  std::string body;
+  bool emoji = true;    // usable as an emoji
+  bool sticker = true;  // and as a sticker
+  std::string mimetype;
+  std::int64_t width = 0, height = 0, size = 0;
+  friend bool operator==(const pack_picture&, const pack_picture&) = default;
+};
+struct emote_pack {
+  std::optional<std::string> room;  // none: one's own
+  std::string state_key;
+  std::string name;
+  std::optional<std::string> avatar;
+  std::string attribution;
+  bool emoji = true;
+  bool sticker = true;
+  std::vector<pack_picture> pictures;
+  friend bool operator==(const emote_pack&, const emote_pack&) = default;
+};
 struct directory_room {
   std::string id;
   std::string name;
@@ -934,6 +958,26 @@ struct reacted_to_mine {
   std::string target;
   std::chrono::sys_time<std::chrono::milliseconds> at{};
 };
+// The packs of a room, or one's own, as asked for to edit.
+struct packs_listed {
+  account_id by;
+  std::optional<std::string> room;
+  std::vector<emote_pack> packs;
+};
+// A pack saved -- or taken away, where `removed` -- or not.
+struct pack_saved {
+  account_id by;
+  emote_pack pack;
+  bool removed = false;
+  bool done = false;
+};
+// An image uploaded for a pack being edited: its mxc://, none where it
+// failed.
+struct pack_picture_uploaded {
+  account_id by;
+  pack_picture picture;
+  bool done = false;
+};
 // The user directory searched: who it found for what was asked.
 struct people_found {
   account_id by;
@@ -982,7 +1026,8 @@ using change_t = splice::variant<change::connection_changed, change::account_rem
                               change::room_created, change::preview_loaded, change::devtools_text,
                               change::state_listed, change::room_previewed, change::mentioned,
                               change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine,
-                              change::directory_listed, change::people_found>;
+                              change::directory_listed, change::people_found, change::packs_listed, change::pack_saved,
+                              change::pack_picture_uploaded>;
 
 // The model: every account, and every change applied to it.
 class model {
@@ -1253,6 +1298,9 @@ class model {
   }
   void on(const change::directory_listed&) {}  // the window's: the Explore dialog
   void on(const change::people_found&) {}  // the window's: the Start chat dialog
+  void on(const change::packs_listed&) {}  // the window's: the packs' dialog
+  void on(const change::pack_saved&) {}
+  void on(const change::pack_picture_uploaded&) {}
   void on(const change::reacted_to_mine& one) {
     keep_mark(of(one.in), of(one.in).unread_reactions, {one.event, one.target, one.at});
   }

@@ -92,6 +92,13 @@ class account {
   void create_room(std::string name, std::string topic, bool open, std::string alias, bool federate = true);
   // A picture's caption edited: the picture kept, its caption the text.
   void edit_caption(std::string room, std::string event, std::string caption, mux::attachment picture);
+  // Packs of custom emoji and stickers (MSC2545): a room's, or one's own
+  // where none is named, listed to edit; one saved, or a room's taken away;
+  // an image uploaded for one.
+  void list_packs(std::optional<std::string> room);
+  void save_pack(emote_pack pack);
+  void delete_pack(std::string room, std::string state_key);
+  void upload_pack_picture(pack_picture picture, std::string bytes);
   // The user directory searched: people_found for what was asked.
   void search_people(std::string term);
   // A room's gap since the last run, from where the sync left it back to

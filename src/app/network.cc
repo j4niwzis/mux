@@ -375,6 +375,51 @@ struct network {
             one.account);
     });
   }
+  // Packs: listed, saved, taken away, an image uploaded -- by the account named.
+  void list_packs(const mux::account_id& by, std::optional<std::string> room) {
+    loop.post([this, by, room = std::move(room)] {
+      for (auto& one : accounts)
+        splice::visit(
+            [&](auto& account) {
+              if (account->id() == by)
+                account->list_packs(room);
+            },
+            one.account);
+    });
+  }
+  void save_pack(const mux::account_id& by, emote_pack pack) {
+    loop.post([this, by, pack = std::move(pack)] {
+      for (auto& one : accounts)
+        splice::visit(
+            [&](auto& account) {
+              if (account->id() == by)
+                account->save_pack(pack);
+            },
+            one.account);
+    });
+  }
+  void delete_pack(const mux::account_id& by, std::string room, std::string state_key) {
+    loop.post([this, by, room = std::move(room), state_key = std::move(state_key)] {
+      for (auto& one : accounts)
+        splice::visit(
+            [&](auto& account) {
+              if (account->id() == by)
+                account->delete_pack(room, state_key);
+            },
+            one.account);
+    });
+  }
+  void upload_pack_picture(const mux::account_id& by, pack_picture picture, std::string bytes) {
+    loop.post([this, by, picture = std::move(picture), bytes = std::move(bytes)] {
+      for (auto& one : accounts)
+        splice::visit(
+            [&](auto& account) {
+              if (account->id() == by)
+                account->upload_pack_picture(picture, bytes);
+            },
+            one.account);
+    });
+  }
   // The user directory of the account named, searched.
   void search_people(const mux::account_id& by, std::string term) {
     loop.post([this, by, term = std::move(term)] {

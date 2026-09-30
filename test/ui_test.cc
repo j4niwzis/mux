@@ -103,6 +103,12 @@ struct stub {
   void join_directory_room(std::string, std::string) {}
   void create_room(std::string, std::string, bool, std::string, bool = true) {}
   void find_people(std::string) {}
+  void open_packs() {}
+  void open_room_packs() {}
+  void close_packs() {}
+  void save_pack(mux::emote_pack) {}
+  void delete_pack(std::string, std::string) {}
+  void pick_pack_images() {}
   void open_new_room() {}
   void close_new_room() {}
   void copy_text(std::string) {}

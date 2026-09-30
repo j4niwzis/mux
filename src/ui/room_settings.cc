@@ -620,15 +620,18 @@ struct room_settings : nodes::Stack {
       nodes::Text tools = part_heading("Developer tools");
       widgets::Button<ask<Actions, &Actions::explore_state>> explore;
       widgets::Button<ask<Actions, &Actions::open_send_custom>> send_custom;
+      nodes::Text packs_heading = part_heading("Emojis & Stickers");
+      widgets::Button<ask<Actions, &Actions::open_room_packs>> packs;
     } parts;
     advanced_page(Actions* a, room_settings*, const room_settings_facts& facts)
         : parts{.id = copy_line("Internal room ID", facts.id),
                 .version = nodes::Text("Room version: " + facts.version, 14.0f, text_colour),
                 .explore = widgets::Button<ask<Actions, &Actions::explore_state>>("Explore room state", {a}),
-                .send_custom = widgets::Button<ask<Actions, &Actions::open_send_custom>>("Send custom event", {a})} {
+                .send_custom = widgets::Button<ask<Actions, &Actions::open_send_custom>>("Send custom event", {a}),
+                .packs = widgets::Button<ask<Actions, &Actions::open_room_packs>>("Edit room packs", {a})} {
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
-      for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.explore, &parts.send_custom})
+      for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.explore, &parts.send_custom, &parts.packs})
         each->apply({.width = 180.0f, .height = 32.0f});
     }
   };

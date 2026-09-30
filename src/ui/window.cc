@@ -62,6 +62,8 @@ struct window : scene::Node {
       // Element's Start chat, and its Create a room.
       widgets::Dialog<start_chat_box<Actions>> new_chat;
       widgets::Dialog<create_room_box<Actions>> new_room;
+      // Emojis & Stickers: a room's packs, or one's own.
+      widgets::Dialog<packs_box<Actions>> packs;
       // A server's public rooms, searched.
       widgets::Dialog<explore_box<Actions>> explore;
       // The developer tools.
@@ -88,7 +90,7 @@ struct window : scene::Node {
     explicit layers(Actions* a)
         : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a))},
           actions_of(a) {
-      auto& [backdrop, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, explore, devtools, sending,
+      auto& [backdrop, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, explore, devtools, sending,
              emoji, menu, viewer] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
@@ -119,6 +121,8 @@ struct window : scene::Node {
       new_chat.setSize(480.0f, 560.0f);
       new_room.setSheetColour(sidebar_colour);
       new_room.setWidthFittingContent(480.0f);
+      packs.setSheetColour(sidebar_colour);
+      packs.setSize(620.0f, 600.0f);
       explore.setSheetColour(sidebar_colour);
       explore.setSize(640.0f, 560.0f);
       devtools.setSheetColour(sidebar_colour);
@@ -176,6 +180,7 @@ struct window : scene::Node {
     layer().forwarding.dropClosed();
     layer().new_chat.dropClosed();
     layer().new_room.dropClosed();
+    layer().packs.dropClosed();
     layer().explore.dropClosed();
     layer().devtools.dropClosed();
     layer().sending.dropClosed();
@@ -270,6 +275,39 @@ struct window : scene::Node {
     layer().new_room.open(actions, own_server);
   }
   void close_new_room() { layer().new_room.close(); }
+  void open_packs(std::optional<std::string> room, bool editable) { layer().packs.open(actions, std::move(room), editable); }
+  void close_packs() { layer().packs.close(); }
+  void show_packs(std::vector<emote_pack> packs) {
+    if (auto* up = layer().packs.shown())
+      up->show_packs(std::move(packs));
+  }
+  // A pack saved: in the list as it is now, the list shown again -- or one's
+  // own left open; one taken away, out of it.
+  void pack_saved(const emote_pack& pack, bool removed, bool done) {
+    auto* up = layer().packs.shown();
+    if (!up)
+      return;
+    if (!done) {
+      up->parts.note.setText(removed ? "The pack was not deleted." : "The pack was not saved.");
+      return;
+    }
+    const auto same = [&](const emote_pack& one) { return one.room == pack.room && one.state_key == pack.state_key; };
+    std::erase_if(up->packs, same);
+    if (!removed)
+      up->packs.push_back(pack);
+    if (up->room)
+      up->show_list();
+    else
+      up->parts.note.setText("Saved.");
+  }
+  void pack_picture_uploaded(const pack_picture& picture, bool done) {
+    if (auto* up = layer().packs.shown()) {
+      if (done)
+        up->add_picture(picture);
+      else
+        up->parts.note.setText("An image could not be uploaded: " + picture.body);
+    }
+  }
   void open_explore(const std::string& own_server) {
     close_drawer();
     layer().new_chat.close();

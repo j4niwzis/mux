@@ -133,6 +133,10 @@ class pictures_part {
       s_->net->fetch_avatar(of, *source, key);
     };
     auto& screen = s_->root().main();
+    // The images of the pack being edited, by the account of the chat in view.
+    if (screen.current)
+      for (const std::string& url : mux::ui::pack_pictures_shown())
+        want(*screen.current, url, url);
     for (const auto& [id, account] : s_->model->accounts())
       for (const auto& [key, one] : account.conversations) {
         want(id, one.avatar, one.id.id);

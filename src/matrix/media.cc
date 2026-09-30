@@ -83,6 +83,36 @@ void account<Sink>::fetch_media(std::string source, media_use_t use, int size, b
   });
 }
 
+// An image uploaded for a pack: its mxc://, said as pack_picture_uploaded.
+template <class Sink>
+void account<Sink>::upload_pack_picture(pack_picture picture, std::string bytes) {
+  loop_->spawn([this, picture = std::move(picture), bytes = std::move(bytes)]() mutable {
+    std::optional<std::string> uri;
+    if (api_) {
+      std::string target = "/_matrix/media/v3/upload?filename=";
+      for (const char c : picture.body)
+        target += std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_'
+                      ? std::string(1, c)
+                      : std::format("%{:02X}", static_cast<unsigned>(static_cast<unsigned char>(c)));
+      try {
+        const auto got = api_->request("POST", target, bytes, token_ ? std::optional<std::string_view>(*token_) : std::nullopt,
+                                       std::chrono::seconds(120),
+                                       picture.mimetype.empty() ? std::string_view("application/octet-stream")
+                                                                : std::string_view(picture.mimetype));
+        if (got.status == 200)
+          if (auto answer = knot::try_read<upload_answer>(std::string_view(got.body)))
+            uri = std::move(answer->content_uri);
+        if (!uri)
+          log(id_, "upload of {} failed: {} {}", picture.body, got.status, got.body.substr(0, 200));
+      } catch (const net::failure& failed) {
+        log(id_, "upload of {} failed: {}", picture.body, failed.what());
+      }
+    }
+    picture.url = uri.value_or("");
+    sink_(change::pack_picture_uploaded{.by = id_, .picture = std::move(picture), .done = uri.has_value()});
+  });
+}
+
 template <class Sink>
 void account<Sink>::send_file(std::string room, std::string local, std::string bytes, std::string name, std::string mimetype,
                  bool image, int width, int height, std::string caption, std::optional<std::string> reply_to) {

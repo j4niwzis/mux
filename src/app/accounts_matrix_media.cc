@@ -17,5 +17,6 @@ import mux.matrix;
 
 namespace mux::matrix {
 template void account<mux::app::post_change>::fetch_media(std::string source, media_use_t use, int size, bool crop);
+template void account<mux::app::post_change>::upload_pack_picture(pack_picture picture, std::string bytes);
 template void account<mux::app::post_change>::send_file(std::string room, std::string local, std::string bytes, std::string name, std::string mimetype, bool image, int width, int height, std::string caption, std::optional<std::string> reply_to);
 }  // namespace mux::matrix

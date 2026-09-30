@@ -82,6 +82,70 @@ void app::apply(const request::open_new_room&) {
   root().open_new_room(by ? by->address.substr(by->address.find(':') + 1) : std::string());
 }
 void app::apply(const request::close_new_room&) { root().close_new_room(); }
+
+// Emojis & Stickers, as Cinny has them: one's own pack, from Settings; the
+// room's, from its settings -- editable where one's power there is what the
+// room's state asks.
+void app::apply(const request::open_packs&) {
+  packs_account = this->matrix_account();
+  root().open_packs(std::nullopt, true);
+  if (packs_account && !shared.demo())
+    net->list_packs(*packs_account, std::nullopt);
+}
+void app::apply(const request::open_room_packs&) {
+  const auto& chosen = root().main().chosen;
+  const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
+  if (!chat || !mux::is_matrix(chat->id.account.speaks))
+    return;
+  packs_account = chat->id.account;
+  const auto mine = chat->powers.find(chat->id.account.address);
+  const std::int64_t level = mine != chat->powers.end() ? mine->second : chat->power_default;
+  const auto asked = chat->needs.events.find("im.ponies.room_emotes");
+  const std::int64_t needs = asked != chat->needs.events.end() ? asked->second : chat->needs.state_default;
+  root().open_packs(chat->id.id, level >= needs);
+  if (!shared.demo())
+    net->list_packs(*packs_account, chat->id.id);
+}
+void app::apply(const request::close_packs&) {
+  root().close_packs();
+  mux::ui::pack_pictures_shown().clear();
+}
+void app::apply(const request::save_pack& one) {
+  if (packs_account && !shared.demo())
+    net->save_pack(*packs_account, one.pack);
+}
+void app::apply(const request::delete_pack& one) {
+  if (packs_account && !shared.demo())
+    net->delete_pack(*packs_account, one.room, one.state_key);
+}
+void app::apply(const request::pick_pack_images&) {
+  picking_pack_images = true;
+  mux::host::choose_files();
+}
+// Images chosen for the pack open: each a picture, uploaded -- its name
+// its shortcode to begin with, its size and type said in the pack.
+void app::pack_files(const std::vector<std::string>& paths) {
+  if (!packs_account || shared.demo())
+    return;
+  for (const std::string& path : paths) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in)
+      continue;
+    std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    const auto type = mux::media::picture_of(bytes);
+    if (!type)
+      continue;
+    mux::pack_picture one{.shortcode = std::filesystem::path(path).stem().string(),
+                          .body = std::filesystem::path(path).filename().string(),
+                          .mimetype = std::string(splice::visit([](auto kind) { return mux::media::mimetype_of(kind); }, *type)),
+                          .size = static_cast<std::int64_t>(bytes.size())};
+    if (auto image = skia::decodeImage(bytes.data(), bytes.size())) {
+      one.width = image->width();
+      one.height = image->height();
+    }
+    net->upload_pack_picture(*packs_account, std::move(one), std::move(bytes));
+  }
+}
 void app::apply(const request::copy_text& one) { skiff::scene::setClipboardText(one.text); }
 void app::apply(const request::close_new_chat&) { root().close_new_chat(); }
 void app::apply(const request::start_direct& one) {

@@ -53,6 +53,12 @@ void app::woken() {
                                [&](const mux::change::directory_listed& listed) {
                                  root().show_directory(listed.rooms, listed.server);
                                },
+                               // Packs: listed, saved, an image uploaded -- in their dialog.
+                               [&](const mux::change::packs_listed& listed) { root().show_packs(listed.packs); },
+                               [&](const mux::change::pack_saved& saved) { root().pack_saved(saved.pack, saved.removed, saved.done); },
+                               [&](const mux::change::pack_picture_uploaded& uploaded) {
+                                 root().pack_picture_uploaded(uploaded.picture, uploaded.done);
+                               },
                                // People found: in Start chat, while it asks for them.
                                [&](const mux::change::people_found& found) {
                                  root().show_found_people(found.people, found.query);

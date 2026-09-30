@@ -54,7 +54,13 @@ struct app : kept_settings {
   // Work off the UI's thread: decoding pictures, reading the disk.
   workers work;
   // Files chosen in the dialog, or dropped on the window: to the outbox.
-  void files_given(std::vector<std::string> paths, bool dropped) { outbox.files_given(std::move(paths), dropped); }
+  void files_given(std::vector<std::string> paths, bool dropped) {
+    if (std::exchange(picking_pack_images, false) && !dropped) {
+      this->pack_files(paths);
+      return;
+    }
+    outbox.files_given(std::move(paths), dropped);
+  }
   // Where Save As… was asked to put what it saves: to the pictures part.
   void save_path_chosen(std::string path) { pictures.save_to(std::move(path)); }
   // What the parts share, pointed at the program's own: once the program
@@ -299,6 +305,17 @@ struct app : kept_settings {
   void apply(const request::open_new_chat&);
   void apply(const request::find_people& one);
   void apply(const request::open_new_room&);
+  void apply(const request::open_packs&);
+  void apply(const request::open_room_packs&);
+  void apply(const request::close_packs&);
+  void apply(const request::save_pack& one);
+  void apply(const request::delete_pack& one);
+  void apply(const request::pick_pack_images&);
+  // The packs' dialog: the account whose packs it shows, and whether the
+  // files chosen next are its images.
+  std::optional<mux::account_id> packs_account;
+  bool picking_pack_images = false;
+  void pack_files(const std::vector<std::string>& paths);
   void apply(const request::close_new_room&);
   void apply(const request::copy_text& one);
   void apply(const request::close_new_chat&);

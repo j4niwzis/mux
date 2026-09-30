@@ -363,6 +363,154 @@ void account<Sink>::search_directory(std::string server, std::string query) {
   });
 }
 
+namespace packs {
+// A pack's or an image's use, as its usage list says: missing or empty, any.
+inline void use_of(const auto& usage, bool& emoji, bool& sticker) {
+  emoji = loom::client::detail::allows(usage, loom::client::image_use::emoticon{});
+  sticker = loom::client::detail::allows(usage, loom::client::image_use::sticker{});
+}
+// A usage list, as it is written: of the item and value types of the kind
+// of content it goes in.
+template <class Item, class Values>
+[[nodiscard]] std::vector<Item> usage_list(bool emoji, bool sticker) {
+  std::vector<Item> out;
+  if (emoji)
+    out.push_back(Item{typename Values::emoticon{}});
+  if (sticker)
+    out.push_back(Item{typename Values::sticker{}});
+  return out;
+}
+// A pack read from its content -- a room's or one's own, the same shape.
+template <class Content>
+[[nodiscard]] emote_pack pack_of(const Content& content, std::optional<std::string> room, std::string key) {
+  emote_pack pack{.room = std::move(room), .state_key = std::move(key)};
+  if (content.pack) {
+    pack.name = content.pack->display_name.value_or("");
+    pack.avatar = content.pack->avatar_url;
+    pack.attribution = content.pack->attribution.value_or("");
+    use_of(content.pack->usage, pack.emoji, pack.sticker);
+  }
+  for (const auto& [shortcode, image] : content.images) {
+    pack_picture one{.shortcode = shortcode, .url = image.url, .body = image.body.value_or("")};
+    if (image.usage && !image.usage->empty())
+      use_of(image.usage, one.emoji, one.sticker);
+    else {
+      one.emoji = pack.emoji;
+      one.sticker = pack.sticker;
+    }
+    if (image.info) {
+      one.mimetype = image.info->mimetype.value_or("");
+      one.width = image.info->w.value_or(0);
+      one.height = image.info->h.value_or(0);
+      one.size = image.info->size.value_or(0);
+    }
+    pack.pictures.push_back(std::move(one));
+  }
+  return pack;
+}
+// And written: an image's usage only where it is not the pack's.
+template <class Content>
+[[nodiscard]] Content content_of(const emote_pack& pack) {
+  using image_t = typename Content::image_pack_image_t;
+  using meta_t = typename Content::image_pack_meta_t;
+  Content content;
+  auto& meta = content.pack.emplace();
+  if (!pack.name.empty())
+    meta.display_name = pack.name;
+  meta.avatar_url = pack.avatar;
+  if (!pack.attribution.empty())
+    meta.attribution = pack.attribution;
+  meta.usage = usage_list<typename meta_t::usage_item_t, typename meta_t::usage_item_values>(pack.emoji, pack.sticker);
+  for (const pack_picture& one : pack.pictures) {
+    image_t image;
+    image.url = one.url;
+    if (!one.body.empty())
+      image.body = one.body;
+    if (one.emoji != pack.emoji || one.sticker != pack.sticker)
+      image.usage = usage_list<typename image_t::usage_item_t, typename image_t::usage_item_values>(one.emoji, one.sticker);
+    if (!one.mimetype.empty() || one.width > 0 || one.height > 0) {
+      auto& info = image.info.emplace();
+      if (!one.mimetype.empty())
+        info.mimetype = one.mimetype;
+      if (one.width > 0)
+        info.w = one.width;
+      if (one.height > 0)
+        info.h = one.height;
+      if (one.size > 0)
+        info.size = one.size;
+    }
+    content.images.insert_or_assign(one.shortcode, std::move(image));
+  }
+  return content;
+}
+}  // namespace packs
+
+template <class Sink>
+void account<Sink>::list_packs(std::optional<std::string> room) {
+  loop_->spawn([this, room = std::move(room)] {
+    std::vector<emote_pack> found;
+    if (!room) {
+      if (const auto own = state_.account_data.find("im.ponies.user_emotes"); own != state_.account_data.end())
+        splice::visit(splice::overloaded{[&](const loom::ev::im_ponies_user_emotes_content_t& content) {
+                                           found.push_back(packs::pack_of(content, std::nullopt, std::string()));
+                                         },
+                                         [](const auto&) {}},
+                      own->second.content.data());
+      // One's own pack, even empty: to be filled.
+      if (found.empty())
+        found.push_back(emote_pack{});
+    } else if (const auto joined = state_.joined.find(*room); joined != state_.joined.end()) {
+      for (const auto& [key, one] : joined->second.state.events)
+        splice::visit(splice::overloaded{[&](const loom::ev::im_ponies_room_emotes_content_t& content) {
+                                           // An emptied one is a pack taken away.
+                                           if (!content.images.empty() || content.pack)
+                                             found.push_back(packs::pack_of(content, room, key.second));
+                                         },
+                                         [](const auto&) {}},
+                      one.content.data());
+    }
+    sink_(change::packs_listed{id_, room, std::move(found)});
+  });
+}
+
+template <class Sink>
+void account<Sink>::save_pack(emote_pack pack) {
+  loop_->spawn([this, pack = std::move(pack)] {
+    bool done = false;
+    if (api_) {
+      if (pack.room)
+        done = static_cast<bool>(perform(
+            *api_, loom::cs::set_room_state_with_key{
+                       .room_id = *pack.room,
+                       .event_type = "im.ponies.room_emotes",
+                       .state_key = pack.state_key,
+                       .body = as_body(packs::content_of<loom::ev::im_ponies_room_emotes_content_t>(pack))}));
+      else
+        done = static_cast<bool>(perform(
+            *api_, loom::cs::set_account_data{
+                       .user_id = id_.address,
+                       .type = "im.ponies.user_emotes",
+                       .body = as_body(packs::content_of<loom::ev::im_ponies_user_emotes_content_t>(pack))}));
+    }
+    if (!done)
+      log(id_, "the pack {} was not saved", pack.name);
+    sink_(change::pack_saved{.by = id_, .pack = pack, .done = done});
+  });
+}
+
+template <class Sink>
+void account<Sink>::delete_pack(std::string room, std::string state_key) {
+  loop_->spawn([this, room = std::move(room), state_key = std::move(state_key)] {
+    // Taken away as the MSC has it: its state emptied.
+    const bool done = api_ && static_cast<bool>(perform(
+                                  *api_, loom::cs::set_room_state_with_key{.room_id = room,
+                                                                           .event_type = "im.ponies.room_emotes",
+                                                                           .state_key = state_key,
+                                                                           .body = knot::raw{"{}"}}));
+    sink_(change::pack_saved{.by = id_, .pack = emote_pack{.room = room, .state_key = state_key}, .removed = true, .done = done});
+  });
+}
+
 template <class Sink>
 void account<Sink>::search_people(std::string term) {
   loop_->spawn([this, term = std::move(term)] {

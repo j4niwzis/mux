@@ -33,6 +33,12 @@ inline skia::SkColor chat_colour = skia::colorSetARGB(255, 14, 22, 33);
 // The chat's wallpaper, as Telegram's are: a gradient from the top down to
 // chat_colour at the bottom.
 inline skia::SkColor chat_top_colour = skia::colorSetARGB(255, 22, 38, 58);
+// The images of the pack being edited: fetched as avatars are, keyed by
+// their mxc://, while its dialog shows them.
+inline std::vector<std::string>& pack_pictures_shown() {
+  static std::vector<std::string> shown;
+  return shown;
+}
 // And Telegram's pattern over it: dark and faint on a light theme, light and
 // fainter on a dark one.
 inline skia::SkColor pattern_colour = skia::colorSetARGB(20, 255, 255, 255);

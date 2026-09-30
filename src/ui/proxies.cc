@@ -35,6 +35,7 @@ struct settings_home : nodes::Stack {
     row_item<ask<Actions, &Actions::open_accounts>> accounts;
     row_item<ask<Actions, &Actions::settings_animations>> animations;
     row_item<ask<Actions, &Actions::settings_appearance>> appearance;
+    row_item<ask<Actions, &Actions::open_packs>> packs;
     row_item<ask<Actions, &Actions::settings_rendering>> rendering;
     row_item<ask<Actions, &Actions::settings_notifications>> notifications;
     row_item<ask<Actions, &Actions::settings_storage>> storage;
@@ -47,6 +48,7 @@ struct settings_home : nodes::Stack {
               .accounts = {"Accounts", {a}, icon::person{}},
               .animations = {"Animations", {a}, icon::motion{}},
               .appearance = {"Appearance", {a}, icon::eye{}},
+              .packs = {"Emojis & Stickers", {a}, icon::smile{}},
               .rendering = {"Rendering", {a}, icon::sliders{}},
               .notifications = {"Notifications", {a}, icon::bell{}},
               .storage = {"Storage", {a}, icon::clip{}},

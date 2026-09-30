@@ -389,9 +389,11 @@ struct mark_button : scene::Node {
     actions->jump_to_mark(kind);
     return true;
   }
-  // The other button: all of them, listed.
+  // The other button: all of them, listed. On the way back up, not at the
+  // target: a press there of its own hid the one that clicks, and a left
+  // press did nothing.
   using Node::onPointer;
-  void onPointer(scene::phase::target, const scene::pointer::down& press, scene::PointerReply& reply) {
+  void onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
     if (press.button != 3)
       return;
     actions->list_marks(kind);

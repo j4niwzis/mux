@@ -162,15 +162,30 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       // the quote, whether reactions are shown as events or not -- "Reacted
       // with" its key -- pointing at what it reacted to.
       const std::string& key = *content.m_relates_to->key;
+      // A custom emoji's key is its picture: shown as the picture, in HTML,
+      // as a message carries one -- not said to be "a custom emoji".
+      const bool pictured = key.starts_with("mxc://");
+      const auto escaped = [](std::string_view text) {
+        std::string out;
+        for (const char c : text) {
+          switch (c) {
+            case '&': out += "&amp;"; break;
+            case '<': out += "&lt;"; break;
+            case '>': out += "&gt;"; break;
+            case '"': out += "&quot;"; break;
+            default: out += c;
+          }
+        }
+        return out;
+      };
+      const std::string emote = std::format(R"(<img data-mx-emoticon src="{}" alt=":emoji:" height="32">)", escaped(key));
       splice::visit(splice::overloaded{[&](placement::aside) {
                               message made{.in = in,
                                            .id = one.event_id,
                                            .sender = one.sender,
                                            .at = at,
-                                           .body = {std::format("Reacted with {}", key.starts_with("mxc://")
-                                                                                       ? std::string("a custom emoji")
-                                                                                       : key),
-                                                    std::nullopt},
+                                           .body = pictured ? mux::body{"Reacted with :emoji:", "Reacted with " + emote}
+                                                            : mux::body{std::format("Reacted with {}", key), std::nullopt},
                                            .replies_to = content.m_relates_to->event_id,
                                            .outgoing = one.sender == id_.address,
                                            .reaction = true};
@@ -183,10 +198,11 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
                                            .id = one.event_id,
                                            .sender = one.sender,
                                            .at = at,
-                                           .body = {std::format("{} reacted {}", name_in(in.id, one.sender),
-                                                                key.starts_with("mxc://") ? std::string("with a custom emoji")
-                                                                                          : key),
-                                                    std::nullopt},
+                                           .body = pictured
+                                                       ? mux::body{std::format("{} reacted :emoji:", name_in(in.id, one.sender)),
+                                                              escaped(name_in(in.id, one.sender)) + " reacted " + emote}
+                                                       : mux::body{std::format("{} reacted {}", name_in(in.id, one.sender), key),
+                                                              std::nullopt},
                                            .replies_to = content.m_relates_to->event_id,
                                            .outgoing = one.sender == id_.address,
                                            .service = true,

@@ -479,8 +479,12 @@ struct conversations_screen : nodes::Stack {
     } else if (press.key == keys::kC && control) {
       auto& bubbles = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
       const auto selected = std::ranges::find_if(bubbles, [](message_bubble& one) { return one.parts.body.parts.text.hasSelection(); });
-      if (selected == bubbles.end())
+      // Not in a message: what any text shows selected -- View source's.
+      if (selected == bubbles.end()) {
+        if (!scene::selectedText().empty())
+          skiff::scene::setClipboardText(scene::selectedText());
         return;
+      }
       skiff::scene::setClipboardText(selected->parts.body.parts.text.selected());
     } else if (press.key == keys::kEscape && !any && line.answering()) {
       actions->cancel_compose();

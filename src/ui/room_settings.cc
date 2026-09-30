@@ -413,7 +413,7 @@ struct room_settings : nodes::Stack {
                                                         "rooms yet: what is sent after this will not show here."
                                                       : "",
                                                   13.0f, error_colour),
-                .access_about = explained(std::format("Decide who can join {}.", facts.name)),
+                .access_about = explained("Decide who can join " + facts.name + "."),
                 .invite = join_choice("Private (invite only)", "Only invited people can join.",
                                       {box, join_rule::invite{}}, is<join_rule::invite>(facts.join_rule),
                                       facts.may(power_need::change_access{})),
@@ -622,7 +622,7 @@ struct room_settings : nodes::Stack {
     } parts;
     advanced_page(Actions* a, room_settings*, const room_settings_facts& facts)
         : parts{.id = copy_line("Internal room ID", facts.id),
-                .version = nodes::Text(std::format("Room version: {}", facts.version), 14.0f, text_colour),
+                .version = nodes::Text("Room version: " + facts.version, 14.0f, text_colour),
                 .explore = widgets::Button<ask<Actions, &Actions::explore_state>>("Explore room state", {a}),
                 .send_custom = widgets::Button<ask<Actions, &Actions::open_send_custom>>("Send custom event", {a})} {
       this->setGap(6.0f);
@@ -678,7 +678,7 @@ struct room_settings : nodes::Stack {
 
   room_settings(Actions* a, const room_settings_facts& shown)
       : actions(a), facts(shown),
-        parts{.header = header_t(std::format("Room Settings - {}", shown.name), {}, {a}, false, true),
+        parts{.header = header_t("Room Settings - " + shown.name, {}, {a}, false, true),
               .body = body_row(this, page_t(std::in_place_index<0>, a, this, shown))} {
     fState.apply({.fill = true});
     parts.body.parts.tabs.show(tab);

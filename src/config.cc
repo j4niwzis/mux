@@ -451,6 +451,7 @@ struct space_place {
   std::string bar;
   friend bool operator==(const space_place&, const space_place&) = default;
 };
+consteval auto json_schema(knot::type<space_place>) { return knot::schema<space_place>(); }
 struct space_placed {
   std::string account;
   space_item_t item;

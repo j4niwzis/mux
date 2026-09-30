@@ -239,12 +239,12 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
 template <class Sink>
 void account<Sink>::service(const conversation_id& in, const loom::ev::timeline_event& one,
                             std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where, std::string said,
-                            room_event_t kind) {
+                            room_event_t kind, std::optional<std::string> html) {
   sink_(change::message_added{message{.in = in,
                                       .id = one.event_id,
                                       .sender = one.sender,
                                       .at = at,
-                                      .body = {std::move(said), std::nullopt},
+                                      .body = {std::move(said), std::move(html)},
                                       .outgoing = one.sender == id_.address,
                                       .service = true,
                                       .event_kind = kind},
@@ -280,31 +280,56 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
             const membership_t was = before ? membership_from(before->membership) : membership_t{membership::other{}};
             const bool was_in = splice::visit([](auto of) { return of.in; }, was);
             const bool self = one.sender == target_id;
+            // The people in it as people -- pills, as a mention in a message
+            // is one -- in its HTML: links to them, their names as shown.
+            const auto escaped = [](std::string_view text) {
+              std::string out;
+              for (const char c : text) {
+                switch (c) {
+                  case '&': out += "&amp;"; break;
+                  case '<': out += "&lt;"; break;
+                  case '>': out += "&gt;"; break;
+                  case '"': out += "&quot;"; break;
+                  default: out += c;
+                }
+              }
+              return out;
+            };
+            const auto person = [&](const std::string& id, const std::string& name) {
+              return std::format(R"(<a href="https://matrix.to/#/{}">{}</a>)", escaped(id), escaped(name));
+            };
+            const std::string who_link = person(one.sender, who), target_link = person(target_id, target);
+            // A line of who did it ({0}) and to whom ({1}): plain, and with
+            // them as people.
+            const auto say_people = [&](room_event_t kind, std::string_view pattern) {
+              service(in, one, at, where, std::vformat(pattern, std::make_format_args(who, target)), kind,
+                      std::vformat(pattern, std::make_format_args(who_link, target_link)));
+            };
             splice::visit(splice::overloaded{[&](membership::join) {
                                     if (!was_in) {
-                                      say(room_event::joins{}, std::format("{} joined", target));
+                                      say_people(room_event::joins{}, "{1} joined");
                                     } else if (const auto old = before ? before->displayname : std::nullopt; old && *old != target) {
                                       say(room_event::names{}, std::format("{} changed their name to {}", *old, target));
                                     } else {
-                                      say(room_event::avatars{}, std::format("{} changed their picture", target));
+                                      say_people(room_event::avatars{}, "{1} changed their picture");
                                     }
                                   },
                                   [&](membership::leave) {
-                                    splice::visit(splice::overloaded{[&](membership::ban) { say(room_event::invites{}, std::format("{} unbanned {}", who, target)); },
+                                    splice::visit(splice::overloaded{[&](membership::ban) { say_people(room_event::invites{}, "{0} unbanned {1}"); },
                                                           [&](membership::invite) {
-                                                            say(room_event::invites{}, self ? std::format("{} declined the invitation", target)
-                                                                     : std::format("{} withdrew {}'s invitation", who, target));
+                                                            say_people(room_event::invites{}, self ? "{1} declined the invitation"
+                                                                                               : "{0} withdrew {1}'s invitation");
                                                           },
                                                           [&](const auto&) {
-                                                            say(self ? room_event_t{room_event::joins{}} : room_event_t{room_event::invites{}}, self ? std::format("{} left", target)
-                                                                     : std::format("{} removed {}", who, target));
+                                                            say_people(self ? room_event_t{room_event::joins{}} : room_event_t{room_event::invites{}},
+                                                                       self ? "{1} left" : "{0} removed {1}");
                                                           }},
                                                was);
                                   },
-                                  [&](membership::invite) { say(room_event::invites{}, std::format("{} invited {}", who, target)); },
-                                  [&](membership::ban) { say(room_event::invites{}, std::format("{} banned {}", who, target)); },
-                                  [&](membership::knock) { say(room_event::invites{}, std::format("{} asked to join", target)); },
-                                  [&](membership::other) { say(room_event::invites{}, std::format("{} changed {}'s membership", who, target)); }},
+                                  [&](membership::invite) { say_people(room_event::invites{}, "{0} invited {1}"); },
+                                  [&](membership::ban) { say_people(room_event::invites{}, "{0} banned {1}"); },
+                                  [&](membership::knock) { say_people(room_event::invites{}, "{1} asked to join"); },
+                                  [&](membership::other) { say_people(room_event::invites{}, "{0} changed {1}'s membership"); }},
                        now);
           },
           [&](const loom::ev::m_room_name_content_t& content) {

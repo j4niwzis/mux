@@ -267,7 +267,7 @@ class account {
   // person's name there, as the room's state has it.
   void service(const conversation_id& in, const loom::ev::timeline_event& one,
                std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where, std::string said,
-               room_event_t kind = room_event::other{});
+               room_event_t kind = room_event::other{}, std::optional<std::string> html = std::nullopt);
   void done(const conversation_id& in, const loom::ev::timeline_event& one, event_type_t type,
             std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where);
   [[nodiscard]] std::string name_in(const std::string& room, const std::string& user) const;

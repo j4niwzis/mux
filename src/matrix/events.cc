@@ -36,7 +36,7 @@ struct media_info {
   struct thumbnail_t {
     std::optional<std::int64_t> w;
     std::optional<std::int64_t> h;
-    friend consteval auto json_schema(knot::type<media_info::thumbnail_t>) { return knot::schema<media_info::thumbnail_t>(); }
+    friend consteval auto json_schema(knot::type<thumbnail_t>) { return knot::schema<thumbnail_t>(); }
   };
   std::optional<std::string> mimetype;
   std::optional<std::int64_t> size;

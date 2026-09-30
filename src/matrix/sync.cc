@@ -38,7 +38,7 @@ struct user_field {
 struct receipt_event {
   struct at_t {
     std::optional<std::int64_t> ts;
-    friend consteval auto json_schema(knot::type<receipt_event::at_t>) { return knot::schema<receipt_event::at_t>(); }
+    friend consteval auto json_schema(knot::type<at_t>) { return knot::schema<at_t>(); }
   };
   std::map<std::string, std::map<std::string, std::map<std::string, at_t>>> content;
   friend consteval auto json_schema(knot::type<receipt_event>) { return knot::schema<receipt_event>(); }
@@ -49,17 +49,16 @@ struct pack_event {
   struct image_t {
     std::optional<std::string> url;
     std::optional<std::vector<std::string>> usage;
-    friend consteval auto json_schema(knot::type<pack_event::image_t>) { return knot::schema<pack_event::image_t>(); }
+    friend consteval auto json_schema(knot::type<image_t>) { return knot::schema<image_t>(); }
   };
   struct pack_t {
     std::optional<std::vector<std::string>> usage;
-    friend consteval auto json_schema(knot::type<pack_event::pack_t>) { return knot::schema<pack_event::pack_t>(); }
+    friend consteval auto json_schema(knot::type<pack_t>) { return knot::schema<pack_t>(); }
   };
   struct content_t {
     std::optional<std::map<std::string, image_t>> images;
     std::optional<pack_t> pack;
-    friend consteval auto json_schema(knot::type<pack_event::content_t>) { return knot::schema<pack_event::content_t>(); }
-      friend consteval auto json_schema(knot::type<emote_rooms_event::content_t>) { return knot::schema<emote_rooms_event::content_t>(); }
+    friend consteval auto json_schema(knot::type<content_t>) { return knot::schema<content_t>(); }
   };
   content_t content;
   friend consteval auto json_schema(knot::type<pack_event>) { return knot::schema<pack_event>(); }
@@ -69,6 +68,7 @@ struct pack_event {
 struct emote_rooms_event {
   struct content_t {
     std::optional<std::map<std::string, std::map<std::string, knot::raw>>> rooms;
+    friend consteval auto json_schema(knot::type<content_t>) { return knot::schema<content_t>(); }
   };
   content_t content;
   friend consteval auto json_schema(knot::type<emote_rooms_event>) { return knot::schema<emote_rooms_event>(); }

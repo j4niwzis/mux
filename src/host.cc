@@ -573,6 +573,9 @@ int run(App& app, const options& how) {
     bool running = true;
     bool redraw = true;
     bool animating = false;
+    // When a node next wants a frame on its own (a caret's blink): slept
+    // until then where nothing animates, rather than a frame at a time.
+    double wake_at = std::numeric_limits<double>::infinity();
     detail::toasts<App> shown_toasts;
     // Partial redraw's frame, kept between frames; and which one the last
     // frame drew into (a new one is painted whole).
@@ -580,7 +583,11 @@ int run(App& app, const options& how) {
     skia::SkSurface* kept_frame_for = nullptr;
     while (running) {
       SDL_Event event;
-      bool got = (redraw || animating) ? SDL_WaitEventTimeout(&event, 16) : SDL_WaitEvent(&event);
+      const double wake_in = wake_at - detail::now_ms();
+      bool got = (redraw || animating)       ? SDL_WaitEventTimeout(&event, 16)
+                 : std::isfinite(wake_in) ? SDL_WaitEventTimeout(&event, static_cast<std::int32_t>(
+                                                                    std::clamp(wake_in, 1.0, 60000.0)))
+                                          : SDL_WaitEvent(&event);
       while (got) {
         const float scale = SDL_GetWindowDisplayScale(window);
         (void)scale;
@@ -716,6 +723,15 @@ int run(App& app, const options& how) {
       if (traced && !frame.fDamage.isEmpty())
         std::println(std::cerr, "[frame] damage {:.0f},{:.0f} {:.0f}x{:.0f}{}", frame.fDamage.fLeft, frame.fDamage.fTop,
                      frame.fDamage.width(), frame.fDamage.height(), frame.fWantsAnotherFrame ? " (another wanted)" : "");
+      // And which nodes marked it, by type and where.
+      if (traced)
+        for (const auto& one : std::exchange(skiff::scene::damagers(), {})) {
+          int status = 0;
+          char* name = abi::__cxa_demangle(one.type->name(), nullptr, nullptr, &status);
+          std::cerr << "    damaged by " << (name ? name : one.type->name()) << " at " << one.rect.fLeft << ","
+                    << one.rect.fTop << " " << one.rect.width() << "x" << one.rect.height() << "\n";
+          std::free(name);
+        }
       // And which nodes keep asking for frames, by type: said when that
       // changes. skiff notes them as it asks, where asked to.
       skiff::scene::traceSettling() = traced;
@@ -735,6 +751,7 @@ int run(App& app, const options& how) {
       }
       // Frames go on while a notification is up: it goes when its time is.
       animating = frame.fWantsAnotherFrame || !shown_toasts.empty();
+      wake_at = frame.fWakeAtMs;
       if (frame.fDamage.isEmpty() && !redraw)
         continue;
       const bool whole = std::exchange(redraw, false);

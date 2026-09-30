@@ -723,6 +723,15 @@ int run(App& app, const options& how) {
       if (traced && !frame.fDamage.isEmpty())
         std::println(std::cerr, "[frame] damage {:.0f},{:.0f} {:.0f}x{:.0f}{}", frame.fDamage.fLeft, frame.fDamage.fTop,
                      frame.fDamage.width(), frame.fDamage.height(), frame.fWantsAnotherFrame ? " (another wanted)" : "");
+      // What made the frame lay out: the nodes found not laid out, and why.
+      if (traced)
+        for (const auto& one : std::exchange(skiff::scene::dirtiers(), {})) {
+          int status = 0;
+          char* name = abi::__cxa_demangle(one.type->name(), nullptr, nullptr, &status);
+          std::cerr << "    laid out because of " << (name ? name : one.type->name()) << " at " << one.bounds.fLeft << ","
+                    << one.bounds.fTop << (one.children ? " (its children changed)" : " (its layout undone)") << "\n";
+          std::free(name);
+        }
       // And which nodes marked it, by type and where.
       if (traced)
         for (const auto& one : std::exchange(skiff::scene::damagers(), {})) {

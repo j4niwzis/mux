@@ -309,10 +309,18 @@ void account<Sink>::fetch_preview(std::string url) {
     // The authenticated endpoint (Matrix 1.11), and the old one where the
     // server has not that.
     std::optional<link_facts> facts;
+    // What the spec leaves open -- og:title and the rest -- is kept as the
+    // answer's remainder, read here once; og:image is typed already.
+    const auto facts_of = [](const auto& answer) {
+      link_facts read = knot::try_read<link_facts>(answer.rest.text).value_or(link_facts{});
+      if (!read.image)
+        read.image = answer.og_image;
+      return read;
+    };
     if (auto got = perform(*api_, loom::cs::get_url_preview_authed{.url = url}))
-      facts = knot::try_read<link_facts>(knot::to_json_string(*got)).value_or(link_facts{});
+      facts = facts_of(*got);
     else if (auto old = perform(*api_, loom::cs::get_url_preview{.url = url}))
-      facts = knot::try_read<link_facts>(knot::to_json_string(*old)).value_or(link_facts{});
+      facts = facts_of(*old);
     else
       return;
     link_preview made{.site = facts->site.value_or(""),
@@ -498,14 +506,23 @@ void account<Sink>::forward(std::string from, std::string event, std::string to)
       log(id_, "could not fetch {} to forward: {}", event, got.error().said());
       return;
     }
-    auto kept = knot::try_read<content_keys>(knot::to_json_string(*got));
-    if (!kept)
+    // A message's content as it is typed, without what it answered or
+    // replaced: sent on as a message of its own. Anything else is not
+    // forwarded.
+    std::optional<loom::ev::m_room_message_content_t> content;
+    splice::visit(splice::overloaded{[&](const loom::ev::m_room_message_content_t& one) { content = one; },
+                                     [](const auto&) {}},
+                  got->content.data());
+    if (!content) {
+      log(id_, "{} is not a message: not forwarded", event);
       return;
-    kept->content.erase("m.relates_to");
+    }
+    content->m_relates_to.reset();
+    content->m_new_content.reset();
     auto done = perform(*api_, loom::cs::send_message{.room_id = to,
                                                       .event_type = "m.room.message",
                                                       .txn_id = this->transaction(),
-                                                      .body = as_body(kept->content)});
+                                                      .body = as_body(*content)});
     if (!done)
       log(id_, "could not forward {} to {}: {}", event, to, done.error().said());
   });
@@ -543,8 +560,7 @@ void account<Sink>::load_context(std::string room, std::string target) {
         event(in, *it, placement::in_window{});
     // It, read as a timeline event from what the server gave.
     if (got->event)
-      if (auto one = knot::try_read<loom::ev::timeline_event>(knot::to_json_string(*got->event)))
-        event(in, *one, placement::in_window{});
+      event(in, *got->event, placement::in_window{});
     if (got->events_after)
       for (const auto& one : *got->events_after)
         event(in, one, placement::in_window{});

@@ -477,8 +477,10 @@ auto account<Sink>::children_of(const loom::client::joined_room& kept) -> std::v
   for (const auto& [key, one] : kept.state.events) {
     if (!splice::visit([](auto of) { return of.child; }, state_type_of(key.first)))
       continue;
-    // A child taken out has its content emptied.
-    if (const auto said = read_as<content_keys>(one); said && !said->content.empty())
+    // A child taken out has its content emptied: then it is no longer read
+    // as a child's content, which says the servers to reach it by.
+    (void)one;
+    if (kept.state.template content<loom::ev::m_space_child_content_t>("m.space.child", key.second))
       out.push_back(key.second);
   }
   return out;

@@ -45,19 +45,5 @@ struct settings {
 // A typed content as a request's body: its JSON text.
 inline knot::raw as_body(const auto& content) { return knot::raw{knot::to_json_string(content)}; }
 
-// An event's content as its keys, each kept as its text: for what is passed
-// on, or only asked whether it has any.
-struct content_keys {
-  std::map<std::string, knot::raw> content;
-  friend consteval auto json_schema(knot::type<content_keys>) { return knot::schema<content_keys>(); }
-};
-
-// An event of any type, read once into the shape given: what mux reads of
-// a content loom keeps as text (account data, packs of emoji, receipts).
-template <class Shape>
-std::optional<Shape> read_as(const auto& event) {
-  auto got = knot::try_read<Shape>(knot::to_json_string(event));
-  return got ? std::optional<Shape>(std::move(*got)) : std::nullopt;
-}
 
 }  // namespace mux::matrix

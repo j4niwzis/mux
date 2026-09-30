@@ -317,6 +317,7 @@ struct menu_button : scene::Node {
 [[nodiscard]] constexpr std::string_view label_of(room_event::encryption) { return "Encryption"; }
 [[nodiscard]] constexpr std::string_view label_of(room_event::other) { return "Everything else"; }
 [[nodiscard]] constexpr std::string_view label_of(room_event::reactions) { return "Reactions, each as a line"; }
+[[nodiscard]] constexpr std::string_view label_of(room_event::unreactions) { return "Reactions taken back"; }
 
 // Which room events show, at one level -- every account's, one's, a chat's:
 // a row for all of them, then one for each kind, each with Show and Hide

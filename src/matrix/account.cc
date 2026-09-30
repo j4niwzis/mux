@@ -250,7 +250,8 @@ class account {
   void encrypted(const conversation_id& in, const loom::ev::timeline_event& one,
                  std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where);
   // A redaction: a reaction taken back, or a message removed.
-  void redaction(const conversation_id& in, const loom::ev::timeline_event& one);
+  void redaction(const conversation_id& in, const loom::ev::timeline_event& one,
+                 std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where);
   // What is done in a room rather than said, as a line of its own; and a
   // person's name there, as the room's state has it.
   void service(const conversation_id& in, const loom::ev::timeline_event& one,

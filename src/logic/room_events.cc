@@ -27,9 +27,11 @@ using kinds_t = config::room_event_kinds;
 [[nodiscard]] constexpr std::optional<bool> kinds_t::* member_of(room_event::encryption) { return &kinds_t::encryption; }
 [[nodiscard]] constexpr std::optional<bool> kinds_t::* member_of(room_event::other) { return &kinds_t::other; }
 [[nodiscard]] constexpr std::optional<bool> kinds_t::* member_of(room_event::reactions) { return &kinds_t::reactions; }
-// What a kind is where nothing is chosen for it: shown, but reactions --
-// each one a line of its own only where asked for.
+[[nodiscard]] constexpr std::optional<bool> kinds_t::* member_of(room_event::unreactions) { return &kinds_t::unreactions; }
+// What a kind is where nothing is chosen for it: shown, but reactions and
+// reactions taken back -- each one a line of its own only where asked for.
 [[nodiscard]] constexpr bool shown_unless_chosen(room_event::reactions) { return false; }
+[[nodiscard]] constexpr bool shown_unless_chosen(room_event::unreactions) { return false; }
 [[nodiscard]] constexpr bool shown_unless_chosen(const auto&) { return true; }
 
 // A kind's word, as it is kept on disk -- the name of its member -- and a
@@ -48,6 +50,7 @@ using kinds_t = config::room_event_kinds;
 [[nodiscard]] constexpr std::string_view word_of(room_event::encryption) { return "encryption"; }
 [[nodiscard]] constexpr std::string_view word_of(room_event::other) { return "other"; }
 [[nodiscard]] constexpr std::string_view word_of(room_event::reactions) { return "reactions"; }
+[[nodiscard]] constexpr std::string_view word_of(room_event::unreactions) { return "unreactions"; }
 [[nodiscard]] inline std::string_view word_of(const room_event_t& kind) {
   return splice::visit([](auto one) { return word_of(one); }, kind);
 }

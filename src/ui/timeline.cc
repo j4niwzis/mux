@@ -293,7 +293,8 @@ struct timeline_area : scene::Node {
         }
         // A reaction shown as a line: pressed anywhere, to what it is on.
         if (one.said.service && one.said.replies_to && one.parts.body.bounds().contains(press.x, press.y) &&
-            splice::visit(splice::overloaded{[](room_event::reactions) { return true; }, [](const auto&) { return false; }},
+            splice::visit(splice::overloaded{[](room_event::reactions) { return true; },
+                                             [](room_event::unreactions) { return true; }, [](const auto&) { return false; }},
                        one.said.event_kind)) {
           actions->jump_to_message(*one.said.replies_to);
           return true;

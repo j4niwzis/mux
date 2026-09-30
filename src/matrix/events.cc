@@ -216,7 +216,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     // content yet.
     const event_type_t type = event_type_of(one.type);
     splice::visit(splice::overloaded{[&](event_type::encrypted) { encrypted(in, one, at, where); },
-                          [&](event_type::redaction) { redaction(in, one); },
+                          [&](event_type::redaction) { redaction(in, one, at, where); },
                           [](event_type::receipt) {},
                           [&](const auto&) { done(in, one, type, at, where); }},
                type);
@@ -359,7 +359,8 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
 }
 
 template <class Sink>
-void account<Sink>::redaction(const conversation_id& in, const loom::ev::timeline_event& one) {
+void account<Sink>::redaction(const conversation_id& in, const loom::ev::timeline_event& one,
+                              std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where) {
   std::optional<std::string> target = one.redacts;
   // From room version 11, in its content.
   splice::visit(splice::overloaded{[&](const loom::ev::m_room_redaction_content_t& content) {
@@ -374,6 +375,43 @@ void account<Sink>::redaction(const conversation_id& in, const loom::ev::timelin
   if (const auto reaction = reactions_.find(*target); reaction != reactions_.end()) {
     sink_(change::reaction_changed{in, reaction->second.target, reaction->second.key, reaction->second.who,
                                    false});
+    // And a line of its own, quoting what it was on: shown where the chat's
+    // settings show reactions taken back -- by who reacted, or by another
+    // (a moderator) for them. Not for one fetched on its own, for a quote.
+    const std::string& key = reaction->second.key;
+    const std::string& who = reaction->second.who;
+    const bool pictured = key.starts_with("mxc://");
+    const auto escaped = [](std::string_view text) {
+      std::string out;
+      for (const char c : text) {
+        switch (c) {
+          case '&': out += "&amp;"; break;
+          case '<': out += "&lt;"; break;
+          case '>': out += "&gt;"; break;
+          case '"': out += "&quot;"; break;
+          default: out += c;
+        }
+      }
+      return out;
+    };
+    const std::string by = name_in(in.id, one.sender);
+    const std::string said = one.sender == who ? by + " took back" : by + " took back " + name_in(in.id, who) + "'s";
+    message made{.in = in,
+                 .id = one.event_id,
+                 .sender = one.sender,
+                 .at = at,
+                 .body = pictured ? mux::body{said + " :emoji:",
+                                              escaped(said) + " " +
+                                                  std::format(R"(<img data-mx-emoticon src="{}" alt=":emoji:" height="32">)",
+                                                              escaped(key))}
+                                  : mux::body{said + " " + key, std::nullopt},
+                 .replies_to = reaction->second.target,
+                 .outgoing = one.sender == id_.address,
+                 .service = true,
+                 .event_kind = room_event::unreactions{}};
+    splice::visit(splice::overloaded{[](placement::aside) {},
+                                     [&](const auto&) { sink_(change::message_added{std::move(made), where}); }},
+                  where);
     reactions_.erase(reaction);
   } else {
     sink_(change::message_redacted{in, *target});

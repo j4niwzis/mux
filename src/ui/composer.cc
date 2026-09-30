@@ -454,4 +454,43 @@ struct jump_button : scene::Node {
   }
 };
 
+// Back to the chat a jump came from -- a link or a reply into another chat
+// -- over "↓", as Telegram's: the chat as it was left.
+template <class Actions>
+struct back_button : scene::Node {
+  Actions* actions = nullptr;
+  struct parts_t {
+    nodes::Icon mark;
+  } parts{.mark = nodes::Icon(shape_of(icon::back{}), text_colour)};
+  explicit back_button(Actions* a) : actions(a) {
+    fState.apply({.place = scene::anchor::kBottomRight,
+                  .x = -18.0f,
+                  .y = -12.0f,
+                  .width = 42.0f,
+                  .height = 42.0f,
+                  .cornerRadius = 21.0f,
+                  .background = sidebar_colour,
+                  .hoverBackground = chosen_colour,
+                  .border = scene::Border{band_colour, 1.0f}});
+    parts.mark.apply({.fill = true});
+    this->setVisible(false);
+  }
+  // Up or not, at a place in the stack of buttons over the list's corner.
+  void show(bool up, int slot) {
+    if (up != this->visible())
+      this->setVisible(up);
+    const float y = -12.0f - 52.0f * static_cast<float>(slot);
+    if (fState.fY != y) {
+      fState.apply({.y = y});
+      this->invalidateLayout();
+    }
+  }
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+  [[nodiscard]] bool onClick(float, float) {
+    actions->return_to_chat();
+    return true;
+  }
+};
+
 }  // namespace mux::ui

@@ -154,9 +154,18 @@ void app::apply(const request::toggle_info&) { root().main().toggle_info(); }
 // newest from the disk first -- live again -- then to its end.
 void app::apply(const request::jump_to_end&) {
   auto& screen = root().main();
+  // Back where a jump in this chat came from first, where there is one.
+  if (screen.go_back())
+    return;
   if (screen.chosen)
     this->go_live(*screen.chosen);
   screen.jump_to_end();
+}
+
+// Back to the chat a jump to another left: as it was left there.
+void app::apply(const request::return_to_chat&) {
+  if (const auto back = root().main().take_chat_return())
+    this->apply(request::choose{*back});
 }
 
 // A chat that is a window away from its newest: its newest from the disk,

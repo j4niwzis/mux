@@ -598,6 +598,48 @@ struct conversations_screen : nodes::Stack {
   // made, paged back to, fetched around, aimed at -- and skiff draws the next
   // frame only for what is still settling. Nothing else here asks for one.
   [[nodiscard]] bool settling() const { return jumping_to.has_value() || aiming.has_value(); }
+  // Where jumps in a chat came from -- a reply's quote, a link to a
+  // message: "↓" goes back to each in turn, the last first, before it goes
+  // to the newest, as Telegram's. And the chats jumps went out of, to a
+  // message in another: the button over "↓" goes back to the last.
+  std::map<conversation_id, std::vector<std::string>> returns;
+  std::vector<conversation_id> chat_returns;
+  // A jump in this chat about to go: where the view is, to come back to.
+  void note_return() {
+    if (chosen)
+      if (std::optional<std::string> here = this->last_seen())
+        returns[*chosen].push_back(std::move(*here));
+  }
+  // A jump to another chat about to go: this one, to come back to.
+  void note_chat_return() {
+    if (chosen)
+      chat_returns.push_back(*chosen);
+  }
+  [[nodiscard]] std::optional<conversation_id> take_chat_return() {
+    if (chat_returns.empty())
+      return std::nullopt;
+    conversation_id back = chat_returns.back();
+    chat_returns.pop_back();
+    return back;
+  }
+  [[nodiscard]] bool has_return() const {
+    if (!chosen)
+      return false;
+    const auto found = returns.find(*chosen);
+    return found != returns.end() && !found->second.empty();
+  }
+  // Back to where the last jump in this chat came from, where there is
+  // one: gone to quietly, not flashed.
+  bool go_back() {
+    if (!this->has_return())
+      return false;
+    auto& stack = returns[*chosen];
+    std::string id = std::move(stack.back());
+    stack.pop_back();
+    this->jump_to(std::move(id));
+    jump_quiet = true;
+    return true;
+  }
   // Back to the newest, and nothing unseen. A jump still on its way, or a
   // message still aimed at -- one jumped to a moment ago, held in view while
   // what is above it settles -- let go first: it pulled the view back to
@@ -606,8 +648,13 @@ struct conversations_screen : nodes::Stack {
     this->stop_jump();
     aiming.reset();
     jump_fragment.reset();
-    // To the newest: the stretch made at the end again.
-    if (!made.to_end && last_model) {
+    if (chosen)
+      returns.erase(*chosen);
+    // The stretch at the end made again, even where it reaches the end: one
+    // grown up from there -- the reader high above -- slid on up as the view
+    // left the top, dropped its end to stay within its most, and the glide
+    // stopped short of the newest: pressed twice.
+    if (last_model) {
       made = made_range{};
       this->show_conversation(*last_model);
     }
@@ -1051,12 +1098,18 @@ struct conversations_screen : nodes::Stack {
     }
     // Away from the newest: scrolled up, or in a window of the history.
     const conversation* shown_one = chosen && last_model ? last_model->find(*chosen) : nullptr;
-    const bool away = !timeline.atEnd(40.0f) || (shown_one && shown_one->detached);
+    const bool away = !timeline.atEnd(40.0f) || (shown_one && shown_one->detached) || this->has_return();
     if (away != chat.area.parts.jump.visible())
       chat.area.parts.jump.setVisible(away);
     // The @ and the heart, stacked over "↓" where it is up.
     if (const conversation* here = chosen && last_model ? last_model->find(*chosen) : nullptr) {
       int slot = chat.area.parts.jump.visible() ? 1 : 0;
+      // Come back to the chat a jump left by hand: that way back is done.
+      while (!chat_returns.empty() && chat_returns.back() == *chosen)
+        chat_returns.pop_back();
+      chat.area.parts.back.show(!chat_returns.empty(), slot);
+      if (!chat_returns.empty())
+        ++slot;
       chat.area.parts.mentions.show(here->unread_mentions.size(), slot);
       if (!here->unread_mentions.empty())
         ++slot;
@@ -1069,7 +1122,7 @@ struct conversations_screen : nodes::Stack {
     // Near the top: the stretch made slides up -- the far ones below let
     // go -- and past all that is loaded, the history is paged back. Near
     // the bottom, where it is not at the end, it slides down.
-    if (chosen && last_model && !jumping_to)
+    if (chosen && last_model && !jumping_to && !timeline.glidingToEnd())
       if (const conversation* one = last_model->find(*chosen)) {
         auto [from, to] = this->made_indices(one->timeline);
         // Slid while a screen and a half is still made beyond the view.

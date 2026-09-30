@@ -46,8 +46,14 @@ void app::open_chat(const mux::conversation_id& which, const std::optional<std::
 // reacted to; and the view jumps, to the part a quote marks where it has one.
 void app::go_to_message(const mux::conversation_id& in, std::string id, std::optional<std::string> fragment) {
   auto& screen = root().main();
-  if (!screen.chosen || *screen.chosen != in)
+  // Where it goes from, to come back to: this chat, where it goes to
+  // another; else the place in this one.
+  if (!screen.chosen || *screen.chosen != in) {
+    screen.note_chat_return();
     this->open_chat(in, std::nullopt);
+  } else {
+    screen.note_return();
+  }
   if (const mux::conversation* chat = model->find(in))
     if (const auto aside = chat->quoted.find(id);
         aside != chat->quoted.end() && aside->second.reaction && aside->second.replies_to) {

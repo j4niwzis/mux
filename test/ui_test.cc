@@ -41,6 +41,7 @@ struct stub {
   void pop_panel() {}
   void toggle_info() {}
   void jump_to_end() {}
+  void return_to_chat() {}
   void message_menu(mux::ui::menu_facts) {}
   void menu_copy_link() {}
   void menu_save() {}

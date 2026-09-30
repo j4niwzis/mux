@@ -446,7 +446,7 @@ struct conversations_screen : nodes::Stack {
                   .hide = widgets::Button<set_bars_act>("Hide", {a, account, item, false, false})} {
         this->setGap(4.0f);
         fState.apply({.width = 190.0f, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 8.0f, 8.0f}, .cornerRadius = 10.0f,
-                      .background = sidebar_colour, .border = scene::Border{band_colour, 1.0f},
+                      .background = popup_colour(), .border = scene::Border{band_colour, 1.0f},
                       .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
         parts.title.setElided(true);
         parts.title.apply({.fillX = true});

@@ -47,6 +47,9 @@ inline config::bubble_look& bubble_look_now() {
   return splice::visit(splice::overloaded{[](config::bubbles::solid) { return 100; }, [&](const auto&) { return look.opacity; }},
                        look.kind);
 }
+// A menu's plate: the side's colour, all but opaque -- never taken for a
+// panel's fill, so a see-through panel look leaves menus readable over it.
+[[nodiscard]] inline skia::SkColor popup_colour() { return (sidebar_colour & 0x00FFFFFFu) | (0xFEu << 24); }
 // A colour at an opacity in percent.
 [[nodiscard]] inline skia::SkColor at_opacity(skia::SkColor colour, int percent) {
   const auto alpha = static_cast<unsigned>(std::lround(((colour >> 24) & 0xFF) * std::clamp(percent, 0, 100) / 100.0));

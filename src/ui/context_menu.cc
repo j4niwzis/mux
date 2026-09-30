@@ -804,7 +804,7 @@ struct seen_row : nodes::Stack {
       parts.list.apply({.fill = true});
       const float tall = height_for(readers.size());
       fState.apply({.width = kWidth, .height = tall, .padding = {6.0f, 0.0f, 4.0f, 0.0f},
-                    .cornerRadius = 10.0f, .background = sidebar_colour, .border = scene::Border{band_colour, 1.0f},
+                    .cornerRadius = 10.0f, .background = popup_colour(), .border = scene::Border{band_colour, 1.0f},
                     .masking = true});
     }
   };
@@ -1101,7 +1101,7 @@ struct context_menu : scene::Node {
       seen_band.apply({.fillX = true, .height = 1.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f}});
       // As wide as its widest -- the quick reactions -- and no narrower than a
       // menu reads well at; the items fill that width.
-      fState.apply({.autoSize = scene::axes::kBoth, .minWidth = 220.0f, .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .cornerRadius = 10.0f, .background = sidebar_colour, .border = scene::Border{band_colour, 1.0f},
+      fState.apply({.autoSize = scene::axes::kBoth, .minWidth = 220.0f, .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .cornerRadius = 10.0f, .background = popup_colour(), .border = scene::Border{band_colour, 1.0f},
                     .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
     }
   };

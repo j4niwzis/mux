@@ -556,10 +556,6 @@ struct conversations_screen : nodes::Stack {
       if (!drag)
         return;
       if (!drag->moving) {
-        if (reply.fCaptured) {
-          drag.reset();
-          return;
-        }
         if (std::abs(at.x - drag->x0) < 6.0f && std::abs(at.y - drag->y0) < 6.0f)
           return;
         drag->moving = true;
@@ -1668,7 +1664,20 @@ struct conversations_screen : nodes::Stack {
       for (const std::string& name : groups)
         folders.emplace_back(name, folder::group{name});
     }
-    if (std::ranges::find(folders, folder, &std::pair<std::string, folder_t>::second) == folders.end())
+    // The folder chosen kept while it is still there: a tab's, or a bar's --
+    // Direct messages, or a space the account has (the bars' are no tabs).
+    const bool in_bars = spaces_on && splice::visit(
+        splice::overloaded{[](const folder::direct&) { return true; },
+                           [&](const folder::space& s) {
+                             if (!current)
+                               return false;
+                             const auto& chats = now.accounts().at(*current).conversations;
+                             const auto found = chats.find(s.room);
+                             return found != chats.end() && found->second.space;
+                           },
+                           [](const auto&) { return false; }},
+        folder);
+    if (!in_bars && std::ranges::find(folders, folder, &std::pair<std::string, folder_t>::second) == folders.end())
       folder = folder::all{};
     // Made again only where they changed: made at every change in the model,
     // new tabs were a full walk and the bar laid out and painted again.

@@ -998,6 +998,10 @@ struct message_bubble : nodes::Stack {
     // eighty made around it -- asked for frames forever, and every frame
     // repainted the chat and the list beside it.
     [[nodiscard]] bool settling() const { return !time_placed && !fState.fBounds.isEmpty(); }
+    // Ticked only until the time is placed: every bubble in view was ticked
+    // at every frame for as long as it was shown. What moves it again --
+    // its text, its reactions -- marks it.
+    [[nodiscard]] bool wantsTick() const { return !time_placed; }
     [[nodiscard]] static skia::SkColor mixed(skia::SkColor from, skia::SkColor to, float amount) {
       const auto channel = [&](int shift) {
         const float a = static_cast<float>((from >> shift) & 0xFF), b = static_cast<float>((to >> shift) & 0xFF);

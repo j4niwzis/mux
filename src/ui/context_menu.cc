@@ -695,6 +695,8 @@ struct emoji_popup : scene::Node {
 struct seen_row : nodes::Stack {
   static constexpr float kHeight = 33.0f, kFace = 22.0f, kOverlap = 8.0f, kRight = 17.0f;
   static constexpr std::size_t kMostFaces = 3;
+  // How far the readers list lies over the menu it opens from.
+  static constexpr float kOverlapMenu = 6.0f;
   // A reader, as a line of the submenu.
   struct reader_row : nodes::Stack {
     struct lines_t : nodes::Stack {
@@ -779,14 +781,16 @@ struct seen_row : nodes::Stack {
     }
   }
   // The submenu while the row or the submenu is hovered, as tdesktop's opens
-  // under the pointer: moving over to it no longer closes it.
+  // under the pointer: moving over to it no longer closes it. It overlaps the
+  // menu's edge: a gap between them, where neither is hovered, closed it on
+  // the way over.
   void update(double) {
     const bool open = (fState.hovered() || (parts.submenu && parts.submenu->fState.hovered())) && !readers.empty();
     if (open == parts.submenu.has_value())
       return;
     if (open) {
       parts.submenu.emplace(readers);
-      parts.submenu->apply({.place = scene::anchor::kTopRight, .x = fState.fPadding.fRight + 4.0f + submenu_t::kWidth, .y = -9.0f});
+      parts.submenu->apply({.place = scene::anchor::kTopRight, .x = fState.fPadding.fRight - kOverlapMenu + submenu_t::kWidth, .y = -9.0f});
     } else {
       parts.submenu.reset();
     }

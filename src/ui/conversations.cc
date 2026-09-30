@@ -100,6 +100,14 @@ struct conversations_screen : nodes::Stack {
   // say: set by the program before it shows the model; a chat not in it
   // shows them all.
   std::map<conversation_id, room_event_filter> event_filters;
+  // Whether a chat's view has a message: said, or a room event its filter
+  // shows -- what the reader can see, and so answer.
+  [[nodiscard]] bool shown_in(const conversation_id& chat, const message& said) const {
+    if (!said.service)
+      return true;
+    const auto found = event_filters.find(chat);
+    return found == event_filters.end() || found->second.shows(said.event_kind);
+  }
   // The chats that show who has read up to where, as faces.
   std::set<conversation_id> receipts_in;
   // The chats that show no link previews.

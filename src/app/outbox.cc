@@ -86,9 +86,11 @@ class outbox_part {
       screen.jump_to(next->id);
       return;
     }
+    // What can be answered: what the view shows -- not what it hides, a room
+    // event its filter leaves out.
     std::vector<const message*> answerable;
     for (const message& each : chat->timeline)
-      if (!each.id.empty() && !each.redacted)
+      if (!each.id.empty() && !each.redacted && screen.shown_in(chat->id, each))
         answerable.push_back(&each);
     if (answerable.empty())
       return;

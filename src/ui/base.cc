@@ -30,6 +30,9 @@ inline skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110);
 inline skia::SkColor selected_text_colour = skia::colorSetARGB(255, 255, 255, 255);
 inline skia::SkColor out_bubble_colour = skia::colorSetARGB(255, 43, 82, 120);
 inline skia::SkColor chat_colour = skia::colorSetARGB(255, 14, 22, 33);
+// The chat's wallpaper, as Telegram's are: a gradient from the top down to
+// chat_colour at the bottom.
+inline skia::SkColor chat_top_colour = skia::colorSetARGB(255, 22, 38, 58);
 inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 
 // The protocol an address speaks: a Matrix user ID starts with '@', and a JID

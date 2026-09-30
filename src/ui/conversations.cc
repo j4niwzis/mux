@@ -419,7 +419,8 @@ struct conversations_screen : nodes::Stack {
       parts.pinned.apply({.fillX = true, .height = pinned_bar<pinned_press>::kHeight});
       parts.pinned.setVisible(false);
       header.show({}, [a](const auto& shown) { return chat_header<Actions>(a, shown); });
-      fState.apply({.fillY = true, .grow = scene::axes::kX, .background = chat_colour});
+      // The wallpaper: the theme's gradient, as Telegram's.
+      fState.apply({.fillY = true, .grow = scene::axes::kX, .gradient = scene::Gradient{chat_top_colour, chat_colour}});
       area.apply({.fillX = true, .grow = scene::axes::kY});
       parts.mentions.setVisible(false);
     }

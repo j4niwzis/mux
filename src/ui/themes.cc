@@ -60,7 +60,8 @@ inline void use_theme(config::theme::classic) {
   bubble_colour = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
   out_bubble_colour = skia::colorSetARGB(255, 239, 253, 222);  // #effdde
   sent_time_colour = skia::colorSetARGB(255, 109, 181, 102);  // #6db566
-  chat_colour = skia::colorSetARGB(255, 155, 212, 148);  // #9bd494
+  chat_colour = skia::colorSetARGB(255, 136, 184, 132);      // #88b884, Telegram's default wallpaper
+  chat_top_colour = skia::colorSetARGB(255, 213, 216, 141);  // #d5d88d, down to it
   on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
   auto& widget = widgets::theme();
   widget = widgets::Theme{};
@@ -91,7 +92,8 @@ inline void use_theme(config::theme::day) {
   bubble_colour = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
   out_bubble_colour = skia::colorSetARGB(255, 222, 241, 253);  // #def1fd
   sent_time_colour = skia::colorSetARGB(255, 134, 168, 194);  // #86a8c2
-  chat_colour = skia::colorSetARGB(255, 116, 180, 224);  // #74b4e0
+  chat_colour = skia::colorSetARGB(255, 92, 159, 214);       // #5c9fd6
+  chat_top_colour = skia::colorSetARGB(255, 166, 211, 240);  // #a6d3f0, down to it
   on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
   auto& widget = widgets::theme();
   widget = widgets::Theme{};
@@ -122,7 +124,8 @@ inline void use_theme(config::theme::tinted) {
   bubble_colour = skia::colorSetARGB(255, 24, 37, 51);  // #182533
   out_bubble_colour = skia::colorSetARGB(255, 43, 82, 120);  // #2b5278
   sent_time_colour = skia::colorSetARGB(255, 125, 168, 211);  // #7da8d3
-  chat_colour = skia::colorSetARGB(255, 14, 22, 33);  // #0e1621
+  chat_colour = skia::colorSetARGB(255, 14, 22, 33);      // #0e1621
+  chat_top_colour = skia::colorSetARGB(255, 25, 44, 66);  // #192c42, down to it
   on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
   auto& widget = widgets::theme();
   widget = widgets::Theme{};
@@ -153,7 +156,8 @@ inline void use_theme(config::theme::night) {
   bubble_colour = skia::colorSetARGB(255, 51, 57, 63);  // #33393f
   out_bubble_colour = skia::colorSetARGB(255, 42, 47, 51);  // #2a2f33
   sent_time_colour = skia::colorSetARGB(255, 115, 127, 135);  // #737f87
-  chat_colour = skia::colorSetARGB(255, 24, 25, 29);  // #18191d
+  chat_colour = skia::colorSetARGB(255, 24, 25, 29);      // #18191d
+  chat_top_colour = skia::colorSetARGB(255, 32, 46, 40);  // #202e28, down to it
   on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
   auto& widget = widgets::theme();
   widget = widgets::Theme{};

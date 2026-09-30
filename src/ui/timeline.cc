@@ -77,6 +77,9 @@ struct timeline_area : scene::Node {
               .loading = widgets::RadialLoader<stop_jump>(44.0f, {a})},
         actions(a) {
     parts.timeline.apply({.fill = true});
+    // Over the wallpaper's gradient, which stays where it is: a scroll step
+    // repainted, not copied.
+    parts.timeline.setCopiesOnScroll(false);
     // The room around the messages is inside what scrolls, so the bar is at
     // the window's edge.
     std::get<0>(parts.timeline.fChildren).apply(

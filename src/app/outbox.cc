@@ -43,17 +43,38 @@ class outbox_part {
     s_->root().main().line.show_context(mux::ui::compose_context{mux::ui::icon::pencil{}, "Edit message", std::move(line)});
     s_->root().main().line.set_text(text);
   }
+  // A picture whose caption may be edited (not a video's, whose own is its
+  // file): as Element edits one.
+  [[nodiscard]] static bool captioned(const message& one) {
+    return one.attachment && is_picture(one.attachment->kind) && !one.attachment->video;
+  }
+  // What of one's own messages may be edited: its text, or its picture's
+  // caption -- not a file, a video or a sound.
+  [[nodiscard]] static bool editable(const message& one) {
+    return one.outgoing && !one.redacted && !one.id.empty() && !one.service &&
+           (one.attachment ? captioned(one) : !one.body.plain.empty());
+  }
+  // What the field is given to edit: the text; a picture's caption, nothing
+  // where it has none -- its body then its file's name.
+  [[nodiscard]] static std::string edited_text(const message& one) {
+    return one.attachment && one.body.plain == one.attachment->name ? std::string() : one.body.plain;
+  }
+  [[nodiscard]] const message* message_of(const conversation_id& in, const std::string& id) const {
+    if (const conversation* chat = s_->model->find(in))
+      if (const auto found = std::ranges::find(chat->timeline, id, &message::id); found != chat->timeline.end())
+        return &*found;
+    return nullptr;
+  }
   // Up in an empty input: the last message sent here edited.
   void apply(const request::edit_last&) {
     const auto& chosen = s_->root().main().chosen;
     const conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
     if (!chat)
       return;
-    const auto last = std::ranges::find_if(chat->timeline.rbegin(), chat->timeline.rend(), [](const message& one) {
-      return one.outgoing && !one.redacted && !one.id.empty() && !one.body.plain.empty();
-    });
+    const auto last = std::ranges::find_if(chat->timeline.rbegin(), chat->timeline.rend(),
+                                           [](const message& one) { return editable(one); });
     if (last != chat->timeline.rend())
-      this->edit(last->id, last->body.plain);
+      this->edit(last->id, edited_text(*last));
   }
   // Ctrl+Up: the last message answered -- and, answering one, the one above
   // it; Ctrl+Down the one below, and past the newest the answer let go. The
@@ -73,7 +94,7 @@ class outbox_part {
     if (editing) {
       std::vector<const message*> own;
       for (const message& each : chat->timeline)
-        if (each.outgoing && !each.redacted && !each.id.empty() && !each.body.plain.empty())
+        if (editable(each))
           own.push_back(&each);
       const auto at = std::ranges::find(own, *editing, &message::id);
       const message* next = nullptr;
@@ -87,7 +108,7 @@ class outbox_part {
         this->apply(request::cancel_compose{});
         return;
       }
-      this->edit(next->id, next->body.plain);
+      this->edit(next->id, edited_text(*next));
       screen.jump_to(next->id);
       return;
     }
@@ -294,8 +315,13 @@ class outbox_part {
                               s_->net->send(to, std::move(text), one.id, std::move(mentions));
                           },
                           [&](const compose::edit& one) {
+                            // A picture's: its caption, the picture kept.
+                            const message* said = this->message_of(to, one.id);
+                            const bool picture = said != nullptr && captioned(*said);
                             if (s_->demo())
                               s_->box->push(change_t{change::message_edited{to, one.id, body{std::move(text), std::nullopt}}});
+                            else if (picture)
+                              s_->net->edit_caption(to, one.id, std::move(text), *said->attachment);
                             else
                               s_->net->edit(to, one.id, std::move(text));
                           }},

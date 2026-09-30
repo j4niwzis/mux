@@ -213,6 +213,7 @@ class account {
   void search_directory(std::string, std::string) {}
   void create_room(std::string, std::string, bool, std::string, bool = true) {}
   void search_people(std::string) {}
+  void edit_caption(std::string, std::string, std::string, mux::attachment) {}
   // New chats and groups are made over Matrix alone for now.
   void create_direct(std::string) {}
   void create_group(std::string) {}

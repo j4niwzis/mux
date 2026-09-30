@@ -1056,7 +1056,8 @@ struct context_menu : scene::Node {
       compact(forward);
       compact(source);
       compact(remove);
-      edit.setVisible(facts.own && !facts.text.empty() && !facts.media);
+      // One's own text, or one's own picture's caption, as Element edits it.
+      edit.setVisible(facts.own && ((!facts.text.empty() && !facts.media) || facts.captioned));
       quote_reply.setVisible(facts.selection && !facts.own && !facts.copied.empty());
       copy.setVisible(!facts.copied.empty());
       copy_link.setVisible(!facts.link.empty());

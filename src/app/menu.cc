@@ -80,7 +80,8 @@ class menu_part {
   }
   void apply(const request::menu_edit&) {
     s_->root().close_menu();
-    outbox_->edit(target_.id, target_.text);
+    // A picture with no caption says its file's name: nothing to edit then.
+    outbox_->edit(target_.id, target_.captioned && target_.text == target_.media_name ? std::string() : target_.text);
   }
   // What is selected in it, or all of it.
   void apply(const request::menu_copy&) {

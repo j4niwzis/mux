@@ -636,6 +636,24 @@ void account<Sink>::edit(std::string room, std::string event, std::string text) 
 }
 
 template <class Sink>
+void account<Sink>::edit_caption(std::string room, std::string event, std::string caption, mux::attachment picture) {
+  loop_->spawn([this, room = std::move(room), event = std::move(event), caption = std::move(caption),
+                picture = std::move(picture)] {
+    if (!api_)
+      return;
+    const auto content = loom::client::edit_picture(
+        event, loom::client::media_said{.uri = picture.source, .name = picture.name, .caption = caption,
+                                        .mimetype = picture.mimetype, .size = picture.size},
+        picture.width, picture.height);
+    if (perform(*api_, loom::cs::send_message{.room_id = room,
+                                              .event_type = "m.room.message",
+                                              .txn_id = this->transaction(),
+                                              .body = as_body(content)}))
+      sink_(change::message_edited{{id_, room}, event, body{caption.empty() ? picture.name : caption, std::nullopt}});
+  });
+}
+
+template <class Sink>
 void account<Sink>::remove(std::string room, std::string event) {
   loop_->spawn([this, room = std::move(room), event = std::move(event)] {
     if (!api_)

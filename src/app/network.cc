@@ -156,6 +156,18 @@ struct network {
             one.account);
     });
   }
+  // A picture's caption, edited.
+  void edit_caption(const mux::conversation_id& in, std::string id, std::string caption, mux::attachment picture) {
+    loop.post([this, in, id = std::move(id), caption = std::move(caption), picture = std::move(picture)] {
+      for (auto& one : accounts)
+        splice::visit(
+            [&](auto& account) {
+              if (account->id() == in.account)
+                account->edit_caption(in.id, id, caption, picture);
+            },
+            one.account);
+    });
+  }
   void remove_message(const mux::conversation_id& in, std::string id) {
     loop.post([this, in, id = std::move(id)] {
       for (auto& one : accounts)

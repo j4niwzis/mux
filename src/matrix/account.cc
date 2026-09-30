@@ -90,6 +90,8 @@ class account {
   // A room made, as Element's Create room makes one: named, about
   // something, public -- with an address -- or private.
   void create_room(std::string name, std::string topic, bool open, std::string alias, bool federate = true);
+  // A picture's caption edited: the picture kept, its caption the text.
+  void edit_caption(std::string room, std::string event, std::string caption, mux::attachment picture);
   // The user directory searched: people_found for what was asked.
   void search_people(std::string term);
   // A room's gap since the last run, from where the sync left it back to

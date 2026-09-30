@@ -24,6 +24,7 @@ import :avatars;
 import :timeline;
 import :conversations;
 import :forms;
+import :names;
 
 export namespace mux::ui {
 
@@ -683,6 +684,102 @@ struct emoji_popup : scene::Node {
 };
 
 // What is done with a message from its menu, as the program keeps it.
+// Who has seen a message, as tdesktop's menu shows it (chat_helpers.style's
+// defaultWhoRead, who_reacted_context_action.cpp): the read ticks 15 in;
+// "N Seen", the one reader's name, or "Nobody Viewed", 44 in; up to three
+// userpics of 22 at the right, 17 in, each 8 over the next, in a ring of the
+// menu's colour. Hovered, every reader in a submenu beside the menu: a
+// userpic of 30, 13 in, the name 57 in, and under it when they read.
+struct seen_row : nodes::Stack {
+  static constexpr float kHeight = 33.0f, kFace = 22.0f, kOverlap = 8.0f, kRight = 17.0f;
+  static constexpr std::size_t kMostFaces = 3;
+  // A reader, as a line of the submenu.
+  struct reader_row : nodes::Stack {
+    struct lines_t : nodes::Stack {
+      struct parts_t {
+        nodes::Text name;
+        nodes::Text when;
+      } parts;
+      explicit lines_t(const seen_reader& one)
+          : parts{.name = nodes::Text(one.name, 13.0f, text_colour),
+                  .when = nodes::Text(one.at ? clock_of(*one.at) : std::string("seen"), 12.0f, dim_colour)} {
+        fState.apply({.grow = scene::axes::kX, .autoSize = scene::axes::kY, .alignSelf = scene::align::kMiddle});
+        parts.name.setElided(true);
+        parts.when.setElided(true);
+      }
+    };
+    struct parts_t {
+      avatar_mark face;
+      lines_t lines;
+    } parts;
+    explicit reader_row(const seen_reader& one) : parts{.face = avatar_mark(one.id, one.name, 30.0f), .lines = lines_t(one)} {
+      this->setHorizontal();
+      this->setGap(14.0f);  // the name at 13 + 30 + 14 = 57
+      fState.apply({.fillX = true, .height = 44.0f, .padding = {7.0f, 17.0f, 7.0f, 13.0f}, .hoverBackground = chosen_colour});
+    }
+  };
+  struct submenu_t : nodes::Stack {
+    struct parts_t {
+      std::vector<reader_row> rows;
+    } parts;
+    explicit submenu_t(const std::vector<seen_reader>& readers) {
+      for (const seen_reader& one : readers)
+        parts.rows.emplace_back(one);
+      fState.apply({.autoSize = scene::axes::kBoth, .minWidth = 220.0f, .padding = {6.0f, 0.0f, 4.0f, 0.0f},
+                    .cornerRadius = 10.0f, .background = sidebar_colour, .border = scene::Border{band_colour, 1.0f}});
+    }
+  };
+  std::vector<seen_reader> readers;
+  struct parts_t {
+    icon_mark mark;
+    nodes::Text label;
+    std::vector<avatar_mark> faces;
+    std::optional<submenu_t> submenu;
+  } parts;
+  explicit seen_row(std::vector<seen_reader> who)
+      : readers(std::move(who)),
+        parts{.mark = icon_mark(icon::check{}),
+              .label = nodes::Text(readers.empty()       ? std::string("Nobody Viewed")
+                                   : readers.size() == 1 ? readers.front().name
+                                                         : std::to_string(readers.size()) + " Seen",
+                                   13.0f, text_colour)} {
+    auto& [mark, label, faces, submenu] = parts;
+    this->setHorizontal();
+    const std::size_t shown = std::min(kMostFaces, readers.size());
+    const float faces_width = shown ? kFace + static_cast<float>(shown - 1) * (kFace - kOverlap) : 0.0f;
+    // The text 44 in, 9 over and 7 under it; the faces' room kept at the right.
+    fState.apply({.fillX = true,
+                  .height = kHeight,
+                  .padding = {9.0f, kRight + (shown ? faces_width + 8.0f : 0.0f), 7.0f, 44.0f},
+                  .hoverBackground = chosen_colour});
+    // The ticks 15 in and 7 down: out of the flow, back over the padding.
+    mark.apply({.place = scene::anchor::kTopLeft, .x = 15.0f - 44.0f, .y = 7.0f - 9.0f});
+    label.setElided(true);
+    label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+    // The faces out of the flow, in the room at the right: the first the
+    // rightmost, 17 in from the edge, each next 14 to its left.
+    for (std::size_t i = 0; i < shown; ++i) {
+      faces.emplace_back(readers[i].id, readers[i].name, kFace);
+      faces.back().apply({.place = scene::anchor::kCentreRight,
+                          .x = faces_width + 8.0f - static_cast<float>(i) * (kFace - kOverlap),
+                          .border = scene::Border{sidebar_colour, 2.0f}});
+    }
+  }
+  // The submenu while it is hovered, as tdesktop's opens under the pointer.
+  void update(double) {
+    const bool open = fState.hovered() && !readers.empty();
+    if (open == parts.submenu.has_value())
+      return;
+    if (open) {
+      parts.submenu.emplace(readers);
+      parts.submenu->apply({.place = scene::anchor::kTopRight, .x = fState.fPadding.fRight + 4.0f + 220.0f, .y = -9.0f});
+    } else {
+      parts.submenu.reset();
+    }
+    this->invalidateLayout();
+  }
+};
+
 template <class Actions>
 struct context_menu : scene::Node {
   struct card : nodes::Stack {
@@ -762,15 +859,14 @@ struct context_menu : scene::Node {
       source_row source;
       delete_row remove;
       nodes::Box<> seen_band{band_colour};
-      row_item<nothing> seen;
-      std::vector<nodes::Text> seen_names;
+      seen_row seen;
       // Every emoji, once asked for: over the items, out of their flow, and
       // after them, so drawn on top of them and pressed first.
       std::optional<emoji_panel<react_with<Actions>>> emoji;
     } parts;
     void expand() {
       auto& [quick, quick_band, reply, edit, pin, copy, copy_link, save, save_gif, reactions, forward, source,
-             remove, seen_band, seen, seen_names, emoji] = parts;
+             remove, seen_band, seen, emoji] = parts;
       if (emoji)
         return;
       // As Telegram's: the list takes the room the items had under the
@@ -797,13 +893,11 @@ struct context_menu : scene::Node {
     // its size by its least height.
     void hide_items() {
       auto& [quick, quick_band, reply, edit, pin, copy, copy_link, save, save_gif, reactions, forward, source, remove,
-             seen_band, seen, seen_names, emoji] = parts;
+             seen_band, seen, emoji] = parts;
       for (scene::Node* item : std::initializer_list<scene::Node*>{&reply, &edit, &pin, &copy, &copy_link, &save,
                                                                    &save_gif, &reactions, &forward, &source,
                                                                    &remove, &seen_band, &seen})
         item->setVisible(false);
-      for (auto& name : seen_names)
-        name.setVisible(false);
       this->invalidateLayout();
     }
     static constexpr float kEmojiLeast = 220.0f;
@@ -848,12 +942,9 @@ struct context_menu : scene::Node {
                 .forward = forward_row("Forward", {a}, icon::send{}),
                 .source = source_row("View Source", {a}, icon::info{}),
                 .remove = delete_row("Delete", {a}, icon::close{}),
-                .seen = row_item<nothing>(facts.seen.empty() ? std::string("Not seen yet")
-                                                             : std::format("Seen by {}", facts.seen.size()),
-                                          {}, icon::check{})} {
+                .seen = seen_row(facts.seen)} {
       auto& [quick, quick_band, reply, edit, pin, copy, copy_link, save, save_gif, reactions, forward, source,
-             remove, seen_band, seen, seen_names, emoji] = parts;
-      const std::vector<std::string>& readers = facts.seen;
+             remove, seen_band, seen, emoji] = parts;
       quick_band.apply({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 4.0f, 0.0f}});
       // A menu's rows as tdesktop's menuWithIcons: 8 over and under the
       // 13px normalFont's line -- 33 high -- the icon 15 in, the text 54 in.
@@ -874,7 +965,6 @@ struct context_menu : scene::Node {
       compact(forward);
       compact(source);
       compact(remove);
-      compact(seen);
       edit.setVisible(facts.own && !facts.text.empty() && !facts.media);
       copy.setVisible(!facts.copied.empty());
       copy_link.setVisible(!facts.link.empty());
@@ -885,15 +975,6 @@ struct context_menu : scene::Node {
       source.setVisible(facts.pinnable);
       // Who reacted, as Telegram's menu lists them: wherever there are any.
       reactions.setVisible(facts.reaction_count > 0);
-      for (std::size_t i = 0; i < readers.size() && i < 10; ++i) {
-        seen_names.emplace_back(readers[i], 13.0f, dim_colour);
-        seen_names.back().setElided(true);
-        seen_names.back().apply({.fillX = true, .margin = {0.0f, 16.0f, 2.0f, 64.0f}});
-      }
-      if (readers.size() > 10) {
-        seen_names.emplace_back(std::format("and {} more", readers.size() - 10), 13.0f, dim_colour);
-        seen_names.back().apply({.fillX = true, .margin = {0.0f, 16.0f, 2.0f, 64.0f}});
-      }
       seen_band.apply({.fillX = true, .height = 1.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f}});
       // As wide as its widest -- the quick reactions -- and no narrower than a
       // menu reads well at; the items fill that width.

@@ -24,13 +24,20 @@ export namespace mux::ui {
 // The messages, and over them, where one has scrolled up from the newest,
 // the way back down. Each is placed by its own spec.
 // What a message's menu is made from: the message, and what it carries.
+// One who has read a message: who, by their name in the chat, and when,
+// where their receipt says.
+struct seen_reader {
+  std::string id;
+  std::string name;
+  std::optional<std::chrono::sys_time<std::chrono::milliseconds>> at;
+};
 struct menu_facts {
   std::string id;
   bool own = false;
   std::string text;    // all of it
   std::string copied;  // what Copy takes: the selection, or all of it
   bool selection = false;
-  std::vector<std::string> seen;
+  std::vector<seen_reader> seen;
   std::optional<std::string> media;  // a picture's or a file's source
   std::string media_name;
   bool moving = false;  // a GIF or a moving WebP: one that can be saved to the GIFs
@@ -171,8 +178,8 @@ struct timeline_area : scene::Node {
   // it, by their names in the chat -- its sender and the user aside.
   const model* seen_model = nullptr;
   std::optional<conversation_id> seen_chat;
-  std::vector<std::string> seen_by(const std::string& id, const std::string& sender) const {
-    std::vector<std::string> out;
+  std::vector<seen_reader> seen_by(const std::string& id, const std::string& sender) const {
+    std::vector<seen_reader> out;
     const conversation* chat = seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr;
     if (!chat)
       return out;
@@ -189,14 +196,16 @@ struct timeline_area : scene::Node {
       // Read up to a message here at or after it; else, the receipt pointing
       // at what is not among these -- a reaction, a state event -- read at
       // or after it was sent.
+      const auto read = chat->receipt_times.find(user);
+      const auto read_at = read == chat->receipt_times.end() ? std::nullopt : std::optional(read->second);
       if (const auto theirs = at.find(event); theirs != at.end()) {
         if (theirs->second >= mine->second)
-          out.push_back(sender_name(*chat, user));
-      } else if (const auto read = chat->receipt_times.find(user); read != chat->receipt_times.end() && read->second >= when) {
-        out.push_back(sender_name(*chat, user));
+          out.push_back({user, sender_name(*chat, user), read_at});
+      } else if (read_at && *read_at >= when) {
+        out.push_back({user, sender_name(*chat, user), read_at});
       }
     }
-    std::ranges::sort(out);
+    std::ranges::sort(out, {}, &seen_reader::name);
     return out;
   }
 

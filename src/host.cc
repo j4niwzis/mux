@@ -377,6 +377,31 @@ class canvas_target {
     if (gl_)
       SDL_GL_MakeCurrent(window_, gl_);
 #endif
+    // In software, Skia draws straight into the window's own pixels where
+    // they are laid out as its own are: no copy of the frame at each present,
+    // and they stay from one frame to the next -- the kept frame themselves.
+    if (!this->on_gpu()) {
+      SDL_Surface* shown = SDL_GetWindowSurface(window_);
+      if (shown && shown->pixels &&
+          (shown->format == SDL_PIXELFORMAT_XRGB8888 || shown->format == SDL_PIXELFORMAT_ARGB8888)) {
+        if (!direct_ || shown != shown_ || shown->pixels != shown_pixels_ || shown->w != width_ || shown->h != height_) {
+          surface_ = skia::WrapPixels(skia::SkImageInfo::MakeN32Premul(shown->w, shown->h), shown->pixels,
+                                      static_cast<std::size_t>(shown->pitch));
+          shown_ = shown;
+          shown_pixels_ = shown->pixels;
+          width_ = shown->w;
+          height_ = shown->h;
+          direct_ = surface_ != nullptr;
+          fresh_ = true;
+        }
+        if (direct_)
+          return surface_.get();
+      }
+      if (direct_) {
+        direct_ = false;
+        surface_.reset();
+      }
+    }
     int width = 0, height = 0;
     SDL_GetWindowSizeInPixels(window_, &width, &height);
     if (surface_ && width == width_ && height == height_)
@@ -411,10 +436,31 @@ class canvas_target {
 #endif
   }
 
-  // What was drawn, shown.
-  void present() {
+  // Whether what is drawn stays in the window's pixels from frame to frame;
+  // and whether they are new since last asked -- to be painted whole.
+  [[nodiscard]] bool keeps_pixels() const noexcept { return direct_; }
+  [[nodiscard]] bool take_fresh() noexcept { return std::exchange(fresh_, false); }
+
+  // What was drawn, shown: where the window keeps its pixels, only the
+  // parts said -- all of it where none are.
+  void present(std::span<const skia::SkIRect> parts = {}) {
     if (!surface_)
       return;
+    if (direct_) {
+      if (parts.empty()) {
+        SDL_UpdateWindowSurface(window_);
+        return;
+      }
+      std::vector<SDL_Rect> rects;
+      rects.reserve(parts.size());
+      for (const skia::SkIRect& one : parts)
+        if (!one.isEmpty())
+          rects.push_back(SDL_Rect{one.fLeft, one.fTop, one.width(), one.height()});
+      if (rects.empty())
+        return;
+      SDL_UpdateWindowSurfaceRects(window_, rects.data(), static_cast<int>(rects.size()));
+      return;
+    }
 #if defined(SK_GANESH)
     if (context_) {
       context_->flushAndSubmit(surface_.get());
@@ -429,10 +475,11 @@ class canvas_target {
     // bytes in the same order. Anything else is converted.
     const auto info = skia::SkImageInfo::MakeN32Premul(width_, height_);
     const std::size_t pitch = static_cast<std::size_t>(width_) * 4;
-    std::vector<std::byte> pixels(pitch * static_cast<std::size_t>(height_));
-    if (!surface_->readPixels(info, pixels.data(), pitch, 0, 0))
+    // Not zeroed: every byte is written by the read.
+    const auto pixels = std::make_unique_for_overwrite<std::byte[]>(pitch * static_cast<std::size_t>(height_));
+    if (!surface_->readPixels(info, pixels.get(), pitch, 0, 0))
       return;
-    SDL_ConvertPixels(width_, height_, SDL_PIXELFORMAT_ARGB8888, pixels.data(), static_cast<int>(pitch),
+    SDL_ConvertPixels(width_, height_, SDL_PIXELFORMAT_ARGB8888, pixels.get(), static_cast<int>(pitch),
                       shown->format, shown->pixels, shown->pitch);
     SDL_UpdateWindowSurface(window_);
   }
@@ -445,6 +492,12 @@ class canvas_target {
 #endif
   skia::Sp<skia::SkSurface> surface_;
   int width_ = 0, height_ = 0;
+  // The window's own pixels drawn into, and which: a surface SDL makes
+  // again, or moves, is wrapped again -- and painted whole.
+  SDL_Surface* shown_ = nullptr;
+  void* shown_pixels_ = nullptr;
+  bool direct_ = false;
+  bool fresh_ = true;
 };
 
 // tdesktop's own notifications: a small window each, borderless, over the
@@ -627,6 +680,9 @@ int run(App& app, const options& how) {
     // The last frame shown, by phase, in milliseconds: the events, the app's
     // own work, the tick, the layout, finding the damage, drawing, showing.
     std::array<double, 7> phase_ms{};
+    // What the counter and the outline were drawn over, where the window
+    // keeps its pixels: put back before the next frame is drawn.
+    std::vector<std::pair<skia::Sp<skia::SkImage>, skia::SkIRect>> overlays;
     bool vsync_on = true;
     while (running) {
       SDL_Event event;
@@ -842,22 +898,45 @@ int run(App& app, const options& how) {
       // for antialiasing -- or all of it.
       const skia::SkRect all = skia::SkRect::MakeWH(static_cast<float>(surface->width()), static_cast<float>(surface->height()));
       skia::SkRect repainted = all;
+      // Drawn straight into pixels the window keeps: those are the kept frame,
+      // and only what changed in them is shown again. What was drawn over
+      // them last -- the counter, the outline -- is put back first, before a
+      // scroll's copy could carry it along.
+      const bool keeps = target.keeps_pixels();
+      std::vector<skia::SkIRect> changed;
+      bool show_all = true;
+      for (auto& [pixels, at] : std::exchange(overlays, {}))
+        if (keeps) {
+          canvas->drawImage(pixels, static_cast<float>(at.fLeft), static_cast<float>(at.fTop));
+          changed.push_back(at);
+        }
       if (app.partial_redraw) {
-        // Into a frame kept between frames (the window's buffers are not):
-        // only the damage repainted there, then the frame shown whole.
-        if (!kept_frame || kept_frame->width() != surface->width() || kept_frame->height() != surface->height())
-          kept_frame = surface->makeSurface(surface->imageInfo());
-        if (!kept_frame)
-          continue;
-        const bool fresh = std::exchange(kept_frame_for, kept_frame.get()) != kept_frame.get();
+        // Else into a frame of its own kept between frames (the window's
+        // buffers are not): only the damage repainted there, then the frame
+        // shown whole.
+        skia::SkSurface* kept = surface;
+        bool fresh = false;
+        if (keeps) {
+          kept_frame = nullptr;
+          kept_frame_for = nullptr;
+          fresh = target.take_fresh();
+        } else {
+          if (!kept_frame || kept_frame->width() != surface->width() || kept_frame->height() != surface->height())
+            kept_frame = surface->makeSurface(surface->imageInfo());
+          if (!kept_frame)
+            continue;
+          fresh = std::exchange(kept_frame_for, kept_frame.get()) != kept_frame.get();
+          kept = kept_frame.get();
+        }
         if (!whole && !fresh) {
+          show_all = false;
           repainted = skia::SkRect::MakeLTRB(frame.fDamage.fLeft * scale - 1.0f, frame.fDamage.fTop * scale - 1.0f,
                                              frame.fDamage.fRight * scale + 1.0f, frame.fDamage.fBottom * scale + 1.0f);
           repainted.roundOut(&repainted);
           if (!repainted.intersect(all))
-            continue;
+            repainted.setEmpty();
         }
-        skia::SkCanvas* into = kept_frame->getCanvas();
+        skia::SkCanvas* into = kept->getCanvas();
         // A scroll view that only moved: last frame's pixels of it copied to
         // where they go now, and only what came into view, and what is over
         // it, repainted -- not the whole view at every step of a scroll.
@@ -870,16 +949,22 @@ int run(App& app, const options& how) {
             skia::SkIRect from = to.makeOffset(0, -dy);
             if (!from.intersect(to))
               continue;
-            if (auto pixels = kept_frame->makeImageSnapshot(from))
+            if (auto pixels = kept->makeImageSnapshot(from)) {
               into->drawImage(pixels, static_cast<float>(from.fLeft), static_cast<float>(from.fTop + dy));
+              changed.push_back(to);
+            }
           }
-        into->save();
-        into->clipRect(repainted);
-        into->clear(skia::colorSetARGB(255, 24, 27, 30));
-        into->scale(scale, scale);
-        scene.draw(into);
-        into->restore();
-        canvas->drawImage(kept_frame->makeImageSnapshot(), 0.0f, 0.0f);
+        if (!repainted.isEmpty()) {
+          into->save();
+          into->clipRect(repainted);
+          into->clear(skia::colorSetARGB(255, 24, 27, 30));
+          into->scale(scale, scale);
+          scene.draw(into);
+          into->restore();
+          changed.push_back(repainted.roundOut());
+        }
+        if (kept != surface)
+          canvas->drawImage(kept_frame->makeImageSnapshot(), 0.0f, 0.0f);
       } else {
         kept_frame = nullptr;
         kept_frame_for = nullptr;
@@ -892,13 +977,33 @@ int run(App& app, const options& how) {
           repainted = skia::SkRect::MakeLTRB(frame.fDamage.fLeft * scale, frame.fDamage.fTop * scale,
                                              frame.fDamage.fRight * scale, frame.fDamage.fBottom * scale);
       }
+      // What is drawn over the frame, where the window keeps its pixels:
+      // what was under it kept, to be put back at the next frame.
+      const auto keep_under = [&](const skia::SkRect& area) {
+        if (!keeps)
+          return;
+        skia::SkIRect at = area.roundOut();
+        if (!at.intersect(skia::SkIRect::MakeWH(surface->width(), surface->height())))
+          return;
+        if (auto pixels = surface->makeImageSnapshot(at)) {
+          overlays.emplace_back(std::move(pixels), at);
+          changed.push_back(at);
+        }
+      };
       // What this frame repainted, outlined, where that is asked for.
-      if (app.flash_redraws) {
+      if (app.flash_redraws && !repainted.isEmpty()) {
         skia::SkPaint outline;
         outline.setStyle(skia::kStrokeStyle);
         outline.setStrokeWidth(2.0f);
         outline.setColor(skia::colorSetARGB(220, 255, 0, 160));
-        canvas->drawRect(repainted.makeInset(1.0f, 1.0f), outline);
+        const skia::SkRect edge = repainted.makeInset(1.0f, 1.0f);
+        // Only its four sides kept: what is inside is the frame's own.
+        for (const skia::SkRect& side : {skia::SkRect::MakeLTRB(edge.fLeft - 2, edge.fTop - 2, edge.fRight + 2, edge.fTop + 2),
+                                         skia::SkRect::MakeLTRB(edge.fLeft - 2, edge.fBottom - 2, edge.fRight + 2, edge.fBottom + 2),
+                                         skia::SkRect::MakeLTRB(edge.fLeft - 2, edge.fTop - 2, edge.fLeft + 2, edge.fBottom + 2),
+                                         skia::SkRect::MakeLTRB(edge.fRight - 2, edge.fTop - 2, edge.fRight + 2, edge.fBottom + 2)})
+          keep_under(side);
+        canvas->drawRect(edge, outline);
       }
       // Frames a second over the last second, and the last frame's time, in
       // the top right corner: counted as shown, so an idle window stays at
@@ -920,11 +1025,12 @@ int run(App& app, const options& how) {
           const float wide = font.measureText(text.data(), text.size(), skia::SkTextEncoding::kUTF8);
           const float x = all.width() - wide - 12.0f * scale;
           const float y = 20.0f * scale;
+          const skia::SkRect box =
+              skia::SkRect::MakeLTRB(x - 6.0f * scale, y - 15.0f * scale, x + wide + 6.0f * scale, y + 5.0f * scale);
+          keep_under(box);
           skia::SkPaint back;
           back.setColor(skia::colorSetARGB(170, 0, 0, 0));
-          canvas->drawRect(skia::SkRect::MakeLTRB(x - 6.0f * scale, y - 15.0f * scale, x + wide + 6.0f * scale,
-                                                  y + 5.0f * scale),
-                           back);
+          canvas->drawRect(box, back);
           skia::SkPaint ink;
           ink.setColor(skia::colorSetARGB(255, 120, 255, 140));
           canvas->drawSimpleText(text.data(), text.size(), skia::SkTextEncoding::kUTF8, x, y, font, ink);
@@ -937,7 +1043,10 @@ int run(App& app, const options& how) {
         vsync_on = app.vsync;
         target.set_vsync(vsync_on);
       }
-      target.present();
+      if (keeps && !show_all)
+        target.present(changed);
+      else
+        target.present();
       phase_ms = {events_done - frame_began, app_done - events_done, ticked - app_done,  laid_out - ticked,
                   damage_found - laid_out,   shown_at - damage_found, detail::now_ms() - shown_at};
     }

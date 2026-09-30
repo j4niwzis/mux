@@ -28,51 +28,14 @@ import :account;
 // The members defined here are declared in :account, and exported there.
 namespace mux::matrix {
 
-// What a message's content says of what it carries -- a picture's or a
-// file's place, name and facts, a gallery's items (MSC4274) -- that loom's
-// m.room.message content does not type: read once from what it keeps as
-// text, into these.
-struct media_info {
-  struct thumbnail_t {
-    std::optional<std::int64_t> w;
-    std::optional<std::int64_t> h;
-    friend consteval auto json_schema(knot::type<thumbnail_t>) { return knot::schema<thumbnail_t>(); }
-  };
-  std::optional<std::string> mimetype;
-  std::optional<std::int64_t> size;
-  std::optional<std::int64_t> w;
-  std::optional<std::int64_t> h;
-  std::optional<std::int64_t> duration;
-  std::optional<std::string> thumbnail_url;
-  std::optional<thumbnail_t> thumbnail_info;
-  std::optional<std::string> blurhash;
-  friend consteval auto json_schema(knot::type<media_info>) {
-    return knot::schema<media_info>().member<"blurhash">(knot::key("xyz.amorgan.blurhash"));
-  }
-};
-struct gallery_item {
-  std::optional<std::string> itemtype;
-  std::optional<std::string> url;
-  std::optional<std::string> filename;
-  std::optional<std::string> body;
-  std::optional<media_info> info;
-  friend consteval auto json_schema(knot::type<gallery_item>) { return knot::schema<gallery_item>(); }
-};
-struct message_media {
-  std::optional<std::string> url;
-  std::optional<std::string> filename;
-  std::optional<media_info> info;
-  std::optional<std::vector<gallery_item>> itemtypes;
-  friend consteval auto json_schema(knot::type<message_media>) { return knot::schema<message_media>(); }
-};
-
 // A picture's or a file's facts, as an attachment keeps them.
-inline void carry_info(mux::attachment& carried, const media_info& info) {
+// Of a message's own info or a gallery item's: loom reads both alike.
+inline void carry_info(mux::attachment& carried, const auto& info) {
   carried.mimetype = info.mimetype.value_or("");
   carried.size = info.size.value_or(0);
   carried.width = static_cast<int>(info.w.value_or(0));
   carried.height = static_cast<int>(info.h.value_or(0));
-  carried.blurhash = info.blurhash;
+  carried.blurhash = info.xyz_amorgan_blurhash;
 }
 
 using member_content = loom::ev::m_room_member_content_t;
@@ -120,28 +83,26 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
         [](auto of) { return std::tuple(of.carries, of.picture, of.is_emote); }, msgtype_of(content.msgtype));
     if (emote)
       made.body.plain = "* " + made.body.plain;
-    // What it carries, read once from what loom keeps of it as text.
-    const message_media media = knot::try_read<message_media>(content.rest.text).value_or(message_media{});
     // A picture or a file: where it is kept, its name, what it is; its
     // body a caption where a file name is given apart from it.
     if (carries) {
       mux::attachment carried;
       if (picture)
         carried.kind = attachment_kind::image{};
-      carried.source = media.url.value_or("");
-      carried.name = media.filename.value_or(content.body);
-      if (media.info) {
-        carry_info(carried, *media.info);
+      carried.source = content.url.value_or("");
+      carried.name = content.filename.value_or(content.body);
+      if (content.info) {
+        carry_info(carried, *content.info);
         // A video: shown by its thumbnail, as a picture, until it can be
         // played here; its own size where the video gives none.
         const bool video = splice::visit(splice::overloaded{[](msgtype::video) { return true; }, [](const auto&) { return false; }},
                                       msgtype_of(content.msgtype));
-        if (video && media.info->thumbnail_url) {
+        if (video && content.info->thumbnail_url) {
           carried.video = carried.source;
-          carried.source = *media.info->thumbnail_url;
-          carried.duration_ms = media.info->duration.value_or(0);
+          carried.source = *content.info->thumbnail_url;
+          carried.duration_ms = content.info->duration.value_or(0);
           carried.kind = attachment_kind::image{};
-          if (const auto& thumb = media.info->thumbnail_info; thumb && (carried.width == 0 || carried.height == 0)) {
+          if (const auto& thumb = content.info->thumbnail_info; thumb && (carried.width == 0 || carried.height == 0)) {
             carried.width = static_cast<int>(thumb->w.value_or(0));
             carried.height = static_cast<int>(thumb->h.value_or(0));
           }
@@ -151,7 +112,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
         carried.kind = attachment_kind::image{.moves = moving_type(carried.mimetype)};
       if (!carried.source.empty()) {
         made.attachment = std::move(carried);
-        if (!media.filename || *media.filename == content.body)
+        if (!content.filename || *content.filename == content.body)
           made.body = {};  // no caption: the body was the file's name
       }
     }
@@ -159,8 +120,8 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     // alone is, its body the caption.
     if (splice::visit(splice::overloaded{[](msgtype::gallery) { return true; }, [](const auto&) { return false; }},
                    msgtype_of(content.msgtype)) &&
-        media.itemtypes)
-      for (const gallery_item& item : *media.itemtypes) {
+        content.itemtypes)
+      for (const auto& item : *content.itemtypes) {
         const bool is_picture_item = splice::visit([](auto of) { return of.picture; }, msgtype_of(item.itemtype));
         mux::attachment carried;
         carried.source = item.url.value_or("");

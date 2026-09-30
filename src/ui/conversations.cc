@@ -747,8 +747,15 @@ struct conversations_screen : nodes::Stack {
     this->jump_to(std::move(id));
     jump_fragment = std::move(fragment);
   }
+  // Jumps said, where MUX_TRACE_FRAMES is set: asked, and how each goes.
+  static bool trace_jumps() {
+    static const bool on = std::getenv("MUX_TRACE_FRAMES") != nullptr;
+    return on;
+  }
   void jump_to(std::string id) {
     jump_fragment.reset();
+    if (trace_jumps())
+      std::cerr << "[jump] to " << id << (chosen && last_model ? "" : " (no chat shown: dropped)") << '\n';
     if (!chosen || !last_model)
       return;
     const conversation* one = last_model->find(*chosen);
@@ -864,6 +871,9 @@ struct conversations_screen : nodes::Stack {
           it = shown;
         }
       }
+      if (trace_jumps() && jump_tries % 30 == 0)
+        std::cerr << "[jump] " << *jumping_to << (it == entries.end() ? " not made" : it->bounds().isEmpty() ? " made, not laid out" : " laid out")
+                  << (one && std::ranges::contains(one->timeline, *jumping_to, &message::id) ? ", held" : ", not held") << '\n';
       if (it != entries.end() && !it->bounds().isEmpty()) {
         aiming = std::exchange(jumping_to, std::nullopt);
         aim_quiet = jump_quiet;
@@ -1288,7 +1298,10 @@ struct conversations_screen : nodes::Stack {
       else
         timeline.setCurrent(kept->second);
       unseen = 0;
-    } else if (was_at_end) {
+    } else if (was_at_end && !jumping_to && !aiming) {
+      // At the newest, it follows what comes -- not while a jump goes
+      // elsewhere: a refresh each time the model changes put the view back
+      // at the end under a jump on its way up, and it never got there.
       timeline.scrollToEnd();
       unseen = 0;
     } else if (last != shown_last) {

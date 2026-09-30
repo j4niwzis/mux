@@ -638,6 +638,15 @@ struct conversations_screen : nodes::Stack {
   // message in another: the button over "↓" goes back to the last.
   std::map<conversation_id, std::vector<std::string>> returns;
   std::vector<conversation_id> chat_returns;
+  // The ways back that are where a jump goes: done with, as tdesktop's
+  // skipReplyReturn -- from the top, while they are that message.
+  void skip_return(const std::string& id) {
+    if (!chosen)
+      return;
+    if (const auto found = returns.find(*chosen); found != returns.end())
+      while (!found->second.empty() && found->second.back() == id)
+        found->second.pop_back();
+  }
   // The message pressed for the jump about to go, where one was: come back
   // to, rather than to where the view is.
   std::optional<std::string> return_from;
@@ -1144,14 +1153,12 @@ struct conversations_screen : nodes::Stack {
       searched = side.search.field.text();
       this->show(*last_model);
     }
-    // Scrolled to the newest by hand: the way back from a jump is done.
-    if (chosen && timeline.atEnd(40.0f) && !timeline.moving() && this->has_return())
-      returns.erase(*chosen);
-    // And each message to come back to, as tdesktop lets one go
-    // (preloadHistoryIfNeeded): once the view has come down to it -- its top
-    // above the view's middle -- or past it, where it is not made and older
-    // than the newest made. The one under it is next, if it is not passed.
-    if (chosen && !jumping_to && !aiming && !timeline.moving())
+    // Each message to come back to, as tdesktop lets one go
+    // (checkReplyReturns, at every scroll but its own scroll to a message):
+    // once the view has come down to it -- its top above the view's middle,
+    // or the view at the very end -- or past it, where it is not made and
+    // older than the newest made. The one under it next, if not passed.
+    if (chosen && !jumping_to && !aiming)
       if (const auto found = returns.find(*chosen); found != returns.end()) {
         auto& stack = found->second;
         const auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
@@ -1163,7 +1170,7 @@ struct conversations_screen : nodes::Stack {
           const auto it = std::ranges::find(entries, stack.back(), &message_bubble::message_id);
           bool passed = false;
           if (it != entries.end() && !it->bounds().isEmpty()) {
-            passed = timeline.toView(it->bounds()).fTop < view.centerY();
+            passed = timeline.atEnd(0.5f) || timeline.toView(it->bounds()).fTop < view.centerY();
           } else if (one && newest != entries.rend()) {
             const auto at = std::ranges::find(one->timeline, stack.back(), &message::id);
             const auto last = std::ranges::find(one->timeline, newest->message_id, &message::id);

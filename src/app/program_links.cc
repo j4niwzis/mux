@@ -48,11 +48,10 @@ void app::go_to_message(const mux::conversation_id& in, std::string id, std::opt
   auto& screen = root().main();
   // Where it goes from, to come back to: this chat, where it goes to
   // another; else the place in this one.
-  if (!screen.chosen || *screen.chosen != in) {
+  const bool here = screen.chosen && *screen.chosen == in;
+  if (!here) {
     screen.note_chat_return();
     this->open_chat(in, std::nullopt);
-  } else {
-    screen.note_return();
   }
   if (const mux::conversation* chat = model->find(in))
     if (const auto aside = chat->quoted.find(id);
@@ -60,6 +59,12 @@ void app::go_to_message(const mux::conversation_id& in, std::string id, std::opt
       id = *aside->second.replies_to;
       fragment.reset();
     }
+  // As tdesktop's doneJumpFrom: a way back to where it goes is done with,
+  // then where it went from is one.
+  if (here) {
+    screen.skip_return(id);
+    screen.note_return();
+  }
   screen.jump_to(std::move(id), std::move(fragment));
 }
 

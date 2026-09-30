@@ -292,6 +292,10 @@ class outbox_part {
   // The field's text sent: as a message, an answer, or an edit -- as what is
   // written says -- and the field and its draft emptied.
   void send(std::string text) {
+    // A text sent: the ways back from jumps let go, as tdesktop's
+    // sendTextWithTags clears its reply returns.
+    if (const auto& chosen = s_->root().main().chosen)
+      s_->root().main().returns.erase(*chosen);
     auto& screen = s_->root().main();
     if (!screen.chosen || !logic::sendable(text))
       return;

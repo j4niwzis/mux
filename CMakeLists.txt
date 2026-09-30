@@ -77,7 +77,7 @@ cme_declare_port(NAME tern PROVIDES tern
 cme_options(tern "TERN_TESTS OFF" "TERN_EXAMPLES OFF")
 cme_declare_port(NAME loom PROVIDES loom
   GITHUB_REPOSITORY j4niwzis/loom
-  GIT_TAG c78b519b0c8cf26213134d3dc166725e3b9038b8
+  GIT_TAG 72b7241ed2f7763beec039b68fb42d31b24162d9
   LICENSE AGPL-3.0-only
   SYSTEM NEVER
   TARGETS loom)
@@ -105,12 +105,12 @@ cme_declare_port(NAME alef PROVIDES alef
 cme_options(alef "ALEF_TESTS OFF")
 cme_find_package(alef COMPONENTS precis idna grapheme line bidi emoji REQUIRED)
 
-# knot, at its pretty printer (a7e6cd4): what a room's events are shown as
-# in the developer tools. loom asks for an older one; the project's pin is
-# the one taken.
+# knot, at knot::raw as a rest member (4903935): what is not typed kept as
+# its JSON text, no tree -- loom asks for the same. The project's pin is the
+# one taken.
 cme_declare_port(NAME knot PROVIDES knot
   GITHUB_REPOSITORY j4niwzis/knot
-  GIT_TAG a7e6cd44e5f522c1f49ab87ee9a40c4cd96514ad
+  GIT_TAG 49039355f299e81a0c408c38d5cbf7b9b29b4e6f
   LICENSE AGPL-3.0-only
   SYSTEM NEVER)
 

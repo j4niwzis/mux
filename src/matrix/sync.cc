@@ -28,6 +28,58 @@ import :account;
 // The members defined here are declared in :account, and exported there.
 namespace mux::matrix {
 
+// What the password login says of who: the user's local part.
+struct user_field {
+  std::string user;
+};
+consteval auto json_schema(knot::type<user_field>) { return knot::schema<user_field>(); }
+
+// m.receipt's content: event, then kind, then user, to when.
+struct receipt_event {
+  struct at_t {
+    std::optional<std::int64_t> ts;
+  };
+  std::map<std::string, std::map<std::string, std::map<std::string, at_t>>> content;
+};
+consteval auto json_schema(knot::type<receipt_event::at_t>) { return knot::schema<receipt_event::at_t>(); }
+consteval auto json_schema(knot::type<receipt_event>) { return knot::schema<receipt_event>(); }
+
+// A pack of images (MSC2545): as the room's state, or the user's own.
+struct pack_event {
+  struct image_t {
+    std::optional<std::string> url;
+    std::optional<std::vector<std::string>> usage;
+  };
+  struct pack_t {
+    std::optional<std::vector<std::string>> usage;
+  };
+  struct content_t {
+    std::optional<std::map<std::string, image_t>> images;
+    std::optional<pack_t> pack;
+  };
+  content_t content;
+};
+consteval auto json_schema(knot::type<pack_event::image_t>) { return knot::schema<pack_event::image_t>(); }
+consteval auto json_schema(knot::type<pack_event::pack_t>) { return knot::schema<pack_event::pack_t>(); }
+consteval auto json_schema(knot::type<pack_event::content_t>) { return knot::schema<pack_event::content_t>(); }
+consteval auto json_schema(knot::type<pack_event>) { return knot::schema<pack_event>(); }
+
+// im.ponies.emote_rooms: room, then the state keys of its packs.
+struct emote_rooms_event {
+  struct content_t {
+    std::optional<std::map<std::string, std::map<std::string, knot::raw>>> rooms;
+  };
+  content_t content;
+};
+consteval auto json_schema(knot::type<emote_rooms_event::content_t>) { return knot::schema<emote_rooms_event::content_t>(); }
+consteval auto json_schema(knot::type<emote_rooms_event>) { return knot::schema<emote_rooms_event>(); }
+
+// A rule's word, as loom reads it: its text, for mux's own table.
+template <class Content, class Rule>
+std::optional<std::string> rule_text(const Content* content, Rule Content::* rule) {
+  return content ? std::optional<std::string>(loom::client::choice_text(content->*rule)) : std::nullopt;
+}
+
 template <class Sink>
 void account<Sink>::say(connection_t state) { sink_(change::connection_changed{id_, std::move(state)}); }
 
@@ -66,9 +118,7 @@ void account<Sink>::run() {
   // told, to be kept.
   const auto log_in = [&]() -> bool {
     loom::cs::def::user_identifier_t who{.type = "m.id.user"};
-    knot::value::object said_user;
-    said_user.emplace("user", knot::value(localpart_));
-    who.rest = knot::value(std::move(said_user));
+    who.rest = as_body(user_field{localpart_});
     log(id_, "logging in, as the device {}", how_.device_id.value_or("the server makes"));
     auto logged = perform(api, loom::cs::login{.body = {.type = "m.login.password",
                                                         .identifier = std::move(who),
@@ -306,23 +356,18 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
                                           event_type_of(event.type));
           if (!receipt)
             continue;
-          const knot::value tree = knot::to_value(event);
-          const knot::value* content = member(tree, "content");
-          if (!content || !content->is<knot::value::object>())
+          const auto receipts = read_as<receipt_event>(event);
+          if (!receipts)
             continue;
-          for (const auto& [event_id, kinds] : content->as<knot::value::object>()) {
-            if (!kinds.is<knot::value::object>())
-              continue;
-            for (const auto& [kind, users] : kinds.as<knot::value::object>())
-              if (mux::visit([](auto of) { return of.read_up_to; }, receipt_kind_of(kind)) &&
-                  users.is<knot::value::object>())
-                for (const auto& [user, when] : users.as<knot::value::object>()) {
+          for (const auto& [event_id, kinds] : receipts->content)
+            for (const auto& [kind, users] : kinds)
+              if (mux::visit([](auto of) { return of.read_up_to; }, receipt_kind_of(kind)))
+                for (const auto& [user, when] : users) {
                   read_by.insert_or_assign(user, event_id);
-                  if (const knot::value* ts = member(when, "ts"); ts && ts->is<std::int64_t>())
+                  if (when.ts)
                     read_at.insert_or_assign(user, std::chrono::sys_time<std::chrono::milliseconds>(
-                                                       std::chrono::milliseconds(ts->as<std::int64_t>())));
+                                                       std::chrono::milliseconds(*when.ts)));
                 }
-          }
         }
         if (!read_by.empty())
           sink_(change::receipts_changed{in, std::move(read_by), std::move(read_at)});
@@ -336,50 +381,41 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
       sink_(change::conversation_removed{{id_, room}});
 }
 
+using power_levels_content = loom::ev::m_room_power_levels_content_t;
 // Each one's say in a room, as its power levels list them.
-inline std::map<std::string, std::int64_t> powers_of(const knot::value& content) {
-  std::map<std::string, std::int64_t> out;
-  if (const knot::value* users = member(content, "users"); users && users->is<knot::value::object>())
-    for (const auto& [user, level] : users->as<knot::value::object>())
-      if (level.is<std::int64_t>())
-        out.emplace(user, level.as<std::int64_t>());
-  return out;
+inline std::map<std::string, std::int64_t> powers_of(const power_levels_content* content) {
+  return content && content->users ? *content->users : std::map<std::string, std::int64_t>{};
 }
 // What each thing done in a room asks, as its power levels say: read here,
 // where they come in, into what the rest keeps.
-inline power_needs needs_of(const knot::value& content) {
+inline power_needs needs_of(const power_levels_content* content) {
   power_needs out;
-  const auto level = [&](const knot::value* at, std::int64_t& into) {
-    if (at && at->is<std::int64_t>())
-      into = at->as<std::int64_t>();
+  if (!content)
+    return out;
+  const auto level = [](const std::optional<std::int64_t>& said, std::int64_t& into) {
+    if (said)
+      into = *said;
   };
-  level(member(content, "users_default"), out.users_default);
-  level(member(content, "events_default"), out.events_default);
-  level(member(content, "state_default"), out.state_default);
-  level(member(content, "invite"), out.invite);
-  level(member(content, "kick"), out.kick);
-  level(member(content, "ban"), out.ban);
-  level(member(content, "redact"), out.redact);
-  if (const knot::value* told = member(content, "notifications"))
-    level(member(*told, "room"), out.notify_room);
-  if (const knot::value* events = member(content, "events"); events && events->is<knot::value::object>())
-    for (const auto& [kind, needed] : events->as<knot::value::object>())
-      if (needed.is<std::int64_t>())
-        out.events.emplace(kind, needed.as<std::int64_t>());
+  level(content->users_default, out.users_default);
+  level(content->events_default, out.events_default);
+  level(content->state_default, out.state_default);
+  level(content->invite, out.invite);
+  level(content->kick, out.kick);
+  level(content->ban, out.ban);
+  level(content->redact, out.redact);
+  if (content->notifications)
+    level(content->notifications->room, out.notify_room);
+  if (content->events)
+    for (const auto& [kind, needed] : *content->events)
+      out.events.emplace(kind, needed);
   return out;
 }
 // The other addresses a room publishes, besides its canonical one.
-inline std::vector<std::string> other_aliases_of(const knot::value& content) {
-  std::vector<std::string> out;
-  if (const knot::value* alt = member(content, "alt_aliases"); alt && alt->is<knot::value::array>())
-    for (const knot::value& one : alt->as<knot::value::array>())
-      if (one.is<std::string>())
-        out.push_back(one.as<std::string>());
-  return out;
+inline std::vector<std::string> other_aliases_of(const loom::ev::m_room_canonical_alias_content_t* content) {
+  return content && content->alt_aliases ? *content->alt_aliases : std::vector<std::string>{};
 }
-inline std::int64_t power_default_of(const knot::value& content) {
-  const knot::value* level = member(content, "users_default");
-  return level && level->is<std::int64_t>() ? level->as<std::int64_t>() : 0;
+inline std::int64_t power_default_of(const power_levels_content* content) {
+  return content ? content->users_default.value_or(0) : 0;
 }
 
 template <class Sink>
@@ -415,16 +451,8 @@ auto account<Sink>::direct(const std::string& room) const -> bool {
   const auto found = state_.account_data.find("m.direct");
   if (found == state_.account_data.end())
     return false;
-  const knot::value tree = knot::to_value(found->second);
-  const knot::value* content = member(tree, "content");
-  if (!content || !content->is<knot::value::object>())
-    return false;
-  for (const auto& [user, rooms] : content->as<knot::value::object>())
-    if (rooms.is<knot::value::array>())
-      for (const auto& one : rooms.as<knot::value::array>())
-        if (one.is<std::string>() && one.as<std::string>() == room)
-          return true;
-  return false;
+  const auto said = read_as<direct_event>(found->second);
+  return said && std::ranges::any_of(said->content, [&](const auto& one) { return std::ranges::contains(one.second, room); });
 }
 
 template <class Sink>
@@ -444,65 +472,49 @@ void account<Sink>::conversation(const conversation_id& in, const loom::client::
                                      .pinned = pinned_of(kept),
                                      .emotes = emotes_of(kept),
                                      .stickers = emotes_of(kept, true),
-                                     .join_rule = join_rule_of(text(member(state_content(kept, "m.room.join_rules"), "join_rule"))),
-                                     .history = history_rule_of(text(member(state_content(kept, "m.room.history_visibility"),
-                                                                            "history_visibility"))),
-                                     .powers = powers_of(state_content(kept, "m.room.power_levels")),
-                                     .power_default = power_default_of(state_content(kept, "m.room.power_levels")),
-                                     .needs = needs_of(state_content(kept, "m.room.power_levels")),
-                                     .version = text(member(state_content(kept, "m.room.create"), "room_version")).value_or("1"),
-                                     .other_aliases = other_aliases_of(state_content(kept, "m.room.canonical_alias"))});
+                                     .join_rule = join_rule_of(rule_text(kept.state.template content<loom::ev::m_room_join_rules_content_t>("m.room.join_rules"),
+                                                                         &loom::ev::m_room_join_rules_content_t::join_rule)),
+                                     .history = history_rule_of(rule_text(kept.state.template content<loom::ev::m_room_history_visibility_content_t>("m.room.history_visibility"),
+                                                                          &loom::ev::m_room_history_visibility_content_t::history_visibility)),
+                                     .powers = powers_of(kept.state.template content<power_levels_content>("m.room.power_levels")),
+                                     .power_default = power_default_of(kept.state.template content<power_levels_content>("m.room.power_levels")),
+                                     .needs = needs_of(kept.state.template content<power_levels_content>("m.room.power_levels")),
+                                     .version = kept.state.room_version(),
+                                     .other_aliases = other_aliases_of(kept.state.template content<loom::ev::m_room_canonical_alias_content_t>("m.room.canonical_alias"))});
 }
 
-template <class Sink>
-auto account<Sink>::state_content(const loom::client::joined_room& kept, std::string_view type) -> knot::value {
-  const auto* said = kept.state.find(std::string(type));
-  if (!said)
-    return knot::value();
-  const knot::value tree = knot::to_value(*said);
-  const knot::value* content = member(tree, "content");
-  return content ? *content : knot::value();
-}
 
 
 
 // Whether a usage list lets an image be an emoji: MSC2545's "usage", on the
 // image or else on its pack -- "emoticon", "sticker", or both where it is
 // missing or empty.
-inline bool usable_as_emoji(const knot::value* usage) {
-  if (!usage || !usage->is<knot::value::array>() || usage->as<knot::value::array>().empty())
-    return true;
-  for (const auto& one : usage->as<knot::value::array>())
-    if (one.is<std::string>() && mux::visit([](auto of) { return of.as_emoji; }, image_usage_of(one.as<std::string>())))
-      return true;
-  return false;
+using usage_t = std::optional<std::vector<std::string>>;
+inline bool usable_as_emoji(const usage_t& usage) {
+  return !usage || usage->empty() || std::ranges::any_of(*usage, [](const std::string& one) {
+    return mux::visit([](auto of) { return of.as_emoji; }, image_usage_of(one));
+  });
 }
-inline bool usable_as_sticker(const knot::value* usage) {
-  if (!usage || !usage->is<knot::value::array>() || usage->as<knot::value::array>().empty())
-    return true;
-  for (const auto& one : usage->as<knot::value::array>())
-    if (one.is<std::string>() && mux::visit([](auto of) { return of.as_sticker; }, image_usage_of(one.as<std::string>())))
-      return true;
-  return false;
+inline bool usable_as_sticker(const usage_t& usage) {
+  return !usage || usage->empty() || std::ranges::any_of(*usage, [](const std::string& one) {
+    return mux::visit([](auto of) { return of.as_sticker; }, image_usage_of(one));
+  });
 }
 
 // A pack's images, as MSC2545 has them: "images", shortcode to {"url"},
 // those that may be emoji -- or, asked for stickers, those that may be those.
-inline void emotes_from(const knot::value* content, std::vector<mux::emote>& into, bool stickers = false) {
-  const knot::value* images = content ? member(*content, "images") : nullptr;
-  if (!images || !images->is<knot::value::object>())
+inline void emotes_from(const std::optional<pack_event>& said, std::vector<mux::emote>& into, bool stickers = false) {
+  if (!said || !said->content.images)
     return;
-  const knot::value* pack = member(*content, "pack");
-  const knot::value* pack_usage = pack ? member(*pack, "usage") : nullptr;
-  for (const auto& [shortcode, image] : images->as<knot::value::object>()) {
-    const knot::value* own_usage = member(image, "usage");
-    const knot::value* usage = own_usage ? own_usage : pack_usage;
+  const usage_t no_usage;
+  const usage_t& pack_usage = said->content.pack ? said->content.pack->usage : no_usage;
+  for (const auto& [shortcode, image] : *said->content.images) {
+    const usage_t& usage = image.usage ? image.usage : pack_usage;
     if (!(stickers ? usable_as_sticker(usage) : usable_as_emoji(usage)))
       continue;
-    const auto url = text(member(image, "url"));
-    if (url && url->starts_with("mxc://") &&
+    if (image.url && image.url->starts_with("mxc://") &&
         std::ranges::find(into, shortcode, &mux::emote::shortcode) == into.end())
-      into.push_back({shortcode, *url});
+      into.push_back({shortcode, *image.url});
   }
 }
 
@@ -510,32 +522,25 @@ template <class Sink>
 auto account<Sink>::emotes_of(const loom::client::joined_room& kept, bool stickers) const -> std::vector<mux::emote> {
   std::vector<mux::emote> out;
   if (const auto own = state_.account_data.find("im.ponies.user_emotes"); own != state_.account_data.end()) {
-    const knot::value tree = knot::to_value(own->second);
-    emotes_from(member(tree, "content"), out, stickers);
+    emotes_from(read_as<pack_event>(own->second), out, stickers);
   }
   for (const auto& [key, one] : kept.state.events) {
     if (!mux::visit([](auto of) { return of.emotes; }, state_type_of(key.first)))
       continue;
-    const knot::value tree = knot::to_value(one);
-    emotes_from(member(tree, "content"), out, stickers);
+    emotes_from(read_as<pack_event>(one), out, stickers);
   }
   // And the packs of other rooms the user made usable everywhere, as Cinny
   // and Sable do: im.ponies.emote_rooms, room to the state keys of its packs.
   if (const auto chosen = state_.account_data.find("im.ponies.emote_rooms"); chosen != state_.account_data.end()) {
-    const knot::value tree = knot::to_value(chosen->second);
-    const knot::value* content = member(tree, "content");
-    const knot::value* rooms = content ? member(*content, "rooms") : nullptr;
-    if (rooms && rooms->is<knot::value::object>())
-      for (const auto& [room, packs] : rooms->as<knot::value::object>()) {
+    if (const auto said = read_as<emote_rooms_event>(chosen->second); said && said->content.rooms)
+      for (const auto& [room, packs] : *said->content.rooms) {
         const auto joined = state_.joined.find(room);
-        if (joined == state_.joined.end() || !packs.is<knot::value::object>())
+        if (joined == state_.joined.end())
           continue;
-        for (const auto& [state_key, ignored] : packs.as<knot::value::object>())
+        for (const auto& [state_key, ignored] : packs)
           for (const auto& [key, one] : joined->second.state.events)
-            if (key.second == state_key && mux::visit([](auto of) { return of.emotes; }, state_type_of(key.first))) {
-              const knot::value pack = knot::to_value(one);
-              emotes_from(member(pack, "content"), out, stickers);
-            }
+            if (key.second == state_key && mux::visit([](auto of) { return of.emotes; }, state_type_of(key.first)))
+              emotes_from(read_as<pack_event>(one), out, stickers);
       }
   }
   return out;
@@ -552,28 +557,15 @@ auto account<Sink>::emotes_in(const std::string& room) const -> std::vector<mux:
 template <class Sink>
 auto account<Sink>::pinned_of(const loom::client::joined_room& kept) -> std::vector<std::string> {
   std::vector<std::string> out;
-  const auto* said = kept.state.find("m.room.pinned_events");
-  if (!said)
-    return out;
-  const knot::value tree = knot::to_value(*said);
-  const knot::value* content = member(tree, "content");
-  const knot::value* pinned = content ? member(*content, "pinned") : nullptr;
-  if (pinned && pinned->is<knot::value::array>())
-    for (const auto& one : pinned->as<knot::value::array>())
-      if (one.is<std::string>())
-        out.push_back(one.as<std::string>());
+  if (const auto* said = kept.state.template content<loom::ev::m_room_pinned_events_content_t>("m.room.pinned_events"))
+    out = said->pinned;
   return out;
 }
 
 template <class Sink>
 auto account<Sink>::space(const loom::client::joined_room& kept) -> bool {
-  const auto* created = kept.state.find("m.room.create");
-  if (!created)
-    return false;
-  const knot::value tree = knot::to_value(*created);
-  const knot::value* content = member(tree, "content");
-  const knot::value* type = content ? member(*content, "type") : nullptr;
-  return mux::visit([](auto of) { return of.is_space; }, room_type_of(text(type)));
+  const auto* created = kept.state.template content<loom::ev::m_room_create_content_t>("m.room.create");
+  return created && mux::visit([](auto of) { return of.is_space; }, room_type_of(created->type));
 }
 
 template <class Sink>
@@ -582,9 +574,8 @@ auto account<Sink>::children_of(const loom::client::joined_room& kept) -> std::v
   for (const auto& [key, one] : kept.state.events) {
     if (!mux::visit([](auto of) { return of.child; }, state_type_of(key.first)))
       continue;
-    const knot::value tree = knot::to_value(one);
-    const knot::value* content = member(tree, "content");
-    if (content && content->is<knot::value::object>() && !content->as<knot::value::object>().empty())
+    // A child taken out has its content emptied.
+    if (const auto said = read_as<content_keys>(one); said && !said->content.empty())
       out.push_back(key.second);
   }
   return out;

@@ -27,6 +27,12 @@ import :account;
 // The members defined here are declared in :account, and exported there.
 namespace mux::matrix {
 
+// What an upload answers: where the file is kept now.
+struct upload_answer {
+  std::string content_uri;
+};
+consteval auto json_schema(knot::type<upload_answer>) { return knot::schema<upload_answer>(); }
+
 template <class Sink>
 void account<Sink>::fetch_media(std::string source, media_use_t use, int size, bool crop) {
   loop_->spawn([this, source = std::move(source), use = std::move(use), size, crop] {
@@ -118,8 +124,8 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
                                      std::chrono::seconds(600),
                                      mimetype.empty() ? std::string_view("application/octet-stream") : mimetype);
       if (got.status == 200)
-        if (auto answer = knot::try_read<knot::value>(std::string_view(got.body)); answer)
-          uri = text(member(*answer, "content_uri"));
+        if (auto answer = knot::try_read<upload_answer>(std::string_view(got.body)))
+          uri = std::move(answer->content_uri);
       if (!uri)
         log(id_, "upload of {} failed: {} {}", name, got.status, got.body.substr(0, 200));
     } catch (const net::failure& failed) {
@@ -129,31 +135,34 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
       sink_(change::delivery_changed{in, local, delivery::failed{}});
       return;
     }
-    knot::value::object content;
-    content.emplace("msgtype", knot::value(std::string(image ? "m.image" : "m.file")));
-    content.emplace("body", knot::value(caption.empty() ? name : caption));
-    content.emplace("filename", knot::value(name));
-    content.emplace("url", knot::value(*uri));
-    knot::value::object info;
-    info.emplace("mimetype", knot::value(mimetype));
-    info.emplace("size", knot::value(static_cast<std::int64_t>(bytes.size())));
+    // The message: a picture or a file, its caption its body; an answer, as
+    // any message may be one.
+    const auto fill = [&](auto& content) {
+      content.body = caption.empty() ? name : caption;
+      content.filename = name;
+      content.url = *uri;
+      auto& info = content.info.emplace();
+      info.mimetype = mimetype;
+      info.size = static_cast<std::int64_t>(bytes.size());
+      if (reply_to)
+        content.m_relates_to.emplace().m_in_reply_to.emplace().event_id = *reply_to;
+    };
+    knot::raw message;
     if (image) {
-      info.emplace("w", knot::value(static_cast<std::int64_t>(width)));
-      info.emplace("h", knot::value(static_cast<std::int64_t>(height)));
-    }
-    content.emplace("info", knot::value(std::move(info)));
-    // An answer, as any message may be one: a picture or a file too.
-    if (reply_to) {
-      knot::value::object target;
-      target.emplace("event_id", knot::value(*reply_to));
-      knot::value::object relates;
-      relates.emplace("m.in_reply_to", knot::value(std::move(target)));
-      content.emplace("m.relates_to", knot::value(std::move(relates)));
+      loom::ev::m_room_message_m_image_content_t content;
+      fill(content);
+      content.info->w = static_cast<std::int64_t>(width);
+      content.info->h = static_cast<std::int64_t>(height);
+      message = as_body(content);
+    } else {
+      loom::ev::m_room_message_m_file_content_t content;
+      fill(content);
+      message = as_body(content);
     }
     auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.room.message",
                                                       .txn_id = local,
-                                                      .body = knot::value(std::move(content))});
+                                                      .body = std::move(message)});
     if (!sent) {
       sink_(change::delivery_changed{in, local, delivery::failed{}});
       return;

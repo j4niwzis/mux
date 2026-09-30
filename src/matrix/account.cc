@@ -219,7 +219,6 @@ class account {
   // The room's pinned messages, as its state says.
   static std::vector<std::string> pinned_of(const loom::client::joined_room& kept);
   // A state event's content, as a tree; null where the room has none.
-  static knot::value state_content(const loom::client::joined_room& kept, std::string_view type);
   // The custom emoji usable in a room: the user's own (im.ponies.user_emotes)
   // and the room's packs (im.ponies.room_emotes), a shortcode once.
   [[nodiscard]] std::vector<mux::emote> emotes_of(const loom::client::joined_room& kept, bool stickers = false) const;
@@ -263,14 +262,8 @@ class account {
 
   // A message's body: its plain text, and its HTML where it says it has
   // org.matrix.custom.html.
-  static body body_of(std::string plain, const knot::value& content);
-  template <class Tagged>
-  static body body_of(std::string plain, const knot::value& rest, const Tagged& content) {
-    body made{std::move(plain), std::nullopt};
-    if (mux::visit([](auto of) { return of.html_given; }, body_format_of(text(extra(rest, content, "format")))))
-      made.html = text(extra(rest, content, "formatted_body"));
-    return made;
-  }
+  static body body_of(std::string plain, const std::optional<std::string>& format,
+                      const std::optional<std::string>& formatted_body);
 
   struct reaction {
     std::string target, key, who;

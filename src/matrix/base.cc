@@ -42,29 +42,28 @@ struct settings {
   std::chrono::milliseconds sync_timeout = std::chrono::seconds(30);
 };
 
-// A value of an object, by key; nothing where it is not an object or has no
-// such key.
-inline const knot::value* member(const knot::value& of, std::string_view key) {
-  if (!of.is<knot::value::object>())
-    return nullptr;
-  const auto& all = of.as<knot::value::object>();
-  const auto found = all.find(key);
-  return found == all.end() ? nullptr : &found->second;
-}
+// A typed content as a request's body: its JSON text.
+inline knot::raw as_body(const auto& content) { return knot::raw{knot::to_json_string(content)}; }
 
-// A key of an event's content that its type does not name: in the content's
-// rest, or where knot::tagged keeps what the alternative did not type.
-template <class Tagged>
-const knot::value* extra(const knot::value& rest, const Tagged& content, std::string_view key) {
-  if (const knot::value* found = member(rest, key))
-    return found;
-  return member(content.unknown, key);
-}
+// m.direct's content: each person's direct rooms.
+struct direct_event {
+  std::map<std::string, std::vector<std::string>> content;
+};
+consteval auto json_schema(knot::type<direct_event>) { return knot::schema<direct_event>(); }
 
-inline std::optional<std::string> text(const knot::value* of) {
-  if (of && of->is<std::string>())
-    return of->as<std::string>();
-  return std::nullopt;
+// An event's content as its keys, each kept as its text: for what is passed
+// on, or only asked whether it has any.
+struct content_keys {
+  std::map<std::string, knot::raw> content;
+};
+consteval auto json_schema(knot::type<content_keys>) { return knot::schema<content_keys>(); }
+
+// An event of any type, read once into the shape given: what mux reads of
+// a content loom keeps as text (account data, packs of emoji, receipts).
+template <class Shape>
+std::optional<Shape> read_as(const auto& event) {
+  auto got = knot::try_read<Shape>(knot::to_json_string(event));
+  return got ? std::optional<Shape>(std::move(*got)) : std::nullopt;
 }
 
 }  // namespace mux::matrix

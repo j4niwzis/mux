@@ -28,64 +28,121 @@ import :account;
 // The members defined here are declared in :account, and exported there.
 namespace mux::matrix {
 
+// What a message's content says of what it carries -- a picture's or a
+// file's place, name and facts, a gallery's items (MSC4274) -- that loom's
+// m.room.message content does not type: read once from what it keeps as
+// text, into these.
+struct media_info {
+  struct thumbnail_t {
+    std::optional<std::int64_t> w;
+    std::optional<std::int64_t> h;
+  };
+  std::optional<std::string> mimetype;
+  std::optional<std::int64_t> size;
+  std::optional<std::int64_t> w;
+  std::optional<std::int64_t> h;
+  std::optional<std::int64_t> duration;
+  std::optional<std::string> thumbnail_url;
+  std::optional<thumbnail_t> thumbnail_info;
+  std::optional<std::string> blurhash;
+};
+consteval auto json_schema(knot::type<media_info::thumbnail_t>) { return knot::schema<media_info::thumbnail_t>(); }
+consteval auto json_schema(knot::type<media_info>) {
+  return knot::schema<media_info>().member<"blurhash">(knot::key("xyz.amorgan.blurhash"));
+}
+struct gallery_item {
+  std::optional<std::string> itemtype;
+  std::optional<std::string> url;
+  std::optional<std::string> filename;
+  std::optional<std::string> body;
+  std::optional<media_info> info;
+};
+consteval auto json_schema(knot::type<gallery_item>) { return knot::schema<gallery_item>(); }
+struct message_media {
+  std::optional<std::string> url;
+  std::optional<std::string> filename;
+  std::optional<media_info> info;
+  std::optional<std::vector<gallery_item>> itemtypes;
+};
+consteval auto json_schema(knot::type<message_media>) { return knot::schema<message_media>(); }
+
+// A picture's or a file's facts, as an attachment keeps them.
+inline void carry_info(mux::attachment& carried, const media_info& info) {
+  carried.mimetype = info.mimetype.value_or("");
+  carried.size = info.size.value_or(0);
+  carried.width = static_cast<int>(info.w.value_or(0));
+  carried.height = static_cast<int>(info.h.value_or(0));
+  carried.blurhash = info.blurhash;
+}
+
+using member_content = loom::ev::m_room_member_content_t;
+// A membership as loom reads it, as mux's.
+inline membership_t membership_from(const member_content::membership_t& said) {
+  using values = member_content::membership_values;
+  return std::visit(overloaded{[](values::join) -> membership_t { return membership::join{}; },
+                               [](values::leave) -> membership_t { return membership::leave{}; },
+                               [](values::invite) -> membership_t { return membership::invite{}; },
+                               [](values::ban) -> membership_t { return membership::ban{}; },
+                               [](values::knock) -> membership_t { return membership::knock{}; },
+                               [](const std::string&) -> membership_t { return membership::other{}; }},
+                    said);
+}
+
+// Whether a relation replaces what it relates to: an edit.
+inline bool replaces(const loom::ev::m_room_message_content_t::m_relates_to_t& relates) {
+  using values = loom::ev::m_room_message_content_t::m_relates_to_t::rel_type_values;
+  return relates.rel_type &&
+         std::visit(overloaded{[](values::m_replace) { return true; }, [](const auto&) { return false; }}, *relates.rel_type);
+}
+
 template <class Sink>
 void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where) {
   const auto at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(one.origin_server_ts));
   if (one.content.template is<loom::ev::m_room_message_content_t>()) {
     const auto& content = one.content.template as<loom::ev::m_room_message_content_t>();
-    const knot::value* relates = extra(content.rest, one.content, "m.relates_to");
+    const auto& relates = content.m_relates_to;
     // An edit: the event it replaces takes its new content.
-    if (mux::visit([](auto of) { return of.edit; },
-                   relation_of(text(member(relates ? *relates : knot::value(), "rel_type"))))) {
-      const auto target = text(member(*relates, "event_id"));
-      const knot::value* now = extra(content.rest, one.content, "m.new_content");
-      if (target && now)
-        sink_(change::message_edited{in, *target, body_of(text(member(*now, "body")).value_or(""), *now)});
+    if (relates && replaces(*relates)) {
+      if (relates->event_id && content.m_new_content)
+        sink_(change::message_edited{in, *relates->event_id,
+                                     body_of(content.m_new_content->body.value_or(""), content.m_new_content->format,
+                                             content.m_new_content->formatted_body)});
       return;
     }
     message made{.in = in,
                  .id = one.event_id,
                  .sender = one.sender,
                  .at = at,
-                 .body = body_of(content.body, content.rest, one.content),
+                 .body = body_of(content.body, content.format, content.formatted_body),
                  .outgoing = one.sender == id_.address};
     const auto [carries, picture, emote] = mux::visit(
         [](auto of) { return std::tuple(of.carries, of.picture, of.is_emote); }, msgtype_of(content.msgtype));
     if (emote)
       made.body.plain = "* " + made.body.plain;
+    // What it carries, read once from what loom keeps of it as text.
+    const message_media media = knot::try_read<message_media>(content.rest.text).value_or(message_media{});
     // A picture or a file: where it is kept, its name, what it is; its
     // body a caption where a file name is given apart from it.
     if (carries) {
       mux::attachment carried;
       if (picture)
         carried.kind = attachment_kind::image{};
-      carried.source = text(extra(content.rest, one.content, "url")).value_or("");
-      const auto file_name = text(extra(content.rest, one.content, "filename"));
-      carried.name = file_name.value_or(content.body);
-      if (const knot::value* info = extra(content.rest, one.content, "info")) {
-        const auto number = [&](std::string_view key) -> std::int64_t {
-          const knot::value* got = member(*info, key);
-          return got && got->is<std::int64_t>() ? got->as<std::int64_t>() : 0;
-        };
-        carried.mimetype = text(member(*info, "mimetype")).value_or("");
-        carried.size = number("size");
-        carried.width = static_cast<int>(number("w"));
-        carried.height = static_cast<int>(number("h"));
-        carried.blurhash = text(member(*info, "xyz.amorgan.blurhash"));
+      carried.source = media.url.value_or("");
+      carried.name = media.filename.value_or(content.body);
+      if (media.info) {
+        carry_info(carried, *media.info);
         // A video: shown by its thumbnail, as a picture, until it can be
         // played here; its own size where the video gives none.
         const bool video = mux::visit(overloaded{[](msgtype::video) { return true; }, [](const auto&) { return false; }},
                                       msgtype_of(content.msgtype));
-        if (const auto thumbnail = text(member(*info, "thumbnail_url")); video && thumbnail) {
+        if (video && media.info->thumbnail_url) {
           carried.video = carried.source;
-          carried.source = *thumbnail;
-          carried.duration_ms = number("duration");
+          carried.source = *media.info->thumbnail_url;
+          carried.duration_ms = media.info->duration.value_or(0);
           carried.kind = attachment_kind::image{};
-          if (const knot::value* thumb = member(*info, "thumbnail_info"); thumb && (carried.width == 0 || carried.height == 0)) {
-            const knot::value* w = member(*thumb, "w");
-            const knot::value* h = member(*thumb, "h");
-            carried.width = w && w->is<std::int64_t>() ? static_cast<int>(w->as<std::int64_t>()) : 0;
-            carried.height = h && h->is<std::int64_t>() ? static_cast<int>(h->as<std::int64_t>()) : 0;
+          if (const auto& thumb = media.info->thumbnail_info; thumb && (carried.width == 0 || carried.height == 0)) {
+            carried.width = static_cast<int>(thumb->w.value_or(0));
+            carried.height = static_cast<int>(thumb->h.value_or(0));
           }
         }
       }
@@ -93,59 +150,41 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
         carried.kind = attachment_kind::image{.moves = moving_type(carried.mimetype)};
       if (!carried.source.empty()) {
         made.attachment = std::move(carried);
-        if (!file_name || *file_name == content.body)
+        if (!media.filename || *media.filename == content.body)
           made.body = {};  // no caption: the body was the file's name
       }
     }
     // A gallery (MSC4274): each of its itemtypes read as a picture or a file
     // alone is, its body the caption.
     if (mux::visit(overloaded{[](msgtype::gallery) { return true; }, [](const auto&) { return false; }},
-                   msgtype_of(content.msgtype)))
-      if (const knot::value* items = extra(content.rest, one.content, "itemtypes"); items && items->is<knot::value::array>())
-        for (const knot::value& item : items->as<knot::value::array>()) {
-          const auto kind = text(member(item, "itemtype"));
-          const bool is_picture_item = mux::visit([](auto of) { return of.picture; }, msgtype_of(kind));
-          mux::attachment carried;
-          carried.source = text(member(item, "url")).value_or("");
-          carried.name = text(member(item, "filename")).value_or(text(member(item, "body")).value_or(""));
-          if (const knot::value* info = member(item, "info")) {
-            const auto number = [&](std::string_view key) -> std::int64_t {
-              const knot::value* got = member(*info, key);
-              return got && got->is<std::int64_t>() ? got->as<std::int64_t>() : 0;
-            };
-            carried.mimetype = text(member(*info, "mimetype")).value_or("");
-            carried.size = number("size");
-            carried.width = static_cast<int>(number("w"));
-            carried.height = static_cast<int>(number("h"));
-            carried.blurhash = text(member(*info, "xyz.amorgan.blurhash"));
-          }
-          if (is_picture_item)
-            carried.kind = attachment_kind::image{.moves = moving_type(carried.mimetype)};
-          if (!carried.source.empty())
-            made.album.push_back(std::move(carried));
-        }
+                   msgtype_of(content.msgtype)) &&
+        media.itemtypes)
+      for (const gallery_item& item : *media.itemtypes) {
+        const bool is_picture_item = mux::visit([](auto of) { return of.picture; }, msgtype_of(item.itemtype));
+        mux::attachment carried;
+        carried.source = item.url.value_or("");
+        carried.name = item.filename.value_or(item.body.value_or(""));
+        if (item.info)
+          carry_info(carried, *item.info);
+        if (is_picture_item)
+          carried.kind = attachment_kind::image{.moves = moving_type(carried.mimetype)};
+        if (!carried.source.empty())
+          made.album.push_back(std::move(carried));
+      }
     // Nothing mux can show of it: said so, so that it is there to be looked
     // at (View Source) rather than an empty space.
-    if (made.body.plain.empty() && !made.body.html && !made.attachment && made.album.empty()) {
-      const knot::value tree = knot::to_value(one);
-      const knot::value* said = member(tree, "content");
-      made.body.plain = std::format("Unsupported message ({})",
-                                    said ? text(member(*said, "msgtype")).value_or("no msgtype") : std::string("no msgtype"));
-    }
-    if (relates)
-      if (const knot::value* reply = member(*relates, "m.in_reply_to"))
-        made.replies_to = text(member(*reply, "event_id"));
+    if (made.body.plain.empty() && !made.body.html && !made.attachment && made.album.empty())
+      made.body.plain = "Unsupported message (" + (content.msgtype.empty() ? std::string("no msgtype") : content.msgtype) + ")";
+    if (relates && relates->m_in_reply_to)
+      made.replies_to = relates->m_in_reply_to->event_id;
     // A message for the user, come as it happened: listed, as Telegram's @.
     // Who it mentions, as m.mentions says; before that, the user's ID in it.
     const bool live = mux::visit(overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
     const auto mentions_me = [&] {
-      if (const knot::value* said = extra(content.rest, one.content, "m.mentions")) {
-        if (const knot::value* users = member(*said, "user_ids"); users && users->is<knot::value::array>())
-          for (const knot::value& user : users->as<knot::value::array>())
-            if (user.is<std::string>() && user.as<std::string>() == id_.address)
-              return true;
-        const knot::value* room = member(*said, "room");
-        return room != nullptr && room->is<bool>() && room->as<bool>();
+      if (const auto& said = content.m_mentions) {
+        if (said->user_ids && std::ranges::contains(*said->user_ids, id_.address))
+          return true;
+        return said->room.value_or(false);
       }
       return made.body.plain.find(id_.address) != std::string::npos;
     };
@@ -248,30 +287,28 @@ auto account<Sink>::name_in(const std::string& room, const std::string& user) co
 // messages out: who did what. A sticker is a picture, and shown as one;
 // a type nothing here reads is said by its name.
 template <class Sink>
-void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_event& one, event_type_t type,
+void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_event& one, event_type_t,
                          std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where) {
-  const knot::value tree = knot::to_value(one);
-  const knot::value* content = member(tree, "content");
-  const knot::value* extras = member(tree, "unsigned");
-  const knot::value* before = extras ? member(*extras, "prev_content") : nullptr;
-  const auto field = [](const knot::value* of, std::string_view key) {
-    return of ? text(member(*of, key)) : std::optional<std::string>();
-  };
   const std::string who = name_in(in.id, one.sender);
   const auto say = [&](room_event_t kind, std::string said) { service(in, one, at, where, std::move(said), kind); };
-  mux::visit(
+  std::visit(
       overloaded{
-          [&](event_type::member) {
+          [&](const member_content& content) {
             const std::string target_id = one.state_key.value_or(one.sender);
-            const std::string target = field(content, "displayname").value_or(name_in(in.id, target_id));
-            const membership_t now = membership_of(field(content, "membership"));
-            const membership_t was = membership_of(field(before, "membership"));
+            const std::string target = content.displayname.value_or(name_in(in.id, target_id));
+            // What it was: the content before, as the server gives it beside.
+            std::optional<member_content> before;
+            if (one.unsigned_ && one.unsigned_->prev_content)
+              if (auto got = knot::try_read<member_content>(one.unsigned_->prev_content->text))
+                before = std::move(*got);
+            const membership_t now = membership_from(content.membership);
+            const membership_t was = before ? membership_from(before->membership) : membership_t{membership::other{}};
             const bool was_in = mux::visit([](auto of) { return of.in; }, was);
             const bool self = one.sender == target_id;
             mux::visit(overloaded{[&](membership::join) {
                                     if (!was_in) {
                                       say(room_event::joins{}, std::format("{} joined", target));
-                                    } else if (const auto old = field(before, "displayname"); old && *old != target) {
+                                    } else if (const auto old = before ? before->displayname : std::nullopt; old && *old != target) {
                                       say(room_event::names{}, std::format("{} changed their name to {}", *old, target));
                                     } else {
                                       say(room_event::avatars{}, std::format("{} changed their picture", target));
@@ -295,62 +332,55 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
                                   [&](membership::other) { say(room_event::invites{}, std::format("{} changed {}'s membership", who, target)); }},
                        now);
           },
-          [&](event_type::room_name) {
-            const auto name = field(content, "name").value_or("");
-            say(room_event::room_name{}, name.empty() ? std::format("{} removed the room's name", who)
-                             : std::format("{} renamed the room to “{}”", who, name));
+          [&](const loom::ev::m_room_name_content_t& content) {
+            say(room_event::room_name{}, content.name.empty() ? std::format("{} removed the room's name", who)
+                                                              : std::format("{} renamed the room to “{}”", who, content.name));
           },
-          [&](event_type::topic) {
-            const auto topic = field(content, "topic").value_or("");
-            say(room_event::topic{}, topic.empty() ? std::format("{} removed the topic", who)
-                              : std::format("{} changed the topic to “{}”", who, topic));
+          [&](const loom::ev::m_room_topic_content_t& content) {
+            say(room_event::topic{}, content.topic.empty() ? std::format("{} removed the topic", who)
+                                                           : std::format("{} changed the topic to “{}”", who, content.topic));
           },
-          [&](event_type::room_avatar) { say(room_event::room_avatar{}, std::format("{} changed the room's picture", who)); },
-          [&](event_type::create) { say(room_event::other{}, std::format("{} created the room", who)); },
-          [&](event_type::power_levels) { say(room_event::permissions{}, std::format("{} changed who may do what here", who)); },
-          [&](event_type::pinned) { say(room_event::pins{}, std::format("{} changed the pinned messages", who)); },
-          [&](event_type::join_rules) {
-            say(room_event::access{}, std::format("{} set who may join to “{}”", who, field(content, "join_rule").value_or("?")));
+          [&](const loom::ev::m_room_avatar_content_t&) { say(room_event::room_avatar{}, std::format("{} changed the room's picture", who)); },
+          [&](const loom::ev::m_room_create_content_t&) { say(room_event::other{}, std::format("{} created the room", who)); },
+          [&](const loom::ev::m_room_power_levels_content_t&) { say(room_event::permissions{}, std::format("{} changed who may do what here", who)); },
+          [&](const loom::ev::m_room_pinned_events_content_t&) { say(room_event::pins{}, std::format("{} changed the pinned messages", who)); },
+          [&](const loom::ev::m_room_join_rules_content_t& content) {
+            say(room_event::access{}, std::format("{} set who may join to “{}”", who, loom::client::choice_text(content.join_rule)));
           },
-          [&](event_type::history_visibility) {
+          [&](const loom::ev::m_room_history_visibility_content_t& content) {
             say(room_event::access{}, std::format("{} set who may read the history to “{}”", who,
-                            field(content, "history_visibility").value_or("?")));
+                                                  loom::client::choice_text(content.history_visibility)));
           },
-          [&](event_type::canonical_alias) {
-            const auto alias = field(content, "alias").value_or("");
+          [&](const loom::ev::m_room_canonical_alias_content_t& content) {
+            const std::string alias = content.alias.value_or("");
             say(room_event::address{}, alias.empty() ? std::format("{} removed the room's address", who)
-                              : std::format("{} set the room's address to {}", who, alias));
+                                                     : std::format("{} set the room's address to {}", who, alias));
           },
           // A sticker: a picture, as a message with one is shown.
-          [&](event_type::sticker) {
+          [&](const loom::ev::m_sticker_content_t& content) {
+            if (content.url.empty()) {
+              say(room_event::other{}, std::format("{} sent a sticker", who));
+              return;
+            }
+            mux::attachment carried;
+            carried.source = content.url;
+            carried.name = content.body.empty() ? std::string("sticker") : content.body;
+            carried.mimetype = content.info.mimetype.value_or("");
+            carried.width = static_cast<int>(content.info.w.value_or(0));
+            carried.height = static_cast<int>(content.info.h.value_or(0));
+            carried.kind = attachment_kind::image{.moves = moving_type(carried.mimetype)};
             message made{.in = in,
                          .id = one.event_id,
                          .sender = one.sender,
                          .at = at,
                          .body = {},
                          .outgoing = one.sender == id_.address};
-            mux::attachment carried;
-            carried.source = field(content, "url").value_or("");
-            carried.name = field(content, "body").value_or("sticker");
-            if (const knot::value* info = content ? member(*content, "info") : nullptr) {
-              const auto number = [&](std::string_view key) -> std::int64_t {
-                const knot::value* got = member(*info, key);
-                return got && got->is<std::int64_t>() ? got->as<std::int64_t>() : 0;
-              };
-              carried.mimetype = text(member(*info, "mimetype")).value_or("");
-              carried.width = static_cast<int>(number("w"));
-              carried.height = static_cast<int>(number("h"));
-            }
-            carried.kind = attachment_kind::image{.moves = moving_type(carried.mimetype)};
-            if (carried.source.empty()) {
-              say(room_event::other{}, std::format("{} sent a sticker", who));
-              return;
-            }
             made.attachment = std::move(carried);
             sink_(change::message_added{std::move(made), where});
           },
+          // Any other: said by its type's name.
           [&](const auto&) { say(room_event::other{}, std::format("{} sent {}", who, one.type)); }},
-      type);
+      one.content.data());
 }
 
 template <class Sink>
@@ -372,10 +402,11 @@ void account<Sink>::redaction(const conversation_id& in, const loom::ev::timelin
 }
 
 template <class Sink>
-auto account<Sink>::body_of(std::string plain, const knot::value& content) -> body {
+auto account<Sink>::body_of(std::string plain, const std::optional<std::string>& format,
+                            const std::optional<std::string>& formatted_body) -> body {
   body made{std::move(plain), std::nullopt};
-  if (mux::visit([](auto of) { return of.html_given; }, body_format_of(text(member(content, "format")))))
-    made.html = text(member(content, "formatted_body"));
+  if (mux::visit([](auto of) { return of.html_given; }, body_format_of(format)))
+    made.html = formatted_body;
   return made;
 }
 

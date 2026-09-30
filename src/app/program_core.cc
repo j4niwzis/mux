@@ -220,7 +220,7 @@ void app::save_marks() {
       out.chats.push_back(std::move(chat));
     }
   std::ofstream(mux::config::state_path("marks.json"), std::ios::binary | std::ios::trunc)
-      << knot::to_json_string(knot::to_value(out));
+      << knot::to_json_string(out);
 }
 
 void app::load_marks() {

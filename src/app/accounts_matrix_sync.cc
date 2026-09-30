@@ -27,7 +27,6 @@ template auto account<mux::app::post_change>::avatar_of(const std::string& room,
 template auto account<mux::app::post_change>::name_of(const std::string& room, const loom::client::joined_room& kept) -> std::string;
 template auto account<mux::app::post_change>::direct(const std::string& room) const -> bool;
 template void account<mux::app::post_change>::conversation(const conversation_id& in, const loom::client::joined_room& kept);
-template auto account<mux::app::post_change>::state_content(const loom::client::joined_room& kept, std::string_view type) -> knot::value;
 template auto account<mux::app::post_change>::emotes_of(const loom::client::joined_room& kept, bool stickers) const -> std::vector<mux::emote>;
 template auto account<mux::app::post_change>::emotes_in(const std::string& room) const -> std::vector<mux::emote>;
 template auto account<mux::app::post_change>::pinned_of(const loom::client::joined_room& kept) -> std::vector<std::string>;

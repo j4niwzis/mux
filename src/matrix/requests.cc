@@ -84,29 +84,50 @@ void account<Sink>::load_older(std::string room, std::string from) {
   });
 }
 
+// Beeper's name of a custom emoji reacted with, beside the relation.
+struct reaction_shortcode {
+  std::string shortcode;
+};
+consteval auto json_schema(knot::type<reaction_shortcode>) {
+  return knot::schema<reaction_shortcode>().member<"shortcode">(knot::key("com.beeper.reaction.shortcode"));
+}
+
+// What a link preview says of the page (Open Graph).
+struct link_facts {
+  std::optional<std::string> site;
+  std::optional<std::string> title;
+  std::optional<std::string> description;
+  std::optional<std::string> image;
+};
+consteval auto json_schema(knot::type<link_facts>) {
+  return knot::schema<link_facts>()
+      .member<"site">(knot::key("og:site_name"))
+      .member<"title">(knot::key("og:title"))
+      .member<"description">(knot::key("og:description"))
+      .member<"image">(knot::key("og:image"));
+}
+
+using text_content = loom::ev::m_room_message_m_text_content_t;
+using power_levels_content = loom::ev::m_room_power_levels_content_t;
+
 template <class Sink>
 void account<Sink>::manage(std::string room, room_action_t action) {
   loop_->spawn([this, room = std::move(room), action = std::move(action)] {
     if (!api_)
       return;
     // A state event of the room set, its content given.
-    const auto set = [&](std::string type, knot::value::object content) {
+    const auto set = [&](std::string type, const auto& content) {
       auto done = perform(*api_, loom::cs::set_room_state_with_key{
-                                     .room_id = room, .event_type = type, .state_key = "", .body = knot::value(std::move(content))});
+                                     .room_id = room, .event_type = type, .state_key = "", .body = as_body(content)});
       if (!done)
         log(id_, "could not set {} in {}: {}", type, room, done.error().said());
-    };
-    const auto one_field = [](std::string_view key, std::string value) {
-      knot::value::object content;
-      content.emplace(std::string(key), knot::value(std::move(value)));
-      return content;
     };
     // The room's power levels as they are now: what a change is made on.
     const auto power_levels = [&] {
       if (const auto kept = state_.joined.find(room); kept != state_.joined.end())
-        if (const knot::value now = state_content(kept->second, "m.room.power_levels"); now.is<knot::value::object>())
-          return now.as<knot::value::object>();
-      return knot::value::object();
+        if (const auto* now = kept->second.state.template content<power_levels_content>("m.room.power_levels"))
+          return *now;
+      return power_levels_content{};
     };
     const auto told = [&](const char* what, auto done) {
       if (!done)
@@ -114,15 +135,25 @@ void account<Sink>::manage(std::string room, room_action_t action) {
     };
     mux::visit(
         overloaded{
-            [&](const room_action::rename& one) { set("m.room.name", one_field("name", one.name)); },
-            [&](const room_action::retopic& one) { set("m.room.topic", one_field("topic", one.topic)); },
+            [&](const room_action::rename& one) {
+              loom::ev::m_room_name_content_t content;
+              content.name = one.name;
+              set("m.room.name", content);
+            },
+            [&](const room_action::retopic& one) {
+              loom::ev::m_room_topic_content_t content;
+              content.topic = one.topic;
+              set("m.room.topic", content);
+            },
             [&](const room_action::set_join_rule& one) {
-              set("m.room.join_rules",
-                  one_field("join_rule", std::string(mux::visit([](auto of) { return word_of(of); }, one.rule))));
+              loom::ev::m_room_join_rules_content_t content;
+              content.join_rule = std::string(mux::visit([](auto of) { return word_of(of); }, one.rule));
+              set("m.room.join_rules", content);
             },
             [&](const room_action::set_history& one) {
-              set("m.room.history_visibility",
-                  one_field("history_visibility", std::string(mux::visit([](auto of) { return word_of(of); }, one.rule))));
+              loom::ev::m_room_history_visibility_content_t content;
+              content.history_visibility = std::string(mux::visit([](auto of) { return word_of(of); }, one.rule));
+              set("m.room.history_visibility", content);
             },
             [&](const room_action::invite& one) {
               told("invite", perform(*api_, loom::cs::invite_user{.room_id = room, .body = {.user_id = one.user}}));
@@ -138,42 +169,44 @@ void account<Sink>::manage(std::string room, room_action_t action) {
             },
             // A say given: the room's power levels as they are, with it.
             [&](const room_action::set_power& one) {
-              knot::value::object content = power_levels();
-              knot::value::object users;
-              if (const auto found = content.find("users");
-                  found != content.end() && found->second.is<knot::value::object>())
-                users = found->second.as<knot::value::object>();
-              users.insert_or_assign(one.user, knot::value(one.level));
-              content.insert_or_assign("users", knot::value(std::move(users)));
-              set("m.room.power_levels", std::move(content));
+              power_levels_content content = power_levels();
+              if (!content.users)
+                content.users.emplace();
+              content.users->insert_or_assign(one.user, static_cast<std::int64_t>(one.level));
+              set("m.room.power_levels", content);
             },
             // Encryption on, as Element turns it on.
-            [&](const room_action::encrypt&) { set("m.room.encryption", one_field("algorithm", "m.megolm.v1.aes-sha2")); },
+            [&](const room_action::encrypt&) {
+              loom::ev::m_room_encryption_content_t content;
+              content.algorithm = loom::ev::m_room_encryption_content_t::algorithm_values::m_megolm_v1_aes_sha2{};
+              set("m.room.encryption", content);
+            },
             // What a thing done asks: the power levels as they are, with it.
             [&](const room_action::set_need& one) {
-              knot::value::object content = power_levels();
-              const auto top = [&](std::string_view key) {
-                content.insert_or_assign(std::string(key), knot::value(one.level));
+              power_levels_content content = power_levels();
+              const auto top = [&](std::optional<std::int64_t> power_levels_content::* member) {
+                content.*member = static_cast<std::int64_t>(one.level);
               };
-              const auto nested = [&](std::string_view outer, std::string_view key) {
-                knot::value::object inner;
-                if (const auto found = content.find(std::string(outer));
-                    found != content.end() && found->second.is<knot::value::object>())
-                  inner = found->second.as<knot::value::object>();
-                inner.insert_or_assign(std::string(key), knot::value(one.level));
-                content.insert_or_assign(std::string(outer), knot::value(std::move(inner)));
-              };
-              mux::visit(overloaded{[&](power_need::default_role) { top("users_default"); },
-                                    [&](power_need::send_messages) { top("events_default"); },
-                                    [&](power_need::change_settings) { top("state_default"); },
-                                    [&](power_need::invite) { top("invite"); },
-                                    [&](power_need::kick) { top("kick"); },
-                                    [&](power_need::ban) { top("ban"); },
-                                    [&](power_need::redact) { top("redact"); },
-                                    [&](power_need::notify_everyone) { nested("notifications", "room"); },
-                                    [&]<sends_state Need>(Need) { nested("events", Need::event); }},
+              mux::visit(overloaded{[&](power_need::default_role) { top(&power_levels_content::users_default); },
+                                    [&](power_need::send_messages) { top(&power_levels_content::events_default); },
+                                    [&](power_need::change_settings) { top(&power_levels_content::state_default); },
+                                    [&](power_need::invite) { top(&power_levels_content::invite); },
+                                    [&](power_need::kick) { top(&power_levels_content::kick); },
+                                    [&](power_need::ban) { top(&power_levels_content::ban); },
+                                    [&](power_need::redact) { top(&power_levels_content::redact); },
+                                    [&](power_need::notify_everyone) {
+                                      if (!content.notifications)
+                                        content.notifications.emplace();
+                                      content.notifications->room = static_cast<std::int64_t>(one.level);
+                                    },
+                                    [&]<sends_state Need>(Need) {
+                                      if (!content.events)
+                                        content.events.emplace();
+                                      content.events->insert_or_assign(std::string(Need::event),
+                                                                       static_cast<std::int64_t>(one.level));
+                                    }},
                          one.need);
-              set("m.room.power_levels", std::move(content));
+              set("m.room.power_levels", content);
             }},
         action);
   });
@@ -192,19 +225,13 @@ void account<Sink>::create_direct(std::string user) {
       return;
     }
     // m.direct as it is, with the new room under its person.
-    knot::value::object direct;
-    if (const auto found = state_.account_data.find("m.direct"); found != state_.account_data.end()) {
-      const knot::value tree = knot::to_value(found->second);
-      if (const knot::value* content = member(tree, "content"); content && content->is<knot::value::object>())
-        direct = content->as<knot::value::object>();
-    }
-    knot::value::array rooms;
-    if (const auto theirs = direct.find(user); theirs != direct.end() && theirs->second.is<knot::value::array>())
-      rooms = theirs->second.as<knot::value::array>();
-    rooms.push_back(knot::value(made->room_id));
-    direct.insert_or_assign(user, knot::value(std::move(rooms)));
+    std::map<std::string, std::vector<std::string>> direct;
+    if (const auto found = state_.account_data.find("m.direct"); found != state_.account_data.end())
+      if (auto kept = knot::try_read<direct_event>(knot::to_json_string(found->second)))
+        direct = std::move(kept->content);
+    direct[user].push_back(made->room_id);
     (void)perform(*api_, loom::cs::set_account_data{.user_id = id_.address, .type = "m.direct",
-                                                    .body = knot::value(std::move(direct))});
+                                                    .body = as_body(direct)});
     sink_(change::room_created{{id_, made->room_id}});
   });
 }
@@ -214,14 +241,13 @@ void account<Sink>::send_sticker(std::string room, mux::emote sticker) {
   loop_->spawn([this, room = std::move(room), sticker = std::move(sticker)] {
     if (!api_)
       return;
-    knot::value::object content;
-    content.emplace("body", knot::value(sticker.shortcode));
-    content.emplace("url", knot::value(sticker.url));
-    content.emplace("info", knot::value(knot::value::object{}));
+    loom::ev::m_sticker_content_t content;
+    content.body = sticker.shortcode;
+    content.url = sticker.url;
     auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.sticker",
                                                       .txn_id = this->transaction(),
-                                                      .body = knot::value(std::move(content))});
+                                                      .body = as_body(content)});
     if (!sent)
       log(id_, "could not send a sticker to {}: {}", room, sent.error().said());
   });
@@ -237,7 +263,7 @@ void account<Sink>::view_source(std::string room, std::string event) {
       sink_(change::devtools_text{"Source of " + event, "Not fetched: " + got.error().said()});
       return;
     }
-    sink_(change::devtools_text{"Source of " + event, knot::to_pretty_json_string(knot::to_value(*got))});
+    sink_(change::devtools_text{"Source of " + event, knot::to_pretty_json_string(*got)});
   });
 }
 
@@ -247,7 +273,7 @@ void account<Sink>::list_state(std::string room) {
     std::vector<change::state_entry> entries;
     if (const auto kept = state_.joined.find(room); kept != state_.joined.end())
       for (const auto& [key, one] : kept->second.state.events)
-        entries.push_back({key.first, key.second, knot::to_pretty_json_string(knot::to_value(one))});
+        entries.push_back({key.first, key.second, knot::to_pretty_json_string(one)});
     sink_(change::state_listed{{id_, room}, std::move(entries)});
   });
 }
@@ -258,8 +284,8 @@ void account<Sink>::send_custom(std::string room, std::string type, std::optiona
   loop_->spawn([this, room = std::move(room), type = std::move(type), state_key = std::move(state_key),
                 json = std::move(json)] {
     const std::string title = "Sent " + type;
-    auto body = knot::try_read<knot::value>(json);
-    if (!body || !body->is<knot::value::object>()) {
+    // Only an object is a content: read as one, its keys' values left as text.
+    if (!knot::try_read<std::map<std::string, knot::raw>>(json)) {
       sink_(change::devtools_text{title, "Not sent: the content is not a JSON object."});
       return;
     }
@@ -269,11 +295,11 @@ void account<Sink>::send_custom(std::string room, std::string type, std::optiona
     }
     if (state_key) {
       auto done = perform(*api_, loom::cs::set_room_state_with_key{
-                                     .room_id = room, .event_type = type, .state_key = *state_key, .body = std::move(*body)});
+                                     .room_id = room, .event_type = type, .state_key = *state_key, .body = knot::raw{json}});
       sink_(change::devtools_text{title, done ? "Sent: " + done->event_id : "Not sent: " + done.error().said()});
     } else {
       auto done = perform(*api_, loom::cs::send_message{
-                                     .room_id = room, .event_type = type, .txn_id = this->transaction(), .body = std::move(*body)});
+                                     .room_id = room, .event_type = type, .txn_id = this->transaction(), .body = knot::raw{json}});
       sink_(change::devtools_text{title, done ? "Sent: " + done->event_id : "Not sent: " + done.error().said()});
     }
   });
@@ -286,17 +312,18 @@ void account<Sink>::fetch_preview(std::string url) {
       return;
     // The authenticated endpoint (Matrix 1.11), and the old one where the
     // server has not that.
-    knot::value tree;
+    std::optional<link_facts> facts;
     if (auto got = perform(*api_, loom::cs::get_url_preview_authed{.url = url}))
-      tree = knot::to_value(*got);
+      facts = knot::try_read<link_facts>(knot::to_json_string(*got)).value_or(link_facts{});
     else if (auto old = perform(*api_, loom::cs::get_url_preview{.url = url}))
-      tree = knot::to_value(*old);
+      facts = knot::try_read<link_facts>(knot::to_json_string(*old)).value_or(link_facts{});
     else
       return;
-    const auto said = [&](std::string_view key) { return text(member(tree, key)).value_or(""); };
-    link_preview made{.site = said("og:site_name"), .title = said("og:title"), .description = said("og:description")};
-    if (auto image = text(member(tree, "og:image")); image && image->starts_with("mxc://"))
-      made.image = std::move(image);
+    link_preview made{.site = facts->site.value_or(""),
+                      .title = facts->title.value_or(""),
+                      .description = facts->description.value_or("")};
+    if (facts->image && facts->image->starts_with("mxc://"))
+      made.image = std::move(facts->image);
     if (made.title.empty() && made.description.empty())
       return;
     sink_(change::preview_loaded{url, std::move(made)});
@@ -389,14 +416,8 @@ void account<Sink>::catch_up(std::string room, std::string from, std::string unt
         if (one.content.template is<loom::ev::m_room_message_content_t>()) {
           const auto& content = one.content.template as<loom::ev::m_room_message_content_t>();
           bool me = content.body.find(id_.address) != std::string::npos;
-          if (const knot::value* said = extra(content.rest, one.content, "m.mentions")) {
-            me = false;
-            if (const knot::value* users = member(*said, "user_ids"); users && users->is<knot::value::array>())
-              for (const knot::value& user : users->as<knot::value::array>())
-                me = me || (user.is<std::string>() && user.as<std::string>() == id_.address);
-            if (const knot::value* everyone = member(*said, "room"); everyone && everyone->is<bool>())
-              me = me || everyone->as<bool>();
-          }
+          if (const auto& said = content.m_mentions)
+            me = (said->user_ids && std::ranges::contains(*said->user_ids, id_.address)) || said->room.value_or(false);
           if (me) {
             ++mentions;
             sink_(change::mentioned{in, one.event_id, at});
@@ -481,16 +502,14 @@ void account<Sink>::forward(std::string from, std::string event, std::string to)
       log(id_, "could not fetch {} to forward: {}", event, got.error().said());
       return;
     }
-    const knot::value tree = knot::to_value(*got);
-    const knot::value* content = member(tree, "content");
-    if (!content || !content->is<knot::value::object>())
+    auto kept = knot::try_read<content_keys>(knot::to_json_string(*got));
+    if (!kept)
       return;
-    knot::value::object sent = content->as<knot::value::object>();
-    sent.erase("m.relates_to");
+    kept->content.erase("m.relates_to");
     auto done = perform(*api_, loom::cs::send_message{.room_id = to,
                                                       .event_type = "m.room.message",
                                                       .txn_id = this->transaction(),
-                                                      .body = knot::value(std::move(sent))});
+                                                      .body = as_body(kept->content)});
     if (!done)
       log(id_, "could not forward {} to {}: {}", event, to, done.error().said());
   });
@@ -528,7 +547,7 @@ void account<Sink>::load_context(std::string room, std::string target) {
         event(in, *it, placement::in_window{});
     // It, read as a timeline event from what the server gave.
     if (got->event)
-      if (auto one = knot::try_read<loom::ev::timeline_event>(knot::to_json_string(knot::to_value(*got->event))))
+      if (auto one = knot::try_read<loom::ev::timeline_event>(knot::to_json_string(*got->event)))
         event(in, *one, placement::in_window{});
     if (got->events_after)
       for (const auto& one : *got->events_after)
@@ -574,29 +593,26 @@ void account<Sink>::edit(std::string room, std::string event, std::string text) 
       return;
     // Made HTML as a message sent is: its Markdown, the room's emoji.
     const auto html = html_of(text, emotes_in(room));
-    knot::value::object now;
-    now.emplace("msgtype", knot::value(std::string("m.text")));
-    now.emplace("body", knot::value(text));
+    text_content content;
+    content.body = "* " + text;
     if (html) {
-      now.emplace("format", knot::value(std::string("org.matrix.custom.html")));
-      now.emplace("formatted_body", knot::value(*html));
+      content.format = "org.matrix.custom.html";
+      content.formatted_body = "* " + *html;
     }
-    knot::value::object relates;
-    relates.emplace("rel_type", knot::value(std::string("m.replace")));
-    relates.emplace("event_id", knot::value(event));
-    knot::value::object content;
-    content.emplace("msgtype", knot::value(std::string("m.text")));
-    content.emplace("body", knot::value("* " + text));
+    auto& now = content.m_new_content.emplace();
+    now.msgtype = "m.text";
+    now.body = text;
     if (html) {
-      content.emplace("format", knot::value(std::string("org.matrix.custom.html")));
-      content.emplace("formatted_body", knot::value("* " + *html));
+      now.format = "org.matrix.custom.html";
+      now.formatted_body = *html;
     }
-    content.emplace("m.new_content", knot::value(std::move(now)));
-    content.emplace("m.relates_to", knot::value(std::move(relates)));
+    auto& relates = content.m_relates_to.emplace();
+    relates.rel_type = text_content::m_relates_to_t::rel_type_values::m_replace{};
+    relates.event_id = event;
     if (perform(*api_, loom::cs::send_message{.room_id = room,
                                               .event_type = "m.room.message",
                                               .txn_id = this->transaction(),
-                                              .body = knot::value(std::move(content))}))
+                                              .body = as_body(content)}))
       sink_(change::message_edited{{id_, room}, event, body{text, html}});
   });
 }
@@ -619,21 +635,20 @@ void account<Sink>::react(std::string room, std::string target, std::string key,
     if (!api_)
       return;
     if (on) {
-      knot::value::object relates;
-      relates.emplace("rel_type", knot::value(std::string("m.annotation")));
-      relates.emplace("event_id", knot::value(target));
-      relates.emplace("key", knot::value(key));
-      knot::value::object content;
-      content.emplace("m.relates_to", knot::value(std::move(relates)));
+      loom::ev::m_reaction_content_t content;
+      auto& relates = content.m_relates_to.emplace();
+      relates.rel_type = loom::ev::m_reaction_content_t::reaction_relates_to_t::rel_type_values::m_annotation{};
+      relates.event_id = target;
+      relates.key = key;
       if (key.starts_with("mxc://")) {
         const auto emotes = emotes_in(room);
         if (const auto found = std::ranges::find(emotes, key, &mux::emote::url); found != emotes.end())
-          content.emplace("com.beeper.reaction.shortcode", knot::value(std::format(":{}:", found->shortcode)));
+          content.rest = as_body(reaction_shortcode{std::format(":{}:", found->shortcode)});
       }
       (void)perform(*api_, loom::cs::send_message{.room_id = room,
                                                   .event_type = "m.reaction",
                                                   .txn_id = this->transaction(),
-                                                  .body = knot::value(std::move(content))});
+                                                  .body = as_body(content)});
       return;
     }
     for (const auto& [event, one] : reactions_)
@@ -657,15 +672,12 @@ void account<Sink>::pin(std::string room, std::string target, bool on) {
     std::erase(pinned, target);
     if (on)
       pinned.push_back(target);
-    knot::value::array listed;
-    for (auto& one : pinned)
-      listed.push_back(knot::value(std::move(one)));
-    knot::value::object content;
-    content.emplace("pinned", knot::value(std::move(listed)));
+    loom::ev::m_room_pinned_events_content_t content;
+    content.pinned = std::move(pinned);
     if (auto done = perform(*api_, loom::cs::set_room_state_with_key{.room_id = room,
                                                                      .event_type = "m.room.pinned_events",
                                                                      .state_key = "",
-                                                                     .body = knot::value(std::move(content))});
+                                                                     .body = as_body(content)});
         !done)
       log(id_, "could not {} {} in {}: {}", on ? "pin" : "unpin", target, room, done.error().said());
   });
@@ -797,33 +809,24 @@ void account<Sink>::send(std::string room, std::string body, std::optional<std::
       sink_(change::delivery_changed{in, txn, delivery::failed{}});
       return;
     }
-    knot::value::object content;
-    content.emplace("msgtype", knot::value(std::string("m.text")));
-    content.emplace("body", knot::value(body));
+    text_content content;
+    content.body = body;
     if (html) {
-      content.emplace("format", knot::value(std::string("org.matrix.custom.html")));
-      content.emplace("formatted_body", knot::value(*html));
+      content.format = "org.matrix.custom.html";
+      content.formatted_body = *html;
     }
-    if (reply_to) {
-      knot::value::object target;
-      target.emplace("event_id", knot::value(*reply_to));
-      knot::value::object relates;
-      relates.emplace("m.in_reply_to", knot::value(std::move(target)));
-      content.emplace("m.relates_to", knot::value(std::move(relates)));
-    }
+    if (reply_to)
+      content.m_relates_to.emplace().m_in_reply_to.emplace().event_id = *reply_to;
     // Who is mentioned, as Matrix 1.7 says it: what their clients notify by.
     if (!mentions.empty()) {
-      knot::value::array users;
+      auto& users = content.m_mentions.emplace().user_ids.emplace();
       for (const mention& one : mentions)
-        users.push_back(knot::value(one.user));
-      knot::value::object said;
-      said.emplace("user_ids", knot::value(std::move(users)));
-      content.emplace("m.mentions", knot::value(std::move(said)));
+        users.push_back(one.user);
     }
     auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.room.message",
                                                       .txn_id = txn,
-                                                      .body = knot::value(std::move(content))});
+                                                      .body = as_body(content)});
     if (!sent) {
       sink_(change::delivery_changed{in, txn, delivery::failed{}});
       return;

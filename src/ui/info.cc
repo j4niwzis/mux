@@ -2193,9 +2193,32 @@ struct explore_box : nodes::Stack {
   struct search_press {
     explore_box* box;
     void operator()() const {
+      if (box->space) {
+        box->filter(box->parts.search.parts.query.text());
+        return;
+      }
       box->parts.status.setText("Searching\u2026");
       box->parts.status.setVisible(true);
       box->actions->search_rooms(box->parts.search.parts.server.text(), box->parts.search.parts.query.text());
+    }
+  };
+  // Whose rooms are listed, where a space's are; and what it listed, to be
+  // searched here -- its server searches no space.
+  std::optional<std::string> space;
+  std::vector<directory_room> listed;
+  std::string listed_server;
+  // A space's name and picture, over what it holds.
+  struct space_head_t : nodes::Stack {
+    struct parts_t {
+      std::optional<avatar_mark> face;
+      nodes::Text name{"", 17.0f, text_colour, true};
+    } parts;
+    space_head_t() {
+      this->setHorizontal();
+      this->setGap(10.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 10.0f, 8.0f, 10.0f}});
+      parts.name.setElided(true);
+      parts.name.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
     }
   };
   // Join a room; a space in a space's listing, opened -- its own listed.
@@ -2204,9 +2227,10 @@ struct explore_box : nodes::Stack {
     std::string room;
     std::string server;
     bool open = false;
+    std::string name;
     void operator()() const {
       if (open)
-        actions->explore_space(room);
+        actions->explore_space(room, name);
       else
         actions->join_directory_room(room, server);
     }
@@ -2245,7 +2269,8 @@ struct explore_box : nodes::Stack {
         : parts{.face = avatar_mark(one.id, one.name.empty() ? one.alias : one.name, 40.0f),
                 .texts = texts_t(one),
                 .join = widgets::Button<join_press>(one.space ? "Open" : "Join",
-                                                    {a, one.space ? one.id : (one.alias.empty() ? one.id : one.alias), server, one.space})} {
+                                                    {a, one.space ? one.id : (one.alias.empty() ? one.id : one.alias), server, one.space,
+                                                     one.name})} {
       this->setHorizontal();
       this->setGap(12.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 16.0f, 8.0f, 16.0f}});
@@ -2280,6 +2305,7 @@ struct explore_box : nodes::Stack {
   using rows_t = nodes::Flow<std::vector<result_row>>;
   struct parts_t {
     header_t header;
+    space_head_t space_head;
     search_row search;
     nodes::Text status{"", 13.0f, dim_colour};
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
@@ -2292,12 +2318,44 @@ struct explore_box : nodes::Stack {
     parts.status.setWrapped(true);
     parts.status.apply({.fillX = true, .margin = {6.0f, 10.0f, 4.0f, 10.0f}});
     parts.status.setVisible(false);
+    parts.space_head.setVisible(false);
     parts.list.apply({.fillX = true, .grow = scene::axes::kY});
     std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
   }
-  // What the directory listed.
+  // A space's listing: its name and picture on top, no server to ask --
+  // the search looks through what it holds.
+  void as_space(const std::string& room, const std::string& name) {
+    space = room;
+    parts.space_head.parts.face.emplace(room, name, 36.0f);
+    parts.space_head.parts.name.setText(name);
+    parts.space_head.setVisible(true);
+    parts.search.parts.server.setVisible(false);
+    this->invalidateLayout();
+  }
+  // What it listed, whose name, topic or address has what is typed.
+  void filter(const std::string& typed) {
+    const auto lower = [](std::string_view text) {
+      return text | std::views::transform([](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); }) |
+             std::ranges::to<std::string>();
+    };
+    const std::string wanted = lower(typed);
+    const std::vector<directory_room> found =
+        listed | std::views::filter([&](const directory_room& one) {
+          return wanted.empty() || lower(one.name).contains(wanted) || lower(one.topic).contains(wanted) ||
+                 lower(one.alias).contains(wanted);
+        }) |
+        std::ranges::to<std::vector>();
+    this->show_rows(found, listed_server, space);
+  }
+  // What the directory listed -- or a space.
   void show(const std::vector<directory_room>& rooms, const std::string& server,
-            const std::optional<std::string>& space = std::nullopt) {
+            const std::optional<std::string>& space_of = std::nullopt) {
+    listed = rooms;
+    listed_server = server;
+    this->show_rows(rooms, server, space_of);
+  }
+  void show_rows(const std::vector<directory_room>& rooms, const std::string& server,
+                 const std::optional<std::string>& space) {
     auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
     rows.clear();
     rows.reserve(rooms.size());

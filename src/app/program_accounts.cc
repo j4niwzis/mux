@@ -350,6 +350,11 @@ void app::apply(const request::explore_space& one) {
   if (!by || shared.demo())
     return;
   root().open_explore(by->address.substr(by->address.find(':') + 1));
+  // Said as the space's: its name and picture over what it holds.
+  std::string name = one.name;
+  if (const auto& chats = model->accounts().at(*by).conversations; chats.contains(one.room))
+    name = mux::ui::display_name(chats.at(one.room));
+  root().explore_as_space(one.room, name.empty() ? one.room : name);
   root().explore_loading();
   net->explore_space(*by, one.room);
 }

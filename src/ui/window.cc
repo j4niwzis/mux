@@ -334,6 +334,10 @@ struct window : scene::Node {
     layer().explore.open(actions, own_server);
   }
   void close_explore() { layer().explore.close(); }
+  void explore_as_space(const std::string& room, const std::string& name) {
+    if (auto* up = layer().explore.shown())
+      up->as_space(room, name);
+  }
   // Explore rooms asking its server's directory: said so until it answers.
   void explore_loading() {
     if (auto* up = layer().explore.shown()) {

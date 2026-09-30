@@ -197,6 +197,7 @@ struct close_explore {};
 // A space's rooms and spaces, joined or not, in Explore.
 struct explore_space {
   std::string room;
+  std::string name;  // as listed, where it is not joined: none, the chat's
 };
 struct search_rooms {
   std::string server;
@@ -582,7 +583,9 @@ struct actions {
   void close_marks() { requests.emplace_back(request::close_marks{}); }
   void open_explore() { requests.emplace_back(request::open_explore{}); }
   void close_explore() { requests.emplace_back(request::close_explore{}); }
-  void explore_space(std::string room) { requests.emplace_back(request::explore_space{std::move(room)}); }
+  void explore_space(std::string room, std::string name = {}) {
+    requests.emplace_back(request::explore_space{std::move(room), std::move(name)});
+  }
   void search_rooms(std::string server, std::string query) {
     requests.emplace_back(request::search_rooms{std::move(server), std::move(query)});
   }

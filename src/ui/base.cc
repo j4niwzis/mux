@@ -57,6 +57,36 @@ inline config::bubble_look& bubble_look_everywhere() {
   static config::bubble_look look;
   return look;
 }
+// And the panels': every chat's, and the chosen chat's.
+inline config::bubble_look& panel_look_everywhere() {
+  static config::bubble_look look;
+  return look;
+}
+inline config::bubble_look& panel_look_now() {
+  static config::bubble_look look;
+  return look;
+}
+// The panels' look put in place, for skiff to paint them in: only over the
+// background behind the whole window. Whether it changed -- the window to
+// be repainted.
+inline bool show_panels(const config::bubble_look& look) {
+  const bool kinded = window_look().behind && splice::visit(splice::overloaded{[](config::bubbles::solid) { return false; },
+                                                                              [](const auto&) { return true; }},
+                                                           look.kind);
+  scene::detail::PanelLook next{
+      .active = kinded,
+      .opacity = static_cast<float>(look.opacity) / 100.0f,
+      .frosted = splice::visit(splice::overloaded{[](config::bubbles::frosted) { return true; }, [](const auto&) { return false; }}, look.kind),
+      .edge = splice::visit(splice::overloaded{[](config::bubbles::glass) { return true; }, [](const auto&) { return false; }}, look.kind),
+      .panels = {sidebar_colour},
+      .tints = {chosen_colour}};
+  if (!kinded)
+    next = {};
+  if (next == scene::detail::panelLook())
+    return false;
+  scene::detail::panelLook() = std::move(next);
+  return true;
+}
 inline window_look_t& window_look() {
   static window_look_t look;
   return look;

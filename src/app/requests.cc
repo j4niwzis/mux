@@ -233,6 +233,7 @@ struct flip_wallpaper_behind {};
 struct set_bubbles {
   mux::choice_level_t level;
   std::optional<mux::config::bubble_look> look;
+  mux::config::look_part_t part = mux::config::look_part::bubbles{};
 };
 struct set_wallpaper {
   mux::choice_level_t level;
@@ -563,8 +564,9 @@ struct actions {
   void toggle_threads() { requests.emplace_back(request::toggle_threads{}); }
   void open_wallpaper(mux::choice_level_t level) { requests.emplace_back(request::open_wallpaper{level}); }
   void close_wallpaper() { requests.emplace_back(request::close_wallpaper{}); }
-  void set_bubbles(mux::choice_level_t level, std::optional<mux::config::bubble_look> look) {
-    requests.emplace_back(request::set_bubbles{level, look});
+  void set_bubbles(mux::choice_level_t level, std::optional<mux::config::bubble_look> look,
+                   mux::config::look_part_t part = mux::config::look_part::bubbles{}) {
+    requests.emplace_back(request::set_bubbles{level, look, part});
   }
   void set_wallpaper(mux::choice_level_t level, mux::config::wallpaper_pick_t pick) {
     requests.emplace_back(request::set_wallpaper{level, pick});

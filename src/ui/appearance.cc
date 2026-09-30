@@ -171,10 +171,9 @@ struct appearance_page : nodes::Stack {
     cards_row cards;
     nodes::Text accent_title = section_title("ACCENT");
     circles_row circles;
-    nodes::Text wallpaper_title = section_title("CHAT BACKGROUND");
-    widgets::Button<open_wallpaper_at<Actions>> wallpaper;
+    // Every chat's background, bubbles and panels, here -- not in a dialog.
+    look_choices<Actions> looks;
     switch_row<ask<Actions, &Actions::flip_wallpaper_behind>> behind;
-    bubbles_picker<Actions> bubbles;
     nodes::Text window_title = section_title(std::format("WINDOW OPACITY: {}%", window_look().chosen));
     widgets::SliderBar<scene::NoAction, opacity_done<Actions>> opacity;
     nodes::Text window_note{window_look().see_through
@@ -189,18 +188,14 @@ struct appearance_page : nodes::Stack {
       : parts{.header = header_t("Appearance", {a}, {a}, true, true),
               .cards = cards_row(a),
               .circles = circles_row(a, theme),
-              .wallpaper = widgets::Button<open_wallpaper_at<Actions>>("Chat background\u2026",
-                                                                      {a, choice_level::everywhere{}}),
-              .behind = switch_row<ask<Actions, &Actions::flip_wallpaper_behind>>("Behind the whole window", {a}),
-              .bubbles = bubbles_picker<Actions>(a, choice_level::everywhere{}),
+              .looks = look_choices<Actions>(a, choice_level::everywhere{}),
+              .behind = switch_row<ask<Actions, &Actions::flip_wallpaper_behind>>("Background behind the whole window", {a}),
               .opacity = widgets::SliderBar<scene::NoAction, opacity_done<Actions>>({}, {a})} {
     fState.apply({.fill = true});
     parts.theme_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
     parts.accent_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
-    parts.wallpaper_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
-    parts.wallpaper.apply({.width = 200.0f, .height = 34.0f, .margin = {0.0f, 0.0f, 0.0f, 20.0f}});
+    parts.looks.apply({.margin = {6.0f, 10.0f, 0.0f, 10.0f}});
     parts.behind.parts.toggle.setOnNow(window_look().behind);
-    parts.bubbles.apply({.margin = {10.0f, 10.0f, 0.0f, 10.0f}});
     parts.window_title.apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
     parts.opacity.setFraction(static_cast<float>(window_look().chosen - 20) / 80.0f);
     parts.opacity.apply({.margin = {10.0f, 28.0f, 10.0f, 28.0f}});

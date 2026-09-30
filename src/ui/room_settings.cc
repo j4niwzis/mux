@@ -27,6 +27,7 @@ import :controls;
 import :themes;
 import :names;
 import :forms;
+import :info;
 
 export namespace mux::ui {
 
@@ -83,9 +84,10 @@ struct security {};
 struct roles {};
 struct notifications {};
 struct advanced {};
+struct looks {};
 }  // namespace settings_tab
 using settings_tab_t = splice::variant<settings_tab::general, settings_tab::security, settings_tab::roles,
-                                    settings_tab::notifications, settings_tab::advanced>;
+                                    settings_tab::notifications, settings_tab::advanced, settings_tab::looks>;
 
 // A heading over a tab, and over a part of one, as Element's.
 inline nodes::Text tab_heading(std::string text) {
@@ -292,13 +294,14 @@ struct room_settings : nodes::Stack {
   };
   struct tab_list : nodes::Stack {
     struct parts_t {
-      tab_row general, security, roles, notifications, advanced;
+      tab_row general, security, roles, notifications, looks, advanced;
     } parts;
     explicit tab_list(room_settings* box)
         : parts{.general = tab_row("General", icon::gear{}, {box, settings_tab::general{}}),
                 .security = tab_row("Security & Privacy", icon::eye{}, {box, settings_tab::security{}}),
                 .roles = tab_row("Roles & Permissions", icon::people{}, {box, settings_tab::roles{}}),
                 .notifications = tab_row("Notifications", icon::bell{}, {box, settings_tab::notifications{}}),
+                .looks = tab_row("Appearance", icon::eye{}, {box, settings_tab::looks{}}),
                 .advanced = tab_row("Advanced", icon::sliders{}, {box, settings_tab::advanced{}})} {
       this->setGap(2.0f);
       fState.apply({.fillY = true, .width = 220.0f, .padding = {4.0f, 12.0f, 12.0f, 12.0f}});
@@ -312,6 +315,7 @@ struct room_settings : nodes::Stack {
       parts.roles.set_chosen(is(settings_tab::roles{}));
       parts.notifications.set_chosen(is(settings_tab::notifications{}));
       parts.advanced.set_chosen(is(settings_tab::advanced{}));
+      parts.looks.set_chosen(is(settings_tab::looks{}));
     }
   };
 
@@ -636,7 +640,19 @@ struct room_settings : nodes::Stack {
     }
   };
 
-  using page_t = splice::variant<general_page, security_page, roles_page, notifications_page, advanced_page>;
+  // ---- Appearance: the room's background, bubbles and panels --------------------
+  struct looks_page : nodes::Stack {
+    struct parts_t {
+      nodes::Text heading = tab_heading("Appearance");
+      look_choices<Actions> choices;
+    } parts;
+    looks_page(Actions* a, room_settings*, const room_settings_facts&) : parts{.choices = look_choices<Actions>(a, choice_level::chat{})} {
+      this->setGap(6.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
+    }
+  };
+
+  using page_t = splice::variant<general_page, security_page, roles_page, notifications_page, advanced_page, looks_page>;
   struct page_holder : nodes::Stack {
     struct parts_t {
       page_t page;
@@ -708,7 +724,8 @@ struct room_settings : nodes::Stack {
                    [&](settings_tab::security) { holder().parts.page.template emplace<1>(actions, this, facts); },
                    [&](settings_tab::roles) { holder().parts.page.template emplace<2>(actions, this, facts); },
                    [&](settings_tab::notifications) { holder().parts.page.template emplace<3>(actions, this, facts); },
-                   [&](settings_tab::advanced) { holder().parts.page.template emplace<4>(actions, this, facts); }},
+                   [&](settings_tab::advanced) { holder().parts.page.template emplace<4>(actions, this, facts); },
+                   [&](settings_tab::looks) { holder().parts.page.template emplace<5>(actions, this, facts); }},
                to);
     parts.body.parts.tabs.show(tab);
     if (std::exchange(to_top, false))

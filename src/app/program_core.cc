@@ -441,6 +441,12 @@ void app::refresh(std::source_location from) {
       filters.emplace(one.id, this->room_event_filter_of(one.id));
   // The chosen chat's bubbles, as its levels say.
   root().main().bubbles = root().main().chosen ? this->bubbles_of(*root().main().chosen) : mux::config::bubble_look{};
+  // The panels' look, as the chosen chat's levels say, else every chat's:
+  // the whole window repainted where it changes -- nothing made again.
+  mux::ui::panel_look_now() = root().main().chosen ? this->panels_of(*root().main().chosen)
+                                                   : panels.value_or(mux::config::bubble_look{});
+  if (mux::ui::show_panels(mux::ui::panel_look_now()))
+    root().markDamaged();
   // The chosen chat's background, as its levels say.
   root().main().wallpaper = root().main().chosen ? this->wallpaper_of(*root().main().chosen)
                                                  : mux::config::wallpaper_t{mux::config::wallpaper::theme{}};

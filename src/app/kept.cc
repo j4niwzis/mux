@@ -55,6 +55,17 @@ struct kept_settings {
   // Every chat's bubbles, and chats' own.
   std::optional<mux::config::bubble_look> bubbles;
   std::map<conversation_id, mux::config::bubble_look> bubbles_in;
+  // Every chat's panels, and chats' own.
+  std::optional<mux::config::bubble_look> panels;
+  std::map<conversation_id, mux::config::bubble_look> panels_in;
+  [[nodiscard]] mux::config::bubble_look panels_of(const conversation_id& chat) {
+    if (const auto own = panels_in.find(chat); own != panels_in.end())
+      return own->second;
+    if (const auto* account = this->settings_of(chat.account.address))
+      if (const auto& chosen = mux::config::panels_of(*account))
+        return mux::config::bubble_look_of(*chosen);
+    return panels.value_or(mux::config::bubble_look{});
+  }
   [[nodiscard]] mux::config::bubble_look bubbles_of(const conversation_id& chat) {
     if (const auto own = bubbles_in.find(chat); own != bubbles_in.end())
       return own->second;
@@ -191,6 +202,8 @@ struct kept_settings {
       out.wallpaper = mux::config::word_of(*wallpaper);
     if (bubbles)
       out.bubbles = mux::config::word_of(*bubbles);
+    if (panels)
+      out.panels = mux::config::word_of(*panels);
     out.accent = mux::config::word_of(accent);
     out.renderer = mux::config::word_of(renderer);
     if (partial_redraw)
@@ -215,7 +228,8 @@ struct kept_settings {
         out.chat_notify->push_back({chat.account.address, chat.id, mux::config::word_of(mode)});
     }
     if (!room_events.empty() || !room_event_kinds.empty() || !receipts_shown_in.empty() || !jump_search_in.empty() ||
-        !previews_shown_in.empty() || !wallpaper_in.empty() || !bubbles_in.empty()) {
+        !previews_shown_in.empty() || !wallpaper_in.empty() || !bubbles_in.empty() ||
+        !panels_in.empty()) {
       std::map<conversation_id, mux::config::room_events_choice> chosen;
       for (const auto& [chat, show] : room_events) {
         auto& one = chosen[chat];
@@ -258,6 +272,12 @@ struct kept_settings {
         one.account = chat.account.address;
         one.conversation = chat.id;
         one.bubbles = mux::config::word_of(look);
+      }
+      for (const auto& [chat, look] : panels_in) {
+        auto& one = chosen[chat];
+        one.account = chat.account.address;
+        one.conversation = chat.id;
+        one.panels = mux::config::word_of(look);
       }
       out.room_events.emplace();
       for (auto& [chat, one] : chosen)

@@ -133,6 +133,9 @@ int main(int argc, char** argv) {
   if (saved.bubbles)
     program.bubbles = mux::config::bubble_look_of(*saved.bubbles);
   mux::ui::bubble_look_everywhere() = program.bubbles.value_or(mux::config::bubble_look{});
+  if (saved.panels)
+    program.panels = mux::config::bubble_look_of(*saved.panels);
+  mux::ui::panel_look_everywhere() = program.panels.value_or(mux::config::bubble_look{});
   program.accent = mux::config::accent_of(saved.accent);
   program.renderer = mux::config::renderer_of(saved.renderer);
   program.partial_redraw = saved.partial_redraw.value_or(false);
@@ -171,6 +174,8 @@ int main(int argc, char** argv) {
       program.wallpaper_in.insert_or_assign(chat, mux::config::wallpaper_of(std::string_view(*one.wallpaper)));
     if (one.bubbles)
       program.bubbles_in.insert_or_assign(chat, mux::config::bubble_look_of(*one.bubbles));
+    if (one.panels)
+      program.panels_in.insert_or_assign(chat, mux::config::bubble_look_of(*one.panels));
   }
   for (const auto& one : saved.muted.value_or(std::vector<mux::config::muted_chat>{}))
     program.muted.insert({{mux::ui::protocol_of(one.account), one.account}, one.conversation});

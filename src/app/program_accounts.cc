@@ -122,14 +122,30 @@ void app::apply(const request::set_wallpaper& one) {
 }
 // Bubbles, at a level: a look, or as the level over it says.
 void app::apply(const request::set_bubbles& one) {
+  // Where each level keeps the look asked for: the bubbles', or the panels'.
+  using look_t = std::optional<mux::config::bubble_look>;
+  auto& everywhere = splice::visit(splice::overloaded{[&](mux::config::look_part::bubbles) -> look_t& { return bubbles; },
+                                                      [&](mux::config::look_part::panels) -> look_t& { return panels; }},
+                                   one.part);
+  auto& known = splice::visit(
+      splice::overloaded{[](mux::config::look_part::bubbles) -> mux::config::bubble_look& { return mux::ui::bubble_look_everywhere(); },
+                         [](mux::config::look_part::panels) -> mux::config::bubble_look& { return mux::ui::panel_look_everywhere(); }},
+      one.part);
+  auto& per_chat = splice::visit(
+      splice::overloaded{[&](mux::config::look_part::bubbles) -> std::map<mux::conversation_id, mux::config::bubble_look>& { return bubbles_in; },
+                         [&](mux::config::look_part::panels) -> std::map<mux::conversation_id, mux::config::bubble_look>& { return panels_in; }},
+      one.part);
   splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) {
-                                     bubbles = one.look;
-                                     mux::ui::bubble_look_everywhere() = one.look.value_or(mux::config::bubble_look{});
+                                     everywhere = one.look;
+                                     known = one.look.value_or(mux::config::bubble_look{});
                                    },
                                    [&](mux::choice_level::account) {
                                      this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-                                       mux::config::bubbles_in(account) =
-                                           one.look ? std::optional<std::string>(mux::config::word_of(*one.look)) : std::nullopt;
+                                       auto& kept = splice::visit(
+                                           splice::overloaded{[&](mux::config::look_part::bubbles) -> std::optional<std::string>& { return mux::config::bubbles_in(account); },
+                                                              [&](mux::config::look_part::panels) -> std::optional<std::string>& { return mux::config::panels_in(account); }},
+                                           one.part);
+                                       kept = one.look ? std::optional<std::string>(mux::config::word_of(*one.look)) : std::nullopt;
                                      });
                                    },
                                    [&](mux::choice_level::chat) {
@@ -137,9 +153,9 @@ void app::apply(const request::set_bubbles& one) {
                                      if (!chosen)
                                        return;
                                      if (one.look)
-                                       bubbles_in.insert_or_assign(*chosen, *one.look);
+                                       per_chat.insert_or_assign(*chosen, *one.look);
                                      else
-                                       bubbles_in.erase(*chosen);
+                                       per_chat.erase(*chosen);
                                    }},
                 one.level);
   (void)this->write();

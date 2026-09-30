@@ -302,6 +302,7 @@ struct xmpp_account {
   std::optional<bool> link_previews;  // as matrix_account's
   std::optional<std::string> wallpaper;  // its chats' background, as matrix_account's
   std::optional<std::string> bubbles;    // its chats' bubbles, as matrix_account's
+  std::optional<std::string> panels;  // its panels' look, as word_of(bubble_look) says it
   std::optional<std::int64_t> jump_search;  // as matrix_account's
   // Its notifications, on the desktop and heard: as every account's, until
   // chosen.
@@ -334,6 +335,7 @@ struct matrix_account {
   std::optional<std::string> wallpaper;
   // Its chats' bubbles, as word_of(bubble_look) says them.
   std::optional<std::string> bubbles;
+  std::optional<std::string> panels;  // its panels' look, as word_of(bubble_look) says it
   std::optional<bool> show_receipts;
   // Whether its chats show a card for a message's first link: its own
   // choice, else every account's.
@@ -409,6 +411,17 @@ struct bubble_look {
   int opacity = 70;  // percent, where the kind has one
   friend bool operator==(const bubble_look&, const bubble_look&) = default;
 };
+// What a look is chosen for: the messages' bubbles, or the panels round
+// them (over the background behind the whole window).
+namespace look_part {
+struct bubbles {
+  friend bool operator==(bubbles, bubbles) = default;
+};
+struct panels {
+  friend bool operator==(panels, panels) = default;
+};
+}  // namespace look_part
+using look_part_t = splice::variant<look_part::bubbles, look_part::panels>;
 [[nodiscard]] inline std::string word_of(const bubble_look& one) {
   const std::string_view kind = splice::visit(splice::overloaded{[](bubbles::solid) { return std::string_view("solid"); },
                                                                  [](bubbles::translucent) { return std::string_view("translucent"); },
@@ -458,6 +471,7 @@ struct room_events_choice {
   std::optional<std::int64_t> jump_search;  // events paged back looking for one; 0 no limit
   std::optional<std::string> wallpaper;  // its background, as word_of(wallpaper_t) says it
   std::optional<std::string> bubbles;    // its bubbles, as word_of(bubble_look) says them
+  std::optional<std::string> panels;  // its panels' look, as word_of(bubble_look) says it
   friend bool operator==(const room_events_choice&, const room_events_choice&) = default;
 };
 consteval auto json_schema(knot::type<room_events_choice>) { return knot::schema<room_events_choice>(); }
@@ -593,6 +607,7 @@ struct file {
   std::optional<std::string> wallpaper;
   // Every chat's bubbles, as word_of(bubble_look) says them; none, solid.
   std::optional<std::string> bubbles;
+  std::optional<std::string> panels;  // its panels' look, as word_of(bubble_look) says it
   std::optional<std::string> renderer;
   // Only what changed repainted, into a frame kept between them.
   std::optional<bool> partial_redraw;
@@ -669,6 +684,12 @@ consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
 }
 [[nodiscard]] inline std::optional<std::string>& bubbles_in(account_t& one) {
   return splice::visit([](auto& each) -> std::optional<std::string>& { return each.bubbles; }, one);
+}
+[[nodiscard]] inline const std::optional<std::string>& panels_of(const account_t& one) {
+  return splice::visit([](const auto& each) -> const std::optional<std::string>& { return each.panels; }, one);
+}
+[[nodiscard]] inline std::optional<std::string>& panels_in(account_t& one) {
+  return splice::visit([](auto& each) -> std::optional<std::string>& { return each.panels; }, one);
 }
 [[nodiscard]] inline const std::optional<bool>& link_previews_of(const account_t& one) {
   return splice::visit([](const auto& each) -> const std::optional<bool>& { return each.link_previews; }, one);

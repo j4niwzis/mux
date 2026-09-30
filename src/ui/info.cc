@@ -1211,59 +1211,83 @@ struct create_room_box : nodes::Stack {
 // A chat's background, chosen: for every chat, an account's, or one chat
 // -- as the level over it says, the theme's (its gradient and Telegram's
 // pattern), a plain colour, or a picture of one's own.
-// How bubbles look, at a level: as the level over it (where there is one),
-// or a kind -- the one in use marked -- and how opaque, on a slider told
-// when it is let go: the chat's bubbles made again once, not at each step
-// of a drag.
+// How bubbles -- or the panels -- look, at a level: as the level over it
+// (where there is one), or a kind -- the one in use marked -- and how
+// opaque, on a slider told when it is let go: made again once, not at each
+// step of a drag. The panels' only over the background behind the whole
+// window: else shown greyed, and nothing done.
 template <class Actions>
 struct bubbles_picker : nodes::Stack {
   // The look at the level, as the UI knows it: every chat's, or the chat's
   // shown.
-  [[nodiscard]] static config::bubble_look current(const choice_level_t& level) {
-    return splice::visit(splice::overloaded{[](choice_level::everywhere) { return bubble_look_everywhere(); },
-                                            [](const auto&) { return bubble_look_now(); }},
-                         level);
+  [[nodiscard]] static config::bubble_look current(const choice_level_t& level, const config::look_part_t& part) {
+    const bool everywhere = splice::visit(splice::overloaded{[](choice_level::everywhere) { return true; },
+                                                             [](const auto&) { return false; }},
+                                          level);
+    return splice::visit(splice::overloaded{[&](config::look_part::bubbles) {
+                                              return everywhere ? bubble_look_everywhere() : bubble_look_now();
+                                            },
+                                            [&](config::look_part::panels) {
+                                              return everywhere ? panel_look_everywhere() : panel_look_now();
+                                            }},
+                         part);
+  }
+  [[nodiscard]] static bool usable(const config::look_part_t& part) {
+    return splice::visit(splice::overloaded{[](config::look_part::bubbles) { return true; },
+                                            [](config::look_part::panels) { return window_look().behind; }},
+                         part);
   }
   struct inherit_it {
     Actions* actions;
     choice_level_t level;
-    void operator()() const { actions->set_bubbles(level, std::nullopt); }
+    config::look_part_t part;
+    void operator()() const {
+      if (usable(part))
+        actions->set_bubbles(level, std::nullopt, part);
+    }
   };
   struct pick_kind {
     Actions* actions;
     choice_level_t level;
+    config::look_part_t part;
     config::bubbles_t kind;
-    void operator()() const { actions->set_bubbles(level, config::bubble_look{kind, current(level).opacity}); }
+    void operator()() const {
+      if (usable(part))
+        actions->set_bubbles(level, config::bubble_look{kind, current(level, part).opacity}, part);
+    }
   };
   // An opacity let go at: of the kind in use -- solid has none, so
   // translucent.
   struct opacity_done {
     Actions* actions;
     choice_level_t level;
+    config::look_part_t part;
     void operator()(float fraction) const {
-      config::bubble_look look = current(level);
+      if (!usable(part))
+        return;
+      config::bubble_look look = current(level, part);
       look.kind = splice::visit(splice::overloaded{[](config::bubbles::solid) { return config::bubbles_t{config::bubbles::translucent{}}; },
                                                    [](const auto& other) { return config::bubbles_t{other}; }},
                                 look.kind);
       look.opacity = static_cast<int>(std::lround(10.0f + std::clamp(fraction, 0.0f, 1.0f) * 90.0f));
-      actions->set_bubbles(level, look);
+      actions->set_bubbles(level, look, part);
     }
   };
   struct kinds_row : nodes::Stack {
     struct parts_t {
       widgets::Button<pick_kind> solid, translucent, frosted, glass;
     } parts;
-    kinds_row(Actions* a, const choice_level_t& level)
-        : parts{.solid = widgets::Button<pick_kind>("Solid", {a, level, config::bubbles::solid{}}),
-                .translucent = widgets::Button<pick_kind>("Translucent", {a, level, config::bubbles::translucent{}}),
-                .frosted = widgets::Button<pick_kind>("Frosted", {a, level, config::bubbles::frosted{}}),
-                .glass = widgets::Button<pick_kind>("Glass", {a, level, config::bubbles::glass{}})} {
+    kinds_row(Actions* a, const choice_level_t& level, const config::look_part_t& part)
+        : parts{.solid = widgets::Button<pick_kind>("Solid", {a, level, part, config::bubbles::solid{}}),
+                .translucent = widgets::Button<pick_kind>("Translucent", {a, level, part, config::bubbles::translucent{}}),
+                .frosted = widgets::Button<pick_kind>("Frosted", {a, level, part, config::bubbles::frosted{}}),
+                .glass = widgets::Button<pick_kind>("Glass", {a, level, part, config::bubbles::glass{}})} {
       this->setHorizontal();
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-      const config::bubbles_t now = current(level).kind;
+      const config::bubbles_t now = current(level, part).kind;
       for (widgets::Button<pick_kind>* each : {&parts.solid, &parts.translucent, &parts.frosted, &parts.glass})
-        each->apply({.grow = scene::axes::kX, .height = 32.0f});
+        each->apply({.grow = scene::axes::kX, .height = 32.0f, .disabled = !usable(part)});
       parts.solid.setPrimary(now == config::bubbles_t{config::bubbles::solid{}});
       parts.translucent.setPrimary(now == config::bubbles_t{config::bubbles::translucent{}});
       parts.frosted.setPrimary(now == config::bubbles_t{config::bubbles::frosted{}});
@@ -1271,33 +1295,106 @@ struct bubbles_picker : nodes::Stack {
     }
   };
   struct parts_t {
-    nodes::Text title{"MESSAGE BUBBLES", 13.0f, dim_colour, true};
+    nodes::Text title;
+    nodes::Text why;
     widgets::Button<inherit_it> inherit;
     kinds_row kinds;
     nodes::Text opacity_label;
     widgets::SliderBar<scene::NoAction, opacity_done> opacity;
   } parts;
-  bubbles_picker(Actions* a, const choice_level_t& level)
-      : parts{.inherit = widgets::Button<inherit_it>(splice::visit(splice::overloaded{[](choice_level::chat) { return "As its account's"; },
+  bubbles_picker(Actions* a, const choice_level_t& level, const config::look_part_t& part = config::look_part::bubbles{})
+      : parts{.title = nodes::Text(splice::visit(splice::overloaded{[](config::look_part::bubbles) { return "MESSAGE BUBBLES"; },
+                                                                    [](config::look_part::panels) { return "PANELS"; }},
+                                                 part),
+                                   13.0f, dim_colour, true),
+              .why = nodes::Text("The chat list, the bars and the side panels: only over a background behind the whole "
+                                 "window (Appearance \u2192 Chat background \u2192 Behind the whole window).",
+                                 12.0f, dim_colour),
+              .inherit = widgets::Button<inherit_it>(splice::visit(splice::overloaded{[](choice_level::chat) { return "As its account's"; },
                                                                                       [](const auto&) { return "As every chat's"; }},
                                                                    level),
-                                                     {a, level}),
-              .kinds = kinds_row(a, level),
+                                                     {a, level, part}),
+              .kinds = kinds_row(a, level, part),
               .opacity_label = nodes::Text("Opacity", 13.0f, text_colour),
-              .opacity = widgets::SliderBar<scene::NoAction, opacity_done>({}, opacity_done{a, level})} {
+              .opacity = widgets::SliderBar<scene::NoAction, opacity_done>({}, opacity_done{a, level, part})} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 10.0f, 0.0f, 10.0f}});
+    parts.why.setWrapped(true);
+    parts.why.apply({.fillX = true});
+    parts.why.setVisible(splice::visit(splice::overloaded{[](config::look_part::panels) { return true; },
+                                                          [](const auto&) { return false; }},
+                                       part));
     parts.inherit.setVisible(splice::visit(splice::overloaded{[](choice_level::everywhere) { return false; },
                                                              [](const auto&) { return true; }},
                                            level));
-    parts.inherit.apply({.fillX = true, .height = 36.0f});
-    const int opacity = current(level).opacity;
+    parts.inherit.apply({.fillX = true, .height = 36.0f, .disabled = !usable(part)});
+    const int opacity = current(level, part).opacity;
     parts.opacity_label.setText(std::format("Opacity: {}%", opacity));
     parts.opacity.setFraction(static_cast<float>(opacity - 10) / 90.0f);
     parts.opacity.apply({.margin = {4.0f, 8.0f, 8.0f, 8.0f}});
+    // Greyed where it does nothing.
+    if (!usable(part))
+      for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.kinds, &parts.opacity_label, &parts.opacity, &parts.inherit})
+        each->apply({.alpha = 0.4f});
   }
 };
 
+// What a chat looks like, at a level: its background, its bubbles, and the
+// panels round it -- in the dialog (every chat's, an account's) and in a
+// room's Manage (its own).
+template <class Actions>
+struct look_choices : nodes::Stack {
+  struct pick {
+    Actions* actions;
+    choice_level_t level;
+    config::wallpaper_pick_t chosen;
+    void operator()() const { actions->set_wallpaper(level, chosen); }
+  };
+  struct parts_t {
+    nodes::Text background_title{"BACKGROUND", 13.0f, dim_colour, true};
+    nodes::Text note;
+    widgets::Button<pick> inherit;
+    widgets::Button<pick> theme;
+    widgets::Button<pick> plain;
+    widgets::Button<pick> picture;
+    bubbles_picker<Actions> bubbles;
+    bubbles_picker<Actions> panels;
+  } parts;
+  [[nodiscard]] static std::string note_of(const choice_level_t& level) {
+    const std::string where = window_look().behind ? "Behind the whole window" : "Behind the messages";
+    return splice::visit(splice::overloaded{[&](choice_level::everywhere) { return where + ", in every chat."; },
+                                            [&](choice_level::account) { return where + ", in this account's chats."; },
+                                            [&](choice_level::chat) { return where + ", in this chat."; }},
+                         level);
+  }
+  look_choices(Actions* a, choice_level_t level)
+      : parts{.note = nodes::Text(note_of(level), 13.0f, dim_colour),
+              .inherit = widgets::Button<pick>(splice::visit(splice::overloaded{[](choice_level::chat) { return "As its account's"; },
+                                                                                [](const auto&) { return "As every chat's"; }},
+                                                             level),
+                                               {a, level, config::wallpaper_pick::inherit{}}),
+              .theme = widgets::Button<pick>("Theme default", {a, level, config::wallpaper_pick::theme{}}),
+              .plain = widgets::Button<pick>("Plain colour", {a, level, config::wallpaper_pick::plain{}}),
+              .picture = widgets::Button<pick>("Choose image\u2026", {a, level, config::wallpaper_pick::picture{}}),
+              .bubbles = bubbles_picker<Actions>(a, level, config::look_part::bubbles{}),
+              .panels = bubbles_picker<Actions>(a, level, config::look_part::panels{})} {
+    this->setGap(8.0f);
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    parts.background_title.apply({.margin = {0.0f, 10.0f, 0.0f, 10.0f}});
+    parts.note.setWrapped(true);
+    parts.note.apply({.fillX = true, .margin = {0.0f, 10.0f, 4.0f, 10.0f}});
+    parts.inherit.setVisible(splice::visit(splice::overloaded{[](choice_level::everywhere) { return false; },
+                                                             [](const auto&) { return true; }},
+                                           level));
+    parts.picture.setPrimary(true);
+    for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.inherit, &parts.theme, &parts.plain, &parts.picture})
+      each->apply({.fillX = true, .height = 36.0f, .margin = {0.0f, 10.0f, 0.0f, 10.0f}});
+    parts.bubbles.apply({.margin = {10.0f, 0.0f, 0.0f, 0.0f}});
+    parts.panels.apply({.margin = {10.0f, 0.0f, 0.0f, 0.0f}});
+  }
+};
+
+// A chat background and its looks chosen, at a level, in a dialog.
 template <class Actions>
 struct wallpaper_box : nodes::Stack {
   struct close_it {
@@ -1307,50 +1404,15 @@ struct wallpaper_box : nodes::Stack {
   struct nothing_back {
     void operator()() const {}
   };
-  struct pick {
-    Actions* actions;
-    choice_level_t level;
-    config::wallpaper_pick_t chosen;
-    void operator()() const { actions->set_wallpaper(level, chosen); }
-  };
   using header_t = page_header<nothing_back, close_it>;
   struct parts_t {
     header_t header;
-    nodes::Text note;
-    widgets::Button<pick> inherit;
-    widgets::Button<pick> theme;
-    widgets::Button<pick> plain;
-    widgets::Button<pick> picture;
-    bubbles_picker<Actions> bubbles;
+    look_choices<Actions> choices;
   } parts;
-  [[nodiscard]] static std::string note_of(const choice_level_t& level) {
-    return splice::visit(splice::overloaded{[](choice_level::everywhere) { return std::string("Behind the messages of every chat."); },
-                                            [](choice_level::account) { return std::string("Behind the messages of this account's chats."); },
-                                            [](choice_level::chat) { return std::string("Behind the messages of this chat."); }},
-                         level);
-  }
   wallpaper_box(Actions* a, choice_level_t level)
-      : parts{.header = header_t("Chat background and bubbles", {}, {a}, false, true),
-              .note = nodes::Text(note_of(level), 13.0f, dim_colour),
-              .inherit = widgets::Button<pick>(splice::visit(splice::overloaded{[](choice_level::chat) { return "As its account's"; },
-                                                                                [](const auto&) { return "As every chat's"; }},
-                                                             level),
-                                               {a, level, config::wallpaper_pick::inherit{}}),
-              .theme = widgets::Button<pick>("Theme default", {a, level, config::wallpaper_pick::theme{}}),
-              .plain = widgets::Button<pick>("Plain colour", {a, level, config::wallpaper_pick::plain{}}),
-              .picture = widgets::Button<pick>("Choose image\u2026", {a, level, config::wallpaper_pick::picture{}}),
-              .bubbles = bubbles_picker<Actions>(a, level)} {
+      : parts{.header = header_t("Chat background and looks", {}, {a}, false, true), .choices = look_choices<Actions>(a, level)} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 18.0f, 12.0f}});
-    parts.note.setWrapped(true);
-    parts.note.apply({.fillX = true, .margin = {0.0f, 10.0f, 4.0f, 10.0f}});
-    parts.inherit.setVisible(splice::visit(splice::overloaded{[](choice_level::everywhere) { return false; },
-                                                             [](const auto&) { return true; }},
-                                           level));
-    parts.picture.setPrimary(true);
-    for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.inherit, &parts.theme, &parts.plain, &parts.picture})
-      each->apply({.fillX = true, .height = 36.0f, .margin = {0.0f, 10.0f, 0.0f, 10.0f}});
-    parts.bubbles.apply({.margin = {6.0f, 0.0f, 0.0f, 0.0f}});
   }
 };
 
@@ -2162,24 +2224,20 @@ struct info_panel : nodes::Stack {
       using mute_tile = action_tile<ask<Actions, &Actions::toggle_mute>>;
       using manage_tile = action_tile<ask<Actions, &Actions::open_manage>>;
       using leave_tile = action_tile<ask<Actions, &Actions::leave_chat>>;
-      using wallpaper_tile = action_tile<open_wallpaper_at<Actions>>;
       struct parts_t {
         mute_tile mute;
         manage_tile manage;
-        wallpaper_tile wallpaper;
         leave_tile leave;
       } parts;
       tiles_row(Actions* a, bool muted)
           : parts{.mute = mute_tile(muted ? "Unmute" : "Mute", icon::bell{}, {a}),
                   .manage = manage_tile("Manage", icon::sliders{}, {a}),
-                  .wallpaper = wallpaper_tile("Background", icon::eye{}, {a, choice_level::chat{}}),
                   .leave = leave_tile("Leave", icon::leave{}, {a})} {
         this->setHorizontal();
         this->setGap(8.0f);
         fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}});
         parts.mute.apply({.grow = scene::axes::kX});
         parts.manage.apply({.grow = scene::axes::kX});
-        parts.wallpaper.apply({.grow = scene::axes::kX});
         parts.leave.apply({.grow = scene::axes::kX});
       }
     };

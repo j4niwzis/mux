@@ -21,6 +21,7 @@ import :controls;
 import :themes;
 import :forms;
 import :add_account;
+import :info;
 
 export namespace mux::ui {
 
@@ -218,8 +219,9 @@ struct account_privacy : nodes::Stack {
     receipts_choice<Actions> faces;
     previews_choice<Actions> previews;
     jump_search_choice<Actions> jump_search;
-    // Its chats' background.
-    widgets::Button<open_wallpaper_at<Actions>> wallpaper;
+    // Its chats' background, bubbles and panels, here as its other choices.
+    nodes::Text looks_title = section_title("LOOKS");
+    look_choices<Actions> looks;
     nodes::Text note{"Off, the people you talk to through this account are not told when you have read their "
                      "messages, or that you are typing. Theirs are still shown, and receipts are still kept here.",
                      13.0f, dim_colour};
@@ -237,8 +239,8 @@ struct account_privacy : nodes::Stack {
               .faces = receipts_choice<Actions>(a, choice_level::account{}, faces_on),
               .previews = previews_choice<Actions>(a, choice_level::account{}, previews_on),
               .jump_search = jump_search_choice<Actions>(a, choice_level::account{}, jump_most),
-              .wallpaper = widgets::Button<open_wallpaper_at<Actions>>("Chat background\u2026", {a, choice_level::account{}})} {
-    parts.wallpaper.apply({.width = 200.0f, .height = 34.0f});
+              .looks = look_choices<Actions>(a, choice_level::account{})} {
+    parts.looks_title.apply({.margin = {10.0f, 0.0f, 0.0f, 0.0f}});
     this->setGap(8.0f);
     parts.note.apply({.fillX = true});
     fState.apply({.fill = true});

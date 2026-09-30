@@ -57,6 +57,8 @@ struct menu_facts {
 // A chat's background shown on a wallpaper: the theme's gradient and
 // Telegram's pattern, a plain colour (what is behind showing), or a picture.
 inline void show_wallpaper_on(widgets::Wallpaper& wall, const config::wallpaper_t& chosen) {
+  // Frosted's blur, as chosen: up to 12 of the frost's quarter-size pixels.
+  wall.setBlur(static_cast<int>(std::lround(static_cast<double>(window_look().frost) * 12.0 / 100.0)));
   splice::visit(splice::overloaded{[&](config::wallpaper::theme) {
                                      wall.setPicture(nullptr);
                                      wall.setGradient(scene::Gradient{chat_top_colour, chat_colour});

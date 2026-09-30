@@ -653,6 +653,8 @@ struct file {
   // chat's background is behind the whole window, not only its messages.
   std::optional<int> window_opacity;
   std::optional<bool> wallpaper_behind;
+  // How much Frosted blurs what is behind, in percent (none, 30).
+  std::optional<int> frost_blur;
   // Frames a second, and the last frame's time, in the window's corner.
   std::optional<bool> show_fps;
   std::optional<cache_limits> cache;

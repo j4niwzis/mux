@@ -105,7 +105,8 @@ int main(int argc, char** argv) {
   // window is made see-through or not once.
   const int opacity = std::clamp(saved.window_opacity.value_or(100), 20, 100);
   mux::ui::window_look() = {.opacity = opacity, .chosen = opacity, .behind = saved.wallpaper_behind.value_or(false),
-                            .see_through = opacity < 100};
+                            .see_through = opacity < 100,
+                            .frost = std::clamp(saved.frost_blur.value_or(30), 0, 100)};
   mux::ui::use_theme(mux::config::theme_of(saved.theme), mux::config::accent_of(saved.accent));
   app program;
   program.box = &box;
@@ -143,6 +144,7 @@ int main(int argc, char** argv) {
   program.vsync = saved.vsync.value_or(true);
   program.window_opacity = opacity;
   program.wallpaper_behind = mux::ui::window_look().behind;
+  program.frost_blur = mux::ui::window_look().frost;
   program.show_fps = saved.show_fps.value_or(false);
   program.limits = saved.cache.value_or(mux::config::cache_limits{});
   if (!demo)

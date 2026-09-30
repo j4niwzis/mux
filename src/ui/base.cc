@@ -60,6 +60,7 @@ struct window_look_t {
   int chosen = 100;
   bool behind = false;
   bool see_through = false;  // the window made with an alpha channel: opacity changes at once
+  int frost = 30;            // how much Frosted blurs, in percent
 };
 inline window_look_t& window_look() {
   static window_look_t look;

@@ -111,6 +111,7 @@ struct stub {
                    mux::config::look_part_t = mux::config::look_part::bubbles{}) {}
   void set_window_opacity(int) {}
   void flip_wallpaper_behind() {}
+  void set_frost_blur(int) {}
   void set_wallpaper(mux::choice_level_t, mux::config::wallpaper_pick_t) {}
   void open_thread(std::string) {}
   void close_thread() {}

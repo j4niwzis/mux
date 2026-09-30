@@ -1390,6 +1390,14 @@ struct bubbles_picker : nodes::Stack {
       actions->set_bubbles(level, look, part);
     }
   };
+  // Frosted's blur, let go at: one for the window, the bubbles' and the
+  // panels' frost alike.
+  struct blur_done {
+    Actions* actions;
+    void operator()(float fraction) const {
+      actions->set_frost_blur(static_cast<int>(std::lround(std::clamp(fraction, 0.0f, 1.0f) * 100.0f)));
+    }
+  };
   struct kinds_row : nodes::Stack {
     struct parts_t {
       widgets::Button<pick_kind> solid, translucent, frosted, glass;
@@ -1417,6 +1425,9 @@ struct bubbles_picker : nodes::Stack {
     choice_menu<pick_kind_at> kinds;
     nodes::Text opacity_label;
     widgets::SliderBar<scene::NoAction, opacity_done> opacity;
+    // Frosted only: how much it blurs.
+    nodes::Text blur_label;
+    widgets::SliderBar<scene::NoAction, blur_done> blur;
     // The bubbles' only: what else is in a chat, each apart where chosen.
     nodes::Text elements_title{"EVERYTHING ELSE IN A CHAT", 12.0f, dim_colour, true};
     std::vector<element_row> elements;
@@ -1432,7 +1443,9 @@ struct bubbles_picker : nodes::Stack {
               .kinds = choice_menu<pick_kind_at>("", kind_names(level), kind_index(level, part),
                                                  pick_kind_at{a, level, part, inherits(level)}),
               .opacity_label = nodes::Text("Opacity", 13.0f, text_colour),
-              .opacity = widgets::SliderBar<scene::NoAction, opacity_done>({}, opacity_done{a, level, part})} {
+              .opacity = widgets::SliderBar<scene::NoAction, opacity_done>({}, opacity_done{a, level, part}),
+              .blur_label = nodes::Text(std::format("Blur: {}%", window_look().frost), 13.0f, text_colour),
+              .blur = widgets::SliderBar<scene::NoAction, blur_done>({}, blur_done{a})} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 10.0f, 0.0f, 10.0f}});
     parts.why.setWrapped(true);
@@ -1444,6 +1457,12 @@ struct bubbles_picker : nodes::Stack {
     parts.opacity_label.setText(std::format("Opacity: {}%", opacity));
     parts.opacity.setFraction(static_cast<float>(opacity - 10) / 90.0f);
     parts.opacity.apply({.margin = {4.0f, 8.0f, 8.0f, 8.0f}});
+    const bool frosted = splice::visit(splice::overloaded{[](config::bubbles::frosted) { return true; }, [](const auto&) { return false; }},
+                                       current(level, part).kind);
+    parts.blur_label.setVisible(frosted);
+    parts.blur.setVisible(frosted);
+    parts.blur.setFraction(static_cast<float>(window_look().frost) / 100.0f);
+    parts.blur.apply({.margin = {4.0f, 8.0f, 8.0f, 8.0f}});
     const bool bubbles = splice::visit(splice::overloaded{[](config::look_part::bubbles) { return true; },
                                                           [](const auto&) { return false; }},
                                        part);

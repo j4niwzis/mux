@@ -117,6 +117,15 @@ class settings_part {
     skiff::scene::forgetStyles();
     s_->rebuild_due = true;
   }
+  // Frosted's blur: kept, the backgrounds' frost made again, and shown.
+  void apply(const request::set_frost_blur& one) {
+    k_->frost_blur = std::clamp(one.percent, 0, 100);
+    mux::ui::window_look().frost = k_->frost_blur;
+    (void)k_->write();
+    s_->refresh();
+    if (auto* up = s_->root().settings_up(); up && up->appearance())
+      up->show_appearance(k_->theme, k_->accent);
+  }
   void apply(const request::flip_show_fps&) {
     k_->show_fps = !k_->show_fps;
     this->show_frames();

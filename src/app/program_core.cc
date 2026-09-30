@@ -114,6 +114,7 @@ void app::woken() {
     if (model->find(waiting.first) == nullptr)
       return false;
     model->apply(waiting.second);
+    marks_not_here.erase(waiting.first);
     return true;
   });
   const bool marks_changed = std::ranges::any_of(changes, [](const mux::change_t& one) {
@@ -219,6 +220,9 @@ void app::save_marks() {
       std::ranges::transform(one.unread_reactions, std::back_inserter(chat.reactions), kept);
       out.chats.push_back(std::move(chat));
     }
+  // And those of chats not here yet, as they were read.
+  for (const auto& [id, chat] : marks_not_here)
+    out.chats.push_back(chat);
   std::ofstream(mux::config::state_path("marks.json"), std::ios::binary | std::ios::trunc)
       << knot::to_json_string(out);
 }
@@ -236,6 +240,7 @@ void app::load_marks() {
     const auto at = [](std::int64_t ms) {
       return std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(ms));
     };
+    marks_not_here.insert_or_assign(id, chat);
     // What was seen first, so that nothing seen comes back as unread.
     if (chat.seen)
       pending_marks.emplace_back(id, mux::change_t{mux::change::marks_seen{id, *chat.seen}});

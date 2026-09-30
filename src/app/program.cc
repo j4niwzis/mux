@@ -246,6 +246,9 @@ struct app : kept_settings {
   void save_marks();
   void load_marks();
   std::vector<std::pair<mux::conversation_id, mux::change_t>> pending_marks;
+  // The marks read back of chats not here yet, as the file had them: written
+  // again as they were until their chats come, not dropped by a save before.
+  std::map<mux::conversation_id, mux::config::chat_marks> marks_not_here;
   void apply(const request::list_marks& one);
   void apply(const request::go_to_mark& one);
   void apply(const request::close_marks&);

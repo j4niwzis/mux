@@ -1211,6 +1211,12 @@ class model {
     conversation& where = of(one.in);
     for (const std::string& event : one.events)
       mark_seen(where, event);
+    // Seen is seen, whichever came first: a mention caught up from the
+    // server before the kept ones were read back is let go here, not left
+    // unread because the seen list was not in yet.
+    const auto seen = [&](const unread_mark& mark) { return std::ranges::contains(where.seen_marks, mark.event); };
+    std::erase_if(where.unread_mentions, seen);
+    std::erase_if(where.unread_reactions, seen);
   }
   void on(const change::directory_listed&) {}  // the window's: the Explore dialog
   void on(const change::reacted_to_mine& one) {

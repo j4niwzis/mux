@@ -29,7 +29,8 @@ template void account<mux::app::post_change>::list_state(std::string room);
 template void account<mux::app::post_change>::send_custom(std::string room, std::string type, std::optional<std::string> state_key, std::string json);
 template void account<mux::app::post_change>::fetch_preview(std::string url);
 template void account<mux::app::post_change>::search_directory(std::string server, std::string query);
-template void account<mux::app::post_change>::create_room(std::string name, std::string topic, bool open, std::string alias);
+template void account<mux::app::post_change>::create_room(std::string name, std::string topic, bool open, std::string alias, bool federate);
+template void account<mux::app::post_change>::search_people(std::string term);
 template void account<mux::app::post_change>::catch_up(std::string room, std::string from, std::string until);
 template void account<mux::app::post_change>::preview_room(std::string room, std::vector<std::string> via);
 template void account<mux::app::post_change>::create_group(std::string name);
@@ -39,6 +40,7 @@ template void account<mux::app::post_change>::load_context(std::string room, std
 template void account<mux::app::post_change>::load_newer(std::string room, std::string from);
 template void account<mux::app::post_change>::fetch_avatar(std::string source, std::string of);
 template void account<mux::app::post_change>::edit(std::string room, std::string event, std::string text);
+template void account<mux::app::post_change>::edit_caption(std::string room, std::string event, std::string caption, mux::attachment picture);
 template void account<mux::app::post_change>::remove(std::string room, std::string event);
 template void account<mux::app::post_change>::react(std::string room, std::string target, std::string key, bool on);
 template void account<mux::app::post_change>::pin(std::string room, std::string target, bool on);

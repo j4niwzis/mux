@@ -1417,8 +1417,8 @@ struct bubbles_picker : nodes::Stack {
   [[nodiscard]] static std::vector<std::string> kind_names(const choice_level_t& level) {
     std::vector<std::string> out;
     if (inherits(level))
-      out.emplace_back(splice::visit(splice::overloaded{[](choice_level::chat) { return "As its account's"; },
-                                                        [](const auto&) { return "As every chat's"; }},
+      out.emplace_back(splice::visit(splice::overloaded{[](choice_level::chat) { return "As above"; },
+                                                        [](const auto&) { return "As above"; }},
                                      level));
     for (const char* name : {"Solid", "Translucent", "Frosted", "Glass"})
       out.emplace_back(name);
@@ -1555,8 +1555,8 @@ struct look_choices : nodes::Stack {
   [[nodiscard]] static std::vector<std::string> background_names(const choice_level_t& level) {
     std::vector<std::string> out;
     if (inherits(level))
-      out.emplace_back(splice::visit(splice::overloaded{[](choice_level::chat) { return "As its account's"; },
-                                                        [](const auto&) { return "As every chat's"; }},
+      out.emplace_back(splice::visit(splice::overloaded{[](choice_level::chat) { return "As above"; },
+                                                        [](const auto&) { return "As above"; }},
                                      level));
     for (const char* name : {"Theme default", "Plain colour", "Image\u2026"})
       out.emplace_back(name);

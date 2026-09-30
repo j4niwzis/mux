@@ -288,6 +288,33 @@ inline skiff::scene::Modifiers modifiers_of(SDL_Keymod held) {
 
 // What draws: a GL context and Skia's context over it, or nothing of the
 // GPU and a surface in memory.
+// What draws OpenGL: a graphics card, or the processor pretending to be one
+// -- Mesa's llvmpipe or softpipe, SwiftShader -- where Skia's own software
+// renderer is much the faster. Read once from the driver's name.
+namespace gl_kind {
+struct hardware {};
+struct emulated {};
+}  // namespace gl_kind
+using gl_kind_t = splice::variant<gl_kind::hardware, gl_kind::emulated>;
+inline gl_kind_t gl_kind_of(std::string_view renderer) {
+  for (const std::string_view emulator : {"llvmpipe", "softpipe", "SwiftShader", "Software Rasterizer"})
+    if (renderer.contains(emulator))
+      return gl_kind::emulated{};
+  return gl_kind::hardware{};
+}
+// Said at the start, where it is seen: which renderer drawing got.
+inline void say_gl_renderer(const char* name) {
+  const std::string_view renderer = name ? name : "unknown";
+  std::println(std::cerr, "[render] OpenGL renderer: {}", renderer);
+  splice::visit(splice::overloaded{[](gl_kind::hardware) {},
+                                   [](gl_kind::emulated) {
+                                     std::println(std::cerr,
+                                                  "[render] OpenGL is emulated on the processor here: Settings, "
+                                                  "Rendering, Software draws faster");
+                                   }},
+                gl_kind_of(renderer));
+}
+
 class canvas_target {
  public:
   canvas_target(SDL_Window* window, bool software) : window_(window) {
@@ -304,6 +331,8 @@ class canvas_target {
           interface = skia::GrGLMakeAssembledInterface(nullptr, [](void*, const char name[]) -> skia::GrGLFuncPtr {
             return reinterpret_cast<skia::GrGLFuncPtr>(SDL_GL_GetProcAddress(name));
           });
+        if (interface && interface->fFunctions.fGetString)
+          say_gl_renderer(reinterpret_cast<const char*>(interface->fFunctions.fGetString(0x1F01 /* GL_RENDERER */)));
         if (interface)
           context_ = skia::MakeGL(std::move(interface));
       }
@@ -315,6 +344,8 @@ class canvas_target {
 #else
     (void)software;
 #endif
+    if (!this->on_gpu())
+      std::println(std::cerr, "[render] Skia software renderer");
   }
   [[nodiscard]] bool on_gpu() const {
 #if defined(SK_GANESH)

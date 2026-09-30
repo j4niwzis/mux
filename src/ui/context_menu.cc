@@ -742,13 +742,17 @@ struct emoji_popup : scene::Node {
 // userpics of 22 at the right, 17 in, each 8 over the next, in a ring of the
 // menu's colour. Hovered, every reader in a submenu beside the menu: a
 // userpic of 30, 13 in, the name 57 in, and under it when they read.
+template <class Actions>
 struct seen_row : nodes::Stack {
   static constexpr float kHeight = 33.0f, kFace = 22.0f, kOverlap = 8.0f, kRight = 17.0f;
   static constexpr std::size_t kMostFaces = 3;
   // How far the readers list lies over the menu it opens from.
   static constexpr float kOverlapMenu = 6.0f;
-  // A reader, as a line of the submenu.
+  // A reader, as a line of the submenu: pressed, their card, as a name
+  // pressed anywhere opens it.
   struct reader_row : nodes::Stack {
+    Actions* actions = nullptr;
+    std::string id;
     struct lines_t : nodes::Stack {
       struct parts_t {
         nodes::Text name;
@@ -766,10 +770,18 @@ struct seen_row : nodes::Stack {
       avatar_mark face;
       lines_t lines;
     } parts;
-    explicit reader_row(const seen_reader& one) : parts{.face = avatar_mark(one.id, one.name, 30.0f), .lines = lines_t(one)} {
+    reader_row(Actions* a, const seen_reader& one)
+        : actions(a), id(one.id), parts{.face = avatar_mark(one.id, one.name, 30.0f), .lines = lines_t(one)} {
       this->setHorizontal();
       this->setGap(14.0f);  // the name at 13 + 30 + 14 = 57
       fState.apply({.fillX = true, .height = 44.0f, .padding = {7.0f, 17.0f, 7.0f, 13.0f}, .hoverBackground = chosen_colour});
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+    [[nodiscard]] bool onClick(float, float) {
+      actions->close_menu();
+      actions->open_member_info(id);
+      return true;
     }
   };
   // The readers, scrolling where there are more than fit: at most about
@@ -783,11 +795,11 @@ struct seen_row : nodes::Stack {
     struct parts_t {
       nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
     } parts;
-    explicit submenu_t(const std::vector<seen_reader>& readers) {
+    submenu_t(Actions* a, const std::vector<seen_reader>& readers) {
       auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
       rows.reserve(readers.size());
       for (const seen_reader& one : readers)
-        rows.emplace_back(one);
+        rows.emplace_back(a, one);
       std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
       parts.list.apply({.fill = true});
       const float tall = height_for(readers.size());
@@ -796,23 +808,29 @@ struct seen_row : nodes::Stack {
                     .masking = true});
     }
   };
+  Actions* actions = nullptr;
   std::vector<seen_reader> readers;
   // The window, as the menu fills it: the submenu kept inside it.
   const skia::SkRect* window = nullptr;
+  // The submenu, held by the menu's layer over the whole window -- not by
+  // this row, outside whose box and its card's it lies: what is repainted
+  // or pointed at there went by the card's box, and missed it. And that
+  // layer, laid out again as it opens or goes.
+  std::optional<submenu_t>* submenu = nullptr;
+  scene::Node* layer = nullptr;
   struct parts_t {
     icon_mark mark;
     nodes::Text label;
     std::vector<avatar_mark> faces;
-    std::optional<submenu_t> submenu;
   } parts;
-  explicit seen_row(std::vector<seen_reader> who)
-      : readers(std::move(who)),
+  seen_row(Actions* a, std::vector<seen_reader> who)
+      : actions(a), readers(std::move(who)),
         parts{.mark = icon_mark(icon::check{}),
               .label = nodes::Text(readers.empty()       ? std::string("Nobody Viewed")
                                    : readers.size() == 1 ? readers.front().name
                                                          : std::to_string(readers.size()) + " Seen",
                                    13.0f, text_colour)} {
-    auto& [mark, label, faces, submenu] = parts;
+    auto& [mark, label, faces] = parts;
     this->setHorizontal();
     const std::size_t shown = std::min(kMostFaces, readers.size());
     const float faces_width = shown ? kFace + static_cast<float>(shown - 1) * (kFace - kOverlap) : 0.0f;
@@ -840,25 +858,30 @@ struct seen_row : nodes::Stack {
   // menu's edge: a gap between them, where neither is hovered, closed it on
   // the way over.
   void update(double) {
-    const bool open = (fState.hovered() || (parts.submenu && parts.submenu->fState.hovered())) && !readers.empty();
-    if (open == parts.submenu.has_value())
+    if (submenu == nullptr || layer == nullptr)
+      return;
+    const bool open = (fState.hovered() || (*submenu && (*submenu)->fState.hovered())) && !readers.empty();
+    if (open == submenu->has_value())
       return;
     if (open) {
-      parts.submenu.emplace(readers);
-      // Its top at the row's, or higher where it would pass the window's
-      // bottom -- as Telegram's, kept on the screen -- but never above its
-      // top. Where it is placed is from the row's content, 9 under its top.
-      const float row_top = fState.fBounds.fTop;
-      float top = row_top;
-      if (window != nullptr && !window->isEmpty())
-        top = std::max(window->fTop + 8.0f, std::min(row_top, window->fBottom - 8.0f - submenu_t::height_for(readers.size())));
-      parts.submenu->apply({.place = scene::anchor::kTopRight,
-                            .x = fState.fPadding.fRight - kOverlapMenu + submenu_t::kWidth,
-                            .y = top - row_top - fState.fPadding.fTop});
+      submenu->emplace(actions, readers);
+      // Beside the menu, over its edge -- left of it where the window has
+      // no room on the right. Its top at the row's, or higher where it would
+      // pass the window's bottom -- as Telegram's, kept on the screen -- but
+      // never above its top. In the layer's box, the window's.
+      const skia::SkRect row = fState.fBounds;
+      const skia::SkRect box = window != nullptr && !window->isEmpty() ? *window : row;
+      const float tall = submenu_t::height_for(readers.size());
+      const float top = std::max(box.fTop + 8.0f, std::min(row.fTop, box.fBottom - 8.0f - tall));
+      float left = row.fRight - kOverlapMenu;
+      if (left + submenu_t::kWidth > box.fRight - 8.0f)
+        left = std::max(box.fLeft + 8.0f, row.fLeft + kOverlapMenu - submenu_t::kWidth);
+      (*submenu)->apply({.place = scene::anchor::kTopLeft, .x = left - box.fLeft, .y = top - box.fTop});
     } else {
-      parts.submenu.reset();
+      submenu->reset();
     }
-    this->invalidateLayout();
+    layer->invalidateLayout();
+    layer->markDamaged();
   }
 };
 
@@ -949,7 +972,7 @@ struct context_menu : scene::Node {
       source_row source;
       delete_row remove;
       nodes::Box<> seen_band{band_colour};
-      seen_row seen;
+      seen_row<Actions> seen;
       // Every emoji, once asked for: over the items, out of their flow, and
       // after them, so drawn on top of them and pressed first.
       std::optional<emoji_panel<react_with<Actions>>> emoji;
@@ -1035,7 +1058,7 @@ struct context_menu : scene::Node {
                 .forward = forward_row("Forward", {a}, icon::send{}),
                 .source = source_row("View Source", {a}, icon::info{}),
                 .remove = delete_row("Delete", {a}, icon::close{}),
-                .seen = seen_row(facts.seen)} {
+                .seen = seen_row<Actions>(a, facts.seen)} {
       auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_image, save, save_gif, reactions, forward, source,
              remove, seen_band, seen, emoji] = parts;
       quick_band.apply({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 4.0f, 0.0f}});
@@ -1084,6 +1107,9 @@ struct context_menu : scene::Node {
   };
   struct parts_t {
     card menu;
+    // Who has seen it, listed beside the menu: over the whole window, as the
+    // menu is.
+    std::optional<typename seen_row<Actions>::submenu_t> seen_list;
   } parts;
   Actions* actions = nullptr;
 
@@ -1093,6 +1119,8 @@ struct context_menu : scene::Node {
       : parts{.menu = card(a, facts)}, actions(a), at_x(facts.x), at_y(facts.y) {
     fState.apply({.fill = true});
     parts.menu.parts.seen.window = &fState.fBounds;
+    parts.menu.parts.seen.submenu = &parts.seen_list;
+    parts.menu.parts.seen.layer = this;
     parts.menu.apply({.x = at_x, .y = at_y});
   }
   // As tdesktop's popup menu: at the pointer, going down and right -- up

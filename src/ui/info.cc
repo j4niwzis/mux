@@ -1342,7 +1342,7 @@ struct bubbles_picker : nodes::Stack {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
       const config::bubbles_t now = current(level, part).kind;
       for (widgets::Button<pick_kind>* each : {&parts.solid, &parts.translucent, &parts.frosted, &parts.glass})
-        each->apply({.grow = scene::axes::kX, .height = 32.0f, .disabled = !usable(part)});
+        each->apply({.height = 32.0f, .grow = scene::axes::kX, .disabled = !usable(part)});
       parts.solid.setPrimary(now == config::bubbles_t{config::bubbles::solid{}});
       parts.translucent.setPrimary(now == config::bubbles_t{config::bubbles::translucent{}});
       parts.frosted.setPrimary(now == config::bubbles_t{config::bubbles::frosted{}});

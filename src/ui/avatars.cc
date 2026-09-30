@@ -80,6 +80,8 @@ class avatar_cache {
   // or the one before is never let go, over the budget if need be: what is
   // on screen stays.
   std::size_t budget = 32u << 20;
+  // The pictures on screen waiting for one of these: woken as one comes.
+  skiff::scene::Waiters waiting;
   void clear() {
     images_.clear();
     order_.clear();
@@ -118,6 +120,7 @@ class avatar_cache {
       images_.erase(oldest);
       order_.pop_back();
     }
+    waiting.wake();
   }
 
   // The frame being drawn, counted by the window: what was used in it and
@@ -252,6 +255,7 @@ using picture_ptr = const skia::Sp<skia::SkImage>*;
 struct from_avatars {  // a chat's or a person's, a custom emoji's, a sticker's
   std::string key;
   picture_ptr operator()() const { return avatar_images().find(key); }
+  skiff::scene::Waiters& waiters() const { return avatar_images().waiting; }
 };
 struct from_previews {  // blurred, from a blurhash, until the picture comes
   std::string key;
@@ -260,6 +264,7 @@ struct from_previews {  // blurred, from a blurhash, until the picture comes
 struct from_thumbnails {
   std::string key;
   picture_ptr operator()() const { return thumbnails().find(key); }
+  skiff::scene::Waiters& waiters() const { return thumbnails().waiting; }
 };
 // Where it moves, the frame for now; else its thumbnail.
 struct from_moving_thumbnail {

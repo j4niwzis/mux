@@ -50,7 +50,13 @@ struct window_look_t {
   int opacity = 100;
   int chosen = 100;
   bool behind = false;
+  bool see_through = false;  // the window made with an alpha channel: opacity changes at once
 };
+// Every chat's bubbles, as chosen for the client.
+inline config::bubble_look& bubble_look_everywhere() {
+  static config::bubble_look look;
+  return look;
+}
 inline window_look_t& window_look() {
   static window_look_t look;
   return look;

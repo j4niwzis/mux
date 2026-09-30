@@ -18,6 +18,8 @@ import :controls;
 import :themes;
 import :accounts;
 import :proxies;
+import :info;
+import skiff.widgets.sliderbar;
 
 export namespace mux::ui {
 
@@ -28,11 +30,13 @@ struct choose_theme {
   config::theme_t theme;
   void operator()() const { actions->set_theme(theme); }
 };
+// The window's opacity, let go at on its slider: 20% to 100%.
 template <class Actions>
-struct choose_opacity {
+struct opacity_done {
   Actions* actions = nullptr;
-  int percent = 100;
-  void operator()() const { actions->set_window_opacity(percent); }
+  void operator()(float fraction) const {
+    actions->set_window_opacity(static_cast<int>(std::lround(20.0f + std::clamp(fraction, 0.0f, 1.0f) * 80.0f)));
+  }
 };
 template <class Actions>
 struct choose_renderer {
@@ -161,22 +165,6 @@ struct appearance_page : nodes::Stack {
         parts.circles.emplace_back(a, one, in);
     }
   };
-  // The window's opacities, the chosen one marked.
-  struct opacity_row : nodes::Stack {
-    struct parts_t {
-      std::vector<widgets::Button<choose_opacity<Actions>>> each;
-    } parts;
-    explicit opacity_row(Actions* a) {
-      this->setHorizontal();
-      this->setGap(6.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 16.0f, 8.0f, 20.0f}});
-      for (const int percent : {100, 90, 80, 70, 60, 50}) {
-        parts.each.emplace_back(std::format("{}%", percent), choose_opacity<Actions>{a, percent});
-        parts.each.back().apply({.width = 56.0f, .height = 30.0f});
-        parts.each.back().setPrimary(percent == window_look().chosen);
-      }
-    }
-  };
   struct parts_t {
     header_t header;
     nodes::Text theme_title = section_title("THEME");
@@ -186,10 +174,14 @@ struct appearance_page : nodes::Stack {
     nodes::Text wallpaper_title = section_title("CHAT BACKGROUND");
     widgets::Button<open_wallpaper_at<Actions>> wallpaper;
     switch_row<ask<Actions, &Actions::flip_wallpaper_behind>> behind;
-    nodes::Text window_title = section_title("WINDOW OPACITY");
-    opacity_row opacity;
-    nodes::Text window_note{"Below 100% the window shows what is under it, where a compositor (picom, KWin, "
-                            "Mutter) blends windows. Takes effect when mux starts again.",
+    bubbles_picker<Actions> bubbles;
+    nodes::Text window_title = section_title(std::format("WINDOW OPACITY: {}%", window_look().chosen));
+    widgets::SliderBar<scene::NoAction, opacity_done<Actions>> opacity;
+    nodes::Text window_note{window_look().see_through
+                                ? "The panels at this opacity, and what is under the window through them."
+                                : "Below 100% the window shows what is under it, where a compositor (picom, KWin, "
+                                  "Mutter) blends windows. Made see-through when mux starts again; from then on, "
+                                  "changes here apply at once.",
                             13.0f, dim_colour};
   } parts;
 
@@ -200,14 +192,18 @@ struct appearance_page : nodes::Stack {
               .wallpaper = widgets::Button<open_wallpaper_at<Actions>>("Chat background\u2026",
                                                                       {a, choice_level::everywhere{}}),
               .behind = switch_row<ask<Actions, &Actions::flip_wallpaper_behind>>("Behind the whole window", {a}),
-              .opacity = opacity_row(a)} {
+              .bubbles = bubbles_picker<Actions>(a, choice_level::everywhere{}),
+              .opacity = widgets::SliderBar<scene::NoAction, opacity_done<Actions>>({}, {a})} {
     fState.apply({.fill = true});
     parts.theme_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
     parts.accent_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
     parts.wallpaper_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
     parts.wallpaper.apply({.width = 200.0f, .height = 34.0f, .margin = {0.0f, 0.0f, 0.0f, 20.0f}});
     parts.behind.parts.toggle.setOnNow(window_look().behind);
+    parts.bubbles.apply({.margin = {10.0f, 10.0f, 0.0f, 10.0f}});
     parts.window_title.apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
+    parts.opacity.setFraction(static_cast<float>(window_look().chosen - 20) / 80.0f);
+    parts.opacity.apply({.margin = {10.0f, 28.0f, 10.0f, 28.0f}});
     parts.window_note.apply({.fillX = true, .margin = {0.0f, 20.0f, 0.0f, 20.0f}});
     parts.window_note.setWrapped(true);
     this->show(theme, accent);

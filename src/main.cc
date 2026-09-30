@@ -104,7 +104,8 @@ int main(int argc, char** argv) {
   // them. Its opacity is as it was at the start for all of the run -- the
   // window is made see-through or not once.
   const int opacity = std::clamp(saved.window_opacity.value_or(100), 20, 100);
-  mux::ui::window_look() = {.opacity = opacity, .chosen = opacity, .behind = saved.wallpaper_behind.value_or(false)};
+  mux::ui::window_look() = {.opacity = opacity, .chosen = opacity, .behind = saved.wallpaper_behind.value_or(false),
+                            .see_through = opacity < 100};
   mux::ui::use_theme(mux::config::theme_of(saved.theme), mux::config::accent_of(saved.accent));
   app program;
   program.box = &box;
@@ -131,6 +132,7 @@ int main(int argc, char** argv) {
     program.wallpaper = mux::config::wallpaper_of(std::string_view(*saved.wallpaper));
   if (saved.bubbles)
     program.bubbles = mux::config::bubble_look_of(*saved.bubbles);
+  mux::ui::bubble_look_everywhere() = program.bubbles.value_or(mux::config::bubble_look{});
   program.accent = mux::config::accent_of(saved.accent);
   program.renderer = mux::config::renderer_of(saved.renderer);
   program.partial_redraw = saved.partial_redraw.value_or(false);

@@ -122,7 +122,10 @@ void app::apply(const request::set_wallpaper& one) {
 }
 // Bubbles, at a level: a look, or as the level over it says.
 void app::apply(const request::set_bubbles& one) {
-  splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) { bubbles = one.look; },
+  splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) {
+                                     bubbles = one.look;
+                                     mux::ui::bubble_look_everywhere() = one.look.value_or(mux::config::bubble_look{});
+                                   },
                                    [&](mux::choice_level::account) {
                                      this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
                                        mux::config::bubbles_in(account) =
@@ -141,6 +144,9 @@ void app::apply(const request::set_bubbles& one) {
                 one.level);
   (void)this->write();
   this->refresh();
+  // Appearance up: its choice marked again.
+  if (auto* up = root().settings_up(); up && up->appearance())
+    up->show_appearance(theme, accent);
 }
 // The picture chosen for a background: copied into mux's data, by a name
 // its bytes give, and set at the level it was chosen for.

@@ -97,10 +97,17 @@ class settings_part {
   // start, where the window is made see-through or not.
   void apply(const request::set_window_opacity& one) {
     k_->window_opacity = std::clamp(one.percent, 20, 100);
-    mux::ui::window_look().chosen = k_->window_opacity;
+    auto& look = mux::ui::window_look();
+    look.chosen = k_->window_opacity;
     (void)k_->write();
-    if (auto* up = s_->root().settings_up())
+    // A window made see-through: at once, everything in its colours again.
+    if (look.see_through) {
+      look.opacity = look.chosen;
+      skiff::scene::forgetStyles();
+      s_->rebuild_due = true;
+    } else if (auto* up = s_->root().settings_up()) {
       up->show_appearance(k_->theme, k_->accent);
+    }
   }
   // The background behind the whole window: everything made again over it.
   void apply(const request::flip_wallpaper_behind&) {

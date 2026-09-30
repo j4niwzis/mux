@@ -122,7 +122,7 @@ class settings_part {
     k_->frost_blur = std::clamp(one.percent, 0, 100);
     mux::ui::window_look().frost = k_->frost_blur;
     (void)k_->write();
-    s_->refresh();
+    s_->refresh_due = true;
     if (auto* up = s_->root().settings_up(); up && up->appearance())
       up->show_appearance(k_->theme, k_->accent);
   }
@@ -131,7 +131,7 @@ class settings_part {
     k_->spaces = !k_->spaces;
     mux::ui::window_look().spaces = k_->spaces;
     (void)k_->write();
-    s_->refresh();
+    s_->refresh_due = true;
     if (auto* up = s_->root().settings_up(); up && up->appearance())
       up->show_appearance(k_->theme, k_->accent);
   }
@@ -139,7 +139,7 @@ class settings_part {
     k_->top_bar = !k_->top_bar;
     mux::ui::window_look().top_bar = k_->top_bar;
     (void)k_->write();
-    s_->refresh();
+    s_->refresh_due = true;
     if (auto* up = s_->root().settings_up(); up && up->appearance())
       up->show_appearance(k_->theme, k_->accent);
   }

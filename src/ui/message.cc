@@ -295,6 +295,10 @@ struct picture_view : scene::Node {
   // The loader while the picture has not come; where it moves, drawn again
   // each frame for the next of its frames.
   [[nodiscard]] bool settling() const { return animations().has(source); }
+  // Ticked while the picture is coming, moves, or has only its thumbnail.
+  [[nodiscard]] bool wantsTick() const {
+    return parts.loader.visible() || animations().has(source) || !whole_pictures().has(source);
+  }
   void update(double) {
     const bool moving = animations().has(source);
     const bool coming = !moving && !thumbnails().has(source) && !whole_pictures().has(source);
@@ -432,6 +436,8 @@ struct file_view : nodes::Stack {
   std::string shown_time;
   std::string size_line;
   [[nodiscard]] bool settling() const { return sound && mux::audio::the_speaker().holds(source); }
+  // A voice message's is ticked, for its button and its time; a file's not.
+  [[nodiscard]] bool wantsTick() const { return sound; }
   void update(double) {
     if (!sound)
       return;
@@ -974,6 +980,13 @@ struct message_bubble : nodes::Stack {
       float last_width = text.lastLineWidth();
       if (reactions)
         last_width = reactions->chips().empty() ? 0.0f : reactions->chips().back().bounds().fRight - last.fLeft;
+      // Measured again only where what it goes beside moved or changed: not
+      // a font's measuring for every bubble in view, every frame.
+      if (last == placed_beside && last_width == placed_width && inline_time.text() == placed_time)
+        return;
+      placed_beside = last;
+      placed_width = last_width;
+      placed_time = inline_time.text();
       const float needs =
           last_width + skiff::paint::Painter(nullptr, *font).measure(inline_time.text(), 11.0f) + 10.0f;
       const bool inside = needs <= kMaxWidth;
@@ -998,6 +1011,9 @@ struct message_bubble : nodes::Stack {
       }
     }
     float time_drop = 0.0f;
+    skia::SkRect placed_beside = skia::SkRect::MakeEmpty();
+    float placed_width = -1.0f;
+    std::string placed_time;
     // The tail: 10 by 12, its straight side on the bubble's edge, curving
     // down and out to its tip at the bubble's bottom.
     static IconShape tail_shape(bool mine) {
@@ -1366,6 +1382,8 @@ struct message_bubble : nodes::Stack {
   [[nodiscard]] bool settling() const {
     return swipe.moving() || swipe.value() != swipe_drawn || flash.moving() || appearing.moving() || marked;
   }
+  // Ticked while it flashes, appears or is swiped: at rest, not.
+  [[nodiscard]] bool wantsTick() const { return this->settling(); }
   void update(double now_ms) {
     if (flash.step(now_ms))
       fState.apply({.background = (accent_colour & 0x00FFFFFFu) |

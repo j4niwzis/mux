@@ -43,6 +43,18 @@ inline config::bubble_look& bubble_look_now() {
   const auto alpha = static_cast<unsigned>(std::lround(((colour >> 24) & 0xFF) * std::clamp(percent, 0, 100) / 100.0));
   return (colour & 0x00FFFFFFu) | (alpha << 24);
 }
+// The window's look: its opacity in percent in effect (as at the start),
+// the one chosen for the next start, and whether the chat's background is
+// behind all of the window.
+struct window_look_t {
+  int opacity = 100;
+  int chosen = 100;
+  bool behind = false;
+};
+inline window_look_t& window_look() {
+  static window_look_t look;
+  return look;
+}
 // A chat background's dialog, for a level.
 template <class Actions>
 struct open_wallpaper_at {

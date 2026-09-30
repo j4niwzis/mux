@@ -108,6 +108,8 @@ struct stub {
   void open_wallpaper(mux::choice_level_t) {}
   void close_wallpaper() {}
   void set_bubbles(mux::choice_level_t, std::optional<mux::config::bubble_look>) {}
+  void set_window_opacity(int) {}
+  void flip_wallpaper_behind() {}
   void set_wallpaper(mux::choice_level_t, mux::config::wallpaper_pick_t) {}
   void open_thread(std::string) {}
   void close_thread() {}

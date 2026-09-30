@@ -100,7 +100,11 @@ int main(int argc, char** argv) {
     }
   });
 
-  // The theme first: what is made takes its colours from it.
+  // The window's look, then the theme: what is made takes its colours from
+  // them. Its opacity is as it was at the start for all of the run -- the
+  // window is made see-through or not once.
+  const int opacity = std::clamp(saved.window_opacity.value_or(100), 20, 100);
+  mux::ui::window_look() = {.opacity = opacity, .chosen = opacity, .behind = saved.wallpaper_behind.value_or(false)};
   mux::ui::use_theme(mux::config::theme_of(saved.theme), mux::config::accent_of(saved.accent));
   app program;
   program.box = &box;
@@ -132,6 +136,8 @@ int main(int argc, char** argv) {
   program.partial_redraw = saved.partial_redraw.value_or(false);
   program.flash_redraws = saved.flash_redraws.value_or(false);
   program.vsync = saved.vsync.value_or(true);
+  program.window_opacity = opacity;
+  program.wallpaper_behind = mux::ui::window_look().behind;
   program.show_fps = saved.show_fps.value_or(false);
   program.limits = saved.cache.value_or(mux::config::cache_limits{});
   if (!demo)
@@ -174,7 +180,8 @@ int main(int argc, char** argv) {
   if (config_note)
     program.root().show_message("The accounts file could not be read", *config_note);
   const int code = mux::host::run(
-      program, {.software = program.renderer == mux::config::renderer_t{mux::config::renderer::software{}}});
+      program, {.software = program.renderer == mux::config::renderer_t{mux::config::renderer::software{}},
+                .transparent = opacity < 100});
   net.thread.join();
   return code;
 }

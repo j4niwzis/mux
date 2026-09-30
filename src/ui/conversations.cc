@@ -426,7 +426,9 @@ struct conversations_screen : nodes::Stack {
       header.show({}, [a](const auto& shown) { return chat_header<Actions>(a, shown); });
       // A plain colour: the wallpaper is the messages' own -- the timeline's
       // Wallpaper -- not behind Select a chat, where Telegram has none.
-      fState.apply({.fillY = true, .grow = scene::axes::kX, .background = chat_colour});
+      // Nothing, where the background is behind the whole window.
+      fState.apply({.fillY = true, .grow = scene::axes::kX,
+                    .background = window_look().behind ? skia::SkColor{0} : chat_colour});
       area.apply({.fillX = true, .grow = scene::axes::kY});
       parts.mentions.setVisible(false);
     }

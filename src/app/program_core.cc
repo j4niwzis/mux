@@ -444,6 +444,9 @@ void app::refresh(std::source_location from) {
   // The chosen chat's background, as its levels say.
   root().main().wallpaper = root().main().chosen ? this->wallpaper_of(*root().main().chosen)
                                                  : mux::config::wallpaper_t{mux::config::wallpaper::theme{}};
+  // Behind the whole window, where it is so: the chat's, else every chat's.
+  root().show_behind(root().main().chosen ? root().main().wallpaper
+                                          : wallpaper.value_or(mux::config::wallpaper_t{mux::config::wallpaper::theme{}}));
   // And which show who has read up to where.
   auto& receipts = root().main().receipts_in;
   receipts.clear();

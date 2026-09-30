@@ -570,6 +570,14 @@ inline void use_theme(const config::theme_t& chosen, const config::accent_t& acc
   use_theme(chosen);
   accent_colour = colour_of(accent, chosen);
   widgets::theme().fAccent = accent_colour;
+  // A see-through window: its panels at its opacity, and under them
+  // nothing -- the desktop, or the background behind all of it. Their
+  // colours taken once here, not blended at each frame.
+  if (const int opacity = window_look().opacity; opacity < 100) {
+    background = at_opacity(background, 0);
+    for (skia::SkColor* each : {&sidebar_colour, &chosen_colour, &chat_colour, &chat_top_colour})
+      *each = at_opacity(*each, opacity);
+  }
 }
 
 }  // namespace mux::ui

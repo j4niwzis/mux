@@ -32,6 +32,8 @@ struct kept_settings {
   bool partial_redraw = false;
   bool flash_redraws = false;
   bool vsync = true;
+  int window_opacity = 100;
+  bool wallpaper_behind = false;
   bool show_fps = false;
   // How much is kept, in memory and on disk.
   mux::config::cache_limits limits;
@@ -197,6 +199,10 @@ struct kept_settings {
       out.flash_redraws = true;
     if (!vsync)
       out.vsync = false;
+    if (window_opacity != 100)
+      out.window_opacity = window_opacity;
+    if (wallpaper_behind)
+      out.wallpaper_behind = true;
     if (show_fps)
       out.show_fps = true;
     out.cache = limits;

@@ -54,6 +54,27 @@ struct menu_facts {
   float x = 0.0f, y = 0.0f;
 };
 
+// A chat's background shown on a wallpaper: the theme's gradient and
+// Telegram's pattern, a plain colour (what is behind showing), or a picture.
+inline void show_wallpaper_on(widgets::Wallpaper& wall, const config::wallpaper_t& chosen) {
+  splice::visit(splice::overloaded{[&](config::wallpaper::theme) {
+                                     wall.setPicture(nullptr);
+                                     wall.setGradient(scene::Gradient{chat_top_colour, chat_colour});
+                                     wall.setPattern(telegram_pattern(), pattern_colour);
+                                   },
+                                   [&](config::wallpaper::plain) {
+                                     wall.setPicture(nullptr);
+                                     wall.setGradient(std::nullopt);
+                                     wall.setPattern(nullptr, 0);
+                                   },
+                                   [&](const config::wallpaper::picture& at) {
+                                     wall.setGradient(std::nullopt);
+                                     wall.setPattern(nullptr, 0);
+                                     wall.setPicture(wallpaper_picture(at.path));
+                                   }},
+                chosen);
+}
+
 template <class Actions>
 struct timeline_area : scene::Node {
   // The loader's cross: the message jumped to no longer looked for.
@@ -100,24 +121,12 @@ struct timeline_area : scene::Node {
   }
   // The chat's background: the theme's gradient and Telegram's pattern, a
   // plain colour (what is behind showing), or a picture.
+  // Not here where it is behind the whole window: the window's shows
+  // through. Else at the window's opacity, as the panels are.
   void show_wallpaper(const config::wallpaper_t& chosen) {
-    auto& wall = parts.wall;
-    splice::visit(splice::overloaded{[&](config::wallpaper::theme) {
-                                       wall.setPicture(nullptr);
-                                       wall.setGradient(scene::Gradient{chat_top_colour, chat_colour});
-                                       wall.setPattern(telegram_pattern(), pattern_colour);
-                                     },
-                                     [&](config::wallpaper::plain) {
-                                       wall.setPicture(nullptr);
-                                       wall.setGradient(std::nullopt);
-                                       wall.setPattern(nullptr, 0);
-                                     },
-                                     [&](const config::wallpaper::picture& at) {
-                                       wall.setGradient(std::nullopt);
-                                       wall.setPattern(nullptr, 0);
-                                       wall.setPicture(wallpaper_picture(at.path));
-                                     }},
-                  chosen);
+    parts.wall.setVisible(!window_look().behind);
+    parts.wall.setOpacity(static_cast<float>(window_look().opacity) / 100.0f);
+    show_wallpaper_on(parts.wall, chosen);
   }
   // The bubbles in the list, as they are made.
   [[nodiscard]] std::vector<message_bubble>& bubbles() {

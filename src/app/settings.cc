@@ -93,6 +93,23 @@ class settings_part {
     this->show_frames();
     (void)k_->write();
   }
+  // The window's opacity: kept, and shown chosen; in effect from the next
+  // start, where the window is made see-through or not.
+  void apply(const request::set_window_opacity& one) {
+    k_->window_opacity = std::clamp(one.percent, 20, 100);
+    mux::ui::window_look().chosen = k_->window_opacity;
+    (void)k_->write();
+    if (auto* up = s_->root().settings_up())
+      up->show_appearance(k_->theme, k_->accent);
+  }
+  // The background behind the whole window: everything made again over it.
+  void apply(const request::flip_wallpaper_behind&) {
+    k_->wallpaper_behind = !k_->wallpaper_behind;
+    mux::ui::window_look().behind = k_->wallpaper_behind;
+    (void)k_->write();
+    skiff::scene::forgetStyles();
+    s_->rebuild_due = true;
+  }
   void apply(const request::flip_show_fps&) {
     k_->show_fps = !k_->show_fps;
     this->show_frames();

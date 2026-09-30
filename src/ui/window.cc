@@ -9,6 +9,7 @@ import skiff.paint;
 import skiff.scene;
 import skiff.nodes.box;
 import skiff.widgets.motion;
+import skiff.widgets.wallpaper;
 import mux.core;
 import mux.config;
 import :base;
@@ -43,6 +44,10 @@ struct window : scene::Node {
     using frame_t = widgets::SlideOver<with_drawer, panel_type>;
     struct parts_t {
       nodes::Box<> backdrop{background};
+      // The chat's background behind all of the window, where it is so:
+      // drawn at its own opacity -- the desktop through it only where the
+      // picture itself lets it be seen.
+      widgets::Wallpaper behind;
       // The pages slide over the drawer too: Manage accounts comes in over it.
       frame_t frame;
       widgets::Dialog<settings_dialog<Actions>> settings;
@@ -92,10 +97,12 @@ struct window : scene::Node {
     explicit layers(Actions* a)
         : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a))},
           actions_of(a) {
-      auto& [backdrop, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, devtools, sending,
+      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, devtools, sending,
              emoji, menu, viewer] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
+      behind.apply({.fill = true});
+      behind.setVisible(window_look().behind);
       frame.setSheetColour(background);
       frame.base().setSheetColour(sidebar_colour);
       settings.setSheetColour(sidebar_colour);
@@ -154,6 +161,11 @@ struct window : scene::Node {
   }
 
   [[nodiscard]] conversations_screen<Actions>& main() { return layer().frame.base().base(); }
+  // The background behind the whole window, where it is so.
+  void show_behind(const config::wallpaper_t& chosen) {
+    if (window_look().behind)
+      show_wallpaper_on(layer().behind, chosen);
+  }
   // The panel that is up, not on its way out.
   [[nodiscard]] panel_type* open_panel() { return layer().frame.shown(); }
 

@@ -62,6 +62,9 @@ struct options {
   int width = 1100;
   int height = 720;
   bool software = false;  // skip the GPU even where there is one
+  // A window with an alpha channel the desktop blends: what is repainted
+  // cleared first, the scene no longer opaque at its bottom.
+  bool transparent = false;
   std::string fonts = "/usr/share/fonts";
 };
 
@@ -707,7 +710,10 @@ int run(App& app, const options& how) {
   load_fonts(how.fonts);
   SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-  const SDL_WindowFlags base = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+  if (how.transparent)
+    SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
+  const SDL_WindowFlags base = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY |
+                               (how.transparent ? SDL_WINDOW_TRANSPARENT : SDL_WindowFlags{0});
 #if defined(SK_GANESH)
   constexpr bool can_use_gl = true;
 #else
@@ -1103,6 +1109,8 @@ int run(App& app, const options& how) {
           for (const skia::SkRect& piece : pieces) {
             record->save();
             record->clipRect(piece);
+            if (how.transparent)
+              record->clear(skia::SkColor{0});
             record->scale(scale, scale);
             scene.draw(record);
             record->restore();
@@ -1130,6 +1138,10 @@ int run(App& app, const options& how) {
           for (const skia::SkRect& piece : pieces) {
             into->save();
             into->clipRect(piece);
+            // See-through: nothing opaque at the bottom to cover last
+            // frame's pixels -- cleared, one fill of what is repainted.
+            if (how.transparent)
+              into->clear(skia::SkColor{0});
             into->scale(scale, scale);
             scene.draw(into);
             into->restore();
@@ -1137,12 +1149,16 @@ int run(App& app, const options& how) {
         }
         for (const skia::SkRect& piece : pieces)
           changed.push_back(piece.roundOut());
-        if (kept != surface)
+        if (kept != surface) {
+          // Drawn over what the buffer had: see-through, that cleared first.
+          if (how.transparent)
+            canvas->clear(skia::SkColor{0});
           canvas->drawImage(kept_frame->makeImageSnapshot(), 0.0f, 0.0f);
+        }
       } else {
         kept_frame = nullptr;
         kept_frame_for = nullptr;
-        canvas->clear(skia::colorSetARGB(255, 24, 27, 30));
+        canvas->clear(how.transparent ? skia::SkColor{0} : skia::colorSetARGB(255, 24, 27, 30));
         canvas->save();
         canvas->scale(scale, scale);
         scene.draw(canvas);

@@ -29,6 +29,12 @@ struct choose_theme {
   void operator()() const { actions->set_theme(theme); }
 };
 template <class Actions>
+struct choose_opacity {
+  Actions* actions = nullptr;
+  int percent = 100;
+  void operator()() const { actions->set_window_opacity(percent); }
+};
+template <class Actions>
 struct choose_renderer {
   Actions* actions = nullptr;
   config::renderer_t renderer;
@@ -155,6 +161,22 @@ struct appearance_page : nodes::Stack {
         parts.circles.emplace_back(a, one, in);
     }
   };
+  // The window's opacities, the chosen one marked.
+  struct opacity_row : nodes::Stack {
+    struct parts_t {
+      std::vector<widgets::Button<choose_opacity<Actions>>> each;
+    } parts;
+    explicit opacity_row(Actions* a) {
+      this->setHorizontal();
+      this->setGap(6.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 16.0f, 8.0f, 20.0f}});
+      for (const int percent : {100, 90, 80, 70, 60, 50}) {
+        parts.each.emplace_back(std::format("{}%", percent), choose_opacity<Actions>{a, percent});
+        parts.each.back().apply({.width = 56.0f, .height = 30.0f});
+        parts.each.back().setPrimary(percent == window_look().chosen);
+      }
+    }
+  };
   struct parts_t {
     header_t header;
     nodes::Text theme_title = section_title("THEME");
@@ -163,6 +185,12 @@ struct appearance_page : nodes::Stack {
     circles_row circles;
     nodes::Text wallpaper_title = section_title("CHAT BACKGROUND");
     widgets::Button<open_wallpaper_at<Actions>> wallpaper;
+    switch_row<ask<Actions, &Actions::flip_wallpaper_behind>> behind;
+    nodes::Text window_title = section_title("WINDOW OPACITY");
+    opacity_row opacity;
+    nodes::Text window_note{"Below 100% the window shows what is under it, where a compositor (picom, KWin, "
+                            "Mutter) blends windows. Takes effect when mux starts again.",
+                            13.0f, dim_colour};
   } parts;
 
   appearance_page(Actions* a, const config::theme_t& theme, const config::accent_t& accent)
@@ -170,12 +198,18 @@ struct appearance_page : nodes::Stack {
               .cards = cards_row(a),
               .circles = circles_row(a, theme),
               .wallpaper = widgets::Button<open_wallpaper_at<Actions>>("Chat background\u2026",
-                                                                      {a, choice_level::everywhere{}})} {
+                                                                      {a, choice_level::everywhere{}}),
+              .behind = switch_row<ask<Actions, &Actions::flip_wallpaper_behind>>("Behind the whole window", {a}),
+              .opacity = opacity_row(a)} {
     fState.apply({.fill = true});
     parts.theme_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
     parts.accent_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
     parts.wallpaper_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
     parts.wallpaper.apply({.width = 200.0f, .height = 34.0f, .margin = {0.0f, 0.0f, 0.0f, 20.0f}});
+    parts.behind.parts.toggle.setOnNow(window_look().behind);
+    parts.window_title.apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
+    parts.window_note.apply({.fillX = true, .margin = {0.0f, 20.0f, 0.0f, 20.0f}});
+    parts.window_note.setWrapped(true);
     this->show(theme, accent);
   }
   void show(const config::theme_t& theme, const config::accent_t& accent) {

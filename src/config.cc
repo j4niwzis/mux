@@ -600,6 +600,10 @@ struct file {
   std::optional<bool> flash_redraws;
   // Frames shown in step with the screen's refresh; off, as fast as drawn.
   std::optional<bool> vsync;
+  // The window's opacity in percent (none, 100: opaque); and whether the
+  // chat's background is behind the whole window, not only its messages.
+  std::optional<int> window_opacity;
+  std::optional<bool> wallpaper_behind;
   // Frames a second, and the last frame's time, in the window's corner.
   std::optional<bool> show_fps;
   std::optional<cache_limits> cache;

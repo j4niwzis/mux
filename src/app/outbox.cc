@@ -120,7 +120,13 @@ class outbox_part {
     composing_ = compose::plain{};
     s_->root().main().line.show_context(std::nullopt);
   }
-  void apply(const request::submit_message& one) { this->send(one.text); }
+  // Enter in the field: sent while the field still holds it. Two asked for
+  // before the first was handled -- the field emptied by it -- send once.
+  void apply(const request::submit_message& one) {
+    if (s_->root().main().line.plain().empty())
+      return;
+    this->send(one.text);
+  }
   void apply(const request::stop_jump&) { s_->root().main().stop_jump(); }
   void apply(const request::send_typed&) { this->send(s_->root().main().line.plain()); }
 

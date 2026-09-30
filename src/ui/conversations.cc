@@ -176,6 +176,9 @@ struct conversations_screen : nodes::Stack {
 
   // The folder whose chats are listed.
   folder_t folder = folder::all{};
+  // The folders the tabs were made for, and the one chosen then.
+  std::vector<std::pair<std::string, folder_t>> shown_folders;
+  folder_t shown_folder = folder::all{};
   struct pick_folder {
     conversations_screen* screen;
     void operator()(const folder_t& which) const { screen->choose_folder(which); }
@@ -1096,10 +1099,16 @@ struct conversations_screen : nodes::Stack {
     }
     if (std::ranges::find(folders, folder, &std::pair<std::string, folder_t>::second) == folders.end())
       folder = folder::all{};
+    // Made again only where they changed: made at every change in the model,
+    // new tabs were a full walk and the bar laid out and painted again.
     auto& tabs = std::get<0>(side.folders.fChildren);
-    tabs.clear();
-    for (auto& [name, which] : folders)
-      tabs.emplace_back(name, which, which == folder, pick_folder{this});
+    if (folders != shown_folders || folder != shown_folder) {
+      tabs.clear();
+      for (auto& [name, which] : folders)
+        tabs.emplace_back(name, which, which == folder, pick_folder{this});
+      shown_folders = folders;
+      shown_folder = folder;
+    }
     side.folders.setVisible(folders.size() > 1);
     // Whether a chat is in the folder chosen. A space is a folder, not a
     // chat: it is never listed.
@@ -1158,7 +1167,10 @@ struct conversations_screen : nodes::Stack {
     no_chats.setVisible(!none && chats.empty());
     chat.empty.setVisible(none);
     this->show_info();
-    this->invalidateLayout();
+    // Laid out again, repainting only what moves: what changed repaints
+    // itself. Invalidated, the whole window was painted at every change in
+    // the model -- a hidden event's too.
+    fState.relayoutQuietly();
     this->show_conversation(now);
   }
 
@@ -1286,7 +1298,9 @@ struct conversations_screen : nodes::Stack {
                      row.preview_known == preview_known && row.readers_shown == readers_of(i) &&
                      row.previews_shown == !previews_off.contains(one->id) && !row.rooms_came();
             }))
-      timeline.invalidateLayout();
+      // Laid out again; painted where rows came, went or moved -- a hidden
+      // one coming moves nothing, and paints nothing.
+      std::get<0>(timeline.fChildren).fState.relayoutQuietly();
     rooms_waiting.clear();
     rooms_unfound.clear();
     for (const message_bubble& row : entries) {

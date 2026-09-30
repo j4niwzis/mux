@@ -145,6 +145,11 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     const auto mentions_me = [&] { return loom::client::mentions(content, id_.address); };
     if (live && !made.outgoing && mentions_me())
       sink_(change::mentioned{in, made.id, made.at});
+    // The user's own, sent from here: the echo shown under its transaction
+    // id is this one. Acknowledged first -- the sync can bring it before the
+    // send's answer does, and both were shown until then.
+    if (one.unsigned_ && one.unsigned_->transaction_id)
+      sink_(change::message_acknowledged{in, *one.unsigned_->transaction_id, one.event_id});
     sink_(change::message_added{std::move(made), where});
   }, [&](const loom::ev::m_reaction_content_t& content) {
     if (content.m_relates_to && content.m_relates_to->event_id && content.m_relates_to->key) {

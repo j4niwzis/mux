@@ -98,8 +98,9 @@ inline bool replaces(const loom::ev::m_room_message_content_t::m_relates_to_t& r
 template <class Sink>
 void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where) {
   const auto at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(one.origin_server_ts));
-  if (one.content.template is<loom::ev::m_room_message_content_t>()) {
-    const auto& content = one.content.template as<loom::ev::m_room_message_content_t>();
+  // By the content's type: a message, a reaction, or the rest by the type
+  // it says.
+  splice::visit(splice::overloaded{[&](const loom::ev::m_room_message_content_t& content) {
     const auto& relates = content.m_relates_to;
     // An edit: the event it replaces takes its new content.
     if (relates && replaces(*relates)) {
@@ -191,8 +192,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     if (live && !made.outgoing && mentions_me())
       sink_(change::mentioned{in, made.id, made.at});
     sink_(change::message_added{std::move(made), where});
-  } else if (one.content.template is<loom::ev::m_reaction_content_t>()) {
-    const auto& content = one.content.template as<loom::ev::m_reaction_content_t>();
+  }, [&](const loom::ev::m_reaction_content_t& content) {
     if (content.m_relates_to && content.m_relates_to->event_id && content.m_relates_to->key) {
       reactions_[one.event_id] = {*content.m_relates_to->event_id, *content.m_relates_to->key, one.sender};
       const bool live =
@@ -236,7 +236,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
                             }},
                  where);
     }
-  } else {
+  }, [&](const auto&) {
     // The rest, by its type: loom's timeline union does not have their
     // content yet.
     const event_type_t type = event_type_of(one.type);
@@ -245,7 +245,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
                           [](event_type::receipt) {},
                           [&](const auto&) { done(in, one, type, at, where); }},
                type);
-  }
+  }}, one.content.data());
 }
 
 template <class Sink>
@@ -386,9 +386,13 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
 template <class Sink>
 void account<Sink>::redaction(const conversation_id& in, const loom::ev::timeline_event& one) {
   std::optional<std::string> target = one.redacts;
-  if (one.content.template is<loom::ev::m_room_redaction_content_t>())
-    if (const auto& redacts = one.content.template as<loom::ev::m_room_redaction_content_t>().redacts)
-      target = redacts;
+  // From room version 11, in its content.
+  splice::visit(splice::overloaded{[&](const loom::ev::m_room_redaction_content_t& content) {
+                                     if (content.redacts)
+                                       target = content.redacts;
+                                   },
+                                   [](const auto&) {}},
+                one.content.data());
   if (!target)
     return;
   // A reaction taken back, or a message removed.

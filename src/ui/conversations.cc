@@ -638,10 +638,14 @@ struct conversations_screen : nodes::Stack {
   // message in another: the button over "↓" goes back to the last.
   std::map<conversation_id, std::vector<std::string>> returns;
   std::vector<conversation_id> chat_returns;
-  // A jump in this chat about to go: where the view is, to come back to.
+  // The message pressed for the jump about to go, where one was: come back
+  // to, rather than to where the view is.
+  std::optional<std::string> return_from;
+  // A jump in this chat about to go: the message it went from, else where
+  // the view is, to come back to.
   void note_return() {
     if (chosen)
-      if (std::optional<std::string> here = this->last_seen())
+      if (std::optional<std::string> here = std::exchange(return_from, std::nullopt).or_else([&] { return this->last_seen(); }))
         returns[*chosen].push_back(std::move(*here));
   }
   // A jump to another chat about to go: this one, to come back to.
@@ -663,15 +667,15 @@ struct conversations_screen : nodes::Stack {
     return found != returns.end() && !found->second.empty();
   }
   // Back to where the last jump in this chat came from, where there is
-  // one: gone to quietly, not flashed.
+  // one: as any jump, flashed where it lands.
   bool go_back() {
     if (!this->has_return())
       return false;
     auto& stack = returns[*chosen];
     std::string id = std::move(stack.back());
     stack.pop_back();
+    // As a jump there goes: the same way, in the middle and flashed.
     this->jump_to(std::move(id));
-    jump_quiet = true;
     return true;
   }
   // Back to the newest, and nothing unseen. A jump still on its way, or a

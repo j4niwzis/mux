@@ -343,7 +343,7 @@ struct timeline_area : scene::Node {
             splice::visit(splice::overloaded{[](room_event::reactions) { return true; },
                                              [](room_event::unreactions) { return true; }, [](const auto&) { return false; }},
                        one.said.event_kind)) {
-          actions->jump_to_message(*one.said.replies_to);
+          actions->jump_to_message(*one.said.replies_to, std::nullopt, one.message_id);
           return true;
         }
         // A quoted stretch of a reply's text -- the part of the message it
@@ -354,7 +354,8 @@ struct timeline_area : scene::Node {
           // The quote pressed, of those the reply has: its own words marked.
           if (const auto quote = text.quoteAt(press.x, press.y)) {
             actions->jump_to_message(*one.said.replies_to,
-                                     trimmed_fragment(std::string_view(text.text()).substr(quote->first, quote->second - quote->first)));
+                                     trimmed_fragment(std::string_view(text.text()).substr(quote->first, quote->second - quote->first)),
+                                     one.message_id);
             return true;
           }
         }
@@ -363,9 +364,9 @@ struct timeline_area : scene::Node {
         if (one.parts.body.parts.quote && one.said.replies_to && one.parts.body.parts.quote->bounds().contains(press.x, press.y)) {
           // Where the header shows the quote itself, the quoted part marked.
           if (one.header_quote)
-            actions->jump_to_message(*one.said.replies_to, one.header_quote);
+            actions->jump_to_message(*one.said.replies_to, one.header_quote, one.message_id);
           else
-            actions->jump_to_message(*one.said.replies_to);
+            actions->jump_to_message(*one.said.replies_to, std::nullopt, one.message_id);
           return true;
         }
         // The sender, by their avatar or their name: their page.

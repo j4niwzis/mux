@@ -233,8 +233,11 @@ void app::apply(const request::message_person& one) {
 // A quote pressed: to what it quotes -- or, a reaction's, to the message it
 // reacted to, as any quote's.
 void app::apply(const request::jump_to_message& one) {
-  if (const auto& chosen = root().main().chosen)
+  if (const auto& chosen = root().main().chosen) {
+    root().main().return_from = one.from;
     this->go_to_message(*chosen, one.id, one.fragment);
+    root().main().return_from.reset();
+  }
 }
 
 }  // namespace mux::app

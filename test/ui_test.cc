@@ -67,7 +67,7 @@ struct stub {
   void resize_sidebar(float) {}
   void not_implemented(std::string) {}
   void message_person(const mux::conversation_id&) {}
-  void jump_to_message(std::string, std::optional<std::string> = std::nullopt) {}
+  void jump_to_message(std::string, std::optional<std::string> = std::nullopt, std::optional<std::string> = std::nullopt) {}
   void open_search() {}
   void close_search() {}
   void search_typed(std::string) {}

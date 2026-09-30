@@ -156,6 +156,9 @@ struct jump_to_message {
   std::string id;
   // The part of it a reply quoted, to be marked in it as Telegram does.
   std::optional<std::string> fragment;
+  // The message pressed to go there -- a reply, a reaction's line: where
+  // "↓" comes back to.
+  std::optional<std::string> from;
 };
 struct open_search {};
 struct edit_last {};
@@ -522,8 +525,9 @@ struct actions {
     requests.emplace_back(request::open_file{std::move(source), std::move(name)});
   }
   void reply_to(std::string id, std::string text) { requests.emplace_back(request::reply_to{std::move(id), std::move(text)}); }
-  void jump_to_message(std::string id, std::optional<std::string> fragment = std::nullopt) {
-    requests.emplace_back(request::jump_to_message{std::move(id), std::move(fragment)});
+  void jump_to_message(std::string id, std::optional<std::string> fragment = std::nullopt,
+                       std::optional<std::string> from = std::nullopt) {
+    requests.emplace_back(request::jump_to_message{std::move(id), std::move(fragment), std::move(from)});
   }
   void open_search() { requests.emplace_back(request::open_search{}); }
   void close_search() { requests.emplace_back(request::close_search{}); }

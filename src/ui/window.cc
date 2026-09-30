@@ -152,9 +152,8 @@ struct window : scene::Node {
   template <class Panel>
   Panel& open() {
     if (panel_type* up = layer().frame.shown())
-      if (Panel* same = mux::visit(overloaded{[](Panel& one) -> Panel* { return &one; },
-                                              [](auto&) -> Panel* { return nullptr; }},
-                                   *up))
+      if (Panel* same = up->visit(overloaded{[](Panel& one) -> Panel* { return &one; },
+                                             [](auto&) -> Panel* { return nullptr; }}))
         return *same;
     return mux::get<Panel>(layer().frame.open(std::in_place_type<Panel>, actions));
   }

@@ -110,6 +110,11 @@ void app::apply(const request::set_wallpaper& one) {
     (void)this->write();
     root().close_wallpaper();
     this->refresh();
+    // What shows the choice, shown again.
+    if (auto* up = root().settings_up(); up && up->appearance())
+      up->show_appearance(theme, accent);
+    if (auto* managing = root().manage_up())
+      managing->show_tab(managing->tab);
   };
   splice::visit(splice::overloaded{[&](mux::config::wallpaper_pick::inherit) { set(std::nullopt); },
                                    [&](mux::config::wallpaper_pick::theme) { set(mux::config::wallpaper::theme{}); },
@@ -163,6 +168,8 @@ void app::apply(const request::set_bubbles& one) {
   // Appearance up: its choice marked again.
   if (auto* up = root().settings_up(); up && up->appearance())
     up->show_appearance(theme, accent);
+  if (auto* managing = root().manage_up())
+    managing->show_tab(managing->tab);
 }
 // The picture chosen for a background: copied into mux's data, by a name
 // its bytes give, and set at the level it was chosen for.

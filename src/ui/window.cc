@@ -226,6 +226,7 @@ struct window : scene::Node {
   }
   void close_settings() { layer().settings.close(); }
   [[nodiscard]] settings_dialog<Actions>* settings_up() { return layer().settings.shown(); }
+  [[nodiscard]] room_settings<Actions>* manage_up() { return layer().manage.shown(); }
 
   void open_drawer() { layer().frame.base().open(); }
   void close_drawer() { layer().frame.base().close(); }

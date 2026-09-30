@@ -77,7 +77,7 @@ cme_declare_port(NAME tern PROVIDES tern
 cme_options(tern "TERN_TESTS OFF" "TERN_EXAMPLES OFF")
 cme_declare_port(NAME loom PROVIDES loom
   GITHUB_REPOSITORY j4niwzis/loom
-  GIT_TAG 9ec2fdd3f4f7cac93265a145fecccc4e53ab83cc
+  GIT_TAG f0c963ba7f96e7d8c8b5334bd25050f8e188a36d
   LICENSE AGPL-3.0-only
   SYSTEM NEVER
   TARGETS loom)
@@ -124,7 +124,7 @@ cme_find_package(splice REQUIRED)
 # one taken.
 cme_declare_port(NAME knot PROVIDES knot
   GITHUB_REPOSITORY j4niwzis/knot
-  GIT_TAG 18a59fda38de7a79dc93a2dd87bbc6f4d756261d
+  GIT_TAG 9b482200bb588ac53977c215a41e3c27351a4004
   LICENSE AGPL-3.0-only
   SYSTEM NEVER)
 

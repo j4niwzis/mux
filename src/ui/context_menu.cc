@@ -443,11 +443,13 @@ struct emoji_panel : nodes::Stack {
     if (at >= all.size() || all[at].bounds().isEmpty())
       return;
     auto& list = parts.list;
-    list.scrollTo(std::max(0.0f, list.current() + (all[at].bounds().fTop - list.bounds().fTop)));
+    list.scrollTo(std::max(0.0f, list.current() + (list.toView(all[at].bounds()).fTop - list.bounds().fTop)));
   }
   // An emoji's tones over its cell, kept inside the panel; nothing for one
   // that takes none.
-  bool show_tones(const alef::emoji& base, const skia::SkRect& at) {
+  bool show_tones(const alef::emoji& base, const skia::SkRect& cell) {
+    // The cell as the list shows it: its rows are laid out as if unscrolled.
+    const skia::SkRect at = parts.list.toView(cell);
     const auto found = logic::tones_of(base);
     if (found.empty())
       return false;
@@ -477,7 +479,7 @@ struct emoji_panel : nodes::Stack {
     std::size_t lit = 0;
     const float top = parts.list.bounds().fTop + 1.0f;
     for (std::size_t s = first_group; s < all.size(); ++s)
-      if (!all[s].bounds().isEmpty() && all[s].bounds().fTop <= top)
+      if (!all[s].bounds().isEmpty() && parts.list.toView(all[s].bounds()).fTop <= top)
         lit = s - first_group;
     for (tab& each : parts.footer.parts.each)
       if (const bool on = !searching && each.group == lit; on != each.fState.selected())

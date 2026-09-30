@@ -132,7 +132,8 @@ struct timeline_area : scene::Node {
         std::chrono::steady_clock::now() - swipe_pressed > std::chrono::milliseconds(250))
       return;
     for (message_bubble& one : this->bubbles())
-      if (one.bounds().contains(swipe_x, swipe_y) && !one.message_id.empty()) {
+      // The rows are laid out as if unscrolled: the press, where they are.
+      if (parts.timeline.toView(one.bounds()).contains(swipe_x, swipe_y) && !one.message_id.empty()) {
         swiping = one.message_id;
         one.swipe.jump(std::clamp(dx, -120.0f, 0.0f));
         reply.capturePointer();
@@ -221,9 +222,10 @@ struct timeline_area : scene::Node {
   // its sender -- as a click: it comes here from what was pressed when that
   // did not take it, at once or, in a list that scrolls, on the release.
   [[nodiscard]] bool onClick(float x, float y) {
+    // In the space the rows are laid out in: the list draws them scrolled.
     const struct {
       float x, y;
-    } press{x, y};
+    } press{x, y - parts.timeline.contentsShift()};
       for (const message_bubble& one : this->bubbles()) {
         // A picture: seen whole. A file: saved and opened.
         // A video, shown by its thumbnail: played in the viewer -- or, built
@@ -326,7 +328,7 @@ struct timeline_area : scene::Node {
     // room beside it. What Copy takes is what is selected in it, if anything
     // is, and all of it if not.
     for (const message_bubble& one : this->bubbles())
-      if (one.bounds().contains(press.x, press.y)) {
+      if (parts.timeline.toView(one.bounds()).contains(press.x, press.y)) {
         menu_facts facts;
         facts.id = one.message_id;
         facts.own = one.outgoing;

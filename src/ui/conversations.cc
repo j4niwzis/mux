@@ -718,7 +718,8 @@ struct conversations_screen : nodes::Stack {
       return out;
     const skia::SkRect view = timeline.bounds();
     for (const message_bubble& row : std::get<0>(std::get<0>(timeline.fChildren).fChildren)) {
-      const skia::SkRect box = row.bounds();
+      // Laid out as if unscrolled: where it is in the view.
+      const skia::SkRect box = timeline.toView(row.bounds());
       if (!row.message_id.empty() && !box.isEmpty() && row.visible() && box.fBottom > view.fTop + 8.0f &&
           box.fTop < view.fBottom - 8.0f)
         out.push_back(row.message_id);
@@ -731,7 +732,7 @@ struct conversations_screen : nodes::Stack {
     const skia::SkRect view = timeline.bounds();
     const auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
     for (auto it = entries.rbegin(); it != entries.rend(); ++it) {
-      const skia::SkRect box = it->bounds();
+      const skia::SkRect box = timeline.toView(it->bounds());
       if (it->message_id.empty() || box.isEmpty())
         continue;
       if (box.fBottom <= view.fBottom + 1.0f && box.fBottom > view.fTop)
@@ -811,7 +812,7 @@ struct conversations_screen : nodes::Stack {
     const skia::SkRect view = timeline.bounds();
     const auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
     const auto first = std::ranges::find_if(entries, [&](const message_bubble& row) {
-      const skia::SkRect box = row.bounds();
+      const skia::SkRect box = timeline.toView(row.bounds());
       return !row.message_id.empty() && row.visible() && !box.isEmpty() && box.fBottom > view.fTop + 8.0f;
     });
     const auto place = [&](const std::string& id) -> std::ptrdiff_t {
@@ -960,7 +961,7 @@ struct conversations_screen : nodes::Stack {
         aiming.reset();
       } else {
         const skia::SkRect view = timeline.bounds();
-        const skia::SkRect box = it->bounds();
+        const skia::SkRect box = timeline.toView(it->bounds());
         const float above = aim_quiet ? (unread_from && *aiming == *unread_from ? 0.0f : 60.0f)
                             : box.height() < view.height() ? (view.height() - box.height()) * 0.5f
                                                            : 0.0f;
@@ -971,7 +972,7 @@ struct conversations_screen : nodes::Stack {
         if (aimed_at < 0.0f && jump_fragment) {
           if (const auto at = it->mark(*jump_fragment)) {
             const auto& text = it->parts.body.parts.text;
-            const float line = text.bounds().fTop + text.lineTopOf(*at);
+            const float line = timeline.toView(text.bounds()).fTop + text.lineTopOf(*at);
             to = std::max(0.0f, timeline.current() + (line - view.fTop) - view.height() * 0.4f);
           }
           jump_fragment.reset();

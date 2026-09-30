@@ -1373,9 +1373,16 @@ struct conversations_screen : nodes::Stack {
       timeline.scrollToEnd();
       unseen = 0;
     } else if (last != shown_last) {
+      // What came after the newest shown before: others' messages the view
+      // shows. Where that one is not here any more -- its id changed as the
+      // server acknowledged it, or it went -- nothing is counted: every
+      // message held was, and a few new ones said 64. Nor the reader's own,
+      // nor a room event the view hides.
       int after = 0;
-      for (auto it = all.rbegin(); it != all.rend() && it->id != shown_last; ++it)
-        ++after;
+      if (const auto was = std::ranges::find(all, shown_last, &message::id); was != all.end())
+        for (auto it = std::next(was); it != all.end(); ++it)
+          if (!it->outgoing && this->shown_in(*chosen, *it))
+            ++after;
       unseen += after;
     }
     chat.area.parts.jump.set_unseen(unseen);

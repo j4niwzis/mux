@@ -1044,11 +1044,17 @@ struct message_bubble : nodes::Stack {
     void update(double now_ms) {
       auto& [name, quote, picture, album, file, text, cards, preview, reactions, time, inline_time, tail] = parts;
       // Nothing left of the text -- all of it the quote the header shows --
-      // and nothing else under the header: the time on a line of its own,
-      // as Telegram's, not beside an empty last line, drawn over the quote.
-      if (text.visible() && text.text().empty() && !reactions) {
+      // or a text that ends in a quote, and nothing under it: the time on a
+      // line of its own, as Telegram's -- not beside an empty last line, nor
+      // on the quote's plate, over its words.
+      const std::string& words = text.text();
+      const bool ends_quoted = !words.empty() && std::ranges::any_of(text.styles(), [&](const auto& one) {
+        return one.quote && one.first < words.size() && words.size() <= one.last;
+      });
+      if (text.visible() && (words.empty() || ends_quoted) && !reactions) {
         time_placed = true;
-        text.setVisible(false);
+        if (words.empty())
+          text.setVisible(false);
         if (!time.visible() || inline_time.visible()) {
           time.setVisible(true);
           inline_time.setVisible(false);

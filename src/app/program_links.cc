@@ -26,6 +26,10 @@ import mux.logic.links;
 namespace mux::app {
 
 void app::open_chat(const mux::conversation_id& which, const std::optional<std::string>& event) {
+  if (event) {
+    this->go_to_message(which, *event, std::nullopt);
+    return;
+  }
   auto& screen = root().main();
   screen.current = which.account;
   screen.wanted.reset();
@@ -34,8 +38,23 @@ void app::open_chat(const mux::conversation_id& which, const std::optional<std::
     (void)this->write();
   }
   this->apply(request::choose{which});
-  if (event)
-    screen.jump_to(*event);
+}
+
+// A message gone to -- from a reply's quote, a link, a room's own link in
+// its messages -- one way for all of them: a chat not open is opened first,
+// the one open is not chosen again; a reaction's own line goes to what it
+// reacted to; and the view jumps, to the part a quote marks where it has one.
+void app::go_to_message(const mux::conversation_id& in, std::string id, std::optional<std::string> fragment) {
+  auto& screen = root().main();
+  if (!screen.chosen || *screen.chosen != in)
+    this->open_chat(in, std::nullopt);
+  if (const mux::conversation* chat = model->find(in))
+    if (const auto aside = chat->quoted.find(id);
+        aside != chat->quoted.end() && aside->second.reaction && aside->second.replies_to) {
+      id = *aside->second.replies_to;
+      fragment.reset();
+    }
+  screen.jump_to(std::move(id), std::move(fragment));
 }
 
 void app::follow(const mux::logic::link_t& where) {
@@ -209,13 +228,7 @@ void app::apply(const request::message_person& one) {
 // reacted to, as any quote's.
 void app::apply(const request::jump_to_message& one) {
   if (const auto& chosen = root().main().chosen)
-    if (const mux::conversation* in = model->find(*chosen))
-      if (const auto aside = in->quoted.find(one.id);
-          aside != in->quoted.end() && aside->second.reaction && aside->second.replies_to) {
-        root().main().jump_to(*aside->second.replies_to, std::nullopt);
-        return;
-      }
-  root().main().jump_to(one.id, one.fragment);
+    this->go_to_message(*chosen, one.id, one.fragment);
 }
 
 }  // namespace mux::app

@@ -222,6 +222,7 @@ struct app : kept_settings {
   std::optional<room_looked_up> previewing;
   void follow(const mux::logic::link_t& where);
   void open_chat(const mux::conversation_id& which, const std::optional<std::string>& event);
+  void go_to_message(const mux::conversation_id& in, std::string id, std::optional<std::string> fragment);
   // Older messages of a chat: from the disk while it has some from before
   // the oldest in memory, from the server past that.
   void apply(const request::load_older& one);

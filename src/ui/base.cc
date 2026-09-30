@@ -3,6 +3,7 @@
 export module mux.ui:base;
 
 import std;
+import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
@@ -60,6 +61,10 @@ struct window_look_t {
   bool behind = false;
   bool see_through = false;  // the window made with an alpha channel: opacity changes at once
 };
+inline window_look_t& window_look() {
+  static window_look_t look;
+  return look;
+}
 // Every chat's bubbles, as chosen for the client.
 inline config::bubble_look& bubble_look_everywhere() {
   static config::bubble_look look;
@@ -94,10 +99,6 @@ inline bool show_panels(const config::bubble_look& look) {
     return false;
   scene::detail::panelLook() = std::move(next);
   return true;
-}
-inline window_look_t& window_look() {
-  static window_look_t look;
-  return look;
 }
 // A chat background's dialog, for a level.
 template <class Actions>

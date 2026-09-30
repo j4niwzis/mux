@@ -1147,7 +1147,10 @@ struct message_bubble : nodes::Stack {
               .body = body_column(said.outgoing, said.body.plain, mark_of(said) + clock_of(said.at))} {
     // Drawn once and played back until something in it changes: a strip of
     // the list repainted went through every part of every message in it.
-    fState.setRecorded(true);
+    // Not one with a picture or a file: a loader turns in it while it comes,
+    // a picture may move -- recorded again at every frame, and where its
+    // parts were last drawn left behind when history moved it.
+    fState.setRecorded(!said.attachment && said.album.empty());
     auto& [face, body, swipe_mark, unread_bar, readers] = parts;
     swipe_mark.apply({.place = scene::anchor::kCentreRight,
                       .x = -6.0f,

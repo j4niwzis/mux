@@ -7,6 +7,7 @@ export module mux.app.settings;
 
 import std;
 import skiff.paint;
+import skiff.scene;
 import mux.core;
 import mux.config;
 import mux.ui;

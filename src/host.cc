@@ -593,6 +593,9 @@ int run(App& app, const options& how) {
     skia::SkSurface* kept_frame_for = nullptr;
     // When the last frames were shown, for the counter; and whether they wait for the screen.
     std::deque<double> shown_times;
+    // The last frame shown, by phase, in milliseconds: the events, the app's
+    // own work, the tick, the layout, finding the damage, drawing, showing.
+    std::array<double, 7> phase_ms{};
     bool vsync_on = true;
     while (running) {
       SDL_Event event;
@@ -601,6 +604,8 @@ int run(App& app, const options& how) {
                  : std::isfinite(wake_in) ? SDL_WaitEventTimeout(&event, static_cast<std::int32_t>(
                                                                     std::clamp(wake_in, 1.0, 60000.0)))
                                           : SDL_WaitEvent(&event);
+      // When the frame's work began: the events that woke it, first.
+      const double frame_began = detail::now_ms();
       while (got) {
         const float scale = SDL_GetWindowDisplayScale(window);
         (void)scale;
@@ -720,9 +725,13 @@ int run(App& app, const options& how) {
       for (std::size_t i = due_now.size() > 3 ? due_now.size() - 3 : 0; i < due_now.size(); ++i)
         shown_toasts.show(due_now[i]);
       shown_toasts.frame();
+      const double events_done = detail::now_ms();
       app.before_frame();
-      scene.update(detail::now_ms());
+      const double app_done = detail::now_ms();
+      scene.update(app_done);
+      const double ticked = detail::now_ms();
       scene.layoutIfNeeded(skia::SkRect::MakeWH(width, height));
+      const double laid_out = detail::now_ms();
       // What the layout put past the edge of its parent, said where it can
       // be seen: once a node, until it fits again.
       for (const auto& one : std::exchange(skiff::scene::overflows(), {}))
@@ -732,6 +741,7 @@ int run(App& app, const options& how) {
       // Scroll views copied rather than repainted, where the frame is kept.
       skiff::scene::blitScrolling() = app.partial_redraw;
       const skiff::scene::FrameResult frame = scene.finishFrame();
+      const double damage_found = detail::now_ms();
       // Frames said, where MUX_TRACE_FRAMES is set: what each repaints, and
       // whether more are asked for.
       static const bool traced = std::getenv("MUX_TRACE_FRAMES") != nullptr;
@@ -870,7 +880,12 @@ int run(App& app, const options& how) {
         if (skia::SkFont* base = skiff::paint::defaultFont()) {
           skia::SkFont font = *base;
           font.setSize(13.0f * scale);
-          const std::string text = std::format("{} fps  {:.1f} ms", shown_times.size() + 1, since);
+          // And the last frame shown, by its phases: what the time went on.
+          const std::string text =
+              std::format("{} fps  {:.1f} ms | events {:.1f}  app {:.1f}  tick {:.1f}  layout {:.1f}  damage {:.1f}  "
+                          "draw {:.1f}  present {:.1f}",
+                          shown_times.size() + 1, since, phase_ms[0], phase_ms[1], phase_ms[2], phase_ms[3],
+                          phase_ms[4], phase_ms[5], phase_ms[6]);
           const float wide = font.measureText(text.data(), text.size(), skia::SkTextEncoding::kUTF8);
           const float x = all.width() - wide - 12.0f * scale;
           const float y = 20.0f * scale;
@@ -892,6 +907,8 @@ int run(App& app, const options& how) {
         target.set_vsync(vsync_on);
       }
       target.present();
+      phase_ms = {events_done - frame_began, app_done - events_done, ticked - app_done,  laid_out - ticked,
+                  damage_found - laid_out,   shown_at - damage_found, detail::now_ms() - shown_at};
     }
     app.closing();
   }

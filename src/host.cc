@@ -891,7 +891,7 @@ int run(App& app, const options& how) {
           std::cerr << "    walked: tick " << counts.tick << ", restyle " << counts.restyle << ", dirty " << counts.dirty
                     << ", layout " << counts.layout << " (" << counts.laidOut << " laid out), damage " << counts.damage
                     << ", hover " << counts.hover << ", animating " << counts.animating << ", draw " << seen << " ("
-                    << drawn << " drawn)\n";
+                    << drawn << " drawn), made " << counts.made << "\n";
       }
       // And which nodes marked it, by type and where.
       if (traced)

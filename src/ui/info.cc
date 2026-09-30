@@ -122,6 +122,7 @@ struct member_row : nodes::Stack {
     this->setHorizontal();
     this->setGap(12.0f);
     fState.apply({.fillX = true, .height = 54.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}, .hoverBackground = chosen_colour});
+    fState.setRecorded(true);  // played back as the list repaints around it
     parts.pill.setVisible(one.role.has_value());
   }
   [[nodiscard]] bool acceptsInput() const { return true; }

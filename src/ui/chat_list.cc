@@ -124,6 +124,8 @@ struct conversation_row : nodes::Stack {
       : actions(a), id(one.id), chosen(is_chosen), muted(is_muted), shown(view_of(one, is_chosen, is_muted, draft, events)),
         parts{.face = avatar_mark(one.id.id, display_name(one), 46.0f),
               .lines = lines_column(display_name(one), one.unread_here(events), is_chosen, is_muted)} {
+    // Drawn once, played back as the list repaints around it.
+    fState.setRecorded(true);
     auto& time = parts.lines.parts.top.parts.time;
     auto& preview = parts.lines.parts.bottom.parts.preview;
     auto& sender = parts.lines.parts.bottom.parts.sender;

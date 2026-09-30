@@ -1018,6 +1018,9 @@ int run(App& app, const options& how) {
               changed.push_back(to);
             }
           }
+        // Not cleared first: the window's backdrop, the bottom of every
+        // scene, fills all of it opaque -- a clear under it was the same
+        // pixels filled twice, the most costly part of a repainted frame.
         // Much to paint: the scene drawn on this thread into a recording --
         // walking it is not for several threads -- and the recording played
         // back into the pixels in bands, one a thread, as a browser's raster
@@ -1034,7 +1037,6 @@ int run(App& app, const options& how) {
           for (const skia::SkRect& piece : pieces) {
             record->save();
             record->clipRect(piece);
-            record->clear(skia::colorSetARGB(255, 24, 27, 30));
             record->scale(scale, scale);
             scene.draw(record);
             record->restore();
@@ -1062,7 +1064,6 @@ int run(App& app, const options& how) {
           for (const skia::SkRect& piece : pieces) {
             into->save();
             into->clipRect(piece);
-            into->clear(skia::colorSetARGB(255, 24, 27, 30));
             into->scale(scale, scale);
             scene.draw(into);
             into->restore();

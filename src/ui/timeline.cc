@@ -118,6 +118,12 @@ struct timeline_area : scene::Node {
     }
     if (!swipe_armed)
       return;
+    // Something holds the pointer already -- a text being selected: this
+    // drag is its, not a swipe.
+    if (reply.fCaptured) {
+      swipe_armed = false;
+      return;
+    }
     const float dx = at.x - swipe_x, dy = at.y - swipe_y;
     if (std::abs(dx) < 8.0f && std::abs(dy) < 8.0f)
       return;

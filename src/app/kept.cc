@@ -35,6 +35,11 @@ struct kept_settings {
   int window_opacity = 100;
   bool wallpaper_behind = false;
   int frost_blur = 30;
+  // The space bars: whether there are any, whether the top one is, and
+  // where each item is put, in order.
+  bool spaces = true;
+  bool top_bar = true;
+  std::vector<mux::config::space_placed> space_places;
   bool show_fps = false;
   // How much is kept, in memory and on disk.
   mux::config::cache_limits limits;
@@ -219,6 +224,16 @@ struct kept_settings {
       out.wallpaper_behind = true;
     if (frost_blur != 30)
       out.frost_blur = frost_blur;
+    if (!spaces)
+      out.spaces = false;
+    if (!top_bar)
+      out.top_bar = false;
+    if (!space_places.empty())
+      out.space_places = space_places | std::views::transform([](const mux::config::space_placed& one) {
+                           return mux::config::space_place{one.account, mux::config::word_of(one.item),
+                                                           std::string(mux::config::word_of(one.bar))};
+                         }) |
+                         std::ranges::to<std::vector>();
     if (show_fps)
       out.show_fps = true;
     out.cache = limits;

@@ -387,6 +387,77 @@ using wallpaper_t = splice::variant<wallpaper::theme, wallpaper::plain, wallpape
       return theme ? wallpaper_t{wallpaper::theme{}} : wallpaper_t{wallpaper::plain{}};
   return wallpaper::picture{std::string(word)};
 }
+// What a bar of spaces holds: Home (every chat), Direct messages, or a
+// Matrix space, by its room. Kept as a word: "home", "direct", or the
+// room's id (which starts with '!', so none is taken for the others).
+namespace space_item {
+struct home {
+  friend bool operator==(home, home) = default;
+};
+struct direct {
+  friend bool operator==(direct, direct) = default;
+};
+struct space {
+  std::string room;
+  friend bool operator==(const space&, const space&) = default;
+};
+}  // namespace space_item
+using space_item_t = splice::variant<space_item::home, space_item::direct, space_item::space>;
+[[nodiscard]] inline std::string word_of(const space_item_t& one) {
+  return splice::visit(splice::overloaded{[](space_item::home) { return std::string("home"); },
+                                          [](space_item::direct) { return std::string("direct"); },
+                                          [](const space_item::space& s) { return s.room; }},
+                       one);
+}
+[[nodiscard]] inline space_item_t space_item_of(std::string_view word) {
+  if (word == "home")
+    return space_item::home{};
+  if (word == "direct")
+    return space_item::direct{};
+  return space_item::space{std::string(word)};
+}
+// Where it is put: the bar down the side, the one along the top -- or
+// hidden. An item may be in both bars.
+namespace space_bar {
+struct side {
+  friend bool operator==(side, side) = default;
+};
+struct top {
+  friend bool operator==(top, top) = default;
+};
+struct hidden {
+  friend bool operator==(hidden, hidden) = default;
+};
+}  // namespace space_bar
+using space_bar_t = splice::variant<space_bar::side, space_bar::top, space_bar::hidden>;
+[[nodiscard]] inline std::string_view word_of(const space_bar_t& one) {
+  return splice::visit(splice::overloaded{[](space_bar::side) { return std::string_view("side"); },
+                                          [](space_bar::top) { return std::string_view("top"); },
+                                          [](space_bar::hidden) { return std::string_view("hidden"); }},
+                       one);
+}
+[[nodiscard]] inline space_bar_t space_bar_of(std::string_view word) {
+  if (word == "top")
+    return space_bar::top{};
+  if (word == "hidden")
+    return space_bar::hidden{};
+  return space_bar::side{};
+}
+// An item put in a bar, for an account: in the file as words, in the
+// program as types. The order of those of a bar is the bar's order.
+struct space_place {
+  std::string account;
+  std::string item;
+  std::string bar;
+  friend bool operator==(const space_place&, const space_place&) = default;
+};
+struct space_placed {
+  std::string account;
+  space_item_t item;
+  space_bar_t bar;
+  friend bool operator==(const space_placed&, const space_placed&) = default;
+};
+
 // How message bubbles look: solid, as they always were; translucent (their
 // colour at an opacity); frosted (what is behind blurred, tinted with their
 // colour at an opacity); or glass (translucent, a light edge round it). Kept
@@ -655,6 +726,11 @@ struct file {
   std::optional<bool> wallpaper_behind;
   // How much Frosted blurs what is behind, in percent (none, 30).
   std::optional<int> frost_blur;
+  // Spaces in bars at all (none, yes); the bar along the top (none, yes);
+  // and where each item is put, in order.
+  std::optional<bool> spaces;
+  std::optional<bool> top_bar;
+  std::optional<std::vector<space_place>> space_places;
   // Frames a second, and the last frame's time, in the window's corner.
   std::optional<bool> show_fps;
   std::optional<cache_limits> cache;

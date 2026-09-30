@@ -447,6 +447,10 @@ void app::refresh(std::source_location from) {
                                                    : panels.value_or(mux::config::bubble_look{});
   if (mux::ui::show_panels(mux::ui::panel_look_now()))
     root().markDamaged();
+  // The space bars, as the settings put them.
+  root().main().spaces_on = spaces;
+  root().main().top_bar_on = top_bar;
+  root().main().space_places = space_places;
   // What each level holds of the looks, for the choices to show: every
   // chat's; the chosen chat's own, and its account's.
   {

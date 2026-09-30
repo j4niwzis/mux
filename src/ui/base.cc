@@ -61,6 +61,8 @@ struct window_look_t {
   bool behind = false;
   bool see_through = false;  // the window made with an alpha channel: opacity changes at once
   int frost = 30;            // how much Frosted blurs, in percent
+  bool spaces = true;        // the space bars at all
+  bool top_bar = true;       // the one along the top
 };
 inline window_look_t& window_look() {
   static window_look_t look;
@@ -70,6 +72,22 @@ inline window_look_t& window_look() {
 inline config::bubble_look& bubble_look_everywhere() {
   static config::bubble_look look;
   return look;
+}
+// The items of the space bars of the account shown, and where each is: for
+// the settings to list them. Said by the chat list as it shows them.
+struct space_item_shown {
+  config::space_item_t item;
+  std::string name;
+  bool side = false;
+  bool top = false;
+};
+inline std::vector<space_item_shown>& space_items_now() {
+  static std::vector<space_item_shown> items;
+  return items;
+}
+inline std::string& space_account_now() {
+  static std::string account;
+  return account;
 }
 // What each level holds of the looks, as the program last said: none, as
 // the level over it. For the choices to show what is chosen where.

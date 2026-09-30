@@ -638,6 +638,38 @@ void app::apply(const request::set_room_event_kind& one) {
   this->refresh();
 }
 
+// A bar's order, as a drag left it: its items put there in that order --
+// the one moved taken out of the bar it came from, and from hidden.
+void app::apply(const request::place_spaces& one) {
+  const auto mine = [&](const mux::config::space_placed& p) { return p.account == one.account; };
+  std::erase_if(space_places, [&](const mux::config::space_placed& p) {
+    return mine(p) && (p.bar == one.bar || (one.moved && p.item == *one.moved && (p.bar == mux::config::space_bar_t{mux::config::space_bar::hidden{}} ||
+                                                                              (one.from && p.bar == *one.from))));
+  });
+  // Where the item came from the side bar by default -- put nowhere -- the
+  // rest of the side bar is put too, so it stays as it was.
+  std::ranges::copy(one.order | std::views::transform([&](const mux::config::space_item_t& item) {
+                      return mux::config::space_placed{one.account, item, one.bar};
+                    }),
+                    std::back_inserter(space_places));
+  (void)this->write();
+  this->refresh();
+}
+// An item's bars, as chosen: the side, the top, both, or none -- hidden.
+void app::apply(const request::set_space_bars& one) {
+  std::erase_if(space_places, [&](const mux::config::space_placed& p) { return p.account == one.account && p.item == one.item; });
+  if (one.side)
+    space_places.push_back({one.account, one.item, mux::config::space_bar::side{}});
+  if (one.top)
+    space_places.push_back({one.account, one.item, mux::config::space_bar::top{}});
+  if (!one.side && !one.top)
+    space_places.push_back({one.account, one.item, mux::config::space_bar::hidden{}});
+  (void)this->write();
+  this->refresh();
+  if (auto* up = root().settings_up(); up && up->appearance())
+    up->show_appearance(theme, accent);
+}
+
 // How a level shows room events, as a whole: what it holds replaced.
 void app::apply(const request::set_room_events& one) {
   splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) {

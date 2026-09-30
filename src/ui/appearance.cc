@@ -173,6 +173,10 @@ struct appearance_page : nodes::Stack {
     circles_row circles;
     // Every chat's background, bubbles and panels, here -- not in a dialog.
     look_choices<Actions> looks;
+    nodes::Text spaces_title = section_title("SPACES");
+    switch_row<ask<Actions, &Actions::flip_spaces>> spaces;
+    switch_row<ask<Actions, &Actions::flip_top_bar>> top_bar;
+    spaces_choices<Actions> places;
     switch_row<ask<Actions, &Actions::flip_wallpaper_behind>> behind;
     nodes::Text window_title = section_title(std::format("WINDOW OPACITY: {}%", window_look().chosen));
     widgets::SliderBar<scene::NoAction, opacity_done<Actions>> opacity;
@@ -189,12 +193,19 @@ struct appearance_page : nodes::Stack {
               .cards = cards_row(a),
               .circles = circles_row(a, theme),
               .looks = look_choices<Actions>(a, choice_level::everywhere{}),
+              .spaces = switch_row<ask<Actions, &Actions::flip_spaces>>("Space bars", {a}),
+              .top_bar = switch_row<ask<Actions, &Actions::flip_top_bar>>("The bar after \"mux\"", {a}),
+              .places = spaces_choices<Actions>(a),
               .behind = switch_row<ask<Actions, &Actions::flip_wallpaper_behind>>("Background behind the whole window", {a}),
               .opacity = widgets::SliderBar<scene::NoAction, opacity_done<Actions>>({}, {a})} {
     fState.apply({.fill = true});
     parts.theme_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
     parts.accent_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
     parts.looks.apply({.margin = {6.0f, 10.0f, 0.0f, 10.0f}});
+    parts.spaces_title.apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
+    parts.spaces.parts.toggle.setOnNow(window_look().spaces);
+    parts.top_bar.parts.toggle.setOnNow(window_look().top_bar);
+    parts.places.setVisible(window_look().spaces);
     parts.behind.parts.toggle.setOnNow(window_look().behind);
     parts.window_title.apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
     parts.opacity.setFraction(static_cast<float>(window_look().chosen - 20) / 80.0f);

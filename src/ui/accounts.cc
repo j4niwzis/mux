@@ -222,6 +222,9 @@ struct account_privacy : nodes::Stack {
     // Its chats' background, bubbles and panels, here as its other choices.
     nodes::Text looks_title = section_title("LOOKS");
     look_choices<Actions> looks;
+    // Its spaces' places in the bars.
+    nodes::Text spaces_title = section_title("SPACES");
+    spaces_choices<Actions> places;
     nodes::Text note{"Off, the people you talk to through this account are not told when you have read their "
                      "messages, or that you are typing. Theirs are still shown, and receipts are still kept here.",
                      13.0f, dim_colour};
@@ -239,7 +242,8 @@ struct account_privacy : nodes::Stack {
               .faces = receipts_choice<Actions>(a, choice_level::account{}, faces_on),
               .previews = previews_choice<Actions>(a, choice_level::account{}, previews_on),
               .jump_search = jump_search_choice<Actions>(a, choice_level::account{}, jump_most),
-              .looks = look_choices<Actions>(a, choice_level::account{})} {
+              .looks = look_choices<Actions>(a, choice_level::account{}),
+              .places = spaces_choices<Actions>(a)} {
     parts.looks_title.apply({.margin = {10.0f, 0.0f, 0.0f, 0.0f}});
     this->setGap(8.0f);
     parts.note.apply({.fillX = true});

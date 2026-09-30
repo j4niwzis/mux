@@ -401,6 +401,49 @@ struct choice_menu : nodes::Stack {
   }
 };
 
+// The items of the space bars -- Home, Direct messages, each space -- each
+// with where it is: the side bar, the top one, both, or hidden.
+template <class Actions>
+struct spaces_choices : nodes::Stack {
+  struct pick_bars {
+    Actions* actions;
+    std::string account;
+    config::space_item_t item;
+    void operator()(std::size_t index) const {
+      static constexpr std::array<std::pair<bool, bool>, 4> kWays{{{true, false}, {false, true}, {true, true}, {false, false}}};
+      if (index < kWays.size())
+        actions->set_space_bars(account, item, kWays[index].first, kWays[index].second);
+    }
+  };
+  struct row : nodes::Stack {
+    struct parts_t {
+      nodes::Text name;
+      choice_menu<pick_bars> where;
+    } parts;
+    row(Actions* a, const std::string& account, const space_item_shown& one)
+        : parts{.name = nodes::Text(one.name, 14.0f, text_colour),
+                .where = choice_menu<pick_bars>("", {"Side bar", "Top bar", "Both bars", "Hidden"},
+                                                one.side && !one.top   ? 0
+                                                : one.top && !one.side ? 1
+                                                : one.side && one.top  ? 2
+                                                                       : 3,
+                                                pick_bars{a, account, one.item})} {
+      this->setGap(4.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 20.0f, 4.0f, 20.0f}});
+    }
+  };
+  struct parts_t {
+    std::vector<row> rows;
+  } parts;
+  explicit spaces_choices(Actions* a) {
+    this->setGap(2.0f);
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    parts.rows.reserve(space_items_now().size());
+    for (const space_item_shown& one : space_items_now())
+      parts.rows.emplace_back(a, space_account_now(), one);
+  }
+};
+
 // What each level holds of room events, as the program last said: for a
 // list to show what is in effect where a level is not its own.
 struct room_events_held {

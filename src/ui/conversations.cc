@@ -43,8 +43,51 @@ struct group {
   std::string name;
   friend bool operator==(const group&, const group&) = default;
 };
+// The direct chats: one person each.
+struct direct {
+  friend bool operator==(direct, direct) = default;
+};
 }  // namespace folder
-using folder_t = splice::variant<folder::all, folder::space, folder::group>;
+using folder_t = splice::variant<folder::all, folder::space, folder::group, folder::direct>;
+
+// An item of a space bar: Home, Direct messages, or a space -- round, its
+// picture or its mark, ringed in the accent while its chats are the ones
+// listed. Pressed, they are.
+template <class Pick>
+struct space_icon : nodes::Stack {
+  Pick pick;
+  folder_t which;
+  config::space_item_t item;
+  config::space_bar_t bar;
+  std::string name;
+  struct parts_t {
+    std::optional<avatar_mark> face;
+    std::optional<nodes::Text> mark;
+  } parts;
+  space_icon(config::space_item_t what, folder_t shows, config::space_bar_t in, std::string id, std::string shown, bool chosen,
+             float size, Pick act)
+      : pick(std::move(act)), which(std::move(shows)), item(std::move(what)), bar(in), name(shown) {
+    this->setHorizontal();
+    fStack.justify = nodes::justify::middle{};
+    fState.apply({.width = size, .height = size, .cornerRadius = size * 0.5f, .background = tile_colour,
+                  .hoverBackground = chosen_colour,
+                  .border = scene::Border{chosen ? accent_colour : skia::SkColor{0}, chosen ? 2.0f : 0.0f}});
+    splice::visit(splice::overloaded{[&](config::space_item::home) { parts.mark.emplace("\u2302", size * 0.5f, text_colour); },
+                                     [&](config::space_item::direct) { parts.mark.emplace("@", size * 0.45f, text_colour, true); },
+                                     [&](const config::space_item::space&) { parts.face.emplace(id, shown, size - 6.0f); }},
+                  item);
+    if (parts.mark)
+      parts.mark->apply({.alignSelf = scene::align::kMiddle});
+    if (parts.face)
+      parts.face->apply({.alignSelf = scene::align::kMiddle});
+  }
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+  [[nodiscard]] bool onClick(float, float) {
+    pick(which);
+    return true;
+  }
+};
 
 // A folder's tab over the chat list, as Telegram's: its name, and under
 // the one chosen a line in the accent.
@@ -179,6 +222,12 @@ struct conversations_screen : nodes::Stack {
   // The folders the tabs were made for, and the one chosen then.
   std::vector<std::pair<std::string, folder_t>> shown_folders;
   folder_t shown_folder = folder::all{};
+  // The space bars, as the program says: at all, the top one, and where
+  // each item is put; and what they were made for, not made again unchanged.
+  bool spaces_on = true;
+  bool top_bar_on = true;
+  std::vector<config::space_placed> space_places;
+  std::vector<std::string> shown_bars;
   struct pick_folder {
     conversations_screen* screen;
     void operator()(const folder_t& which) const { screen->choose_folder(which); }
@@ -279,6 +328,8 @@ struct conversations_screen : nodes::Stack {
   }
 
   // The chat list: the drawer's button and the name, then the chats.
+  // A space bar: its items, in a line.
+  using icons_t = nodes::Flow<std::vector<space_icon<pick_folder>>>;
   struct side_column : nodes::Stack {
     float wanted = 300.0f;
     struct head_row : nodes::Stack {
@@ -286,6 +337,9 @@ struct conversations_screen : nodes::Stack {
       struct parts_t {
         menu_button<Actions> menu;
         nodes::Text name{"mux", 17.0f, text_colour, true};
+        // The top bar of spaces, after the name: there, empty or not, unless
+        // the settings say otherwise -- something can always be put in it.
+        icons_t top{{.direction = nodes::direction::horizontal{}, .spacingX = 4.0f, .wrap = false}, {}};
         // Explore rooms, out of the new chat's box: beside the chats, as
         // Element's compass is.
         explore_button explore;
@@ -294,7 +348,8 @@ struct conversations_screen : nodes::Stack {
         this->setHorizontal();
         this->setGap(10.0f);
         fState.apply({.fillX = true, .height = 52.0f, .padding = {8.0f, 8.0f, 8.0f, 8.0f}});
-        parts.name.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+        parts.name.apply({.alignSelf = scene::align::kMiddle});
+        parts.top.apply({.height = 34.0f, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle, .cornerRadius = 8.0f});
         parts.explore.apply({.alignSelf = scene::align::kMiddle});
       }
     };
@@ -320,27 +375,210 @@ struct conversations_screen : nodes::Stack {
       }
     };
     using list_t = nodes::ScrollContainer<nodes::Flow<std::vector<conversation_row<Actions>>>>;
+    // What is right of the side bar: the search, the tabs, the chats.
+    struct rest_t : nodes::Stack {
+      struct parts_t {
+        search_box search;
+        // The folders, where the account has groups -- or spaces, with no
+        // bars: a line of tabs.
+        nodes::Flow<std::vector<folder_tab<pick_folder>>> folders{
+            {.direction = nodes::direction::horizontal{}, .spacingX = 2.0f, .spacingY = 2.0f}, {}};
+        nodes::Text no_chats{"No chats yet.", 13.0f, dim_colour};
+        list_t list{nodes::Flow<std::vector<conversation_row<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
+      } parts;
+      rest_t() {
+        fState.apply({.fillY = true, .grow = scene::axes::kX});
+        parts.no_chats.apply({.margin = {12.0f, 16.0f, 0.0f, 16.0f}});
+        parts.folders.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {0.0f, 8.0f, 6.0f, 8.0f}});
+        parts.list.apply({.fillX = true, .grow = scene::axes::kY});
+        std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
+      }
+    };
+    // Under the head: the side bar of spaces, under the menu's button and
+    // down to the window's bottom -- drawn where it holds any -- and the rest.
+    struct body_t : nodes::Stack {
+      struct parts_t {
+        icons_t side{{.spacingY = 8.0f, .wrap = false, .crossAlign = scene::align::kMiddle}, {}};
+        rest_t rest;
+      } parts;
+      body_t() {
+        this->setHorizontal();
+        fState.apply({.fillX = true, .grow = scene::axes::kY});
+        parts.side.apply({.fillY = true, .width = 56.0f, .padding = {4.0f, 6.0f, 8.0f, 6.0f}});
+      }
+    };
+    // What a right press on an item offers: the bars it is in, or hidden.
+    struct set_bars_act {
+      Actions* actions;
+      std::string account;
+      config::space_item_t item;
+      bool side = true, top = false;
+      void operator()() const { actions->set_space_bars(account, item, side, top); }
+    };
+    struct space_menu : nodes::Stack {
+      struct parts_t {
+        nodes::Text title;
+        widgets::Button<set_bars_act> side, top, both, hide;
+      } parts;
+      space_menu(Actions* a, const std::string& account, const config::space_item_t& item, std::string name)
+          : parts{.title = nodes::Text(std::move(name), 13.0f, dim_colour, true),
+                  .side = widgets::Button<set_bars_act>("Side bar only", {a, account, item, true, false}),
+                  .top = widgets::Button<set_bars_act>("Top bar only", {a, account, item, false, true}),
+                  .both = widgets::Button<set_bars_act>("Both bars", {a, account, item, true, true}),
+                  .hide = widgets::Button<set_bars_act>("Hide", {a, account, item, false, false})} {
+        this->setGap(4.0f);
+        fState.apply({.width = 190.0f, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 8.0f, 8.0f}, .cornerRadius = 10.0f,
+                      .background = sidebar_colour, .border = scene::Border{band_colour, 1.0f},
+                      .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
+        parts.title.setElided(true);
+        parts.title.apply({.fillX = true});
+        for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.side, &parts.top, &parts.both, &parts.hide})
+          each->apply({.fillX = true, .height = 30.0f});
+      }
+    };
     struct parts_t {
       head_row head;
-      search_box search;
-      // The folders, where the account has spaces or groups: a line of tabs.
-      nodes::Flow<std::vector<folder_tab<pick_folder>>> folders{
-          {.direction = nodes::direction::horizontal{}, .spacingX = 2.0f, .spacingY = 2.0f}, {}};
-      nodes::Text no_chats{"No chats yet.", 13.0f, dim_colour};
-      list_t list{nodes::Flow<std::vector<conversation_row<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
+      body_t body;
+      // A right press's menu, over the rest.
+      std::optional<space_menu> menu;
     } parts;
     // Its parts by their names, for what reads them: it is never moved.
     head_row& head = parts.head;
-    search_box& search = parts.search;
-    nodes::Flow<std::vector<folder_tab<pick_folder>>>& folders = parts.folders;
-    nodes::Text& no_chats = parts.no_chats;
-    list_t& list = parts.list;
-    explicit side_column(Actions* a) : parts{.head = head_row(a)} {
+    search_box& search = parts.body.parts.rest.parts.search;
+    nodes::Flow<std::vector<folder_tab<pick_folder>>>& folders = parts.body.parts.rest.parts.folders;
+    nodes::Text& no_chats = parts.body.parts.rest.parts.no_chats;
+    list_t& list = parts.body.parts.rest.parts.list;
+    icons_t& top_bar = parts.head.parts.top;
+    icons_t& side_bar = parts.body.parts.side;
+    Actions* actions = nullptr;
+    // Whose spaces the bars hold, as the screen says as it shows them.
+    std::string account;
+    explicit side_column(Actions* a) : parts{.head = head_row(a)}, actions(a) {
       fState.apply({.fillY = true, .background = sidebar_colour});
-      no_chats.apply({.margin = {12.0f, 16.0f, 0.0f, 16.0f}});
-      folders.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {0.0f, 8.0f, 6.0f, 8.0f}});
-      list.apply({.fillX = true, .grow = scene::axes::kY});
-      std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
+    }
+
+    // ---- an item dragged from a bar to the other, or along one ------------
+    struct drag_t {
+      config::space_item_t item;
+      config::space_bar_t from;
+      float x0 = 0.0f, y0 = 0.0f;
+      bool moving = false;
+    };
+    std::optional<drag_t> drag;
+    bool menu_close_due = false;
+    [[nodiscard]] std::vector<space_icon<pick_folder>>& icons_of(icons_t& bar) { return std::get<0>(bar.fChildren); }
+    [[nodiscard]] const space_icon<pick_folder>* icon_at(float x, float y) {
+      for (icons_t* bar : {&top_bar, &side_bar})
+        if (bar->visible())
+          for (const auto& one : icons_of(*bar))
+            if (one.bounds().contains(x, y))
+              return &one;
+      return nullptr;
+    }
+    // The bar a point is over: the head (the top bar, where there is one),
+    // or the side bar's strip -- shown while something is dragged.
+    [[nodiscard]] std::optional<config::space_bar_t> bar_at(float x, float y) const {
+      if (top_bar.visible() && parts.head.bounds().contains(x, y))
+        return config::space_bar::top{};
+      if (side_bar.visible() && side_bar.bounds().contains(x, y))
+        return config::space_bar::side{};
+      return std::nullopt;
+    }
+    // A bar's items with the one dragged put where it is let go: before the
+    // first whose middle is past the point, along the bar.
+    [[nodiscard]] std::vector<config::space_item_t> order_with(const config::space_bar_t& bar, const config::space_item_t& item,
+                                                               float x, float y) {
+      const bool along_x = splice::visit(splice::overloaded{[](config::space_bar::top) { return true; }, [](const auto&) { return false; }}, bar);
+      icons_t& icons = along_x ? top_bar : side_bar;
+      std::vector<config::space_item_t> out = icons_of(icons) |
+                                              std::views::filter([&](const auto& one) { return one.item != item; }) |
+                                              std::views::transform([](const auto& one) { return one.item; }) |
+                                              std::ranges::to<std::vector>();
+      const auto before = std::ranges::count_if(icons_of(icons), [&](const auto& one) {
+        return one.item != item && (along_x ? one.bounds().centerX() < x : one.bounds().centerY() < y);
+      });
+      out.insert(out.begin() + before, item);
+      return out;
+    }
+    void show_drop_targets(bool on) {
+      if (on)
+        side_bar.setVisible(true);
+      this->invalidateLayout();
+      this->markDamaged();
+    }
+    void light(const std::optional<config::space_bar_t>& over) {
+      const bool top = over && *over == config::space_bar_t{config::space_bar::top{}};
+      const bool side = over && *over == config::space_bar_t{config::space_bar::side{}};
+      top_bar.apply({.background = top ? chosen_colour : skia::SkColor{0}});
+      side_bar.apply({.background = side ? chosen_colour : skia::SkColor{0}});
+    }
+    void drag_down(const scene::pointer::down& press, scene::PointerReply& reply) {
+      if (parts.menu && !parts.menu->bounds().contains(press.x, press.y))
+        menu_close_due = true;
+      drag.reset();
+      const space_icon<pick_folder>* one = this->icon_at(press.x, press.y);
+      if (!one)
+        return;
+      // A right press: its menu, where it was pressed, kept in the column.
+      if (press.button == 3) {
+        const skia::SkRect box = fState.fBounds;
+        parts.menu.emplace(actions, account, one->item, one->name);
+        parts.menu->apply({.place = scene::anchor::kTopLeft,
+                           .x = std::clamp(press.x - box.fLeft, 0.0f, std::max(0.0f, box.width() - 190.0f)),
+                           .y = std::clamp(press.y - box.fTop, 0.0f, std::max(0.0f, box.height() - 180.0f))});
+        menu_close_due = false;
+        this->invalidateLayout();
+        reply.handle();
+        return;
+      }
+      drag = drag_t{one->item, one->bar, press.x, press.y};
+    }
+    void drag_move(const scene::pointer::move& at, scene::PointerReply& reply) {
+      if (!drag)
+        return;
+      if (!drag->moving) {
+        if (reply.fCaptured) {
+          drag.reset();
+          return;
+        }
+        if (std::abs(at.x - drag->x0) < 6.0f && std::abs(at.y - drag->y0) < 6.0f)
+          return;
+        drag->moving = true;
+        reply.capturePointer();
+        reply.suppressHover();
+        this->show_drop_targets(true);
+      }
+      this->light(this->bar_at(at.x, at.y));
+      reply.handle();
+    }
+    void drag_up(const scene::pointer::up& at, scene::PointerReply& reply) {
+      if (!drag)
+        return;
+      const drag_t was = *std::exchange(drag, std::nullopt);
+      if (!was.moving)
+        return;
+      reply.releasePointer();
+      reply.handle();
+      this->light(std::nullopt);
+      if (const auto bar = this->bar_at(at.x, at.y))
+        actions->place_spaces(account, *bar, this->order_with(*bar, was.item, at.x, at.y), was.from, was.item);
+      this->show_drop_targets(false);
+    }
+    using Node::onPointer;
+    void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply& reply) { drag_down(press, reply); }
+    void onPointer(scene::phase::capture, const scene::pointer::move& at, scene::PointerReply& reply) { drag_move(at, reply); }
+    void onPointer(scene::phase::target, const scene::pointer::move& at, scene::PointerReply& reply) { drag_move(at, reply); }
+    void onPointer(scene::phase::capture, const scene::pointer::up& at, scene::PointerReply& reply) { drag_up(at, reply); }
+    void onPointer(scene::phase::target, const scene::pointer::up& at, scene::PointerReply& reply) { drag_up(at, reply); }
+    // The menu closed after the press that chose from it, or one off it:
+    // not from inside that press's handling.
+    [[nodiscard]] bool wantsTick() const { return menu_close_due; }
+    void update(double) {
+      if (std::exchange(menu_close_due, false) && parts.menu) {
+        parts.menu.reset();
+        this->invalidateLayout();
+        this->markDamaged();
+      }
     }
     // Its own width, as far as the window has room for it.
     void measure(const skia::SkRect& parent) {
@@ -560,6 +798,79 @@ struct conversations_screen : nodes::Stack {
     this->show_info();
   }
 
+
+  // The space bars of the account shown: Home, Direct messages, and its
+  // spaces, each in the bars it is put in -- none said, the side one --
+  // in the order put there, the rest after them as the model has them.
+  void show_space_bars(const model& now) {
+    struct entry {
+      config::space_item_t item;
+      folder_t shows;
+      std::string id;
+      std::string name;
+    };
+    std::vector<entry> all{{config::space_item::home{}, folder::all{}, "", "Home"},
+                           {config::space_item::direct{}, folder::direct{}, "", "Direct messages"}};
+    const std::string address = current ? current->address : std::string();
+    if (current)
+      for (const auto& [key, one] : now.accounts().at(*current).conversations)
+        if (one.space)
+          all.push_back({config::space_item::space{one.id.id}, folder::space{one.id.id}, one.id.id, display_name(one)});
+    const std::vector<config::space_placed> mine = space_places |
+                                                   std::views::filter([&](const config::space_placed& p) { return p.account == address; }) |
+                                                   std::ranges::to<std::vector>();
+    const auto in_bar = [&](const entry& one, const config::space_bar_t& bar) {
+      const bool placed = std::ranges::any_of(mine, [&](const auto& p) { return p.item == one.item; });
+      if (!placed)
+        return bar == config::space_bar_t{config::space_bar::side{}};
+      return std::ranges::any_of(mine, [&](const auto& p) { return p.item == one.item && p.bar == bar; });
+    };
+    const auto bar_of = [&](const config::space_bar_t& bar) {
+      std::vector<std::pair<std::size_t, const entry*>> ranked;
+      for (std::size_t i = 0; i < all.size(); ++i)
+        if (in_bar(all[i], bar)) {
+          const auto at = std::ranges::find_if(mine, [&](const auto& p) { return p.item == all[i].item && p.bar == bar; });
+          ranked.emplace_back(at == mine.end() ? mine.size() + i : static_cast<std::size_t>(at - mine.begin()), &all[i]);
+        }
+      std::ranges::sort(ranked, {}, &std::pair<std::size_t, const entry*>::first);
+      return ranked | std::views::values | std::ranges::to<std::vector>();
+    };
+    const std::vector<const entry*> side_items = bar_of(config::space_bar::side{});
+    const std::vector<const entry*> top_items = bar_of(config::space_bar::top{});
+    // For the settings to list them.
+    space_account_now() = address;
+    space_items_now() = all | std::views::transform([&](const entry& one) {
+                          return space_item_shown{one.item, one.name, in_bar(one, config::space_bar::side{}),
+                                                  in_bar(one, config::space_bar::top{})};
+                        }) |
+                        std::ranges::to<std::vector>();
+    side.account = address;
+    // Made again only where they changed.
+    std::vector<std::string> made;
+    for (const auto& [items, mark] : {std::pair{&side_items, "s"}, std::pair{&top_items, "t"}})
+      for (const entry* one : *items)
+        made.push_back(std::format("{}|{}|{}|{}", mark, config::word_of(one->item), one->name, one->shows == folder));
+    made.push_back(std::format("{}{}", spaces_on, top_bar_on));
+    if (made != shown_bars) {
+      shown_bars = made;
+      auto& side_icons = std::get<0>(side.side_bar.fChildren);
+      auto& top_icons = std::get<0>(side.top_bar.fChildren);
+      side_icons.clear();
+      top_icons.clear();
+      for (const entry* one : side_items)
+        side_icons.emplace_back(one->item, one->shows, config::space_bar::side{}, one->id, one->name, one->shows == folder, 40.0f,
+                                pick_folder{this});
+      for (const entry* one : top_items)
+        top_icons.emplace_back(one->item, one->shows, config::space_bar::top{}, one->id, one->name, one->shows == folder, 30.0f,
+                               pick_folder{this});
+      side.side_bar.invalidateLayout();
+      side.top_bar.invalidateLayout();
+    }
+    // The top bar there unless turned off; the side one where it holds any.
+    side.top_bar.setVisible(spaces_on && top_bar_on);
+    if (!side.drag || !side.drag->moving)
+      side.side_bar.setVisible(spaces_on && !side_items.empty());
+  }
 
   // The chat list as wide as `x`, where its edge was dragged to.
   void resize_sidebar(float x) {
@@ -1253,7 +1564,8 @@ struct conversations_screen : nodes::Stack {
     if (current) {
       std::set<std::string> groups;
       for (const auto& [key, one] : now.accounts().at(*current).conversations) {
-        if (one.space)
+        // Spaces in their bars, where there are bars; else as tabs.
+        if (one.space && !spaces_on)
           folders.emplace_back(display_name(one), folder::space{one.id.id});
         groups.insert(one.groups.begin(), one.groups.end());
       }
@@ -1273,6 +1585,7 @@ struct conversations_screen : nodes::Stack {
       shown_folder = folder;
     }
     side.folders.setVisible(folders.size() > 1);
+    this->show_space_bars(now);
     // Whether a chat is in the folder chosen. A space is a folder, not a
     // chat: it is never listed.
     const account* in = current ? &now.accounts().at(*current) : nullptr;
@@ -1285,7 +1598,12 @@ struct conversations_screen : nodes::Stack {
                                      return found != in->conversations.end() &&
                                             std::ranges::contains(found->second.children, one.id.id);
                                    },
-                                   [&](const folder::group& g) { return std::ranges::contains(one.groups, g.name); }},
+                                   [&](const folder::group& g) { return std::ranges::contains(one.groups, g.name); },
+                                   [&](const folder::direct&) {
+                                     return splice::visit(splice::overloaded{[](conversation_kind::direct) { return true; },
+                                                                             [](const auto&) { return false; }},
+                                                          one.kind);
+                                   }},
                         folder);
     };
     if (in)

@@ -300,6 +300,8 @@ struct app : kept_settings {
   void notify_of(const mux::message& said, bool mentions_me);
   void apply(const request::set_room_event_kind& one);
   void apply(const request::set_room_events& one);
+  void apply(const request::place_spaces& one);
+  void apply(const request::set_space_bars& one);
   void apply(const request::join_room_card&);
   void apply(const request::toggle_emoji&);
   void apply(const request::close_emoji&);

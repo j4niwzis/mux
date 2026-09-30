@@ -126,6 +126,23 @@ class settings_part {
     if (auto* up = s_->root().settings_up(); up && up->appearance())
       up->show_appearance(k_->theme, k_->accent);
   }
+  // The space bars at all, and the top one.
+  void apply(const request::flip_spaces&) {
+    k_->spaces = !k_->spaces;
+    mux::ui::window_look().spaces = k_->spaces;
+    (void)k_->write();
+    s_->refresh();
+    if (auto* up = s_->root().settings_up(); up && up->appearance())
+      up->show_appearance(k_->theme, k_->accent);
+  }
+  void apply(const request::flip_top_bar&) {
+    k_->top_bar = !k_->top_bar;
+    mux::ui::window_look().top_bar = k_->top_bar;
+    (void)k_->write();
+    s_->refresh();
+    if (auto* up = s_->root().settings_up(); up && up->appearance())
+      up->show_appearance(k_->theme, k_->accent);
+  }
   void apply(const request::flip_show_fps&) {
     k_->show_fps = !k_->show_fps;
     this->show_frames();

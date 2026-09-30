@@ -145,6 +145,16 @@ int main(int argc, char** argv) {
   program.window_opacity = opacity;
   program.wallpaper_behind = mux::ui::window_look().behind;
   program.frost_blur = mux::ui::window_look().frost;
+  program.spaces = saved.spaces.value_or(true);
+  program.top_bar = saved.top_bar.value_or(true);
+  mux::ui::window_look().spaces = program.spaces;
+  mux::ui::window_look().top_bar = program.top_bar;
+  if (saved.space_places)
+    program.space_places = *saved.space_places | std::views::transform([](const mux::config::space_place& one) {
+                             return mux::config::space_placed{one.account, mux::config::space_item_of(one.item),
+                                                              mux::config::space_bar_of(one.bar)};
+                           }) |
+                           std::ranges::to<std::vector>();
   program.show_fps = saved.show_fps.value_or(false);
   program.limits = saved.cache.value_or(mux::config::cache_limits{});
   if (!demo)

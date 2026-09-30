@@ -112,6 +112,11 @@ struct stub {
   void set_window_opacity(int) {}
   void flip_wallpaper_behind() {}
   void set_frost_blur(int) {}
+  void place_spaces(std::string, mux::config::space_bar_t, std::vector<mux::config::space_item_t>,
+                    std::optional<mux::config::space_bar_t>, std::optional<mux::config::space_item_t>) {}
+  void set_space_bars(std::string, mux::config::space_item_t, bool, bool) {}
+  void flip_spaces() {}
+  void flip_top_bar() {}
   void set_wallpaper(mux::choice_level_t, mux::config::wallpaper_pick_t) {}
   void open_thread(std::string) {}
   void close_thread() {}

@@ -41,6 +41,26 @@ class menu_part {
     target_.text = one.text;
     this->apply(request::menu_reply{});
   }
+  // Quote & Reply, as Telegram's: the message answered, and what is
+  // selected of it quoted at the start of the field -- each of its lines
+  // after "> ", as Markdown quotes -- the rest of what was written after.
+  void apply(const request::menu_quote_reply&) {
+    const std::string selected = target_.selection ? target_.copied : std::string();
+    this->apply(request::menu_reply{});
+    if (selected.empty())
+      return;
+    std::string quote;
+    for (std::size_t at = 0; at <= selected.size();) {
+      const std::size_t end = std::min(selected.find('\n', at), selected.size());
+      quote += "> ";
+      quote += std::string_view(selected).substr(at, end - at);
+      quote += '\n';
+      at = end + 1;
+    }
+    quote += '\n';
+    auto& line = s_->root().main().line;
+    line.set_text(quote + std::string(line.text()));
+  }
   // As tdesktop's: "Reply to <name>" over a line of the message.
   void apply(const request::menu_reply&) {
     s_->root().close_menu();

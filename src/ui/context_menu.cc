@@ -843,6 +843,7 @@ struct context_menu : scene::Node {
     };
     Actions* actions_of = nullptr;
     using reply_row = row_item<ask<Actions, &Actions::menu_reply>>;
+    using quote_reply_row = row_item<ask<Actions, &Actions::menu_quote_reply>>;
     using edit_row = row_item<ask<Actions, &Actions::menu_edit>>;
     using later_row = row_item<not_yet<Actions>>;
     using copy_row = row_item<ask<Actions, &Actions::menu_copy>>;
@@ -862,6 +863,8 @@ struct context_menu : scene::Node {
       quick_row quick;
       nodes::Box<> quick_band{band_colour};
       reply_row reply;
+      // What is selected of another's message, quoted in an answer.
+      quote_reply_row quote_reply;
       edit_row edit;
       pin_row pin;
       copy_row copy;
@@ -879,7 +882,7 @@ struct context_menu : scene::Node {
       std::optional<emoji_panel<react_with<Actions>>> emoji;
     } parts;
     void expand() {
-      auto& [quick, quick_band, reply, edit, pin, copy, copy_link, save, save_gif, reactions, forward, source,
+      auto& [quick, quick_band, reply, quote_reply, edit, pin, copy, copy_link, save, save_gif, reactions, forward, source,
              remove, seen_band, seen, emoji] = parts;
       if (emoji)
         return;
@@ -906,9 +909,9 @@ struct context_menu : scene::Node {
     // The items, once the list is down over them: gone, the menu keeping
     // its size by its least height.
     void hide_items() {
-      auto& [quick, quick_band, reply, edit, pin, copy, copy_link, save, save_gif, reactions, forward, source, remove,
+      auto& [quick, quick_band, reply, quote_reply, edit, pin, copy, copy_link, save, save_gif, reactions, forward, source, remove,
              seen_band, seen, emoji] = parts;
-      for (scene::Node* item : std::initializer_list<scene::Node*>{&reply, &edit, &pin, &copy, &copy_link, &save,
+      for (scene::Node* item : std::initializer_list<scene::Node*>{&reply, &quote_reply, &edit, &pin, &copy, &copy_link, &save,
                                                                    &save_gif, &reactions, &forward, &source,
                                                                    &remove, &seen_band, &seen})
         item->setVisible(false);
@@ -944,6 +947,7 @@ struct context_menu : scene::Node {
         : actions_of(a),
           parts{.quick = quick_row(a, this),
                 .reply = reply_row("Reply", {a}, icon::back{}),
+                .quote_reply = quote_reply_row("Quote & Reply", {a}, icon::back{}),
                 .edit = edit_row("Edit", {a}, icon::sliders{}),
                 .pin = pin_row(facts.pinned ? "Unpin" : "Pin", {a}, icon::check{}),
                 .copy = copy_row(facts.selection ? "Copy Selected Text" : "Copy Text", {a}, icon::clip{}),
@@ -957,7 +961,7 @@ struct context_menu : scene::Node {
                 .source = source_row("View Source", {a}, icon::info{}),
                 .remove = delete_row("Delete", {a}, icon::close{}),
                 .seen = seen_row(facts.seen)} {
-      auto& [quick, quick_band, reply, edit, pin, copy, copy_link, save, save_gif, reactions, forward, source,
+      auto& [quick, quick_band, reply, quote_reply, edit, pin, copy, copy_link, save, save_gif, reactions, forward, source,
              remove, seen_band, seen, emoji] = parts;
       quick_band.apply({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 4.0f, 0.0f}});
       // A menu's rows as tdesktop's menuWithIcons: 8 over and under the
@@ -969,6 +973,7 @@ struct context_menu : scene::Node {
         row.parts.label.setFontSize(13.0f);
       };
       compact(reply);
+      compact(quote_reply);
       compact(edit);
       compact(pin);
       compact(copy);
@@ -980,6 +985,7 @@ struct context_menu : scene::Node {
       compact(source);
       compact(remove);
       edit.setVisible(facts.own && !facts.text.empty() && !facts.media);
+      quote_reply.setVisible(facts.selection && !facts.own && !facts.copied.empty());
       copy.setVisible(!facts.copied.empty());
       copy_link.setVisible(!facts.link.empty());
       save.setVisible(facts.media.has_value());

@@ -424,7 +424,7 @@ struct accounts_panel : closes_on_escape<Actions> {
       detail.template emplace<4>(this->actions, proxies, config::proxy_of(one));
     } else {
       detail.template emplace<1>(this->actions, one);
-      std::get<1>(detail).show(one, now);
+      splice::get<1>(detail).show(one, now);
     }
     this->begin_swap();
     this->invalidateLayout();

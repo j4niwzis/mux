@@ -22,6 +22,31 @@ export namespace mux::ui {
 
 // One chat in the list, as Telegram Desktop draws it: a round avatar, the
 // name, the time of the last message, a line of it, and how many are unread.
+// What a message carries, as Telegram's chat list says it: a picture, a
+// video or a GIF by its mark and its caption -- or, with none, what it is;
+// a voice message as one; a sound or a file by its name. Nothing for a
+// message that carries nothing.
+[[nodiscard]] inline std::optional<std::string> media_line(const message& said) {
+  if (!said.attachment)
+    return std::nullopt;
+  const attachment& carried = *said.attachment;
+  // Its caption: its body, where that is not its file's name.
+  const std::string caption = said.body.plain != carried.name ? said.body.plain : std::string();
+  const auto with = [&](std::string_view mark, std::string_view kind) {
+    return std::format("{} {}", mark, caption.empty() ? kind : std::string_view(caption));
+  };
+  if (carried.video)
+    return with("\U0001F3A5", "Video");
+  if (is_picture(carried.kind))
+    return moves(carried.kind) ? with("\U0001F39E", "GIF") : with("\U0001F5BC", "Photo");
+  if (audio_type(carried.mimetype, carried.name)) {
+    const bool voice = carried.mimetype.starts_with("audio/ogg") || carried.name.ends_with(".ogg") ||
+                       carried.name.ends_with(".opus") || carried.name.ends_with(".oga");
+    return voice ? with("\U0001F3A4", "Voice message") : std::format("\U0001F3B5 {}", carried.name);
+  }
+  return std::format("\U0001F4CE {}", carried.name.empty() ? std::string("File") : carried.name);
+}
+
 template <class Actions>
 struct conversation_row : nodes::Stack {
   Actions* actions = nullptr;
@@ -156,8 +181,14 @@ struct conversation_row : nodes::Stack {
         said_by("You", accent_colour);
       else if (is_group(one))
         said_by(sender_name(one, last.sender), accent_colour);
-      preview.setText(std::move(shown.text));
-      preview.setLinks(std::move(shown.links), accent_colour);
+      // Media: said as Telegram says it, not by the file's name its body is.
+      if (auto carried = media_line(last)) {
+        preview.setText(std::move(*carried));
+        preview.setLinks({}, accent_colour);
+      } else {
+        preview.setText(std::move(shown.text));
+        preview.setLinks(std::move(shown.links), accent_colour);
+      }
     }
     // A draft left in it: said instead, as tdesktop says it, in red.
     if (!shown.draft.empty() && !is_chosen) {

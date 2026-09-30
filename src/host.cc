@@ -1018,15 +1018,58 @@ int run(App& app, const options& how) {
               changed.push_back(to);
             }
           }
-        for (const skia::SkRect& piece : pieces) {
-          into->save();
-          into->clipRect(piece);
-          into->clear(skia::colorSetARGB(255, 24, 27, 30));
-          into->scale(scale, scale);
-          scene.draw(into);
-          into->restore();
-          changed.push_back(piece.roundOut());
+        // Much to paint: the scene drawn on this thread into a recording --
+        // walking it is not for several threads -- and the recording played
+        // back into the pixels in bands, one a thread, as a browser's raster
+        // workers play back what its main thread recorded. Little: drawn
+        // straight in.
+        float area = 0.0f;
+        for (const skia::SkRect& piece : pieces)
+          area += piece.width() * piece.height();
+        const unsigned team_size = std::min(4u, std::max(1u, std::thread::hardware_concurrency()));
+        skia::SkPixmap pixels;
+        if (area > 300000.0f && team_size > 1 && kept->peekPixels(&pixels)) {
+          skia::SkPictureRecorder recorder;
+          skia::SkCanvas* record = recorder.beginRecording(all);
+          for (const skia::SkRect& piece : pieces) {
+            record->save();
+            record->clipRect(piece);
+            record->clear(skia::colorSetARGB(255, 24, 27, 30));
+            record->scale(scale, scale);
+            scene.draw(record);
+            record->restore();
+          }
+          const auto picture = recorder.finishRecordingAsPicture();
+          if (picture) {
+            std::vector<std::jthread> team;
+            team.reserve(team_size);
+            for (unsigned band = 0; band < team_size; ++band)
+              team.emplace_back([&pixels, &picture, band, team_size] {
+                const int top = pixels.height() * static_cast<int>(band) / static_cast<int>(team_size);
+                const int bottom = pixels.height() * static_cast<int>(band + 1) / static_cast<int>(team_size);
+                if (bottom <= top)
+                  return;
+                auto rows = skia::WrapPixels(pixels.info().makeWH(pixels.width(), bottom - top),
+                                             pixels.writable_addr(0, top), pixels.rowBytes());
+                if (!rows)
+                  return;
+                skia::SkCanvas* band_canvas = rows->getCanvas();
+                band_canvas->translate(0.0f, static_cast<float>(-top));
+                band_canvas->drawPicture(picture);
+              });
+          }  // the team joined here
+        } else {
+          for (const skia::SkRect& piece : pieces) {
+            into->save();
+            into->clipRect(piece);
+            into->clear(skia::colorSetARGB(255, 24, 27, 30));
+            into->scale(scale, scale);
+            scene.draw(into);
+            into->restore();
+          }
         }
+        for (const skia::SkRect& piece : pieces)
+          changed.push_back(piece.roundOut());
         if (kept != surface)
           canvas->drawImage(kept_frame->makeImageSnapshot(), 0.0f, 0.0f);
       } else {

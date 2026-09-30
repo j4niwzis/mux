@@ -232,18 +232,18 @@ struct rendering_page : nodes::Stack {
   };
   struct parts_t {
     header_t header;
-    nodes::ScrollContainer<body> list;
+    body list;  // in the settings' own scroll view
   } parts;
 
   rendering_page(Actions* a, const config::renderer_t& renderer, bool partial = false, bool flash = false,
                  bool vsync = true, bool fps = false)
       : parts{.header = header_t("Rendering", {a}, {a}, true, true),
-              .list = nodes::ScrollContainer<body>(body(a, partial, flash, vsync, fps))} {
+              .list = body(a, partial, flash, vsync, fps)} {
     fState.apply({.fill = true});
-    parts.list.apply({.fillX = true, .grow = scene::axes::kY});
+    parts.list.apply({.fillX = true});
     this->show(renderer);
   }
-  [[nodiscard]] body& content() { return std::get<0>(parts.list.fChildren); }
+  [[nodiscard]] body& content() { return parts.list; }
   void show_frames(bool partial, bool flash, bool vsync, bool fps) {
     auto& rows = this->content().parts;
     rows.partial.parts.toggle.setOn(partial);

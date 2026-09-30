@@ -111,17 +111,17 @@ struct storage_page : nodes::Stack {
   };
   struct parts_t {
     header_t header;
-    nodes::ScrollContainer<body> list;
+    body list;  // in the settings' own scroll view
   } parts;
 
   storage_page(Actions* a, const config::cache_limits& limits, const config::history_settings& history)
       : parts{.header = header_t("Storage", {a}, {a}, true, true),
-              .list = nodes::ScrollContainer<body>(body(a, history))} {
+              .list = body(a, history)} {
     fState.apply({.fill = true});
-    parts.list.apply({.fillX = true, .grow = scene::axes::kY});
+    parts.list.apply({.fillX = true});
     this->show(limits);
   }
-  [[nodiscard]] body& content() { return std::get<0>(parts.list.fChildren); }
+  [[nodiscard]] body& content() { return parts.list; }
   void show(const config::cache_limits& limits) {
     auto& rows = this->content().parts;
     rows.messages_in_memory.parts.value.setText(std::format("{} messages", limits.messages_in_memory));

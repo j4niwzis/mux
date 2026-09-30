@@ -728,6 +728,9 @@ struct seen_row : nodes::Stack {
   // seven rows tall.
   struct submenu_t : nodes::Stack {
     static constexpr float kRow = 44.0f, kMostHeight = 320.0f, kWidth = 240.0f;
+    [[nodiscard]] static float height_for(std::size_t readers) {
+      return std::min(kMostHeight, kRow * static_cast<float>(readers) + 10.0f);
+    }
     using rows_t = nodes::Flow<std::vector<reader_row>>;
     struct parts_t {
       nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
@@ -739,13 +742,15 @@ struct seen_row : nodes::Stack {
         rows.emplace_back(one);
       std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
       parts.list.apply({.fill = true});
-      const float tall = std::min(kMostHeight, kRow * static_cast<float>(readers.size()) + 10.0f);
+      const float tall = height_for(readers.size());
       fState.apply({.width = kWidth, .height = tall, .padding = {6.0f, 0.0f, 4.0f, 0.0f},
                     .cornerRadius = 10.0f, .background = sidebar_colour, .border = scene::Border{band_colour, 1.0f},
                     .masking = true});
     }
   };
   std::vector<seen_reader> readers;
+  // The window, as the menu fills it: the submenu kept inside it.
+  const skia::SkRect* window = nullptr;
   struct parts_t {
     icon_mark mark;
     nodes::Text label;
@@ -792,7 +797,16 @@ struct seen_row : nodes::Stack {
       return;
     if (open) {
       parts.submenu.emplace(readers);
-      parts.submenu->apply({.place = scene::anchor::kTopRight, .x = fState.fPadding.fRight - kOverlapMenu + submenu_t::kWidth, .y = -9.0f});
+      // Its top at the row's, or higher where it would pass the window's
+      // bottom -- as Telegram's, kept on the screen -- but never above its
+      // top. Where it is placed is from the row's content, 9 under its top.
+      const float row_top = fState.fBounds.fTop;
+      float top = row_top;
+      if (window != nullptr && !window->isEmpty())
+        top = std::max(window->fTop + 8.0f, std::min(row_top, window->fBottom - 8.0f - submenu_t::height_for(readers.size())));
+      parts.submenu->apply({.place = scene::anchor::kTopRight,
+                            .x = fState.fPadding.fRight - kOverlapMenu + submenu_t::kWidth,
+                            .y = top - row_top - fState.fPadding.fTop});
     } else {
       parts.submenu.reset();
     }
@@ -1023,6 +1037,7 @@ struct context_menu : scene::Node {
   explicit context_menu(Actions* a, const menu_facts& facts)
       : parts{.menu = card(a, facts)}, actions(a), at_x(facts.x), at_y(facts.y) {
     fState.apply({.fill = true});
+    parts.menu.parts.seen.window = &fState.fBounds;
     parts.menu.apply({.x = at_x, .y = at_y});
   }
   // As tdesktop's popup menu: at the pointer, going down and right -- up

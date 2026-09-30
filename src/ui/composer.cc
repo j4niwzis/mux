@@ -308,7 +308,8 @@ struct composer_bar : nodes::Stack {
   void put_mention(std::size_t from, const std::string& name, const std::string& user) {
     auto& field = parts.input.parts.field;
     field.select(from, field.text().size());
-    field.insertAtom("\u2002\u2002" + name, user, name);
+    // Taken apart with Backspace: its user's id, not the name it is sent by.
+    field.insertAtom("\u2002\u2002" + name, user, name, false, user);
     field.insertText(" ");
   }
   // Whether what is written answers or edits something.

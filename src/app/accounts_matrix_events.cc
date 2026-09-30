@@ -21,6 +21,7 @@ template void account<mux::app::post_change>::encrypted(const conversation_id& i
 template void account<mux::app::post_change>::service(const conversation_id& in, const loom::ev::timeline_event& one, std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where, std::string said, room_event_t kind);
 template auto account<mux::app::post_change>::name_in(const std::string& room, const std::string& user) const -> std::string;
 template void account<mux::app::post_change>::done(const conversation_id& in, const loom::ev::timeline_event& one, event_type_t type, std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where);
-template void account<mux::app::post_change>::redaction(const conversation_id& in, const loom::ev::timeline_event& one);
+template void account<mux::app::post_change>::redaction(const conversation_id& in, const loom::ev::timeline_event& one,
+                                                       std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where);
 template auto account<mux::app::post_change>::body_of(std::string plain, const std::optional<std::string>& format, const std::optional<std::string>& formatted_body) -> body;
 }  // namespace mux::matrix

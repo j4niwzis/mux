@@ -156,7 +156,7 @@ struct window : scene::Node {
                                               [](auto&) -> Panel* { return nullptr; }},
                                    *up))
         return *same;
-    return std::get<Panel>(layer().frame.open(std::in_place_type<Panel>, actions));
+    return mux::get<Panel>(layer().frame.open(std::in_place_type<Panel>, actions));
   }
   // The top panel goes, and the one under it is up again.
   void back_panel() { layer().frame.back(); }

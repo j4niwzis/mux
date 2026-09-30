@@ -370,6 +370,16 @@ class canvas_target {
     return surface_.get();
   }
 
+  // Shown in step with the screen's refresh, or as soon as drawn.
+  void set_vsync(bool on) {
+#if defined(SK_GANESH)
+    if (gl_)
+      SDL_GL_SetSwapInterval(on ? 1 : 0);
+#else
+    (void)on;
+#endif
+  }
+
   // What was drawn, shown.
   void present() {
     if (!surface_)
@@ -581,6 +591,9 @@ int run(App& app, const options& how) {
     // frame drew into (a new one is painted whole).
     skia::Sp<skia::SkSurface> kept_frame;
     skia::SkSurface* kept_frame_for = nullptr;
+    // When the last frames were shown, for the counter; and whether they wait for the screen.
+    std::deque<double> shown_times;
+    bool vsync_on = true;
     while (running) {
       SDL_Event event;
       const double wake_in = wake_at - detail::now_ms();
@@ -845,6 +858,38 @@ int run(App& app, const options& how) {
         outline.setStrokeWidth(2.0f);
         outline.setColor(skia::colorSetARGB(220, 255, 0, 160));
         canvas->drawRect(repainted.makeInset(1.0f, 1.0f), outline);
+      }
+      // Frames a second over the last second, and the last frame's time, in
+      // the top right corner: counted as shown, so an idle window stays at
+      // what it last was.
+      const double shown_at = detail::now_ms();
+      if (app.show_fps) {
+        while (!shown_times.empty() && shown_at - shown_times.front() > 1000.0)
+          shown_times.pop_front();
+        const double since = shown_times.empty() ? 0.0 : shown_at - shown_times.back();
+        if (skia::SkFont* base = skiff::paint::defaultFont()) {
+          skia::SkFont font = *base;
+          font.setSize(13.0f * scale);
+          const std::string text = std::format("{} fps  {:.1f} ms", shown_times.size() + 1, since);
+          const float wide = font.measureText(text.data(), text.size(), skia::SkTextEncoding::kUTF8);
+          const float x = all.width() - wide - 12.0f * scale;
+          const float y = 20.0f * scale;
+          skia::SkPaint back;
+          back.setColor(skia::colorSetARGB(170, 0, 0, 0));
+          canvas->drawRect(skia::SkRect::MakeLTRB(x - 6.0f * scale, y - 15.0f * scale, x + wide + 6.0f * scale,
+                                                  y + 5.0f * scale),
+                           back);
+          skia::SkPaint ink;
+          ink.setColor(skia::colorSetARGB(255, 120, 255, 140));
+          canvas->drawSimpleText(text.data(), text.size(), skia::SkTextEncoding::kUTF8, x, y, font, ink);
+        }
+      }
+      shown_times.push_back(shown_at);
+      if (shown_times.size() > 2000)
+        shown_times.pop_front();
+      if (app.vsync != vsync_on) {
+        vsync_on = app.vsync;
+        target.set_vsync(vsync_on);
       }
       target.present();
     }

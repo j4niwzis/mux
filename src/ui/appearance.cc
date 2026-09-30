@@ -190,6 +190,8 @@ struct rendering_page : nodes::Stack {
   using choice = row_item<choose_renderer<Actions>>;
   using partial_row = switch_row<ask<Actions, &Actions::flip_partial_redraw>>;
   using flash_row = switch_row<ask<Actions, &Actions::flip_flash_redraws>>;
+  using vsync_row = switch_row<ask<Actions, &Actions::flip_vsync>>;
+  using fps_row = switch_row<ask<Actions, &Actions::flip_show_fps>>;
   struct parts_t {
     header_t header;
     choice gpu;
@@ -198,18 +200,25 @@ struct rendering_page : nodes::Stack {
     nodes::Text frames_title = section_title("FRAMES");
     partial_row partial;
     flash_row flash;
+    vsync_row vsync;
+    fps_row fps;
     nodes::Text frames_note{"Partial redraw repaints only what changed, into a frame kept between them; a part "
                             "that forgets to say it changed then stays as it was. Flashing outlines what each "
-                            "frame repainted. Both take effect at once.",
+                            "frame repainted. Vsync shows frames in step with the screen; off, they are shown as soon "
+                            "as drawn. The counter shows frames a second and the last frame's time. All take "
+                            "effect at once.",
                             13.0f, dim_colour};
   } parts;
 
-  rendering_page(Actions* a, const config::renderer_t& renderer, bool partial = false, bool flash = false)
+  rendering_page(Actions* a, const config::renderer_t& renderer, bool partial = false, bool flash = false,
+                 bool vsync = true, bool fps = false)
       : parts{.header = header_t("Rendering", {a}, {a}, true, true),
               .gpu = choice("OpenGL (the graphics card)", {a, config::renderer::opengl{}}, icon::none{}, false),
               .cpu = choice("Software (the processor)", {a, config::renderer::software{}}, icon::none{}, false),
               .partial = partial_row("Partial redraw", {a}),
-              .flash = flash_row("Flash redrawn areas", {a})} {
+              .flash = flash_row("Flash redrawn areas", {a}),
+              .vsync = vsync_row("Vsync", {a}),
+              .fps = fps_row("Show frames a second", {a})} {
     parts.note.apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
     parts.frames_title.apply({.margin = {14.0f, 0.0f, 4.0f, 20.0f}});
     parts.frames_note.apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
@@ -218,11 +227,15 @@ struct rendering_page : nodes::Stack {
     parts.frames_note.setWrapped(true);
     parts.partial.parts.toggle.setOnNow(partial);
     parts.flash.parts.toggle.setOnNow(flash);
+    parts.vsync.parts.toggle.setOnNow(vsync);
+    parts.fps.parts.toggle.setOnNow(fps);
     this->show(renderer);
   }
-  void show_frames(bool partial, bool flash) {
+  void show_frames(bool partial, bool flash, bool vsync, bool fps) {
     parts.partial.parts.toggle.setOn(partial);
     parts.flash.parts.toggle.setOn(flash);
+    parts.vsync.parts.toggle.setOn(vsync);
+    parts.fps.parts.toggle.setOn(fps);
   }
   void show(const config::renderer_t& renderer) {
     parts.gpu.set_chosen(renderer == config::renderer_t{config::renderer::opengl{}});

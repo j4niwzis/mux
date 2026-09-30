@@ -493,6 +493,10 @@ struct file {
   std::optional<bool> partial_redraw;
   // What each frame repainted, outlined: to see that only that is.
   std::optional<bool> flash_redraws;
+  // Frames shown in step with the screen's refresh; off, as fast as drawn.
+  std::optional<bool> vsync;
+  // Frames a second, and the last frame's time, in the window's corner.
+  std::optional<bool> show_fps;
   std::optional<cache_limits> cache;
   std::optional<sending_settings> sending;
   std::optional<history_settings> history;

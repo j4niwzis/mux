@@ -31,6 +31,8 @@ struct kept_settings {
   // outlined.
   bool partial_redraw = false;
   bool flash_redraws = false;
+  bool vsync = true;
+  bool show_fps = false;
   // How much is kept, in memory and on disk.
   mux::config::cache_limits limits;
   // What is done to a picture dropped before it is sent.
@@ -165,6 +167,10 @@ struct kept_settings {
       out.partial_redraw = true;
     if (flash_redraws)
       out.flash_redraws = true;
+    if (!vsync)
+      out.vsync = false;
+    if (show_fps)
+      out.show_fps = true;
     out.cache = limits;
     out.sending = sending;
     out.history = history;

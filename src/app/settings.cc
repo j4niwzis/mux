@@ -61,7 +61,7 @@ class settings_part {
   }
   void apply(const request::settings_rendering&) {
     if (auto* up = s_->root().settings_up())
-      up->show_rendering(k_->renderer, k_->partial_redraw, k_->flash_redraws);
+      up->show_rendering(k_->renderer, k_->partial_redraw, k_->flash_redraws, k_->vsync, k_->show_fps);
   }
   void apply(const request::set_theme& one) {
     k_->theme = one.theme;
@@ -85,11 +85,21 @@ class settings_part {
     this->show_frames();
     (void)k_->write();
   }
+  void apply(const request::flip_vsync&) {
+    k_->vsync = !k_->vsync;
+    this->show_frames();
+    (void)k_->write();
+  }
+  void apply(const request::flip_show_fps&) {
+    k_->show_fps = !k_->show_fps;
+    this->show_frames();
+    (void)k_->write();
+  }
   // The Rendering page's switches, moved to what is now so.
   void show_frames() {
     if (auto* up = s_->root().settings_up())
       if (auto* page = up->rendering())
-        page->show_frames(k_->partial_redraw, k_->flash_redraws);
+        page->show_frames(k_->partial_redraw, k_->flash_redraws, k_->vsync, k_->show_fps);
   }
   void apply(const request::set_renderer& one) {
     k_->renderer = one.renderer;

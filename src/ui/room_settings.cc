@@ -137,7 +137,8 @@ struct radio_choice : nodes::Stack {
     this->setGap(10.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 6.0f, 6.0f, 6.0f},
                   .cornerRadius = 6.0f, .hoverBackground = chosen_colour, .disabled = !allowed});
-    fState.setCursor(scene::cursor::hand{});
+    if (allowed)
+      fState.setCursor(scene::cursor::hand{});
     parts.ring.set_on(on);
     if (!allowed)
       fState.setAlpha(0.55f);

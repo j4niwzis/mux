@@ -734,6 +734,18 @@ int run(App& app, const options& how) {
                     << one.bounds.fTop << (one.children ? " (its children changed)" : " (its layout undone)") << "\n";
           std::free(name);
         }
+      // How many nodes each walk touched since the last frame said: what the
+      // frame cost, walk by walk.
+      if (traced) {
+        const auto counts = std::exchange(skiff::scene::walkCounts(), {});
+        const auto drawn = std::exchange(skiff::scene::drawnCount(), 0);
+        const auto seen = std::exchange(skiff::scene::visitedCount(), 0);
+        if (!frame.fDamage.isEmpty() || counts.laidOut != 0)
+          std::cerr << "    walked: tick " << counts.tick << ", restyle " << counts.restyle << ", dirty " << counts.dirty
+                    << ", layout " << counts.layout << " (" << counts.laidOut << " laid out), damage " << counts.damage
+                    << ", hover " << counts.hover << ", animating " << counts.animating << ", draw " << seen << " ("
+                    << drawn << " drawn)\n";
+      }
       // And which nodes marked it, by type and where.
       if (traced)
         for (const auto& one : std::exchange(skiff::scene::damagers(), {})) {

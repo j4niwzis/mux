@@ -716,6 +716,8 @@ int run(App& app, const options& how) {
         std::println(std::cerr, "[layout] {} sticks out of {} by {:.1f} across, {:.1f} down", one.node, one.parent,
                      one.x, one.y);
       shapes.show(scene.cursor());
+      // Scroll views copied rather than repainted, where the frame is kept.
+      skiff::scene::blitScrolling() = app.partial_redraw;
       const skiff::scene::FrameResult frame = scene.finishFrame();
       // Frames said, where MUX_TRACE_FRAMES is set: what each repaints, and
       // whether more are asked for.
@@ -790,6 +792,21 @@ int run(App& app, const options& how) {
             continue;
         }
         skia::SkCanvas* into = kept_frame->getCanvas();
+        // A scroll view that only moved: last frame's pixels of it copied to
+        // where they go now, and only what came into view, and what is over
+        // it, repainted -- not the whole view at every step of a scroll.
+        if (!whole && !fresh)
+          for (const skiff::scene::ScrollMove& move : frame.fMoves) {
+            const skia::SkIRect to = skia::SkRect::MakeLTRB(move.rect.fLeft * scale, move.rect.fTop * scale,
+                                                            move.rect.fRight * scale, move.rect.fBottom * scale)
+                                         .round();
+            const int dy = static_cast<int>(std::lround(move.dy * scale));
+            skia::SkIRect from = to.makeOffset(0, -dy);
+            if (!from.intersect(to))
+              continue;
+            if (auto pixels = kept_frame->makeImageSnapshot(from))
+              into->drawImage(pixels, static_cast<float>(from.fLeft), static_cast<float>(from.fTop + dy));
+          }
         into->save();
         into->clipRect(repainted);
         into->clear(skia::colorSetARGB(255, 24, 27, 30));

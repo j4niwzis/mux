@@ -644,6 +644,39 @@ struct conversations_screen : nodes::Stack {
   // The chat's first unread message as it was opened: the bar goes over it,
   // and the view opens with it at its top.
   std::optional<std::string> unread_from;
+  // The first unread message among those held: the one after the message
+  // read up to that the reader did not send. Where that marker is not known
+  // yet -- a chat opened before its read marker is loaded, which the server
+  // gives only as a count of unread -- that many messages back from the
+  // newest, as the server counts them: said, not done, and not the reader's.
+  static std::optional<std::string> first_unread_here(const conversation& one, const auto& all) {
+    if (one.unread_here() <= 0)
+      return std::nullopt;
+    if (one.read_up_to) {
+      if (const auto read = std::ranges::find(all, *one.read_up_to, &message::id); read != all.end())
+        for (auto it = std::next(read); it != all.end(); ++it)
+          if (!it->outgoing)
+            return it->id;
+      return std::nullopt;
+    }
+    std::optional<std::string> found;
+    std::int64_t left = one.unread_here();
+    for (auto it = all.rbegin(); it != all.rend() && left > 0; ++it)
+      if (!it->outgoing && !it->service) {
+        found = it->id;
+        --left;
+      }
+    return found;
+  }
+  // Where a chat with unread opens: its first unread held, or else the
+  // message read up to, to be fetched with what is around it.
+  static std::optional<std::string> first_unread(const conversation& one, const auto& all) {
+    if (auto here = first_unread_here(one, all))
+      return here;
+    if (one.unread_here() > 0 && one.read_up_to)
+      return one.read_up_to;
+    return std::nullopt;
+  }
   bool jump_quiet = false;
   int jump_tries = 0;
   // Frames a jump has been on its way: the loader shows past a few.
@@ -1228,19 +1261,13 @@ struct conversations_screen : nodes::Stack {
       unread_from.reset();
       if (jumping_to) {
         timeline.scrollToEnd(false);
-      } else if (one->read_up_to && one->unread_here() > 0) {
+      } else if (const std::optional<std::string> first = first_unread(*one, all)) {
         // Unread in it: opened at its first unread, at the view's top under
         // tdesktop's bar, and read on from there as it is seen -- where the
         // message read up to is not here, first what is around it.
         timeline.scrollToEnd(false);
-        unread_from.reset();
-        if (const auto read = std::ranges::find(all, *one->read_up_to, &message::id); read != all.end())
-          for (auto it = std::next(read); it != all.end(); ++it)
-            if (!it->outgoing) {
-              unread_from = it->id;
-              break;
-            }
-        jumping_to = unread_from ? *unread_from : *one->read_up_to;
+        unread_from = first_unread_here(*one, all);
+        jumping_to = *first;
         jump_chat = chosen;
         jump_quiet = true;
         jump_tries = 0;

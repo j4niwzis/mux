@@ -15,6 +15,7 @@ import loom.cs.message_pagination;
 import loom.cs.event_context;
 import loom.cs.receipts;
 import loom.cs.redaction;
+import loom.cs.users;
 import loom.cs.room_summary;
 import loom.cs.list_public_rooms;
 import loom.cs.room_send;
@@ -391,12 +392,12 @@ void account<Sink>::create_room(std::string name, std::string topic, bool open, 
                             .room_alias_name = alias.empty() ? std::nullopt : std::optional<std::string>(alias),
                             .name = name,
                             .topic = topic.empty() ? std::nullopt : std::optional<std::string>(topic),
-                            .preset = open ? made_t::preset_t{made_t::preset_values::public_chat{}}
-                                           : made_t::preset_t{made_t::preset_values::private_chat{}},
                             // Element's "Block anyone not part of the server":
                             // the room's creation content, as the spec has it.
                             .creation_content = federate ? std::nullopt
-                                                         : std::optional<knot::raw>(knot::raw{R"({"m.federate":false})"})}});
+                                                         : std::optional<knot::raw>(knot::raw{R"({"m.federate":false})"}),
+                            .preset = open ? made_t::preset_t{made_t::preset_values::public_chat{}}
+                                           : made_t::preset_t{made_t::preset_values::private_chat{}}}});
     if (!made) {
       log(id_, "could not make the room {}: {}", name, made.error().said());
       return;

@@ -351,13 +351,26 @@ struct network {
     });
   }
   // A room made by the account named, as Element's Create room.
-  void create_room(const mux::account_id& by, std::string name, std::string topic, bool open, std::string alias) {
-    loop.post([this, by, name = std::move(name), topic = std::move(topic), open, alias = std::move(alias)] {
+  void create_room(const mux::account_id& by, std::string name, std::string topic, bool open, std::string alias,
+                   bool federate = true) {
+    loop.post([this, by, name = std::move(name), topic = std::move(topic), open, alias = std::move(alias), federate] {
       for (auto& one : accounts)
         splice::visit(
             [&](auto& account) {
               if (account->id() == by)
-                account->create_room(name, topic, open, alias);
+                account->create_room(name, topic, open, alias, federate);
+            },
+            one.account);
+    });
+  }
+  // The user directory of the account named, searched.
+  void search_people(const mux::account_id& by, std::string term) {
+    loop.post([this, by, term = std::move(term)] {
+      for (auto& one : accounts)
+        splice::visit(
+            [&](auto& account) {
+              if (account->id() == by)
+                account->search_people(term);
             },
             one.account);
     });

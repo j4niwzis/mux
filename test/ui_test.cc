@@ -101,7 +101,11 @@ struct stub {
   void close_explore() {}
   void search_rooms(std::string, std::string) {}
   void join_directory_room(std::string, std::string) {}
-  void create_room(std::string, std::string, bool, std::string) {}
+  void create_room(std::string, std::string, bool, std::string, bool = true) {}
+  void find_people(std::string) {}
+  void open_new_room() {}
+  void close_new_room() {}
+  void copy_text(std::string) {}
   void settings_notifications() {}
   void flip_notify(mux::config::notify_flag_t) {}
   void set_notify_backend(mux::config::notify_backend_t) {}

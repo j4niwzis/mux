@@ -53,6 +53,10 @@ void app::woken() {
                                [&](const mux::change::directory_listed& listed) {
                                  root().show_directory(listed.rooms, listed.server);
                                },
+                               // People found: in Start chat, while it asks for them.
+                               [&](const mux::change::people_found& found) {
+                                 root().show_found_people(found.people, found.query);
+                               },
                                [&](const mux::change::state_listed& listed) {
                                  root().show_room_state(listed.entries);
                                },

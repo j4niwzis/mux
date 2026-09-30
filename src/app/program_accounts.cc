@@ -55,7 +55,34 @@ void app::apply(const request::close_emoji&) { root().close_emoji(); }
 // A new chat: its box; a direct chat or a group asked of the account whose
 // chats are listed -- or, for a direct chat with someone it already has
 // one with, that chat shown.
-void app::apply(const request::open_new_chat&) { root().open_new_chat(); }
+// Element's Start chat: those one has direct chats with to begin with, and
+// one's own link to send.
+void app::apply(const request::open_new_chat&) {
+  const auto& current = root().main().current;
+  std::vector<mux::found_person> known;
+  std::string link;
+  if (current) {
+    if (const auto found = model->accounts().find(*current); found != model->accounts().end())
+      for (const auto& [key, chat] : found->second.conversations)
+        if (!mux::ui::is_group(chat))
+          known.push_back({.id = mux::ui::contact_of(chat), .name = mux::ui::display_name(chat), .avatar = chat.avatar});
+    link = mux::is_matrix(current->speaks) ? "https://matrix.to/#/" + current->address : "xmpp:" + current->address;
+  }
+  std::ranges::sort(known, {}, &mux::found_person::name);
+  root().open_new_chat(std::move(known), std::move(link));
+}
+void app::apply(const request::find_people& one) {
+  const auto by = this->matrix_account();
+  if (!by || shared.demo())
+    return;
+  net->search_people(*by, one.query);
+}
+void app::apply(const request::open_new_room&) {
+  const auto by = this->matrix_account();
+  root().open_new_room(by ? by->address.substr(by->address.find(':') + 1) : std::string());
+}
+void app::apply(const request::close_new_room&) { root().close_new_room(); }
+void app::apply(const request::copy_text& one) { skiff::scene::setClipboardText(one.text); }
 void app::apply(const request::close_new_chat&) { root().close_new_chat(); }
 void app::apply(const request::start_direct& one) {
   const auto& current = root().main().current;
@@ -122,11 +149,11 @@ void app::apply(const request::create_room& one) {
   const auto by = this->matrix_account();
   if (!by || shared.demo())
     return;
-  root().close_new_chat();
+  root().close_new_room();
   std::string alias = one.alias;
   if (alias.starts_with('#'))
     alias = alias.substr(1, alias.find(':') == std::string::npos ? std::string::npos : alias.find(':') - 1);
-  net->create_room(*by, one.name, one.topic, one.open, one.open ? alias : std::string());
+  net->create_room(*by, one.name, one.topic, one.open, one.open ? alias : std::string(), one.federate);
   root().show_message("New room", "Making " + one.name + "\u2026");
 }
 void app::apply(const request::start_group& one) {

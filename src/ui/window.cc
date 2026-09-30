@@ -59,8 +59,9 @@ struct window : scene::Node {
       widgets::Dialog<room_settings<Actions>> manage;
       // Where a message is forwarded to.
       widgets::Dialog<forward_box<Actions>> forwarding;
-      // A new chat: someone to message, or a group to make.
-      widgets::Dialog<new_chat_box<Actions>> new_chat;
+      // Element's Start chat, and its Create a room.
+      widgets::Dialog<start_chat_box<Actions>> new_chat;
+      widgets::Dialog<create_room_box<Actions>> new_room;
       // A server's public rooms, searched.
       widgets::Dialog<explore_box<Actions>> explore;
       // The developer tools.
@@ -87,7 +88,7 @@ struct window : scene::Node {
     explicit layers(Actions* a)
         : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a))},
           actions_of(a) {
-      auto& [backdrop, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, explore, devtools, sending,
+      auto& [backdrop, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, explore, devtools, sending,
              emoji, menu, viewer] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
@@ -115,7 +116,9 @@ struct window : scene::Node {
       forwarding.setSheetColour(sidebar_colour);
       forwarding.setSize(400.0f, 520.0f);
       new_chat.setSheetColour(sidebar_colour);
-      new_chat.setWidthFittingContent(420.0f);
+      new_chat.setSize(480.0f, 560.0f);
+      new_room.setSheetColour(sidebar_colour);
+      new_room.setWidthFittingContent(480.0f);
       explore.setSheetColour(sidebar_colour);
       explore.setSize(640.0f, 560.0f);
       devtools.setSheetColour(sidebar_colour);
@@ -172,6 +175,7 @@ struct window : scene::Node {
     layer().manage.dropClosed();
     layer().forwarding.dropClosed();
     layer().new_chat.dropClosed();
+    layer().new_room.dropClosed();
     layer().explore.dropClosed();
     layer().devtools.dropClosed();
     layer().sending.dropClosed();
@@ -252,12 +256,22 @@ struct window : scene::Node {
   void close_manage() { layer().manage.close(); }
   void open_forward(const std::vector<forward_target>& chats) { layer().forwarding.open(actions, chats); }
   void close_forward() { layer().forwarding.close(); }
-  void open_new_chat() {
+  void open_new_chat(std::vector<found_person> known, std::string own_link) {
     close_drawer();
-    layer().new_chat.open(actions);
+    layer().new_chat.open(actions, std::move(known), std::move(own_link));
   }
   void close_new_chat() { layer().new_chat.close(); }
+  void show_found_people(const std::vector<found_person>& people, const std::string& query) {
+    if (auto* up = layer().new_chat.shown())
+      up->show_found(people, query);
+  }
+  void open_new_room(const std::string& own_server) {
+    close_drawer();
+    layer().new_room.open(actions, own_server);
+  }
+  void close_new_room() { layer().new_room.close(); }
   void open_explore(const std::string& own_server) {
+    close_drawer();
     layer().new_chat.close();
     layer().explore.open(actions, own_server);
   }

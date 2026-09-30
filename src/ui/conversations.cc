@@ -282,15 +282,20 @@ struct conversations_screen : nodes::Stack {
   struct side_column : nodes::Stack {
     float wanted = 300.0f;
     struct head_row : nodes::Stack {
+      using explore_button = icon_button<ask<Actions, &Actions::open_explore>>;
       struct parts_t {
         menu_button<Actions> menu;
         nodes::Text name{"mux", 17.0f, text_colour, true};
+        // Explore rooms, out of the new chat's box: beside the chats, as
+        // Element's compass is.
+        explore_button explore;
       } parts;
-      explicit head_row(Actions* a) : parts{.menu = menu_button<Actions>(a)} {
+      explicit head_row(Actions* a) : parts{.menu = menu_button<Actions>(a), .explore = explore_button(icon::compass{}, {a})} {
         this->setHorizontal();
         this->setGap(10.0f);
         fState.apply({.fillX = true, .height = 52.0f, .padding = {8.0f, 8.0f, 8.0f, 8.0f}});
-        parts.name.apply({.alignSelf = scene::align::kMiddle});
+        parts.name.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+        parts.explore.apply({.alignSelf = scene::align::kMiddle});
       }
     };
     // Search: the chats listed are those whose name or address has what is

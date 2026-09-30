@@ -11,8 +11,11 @@ import mux.ui;
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::explore_box<mux::app::actions>>() noexcept {
   return skiff::scene::AnyNode::opsOf<mux::ui::explore_box<mux::app::actions>>();
 }
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::new_chat_box<mux::app::actions>>() noexcept {
-  return skiff::scene::AnyNode::opsOf<mux::ui::new_chat_box<mux::app::actions>>();
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::start_chat_box<mux::app::actions>>() noexcept {
+  return skiff::scene::AnyNode::opsOf<mux::ui::start_chat_box<mux::app::actions>>();
+}
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::create_room_box<mux::app::actions>>() noexcept {
+  return skiff::scene::AnyNode::opsOf<mux::ui::create_room_box<mux::app::actions>>();
 }
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::person_card<mux::app::actions>>() noexcept {
   return skiff::scene::AnyNode::opsOf<mux::ui::person_card<mux::app::actions>>();

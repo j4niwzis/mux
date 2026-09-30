@@ -492,6 +492,14 @@ struct reaction {};
 using mark_kind_t = splice::variant<mark_kind::mention, mark_kind::reaction>;
 
 // A room of a server's public directory, as it lists it.
+// Someone found -- in the user directory, or among one's chats: their ID,
+// their name and picture where known.
+struct found_person {
+  std::string id;
+  std::string name;
+  std::optional<std::string> avatar;
+  friend bool operator==(const found_person&, const found_person&) = default;
+};
 struct directory_room {
   std::string id;
   std::string name;
@@ -926,6 +934,12 @@ struct reacted_to_mine {
   std::string target;
   std::chrono::sys_time<std::chrono::milliseconds> at{};
 };
+// The user directory searched: who it found for what was asked.
+struct people_found {
+  account_id by;
+  std::string query;
+  std::vector<found_person> people;
+};
 // A server's public directory, searched: what it listed.
 struct directory_listed {
   account_id by;
@@ -968,7 +982,7 @@ using change_t = splice::variant<change::connection_changed, change::account_rem
                               change::room_created, change::preview_loaded, change::devtools_text,
                               change::state_listed, change::room_previewed, change::mentioned,
                               change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine,
-                              change::directory_listed>;
+                              change::directory_listed, change::people_found>;
 
 // The model: every account, and every change applied to it.
 class model {
@@ -1238,6 +1252,7 @@ class model {
     std::erase_if(where.unread_reactions, seen);
   }
   void on(const change::directory_listed&) {}  // the window's: the Explore dialog
+  void on(const change::people_found&) {}  // the window's: the Start chat dialog
   void on(const change::reacted_to_mine& one) {
     keep_mark(of(one.in), of(one.in).unread_reactions, {one.event, one.target, one.at});
   }

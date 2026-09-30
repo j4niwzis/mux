@@ -89,7 +89,9 @@ class account {
   void search_directory(std::string server, std::string query);
   // A room made, as Element's Create room makes one: named, about
   // something, public -- with an address -- or private.
-  void create_room(std::string name, std::string topic, bool open, std::string alias);
+  void create_room(std::string name, std::string topic, bool open, std::string alias, bool federate = true);
+  // The user directory searched: people_found for what was asked.
+  void search_people(std::string term);
   // A room's gap since the last run, from where the sync left it back to
   // the event it had last: read for mentions of the user and reactions to
   // theirs, and nothing else -- no message kept, nothing fetched.

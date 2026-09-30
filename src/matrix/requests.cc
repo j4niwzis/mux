@@ -363,8 +363,24 @@ void account<Sink>::search_directory(std::string server, std::string query) {
 }
 
 template <class Sink>
-void account<Sink>::create_room(std::string name, std::string topic, bool open, std::string alias) {
-  loop_->spawn([this, name = std::move(name), topic = std::move(topic), open, alias = std::move(alias)] {
+void account<Sink>::search_people(std::string term) {
+  loop_->spawn([this, term = std::move(term)] {
+    if (!api_)
+      return;
+    auto got = perform(*api_, loom::cs::search_user_directory{.body = {.search_term = term, .limit = 30}});
+    std::vector<found_person> people;
+    if (got)
+      for (const auto& one : got->results)
+        people.push_back({.id = one.user_id, .name = one.display_name.value_or(""), .avatar = one.avatar_url});
+    else
+      log(id_, "the user directory, for {}: {}", term, got.error().said());
+    sink_(change::people_found{id_, term, std::move(people)});
+  });
+}
+
+template <class Sink>
+void account<Sink>::create_room(std::string name, std::string topic, bool open, std::string alias, bool federate) {
+  loop_->spawn([this, name = std::move(name), topic = std::move(topic), open, alias = std::move(alias), federate] {
     if (!api_)
       return;
     using made_t = loom::cs::create_room::body_t;
@@ -376,7 +392,11 @@ void account<Sink>::create_room(std::string name, std::string topic, bool open, 
                             .name = name,
                             .topic = topic.empty() ? std::nullopt : std::optional<std::string>(topic),
                             .preset = open ? made_t::preset_t{made_t::preset_values::public_chat{}}
-                                           : made_t::preset_t{made_t::preset_values::private_chat{}}}});
+                                           : made_t::preset_t{made_t::preset_values::private_chat{}},
+                            // Element's "Block anyone not part of the server":
+                            // the room's creation content, as the spec has it.
+                            .creation_content = federate ? std::nullopt
+                                                         : std::optional<knot::raw>(knot::raw{R"({"m.federate":false})"})}});
     if (!made) {
       log(id_, "could not make the room {}: {}", name, made.error().said());
       return;

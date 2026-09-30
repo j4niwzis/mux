@@ -95,6 +95,9 @@ std::string of(const change::preview_loaded& one) { return std::format("a previe
 std::string of(const change::devtools_text& one) { return one.title + "\n" + one.text; }
 std::string of(const change::mentioned& one) { return std::format("mentioned in {}", one.in.id); }
 std::string of(const change::marks_shown&) { return std::string(); }
+std::string of(const change::people_found& one) {
+  return std::format("{} found for {}", one.people.size(), one.query);
+}
 std::string of(const change::directory_listed& one) {
   return std::format("{} rooms in the directory of {}", one.rooms.size(), one.server.empty() ? "the home server" : one.server);
 }

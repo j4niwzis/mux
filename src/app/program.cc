@@ -297,6 +297,10 @@ struct app : kept_settings {
   void apply(const request::close_devtools&);
   void apply(const request::send_custom& one);
   void apply(const request::open_new_chat&);
+  void apply(const request::find_people& one);
+  void apply(const request::open_new_room&);
+  void apply(const request::close_new_room&);
+  void apply(const request::copy_text& one);
   void apply(const request::close_new_chat&);
   void apply(const request::start_direct& one);
   void apply(const request::start_group& one);

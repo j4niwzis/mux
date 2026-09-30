@@ -301,12 +301,16 @@ if(mux_ipo)
     get_property(mux_targets DIRECTORY ${dir} PROPERTY BUILDSYSTEM_TARGETS)
     foreach(target IN LISTS mux_targets)
       get_target_property(kind ${target} TYPE)
-      if(kind MATCHES "^(EXECUTABLE|STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY|OBJECT_LIBRARY)$")
+      # mux's own only: what a package is built into here (FFmpeg's
+      # libraries, by cme) keeps its own flags -- its C is another
+      # compiler's, whose LTO objects mux's linker could not read.
+      if(target MATCHES "^mux" AND kind MATCHES "^(EXECUTABLE|STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY|OBJECT_LIBRARY)$")
         set_property(TARGET ${target} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
         # Full LTO, not CMake's thin: the whole program optimised as one
         # module at the link. Given after CMake's own flag, it is the one kept.
         if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-          target_compile_options(${target} PRIVATE $<$<CONFIG:Release>:-flto=full>)
+          target_compile_options(${target} PRIVATE
+            $<$<AND:$<CONFIG:Release>,$<OR:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<COMPILE_LANG_AND_ID:C,Clang>>>:-flto=full>)
           target_link_options(${target} PRIVATE $<$<CONFIG:Release>:-flto=full>)
         endif()
       endif()

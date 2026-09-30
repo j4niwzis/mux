@@ -284,10 +284,7 @@ class pictures_part {
   }
   // Where a video is kept once fetched: a file of its own, named by it.
   [[nodiscard]] static std::filesystem::path video_file(std::string_view source) {
-    std::string name;
-    for (const char c : source)
-      name += std::isalnum(static_cast<unsigned char>(c)) ? c : '_';
-    return mux::config::cache_path("videos") / name;
+    return mux::config::cache_path("videos") / mux::config::file_name_of(source);
   }
   // The viewer's cross: the whole picture's download stopped, the thumbnail
   // left; pressed again (an arrow then), asked for again.
@@ -386,10 +383,7 @@ class pictures_part {
     std::string bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
     std::error_code failed;
     std::filesystem::create_directories(gifs(), failed);
-    std::string name;
-    for (const char c : source)
-      name += std::isalnum(static_cast<unsigned char>(c)) ? c : '_';
-    std::ofstream(gifs() / name, std::ios::binary) << bytes;
+    std::ofstream(gifs() / mux::config::file_name_of(source), std::ios::binary) << bytes;
     s_->root().show_message("GIFs", "Saved to your GIFs.");
   }
   // The saved GIFs, newest first, to the input's GIF tab; each decoded on a
@@ -507,10 +501,7 @@ class pictures_part {
   // thumb_ and full_ before it -- so what was kept is found.
   static std::optional<std::filesystem::path> kept_file(const media_use_t& use, std::string_view source) {
     const auto named = [&](std::string_view kind) {
-      std::string name(kind);
-      for (const char c : source)
-        name += std::isalnum(static_cast<unsigned char>(c)) ? c : '_';
-      return std::optional(mux::config::cache_path("avatars") / name);
+      return std::optional(mux::config::cache_path("avatars") / (std::string(kind) + mux::config::file_name_of(source)));
     };
     return splice::visit(splice::overloaded{[&](const media_use::avatar&) { return named(""); },
                                  [&](const media_use::thumbnail&) { return named("thumb_"); },

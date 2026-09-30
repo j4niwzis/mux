@@ -189,10 +189,9 @@ void account<Sink>::run() {
 
 template <class Sink>
 auto account<Sink>::kept_file() const -> std::filesystem::path {
-  std::string name;
-  for (const char c : id_.address)
-    name += std::isalnum(static_cast<unsigned char>(c)) || c == '@' || c == '.' || c == '-' ? c : '_';
-  return config::state_path(name + ".sync.json");
+  // Named one to one by the account; kept under its name before, moved.
+  return config::moved_from(config::state_path(config::file_name_of(id_.address) + ".sync.json"),
+                            config::state_path(config::old_file_name_of(id_.address) + ".sync.json"));
 }
 
 template <class Sink>

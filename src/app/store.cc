@@ -150,21 +150,17 @@ class message_store {
   }
 
  private:
-  static std::string safe(std::string_view name) {
-    std::string out;
-    for (const char c : name)
-      out += std::isalnum(static_cast<unsigned char>(c)) || c == '@' || c == '.' || c == '-' ? c : '_';
-    return out;
+  // A chat's file in a folder: named one to one by its account and its id
+  // -- what was kept under the names before moved there.
+  static std::filesystem::path kept_of(std::string_view folder, const mux::conversation_id& in, std::string_view ending) {
+    const auto root = mux::config::state_path(std::string(folder));
+    return mux::config::moved_from(
+        root / mux::config::file_name_of(in.account.address) / (mux::config::file_name_of(in.id) + std::string(ending)),
+        root / mux::config::old_file_name_of(in.account.address) / (mux::config::old_file_name_of(in.id) + std::string(ending)));
   }
-  static std::filesystem::path reads_file_of(const mux::conversation_id& in) {
-    return mux::config::state_path("messages") / safe(in.account.address) / (safe(in.id) + ".reads.json");
-  }
-  static std::filesystem::path deleted_file_of(const mux::conversation_id& in) {
-    return mux::config::state_path("deleted") / safe(in.account.address) / (safe(in.id) + ".jsonl");
-  }
-  static std::filesystem::path file_of(const mux::conversation_id& in) {
-    return mux::config::state_path("messages") / safe(in.account.address) / (safe(in.id) + ".jsonl");
-  }
+  static std::filesystem::path reads_file_of(const mux::conversation_id& in) { return kept_of("messages", in, ".reads.json"); }
+  static std::filesystem::path deleted_file_of(const mux::conversation_id& in) { return kept_of("deleted", in, ".jsonl"); }
+  static std::filesystem::path file_of(const mux::conversation_id& in) { return kept_of("messages", in, ".jsonl"); }
   // The files are read on workers and written on the UI's thread: a line
   // written, and a file written again whole, hold this.
   static std::mutex& file_lock() {

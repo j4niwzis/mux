@@ -867,6 +867,47 @@ std::filesystem::path state_path(std::string_view name) {
   return std::filesystem::path(std::format("mux-{}", name));
 }
 
+// A name -- an address, a room's id, a media source -- as a file's: kept as
+// it is where it is plain (letters, digits, '@', '-', '_', and '.' but not
+// first), every other byte as %XX -- '%' too, and a leading '.', so no "."
+// or ".." and nothing hidden. One name to one file: before, every other
+// character became '_', and "!a:b" and "!a_b" shared one.
+[[nodiscard]] inline std::string file_name_of(std::string_view name) {
+  std::string out;
+  for (std::size_t i = 0; i < name.size(); ++i) {
+    const auto c = static_cast<unsigned char>(name[i]);
+    const bool plain = std::isalnum(c) != 0 || c == '@' || c == '-' || c == '_' || (c == '.' && i > 0);
+    if (plain)
+      out += name[i];
+    else
+      out += std::format("%{:02X}", static_cast<unsigned>(c));
+  }
+  return out.empty() ? std::string("%") : out;
+}
+// The name as files were named before: to find what was kept under it.
+[[nodiscard]] inline std::string old_file_name_of(std::string_view name) {
+  std::string out;
+  for (const char c : name)
+    out += std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '@' || c == '.' || c == '-' ? c : '_';
+  return out;
+}
+// Where something is kept: what was kept where it was before moved there,
+// the first time it is asked for in a run -- looked for once, not at each
+// line written.
+inline std::filesystem::path moved_from(std::filesystem::path now, const std::filesystem::path& before) {
+  static std::mutex held;
+  static std::set<std::filesystem::path> looked;
+  const std::scoped_lock lock(held);
+  if (!looked.insert(now).second || now == before)
+    return now;
+  std::error_code failed;
+  if (!std::filesystem::exists(now, failed) && std::filesystem::exists(before, failed)) {
+    std::filesystem::create_directories(now.parent_path(), failed);
+    std::filesystem::rename(before, now, failed);
+  }
+  return now;
+}
+
 // Where what can be fetched again is kept: $XDG_CACHE_HOME/mux, or
 // ~/.cache/mux.
 std::filesystem::path cache_path(std::string_view name) {

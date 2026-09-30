@@ -598,8 +598,14 @@ struct conversations_screen : nodes::Stack {
   // made, paged back to, fetched around, aimed at -- and skiff draws the next
   // frame only for what is still settling. Nothing else here asks for one.
   [[nodiscard]] bool settling() const { return jumping_to.has_value() || aiming.has_value(); }
-  // Back to the newest, and nothing unseen.
+  // Back to the newest, and nothing unseen. A jump still on its way, or a
+  // message still aimed at -- one jumped to a moment ago, held in view while
+  // what is above it settles -- let go first: it pulled the view back to
+  // itself, and the button had to be pressed twice.
   void jump_to_end() {
+    this->stop_jump();
+    aiming.reset();
+    jump_fragment.reset();
     // To the newest: the stretch made at the end again.
     if (!made.to_end && last_model) {
       made = made_range{};

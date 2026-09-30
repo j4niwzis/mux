@@ -66,11 +66,13 @@ class settings_part {
   void apply(const request::set_theme& one) {
     k_->theme = one.theme;
     (void)k_->write();
+    skiff::scene::forgetStyles();  // resolved with the theme before
     s_->rebuild_due = true;
   }
   void apply(const request::set_accent& one) {
     k_->accent = one.accent;
     (void)k_->write();
+    skiff::scene::forgetStyles();  // resolved with the accent before
     s_->rebuild_due = true;
   }
   // The renderer: for the next start, kept.

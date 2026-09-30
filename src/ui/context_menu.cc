@@ -703,7 +703,7 @@ struct seen_row : nodes::Stack {
       explicit lines_t(const seen_reader& one)
           : parts{.name = nodes::Text(one.name, 13.0f, text_colour),
                   .when = nodes::Text(one.at ? clock_of(*one.at) : std::string("seen"), 12.0f, dim_colour)} {
-        fState.apply({.grow = scene::axes::kX, .autoSize = scene::axes::kY, .alignSelf = scene::align::kMiddle});
+        fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
         parts.name.setElided(true);
         parts.when.setElided(true);
       }

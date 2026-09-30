@@ -613,12 +613,37 @@ inline double now_ms() {
 //   before_frame()  between events: what the screens asked for, applied
 //                   where no handler is running
 //   closing()       the window is going away
+// What shows the windows, as SDL names it: read once, here.
+namespace video_driver {
+struct x11 {};
+struct wayland {};
+struct other {};
+}  // namespace video_driver
+using video_driver_t = splice::variant<video_driver::x11, video_driver::wayland, video_driver::other>;
+inline video_driver_t video_driver_of(const char* name) {
+  const std::string_view said = name ? name : "";
+  if (said == "x11")
+    return video_driver::x11{};
+  if (said == "wayland")
+    return video_driver::wayland{};
+  return video_driver::other{};
+}
+
 template <class App>
 int run(App& app, const options& how) {
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
     std::println(std::cerr, "[mux] no window: {}", SDL_GetError());
     return 1;
   }
+  // A window drawn in software shown as it is, where the system can: on X11
+  // SDL has a framebuffer of its own (shared memory), where by default it
+  // puts the window on a GL texture -- emulated on the processor without a
+  // GPU, the whole window drawn again at each frame. Not on Wayland, which
+  // has no such framebuffer in SDL: there the texture is the only way.
+  if (how.software)
+    splice::visit(splice::overloaded{[](video_driver::x11) { SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION, "0"); },
+                                     [](const auto&) {}},
+                  video_driver_of(SDL_GetCurrentVideoDriver()));
   (void)wake_event();
   (void)files_event();
   (void)save_event();

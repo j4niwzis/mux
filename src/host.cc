@@ -929,6 +929,8 @@ int run(App& app, const options& how) {
       // scroll's copy could carry it along.
       const bool keeps = target.keeps_pixels();
       std::vector<skia::SkIRect> changed;
+      // What is repainted, rect by rect: all of it, unless only the damage.
+      std::vector<skia::SkRect> pieces{all};
       bool show_all = true;
       for (auto& [pixels, at] : std::exchange(overlays, {}))
         if (keeps) {
@@ -953,13 +955,23 @@ int run(App& app, const options& how) {
           fresh = std::exchange(kept_frame_for, kept_frame.get()) != kept_frame.get();
           kept = kept_frame.get();
         }
+        // Each rect of the damage on its own, in the window's pixels -- a pixel
+        // out for antialiasing: their union could be the whole view.
         if (!whole && !fresh) {
           show_all = false;
-          repainted = skia::SkRect::MakeLTRB(frame.fDamage.fLeft * scale - 1.0f, frame.fDamage.fTop * scale - 1.0f,
-                                             frame.fDamage.fRight * scale + 1.0f, frame.fDamage.fBottom * scale + 1.0f);
-          repainted.roundOut(&repainted);
-          if (!repainted.intersect(all))
-            repainted.setEmpty();
+          pieces.clear();
+          repainted.setEmpty();
+          const std::vector<skia::SkRect> said =
+              frame.fDamageRects.empty() ? std::vector<skia::SkRect>{frame.fDamage} : frame.fDamageRects;
+          for (const skia::SkRect& one : said) {
+            skia::SkRect piece = skia::SkRect::MakeLTRB(one.fLeft * scale - 1.0f, one.fTop * scale - 1.0f,
+                                                        one.fRight * scale + 1.0f, one.fBottom * scale + 1.0f);
+            piece.roundOut(&piece);
+            if (!piece.intersect(all))
+              continue;
+            pieces.push_back(piece);
+            repainted.join(piece);
+          }
         }
         skia::SkCanvas* into = kept->getCanvas();
         // A scroll view that only moved: last frame's pixels of it copied to
@@ -994,14 +1006,14 @@ int run(App& app, const options& how) {
               changed.push_back(to);
             }
           }
-        if (!repainted.isEmpty()) {
+        for (const skia::SkRect& piece : pieces) {
           into->save();
-          into->clipRect(repainted);
+          into->clipRect(piece);
           into->clear(skia::colorSetARGB(255, 24, 27, 30));
           into->scale(scale, scale);
           scene.draw(into);
           into->restore();
-          changed.push_back(repainted.roundOut());
+          changed.push_back(piece.roundOut());
         }
         if (kept != surface)
           canvas->drawImage(kept_frame->makeImageSnapshot(), 0.0f, 0.0f);
@@ -1016,6 +1028,7 @@ int run(App& app, const options& how) {
         if (!whole)
           repainted = skia::SkRect::MakeLTRB(frame.fDamage.fLeft * scale, frame.fDamage.fTop * scale,
                                              frame.fDamage.fRight * scale, frame.fDamage.fBottom * scale);
+        pieces = {repainted};
       }
       // What is drawn over the frame, where the window keeps its pixels:
       // what was under it kept, to be put back at the next frame.
@@ -1031,12 +1044,15 @@ int run(App& app, const options& how) {
         }
       };
       // What this frame repainted, outlined, where that is asked for.
-      if (app.flash_redraws && !repainted.isEmpty()) {
+      if (app.flash_redraws)
+        for (const skia::SkRect& piece : pieces) {
+        if (piece.isEmpty())
+          continue;
         skia::SkPaint outline;
         outline.setStyle(skia::kStrokeStyle);
         outline.setStrokeWidth(2.0f);
         outline.setColor(skia::colorSetARGB(220, 255, 0, 160));
-        const skia::SkRect edge = repainted.makeInset(1.0f, 1.0f);
+        const skia::SkRect edge = piece.makeInset(1.0f, 1.0f);
         // Only its four sides kept: what is inside is the frame's own.
         for (const skia::SkRect& side : {skia::SkRect::MakeLTRB(edge.fLeft - 2, edge.fTop - 2, edge.fRight + 2, edge.fTop + 2),
                                          skia::SkRect::MakeLTRB(edge.fLeft - 2, edge.fBottom - 2, edge.fRight + 2, edge.fBottom + 2),

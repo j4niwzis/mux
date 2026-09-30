@@ -151,6 +151,7 @@ struct sticker_grid : nodes::Stack {
       fState.apply({.width = 80.0f, .height = 80.0f, .margin = {2.0f, 2.0f, 2.0f, 2.0f}, .cornerRadius = 6.0f,
                     .hoverBackground = chosen_colour});
       parts.picture.apply({.fill = true});
+      parts.picture.keepBox();  // the cell's size, whatever the sticker
     }
     dwell resting;
     [[nodiscard]] bool settling() const { return resting.counting(this->hovered()); }
@@ -245,6 +246,7 @@ struct emoji_panel : nodes::Stack {
       parts.face.setVisible(false);
       parts.picture.emplace(from_avatars{custom.url});
       parts.picture->apply({.width = 26.0f, .height = 26.0f, .alignSelf = scene::align::kMiddle});
+      parts.picture->keepBox();  // fixed: its coming repaints, lays nothing out
     }
     [[nodiscard]] bool onClick(float, float) {
       const std::string chosen = glyph;

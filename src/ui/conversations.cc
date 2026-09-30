@@ -826,6 +826,16 @@ struct conversations_screen : nodes::Stack {
       }
     return best.value_or(0);
   }
+  // What the pin above the view was last worked out from.
+  struct pin_inputs {
+    conversation_id chat;
+    float at = 0.0f;
+    std::size_t held = 0;
+    std::size_t pins = 0;
+    std::string first;
+    friend bool operator==(const pin_inputs&, const pin_inputs&) = default;
+  };
+  std::optional<pin_inputs> pin_worked_out;
   // The message jumped to no longer looked for: where the view is, it stays.
   void stop_jump() {
     jumping_to.reset();
@@ -843,12 +853,20 @@ struct conversations_screen : nodes::Stack {
       this->show_conversation(*last_model);
     // The pin the bar shows, as the view moves: the one above it. Not while
     // a jump goes on -- where it lands decides.
+    // Worked out again only where the view, the messages or the pins moved:
+    // it looks each pin up in the whole timeline.
     if (!jumping_to && !aiming && chosen && last_model)
-      if (const conversation* one = last_model->find(*chosen); one && !one->pinned.empty())
-        if (const std::size_t want = this->pin_above(*one); want != std::min(pinned_step, one->pinned.size() - 1)) {
-          pinned_step = want;
-          this->show_pinned(one);
+      if (const conversation* one = last_model->find(*chosen); one && !one->pinned.empty()) {
+        const pin_inputs now{*chosen, timeline.current(), one->timeline.size(), one->pinned.size(),
+                             one->timeline.empty() ? std::string() : one->timeline.front().id};
+        if (now != pin_worked_out) {
+          pin_worked_out = now;
+          if (const std::size_t want = this->pin_above(*one); want != std::min(pinned_step, one->pinned.size() - 1)) {
+            pinned_step = want;
+            this->show_pinned(one);
+          }
         }
+      }
     // A message jumped to: made into a bubble where it is loaded, paged back
     // to where it is not -- page after page, as long as there is history --
     // and once it is laid out, brought into view and flashed.

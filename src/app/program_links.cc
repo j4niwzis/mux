@@ -229,10 +229,14 @@ void app::apply(const request::load_older& one) {
 void app::apply(const request::resize_sidebar& one) { root().main().resize_sidebar(one.x); }
 
 void app::apply(const request::message_person& one) {
-  if (model->find(one.who) != nullptr)
+  if (model->find(one.who) != nullptr) {
     this->apply(request::choose{one.who});
-  else
-    root().show_notice("Starting a new chat");
+    return;
+  }
+  // No chat with them yet: one started, as Start chat starts it -- their
+  // card closed, the chat opened once it is made.
+  this->apply(request::close_person_info{});
+  this->apply(request::start_direct{one.who.id});
 }
 
 // A quote pressed: to what it quotes -- or, a reaction's, to the message it

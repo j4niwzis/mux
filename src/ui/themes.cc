@@ -13,6 +13,374 @@ import mux.core;
 import mux.config;
 import :base;
 
+// Telegram's chat pattern, in the binary (telegram_pattern.cc): tdesktop's
+// art/background.tgv, a gzipped SVG, as the build fetched it.
+extern "C++" {
+extern const unsigned char mux_telegram_pattern[];
+extern const decltype(sizeof 0) mux_telegram_pattern_size;
+}
+
+namespace mux::ui {
+namespace pattern_reading {
+// DEFLATE (RFC 1951), as puff.c reads it: what gzip keeps the pattern in.
+// Read once, at the boundary, into the pattern's steps; a build without
+// zlib has it this way.
+struct bits {
+  std::span<const unsigned char> in;
+  std::size_t at = 0;
+  std::uint32_t held = 0;
+  int count = 0;
+  // `n` bits, the first the lowest; -1 past the end.
+  int take(int n) {
+    while (count < n) {
+      if (at >= in.size())
+        return -1;
+      held |= static_cast<std::uint32_t>(in[at++]) << count;
+      count += 8;
+    }
+    const int value = static_cast<int>(held & ((1u << n) - 1u));
+    held >>= n;
+    count -= n;
+    return value;
+  }
+};
+struct huffman {
+  std::array<short, 16> counts{};
+  std::array<short, 320> symbols{};
+};
+inline void build(huffman& table, std::span<const short> lengths) {
+  table.counts.fill(0);
+  for (const short length : lengths)
+    ++table.counts[static_cast<std::size_t>(length)];
+  table.counts[0] = 0;
+  std::array<short, 16> offsets{};
+  for (std::size_t length = 1; length < 16; ++length)
+    offsets[length] = static_cast<short>(offsets[length - 1] + table.counts[length - 1]);
+  for (std::size_t symbol = 0; symbol < lengths.size(); ++symbol)
+    if (lengths[symbol] != 0)
+      table.symbols[static_cast<std::size_t>(offsets[static_cast<std::size_t>(lengths[symbol])]++)] =
+          static_cast<short>(symbol);
+}
+inline int decode(bits& from, const huffman& table) {
+  int code = 0, first = 0, index = 0;
+  for (std::size_t length = 1; length < 16; ++length) {
+    const int bit = from.take(1);
+    if (bit < 0)
+      return -1;
+    code |= bit;
+    const int count = table.counts[length];
+    if (code - count < first)
+      return table.symbols[static_cast<std::size_t>(index + (code - first))];
+    index += count;
+    first += count;
+    first <<= 1;
+    code <<= 1;
+  }
+  return -1;
+}
+inline constexpr std::array<short, 29> kLengthBase{3,  4,  5,  6,  7,  8,  9,  10, 11,  13,  15,  17,  19,  23, 27,
+                                                   31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258};
+inline constexpr std::array<short, 29> kLengthExtra{0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2,
+                                                    2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0};
+inline constexpr std::array<short, 30> kDistanceBase{1,   2,   3,   4,   5,   7,    9,    13,   17,   25,
+                                                     33,  49,  65,  97,  129, 193,  257,  385,  513,  769,
+                                                     1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577};
+inline constexpr std::array<short, 30> kDistanceExtra{0, 0, 0, 0, 1, 1, 2, 2,  3,  3,  4,  4,  5,  5,  6,
+                                                      6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13};
+// A block's codes, into what is written out.
+inline bool codes(bits& from, std::string& out, const huffman& literals, const huffman& distances) {
+  while (true) {
+    const int symbol = decode(from, literals);
+    if (symbol < 0)
+      return false;
+    if (symbol < 256) {
+      out += static_cast<char>(symbol);
+      continue;
+    }
+    if (symbol == 256)
+      return true;
+    const std::size_t which = static_cast<std::size_t>(symbol - 257);
+    if (which >= kLengthBase.size())
+      return false;
+    const int extra = from.take(kLengthExtra[which]);
+    const int distance_symbol = decode(from, distances);
+    if (extra < 0 || distance_symbol < 0 || static_cast<std::size_t>(distance_symbol) >= kDistanceBase.size())
+      return false;
+    const int far_extra = from.take(kDistanceExtra[static_cast<std::size_t>(distance_symbol)]);
+    if (far_extra < 0)
+      return false;
+    const std::size_t length = static_cast<std::size_t>(kLengthBase[which] + extra);
+    const std::size_t distance = static_cast<std::size_t>(kDistanceBase[static_cast<std::size_t>(distance_symbol)] + far_extra);
+    if (distance > out.size())
+      return false;
+    for (std::size_t i = 0; i < length; ++i)
+      out += out[out.size() - distance];
+  }
+}
+// A gzip file (RFC 1952) inflated; nothing where it is not one.
+[[nodiscard]] inline std::optional<std::string> gunzip(std::span<const unsigned char> file) {
+  if (file.size() < 18 || file[0] != 0x1f || file[1] != 0x8b || file[2] != 8)
+    return std::nullopt;
+  const unsigned flags = file[3];
+  std::size_t at = 10;
+  if (flags & 4u)
+    at += 2 + (file[at] | (static_cast<std::size_t>(file[at + 1]) << 8));
+  if (flags & 8u)
+    while (at < file.size() && file[at++] != 0) {
+    }
+  if (flags & 16u)
+    while (at < file.size() && file[at++] != 0) {
+    }
+  if (flags & 2u)
+    at += 2;
+  if (at >= file.size())
+    return std::nullopt;
+  bits from{file.subspan(at)};
+  std::string out;
+  while (true) {
+    const int last = from.take(1);
+    const int type = from.take(2);
+    if (last < 0 || type < 0)
+      return std::nullopt;
+    if (type == 0) {
+      // Stored: from the next byte, its length and that length's complement.
+      from.held = 0;
+      from.count = 0;
+      if (from.at + 4 > from.in.size())
+        return std::nullopt;
+      const std::size_t length = from.in[from.at] | (static_cast<std::size_t>(from.in[from.at + 1]) << 8);
+      from.at += 4;
+      if (from.at + length > from.in.size())
+        return std::nullopt;
+      out.append(reinterpret_cast<const char*>(from.in.data() + from.at), length);
+      from.at += length;
+    } else if (type == 1) {
+      std::array<short, 288> lengths{};
+      std::fill(lengths.begin(), lengths.begin() + 144, short{8});
+      std::fill(lengths.begin() + 144, lengths.begin() + 256, short{9});
+      std::fill(lengths.begin() + 256, lengths.begin() + 280, short{7});
+      std::fill(lengths.begin() + 280, lengths.end(), short{8});
+      std::array<short, 30> far{};
+      far.fill(5);
+      huffman literals, distances;
+      build(literals, lengths);
+      build(distances, far);
+      if (!codes(from, out, literals, distances))
+        return std::nullopt;
+    } else if (type == 2) {
+      const int literal_count = from.take(5) + 257;
+      const int distance_count = from.take(5) + 1;
+      const int length_count = from.take(4) + 4;
+      if (literal_count > 286 || distance_count > 30)
+        return std::nullopt;
+      static constexpr std::array<std::size_t, 19> kOrder{16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15};
+      std::array<short, 19> code_lengths{};
+      for (int i = 0; i < length_count; ++i) {
+        const int length = from.take(3);
+        if (length < 0)
+          return std::nullopt;
+        code_lengths[kOrder[static_cast<std::size_t>(i)]] = static_cast<short>(length);
+      }
+      huffman lengths_code;
+      build(lengths_code, code_lengths);
+      std::array<short, 320> lengths{};
+      const int total = literal_count + distance_count;
+      for (int i = 0; i < total;) {
+        const int symbol = decode(from, lengths_code);
+        if (symbol < 0)
+          return std::nullopt;
+        if (symbol < 16) {
+          lengths[static_cast<std::size_t>(i++)] = static_cast<short>(symbol);
+          continue;
+        }
+        short repeated = 0;
+        int times = 0;
+        if (symbol == 16) {
+          if (i == 0)
+            return std::nullopt;
+          repeated = lengths[static_cast<std::size_t>(i - 1)];
+          times = 3 + from.take(2);
+        } else if (symbol == 17) {
+          times = 3 + from.take(3);
+        } else {
+          times = 11 + from.take(7);
+        }
+        if (i + times > total)
+          return std::nullopt;
+        for (; times > 0; --times)
+          lengths[static_cast<std::size_t>(i++)] = repeated;
+      }
+      huffman literals, distances;
+      build(literals, std::span<const short>(lengths.data(), static_cast<std::size_t>(literal_count)));
+      build(distances, std::span<const short>(lengths.data() + literal_count, static_cast<std::size_t>(distance_count)));
+      if (!codes(from, out, literals, distances))
+        return std::nullopt;
+    } else {
+      return std::nullopt;
+    }
+    if (last == 1)
+      return out;
+  }
+}
+
+// An SVG's path data (its M, L, H, V, C, S and Z, each also relative) read
+// into steps in absolute points; what else it may say is not in this one.
+inline void read_path(std::string_view data, std::vector<widgets::PatternStep>& steps) {
+  std::size_t at = 0;
+  const auto skip = [&] {
+    while (at < data.size() && (data[at] == ' ' || data[at] == ',' || data[at] == '\n' || data[at] == '\t' || data[at] == '\r'))
+      ++at;
+  };
+  const auto number = [&](float& value) {
+    skip();
+    const std::size_t start = at;
+    if (at < data.size() && (data[at] == '-' || data[at] == '+'))
+      ++at;
+    bool dot = false;
+    while (at < data.size() && (std::isdigit(static_cast<unsigned char>(data[at])) || (data[at] == '.' && !dot))) {
+      dot = dot || data[at] == '.';
+      ++at;
+    }
+    if (at < data.size() && (data[at] == 'e' || data[at] == 'E')) {
+      ++at;
+      if (at < data.size() && (data[at] == '-' || data[at] == '+'))
+        ++at;
+      while (at < data.size() && std::isdigit(static_cast<unsigned char>(data[at])))
+        ++at;
+    }
+    if (at == start)
+      return false;
+    return std::from_chars(data.data() + start, data.data() + at, value).ec == std::errc{};
+  };
+  float x = 0.0f, y = 0.0f, start_x = 0.0f, start_y = 0.0f, control_x = 0.0f, control_y = 0.0f;
+  bool smooth = false;  // the last step a cubic: its second control reflected by an S
+  char command = 0;
+  while (true) {
+    skip();
+    if (at >= data.size())
+      return;
+    if (std::isalpha(static_cast<unsigned char>(data[at])))
+      command = data[at++];
+    const bool relative = std::islower(static_cast<unsigned char>(command)) != 0;
+    const float ox = relative ? x : 0.0f, oy = relative ? y : 0.0f;
+    switch (std::tolower(static_cast<unsigned char>(command))) {
+      case 'm': {
+        float px = 0.0f, py = 0.0f;
+        if (!number(px) || !number(py))
+          return;
+        x = start_x = ox + px;
+        y = start_y = oy + py;
+        steps.push_back(widgets::pattern_step::move{x, y});
+        command = relative ? 'l' : 'L';  // pairs after it are lines
+        smooth = false;
+        break;
+      }
+      case 'l': {
+        float px = 0.0f, py = 0.0f;
+        if (!number(px) || !number(py))
+          return;
+        x = ox + px;
+        y = oy + py;
+        steps.push_back(widgets::pattern_step::line{x, y});
+        smooth = false;
+        break;
+      }
+      case 'h': {
+        float px = 0.0f;
+        if (!number(px))
+          return;
+        x = ox + px;
+        steps.push_back(widgets::pattern_step::line{x, y});
+        smooth = false;
+        break;
+      }
+      case 'v': {
+        float py = 0.0f;
+        if (!number(py))
+          return;
+        y = oy + py;
+        steps.push_back(widgets::pattern_step::line{x, y});
+        smooth = false;
+        break;
+      }
+      case 'c': {
+        float x1 = 0.0f, y1 = 0.0f, x2 = 0.0f, y2 = 0.0f, px = 0.0f, py = 0.0f;
+        if (!number(x1) || !number(y1) || !number(x2) || !number(y2) || !number(px) || !number(py))
+          return;
+        steps.push_back(widgets::pattern_step::cubic{ox + x1, oy + y1, ox + x2, oy + y2, ox + px, oy + py});
+        control_x = ox + x2;
+        control_y = oy + y2;
+        x = ox + px;
+        y = oy + py;
+        smooth = true;
+        break;
+      }
+      case 's': {
+        float x2 = 0.0f, y2 = 0.0f, px = 0.0f, py = 0.0f;
+        if (!number(x2) || !number(y2) || !number(px) || !number(py))
+          return;
+        const float x1 = smooth ? 2.0f * x - control_x : x, y1 = smooth ? 2.0f * y - control_y : y;
+        steps.push_back(widgets::pattern_step::cubic{x1, y1, ox + x2, oy + y2, ox + px, oy + py});
+        control_x = ox + x2;
+        control_y = oy + y2;
+        x = ox + px;
+        y = oy + py;
+        smooth = true;
+        break;
+      }
+      case 'z':
+        steps.push_back(widgets::pattern_step::close{});
+        x = start_x;
+        y = start_y;
+        smooth = false;
+        break;
+      default:
+        return;  // one it does not read: the rest of this path left out
+    }
+  }
+}
+// The SVG's size, from its viewBox, and every path's data in it.
+[[nodiscard]] inline widgets::Pattern pattern_of(std::string_view svg) {
+  widgets::Pattern out;
+  if (const auto box = svg.find("viewBox=\""); box != std::string_view::npos) {
+    std::array<float, 4> numbers{};
+    std::size_t at = box + 9;
+    for (float& one : numbers) {
+      while (at < svg.size() && (svg[at] == ' ' || svg[at] == ','))
+        ++at;
+      const auto [end, failed] = std::from_chars(svg.data() + at, svg.data() + svg.size(), one);
+      if (failed != std::errc{})
+        break;
+      at = static_cast<std::size_t>(end - svg.data());
+    }
+    out.width = numbers[2];
+    out.height = numbers[3];
+  }
+  for (std::size_t at = svg.find(" d=\""); at != std::string_view::npos; at = svg.find(" d=\"", at)) {
+    at += 4;
+    const std::size_t end = svg.find('"', at);
+    if (end == std::string_view::npos)
+      break;
+    read_path(svg.substr(at, end - at), out.steps);
+    at = end;
+  }
+  return out;
+}
+}  // namespace pattern_reading
+}  // namespace mux::ui
+
+export namespace mux::ui {
+// Telegram's chat pattern, read once from what is in the binary: drawn over
+// the theme's gradient behind the messages, in the theme's pattern colour.
+[[nodiscard]] inline std::shared_ptr<const widgets::Pattern> telegram_pattern() {
+  static const std::shared_ptr<const widgets::Pattern> read = [] {
+    const auto svg = pattern_reading::gunzip(std::span<const unsigned char>(mux_telegram_pattern, mux_telegram_pattern_size));
+    return svg ? std::make_shared<const widgets::Pattern>(pattern_reading::pattern_of(*svg)) : nullptr;
+  }();
+  return read;
+}
+}  // namespace mux::ui
+
 export namespace mux::ui {
 
 // ---- the conversations ------------------------------------------------------
@@ -62,6 +430,7 @@ inline void use_theme(config::theme::classic) {
   sent_time_colour = skia::colorSetARGB(255, 109, 181, 102);  // #6db566
   chat_colour = skia::colorSetARGB(255, 136, 184, 132);      // #88b884, Telegram's default wallpaper
   chat_top_colour = skia::colorSetARGB(255, 213, 216, 141);  // #d5d88d, down to it
+  pattern_colour = skia::colorSetARGB(36, 0, 0, 0);
   on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
   auto& widget = widgets::theme();
   widget = widgets::Theme{};
@@ -94,6 +463,7 @@ inline void use_theme(config::theme::day) {
   sent_time_colour = skia::colorSetARGB(255, 134, 168, 194);  // #86a8c2
   chat_colour = skia::colorSetARGB(255, 92, 159, 214);       // #5c9fd6
   chat_top_colour = skia::colorSetARGB(255, 166, 211, 240);  // #a6d3f0, down to it
+  pattern_colour = skia::colorSetARGB(36, 0, 0, 0);
   on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
   auto& widget = widgets::theme();
   widget = widgets::Theme{};
@@ -126,6 +496,7 @@ inline void use_theme(config::theme::tinted) {
   sent_time_colour = skia::colorSetARGB(255, 125, 168, 211);  // #7da8d3
   chat_colour = skia::colorSetARGB(255, 14, 22, 33);      // #0e1621
   chat_top_colour = skia::colorSetARGB(255, 25, 44, 66);  // #192c42, down to it
+  pattern_colour = skia::colorSetARGB(20, 255, 255, 255);
   on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
   auto& widget = widgets::theme();
   widget = widgets::Theme{};
@@ -158,6 +529,7 @@ inline void use_theme(config::theme::night) {
   sent_time_colour = skia::colorSetARGB(255, 115, 127, 135);  // #737f87
   chat_colour = skia::colorSetARGB(255, 24, 25, 29);      // #18191d
   chat_top_colour = skia::colorSetARGB(255, 32, 46, 40);  // #202e28, down to it
+  pattern_colour = skia::colorSetARGB(20, 255, 255, 255);
   on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
   auto& widget = widgets::theme();
   widget = widgets::Theme{};

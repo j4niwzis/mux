@@ -10,6 +10,7 @@ import skiff.scene;
 import skiff.nodes.flow;
 import skiff.nodes.scroll;
 import skiff.widgets.loader;
+import skiff.widgets.wallpaper;
 import mux.core;
 import mux.video;
 import mux.config;
@@ -18,6 +19,7 @@ import :base;
 import :names;
 import :message;
 import :composer;
+import :themes;
 
 export namespace mux::ui {
 
@@ -58,6 +60,8 @@ struct timeline_area : scene::Node {
     void operator()() const { actions->stop_jump(); }
   };
   struct parts_t {
+    // Behind the messages: the theme's gradient, Telegram's pattern over it.
+    widgets::Wallpaper wall;
     nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>> timeline{
         nodes::Flow<std::vector<message_bubble>>({.spacingY = 0.0f, .wrap = false}, {})};
     jump_button<Actions> jump;
@@ -76,6 +80,8 @@ struct timeline_area : scene::Node {
               .reactions = mark_button<Actions>(a, mark_kind::reaction{}, "\u2665"),
               .loading = widgets::RadialLoader<stop_jump>(44.0f, {a})},
         actions(a) {
+    parts.wall.apply({.fill = true, .gradient = scene::Gradient{chat_top_colour, chat_colour}});
+    parts.wall.setPattern(telegram_pattern(), pattern_colour);
     parts.timeline.apply({.fill = true});
     // Over the wallpaper's gradient, which stays where it is: a scroll step
     // repainted, not copied.

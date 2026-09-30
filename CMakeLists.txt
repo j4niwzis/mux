@@ -180,7 +180,7 @@ if(MUX_UI)
     GIT_TAG de06df87cce2e7aee6d57ec999497d03bb0664b7)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
-    GIT_TAG 1ebc9f93609c73430f7fb5040b50bc56ad415e33)
+    GIT_TAG bfd2ca8ead4631ed4633c17e88d257fb5d594c66)
   # Skia's features, each an option asking for its component: GL to draw on
   # the GPU (the software renderer is there either way), and the pictures
   # decoded. A system Skia without one is taken where its option is off.
@@ -250,6 +250,22 @@ if(MUX_UI)
   target_sources(mux_modules PRIVATE src/emoji_font.cc)
   set_property(SOURCE src/emoji_font.cc APPEND PROPERTY COMPILE_OPTIONS --embed-dir=${mux_emoji_dir})
   set_property(SOURCE src/emoji_font.cc APPEND PROPERTY OBJECT_DEPENDS ${mux_emoji_font})
+  # Telegram's chat pattern, as tdesktop lays it over a theme's gradient:
+  # its art/background.tgv (GPL-3.0, combined under AGPL-3.0's section 13),
+  # fetched once at a pinned commit and checked, and put in the binary by
+  # telegram_pattern.cc's #embed.
+  set(mux_art_dir ${CMAKE_BINARY_DIR}/art)
+  set(mux_pattern ${mux_art_dir}/background.tgv)
+  if(NOT EXISTS ${mux_pattern})
+    file(DOWNLOAD
+      https://raw.githubusercontent.com/telegramdesktop/tdesktop/f59db1026742fedd3b1bcee961b6c62ba9baf3bb/Telegram/Resources/art/background.tgv
+      ${mux_pattern}
+      EXPECTED_HASH SHA256=3c5ef666d033ce9effe703b80348b9d7363323f0076b2856ec041923c78b0ab8
+      TLS_VERIFY ON)
+  endif()
+  target_sources(mux_modules PRIVATE src/telegram_pattern.cc)
+  set_property(SOURCE src/telegram_pattern.cc APPEND PROPERTY COMPILE_OPTIONS --embed-dir=${mux_art_dir})
+  set_property(SOURCE src/telegram_pattern.cc APPEND PROPERTY OBJECT_DEPENDS ${mux_pattern})
   target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
     FILES src/host.cc src/audio.cc ${mux_video_source} src/dbus.cc src/ui.cc
           src/ui/base.cc src/ui/icons.cc src/ui/avatars.cc src/ui/controls.cc src/ui/themes.cc src/ui/names.cc src/ui/html.cc src/ui/chat_list.cc src/ui/message.cc src/ui/header.cc src/ui/info.cc src/ui/room_settings.cc src/ui/composer.cc src/ui/timeline.cc src/ui/conversations.cc src/ui/forms.cc src/ui/add_account.cc src/ui/accounts.cc src/ui/drawer.cc src/ui/proxies.cc src/ui/appearance.cc src/ui/storage.cc src/ui/settings.cc src/ui/context_menu.cc src/ui/sending.cc src/ui/viewer.cc src/ui/window.cc)

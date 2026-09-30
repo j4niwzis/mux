@@ -91,6 +91,11 @@ class menu_part {
     s_->root().close_menu();
     skiff::scene::setClipboardText(target_.link);
   }
+  void apply(const request::menu_copy_image&) {
+    s_->root().close_menu();
+    if (target_.picture)
+      pictures_->copy(*target_.picture);
+  }
   void apply(const request::menu_save&) {
     s_->root().close_menu();
     if (target_.media)

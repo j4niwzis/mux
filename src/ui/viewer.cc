@@ -171,6 +171,22 @@ struct picture_viewer : nodes::Stack {
     float last_x = 0.0f, last_y = 0.0f;
     using Node::onPointer;
     void onPointer(scene::phase::target, const scene::pointer::down& press, scene::PointerReply& reply) {
+      // Its menu up: a press anywhere else closes it, and does nothing more.
+      if (viewer->parts.menu) {
+        viewer->close_menu_later();
+        reply.handle();
+        return;
+      }
+      // The other button on the picture: its menu, there.
+      if (press.button == 3) {
+        if (this->where().contains(press.x, press.y)) {
+          const skia::SkRect& whole = viewer->fState.fBounds;
+          viewer->parts.menu.emplace(viewer, press.x - whole.fLeft, press.y - whole.fTop);
+          viewer->invalidateLayout();
+        }
+        reply.handle();
+        return;
+      }
       // Off the picture: closed. On it, and larger than the room: dragged.
       if (!this->where().contains(press.x, press.y)) {
         viewer->actions->close_picture();
@@ -260,11 +276,70 @@ struct picture_viewer : nodes::Stack {
       reply.handle();
     }
   };
+  // Its own menu, as a right press on the picture opens it there: the
+  // picture copied, or saved. A press anywhere else closes it.
+  struct copy_it {
+    picture_viewer* viewer;
+    void operator()() const { viewer->actions->copy_picture(viewer->source); }
+  };
+  struct save_this {
+    picture_viewer* viewer;
+    void operator()() const { viewer->actions->save_picture(viewer->source); }
+  };
+  template <class Do>
+  struct menu_row : nodes::Stack {
+    picture_viewer* viewer;
+    Do act;
+    struct parts_t {
+      nodes::Text label;
+    } parts;
+    menu_row(picture_viewer* v, std::string label)
+        : viewer(v), act{v}, parts{.label = nodes::Text(std::move(label), 13.0f, text_colour)} {
+      fState.apply({.fillX = true, .height = 33.0f, .padding = {0.0f, 17.0f, 0.0f, 17.0f}, .hoverBackground = chosen_colour});
+      parts.label.apply({.alignSelf = scene::align::kMiddle});
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+    [[nodiscard]] bool onClick(float, float) {
+      act();
+      viewer->close_menu_later();
+      return true;
+    }
+  };
+  struct picture_menu : nodes::Stack {
+    struct parts_t {
+      menu_row<copy_it> copy;
+      menu_row<save_this> save;
+    } parts;
+    picture_menu(picture_viewer* v, float x, float y)
+        : parts{.copy = menu_row<copy_it>(v, "Copy Image"), .save = menu_row<save_this>(v, "Save As…")} {
+      fState.apply({.place = scene::anchor::kTopLeft, .x = x, .y = y, .width = 200.0f, .autoSize = scene::axes::kY,
+                    .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .cornerRadius = 10.0f, .background = sidebar_colour,
+                    .border = scene::Border{band_colour, 1.0f},
+                    .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+  };
   struct parts_t {
     top_bar top;
     stage view;
     video_bar bar;
+    std::optional<picture_menu> menu;
   } parts;
+  // The menu let go at the next frame -- not from inside one of its rows.
+  bool menu_done = false;
+  void close_menu_later() {
+    menu_done = true;
+    scene::work::mark(fState.fId);
+  }
+  [[nodiscard]] bool wantsTick() const { return menu_done; }
+  void update(double) {
+    if (!menu_done)
+      return;
+    menu_done = false;
+    parts.menu.reset();
+    this->invalidateLayout();
+  }
   float zoom = 1.0f;
   float pan_x = 0.0f, pan_y = 0.0f;
   void zoom_to(float wanted) {

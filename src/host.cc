@@ -118,6 +118,22 @@ inline void load_fonts(const std::string& directory) {
 // A link opened in what the system opens links with.
 inline void open_url(const std::string& url) { SDL_OpenURL(url.c_str()); }
 
+// A picture put on the system's clipboard: its PNG, offered as image/png --
+// what every program that pastes a picture takes -- held until the
+// clipboard lets it go. SDL asks for it through the two functions it is
+// given, as its C interface has it.
+inline void copy_picture(std::string png) {
+  auto* held = new std::string(std::move(png));
+  const char* types[] = {"image/png"};
+  SDL_SetClipboardData(
+      +[](void* data, const char*, std::size_t* size) -> const void* {
+        const auto* bytes = static_cast<const std::string*>(data);
+        *size = bytes->size();
+        return bytes->data();
+      },
+      +[](void* data) { delete static_cast<std::string*>(data); }, held, types, 1);
+}
+
 // Files the user picked or dropped, handed to the window's thread as an
 // event of its own: the dialog answers on a thread of its choosing.
 inline std::uint32_t files_event() {

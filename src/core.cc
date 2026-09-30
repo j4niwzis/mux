@@ -674,9 +674,12 @@ struct to_save {  // a picture or a file, saved to Downloads
 struct to_play {};
 // A video to watch: fetched whole into a file of its own, and played.
 struct to_watch {};
+// A picture to copy: fetched whole, kept as a whole picture is, and put on
+// the clipboard.
+struct to_copy {};
 }  // namespace media_use
 using media_use_t = splice::variant<media_use::avatar, media_use::thumbnail, media_use::whole, media_use::to_open,
-                                 media_use::to_save, media_use::to_play, media_use::to_watch>;
+                                 media_use::to_save, media_use::to_play, media_use::to_watch, media_use::to_copy>;
 
 // Where a message goes among those of its chat.
 namespace placement {

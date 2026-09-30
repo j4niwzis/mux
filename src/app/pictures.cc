@@ -87,6 +87,7 @@ class pictures_part {
                           // added where the name is taken, and opened; or only saved.
                           [&](const media_use::to_open& one) { this->save_download(picture.bytes, one.name, true); },
                           [&](const media_use::to_play&) { this->play(picture.source, picture.bytes); },
+                          [&](const media_use::to_copy&) { copy_bytes(picture.bytes); },
                           // A video: into its file, and played where the viewer waits for it.
                           [&](const media_use::to_watch&) {
                             videos_fetching_.erase(picture.source);
@@ -308,6 +309,25 @@ class pictures_part {
     }
   }
   void apply(const request::save_picture& one) { this->save(one.source, "image"); }
+  void apply(const request::copy_picture& one) { this->copy(one.source); }
+  // A picture copied: onto the clipboard as PNG, from what is kept whole --
+  // fetched whole first where it is not.
+  void copy(const std::string& source) {
+    if (const auto bytes = this->kept_whole(source)) {
+      this->copy_bytes(*bytes);
+      return;
+    }
+    if (const auto& chosen = s_->root().main().chosen)
+      s_->net->fetch_media(chosen->account, source, media_use::to_copy{}, 0);
+  }
+  // Its pixels written anew as PNG: nothing of its file goes with them.
+  static void copy_bytes(const std::string& bytes) {
+    const auto image = skia::decodeImage(bytes.data(), bytes.size());
+    if (!image)
+      return;
+    if (std::string png = skia::encodeImage(*image, false); !png.empty())
+      mux::host::copy_picture(std::move(png));
+  }
   // A file in a message, pressed: fetched, saved to Downloads, and opened.
   void apply(const request::open_file& one) {
     if (const auto& chosen = s_->root().main().chosen)
@@ -490,6 +510,7 @@ class pictures_part {
                                  [](const media_use::to_open&) { return std::optional<std::filesystem::path>(); },
                                  [](const media_use::to_save&) { return std::optional<std::filesystem::path>(); },
                                  [&](const media_use::to_play&) { return named("full_"); },
+                                 [&](const media_use::to_copy&) { return named("full_"); },
                                  [](const media_use::to_watch&) { return std::optional<std::filesystem::path>(); }},
                       use);
   }

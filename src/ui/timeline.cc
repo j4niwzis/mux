@@ -39,6 +39,7 @@ struct menu_facts {
   bool selection = false;
   std::vector<seen_reader> seen;
   std::optional<std::string> media;  // a picture's or a file's source
+  std::optional<std::string> picture;  // a picture's source, or a video's thumbnail's: what Copy Image copies
   std::string media_name;
   bool moving = false;  // a GIF or a moving WebP: one that can be saved to the GIFs
   bool pinned = false;  // pinned in its chat: the menu offers Unpin
@@ -351,6 +352,8 @@ struct timeline_area : scene::Node {
           facts.media = one.said.attachment->video.value_or(one.said.attachment->source);
           facts.media_name = one.said.attachment->name;
           facts.moving = moves(one.said.attachment->kind);
+          if (is_picture(one.said.attachment->kind) || one.said.attachment->video)
+            facts.picture = one.said.attachment->source;
         }
         if (const conversation* chat = seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr) {
           facts.pinned = std::ranges::contains(chat->pinned, one.message_id);

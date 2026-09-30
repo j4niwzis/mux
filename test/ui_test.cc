@@ -41,6 +41,8 @@ struct stub {
   void pop_panel() {}
   void toggle_info() {}
   void jump_to_end() {}
+  void menu_copy_image() {}
+  void copy_picture(std::string) {}
   void retry_unsent() {}
   void discard_unsent() {}
   void return_to_chat() {}

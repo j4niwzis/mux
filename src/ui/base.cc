@@ -51,6 +51,13 @@ inline skia::Sp<skia::SkImage> wallpaper_picture(const std::string& path) {
   read.insert_or_assign(path, image);
   return image;
 }
+// Pictures of what a dialog lists that no chat holds -- Explore's rooms,
+// Start chat's people found -- by their key (a room's or a person's id) and
+// their mxc://: fetched as avatars are, while the dialog shows them.
+inline std::vector<std::pair<std::string, std::string>>& listed_avatars() {
+  static std::vector<std::pair<std::string, std::string>> listed;
+  return listed;
+}
 // The images of the pack being edited: fetched as avatars are, keyed by
 // their mxc://, while its dialog shows them.
 inline std::vector<std::string>& pack_pictures_shown() {

@@ -963,6 +963,9 @@ struct start_chat_box : nodes::Stack {
     if (asked != query)
       return;
     found = people;
+    for (const found_person& one : people)
+      if (one.avatar && !one.avatar->empty())
+        listed_avatars().emplace_back(one.id, *one.avatar);
     this->show_rows();
   }
   void show_rows() {
@@ -1977,6 +1980,10 @@ struct explore_box : nodes::Stack {
     rows.reserve(rooms.size());
     for (const directory_room& one : rooms)
       rows.emplace_back(actions, one, server);
+    // Their pictures, asked for as a chat's are.
+    for (const directory_room& one : rooms)
+      if (one.avatar && !one.avatar->empty())
+        listed_avatars().emplace_back(one.id, *one.avatar);
     parts.status.setText(rooms.empty() ? std::string("No rooms found.") : std::format("{} rooms", rooms.size()));
     parts.status.setVisible(true);
     this->invalidateLayout();

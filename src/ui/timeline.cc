@@ -300,10 +300,13 @@ struct timeline_area : scene::Node {
         // answers, as "> " quotes it: to that message, the part marked, as
         // the reply's own quote goes.
         if (const auto& text = one.parts.body.parts.text;
-            one.said.replies_to && text.visible() && text.bounds().contains(press.x, press.y) && !text.hasSelection() &&
-            text.quotedAt(press.x, press.y)) {
-          actions->jump_to_message(*one.said.replies_to, quoted_fragment(one.said));
-          return true;
+            one.said.replies_to && text.visible() && text.bounds().contains(press.x, press.y) && !text.hasSelection()) {
+          // The quote pressed, of those the reply has: its own words marked.
+          if (const auto quote = text.quoteAt(press.x, press.y)) {
+            actions->jump_to_message(*one.said.replies_to,
+                                     trimmed_fragment(std::string_view(text.text()).substr(quote->first, quote->second - quote->first)));
+            return true;
+          }
         }
         // The reply's header: to the message it answers, as it is -- a part
         // marked there only by a click on the quoted stretch itself.

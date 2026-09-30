@@ -103,9 +103,30 @@ export namespace mux::logic {
   // The block a line is in, as it is closed when the next one opens.
   enum class block { none, quote, bullets, numbers };
   block open = block::none;
+  // How many quotes are open: a line "> > " is a quote inside a quote.
+  int quotes = 0;
   const auto close = [&] {
-    html += open == block::quote ? "</blockquote>" : open == block::bullets ? "</ul>" : open == block::numbers ? "</ol>" : "";
+    for (; quotes > 0; --quotes)
+      html += "</blockquote>";
+    html += open == block::bullets ? "</ul>" : open == block::numbers ? "</ol>" : "";
     open = block::none;
+  };
+  // How deep in quotes a line is -- how many "> " it starts with, a bare ">"
+  // the last -- and where its text starts after them.
+  const auto quote_depth = [](std::string_view line, std::size_t& text) {
+    int depth = 0;
+    text = 0;
+    while (true) {
+      const std::string_view rest = line.substr(text);
+      if (rest.starts_with("> ")) {
+        text += 2;
+      } else if (rest == ">") {
+        text += 1;
+      } else {
+        return depth;
+      }
+      ++depth;
+    }
   };
   bool first_line = true;
   for (std::size_t i = 0; i < lines.size(); ++i) {
@@ -136,11 +157,23 @@ export namespace mux::logic {
       }
       marked = true;
     };
-    if (line.starts_with("> ") || line == ">") {
-      begin(block::quote, "<blockquote>");
-      if (!first_line)
+    if (std::size_t text = 0; const int depth = quote_depth(line, text)) {
+      // A line of a quote: the quotes it is in opened, those it is out of
+      // closed; a line on at the same depth as the one before, after a
+      // break.
+      const bool on = open == block::quote && quotes == depth;
+      if (open != block::quote) {
+        close();
+        open = block::quote;
+      }
+      marked = true;
+      if (on)
         html += "<br>";
-      html += inline_html(line.substr(std::min<std::size_t>(2, line.size())), marked);
+      for (; quotes < depth; ++quotes)
+        html += "<blockquote>";
+      for (; quotes > depth; --quotes)
+        html += "</blockquote>";
+      html += inline_html(line.substr(text), marked);
       first_line = false;
       continue;
     }

@@ -90,6 +90,19 @@ struct link_card : nodes::Stack {
   return std::nullopt;
 }
 
+// A quoted stretch as a fragment to mark: its spaces at either end cut, and
+// nothing where it is all spaces.
+[[nodiscard]] inline std::optional<std::string> trimmed_fragment(std::string_view said) {
+  const auto space = [](char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; };
+  while (!said.empty() && space(said.back()))
+    said.remove_suffix(1);
+  while (!said.empty() && space(said.front()))
+    said.remove_prefix(1);
+  if (said.empty())
+    return std::nullopt;
+  return std::string(said);
+}
+
 // What a reply quoted of the message it answers, where it quoted some: the
 // first quote in its own text -- its HTML's blockquote, or its plain lines
 // after "> " -- and not the fallback that repeats who was answered.

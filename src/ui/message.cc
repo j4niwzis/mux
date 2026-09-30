@@ -1144,6 +1144,9 @@ struct message_bubble : nodes::Stack {
         outgoing(said.outgoing), sender(said.sender),
         parts{.face = avatar_mark(said.sender, sender_name(in, said.sender), kAvatar),
               .body = body_column(said.outgoing, said.body.plain, mark_of(said) + clock_of(said.at))} {
+    // Drawn once and played back until something in it changes: a strip of
+    // the list repainted went through every part of every message in it.
+    fState.setRecorded(true);
     auto& [face, body, swipe_mark, unread_bar, readers] = parts;
     swipe_mark.apply({.place = scene::anchor::kCentreRight,
                       .x = -6.0f,

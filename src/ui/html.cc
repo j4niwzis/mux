@@ -10,6 +10,7 @@ import skiff.scene;
 import skiff.nodes.text;
 import mux.core;
 import mux.config;
+import chevron;
 import :base;
 
 export namespace mux::ui {
@@ -50,7 +51,7 @@ using text_style_t =
   return {.first = a, .last = b, .quote = true};
 }
 // An HTML tag, as read: what it does to the text, told by its type. Its
-// name is looked up once, where it is read (tag_of); what follows works on
+// name is looked up once, where it is read (start_of, end_of); what follows works on
 // the variant.
 namespace html_tag {
 struct line_break {};  // <br>
@@ -84,88 +85,78 @@ using html_tag_t = splice::variant<html_tag::line_break, html_tag::block_end, ht
                                 html_tag::style_open, html_tag::style_close, html_tag::code_open, html_tag::block_open,
                                 html_tag::block_close, html_tag::other>;
 
-// An attribute's value in a tag's inside, quoted either way.
-[[nodiscard]] inline std::optional<std::string> attribute_of(std::string_view inside, std::string_view name) {
-  for (std::size_t at = inside.find(name); at != std::string_view::npos; at = inside.find(name, at + 1)) {
-    const bool starts = at == 0 || inside[at - 1] == ' ';
-    const std::size_t eq = at + name.size();
-    if (!starts || eq + 1 >= inside.size() || inside[eq] != '=')
-      continue;
-    const char quote = inside[eq + 1];
-    if (quote != '"' && quote != '\'')
-      continue;
-    const auto stop = inside.find(quote, eq + 2);
-    return std::string(inside.substr(eq + 2, stop == std::string_view::npos ? std::string_view::npos : stop - eq - 2));
-  }
-  return std::nullopt;
-}
-
-// A tag's inside (between < and >) read into what it is.
-[[nodiscard]] inline html_tag_t tag_of(std::string_view inside) {
-  std::string name;
-  for (const char t : inside) {
-    if (t == ' ' || t == '/' && !name.empty())
-      break;
-    name += static_cast<char>(std::tolower(static_cast<unsigned char>(t)));
-  }
-  static const std::unordered_map<std::string_view, html_tag_t> known = {
-      {"br", html_tag::line_break{}},   {"/p", html_tag::block_end{}},    {"/div", html_tag::block_end{}},
-      {"/li", html_tag::block_end{}}, {"/h1", html_tag::block_end{}},
-      {"/h2", html_tag::block_end{}},   {"/h3", html_tag::block_end{}},
-      {"li", html_tag::list_item{}},    {"mx-reply", html_tag::reply{}},
-      {"b", html_tag::style_open{text_style::strong{}}},       {"/b", html_tag::style_close{text_style::strong{}}},
-      {"strong", html_tag::style_open{text_style::strong{}}},  {"/strong", html_tag::style_close{text_style::strong{}}},
-      {"i", html_tag::style_open{text_style::emphasis{}}},     {"/i", html_tag::style_close{text_style::emphasis{}}},
-      {"em", html_tag::style_open{text_style::emphasis{}}},    {"/em", html_tag::style_close{text_style::emphasis{}}},
-      {"del", html_tag::style_open{text_style::struck{}}},     {"/del", html_tag::style_close{text_style::struck{}}},
-      {"s", html_tag::style_open{text_style::struck{}}},       {"/s", html_tag::style_close{text_style::struck{}}},
-      {"strike", html_tag::style_open{text_style::struck{}}},  {"/strike", html_tag::style_close{text_style::struck{}}},
-      {"code", html_tag::code_open{}},      {"/code", html_tag::style_close{text_style::code{}}},
-      {"pre", html_tag::block_open{}},       {"/pre", html_tag::block_close{}},
-      {"blockquote", html_tag::style_open{text_style::quote{}}}, {"/blockquote", html_tag::style_close{text_style::quote{}}},
-      {"a", html_tag::link_open{}},     {"/a", html_tag::link_close{}},  {"img", html_tag::image{}},
+// An element's start, as chevron read it (dialect::html), read into what it
+// does: its name looked up once, here -- what follows works on the variant.
+[[nodiscard]] inline html_tag_t start_of(const chevron::start_element& one) {
+  const auto attribute = [&](std::string_view name) -> std::string {
+    const auto found = std::ranges::find(one.attributes, name, [](const chevron::attribute& each) { return each.name.local; });
+    return found == one.attributes.end() ? std::string() : std::string(found->value);
   };
-  const auto found = known.find(name);
+  static const std::unordered_map<std::string_view, html_tag_t> known = {
+      {"br", html_tag::line_break{}},
+      {"li", html_tag::list_item{}},
+      {"mx-reply", html_tag::reply{}},
+      {"b", html_tag::style_open{text_style::strong{}}},
+      {"strong", html_tag::style_open{text_style::strong{}}},
+      {"i", html_tag::style_open{text_style::emphasis{}}},
+      {"em", html_tag::style_open{text_style::emphasis{}}},
+      {"del", html_tag::style_open{text_style::struck{}}},
+      {"s", html_tag::style_open{text_style::struck{}}},
+      {"strike", html_tag::style_open{text_style::struck{}}},
+      {"code", html_tag::code_open{}},
+      {"pre", html_tag::block_open{}},
+      {"blockquote", html_tag::style_open{text_style::quote{}}},
+      {"a", html_tag::link_open{}},
+      {"img", html_tag::image{}},
+  };
+  const auto found = known.find(one.name.local);
   if (found == known.end())
     return html_tag::other{};
-  // A link takes where it goes from its href; the rest are as found.
   return splice::visit(splice::overloaded{[&](html_tag::link_open) -> html_tag_t {
-                                 const auto href = inside.find("href=");
-                                 if (href == std::string_view::npos || href + 6 >= inside.size())
-                                   return html_tag::other{};
-                                 const char quote = inside[href + 5];
-                                 const auto stop = inside.find(quote, href + 6);
-                                 return html_tag::link_open{std::string(inside.substr(
-                                     href + 6, stop == std::string_view::npos ? std::string_view::npos : stop - href - 6))};
-                               },
-                               // Code says its language as a class, language-...
-                               [&](html_tag::code_open) -> html_tag_t {
-                                 const std::string classes = attribute_of(inside, "class").value_or("");
-                                 constexpr std::string_view prefix = "language-";
-                                 const auto at = classes.find(prefix);
-                                 if (at == std::string::npos)
-                                   return html_tag::code_open{};
-                                 const auto end = classes.find(' ', at);
-                                 return html_tag::code_open{classes.substr(
-                                     at + prefix.size(), end == std::string::npos ? std::string::npos : end - at - prefix.size())};
-                               },
-                               [&](html_tag::image) -> html_tag_t {
-                                 return html_tag::image{attribute_of(inside, "src").value_or(""),
-                                                        attribute_of(inside, "alt").value_or("")};
-                               },
-                               [](const auto& as_found) -> html_tag_t { return as_found; }},
-                    found->second);
+                                            const std::string href = attribute("href");
+                                            return href.empty() ? html_tag_t{html_tag::other{}} : html_tag_t{html_tag::link_open{href}};
+                                          },
+                                          // Code says its language as a class, language-...
+                                          [&](html_tag::code_open) -> html_tag_t {
+                                            const std::string classes = attribute("class");
+                                            constexpr std::string_view prefix = "language-";
+                                            const auto at = classes.find(prefix);
+                                            if (at == std::string::npos)
+                                              return html_tag::code_open{};
+                                            const auto end = classes.find(' ', at);
+                                            return html_tag::code_open{classes.substr(
+                                                at + prefix.size(), end == std::string::npos ? std::string::npos : end - at - prefix.size())};
+                                          },
+                                          [&](html_tag::image) -> html_tag_t {
+                                            return html_tag::image{attribute("src"), attribute("alt")};
+                                          },
+                                          [](const auto& as_found) -> html_tag_t { return as_found; }},
+                       found->second);
 }
-
-// An entity's name (between & and ;) read into what it stands for; one not
-// known is kept as it was written.
-[[nodiscard]] inline std::string entity_of(std::string_view name) {
-  static const std::unordered_map<std::string_view, std::string_view> known = {
-      {"amp", "&"}, {"lt", "<"}, {"gt", ">"}, {"quot", "\""}, {"apos", "'"}, {"#39", "'"}, {"nbsp", " "},
+// An element's end, read into what it does. The void elements' -- <br>,
+// <img> -- do nothing: their start did it.
+[[nodiscard]] inline html_tag_t end_of(const chevron::end_element& one) {
+  static const std::unordered_map<std::string_view, html_tag_t> known = {
+      {"p", html_tag::block_end{}},
+      {"div", html_tag::block_end{}},
+      {"li", html_tag::block_end{}},
+      {"h1", html_tag::block_end{}},
+      {"h2", html_tag::block_end{}},
+      {"h3", html_tag::block_end{}},
+      {"b", html_tag::style_close{text_style::strong{}}},
+      {"strong", html_tag::style_close{text_style::strong{}}},
+      {"i", html_tag::style_close{text_style::emphasis{}}},
+      {"em", html_tag::style_close{text_style::emphasis{}}},
+      {"del", html_tag::style_close{text_style::struck{}}},
+      {"s", html_tag::style_close{text_style::struck{}}},
+      {"strike", html_tag::style_close{text_style::struck{}}},
+      {"code", html_tag::style_close{text_style::code{}}},
+      {"pre", html_tag::block_close{}},
+      {"blockquote", html_tag::style_close{text_style::quote{}}},
+      {"a", html_tag::link_close{}},
   };
-  if (const auto found = known.find(name); found != known.end())
-    return std::string(found->second);
-  return "&" + std::string(name) + ";";
+  const auto found = known.find(one.name.local);
+  return found == known.end() ? html_tag_t{html_tag::other{}} : found->second;
 }
 
 [[nodiscard]] inline std::vector<nodes::Text::Link> link_spans_in(std::string_view text);
@@ -180,7 +171,6 @@ using html_tag_t = splice::variant<html_tag::line_break, html_tag::block_end, ht
   // kept as they are, drawn as a block of their own.
   std::optional<std::size_t> block_from;
   std::string block_language;
-  std::size_t at = 0;
   // A line ended: once, as a browser's blocks are -- never an empty line
   // between two, nor one at the start. Inside code, every line kept.
   const auto in_code = [&] {
@@ -192,14 +182,11 @@ using html_tag_t = splice::variant<html_tag::line_break, html_tag::block_end, ht
     if (!out.text.empty() && out.text.back() != '\n')
       out.text += '\n';
   };
-  while (at < html.size()) {
-    const char c = html[at];
-    if (c == '<') {
-      const auto end = html.find('>', at);
-      if (end == std::string_view::npos)
-        break;
-      html_tag_t read = tag_of(html.substr(at + 1, end - at - 1));
-      at = end + 1;
+  // A tag read: what it does to the text.
+  // Inside the quoted message a reply carries (<mx-reply>): how deep, its
+  // elements passed over -- not shown twice.
+  int skipping = 0;
+  const auto apply = [&](html_tag_t read) {
       splice::visit(splice::overloaded{[&](html_tag::line_break) { out.text += '\n'; },
                             // A block of code: on lines of its own, its language as its
                             // code says, a stretch of the text marked as one.
@@ -230,7 +217,7 @@ using html_tag_t = splice::variant<html_tag::line_break, html_tag::block_end, ht
                               opened.emplace_back(text_style::code{}, out.text.size());
                             },
                             [&](html_tag::block_end) { end_line(); },
-                            [&](html_tag::list_item) { out.text += "• "; },
+                            [&](html_tag::list_item) { out.text += "\u2022 "; },
                             [&](html_tag::quote) {},
                             [&](html_tag::style_open& open) {
                               // A quote and a block of code start on a line of their own.
@@ -252,11 +239,7 @@ using html_tag_t = splice::variant<html_tag::line_break, html_tag::block_end, ht
                               splice::visit(splice::overloaded{[&](text_style::quote) { end_line(); }, [](const auto&) {}},
                                          close.style);
                             },
-                            [&](html_tag::reply) {
-                              // The quoted message: not shown twice.
-                              const auto close = html.find("</mx-reply>", end);
-                              at = close == std::string_view::npos ? html.size() : close + 11;
-                            },
+                            [&](html_tag::reply) { skipping = 1; },
                             [&](html_tag::link_open& link) {
                               open_href = std::move(link.href);
                               link_start = out.text.size();
@@ -283,23 +266,47 @@ using html_tag_t = splice::variant<html_tag::line_break, html_tag::block_end, ht
                             },
                             [](html_tag::other) {}},
                  read);
-    } else if (c == '&') {
-      const auto end = html.find(';', at);
-      if (end == std::string_view::npos || end - at > 8) {
-        out.text += c;
+  };
+  // What is said: as it is in code; elsewhere its line ends as one, a
+  // no-break space as a space.
+  const auto say = [&](std::string_view said) {
+    for (std::size_t at = 0; at < said.size();) {
+      if (said[at] == '\n' && !in_code()) {
+        end_line();
         ++at;
-        continue;
+      } else if (said.substr(at).starts_with("\u00A0")) {
+        out.text += ' ';
+        at += std::string_view("\u00A0").size();
+      } else {
+        out.text += said[at];
+        ++at;
       }
-      out.text += entity_of(html.substr(at + 1, end - at - 1));
-      at = end + 1;
-    } else if (c == '\n' && !in_code()) {
-      end_line();
-      ++at;
-    } else {
-      out.text += c;
-      ++at;
     }
-  }
+  };
+  // Read by chevron as HTML, as a message carries it: its events, in turn.
+  chevron::parser reader(chevron::limits{}, chevron::dialect::html{});
+  reader.feed(html);
+  reader.finish();
+  for (auto next = reader.next(); next && *next; next = reader.next())
+    splice::visit(splice::overloaded{[&](const chevron::start_element& one) {
+                                       if (skipping > 0) {
+                                         ++skipping;
+                                         return;
+                                       }
+                                       apply(start_of(one));
+                                     },
+                                     [&](const chevron::end_element& one) {
+                                       if (skipping > 0) {
+                                         --skipping;
+                                         return;
+                                       }
+                                       apply(end_of(one));
+                                     },
+                                     [&](const chevron::text& one) {
+                                       if (skipping == 0)
+                                         say(one.content);
+                                     }},
+                  **next);
   while (!out.text.empty() && out.text.back() == '\n')
     out.text.pop_back();
   // And the addresses written in it bare, as in a plain text: a message's

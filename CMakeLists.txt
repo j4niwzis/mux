@@ -68,6 +68,16 @@ endforeach()
 # modules as it is on alef's.
 
 # The libraries of this family, each pinned to a commit.
+# chevron, which tern reads the XML of streams with, newer than tern's own:
+# mux reads a message's HTML with it too (dialect::html). Declared first, it
+# is the one tern is built with as well.
+cme_declare_port(NAME chevron PROVIDES chevron
+  GITHUB_REPOSITORY j4niwzis/chevron
+  GIT_TAG 8effedc8c5e13945600cafb556228819f0bcdb11
+  LICENSE AGPL-3.0-only
+  SYSTEM NEVER
+  TARGETS chevron)
+cme_options(chevron "CHEVRON_TESTS OFF")
 cme_declare_port(NAME tern PROVIDES tern
   GITHUB_REPOSITORY j4niwzis/tern
   GIT_TAG 8144cacc26012dc1d349b75f6cf326f083c7a69b

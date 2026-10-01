@@ -515,6 +515,20 @@ struct bubble_look {
   element_blur blurs;
   friend bool operator==(const bubble_look&, const bubble_look&) = default;
 };
+// A look as a level has it, what it leaves unsaid -- an element's opacity,
+// the blur, an element's blur -- taken from the level over it: a chat's look
+// over its account's over every chat's, each saying only what it changes.
+[[nodiscard]] inline bubble_look filled_from(bubble_look below, const bubble_look& above) {
+  for (const auto& [name, member] : kElementNames)
+    if (!(below.elements.*member))
+      below.elements.*member = above.elements.*member;
+  if (!below.blur)
+    below.blur = above.blur;
+  for (const auto& [name, member] : kElementBlurNames)
+    if (!(below.blurs.*member))
+      below.blurs.*member = above.blurs.*member;
+  return below;
+}
 // What a look is chosen for: the messages' bubbles, or the panels round
 // them (over the background behind the whole window).
 namespace look_part {

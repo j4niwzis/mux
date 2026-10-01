@@ -91,21 +91,34 @@ struct kept_settings {
     }
     return own;
   }
+  // A chat's look: the lowest level's that has one -- its own or its
+  // space's, its account's, every chat's -- what it leaves unsaid taken
+  // from the levels over it, in turn.
+  [[nodiscard]] mux::config::bubble_look look_of(std::map<conversation_id, mux::config::bubble_look>& in,
+                                                 const std::optional<std::string>& account_word,
+                                                 const std::optional<mux::config::bubble_look>& everywhere,
+                                                 const conversation_id& chat) {
+    std::vector<mux::config::bubble_look> levels;
+    if (const auto own = this->own_or_space(in, chat); own != in.end())
+      levels.push_back(own->second);
+    if (account_word)
+      levels.push_back(mux::config::bubble_look_of(*account_word));
+    if (everywhere)
+      levels.push_back(*everywhere);
+    if (levels.empty())
+      return mux::config::bubble_look{};
+    return std::ranges::fold_left(levels | std::views::drop(1), levels.front(),
+                                  [](mux::config::bubble_look below, const mux::config::bubble_look& above) {
+                                    return mux::config::filled_from(std::move(below), above);
+                                  });
+  }
   [[nodiscard]] mux::config::bubble_look panels_of(const conversation_id& chat) {
-    if (const auto own = this->own_or_space(panels_in, chat); own != panels_in.end())
-      return own->second;
-    if (const auto* account = this->settings_of(chat.account.address))
-      if (const auto& chosen = mux::config::panels_of(*account))
-        return mux::config::bubble_look_of(*chosen);
-    return panels.value_or(mux::config::bubble_look{});
+    const auto* account = this->settings_of(chat.account.address);
+    return this->look_of(panels_in, account ? mux::config::panels_of(*account) : std::nullopt, panels, chat);
   }
   [[nodiscard]] mux::config::bubble_look bubbles_of(const conversation_id& chat) {
-    if (const auto own = this->own_or_space(bubbles_in, chat); own != bubbles_in.end())
-      return own->second;
-    if (const auto* account = this->settings_of(chat.account.address))
-      if (const auto& chosen = mux::config::bubbles_of(*account))
-        return mux::config::bubble_look_of(*chosen);
-    return bubbles.value_or(mux::config::bubble_look{});
+    const auto* account = this->settings_of(chat.account.address);
+    return this->look_of(bubbles_in, account ? mux::config::bubbles_of(*account) : std::nullopt, bubbles, chat);
   }
   // A chat's background: its own, else its account's, else every chat's,
   // else the theme's.

@@ -200,6 +200,8 @@ struct proxy_editor : nodes::Stack {
     field port{"Port", "1080"};
     field username{"User name", "none"};
     field password{"Password", "none"};
+    // XMPP's SRV records, through it: asked of whom.
+    field resolver{"XMPP SRV lookups: nameserver", "the system's; an IP address, or off"};
     nodes::Text message{"", 13.0f, dim_colour};
     button_row<save_button, delete_button> buttons;
   } parts;
@@ -209,11 +211,11 @@ struct proxy_editor : nodes::Stack {
         parts{.header = header_t(from ? from->name : std::string("New proxy"), {a}, {a}, true, true),
               .kinds = kind_switch<Actions>(a),
               .buttons = button_row<save_button, delete_button>(save_button("Save", {a}), delete_button("Delete", {a}))} {
-    auto& [header, name, kinds, host, port, username, password, message, buttons] = parts;
+    auto& [header, name, kinds, host, port, username, password, resolver, message, buttons] = parts;
     fState.apply({.fill = true});
     this->setGap(8.0f);
     const auto inset = scene::Margin::horizontal(16.0f);
-    for (field* one : {&name, &host, &port, &username, &password})
+    for (field* one : {&name, &host, &port, &username, &password, &resolver})
       one->apply({.margin = inset});
     kinds.apply({.margin = {4.0f, 0.0f, 4.0f, 16.0f}});
     message.setWrapped(true);
@@ -231,6 +233,7 @@ struct proxy_editor : nodes::Stack {
       port.parts.box.setText(std::to_string(from->port));
       username.parts.box.setText(from->username.value_or(""));
       password.parts.box.setText(from->password.value_or(""));
+      resolver.parts.box.setText(from->srv_resolver.value_or(""));
     }
     kind = from ? config::proxy_kind_of(from->kind) : config::proxy_kind_t{config::proxy_kind::socks5{}};
     kinds.show(kind, true);
@@ -243,7 +246,7 @@ struct proxy_editor : nodes::Stack {
 
   // The profile as typed, or what is wrong with it.
   [[nodiscard]] std::expected<config::proxy_settings, std::string> proxy() const {
-    const auto& [header, name, kinds, host, port, username, password, message, buttons] = parts;
+    const auto& [header, name, kinds, host, port, username, password, resolver, message, buttons] = parts;
     config::proxy_settings out{.name = name.parts.box.text(), .kind = config::word_of(kind), .host = host.parts.box.text()};
     if (out.name.empty())
       return std::unexpected("Name the proxy");
@@ -257,6 +260,7 @@ struct proxy_editor : nodes::Stack {
     out.port = number;
     out.username = typed_or_nothing(username.parts.box.text());
     out.password = typed_or_nothing(password.parts.box.text());
+    out.srv_resolver = typed_or_nothing(resolver.parts.box.text());
     return out;
   }
 

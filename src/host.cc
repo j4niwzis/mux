@@ -103,6 +103,14 @@ inline void load_fonts(const std::string& directory) {
     skiff::paint::fonts().addFallback(std::move(emoji));
   // Where a character no face loaded here has is looked for: the system's.
   skiff::paint::fonts().setFontManager(manager);
+  // Code in a monospace face of the system's, as Telegram draws it: the
+  // first of the usual ones that is there.
+  for (const char* family : {"DejaVu Sans Mono", "Noto Sans Mono", "Liberation Mono", "Ubuntu Mono", "JetBrains Mono",
+                             "Fira Mono", "Source Code Pro", "Cascadia Mono", "Consolas", "Menlo", "Courier New"})
+    if (auto face = manager->matchFamilyStyle(family, skia::SkFontStyle())) {
+      skiff::paint::fonts().setMonospace(std::move(face));
+      break;
+    }
   // What every Text and widget draws with. Without it they draw nothing:
   // the window was its boxes and no words.
   static skia::SkFont font(primary);

@@ -1613,7 +1613,7 @@ struct message_bubble : nodes::Stack {
     // much to be seen. What came before the room was encrypted is not
     // marked: it was said in the clear, as the room was then.
     const bool plain_in_encrypted = in.encrypted && !said.encrypted && !said.service &&
-                                    (!in.encrypted_since || said.at >= *in.encrypted_since);
+                                    (said.came_plain || !in.encrypted_since || said.at >= *in.encrypted_since);
     // And one that came encrypted from a device its sender did not
     // cross-sign: the server may have made that device up.
     const std::string warning = plain_in_encrypted ? std::string("not encrypted \u00b7 ")

@@ -649,7 +649,7 @@ void account<Sink>::conversation(const conversation_id& in, const loom::client::
                                      .topic = kept.state.topic(),
                                      .encrypted = this->encrypted_room(in.id) || kept.state.encrypted(),
                                      .unread = kept.unread.notification,
-                                     .encrypted_since = encrypted_since_of(kept),
+                                     .encrypted_since = this->encrypted_by(in.id, encrypted_since_of(kept)),
                                      .highlights = kept.unread.highlight,
                                      .space = space(kept),
                                      .children = children_of(kept),
@@ -866,6 +866,13 @@ void account<Sink>::vet_room_key(const crypto::room_key_offer& offer) {
   }
   if (device->master && !crypto_->pinned_master(user))
     crypto_->pin_master(user, *device->master);
+  // Their master key is not the one first seen: said once, plainly -- a
+  // server that swaps it is making their devices its own (review 6).
+  if (const auto pinned = crypto_->pinned_master(user);
+      device->master && pinned && *pinned != *device->master && identity_changed_.emplace(user).second)
+    sink_(change::refused{id_, std::format("{}'s encryption identity changed. Their messages are marked as from an "
+                                           "unverified device until it is verified.",
+                                           user)});
   if (!crypto_->accept_room_key(offer, *device)) {
     log(id_, "room key from {} ({}) not taken", user, device->device_id);
     return;
@@ -894,9 +901,7 @@ template <class Sink>
 void account<Sink>::remember_encrypted(std::string_view room) {
   if (!encrypted_rooms_.emplace(room).second)
     return;
-  const std::vector<std::string> all(encrypted_rooms_.begin(), encrypted_rooms_.end());
-  if (!mux::vault::the().write_file(this->encrypted_rooms_file(), knot::to_json_string(all), true))
-    log(id_, "the encrypted rooms could not be kept in {}", this->encrypted_rooms_file().string());
+  this->save_encrypted();
   if (crypto_) {
     try {
       crypto_->remember_encrypted(room);
@@ -905,6 +910,31 @@ void account<Sink>::remember_encrypted(std::string_view room) {
       crypto_.reset();
     }
   }
+}
+// What the file keeps: the rooms, and when each was encrypted at the latest.
+struct encrypted_kept {
+  std::vector<std::string> rooms;
+  std::map<std::string, std::int64_t> since;
+  friend consteval auto json_schema(knot::type<encrypted_kept>) { return knot::schema<encrypted_kept>(); }
+};
+template <class Sink>
+void account<Sink>::save_encrypted() {
+  const encrypted_kept all{.rooms = std::vector<std::string>(encrypted_rooms_.begin(), encrypted_rooms_.end()),
+                           .since = std::map<std::string, std::int64_t>(encrypted_since_.begin(), encrypted_since_.end())};
+  if (!mux::vault::the().write_file(this->encrypted_rooms_file(), knot::to_json_string(all), true))
+    log(id_, "the encrypted rooms could not be kept in {}", this->encrypted_rooms_file().string());
+}
+template <class Sink>
+std::optional<typename account<Sink>::since_t> account<Sink>::encrypted_by(std::string_view room, std::optional<since_t> seen) {
+  const auto kept = encrypted_since_.find(room);
+  if (seen && (kept == encrypted_since_.end() || seen->time_since_epoch().count() < kept->second)) {
+    encrypted_since_.insert_or_assign(std::string(room), seen->time_since_epoch().count());
+    this->save_encrypted();
+    return seen;
+  }
+  if (kept == encrypted_since_.end())
+    return std::nullopt;
+  return since_t(std::chrono::milliseconds(kept->second));
 }
 template <class Sink>
 std::filesystem::path account<Sink>::encrypted_rooms_file() const {
@@ -915,8 +945,12 @@ void account<Sink>::load_encrypted() {
   const auto opened = mux::vault::the().read_file(this->encrypted_rooms_file());
   if (!opened)
     return;
-  if (auto read = knot::try_read<std::vector<std::string>>(std::string_view(*opened)))
-    encrypted_rooms_.insert(read->begin(), read->end());
+  if (auto read = knot::try_read<encrypted_kept>(std::string_view(*opened))) {
+    encrypted_rooms_.insert(read->rooms.begin(), read->rooms.end());
+    encrypted_since_.insert(read->since.begin(), read->since.end());
+  } else if (auto old = knot::try_read<std::vector<std::string>>(std::string_view(*opened))) {
+    encrypted_rooms_.insert(old->begin(), old->end());  // as kept before the times were
+  }
 }
 
 }  // namespace mux::matrix

@@ -236,6 +236,24 @@ class account {
   std::set<std::string, std::less<>> encrypted_rooms_;
   [[nodiscard]] bool encrypted_room(std::string_view room);
   void remember_encrypted(std::string_view room);
+  // When each room was encrypted, at the latest: the earliest time ever
+  // seen for it -- its m.room.encryption's, or an encrypted event's -- kept
+  // beside the rooms. A server that sends that state again later, or with
+  // a later time, does not move it: messages put in the clear before it
+  // would no longer say "not encrypted" (review 6).
+  std::map<std::string, std::int64_t, std::less<>> encrypted_since_;
+  using since_t = std::chrono::sys_time<std::chrono::milliseconds>;
+  [[nodiscard]] std::optional<since_t> encrypted_by(std::string_view room, std::optional<since_t> seen);
+  void save_encrypted();
+  // A message, added: one that came in the clear, live, into a room known
+  // to be encrypted, says so whatever its time says (review 6).
+  void added(message made, placement_t where, bool sealed) {
+    const bool live = splice::visit(splice::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
+    made.came_plain = !sealed && live && encrypted_rooms_.contains(made.in.id);
+    sink_(change::message_added{std::move(made), where});
+  }
+  // Users whose master key changed from the one pinned, told once a run.
+  std::set<std::string, std::less<>> identity_changed_;
   [[nodiscard]] std::filesystem::path encrypted_rooms_file() const;
   void load_encrypted();
   // What was to go in the clear into an encrypted room (#12169, review 4,

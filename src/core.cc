@@ -318,6 +318,9 @@ struct message {
   // And from a device its sender did not cross-sign: their account's, as
   // the server says, but not vouched for by them (review 4, H1).
   bool unverified = false;
+  // Came in the clear, live, into a room known then to be encrypted: marked
+  // "not encrypted" whatever time it says it was sent at.
+  bool came_plain = false;
   bool outgoing = false;
   // Not something said but something done -- someone joined, the room was
   // renamed, an event nothing here reads -- shown as a line of its own in

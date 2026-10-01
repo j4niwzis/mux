@@ -269,7 +269,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     // send's answer does, and both were shown until then.
     if (one.unsigned_ && one.unsigned_->transaction_id)
       sink_(change::message_acknowledged{in, *one.unsigned_->transaction_id, one.event_id});
-    sink_(change::message_added{std::move(made), where});
+    this->added(std::move(made), where, sealed);
   }, [&](const loom::ev::m_reaction_content_t& content) {
     if (content.m_relates_to && content.m_relates_to->event_id && content.m_relates_to->key) {
       reactions_[one.event_id] = {*content.m_relates_to->event_id, *content.m_relates_to->key, one.sender};
@@ -309,7 +309,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
                                            .outgoing = one.sender == id_.address,
                                            .reaction = true,
                                            .reaction_key = std::string(key)};
-                              sink_(change::message_added{std::move(made), where});
+                              this->added(std::move(made), where, sealed);
                             },
                             // Else a line of its own too, quoting what it is on: shown
                             // where the chat's settings show reactions so.
@@ -330,7 +330,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
                                            .service = true,
                                            .event_kind = room_event::reactions{},
                                            .reaction_key = std::string(key)};
-                              sink_(change::message_added{std::move(made), where});
+                              this->added(std::move(made), where, sealed);
                             }},
                  where);
     }
@@ -357,7 +357,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
         }
         made.threaded = summary;
       }
-      sink_(change::message_added{std::move(made), where});
+      this->added(std::move(made), where, sealed);
       sink_(change::message_redacted{in, one.event_id});
     };
     splice::visit(splice::overloaded{[&](event_type::encrypted) { encrypted(in, one, at, where); },
@@ -381,8 +381,10 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
 template <class Sink>
 void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timeline_event& one,
                  std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where) {
-  // An encrypted event seen: the room is one, whatever its state says.
+  // An encrypted event seen: the room is one, whatever its state says --
+  // and was, at the latest, when this one was sent.
   this->remember_encrypted(in.id);
+  this->encrypted_by(in.id, std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(one.origin_server_ts)));
   // Read with the room's Megolm session, where this device has it: the event
   // it was, its type and content, as any event is read -- the rest of it,
   // who sent it and when, the encrypted one's.

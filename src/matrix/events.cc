@@ -306,7 +306,8 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
                                                             : mux::body{std::format("Reacted with {}", key), std::nullopt},
                                            .replies_to = content.m_relates_to->event_id,
                                            .outgoing = one.sender == id_.address,
-                                           .reaction = true};
+                                           .reaction = true,
+                                           .reaction_key = std::string(key)};
                               sink_(change::message_added{std::move(made), where});
                             },
                             // Else a line of its own too, quoting what it is on: shown
@@ -326,7 +327,8 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
                                            .replies_to = content.m_relates_to->event_id,
                                            .outgoing = one.sender == id_.address,
                                            .service = true,
-                                           .event_kind = room_event::reactions{}};
+                                           .event_kind = room_event::reactions{},
+                                           .reaction_key = std::string(key)};
                               sink_(change::message_added{std::move(made), where});
                             }},
                  where);

@@ -337,6 +337,9 @@ struct message {
   // A sticker (m.sticker): its picture drawn as Telegram draws one -- no
   // bubble, smaller than a photo, the time on a plate over its corner.
   bool sticker = false;
+  // A reaction's key, where it is one -- shown as a line, or fetched aside:
+  // what its menu changes it from.
+  std::string reaction_key;
   friend bool operator==(const message&, const message&) = default;
 };
 

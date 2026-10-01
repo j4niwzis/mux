@@ -148,14 +148,15 @@ class menu_part {
     std::vector<mux::ui::reaction_entry> entries;
     for (const auto& one : events)
       entries.push_back(
-          {one.event, one.who, mux::ui::sender_name(*chat, one.who), one.key, one.at, one.who == chat->id.account.address});
+          {one.event, one.who, mux::ui::sender_name(*chat, one.who), one.key, one.at, one.who == chat->id.account.address,
+           target_.id});
     // Those whose reaction came without its event -- read back from the
     // history -- listed too, at the message's time.
     for (const auto& [key, who] : said->reactions)
       for (const std::string& user : who)
         if (std::ranges::none_of(events, [&](const auto& one) { return one.key == key && one.who == user; }))
           entries.push_back({std::string(), user, mux::ui::sender_name(*chat, user), key, said->at,
-                             user == chat->id.account.address});
+                             user == chat->id.account.address, target_.id});
     s_->root().open_reactions(*chat, entries, &*s_->model);
   }
   void apply(const request::close_reactions&) { s_->root().close_reactions(); }
@@ -213,6 +214,16 @@ class menu_part {
   // -- shown at once, and told to the server.
   void apply(const request::menu_react& one) {
     s_->root().close_menu();
+    // On one's own reaction: changed to the one chosen -- the old taken back,
+    // the new put on what it was on. On another's: put on what it is on.
+    if (target_.reaction) {
+      const auto [to, was] = *target_.reaction;
+      if (target_.own && was != one.key)
+        this->apply(request::react{to, was});
+      this->apply(request::react{to, one.key});
+      s_->root().close_reactions();
+      return;
+    }
     this->apply(request::react{target_.id, one.key});
   }
   void apply(const request::react& one) {

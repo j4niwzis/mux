@@ -30,6 +30,7 @@ import :names;
 import :forms;
 import :message;
 import :html;
+import :timeline;  // a message's menu, for the reactions list's bubbles
 
 export namespace mux::ui {
 
@@ -387,6 +388,7 @@ struct reaction_entry {
   std::string key;
   std::chrono::sys_time<std::chrono::milliseconds> at{};
   bool mine = false;
+  std::string to;  // the message reacted to
 };
 
 // A message's reactions as events, as Matrix has them: a box in the middle,
@@ -434,7 +436,44 @@ struct reactions_box : nodes::Stack {
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-    [[nodiscard]] bool onClick(float, float) {
+    // Its menu, as a message's in the chat: Copy -- what is selected, the
+    // link under the pointer, the preview's -- and, one's own, the reaction
+    // changed to another from the menu's reactions, or taken back.
+    using scene::Node::onPointer;
+    void onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
+      if (press.button != 3)
+        return;
+      const message_bubble& one = parts.bubble;
+      menu_facts facts;
+      facts.id = entry.event;
+      facts.own = entry.mine;
+      facts.text = one.plain;
+      facts.selection = one.parts.body.parts.text.hasSelection();
+      facts.copied = facts.selection ? one.parts.body.parts.text.selected() : one.plain;
+      facts.deletable = entry.mine && !entry.event.empty();
+      if (const auto& asked = skiff::nodes::textMenusAsked(); !asked.empty() && asked.back().link)
+        facts.pressed_link = *asked.back().link;
+      else if (const auto& preview = one.parts.body.parts.preview; preview && preview->fState.fBounds.contains(press.x, press.y))
+        facts.pressed_link = preview->url;
+      if (!entry.event.empty() && !entry.to.empty())
+        facts.reaction = menu_facts::reaction_facts{entry.to, entry.key};
+      facts.x = press.x;
+      facts.y = press.y;
+      actions->message_menu(std::move(facts));
+      reply.handle();
+    }
+    [[nodiscard]] bool onClick(float x, float y) {
+      // A link's preview or card in it: followed, as in the chat.
+      const message_bubble& one = parts.bubble;
+      if (const auto& preview = one.parts.body.parts.preview; preview && preview->bounds().contains(x, y)) {
+        actions->open_url(preview->url);
+        return true;
+      }
+      for (const link_card& card : one.parts.body.parts.cards)
+        if (card.bounds().contains(x, y)) {
+          actions->open_url(card.url);
+          return true;
+        }
       // Answered, where it is an event of its own to answer.
       if (!entry.event.empty())
         actions->reply_to(entry.event, std::format("{} reacted {}", entry.name, entry.key));

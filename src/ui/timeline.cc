@@ -54,6 +54,13 @@ struct menu_facts {
   std::string link;  // a link to it, where it has one
   std::string pressed_link;  // the link pressed on: in its text, or its preview
   std::optional<emote> sticker;  // a sticker's: what making it a favourite keeps
+  // A reaction's: the message it is on, and its key -- the menu's reactions
+  // change it to another, where it is one's own.
+  struct reaction_facts {
+    std::string to;
+    std::string key;
+  };
+  std::optional<reaction_facts> reaction;
   float x = 0.0f, y = 0.0f;
 };
 
@@ -463,6 +470,9 @@ struct timeline_area : scene::Node {
                                 .h = one.said.attachment->height > 0 ? std::optional<std::int64_t>(one.said.attachment->height) : std::nullopt,
                                 .mimetype = one.said.attachment->mimetype.empty() ? std::nullopt
                                                                                   : std::optional<std::string>(one.said.attachment->mimetype)};
+        // A reaction shown as a line: what it is on, and with what.
+        if (!one.said.reaction_key.empty() && one.said.replies_to)
+          facts.reaction = menu_facts::reaction_facts{*one.said.replies_to, one.said.reaction_key};
         facts.x = press.x;
         facts.y = press.y;
         actions->message_menu(std::move(facts));

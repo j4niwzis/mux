@@ -308,7 +308,7 @@ struct app : kept_settings {
   // chosen there goes to it -- else the chat chosen.
   std::optional<mux::conversation_id> manage_target;
   [[nodiscard]] std::optional<mux::conversation_id> managed() {
-    return manage_target ? manage_target : root().main().chosen;
+    return manage_target && root().manage_up() ? manage_target : root().main().chosen;
   }
   void manage_chat(const mux::conversation_id& id);
   void apply(const request::place_spaces& one);

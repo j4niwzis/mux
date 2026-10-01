@@ -194,6 +194,7 @@ struct timeline_area : scene::Node {
       if (one->swipe.value() <= -message_bubble::kSwipeToReply)
         actions->reply_to(one->message_id, one->plain);
       one->swipe.setTarget(0.0f);
+      scene::work::mark(one->fState.fId);  // ticked back: nothing else asks for its frames
       swiping.reset();
       reply.releasePointer();
       reply.handle();
@@ -203,6 +204,7 @@ struct timeline_area : scene::Node {
     swipe_armed = false;
     if (message_bubble* one = this->swiped()) {
       one->swipe.setTarget(0.0f);
+      scene::work::mark(one->fState.fId);  // ticked back: nothing else asks for its frames
       swiping.reset();
       reply.releasePointer();
     }

@@ -82,11 +82,24 @@ struct resize_info_to {
 
 // ---- the message field --------------------------------------------------------------
 
+// A block of code the text opens and does not close -- its closing ``` not
+// written: closed at the end, as the field showed it, so that what is sent
+// says the block where it ends, as the field did.
+[[nodiscard]] inline std::string with_blocks_closed(std::string_view text) {
+  const bool open = std::ranges::count_if(text | std::views::split('\n'), [](auto line) {
+                      return std::string_view(line.begin(), line.end()).starts_with("```");
+                    }) % 2 == 1;
+  std::string out(text);
+  if (open)
+    out += out.ends_with('\n') ? "```" : "\n```";
+  return out;
+}
+
 // What Enter in the message field does: asks for its text to be sent.
 template <class Actions>
 struct submit_message {
   Actions* actions = nullptr;
-  void operator()(std::string_view text) const { actions->submit_message(std::string(text)); }
+  void operator()(std::string_view text) const { actions->submit_message(with_blocks_closed(text)); }
 };
 
 // What a message being written answers or edits, as shown over the field:

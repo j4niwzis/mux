@@ -129,21 +129,47 @@ struct field_quotes {
   static constexpr float kIndent = 12.0f, kRight = 18.0f, kRadius = 5.0f;
   static constexpr float kCodeIndent = 10.0f, kCodeRight = 8.0f;
   // Where a paragraph stands as to code: none; the ``` opening a block; a
-  // line inside one; the ``` closing it.
+  // line inside one; the ``` closing it. A block in a quote is one there:
+  // its fences after the quote's marks, its lines at the quote's depth.
   enum class code_line { none, opening, inside, closing };
+  // Whether the paragraph at `start` is a fence: ``` after its quote marks.
+  [[nodiscard]] static bool fence_at(std::string_view text, std::size_t start) {
+    return text.substr(body_at(text, start)).starts_with("```");
+  }
   [[nodiscard]] static code_line code_at(std::string_view text, std::size_t start) {
     bool open = false;
+    int open_depth = 0;
     for (std::size_t at = 0; at < start;) {
       const std::size_t end = text.find('\n', at);
       if (end == std::string_view::npos || end >= start)
         break;
-      if (text.substr(at, end - at).starts_with("```"))
-        open = !open;
+      if (fence_at(text, at)) {
+        if (!open) {
+          open = true;
+          open_depth = depth(text, at);
+        } else if (depth(text, at) == open_depth) {
+          open = false;
+        }
+      }
       at = end + 1;
     }
-    if (text.substr(start).starts_with("```"))
+    const bool fence = fence_at(text, start);
+    if (open && depth(text, start) != open_depth)
+      return code_line::none;
+    if (fence)
       return open ? code_line::closing : code_line::opening;
     return open ? code_line::inside : code_line::none;
+  }
+  // Where a paragraph's text begins: after its quote marks.
+  [[nodiscard]] static std::size_t body_at(std::string_view text, std::size_t start) {
+    return start + 2 * static_cast<std::size_t>(depth(text, start));
+  }
+  // The quote marks of a depth, as a line of it begins.
+  [[nodiscard]] static std::string marks_of(int deep) {
+    std::string out;
+    for (int level = 0; level < deep; ++level)
+      out += "> ";
+    return out;
   }
   // How long the paragraph at `start` is, up to its newline.
   [[nodiscard]] static std::size_t paragraph_length(std::string_view text, std::size_t start) {
@@ -152,7 +178,8 @@ struct field_quotes {
   }
   // The language an opening fence names: what follows its ```, trimmed.
   [[nodiscard]] static std::string_view language_of(std::string_view text, std::size_t start) {
-    std::string_view line = text.substr(start, paragraph_length(text, start)).substr(3);
+    const std::size_t body = body_at(text, start);
+    std::string_view line = text.substr(body, paragraph_length(text, body)).substr(3);
     while (!line.empty() && line.front() == ' ')
       line.remove_prefix(1);
     while (!line.empty() && line.back() == ' ')
@@ -161,10 +188,16 @@ struct field_quotes {
   }
   // Whether a block opened at `start` is closed somewhere after it.
   [[nodiscard]] static bool closed_after(std::string_view text, std::size_t start) {
+    return closing_after(text, start).has_value();
+  }
+  // Where the fence closing a block opened at `start` starts: the next one
+  // at its depth.
+  [[nodiscard]] static std::optional<std::size_t> closing_after(std::string_view text, std::size_t start) {
+    const int deep = depth(text, start);
     for (std::size_t at = text.find('\n', start); at != std::string_view::npos; at = text.find('\n', at + 1))
-      if (text.substr(at + 1).starts_with("```"))
-        return true;
-    return false;
+      if (depth(text, at + 1) == deep && fence_at(text, at + 1))
+        return at + 1;
+    return std::nullopt;
   }
   // How deep a paragraph is in quotes: how many "> " it starts with.
   [[nodiscard]] static int depth(std::string_view text, std::size_t start) {
@@ -191,16 +224,20 @@ struct field_quotes {
     // ```cpp too -- the opening one the plate's head, where drawBehind puts
     // the block's language (or "Code"), as a message's block shows it; the
     // closing one the plate's foot.
+    // In a quote: past its marks and its plates.
+    const int deep = depth(text, start);
+    const float quoted = kIndent * static_cast<float>(deep);
+    const float right = deep > 0 ? kRight : 0.0f;
     switch (code_at(text, start)) {
       case code_line::opening:
       case code_line::closing:
-        return {.hidden = paragraph_length(text, start), .indent = kCodeIndent, .right = kCodeRight, .monospace = true};
+        return {.hidden = paragraph_length(text, start), .indent = quoted + kCodeIndent, .right = right + kCodeRight, .monospace = true};
       case code_line::inside:
-        return {.indent = kCodeIndent, .right = kCodeRight, .monospace = true};
+        return {.hidden = 2 * static_cast<std::size_t>(deep), .indent = quoted + kCodeIndent, .right = right + kCodeRight,
+                .monospace = true};
       case code_line::none:
         break;
     }
-    const int deep = depth(text, start);
     if (deep == 0)
       return {};
     return {.hidden = 2 * static_cast<std::size_t>(deep), .indent = kIndent * static_cast<float>(deep), .right = kRight};
@@ -208,31 +245,6 @@ struct field_quotes {
   static void drawBehind(skia::SkCanvas* canvas, const skiff::paint::Painter& p, std::string_view text,
                          std::span<const widgets::ShownLine> lines, const skia::SkRect& box, const widgets::Theme& theme,
                          float size, float alpha) {
-    // Blocks of code: each run of their lines on one plate, a bar at its left.
-    const auto code = [&](std::size_t i) { return code_at(text, lines[i].paragraph) != code_line::none; };
-    for (std::size_t i = 0; i < lines.size();) {
-      if (!code(i)) {
-        ++i;
-        continue;
-      }
-      std::size_t j = i;
-      while (j < lines.size() && code(j))
-        ++j;
-      const skia::SkRect plate = skia::SkRect::MakeLTRB(box.fLeft, lines[i].top, box.fRight, lines[j - 1].bottom);
-      const int save = canvas->save();
-      canvas->clipRRect(skia::SkRRect::MakeRectXY(plate, kRadius, kRadius), true);
-      p.fillRect(plate, (theme.fAccent & 0x00FFFFFFu) | 0x1F000000u, alpha);
-      p.fillRect(skia::SkRect::MakeXYWH(box.fLeft, plate.fTop, 3.0f, plate.height()), theme.fAccent, alpha);
-      canvas->restoreToCount(save);
-      // Its head: the language its opening fence names, small, in the accent.
-      if (code_at(text, lines[i].paragraph) == code_line::opening) {
-        const std::string_view language = language_of(text, lines[i].paragraph);
-        const float label = size * 0.8f;
-        p.text(language.empty() ? std::string("Code") : std::string(language), box.fLeft + kCodeIndent,
-               lines[i].top + (lines[i].bottom - lines[i].top + label) * 0.5f - 1.0f, label, theme.fAccent, alpha, true);
-      }
-      i = j;
-    }
     int deepest = 0;
     for (const widgets::ShownLine& line : lines)
       deepest = std::max(deepest, depth(text, line.paragraph));
@@ -259,22 +271,79 @@ struct field_quotes {
         i = j;
       }
     }
+    // Blocks of code: each run of their lines on one plate, a bar at its left.
+    const auto code = [&](std::size_t i) { return code_at(text, lines[i].paragraph) != code_line::none; };
+    for (std::size_t i = 0; i < lines.size();) {
+      if (!code(i)) {
+        ++i;
+        continue;
+      }
+      std::size_t j = i;
+      while (j < lines.size() && code(j))
+        ++j;
+      // At its depth in the quotes it is in, inside their plates.
+      const float left = box.fLeft + kIndent * static_cast<float>(depth(text, lines[i].paragraph));
+      const float right = box.fRight - (depth(text, lines[i].paragraph) > 0 ? kRight : 0.0f);
+      const skia::SkRect plate = skia::SkRect::MakeLTRB(left, lines[i].top, right, lines[j - 1].bottom);
+      const int save = canvas->save();
+      canvas->clipRRect(skia::SkRRect::MakeRectXY(plate, kRadius, kRadius), true);
+      p.fillRect(plate, (theme.fAccent & 0x00FFFFFFu) | 0x1F000000u, alpha);
+      p.fillRect(skia::SkRect::MakeXYWH(left, plate.fTop, 3.0f, plate.height()), theme.fAccent, alpha);
+      canvas->restoreToCount(save);
+      // Its head: the language its opening fence names, small, in the accent.
+      if (code_at(text, lines[i].paragraph) == code_line::opening) {
+        const std::string_view language = language_of(text, lines[i].paragraph);
+        const float label = size * 0.8f;
+        p.text(language.empty() ? std::string("Code") : std::string(language), left + kCodeIndent,
+               lines[i].top + (lines[i].bottom - lines[i].top + label) * 0.5f - 1.0f, label, theme.fAccent, alpha, true);
+      }
+      i = j;
+    }
   }
   [[nodiscard]] static std::optional<widgets::TextEdit> key(std::string_view text, std::size_t caret,
                                                             const scene::key::down& press) {
     namespace keys = scene::keys;
     namespace modifier = scene::modifier;
     const std::size_t start = start_of(text, caret);
-    // In a block of code: Enter is a new line of it, not a send; Enter on an
-    // opening ``` with nothing closing it closes it, the caret inside.
+    // In a block of code -- in a quote, at its depth: Enter is a new line of
+    // it, not a send; Enter on an opening ``` with nothing closing it closes
+    // it, the caret inside; Ctrl+Down leaves it, for the line under its
+    // closing fence -- in the quote it is in, or plain text.
+    const code_line in_code = code_at(text, start);
+    const std::string fence_marks = marks_of(depth(text, start));
+    const auto line_end = [&](std::size_t from) {
+      const std::size_t end = text.find('\n', from);
+      return end == std::string_view::npos ? text.size() : end;
+    };
     if (press.key == keys::kEnter && !press.modifiers.has<modifier::shift>()) {
-      const code_line at = code_at(text, start);
-      if (at == code_line::opening && !closed_after(text, start)) {
-        const std::size_t end = text.find('\n', caret) == std::string_view::npos ? text.size() : text.find('\n', caret);
-        return widgets::TextEdit{.from = end, .to = end, .with = "\n\n```", .caret = end + 1};
+      if (in_code == code_line::opening && !closed_after(text, start)) {
+        const std::size_t end = line_end(caret);
+        return widgets::TextEdit{.from = end, .to = end, .with = "\n" + fence_marks + "\n" + fence_marks + "```", .caret = end + 1 + fence_marks.size()};
       }
-      if (at == code_line::opening || at == code_line::inside)
-        return widgets::TextEdit{.from = caret, .to = caret, .with = "\n", .caret = caret + 1};
+      if (in_code == code_line::opening || in_code == code_line::inside)
+        return widgets::TextEdit{.from = caret, .to = caret, .with = "\n" + fence_marks, .caret = caret + 1 + fence_marks.size()};
+    }
+    if (press.key == keys::kDown && press.modifiers.has<modifier::control>() && in_code != code_line::none) {
+      const std::optional<std::size_t> closing =
+          in_code == code_line::closing ? std::optional<std::size_t>(start) : closing_after(text, in_code == code_line::opening ? start : [&] {
+            // The block's opening fence, above.
+            std::size_t at = start;
+            while (at > 0 && code_at(text, at) != code_line::opening)
+              at = start_of(text, at - 1);
+            return at;
+          }());
+      if (!closing) {
+        // Not closed: closed here, and a line of the quote (or plain) after.
+        const std::size_t end = line_end(caret);
+        const std::string with = "\n" + fence_marks + "```\n" + fence_marks;
+        return widgets::TextEdit{.from = end, .to = end, .with = with, .caret = end + with.size()};
+      }
+      const std::size_t after = line_end(*closing);
+      // The line under it, where it is of the same quote and not code: there.
+      if (after < text.size() && depth(text, after + 1) == depth(text, start) && code_at(text, after + 1) == code_line::none)
+        return widgets::TextEdit{.from = caret, .to = caret, .with = "", .caret = body_at(text, after + 1)};
+      const std::string with = "\n" + fence_marks;
+      return widgets::TextEdit{.from = after, .to = after, .with = with, .caret = after + with.size()};
     }
     const int deep = depth(text, start);
     if (deep == 0)

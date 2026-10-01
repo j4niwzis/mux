@@ -698,16 +698,19 @@ void account<Sink>::create_group(std::string name) {
   });
 }
 
-// Extera's mark of a forwarded message, beside its content: who it is from
-// and where, as HTML -- for clients that show a forward apart.
-struct forward_mark {
-  struct attribution_t {
-    std::string attribution;
-    friend consteval auto json_schema(knot::type<attribution_t>) { return knot::schema<attribution_t>(); }
+// Where a forwarded message is from, beside its content (MSC2723, under
+// its unstable name): the original's event, room, sender and time.
+struct forwarded_mark {
+  struct where_t {
+    std::string event_id;
+    std::string room_id;
+    std::string sender;
+    std::int64_t origin_server_ts = 0;
+    friend consteval auto json_schema(knot::type<where_t>) { return knot::schema<where_t>(); }
   };
-  attribution_t forward;
-  friend consteval auto json_schema(knot::type<forward_mark>) {
-    return knot::schema<forward_mark>().member<"forward">(knot::key("xyz.extera.forward"));
+  where_t forwarded;
+  friend consteval auto json_schema(knot::type<forwarded_mark>) {
+    return knot::schema<forwarded_mark>().member<"forwarded">(knot::key("com.famedly.app.forwarded"));
   }
 };
 
@@ -734,41 +737,12 @@ void account<Sink>::forward(std::string from, std::string event, std::string to)
     }
     content->m_relates_to.reset();
     content->m_new_content.reset();
-    // As Extera forwards: who it is from and a link to it over it -- in bold,
-    // the message quoted under it, where it is words -- and the same in a
-    // field of its own. A picture or a file keeps its own body: its name.
-    const auto escaped = [](std::string_view text) {
-      return text | std::views::transform([](char c) {
-               return c == '&' ? std::string("&amp;") : c == '<' ? std::string("&lt;") : c == '>' ? std::string("&gt;")
-                                                       : c == '"' ? std::string("&quot;") : std::string(1, c);
-             }) |
-             std::views::join | std::ranges::to<std::string>();
-    };
-    // The sender by their Matrix ID, as other clients write it: their
-    // pill shows the name, wherever it is read.
-    const std::string& who = got->sender;
-    // The original by its room's address where it has one, as Extera links
-    // it; by the room's id, with a server to reach it through, where not.
-    std::string link = std::format("https://matrix.to/#/{}/{}?via={}", from, event, server_name_);
-    if (const auto kept = state_.joined.find(from); kept != state_.joined.end())
-      if (const auto alias = kept->second.state.canonical_alias(); alias && !alias->empty())
-        link = std::format("https://matrix.to/#/{}/{}", *alias, event);
-    const std::string attribution =
-        std::format(R"(Forwarded from <a href="https://matrix.to/#/{}">{}</a> - <a href="{}">view original message</a>)",
-                    escaped(who), escaped(who), escaped(link));
-    const bool words = splice::visit(splice::overloaded{[](msgtype::other) { return true; }, [](msgtype::emote) { return true; },
-                                                        [](const auto&) { return false; }},
-                                     msgtype_of(content->msgtype));
-    if (words) {
-      const std::string quoted = content->formatted_body ? *content->formatted_body
-                                                         : escaped(content->body) | std::views::split(std::string_view("\n")) |
-                                                               std::views::join_with(std::string_view("<br>")) |
-                                                               std::ranges::to<std::string>();
-      content->formatted_body = "<strong>" + attribution + "</strong><blockquote>" + quoted + "</blockquote>";
-      content->format = "org.matrix.custom.html";
-      content->body = std::format("Forwarded from {} - {}\n{}", who, link, content->body);
-    }
-    content->rest = as_body(forward_mark{.forward = {.attribution = attribution}});
+    // As MSC2723 forwards: the content as it was, and where it is from
+    // beside it -- no words added to it; a client shows the forward its way.
+    content->rest = as_body(forwarded_mark{.forwarded = {.event_id = event,
+                                                         .room_id = from,
+                                                         .sender = got->sender,
+                                                         .origin_server_ts = static_cast<std::int64_t>(got->origin_server_ts)}});
     auto done = perform(*api_, loom::cs::send_message{.room_id = to,
                                                       .event_type = "m.room.message",
                                                       .txn_id = this->transaction(),

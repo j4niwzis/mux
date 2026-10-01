@@ -46,10 +46,25 @@ struct forward_mark_in {
     knot::raw rest;
     friend consteval auto json_schema(knot::type<attribution_t>) { return knot::schema<attribution_t>().member<"rest">(knot::rest); }
   };
+  // MSC2723's: the original's event, room and sender -- by its stable name
+  // or its unstable one.
+  struct where_t {
+    std::string event_id;
+    std::string room_id;
+    std::string sender;
+    knot::raw rest;
+    friend consteval auto json_schema(knot::type<where_t>) { return knot::schema<where_t>().member<"rest">(knot::rest); }
+  };
   std::optional<attribution_t> forward;
+  std::optional<where_t> forwarded;
+  std::optional<where_t> forwarded_unstable;
   knot::raw rest;
   friend consteval auto json_schema(knot::type<forward_mark_in>) {
-    return knot::schema<forward_mark_in>().member<"forward">(knot::key("xyz.extera.forward")).member<"rest">(knot::rest);
+    return knot::schema<forward_mark_in>()
+        .member<"forward">(knot::key("xyz.extera.forward"))
+        .member<"forwarded">(knot::key("m.forwarded"))
+        .member<"forwarded_unstable">(knot::key("com.famedly.app.forwarded"))
+        .member<"rest">(knot::rest);
   }
 };
 // The links of an attribution, in order: where each goes, and its words.
@@ -177,7 +192,14 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     // Forwarded, as Extera marks it: who from and where, read from the mark;
     // the attribution its text was given dropped from what is shown -- the
     // bubble says it, as Telegram's does.
-    if (auto mark = knot::try_read<forward_mark_in>(content.rest.text); mark && mark->forward && mark->forward->attribution) {
+    auto mark = knot::try_read<forward_mark_in>(content.rest.text);
+    // Forwarded as MSC2723 says: the content as it was, where it is from beside.
+    if (mark && (mark->forwarded || mark->forwarded_unstable)) {
+      const auto& where = mark->forwarded ? *mark->forwarded : *mark->forwarded_unstable;
+      made.forwarded = forward_info{.from = where.sender,
+                                    .name = where.sender,
+                                    .link = std::format("https://matrix.to/#/{}/{}", where.room_id, where.event_id)};
+    } else if (mark && mark->forward && mark->forward->attribution) {
       const auto links = links_in(*mark->forward->attribution);
       if (!links.empty()) {
         constexpr std::string_view person = "https://matrix.to/#/";

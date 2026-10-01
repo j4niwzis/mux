@@ -60,6 +60,7 @@ struct room_settings_facts {
   bool space = false;
   bool holds_spaces = false;
   bool forum = false;
+  bool hidden_from_home = false;  // a space whose rooms Home leaves out
   // Those whose level is not the default: Element's privileged users.
   struct person {
     std::string id;
@@ -352,6 +353,28 @@ struct room_settings : nodes::Stack {
         fState.apply({.alpha = 0.4f, .disabled = true});
     }
   };
+  // A space's rooms out of Home, or in it: a switch, for a space that is
+  // not shown as one chat.
+  struct flip_home_hide_act {
+    Actions* actions;
+    std::string room;
+    void operator()() const { actions->flip_home_hide(room); }
+  };
+  struct home_hide_row : nodes::Stack {
+    struct parts_t {
+      nodes::Text label{"Its rooms not in Home", 14.0f, text_colour};
+      widgets::Toggle<flip_home_hide_act> toggle;
+    } parts;
+    home_hide_row(Actions* a, const room_settings_facts& facts)
+        : parts{.toggle = widgets::Toggle<flip_home_hide_act>({a, facts.id})} {
+      this->setHorizontal();
+      this->setGap(12.0f);
+      fState.apply({.fillX = true, .height = 36.0f});
+      parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      parts.toggle.apply({.alignSelf = scene::align::kMiddle});
+      parts.toggle.setOnNow(facts.hidden_from_home);
+    }
+  };
   struct general_page : nodes::Stack {
     struct buttons_row : nodes::Stack {
       struct parts_t {
@@ -392,6 +415,7 @@ struct room_settings : nodes::Stack {
       nodes::Text forum_heading = part_heading("Shown as");
       forum_row forum;
       nodes::Text forum_about;
+      home_hide_row home_hide;
       nodes::Text leave_heading = part_heading("Leave room");
       widgets::Button<ask<Actions, &Actions::leave_chat>> leave;
     } parts;
@@ -411,9 +435,13 @@ struct room_settings : nodes::Stack {
                 .forum_about = explained(facts.holds_spaces
                                              ? "A space that holds spaces is shown as a space."
                                              : "On: in the chat list as one chat; its rooms open inside it, as Telegram's topics."),
+                .home_hide = home_hide_row(a, facts),
                 .leave = widgets::Button<ask<Actions, &Actions::leave_chat>>("Leave room", {a})} {
       for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.forum_heading, &parts.forum, &parts.forum_about})
         each->setVisible(facts.space);
+      // A space's own: its rooms out of Home -- not one shown as one chat,
+      // whose rooms are in it, not in the list.
+      parts.home_hide.setVisible(facts.space && !facts.forum);
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
       parts.photo.apply({.alignSelf = scene::align::kStart});

@@ -522,6 +522,7 @@ void app::refresh(std::source_location from) {
   root().main().top_bar_on = top_bar;
   root().main().space_places = space_places;
   root().main().forums = forums;
+  root().main().hidden_from_home = hidden_from_home;
   // Home without what spaces hold: the account's own choice, else every one's.
   root().main().home_hides_spaced = [&] {
     if (const auto& by = root().main().current)

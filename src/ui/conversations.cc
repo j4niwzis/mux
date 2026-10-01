@@ -251,6 +251,8 @@ struct conversations_screen : nodes::Stack {
   // The spaces shown as forums, and the one open in the list -- its rooms
   // listed, as tdesktop lists a forum's topics.
   std::set<conversation_id> forums;
+  // Spaces whose rooms Home leaves out, each as it chose.
+  std::set<conversation_id> hidden_from_home;
   std::optional<std::string> forum_open;
   // Home without what spaces hold, but direct messages -- and without those
   // too, where that is chosen as well.
@@ -2210,9 +2212,11 @@ struct conversations_screen : nodes::Stack {
     // What the account's spaces hold: out of Home, where it is chosen so --
     // but direct messages.
     std::set<std::string> in_spaces;
-    if (in && home_hides_spaced && folder == folder_t{folder::all{}})
+    // Every space's, where Home hides all that spaces hold; else those of
+    // the spaces that hide theirs.
+    if (in && folder == folder_t{folder::all{}})
       for (const auto& [key, each] : in->conversations)
-        if (each.space)
+        if (each.space && (home_hides_spaced || hidden_from_home.contains(each.id)))
           in_spaces.insert(each.children.begin(), each.children.end());
     const auto direct = [](const conversation& one) {
       return splice::visit(splice::overloaded{[](conversation_kind::direct) { return true; }, [](const auto&) { return false; }}, one.kind);

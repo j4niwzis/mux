@@ -461,6 +461,22 @@ void app::apply(const request::flip_forum& one) {
   if (auto* managing = root().manage_up())
     managing->show_tab(managing->tab);
 }
+// A space's rooms in Home, or not: its own choice.
+void app::apply(const request::flip_home_hide& one) {
+  const auto by = root().main().current;
+  if (!by)
+    return;
+  const mux::conversation_id id{*by, one.room};
+  const mux::conversation* space = model->find(id);
+  if (!space || !space->space)
+    return;
+  if (!hidden_from_home.erase(id))
+    hidden_from_home.insert(id);
+  (void)this->write();
+  this->refresh();
+  if (auto* managing = root().manage_up())
+    managing->show_tab(managing->tab);
+}
 void app::apply(const request::close_forum&) { root().main().close_forum(); }
 void app::apply(const request::manage_forum&) {
   if (const auto& open = root().main().forum_open)
@@ -506,7 +522,8 @@ void app::manage_chat(const mux::conversation_id& id) {
                                        const mux::conversation* in = model->find(mux::conversation_id{chat->id.account, child});
                                        return in && in->space;
                                      }),
-                                     .forum = forums.contains(chat->id)};
+                                     .forum = forums.contains(chat->id),
+                                     .hidden_from_home = hidden_from_home.contains(chat->id)};
   // Element's privileged users: those the power levels name with a level of
   // their own, the highest first.
   for (const auto& [user, level] : chat->powers) {

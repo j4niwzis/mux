@@ -73,6 +73,8 @@ struct kept_settings {
   std::map<conversation_id, mux::config::bubble_look> panels_in;
   // The spaces shown as one chat each, their rooms in them as topics.
   std::set<conversation_id> forums;
+  // Spaces whose rooms Home leaves out: each one's own choice, none by default.
+  std::set<conversation_id> hidden_from_home;
   // The space each chat is in -- the first found holding it -- set by the
   // program from the model at each refresh: a space's own choices are its
   // rooms', where they have none, nearest first, through spaces in spaces.
@@ -305,7 +307,7 @@ struct kept_settings {
     }
     if (!room_events.empty() || !room_event_kinds.empty() || !receipts_shown_in.empty() || !jump_search_in.empty() ||
         !previews_shown_in.empty() || !wallpaper_in.empty() || !bubbles_in.empty() ||
-        !panels_in.empty() || !forums.empty()) {
+        !panels_in.empty() || !forums.empty() || !hidden_from_home.empty()) {
       std::map<conversation_id, mux::config::room_events_choice> chosen;
       for (const auto& [chat, show] : room_events) {
         auto& one = chosen[chat];
@@ -360,6 +362,12 @@ struct kept_settings {
         one.account = chat.account.address;
         one.conversation = chat.id;
         one.forum = true;
+      }
+      for (const conversation_id& chat : hidden_from_home) {
+        auto& one = chosen[chat];
+        one.account = chat.account.address;
+        one.conversation = chat.id;
+        one.hide_from_home = true;
       }
       out.room_events.emplace();
       for (auto& [chat, one] : chosen)

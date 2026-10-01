@@ -1604,6 +1604,9 @@ struct conversations_screen : nodes::Stack {
   // A message to bring into view, once it is made and laid out -- flashed,
   // unless it is where a chat opened, at what it was read up to.
   std::optional<std::string> jumping_to;
+  // How long a jump waits on a window around its message before paging
+  // back to it, and on anything at all before it is given up.
+  static constexpr double kContextPatienceMs = 4000.0, kJumpPatienceMs = 20000.0;
   // The chat the jump is in: one asked with a chat's opening -- a link to
   // a message there -- is kept when the chat is first shown.
   std::optional<conversation_id> jump_chat;
@@ -1645,6 +1648,13 @@ struct conversations_screen : nodes::Stack {
   }
   bool jump_quiet = false;
   int jump_tries = 0;
+  // When the jump last got anywhere -- asked for, a window or a page asked,
+  // more of the chat come -- and how much of it was held then: it waits and
+  // is given up by that, in time, not in frames. Ten seconds of frames from
+  // its start gave up on a message a few pages back while they came, and a
+  // window in the background -- drawn seldom -- waited ten times as long.
+  double jump_since_ms = -1.0;
+  std::size_t jump_held = 0;
   // Frames a jump has been on its way: the loader shows past a few.
   int jump_age = 0;
   // A message jumped to and made, aimed at until it stays where it was
@@ -1726,6 +1736,7 @@ struct conversations_screen : nodes::Stack {
     jump_base.reset();
     jump_paging = false;
     jump_age = 0;
+    jump_since_ms = -1.0;
     aiming.reset();
     context_asked.reset();
   }
@@ -1868,6 +1879,11 @@ struct conversations_screen : nodes::Stack {
       auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
       auto it = std::ranges::find(entries, *jumping_to, &message_bubble::message_id);
       const conversation* one = last_model->find(*chosen);
+      // Begun, or more of the chat come: the jump got somewhere.
+      if (jump_since_ms < 0.0 || (one && one->timeline.size() != jump_held)) {
+        jump_since_ms = now_ms;
+        jump_held = one ? one->timeline.size() : 0;
+      }
       // A reply to something done in the room -- a join, a rename -- whose
       // line is hidden, as the chat's settings say: landed on the nearest
       // shown after it, else before it, as its place.
@@ -1918,8 +1934,9 @@ struct conversations_screen : nodes::Stack {
         // paged back to, as far as the chat's limit.
         if (context_asked != jumping_to) {
           context_asked = jumping_to;
+          jump_since_ms = now_ms;
           actions->load_context(*chosen, *jumping_to);
-        } else if (++jump_tries > 240) {
+        } else if (now_ms - jump_since_ms > kContextPatienceMs) {
           jump_paging = true;
           jump_tries = 0;
         }
@@ -1934,9 +1951,10 @@ struct conversations_screen : nodes::Stack {
         } else {
           history_asked = history_from;
           history_asked_ms = now_ms;
+          jump_since_ms = now_ms;
           actions->load_older(*chosen, *history_from);
         }
-      } else if (!history_from && ++jump_tries > 120) {
+      } else if (!history_from && now_ms - jump_since_ms > 2000.0) {
         jumping_to.reset();  // the beginning, and it was not there
       }
     }
@@ -1994,10 +2012,11 @@ struct conversations_screen : nodes::Stack {
     // A jump on its way for more than a few frames -- fetched, or paged back
     // to -- shows the loader turning in the middle of the list.
     jump_age = jumping_to ? jump_age + 1 : 0;
-    // A jump that has not got there in ten seconds of frames is let go:
-    // while one goes on, frames are asked for, and one that could not land
-    // -- a message not to be had, a bubble never laid out -- asked forever.
-    if (jump_age > 600) {
+    // A jump that has got nowhere for a while is let go -- however far back
+    // it pages while pages come: while one goes on, frames are asked for, and
+    // one that could not land -- a message not to be had, a bubble never laid
+    // out -- asked forever.
+    if (jumping_to && jump_since_ms >= 0.0 && now_ms - jump_since_ms > kJumpPatienceMs) {
       if (trace_jumps() && jumping_to)
         std::cerr << "[jump] " << *jumping_to << " given up\n";
       this->stop_jump();

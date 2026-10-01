@@ -1026,6 +1026,10 @@ struct forward_line : nodes::Stack {
     fState.apply({.autoSize = scene::axes::kBoth});
     parts.label.apply({.alignSelf = scene::align::kMiddle});
     parts.who.setBold(true);
+    // Wrapped, as a message text is: one on a single line draws its words
+    // plain, its links and pills not at all -- no plate, no picture.
+    parts.who.setWrapped(true);
+    parts.who.setShrinksToLines(true);
     parts.who.setLinks(std::move(links), accent_colour);
     parts.who.apply({.alignSelf = scene::align::kMiddle});
     had = from.empty() || avatar_images().has(from);

@@ -73,7 +73,7 @@ endforeach()
 # is the one tern is built with as well.
 cme_declare_port(NAME chevron PROVIDES chevron
   GITHUB_REPOSITORY j4niwzis/chevron
-  GIT_TAG 36f5e3ade3ee1a4ef00737e091ffa94a46fdd22c
+  GIT_TAG 99f7f3dff5900aa9d93bdabcbdcfa57addcfecf0
   LICENSE AGPL-3.0-only
   TARGETS chevron)
 cme_options(chevron "CHEVRON_TESTS OFF")

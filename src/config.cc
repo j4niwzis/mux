@@ -312,6 +312,11 @@ struct xmpp_account {
   std::optional<bool> notify_sound;
   // The name of the proxy profile it connects through, where it has one.
   std::optional<std::string> proxy;
+  // Its colour, as word_of(accent_t) says it -- none, one given it by its
+  // address -- and whether its chats listed in another account's list carry
+  // a strip of it. Nothing said is a strip.
+  std::optional<std::string> colour;
+  std::optional<bool> strip;
   friend bool operator==(const xmpp_account&, const xmpp_account&) = default;
 };
 
@@ -355,6 +360,8 @@ struct matrix_account {
   // The session the server gave, kept so the next start goes on with it.
   std::optional<std::string> access_token;
   std::optional<std::string> device_id;
+  std::optional<std::string> colour;  // as xmpp_account's
+  std::optional<bool> strip;          // as xmpp_account's
   friend bool operator==(const matrix_account&, const matrix_account&) = default;
 };
 
@@ -631,6 +638,20 @@ struct room_events_choice {
 };
 consteval auto json_schema(knot::type<room_events_choice>) { return knot::schema<room_events_choice>(); }
 
+// A chat listed in another account's list than its own -- a copy of its row
+// there, or moved there -- the strip on its left as it chose: its colour,
+// else its account's; shown, else as its account says.
+struct chat_placement {
+  std::string account;       // the chat's account, by its address
+  std::string conversation;  // the chat's id in it
+  std::string listed_in;     // the account whose list it is in, by its address
+  bool moved = false;        // out of its own account's list
+  std::optional<std::string> strip_colour;
+  std::optional<bool> strip;
+  friend bool operator==(const chat_placement&, const chat_placement&) = default;
+};
+consteval auto json_schema(knot::type<chat_placement>) { return knot::schema<chat_placement>(); }
+
 // A chat muted: no notifications from it, its unread count in grey.
 struct muted_chat {
   std::string account;       // the account's address
@@ -763,6 +784,8 @@ struct file {
   std::optional<std::vector<sticker_kept>> recent_stickers;
   std::optional<std::vector<sticker_kept>> favourite_stickers;
   std::optional<std::vector<muted_chat>> muted;
+  // The chats listed in other accounts' lists than their own.
+  std::optional<std::vector<chat_placement>> placements;
   // The chats that chose for themselves whether their room events show.
   std::optional<std::vector<room_events_choice>> room_events;
   // The proxy profiles accounts choose from.
@@ -839,6 +862,38 @@ consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
 }
 [[nodiscard]] inline std::optional<bool>& read_receipts_in(account_t& one) {
   return splice::visit([](auto& each) -> std::optional<bool>& { return each.read_receipts; }, one);
+}
+// An account's colour: its own choice, else one of the eight its address
+// picks -- the same every time, and accounts apart mostly apart.
+[[nodiscard]] inline accent_t default_colour_of(std::string_view address) {
+  std::uint32_t hash = 2166136261u;
+  for (const char c : address) {
+    hash ^= static_cast<unsigned char>(c);
+    hash *= 16777619u;
+  }
+  switch (hash % 8) {
+    case 0: return accent::blue{};
+    case 1: return accent::green{};
+    case 2: return accent::pink{};
+    case 3: return accent::orange{};
+    case 4: return accent::purple{};
+    case 5: return accent::red{};
+    case 6: return accent::grey{};
+    default: return accent::gold{};
+  }
+}
+[[nodiscard]] inline accent_t colour_of(const account_t& one) {
+  const std::optional<std::string>& word = splice::visit([](const auto& each) -> const std::optional<std::string>& { return each.colour; }, one);
+  return word ? accent_of(word) : default_colour_of(address_of(one));
+}
+[[nodiscard]] inline std::optional<std::string>& colour_in(account_t& one) {
+  return splice::visit([](auto& each) -> std::optional<std::string>& { return each.colour; }, one);
+}
+[[nodiscard]] inline bool strip_of(const account_t& one) {
+  return splice::visit([](const auto& each) { return each.strip.value_or(true); }, one);
+}
+[[nodiscard]] inline std::optional<bool>& strip_in(account_t& one) {
+  return splice::visit([](auto& each) -> std::optional<bool>& { return each.strip; }, one);
 }
 // Whether the account tells whom it talks to that the user is typing.
 [[nodiscard]] inline bool send_typing_of(const account_t& one) {

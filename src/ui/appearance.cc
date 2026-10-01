@@ -107,32 +107,11 @@ struct theme_card : nodes::Stack {
   }
 };
 
-// An accent's circle: its colour, a ring where it is the one in use.
+// The window's accent: a circle pressed.
 template <class Actions>
-struct accent_circle : scene::Node {
+struct set_accent_to {
   Actions* actions = nullptr;
-  config::accent_t accent;
-  bool chosen = false;
-  // Its shade in the theme in use.
-  skia::SkColor shade;
-  struct parts_t {
-    nodes::Box<> dot;
-  } parts;
-  accent_circle(Actions* a, config::accent_t which, const config::theme_t& in)
-      : actions(a), accent(which), shade(colour_of(which, in)), parts{.dot = nodes::Box<>(shade)} {
-    fState.apply({.width = 34.0f, .height = 34.0f, .cornerRadius = 17.0f});
-    parts.dot.apply({.place = scene::anchor::kCentre, .width = 24.0f, .height = 24.0f, .cornerRadius = 12.0f});
-  }
-  // A ring in its shade while it is the one in use.
-  void set_chosen(bool on) {
-    chosen = on;
-    fState.apply({.border = scene::Border{on ? shade : 0u, on ? 2.0f : 0.0f}});
-  }
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    actions->set_accent(accent);
-    return true;
-  }
+  void operator()(const config::accent_t& one) const { actions->set_accent(one); }
 };
 
 // Settings' Appearance page, as Telegram's: the themes as cards, and the
@@ -161,24 +140,7 @@ struct appearance_page : nodes::Stack {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 16.0f, 8.0f, 16.0f}});
     }
   };
-  struct circles_row : nodes::Stack {
-    struct parts_t {
-      std::vector<accent_circle<Actions>> circles;
-    } parts;
-    // The theme's own first, then Telegram's eight.
-    circles_row(Actions* a, const config::theme_t& in) {
-      this->setHorizontal();
-      this->setGap(4.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 16.0f, 8.0f, 16.0f}});
-      for (const config::accent_t& one :
-           {config::accent_t{config::accent::theme_own{}}, config::accent_t{config::accent::blue{}},
-            config::accent_t{config::accent::green{}}, config::accent_t{config::accent::pink{}},
-            config::accent_t{config::accent::orange{}}, config::accent_t{config::accent::purple{}},
-            config::accent_t{config::accent::red{}}, config::accent_t{config::accent::grey{}},
-            config::accent_t{config::accent::gold{}}})
-        parts.circles.emplace_back(a, one, in);
-    }
-  };
+  using circles_row = accent_circles<set_accent_to<Actions>>;
   struct parts_t {
     header_t header;
     nodes::Text theme_title = section_title("THEME");
@@ -208,7 +170,7 @@ struct appearance_page : nodes::Stack {
   appearance_page(Actions* a, const config::theme_t& theme, const config::accent_t& accent)
       : parts{.header = header_t("Appearance", {a}, {a}, true, true),
               .cards = cards_row(a),
-              .circles = circles_row(a, theme),
+              .circles = circles_row({a}, theme, true),
               .looks = look_choices<Actions>(a, choice_level::everywhere{}),
               .spaces = switch_row<ask<Actions, &Actions::flip_spaces>>("Space bars", {a}),
               .top_bar = switch_row<ask<Actions, &Actions::flip_top_bar>>("The bar after \"mux\"", {a}),
@@ -244,8 +206,7 @@ struct appearance_page : nodes::Stack {
     auto& [classic, day, tinted, night] = parts.cards.parts;
     for (auto* card : {&classic, &day, &tinted, &night})
       card->set_chosen(card->theme == theme);
-    for (auto& circle : parts.circles.parts.circles)
-      circle.set_chosen(circle.accent == accent);
+    parts.circles.show_chosen(accent);
     this->markDamaged();
   }
   void show_motion(std::string_view) {}

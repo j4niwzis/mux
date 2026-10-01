@@ -230,7 +230,7 @@ void app::wallpaper_file(const std::string& path) {
     managing->show_tab(managing->tab);
   this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
     if (panel.chats_page())
-      panel.show_page(3, account, *model, proxies);
+      panel.show_page(3, account, *model, proxies, theme);
   });
 }
 
@@ -646,7 +646,7 @@ void app::apply(const request::accounts_back&) {
 
 void app::apply(const request::account_page& one) {
   this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
-    panel.show_page(one.page, account, *model, proxies);
+    panel.show_page(one.page, account, *model, proxies, theme);
     // Sessions: asked of the server as the page opens.
     if (one.page == 4)
       net->list_sessions(id_of(account));
@@ -674,6 +674,28 @@ void app::apply(const request::flip_account_receipts&) {
       page->show(*kept, mux::config::send_typing_of(account));
     (void)this->write();
   });
+}
+
+// An account's colour chosen, and its strip on its chats in other lists:
+// kept, and the lists shown again (#11727).
+void app::apply(const request::set_account_colour& one) {
+  this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
+    mux::config::colour_in(account) = std::string(splice::visit([](const auto& each) { return mux::config::word_of(each); }, one.colour));
+    if (auto* page = panel.chats_page())
+      page->show_colour(mux::config::colour_of(account), mux::config::strip_of(account));
+    (void)this->write();
+  });
+  this->refresh();
+}
+void app::apply(const request::flip_account_strip&) {
+  this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
+    auto& kept = mux::config::strip_in(account);
+    kept = !kept.value_or(true);
+    if (auto* page = panel.chats_page())
+      page->show_colour(mux::config::colour_of(account), *kept);
+    (void)this->write();
+  });
+  this->refresh();
 }
 
 void app::apply(const request::flip_account_typing&) {
@@ -976,7 +998,7 @@ void app::apply(const request::choose_account_proxy& one) {
       kept = proxies[static_cast<std::size_t>(one.index)].name;
     (void)this->write();
     this->reconnect(account);
-    panel.show_page(2, account, *model, proxies);
+    panel.show_page(2, account, *model, proxies, theme);
   });
 }
 

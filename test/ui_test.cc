@@ -138,6 +138,8 @@ struct stub {
   void attach_in_thread() {}
   void toggle_thread_emoji() {}
   void flip_live_blur() {}
+  void set_account_colour(mux::config::accent_t) {}
+  void flip_account_strip() {}
   void flip_home_hide(std::string) {}
   void menu_thread() {}
   void open_room_packs() {}

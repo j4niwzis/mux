@@ -406,6 +406,8 @@ struct app : kept_settings {
   }
   void apply(const request::flip_account_receipts&);
   void apply(const request::flip_account_typing&);
+  void apply(const request::set_account_colour& one);
+  void apply(const request::flip_account_strip&);
   void apply(const request::proxy_kind& one);
   // The chosen account through a profile, or none: kept, and connected again.
   void apply(const request::choose_account_proxy& one);

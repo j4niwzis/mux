@@ -257,6 +257,11 @@ struct account_privacy : nodes::Stack {
 // here; a chat of it may choose again.
 template <class Actions>
 struct account_chats : nodes::Stack {
+  // Its colour chosen.
+  struct set_colour {
+    Actions* actions;
+    void operator()(const config::accent_t& one) const { actions->set_account_colour(one); }
+  };
   // Home without what its spaces hold -- but direct messages -- or as every
   // account's.
   struct pick_home {
@@ -267,6 +272,11 @@ struct account_chats : nodes::Stack {
     }
   };
   struct parts_t {
+    // Its colour, as only this page shows it (#11727, #11758): the strip of
+    // its chats listed in other accounts' lists, unless they chose another.
+    nodes::Text colour_title = section_title("COLOUR");
+    accent_circles<set_colour> colours;
+    switch_row<ask<Actions, &Actions::flip_account_strip>> strip;
     nodes::Text title = section_title("CHATS");
     event_kind_list<Actions> events;
     receipts_choice<Actions> faces;
@@ -280,8 +290,11 @@ struct account_chats : nodes::Stack {
   } parts;
   account_chats(Actions* a, std::optional<bool> events_all, const std::optional<config::room_event_kinds>& kinds,
                 std::optional<bool> faces_on, std::optional<std::int64_t> jump_most, std::optional<bool> previews_on,
-                std::optional<bool> home_hides = std::nullopt, std::optional<bool> home_direct = std::nullopt)
-      : parts{.events = event_kind_list<Actions>(a, choice_level::account{}, events_all, kinds),
+                std::optional<bool> home_hides, std::optional<bool> home_direct, const config::accent_t& colour,
+                bool strip_on, const config::theme_t& theme)
+      : parts{.colours = accent_circles<set_colour>({a}, theme, false),
+              .strip = switch_row<ask<Actions, &Actions::flip_account_strip>>("A strip on its chats in other lists", {a}),
+              .events = event_kind_list<Actions>(a, choice_level::account{}, events_all, kinds),
               .faces = receipts_choice<Actions>(a, choice_level::account{}, faces_on),
               .previews = previews_choice<Actions>(a, choice_level::account{}, previews_on),
               .jump_search = jump_search_choice<Actions>(a, choice_level::account{}, jump_most),
@@ -293,8 +306,13 @@ struct account_chats : nodes::Stack {
               .places = spaces_choices<Actions>(a)} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-    for (nodes::Text* each : {&parts.looks_title, &parts.spaces_title})
+    for (nodes::Text* each : {&parts.title, &parts.looks_title, &parts.spaces_title})
       each->apply({.margin = {10.0f, 0.0f, 0.0f, 0.0f}});
+    this->show_colour(colour, strip_on);
+  }
+  void show_colour(const config::accent_t& colour, bool strip_on) {
+    parts.colours.show_chosen(colour);
+    parts.strip.parts.toggle.setOn(strip_on);
   }
   void say(std::string, bool) {}
 };
@@ -682,7 +700,7 @@ struct accounts_panel : closes_on_escape<Actions> {
   // One of the chosen account's pages beside the list: 0 Connection, 1
   // Privacy, 2 Proxy.
   void show_page(int page, const config::account_t& one, const model& now,
-                 const std::vector<config::proxy_settings>& proxies = {}) {
+                 const std::vector<config::proxy_settings>& proxies, const config::theme_t& theme) {
     pages.light(page);
     if (page == 1) {
       detail.template emplace<3>(this->actions, config::read_receipts_of(one), config::send_typing_of(one),
@@ -693,7 +711,8 @@ struct accounts_panel : closes_on_escape<Actions> {
     } else if (page == 3) {
       detail.template emplace<5>(this->actions, config::room_events_of(one), config::room_event_kinds_of(one),
                                    config::show_receipts_of(one), config::jump_search_of(one), config::link_previews_of(one),
-                                   config::home_hides_of(one), config::home_direct_of(one));
+                                   config::home_hides_of(one), config::home_direct_of(one), config::colour_of(one),
+                                   config::strip_of(one), theme);
     } else if (page == 4) {
       detail.template emplace<6>(this->actions);
     } else if (page == 2) {

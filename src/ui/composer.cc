@@ -633,6 +633,17 @@ struct mark_button : scene::Node {
     actions->list_marks(kind);
     reply.handle();
   }
+  // And where the press is on the button itself -- the target, which the
+  // way back up does not reach: the right button lists them; any other
+  // press as a node's is, a click.
+  void onPointer(scene::phase::target, const scene::pointer::down& press, scene::PointerReply& reply) {
+    if (press.button == 3) {
+      actions->list_marks(kind);
+      reply.handle();
+      return;
+    }
+    scene::defaultPointer(*this, scene::phase::target{}, press, reply);
+  }
 };
 
 // "↓": back to the newest, with how many came while one read above them.

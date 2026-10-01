@@ -9,6 +9,9 @@ import loom.api;
 import loom.ev;
 import loom.state;
 import loom.cs.joining;
+import loom.cs.keys;
+import loom.cs.sliding_sync;
+import mux.matrix.crypto;
 import loom.cs.leaving;
 import loom.cs.login;
 import loom.cs.message_pagination;
@@ -219,6 +222,13 @@ class account {
   std::optional<http::url> homeserver();
 
   void run();
+
+  // End-to-end encryption: this device's machine, made once the device is
+  // known; its keys uploaded, and what comes for it read.
+  std::optional<crypto::olm_machine> crypto_;
+  void start_crypto();
+  void upload_keys(std::int64_t on_server);
+  void crypto_answer(const loom::cs::sliding_sync::response_t& got);
 
   // The file the sync is kept in, for this account.
   std::filesystem::path kept_file() const;

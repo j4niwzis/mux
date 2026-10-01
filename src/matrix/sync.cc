@@ -204,6 +204,7 @@ void account<Sink>::run() {
     return;
   }
   say(connection::online{});
+  this->start_crypto();
   // Simplified sliding sync, where the server says it has it: the rooms by
   // their activity, a window of them -- not every room at the first sync.
   if (auto versions = perform(api, loom::cs::get_versions{}); versions && versions->unstable_features)
@@ -260,12 +261,19 @@ void account<Sink>::run() {
       using extension = loom::cs::sliding_sync::body_t::extension_t;
       ask.body.extensions = loom::cs::sliding_sync::body_t::extensions_t{
           .account_data = extension{.enabled = true}, .receipts = extension{.enabled = true}, .typing = extension{.enabled = true}};
+      // What comes for this device, and how many of its one-time keys are
+      // left, where it has encryption.
+      if (crypto_) {
+        ask.body.extensions->to_device = extension{.enabled = true, .since = crypto_->to_device_since()};
+        ask.body.extensions->e2ee = extension{.enabled = true};
+      }
       auto slid = perform(syncing, ask,
                           sliding_first ? std::chrono::seconds(300)
                                         : std::chrono::duration_cast<std::chrono::seconds>(how_.sync_timeout) + std::chrono::seconds(30));
       if (!slid)
         return std::unexpected(slid.error());
       sliding_pos_ = slid->pos;
+      this->crypto_answer(*slid);
       // Fewer rooms in the window than the account has: two hundred more at
       // the next, until all are -- every room, a window at a time.
       if (slid->lists)
@@ -748,6 +756,77 @@ void account<Sink>::members(const conversation_id& in, const loom::client::joine
     knocking.push_back({user, kept.state.display_name(user).value_or(user), asked && asked->reason ? *asked->reason : std::string()});
   }
   sink_(change::members_changed{in, std::move(out), std::move(knocking)});
+}
+
+// End-to-end encryption.
+//
+// The machine of this device, once it has one: read from its store, else
+// made, and its keys put on the server -- the device's identity keys once,
+// signed, and one-time keys up to half of what it may hold.
+template <class Sink>
+void account<Sink>::start_crypto() {
+  if (crypto_ || !how_.device_id || how_.crypto_store.empty())
+    return;
+  try {
+    crypto_.emplace(crypto::olm_machine::open(how_.crypto_store, id_.address, *how_.device_id));
+  } catch (const std::exception& failed) {
+    log(id_, "encryption not started: {}", failed.what());
+    return;
+  }
+  log(id_, "encryption: this device's curve25519 key is {}", crypto_->curve25519());
+  this->upload_keys(0);
+}
+
+// Keys put on the server: the device's, the first time; one-time keys where
+// it has fewer than half of what it may hold.
+template <class Sink>
+void account<Sink>::upload_keys(std::int64_t on_server) {
+  if (!crypto_ || !api_)
+    return;
+  const bool first = !crypto_->device_keys_uploaded();
+  loom::cs::upload_keys ask;
+  if (first)
+    if (auto signed_keys = crypto_->signed_device_keys())
+      ask.body.device_keys = loom::cs::upload_keys::body_t::device_keys_t{
+          .user_id = signed_keys->keys.user_id,
+          .device_id = signed_keys->keys.device_id,
+          .algorithms = signed_keys->keys.algorithms,
+          .keys = signed_keys->keys.keys,
+          .signatures = {{id_.address, {{"ed25519:" + signed_keys->keys.device_id, signed_keys->signature}}}}};
+  if (auto made = crypto_->one_time_keys(on_server); !made.empty())
+    ask.body.one_time_keys = std::move(made);
+  if (!ask.body.device_keys && !ask.body.one_time_keys)
+    return;
+  auto done = perform(*api_, ask);
+  if (!done) {
+    log(id_, "keys not uploaded: {}", done.error().said());
+    return;
+  }
+  crypto_->published(ask.body.device_keys.has_value());
+  log(id_, "keys uploaded{}", ask.body.device_keys ? ", the device's with them" : "");
+}
+
+// What a sliding sync's answer brought for this device: to-device messages
+// -- Olm, carrying room keys -- and how many one-time keys the server holds.
+template <class Sink>
+void account<Sink>::crypto_answer(const loom::cs::sliding_sync::response_t& got) {
+  if (!crypto_ || !got.extensions)
+    return;
+  const auto& extensions = *got.extensions;
+  if (extensions.to_device) {
+    if (extensions.to_device->events)
+      for (const auto& one : *extensions.to_device->events)
+        splice::visit(splice::overloaded{[&](const loom::ev::m_room_encrypted_content_t& content) {
+                                           crypto_->to_device(one.sender.value_or(""), content);
+                                         },
+                                         [](const auto&) {}},
+                      one.content.data());
+    crypto_->went_on_to(extensions.to_device->next_batch);
+  }
+  if (extensions.e2ee && extensions.e2ee->device_one_time_keys_count)
+    if (const auto left = extensions.e2ee->device_one_time_keys_count->find("signed_curve25519");
+        left != extensions.e2ee->device_one_time_keys_count->end())
+      this->upload_keys(left->second);
 }
 
 }  // namespace mux::matrix

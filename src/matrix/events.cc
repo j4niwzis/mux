@@ -380,7 +380,25 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
 template <class Sink>
 void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timeline_event& one,
                  std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where) {
-  // By its type: loom's timeline union does not have its content yet.
+  // Read with the room's Megolm session, where this device has it: the event
+  // it was, its type and content, as any event is read -- the rest of it,
+  // who sent it and when, the encrypted one's.
+  if (crypto_) {
+    std::optional<crypto::megolm_payload> clear;
+    splice::visit(splice::overloaded{[&](const loom::ev::m_room_encrypted_content_t& content) {
+                                       clear = crypto_->room_event(in.id, content);
+                                     },
+                                     [](const auto&) {}},
+                  one.content.data());
+    if (clear) {
+      loom::ev::timeline_event made = one;
+      made.type = std::move(clear->type);
+      made.content = std::move(clear->content);
+      this->event(in, made, where);
+      return;
+    }
+  }
+  // Not readable here (yet): said so.
   sink_(change::message_added{message{.in = in,
                                       .id = one.event_id,
                                       .sender = one.sender,

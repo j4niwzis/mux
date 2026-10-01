@@ -107,7 +107,8 @@ struct network {
                               .device_name = saved.device_name,
                               .proxy = std::move(via),
                               .access_token = saved.access_token,
-                              .device_id = saved.device_id};
+                              .device_id = saved.device_id,
+                              .crypto_store = mux::config::state_path("crypto") / (saved.user_id + ".json")};
     this->run(saved.user_id, std::make_unique<matrix_account>(loop, tls, std::move(how), post_change{box, live}),
               live);
   }

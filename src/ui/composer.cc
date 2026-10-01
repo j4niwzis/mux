@@ -106,8 +106,39 @@ struct compose_context {
 // inside a quote on both tints. Shift+Enter goes on in the quote, or ends it
 // on an empty line; Backspace right after the marks takes a level off;
 // Ctrl+Down leaves the quote for what is under it. The field's `Blocks`.
+//
+// And blocks of code, as Telegram's field shows them while they are written:
+// from a line starting ``` to the next such line, on a plate faint in the
+// accent with a bar at its left, in the monospace face. Enter inside one
+// goes to a new line of it rather than sending; Enter on an opening ```
+// line with no closing one after it closes the block, the caret in it.
 struct field_quotes {
   static constexpr float kIndent = 12.0f, kRight = 18.0f, kRadius = 5.0f;
+  static constexpr float kCodeIndent = 10.0f, kCodeRight = 8.0f;
+  // Where a paragraph stands as to code: none; the ``` opening a block; a
+  // line inside one; the ``` closing it.
+  enum class code_line { none, opening, inside, closing };
+  [[nodiscard]] static code_line code_at(std::string_view text, std::size_t start) {
+    bool open = false;
+    for (std::size_t at = 0; at < start;) {
+      const std::size_t end = text.find('\n', at);
+      if (end == std::string_view::npos || end >= start)
+        break;
+      if (text.substr(at, end - at).starts_with("```"))
+        open = !open;
+      at = end + 1;
+    }
+    if (text.substr(start).starts_with("```"))
+      return open ? code_line::closing : code_line::opening;
+    return open ? code_line::inside : code_line::none;
+  }
+  // Whether a block opened at `start` is closed somewhere after it.
+  [[nodiscard]] static bool closed_after(std::string_view text, std::size_t start) {
+    for (std::size_t at = text.find('\n', start); at != std::string_view::npos; at = text.find('\n', at + 1))
+      if (text.substr(at + 1).starts_with("```"))
+        return true;
+    return false;
+  }
   // How deep a paragraph is in quotes: how many "> " it starts with.
   [[nodiscard]] static int depth(std::string_view text, std::size_t start) {
     int depth = 0;
@@ -129,6 +160,8 @@ struct field_quotes {
   }
 
   [[nodiscard]] static widgets::BlockLook look(std::string_view text, std::size_t start) {
+    if (code_at(text, start) != code_line::none)
+      return {.indent = kCodeIndent, .right = kCodeRight, .monospace = true};
     const int deep = depth(text, start);
     if (deep == 0)
       return {};
@@ -137,6 +170,24 @@ struct field_quotes {
   static void drawBehind(skia::SkCanvas* canvas, const skiff::paint::Painter& p, std::string_view text,
                          std::span<const widgets::ShownLine> lines, const skia::SkRect& box, const widgets::Theme& theme,
                          float size, float alpha) {
+    // Blocks of code: each run of their lines on one plate, a bar at its left.
+    const auto code = [&](std::size_t i) { return code_at(text, lines[i].paragraph) != code_line::none; };
+    for (std::size_t i = 0; i < lines.size();) {
+      if (!code(i)) {
+        ++i;
+        continue;
+      }
+      std::size_t j = i;
+      while (j < lines.size() && code(j))
+        ++j;
+      const skia::SkRect plate = skia::SkRect::MakeLTRB(box.fLeft, lines[i].top, box.fRight, lines[j - 1].bottom);
+      const int save = canvas->save();
+      canvas->clipRRect(skia::SkRRect::MakeRectXY(plate, kRadius, kRadius), true);
+      p.fillRect(plate, (theme.fAccent & 0x00FFFFFFu) | 0x1F000000u, alpha);
+      p.fillRect(skia::SkRect::MakeXYWH(box.fLeft, plate.fTop, 3.0f, plate.height()), theme.fAccent, alpha);
+      canvas->restoreToCount(save);
+      i = j;
+    }
     int deepest = 0;
     for (const widgets::ShownLine& line : lines)
       deepest = std::max(deepest, depth(text, line.paragraph));
@@ -169,6 +220,17 @@ struct field_quotes {
     namespace keys = scene::keys;
     namespace modifier = scene::modifier;
     const std::size_t start = start_of(text, caret);
+    // In a block of code: Enter is a new line of it, not a send; Enter on an
+    // opening ``` with nothing closing it closes it, the caret inside.
+    if (press.key == keys::kEnter && !press.modifiers.has<modifier::shift>()) {
+      const code_line at = code_at(text, start);
+      if (at == code_line::opening && !closed_after(text, start)) {
+        const std::size_t end = text.find('\n', caret) == std::string_view::npos ? text.size() : text.find('\n', caret);
+        return widgets::TextEdit{.from = end, .to = end, .with = "\n\n```", .caret = end + 1};
+      }
+      if (at == code_line::opening || at == code_line::inside)
+        return widgets::TextEdit{.from = caret, .to = caret, .with = "\n", .caret = caret + 1};
+    }
     const int deep = depth(text, start);
     if (deep == 0)
       return std::nullopt;

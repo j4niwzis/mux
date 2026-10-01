@@ -65,10 +65,8 @@ class reading_part {
   void apply(const request::typing& one) {
     if (s_->demo())
       return;
-    const auto allowed = [&](const conversation_id& in) {
-      const auto* account = s_->kept->settings_of(in.account.address);
-      return account && mux::config::send_typing_of(*account);
-    };
+    // As the chat, its space, its account or every account says (#12156).
+    const auto allowed = [&](const conversation_id& in) { return s_->kept->typing_sent(in); };
     auto step = logic::typing_after(typing_, one.on, s_->root().main().chosen, std::chrono::steady_clock::now(), allowed);
     for (const auto& said : step.say)
       splice::visit(splice::overloaded{[&](const logic::typing_said::started& it) { s_->net->typing(it.in, true); },

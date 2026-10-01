@@ -47,6 +47,7 @@ struct room_settings_facts {
   // its account's.
   std::optional<bool> events_all;
   // Whether it shows link previews, as chosen for it.
+  std::optional<bool> typing;  // others told one is typing: its own choice
   std::optional<bool> previews;
   // Whether it shows who has read up to where, as chosen for it.
   std::optional<bool> receipts;
@@ -410,6 +411,7 @@ struct room_settings : nodes::Stack {
       event_kind_list<Actions> events;
       receipts_choice<Actions> receipts;
       previews_choice<Actions> previews;
+      typing_choice<Actions> typing;
       jump_search_choice<Actions> jump_search;
       nodes::Text forum_heading = part_heading("Shown as");
       forum_row forum;
@@ -429,6 +431,7 @@ struct room_settings : nodes::Stack {
                 .events = event_kind_list<Actions>(a, choice_level::chat{}, facts.events_all, facts.event_kinds),
                 .receipts = receipts_choice<Actions>(a, choice_level::chat{}, facts.receipts),
                 .previews = previews_choice<Actions>(a, choice_level::chat{}, facts.previews),
+                .typing = typing_choice<Actions>(a, choice_level::chat{}, facts.typing),
                 .jump_search = jump_search_choice<Actions>(a, choice_level::chat{}, facts.jump_search),
                 .forum = forum_row(a, facts),
                 .forum_about = explained(facts.holds_spaces

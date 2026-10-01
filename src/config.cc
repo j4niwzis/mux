@@ -628,6 +628,7 @@ struct room_events_choice {
   std::optional<room_event_kinds> kinds;  // each kind
   std::optional<bool> receipts;  // who has read up to where, as faces
   std::optional<bool> previews;  // a card for a message's first link
+  std::optional<bool> typing;    // others told one is typing
   std::optional<std::int64_t> jump_search;  // events paged back looking for one; 0 no limit
   std::optional<std::string> wallpaper;  // its background, as word_of(wallpaper_t) says it
   std::optional<bool> forum;  // a space: shown as one chat, its rooms in it as topics
@@ -766,6 +767,10 @@ struct history_settings {
   std::int64_t jump_search = 5000;
   // And each kind of them, where chosen apart.
   std::optional<room_event_kinds> room_event_kinds;
+  // Whether others are told one is typing (m.typing, XEP-0085's chat
+  // states) -- never what: as every account's, until chosen there or in a
+  // chat or its space.
+  bool send_typing = true;
   friend bool operator==(const history_settings&, const history_settings&) = default;
 };
 consteval auto json_schema(knot::type<history_settings>) { return knot::schema<history_settings>(); }
@@ -896,8 +901,9 @@ consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
   return splice::visit([](auto& each) -> std::optional<bool>& { return each.strip; }, one);
 }
 // Whether the account tells whom it talks to that the user is typing.
-[[nodiscard]] inline bool send_typing_of(const account_t& one) {
-  return splice::visit([](const auto& each) { return each.send_typing.value_or(true); }, one);
+// Its own choice, if it made one; else as every account's.
+[[nodiscard]] inline const std::optional<bool>& send_typing_of(const account_t& one) {
+  return splice::visit([](const auto& each) -> const std::optional<bool>& { return each.send_typing; }, one);
 }
 [[nodiscard]] inline std::optional<bool>& send_typing_in(account_t& one) {
   return splice::visit([](auto& each) -> std::optional<bool>& { return each.send_typing; }, one);

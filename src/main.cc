@@ -198,6 +198,8 @@ int main(int argc, char** argv) {
       program.receipts_shown_in.insert_or_assign(chat, *one.receipts);
     if (one.previews)
       program.previews_shown_in.insert_or_assign(chat, *one.previews);
+    if (one.typing)
+      program.typing_sent_in.insert_or_assign(chat, *one.typing);
     if (one.jump_search)
       program.jump_search_in.insert_or_assign(chat, *one.jump_search);
     if (one.wallpaper)

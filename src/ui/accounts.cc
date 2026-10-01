@@ -208,17 +208,18 @@ struct account_pages : nodes::Stack {
 // A section's title on a settings page, as Gajim sets them: small, bold, dim.
 inline nodes::Text section_title(std::string text) { return nodes::Text(std::move(text), 13.0f, dim_colour, true); }
 
-// An account's Privacy page: whether it sends read receipts.
+// An account's Privacy page: whether it sends read receipts; whether it
+// tells others one is typing, as every account's until chosen here, and a
+// chat or space of it may choose again.
 template <class Actions>
 struct account_privacy : nodes::Stack {
   using receipts_row = switch_row<ask<Actions, &Actions::flip_account_receipts>>;
-  using typing_row = switch_row<ask<Actions, &Actions::flip_account_typing>>;
   using notify_row = switch_row<ask<Actions, &Actions::flip_account_notify>>;
   using notify_sound_row = switch_row<ask<Actions, &Actions::flip_account_notify_sound>>;
   struct parts_t {
     nodes::Text title = section_title("PRIVACY");
     receipts_row receipts;
-    typing_row typing;
+    typing_choice<Actions> typing;
     notify_row notify;
     notify_sound_row notify_sound;
     nodes::Text note{"Off, the people you talk to through this account are not told when you have read their "
@@ -226,12 +227,12 @@ struct account_privacy : nodes::Stack {
                      13.0f, dim_colour};
   } parts;
 
-  account_privacy(Actions* a, bool receipts_on, bool typing_on, std::optional<bool> events_all = std::nullopt,
+  account_privacy(Actions* a, bool receipts_on, std::optional<bool> typing_on, std::optional<bool> events_all = std::nullopt,
                   const std::optional<config::room_event_kinds>& kinds = std::nullopt, bool notify_on = true,
                   bool notify_sound_on = true, std::optional<bool> faces_on = std::nullopt,
                   std::optional<std::int64_t> jump_most = std::nullopt, std::optional<bool> previews_on = std::nullopt)
       : parts{.receipts = receipts_row("Send read receipts", {a}),
-              .typing = typing_row("Send typing notifications", {a}),
+              .typing = typing_choice<Actions>(a, choice_level::account{}, typing_on),
               .notify = notify_row("Desktop notifications from it", {a}),
               .notify_sound = notify_sound_row("Their sound", {a})} {
     (void)events_all, (void)kinds, (void)faces_on, (void)jump_most, (void)previews_on;
@@ -240,14 +241,10 @@ struct account_privacy : nodes::Stack {
     fState.apply({.fill = true});
     parts.note.setWrapped(true);
     parts.receipts.parts.toggle.setOnNow(receipts_on);
-    parts.typing.parts.toggle.setOnNow(typing_on);
     parts.notify.parts.toggle.setOnNow(notify_on);
     parts.notify_sound.parts.toggle.setOnNow(notify_sound_on);
   }
-  void show(bool receipts_on, bool typing_on) {
-    parts.receipts.parts.toggle.setOn(receipts_on);
-    parts.typing.parts.toggle.setOn(typing_on);
-  }
+  void show(bool receipts_on) { parts.receipts.parts.toggle.setOn(receipts_on); }
   void say(std::string, bool) {}
 };
 

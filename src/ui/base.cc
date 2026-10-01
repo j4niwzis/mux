@@ -355,6 +355,12 @@ inline bool& inside_panel() {
   static bool inside = false;
   return inside;
 }
+// Being drawn inside what floats over others -- a layer sliding in, a
+// dialog -- set by it, put back as it is done.
+inline bool& inside_float() {
+  static bool inside = false;
+  return inside;
+}
 inline scene::NodeId& panel_painted() {
   static scene::NodeId id = 0;
   return id;
@@ -382,6 +388,12 @@ struct mux_paint {
     const panel_look_t& look = panel_look();
     if (!fill || !look.active)
       return fill;
+    // A panel's fill on what floats, live: its sheet under it shows what is
+    // behind already -- frosted again from the wallpaper, a title bar showed
+    // the picture over the messages the sheet blurred.
+    if (inside_float() && !state.fFloats && look.frosted && window_look().live_blur &&
+        std::ranges::contains(look.panels, *fill))
+      return std::nullopt;
     // Floating over others -- a popup, a sheet -- frosted, and asked so:
     // what is really under it blurred, as it is drawn, its fill over that.
     if (state.fFloats && look.frosted && window_look().live_blur) {
@@ -423,8 +435,15 @@ struct mux_paint {
   // A panel's fill found in a node holds for what is under it, and no further.
   struct scope {
     bool was;
-    explicit scope(const scene::State&) : was(inside_panel()) {}
-    ~scope() { inside_panel() = was; }
+    bool was_float;
+    explicit scope(const scene::State& state) : was(inside_panel()), was_float(inside_float()) {
+      if (state.fFloats)
+        inside_float() = true;
+    }
+    ~scope() {
+      inside_panel() = was;
+      inside_float() = was_float;
+    }
   };
 };
 }  // namespace mux::ui

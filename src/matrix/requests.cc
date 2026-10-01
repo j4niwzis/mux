@@ -238,8 +238,8 @@ void account<Sink>::create_direct(std::string user) {
 }
 
 template <class Sink>
-void account<Sink>::send_sticker(std::string room, mux::emote sticker) {
-  loop_->spawn([this, room = std::move(room), sticker = std::move(sticker)] {
+void account<Sink>::send_sticker(std::string room, mux::emote sticker, std::optional<std::string> reply_to) {
+  loop_->spawn([this, room = std::move(room), sticker = std::move(sticker), reply_to = std::move(reply_to)] {
     if (!api_)
       return;
     // As the spec has it: its words, and its info -- its size and type, by
@@ -251,6 +251,9 @@ void account<Sink>::send_sticker(std::string room, mux::emote sticker) {
     content.info.h = sticker.h;
     content.info.size = sticker.size;
     content.info.mimetype = sticker.mimetype;
+    if (reply_to)
+      content.m_relates_to = loom::ev::m_sticker_content_t::m_relates_to_t{
+          .m_in_reply_to = loom::ev::m_sticker_content_t::m_relates_to_t::m_in_reply_to_t{.event_id = *reply_to}};
     auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.sticker",
                                                       .txn_id = this->transaction(),

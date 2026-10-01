@@ -125,8 +125,9 @@ class account {
   void view_source(std::string room, std::string event);
   void list_state(std::string room);
   void send_custom(std::string room, std::string type, std::optional<std::string> state_key, std::string json);
-  // A sticker sent: an m.sticker, its picture's URL and its name.
-  void send_sticker(std::string room, mux::emote sticker);
+  // A sticker sent: an m.sticker, its picture's URL and its name -- an
+  // answer to a message, where one is being answered.
+  void send_sticker(std::string room, mux::emote sticker, std::optional<std::string> reply_to = std::nullopt);
   void load_newer(std::string room, std::string from);
 
   // An avatar's picture: the server's thumbnail of an mxc:// URI, at the size

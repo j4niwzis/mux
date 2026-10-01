@@ -248,13 +248,13 @@ struct network {
     });
   }
   // A sticker sent into a chat by the account it is of.
-  void send_sticker(const mux::conversation_id& to, mux::emote sticker) {
-    loop.post([this, to, sticker = std::move(sticker)] {
+  void send_sticker(const mux::conversation_id& to, mux::emote sticker, std::optional<std::string> reply_to = std::nullopt) {
+    loop.post([this, to, sticker = std::move(sticker), reply_to = std::move(reply_to)] {
       for (auto& one : accounts)
         splice::visit(
             [&](auto& account) {
               if (account->id() == to.account)
-                account->send_sticker(to.id, sticker);
+                account->send_sticker(to.id, sticker, reply_to);
             },
             one.account);
     });

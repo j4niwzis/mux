@@ -255,7 +255,16 @@ class outbox_part {
     s_->root().close_emoji();
     s_->go_live(*chosen);
     s_->root().main().jump_to_end();
-    s_->net->send_sticker(*chosen, one.sticker);
+    // Sent while answering: the answer, as a text would be.
+    const std::optional<std::string> reply_to =
+        splice::visit(splice::overloaded{[](const compose::reply& r) { return std::optional<std::string>(r.id); },
+                                         [](const auto&) { return std::optional<std::string>(); }},
+                      composing_);
+    s_->net->send_sticker(*chosen, one.sticker, reply_to);
+    if (reply_to) {
+      composing_ = compose::plain{};
+      s_->root().main().line.show_context(std::nullopt);
+    }
   }
 
   // Files given: read and prepared as the logic of sending says; a

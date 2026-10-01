@@ -206,7 +206,7 @@ class account {
   void list_state(std::string) {}
   void send_custom(std::string, std::string, std::optional<std::string>, std::string) {}
   // Stickers are Matrix's.
-  void send_sticker(std::string, mux::emote) {}
+  void send_sticker(std::string, mux::emote, std::optional<std::string> = std::nullopt) {}
   // Link previews come from a Matrix homeserver alone.
   void fetch_preview(std::string) {}
   void preview_room(std::string, std::vector<std::string>) {}

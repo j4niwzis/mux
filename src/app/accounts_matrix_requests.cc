@@ -23,7 +23,7 @@ template void account<mux::app::post_change>::mark_read(std::string room, std::s
 template void account<mux::app::post_change>::load_older(std::string room, std::string from);
 template void account<mux::app::post_change>::manage(std::string room, room_action_t action);
 template void account<mux::app::post_change>::create_direct(std::string user);
-template void account<mux::app::post_change>::send_sticker(std::string room, mux::emote sticker);
+template void account<mux::app::post_change>::send_sticker(std::string room, mux::emote sticker, std::optional<std::string> reply_to);
 template void account<mux::app::post_change>::view_source(std::string room, std::string event);
 template void account<mux::app::post_change>::list_state(std::string room);
 template void account<mux::app::post_change>::send_custom(std::string room, std::string type, std::optional<std::string> state_key, std::string json);

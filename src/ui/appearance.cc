@@ -30,6 +30,20 @@ struct choose_theme {
   config::theme_t theme;
   void operator()() const { actions->set_theme(theme); }
 };
+// Home without what spaces hold, for every account: flipped.
+template <class Actions>
+struct flip_home_hides {
+  Actions* actions = nullptr;
+  void operator()() const { actions->set_home_hides(choice_level::everywhere{}, !window_look().home_hides); }
+};
+template <class Actions>
+struct flip_home_direct {
+  Actions* actions = nullptr;
+  void operator()() const {
+    if (window_look().home_hides)
+      actions->set_home_direct(choice_level::everywhere{}, !window_look().home_direct);
+  }
+};
 // The window's opacity, let go at on its slider: 20% to 100%.
 template <class Actions>
 struct opacity_done {
@@ -176,6 +190,8 @@ struct appearance_page : nodes::Stack {
     nodes::Text spaces_title = section_title("SPACES");
     switch_row<ask<Actions, &Actions::flip_spaces>> spaces;
     switch_row<ask<Actions, &Actions::flip_top_bar>> top_bar;
+    switch_row<flip_home_hides<Actions>> home_hides;
+    switch_row<flip_home_direct<Actions>> home_direct;
     spaces_choices<Actions> places;
     switch_row<ask<Actions, &Actions::flip_wallpaper_behind>> behind;
     nodes::Text window_title = section_title(std::format("WINDOW OPACITY: {}%", window_look().chosen));
@@ -195,6 +211,8 @@ struct appearance_page : nodes::Stack {
               .looks = look_choices<Actions>(a, choice_level::everywhere{}),
               .spaces = switch_row<ask<Actions, &Actions::flip_spaces>>("Space bars", {a}),
               .top_bar = switch_row<ask<Actions, &Actions::flip_top_bar>>("The bar after \"mux\"", {a}),
+              .home_hides = switch_row<flip_home_hides<Actions>>("Home without chats spaces hold (not direct messages)", {a}),
+              .home_direct = switch_row<flip_home_direct<Actions>>("And without direct messages", {a}),
               .places = spaces_choices<Actions>(a),
               .behind = switch_row<ask<Actions, &Actions::flip_wallpaper_behind>>("Background behind the whole window", {a}),
               .opacity = widgets::SliderBar<scene::NoAction, opacity_done<Actions>>({}, {a})} {
@@ -205,6 +223,11 @@ struct appearance_page : nodes::Stack {
     parts.spaces_title.apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
     parts.spaces.parts.toggle.setOnNow(window_look().spaces);
     parts.top_bar.parts.toggle.setOnNow(window_look().top_bar);
+    parts.home_hides.parts.toggle.setOnNow(window_look().home_hides);
+    parts.home_direct.parts.toggle.setOnNow(window_look().home_direct);
+    // Only where Home is without what spaces hold.
+    if (!window_look().home_hides)
+      parts.home_direct.apply({.alpha = 0.4f, .disabled = true});
     parts.places.setVisible(window_look().spaces);
     parts.behind.parts.toggle.setOnNow(window_look().behind);
     parts.window_title.apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});

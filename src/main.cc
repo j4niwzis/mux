@@ -147,6 +147,10 @@ int main(int argc, char** argv) {
   program.frost_blur = mux::ui::window_look().frost;
   program.spaces = saved.spaces.value_or(true);
   program.top_bar = saved.top_bar.value_or(true);
+  program.home_hides_spaced = saved.home_hides_spaced.value_or(false);
+  mux::ui::window_look().home_hides = program.home_hides_spaced;
+  program.home_hides_direct = saved.home_hides_direct.value_or(false);
+  mux::ui::window_look().home_direct = program.home_hides_direct;
   mux::ui::window_look().spaces = program.spaces;
   mux::ui::window_look().top_bar = program.top_bar;
   if (saved.space_places)

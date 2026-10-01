@@ -253,6 +253,15 @@ struct account_privacy : nodes::Stack {
 // here; a chat of it may choose again.
 template <class Actions>
 struct account_chats : nodes::Stack {
+  // Home without what its spaces hold -- but direct messages -- or as every
+  // account's.
+  struct pick_home {
+    Actions* actions;
+    void operator()(std::size_t index) const {
+      actions->set_home_hides(choice_level::account{}, index == 0 ? std::nullopt : std::optional<bool>(index >= 2));
+      actions->set_home_direct(choice_level::account{}, index == 0 ? std::nullopt : std::optional<bool>(index == 3));
+    }
+  };
   struct parts_t {
     nodes::Text title = section_title("CHATS");
     event_kind_list<Actions> events;
@@ -262,15 +271,21 @@ struct account_chats : nodes::Stack {
     nodes::Text looks_title = section_title("LOOKS");
     look_choices<Actions> looks;
     nodes::Text spaces_title = section_title("SPACES");
+    choice_menu<pick_home> home;
     spaces_choices<Actions> places;
   } parts;
   account_chats(Actions* a, std::optional<bool> events_all, const std::optional<config::room_event_kinds>& kinds,
-                std::optional<bool> faces_on, std::optional<std::int64_t> jump_most, std::optional<bool> previews_on)
+                std::optional<bool> faces_on, std::optional<std::int64_t> jump_most, std::optional<bool> previews_on,
+                std::optional<bool> home_hides = std::nullopt, std::optional<bool> home_direct = std::nullopt)
       : parts{.events = event_kind_list<Actions>(a, choice_level::account{}, events_all, kinds),
               .faces = receipts_choice<Actions>(a, choice_level::account{}, faces_on),
               .previews = previews_choice<Actions>(a, choice_level::account{}, previews_on),
               .jump_search = jump_search_choice<Actions>(a, choice_level::account{}, jump_most),
               .looks = look_choices<Actions>(a, choice_level::account{}),
+              .home = choice_menu<pick_home>("Home",
+                                             {"As above", "Every chat", "Without chats spaces hold",
+                                              "Without those and direct messages"},
+                                             !home_hides ? 0 : !*home_hides ? 1 : home_direct.value_or(false) ? 3 : 2, pick_home{a}),
               .places = spaces_choices<Actions>(a)} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -488,7 +503,8 @@ struct accounts_panel : closes_on_escape<Actions> {
                                    config::link_previews_of(one));
     } else if (page == 3) {
       detail.template emplace<5>(this->actions, config::room_events_of(one), config::room_event_kinds_of(one),
-                                   config::show_receipts_of(one), config::jump_search_of(one), config::link_previews_of(one));
+                                   config::show_receipts_of(one), config::jump_search_of(one), config::link_previews_of(one),
+                                   config::home_hides_of(one), config::home_direct_of(one));
     } else if (page == 2) {
       detail.template emplace<4>(this->actions, proxies, config::proxy_of(one));
     } else {

@@ -39,6 +39,10 @@ struct kept_settings {
   // where each item is put, in order.
   bool spaces = true;
   bool top_bar = true;
+  // Home without what spaces hold -- but direct messages -- for every
+  // account that does not say.
+  bool home_hides_spaced = false;
+  bool home_hides_direct = false;  // and direct messages, where that is so
   std::vector<mux::config::space_placed> space_places;
   bool show_fps = false;
   // How much is kept, in memory and on disk.
@@ -230,6 +234,10 @@ struct kept_settings {
       out.spaces = false;
     if (!top_bar)
       out.top_bar = false;
+    if (home_hides_spaced)
+      out.home_hides_spaced = true;
+    if (home_hides_direct)
+      out.home_hides_direct = true;
     if (!space_places.empty())
       out.space_places = space_places | std::views::transform([](const mux::config::space_placed& one) {
                            return mux::config::space_place{one.account, mux::config::word_of(one.item),

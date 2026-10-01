@@ -121,6 +121,8 @@ struct stub {
                     std::optional<mux::config::space_bar_t>, std::optional<mux::config::space_item_t>) {}
   void set_space_bars(std::string, mux::config::space_item_t, bool, bool) {}
   void flip_spaces() {}
+  void set_home_hides(mux::choice_level_t, std::optional<bool>) {}
+  void set_home_direct(mux::choice_level_t, std::optional<bool>) {}
   void flip_top_bar() {}
   void set_wallpaper(mux::choice_level_t, mux::config::wallpaper_pick_t) {}
   void open_thread(std::string) {}

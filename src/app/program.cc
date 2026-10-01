@@ -314,6 +314,8 @@ struct app : kept_settings {
   void manage_chat(const mux::conversation_id& id);
   void apply(const request::place_spaces& one);
   void apply(const request::set_space_bars& one);
+  void apply(const request::set_home_hides& one);
+  void apply(const request::set_home_direct& one);
   void apply(const request::join_room_card&);
   void apply(const request::toggle_emoji&);
   void apply(const request::close_emoji&);

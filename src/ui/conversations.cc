@@ -238,6 +238,10 @@ struct conversations_screen : nodes::Stack {
   // listed, as tdesktop lists a forum's topics.
   std::set<conversation_id> forums;
   std::optional<std::string> forum_open;
+  // Home without what spaces hold, but direct messages -- and without those
+  // too, where that is chosen as well.
+  bool home_hides_spaced = false;
+  bool home_hides_direct = false;
   void open_forum(std::string room) {
     forum_open = std::move(room);
     if (last_model)
@@ -1989,7 +1993,21 @@ struct conversations_screen : nodes::Stack {
     side.forum_head.setVisible(forum != nullptr);
     if (forum)
       side.forum_head.parts.name.setText(display_name(*forum));
+    // What the account's spaces hold: out of Home, where it is chosen so --
+    // but direct messages.
+    std::set<std::string> in_spaces;
+    if (in && home_hides_spaced && folder == folder_t{folder::all{}})
+      for (const auto& [key, each] : in->conversations)
+        if (each.space)
+          in_spaces.insert(each.children.begin(), each.children.end());
+    const auto direct = [](const conversation& one) {
+      return splice::visit(splice::overloaded{[](conversation_kind::direct) { return true; }, [](const auto&) { return false; }}, one.kind);
+    };
     const auto in_folder = [&](const conversation& one) {
+      if (!one.space && in_spaces.contains(one.id.id) && !direct(one))
+        return false;
+      if (home_hides_spaced && home_hides_direct && folder == folder_t{folder::all{}} && direct(one))
+        return false;
       if (forum)
         return !one.space && std::ranges::contains(forum->children, one.id.id);
       // A space is a folder, not a chat -- but a forum is one chat.

@@ -303,6 +303,8 @@ struct xmpp_account {
   std::optional<std::string> wallpaper;  // its chats' background, as matrix_account's
   std::optional<std::string> bubbles;    // its chats' bubbles, as matrix_account's
   std::optional<std::string> panels;  // its panels' look, as word_of(bubble_look) says it
+  std::optional<bool> home_hides_spaced;  // Home without what spaces hold, but direct messages
+  std::optional<bool> home_hides_direct;  // and without direct messages too, where it is so
   std::optional<std::int64_t> jump_search;  // as matrix_account's
   // Its notifications, on the desktop and heard: as every account's, until
   // chosen.
@@ -336,6 +338,8 @@ struct matrix_account {
   // Its chats' bubbles, as word_of(bubble_look) says them.
   std::optional<std::string> bubbles;
   std::optional<std::string> panels;  // its panels' look, as word_of(bubble_look) says it
+  std::optional<bool> home_hides_spaced;  // Home without what spaces hold, but direct messages
+  std::optional<bool> home_hides_direct;  // and without direct messages too, where it is so
   std::optional<bool> show_receipts;
   // Whether its chats show a card for a message's first link: its own
   // choice, else every account's.
@@ -715,6 +719,8 @@ struct file {
   // Every chat's bubbles, as word_of(bubble_look) says them; none, solid.
   std::optional<std::string> bubbles;
   std::optional<std::string> panels;  // its panels' look, as word_of(bubble_look) says it
+  std::optional<bool> home_hides_spaced;  // Home without what spaces hold, but direct messages
+  std::optional<bool> home_hides_direct;  // and without direct messages too, where it is so
   std::optional<std::string> renderer;
   // Only what changed repainted, into a frame kept between them.
   std::optional<bool> partial_redraw;
@@ -804,6 +810,18 @@ consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
 }
 [[nodiscard]] inline std::optional<std::string>& panels_in(account_t& one) {
   return splice::visit([](auto& each) -> std::optional<std::string>& { return each.panels; }, one);
+}
+[[nodiscard]] inline const std::optional<bool>& home_hides_of(const account_t& one) {
+  return splice::visit([](const auto& each) -> const std::optional<bool>& { return each.home_hides_spaced; }, one);
+}
+[[nodiscard]] inline const std::optional<bool>& home_direct_of(const account_t& one) {
+  return splice::visit([](const auto& each) -> const std::optional<bool>& { return each.home_hides_direct; }, one);
+}
+[[nodiscard]] inline std::optional<bool>& home_direct_in(account_t& one) {
+  return splice::visit([](auto& each) -> std::optional<bool>& { return each.home_hides_direct; }, one);
+}
+[[nodiscard]] inline std::optional<bool>& home_hides_in(account_t& one) {
+  return splice::visit([](auto& each) -> std::optional<bool>& { return each.home_hides_spaced; }, one);
 }
 [[nodiscard]] inline const std::optional<bool>& link_previews_of(const account_t& one) {
   return splice::visit([](const auto& each) -> const std::optional<bool>& { return each.link_previews; }, one);

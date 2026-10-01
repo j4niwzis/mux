@@ -457,6 +457,21 @@ void app::refresh(std::source_location from) {
   root().main().top_bar_on = top_bar;
   root().main().space_places = space_places;
   root().main().forums = forums;
+  // Home without what spaces hold: the account's own choice, else every one's.
+  root().main().home_hides_spaced = [&] {
+    if (const auto& by = root().main().current)
+      if (const auto* account = this->settings_of(by->address))
+        if (const auto& own = mux::config::home_hides_of(*account))
+          return *own;
+    return home_hides_spaced;
+  }();
+  root().main().home_hides_direct = [&] {
+    if (const auto& by = root().main().current)
+      if (const auto* account = this->settings_of(by->address))
+        if (const auto& own = mux::config::home_direct_of(*account))
+          return *own;
+    return home_hides_direct;
+  }();
   // What each level holds of the looks, for the choices to show: every
   // chat's; the chosen chat's own, and its account's.
   {

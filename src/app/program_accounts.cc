@@ -723,6 +723,41 @@ void app::apply(const request::place_spaces& one) {
   (void)this->write();
   this->refresh();
 }
+// Home without what spaces hold, at a level.
+void app::apply(const request::set_home_hides& one) {
+  splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) {
+                                     home_hides_spaced = one.on.value_or(false);
+                                     mux::ui::window_look().home_hides = home_hides_spaced;
+                                   },
+                                   [&](mux::choice_level::account) {
+                                     this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+                                       mux::config::home_hides_in(account) = one.on;
+                                     });
+                                   },
+                                   [](mux::choice_level::chat) {}},
+                one.level);
+  (void)this->write();
+  this->refresh();
+  if (auto* up = root().settings_up(); up && up->appearance())
+    up->show_appearance(theme, accent);
+}
+void app::apply(const request::set_home_direct& one) {
+  splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) {
+                                     home_hides_direct = one.on.value_or(false);
+                                     mux::ui::window_look().home_direct = home_hides_direct;
+                                   },
+                                   [&](mux::choice_level::account) {
+                                     this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+                                       mux::config::home_direct_in(account) = one.on;
+                                     });
+                                   },
+                                   [](mux::choice_level::chat) {}},
+                one.level);
+  (void)this->write();
+  this->refresh();
+  if (auto* up = root().settings_up(); up && up->appearance())
+    up->show_appearance(theme, accent);
+}
 // An item's bars, as chosen: the side, the top, both, or none -- hidden.
 void app::apply(const request::set_space_bars& one) {
   (void)root().main().close_space_menu();

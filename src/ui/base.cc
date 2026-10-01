@@ -66,6 +66,8 @@ struct window_look_t {
   int frost = 30;            // how much Frosted blurs, in percent
   bool spaces = true;        // the space bars at all
   bool top_bar = true;       // the one along the top
+  bool home_hides = false;   // Home without what spaces hold, for the client
+  bool home_direct = false;  // and without direct messages
 };
 inline window_look_t& window_look() {
   static window_look_t look;

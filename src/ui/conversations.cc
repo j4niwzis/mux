@@ -532,6 +532,7 @@ struct conversations_screen : nodes::Stack {
       config::space_bar_t from;
       float x0 = 0.0f, y0 = 0.0f;
       bool moving = false;
+      std::chrono::steady_clock::time_point pressed = std::chrono::steady_clock::now();
     };
     std::optional<drag_t> drag;
     bool menu_close_due = false;
@@ -678,8 +679,20 @@ struct conversations_screen : nodes::Stack {
       if (!drag)
         return;
       if (!drag->moving) {
-        if (std::abs(at.x - drag->x0) < 6.0f && std::abs(at.y - drag->y0) < 6.0f)
+        const float dx = at.x - drag->x0, dy = at.y - drag->y0;
+        if (std::abs(dx) < 6.0f && std::abs(dy) < 6.0f)
           return;
+        // In the side bar, a quick move along it is a scroll -- a finger's or
+        // a quick drag's -- left to the bar; one held a moment first, or one
+        // out across it, carries the item.
+        const bool along_side = splice::visit(splice::overloaded{[](config::space_bar::side) { return true; },
+                                                                 [](const auto&) { return false; }},
+                                              drag->from);
+        if (along_side && std::abs(dy) > std::abs(dx) &&
+            std::chrono::steady_clock::now() - drag->pressed < std::chrono::milliseconds(250)) {
+          drag.reset();
+          return;
+        }
         drag->moving = true;
         reply.capturePointer();
         reply.suppressHover();

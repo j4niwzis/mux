@@ -37,9 +37,13 @@ using matrix_account = mux::matrix::account<post_change>;
 }  // namespace mux::app
 // The accounts themselves -- their requests, sync, media, and the HTTP and
 // TLS under them -- instantiated in units of their own (accounts_*.cc), in
-// parallel: they were most of this one's four and a half minutes.
+// parallel: they were most of this one's four and a half minutes. Outside a
+// release build only: a release build makes them here, where they are used,
+// so that the optimiser sees all of them in one unit.
+#if defined(MUX_SPLIT_ACCOUNTS)
 extern template class mux::xmpp::account<mux::app::post_change>;
 extern template class mux::matrix::account<mux::app::post_change>;
+#endif
 export namespace mux::app {
 using any_account = splice::variant<std::unique_ptr<xmpp_account>, std::unique_ptr<matrix_account>>;
 

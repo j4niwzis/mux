@@ -298,9 +298,17 @@ if(MUX_UI)
   if(NOT DEFINED SKIFF_ERASE_WALKS)
     set(mux_erased $<NOT:$<CONFIG:Release>>)
   endif()
-  # The accounts, each in a unit of its own, beside network.cc.
-  target_sources(mux PRIVATE src/app/accounts_matrix_sync.cc src/app/accounts_matrix_requests.cc
-    src/app/accounts_matrix_events.cc src/app/accounts_matrix_media.cc src/app/accounts_xmpp.cc)
+  # Outside a release build, the accounts each in a unit of its own, beside
+  # network.cc, built in parallel; a release build instantiates them where
+  # they are used, in network.cc's unit, all of them in the optimiser's sight.
+  set(mux_split $<NOT:$<CONFIG:Release>>)
+  target_compile_definitions(mux PRIVATE $<${mux_split}:MUX_SPLIT_ACCOUNTS>)
+  target_sources(mux PRIVATE
+    $<${mux_split}:src/app/accounts_matrix_sync.cc>
+    $<${mux_split}:src/app/accounts_matrix_requests.cc>
+    $<${mux_split}:src/app/accounts_matrix_events.cc>
+    $<${mux_split}:src/app/accounts_matrix_media.cc>
+    $<${mux_split}:src/app/accounts_xmpp.cc>)
   target_sources(mux PRIVATE
     $<${mux_erased}:src/app/walks_window.cc>
     $<${mux_erased}:src/app/walks_chats.cc>

@@ -86,6 +86,8 @@ struct response {
   // What Retry-After said, in milliseconds, where it said a number of
   // seconds (RFC 9110, 10.2.3).
   std::optional<std::int64_t> retry_after_ms;
+  // Where a redirect points.
+  std::optional<std::string> location;
 };
 
 // One connection to one host, used by one fiber at a time.
@@ -104,21 +106,22 @@ class connection {
   // bearer token goes in Authorization where there is one. A connection the
   // server closed since the last request is opened again, once.
   // `type` is the body's, where it is not JSON: an upload's.
+  // `accept` is what is asked for: JSON, unless a page or a picture is.
   template <class Progress = no_progress>
   response request(std::string_view method, std::string_view target, std::string_view body = {},
                    std::optional<std::string_view> bearer = std::nullopt,
                    std::chrono::seconds timeout = std::chrono::seconds(60), std::string_view type = {},
-                   const Progress* progress = nullptr) {
+                   const Progress* progress = nullptr, std::string_view accept = "application/json") {
     const turn mine(*this);
     const bool reused = stream_.has_value();
     try {
-      return once(method, target, body, bearer, timeout, type, progress);
+      return once(method, target, body, bearer, timeout, type, progress, accept);
     } catch (const net::failure& failed) {
       // Stopped by its progress: not a closed connection, not tried again.
       if (!reused || failed.code == asio::error::operation_aborted)
         throw;
       stream_.reset();
-      return once(method, target, body, bearer, timeout, type, progress);
+      return once(method, target, body, bearer, timeout, type, progress, accept);
     }
   }
 
@@ -165,7 +168,7 @@ class connection {
   template <class Progress = no_progress>
   response once(std::string_view method, std::string_view target, std::string_view body,
                 std::optional<std::string_view> bearer, std::chrono::seconds timeout, std::string_view type = {},
-                const Progress* progress = nullptr) {
+                const Progress* progress = nullptr, std::string_view accept = "application/json") {
     if (!stream_)
       open();
     beast::http::request<beast::http::string_body> out;
@@ -177,7 +180,7 @@ class connection {
     out.set(beast::http::field::host,
             where_.port == 443 ? where_.host : where_.host + ":" + std::to_string(where_.port));
     out.set(beast::http::field::user_agent, "mux");
-    out.set(beast::http::field::accept, "application/json");
+    out.set(beast::http::field::accept, accept);
     if (bearer)
       out.set(beast::http::field::authorization, "Bearer " + std::string(*bearer));
     if (!body.empty() || verb == beast::http::verb::post || verb == beast::http::verb::put) {
@@ -243,6 +246,8 @@ class connection {
       if (std::from_chars(text.data(), text.data() + text.size(), seconds).ec == std::errc{})
         made.retry_after_ms = seconds * 1000;
     }
+    if (const auto to = got.find(beast::http::field::location); to != got.end())
+      made.location = std::string(to->value());
     if (!got.keep_alive())
       stream_.reset();
     return made;

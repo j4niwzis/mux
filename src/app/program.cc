@@ -369,6 +369,8 @@ struct app : kept_settings {
   void apply(const request::flip_account_room_events&);
   void apply(const request::set_receipts_shown&);
   void apply(const request::set_link_previews&);
+  void apply(const request::set_typing_sent&);
+  void apply(const request::set_previews_direct&);
   void apply(const request::set_jump_search&);
   void apply(const request::flip_chat_room_events&);
   void apply(const request::close_manage&);
@@ -406,7 +408,6 @@ struct app : kept_settings {
     return mux::account_id{mux::ui::protocol_of(address), address};
   }
   void apply(const request::flip_account_receipts&);
-  void apply(const request::flip_account_typing&);
   void apply(const request::set_account_colour& one);
   void apply(const request::flip_account_strip&);
   void apply(const request::open_replacement&);

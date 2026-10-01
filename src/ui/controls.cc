@@ -694,10 +694,11 @@ struct jump_search_choice : nodes::Stack {
   }
 };
 
-// A thing shown or hidden, at one level: Show and Hide and, where a level
-// under decides for it, Default -- as a room event kind's row. What it is
-// says its label, what it is everywhere when nothing was said, and how it is
-// set: link previews, read receipts as faces.
+// A thing on or off, at one level: its two words (Show and Hide, Send and
+// Don't) and, where a level under decides for it, Default -- as a room event
+// kind's row. What it is says its label and words, what it is everywhere
+// when nothing was said, and how it is set: link previews, read receipts as
+// faces, typing notifications.
 template <class Actions, class Setting>
 struct show_hide_choice : nodes::Stack {
   struct row;
@@ -717,8 +718,8 @@ struct show_hide_choice : nodes::Stack {
         : actions(a), level(at),
           parts{.label = nodes::Text(std::string(Setting::label), 14.0f, text_colour),
                 .fallback = segment<choose>("Default", {this, std::nullopt}),
-                .show = segment<choose>("Show", {this, true}),
-                .hide = segment<choose>("Hide", {this, false})} {
+                .show = segment<choose>(std::string(Setting::yes), {this, true}),
+                .hide = segment<choose>(std::string(Setting::no), {this, false})} {
       const bool everywhere =
           splice::visit(splice::overloaded{[](choice_level::everywhere) { return true; }, [](const auto&) { return false; }}, level);
       this->setHorizontal();
@@ -756,6 +757,7 @@ struct show_hide_choice : nodes::Stack {
 // Link previews: shown, where nothing says otherwise.
 struct link_previews_setting {
   static constexpr std::string_view label = "Link previews";
+  static constexpr std::string_view yes = "Show", no = "Hide";
   static constexpr bool unsaid = true;
   template <class Actions>
   static void set(Actions& actions, choice_level_t level, std::optional<bool> now) {
@@ -765,12 +767,40 @@ struct link_previews_setting {
 // Read receipts as faces: not, where nothing says otherwise.
 struct receipts_setting {
   static constexpr std::string_view label = "Read receipts as faces";
+  static constexpr std::string_view yes = "Show", no = "Hide";
   static constexpr bool unsaid = false;
   template <class Actions>
   static void set(Actions& actions, choice_level_t level, std::optional<bool> now) {
     actions.set_receipts_shown(level, now);
   }
 };
+// Link previews fetched from the sites themselves, through the account's
+// proxy, or through its server (#12177): the server, where nothing says
+// otherwise.
+struct previews_direct_setting {
+  static constexpr std::string_view label = "Fetch link previews";
+  static constexpr std::string_view yes = "From site", no = "Server";
+  static constexpr bool unsaid = false;
+  template <class Actions>
+  static void set(Actions& actions, choice_level_t level, std::optional<bool> now) {
+    actions.set_previews_direct(level, now);
+  }
+};
+template <class Actions>
+using previews_direct_choice = show_hide_choice<Actions, previews_direct_setting>;
+// Others told one is typing -- never what (#12156): sent, where nothing says
+// otherwise.
+struct typing_setting {
+  static constexpr std::string_view label = "Send typing notifications";
+  static constexpr std::string_view yes = "Send", no = "Don't";
+  static constexpr bool unsaid = true;
+  template <class Actions>
+  static void set(Actions& actions, choice_level_t level, std::optional<bool> now) {
+    actions.set_typing_sent(level, now);
+  }
+};
+template <class Actions>
+using typing_choice = show_hide_choice<Actions, typing_setting>;
 template <class Actions>
 using previews_choice = show_hide_choice<Actions, link_previews_setting>;
 template <class Actions>

@@ -148,7 +148,7 @@ cme_find_package(vodozemac REQUIRED)
 # built.
 add_library(mux_modules)
 target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
-  FILES src/core.cc src/net.cc src/xmpp.cc src/http.cc src/matrix.cc src/media.cc
+  FILES src/core.cc src/net.cc src/xmpp.cc src/http.cc src/preview.cc src/matrix.cc src/media.cc
         src/matrix/base.cc src/matrix/names.cc src/matrix/account.cc src/matrix/requests.cc src/matrix/sync.cc
         src/matrix/events.cc src/matrix/media.cc src/matrix/crypto.cc
         src/logic/text.cc src/logic/search.cc src/logic/reading.cc src/logic/drafts.cc
@@ -214,7 +214,7 @@ if(MUX_UI)
   # skiff and skiff-widgets say the rest of what they are in their own trees.
   cme_declare_port(NAME skiff PROVIDES skiff
     GITHUB_REPOSITORY j4niwzis/skiff
-    GIT_TAG 4dda84c2f5bde1c1495e2ea4d01b86206cf2c67b)
+    GIT_TAG d8f925c62d7699e541f1e7fe22be59419e1cff94)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
     GIT_TAG 99bf5557a3713aa414cd14ee550c5dbb7bc75cf4)

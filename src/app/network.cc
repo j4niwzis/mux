@@ -7,6 +7,7 @@ import splice;
 import mux.core;
 import mux.config;
 import mux.net;
+import mux.preview;
 import mux.xmpp;
 import mux.matrix;
 import mux.host;
@@ -51,6 +52,9 @@ struct running_account {
   std::string address;
   any_account account;
   std::shared_ptr<std::atomic<bool>> live;
+  // The proxy it goes through: what is fetched for its chats from elsewhere
+  // -- a link's page, its picture -- goes through it as well.
+  std::optional<mux::net::proxy> via;
 };
 
 // The accounts, on their loop. Everything here runs on the loop's thread;
@@ -67,7 +71,18 @@ struct network {
 
   // An account started, through the profile of `proxies` it names.
   void start(const mux::config::account_t& saved, const std::vector<mux::config::proxy_settings>& proxies) {
-    const auto* via = mux::config::find_proxy(proxies, mux::config::proxy_of(saved));
+    const auto& named = mux::config::proxy_of(saved);
+    const auto* via = mux::config::find_proxy(proxies, named);
+    // A proxy named and not there: not connected at all -- never straight
+    // to the server instead, which would show it this machine's address.
+    if (named && !via) {
+      const std::string& address = mux::config::address_of(saved);
+      box->push(mux::change_t{mux::change::connection_changed{
+          {mux::ui::protocol_of(address), address},
+          mux::connection::failed{std::format("Not connected: its proxy \"{}\" is gone. Choose a proxy for it, or none.",
+                                              *named)}}});
+      return;
+    }
     splice::visit([this, via](const auto& each) { this->start_one(each, proxy_of(via)); }, saved);
   }
   // The proxy a profile names, as mux.net takes it.
@@ -94,10 +109,11 @@ struct network {
                             .resource = saved.resource,
                             .host = saved.host,
                             .plain_without_tls = saved.plain_without_tls,
-                            .proxy = std::move(via)};
+                            .proxy = via};
     if (saved.port)
       how.port = static_cast<std::uint16_t>(*saved.port);
-    this->run(saved.address, std::make_unique<xmpp_account>(loop, tls, std::move(how), post_change{box, live}), live);
+    this->run(saved.address, std::make_unique<xmpp_account>(loop, tls, std::move(how), post_change{box, live}), live,
+              std::move(via));
   }
   void start_one(const mux::config::matrix_account& saved, std::optional<mux::net::proxy> via) {
     auto live = std::make_shared<std::atomic<bool>>(true);
@@ -105,7 +121,7 @@ struct network {
                               .password = saved.password,
                               .homeserver = saved.homeserver,
                               .device_name = saved.device_name,
-                              .proxy = std::move(via),
+                              .proxy = via,
                               .access_token = saved.access_token,
                               .device_id = saved.device_id,
                               // Named by the user ID with what a file name cannot hold put
@@ -115,10 +131,11 @@ struct network {
                                                   return std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_' ? c : '_';
                                                 }) | std::ranges::to<std::string>()) + ".json")};
     this->run(saved.user_id, std::make_unique<matrix_account>(loop, tls, std::move(how), post_change{box, live}),
-              live);
+              live, std::move(via));
   }
-  void run(const std::string& address, any_account account, std::shared_ptr<std::atomic<bool>> live) {
-    running_account entry{address, std::move(account), std::move(live)};
+  void run(const std::string& address, any_account account, std::shared_ptr<std::atomic<bool>> live,
+           std::optional<mux::net::proxy> via) {
+    running_account entry{address, std::move(account), std::move(live), std::move(via)};
     splice::visit([](auto& one) { one->start(); }, entry.account);
     accounts.push_back(std::move(entry));
   }
@@ -265,8 +282,35 @@ struct network {
             one.account);
     });
   }
-  // A link's preview, asked of the account's server.
-  void fetch_preview(const mux::account_id& by, std::string url) {
+  // The proxy of an account: none where it has none, or is gone.
+  [[nodiscard]] std::optional<mux::net::proxy> via_of(const mux::account_id& by) const {
+    const auto found = std::ranges::find(accounts, by.address, &running_account::address);
+    return found == accounts.end() ? std::nullopt : found->via;
+  }
+  // A preview's picture its site's page named: from the site, through the
+  // account's proxy -- asked for only where the chat fetches previews from
+  // sites. Never through fetch_avatar: an https address anything else
+  // carries (a message's, a room's avatar) is not fetched at all.
+  void fetch_preview_picture(const mux::account_id& of, std::string source) {
+    loop.post([this, of, source = std::move(source)] {
+      loop.spawn([this, via = this->via_of(of), source] {
+        if (auto bytes = mux::preview::fetch_picture(loop, tls, via, source))
+          box->push(mux::change_t{mux::change::avatar_loaded{mux::media_use::avatar{source}, source, std::move(*bytes)}});
+      });
+    });
+  }
+  // A link's preview: asked of the account's server, or, where the chat
+  // chose so, of the site itself, through the account's proxy (#12177).
+  void fetch_preview(const mux::account_id& by, std::string url, bool direct) {
+    if (direct) {
+      loop.post([this, by, url = std::move(url)] {
+        loop.spawn([this, via = this->via_of(by), url] {
+          if (auto made = mux::preview::fetch_preview(loop, tls, via, url))
+            box->push(mux::change_t{mux::change::preview_loaded{url, std::move(*made)}});
+        });
+      });
+      return;
+    }
     loop.post([this, by, url = std::move(url)] {
       for (auto& one : accounts)
         splice::visit(
@@ -616,6 +660,14 @@ struct network {
   }
   // An avatar's picture, fetched by the account it is of, for `key`.
   void fetch_avatar(const mux::account_id& of, std::string source, std::string key) {
+    loop.post([this, of, source = std::move(source), key = std::move(key)] {
+        loop.spawn([this, via = this->via_of(of), source, key] {
+          if (auto bytes = mux::preview::fetch_picture(loop, tls, via, source))
+            box->push(mux::change_t{mux::change::avatar_loaded{mux::media_use::avatar{key}, source, std::move(*bytes)}});
+        });
+      });
+      return;
+    }
     loop.post([this, of, source = std::move(source), key = std::move(key)] {
       for (auto& one : accounts)
         splice::visit(

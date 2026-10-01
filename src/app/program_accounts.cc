@@ -518,9 +518,14 @@ void app::manage_chat(const mux::conversation_id& id) {
                                      .events_all = room_events.contains(chat->id)
                                                        ? std::optional<bool>(room_events.at(chat->id))
                                                        : std::nullopt,
+                                     .typing = typing_sent_in.contains(chat->id) ? std::optional<bool>(typing_sent_in.at(chat->id))
+                                                                                 : std::nullopt,
                                      .previews = previews_shown_in.contains(chat->id)
                                                      ? std::optional<bool>(previews_shown_in.at(chat->id))
                                                      : std::nullopt,
+                                     .previews_direct = previews_direct_in.contains(chat->id)
+                                                            ? std::optional<bool>(previews_direct_in.at(chat->id))
+                                                            : std::nullopt,
                                      .receipts = receipts_shown_in.contains(chat->id)
                                                      ? std::optional<bool>(receipts_shown_in.at(chat->id))
                                                      : std::nullopt,
@@ -671,7 +676,7 @@ void app::apply(const request::flip_account_receipts&) {
     auto& kept = mux::config::read_receipts_in(account);
     kept = !kept.value_or(true);
     if (auto* page = panel.privacy())
-      page->show(*kept, mux::config::send_typing_of(account));
+      page->show(*kept);
     (void)this->write();
   });
 }
@@ -756,16 +761,6 @@ void app::apply(const request::set_chat_strip_colour& one) {
     (void)this->write();
   }
   this->refresh();
-}
-
-void app::apply(const request::flip_account_typing&) {
-  this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
-    auto& kept = mux::config::send_typing_in(account);
-    kept = !kept.value_or(true);
-    if (auto* page = panel.privacy())
-      page->show(mux::config::read_receipts_of(account), *kept);
-    (void)this->write();
-  });
 }
 
 // Notifications: the page, its switches, what shows them; an account's and
@@ -993,6 +988,50 @@ void app::apply(const request::set_link_previews& one) {
                                  previews_shown_in.erase(*chosen);
                              }},
              one.level);
+  (void)this->write();
+  this->refresh();
+}
+
+// Where link previews come from, at a level (#12177).
+void app::apply(const request::set_previews_direct& one) {
+  splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) { history.previews_direct = one.direct.value_or(false); },
+                                   [&](mux::choice_level::account) {
+                                     this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+                                       mux::config::previews_direct_in(account) = one.direct;
+                                     });
+                                   },
+                                   [&](mux::choice_level::chat) {
+                                     const auto chosen = this->managed();
+                                     if (!chosen)
+                                       return;
+                                     if (one.direct)
+                                       previews_direct_in.insert_or_assign(*chosen, *one.direct);
+                                     else
+                                       previews_direct_in.erase(*chosen);
+                                   }},
+                one.level);
+  (void)this->write();
+  this->refresh();
+}
+
+// Whether others are told one is typing, at a level (#12156).
+void app::apply(const request::set_typing_sent& one) {
+  splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) { history.send_typing = one.send.value_or(true); },
+                                   [&](mux::choice_level::account) {
+                                     this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+                                       mux::config::send_typing_in(account) = one.send;
+                                     });
+                                   },
+                                   [&](mux::choice_level::chat) {
+                                     const auto chosen = this->managed();
+                                     if (!chosen)
+                                       return;
+                                     if (one.send)
+                                       typing_sent_in.insert_or_assign(*chosen, *one.send);
+                                     else
+                                       typing_sent_in.erase(*chosen);
+                                   }},
+                one.level);
   (void)this->write();
   this->refresh();
 }

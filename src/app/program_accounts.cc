@@ -54,7 +54,7 @@ void app::apply(const request::toggle_thread_emoji&) {
     return;
   }
   emoji_into_ = request::writing::thread{};
-  const auto at = root().main().parts.threads.parts.input.parts.emoji.bounds();
+  const auto at = root().main().parts.threads.parts.line.parts.input.parts.emoji.bounds();
   this->open_emoji_at(at.fRight, at.fTop);
 }
 void app::open_emoji_at(float right, float top) {
@@ -594,7 +594,7 @@ void app::apply(const request::insert_emoji& one) {
     scene.focus(field);
   };
   splice::visit(splice::overloaded{[&](request::writing::chat) { put(screen.line.field); },
-                                   [&](request::writing::thread) { put(screen.parts.threads.parts.input.parts.field); }},
+                                   [&](request::writing::thread) { put(screen.parts.threads.parts.line.parts.input.parts.field); }},
                 emoji_into_);
 }
 

@@ -411,15 +411,28 @@ struct message_input : nodes::Stack {
   }
 };
 
-// Desktop: a line over it, a paperclip on the left, the text growing with
-// what is written, and the send arrow on the right.
+// Where what is written goes, as a composer is told it: what its ✕, its
+// Enter, its paperclip, its emoji and its arrow do, and what its empty field
+// says. The chat's own; a thread's is its panel's (#11677).
 template <class Actions>
+struct in_chat {
+  using cancel = ask<Actions, &Actions::cancel_compose>;
+  using submit = submit_message<Actions>;
+  using attach = ask<Actions, &Actions::attach_files>;
+  using emoji = ask<Actions, &Actions::toggle_emoji>;
+  using send = ask<Actions, &Actions::send_typed>;
+  static constexpr std::string_view placeholder = "Write a message…";
+};
+
+// Desktop: a line over it, a paperclip on the left, the text growing with
+// what is written, and the send arrow on the right. The chat's, and a
+// thread's: one composer, told where it writes.
+template <class Actions, class Where = in_chat<Actions>>
 struct composer_bar : nodes::Stack {
   // What is written answers or edits: the reply bar, its ✕ going back to
   // a plain message.
-  using context_row = context_bar<ask<Actions, &Actions::cancel_compose>>;
-  using input_row = message_input<submit_message<Actions>, ask<Actions, &Actions::attach_files>,
-                                  ask<Actions, &Actions::toggle_emoji>, ask<Actions, &Actions::send_typed>>;
+  using context_row = context_bar<typename Where::cancel>;
+  using input_row = message_input<typename Where::submit, typename Where::attach, typename Where::emoji, typename Where::send>;
   // Element's bar over the field while messages here were not sent
   // (RoomStatusBar's): a warning, and "Delete all" and "Retry all".
   struct unsent_row : nodes::Stack {
@@ -470,7 +483,12 @@ struct composer_bar : nodes::Stack {
 
   // Declared: the divider, the unsent bar, the answer's line where there is
   // one, the row -- or, where the reader may not post, the line saying so.
-  explicit composer_bar(Actions* a) : parts{.unsent = unsent_row(a), .context_line = context_row({a}), .input = input_row("Write a message…", {a}, {a}, {a}, {a})} {
+  explicit composer_bar(Actions* a) : composer_bar(a, {a}, {a}, {a}, {a}, {a}) {}
+  composer_bar(Actions* a, typename Where::cancel cancel, typename Where::submit submit, typename Where::attach attach,
+               typename Where::emoji emoji, typename Where::send send)
+      : parts{.unsent = unsent_row(a),
+              .context_line = context_row(std::move(cancel)),
+              .input = input_row(std::string(Where::placeholder), std::move(submit), std::move(attach), std::move(emoji), std::move(send))} {
     parts.unsent.setVisible(false);
     parts.no_post.setVisible(false);
     parts.context_line.setVisible(false);

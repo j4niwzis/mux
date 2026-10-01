@@ -61,7 +61,7 @@ class menu_part {
     // Into the field that answers it: the thread's, where it is answered there.
     auto& screen = s_->root().main();
     if (screen.parts.threads.answering == target_.id) {
-      auto& field = screen.parts.threads.parts.input.parts.field;
+      auto& field = screen.parts.threads.parts.line.parts.input.parts.field;
       field.setText(quote + std::string(field.text()));
       return;
     }

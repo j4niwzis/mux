@@ -16,6 +16,7 @@ import mux.core;
 import mux.config;
 import :base;
 import :avatars;
+import :controls;
 import :message;
 import :context_menu;
 

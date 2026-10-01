@@ -20,6 +20,7 @@ import std;
 import splice;
 import knot;
 import loom.ev;
+import loom.cs.keys;
 import mux.vault;
 
 export namespace mux::matrix::crypto {
@@ -39,6 +40,12 @@ struct kept_file {
     std::string sender_key;
     std::string ed25519;
     std::string sender;  // the user it came from
+    // The device it came from, as the sender's device list named it and its
+    // own key signed it; and whether the sender's self-signing key, under
+    // their pinned master key, signed it too (review 4, H1). None: kept
+    // before that was checked -- unverified.
+    std::optional<std::string> device;
+    std::optional<bool> cross_signed;
     friend consteval auto json_schema(knot::type<origin>) { return knot::schema<origin>(); }
   };
   std::map<std::string, origin> origins;  // session id -> where it came from
@@ -47,6 +54,9 @@ struct kept_file {
   std::map<std::string, std::map<std::uint32_t, std::string>> indices;
   // The rooms known to be encrypted: never plain again.
   std::set<std::string, std::less<>> encrypted_rooms;
+  // Each user's master cross-signing key, as first seen (trust on first
+  // use): a server that swaps it later does not make its own devices theirs.
+  std::map<std::string, std::string> masters;
   friend consteval auto json_schema(knot::type<kept_file>) { return knot::schema<kept_file>(); }
 };
 
@@ -132,6 +142,160 @@ struct device_keys {
   }
   return out;
 }
+
+// A device's keys as they sign themselves: all of them but the signatures
+// and what is unsigned -- the rest of what the server gave kept as given,
+// for a field this client does not know is signed as well.
+struct device_signed_part {
+  std::vector<std::string> algorithms;
+  std::string device_id;
+  std::map<std::string, std::string> keys;
+  std::string user_id;
+  knot::raw rest;
+  friend consteval auto json_schema(knot::type<device_signed_part>) {
+    return knot::schema<device_signed_part>().member<"rest">(knot::rest);
+  }
+};
+// A cross-signing key as it is signed: all of it but its signatures.
+template <class Key>
+struct key_signed_part {
+  std::string user_id;
+  std::vector<typename Key::usage_item_t> usage;
+  std::map<std::string, std::string> keys;
+  knot::raw rest;
+  friend consteval auto json_schema(knot::type<key_signed_part>) {
+    return knot::schema<key_signed_part>().template member<"rest">(knot::rest);
+  }
+};
+using keys_answer = loom::cs::query_keys::response_t;
+using signatures_t = std::map<std::string, std::map<std::string, std::string>>;
+
+// A signature checked: `signature` of `canonical` by the ed25519 `key`.
+[[nodiscard]] inline bool signed_by(std::string_view canonical, std::string_view key, std::string_view signature) {
+  try {
+    auto public_key = vodozemac::types::ed25519_key_from_base64(rust::Str(key.data(), key.size()));
+    auto made = vodozemac::types::ed25519_signature_from_base64(rust::Str(signature.data(), signature.size()));
+    public_key->verify(rust::Slice<const std::uint8_t>(reinterpret_cast<const std::uint8_t*>(canonical.data()), canonical.size()),
+                       *made);
+    return true;
+  } catch (const rust::Error&) {
+    return false;
+  }
+}
+// The signature `user`'s key `key_id` made, among `all`.
+[[nodiscard]] inline std::optional<std::string> signature_of(const signatures_t& all, const std::string& user, const std::string& key_id) {
+  const auto by = all.find(user);
+  if (by == all.end())
+    return std::nullopt;
+  const auto found = by->second.find(key_id);
+  if (found == by->second.end())
+    return std::nullopt;
+  return found->second;
+}
+// A cross-signing key's one ed25519 key, where it is for `user` and used as
+// `Usage`.
+template <class Usage, class Key>
+[[nodiscard]] std::optional<std::string> cross_key_of(const Key& key, const std::string& user) {
+  const bool used = std::ranges::any_of(key.usage, [](const auto& each) {
+    return splice::visit(splice::overloaded{[](const Usage&) { return true; }, [](const auto&) { return false; }}, each);
+  });
+  if (!used || key.user_id != user || key.keys.size() != 1)
+    return std::nullopt;
+  const auto& [id, value] = *key.keys.begin();
+  if (id != "ed25519:" + value)
+    return std::nullopt;
+  return value;
+}
+// A cross-signing key signed by `signer` (of `user`): checked.
+template <class Key>
+[[nodiscard]] bool key_signed_by(const Key& key, const std::string& user, const std::string& signer) {
+  if (!key.signatures)
+    return false;
+  const auto all = knot::try_read<signatures_t>(key.signatures->text);
+  if (!all)
+    return false;
+  const auto signature = signature_of(*all, user, "ed25519:" + signer);
+  const auto canonical = knot::to_canonical_json(key_signed_part<Key>{key.user_id, key.usage, key.keys, key.rest});
+  return signature && canonical && signed_by(*canonical, signer, *signature);
+}
+
+// A device of a user, found by its curve25519 key in what /keys/query gave,
+// and how far it is vouched for.
+struct device_identity {
+  std::string device_id;
+  std::string ed25519;
+  // Signed by the user's self-signing key, itself signed by their master
+  // key -- the one pinned, where one was.
+  bool cross_signed = false;
+  std::optional<std::string> master;  // the master key seen, to be pinned
+};
+// None where no device of `user` has that key, or where the one that has it
+// did not sign its own keys: the server's word alone is not a device.
+[[nodiscard]] inline std::optional<device_identity> device_of(const keys_answer& got, const std::string& user,
+                                                             const std::string& curve25519,
+                                                             const std::optional<std::string>& pinned) {
+  if (!got.device_keys)
+    return std::nullopt;
+  const auto devices = got.device_keys->find(user);
+  if (devices == got.device_keys->end())
+    return std::nullopt;
+  const auto found = std::ranges::find_if(devices->second, [&](const auto& each) {
+    const auto key = each.second.keys.find("curve25519:" + each.first);
+    return key != each.second.keys.end() && key->second == curve25519;
+  });
+  if (found == devices->second.end())
+    return std::nullopt;
+  const auto& [id, info] = *found;
+  if (info.device_id != id || info.user_id != user)
+    return std::nullopt;
+  const auto ed25519 = info.keys.find("ed25519:" + id);
+  if (ed25519 == info.keys.end())
+    return std::nullopt;
+  const auto canonical = knot::to_canonical_json(device_signed_part{info.algorithms, info.device_id, info.keys, info.user_id, info.rest});
+  if (!canonical)
+    return std::nullopt;
+  const auto self = signature_of(info.signatures, user, "ed25519:" + id);
+  if (!self || !signed_by(*canonical, ed25519->second, *self))
+    return std::nullopt;
+  device_identity made{.device_id = id, .ed25519 = ed25519->second};
+  // Cross-signed: master -> self-signing -> this device.
+  if (!got.master_keys)
+    return made;
+  const auto master_entry = got.master_keys->find(user);
+  if (master_entry == got.master_keys->end())
+    return made;
+  using master_t = keys_answer::cross_signing_key_t;
+  const auto master = cross_key_of<master_t::usage_item_values::master>(master_entry->second, user);
+  if (!master)
+    return made;
+  made.master = master;
+  if (pinned && *pinned != *master)
+    return made;  // not the master key first seen: nothing it signs is trusted
+  if (!got.self_signing_keys)
+    return made;
+  const auto ssk_entry = got.self_signing_keys->find(user);
+  if (ssk_entry == got.self_signing_keys->end())
+    return made;
+  using ssk_t = keys_answer::cross_signing_key_2_t;
+  const auto ssk = cross_key_of<ssk_t::usage_item_values::self_signing>(ssk_entry->second, user);
+  if (!ssk || !key_signed_by(ssk_entry->second, user, *master))
+    return made;
+  const auto by_ssk = signature_of(info.signatures, user, "ed25519:" + *ssk);
+  made.cross_signed = by_ssk && signed_by(*canonical, *ssk, *by_ssk);
+  return made;
+}
+
+// A room key read from an Olm message, not yet taken: where it came from is
+// checked against the sender's devices first.
+struct room_key_offer {
+  loom::ev::m_room_key_content_t key;
+  kept_file::origin from;
+};
+// A room event read, and whether the device it came from is cross-signed.
+struct decrypted {
+  loom::ev::basic_event<loom::ev::timeline_content> event;
+  bool verified = false;
+};
 
 class olm_machine {
  public:
@@ -228,24 +392,26 @@ class olm_machine {
   }
 
   // A to-device m.room.encrypted from a device: an Olm message for this one
-  // read, and what it carries taken in -- a room key, kept for its room's
-  // messages. Nothing where it is not for this device or cannot be read.
-  void to_device(const std::string& sender, const loom::ev::m_room_encrypted_content_t& content) {
+  // read, and the room key it carries offered -- taken only once the
+  // account has found the device it came from (accept_room_key). Nothing
+  // where it is not for this device, cannot be read, or carries no key.
+  [[nodiscard]] std::optional<room_key_offer> to_device(const std::string& sender,
+                                                        const loom::ev::m_room_encrypted_content_t& content) {
     const bool olm = splice::visit(
         splice::overloaded{[](loom::ev::m_room_encrypted_content_t::algorithm_values::m_olm_v1_curve25519_aes_sha2) { return true; },
                            [](const auto&) { return false; }},
         content.algorithm);
     if (!olm || !content.sender_key)
-      return;
+      return std::nullopt;
     auto ciphertexts = knot::try_read<std::map<std::string, olm_ciphertext>>(content.ciphertext.text);
     if (!ciphertexts)
-      return;
+      return std::nullopt;
     const auto mine = ciphertexts->find(this->curve25519());
     if (mine == ciphertexts->end())
-      return;
+      return std::nullopt;
     const auto bytes = from_base64(mine->second.body);
     if (!bytes)
-      return;
+      return std::nullopt;
     vodozemac::olm::OlmMessageParts parts{.message_type = static_cast<std::size_t>(mine->second.type), .ciphertext = {}};
     for (const std::uint8_t b : *bytes)
       parts.ciphertext.push_back(b);
@@ -254,29 +420,52 @@ class olm_machine {
       auto message = vodozemac::olm::olm_message_from_parts(parts);
       plaintext = this->olm_decrypt(*content.sender_key, *message, mine->second.type == 0);
     } catch (const rust::Error&) {
-      return;
+      return std::nullopt;
     }
     if (!plaintext)
-      return;
+      return std::nullopt;
     auto payload = knot::try_read<olm_payload>(*plaintext);
     auto envelope = knot::try_read<olm_envelope>(*plaintext);
     if (!payload || !envelope)
-      return;
+      return std::nullopt;
     // For this user and this device, from the user who sent it: else a
     // payload decrypted elsewhere and passed on, or one claiming another's
     // name, would be believed.
     if (envelope->sender != sender || envelope->recipient != user_id_ || envelope->recipient_keys.ed25519 != this->ed25519())
-      return;
-    splice::visit(splice::overloaded{[&](const loom::ev::m_room_key_content_t& key) {
-                                       this->room_key(key, kept_file::origin{*content.sender_key, envelope->keys.ed25519, sender});
-                                     },
-                                     [](const auto&) {}},
-                  payload->content.data());
+      return std::nullopt;
+    return splice::visit(
+        splice::overloaded{[&](const loom::ev::m_room_key_content_t& key) -> std::optional<room_key_offer> {
+                             return room_key_offer{key, kept_file::origin{.sender_key = *content.sender_key,
+                                                                          .ed25519 = envelope->keys.ed25519,
+                                                                          .sender = sender}};
+                           },
+                           [](const auto&) -> std::optional<room_key_offer> { return std::nullopt; }},
+        payload->content.data());
+  }
+
+  // A room key offered, its device found: taken where the ed25519 key the
+  // Olm payload claimed is that device's own -- else refused.
+  [[nodiscard]] bool accept_room_key(const room_key_offer& offer, const device_identity& device) {
+    if (device.ed25519 != offer.from.ed25519)
+      return false;
+    kept_file::origin from = offer.from;
+    from.device = device.device_id;
+    from.cross_signed = device.cross_signed;
+    return this->room_key(offer.key, std::move(from));
+  }
+  // A user's master key as first seen; pinned the first time.
+  [[nodiscard]] std::optional<std::string> pinned_master(const std::string& user) const {
+    const auto found = kept_.masters.find(user);
+    return found == kept_.masters.end() ? std::nullopt : std::optional<std::string>(found->second);
+  }
+  void pin_master(const std::string& user, const std::string& key) {
+    if (kept_.masters.emplace(user, key).second)
+      this->save();
   }
 
   // A room's m.room.encrypted: its Megolm message read with the session it
   // names, where this device has it; the room event it was, read as any.
-  [[nodiscard]] std::optional<megolm_payload> room_event(const std::string& room, const std::string& event_id,
+  [[nodiscard]] std::optional<decrypted> room_event(const std::string& room, const std::string& event_id,
                                                          const std::string& sender,
                                                          const loom::ev::m_room_encrypted_content_t& content) {
     if (!content.session_id)
@@ -326,7 +515,7 @@ class olm_machine {
         return std::nullopt;
       seen.emplace(clear.message_index, event_id);
       this->save();
-      return std::move(*read);
+      return decrypted{std::move(*read), origin->second.cross_signed.value_or(false)};
     } catch (const rust::Error&) {
       return std::nullopt;
     }
@@ -425,20 +614,22 @@ class olm_machine {
   // A room key: its Megolm session, kept for its room with where it came
   // from. Never over one already held under its id: a second key for the
   // same session, from whoever, would replace the first one's messages'.
-  void room_key(const loom::ev::m_room_key_content_t& key, kept_file::origin from) {
+  bool room_key(const loom::ev::m_room_key_content_t& key, kept_file::origin from) {
     if (key.room_id.empty() || kept_.origins.contains(key.session_id))
-      return;
+      return false;
     try {
       auto session_key = vodozemac::megolm::session_key_from_base64(key.session_key);
       auto session = vodozemac::megolm::new_inbound_group_session(*session_key);
       // The id the key says is the session's own: else it would be kept
       // under another session's name.
       if (std::string(session->session_id()) != key.session_id)
-        return;
+        return false;
       kept_.megolm[key.room_id][key.session_id] = std::string(session->pickle(key_));
       kept_.origins.emplace(key.session_id, std::move(from));
       this->save();
+      return true;
     } catch (const rust::Error&) {
+      return false;
     }
   }
 

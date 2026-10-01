@@ -277,6 +277,9 @@ class account {
   void upload_keys(std::int64_t on_server);
   void crypto_answer(const loom::cs::sliding_sync::response_t& got);
   void crypto_answer_now(const loom::cs::sliding_sync::response_t& got);
+  // A room key offered: taken only from a device the sender's device list
+  // has, signed by itself; marked unverified unless cross-signed.
+  void vet_room_key(const crypto::room_key_offer& offer);
 
   // The file the sync is kept in, for this account.
   std::filesystem::path kept_file() const;

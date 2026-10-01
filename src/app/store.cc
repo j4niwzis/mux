@@ -61,6 +61,8 @@ struct message_line {
   std::optional<bool> sticker;
   // Came end-to-end encrypted: kept, or read back it said "not encrypted".
   std::optional<bool> encrypted;
+  // And from a device its sender did not cross-sign.
+  std::optional<bool> unverified;
   friend consteval auto json_schema(knot::type<message_line>) { return knot::schema<message_line>(); }
 };
 
@@ -300,6 +302,7 @@ class message_store {
       one.thread = std::move(o.thread);
       one.edited = o.edited.value_or(false);
       one.encrypted = o.encrypted.value_or(false);
+      one.unverified = o.unverified.value_or(false);
       one.redacted = o.redacted.value_or(false);
       one.outgoing = o.out.value_or(false);
       one.service = o.service.value_or(false);
@@ -370,6 +373,7 @@ class message_store {
                                    : std::nullopt,
         .sticker = store_file::flag(one.sticker),
         .encrypted = store_file::flag(one.encrypted),
+        .unverified = store_file::flag(one.unverified),
     };
     if (!one.album.empty()) {
       line.album.emplace();

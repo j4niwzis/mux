@@ -315,6 +315,9 @@ struct message {
   // did not is marked as such -- a server or anyone in the room can put a
   // plain message there, and it looked the same.
   bool encrypted = false;
+  // And from a device its sender did not cross-sign: their account's, as
+  // the server says, but not vouched for by them (review 4, H1).
+  bool unverified = false;
   bool outgoing = false;
   // Not something said but something done -- someone joined, the room was
   // renamed, an event nothing here reads -- shown as a line of its own in
@@ -1029,6 +1032,8 @@ struct message_edited {
 struct message_encrypted {
   conversation_id in;
   std::string id;
+  // From a device its sender cross-signed.
+  bool verified = false;
 };
 
 struct message_redacted {
@@ -1481,8 +1486,10 @@ class model {
     where.detached = one.future_from.has_value();
   }
   void on(const change::message_encrypted& one) {
-    if (message* kept = message_in(of(one.in), one.id))
+    if (message* kept = message_in(of(one.in), one.id)) {
       kept->encrypted = true;
+      kept->unverified = !one.verified;
+    }
   }
   void on(const change::message_edited& one) {
     conversation& where = of(one.in);

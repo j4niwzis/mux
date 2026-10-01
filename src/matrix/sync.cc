@@ -833,7 +833,8 @@ void account<Sink>::crypto_answer_now(const loom::cs::sliding_sync::response_t& 
     if (extensions.to_device->events)
       for (const auto& one : *extensions.to_device->events)
         splice::visit(splice::overloaded{[&](const loom::ev::m_room_encrypted_content_t& content) {
-                                           crypto_->to_device(one.sender.value_or(""), content);
+                                           if (auto offer = crypto_->to_device(one.sender.value_or(""), content))
+                                             this->vet_room_key(*offer);
                                          },
                                          [](const auto&) {}},
                       one.content.data());
@@ -843,6 +844,33 @@ void account<Sink>::crypto_answer_now(const loom::cs::sliding_sync::response_t& 
     if (const auto left = extensions.e2ee->device_one_time_keys_count->find("signed_curve25519");
         left != extensions.e2ee->device_one_time_keys_count->end())
       this->upload_keys(left->second);
+}
+
+// A room key offered: the sender's devices asked of the server, and the key
+// taken only where the Olm session it came over is one of them, signed by
+// itself, and the ed25519 key the payload claimed is that device's. The
+// to-device sender is the server's word: a server (or a device it made up)
+// otherwise hands over a session of its own as anyone's (review 4, H1).
+template <class Sink>
+void account<Sink>::vet_room_key(const crypto::room_key_offer& offer) {
+  const std::string& user = offer.from.sender;
+  auto got = perform(*api_, loom::cs::query_keys{.body = {.device_keys = {{user, {}}}}});
+  if (!got) {
+    log(id_, "room key from {} not taken: their devices could not be fetched: {}", user, got.error().said());
+    return;
+  }
+  const auto device = crypto::device_of(*got, user, offer.from.sender_key, crypto_->pinned_master(user));
+  if (!device) {
+    log(id_, "room key from {} refused: no device of theirs, signed by itself, has the key it came with", user);
+    return;
+  }
+  if (device->master && !crypto_->pinned_master(user))
+    crypto_->pin_master(user, *device->master);
+  if (!crypto_->accept_room_key(offer, *device)) {
+    log(id_, "room key from {} ({}) not taken", user, device->device_id);
+    return;
+  }
+  log(id_, "room key from {} ({}){}", user, device->device_id, device->cross_signed ? "" : ", unverified device");
 }
 
 // Encrypted, once known so: by its state now, or by what was known before --

@@ -387,7 +387,7 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
   // it was, its type and content, as any event is read -- the rest of it,
   // who sent it and when, the encrypted one's.
   if (crypto_) {
-    std::optional<crypto::megolm_payload> clear;
+    std::optional<crypto::decrypted> clear;
     try {
       splice::visit(splice::overloaded{[&](const loom::ev::m_room_encrypted_content_t& content) {
                                          clear = crypto_->room_event(in.id, one.event_id, one.sender, content);
@@ -400,10 +400,10 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
     }
     if (clear) {
       loom::ev::timeline_event made = one;
-      made.type = std::move(clear->type);
-      made.content = std::move(clear->content);
+      made.type = std::move(clear->event.type);
+      made.content = std::move(clear->event.content);
       this->event(in, made, where, true);
-      sink_(change::message_encrypted{in, one.event_id});
+      sink_(change::message_encrypted{in, one.event_id, clear->verified});
       return;
     }
   }

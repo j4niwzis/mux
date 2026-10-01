@@ -1614,7 +1614,12 @@ struct message_bubble : nodes::Stack {
     // marked: it was said in the clear, as the room was then.
     const bool plain_in_encrypted = in.encrypted && !said.encrypted && !said.service &&
                                     (!in.encrypted_since || said.at >= *in.encrypted_since);
-    std::string when = (plain_in_encrypted ? std::string("not encrypted \u00b7 ") : std::string()) + mark_of(said) + clock_of(said.at);
+    // And one that came encrypted from a device its sender did not
+    // cross-sign: the server may have made that device up.
+    const std::string warning = plain_in_encrypted ? std::string("not encrypted \u00b7 ")
+                                : said.encrypted && said.unverified ? std::string("unverified device \u00b7 ")
+                                                                    : std::string();
+    std::string when = warning + mark_of(said) + clock_of(said.at);
     when += splice::visit(splice::overloaded{[](const delivery::sending&) { return " · sending"; },
                                   [](const delivery::failed&) { return " · not sent"; },
                                   [](const auto&) { return ""; }},

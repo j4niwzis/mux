@@ -624,6 +624,34 @@ inline void http_connect(loop& owner, tcp::socket& socket, const proxy& via, std
 
 }  // namespace detail
 
+// Whether a host may be asked for what a message names (a link's preview)
+// from this machine: not this machine itself, nor its own network. A link
+// is anyone's to write, and fetching it here would GET whatever it names
+// there -- a router's page, a printer's -- from the user's machine. A name
+// that resolves to such an address is not caught here.
+[[nodiscard]] inline bool public_host(std::string_view host) {
+  const std::string lower = host | std::views::transform([](char c) {
+                              return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                            }) |
+                            std::ranges::to<std::string>();
+  if (lower == "localhost" || lower.ends_with(".localhost") || lower.ends_with(".local") ||
+      lower.ends_with(".internal") || lower.ends_with(".lan") || (!lower.contains('.') && !lower.contains(':')))
+    return false;
+  error_code bad;
+  const auto address = asio::ip::make_address(lower, bad);
+  if (bad)
+    return true;  // a name
+  if (address.is_loopback() || address.is_unspecified() || address.is_multicast())
+    return false;
+  if (address.is_v6()) {
+    const auto v6 = address.to_v6();
+    return !(v6.is_link_local() || v6.is_site_local() || (v6.to_bytes()[0] & 0xfe) == 0xfc || v6.is_v4_mapped());
+  }
+  const auto b = address.to_v4().to_bytes();
+  return !(b[0] == 10 || b[0] == 127 || b[0] == 0 || (b[0] == 172 && (b[1] & 0xf0) == 16) ||
+           (b[0] == 192 && b[1] == 168) || (b[0] == 169 && b[1] == 254) || (b[0] == 100 && (b[1] & 0xc0) == 64));
+}
+
 // A connection to host:port, through a proxy where one is given.
 inline tcp::socket connect(loop& owner, const std::optional<proxy>& via, std::string_view host, std::uint16_t port) {
   if (!via)

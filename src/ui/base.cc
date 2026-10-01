@@ -416,6 +416,12 @@ struct mux_paint {
         widgets::drawBackdrop(canvas, frost_backdrop(), look.blur, scene::detail::roundedBox(state, state.fBounds), alpha);
       return scene::detail::atOpacity(*fill, look.opacity);
     }
+    // A popup's plate on another floating one -- a submenu over its menu,
+    // Seen's list over the message's menu: as it is, near opaque. At the
+    // panels' opacity it let the plate under it through where they met --
+    // darker there, lighter where it stood out of it.
+    if (*fill == popup_colour() && inside_float() && !state.fFloats)
+      return fill;
     if (std::ranges::contains(look.tints, *fill))
       return scene::detail::atOpacity(*fill, look.opacity);
     return fill;

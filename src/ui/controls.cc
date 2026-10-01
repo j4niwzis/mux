@@ -810,4 +810,60 @@ struct toast_card : nodes::Stack {
   }
 };
 
+// What a message being written answers or edits, as shown over the field:
+// its icon, its title ("Reply to <name>", "Edit message"), a line of it.
+struct compose_context {
+  icon_t mark;
+  std::string title;
+  std::string line;
+};
+
+// What is written answers or edits, as tdesktop's FieldHeader shows it:
+// its icon in the left column (historyReplySkip wide), then two lines --
+// "Reply to <name>" or "Edit message" in the accent, semibold, over a line
+// of the message -- and ✕ on the right to go back to a plain one. One bar
+// for every field that answers: the chat's composer, a thread's (#11409);
+// Cancel is what its ✕ does there.
+template <class Cancel>
+struct context_bar : nodes::Stack {
+  static constexpr float kHeight = 49.0f;  // historyReplyHeight
+  static constexpr float kSkip = 51.0f;    // historyReplySkip
+  struct lines_column : nodes::Stack {
+    struct parts_t {
+      nodes::Text title{"", 13.0f, accent_colour, true};
+      nodes::Text line{"", 13.0f, text_colour};
+    } parts;
+    lines_column() {
+      this->setGap(2.0f);
+      for (nodes::Text* each : {&parts.title, &parts.line}) {
+        each->setElided(true);
+        each->apply({.fillX = true});
+      }
+    }
+  };
+  using cancel_button = icon_button<Cancel>;
+  struct parts_t {
+    nodes::Icon mark{IconShape{}, accent_colour};  // in the left column
+    lines_column lines;
+    cancel_button cancel;
+  } parts;
+  explicit context_bar(Cancel cancel) : parts{.cancel = cancel_button(icon::close{}, std::move(cancel))} {
+    this->setHorizontal();
+    this->setGap(8.0f);
+    fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 8.0f, 0.0f, 0.0f}});
+    parts.mark.apply({.fillY = true, .width = kSkip - 8.0f});
+    parts.lines.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+    parts.cancel.apply({.alignSelf = scene::align::kMiddle});
+    this->setVisible(false);
+  }
+  // What is answered or edited, shown; or nothing, hidden.
+  void show(std::optional<compose_context> said) {
+    this->setVisible(said.has_value());
+    parts.mark.setShape(said ? shape_of(said->mark) : IconShape{});
+    parts.lines.parts.title.setText(said ? said->title : std::string());
+    parts.lines.parts.line.setText(said ? said->line : std::string());
+    this->markDamaged();
+  }
+};
+
 }  // namespace mux::ui

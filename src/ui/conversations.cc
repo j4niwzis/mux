@@ -1160,6 +1160,8 @@ struct conversations_screen : nodes::Stack {
         return;
       }
       skiff::scene::setClipboardText(selected->parts.body.parts.text.selected());
+    } else if (press.key == keys::kEscape && !any && parts.threads.answering) {
+      parts.threads.stop_answering();
     } else if (press.key == keys::kEscape && !any && line.answering()) {
       actions->cancel_compose();
     } else if ((press.key == keys::kTab && control) ||
@@ -1209,6 +1211,9 @@ struct conversations_screen : nodes::Stack {
   // the view was above the newest.
   std::optional<conversation_id> shown_chat;
   std::string shown_last;
+  // Whether the timeline last shown was cut off from the newest: what then
+  // comes after it is a page of what is older than the newest, not new.
+  bool shown_detached = false;
   // Where each chat was scrolled to when it was left: it comes back there.
   std::map<conversation_id, float> scrolled;
   int unseen = 0;
@@ -1461,10 +1466,10 @@ struct conversations_screen : nodes::Stack {
     parts.threads.stop_answering();
   }
   // An answer in the thread open answered there.
-  [[nodiscard]] bool answer_in_thread(const std::string& root, std::string id, std::string title) {
+  [[nodiscard]] bool answer_in_thread(const std::string& root, std::string id, compose_context said) {
     if (!threads_open || parts.threads.open != root)
       return false;
-    parts.threads.answer(std::move(id), std::move(title));
+    parts.threads.answer(std::move(id), std::move(said));
     return true;
   }
 
@@ -2627,7 +2632,11 @@ struct conversations_screen : nodes::Stack {
       // and settled.
       timeline.scrollToEnd(last != shown_last);
       unseen = 0;
-    } else if (last != shown_last) {
+    } else if (last != shown_last && !one->detached && !shown_detached) {
+      // A jump far back holds the timeline from there: the pages after it
+      // loaded as the reader goes down are not new, and 30 of them were
+      // counted as new under the button (#11438) -- nor the page that joins
+      // it to the newest again.
       // What came after the newest shown before: others' messages the view
       // shows. Where that one is not here any more -- its id changed as the
       // server acknowledged it, or it went -- nothing is counted: every
@@ -2643,6 +2652,7 @@ struct conversations_screen : nodes::Stack {
     chat.area.parts.jump.set_unseen(unseen);
     shown_chat = chosen;
     shown_last = last;
+    shown_detached = one->detached;
   }
 };
 

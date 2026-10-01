@@ -102,13 +102,6 @@ struct submit_message {
   void operator()(std::string_view text) const { actions->submit_message(with_blocks_closed(text)); }
 };
 
-// What a message being written answers or edits, as shown over the field:
-// its icon, its title ("Reply to <name>", "Edit message"), a line of it.
-struct compose_context {
-  icon_t mark;
-  std::string title;
-  std::string line;
-};
 
 // Where a message is written, across the bottom of a chat as in Telegram
 // Quotes in the field, as Telegram's: a paragraph starting "> " -- a "> "
@@ -386,41 +379,9 @@ struct field_quotes {
 // what is written, and the send arrow on the right.
 template <class Actions>
 struct composer_bar : nodes::Stack {
-  // What is written answers or edits, as tdesktop's FieldHeader shows it:
-  // its icon in the left column (historyReplySkip wide), then two lines --
-  // "Reply to <name>" or "Edit message" in the accent, semibold, over a
-  // line of the message -- and ✕ on the right to go back to a plain one.
-  struct context_row : nodes::Stack {
-    static constexpr float kHeight = 49.0f;  // historyReplyHeight
-    static constexpr float kSkip = 51.0f;    // historyReplySkip
-    struct lines_column : nodes::Stack {
-      struct parts_t {
-        nodes::Text title{"", 13.0f, accent_colour, true};
-        nodes::Text line{"", 13.0f, text_colour};
-      } parts;
-      lines_column() {
-        this->setGap(2.0f);
-        for (nodes::Text* each : {&parts.title, &parts.line}) {
-          each->setElided(true);
-          each->apply({.fillX = true});
-        }
-      }
-    };
-    using cancel_button = icon_button<ask<Actions, &Actions::cancel_compose>>;
-    struct parts_t {
-      nodes::Icon mark{IconShape{}, accent_colour};  // in the left column
-      lines_column lines;
-      cancel_button cancel;
-    } parts;
-    explicit context_row(Actions* a) : parts{.cancel = cancel_button(icon::close{}, {a})} {
-      this->setHorizontal();
-      this->setGap(8.0f);
-      fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 8.0f, 0.0f, 0.0f}});
-      parts.mark.apply({.fillY = true, .width = kSkip - 8.0f});
-      parts.lines.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      parts.cancel.apply({.alignSelf = scene::align::kMiddle});
-    }
-  };
+  // What is written answers or edits: the reply bar, its ✕ going back to
+  // a plain message.
+  using context_row = context_bar<ask<Actions, &Actions::cancel_compose>>;
   // The paperclip, the field growing with what is written in it, the arrow.
   struct input_row : nodes::Stack {
     using attach_button = icon_button<ask<Actions, &Actions::attach_files>>;
@@ -502,7 +463,7 @@ struct composer_bar : nodes::Stack {
 
   // Declared: the divider, the unsent bar, the answer's line where there is
   // one, the row -- or, where the reader may not post, the line saying so.
-  explicit composer_bar(Actions* a) : parts{.unsent = unsent_row(a), .context_line = context_row(a), .input = input_row(a)} {
+  explicit composer_bar(Actions* a) : parts{.unsent = unsent_row(a), .context_line = context_row({a}), .input = input_row(a)} {
     parts.unsent.setVisible(false);
     parts.no_post.setVisible(false);
     parts.context_line.setVisible(false);
@@ -550,12 +511,7 @@ struct composer_bar : nodes::Stack {
   [[nodiscard]] bool answering() const { return parts.context_line.visible(); }
   // What is written answers or edits something, shown; or nothing.
   void show_context(std::optional<compose_context> said) {
-    auto& context_line = parts.context_line;
-    context_line.setVisible(said.has_value());
-    context_line.parts.mark.setShape(said ? shape_of(said->mark) : IconShape{});
-    context_line.parts.lines.parts.title.setText(said ? said->title : std::string());
-    context_line.parts.lines.parts.line.setText(said ? said->line : std::string());
-    context_line.markDamaged();
+    parts.context_line.show(std::move(said));
     this->invalidateLayout();
   }
   void set_text(std::string text) { parts.input.parts.field.setText(std::move(text)); }

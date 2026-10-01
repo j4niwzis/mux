@@ -1748,6 +1748,10 @@ struct threads_panel : nodes::Stack {
     threads_panel* panel;
     void operator()() const { panel->send(); }
   };
+  struct stop_answer {
+    threads_panel* panel;
+    void operator()() const { panel->stop_answering(); }
+  };
   // A thread in the list: its root's author and words, how many answers and
   // the latest's time; pressed, opened.
   struct thread_row : nodes::Stack {
@@ -1847,16 +1851,14 @@ struct threads_panel : nodes::Stack {
     nodes::Text empty{"No threads here yet.", 13.0f, dim_colour};
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 2.0f, .wrap = false}, {})};
     nodes::ScrollContainer<answers_t> answers{answers_t({.spacingY = 0.0f, .wrap = false}, {})};
-    nodes::Text replying{"", 12.0f, accent_colour};
+    context_bar<stop_answer> replying;
     input_t input;
   } parts;
-  explicit threads_panel(Actions* a) : actions(a), parts{.head = head_t(a), .input = input_t(this)} {
+  explicit threads_panel(Actions* a) : actions(a), parts{.head = head_t(a), .replying = context_bar<stop_answer>({this}), .input = input_t(this)} {
     fState.apply({.fillY = true, .background = sidebar_colour});
     parts.divider.apply({.fillX = true, .height = 1.0f});
     parts.empty.apply({.margin = {16.0f, 16.0f, 0.0f, 16.0f}});
-    parts.replying.setElided(true);
-    parts.replying.apply({.fillX = true, .padding = {6.0f, 12.0f, 0.0f, 12.0f}, .background = sidebar_colour});
-    parts.replying.setVisible(false);
+    parts.replying.apply({.background = sidebar_colour});
     for (auto* list : std::initializer_list<scene::Node*>{&parts.list, &parts.answers})
       list->apply({.fillX = true, .grow = scene::axes::kY});
     std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 4.0f, 4.0f, 4.0f}});
@@ -1958,15 +1960,14 @@ struct threads_panel : nodes::Stack {
   }
   // A message of the thread open answered from its menu, as tdesktop's
   // "Reply to <name>" over the field: in the thread, not the chat (#11379).
-  void answer(std::string id, std::string title) {
+  void answer(std::string id, compose_context said) {
     answering = std::move(id);
-    parts.replying.setText(std::move(title));
-    parts.replying.setVisible(open.has_value());
+    parts.replying.show(std::move(said));
     this->invalidateLayout();
   }
   void stop_answering() {
     answering.reset();
-    parts.replying.setVisible(false);
+    parts.replying.show(std::nullopt);
     this->invalidateLayout();
   }
   // What is written, sent in the thread open -- an answer to what is

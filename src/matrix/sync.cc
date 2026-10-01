@@ -210,7 +210,7 @@ void account<Sink>::run() {
     if (const auto found = versions->unstable_features->find("org.matrix.simplified_msc3575");
         found != versions->unstable_features->end() && found->second)
       sliding_ = true;
-  log(id_, sliding_ ? "syncing by simplified sliding sync (MSC4186)" : "syncing by /sync");
+  log(id_, "syncing by {}", sliding_ ? "simplified sliding sync (MSC4186)" : "/sync");
   // Where the last run left the sync: its rooms at once, and the sync goes
   // on from there rather than asking for every room again.
   this->load_kept();

@@ -549,6 +549,9 @@ struct reaction_chip : nodes::Stack {
                   .cornerRadius = 13.0f,
                   .background = at_opacity(own ? accent_colour : tile_colour,
                                            element_opacity_of(bubble_look_now(), &config::element_opacity::reactions))});
+    // Frosted, where the bubbles are, as its own blur says.
+    if (frosts(bubble_look_now()))
+      fState.setBackdrop(true, element_blur_of(bubble_look_now(), &config::element_blur::reactions));
     if (pictured(key)) {
       parts.picture.emplace(from_avatars{key});
       parts.picture->apply({.width = 18.0f, .height = 18.0f, .alignSelf = scene::align::kMiddle});
@@ -1386,7 +1389,7 @@ struct message_bubble : nodes::Stack {
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
                     .padding = {kPadY, kPadX, kPadY, kPadX}, .cornerRadius = 12.0f, .background = plate});
       // Frosted: what is behind blurred under the tint; glass: a light edge.
-      splice::visit(splice::overloaded{[&](config::bubbles::frosted) { fState.setBackdrop(true); },
+      splice::visit(splice::overloaded{[&](config::bubbles::frosted) { fState.setBackdrop(true, blur_of(bubble_look_now())); },
                                        [&](config::bubbles::glass) {
                                          fState.apply({.border = scene::Border{skia::colorSetARGB(70, 255, 255, 255), 1.0f}});
                                        },
@@ -1541,6 +1544,9 @@ struct message_bubble : nodes::Stack {
       face.setVisible(false);
       body.apply({.cornerRadius = 12.0f,
                   .background = at_opacity(tile_colour, element_opacity_of(bubble_look_now(), &config::element_opacity::service))});
+      // Frosted as its own blur says.
+      if (frosts(bubble_look_now()))
+        body.fState.setBackdrop(true, element_blur_of(bubble_look_now(), &config::element_blur::service));
       // Not shown where the chat's settings say so: kept, and out of the
       // flow, taking no room.
       events_shown = show_events;

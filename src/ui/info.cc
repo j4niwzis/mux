@@ -1451,13 +1451,79 @@ struct bubbles_picker : nodes::Stack {
       actions->set_bubbles(level, look, part);
     }
   };
-  // Frosted's blur, let go at: one for the window, the bubbles' and the
-  // panels' frost alike.
+  // Frosted's blur, let go at: the look's own -- the bubbles' apart from the
+  // panels' -- where it was let go, as it is: 55.2%, not rounded.
   struct blur_done {
     Actions* actions;
+    choice_level_t level;
+    config::look_part_t part;
     void operator()(float fraction) const {
-      // Where it was let go, as it is: 55.2%, not rounded to a whole.
-      actions->set_frost_blur(static_cast<double>(std::clamp(fraction, 0.0f, 1.0f)) * 100.0);
+      if (!usable(part) || !own_here(level, part))
+        return;
+      config::bubble_look look = current(level, part);
+      look.blur = static_cast<double>(std::clamp(fraction, 0.0f, 1.0f)) * 100.0;
+      actions->set_bubbles(level, look, part);
+    }
+  };
+  // An element's blur, apart from the bubbles': let go at, or given back.
+  using element_blur_t = std::optional<double> config::element_blur::*;
+  struct element_blur_done {
+    Actions* actions;
+    choice_level_t level;
+    element_blur_t which;
+    void operator()(float fraction) const {
+      if (!own_here(level, config::look_part::bubbles{}))
+        return;
+      config::bubble_look look = current(level, config::look_part::bubbles{});
+      look.blurs.*which = static_cast<double>(std::clamp(fraction, 0.0f, 1.0f)) * 100.0;
+      actions->set_bubbles(level, look, config::look_part::bubbles{});
+    }
+  };
+  struct element_blur_reset {
+    Actions* actions;
+    choice_level_t level;
+    element_blur_t which;
+    void operator()() const {
+      if (!own_here(level, config::look_part::bubbles{}))
+        return;
+      config::bubble_look look = current(level, config::look_part::bubbles{});
+      look.blurs.*which = std::nullopt;
+      actions->set_bubbles(level, look, config::look_part::bubbles{});
+    }
+  };
+  // An element drawn frosted: its blur, and a way back to the bubbles'.
+  struct element_blur_row : nodes::Stack {
+    struct head_t : nodes::Stack {
+      struct parts_t {
+        nodes::Text label;
+        widgets::Button<element_blur_reset> reset;
+      } parts;
+      head_t(std::string label, element_blur_reset reset, bool own)
+          : parts{.label = nodes::Text(std::move(label), 13.0f, text_colour),
+                  .reset = widgets::Button<element_blur_reset>("As bubbles", reset)} {
+        this->setHorizontal();
+        this->setGap(6.0f);
+        fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+        parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+        parts.reset.apply({.width = 96.0f, .height = 26.0f});
+        parts.reset.setVisible(own);
+      }
+    };
+    struct parts_t {
+      head_t head;
+      widgets::SliderBar<scene::NoAction, element_blur_done> bar;
+    } parts;
+    element_blur_row(Actions* a, const choice_level_t& level, std::string_view name, element_blur_t which)
+        : parts{.head = head_t(std::format("{} blur: {:.1f}%{}", name,
+                                           element_blur_of(current(level, config::look_part::bubbles{}), which) * 100.0f,
+                                           (current(level, config::look_part::bubbles{}).blurs.*which) ? "" : " (as bubbles)"),
+                               element_blur_reset{a, level, which},
+                               (current(level, config::look_part::bubbles{}).blurs.*which).has_value()),
+                .bar = widgets::SliderBar<scene::NoAction, element_blur_done>({}, element_blur_done{a, level, which})} {
+      this->setGap(4.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+      parts.bar.setFraction(element_blur_of(current(level, config::look_part::bubbles{}), which));
+      parts.bar.apply({.margin = {4.0f, 8.0f, 6.0f, 8.0f}});
     }
   };
   struct kinds_row : nodes::Stack {
@@ -1493,6 +1559,8 @@ struct bubbles_picker : nodes::Stack {
     // The bubbles' only: what else is in a chat, each apart where chosen.
     nodes::Text elements_title{"EVERYTHING ELSE IN A CHAT", 12.0f, dim_colour, true};
     std::vector<element_row> elements;
+    // Those drawn frosted, where the bubbles are: each its blur.
+    std::vector<element_blur_row> element_blurs;
   } parts;
   bubbles_picker(Actions* a, const choice_level_t& level, const config::look_part_t& part = config::look_part::bubbles{})
       : parts{.title = nodes::Text(splice::visit(splice::overloaded{[](config::look_part::bubbles) { return "MESSAGE BUBBLES"; },
@@ -1506,8 +1574,8 @@ struct bubbles_picker : nodes::Stack {
                                                  pick_kind_at{a, level, part, inherits(level)}),
               .opacity_label = nodes::Text("Opacity", 13.0f, text_colour),
               .opacity = widgets::SliderBar<scene::NoAction, opacity_done>({}, opacity_done{a, level, part}),
-              .blur_label = nodes::Text(std::format("Blur: {:.1f}%", window_look().frost), 13.0f, text_colour),
-              .blur = widgets::SliderBar<scene::NoAction, blur_done>({}, blur_done{a})} {
+              .blur_label = nodes::Text(std::format("Blur: {:.1f}%", blur_of(current(level, part)) * 100.0f), 13.0f, text_colour),
+              .blur = widgets::SliderBar<scene::NoAction, blur_done>({}, blur_done{a, level, part})} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 10.0f, 0.0f, 10.0f}});
     parts.why.setWrapped(true);
@@ -1523,7 +1591,7 @@ struct bubbles_picker : nodes::Stack {
                                        current(level, part).kind);
     parts.blur_label.setVisible(frosted);
     parts.blur.setVisible(frosted);
-    parts.blur.setFraction(static_cast<float>(window_look().frost / 100.0));
+    parts.blur.setFraction(blur_of(current(level, part)));
     parts.blur.apply({.margin = {4.0f, 8.0f, 8.0f, 8.0f}});
     const bool bubbles = splice::visit(splice::overloaded{[](config::look_part::bubbles) { return true; },
                                                           [](const auto&) { return false; }},
@@ -1534,6 +1602,13 @@ struct bubbles_picker : nodes::Stack {
       parts.elements.reserve(config::kElementNames.size());
       for (std::size_t i = 0; i < config::kElementNames.size(); ++i)
         parts.elements.emplace_back(a, level, kLabels[i], config::kElementNames[i].second);
+      // Frosted: what else is drawn so, each its blur.
+      if (frosted) {
+        static constexpr std::array<std::string_view, 2> kBlurLabels{"Service lines", "Reactions"};
+        parts.element_blurs.reserve(config::kElementBlurNames.size());
+        for (std::size_t i = 0; i < config::kElementBlurNames.size(); ++i)
+          parts.element_blurs.emplace_back(a, level, kBlurLabels[i], config::kElementBlurNames[i].second);
+      }
     }
     // Greyed where it does nothing: all of it where the panels have nothing
     // behind them; under the kind, where the level is as above.

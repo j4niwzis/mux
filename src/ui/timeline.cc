@@ -69,6 +69,15 @@ struct menu_facts {
 inline void show_wallpaper_on(widgets::Wallpaper& wall, const config::wallpaper_t& chosen) {
   // Frosted's blur, as chosen: 0 to 100 for none to about five pixels.
   wall.setBlur(static_cast<float>(window_look().frost) / 100.0f);
+  // And each look's and element's own, where it frosts: made once for a size.
+  std::vector<float> blurs;
+  for (const config::bubble_look* look : {&bubble_look_now(), &panel_look_now(), &bubble_look_everywhere(), &panel_look_everywhere()})
+    if (frosts(*look)) {
+      blurs.push_back(blur_of(*look));
+      for (const auto& [name, member] : config::kElementBlurNames)
+        blurs.push_back(element_blur_of(*look, member));
+    }
+  wall.setBlurs(std::move(blurs));
   splice::visit(splice::overloaded{[&](config::wallpaper::theme) {
                                      wall.setPicture(nullptr);
                                      wall.setGradient(scene::Gradient{chat_top_colour, chat_colour});

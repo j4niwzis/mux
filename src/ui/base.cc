@@ -47,6 +47,14 @@ inline config::bubble_look& bubble_look_now() {
   return splice::visit(splice::overloaded{[](config::bubbles::solid) { return 100; }, [&](const auto&) { return look.opacity; }},
                        look.kind);
 }
+// How much a look's Frosted blurs, 0 to 1: its own, else the window's.
+[[nodiscard]] inline float blur_of(const config::bubble_look& look);
+// An element's, drawn frosted: its own, else its look's.
+[[nodiscard]] inline float element_blur_of(const config::bubble_look& look, std::optional<double> config::element_blur::* which);
+// Whether a look frosts.
+[[nodiscard]] inline bool frosts(const config::bubble_look& look) {
+  return splice::visit(splice::overloaded{[](config::bubbles::frosted) { return true; }, [](const auto&) { return false; }}, look.kind);
+}
 // A menu's plate: the side's colour, all but opaque -- never taken for a
 // panel's fill, so a see-through panel look leaves menus readable over it.
 [[nodiscard]] inline skia::SkColor popup_colour() { return (sidebar_colour & 0x00FFFFFFu) | (0xFEu << 24); }
@@ -291,4 +299,13 @@ struct column_stack {
   return skia::SkRect::MakeXYWH(box.centerX() - w * 0.5f, box.fTop + top, w, std::max(0.0f, box.height() - top));
 }
 
+
+inline float blur_of(const config::bubble_look& look) {
+  return static_cast<float>(look.blur.value_or(window_look().frost) / 100.0);
+}
+inline float element_blur_of(const config::bubble_look& look, std::optional<double> config::element_blur::* which) {
+  if (const auto& own = look.blurs.*which)
+    return static_cast<float>(*own / 100.0);
+  return blur_of(look);
+}
 }  // namespace mux::ui

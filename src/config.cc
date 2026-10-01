@@ -497,10 +497,22 @@ inline constexpr std::array<std::pair<std::string_view, std::optional<int> eleme
      {"images", &element_opacity::images},
      {"avatars", &element_opacity::avatars},
      {"reactions", &element_opacity::reactions}}};
+// What in a chat is drawn frosted besides the bubbles, each with a blur of
+// its own where one is chosen -- else the bubbles'.
+struct element_blur {
+  std::optional<double> service;    // a line of something done
+  std::optional<double> reactions;  // the reactions' chips
+  friend bool operator==(const element_blur&, const element_blur&) = default;
+};
+inline constexpr std::array<std::pair<std::string_view, std::optional<double> element_blur::*>, 2> kElementBlurNames{
+    {{"service", &element_blur::service}, {"reactions", &element_blur::reactions}}};
 struct bubble_look {
   bubbles_t kind = bubbles::solid{};
   int opacity = 70;  // percent, where the kind has one
   element_opacity elements;
+  // How much Frosted blurs, in percent of the most; none, as the window's.
+  std::optional<double> blur;
+  element_blur blurs;
   friend bool operator==(const bubble_look&, const bubble_look&) = default;
 };
 // What a look is chosen for: the messages' bubbles, or the panels round
@@ -524,6 +536,12 @@ using look_part_t = splice::variant<look_part::bubbles, look_part::panels>;
   for (const auto& [name, member] : kElementNames)
     if (const auto& own = one.elements.*member)
       out += std::format(";{}={}", name, *own);
+  // ";blur=55.2;service.blur=40": the look's blur, and its elements'.
+  if (one.blur)
+    out += std::format(";blur={}", *one.blur);
+  for (const auto& [name, member] : kElementBlurNames)
+    if (const auto& own = one.blurs.*member)
+      out += std::format(";{}.blur={}", name, *own);
   return out;
 }
 [[nodiscard]] inline bubble_look bubble_look_of(std::string_view word) {
@@ -554,6 +572,17 @@ using look_part_t = splice::variant<look_part::bubbles, look_part::panels>;
         std::from_chars(pair.data() + equals + 1, pair.data() + pair.size(), percent);
         out.elements.*member = std::clamp(percent, 0, 100);
       }
+    // A blur, the look's or an element's: a percent, with its fraction.
+    const auto blur_at = [&] {
+      double percent = 10.0;
+      std::from_chars(pair.data() + equals + 1, pair.data() + pair.size(), percent);
+      return std::clamp(percent, 0.0, 100.0);
+    };
+    if (equals != std::string_view::npos && pair.substr(0, equals) == "blur")
+      out.blur = blur_at();
+    for (const auto& [name, member] : kElementBlurNames)
+      if (equals != std::string_view::npos && pair.substr(0, equals) == std::format("{}.blur", name))
+        out.blurs.*member = blur_at();
     at = next;
   }
   return out;

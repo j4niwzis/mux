@@ -591,6 +591,7 @@ inline bool show_panels(const config::bubble_look& look) {
       .active = kinded,
       .opacity = static_cast<float>(look.opacity) / 100.0f,
       .frosted = splice::visit(splice::overloaded{[](config::bubbles::frosted) { return true; }, [](const auto&) { return false; }}, look.kind),
+      .blur = blur_of(look),
       .edge = splice::visit(splice::overloaded{[](config::bubbles::glass) { return true; }, [](const auto&) { return false; }}, look.kind),
       .panels = {sidebar_colour},
       // Tinted at the opacity, never left out as a panel fill again: what is
@@ -602,7 +603,8 @@ inline bool show_panels(const config::bubble_look& look) {
     return false;
   // Only the opacity another: eased to it, from where it is now.
   scene::detail::PanelLook& now = scene::detail::panelLook();
-  const bool same_but_opacity = now.active && next.active && now.frosted == next.frosted && now.edge == next.edge &&
+  const bool same_but_opacity = now.active && next.active && now.frosted == next.frosted && now.blur == next.blur &&
+                                now.edge == next.edge &&
                                 now.panels == next.panels && now.tints == next.tints;
   if (same_but_opacity) {
     auto& ease = panel_ease();

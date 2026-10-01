@@ -304,11 +304,15 @@ struct conversations_screen : nodes::Stack {
   static constexpr std::size_t kRowsKept = 300;
   std::map<conversation_id, conversation_row<Actions>> rows_kept;
   float list_from = 1.0f;
+  // Begun two frames on: the frame the list is made in -- its rows made,
+  // laid out, their avatars scaled -- took its time out of the slide's
+  // first frames, and the slide jumped, then went on.
+  int slide_wait = 0;
   void slide_list(float from) {
     chats_made = kChatsFirst;
     list_from = from;
     list_in.jump(0.0f);
-    list_in.setTarget(1.0f);
+    slide_wait = 2;
     this->place_list();
     scene::work::mark(fState.fId);
   }
@@ -1802,12 +1806,14 @@ struct conversations_screen : nodes::Stack {
   // that brought the view to the end stopped in a frame whose tick had gone
   // by here already, and nothing ticked this again -- the arrow stayed.
   [[nodiscard]] bool wantsTick() const {
-    return list_in.moving() || panel_ease().t.moving() || this->away() != chat.area.parts.jump.visible() ||
+    return slide_wait > 0 || list_in.moving() || panel_ease().t.moving() || this->away() != chat.area.parts.jump.visible() ||
            this->older_due() || this->history_pending() ||
            jumping_to.has_value() || aiming.has_value() || jump_age != 0 || timeline.moving() ||
            !rooms_waiting.empty() || !rooms_unfound.empty();
   }
   void update(double now_ms) {
+    if (slide_wait > 0 && --slide_wait == 0)
+      list_in.setTarget(1.0f);
     if (list_in.step(now_ms))
       this->place_list();
     // The older asked long ago and not come: asked again.

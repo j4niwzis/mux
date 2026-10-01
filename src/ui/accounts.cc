@@ -278,6 +278,7 @@ struct account_chats : nodes::Stack {
     event_kind_list<Actions> events;
     receipts_choice<Actions> faces;
     previews_choice<Actions> previews;
+    previews_direct_choice<Actions> previews_direct;
     jump_search_choice<Actions> jump_search;
     nodes::Text looks_title = section_title("LOOKS");
     look_choices<Actions> looks;
@@ -288,12 +289,13 @@ struct account_chats : nodes::Stack {
   account_chats(Actions* a, std::optional<bool> events_all, const std::optional<config::room_event_kinds>& kinds,
                 std::optional<bool> faces_on, std::optional<std::int64_t> jump_most, std::optional<bool> previews_on,
                 std::optional<bool> home_hides, std::optional<bool> home_direct, const config::accent_t& colour,
-                bool strip_on, const config::theme_t& theme)
+                bool strip_on, const config::theme_t& theme, std::optional<bool> direct_on = std::nullopt)
       : parts{.colours = accent_circles<set_colour>({a}, theme, false),
               .strip = switch_row<ask<Actions, &Actions::flip_account_strip>>("A strip on its chats in other lists", {a}),
               .events = event_kind_list<Actions>(a, choice_level::account{}, events_all, kinds),
               .faces = receipts_choice<Actions>(a, choice_level::account{}, faces_on),
               .previews = previews_choice<Actions>(a, choice_level::account{}, previews_on),
+              .previews_direct = previews_direct_choice<Actions>(a, choice_level::account{}, direct_on),
               .jump_search = jump_search_choice<Actions>(a, choice_level::account{}, jump_most),
               .looks = look_choices<Actions>(a, choice_level::account{}),
               .home = choice_menu<pick_home>("Home",
@@ -709,7 +711,7 @@ struct accounts_panel : closes_on_escape<Actions> {
       detail.template emplace<5>(this->actions, config::room_events_of(one), config::room_event_kinds_of(one),
                                    config::show_receipts_of(one), config::jump_search_of(one), config::link_previews_of(one),
                                    config::home_hides_of(one), config::home_direct_of(one), config::colour_of(one),
-                                   config::strip_of(one), theme);
+                                   config::strip_of(one), theme, config::previews_direct_of(one));
     } else if (page == 4) {
       detail.template emplace<6>(this->actions);
     } else if (page == 2) {

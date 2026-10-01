@@ -774,6 +774,20 @@ struct receipts_setting {
     actions.set_receipts_shown(level, now);
   }
 };
+// Link previews fetched from the sites themselves, through the account's
+// proxy, or through its server (#12177): the server, where nothing says
+// otherwise.
+struct previews_direct_setting {
+  static constexpr std::string_view label = "Fetch link previews";
+  static constexpr std::string_view yes = "From site", no = "Server";
+  static constexpr bool unsaid = false;
+  template <class Actions>
+  static void set(Actions& actions, choice_level_t level, std::optional<bool> now) {
+    actions.set_previews_direct(level, now);
+  }
+};
+template <class Actions>
+using previews_direct_choice = show_hide_choice<Actions, previews_direct_setting>;
 // Others told one is typing -- never what (#12156): sent, where nothing says
 // otherwise.
 struct typing_setting {

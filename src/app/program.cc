@@ -370,6 +370,7 @@ struct app : kept_settings {
   void apply(const request::set_receipts_shown&);
   void apply(const request::set_link_previews&);
   void apply(const request::set_typing_sent&);
+  void apply(const request::set_previews_direct&);
   void apply(const request::set_jump_search&);
   void apply(const request::flip_chat_room_events&);
   void apply(const request::close_manage&);

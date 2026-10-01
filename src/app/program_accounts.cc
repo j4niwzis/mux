@@ -523,6 +523,9 @@ void app::manage_chat(const mux::conversation_id& id) {
                                      .previews = previews_shown_in.contains(chat->id)
                                                      ? std::optional<bool>(previews_shown_in.at(chat->id))
                                                      : std::nullopt,
+                                     .previews_direct = previews_direct_in.contains(chat->id)
+                                                            ? std::optional<bool>(previews_direct_in.at(chat->id))
+                                                            : std::nullopt,
                                      .receipts = receipts_shown_in.contains(chat->id)
                                                      ? std::optional<bool>(receipts_shown_in.at(chat->id))
                                                      : std::nullopt,
@@ -985,6 +988,28 @@ void app::apply(const request::set_link_previews& one) {
                                  previews_shown_in.erase(*chosen);
                              }},
              one.level);
+  (void)this->write();
+  this->refresh();
+}
+
+// Where link previews come from, at a level (#12177).
+void app::apply(const request::set_previews_direct& one) {
+  splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) { history.previews_direct = one.direct.value_or(false); },
+                                   [&](mux::choice_level::account) {
+                                     this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+                                       mux::config::previews_direct_in(account) = one.direct;
+                                     });
+                                   },
+                                   [&](mux::choice_level::chat) {
+                                     const auto chosen = this->managed();
+                                     if (!chosen)
+                                       return;
+                                     if (one.direct)
+                                       previews_direct_in.insert_or_assign(*chosen, *one.direct);
+                                     else
+                                       previews_direct_in.erase(*chosen);
+                                   }},
+                one.level);
   (void)this->write();
   this->refresh();
 }

@@ -244,7 +244,7 @@ class pictures_part {
                 if (found->second.image)
                   want(id, found->second.image, *found->second.image);
               } else if (links_asked_.insert(*link).second) {
-                s_->net->fetch_preview(id, *link);
+                s_->net->fetch_preview(id, *link, s_->kept->previews_direct(one.id));
               }
             }
             // A message quoted that is neither in the timeline nor fetched:

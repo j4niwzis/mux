@@ -166,6 +166,7 @@ struct stub {
   void set_receipts_shown(mux::choice_level_t, std::optional<bool>) {}
   void set_link_previews(mux::choice_level_t, std::optional<bool>) {}
   void set_typing_sent(mux::choice_level_t, std::optional<bool>) {}
+  void set_previews_direct(mux::choice_level_t, std::optional<bool>) {}
   void set_jump_search(mux::choice_level_t, std::optional<std::int64_t>) {}
   void press_loader(std::string) {}
   void stop_jump() {}

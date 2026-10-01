@@ -64,6 +64,8 @@ struct kept_settings {
   std::map<conversation_id, bool> receipts_shown_in;
   // Chats' own choice of link previews.
   std::map<conversation_id, bool> previews_shown_in;
+  // Chats' (and spaces') own choice of where link previews come from.
+  std::map<conversation_id, bool> previews_direct_in;
   // Chats' (and spaces') own choice of telling others one is typing.
   std::map<conversation_id, bool> typing_sent_in;
   // Every chat's background, and chats' own.
@@ -182,6 +184,16 @@ struct kept_settings {
       if (const auto& chosen = mux::config::link_previews_of(*account))
         return *chosen;
     return history.link_previews;
+  }
+  // Whether a chat's link previews come from the sites themselves: its own
+  // choice, its space's, its account's, else every account's.
+  [[nodiscard]] bool previews_direct(const conversation_id& chat) {
+    if (const auto own = this->own_or_space(previews_direct_in, chat); own != previews_direct_in.end())
+      return own->second;
+    if (const auto* account = this->settings_of(chat.account.address))
+      if (const auto& chosen = mux::config::previews_direct_of(*account))
+        return *chosen;
+    return history.previews_direct;
   }
   // Whether others in a chat are told one is typing: its own choice, its
   // space's, its account's, else every account's.
@@ -320,7 +332,7 @@ struct kept_settings {
         out.chat_notify->push_back({chat.account.address, chat.id, mux::config::word_of(mode)});
     }
     if (!room_events.empty() || !room_event_kinds.empty() || !receipts_shown_in.empty() || !jump_search_in.empty() ||
-        !previews_shown_in.empty() || !typing_sent_in.empty() || !wallpaper_in.empty() || !bubbles_in.empty() ||
+        !previews_shown_in.empty() || !typing_sent_in.empty() || !previews_direct_in.empty() || !wallpaper_in.empty() || !bubbles_in.empty() ||
         !panels_in.empty() || !forums.empty() || !hidden_from_home.empty()) {
       std::map<conversation_id, mux::config::room_events_choice> chosen;
       for (const auto& [chat, show] : room_events) {
@@ -340,6 +352,12 @@ struct kept_settings {
         one.account = chat.account.address;
         one.conversation = chat.id;
         one.previews = show;
+      }
+      for (const auto& [chat, direct] : previews_direct_in) {
+        auto& one = chosen[chat];
+        one.account = chat.account.address;
+        one.conversation = chat.id;
+        one.previews_direct = direct;
       }
       for (const auto& [chat, send] : typing_sent_in) {
         auto& one = chosen[chat];

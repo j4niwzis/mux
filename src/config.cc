@@ -300,6 +300,7 @@ struct xmpp_account {
   std::optional<room_event_kinds> room_event_kinds;
   std::optional<bool> show_receipts;  // as matrix_account's
   std::optional<bool> link_previews;  // as matrix_account's
+  std::optional<bool> previews_direct;  // link previews fetched from the site itself
   std::optional<std::string> wallpaper;  // its chats' background, as matrix_account's
   std::optional<std::string> bubbles;    // its chats' bubbles, as matrix_account's
   std::optional<std::string> panels;  // its panels' look, as word_of(bubble_look) says it
@@ -349,6 +350,7 @@ struct matrix_account {
   // Whether its chats show a card for a message's first link: its own
   // choice, else every account's.
   std::optional<bool> link_previews;
+  std::optional<bool> previews_direct;  // link previews fetched from the site itself
   // How many events a search for a message jumped to pages back before it
   // gives up; 0 for no limit. Its own choice, else every account's.
   std::optional<std::int64_t> jump_search;
@@ -628,6 +630,7 @@ struct room_events_choice {
   std::optional<room_event_kinds> kinds;  // each kind
   std::optional<bool> receipts;  // who has read up to where, as faces
   std::optional<bool> previews;  // a card for a message's first link
+  std::optional<bool> previews_direct;  // fetched from the site itself, not the server
   std::optional<bool> typing;    // others told one is typing
   std::optional<std::int64_t> jump_search;  // events paged back looking for one; 0 no limit
   std::optional<std::string> wallpaper;  // its background, as word_of(wallpaper_t) says it
@@ -762,6 +765,10 @@ struct history_settings {
   // A card under a message for its first link, fetched through the
   // account's server. On unless turned off.
   bool link_previews = true;
+  // Link previews fetched from the site itself, through the account's proxy,
+  // instead of through its server (#12177): off -- the site then sees where
+  // the request comes from.
+  bool previews_direct = false;
   // How many events a search for a message jumped to (a reply's, a link's)
   // pages back through before it gives up; 0 for no limit.
   std::int64_t jump_search = 5000;
@@ -952,6 +959,13 @@ consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
 }
 [[nodiscard]] inline std::optional<bool>& link_previews_in(account_t& one) {
   return splice::visit([](auto& each) -> std::optional<bool>& { return each.link_previews; }, one);
+}
+// Whether its chats' link previews come from the sites themselves.
+[[nodiscard]] inline const std::optional<bool>& previews_direct_of(const account_t& one) {
+  return splice::visit([](const auto& each) -> const std::optional<bool>& { return each.previews_direct; }, one);
+}
+[[nodiscard]] inline std::optional<bool>& previews_direct_in(account_t& one) {
+  return splice::visit([](auto& each) -> std::optional<bool>& { return each.previews_direct; }, one);
 }
 [[nodiscard]] inline const std::optional<bool>& show_receipts_of(const account_t& one) {
   return splice::visit([](const auto& each) -> const std::optional<bool>& { return each.show_receipts; }, one);

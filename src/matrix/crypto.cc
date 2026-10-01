@@ -593,6 +593,12 @@ class olm_machine {
     auto config = vodozemac::olm::new_session_config_version_1();
     auto made = (*account_)->create_inbound_session(*config, *identity, message);
     sessions.push_back(std::string(made.session->pickle(key_)));
+    // A few per device, the oldest going first: the server holds this
+    // device's one-time keys, and could otherwise open sessions without end,
+    // each written to the store (review 4, L1).
+    constexpr std::size_t kMostSessions = 16;
+    if (sessions.size() > kMostSessions)
+      sessions.erase(sessions.begin(), sessions.end() - kMostSessions);
     this->save();
     return std::string(made.plaintext.begin(), made.plaintext.end());
   }

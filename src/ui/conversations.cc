@@ -2630,7 +2630,7 @@ struct conversations_screen : nodes::Stack {
     chat.area.show_messages(*one, all, first_made, last_made, now,
                             shown_how{.filter = filter,
                                       .receipts = receipts_in.contains(one->id),
-                                      .previews = !previews_off.contains(one->id),
+                                      .previews = !previews_off.contains(one->id) && !one->encrypted,
                                       .unread_from = unread_from},
                             arrives, rooms_wanted);
     rooms_waiting.clear();

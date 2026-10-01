@@ -237,7 +237,10 @@ class pictures_part {
               }
             // Its first link's preview, once, where the chat shows them;
             // and the preview's picture.
-            if (const auto link = s_->root().main().previews_off.contains(one.id)
+            // Never for an encrypted room: the preview is fetched through the
+            // homeserver (/preview_url), which would be handed every link
+            // said in it -- as Element does not by default.
+            if (const auto link = s_->root().main().previews_off.contains(one.id) || one.encrypted
                                       ? std::nullopt
                                       : mux::ui::first_link_of(said)) {
               if (const auto found = s_->model->previews.find(*link); found != s_->model->previews.end()) {

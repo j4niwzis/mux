@@ -228,6 +228,24 @@ class account {
   // known; its keys uploaded, and what comes for it read.
   std::optional<crypto::olm_machine> crypto_;
   void start_crypto();
+  // Rooms known to be encrypted: never sent to in the clear, whatever their
+  // state says later -- a server that drops or hides m.room.encryption does
+  // not turn a room back to plain text (the spec's "no downgrade"). Kept in
+  // the E2EE store where there is one.
+  std::set<std::string, std::less<>> encrypted_rooms_;
+  [[nodiscard]] bool encrypted_room(std::string_view room);
+  // A room event sent: refused where the room is encrypted, for this client
+  // does not send encrypted yet (part 2 of the E2EE PR) -- sent in the clear,
+  // what was typed into an encrypted room was the server's to read.
+  template <class Ask>
+  auto send_room_event(Ask ask) {
+    using result = decltype(perform(*api_, ask));
+    if (this->encrypted_room(ask.room_id)) {
+      log(id_, "not sent: {} is encrypted, and this client does not send encrypted yet", ask.room_id);
+      return result(std::unexpected(failure{.network = "not sent: the room is end-to-end encrypted"}));
+    }
+    return perform(*api_, ask);
+  }
   void upload_keys(std::int64_t on_server);
   void crypto_answer(const loom::cs::sliding_sync::response_t& got);
   void crypto_answer_now(const loom::cs::sliding_sync::response_t& got);

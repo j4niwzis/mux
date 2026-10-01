@@ -178,7 +178,7 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
                                         .thread_latest = thread ? std::optional<std::string>(thread->latest) : std::nullopt};
     knot::raw message = image ? as_body(loom::client::picture_message(said, width, height))
                               : as_body(loom::client::file_message(said));
-    auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
+    auto sent = this->send_room_event(loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.room.message",
                                                       .txn_id = local,
                                                       .body = std::move(message)});

@@ -646,7 +646,7 @@ void account<Sink>::conversation(const conversation_id& in, const loom::client::
                                      .name = name_of(in.id, kept),
                                      .avatar = avatar_of(in.id, kept),
                                      .topic = kept.state.topic(),
-                                     .encrypted = kept.state.encrypted(),
+                                     .encrypted = this->encrypted_room(in.id) || kept.state.encrypted(),
                                      .unread = kept.unread.notification,
                                      .encrypted_since = encrypted_since_of(kept),
                                      .highlights = kept.unread.highlight,
@@ -842,6 +842,26 @@ void account<Sink>::crypto_answer_now(const loom::cs::sliding_sync::response_t& 
     if (const auto left = extensions.e2ee->device_one_time_keys_count->find("signed_curve25519");
         left != extensions.e2ee->device_one_time_keys_count->end())
       this->upload_keys(left->second);
+}
+
+// Encrypted, once known so: by its state now, or by what was known before --
+// kept in the E2EE store, so that a server hiding m.room.encryption later, or
+// at the next start, does not make it plain.
+template <class Sink>
+bool account<Sink>::encrypted_room(std::string_view room) {
+  if (encrypted_rooms_.contains(room))
+    return true;
+  bool now = false;
+  if (const auto kept = state_.joined.find(std::string(room)); kept != state_.joined.end())
+    now = kept->second.state.encrypted();
+  if (!now && crypto_)
+    now = crypto_->was_encrypted(room);
+  if (now) {
+    encrypted_rooms_.emplace(room);
+    if (crypto_)
+      crypto_->remember_encrypted(room);
+  }
+  return now;
 }
 
 }  // namespace mux::matrix

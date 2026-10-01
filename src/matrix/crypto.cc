@@ -45,6 +45,8 @@ struct kept_file {
   // Each session's message indices read, and the event each was: the same
   // index in another event is a replay.
   std::map<std::string, std::map<std::uint32_t, std::string>> indices;
+  // The rooms known to be encrypted: never plain again.
+  std::set<std::string, std::less<>> encrypted_rooms;
   friend consteval auto json_schema(knot::type<kept_file>) { return knot::schema<kept_file>(); }
 };
 
@@ -168,6 +170,12 @@ class olm_machine {
   [[nodiscard]] std::string curve25519() const { return std::string((*account_)->curve25519_key()->to_base64()); }
   [[nodiscard]] std::string ed25519() const { return std::string((*account_)->ed25519_key()->to_base64()); }
   [[nodiscard]] bool device_keys_uploaded() const { return kept_.device_keys_uploaded; }
+  [[nodiscard]] bool was_encrypted(std::string_view room) const { return kept_.encrypted_rooms.contains(room); }
+  // Kept where it is new; saved, and an error where that fails (as any save).
+  void remember_encrypted(std::string_view room) {
+    if (kept_.encrypted_rooms.emplace(room).second)
+      this->save();
+  }
   [[nodiscard]] const std::optional<std::string>& to_device_since() const { return kept_.to_device_since; }
   void went_on_to(std::string since) {
     kept_.to_device_since = std::move(since);

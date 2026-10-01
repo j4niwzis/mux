@@ -271,7 +271,7 @@ void account<Sink>::send_sticker(std::string room, mux::emote sticker, std::opti
     if (reply_to)
       content.m_relates_to = loom::ev::m_sticker_content_t::m_relates_to_t{
           .m_in_reply_to = loom::ev::m_sticker_content_t::m_relates_to_t::m_in_reply_to_t{.event_id = *reply_to}};
-    auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
+    auto sent = this->send_room_event(loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.sticker",
                                                       .txn_id = this->transaction(),
                                                       .body = as_body(content)});
@@ -325,7 +325,7 @@ void account<Sink>::send_custom(std::string room, std::string type, std::optiona
                                      .room_id = room, .event_type = type, .state_key = *state_key, .body = knot::raw{json}});
       sink_(change::devtools_text{title, done ? "Sent: " + done->event_id : "Not sent: " + done.error().said()});
     } else {
-      auto done = perform(*api_, loom::cs::send_message{
+      auto done = this->send_room_event(loom::cs::send_message{
                                      .room_id = room, .event_type = type, .txn_id = this->transaction(), .body = knot::raw{json}});
       sink_(change::devtools_text{title, done ? "Sent: " + done->event_id : "Not sent: " + done.error().said()});
     }
@@ -787,7 +787,7 @@ void account<Sink>::forward(std::string from, std::string event, std::string to)
                                                          .room_id = from,
                                                          .sender = got->sender,
                                                          .origin_server_ts = static_cast<std::int64_t>(got->origin_server_ts)}});
-    auto done = perform(*api_, loom::cs::send_message{.room_id = to,
+    auto done = this->send_room_event(loom::cs::send_message{.room_id = to,
                                                       .event_type = "m.room.message",
                                                       .txn_id = this->transaction(),
                                                       .body = as_body(*content)});
@@ -973,7 +973,7 @@ void account<Sink>::edit(std::string room, std::string event, std::string text) 
     // Made HTML as a message sent is: its Markdown, the room's emoji.
     const auto html = html_of(text, emotes_in(room));
     const auto content = loom::client::edit_message(event, text, html);
-    if (perform(*api_, loom::cs::send_message{.room_id = room,
+    if (this->send_room_event(loom::cs::send_message{.room_id = room,
                                               .event_type = "m.room.message",
                                               .txn_id = this->transaction(),
                                               .body = as_body(content)}))
@@ -991,7 +991,7 @@ void account<Sink>::edit_caption(std::string room, std::string event, std::strin
         event, loom::client::media_said{.uri = picture.source, .name = picture.name, .caption = caption,
                                         .mimetype = picture.mimetype, .size = picture.size},
         picture.width, picture.height);
-    if (perform(*api_, loom::cs::send_message{.room_id = room,
+    if (this->send_room_event(loom::cs::send_message{.room_id = room,
                                               .event_type = "m.room.message",
                                               .txn_id = this->transaction(),
                                               .body = as_body(content)}))
@@ -1026,7 +1026,7 @@ void account<Sink>::react(std::string room, std::string target, std::string key,
         if (const auto found = std::ranges::find(emotes, key, &mux::emote::url); found != emotes.end())
           content.rest = as_body(reaction_shortcode{std::format(":{}:", found->shortcode)});
       }
-      (void)perform(*api_, loom::cs::send_message{.room_id = room,
+      (void)this->send_room_event(loom::cs::send_message{.room_id = room,
                                                   .event_type = "m.reaction",
                                                   .txn_id = this->transaction(),
                                                   .body = as_body(content)});
@@ -1195,7 +1195,7 @@ void account<Sink>::send(std::string room, std::string body, std::optional<std::
     for (const mention& one : mentions)
       said.mentions.push_back(one.user);
     const auto content = loom::client::text_message(said);
-    auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
+    auto sent = this->send_room_event(loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.room.message",
                                                       .txn_id = txn,
                                                       .body = as_body(content)});
@@ -1277,7 +1277,7 @@ void account<Sink>::send_in_thread(std::string room, std::string body, std::stri
     }
     const auto content = loom::client::text_message(
         loom::client::text_said{.body = body, .html = html, .reply_to = reply_to, .thread = root, .thread_latest = latest});
-    auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
+    auto sent = this->send_room_event(loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.room.message",
                                                       .txn_id = txn,
                                                       .body = as_body(content)});

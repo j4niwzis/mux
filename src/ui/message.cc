@@ -1753,6 +1753,20 @@ struct message_bubble : nodes::Stack {
       body.base_min = asks;
       body.apply({.minWidth = asks});
     }
+    // A sticker's: no bubble under it, so what is over it -- the sender's
+    // name, a forward's line, the quote of what it answers -- each on a small
+    // plate of its own, as Telegram's; they stood on the wallpaper (#11978).
+    if (said.sticker && body.parts.picture) {
+      const auto plated = [&](scene::Node& part) {
+        part.apply({.padding = {3.0f, 8.0f, 3.0f, 8.0f}, .cornerRadius = 8.0f, .background = body.plate});
+      };
+      if (body.parts.name)
+        plated(*body.parts.name);
+      if (body.parts.forwarded)
+        plated(*body.parts.forwarded);
+      if (body.parts.quote)
+        plated(*body.parts.quote);
+    }
     if (said.threaded && said.threaded->count > 0) {
       const thread_summary& summary = *said.threaded;
       std::string line = std::format("\U0001F4AC {} {}", summary.count, summary.count == 1 ? "reply" : "replies");

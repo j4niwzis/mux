@@ -1798,12 +1798,7 @@ struct conversations_screen : nodes::Stack {
         pinned_view shown{id, count == 1 ? std::string("Pinned message")
                                          : std::format("Pinned message #{} of {}", at + 1, count),
                           "A message"};
-        const auto found = std::ranges::find(one->timeline, id, &message::id);
-        const message* said = found != one->timeline.end() ? &*found : nullptr;
-        if (!said)
-          if (const auto aside = one->quoted.find(id); aside != one->quoted.end())
-            said = &aside->second;
-        if (said) {
+        if (const message* said = held_message(*one, id)) {
           shown.line = said->body.plain.empty() && said->attachment ? std::string("Photo") : said->body.plain;
           std::ranges::replace(shown.line, '\n', ' ');
         }
@@ -2528,10 +2523,8 @@ struct conversations_screen : nodes::Stack {
     const auto quote_body = [&](std::size_t i) -> std::optional<decltype(message::body)> {
       if (!all[i].replies_to)
         return std::nullopt;
-      if (const auto found = std::ranges::find(all, *all[i].replies_to, &message::id); found != all.end())
-        return found->body;
-      if (const auto aside = one->quoted.find(*all[i].replies_to); aside != one->quoted.end())
-        return aside->second.body;
+      if (const message* said = held_message(*one, *all[i].replies_to))
+        return said->body;
       return std::nullopt;
     };
     const auto arrives = [&](std::size_t i) {

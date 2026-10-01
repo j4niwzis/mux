@@ -1728,13 +1728,7 @@ struct threads_panel : nodes::Stack {
     parts.answers.setVisible(open.has_value());
     parts.input.setVisible(open.has_value());
     parts.replying.setVisible(open.has_value() && answering.has_value());
-    const auto root_of = [&](const std::string& id) -> const message* {
-      for (auto it = chat.timeline.rbegin(); it != chat.timeline.rend(); ++it)
-        if (it->id == id)
-          return &*it;
-      const auto found = chat.quoted.find(id);
-      return found == chat.quoted.end() ? nullptr : &found->second;
-    };
+    const auto root_of = [&](const std::string& id) { return held_message(chat, id); };
     if (!open) {
       // The roots: those the server listed, those in view with a thread,
       // and those threads are held of -- each once, the latest active first.

@@ -414,6 +414,9 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
           [&](const loom::ev::m_room_join_rules_content_t& content) {
             say(room_event::access{}, std::format(" set who may join to “{}”", loom::client::choice_text(content.join_rule)));
           },
+          [&](const loom::ev::m_room_guest_access_content_t& content) {
+            say(room_event::access{}, std::format(" set whether guests may join to “{}”", loom::client::choice_text(content.guest_access)));
+          },
           [&](const loom::ev::m_room_history_visibility_content_t& content) {
             say(room_event::access{}, std::format(" set who may read the history to “{}”",
                                                   loom::client::choice_text(content.history_visibility)));

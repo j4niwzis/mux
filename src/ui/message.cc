@@ -582,6 +582,27 @@ inline std::map<std::string, std::string, std::less<>>& rooms_found() {
 }
 struct mentioned;
 [[nodiscard]] inline std::optional<std::string> take_opening_quote(mentioned& shown);
+// A room event said before its people were pills -- kept so, read back
+// from the disk -- with who did it as a person: its line starts with their
+// name in the chat. A Matrix one's: a person's link is a matrix.to one.
+[[nodiscard]] inline message with_actor(const conversation& in, const message& said) {
+  if (!said.service || said.body.html || !is_matrix(protocol_of(said.sender)))
+    return said;
+  const std::string name = sender_name(in, said.sender);
+  if (name.empty() || !said.body.plain.starts_with(name))
+    return said;
+  const auto escaped = [](std::string_view text) {
+    return text | std::views::transform([](char c) {
+             return c == '&' ? std::string("&amp;") : c == '<' ? std::string("&lt;") : c == '>' ? std::string("&gt;")
+                                                     : c == '"' ? std::string("&quot;") : std::string(1, c);
+           }) |
+           std::views::join | std::ranges::to<std::string>();
+  };
+  message out = said;
+  out.body.html = std::format(R"(<a href="https://matrix.to/#/{}">{}</a>)", escaped(said.sender), escaped(name)) +
+                  escaped(std::string_view(said.body.plain).substr(name.size()));
+  return out;
+}
 struct mentioned {
   // Rooms named in it whose picture is still to come, and rooms not known
   // to be there: made again when the one comes or the other is found.
@@ -1263,8 +1284,13 @@ struct message_bubble : nodes::Stack {
   // Declared: the avatar's room and the bubble, at the right where it is
   // one's own; the bubble a column of the name, the quote, the text, the
   // links, the reactions and the time.
-  message_bubble(const conversation& in, const message& said, bool first_of_run, bool last_of_run,
+  message_bubble(const conversation& in, const message& given, bool first_of_run, bool last_of_run,
                  const model* now = nullptr, bool show_events = true, bool show_preview = true)
+      : message_bubble(in, with_actor(in, given), first_of_run, last_of_run, now, show_events, show_preview, made_t{}) {}
+  // What the one above makes it of: the message with its pills.
+  struct made_t {};
+  message_bubble(const conversation& in, const message& said, bool first_of_run, bool last_of_run, const model* now,
+                 bool show_events, bool show_preview, made_t)
       : said(said), first(first_of_run), last(last_of_run), message_id(said.id), plain(said.body.plain),
         outgoing(said.outgoing), sender(said.sender),
         parts{.face = avatar_mark(said.sender, sender_name(in, said.sender), kAvatar),

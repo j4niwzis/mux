@@ -164,7 +164,7 @@ struct conversation_row : nodes::Stack {
     this->setGap(12.0f);
     fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = chosen_colour, .selectedBackground = selected_colour, .focusBackground = chosen_colour, .selected = chosen});
     if (const message* newest_one = newest(one, events)) {
-      const message& last = *newest_one;
+      const message last = with_actor(one, *newest_one);
       time.setText(clock_of(last.at));
       // What it says, as drawn: an HTML one's text, not its tags, and
       // its mentions by name, as pills.

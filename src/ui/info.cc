@@ -856,21 +856,8 @@ struct start_chat_box : nodes::Stack {
   struct person_row : nodes::Stack {
     Actions* actions;
     std::string id;
-    struct lines_t : nodes::Stack {
-      struct parts_t {
-        nodes::Text name;
-        nodes::Text address;
-      } parts;
-      explicit lines_t(const found_person& one)
-          : parts{.name = nodes::Text(one.name.empty() ? one.id : one.name, 14.0f, text_colour, true),
-                  .address = nodes::Text(one.id, 12.0f, dim_colour)} {
-        this->setGap(2.0f);
-        fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-        for (nodes::Text* each : {&parts.name, &parts.address}) {
-          each->setElided(true);
-          each->apply({.fillX = true});
-        }
-      }
+    struct lines_t : two_lines {
+      explicit lines_t(const found_person& one) : two_lines(one.name.empty() ? one.id : one.name, one.id, 14.0f, 2.0f) {}
     };
     struct parts_t {
       avatar_mark face;
@@ -1950,25 +1937,14 @@ struct packs_box : nodes::Stack {
   struct pack_row : nodes::Stack {
     packs_box* box;
     std::size_t index;
-    struct lines_t : nodes::Stack {
-      struct parts_t {
-        nodes::Text name;
-        nodes::Text line;
-      } parts;
+    struct lines_t : two_lines {
       explicit lines_t(const emote_pack& one)
-          : parts{.name = nodes::Text(one.name.empty() ? std::string("Unnamed pack") : one.name, 14.0f, text_colour, true),
-                  .line = nodes::Text(std::format("{} image{} · {}", one.pictures.size(), one.pictures.size() == 1 ? "" : "s",
-                                                  one.emoji && one.sticker ? "Emoji and stickers"
-                                                  : one.emoji              ? "Emoji"
-                                                                           : "Stickers"),
-                                      12.0f, dim_colour)} {
-        this->setGap(2.0f);
-        fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-        for (nodes::Text* each : {&parts.name, &parts.line}) {
-          each->setElided(true);
-          each->apply({.fillX = true});
-        }
-      }
+          : two_lines(one.name.empty() ? std::string("Unnamed pack") : one.name,
+                      std::format("{} image{} · {}", one.pictures.size(), one.pictures.size() == 1 ? "" : "s",
+                                  one.emoji && one.sticker ? "Emoji and stickers"
+                                  : one.emoji              ? "Emoji"
+                                                           : "Stickers"),
+                      14.0f, 2.0f) {}
     };
     struct parts_t {
       nodes::Image<from_avatars> face;

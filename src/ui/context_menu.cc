@@ -208,18 +208,10 @@ struct sticker_grid : nodes::Stack {
     }
   };
   // A pack: its name over its stickers.
-  struct section : nodes::Stack {
-    using cells_t = nodes::Flow<std::vector<cell>>;
-    struct parts_t {
-      nodes::Text title;
-      cells_t cells{{.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, {}};
-    } parts;
+  struct section : cell_section<cell> {
     section(Actions* a, std::string name, const std::vector<emote>& stickers)
-        : parts{.title = nodes::Text(std::move(name), 13.0f, dim_colour, true)} {
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-      parts.title.apply({.margin = {10.0f, 0.0f, 6.0f, 7.0f}});
-      parts.cells.apply({.fillX = true, .autoSize = scene::axes::kY});
-      auto& cells = std::get<0>(parts.cells.fChildren);
+        : cell_section<cell>(std::move(name)) {
+      auto& cells = this->each();
       cells.reserve(stickers.size());
       for (const emote& one : stickers)
         cells.emplace_back(a, one);
@@ -259,11 +251,7 @@ struct sticker_grid : nodes::Stack {
     sticker_grid* grid;
     void operator()(std::string_view text) const { grid->search(text); }
   };
-  struct footer_row : nodes::Stack {
-    struct parts_t {
-      std::vector<tab> each;
-    } parts;
-  };
+  using footer_row = tab_strip<tab>;
   using field_t = widgets::TextBox<searched>;
   using list_t = nodes::ScrollContainer<nodes::Flow<std::vector<section>>>;
   struct parts_t {
@@ -510,40 +498,26 @@ struct emoji_panel : nodes::Stack {
     }
   };
   // A group: its name over its emoji (headerTop 10, headerLeft 14).
-  struct section : nodes::Stack {
-    using cells_t = nodes::Flow<std::vector<cell>>;
-    struct parts_t {
-      nodes::Text title;
-      cells_t cells{{.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, {}};
-    } parts;
+  struct section : cell_section<cell> {
     section(emoji_panel* p, std::string_view name, const std::vector<const alef::emoji*>& all)
-        : parts{.title = nodes::Text(std::string(name), 13.0f, dim_colour, true)} {
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-      parts.title.apply({.margin = {10.0f, 0.0f, 6.0f, 7.0f}});
-      parts.cells.apply({.fillX = true, .autoSize = scene::axes::kY});
-      auto& cells = std::get<0>(parts.cells.fChildren);
+        : cell_section<cell>(std::string(name)) {
+      auto& cells = this->each();
       cells.reserve(all.size());
       for (const alef::emoji* one : all)
         cells.emplace_back(p, logic::emoji_text(*one), one);
     }
     // The chat's custom emoji, as pictures.
     section(emoji_panel* p, std::string_view name, const std::vector<emote>& custom)
-        : parts{.title = nodes::Text(std::string(name), 13.0f, dim_colour, true)} {
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-      parts.title.apply({.margin = {10.0f, 0.0f, 6.0f, 7.0f}});
-      parts.cells.apply({.fillX = true, .autoSize = scene::axes::kY});
-      auto& cells = std::get<0>(parts.cells.fChildren);
+        : cell_section<cell>(std::string(name)) {
+      auto& cells = this->each();
       cells.reserve(custom.size());
       for (const emote& one : custom)
         cells.emplace_back(p, one);
     }
     // The recently used: emoji as they were picked, text already.
     section(emoji_panel* p, std::string_view name, const std::vector<std::string>& glyphs)
-        : parts{.title = nodes::Text(std::string(name), 13.0f, dim_colour, true)} {
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-      parts.title.apply({.margin = {10.0f, 0.0f, 6.0f, 7.0f}});
-      parts.cells.apply({.fillX = true, .autoSize = scene::axes::kY});
-      auto& cells = std::get<0>(parts.cells.fChildren);
+        : cell_section<cell>(std::string(name)) {
+      auto& cells = this->each();
       cells.reserve(glyphs.size());
       for (const std::string& one : glyphs)
         cells.emplace_back(p, one);
@@ -596,11 +570,7 @@ struct emoji_panel : nodes::Stack {
     emoji_panel* panel;
     void operator()(std::string_view text) const { panel->search(text); }
   };
-  struct footer_row : nodes::Stack {
-    struct parts_t {
-      std::vector<tab> each;
-    } parts;
-  };
+  using footer_row = tab_strip<tab>;
   using field_t = widgets::TextBox<searched>;
   using list_t = nodes::ScrollContainer<nodes::Flow<std::vector<section>>>;
   struct parts_t {

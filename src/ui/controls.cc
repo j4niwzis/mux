@@ -88,8 +88,11 @@ struct two_lines : nodes::Stack {
     nodes::Text state;
   } parts;
   two_lines(std::string first, std::string second, float size, float gap)
+      : two_lines(std::move(first), std::move(second), size, gap, size - 2.0f) {}
+  // The line under it its own size: an account's facts under its name.
+  two_lines(std::string first, std::string second, float size, float gap, float second_size)
       : parts{.name = nodes::Text(std::move(first), size, text_colour, true),
-              .state = nodes::Text(std::move(second), size - 2.0f, dim_colour)} {
+              .state = nodes::Text(std::move(second), second_size, dim_colour)} {
     this->setGap(gap);
     fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
     for (nodes::Text* each : {&parts.name, &parts.state}) {
@@ -912,6 +915,33 @@ struct label_button_row : nodes::Stack {
     parts.reset.apply({.width = 96.0f, .height = 26.0f});
     parts.reset.setVisible(shown);
   }
+};
+
+
+// A run of things under a name, as the emoji and sticker panels list them:
+// the name, dim, over its cells, wrapped as wide as it is. The cells are put
+// in by what it is a section of.
+template <class Cell>
+struct cell_section : nodes::Stack {
+  using cells_t = nodes::Flow<std::vector<Cell>>;
+  struct parts_t {
+    nodes::Text title;
+    cells_t cells{{.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, {}};
+  } parts;
+  explicit cell_section(std::string name) : parts{.title = nodes::Text(std::move(name), 13.0f, dim_colour, true)} {
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    parts.title.apply({.margin = {10.0f, 0.0f, 6.0f, 7.0f}});
+    parts.cells.apply({.fillX = true, .autoSize = scene::axes::kY});
+  }
+  [[nodiscard]] std::vector<Cell>& each() { return std::get<0>(parts.cells.fChildren); }
+};
+
+// A panel's footer of tabs, one for each of its sections.
+template <class Tab>
+struct tab_strip : nodes::Stack {
+  struct parts_t {
+    std::vector<Tab> each;
+  } parts;
 };
 
 }  // namespace mux::ui

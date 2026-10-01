@@ -334,20 +334,8 @@ struct account_sessions : nodes::Stack {
   struct session_row : nodes::Stack {
     std::string device;
     std::string name;
-    struct lines_t : nodes::Stack {
-      struct parts_t {
-        nodes::Text name;
-        nodes::Text facts;
-      } parts;
-      lines_t(std::string shown, std::string facts)
-          : parts{.name = nodes::Text(std::move(shown), 15.0f, text_colour, true), .facts = nodes::Text(std::move(facts), 12.0f, dim_colour)} {
-        this->setGap(2.0f);
-        fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-        parts.name.setElided(true);
-        parts.name.apply({.fillX = true});
-        parts.facts.setElided(true);
-        parts.facts.apply({.fillX = true});
-      }
+    struct lines_t : two_lines {
+      lines_t(std::string shown, std::string facts) : two_lines(std::move(shown), std::move(facts), 15.0f, 2.0f, 12.0f) {}
     };
     struct parts_t {
       lines_t lines;

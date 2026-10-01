@@ -964,7 +964,7 @@ struct conversations_screen : nodes::Stack {
       const space_icon<pick_folder>* one = this->icon_at(press.x, press.y);
       // A right press on a chat in the list: its menu, where it was pressed.
       if (!one && press.button == 3 && list.visible())
-        for (const auto& row : std::get<0>(list.fChildren).fChildren)
+        for (const auto& row : std::get<0>(std::get<0>(list.fChildren).fChildren))
           if (list.toView(row.bounds()).contains(press.x, press.y)) {
             const skia::SkRect box = fState.fBounds;
             parts.row_menu.emplace(actions, row.id, row.parts.lines.parts.top.parts.name.text(),

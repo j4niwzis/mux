@@ -177,21 +177,19 @@ class vault {
 
   // Unlocked with its passphrase: false where it is not the one.
   [[nodiscard]] bool unlock(std::string_view passphrase) {
-    std::ifstream in(header_file_, std::ios::binary);
-    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    auto how = knot::try_read<header>(text);
-    if (!how || !detail::sane(*how))
+    const auto key = this->key_for(passphrase);
+    if (!key)
       return false;
-    const auto salt = detail::from_base64(how->salt);
-    const auto check = detail::from_base64(how->check);
-    if (!salt || !check)
-      return false;
-    const key_t key = detail::derive(passphrase, *salt, *how);
-    const auto opened = detail::open(key, *check, detail::kCheckBound);
-    if (!opened || std::string(opened->begin(), opened->end()) != detail::kCheckText)
-      return false;
-    key_ = key;
+    key_ = *key;
     return true;
+  }
+  // Whether it is the passphrase, the vault left as it is: asked before it
+  // is changed or turned off.
+  [[nodiscard]] bool matches(std::string_view passphrase) const { return this->key_for(passphrase).has_value(); }
+  // Whether the file at `path` is sealed while there is no header to open it
+  // with: vault.json lost. Nothing is read or written then (review 4, M3).
+  [[nodiscard]] bool sealed_without_header(const std::filesystem::path& path) const {
+    return !this->exists() && !this->may_write(path);
   }
 
   // Turned on with a passphrase: its header written; what is on disk is
@@ -250,17 +248,19 @@ class vault {
   [[nodiscard]] bool write_file(const std::filesystem::path& path, std::string_view text, bool secret = false) const {
     if (!this->may_write(path))
       return false;
+    return write_plain(path, this->encoded(path, text), secret);
+  }
+  // A whole file's bytes as they go on disk: sealed where the vault is on.
+  [[nodiscard]] std::string encoded(const std::filesystem::path& path, std::string_view text) const {
+    if (!key_)
+      return std::string(text);
+    const auto sealed = detail::seal(*key_, std::span(reinterpret_cast<const std::uint8_t*>(text.data()), text.size()),
+                                     detail::bound_of(path));
     std::string out;
-    if (key_) {
-      const auto sealed = detail::seal(*key_, std::span(reinterpret_cast<const std::uint8_t*>(text.data()), text.size()),
-                                       detail::bound_of(path));
-      out.reserve(detail::kMagic.size() + sealed.size());
-      out.append(detail::kMagic);
-      out.append(reinterpret_cast<const char*>(sealed.data()), sealed.size());
-    } else {
-      out.assign(text);
-    }
-    return write_plain(path, out, secret);
+    out.reserve(detail::kMagic.size() + sealed.size());
+    out.append(detail::kMagic);
+    out.append(reinterpret_cast<const char*>(sealed.data()), sealed.size());
+    return out;
   }
   // A line appended: sealed on its own where the vault is on.
   [[nodiscard]] bool append_line(const std::filesystem::path& path, std::string_view line) const {
@@ -327,11 +327,84 @@ class vault {
     std::filesystem::permissions(dir, std::filesystem::perms::owner_all, std::filesystem::perm_options::replace, ignored);
   }
 
+  // Every file mux keeps through the vault: whole ones, and ones written a
+  // line at a time.
+  struct kept_files {
+    std::vector<std::filesystem::path> whole;
+    std::vector<std::filesystem::path> lines;
+  };
+  // What they hold, opened: to be sealed again, under another key or none.
+  struct contents {
+    std::vector<std::pair<std::filesystem::path, std::string>> whole;
+    std::vector<std::pair<std::filesystem::path, std::vector<std::string>>> lines;
+  };
+  // All of them read, sealed or not: none where one there cannot be opened
+  // -- then nothing is to be changed.
+  [[nodiscard]] std::optional<contents> read_all(const kept_files& files) const {
+    contents out;
+    std::error_code ignored;
+    for (const auto& path : files.whole) {
+      if (!std::filesystem::exists(path, ignored))
+        continue;
+      auto text = this->read_file(path, migrating{});
+      if (!text)
+        return std::nullopt;
+      out.whole.emplace_back(path, std::move(*text));
+    }
+    for (const auto& path : files.lines) {
+      std::ifstream in(path, std::ios::binary);
+      if (!in)
+        continue;
+      const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+      auto opened = text | std::views::split('\n') |
+                    std::views::transform([](auto&& line) { return std::string_view(line.begin(), line.end()); }) |
+                    std::views::filter([](std::string_view line) { return !line.empty(); }) |
+                    std::views::transform([&](std::string_view line) { return this->open_line(line, path, migrating{}); }) |
+                    std::ranges::to<std::vector<std::optional<std::string>>>();
+      if (std::ranges::any_of(opened, [](const auto& one) { return !one.has_value(); }))
+        return std::nullopt;
+      out.lines.emplace_back(path, opened | std::views::transform([](auto& one) { return std::move(*one); }) |
+                                       std::ranges::to<std::vector<std::string>>());
+    }
+    return out;
+  }
+  // All of it written again as the vault is now -- sealed under its key, or
+  // plain where it is off -- each file put in its place whole.
+  [[nodiscard]] bool write_all(const contents& all) const {
+    const bool whole_written = std::ranges::all_of(all.whole, [&](const auto& one) {
+      return write_plain(one.first, this->encoded(one.first, one.second), true);
+    });
+    const bool lines_written = std::ranges::all_of(all.lines, [&](const auto& one) {
+      const auto& [path, lines] = one;
+      const std::string text = lines | std::views::transform([&](const std::string& line) { return this->line_of(line, path) + "\n"; }) |
+                               std::views::join | std::ranges::to<std::string>();
+      return write_plain(path, text, true);
+    });
+    return whole_written && lines_written;
+  }
+
   // What the system gives for randomness: for keys made elsewhere (the E2EE
   // store's pickle key).
   [[nodiscard]] static std::vector<std::uint8_t> random(std::size_t n) { return detail::random_bytes(n); }
 
  private:
+  // The key a passphrase makes, where it is this vault's.
+  [[nodiscard]] std::optional<key_t> key_for(std::string_view passphrase) const {
+    std::ifstream in(header_file_, std::ios::binary);
+    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    auto how = knot::try_read<header>(text);
+    if (!how || !detail::sane(*how))
+      return std::nullopt;
+    const auto salt = detail::from_base64(how->salt);
+    const auto check = detail::from_base64(how->check);
+    if (!salt || !check)
+      return std::nullopt;
+    const key_t key = detail::derive(passphrase, *salt, *how);
+    const auto opened = detail::open(key, *check, detail::kCheckBound);
+    if (!opened || std::string(opened->begin(), opened->end()) != detail::kCheckText)
+      return std::nullopt;
+    return key;
+  }
   // A directory made: the user's alone where it is new.
   static void private_dir(const std::filesystem::path& dir) {
     std::error_code ignored;

@@ -909,6 +909,26 @@ consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
   return splice::visit([](auto& each) -> std::optional<bool>& { return each.strip; }, one);
 }
 // Whether the account tells whom it talks to that the user is typing.
+// What a passphrase is asked for (#12113, #12118): local data opened at the
+// start; encrypted, a new one twice; another one, the one now first; or
+// encryption turned off, the one now.
+namespace passphrase_for {
+struct unlock {
+  friend bool operator==(unlock, unlock) = default;
+};
+struct encrypt {
+  friend bool operator==(encrypt, encrypt) = default;
+};
+struct change {
+  friend bool operator==(change, change) = default;
+};
+struct decrypt {
+  friend bool operator==(decrypt, decrypt) = default;
+};
+}  // namespace passphrase_for
+using passphrase_for_t =
+    splice::variant<passphrase_for::unlock, passphrase_for::encrypt, passphrase_for::change, passphrase_for::decrypt>;
+
 // Its own choice, if it made one; else as every account's.
 [[nodiscard]] inline const std::optional<bool>& send_typing_of(const account_t& one) {
   return splice::visit([](const auto& each) -> const std::optional<bool>& { return each.send_typing; }, one);

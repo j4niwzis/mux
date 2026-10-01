@@ -6,6 +6,7 @@
 export module mux.app.settings;
 
 import std;
+import mux.vault;
 import skiff.paint;
 import skiff.scene;
 import mux.core;
@@ -176,7 +177,7 @@ class settings_part {
   // of it cleared.
   void apply(const request::settings_storage&) {
     if (auto* up = s_->root().settings_up())
-      up->show_storage(k_->limits, k_->history);
+      up->show_storage(k_->limits, k_->history, mux::vault::the().on());
   }
   void apply(const request::change_limit& one) {
     std::int64_t& value = mux::config::value_of(k_->limits, one.which);

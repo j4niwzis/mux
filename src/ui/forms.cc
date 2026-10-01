@@ -52,6 +52,87 @@ struct field : nodes::Stack {
   [[nodiscard]] const std::string& text() const { return parts.box.text(); }
 };
 
+// A passphrase asked for: to open local data at the start (not dismissed --
+// nothing behind it is anything until it opens), to turn its encryption on
+// or off, or to change it. Its fields are the forms' own, masked; what each
+// purpose shows and says, by its type.
+template <class Actions>
+struct passphrase_box : nodes::Stack {
+  struct words {
+    std::string_view title, note, button;
+    bool current, fresh;  // the passphrase now asked; a new one, twice
+  };
+  static constexpr words words_of(config::passphrase_for::unlock) {
+    return {"Local data is encrypted", "Type its passphrase to open your settings, chats and keys.", "Unlock", true, false};
+  }
+  static constexpr words words_of(config::passphrase_for::encrypt) {
+    return {"Encrypt local data",
+            "Settings, passwords and tokens, chats kept, drafts and encryption keys are sealed under a passphrase, "
+            "asked for at every start. Forgotten, it cannot be recovered, and neither can they.",
+            "Encrypt", false, true};
+  }
+  static constexpr words words_of(config::passphrase_for::change) {
+    return {"Change the passphrase", "Everything kept is sealed again under the new one.", "Change", true, true};
+  }
+  static constexpr words words_of(config::passphrase_for::decrypt) {
+    return {"Stop encrypting local data", "Everything kept is written in the clear again, readable by whoever can read "
+                                          "these files.",
+            "Decrypt", true, false};
+  }
+  struct submit {
+    passphrase_box* box;
+    void operator()() const {
+      box->actions->give_passphrase(box->purpose, box->parts.current.text(), box->parts.fresh.text(), box->parts.again.text());
+    }
+  };
+  Actions* actions = nullptr;
+  config::passphrase_for_t purpose;
+  struct parts_t {
+    nodes::Text title;
+    nodes::Text note;
+    field current;
+    field fresh;
+    field again;
+    nodes::Text error;
+    widgets::Button<submit> go;
+  } parts;
+
+  passphrase_box(Actions* a, config::passphrase_for_t why)
+      : actions(a), purpose(why),
+        parts{.title = nodes::Text(std::string(said().title), 17.0f, text_colour, true),
+              .note = nodes::Text(std::string(said().note), 14.0f, dim_colour),
+              .current = field(said().fresh ? "Passphrase now" : "Passphrase", "Passphrase"),
+              .fresh = field("New passphrase", "New passphrase"),
+              .again = field("The new one again", "New passphrase"),
+              .error = nodes::Text("", 13.0f, error_colour),
+              .go = widgets::Button<submit>(std::string(said().button), {this})} {
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
+    this->setGap(10.0f);
+    for (nodes::Text* each : {&parts.title, &parts.note, &parts.error}) {
+      each->setWrapped(true);
+      each->apply({.fillX = true});
+    }
+    for (field* each : {&parts.current, &parts.fresh, &parts.again})
+      each->parts.box.setMasked(true);
+    parts.current.setVisible(said().current);
+    parts.fresh.setVisible(said().fresh);
+    parts.again.setVisible(said().fresh);
+    parts.error.setVisible(false);
+    parts.go.setPrimary(true);
+    parts.go.apply({.width = 110.0f, .height = 34.0f, .alignSelf = scene::align::kEnd});
+  }
+  [[nodiscard]] words said() const {
+    return splice::visit([](auto why) { return words_of(why); }, purpose);
+  }
+  // Why it was not taken: said under the fields, which are emptied.
+  void say(std::string what) {
+    parts.error.setText(std::move(what));
+    parts.error.setVisible(true);
+    for (field* each : {&parts.current, &parts.fresh, &parts.again})
+      each->parts.box.setText("");
+  }
+};
+
 // ---- the account forms ---------------------------------------------------------
 
 // Buttons side by side, as a form ends.

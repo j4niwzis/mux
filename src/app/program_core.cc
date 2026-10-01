@@ -649,4 +649,241 @@ void app::bring_up_to_date(accounts& panel) {
   }
 }
 
+// What is kept, applied: once at the start, or once the vault is opened.
+void app::begin(const mux::config::file& saved, std::vector<mux::config::account_t> extra, bool demo,
+                std::optional<std::string> error) {
+  const auto proxies = saved.proxies.value_or(std::vector<mux::config::proxy_settings>{});
+  for (const auto& one : mux::config::accounts_of(saved))
+    if (mux::config::enabled_of(one) && !demo)
+      net->start(one, proxies);
+  for (const auto& one : extra)
+    net->start(one, proxies);
+  net->thread = std::thread([n = net] {
+    try {
+      n->loop.run_forever();
+    } catch (const std::exception& failed) {
+      std::println(std::cerr, "[mux] the network stopped: {}", failed.what());
+    }
+  });
+
+  this->keeps_nothing = demo;
+  this->saved = mux::config::accounts_of(saved);
+  this->motion = saved.motion;
+  // The account shown last, shown again once it is in the model: accounts
+  // arrive after the first frame, and the first one there is not the one.
+  this->last_account = saved.last_account;
+  // The emoji picked lately: shown first in the panels, and kept as picked.
+  this->recent_emoji = saved.recent_emoji.value_or(std::vector<std::string>{});
+  mux::ui::recent_emoji() = this->recent_emoji;
+  // And the stickers sent lately, and the favourites.
+  const auto emotes_of = [](const std::optional<std::vector<mux::config::sticker_kept>>& kept) {
+    return kept.value_or(std::vector<mux::config::sticker_kept>{}) | std::views::transform([](const mux::config::sticker_kept& one) {
+             return mux::emote{.shortcode = one.shortcode, .url = one.url, .body = one.body, .w = one.w, .h = one.h, .size = one.size,
+                               .mimetype = one.mimetype};
+           }) |
+           std::ranges::to<std::vector>();
+  };
+  this->recent_stickers = emotes_of(saved.recent_stickers);
+  this->favourite_stickers = emotes_of(saved.favourite_stickers);
+  mux::ui::recent_stickers() = this->recent_stickers;
+  mux::ui::favourite_stickers() = this->favourite_stickers;
+  if (saved.last_account)
+    this->root().main().wanted = mux::account_id{mux::ui::protocol_of(*saved.last_account), *saved.last_account};
+  this->theme = mux::config::theme_of(saved.theme);
+  if (saved.wallpaper)
+    this->wallpaper = mux::config::wallpaper_of(std::string_view(*saved.wallpaper));
+  if (saved.bubbles)
+    this->bubbles = mux::config::bubble_look_of(*saved.bubbles);
+  mux::ui::bubble_look_everywhere() = this->bubbles.value_or(mux::config::bubble_look{});
+  if (saved.panels)
+    this->panels = mux::config::bubble_look_of(*saved.panels);
+  mux::ui::panel_look_everywhere() = this->panels.value_or(mux::config::bubble_look{});
+  this->accent = mux::config::accent_of(saved.accent);
+  this->renderer = mux::config::renderer_of(saved.renderer);
+  this->partial_redraw = saved.partial_redraw.value_or(false);
+  this->flash_redraws = saved.flash_redraws.value_or(false);
+  this->vsync = saved.vsync.value_or(true);
+  this->window_opacity = std::clamp(saved.window_opacity.value_or(100), 20, 100);
+  this->wallpaper_behind = mux::ui::window_look().behind;
+  mux::ui::window_look().live_blur = saved.live_blur.value_or(false);
+  this->live_blur = mux::ui::window_look().live_blur;
+  this->frost_blur = mux::ui::window_look().frost;
+  this->spaces = saved.spaces.value_or(true);
+  this->top_bar = saved.top_bar.value_or(true);
+  this->home_hides_spaced = saved.home_hides_spaced.value_or(false);
+  mux::ui::window_look().home_hides = this->home_hides_spaced;
+  this->home_hides_direct = saved.home_hides_direct.value_or(false);
+  mux::ui::window_look().home_direct = this->home_hides_direct;
+  mux::ui::window_look().spaces = this->spaces;
+  mux::ui::window_look().top_bar = this->top_bar;
+  if (saved.space_places)
+    this->space_places = *saved.space_places | std::views::transform([](const mux::config::space_place& one) {
+                             return mux::config::space_placed{one.account, mux::config::space_item_of(one.item),
+                                                              mux::config::space_bar_of(one.bar)};
+                           }) |
+                           std::ranges::to<std::vector>();
+  this->show_fps = saved.show_fps.value_or(false);
+  this->limits = saved.cache.value_or(mux::config::cache_limits{});
+  if (!demo)
+    this->drafts.load();
+  this->sending = saved.sending.value_or(mux::config::sending_settings{});
+  this->history = saved.history.value_or(mux::config::history_settings{});
+  this->model->show_deleted = this->history.show_deleted;
+  this->settings.apply_limits();
+  this->proxies = proxies;
+  this->load_marks();
+  this->notifications = saved.notifications.value_or(mux::config::notification_settings{});
+  for (const auto& one : saved.chat_notify.value_or(std::vector<mux::config::chat_notify>{}))
+    this->notify_modes.insert_or_assign(
+        mux::conversation_id{{mux::ui::protocol_of(one.account), one.account}, one.conversation},
+        mux::config::notify_mode_of(one.mode));
+  for (const auto& one : saved.room_events.value_or(std::vector<mux::config::room_events_choice>{})) {
+    const mux::conversation_id chat{{mux::ui::protocol_of(one.account), one.account}, one.conversation};
+    if (one.show)
+      this->room_events.insert_or_assign(chat, *one.show);
+    if (one.kinds)
+      this->room_event_kinds.insert_or_assign(chat, *one.kinds);
+    if (one.receipts)
+      this->receipts_shown_in.insert_or_assign(chat, *one.receipts);
+    if (one.previews)
+      this->previews_shown_in.insert_or_assign(chat, *one.previews);
+    if (one.typing)
+      this->typing_sent_in.insert_or_assign(chat, *one.typing);
+    if (one.previews_direct)
+      this->previews_direct_in.insert_or_assign(chat, *one.previews_direct);
+    if (one.jump_search)
+      this->jump_search_in.insert_or_assign(chat, *one.jump_search);
+    if (one.wallpaper)
+      this->wallpaper_in.insert_or_assign(chat, mux::config::wallpaper_of(std::string_view(*one.wallpaper)));
+    if (one.bubbles)
+      this->bubbles_in.insert_or_assign(chat, mux::config::bubble_look_of(*one.bubbles));
+    if (one.panels)
+      this->panels_in.insert_or_assign(chat, mux::config::bubble_look_of(*one.panels));
+    if (one.forum.value_or(false))
+      this->forums.insert(chat);
+    if (one.hide_from_home.value_or(false))
+      this->hidden_from_home.insert(chat);
+  }
+  this->placements = saved.placements.value_or(std::vector<mux::config::chat_placement>{});
+  for (const auto& one : saved.muted.value_or(std::vector<mux::config::muted_chat>{}))
+    this->muted.insert({{mux::ui::protocol_of(one.account), one.account}, one.conversation});
+  skiff::paint::motionLevel() = motion_of(saved.motion);
+  this->root().show_motion(saved.motion.value_or("full"));
+  this->config_error = std::move(error);
+  this->refresh();
+}
+
+void app::lock(std::vector<mux::config::account_t> extra, bool demo) {
+  waiting_extra = std::move(extra);
+  waiting_demo = demo;
+  root().ask_passphrase(mux::config::passphrase_for::unlock{});
+}
+
+// The files sealed: the settings, and every file in the state directory
+// that is read through the vault -- a chat's messages and its deleted ones
+// a line at a time, the rest whole. Not the wallpapers, read as pictures.
+mux::vault::vault::kept_files app::sealed_files() const {
+  mux::vault::vault::kept_files out;
+  out.whole.push_back(config_path);
+  const auto root = mux::config::state_path("").parent_path();
+  std::error_code failed;
+  if (!std::filesystem::exists(root, failed))
+    return out;
+  for (auto walk = std::filesystem::recursive_directory_iterator(root, failed);
+       !failed && walk != std::filesystem::recursive_directory_iterator(); walk.increment(failed)) {
+    const auto& path = walk->path();
+    if (walk->is_directory() && path.filename() == "wallpapers") {
+      walk.disable_recursion_pending();
+      continue;
+    }
+    if (!walk->is_regular_file())
+      continue;
+    const auto name = path.filename().string();
+    if (name.ends_with(".new") || name.ends_with(".unreadable"))
+      continue;
+    (path.extension() == ".jsonl" ? out.lines : out.whole).push_back(path);
+  }
+  return out;
+}
+
+template <class Turn>
+bool app::reseal(Turn turn) {
+  auto& vault = mux::vault::the();
+  const auto all = vault.read_all(this->sealed_files());
+  if (!all)
+    return false;
+  turn(vault);
+  return vault.write_all(*all);
+}
+
+// A passphrase given, by what it was asked for.
+void app::apply(const request::give_passphrase& one) {
+  auto& vault = mux::vault::the();
+  // A new one: not empty, and the same twice.
+  const auto fresh_refused = [&]() -> std::optional<std::string> {
+    if (one.fresh.empty())
+      return "Type a passphrase.";
+    if (one.fresh != one.again)
+      return "The new passphrase is not the same twice.";
+    return std::nullopt;
+  };
+  const auto done = [&] {
+    root().close_passphrase();
+    if (auto* up = root().settings_up())
+      if (auto* page = up->storage())
+        page->show_sealed(vault.on());
+  };
+  splice::visit(
+      splice::overloaded{
+          [&](mux::config::passphrase_for::unlock) {
+            if (!vault.unlock(one.current))
+              return root().passphrase_refused("That is not the passphrase.");
+            root().close_passphrase();
+            mux::config::file saved;
+            std::optional<std::string> error;
+            if (auto loaded = mux::config::load(config_path))
+              saved = std::move(*loaded);
+            else
+              error = loaded.error();
+            this->begin(saved, std::move(waiting_extra), waiting_demo, std::move(error));
+          },
+          [&](mux::config::passphrase_for::encrypt) {
+            if (vault.on())
+              return done();
+            if (auto refused = fresh_refused())
+              return root().passphrase_refused(*refused);
+            if (!this->reseal([&](mux::vault::vault& v) { v.create(one.fresh); }))
+              return root().passphrase_refused("Something kept could not be read, so nothing was changed.");
+            // Pictures are not kept on disk while it is on: those there go.
+            std::error_code ignored;
+            std::filesystem::remove_all(mux::config::cache_path("").parent_path(), ignored);
+            done();
+          },
+          [&](mux::config::passphrase_for::change) {
+            if (!vault.matches(one.current))
+              return root().passphrase_refused("That is not the passphrase now.");
+            if (auto refused = fresh_refused())
+              return root().passphrase_refused(*refused);
+            if (!this->reseal([&](mux::vault::vault& v) { v.create(one.fresh); }))
+              return root().passphrase_refused("Something kept could not be read, so nothing was changed.");
+            done();
+          },
+          [&](mux::config::passphrase_for::decrypt) {
+            if (!vault.matches(one.current))
+              return root().passphrase_refused("That is not the passphrase.");
+            if (!this->reseal([](mux::vault::vault& v) { v.remove(); }))
+              return root().passphrase_refused("Something kept could not be read, so nothing was changed.");
+            done();
+          }},
+      one.why);
+}
+// From Storage: on asks for a new passphrase, off for the one now.
+void app::apply(const request::flip_local_encryption&) {
+  if (mux::vault::the().on())
+    root().ask_passphrase(mux::config::passphrase_for::decrypt{});
+  else
+    root().ask_passphrase(mux::config::passphrase_for::encrypt{});
+}
+void app::apply(const request::change_passphrase&) { root().ask_passphrase(mux::config::passphrase_for::change{}); }
+
 }  // namespace mux::app

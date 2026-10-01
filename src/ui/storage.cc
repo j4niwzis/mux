@@ -58,9 +58,18 @@ struct storage_page : nodes::Stack {
   };
   using clear_row = row_item<ask<Actions, &Actions::clear_stored>>;
   using keep_row = switch_row<ask<Actions, &Actions::flip_show_deleted>>;
+  using seal_row = switch_row<ask<Actions, &Actions::flip_local_encryption>>;
+  using change_row = row_item<ask<Actions, &Actions::change_passphrase>>;
   // What is under the header: it scrolls where the dialog is too low for it.
   struct body : nodes::Stack {
     struct parts_t {
+      nodes::Text seal_title = section_title("ENCRYPTION");
+      seal_row seal;
+      change_row change;
+      nodes::Text seal_note{"Off by default. On, everything mux keeps on disk is sealed under a passphrase asked for at "
+                            "every start: settings with passwords and tokens, chats, drafts, encryption keys. Pictures "
+                            "are not kept on disk then.",
+                            13.0f, dim_colour};
       nodes::Text memory_title = section_title("IN MEMORY");
       stepper messages_in_memory;
       stepper pictures_in_memory;
@@ -86,8 +95,10 @@ struct storage_page : nodes::Stack {
                                "time, marked removed.",
                                13.0f, dim_colour};
     } parts;
-    body(Actions* a, const config::history_settings& history)
-        : parts{.messages_in_memory = stepper(a, "Messages", config::limit::messages_in_memory{}),
+    body(Actions* a, const config::history_settings& history, bool sealed)
+        : parts{.seal = seal_row("Encrypt local data", {a}),
+                .change = change_row("Change the passphrase", {a}),
+                .messages_in_memory = stepper(a, "Messages", config::limit::messages_in_memory{}),
                 .pictures_in_memory = stepper(a, "Pictures", config::limit::pictures_in_memory{}),
                 .messages_on_disk = stepper(a, "Messages", config::limit::messages_on_disk{}),
                 .pictures_on_disk = stepper(a, "Pictures", config::limit::pictures_on_disk{}),
@@ -110,7 +121,20 @@ struct storage_page : nodes::Stack {
         each->apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
       }
       parts.show_deleted.parts.toggle.setOnNow(history.show_deleted);
+      parts.seal_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
+      parts.seal_note.setWrapped(true);
+      parts.seal_note.apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
+      this->show_sealed(sealed, true);
       parts.events_title.apply({.margin = {14.0f, 0.0f, 4.0f, 20.0f}});
+    }
+    // Whether local data is encrypted now: its switch, and the passphrase
+    // to change where it is.
+    void show_sealed(bool sealed, bool at_once = false) {
+      if (at_once)
+        parts.seal.parts.toggle.setOnNow(sealed);
+      else
+        parts.seal.parts.toggle.setOn(sealed);
+      parts.change.setVisible(sealed);
     }
   };
   struct parts_t {
@@ -118,9 +142,9 @@ struct storage_page : nodes::Stack {
     body list;  // in the settings' own scroll view
   } parts;
 
-  storage_page(Actions* a, const config::cache_limits& limits, const config::history_settings& history)
+  storage_page(Actions* a, const config::cache_limits& limits, const config::history_settings& history, bool sealed)
       : parts{.header = header_t("Storage", {a}, {a}, true, true),
-              .list = body(a, history)} {
+              .list = body(a, history, sealed)} {
     fState.apply({.fill = true});
     parts.list.apply({.fillX = true});
     this->show(limits);
@@ -136,6 +160,7 @@ struct storage_page : nodes::Stack {
   }
   void show_motion(std::string_view) {}
   void show_receipts(bool) {}
+  void show_sealed(bool sealed) { this->content().show_sealed(sealed); }
 };
 
 // Settings' Notifications page, as Telegram Desktop's: a notification on

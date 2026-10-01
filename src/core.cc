@@ -822,6 +822,10 @@ struct link_preview {
   std::string title;
   std::string description;
   std::optional<std::string> image;
+  // Read from the site itself (#12177): its picture an https address, to
+  // be fetched from there too -- and only where the chat fetches previews
+  // so; else kept on the server (an mxc://).
+  bool from_site = false;
   friend bool operator==(const link_preview&, const link_preview&) = default;
 };
 

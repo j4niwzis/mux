@@ -270,6 +270,18 @@ struct network {
     const auto found = std::ranges::find(accounts, by.address, &running_account::address);
     return found == accounts.end() ? std::nullopt : found->via;
   }
+  // A preview's picture its site's page named: from the site, through the
+  // account's proxy -- asked for only where the chat fetches previews from
+  // sites. Never through fetch_avatar: an https address anything else
+  // carries (a message's, a room's avatar) is not fetched at all.
+  void fetch_preview_picture(const mux::account_id& of, std::string source) {
+    loop.post([this, of, source = std::move(source)] {
+      loop.spawn([this, via = this->via_of(of), source] {
+        if (auto bytes = mux::preview::fetch_picture(loop, tls, via, source))
+          box->push(mux::change_t{mux::change::avatar_loaded{mux::media_use::avatar{source}, source, std::move(*bytes)}});
+      });
+    });
+  }
   // A link's preview: asked of the account's server, or, where the chat
   // chose so, of the site itself, through the account's proxy (#12177).
   void fetch_preview(const mux::account_id& by, std::string url, bool direct) {
@@ -631,11 +643,7 @@ struct network {
   }
   // An avatar's picture, fetched by the account it is of, for `key`.
   void fetch_avatar(const mux::account_id& of, std::string source, std::string key) {
-    // A picture by its https address -- a page's, for a preview fetched from
-    // the site: from there, through the account's proxy. Never asked of a
-    // server, which would learn the link.
-    if (source.starts_with("https://")) {
-      loop.post([this, of, source = std::move(source), key = std::move(key)] {
+    loop.post([this, of, source = std::move(source), key = std::move(key)] {
         loop.spawn([this, via = this->via_of(of), source, key] {
           if (auto bytes = mux::preview::fetch_picture(loop, tls, via, source))
             box->push(mux::change_t{mux::change::avatar_loaded{mux::media_use::avatar{key}, source, std::move(*bytes)}});

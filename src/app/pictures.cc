@@ -241,8 +241,16 @@ class pictures_part {
                                       ? std::nullopt
                                       : mux::ui::first_link_of(said)) {
               if (const auto found = s_->model->previews.find(*link); found != s_->model->previews.end()) {
-                if (found->second.image)
+                if (found->second.image && !found->second.from_site)
                   want(id, found->second.image, *found->second.image);
+                // From the site: only where this chat fetches previews so.
+                else if (const std::string& image = found->second.image.value_or(std::string());
+                         found->second.image && s_->kept->previews_direct(one.id) &&
+                         !mux::ui::avatar_images().has(image) && !avatars_fetched_.contains(image) &&
+                         !this->read_back(media_use::avatar{image}, image)) {
+                  avatars_fetched_.insert(image);
+                  s_->net->fetch_preview_picture(id, image);
+                }
               } else if (links_asked_.insert(*link).second) {
                 s_->net->fetch_preview(id, *link, s_->kept->previews_direct(one.id));
               }

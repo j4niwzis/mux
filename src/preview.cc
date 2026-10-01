@@ -198,7 +198,8 @@ inline constexpr std::array<std::pair<std::string_view, std::string facts::*>, 6
         read.page_title = unescaped(html.substr(start + 1, end - start - 1));
   link_preview made{.site = read.site,
                     .title = read.title.empty() ? read.page_title : read.title,
-                    .description = read.description.empty() ? read.plain_description : read.description};
+                    .description = read.description.empty() ? read.plain_description : read.description,
+                    .from_site = true};
   if (!read.image.empty())
     if (auto image = resolve(at, read.image); image && image->starts_with("https://"))
       made.image = std::move(*image);

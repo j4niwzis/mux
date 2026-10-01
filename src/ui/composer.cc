@@ -223,8 +223,11 @@ struct field_quotes {
     const float right = deep > 0 ? kRight : 0.0f;
     switch (code_at(text, start)) {
       case code_line::opening:
-      case code_line::closing:
         return {.hidden = paragraph_length(text, start), .indent = quoted + kCodeIndent, .right = right + kCodeRight, .monospace = true};
+      // Not seen at all, as a sent block has no foot (#11942).
+      case code_line::closing:
+        return {.hidden = paragraph_length(text, start), .indent = quoted + kCodeIndent, .right = right + kCodeRight, .monospace = true,
+                .collapsed = true};
       case code_line::inside:
         return {.hidden = 2 * static_cast<std::size_t>(deep), .indent = quoted + kCodeIndent, .right = right + kCodeRight,
                 .monospace = true};

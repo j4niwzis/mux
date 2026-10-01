@@ -193,7 +193,7 @@ struct kept_settings {
     if (const auto* account = this->settings_of(chat.account.address))
       if (const auto& chosen = mux::config::previews_direct_of(*account))
         return *chosen;
-    return history.previews_direct;
+    return history.previews_direct.value_or(false);
   }
   // Whether others in a chat are told one is typing: its own choice, its
   // space's, its account's, else every account's.
@@ -203,7 +203,7 @@ struct kept_settings {
     if (const auto* account = this->settings_of(chat.account.address))
       if (const auto& chosen = mux::config::send_typing_of(*account))
         return *chosen;
-    return history.send_typing;
+    return history.send_typing.value_or(true);
   }
   [[nodiscard]] bool receipts_shown(const conversation_id& chat) {
     if (const auto own = this->own_or_space(receipts_shown_in, chat); own != receipts_shown_in.end())

@@ -61,13 +61,56 @@ export namespace mux::ui {
 
 // The name someone goes by in a conversation: as a member of it, or their
 // address's local part.
+// A name as it may be shown: without the characters that turn text around
+// or hide in it -- bidi overrides and isolates, zero-width ones, the soft
+// hyphen, controls. "Alice\u202Eecila" or "Ali\u200Bce" otherwise passed for
+// someone else.
+[[nodiscard]] inline std::string shown_plainly(std::string_view name) {
+  const auto hidden = [](std::string_view character) {
+    const auto at = [&](std::size_t i) { return static_cast<std::uint32_t>(static_cast<unsigned char>(character[i])); };
+    const std::uint32_t code =
+        character.size() == 1   ? at(0)
+        : character.size() == 2 ? ((at(0) & 0x1F) << 6) | (at(1) & 0x3F)
+        : character.size() == 3 ? ((at(0) & 0x0F) << 12) | ((at(1) & 0x3F) << 6) | (at(2) & 0x3F)
+                                : ((at(0) & 0x07) << 18) | ((at(1) & 0x3F) << 12) | ((at(2) & 0x3F) << 6) | (at(3) & 0x3F);
+    return code < 0x20 || code == 0x7F || (code >= 0x80 && code < 0xA0) || code == 0xAD || (code >= 0x200B && code <= 0x200F) ||
+           (code >= 0x202A && code <= 0x202E) || (code >= 0x2060 && code <= 0x2069) || code == 0xFEFF;
+  };
+  return name | std::views::chunk_by([](char, char next) { return (static_cast<unsigned char>(next) & 0xC0) == 0x80; }) |
+         std::views::transform([](auto&& each) { return std::string_view(each.begin(), each.end()); }) |
+         std::views::filter([&](std::string_view each) { return !hidden(each); }) | std::views::join |
+         std::ranges::to<std::string>();
+}
+// What someone is called in a chat, before telling them apart: their name
+// there, shown plainly, or their ID's local part.
+[[nodiscard]] inline std::string local_part(std::string_view who) {
+  if (who.starts_with('@'))
+    who.remove_prefix(1);
+  return std::string(who.substr(0, who.find_first_of("@:")));
+}
+[[nodiscard]] inline std::string called(const member& one) {
+  std::string name = shown_plainly(one.name);
+  return name.empty() ? local_part(one.id) : name;
+}
+[[nodiscard]] inline std::string called(const conversation& in, std::string_view who) {
+  const auto found = std::ranges::find(in.members, who, &member::id);
+  return found != in.members.end() ? called(*found) : local_part(who);
+}
+// What a sender is called in a chat -- with their whole ID after it where
+// someone else there is called the same, in any case: a display name, or a
+// local part on another server, is anyone's to take, and "Alice" written by
+// someone else looked like Alice's (as Element tells them apart).
 [[nodiscard]] inline std::string sender_name(const conversation& in, std::string_view sender) {
-  for (const member& one : in.members)
-    if (one.id == sender && !one.name.empty())
-      return one.name;
-  if (sender.starts_with('@'))
-    sender.remove_prefix(1);
-  return std::string(sender.substr(0, sender.find_first_of("@:")));
+  const std::string name = called(in, sender);
+  const auto folded = [](std::string_view text) {
+    return text | std::views::transform([](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); }) |
+           std::ranges::to<std::string>();
+  };
+  const std::string mine = folded(name);
+  const bool shared = std::ranges::any_of(in.members, [&](const member& one) {
+    return one.id != sender && folded(called(one)) == mine;
+  });
+  return shared ? std::format("{} ({})", name, sender) : name;
 }
 
 // A time of day, as the clock on the wall says it.

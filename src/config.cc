@@ -773,7 +773,10 @@ struct history_settings {
   // Link previews fetched from the site itself, through the account's proxy,
   // instead of through its server: off -- the site then sees where
   // the request comes from.
-  bool previews_direct = false;
+  // Optional, as every field added to a kept file after it was first
+  // written: knot requires the others, and a file saved before this one
+  // came would no longer be read. Unset: off.
+  std::optional<bool> previews_direct;
   // How many events a search for a message jumped to (a reply's, a link's)
   // pages back through before it gives up; 0 for no limit.
   std::int64_t jump_search = 5000;
@@ -782,7 +785,7 @@ struct history_settings {
   // Whether others are told one is typing (m.typing, XEP-0085's chat
   // states) -- never what: as every account's, until chosen there or in a
   // chat or its space.
-  bool send_typing = true;
+  std::optional<bool> send_typing;  // unset: sent (and optional, as previews_direct)
   friend bool operator==(const history_settings&, const history_settings&) = default;
 };
 consteval auto json_schema(knot::type<history_settings>) { return knot::schema<history_settings>(); }

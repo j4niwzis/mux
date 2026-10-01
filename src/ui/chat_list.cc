@@ -55,20 +55,10 @@ struct conversation_row : nodes::Stack {
   bool muted = false;
   // The name and the time over the last message and the unread count.
   struct lines_column : nodes::Stack {
-    struct top_line : nodes::Stack {
-      struct parts_t {
-        nodes::Text name;
-        nodes::Text time;
-      } parts;
+    struct top_line : name_time_line {
       top_line(std::string shown, bool chosen)
-          : parts{.name = nodes::Text(std::move(shown), 13.0f, chosen ? selected_text_colour : text_colour, true),
-                  .time = nodes::Text("", 13.0f, chosen ? selected_text_colour : dim_colour)} {
-        this->setHorizontal();
-        this->setGap(8.0f);
-        fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-        parts.name.setElided(true);
-        parts.name.apply({.grow = scene::axes::kX});
-      }
+          : name_time_line(std::move(shown), "", chosen ? selected_text_colour : text_colour,
+                           chosen ? selected_text_colour : dim_colour, 13.0f) {}
     };
     struct bottom_line : nodes::Stack {
       // The chats' unread count, in a pill.

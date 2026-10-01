@@ -936,4 +936,23 @@ struct dialog_buttons : nodes::Stack {
   }
 };
 
+
+// A row's top line, as a chat's in the list: the name, bold, as long as it
+// can be, and the time on the right.
+struct name_time_line : nodes::Stack {
+  struct parts_t {
+    nodes::Text name;
+    nodes::Text time;
+  } parts;
+  name_time_line(std::string name, std::string time, skia::SkColor name_colour, skia::SkColor time_colour, float time_size)
+      : parts{.name = nodes::Text(std::move(name), 13.0f, name_colour, true),
+              .time = nodes::Text(std::move(time), time_size, time_colour)} {
+    this->setHorizontal();
+    this->setGap(8.0f);
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    parts.name.setElided(true);
+    parts.name.apply({.grow = scene::axes::kX});
+  }
+};
+
 }  // namespace mux::ui

@@ -552,19 +552,9 @@ struct conversations_screen : nodes::Stack {
     struct found_row : nodes::Stack {
       pick_found pick;
       struct lines_t : nodes::Stack {
-        struct top_t : nodes::Stack {
-          struct parts_t {
-            nodes::Text name;
-            nodes::Text when;
-          } parts;
+        struct top_t : name_time_line {
           top_t(std::string name, std::string when)
-              : parts{.name = nodes::Text(std::move(name), 13.0f, text_colour, true), .when = nodes::Text(std::move(when), 12.0f, dim_colour)} {
-            this->setHorizontal();
-            this->setGap(8.0f);
-            fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-            parts.name.setElided(true);
-            parts.name.apply({.grow = scene::axes::kX});
-          }
+              : name_time_line(std::move(name), std::move(when), text_colour, dim_colour, 12.0f) {}
         };
         struct parts_t {
           top_t top;

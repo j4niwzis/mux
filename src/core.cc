@@ -500,6 +500,13 @@ using room_action_t =
 struct emote {
   std::string shortcode;
   std::string url;
+  // As its pack says: its words, its size and type -- sent with a sticker,
+  // which other clients size by -- and the pack it is of, for the picker.
+  std::string body;
+  std::optional<std::int64_t> w, h, size;
+  std::optional<std::string> mimetype;
+  std::string pack;
+  std::optional<std::string> pack_avatar;
   friend bool operator==(const emote&, const emote&) = default;
 };
 

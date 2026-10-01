@@ -593,7 +593,15 @@ auto account<Sink>::emotes_of(const loom::client::joined_room& kept, bool sticke
                                                  : loom::client::image_use_t{loom::client::image_use::emoticon{}};
   std::vector<mux::emote> out;
   for (loom::client::pack_image& one : loom::client::images(state_, kept, use))
-    out.push_back({std::move(one.shortcode), std::move(one.url)});
+    out.push_back({.shortcode = std::move(one.shortcode),
+                   .url = std::move(one.url),
+                   .body = std::move(one.body),
+                   .w = one.w,
+                   .h = one.h,
+                   .size = one.size,
+                   .mimetype = std::move(one.mimetype),
+                   .pack = std::move(one.pack),
+                   .pack_avatar = std::move(one.pack_avatar)});
   return out;
 }
 

@@ -242,9 +242,15 @@ void account<Sink>::send_sticker(std::string room, mux::emote sticker) {
   loop_->spawn([this, room = std::move(room), sticker = std::move(sticker)] {
     if (!api_)
       return;
+    // As the spec has it: its words, and its info -- its size and type, by
+    // which other clients size it before it comes.
     loom::ev::m_sticker_content_t content;
-    content.body = sticker.shortcode;
+    content.body = sticker.body.empty() ? sticker.shortcode : sticker.body;
     content.url = sticker.url;
+    content.info.w = sticker.w;
+    content.info.h = sticker.h;
+    content.info.size = sticker.size;
+    content.info.mimetype = sticker.mimetype;
     auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.sticker",
                                                       .txn_id = this->transaction(),

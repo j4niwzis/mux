@@ -788,6 +788,18 @@ struct mentioned {
   return out;
 }
 
+// A text with every run of spaces, tabs and newlines one space, and none at
+// either end: how a quote and what it quotes are compared.
+[[nodiscard]] inline std::string squeezed(std::string_view text) {
+  const auto blank = [](char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; };
+  std::string out = text | std::views::chunk_by([&](char a, char b) { return blank(a) == blank(b); }) |
+                    std::views::transform([&](auto run) { return blank(run.front()) ? std::string(" ") : std::string(run.begin(), run.end()); }) |
+                    std::views::join | std::ranges::to<std::string>();
+  const auto first = out.find_first_not_of(' ');
+  const auto last = out.find_last_not_of(' ');
+  return first == std::string::npos ? std::string() : out.substr(first, last - first + 1);
+}
+
 // The quote a text opens with, where it is its only one: taken out of the
 // text -- with the spaces after it -- its links and styles moved back with
 // what is left; what it said, trimmed. Nothing where the text does not
@@ -1636,10 +1648,24 @@ struct message_bubble : nodes::Stack {
     }
     rooms_waiting = std::move(shown.waiting);
     rooms_unknown = std::move(shown.unknown);
-    // A reply whose text opens with its only quote: the quote shown in the
-    // reply's header, as the part answered, and not again in the text.
-    if (said.replies_to)
-      header_quote = take_opening_quote(shown);
+    // A reply whose text opens with its only quote, of the message it
+    // answers: the quote shown in the reply's header, as the part answered,
+    // and not again in the text. Only where that message says all of it --
+    // one that has a piece of the quote, or another's words, is answered
+    // with a quote of its own, shown as one.
+    if (said.replies_to) {
+      const auto in_timeline = std::ranges::find(in.timeline, *said.replies_to, &message::id);
+      const auto aside = in.quoted.find(*said.replies_to);
+      const message* answered = in_timeline != in.timeline.end() ? &*in_timeline
+                                : aside != in.quoted.end()      ? &aside->second
+                                                                : nullptr;
+      mentioned taken = shown;
+      if (const auto quote = take_opening_quote(taken);
+          quote && answered && squeezed(quote_line_of(*answered, in, now)).contains(squeezed(*quote))) {
+        header_quote = quote;
+        shown = std::move(taken);
+      }
+    }
     {
       // The quote's colour: the accent on theirs; on one's own, the text's,
       // as tdesktop's outgoing blockquote -- not the accent on its accent.

@@ -173,6 +173,13 @@ struct conversations_screen : nodes::Stack {
     const auto found = event_filters.find(chat);
     return found == event_filters.end() || found->second.shows(said.event_kind);
   }
+  // Chats listed in another account's list than their own (#11727): each
+  // account's, the chats moved out of their own, and the strip each shows
+  // where it is listed elsewhere -- none where it is off. As the program
+  // keeps them.
+  std::map<account_id, std::vector<conversation_id>> listed_in;
+  std::set<conversation_id> moved_out;
+  std::map<conversation_id, skia::SkColor> strips;
   // The chats that show who has read up to where, as faces.
   std::set<conversation_id> receipts_in;
   // The chats that show no link previews.
@@ -680,18 +687,72 @@ struct conversations_screen : nodes::Stack {
         actions->open_manage();
       }
     };
+    // Listed in another account's list too, or moved there.
+    struct place_act {
+      Actions* actions;
+      conversation_id chat;
+      account_id to;
+      bool moved;
+      void operator()() const { actions->place_chat(chat, to, moved); }
+    };
+    // Out of this list, where it is another account's: back to its own
+    // where it was moved.
+    struct unplace_act {
+      Actions* actions;
+      conversation_id chat;
+      account_id from;
+      void operator()() const { actions->unplace_chat(chat, from); }
+    };
+    struct strip_act {
+      Actions* actions;
+      conversation_id chat;
+      account_id in;
+      void operator()() const { actions->flip_chat_strip(chat, in); }
+    };
+    struct strip_colour_act {
+      Actions* actions;
+      conversation_id chat;
+      account_id in;
+      void operator()(const config::accent_t& colour) const { actions->set_chat_strip_colour(chat, in, colour); }
+    };
     struct chat_menu : nodes::Stack {
       struct parts_t {
         nodes::Text title;
         widgets::Button<chat_settings_act> settings;
+        std::vector<widgets::Button<place_act>> places;
+        std::optional<widgets::Button<unplace_act>> unplace;
+        std::optional<widgets::Button<strip_act>> strip;
+        std::optional<accent_circles<strip_colour_act>> strip_colours;
       } parts;
-      chat_menu(Actions* a, conversation_id id, std::string name)
+      // Its places: Copy to and Move to each other account. Listed here from
+      // another, its way out of this list, and its strip.
+      chat_menu(Actions* a, conversation_id id, std::string name, const account_id& listing,
+                const std::vector<account_id>& accounts, const config::theme_t& theme)
           : parts{.title = nodes::Text(std::move(name), 13.0f, dim_colour, true),
-                  .settings = widgets::Button<chat_settings_act>("Chat settings\u2026", {a, std::move(id)})} {
+                  .settings = widgets::Button<chat_settings_act>("Chat settings\u2026", {a, id})} {
         as_popup(*this);
+        fState.apply({.width = 320.0f});
         parts.title.setElided(true);
         parts.title.apply({.fillX = true});
         parts.settings.apply({.fillX = true, .height = 30.0f});
+        for (const account_id& to : accounts)
+          if (to != id.account && to != listing) {
+            parts.places.emplace_back(std::format("Copy to {}", to.address), place_act{a, id, to, false});
+            parts.places.emplace_back(std::format("Move to {}", to.address), place_act{a, id, to, true});
+          }
+        if (id.account != listing) {
+          parts.unplace.emplace("Remove from this list", unplace_act{a, id, listing});
+          parts.strip.emplace("Strip on or off", strip_act{a, id, listing});
+          parts.strip_colours.emplace(strip_colour_act{a, id, listing}, theme, false);
+        }
+        for (auto& each : parts.places)
+          each.apply({.fillX = true, .height = 30.0f});
+        if (parts.unplace)
+          parts.unplace->apply({.fillX = true, .height = 30.0f});
+        if (parts.strip)
+          parts.strip->apply({.fillX = true, .height = 30.0f});
+        if (parts.strip_colours)
+          parts.strip_colours->apply({.margin = {4.0f, 0.0f, 0.0f, 0.0f}});
       }
     };
     struct space_menu : nodes::Stack {
@@ -768,6 +829,11 @@ struct conversations_screen : nodes::Stack {
     };
     std::optional<drag_t> drag;
     bool menu_close_due = false;
+    // For the chat menu: the account whose list this is, every account (its
+    // places), and the theme its strip colours are chosen in.
+    std::optional<account_id> current_account;
+    std::vector<account_id> accounts_known;
+    config::theme_t theme_now = config::theme::tinted{};
     // The flight of the one let go, from where it was let go to its place;
     // and the item whose icon shows once it is there.
     skiff::paint::Tween fly{0.0f, 180.0f};
@@ -901,10 +967,11 @@ struct conversations_screen : nodes::Stack {
         for (const auto& row : std::get<0>(list.fChildren).fChildren)
           if (list.toView(row.bounds()).contains(press.x, press.y)) {
             const skia::SkRect box = fState.fBounds;
-            parts.row_menu.emplace(actions, row.id, row.parts.lines.parts.top.parts.name.text());
+            parts.row_menu.emplace(actions, row.id, row.parts.lines.parts.top.parts.name.text(),
+                                   current_account ? *current_account : row.id.account, accounts_known, theme_now);
             parts.row_menu->apply({.place = scene::anchor::kTopLeft,
-                                   .x = std::clamp(press.x - box.fLeft, 0.0f, std::max(0.0f, box.width() - 190.0f)),
-                                   .y = std::clamp(press.y - box.fTop, 0.0f, std::max(0.0f, box.height() - 80.0f))});
+                                   .x = std::clamp(press.x - box.fLeft, 0.0f, std::max(0.0f, box.width() - 320.0f)),
+                                   .y = std::clamp(press.y - box.fTop, 0.0f, std::max(0.0f, box.height() - 260.0f))});
             menu_close_due = false;
             this->invalidateLayout();
             reply.handle();
@@ -2333,11 +2400,27 @@ struct conversations_screen : nodes::Stack {
                                    }},
                         folder);
     };
+    // Its own chats -- not those moved to another account's list -- and the
+    // other accounts' listed in it.
+    const auto found_by = [&](const conversation& one) {
+      return in_folder(one) && (wanted.empty() || lower(display_name(one)).contains(wanted) || lower(one.id.id).contains(wanted));
+    };
     if (in)
       for (const auto& [key, one] : in->conversations)
-        if (in_folder(one) &&
-            (wanted.empty() || lower(display_name(one)).contains(wanted) || lower(one.id.id).contains(wanted)))
+        if (!moved_out.contains(one.id) && found_by(one))
           chats.push_back(&one);
+    if (in && current)
+      if (const auto extra = listed_in.find(*current); extra != listed_in.end())
+        for (const conversation_id& id : extra->second)
+          if (const conversation* one = now.find(id); one && found_by(*one))
+            chats.push_back(one);
+    // The strip of a chat listed here from another account.
+    const auto strip_for = [&](const conversation* one) -> std::optional<skia::SkColor> {
+      if (!current || one->id.account == *current)
+        return std::nullopt;
+      const auto found = strips.find(one->id);
+      return found == strips.end() ? std::nullopt : std::optional<skia::SkColor>(found->second);
+    };
     // Each chat's room events as it shows them: what it hides is not its
     // newest, nor counted.
     const auto events_of = [&](const conversation* one) {
@@ -2410,7 +2493,7 @@ struct conversations_screen : nodes::Stack {
             [&](const conversation* one) {
               if (const auto kept = rows_kept.find(one->id); kept != rows_kept.end()) {
                 const bool same = kept->second.shown == conversation_row<Actions>::view_of(*one, is_chosen(one), muted.contains(one->id),
-                                                                                           draft_of(one->id), events_of(one));
+                                                                                           draft_of(one->id), events_of(one), strip_for(one));
                 if (same) {
                   conversation_row<Actions> back = std::move(kept->second);
                   rows_kept.erase(kept);
@@ -2419,12 +2502,12 @@ struct conversations_screen : nodes::Stack {
                 rows_kept.erase(kept);
               }
               return conversation_row<Actions>(actions, *one, is_chosen(one), muted.contains(one->id), draft_of(one->id),
-                                               events_of(one));
+                                               events_of(one), strip_for(one));
             },
             [&](const conversation_row<Actions>& row, const conversation* one) {
               return row.shown ==
                      conversation_row<Actions>::view_of(*one, is_chosen(one), muted.contains(one->id), draft_of(one->id),
-                                                        events_of(one));
+                                                        events_of(one), strip_for(one));
             })) {
       list.invalidateLayout();
       // A chat come or gone -- or moved to another place: the whole list

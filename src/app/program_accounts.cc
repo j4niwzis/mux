@@ -698,6 +698,58 @@ void app::apply(const request::flip_account_strip&) {
   this->refresh();
 }
 
+// Chats in other accounts' lists (#11727): placed, taken out, their strips.
+mux::config::chat_placement* app::placement_of(const mux::conversation_id& chat, const mux::account_id& in) {
+  const auto found = std::ranges::find_if(placements, [&](const mux::config::chat_placement& one) {
+    return one.account == chat.account.address && one.conversation == chat.id && one.listed_in == in.address;
+  });
+  return found == placements.end() ? nullptr : &*found;
+}
+void app::apply(const request::place_chat& one) {
+  (void)root().main().close_space_menu();
+  if (one.to == one.chat.account)
+    return;
+  // Moved: out of every other list it was moved to, into this one.
+  if (one.moved)
+    std::erase_if(placements, [&](const mux::config::chat_placement& each) {
+      return each.account == one.chat.account.address && each.conversation == one.chat.id && each.moved;
+    });
+  if (auto* kept = this->placement_of(one.chat, one.to))
+    kept->moved = one.moved;
+  else
+    placements.push_back({.account = one.chat.account.address, .conversation = one.chat.id, .listed_in = one.to.address,
+                          .moved = one.moved});
+  (void)this->write();
+  this->refresh();
+}
+void app::apply(const request::unplace_chat& one) {
+  (void)root().main().close_space_menu();
+  std::erase_if(placements, [&](const mux::config::chat_placement& each) {
+    return each.account == one.chat.account.address && each.conversation == one.chat.id && each.listed_in == one.from.address;
+  });
+  (void)this->write();
+  this->refresh();
+}
+void app::apply(const request::flip_chat_strip& one) {
+  (void)root().main().close_space_menu();
+  if (auto* kept = this->placement_of(one.chat, one.in)) {
+    const auto own = this->find(one.chat.account.address);
+    const bool now = kept->strip.value_or(own == saved.end() || mux::config::strip_of(*own));
+    kept->strip = !now;
+    (void)this->write();
+  }
+  this->refresh();
+}
+void app::apply(const request::set_chat_strip_colour& one) {
+  (void)root().main().close_space_menu();
+  if (auto* kept = this->placement_of(one.chat, one.in)) {
+    kept->strip_colour = std::string(splice::visit([](const auto& each) { return mux::config::word_of(each); }, one.colour));
+    kept->strip = true;
+    (void)this->write();
+  }
+  this->refresh();
+}
+
 void app::apply(const request::flip_account_typing&) {
   this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
     auto& kept = mux::config::send_typing_in(account);

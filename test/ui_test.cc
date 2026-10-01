@@ -140,6 +140,10 @@ struct stub {
   void flip_live_blur() {}
   void set_account_colour(mux::config::accent_t) {}
   void flip_account_strip() {}
+  void place_chat(mux::conversation_id, mux::account_id, bool) {}
+  void unplace_chat(mux::conversation_id, mux::account_id) {}
+  void flip_chat_strip(mux::conversation_id, mux::account_id) {}
+  void set_chat_strip_colour(mux::conversation_id, mux::account_id, mux::config::accent_t) {}
   void flip_home_hide(std::string) {}
   void menu_thread() {}
   void open_room_packs() {}

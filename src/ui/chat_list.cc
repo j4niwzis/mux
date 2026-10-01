@@ -117,6 +117,9 @@ struct conversation_row : nodes::Stack {
   struct parts_t {
     avatar_mark face;
     lines_column lines;
+    // Listed in another account's list than its own: a rounded strip on its
+    // left in its colour (#11727) -- out of the flow, in the row's padding.
+    nodes::Box<> strip{0u};
   } parts;
 
   static constexpr float kHeight = 62.0f;
@@ -131,21 +134,22 @@ struct conversation_row : nodes::Stack {
     bool chosen = false, muted = false;
     std::string draft;
     std::optional<invite_info> invite;
+    std::optional<skia::SkColor> strip;
     friend bool operator==(const view&, const view&) = default;
   };
   // What it says of the chat -- its newest and its count -- as the chat
   // shows it: the room events it hides left out of both.
   [[nodiscard]] static view view_of(const conversation& one, bool is_chosen, bool is_muted, std::string draft = {},
-                                    const room_event_filter& events = {}) {
+                                    const room_event_filter& events = {}, std::optional<skia::SkColor> strip = std::nullopt) {
     const message* last = newest(one, events);
     return {display_name(one), last ? std::optional<message>(*last) : std::nullopt, one.unread_here(events), is_chosen,
-            is_muted, std::move(draft), one.invite};
+            is_muted, std::move(draft), one.invite, strip};
   }
   view shown;
 
   conversation_row(Actions* a, const conversation& one, bool is_chosen, bool is_muted, std::string draft = {},
-                   const room_event_filter& events = {})
-      : actions(a), id(one.id), chosen(is_chosen), muted(is_muted), shown(view_of(one, is_chosen, is_muted, draft, events)),
+                   const room_event_filter& events = {}, std::optional<skia::SkColor> strip = std::nullopt)
+      : actions(a), id(one.id), chosen(is_chosen), muted(is_muted), shown(view_of(one, is_chosen, is_muted, draft, events, strip)),
         parts{.face = avatar_mark(one.id.id, display_name(one), 46.0f),
               .lines = lines_column(display_name(one), one.unread_here(events), is_chosen, is_muted)} {
     // Drawn once, played back as the list repaints around it.
@@ -162,6 +166,10 @@ struct conversation_row : nodes::Stack {
     this->setHorizontal();
     this->setGap(12.0f);
     fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = chosen_colour, .selectedBackground = selected_colour, .focusBackground = chosen_colour, .selected = chosen});
+    parts.strip.setVisible(strip.has_value());
+    if (strip)
+      parts.strip.setColour(*strip);
+    parts.strip.apply({.place = scene::anchor::kCentreLeft, .x = -8.0f, .width = 4.0f, .height = 38.0f, .cornerRadius = 2.0f});
     if (const message* newest_one = newest(one, events)) {
       const message last = with_actor(one, *newest_one);
       time.setText(clock_of(last.at));

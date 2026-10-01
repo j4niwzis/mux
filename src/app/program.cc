@@ -408,6 +408,12 @@ struct app : kept_settings {
   void apply(const request::flip_account_typing&);
   void apply(const request::set_account_colour& one);
   void apply(const request::flip_account_strip&);
+  void apply(const request::place_chat& one);
+  void apply(const request::unplace_chat& one);
+  void apply(const request::flip_chat_strip& one);
+  void apply(const request::set_chat_strip_colour& one);
+  // A chat's placement in a list, where it has one.
+  mux::config::chat_placement* placement_of(const mux::conversation_id& chat, const mux::account_id& in);
   void apply(const request::proxy_kind& one);
   // The chosen account through a profile, or none: kept, and connected again.
   void apply(const request::choose_account_proxy& one);

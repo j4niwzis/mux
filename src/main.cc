@@ -211,6 +211,7 @@ int main(int argc, char** argv) {
     if (one.hide_from_home.value_or(false))
       program.hidden_from_home.insert(chat);
   }
+  program.placements = saved.placements.value_or(std::vector<mux::config::chat_placement>{});
   for (const auto& one : saved.muted.value_or(std::vector<mux::config::muted_chat>{}))
     program.muted.insert({{mux::ui::protocol_of(one.account), one.account}, one.conversation});
   skiff::paint::motionLevel() = motion_of(saved.motion);

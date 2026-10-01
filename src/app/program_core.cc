@@ -501,6 +501,34 @@ void app::refresh(std::source_location from) {
           if (child != one.id.id)
             space_above.try_emplace(mux::conversation_id{one.id.account, child}, one.id);
   root().main().muted = muted;
+  // The chats listed in other accounts' lists, and their strips: each its
+  // own colour, else its account's; shown as it says, else as its account.
+  {
+    auto& screen = root().main();
+    screen.listed_in.clear();
+    screen.moved_out.clear();
+    screen.strips.clear();
+    for (const mux::config::chat_placement& one : placements) {
+      const mux::conversation_id chat{{mux::ui::protocol_of(one.account), one.account}, one.conversation};
+      const mux::account_id to{mux::ui::protocol_of(one.listed_in), one.listed_in};
+      screen.listed_in[to].push_back(chat);
+      if (one.moved)
+        screen.moved_out.insert(chat);
+      const auto own = this->find(one.account);
+      const bool on = one.strip.value_or(own == saved.end() || mux::config::strip_of(*own));
+      if (!on)
+        continue;
+      const mux::config::accent_t colour = one.strip_colour ? mux::config::accent_of(one.strip_colour)
+                                           : own != saved.end() ? mux::config::colour_of(*own)
+                                                                : mux::config::default_colour_of(one.account);
+      screen.strips.insert_or_assign(chat, mux::ui::colour_of(colour, theme));
+    }
+    screen.side.current_account = screen.current;
+    screen.side.theme_now = theme;
+    screen.side.accounts_known.clear();
+    for (const auto& [id, account] : model->accounts())
+      screen.side.accounts_known.push_back(id);
+  }
   // Which chats show what is done in them, as the settings say now.
   auto& filters = root().main().event_filters;
   filters.clear();

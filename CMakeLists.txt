@@ -73,9 +73,8 @@ endforeach()
 # is the one tern is built with as well.
 cme_declare_port(NAME chevron PROVIDES chevron
   GITHUB_REPOSITORY j4niwzis/chevron
-  GIT_TAG 8effedc8c5e13945600cafb556228819f0bcdb11
+  GIT_TAG 4312fae9dfb0290105669431aa26d879884aa11a
   LICENSE AGPL-3.0-only
-  SYSTEM NEVER
   TARGETS chevron)
 cme_options(chevron "CHEVRON_TESTS OFF")
 cme_declare_port(NAME tern PROVIDES tern
@@ -122,9 +121,8 @@ cme_find_package(alef COMPONENTS precis idna grapheme line bidi emoji REQUIRED)
 set(SPLICE_ERASE ${MUX_ERASE_HANDLERS} CACHE BOOL "splice::variant through tables outside a release build, as mux's handlers")
 cme_declare_port(NAME splice PROVIDES splice
   GITHUB_REPOSITORY j4niwzis/splice
-  GIT_TAG 39bc67a00185f488c989d3c18b98e5995e4dc8dd
+  GIT_TAG 2086e011a4a09dc5d3634649a4842f1fbb0cedde
   LICENSE GPL-3.0-only
-  SYSTEM NEVER
   TARGETS splice)
 cme_options(splice "SPLICE_TESTS OFF")
 cme_find_package(splice REQUIRED)

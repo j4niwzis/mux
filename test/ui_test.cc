@@ -205,6 +205,10 @@ struct stub {
   void clear_stored() {}
   void set_theme(mux::config::theme_t) {}
   void flip_partial_redraw() {}
+  void flip_vsync() {}
+  void flip_show_fps() {}
+  void menu_quote_reply() {}
+  void show_account(std::string) {}
   void flip_flash_redraws() {}
   void set_renderer(mux::config::renderer_t) {}
   void set_accent(mux::config::accent_t) {}

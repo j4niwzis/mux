@@ -974,7 +974,8 @@ std::filesystem::path state_path(std::string_view name) {
   const auto as_file = [name](std::size_t at) {
     const auto c = static_cast<unsigned char>(name[at]);
     const bool plain = std::isalnum(c) != 0 || c == '@' || c == '-' || c == '_' || (c == '.' && at > 0);
-    return plain ? std::string(1, name[at]) : std::format("%{:02X}", static_cast<unsigned>(c));
+    constexpr std::string_view digits = "0123456789ABCDEF";
+    return plain ? std::string(1, name[at]) : std::string{'%', digits[c >> 4], digits[c & 15u]};
   };
   std::string out = std::views::iota(std::size_t{0}, name.size()) | std::views::transform(as_file) | std::views::join |
                     std::ranges::to<std::string>();

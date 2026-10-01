@@ -311,6 +311,10 @@ struct message {
   std::optional<std::string> replies_to;
   bool edited = false;
   bool redacted = false;
+  // Came end-to-end encrypted, and was read: in an encrypted room, one that
+  // did not is marked as such -- a server or anyone in the room can put a
+  // plain message there, and it looked the same.
+  bool encrypted = false;
   bool outgoing = false;
   // Not something said but something done -- someone joined, the room was
   // renamed, an event nothing here reads -- shown as a line of its own in
@@ -1012,6 +1016,12 @@ struct message_edited {
   std::optional<std::string> by;
 };
 
+// A message that came encrypted and was read so.
+struct message_encrypted {
+  conversation_id in;
+  std::string id;
+};
+
 struct message_redacted {
   conversation_id in;
   std::string id;
@@ -1169,7 +1179,7 @@ struct history_position {
 
 }  // namespace change
 
-using change_t = splice::variant<change::connection_changed, change::refused, change::account_removed, change::conversation_updated,
+using change_t = splice::variant<change::message_encrypted, change::connection_changed, change::refused, change::account_removed, change::conversation_updated,
                               change::conversation_removed,
                               change::presence_changed, change::message_added, change::message_edited,
                               change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed,
@@ -1459,6 +1469,10 @@ class model {
     conversation& where = of(one.in);
     where.future_from = one.future_from;
     where.detached = one.future_from.has_value();
+  }
+  void on(const change::message_encrypted& one) {
+    if (message* kept = message_in(of(one.in), one.id))
+      kept->encrypted = true;
   }
   void on(const change::message_edited& one) {
     conversation& where = of(one.in);

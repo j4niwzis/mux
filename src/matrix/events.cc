@@ -401,6 +401,7 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
       made.type = std::move(clear->type);
       made.content = std::move(clear->content);
       this->event(in, made, where);
+      sink_(change::message_encrypted{in, one.event_id});
       return;
     }
   }

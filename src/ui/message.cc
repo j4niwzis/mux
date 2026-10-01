@@ -1606,7 +1606,11 @@ struct message_bubble : nodes::Stack {
     // Anyone's words can be selected and copied, as in Telegram.
     body.parts.text.setSelectable(true);
     body.parts.text.setSelectionColour((accent_colour & 0x00FFFFFFu) | (110u << 24));  // the accent, see-through
-    std::string when = mark_of(said) + clock_of(said.at);
+    // In an encrypted room, a message that did not come encrypted says so,
+    // as Element's "Not encrypted": it may have been put there by the server
+    // or by anyone, in the clear (#12097).
+    const bool plain_in_encrypted = in.encrypted && !said.encrypted && !said.service && !said.outgoing;
+    std::string when = (plain_in_encrypted ? std::string("not encrypted \u00b7 ") : std::string()) + mark_of(said) + clock_of(said.at);
     when += splice::visit(splice::overloaded{[](const delivery::sending&) { return " · sending"; },
                                   [](const delivery::failed&) { return " · not sent"; },
                                   [](const auto&) { return ""; }},

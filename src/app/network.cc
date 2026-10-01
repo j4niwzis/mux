@@ -71,7 +71,18 @@ struct network {
 
   // An account started, through the profile of `proxies` it names.
   void start(const mux::config::account_t& saved, const std::vector<mux::config::proxy_settings>& proxies) {
-    const auto* via = mux::config::find_proxy(proxies, mux::config::proxy_of(saved));
+    const auto& named = mux::config::proxy_of(saved);
+    const auto* via = mux::config::find_proxy(proxies, named);
+    // A proxy named and not there: not connected at all -- never straight
+    // to the server instead, which would show it this machine's address.
+    if (named && !via) {
+      const std::string& address = mux::config::address_of(saved);
+      box->push(mux::change_t{mux::change::connection_changed{
+          {mux::ui::protocol_of(address), address},
+          mux::connection::failed{std::format("Not connected: its proxy \"{}\" is gone. Choose a proxy for it, or none.",
+                                              *named)}}});
+      return;
+    }
     splice::visit([this, via](const auto& each) { this->start_one(each, proxy_of(via)); }, saved);
   }
   // The proxy a profile names, as mux.net takes it.

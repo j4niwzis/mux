@@ -110,12 +110,19 @@ void app::apply(const request::delete_proxy_profile&) {
   if (!editor || editor->index < 0 || static_cast<std::size_t>(editor->index) >= proxies.size())
     return;
   const std::string name = proxies[static_cast<std::size_t>(editor->index)].name;
+  // In use: not deleted. The accounts that go through it would otherwise
+  // connect straight to their servers, this machine's address shown to
+  // them, without a word.
+  const auto users = saved | std::views::filter([&](const auto& one) { return mux::config::proxy_of(one) == name; }) |
+                     std::views::transform([](const auto& one) { return mux::config::address_of(one); }) |
+                     std::ranges::to<std::vector<std::string>>();
+  if (!users.empty()) {
+    editor->say(std::format("In use by {}: choose another proxy for them, or none, first.",
+                            users | std::views::join_with(std::string_view(", ")) | std::ranges::to<std::string>()),
+                true);
+    return;
+  }
   proxies.erase(proxies.begin() + editor->index);
-  for (auto& one : saved)
-    if (auto& uses = mux::config::proxy_in(one); uses == name) {
-      uses.reset();
-      this->reconnect(one);
-    }
   (void)this->write();
   up->show_proxies(proxies);
 }

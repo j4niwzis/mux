@@ -1222,8 +1222,9 @@ void account<Sink>::load_thread(std::string room, std::string root) {
 }
 
 template <class Sink>
-void account<Sink>::send_in_thread(std::string room, std::string body, std::string root, std::string latest) {
-  loop_->spawn([this, room = std::move(room), body = std::move(body), root = std::move(root), latest = std::move(latest)] {
+void account<Sink>::send_in_thread(std::string room, std::string body, std::string root, std::string latest, std::optional<std::string> reply_to) {
+  loop_->spawn([this, room = std::move(room), body = std::move(body), root = std::move(root), latest = std::move(latest),
+                 reply_to = std::move(reply_to)] {
     const std::string txn = this->transaction();
     const conversation_id in{id_, room};
     const auto html = html_of(body, emotes_in(room));
@@ -1233,6 +1234,7 @@ void account<Sink>::send_in_thread(std::string room, std::string body, std::stri
                                         .at = std::chrono::time_point_cast<std::chrono::milliseconds>(
                                             std::chrono::system_clock::now()),
                                         .body = {body, html},
+                                        .replies_to = reply_to,
                                         .outgoing = true,
                                         .delivery = delivery::sending{},
                                         .thread = root}});
@@ -1241,7 +1243,7 @@ void account<Sink>::send_in_thread(std::string room, std::string body, std::stri
       return;
     }
     const auto content = loom::client::text_message(
-        loom::client::text_said{.body = body, .html = html, .thread = root, .thread_latest = latest});
+        loom::client::text_said{.body = body, .html = html, .reply_to = reply_to, .thread = root, .thread_latest = latest});
     auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.room.message",
                                                       .txn_id = txn,

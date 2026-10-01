@@ -256,7 +256,7 @@ void app::apply(const request::send_in_thread& one) {
   std::string latest = one.root;
   if (const auto found = chat->threads.find(one.root); found != chat->threads.end() && !found->second.empty())
     latest = found->second.back().id;
-  net->send_in_thread(*chosen, one.text, one.root, latest);
+  net->send_in_thread(*chosen, one.text, one.root, latest, one.reply_to);
 }
 
 // Emojis & Stickers, as Cinny has them: one's own pack, from Settings; the

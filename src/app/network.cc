@@ -426,13 +426,15 @@ struct network {
             one.account);
     });
   }
-  void send_in_thread(const mux::conversation_id& in, std::string body, std::string root, std::string latest) {
-    loop.post([this, in, body = std::move(body), root = std::move(root), latest = std::move(latest)] {
+  void send_in_thread(const mux::conversation_id& in, std::string body, std::string root, std::string latest,
+                      std::optional<std::string> reply_to) {
+    loop.post([this, in, body = std::move(body), root = std::move(root), latest = std::move(latest),
+               reply_to = std::move(reply_to)] {
       for (auto& one : accounts)
         splice::visit(
             [&](auto& account) {
               if (account->id() == in.account)
-                account->send_in_thread(in.id, body, root, latest);
+                account->send_in_thread(in.id, body, root, latest, reply_to);
             },
             one.account);
     });

@@ -218,7 +218,7 @@ class account {
   void list_packs(std::optional<std::string>) {}
   void list_threads(std::string) {}
   void load_thread(std::string, std::string) {}
-  void send_in_thread(std::string, std::string, std::string, std::string) {}
+  void send_in_thread(std::string, std::string, std::string, std::string, std::optional<std::string>) {}
   void save_pack(emote_pack) {}
   void delete_pack(std::string, std::string) {}
   void upload_pack_picture(pack_picture, std::string) {}

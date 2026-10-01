@@ -307,6 +307,7 @@ struct close_thread {};
 struct send_in_thread {
   std::string root;
   std::string text;
+  std::optional<std::string> reply_to;  // an answer in it answered
 };
 struct menu_thread {};
 struct open_packs {};
@@ -663,8 +664,8 @@ struct actions {
   }
   void open_thread(std::string root) { requests.emplace_back(request::open_thread{std::move(root)}); }
   void close_thread() { requests.emplace_back(request::close_thread{}); }
-  void send_in_thread(std::string root, std::string text) {
-    requests.emplace_back(request::send_in_thread{std::move(root), std::move(text)});
+  void send_in_thread(std::string root, std::string text, std::optional<std::string> reply_to) {
+    requests.emplace_back(request::send_in_thread{std::move(root), std::move(text), std::move(reply_to)});
   }
   void menu_thread() { requests.emplace_back(request::menu_thread{}); }
   void open_room_packs() { requests.emplace_back(request::open_room_packs{}); }

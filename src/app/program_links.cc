@@ -100,8 +100,30 @@ void app::apply(const request::join_room_card&) {
   root().close_room_card();
 }
 
+// A mark's message gone to: in its thread, where it is an answer in one --
+// the thread opened beside the chat, and the mark let go, the message being
+// shown there -- else in the timeline, straight to what is around it, as a
+// reply's quote goes. There the mark is let go only once the message is on
+// the screen (marks_shown): a jump cancelled, or still on its way, leaves it.
+// Paged back to in the timeline, an answer in a thread was looked for there
+// for ever.
+void app::go_to_marked(const mux::conversation& chat, mux::mark_kind_t kind, const std::string& event, const std::string& target) {
+  if (const mux::message* said = mux::ui::held_message(chat, target); said && said->thread) {
+    auto& screen = root().main();
+    screen.open_thread(*said->thread);
+    if (!shared.demo())
+      net->load_thread(chat.id, *said->thread);
+    model->apply(mux::change_t{mux::change::mark_taken{chat.id, kind, event}});
+    this->save_marks();
+    this->refresh();
+    return;
+  }
+  root().main().jump_to(target);
+  this->refresh();
+}
+
 // Telegram's @ and heart: the oldest mention or reaction not yet seen, gone
-// to -- straight to what is around it, as a reply's quote goes -- and let go.
+// to; let go once it is seen.
 void app::apply(const request::jump_to_mark& one) {
   const auto& chosen = root().main().chosen;
   const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
@@ -117,11 +139,8 @@ void app::apply(const request::jump_to_mark& one) {
   // by the order they were learned in -- the ones caught up after a restart
   // come in after newer ones.
   const auto oldest = std::ranges::min_element(marks, {}, &mux::unread_mark::at);
-  const std::string target = oldest->target;
-  model->apply(mux::change_t{mux::change::mark_taken{*chosen, one.kind, oldest->event}});
-  this->save_marks();
-  root().main().jump_to(target);
-  this->refresh();
+  const std::string target = oldest->target, event = oldest->event;
+  this->go_to_marked(*chat, one.kind, event, target);
 }
 
 // All of them, listed as the chat's bubbles: each mention's message, each
@@ -135,13 +154,8 @@ void app::apply(const request::list_marks& one) {
       splice::visit(splice::overloaded{[&](mux::mark_kind::mention) -> const std::vector<mux::unread_mark>& { return chat->unread_mentions; },
                                  [&](mux::mark_kind::reaction) -> const std::vector<mux::unread_mark>& { return chat->unread_reactions; }},
                  one.kind);
-  const auto find = [&](const std::string& id) -> const mux::message* {
-    if (const auto at = std::ranges::find(chat->timeline, id, &mux::message::id); at != chat->timeline.end())
-      return &*at;
-    if (const auto aside = chat->quoted.find(id); aside != chat->quoted.end())
-      return &aside->second;
-    return nullptr;
-  };
+  // In the timeline, in a thread, or aside.
+  const auto find = [&](const std::string& id) -> const mux::message* { return mux::ui::held_message(*chat, id); };
   std::vector<mux::ui::mark_entry> entries;
   for (const mux::unread_mark& mark : marks) {
     mux::ui::mark_entry entry{.event = mark.event};
@@ -175,10 +189,7 @@ void app::apply(const request::go_to_mark& one) {
   if (found == marks.end())
     return;
   const std::string target = found->target;
-  model->apply(mux::change_t{mux::change::mark_taken{*chosen, one.kind, one.event}});
-  this->save_marks();
-  root().main().jump_to(target);
-  this->refresh();
+  this->go_to_marked(*chat, one.kind, one.event, target);
 }
 void app::apply(const request::close_marks&) { root().close_marks(); }
 

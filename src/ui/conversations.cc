@@ -1445,15 +1445,28 @@ struct conversations_screen : nodes::Stack {
   bool toggle_threads() {
     threads_open = !threads_open;
     parts.threads.open.reset();
+    parts.threads.stop_answering();
     this->show_info();
     return threads_open;
   }
   void open_thread(std::string root) {
     threads_open = true;
+    if (parts.threads.open != root)
+      parts.threads.stop_answering();
     parts.threads.open = std::move(root);
     this->show_info();
   }
-  void close_thread() { parts.threads.open.reset(); }
+  void close_thread() {
+    parts.threads.open.reset();
+    parts.threads.stop_answering();
+  }
+  // An answer in the thread open answered there.
+  [[nodiscard]] bool answer_in_thread(const std::string& root, std::string id, std::string title) {
+    if (!threads_open || parts.threads.open != root)
+      return false;
+    parts.threads.answer(std::move(id), std::move(title));
+    return true;
+  }
 
   void toggle_info() {
     info_open = !info_open;

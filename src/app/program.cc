@@ -254,6 +254,7 @@ struct app : kept_settings {
   void apply(const request::close_person_info&);
   void apply(const request::close_room_card&);
   void apply(const request::jump_to_mark& one);
+  void go_to_marked(const mux::conversation& chat, mux::mark_kind_t kind, const std::string& event, const std::string& target);
   // The mentions and reactions not yet seen, written as they change and read
   // back at the start -- each put in once its chat is there.
   void save_marks();

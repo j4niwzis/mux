@@ -35,7 +35,7 @@ template void account<mux::app::post_change>::create_room(std::string name, std:
 template void account<mux::app::post_change>::search_people(std::string term);
 template void account<mux::app::post_change>::list_threads(std::string room);
 template void account<mux::app::post_change>::load_thread(std::string room, std::string root);
-template void account<mux::app::post_change>::send_in_thread(std::string room, std::string body, std::string root, std::string latest);
+template void account<mux::app::post_change>::send_in_thread(std::string room, std::string body, std::string root, std::string latest, std::optional<std::string> reply_to);
 template void account<mux::app::post_change>::list_packs(std::optional<std::string> room);
 template void account<mux::app::post_change>::save_pack(emote_pack pack);
 template void account<mux::app::post_change>::delete_pack(std::string room, std::string state_key);

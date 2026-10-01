@@ -1731,6 +1731,7 @@ struct threads_panel : nodes::Stack {
   Actions* actions = nullptr;
   std::optional<std::string> open;  // the thread open, else the list
   std::vector<message> shown;       // what the open thread shows now
+  std::optional<std::string> answering;  // an answer in it, answered
   struct close_it {
     Actions* actions;
     void operator()() const { actions->toggle_threads(); }
@@ -1846,12 +1847,16 @@ struct threads_panel : nodes::Stack {
     nodes::Text empty{"No threads here yet.", 13.0f, dim_colour};
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 2.0f, .wrap = false}, {})};
     nodes::ScrollContainer<answers_t> answers{answers_t({.spacingY = 0.0f, .wrap = false}, {})};
+    nodes::Text replying{"", 12.0f, accent_colour};
     input_t input;
   } parts;
   explicit threads_panel(Actions* a) : actions(a), parts{.head = head_t(a), .input = input_t(this)} {
     fState.apply({.fillY = true, .background = sidebar_colour});
     parts.divider.apply({.fillX = true, .height = 1.0f});
     parts.empty.apply({.margin = {16.0f, 16.0f, 0.0f, 16.0f}});
+    parts.replying.setElided(true);
+    parts.replying.apply({.fillX = true, .padding = {6.0f, 12.0f, 0.0f, 12.0f}, .background = sidebar_colour});
+    parts.replying.setVisible(false);
     for (auto* list : std::initializer_list<scene::Node*>{&parts.list, &parts.answers})
       list->apply({.fillX = true, .grow = scene::axes::kY});
     std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 4.0f, 4.0f, 4.0f}});
@@ -1866,6 +1871,7 @@ struct threads_panel : nodes::Stack {
     parts.list.setVisible(!open);
     parts.answers.setVisible(open.has_value());
     parts.input.setVisible(open.has_value());
+    parts.replying.setVisible(open.has_value() && answering.has_value());
     const auto root_of = [&](const std::string& id) -> const message* {
       for (auto it = chat.timeline.rbegin(); it != chat.timeline.rend(); ++it)
         if (it->id == id)
@@ -1950,14 +1956,29 @@ struct threads_panel : nodes::Stack {
         return;
       }
   }
-  // What is written, answered in the thread open.
+  // A message of the thread open answered from its menu, as tdesktop's
+  // "Reply to <name>" over the field: in the thread, not the chat (#11379).
+  void answer(std::string id, std::string title) {
+    answering = std::move(id);
+    parts.replying.setText(std::move(title));
+    parts.replying.setVisible(open.has_value());
+    this->invalidateLayout();
+  }
+  void stop_answering() {
+    answering.reset();
+    parts.replying.setVisible(false);
+    this->invalidateLayout();
+  }
+  // What is written, sent in the thread open -- an answer to what is
+  // answered, where something is.
   void send() {
     auto& field = parts.input.parts.field;
     const std::string text = field.plainText();
     if (!open || text.empty())
       return;
-    actions->send_in_thread(*open, text);
+    actions->send_in_thread(*open, text, answering);
     field.setText({});
+    this->stop_answering();
   }
 };
 

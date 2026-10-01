@@ -790,7 +790,11 @@ struct mentioned {
 
 // A text with every run of spaces, tabs and newlines one space, and none at
 // either end: how a quote and what it quotes are compared.
-[[nodiscard]] inline std::string squeezed(std::string_view text) {
+[[nodiscard]] inline std::string squeezed(std::string_view given) {
+  // Without the room a pill's avatar takes in the text (two en spaces).
+  std::string text(given);
+  for (std::size_t at = text.find("\u2002"); at != std::string::npos; at = text.find("\u2002", at))
+    text.erase(at, std::string_view("\u2002").size());
   const auto blank = [](char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; };
   std::string out = text | std::views::chunk_by([&](char a, char b) { return blank(a) == blank(b); }) |
                     std::views::transform([&](auto run) { return blank(run.front()) ? std::string(" ") : std::string(run.begin(), run.end()); }) |

@@ -747,7 +747,12 @@ void account<Sink>::forward(std::string from, std::string event, std::string to)
     // The sender by their Matrix ID, as other clients write it: their
     // pill shows the name, wherever it is read.
     const std::string& who = got->sender;
-    const std::string link = std::format("https://matrix.to/#/{}/{}", from, event);
+    // The original by its room's address where it has one, as Extera links
+    // it; by the room's id, with a server to reach it through, where not.
+    std::string link = std::format("https://matrix.to/#/{}/{}?via={}", from, event, server_name_);
+    if (const auto kept = state_.joined.find(from); kept != state_.joined.end())
+      if (const auto alias = kept->second.state.canonical_alias(); alias && !alias->empty())
+        link = std::format("https://matrix.to/#/{}/{}", *alias, event);
     const std::string attribution =
         std::format(R"(Forwarded from <a href="https://matrix.to/#/{}">{}</a> - <a href="{}">view original message</a>)",
                     escaped(who), escaped(who), escaped(link));

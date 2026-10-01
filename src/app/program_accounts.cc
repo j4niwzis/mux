@@ -308,7 +308,10 @@ void app::pack_files(const std::vector<std::string>& paths) {
     net->upload_pack_picture(*packs_account, std::move(one), std::move(bytes));
   }
 }
-void app::apply(const request::copy_text& one) { skiff::scene::setClipboardText(one.text); }
+void app::apply(const request::copy_text& one) {
+  skiff::scene::setClipboardText(one.text);
+  root().close_text_menu();
+}
 void app::apply(const request::close_new_chat&) { root().close_new_chat(); }
 void app::apply(const request::start_direct& one) {
   const auto& current = root().main().current;

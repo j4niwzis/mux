@@ -358,6 +358,10 @@ void app::before_frame() {
   auto pending = std::exchange(ask.requests, {});
   for (const request_t& one : pending)
     splice::visit([this](const auto& each) { this->route(each); }, one);
+  // A selectable text pressed with the right button: its menu, the last
+  // asked for.
+  if (auto asked = std::exchange(skiff::nodes::textMenusAsked(), {}); !asked.empty())
+    root().show_text_menu(std::move(asked.back()));
   // What the parts left to do: the window made again, brought up to date;
   // the emoji picked lately kept.
   if (std::exchange(shared.rebuild_due, false))

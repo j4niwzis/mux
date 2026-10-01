@@ -40,6 +40,23 @@ struct window : scene::Node {
 
   // What the window holds, made anew when the theme changes: what is made
   // takes its colours then. Its layers, bottom to top.
+  // A selectable text's menu: Copy, what it selected.
+  struct text_menu : nodes::Stack {
+    struct copy_it {
+      Actions* actions;
+      std::string text;
+      void operator()() const { actions->copy_text(text); }
+    };
+    struct parts_t {
+      widgets::Button<copy_it> copy;
+    } parts;
+    text_menu(Actions* a, std::string text) : parts{.copy = widgets::Button<copy_it>("Copy", {a, std::move(text)})} {
+      fState.apply({.width = 150.0f, .autoSize = scene::axes::kY, .padding = {6.0f, 6.0f, 6.0f, 6.0f}, .cornerRadius = 10.0f,
+                    .background = popup_colour(), .border = scene::Border{band_colour, 1.0f},
+                    .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
+      parts.copy.apply({.fillX = true, .height = 30.0f});
+    }
+  };
   struct layers : scene::Node {
     using frame_t = widgets::SlideOver<with_drawer, panel_type>;
     struct parts_t {
@@ -79,9 +96,24 @@ struct window : scene::Node {
       std::optional<emoji_popup<Actions>> emoji;
       std::optional<context_menu<Actions>> menu;
       std::optional<picture_viewer<Actions>> viewer;
+      // A selectable text's menu, where it was pressed with the right button.
+      std::optional<text_menu> text_menu_up;
     } parts;
 
     Actions* actions_of = nullptr;
+    // Where the pointer was last pressed, in the window: where a menu asked
+    // by that press is put. A press off the text menu closes it, at once --
+    // nothing of it is pressed.
+    skia::SkPoint last_press{};
+    using Node::onPointer;
+    void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply&) {
+      last_press = {press.x, press.y};
+      if (parts.text_menu_up && !parts.text_menu_up->bounds().contains(press.x, press.y)) {
+        parts.text_menu_up.reset();
+        this->invalidateLayout();
+        this->markDamaged();
+      }
+    }
     // Esc closes the emoji popup first, whatever has the keys: the input
     // keeps them while the popup is open, so the press comes down to it
     // through here -- caught on its way, before the chat reads Esc as
@@ -98,7 +130,7 @@ struct window : scene::Node {
         : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a))},
           actions_of(a) {
       auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, devtools, sending,
-             emoji, menu, viewer] = parts;
+             emoji, menu, viewer, text_menu_up] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
       behind.apply({.fill = true});
@@ -228,6 +260,26 @@ struct window : scene::Node {
   }
   void close_settings() { layer().settings.close(); }
   [[nodiscard]] settings_dialog<Actions>* settings_up() { return layer().settings.shown(); }
+  // A selectable text's menu, where the pointer was pressed, kept in the
+  // window; and gone.
+  void show_text_menu(std::string text) {
+    auto& now = *parts.now;
+    const skia::SkRect box = fState.fBounds;
+    now.parts.text_menu_up.emplace(actions, std::move(text));
+    now.parts.text_menu_up->apply({.place = scene::anchor::kTopLeft,
+                                    .x = std::clamp(now.last_press.x() - box.fLeft, 0.0f, std::max(0.0f, box.width() - 150.0f)),
+                                    .y = std::clamp(now.last_press.y() - box.fTop, 0.0f, std::max(0.0f, box.height() - 44.0f))});
+    now.invalidateLayout();
+    now.markDamaged();
+  }
+  void close_text_menu() {
+    auto& now = *parts.now;
+    if (now.parts.text_menu_up) {
+      now.parts.text_menu_up.reset();
+      now.invalidateLayout();
+      now.markDamaged();
+    }
+  }
   [[nodiscard]] room_settings<Actions>* manage_up() { return layer().manage.shown(); }
 
   void open_drawer() { layer().frame.base().open(); }

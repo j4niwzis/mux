@@ -533,6 +533,9 @@ struct conversations_screen : nodes::Stack {
       float x0 = 0.0f, y0 = 0.0f;
       bool moving = false;
       std::chrono::steady_clock::time_point pressed = std::chrono::steady_clock::now();
+      // A quick move along the top bar: it scrolled, by the pointer.
+      bool scrolling = false;
+      float last_x = 0.0f;
     };
     std::optional<drag_t> drag;
     bool menu_close_due = false;
@@ -678,6 +681,12 @@ struct conversations_screen : nodes::Stack {
     void drag_move(const scene::pointer::move& at, scene::PointerReply& reply) {
       if (!drag)
         return;
+      if (drag->scrolling) {
+        top_bar.scroll_by(drag->last_x - at.x);
+        drag->last_x = at.x;
+        reply.handle();
+        return;
+      }
       if (!drag->moving) {
         const float dx = at.x - drag->x0, dy = at.y - drag->y0;
         if (std::abs(dx) < 6.0f && std::abs(dy) < 6.0f)
@@ -688,9 +697,18 @@ struct conversations_screen : nodes::Stack {
         const bool along_side = splice::visit(splice::overloaded{[](config::space_bar::side) { return true; },
                                                                  [](const auto&) { return false; }},
                                               drag->from);
-        if (along_side && std::abs(dy) > std::abs(dx) &&
-            std::chrono::steady_clock::now() - drag->pressed < std::chrono::milliseconds(250)) {
+        const bool quick = std::chrono::steady_clock::now() - drag->pressed < std::chrono::milliseconds(250);
+        if (along_side && std::abs(dy) > std::abs(dx) && quick) {
           drag.reset();
+          return;
+        }
+        // Along the top bar, the same: it scrolls, the pointer held for it.
+        if (!along_side && std::abs(dx) > std::abs(dy) && quick) {
+          drag->scrolling = true;
+          drag->last_x = at.x;
+          top_bar.scroll_by(drag->x0 - at.x);
+          reply.capturePointer();
+          reply.handle();
           return;
         }
         drag->moving = true;
@@ -707,6 +725,11 @@ struct conversations_screen : nodes::Stack {
       if (!drag)
         return;
       const drag_t was = *std::exchange(drag, std::nullopt);
+      if (was.scrolling) {
+        reply.releasePointer();
+        reply.handle();
+        return;
+      }
       if (!was.moving)
         return;
       reply.releasePointer();

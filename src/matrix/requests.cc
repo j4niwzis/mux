@@ -86,7 +86,11 @@ void account<Sink>::load_older(std::string room, std::string from) {
     const conversation_id in{id_, room};
     for (const auto& one : got->chunk)  // newest first: each goes before the rest
       event(in, one, placement::at_start{});
-    sink_(change::history_position{in, got->end});
+    // Nothing came, or the token did not move: the room's start. A server
+    // that hands out a token with an empty page each time had an empty chat
+    // -- at its top all along -- page back again at every one, for ever.
+    const bool start = got->chunk.empty() || !got->end || *got->end == from;
+    sink_(change::history_position{in, start ? std::nullopt : got->end});
   });
 }
 

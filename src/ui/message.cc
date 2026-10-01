@@ -345,11 +345,12 @@ struct picture_view : scene::Node {
     // The picture's own proportions, where the message said none or others.
     if (const auto ratio = parts.picture.ratio(); ratio && (width <= 0 || height <= 0 || std::abs(w / h - *ratio) > 0.01f))
       h = w / *ratio;
-    const float room = parent.width() > 0.0f ? parent.width() : kMax;
-    const float scale = std::min({1.0f, kMax / w, kMax / h, room / w});
+    const float most = sticker ? kStickerMax : kMax;
+    const float room = parent.width() > 0.0f ? parent.width() : most;
+    const float scale = std::min({1.0f, most / w, most / h, room / w});
     w *= scale;
     h *= scale;
-    if (w < kMin && h < kMin) {
+    if (!sticker && w < kMin && h < kMin) {
       const float up = std::min(kMin / std::max(w, h), room / w);
       w *= up;
       h *= up;
@@ -358,6 +359,15 @@ struct picture_view : scene::Node {
     fState.fHeight = std::floor(h);
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
+  // A sticker: no plate under it -- what it does not cover shows what is
+  // behind -- and no larger than tdesktop's (maxStickerSize, 256 a side).
+  bool sticker = false;
+  static constexpr float kStickerMax = 256.0f;
+  void as_sticker() {
+    sticker = true;
+    fState.apply({.background = skia::SkColor{0}});
+    this->invalidateLayout();
+  }
 };
 
 // Several pictures in one message, as tdesktop shows an album: rows filling
@@ -1429,8 +1439,17 @@ struct message_bubble : nodes::Stack {
                                                       audio_type(carried.mimetype, carried.name));
                             }},
                  carried.kind);
-      // No caption: the text goes, and a picture has its time over it.
-      if (said.body.plain.empty() && !said.body.html) {
+      // A sticker: on nothing -- no bubble, no padding -- its time over it.
+      if (said.sticker && body.parts.picture) {
+        body.parts.picture->as_sticker();
+        body.parts.text.setVisible(false);
+        body.parts.picture->show_time(when);
+        body.parts.time.setVisible(false);
+        body.fState.setBackdrop(false);
+        body.apply({.padding = {0.0f, 0.0f, 0.0f, 0.0f}, .background = skia::SkColor{0},
+                    .border = scene::Border{skia::SkColor{0}, 0.0f}});
+      } else if (said.body.plain.empty() && !said.body.html) {
+        // No caption: the text goes, and a picture has its time over it.
         body.parts.text.setVisible(false);
         if (body.parts.picture) {
           body.parts.picture->show_time(when);

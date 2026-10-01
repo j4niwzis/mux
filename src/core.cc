@@ -334,6 +334,9 @@ struct message {
   std::optional<thread_summary> threaded;
   // Forwarded: from whom, and where it was.
   std::optional<forward_info> forwarded;
+  // A sticker (m.sticker): its picture drawn as Telegram draws one -- no
+  // bubble, smaller than a photo, the time on a plate over its corner.
+  bool sticker = false;
   friend bool operator==(const message&, const message&) = default;
 };
 

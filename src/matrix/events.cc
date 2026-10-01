@@ -517,6 +517,7 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
                          .body = {},
                          .outgoing = one.sender == id_.address};
             made.attachment = std::move(carried);
+            made.sticker = true;
             sink_(change::message_added{std::move(made), where});
           },
           // Any other: said by its type's name.

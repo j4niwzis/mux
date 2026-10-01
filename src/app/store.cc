@@ -57,6 +57,7 @@ struct message_line {
   // Forwarded: who from, kept -- read back without it, a forward lost its
   // "Forwarded from" while its text stayed stripped of it.
   std::optional<forward_line> forwarded;
+  std::optional<bool> sticker;
   friend consteval auto json_schema(knot::type<message_line>) { return knot::schema<message_line>(); }
 };
 
@@ -298,6 +299,7 @@ class message_store {
         one.event_kind = mux::logic::room_event_of(*o.kind);
       if (o.attachment)
         one.attachment = attachment_of(*o.attachment);
+      one.sticker = o.sticker.value_or(false);
       if (o.forwarded)
         one.forwarded = mux::forward_info{.from = std::move(o.forwarded->from), .name = std::move(o.forwarded->name),
                                           .link = std::move(o.forwarded->link)};
@@ -358,6 +360,7 @@ class message_store {
         .forwarded = one.forwarded ? std::optional(store_file::forward_line{one.forwarded->from, one.forwarded->name,
                                                                               one.forwarded->link})
                                    : std::nullopt,
+        .sticker = store_file::flag(one.sticker),
     };
     if (!one.album.empty()) {
       line.album.emplace();

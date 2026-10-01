@@ -293,10 +293,35 @@ struct field_quotes {
       i = j;
     }
   }
+  // Typography as it is typed, as Telegram's: "--" an em dash, "<<" and
+  // ">>" guillemets -- not in code, nor where a line begins (a quote's
+  // marks). Backspace right after one gives back the two it was (#11786).
+  static constexpr std::array<std::pair<std::string_view, std::string_view>, 3> kTypography{
+      {{"--", "\u2014"}, {"<<", "\u00AB"}, {">>", "\u00BB"}}};
+  [[nodiscard]] static bool plain_at(std::string_view text, std::size_t caret) {
+    const std::size_t start = start_of(text, caret);
+    if (code_at(text, start) != code_line::none)
+      return false;
+    // Inside `code` on its line: an odd number of backticks before it.
+    return std::ranges::count(text.substr(start, caret - start), '`') % 2 == 0;
+  }
+  [[nodiscard]] static std::optional<widgets::TextEdit> typed(std::string_view text, std::size_t caret, std::string_view what) {
+    if (what.size() != 1 || caret == 0 || !plain_at(text, caret) || caret - 1 < body_at(text, start_of(text, caret)) + 1)
+      return std::nullopt;
+    const std::string pair{text[caret - 1], what[0]};
+    for (const auto& [two, one] : kTypography)
+      if (pair == two)
+        return widgets::TextEdit{.from = caret - 1, .to = caret, .with = std::string(one), .caret = caret - 1 + one.size()};
+    return std::nullopt;
+  }
   [[nodiscard]] static std::optional<widgets::TextEdit> key(std::string_view text, std::size_t caret,
                                                             const scene::key::down& press) {
     namespace keys = scene::keys;
     namespace modifier = scene::modifier;
+    if (press.key == keys::kBackspace && !press.modifiers.template has<modifier::control>() && plain_at(text, caret))
+      for (const auto& [two, one] : kTypography)
+        if (caret >= one.size() && text.substr(caret - one.size(), one.size()) == one)
+          return widgets::TextEdit{.from = caret - one.size(), .to = caret, .with = std::string(two), .caret = caret - one.size() + two.size()};
     const std::size_t start = start_of(text, caret);
     // In a block of code -- in a quote, at its depth: Enter is a new line of
     // it, not a send; Enter on an opening ``` with nothing closing it closes

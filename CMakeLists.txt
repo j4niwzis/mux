@@ -138,6 +138,9 @@ cme_declare_port(NAME knot PROVIDES knot
   LICENSE AGPL-3.0-only
   SYSTEM NEVER)
 
+# Found by itself, and linked by itself: mux imports it (a message's HTML),
+# not only tern.
+cme_find_package(chevron REQUIRED)
 cme_find_package(tern REQUIRED)
 # Of loom, what mux uses: the state a sync leaves, and the parts of the API it
 # calls -- logging in, sending, syncing, finding the homeserver.
@@ -181,7 +184,7 @@ set(mux_std_flags
   $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=${MUX_CONSTEXPR_STEPS}>
   $<$<AND:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,23>>:-fno-experimental-new-constant-interpreter>)
 target_compile_options(mux_modules PUBLIC ${mux_std_flags})
-target_link_libraries(mux_modules PUBLIC tern loom Boost::asio Boost::beast Boost::context
+target_link_libraries(mux_modules PUBLIC chevron tern loom Boost::asio Boost::beast Boost::context
   OpenSSL::SSL OpenSSL::Crypto)
 
 # The accounts kept between runs: a library of its own, on knot alone, so

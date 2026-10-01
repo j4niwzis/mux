@@ -698,6 +698,19 @@ void account<Sink>::create_group(std::string name) {
   });
 }
 
+// Extera's mark of a forwarded message, beside its content: who it is from
+// and where, as HTML -- for clients that show a forward apart.
+struct forward_mark {
+  struct attribution_t {
+    std::string attribution;
+    friend consteval auto json_schema(knot::type<attribution_t>) { return knot::schema<attribution_t>(); }
+  };
+  attribution_t forward;
+  friend consteval auto json_schema(knot::type<forward_mark>) {
+    return knot::schema<forward_mark>().member<"forward">(knot::key("xyz.extera.forward"));
+  }
+};
+
 template <class Sink>
 void account<Sink>::forward(std::string from, std::string event, std::string to) {
   loop_->spawn([this, from = std::move(from), event = std::move(event), to = std::move(to)] {
@@ -721,6 +734,34 @@ void account<Sink>::forward(std::string from, std::string event, std::string to)
     }
     content->m_relates_to.reset();
     content->m_new_content.reset();
+    // As Extera forwards: who it is from and a link to it over it -- in bold,
+    // the message quoted under it, where it is words -- and the same in a
+    // field of its own. A picture or a file keeps its own body: its name.
+    const auto escaped = [](std::string_view text) {
+      return text | std::views::transform([](char c) {
+               return c == '&' ? std::string("&amp;") : c == '<' ? std::string("&lt;") : c == '>' ? std::string("&gt;")
+                                                       : c == '"' ? std::string("&quot;") : std::string(1, c);
+             }) |
+             std::views::join | std::ranges::to<std::string>();
+    };
+    const std::string who = name_in(from, got->sender);
+    const std::string link = std::format("https://matrix.to/#/{}/{}", from, event);
+    const std::string attribution =
+        std::format(R"(Forwarded from <a href="https://matrix.to/#/{}">{}</a> - <a href="{}">view original message</a>)",
+                    escaped(got->sender), escaped(who), escaped(link));
+    const bool words = splice::visit(splice::overloaded{[](msgtype::other) { return true; }, [](msgtype::emote) { return true; },
+                                                        [](const auto&) { return false; }},
+                                     msgtype_of(content->msgtype));
+    if (words) {
+      const std::string quoted = content->formatted_body ? *content->formatted_body
+                                                         : escaped(content->body) | std::views::split(std::string_view("\n")) |
+                                                               std::views::join_with(std::string_view("<br>")) |
+                                                               std::ranges::to<std::string>();
+      content->formatted_body = "<strong>" + attribution + "</strong><blockquote>" + quoted + "</blockquote>";
+      content->format = "org.matrix.custom.html";
+      content->body = std::format("Forwarded from {} - {}\n{}", who, link, content->body);
+    }
+    content->rest = as_body(forward_mark{.forward = {.attribution = attribution}});
     auto done = perform(*api_, loom::cs::send_message{.room_id = to,
                                                       .event_type = "m.room.message",
                                                       .txn_id = this->transaction(),

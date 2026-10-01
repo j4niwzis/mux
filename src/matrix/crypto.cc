@@ -281,6 +281,11 @@ struct device_identity {
   const auto ssk = cross_key_of<ssk_t::usage_item_values::self_signing>(ssk_entry->second, user);
   if (!ssk || !key_signed_by(ssk_entry->second, user, *master))
     return made;
+  // A device whose ID is one of the user's cross-signing keys is no device:
+  // signatures are found by "ed25519:<ID>", and one key standing for the
+  // other is how matrix-js-sdk's CVE-2022-39250 confused them.
+  if (id == *master || id == *ssk)
+    return std::nullopt;
   const auto by_ssk = signature_of(info.signatures, user, "ed25519:" + *ssk);
   made.cross_signed = by_ssk && signed_by(*canonical, *ssk, *by_ssk);
   return made;

@@ -2406,9 +2406,15 @@ struct conversations_screen : nodes::Stack {
     // Its own chats -- not those moved to another account's list -- and the
     // other accounts' listed in it.
     const auto found_by = [&](const conversation& one) {
-      // Upgraded away, its new room here: only the new one listed, as Element.
-      if (one.replaced_by && in && in->conversations.contains(*one.replaced_by))
-        return false;
+      // Upgraded away, its new room here: only the new one listed, as Element
+      // -- where the two agree: its tombstone names the new room, and the new
+      // room's creation names it as what it continues. One side alone is not
+      // believed (as matrix-js-sdk's CVE-2025-59160, the other way round):
+      // a room could otherwise hide another from the list.
+      if (one.replaced_by && in)
+        if (const auto next = in->conversations.find(*one.replaced_by);
+            next != in->conversations.end() && next->second.predecessor == one.id.id)
+          return false;
       return in_folder(one) && (wanted.empty() || lower(display_name(one)).contains(wanted) || lower(one.id.id).contains(wanted));
     };
     if (in)

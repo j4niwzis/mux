@@ -1606,7 +1606,7 @@ struct conversations_screen : nodes::Stack {
   std::optional<std::string> jumping_to;
   // How long a jump waits on a window around its message before paging
   // back to it, and on anything at all before it is given up.
-  static constexpr double kContextPatienceMs = 4000.0, kJumpPatienceMs = 20000.0;
+  static constexpr double kContextPatienceMs = 4000.0;
   // The chat the jump is in: one asked with a chat's opening -- a link to
   // a message there -- is kept when the chat is first shown.
   std::optional<conversation_id> jump_chat;
@@ -2012,16 +2012,9 @@ struct conversations_screen : nodes::Stack {
     // A jump on its way for more than a few frames -- fetched, or paged back
     // to -- shows the loader turning in the middle of the list.
     jump_age = jumping_to ? jump_age + 1 : 0;
-    // A jump that has got nowhere for a while is let go -- however far back
-    // it pages while pages come: while one goes on, frames are asked for, and
-    // one that could not land -- a message not to be had, a bubble never laid
-    // out -- asked forever.
-    if (jumping_to && jump_since_ms >= 0.0 && now_ms - jump_since_ms > kJumpPatienceMs) {
-      if (trace_jumps() && jumping_to)
-        std::cerr << "[jump] " << *jumping_to << " given up\n";
-      this->stop_jump();
-      jump_age = 0;
-    }
+    // No time limit: a jump goes on as long as there is history to page
+    // back through, as far as the chat's own limit (none, where it says 0) --
+    // or until it is stopped by hand, at the loader (#10989).
     // And while the older, asked at the top, are on their way.
     if (const bool loading = jump_age > 6 || (this->history_pending() && timeline.current() <= 300.0f);
         loading != chat.area.parts.loading.visible())

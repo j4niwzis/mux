@@ -1085,9 +1085,10 @@ struct conversations_screen : nodes::Stack {
     const std::vector<shown_icon> top_shown = expanded(top_items);
     for (const auto& [items, mark] : {std::pair{&side_shown, "s"}, std::pair{&top_shown, "t"}})
       for (const shown_icon& one : *items)
-        made.push_back(one.top ? std::format("{}|{}|{}|{}", mark, config::word_of(one.top->item), one.top->name, one.top->shows == folder)
-                               : std::format("{}|{}|{}|{}|{}", mark, one.sub->id.id, display_name(*one.sub), one.depth,
-                                             folder == folder_t{folder::space{one.sub->id.id}}));
+        made.push_back(one.top ? std::format("{}|{}|{}|{}|{}", mark, config::word_of(one.top->item), one.top->name, one.top->shows == folder,
+                                             avatar_images().has(one.top->id))
+                               : std::format("{}|{}|{}|{}|{}|{}", mark, one.sub->id.id, display_name(*one.sub), one.depth,
+                                             folder == folder_t{folder::space{one.sub->id.id}}, avatar_images().has(one.sub->id.id)));
     made.push_back(std::format("{}{}", spaces_on, top_bar_on));
     if (made != shown_bars) {
       shown_bars = made;

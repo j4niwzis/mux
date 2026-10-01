@@ -103,7 +103,9 @@ struct window : scene::Node {
       backdrop.apply({.fill = true});
       behind.apply({.fill = true});
       behind.setVisible(window_look().behind);
-      frame.setSheetColour(background);
+      // The pages over the chats (Accounts) on the panels' colour: as
+      // see-through as the panels are.
+      frame.setSheetColour(sidebar_colour);
       frame.base().setSheetColour(sidebar_colour);
       settings.setSheetColour(sidebar_colour);
       sending.setSheetColour(sidebar_colour);

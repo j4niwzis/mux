@@ -16,6 +16,8 @@ import loom.cs.receipts;
 import loom.cs.redaction;
 import loom.cs.room_send;
 import loom.cs.rooms;
+import loom.cs.room_upgrades;
+import loom.cs.knocking;
 import loom.cs.create_room;
 import loom.cs.account_data;
 import loom.cs.sync;

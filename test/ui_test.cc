@@ -134,7 +134,11 @@ struct stub {
   void set_wallpaper(mux::choice_level_t, mux::config::wallpaper_pick_t) {}
   void open_thread(std::string) {}
   void close_thread() {}
-  void send_in_thread(std::string, std::string) {}
+  void send_in_thread(std::string, std::string, std::optional<std::string>) {}
+  void attach_in_thread() {}
+  void toggle_thread_emoji() {}
+  void flip_live_blur() {}
+  void flip_home_hide(std::string) {}
   void menu_thread() {}
   void open_room_packs() {}
   void close_packs() {}

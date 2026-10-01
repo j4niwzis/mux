@@ -1333,7 +1333,19 @@ class model {
     splice::visit(splice::overloaded{[&](placement::at_end) {
                             if (!where.latest || one.message.at >= where.latest->at)
                               where.latest = one.message;
-                            if (!where.detached)
+                            if (where.detached)
+                              return;
+                            // Being sent from here: said now, after all that is
+                            // shown, whatever its time -- this machine's clock,
+                            // which a few seconds behind the server's put a
+                            // reply above the message it answered.
+                            const bool sending = splice::visit(
+                                splice::overloaded{[](const delivery::sending&) { return true; },
+                                                   [](const auto&) { return false; }},
+                                one.message.delivery);
+                            if (sending)
+                              where.timeline.push_back(one.message);
+                            else
                               in_time(where.timeline.end());
                           },
                           [&](placement::at_start) { in_time(where.timeline.begin()); },

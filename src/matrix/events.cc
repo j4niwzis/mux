@@ -327,7 +327,29 @@ template <class Sink>
 void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_event& one, event_type_t,
                          std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where) {
   const std::string who = name_in(in.id, one.sender);
-  const auto say = [&](room_event_t kind, std::string said) { service(in, one, at, where, std::move(said), kind); };
+  // The people in a line as people -- pills, as a mention in a message is
+  // one -- in its HTML: links to them, their names as shown.
+  const auto escaped = [](std::string_view text) {
+    std::string out;
+    for (const char c : text) {
+      switch (c) {
+        case '&': out += "&amp;"; break;
+        case '<': out += "&lt;"; break;
+        case '>': out += "&gt;"; break;
+        case '"': out += "&quot;"; break;
+        default: out += c;
+      }
+    }
+    return out;
+  };
+  const auto person = [&](const std::string& id, const std::string& name) {
+    return std::format(R"(<a href="https://matrix.to/#/{}">{}</a>)", escaped(id), escaped(name));
+  };
+  const std::string who_link = person(one.sender, who);
+  // A line of who did what: they, as a person, then what they did.
+  const auto say = [&](room_event_t kind, std::string done_what) {
+    service(in, one, at, where, who + done_what, kind, who_link + escaped(done_what));
+  };
   splice::visit(
       splice::overloaded{
           [&](const member_content& content) {
@@ -342,25 +364,7 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
             const membership_t was = before ? membership_from(before->membership) : membership_t{membership::other{}};
             const bool was_in = splice::visit([](auto of) { return of.in; }, was);
             const bool self = one.sender == target_id;
-            // The people in it as people -- pills, as a mention in a message
-            // is one -- in its HTML: links to them, their names as shown.
-            const auto escaped = [](std::string_view text) {
-              std::string out;
-              for (const char c : text) {
-                switch (c) {
-                  case '&': out += "&amp;"; break;
-                  case '<': out += "&lt;"; break;
-                  case '>': out += "&gt;"; break;
-                  case '"': out += "&quot;"; break;
-                  default: out += c;
-                }
-              }
-              return out;
-            };
-            const auto person = [&](const std::string& id, const std::string& name) {
-              return std::format(R"(<a href="https://matrix.to/#/{}">{}</a>)", escaped(id), escaped(name));
-            };
-            const std::string who_link = person(one.sender, who), target_link = person(target_id, target);
+            const std::string target_link = person(target_id, target);
             // A line of who did it ({0}) and to whom ({1}): plain, and with
             // them as people.
             const auto say_people = [&](room_event_t kind, std::string_view pattern) {
@@ -371,7 +375,8 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
                                     if (!was_in) {
                                       say_people(room_event::joins{}, "{1} joined");
                                     } else if (const auto old = before ? before->displayname : std::nullopt; old && *old != target) {
-                                      say(room_event::names{}, std::format("{} changed their name to {}", *old, target));
+                                      service(in, one, at, where, std::format("{} changed their name to {}", *old, target), room_event::names{},
+                                              person(target_id, *old) + " changed their name to " + escaped(target));
                                     } else {
                                       say_people(room_event::avatars{}, "{1} changed their picture");
                                     }
@@ -395,33 +400,33 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
                        now);
           },
           [&](const loom::ev::m_room_name_content_t& content) {
-            say(room_event::room_name{}, content.name.empty() ? std::format("{} removed the room's name", who)
-                                                              : std::format("{} renamed the room to “{}”", who, content.name));
+            say(room_event::room_name{}, content.name.empty() ? std::format(" removed the room's name")
+                                                              : std::format(" renamed the room to “{}”", content.name));
           },
           [&](const loom::ev::m_room_topic_content_t& content) {
-            say(room_event::topic{}, content.topic.empty() ? std::format("{} removed the topic", who)
-                                                           : std::format("{} changed the topic to “{}”", who, content.topic));
+            say(room_event::topic{}, content.topic.empty() ? std::format(" removed the topic")
+                                                           : std::format(" changed the topic to “{}”", content.topic));
           },
-          [&](const loom::ev::m_room_avatar_content_t&) { say(room_event::room_avatar{}, std::format("{} changed the room's picture", who)); },
-          [&](const loom::ev::m_room_create_content_t&) { say(room_event::other{}, std::format("{} created the room", who)); },
-          [&](const loom::ev::m_room_power_levels_content_t&) { say(room_event::permissions{}, std::format("{} changed who may do what here", who)); },
-          [&](const loom::ev::m_room_pinned_events_content_t&) { say(room_event::pins{}, std::format("{} changed the pinned messages", who)); },
+          [&](const loom::ev::m_room_avatar_content_t&) { say(room_event::room_avatar{}, std::format(" changed the room's picture")); },
+          [&](const loom::ev::m_room_create_content_t&) { say(room_event::other{}, std::format(" created the room")); },
+          [&](const loom::ev::m_room_power_levels_content_t&) { say(room_event::permissions{}, std::format(" changed who may do what here")); },
+          [&](const loom::ev::m_room_pinned_events_content_t&) { say(room_event::pins{}, std::format(" changed the pinned messages")); },
           [&](const loom::ev::m_room_join_rules_content_t& content) {
-            say(room_event::access{}, std::format("{} set who may join to “{}”", who, loom::client::choice_text(content.join_rule)));
+            say(room_event::access{}, std::format(" set who may join to “{}”", loom::client::choice_text(content.join_rule)));
           },
           [&](const loom::ev::m_room_history_visibility_content_t& content) {
-            say(room_event::access{}, std::format("{} set who may read the history to “{}”", who,
+            say(room_event::access{}, std::format(" set who may read the history to “{}”",
                                                   loom::client::choice_text(content.history_visibility)));
           },
           [&](const loom::ev::m_room_canonical_alias_content_t& content) {
             const std::string alias = content.alias.value_or("");
-            say(room_event::address{}, alias.empty() ? std::format("{} removed the room's address", who)
-                                                     : std::format("{} set the room's address to {}", who, alias));
+            say(room_event::address{}, alias.empty() ? std::format(" removed the room's address")
+                                                     : std::format(" set the room's address to {}", alias));
           },
           // A sticker: a picture, as a message with one is shown.
           [&](const loom::ev::m_sticker_content_t& content) {
             if (content.url.empty()) {
-              say(room_event::other{}, std::format("{} sent a sticker", who));
+              say(room_event::other{}, std::format(" sent a sticker"));
               return;
             }
             mux::attachment carried;
@@ -441,7 +446,7 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
             sink_(change::message_added{std::move(made), where});
           },
           // Any other: said by its type's name.
-          [&](const auto&) { say(room_event::other{}, std::format("{} sent {}", who, one.type)); }},
+          [&](const auto&) { say(room_event::other{}, std::format(" sent {}", one.type)); }},
       one.content.data());
 }
 

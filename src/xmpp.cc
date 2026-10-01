@@ -591,7 +591,8 @@ class account {
         if (const auto at = stamp_of(delayed->stamp))
           in.at = *at;
       if (const auto* correction = carried.template get_if<tern::corrections::replace>()) {
-        sink_(change::message_edited{in.in, correction->id, in.body});
+        // Its sender's own message only (XEP-0308): anyone's else.
+        sink_(change::message_edited{in.in, correction->id, in.body, in.sender});
         return;
       }
       if (const auto* taken = carried.template get_if<tern::retractions::retract>()) {

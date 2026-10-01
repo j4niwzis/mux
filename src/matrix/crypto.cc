@@ -32,6 +32,18 @@ struct kept_file {
   std::optional<std::string> to_device_since;
   std::map<std::string, std::vector<std::string>> olm;               // their curve25519 key -> sessions
   std::map<std::string, std::map<std::string, std::string>> megolm;  // room -> session id -> session
+  // Who each Megolm session came from: the curve25519 key of the Olm session
+  // its room key came over, and the ed25519 key the sender's payload claimed.
+  struct origin {
+    std::string sender_key;
+    std::string ed25519;
+    std::string sender;  // the user it came from
+    friend consteval auto json_schema(knot::type<origin>) { return knot::schema<origin>(); }
+  };
+  std::map<std::string, origin> origins;  // session id -> where it came from
+  // Each session's message indices read, and the event each was: the same
+  // index in another event is a replay.
+  std::map<std::string, std::map<std::uint32_t, std::string>> indices;
   friend consteval auto json_schema(knot::type<kept_file>) { return knot::schema<kept_file>(); }
 };
 
@@ -45,6 +57,25 @@ struct olm_ciphertext {
 
 // What an Olm message decrypts to: an event of its own, for this device.
 using olm_payload = loom::ev::basic_event<loom::ev::other_content>;
+// And who it says it is from and for: checked against who sent it and who
+// this is, before anything in it is believed (the spec's Olm payload).
+struct olm_envelope {
+  struct ed25519_key {
+    std::string ed25519;
+    friend consteval auto json_schema(knot::type<ed25519_key>) { return knot::schema<ed25519_key>(); }
+  };
+  std::string sender;
+  std::string recipient;
+  ed25519_key recipient_keys;
+  ed25519_key keys;
+  friend consteval auto json_schema(knot::type<olm_envelope>) { return knot::schema<olm_envelope>(); }
+};
+// A Megolm plaintext's room: the room it was sent in, checked against the
+// room it came in.
+struct megolm_room {
+  std::string room_id;
+  friend consteval auto json_schema(knot::type<megolm_room>) { return knot::schema<megolm_room>(); }
+};
 // What a Megolm message decrypts to: a room event's type and content.
 using megolm_payload = loom::ev::basic_event<loom::ev::timeline_content>;
 
@@ -107,15 +138,20 @@ class olm_machine {
     made.key_ = made.pickle_key();
     std::ifstream in(made.store_, std::ios::binary);
     const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    if (!text.empty())
-      if (auto read = knot::try_read<kept_file>(text)) {
-        made.kept_ = std::move(*read);
-        try {
-          made.account_.emplace(vodozemac::olm::account_from_pickle(made.kept_.account, made.key_));
-        } catch (const rust::Error&) {
-          made.kept_ = kept_file{};
-        }
+    // A store there that cannot be read -- damaged, or its key lost -- is not
+    // replaced by a new identity: the device's keys on the server would no
+    // longer be its own, and every session would be lost without a word.
+    if (!text.empty()) {
+      auto read = knot::try_read<kept_file>(text);
+      if (!read)
+        throw std::runtime_error("the encryption store cannot be read: " + made.store_.string());
+      made.kept_ = std::move(*read);
+      try {
+        made.account_.emplace(vodozemac::olm::account_from_pickle(made.kept_.account, made.key_));
+      } catch (const rust::Error& failed) {
+        throw std::runtime_error(std::string("the encryption store's account cannot be unpickled: ") + failed.what());
       }
+    }
     if (!made.account_) {
       made.account_.emplace(vodozemac::olm::new_account());
       made.kept_ = kept_file{};
@@ -210,18 +246,34 @@ class olm_machine {
     if (!plaintext)
       return;
     auto payload = knot::try_read<olm_payload>(*plaintext);
-    if (!payload)
+    auto envelope = knot::try_read<olm_envelope>(*plaintext);
+    if (!payload || !envelope)
       return;
-    (void)sender;
-    splice::visit(splice::overloaded{[&](const loom::ev::m_room_key_content_t& key) { this->room_key(key); },
+    // For this user and this device, from the user who sent it: else a
+    // payload decrypted elsewhere and passed on, or one claiming another's
+    // name, would be believed.
+    if (envelope->sender != sender || envelope->recipient != user_id_ || envelope->recipient_keys.ed25519 != this->ed25519())
+      return;
+    splice::visit(splice::overloaded{[&](const loom::ev::m_room_key_content_t& key) {
+                                       this->room_key(key, kept_file::origin{*content.sender_key, envelope->keys.ed25519, sender});
+                                     },
                                      [](const auto&) {}},
                   payload->content.data());
   }
 
   // A room's m.room.encrypted: its Megolm message read with the session it
   // names, where this device has it; the room event it was, read as any.
-  [[nodiscard]] std::optional<megolm_payload> room_event(const std::string& room, const loom::ev::m_room_encrypted_content_t& content) {
+  [[nodiscard]] std::optional<megolm_payload> room_event(const std::string& room, const std::string& event_id,
+                                                         const std::string& sender,
+                                                         const loom::ev::m_room_encrypted_content_t& content) {
     if (!content.session_id)
+      return std::nullopt;
+    // From the user its key came from, by the device it came from where the
+    // event still says (sender_key, deprecated but sent): a session shared
+    // by one is not another's to send with.
+    const auto origin = kept_.origins.find(*content.session_id);
+    if (origin == kept_.origins.end() || origin->second.sender != sender ||
+        (content.sender_key && *content.sender_key != origin->second.sender_key))
       return std::nullopt;
     const auto in_room = kept_.megolm.find(room);
     if (in_room == kept_.megolm.end())
@@ -236,10 +288,31 @@ class olm_machine {
       auto session = vodozemac::megolm::inbound_group_session_from_pickle(found->second, key_);
       auto message = vodozemac::megolm::megolm_message_from_base64(*ciphertext);
       const auto clear = session->decrypt(*message);
+      // The same index in another event: a replay, refused.
+      auto& seen = kept_.indices[*content.session_id];
+      if (const auto before = seen.find(clear.message_index); before != seen.end() && before->second != event_id)
+        return std::nullopt;
       const std::string text(clear.plaintext.begin(), clear.plaintext.end());
       auto read = knot::try_read<megolm_payload>(text);
-      if (!read)
+      auto in_room = knot::try_read<megolm_room>(text);
+      // Sent in this room: a message from another room put here is not.
+      if (!read || !in_room || in_room->room_id != room)
         return std::nullopt;
+      // Only what a message is: a message, a sticker, a reaction -- or an
+      // event nothing here reads, said as such. Never state, nor a
+      // redaction: the server checks who may send those, and inside an
+      // encrypted event it checks nothing (a room's name, its members, its
+      // power levels, a message removed -- all forged by anyone in it).
+      const bool message_like = splice::visit(
+          splice::overloaded{[](const loom::ev::m_room_message_content_t&) { return true; },
+                             [](const loom::ev::m_sticker_content_t&) { return true; },
+                             [](const loom::ev::m_reaction_content_t&) { return true; },
+                             [](const knot::raw&) { return true; }, [](const auto&) { return false; }},
+          read->content.data());
+      if (!message_like)
+        return std::nullopt;
+      seen.emplace(clear.message_index, event_id);
+      this->save();
       return std::move(*read);
     } catch (const rust::Error&) {
       return std::nullopt;
@@ -265,13 +338,21 @@ class olm_machine {
       b = static_cast<std::uint8_t>(random());
     std::error_code ignored;
     std::filesystem::create_directories(path.parent_path(), ignored);
+    private_file(path);
     {
       std::ofstream out(path, std::ios::binary | std::ios::trunc);
       out.write(reinterpret_cast<const char*>(key.data()), key.size());
     }
+    return key;
+  }
+
+  // A file made empty and the user's alone before anything is written in it:
+  // made, then narrowed, it was readable by others while its secret went in.
+  static void private_file(const std::filesystem::path& path) {
+    std::error_code ignored;
+    { std::ofstream(path, std::ios::binary | std::ios::trunc); }
     std::filesystem::permissions(path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
                                  std::filesystem::perm_options::replace, ignored);
-    return key;
   }
 
   void save() {
@@ -279,12 +360,11 @@ class olm_machine {
     std::error_code ignored;
     std::filesystem::create_directories(store_.parent_path(), ignored);
     const auto fresh = std::filesystem::path(store_).concat(".new");
+    private_file(fresh);
     {
       std::ofstream out(fresh, std::ios::binary | std::ios::trunc);
       out << knot::to_json_string(kept_);
     }
-    std::filesystem::permissions(fresh, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
-                                 std::filesystem::perm_options::replace, ignored);
     std::filesystem::rename(fresh, store_, ignored);
   }
 
@@ -320,12 +400,21 @@ class olm_machine {
     return std::string(made.plaintext.begin(), made.plaintext.end());
   }
 
-  // A room key: its Megolm session, kept for its room.
-  void room_key(const loom::ev::m_room_key_content_t& key) {
+  // A room key: its Megolm session, kept for its room with where it came
+  // from. Never over one already held under its id: a second key for the
+  // same session, from whoever, would replace the first one's messages'.
+  void room_key(const loom::ev::m_room_key_content_t& key, kept_file::origin from) {
+    if (key.room_id.empty() || kept_.origins.contains(key.session_id))
+      return;
     try {
       auto session_key = vodozemac::megolm::session_key_from_base64(key.session_key);
       auto session = vodozemac::megolm::new_inbound_group_session(*session_key);
+      // The id the key says is the session's own: else it would be kept
+      // under another session's name.
+      if (std::string(session->session_id()) != key.session_id)
+        return;
       kept_.megolm[key.room_id][key.session_id] = std::string(session->pickle(key_));
+      kept_.origins.emplace(key.session_id, std::move(from));
       this->save();
     } catch (const rust::Error&) {
     }

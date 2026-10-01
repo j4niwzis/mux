@@ -1007,6 +1007,9 @@ struct message_edited {
   conversation_id in;
   std::string id;
   mux::body now;
+  // Who edited it: applied only where they sent what it edits. Anyone in a
+  // room could otherwise rewrite anyone's message.
+  std::optional<std::string> by;
 };
 
 struct message_redacted {
@@ -1460,12 +1463,15 @@ class model {
   void on(const change::message_edited& one) {
     conversation& where = of(one.in);
     if (message* kept = message_in(where, one.id)) {
+      if (one.by && *one.by != kept->sender)
+        return;
       kept->body = one.now;
       kept->edited = true;
     }
     // And the copy fetched aside for the replies quoting it: what they quote
     // is what it says now.
-    if (const auto aside = where.quoted.find(one.id); aside != where.quoted.end()) {
+    if (const auto aside = where.quoted.find(one.id);
+        aside != where.quoted.end() && (!one.by || *one.by == aside->second.sender)) {
       aside->second.body = one.now;
       aside->second.edited = true;
     }

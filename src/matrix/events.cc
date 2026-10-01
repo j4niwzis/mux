@@ -124,7 +124,8 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       if (relates->event_id && content.m_new_content)
         sink_(change::message_edited{in, *relates->event_id,
                                      body_of(content.m_new_content->body.value_or(""), content.m_new_content->format,
-                                             content.m_new_content->formatted_body)});
+                                             content.m_new_content->formatted_body),
+                                     one.sender});
       return;
     }
     message made{.in = in,
@@ -386,7 +387,7 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
   if (crypto_) {
     std::optional<crypto::megolm_payload> clear;
     splice::visit(splice::overloaded{[&](const loom::ev::m_room_encrypted_content_t& content) {
-                                       clear = crypto_->room_event(in.id, content);
+                                       clear = crypto_->room_event(in.id, one.event_id, one.sender, content);
                                      },
                                      [](const auto&) {}},
                   one.content.data());

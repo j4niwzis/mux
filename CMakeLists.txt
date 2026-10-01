@@ -79,13 +79,13 @@ cme_declare_port(NAME chevron PROVIDES chevron
 cme_options(chevron "CHEVRON_TESTS OFF")
 cme_declare_port(NAME tern PROVIDES tern
   GITHUB_REPOSITORY j4niwzis/tern
-  GIT_TAG 8144cacc26012dc1d349b75f6cf326f083c7a69b
+  GIT_TAG de984ff791a937fff637f44a8d32e506cad18dbc
   LICENSE AGPL-3.0-only
   TARGETS tern)
 cme_options(tern "TERN_TESTS OFF" "TERN_EXAMPLES OFF")
 cme_declare_port(NAME loom PROVIDES loom
   GITHUB_REPOSITORY j4niwzis/loom
-  GIT_TAG 67dae5205d24db9c65806f1cfbca81abc88dc361
+  GIT_TAG 8b7c17fc36ad30d8e5545f90b0c8c555ebe31f19
   LICENSE AGPL-3.0-only
   TARGETS loom)
 cme_options(loom "LOOM_TESTS OFF")

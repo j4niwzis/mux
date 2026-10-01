@@ -28,6 +28,7 @@ import :controls;
 import :themes;
 import :names;
 import :forms;
+import :composer;
 import :message;
 import :html;
 import :timeline;  // a message's menu, for the reactions list's bubbles
@@ -1690,24 +1691,9 @@ struct threads_panel : nodes::Stack {
     }
   };
   using head_t = page_header<back_it, close_it>;
-  struct input_t : nodes::Stack {
-    struct parts_t {
-      widgets::TextArea<sent> field;
-      icon_button<send_press> send;
-    } parts;
-    explicit input_t(threads_panel* panel)
-        : parts{.field = widgets::TextArea<sent>("Reply in thread…", {panel}),
-                .send = icon_button<send_press>(icon::send{}, {panel})} {
-      this->setHorizontal();
-      this->setGap(6.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .minHeight = 48.0f, .padding = {6.0f, 8.0f, 6.0f, 12.0f},
-                    .background = sidebar_colour});
-      parts.field.setFontSize(13.0f);
-      parts.field.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      parts.send.set_colour(accent_colour);
-      parts.send.apply({.alignSelf = scene::align::kEnd});
-    }
-  };
+  // The chat's own field: files and emoji not sent into a thread yet, so
+  // their buttons hidden.
+  using input_t = message_input<sent, no_action, no_action, send_press>;
   using rows_t = nodes::Flow<std::vector<thread_row>>;
   using answers_t = nodes::Flow<std::vector<message_bubble>>;
   struct parts_t {
@@ -1719,11 +1705,14 @@ struct threads_panel : nodes::Stack {
     context_bar<stop_answer> replying;
     input_t input;
   } parts;
-  explicit threads_panel(Actions* a) : actions(a), parts{.head = head_t("Threads", {a}, {a}, false, true), .replying = context_bar<stop_answer>({this}), .input = input_t(this)} {
+  explicit threads_panel(Actions* a) : actions(a), parts{.head = head_t("Threads", {a}, {a}, false, true), .replying = context_bar<stop_answer>({this}), .input = input_t("Reply in thread…", {this}, {}, {}, {this})} {
     fState.apply({.fillY = true, .background = sidebar_colour});
     parts.divider.apply({.fillX = true, .height = 1.0f});
     parts.empty.apply({.margin = {16.0f, 16.0f, 0.0f, 16.0f}});
     parts.replying.apply({.background = sidebar_colour});
+    parts.input.apply({.background = sidebar_colour});
+    parts.input.parts.attach.setVisible(false);
+    parts.input.parts.emoji.setVisible(false);
     for (auto* list : std::initializer_list<scene::Node*>{&parts.list, &parts.answers})
       list->apply({.fillX = true, .grow = scene::axes::kY});
     std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 4.0f, 4.0f, 4.0f}});

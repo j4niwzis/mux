@@ -375,6 +375,42 @@ struct field_quotes {
   }
 };
 
+// Where a message is written: the paperclip, the field growing with what is
+// written in it -- quotes and custom emoji shown as they will be sent -- the
+// emoji, the arrow. The chat's composer and a thread's (#11409); what each
+// button does is said by where it is.
+template <class Submit, class Attach, class Emoji, class Send>
+struct message_input : nodes::Stack {
+  using attach_button = icon_button<Attach>;
+  using field_t = widgets::TextArea<Submit, message_pictures, field_quotes>;
+  using emoji_button = icon_button<Emoji>;
+  using send_button = icon_button<Send>;
+  struct parts_t {
+    attach_button attach;
+    field_t field;
+    emoji_button emoji;
+    send_button send;
+  } parts;
+  message_input(std::string placeholder, Submit submit, Attach attach_it, Emoji emoji_it, Send send_it)
+      : parts{.attach = attach_button(icon::clip{}, std::move(attach_it)),
+              .field = field_t(std::move(placeholder), std::move(submit)),
+              .emoji = emoji_button(icon::smile{}, std::move(emoji_it)),
+              .send = send_button(icon::send{}, std::move(send_it))} {
+    auto& [attach, field, emoji, send] = parts;
+    emoji.apply({.alignSelf = scene::align::kEnd});
+    this->setHorizontal();
+    this->setGap(6.0f);
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {9.0f, 8.0f, 9.0f, 8.0f}});
+    attach.apply({.alignSelf = scene::align::kEnd});
+    send.apply({.alignSelf = scene::align::kEnd});
+    field.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+    // What is typed looks as it will be sent: the messages' size, as in
+    // tdesktop, whose field takes the message font.
+    field.setFontSize(13.0f);
+    send.set_colour(accent_colour);
+  }
+};
+
 // Desktop: a line over it, a paperclip on the left, the text growing with
 // what is written, and the send arrow on the right.
 template <class Actions>
@@ -382,37 +418,8 @@ struct composer_bar : nodes::Stack {
   // What is written answers or edits: the reply bar, its ✕ going back to
   // a plain message.
   using context_row = context_bar<ask<Actions, &Actions::cancel_compose>>;
-  // The paperclip, the field growing with what is written in it, the arrow.
-  struct input_row : nodes::Stack {
-    using attach_button = icon_button<ask<Actions, &Actions::attach_files>>;
-    using field_t = widgets::TextArea<submit_message<Actions>, message_pictures, field_quotes>;
-    using emoji_button = icon_button<ask<Actions, &Actions::toggle_emoji>>;
-    using send_button = icon_button<ask<Actions, &Actions::send_typed>>;
-    struct parts_t {
-      attach_button attach;
-      field_t field;
-      emoji_button emoji;
-      send_button send;
-    } parts;
-    explicit input_row(Actions* a)
-        : parts{.attach = attach_button(icon::clip{}, {a}),
-                .field = field_t("Write a message…", {a}),
-                .emoji = emoji_button(icon::smile{}, {a}),
-                .send = send_button(icon::send{}, {a})} {
-      auto& [attach, field, emoji, send] = parts;
-      emoji.apply({.alignSelf = scene::align::kEnd});
-      this->setHorizontal();
-      this->setGap(6.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {9.0f, 8.0f, 9.0f, 8.0f}});
-      attach.apply({.alignSelf = scene::align::kEnd});
-      send.apply({.alignSelf = scene::align::kEnd});
-      field.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      // What is typed looks as it will be sent: the messages' size, as in
-      // tdesktop, whose field takes the message font.
-      field.setFontSize(13.0f);
-      send.set_colour(accent_colour);
-    }
-  };
+  using input_row = message_input<submit_message<Actions>, ask<Actions, &Actions::attach_files>,
+                                  ask<Actions, &Actions::toggle_emoji>, ask<Actions, &Actions::send_typed>>;
   // Element's bar over the field while messages here were not sent
   // (RoomStatusBar's): a warning, and "Delete all" and "Retry all".
   struct unsent_row : nodes::Stack {
@@ -463,7 +470,7 @@ struct composer_bar : nodes::Stack {
 
   // Declared: the divider, the unsent bar, the answer's line where there is
   // one, the row -- or, where the reader may not post, the line saying so.
-  explicit composer_bar(Actions* a) : parts{.unsent = unsent_row(a), .context_line = context_row({a}), .input = input_row(a)} {
+  explicit composer_bar(Actions* a) : parts{.unsent = unsent_row(a), .context_line = context_row({a}), .input = input_row("Write a message…", {a}, {a}, {a}, {a})} {
     parts.unsent.setVisible(false);
     parts.no_post.setVisible(false);
     parts.context_line.setVisible(false);

@@ -200,9 +200,10 @@ struct icon_button : scene::Node {
 
 // A page with nowhere to go back to: its header's ← hidden, and pressing
 // it does nothing.
-struct no_back {
+struct no_action {
   void operator()() const {}
 };
+using no_back = no_action;
 
 // The head of a page: ← on the left where there is somewhere to go back to,
 // the page's name, and ✕ on the right where the page closes. Every panel,

@@ -386,11 +386,16 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
   // who sent it and when, the encrypted one's.
   if (crypto_) {
     std::optional<crypto::megolm_payload> clear;
-    splice::visit(splice::overloaded{[&](const loom::ev::m_room_encrypted_content_t& content) {
-                                       clear = crypto_->room_event(in.id, one.event_id, one.sender, content);
-                                     },
-                                     [](const auto&) {}},
-                  one.content.data());
+    try {
+      splice::visit(splice::overloaded{[&](const loom::ev::m_room_encrypted_content_t& content) {
+                                         clear = crypto_->room_event(in.id, one.event_id, one.sender, content);
+                                       },
+                                       [](const auto&) {}},
+                    one.content.data());
+    } catch (const std::exception& failed) {
+      log(id_, "encryption stopped: {}", failed.what());
+      crypto_.reset();
+    }
     if (clear) {
       loom::ev::timeline_event made = one;
       made.type = std::move(clear->type);

@@ -229,6 +229,7 @@ class account {
   void start_crypto();
   void upload_keys(std::int64_t on_server);
   void crypto_answer(const loom::cs::sliding_sync::response_t& got);
+  void crypto_answer_now(const loom::cs::sliding_sync::response_t& got);
 
   // The file the sync is kept in, for this account.
   std::filesystem::path kept_file() const;

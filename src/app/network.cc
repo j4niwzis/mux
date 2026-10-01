@@ -108,7 +108,12 @@ struct network {
                               .proxy = std::move(via),
                               .access_token = saved.access_token,
                               .device_id = saved.device_id,
-                              .crypto_store = mux::config::state_path("crypto") / (saved.user_id + ".json")};
+                              // Named by the user ID with what a file name cannot hold put
+                              // aside: ':' is not one on Windows.
+                              .crypto_store = mux::config::state_path("crypto") /
+                                              ((saved.user_id | std::views::transform([](char c) {
+                                                  return std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_' ? c : '_';
+                                                }) | std::ranges::to<std::string>()) + ".json")};
     this->run(saved.user_id, std::make_unique<matrix_account>(loop, tls, std::move(how), post_change{box, live}),
               live);
   }

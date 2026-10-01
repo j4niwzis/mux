@@ -328,20 +328,30 @@ class olm_machine {
   [[nodiscard]] std::array<std::uint8_t, 32> pickle_key() const {
     std::array<std::uint8_t, 32> key{};
     const auto path = std::filesystem::path(store_).concat(".key");
-    if (std::ifstream in(path, std::ios::binary); in) {
+    // There: read whole, or an error. A key there that cannot be read --
+    // its permissions, or cut short -- was made anew over the old one, and
+    // the store under it lost for good.
+    std::error_code ignored;
+    if (std::filesystem::exists(path, ignored)) {
+      std::ifstream in(path, std::ios::binary);
       in.read(reinterpret_cast<char*>(key.data()), key.size());
-      if (in.gcount() == static_cast<std::streamsize>(key.size()))
-        return key;
+      if (!in || in.gcount() != static_cast<std::streamsize>(key.size()) || in.peek() != std::char_traits<char>::eof())
+        throw std::runtime_error("the encryption store's key cannot be read: " + path.string());
+      return key;
     }
+    // Not there, and a store there: its key lost -- an error, not a new key.
+    if (std::filesystem::exists(store_, ignored))
+      throw std::runtime_error("the encryption store's key is missing: " + path.string());
     std::random_device random;
     for (auto& b : key)
       b = static_cast<std::uint8_t>(random());
-    std::error_code ignored;
     std::filesystem::create_directories(path.parent_path(), ignored);
     private_file(path);
     {
       std::ofstream out(path, std::ios::binary | std::ios::trunc);
       out.write(reinterpret_cast<const char*>(key.data()), key.size());
+      if (!out.flush())
+        throw std::runtime_error("the encryption store's key cannot be written: " + path.string());
     }
     return key;
   }
@@ -364,8 +374,16 @@ class olm_machine {
     {
       std::ofstream out(fresh, std::ios::binary | std::ios::trunc);
       out << knot::to_json_string(kept_);
+      if (!out.flush())
+        throw std::runtime_error("the encryption store cannot be written: " + fresh.string());
     }
-    std::filesystem::rename(fresh, store_, ignored);
+    // Not kept is an error, not a word to no one: an account whose used
+    // one-time key comes back at the next start opens a session again for a
+    // pre-key message replayed to it.
+    std::error_code failed;
+    std::filesystem::rename(fresh, store_, failed);
+    if (failed)
+      throw std::runtime_error("the encryption store cannot be replaced: " + failed.message());
   }
 
   [[nodiscard]] std::string sign(std::string_view canonical) const {

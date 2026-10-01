@@ -802,7 +802,13 @@ void account<Sink>::upload_keys(std::int64_t on_server) {
     log(id_, "keys not uploaded: {}", done.error().said());
     return;
   }
-  crypto_->published(ask.body.device_keys.has_value());
+  try {
+    crypto_->published(ask.body.device_keys.has_value());
+  } catch (const std::exception& failed) {
+    log(id_, "encryption stopped: {}", failed.what());
+    crypto_.reset();
+    return;
+  }
   log(id_, "keys uploaded{}", ask.body.device_keys ? ", the device's with them" : "");
 }
 
@@ -812,6 +818,15 @@ template <class Sink>
 void account<Sink>::crypto_answer(const loom::cs::sliding_sync::response_t& got) {
   if (!crypto_ || !got.extensions)
     return;
+  try {
+    this->crypto_answer_now(got);
+  } catch (const std::exception& failed) {
+    log(id_, "encryption stopped: {}", failed.what());
+    crypto_.reset();
+  }
+}
+template <class Sink>
+void account<Sink>::crypto_answer_now(const loom::cs::sliding_sync::response_t& got) {
   const auto& extensions = *got.extensions;
   if (extensions.to_device) {
     if (extensions.to_device->events)

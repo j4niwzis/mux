@@ -66,13 +66,15 @@ struct space_icon : nodes::Stack {
   config::space_item_t item;
   config::space_bar_t bar;
   std::string name;
+  std::string key;  // its picture's
+  float diameter = 0.0f;
   struct parts_t {
     std::optional<avatar_mark> face;
     std::optional<nodes::Text> mark;
   } parts;
   space_icon(config::space_item_t what, folder_t shows, config::space_bar_t in, std::string id, std::string shown, bool chosen,
              float size, Pick act)
-      : pick(std::move(act)), which(std::move(shows)), item(std::move(what)), bar(in), name(shown) {
+      : pick(std::move(act)), which(std::move(shows)), item(std::move(what)), bar(in), name(shown), key(id), diameter(size) {
     this->setHorizontal();
     fStack.justify = nodes::justify::middle{};
     fState.apply({.width = size, .height = size, .cornerRadius = size * 0.5f, .background = tile_colour,
@@ -501,6 +503,9 @@ struct conversations_screen : nodes::Stack {
       body_t body;
       // A right press's menu, over the rest.
       std::optional<space_menu> menu;
+      // The item dragged: picked up off its place, it goes with the pointer;
+      // let go, it flies to where it goes -- or back.
+      std::optional<space_icon<pick_folder>> ghost;
     } parts;
     // Its parts by their names, for what reads them: it is never moved.
     head_row& head = parts.head;
@@ -530,6 +535,60 @@ struct conversations_screen : nodes::Stack {
     };
     std::optional<drag_t> drag;
     bool menu_close_due = false;
+    // The flight of the one let go, from where it was let go to its place;
+    // and the item whose icon shows once it is there.
+    skiff::paint::Tween fly{0.0f, 180.0f};
+    skia::SkPoint fly_from{}, fly_to{};
+    std::optional<config::space_item_t> landing;
+    [[nodiscard]] space_icon<pick_folder>* icon_of(const config::space_item_t& item, const config::space_bar_t& bar) {
+      icons_t& line = splice::visit(splice::overloaded{[&](config::space_bar::top) -> icons_t& { return top_line; },
+                                                       [&](const auto&) -> icons_t& { return side_line; }},
+                                    bar);
+      const auto found = std::ranges::find(icons_of(line), item, &space_icon<pick_folder>::item);
+      return found == icons_of(line).end() ? nullptr : &*found;
+    }
+    // The one dragged, its middle at a point: drawn moved there, not laid out.
+    void ghost_at(float x, float y) {
+      if (!parts.ghost)
+        return;
+      const skia::SkRect box = fState.fBounds;
+      const float half = parts.ghost->diameter * 0.5f;
+      parts.ghost->apply({.shiftX = x - box.fLeft - half, .shiftY = y - box.fTop - half});
+    }
+    void lift(const drag_t& from, float x, float y) {
+      space_icon<pick_folder>* one = this->icon_of(from.item, from.from);
+      if (!one)
+        return;
+      parts.ghost.emplace(one->item, one->which, one->bar, one->key, one->name, false, one->diameter, one->pick);
+      parts.ghost->apply({.place = scene::anchor::kTopLeft, .x = 0.0f, .y = 0.0f, .alpha = 0.9f});
+      // Off its place: the others close up.
+      one->setVisible(false);
+      this->ghost_at(x, y);
+      this->invalidateLayout();
+    }
+    void let_go(const config::space_item_t& item, skia::SkPoint from, skia::SkPoint to) {
+      landing = item;
+      fly_from = from;
+      fly_to = to;
+      fly.jump(0.0f);
+      fly.setTarget(1.0f);
+      scene::work::mark(fState.fId);
+    }
+    // There: its icon shown where it went, the one flying gone.
+    void land() {
+      if (landing)
+        for (icons_t* line : {&top_line, &side_line})
+          for (auto& one : icons_of(*line))
+            if (one.item == *landing) {
+              one.setVisible(true);
+              one.fState.setAlpha(1.0f);
+              one.markDamaged();
+            }
+      landing.reset();
+      parts.ghost.reset();
+      this->invalidateLayout();
+      this->markDamaged();
+    }
     [[nodiscard]] std::vector<space_icon<pick_folder>>& icons_of(icons_t& bar) { return std::get<0>(bar.fChildren); }
     [[nodiscard]] skia::SkRect shown_at(const space_icon<pick_folder>& one) const {
       return splice::visit(splice::overloaded{[&](config::space_bar::top) { return one.bounds().makeOffset(-top_bar.offset, 0.0f); },
@@ -625,7 +684,9 @@ struct conversations_screen : nodes::Stack {
         reply.capturePointer();
         reply.suppressHover();
         this->show_drop_targets(true);
+        this->lift(*drag, at.x, at.y);
       }
+      this->ghost_at(at.x, at.y);
       this->light(this->bar_at(at.x, at.y));
       reply.handle();
     }
@@ -638,8 +699,31 @@ struct conversations_screen : nodes::Stack {
       reply.releasePointer();
       reply.handle();
       this->light(std::nullopt);
-      if (const auto bar = this->bar_at(at.x, at.y))
-        actions->place_spaces(account, *bar, this->order_with(*bar, was.item, at.x, at.y), was.from, was.item);
+      // To where it goes: the place of the one it now comes before, or past
+      // the last -- or back where it was.
+      const auto bar = this->bar_at(at.x, at.y);
+      const config::space_bar_t to_bar = bar ? *bar : was.from;
+      const bool along_x = splice::visit(splice::overloaded{[](config::space_bar::top) { return true; }, [](const auto&) { return false; }}, to_bar);
+      const std::vector<config::space_item_t> order = this->order_with(to_bar, was.item, at.x, at.y);
+      const auto index = static_cast<std::size_t>(std::ranges::find(order, was.item) - order.begin());
+      skia::SkPoint target{at.x, at.y};
+      icons_t& line = along_x ? top_line : side_line;
+      std::vector<skia::SkRect> others;
+      for (const auto& one : icons_of(line))
+        if (one.item != was.item && one.visible())
+          others.push_back(this->shown_at(one));
+      const float step = (parts.ghost ? parts.ghost->diameter : 40.0f) + (along_x ? 4.0f : 8.0f);
+      if (index < others.size())
+        target = {others[index].centerX(), others[index].centerY()};
+      else if (!others.empty())
+        target = along_x ? skia::SkPoint{others.back().centerX() + step, others.back().centerY()}
+                         : skia::SkPoint{others.back().centerX(), others.back().centerY() + step};
+      else
+        target = along_x ? skia::SkPoint{top_bar.bounds().fLeft + step * 0.5f, top_bar.bounds().centerY()}
+                         : skia::SkPoint{side_bar.bounds().centerX(), side_bar.bounds().fTop + step * 0.5f};
+      if (bar)
+        actions->place_spaces(account, *bar, order, was.from, was.item);
+      this->let_go(was.item, {at.x, at.y}, target);
       this->show_drop_targets(false);
     }
     using Node::onPointer;
@@ -650,8 +734,15 @@ struct conversations_screen : nodes::Stack {
     void onPointer(scene::phase::target, const scene::pointer::up& at, scene::PointerReply& reply) { drag_up(at, reply); }
     // The menu closed after the press that chose from it, or one off it:
     // not from inside that press's handling.
-    [[nodiscard]] bool wantsTick() const { return menu_close_due; }
-    void update(double) {
+    [[nodiscard]] bool wantsTick() const { return menu_close_due || fly.moving() || (parts.ghost && !drag); }
+    void update(double now) {
+      if (parts.ghost && !drag) {
+        fly.step(now);
+        const float t = fly.value();
+        this->ghost_at(fly_from.x() + (fly_to.x() - fly_from.x()) * t, fly_from.y() + (fly_to.y() - fly_from.y()) * t);
+        if (!fly.moving())
+          this->land();
+      }
       if (std::exchange(menu_close_due, false) && parts.menu) {
         parts.menu.reset();
         this->invalidateLayout();
@@ -1021,6 +1112,11 @@ struct conversations_screen : nodes::Stack {
       emit(top_icons, top_shown, config::space_bar::top{}, 30.0f);
       side.side_line.invalidateLayout();
       side.top_line.invalidateLayout();
+      if (side.landing)
+        for (auto* icons : {&side_icons, &top_icons})
+          for (auto& one : *icons)
+            if (one.item == *side.landing)
+              one.fState.setAlpha(0.0f);
       // A space come or gone: the bars painted again whole.
       side.side_bar.markDamaged();
       side.top_bar.markDamaged();

@@ -171,6 +171,9 @@ struct id_line : nodes::Stack {
     fState.setCursor(scene::cursor::hand{});
     parts.id.setWrapped(true);
     parts.id.apply({.fillX = true});
+    // Selectable, as any text shown: a drag takes part of it, the right
+    // button its Copy; a click still copies it whole.
+    parts.id.setSelectable(true);
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
@@ -249,6 +252,8 @@ struct person_card : nodes::Stack {
     cover(Actions* a, const std::string& key, const person_facts& facts)
         : parts{.photo = avatar_button<Actions>(a, key, facts.name, 72.0f),
                 .texts = two_lines(facts.name, facts.status, 17.0f, 6.0f)} {
+      parts.texts.parts.name.setSelectable(true);
+      parts.texts.parts.state.setSelectable(true);
       this->setHorizontal();
       this->setGap(16.0f);
       fState.apply({.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}});
@@ -367,6 +372,9 @@ struct room_card : nodes::Stack {
     }
     parts.about.setWrapped(true);
     parts.about.apply({.fillX = true, .margin = {2.0f, 22.0f, 8.0f, 22.0f}});
+    parts.about.setSelectable(true);
+    parts.face.parts.texts.parts.name.setSelectable(true);
+    parts.face.parts.texts.parts.state.setSelectable(true);
     parts.join.apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
   }
 };
@@ -2556,6 +2564,7 @@ struct info_panel : nodes::Stack {
       for (nodes::Text* centred : {&name, &status}) {
         centred->setElided(true);
         centred->apply({.alignSelf = scene::align::kMiddle, .margin = {4.0f, 20.0f, 0.0f, 20.0f}});
+        centred->setSelectable(true);
       }
     }
   };

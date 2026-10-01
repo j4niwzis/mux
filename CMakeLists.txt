@@ -328,10 +328,12 @@ endif()
 # compiled with; where those copies meet in one unit, clang 23 does not
 # refuse it but mixes their declarations up (std::forward found as
 # uintmax_t) and crashes, as accounts_matrix_events.cc, pictures.cc and
-# ui_test.cc did in a release build. So every library of modules in the
-# build -- the family's, skiff's, googletest's, whatever is fetched -- gets
-# the same standard and flags as mux's own, LTO included in a release
-# build: one set of flags, one std, each module built once.
+# ui_test.cc did in a release build: googletest's module and skia's were
+# built against a std without the family's flags, and imported beside
+# mux's. So every library of modules in the build -- the family's, skiff's
+# and skia's, googletest's, whatever is fetched -- gets the same standard
+# and std flags as mux's own. (LTO is not one of them: CMake builds what a
+# target with it imports once more, consistently, and that does not mix.)
 function(mux_targets_under dir out)
   get_property(found DIRECTORY ${dir} PROPERTY BUILDSYSTEM_TARGETS)
   get_property(subdirectories DIRECTORY ${dir} PROPERTY SUBDIRECTORIES)
@@ -348,12 +350,6 @@ foreach(target IN LISTS mux_all_targets)
   if(module_sets AND NOT imported AND NOT target MATCHES "^mux")
     target_compile_options(${target} PUBLIC ${mux_std_flags})
     set_target_properties(${target} PROPERTIES CXX_STANDARD 26 CXX_STANDARD_REQUIRED ON)
-    if(mux_ipo AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-      # Its archive indexed by the toolchain's ar, which reads bitcode.
-      set_property(TARGET ${target} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
-      target_compile_options(${target} PRIVATE
-        $<$<AND:$<CONFIG:Release>,$<COMPILE_LANG_AND_ID:CXX,Clang>>:-flto=full>)
-    endif()
   endif()
 endforeach()
 

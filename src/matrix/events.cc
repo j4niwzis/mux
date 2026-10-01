@@ -445,12 +445,37 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
             splice::visit(splice::overloaded{[&](membership::join) {
                                     if (!was_in) {
                                       say_people(room_event::joins{}, "{1} joined");
-                                    } else if (const auto old = before ? before->displayname : std::nullopt; old && *old != target) {
-                                      service(in, one, at, where, std::format("{} changed their name to {}", *old, target), room_event::names{},
-                                              person(target_id, *old) + " changed their name to " + escaped(target));
-                                    } else {
-                                      say_people(room_event::avatars{}, "{1} changed their picture");
+                                      return;
                                     }
+                                    // Joined already: what changed of how they are shown, as
+                                    // Element words it -- the name set, changed or taken away,
+                                    // else the picture; else nothing.
+                                    const std::optional<std::string> old_name = before ? before->displayname : std::nullopt;
+                                    const std::optional<std::string>& new_name = content.displayname;
+                                    const auto named = [&](const std::string& shown, const std::string& line) {
+                                      service(in, one, at, where, shown + line, room_event::names{},
+                                              person(target_id, shown) + escaped(line));
+                                    };
+                                    if (old_name && new_name && *old_name != *new_name) {
+                                      named(*old_name, " changed their display name to " + *new_name);
+                                      return;
+                                    }
+                                    if (old_name && !new_name) {
+                                      named(*old_name, std::format(" removed their display name ({})", *old_name));
+                                      return;
+                                    }
+                                    if (!old_name && new_name) {
+                                      named(target_id, " set their display name to " + *new_name);
+                                      return;
+                                    }
+                                    const std::optional<std::string> old_picture = before ? before->avatar_url : std::nullopt;
+                                    if (old_picture == content.avatar_url && before) {
+                                      say_people(room_event::avatars{}, "{1} made no change");
+                                      return;
+                                    }
+                                    say_people(room_event::avatars{}, !content.avatar_url ? "{1} removed their profile picture"
+                                                                      : old_picture   ? "{1} changed their profile picture"
+                                                                                      : "{1} set a profile picture");
                                   },
                                   [&](membership::leave) {
                                     splice::visit(splice::overloaded{[&](membership::ban) { say_people(room_event::invites{}, "{0} unbanned {1}"); },

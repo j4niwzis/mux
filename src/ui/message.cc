@@ -1345,8 +1345,18 @@ struct message_bubble : nodes::Stack {
                               power >= 100 ? std::string("admin") : power >= 50 ? std::string("mod") : std::string());
     }
     // Forwarded: "Forwarded from" its sender, at its top, as Telegram's.
+    // The sender a person's pill, as a mention is, and pressed, opens them.
     if (said.forwarded) {
-      body.parts.forwarded.emplace("Forwarded from " + said.forwarded->name, 13.0f, outgoing ? sent_time_colour : accent_colour);
+      const std::string lead = "Forwarded from ";
+      const std::string& who = said.forwarded->name;
+      const std::string target = said.forwarded->from.starts_with('@') ? "https://matrix.to/#/" + said.forwarded->from
+                                                                       : said.forwarded->link;
+      std::vector<nodes::Text::Link> spans;
+      if (!target.empty() && !who.empty())
+        spans.push_back(nodes::Text::Link{lead.size(), lead.size() + who.size(), target});
+      mentioned shown = with_mentions(lead + who, std::move(spans), in, now);
+      body.parts.forwarded.emplace(shown.text, 13.0f, outgoing ? sent_time_colour : accent_colour);
+      body.parts.forwarded->setLinks(std::move(shown.links), accent_colour);
       body.parts.forwarded->setElided(true);
     }
     // Something done, not said: a line in the middle, on a plate of its own,

@@ -95,6 +95,11 @@ struct space_icon : nodes::Stack {
     pick(which);
     return true;
   }
+  // Ringed or not, as it is chosen or not: restyled where it is, not made
+  // again -- every icon of both bars was, at every space chosen.
+  void set_chosen(bool on) {
+    fState.apply({.border = scene::Border{on ? accent_colour : skia::SkColor{0}, on ? 2.0f : 0.0f}});
+  }
 };
 
 // A folder's tab over the chat list, as Telegram's: its name, and under
@@ -124,6 +129,15 @@ struct folder_tab : scene::Node {
     label.setMaxWidth(160.0f);
     label.setElided(true);
     label.apply({.anchor = scene::anchor::kCentreLeft, .origin = scene::anchor::kCentreLeft});
+  }
+  // Chosen or not: its colour and its line, where it is.
+  void set_chosen(bool on) {
+    if (on == chosen)
+      return;
+    chosen = on;
+    parts.label.setColour(on ? accent_colour : dim_colour);
+    parts.underline.setVisible(on);
+    this->markDamaged();
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
@@ -265,13 +279,13 @@ struct conversations_screen : nodes::Stack {
     forum_open = std::move(room);
     this->slide_list(1.0f);
     if (last_model)
-      this->show(*last_model);
+      this->show(*last_model, false);
   }
   void close_forum() {
     forum_open.reset();
     this->slide_list(-1.0f);
     if (last_model)
-      this->show(*last_model);
+      this->show(*last_model, false);
   }
   // The list sliding in as what it lists changes -- another space, a forum
   // opened or left: from the side it comes from, faded in; only drawn
@@ -284,6 +298,11 @@ struct conversations_screen : nodes::Stack {
   static constexpr std::size_t kChatsFirst = 40, kChatsStep = 40;
   std::size_t chats_made = kChatsFirst;
   std::size_t chats_listed = 0;
+  // Rows that left the list -- another space chosen -- kept by their chat,
+  // already laid out and recorded: coming back showing the same, a row is
+  // taken back as it was, not made again. A few hundred at most.
+  static constexpr std::size_t kRowsKept = 300;
+  std::map<conversation_id, conversation_row<Actions>> rows_kept;
   float list_from = 1.0f;
   void slide_list(float from) {
     chats_made = kChatsFirst;
@@ -400,7 +419,7 @@ struct conversations_screen : nodes::Stack {
       this->slide_list(1.0f);
     folder = which;
     if (last_model)
-      this->show(*last_model);
+      this->show(*last_model, false);
   }
 
   // The chat list: the drawer's button and the name, then the chats.
@@ -1287,10 +1306,10 @@ struct conversations_screen : nodes::Stack {
     const std::vector<shown_icon> top_shown = expanded(top_items);
     for (const auto& [items, mark] : {std::pair{&side_shown, "s"}, std::pair{&top_shown, "t"}})
       for (const shown_icon& one : *items)
-        made.push_back(one.top ? std::format("{}|{}|{}|{}|{}", mark, config::word_of(one.top->item), one.top->name, one.top->shows == folder,
+        made.push_back(one.top ? std::format("{}|{}|{}|{}", mark, config::word_of(one.top->item), one.top->name,
                                              avatar_images().has(one.top->id))
-                               : std::format("{}|{}|{}|{}|{}|{}", mark, one.sub->id.id, display_name(*one.sub), one.depth,
-                                             folder == folder_t{folder::space{one.sub->id.id}}, avatar_images().has(one.sub->id.id)));
+                               : std::format("{}|{}|{}|{}|{}", mark, one.sub->id.id, display_name(*one.sub), one.depth,
+                                             avatar_images().has(one.sub->id.id)));
     made.push_back(std::format("{}{}", spaces_on, top_bar_on));
     if (made != shown_bars) {
       shown_bars = made;
@@ -1324,6 +1343,10 @@ struct conversations_screen : nodes::Stack {
       side.side_bar.markDamaged();
       side.top_bar.markDamaged();
     }
+    // Which is chosen: its ring, on the icons as they are.
+    for (auto* icons : {&std::get<0>(side.side_line.fChildren), &std::get<0>(side.top_line.fChildren)})
+      for (auto& one : *icons)
+        one.set_chosen(one.which == folder);
     // The top bar there unless turned off; the side one where it holds any.
     side.top_bar.setVisible(spaces_on && top_bar_on);
     if (!side.drag || !side.drag->moving)
@@ -1767,7 +1790,7 @@ struct conversations_screen : nodes::Stack {
     if (last_model && chats_made < chats_listed && list.visible() &&
         list.atEnd(std::max(300.0f, list.bounds().height() * 1.5f))) {
       chats_made += kChatsStep;
-      this->show(*last_model);
+      this->show(*last_model, false);
     }
     // The panels' opacity on its way to the chat's.
     if (auto& ease = panel_ease(); ease.t.step(now_ms)) {
@@ -1948,7 +1971,7 @@ struct conversations_screen : nodes::Stack {
     }
     if (side.search.field.text() != searched && last_model) {
       searched = side.search.field.text();
-      this->show(*last_model);
+      this->show(*last_model, false);
     }
     // Each message to come back to, as tdesktop lets one go
     // (checkReplyReturns, at every scroll but its own scroll to a message):
@@ -2029,7 +2052,10 @@ struct conversations_screen : nodes::Stack {
       }
   }
 
-  void show(const model& now) {
+  // The screen as the model is: the list, and the chat shown -- or, where
+  // only what the list lists changed (another space, a forum, the search),
+  // the list alone: the chat's messages were reconciled again for nothing.
+  void show(const model& now, bool with_chat = true) {
     last_model = &now;
     if (wanted && now.accounts().contains(*wanted)) {
       current = std::exchange(wanted, std::nullopt);
@@ -2076,13 +2102,15 @@ struct conversations_screen : nodes::Stack {
     // Made again only where they changed: made at every change in the model,
     // new tabs were a full walk and the bar laid out and painted again.
     auto& tabs = std::get<0>(side.folders.fChildren);
-    if (folders != shown_folders || folder != shown_folder) {
+    if (folders != shown_folders) {
       tabs.clear();
       for (auto& [name, which] : folders)
         tabs.emplace_back(name, which, which == folder, pick_folder{this});
       shown_folders = folders;
-      shown_folder = folder;
     }
+    for (auto& tab : tabs)
+      tab.set_chosen(tab.which == folder);
+    shown_folder = folder;
     side.folders.setVisible(folders.size() > 1);
     this->show_space_bars(now);
     // Whether a chat is in the folder chosen. A space is a folder, not a
@@ -2208,10 +2236,32 @@ struct conversations_screen : nodes::Stack {
     const std::vector<conversation_id> listed_before =
         rows | std::views::transform([](const conversation_row<Actions>& row) { return row.id; }) | std::ranges::to<std::vector>();
     chats_listed = chats.size();
+    {
+      const std::set<conversation_id> listed = chats | std::views::take(chats_made) |
+                                               std::views::transform([](const conversation* one) { return one->id; }) |
+                                               std::ranges::to<std::set>();
+      for (conversation_row<Actions>& row : rows)
+        if (!listed.contains(row.id)) {
+          const conversation_id id = row.id;
+          rows_kept.insert_or_assign(id, std::move(row));
+        }
+      while (rows_kept.size() > kRowsKept)
+        rows_kept.erase(rows_kept.begin());
+    }
     if (nodes::reconcile(
             rows, chats | std::views::take(chats_made), [](const conversation* one) { return one->id; },
             [](const conversation_row<Actions>& row) { return row.id; },
             [&](const conversation* one) {
+              if (const auto kept = rows_kept.find(one->id); kept != rows_kept.end()) {
+                const bool same = kept->second.shown == conversation_row<Actions>::view_of(*one, is_chosen(one), muted.contains(one->id),
+                                                                                           draft_of(one->id), events_of(one));
+                if (same) {
+                  conversation_row<Actions> back = std::move(kept->second);
+                  rows_kept.erase(kept);
+                  return back;
+                }
+                rows_kept.erase(kept);
+              }
               return conversation_row<Actions>(actions, *one, is_chosen(one), muted.contains(one->id), draft_of(one->id),
                                                events_of(one));
             },
@@ -2241,7 +2291,8 @@ struct conversations_screen : nodes::Stack {
     // itself. Invalidated, the whole window was painted at every change in
     // the model -- a hidden event's too.
     fState.relayoutQuietly();
-    this->show_conversation(now);
+    if (with_chat)
+      this->show_conversation(now);
   }
 
   void show_conversation(const model& now) {

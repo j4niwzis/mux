@@ -416,8 +416,13 @@ TEST(Timeline, ScrollsALongChatAtSixtyFrames) {
   screen.show(model);
   const double showing = ms(clock::now() - shown);
   frame();
-  std::println("a new message: show {:.2f} ms, then update {:.2f} ms, layout {:.2f} ms, draw {:.2f} ms", showing,
-               updating, laying, drawing);
+  // Through vformat, not std::format: clang 23 crashes now and then on
+  // basic_format_string<...>::__handles_ for this list of arguments, where
+  // libc++'s format headers are in a unit twice -- `import std`, and the
+  // skia module's global fragment (Ganesh's headers include <chrono>).
+  // make_format_args makes no basic_format_string.
+  std::cout << std::vformat("a new message: show {:.2f} ms, then update {:.2f} ms, layout {:.2f} ms, draw {:.2f} ms\n",
+                           std::make_format_args(showing, updating, laying, drawing));
   EXPECT_LT(showing + updating + laying + drawing, 16.0);
   // The same message where it was: what is read does not move, whatever
   // the list does above it -- the oldest bubble made goes as the newest

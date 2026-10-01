@@ -627,8 +627,14 @@ class pictures_part {
     std::error_code failed;
     std::filesystem::create_directories(downloads(), failed);
     auto where = downloads() / (base.empty() ? std::filesystem::path("file") : base);
+    const std::string stem = base.stem().string(), extension = base.extension().string();
+    // Through vformat, not std::format: clang 23 crashes now and then on
+    // basic_format_string<...>::__handles_ for this list of arguments, where
+    // libc++'s format headers are in a unit twice -- `import std`, and the
+    // skia module's global fragment (Ganesh's headers include <chrono>).
+    // make_format_args makes no basic_format_string.
     for (int n = 1; std::filesystem::exists(where, failed); ++n)
-      where = downloads() / std::format("{} ({}){}", base.stem().string(), n, base.extension().string());
+      where = downloads() / std::vformat("{} ({}){}", std::make_format_args(stem, n, extension));
     std::ofstream(where, std::ios::binary) << bytes;
     if (open)
       mux::host::open_url("file://" + where.string());

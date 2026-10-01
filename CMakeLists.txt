@@ -130,8 +130,7 @@ cme_find_package(splice REQUIRED)
 cme_declare_port(NAME knot PROVIDES knot
   GITHUB_REPOSITORY j4niwzis/knot
   GIT_TAG 035e53fdee8875614e350331a914256495b9bb22
-  LICENSE AGPL-3.0-only
-  SYSTEM NEVER)
+  LICENSE AGPL-3.0-only)
 
 # Found by itself, and linked by itself: mux imports it (a message's HTML),
 # not only tern.

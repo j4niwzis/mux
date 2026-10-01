@@ -20,7 +20,11 @@ if(NOT COMMAND cme_declare_port AND NOT CMAKE_PROJECT_TOP_LEVEL_INCLUDES)
   set(CMAKE_PROJECT_TOP_LEVEL_INCLUDES ${CMAKE_CURRENT_LIST_DIR}/cmake/get_cme.cmake)
 endif()
 
-project(mux VERSION 0.1 LANGUAGES C CXX)
+# ASM: Boost.Context, which mux links itself (its stackful coroutines),
+# builds its switch in assembly and enables the language in its own
+# directory only -- not enough for the generate step, which stopped CI on
+# "Missing variable is: CMAKE_ASM_COMPILE_OBJECT".
+project(mux VERSION 0.1 LANGUAGES C CXX ASM)
 
 # A release build is optimised across its units (ThinLTO with clang), where
 # the toolchain can: mux's own targets, set at the end -- not the libraries

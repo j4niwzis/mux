@@ -136,44 +136,6 @@ inline panel_ease_t& panel_ease() {
   static panel_ease_t ease;
   return ease;
 }
-// The panels' look put in place, for skiff to paint them in: only over the
-// background behind the whole window. Whether it changed -- the window to
-// be repainted.
-inline bool show_panels(const config::bubble_look& look) {
-  const bool kinded = window_look().behind && splice::visit(splice::overloaded{[](config::bubbles::solid) { return false; },
-                                                                              [](const auto&) { return true; }},
-                                                           look.kind);
-  scene::detail::PanelLook next{
-      .active = kinded,
-      .opacity = static_cast<float>(look.opacity) / 100.0f,
-      .frosted = splice::visit(splice::overloaded{[](config::bubbles::frosted) { return true; }, [](const auto&) { return false; }}, look.kind),
-      .edge = splice::visit(splice::overloaded{[](config::bubbles::glass) { return true; }, [](const auto&) { return false; }}, look.kind),
-      .panels = {sidebar_colour},
-      // Tinted at the opacity, never left out as a panel fill again: what is
-      // chosen or hovered, a tab lit, a menu.
-      .tints = {chosen_colour, tile_colour, popup_colour()}};
-  if (!kinded)
-    next = {};
-  if (next == scene::detail::panelLook())
-    return false;
-  // Only the opacity another: eased to it, from where it is now.
-  scene::detail::PanelLook& now = scene::detail::panelLook();
-  const bool same_but_opacity = now.active && next.active && now.frosted == next.frosted && now.edge == next.edge &&
-                                now.panels == next.panels && now.tints == next.tints;
-  if (same_but_opacity) {
-    auto& ease = panel_ease();
-    if (ease.t.moving() && ease.to == next.opacity)
-      return false;
-    ease.from = now.opacity;
-    ease.to = next.opacity;
-    ease.t.jump(0.0f);
-    ease.t.setTarget(1.0f);
-    return true;
-  }
-  panel_ease().t.jump(1.0f);
-  now = std::move(next);
-  return true;
-}
 // A chat background's dialog, for a level.
 template <class Actions>
 struct open_wallpaper_at {

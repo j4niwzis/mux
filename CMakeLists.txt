@@ -238,22 +238,6 @@ if(MUX_UI)
   endif()
   cme_find_package(skiff COMPONENTS ${mux_skiff_components} REQUIRED)
   cme_find_package(skiff-widgets REQUIRED)
-  # skiff's modules are C++23 and do not carry the family's flags, so they
-  # would be built with a std module of their own: given the same standard
-  # and the same flags here.
-  foreach(target IN ITEMS skiff::skiff skiff::widgets)
-    if(TARGET ${target})
-      get_target_property(aliased ${target} ALIASED_TARGET)
-      if(aliased)
-        set(target ${aliased})
-      endif()
-      get_target_property(imported ${target} IMPORTED)
-      if(NOT imported)
-        target_compile_options(${target} PUBLIC ${mux_std_flags})
-        set_target_properties(${target} PROPERTIES CXX_STANDARD 26)
-      endif()
-    endif()
-  endforeach()
 
   # The emoji face the window draws emoji with, as tdesktop has its own:
   # Noto Color Emoji, fetched once at a pinned commit and checked, and put
@@ -338,6 +322,40 @@ if(MUX_TESTS)
   enable_testing()
   add_subdirectory(test)
 endif()
+
+# One std module in the whole build. CMake builds std -- and every library
+# of modules imported -- once more for each set of flags an importer is
+# compiled with; where those copies meet in one unit, clang 23 does not
+# refuse it but mixes their declarations up (std::forward found as
+# uintmax_t) and crashes, as accounts_matrix_events.cc, pictures.cc and
+# ui_test.cc did in a release build. So every library of modules in the
+# build -- the family's, skiff's, googletest's, whatever is fetched -- gets
+# the same standard and flags as mux's own, LTO included in a release
+# build: one set of flags, one std, each module built once.
+function(mux_targets_under dir out)
+  get_property(found DIRECTORY ${dir} PROPERTY BUILDSYSTEM_TARGETS)
+  get_property(subdirectories DIRECTORY ${dir} PROPERTY SUBDIRECTORIES)
+  foreach(subdirectory IN LISTS subdirectories)
+    mux_targets_under(${subdirectory} more)
+    list(APPEND found ${more})
+  endforeach()
+  set(${out} ${found} PARENT_SCOPE)
+endfunction()
+mux_targets_under(${CMAKE_CURRENT_SOURCE_DIR} mux_all_targets)
+foreach(target IN LISTS mux_all_targets)
+  get_target_property(module_sets ${target} CXX_MODULE_SETS)
+  get_target_property(imported ${target} IMPORTED)
+  if(module_sets AND NOT imported AND NOT target MATCHES "^mux")
+    target_compile_options(${target} PUBLIC ${mux_std_flags})
+    set_target_properties(${target} PROPERTIES CXX_STANDARD 26 CXX_STANDARD_REQUIRED ON)
+    if(mux_ipo AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+      # Its archive indexed by the toolchain's ar, which reads bitcode.
+      set_property(TARGET ${target} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+      target_compile_options(${target} PRIVATE
+        $<$<AND:$<CONFIG:Release>,$<COMPILE_LANG_AND_ID:CXX,Clang>>:-flto=full>)
+    endif()
+  endif()
+endforeach()
 
 # LTO for what is mux's: the targets made here and in test/.
 if(mux_ipo)

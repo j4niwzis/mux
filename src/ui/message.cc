@@ -1569,6 +1569,7 @@ struct message_bubble : nodes::Stack {
     appearing.jump(0.0f);
     appearing.setTarget(1.0f);
     fState.apply({.alpha = 0.0f, .shiftY = 12.0f});
+    scene::work::mark(fState.fId);  // its frames asked for: nothing else asks, and it stayed shifted
   }
   // The swipe's offset as last drawn: a drag jumps the tween, which then
   // does not move, and the bubble followed only once it was let go.

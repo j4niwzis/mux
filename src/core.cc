@@ -501,11 +501,20 @@ struct set_need {  // the level a thing done asks
   power_need_t need;
   std::int64_t level = 0;
 };
+// The level any kind of event asks, by its type as Matrix names it -- one
+// of the list's or not (#11826).
+struct set_event_need {
+  std::string event;
+  std::int64_t level = 0;
+};
 }  // namespace room_action
+// A room's creator, from room version 12 on: above every level, and not
+// listed in the power levels (MSC4289).
+inline constexpr std::int64_t kCreatorPower = std::numeric_limits<std::int64_t>::max();
 using room_action_t =
     splice::variant<room_action::rename, room_action::retopic, room_action::set_join_rule, room_action::set_history,
                  room_action::invite, room_action::kick, room_action::ban, room_action::unban, room_action::set_power,
-                 room_action::encrypt, room_action::set_need>;
+                 room_action::encrypt, room_action::set_need, room_action::set_event_need>;
 
 // A custom emoji: its shortcode, as written between colons, and its picture
 // on the server -- one of a Matrix room's packs, or the user's own.

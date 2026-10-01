@@ -266,6 +266,16 @@ struct room_settings : nodes::Stack {
     room_settings* box;
     void operator()() const { box->apply_new_level(); }
   };
+  struct set_event_level {
+    room_settings* box;
+    std::string event;
+    std::int64_t level;
+    void operator()() const { box->event_level(event, level); }
+  };
+  struct add_event_need {
+    room_settings* box;
+    void operator()() const { box->apply_event_level(); }
+  };
   struct notify_as {
     room_settings* box;
     config::notify_mode_t mode;
@@ -521,7 +531,7 @@ struct room_settings : nodes::Stack {
       parts.moderator.set_active(now == 50 && fallback != 50);
       parts.admin.set_active(now == 100 && fallback != 100);
       const bool custom = now != fallback && now != 50 && now != 100;
-      parts.custom.setText(custom ? std::format("Custom ({})", now) : std::string());
+      parts.custom.setText(!custom ? std::string() : now == kCreatorPower ? std::string("Creator") : std::format("Custom ({})", now));
       parts.custom.setVisible(custom);
       parts.custom.apply({.alignSelf = scene::align::kMiddle});
       if (!allowed)
@@ -537,6 +547,52 @@ struct room_settings : nodes::Stack {
     room_settings* box;
     std::string user;
     set_level operator()(std::int64_t level) const { return {box, user, level}; }
+  };
+  struct event_maker {
+    room_settings* box;
+    std::string event;
+    set_event_level operator()(std::int64_t level) const { return {box, event, level}; }
+  };
+  // A kind of event the list does not name, as the power levels set it.
+  struct event_row : nodes::Stack {
+    struct parts_t {
+      nodes::Text label;
+      level_choice<set_event_level, event_maker> levels;
+    } parts;
+    event_row(room_settings* box, const std::string& event, std::int64_t level, const room_settings_facts& facts)
+        : parts{.label = nodes::Text(event, 14.0f, text_colour),
+                .levels = level_choice<set_event_level, event_maker>(
+                    event_maker{box, event}, level, facts.needs.state_default,
+                    facts.may(power_need::change_permissions{}) && level <= facts.mine)} {
+      this->setHorizontal();
+      this->setGap(10.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 0.0f, 4.0f, 0.0f}});
+      parts.label.setElided(true);
+      parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+    }
+  };
+  // Any kind of event, by its type: the level it asks, set.
+  struct new_event_row : nodes::Stack {
+    struct parts_t {
+      field event;
+      segment<pick_new_level> moderator, admin;
+      widgets::Button<add_event_need> apply;
+    } parts;
+    explicit new_event_row(room_settings* box)
+        : parts{.event = field("", "Event type, as m.room.server_acl"),
+                .moderator = segment<pick_new_level>("Moderator", {box, 50}),
+                .admin = segment<pick_new_level>("Admin", {box, 100}),
+                .apply = widgets::Button<add_event_need>("Apply", {box})} {
+      this->setHorizontal();
+      this->setGap(6.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+      parts.event.apply({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX, .alignSelf = scene::align::kEnd});
+      parts.moderator.apply({.alignSelf = scene::align::kEnd, .margin = {0.0f, 0.0f, 4.0f, 0.0f}});
+      parts.admin.apply({.alignSelf = scene::align::kEnd, .margin = {0.0f, 0.0f, 4.0f, 0.0f}});
+      parts.apply.setPrimary(true);
+      parts.apply.apply({.width = 80.0f, .height = 30.0f, .alignSelf = scene::align::kEnd,
+                         .margin = {0.0f, 0.0f, 3.0f, 0.0f}});
+    }
   };
   struct permission_row : nodes::Stack {
     struct parts_t {
@@ -606,8 +662,13 @@ struct room_settings : nodes::Stack {
       nodes::Text permissions = part_heading("Permissions");
       nodes::Text permissions_about = explained("Select the roles required to change various parts of the room.");
       std::vector<permission_row> rows;
+      // Every other kind of event the power levels set, and any kind added.
+      std::vector<event_row> others;
+      nodes::Text add_event = part_heading("Any other event");
+      new_event_row adding_event;
     } parts;
-    roles_page(Actions*, room_settings* box, const room_settings_facts& facts) : parts{.adding = new_level_row(box)} {
+    roles_page(Actions*, room_settings* box, const room_settings_facts& facts)
+        : parts{.adding = new_level_row(box), .adding_event = new_event_row(box)} {
       this->setGap(4.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
       parts.users.reserve(facts.privileged.size());
@@ -642,6 +703,15 @@ struct room_settings : nodes::Stack {
       parts.rows.reserve(std::size(all));
       for (const auto& [text, need] : all)
         parts.rows.emplace_back(box, text, need, facts);
+      // Those the list has by their own row are not again.
+      std::set<std::string_view> listed;
+      for (const auto& [text, need] : all)
+        splice::visit(splice::overloaded{[&]<sends_state Need>(const Need&) { listed.insert(Need::event); }, [](const auto&) {}}, need);
+      for (const auto& [event, level] : facts.needs.events)
+        if (!listed.contains(event))
+          parts.others.emplace_back(box, event, level, facts);
+      for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.add_event, &parts.adding_event})
+        each->setVisible(may_add);
     }
   };
 
@@ -858,10 +928,26 @@ struct room_settings : nodes::Stack {
   void show_new_level() {
     splice::visit(splice::overloaded{[&](roles_page& page) {
                             page.parts.adding.parts.moderator.set_active(new_level == 50);
+                            page.parts.adding_event.parts.moderator.set_active(new_level == 50);
+                            page.parts.adding_event.parts.admin.set_active(new_level == 100);
                             page.parts.adding.parts.admin.set_active(new_level == 100);
                           },
                           [](auto&) {}},
                holder().parts.page);
+  }
+  // Any kind of event's level: asked, and shown so at once.
+  void event_level(const std::string& event, std::int64_t level) {
+    if (!facts.may(power_need::change_permissions{}) || level > facts.mine || event.empty())
+      return;
+    actions->room_act(room_action::set_event_need{event, level});
+    facts.needs.events.insert_or_assign(event, level);
+    this->show_tab(tab);
+  }
+  void apply_event_level() {
+    std::string event;
+    splice::visit(splice::overloaded{[&](roles_page& page) { event = page.parts.adding_event.parts.event.text(); }, [](auto&) {}},
+                  holder().parts.page);
+    this->event_level(event, new_level);
   }
   void apply_new_level() {
     std::string user;

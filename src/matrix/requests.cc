@@ -216,6 +216,14 @@ void account<Sink>::manage(std::string room, room_action_t action) {
                                     }},
                          one.need);
               set("m.room.power_levels", content);
+            },
+            // Any kind of event's: by its type, in the power levels' events.
+            [&](const room_action::set_event_need& one) {
+              power_levels_content content = power_levels();
+              if (!content.events)
+                content.events.emplace();
+              content.events->insert_or_assign(one.event, static_cast<std::int64_t>(one.level));
+              set("m.room.power_levels", content);
             }},
         action);
   });

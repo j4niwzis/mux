@@ -523,6 +523,30 @@ using power_levels_content = loom::ev::m_room_power_levels_content_t;
 inline std::map<std::string, std::int64_t> powers_of(const power_levels_content* content) {
   return content && content->users ? *content->users : std::map<std::string, std::int64_t>{};
 }
+// From room version 12 on ("hydra", MSC4289) a room's creators -- who sent
+// its create event, and those it names besides -- outrank every level, and
+// the power levels do not list them: read as the default, the creator of a
+// new room had every permission greyed (#11826).
+inline bool creators_outrank(std::string_view version) {
+  if (version.contains("hydra"))
+    return true;
+  int number = 0;
+  const auto [end, failed] = std::from_chars(version.data(), version.data() + version.size(), number);
+  return failed == std::errc{} && end == version.data() + version.size() && number >= 12;
+}
+inline std::map<std::string, std::int64_t> powers_in(const loom::client::joined_room& kept) {
+  auto out = powers_of(kept.state.content<power_levels_content>("m.room.power_levels"));
+  if (!creators_outrank(kept.state.room_version()))
+    return out;
+  if (const auto created = kept.state.events.find(std::pair<std::string, std::string>{"m.room.create", ""});
+      created != kept.state.events.end())
+    out.insert_or_assign(created->second.sender, kCreatorPower);
+  if (const auto* created = kept.state.content<loom::ev::m_room_create_content_t>("m.room.create");
+      created && created->additional_creators)
+    for (const std::string& one : *created->additional_creators)
+      out.insert_or_assign(one, kCreatorPower);
+  return out;
+}
 // What each thing done in a room asks, as its power levels say: read here,
 // where they come in, into what the rest keeps.
 inline power_needs needs_of(const power_levels_content* content) {
@@ -616,7 +640,7 @@ void account<Sink>::conversation(const conversation_id& in, const loom::client::
                                                                          &loom::ev::m_room_join_rules_content_t::join_rule)),
                                      .history = history_rule_of(rule_text(kept.state.template content<loom::ev::m_room_history_visibility_content_t>("m.room.history_visibility"),
                                                                           &loom::ev::m_room_history_visibility_content_t::history_visibility)),
-                                     .powers = powers_of(kept.state.template content<power_levels_content>("m.room.power_levels")),
+                                     .powers = powers_in(kept),
                                      .power_default = power_default_of(kept.state.template content<power_levels_content>("m.room.power_levels")),
                                      .needs = needs_of(kept.state.template content<power_levels_content>("m.room.power_levels")),
                                      .version = kept.state.room_version(),

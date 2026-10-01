@@ -1243,6 +1243,13 @@ int run(App& app, const options& how) {
         target.present();
       phase_ms = {events_done - frame_began, app_done - events_done, ticked - app_done,  laid_out - ticked,
                   damage_found - laid_out,   shown_at - damage_found, detail::now_ms() - shown_at};
+      // A slow frame said, where MUX_TRACE_FRAMES is set: by its phases, as the
+      // corner shows the last one -- one that came and went is kept here.
+      static const bool slow_traced = std::getenv("MUX_TRACE_FRAMES") != nullptr;
+      if (slow_traced && detail::now_ms() - frame_began > 20.0)
+        std::println(std::cerr, "[slow] {:.1f} ms | events {:.1f}  app {:.1f}  tick {:.1f}  layout {:.1f}  damage {:.1f}  draw {:.1f}  present {:.1f}",
+                     detail::now_ms() - frame_began, phase_ms[0], phase_ms[1], phase_ms[2], phase_ms[3], phase_ms[4],
+                     phase_ms[5], phase_ms[6]);
     }
     app.closing();
   }

@@ -342,7 +342,7 @@ struct account_sessions : nodes::Stack {
       lines_t(std::string shown, std::string facts)
           : parts{.name = nodes::Text(std::move(shown), 15.0f, text_colour, true), .facts = nodes::Text(std::move(facts), 12.0f, dim_colour)} {
         this->setGap(2.0f);
-        fState.apply({.grow = scene::axes::kX, .autoSize = scene::axes::kY, .alignSelf = scene::align::kMiddle});
+        fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
         parts.name.setElided(true);
         parts.name.apply({.fillX = true});
         parts.facts.setElided(true);
@@ -367,7 +367,7 @@ struct account_sessions : nodes::Stack {
       fState.apply({.fillX = true, .height = 60.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 8.0f,
                     .background = tile_colour});
       parts.field.setText(one.name);
-      parts.field.apply({.grow = scene::axes::kX, .height = 32.0f, .alignSelf = scene::align::kMiddle});
+      parts.field.apply({.height = 32.0f, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
       parts.field.setVisible(false);
       parts.save.apply({.width = 70.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle});
       parts.save.setVisible(false);

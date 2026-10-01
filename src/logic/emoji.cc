@@ -68,8 +68,16 @@ export namespace mux::logic {
 // A variant of another for a skin tone (the table says which) is shown
 // through its base, not beside it, as tdesktop's panel does.
 
+// The table's groups -- how many, each one's name and first emoji -- and
+// everything below that reads it: not inline, made here once. alef builds the
+// table while its interface compiles, and clang builds it again (5.5 s) in
+// every unit that has code reading it -- every unit that made the picker.
+[[nodiscard]] std::size_t emoji_group_count() { return alef::emoji_groups.size(); }
+[[nodiscard]] std::string_view emoji_group_name(std::size_t group) { return alef::emoji_groups[group].name; }
+[[nodiscard]] const alef::emoji& emoji_group_face(std::size_t group) { return alef::emoji_groups[group].all.front(); }
+
 // A group's emoji, their skin-tone variants left out.
-[[nodiscard]] inline std::vector<const alef::emoji*> emoji_of_group(std::size_t group) {
+[[nodiscard]] std::vector<const alef::emoji*> emoji_of_group(std::size_t group) {
   std::vector<const alef::emoji*> out;
   if (group >= alef::emoji_groups.size())
     return out;
@@ -82,7 +90,7 @@ export namespace mux::logic {
 // An emoji's skin tones, as tdesktop's panel offers them: the five
 // single-tone variants, light to dark -- in the table, the entries after it
 // named "<its name>: <tone> skin tone". None for an emoji that takes none.
-[[nodiscard]] inline std::vector<const alef::emoji*> tones_of(const alef::emoji& base) {
+[[nodiscard]] std::vector<const alef::emoji*> tones_of(const alef::emoji& base) {
   static constexpr std::array<std::string_view, 5> kTones{"light", "medium-light", "medium", "medium-dark", "dark"};
   std::vector<const alef::emoji*> out;
   for (const alef::emoji_group& group : alef::emoji_groups)
@@ -105,7 +113,7 @@ export namespace mux::logic {
 // Those whose names -- or keywords, English or Russian, as CLDR has them --
 // have what is asked, in any case, in Unicode's order; at most `most` of
 // them.
-[[nodiscard]] inline std::vector<const alef::emoji*> emoji_found(std::string_view query, std::size_t most = 200) {
+[[nodiscard]] std::vector<const alef::emoji*> emoji_found(std::string_view query, std::size_t most = 200) {
   std::vector<const alef::emoji*> out;
   const std::string asked = folded(query);
   if (asked.empty())

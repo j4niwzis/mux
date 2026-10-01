@@ -558,7 +558,7 @@ struct emoji_panel : nodes::Stack {
     } parts;
     tab(emoji_panel* p, std::size_t g)
         : panel(p), group(g),
-          parts{.face = nodes::Text(logic::emoji_text(alef::emoji_groups[g].all.front()), 16.0f, text_colour)} {
+          parts{.face = nodes::Text(logic::emoji_text(logic::emoji_group_face(g)), 16.0f, text_colour)} {
       this->setHorizontal();
       fStack.justify = nodes::justify::middle{};
       fState.apply({.width = 28.0f, .height = 28.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 6.0f,
@@ -635,7 +635,7 @@ struct emoji_panel : nodes::Stack {
     footer.setHorizontal();
     footer.setGap(4.0f);
     footer.apply({.fillX = true, .height = 36.0f});
-    for (std::size_t g = 0; g < alef::emoji_groups.size(); ++g)
+    for (std::size_t g = 0; g < logic::emoji_group_count(); ++g)
       footer.parts.each.emplace_back(this, g);
     this->show_all();
   }
@@ -644,7 +644,7 @@ struct emoji_panel : nodes::Stack {
   void show_all() {
     auto& all = this->sections();
     all.clear();
-    all.reserve(alef::emoji_groups.size() + 1);
+    all.reserve(logic::emoji_group_count() + 1);
     first_group = 0;
     {
       // tdesktop's: what was picked lately first, then its default list
@@ -663,8 +663,8 @@ struct emoji_panel : nodes::Stack {
       all.emplace_back(this, "Custom", chat_emotes());
       ++first_group;
     }
-    for (std::size_t g = 0; g < alef::emoji_groups.size(); ++g)
-      all.emplace_back(this, alef::emoji_groups[g].name, logic::emoji_of_group(g));
+    for (std::size_t g = 0; g < logic::emoji_group_count(); ++g)
+      all.emplace_back(this, logic::emoji_group_name(g), logic::emoji_of_group(g));
     searching = false;
     parts.text_option.show({});
     parts.list.invalidateLayout();

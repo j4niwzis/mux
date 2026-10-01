@@ -2403,6 +2403,9 @@ struct conversations_screen : nodes::Stack {
     // Its own chats -- not those moved to another account's list -- and the
     // other accounts' listed in it.
     const auto found_by = [&](const conversation& one) {
+      // Upgraded away, its new room here: only the new one listed, as Element.
+      if (one.replaced_by && in && in->conversations.contains(*one.replaced_by))
+        return false;
       return in_folder(one) && (wanted.empty() || lower(display_name(one)).contains(wanted) || lower(one.id.id).contains(wanted));
     };
     if (in)
@@ -2571,6 +2574,7 @@ struct conversations_screen : nodes::Stack {
       const auto asked = one->needs.events.find("m.room.message");
       const std::int64_t needs = asked != one->needs.events.end() ? asked->second : one->needs.events_default;
       chat.line.set_can_post(level >= needs);
+      chat.line.set_replaced(one->replaced_by.has_value());
       chat.line.show_unsent(std::ranges::any_of(one->timeline, [](const message& said) {
         return said.outgoing &&
                splice::visit(splice::overloaded{[](const delivery::failed&) { return true; }, [](const auto&) { return false; }},

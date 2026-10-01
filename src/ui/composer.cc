@@ -494,6 +494,25 @@ struct composer_bar : nodes::Stack {
       parts.line.apply({.alignSelf = scene::align::kMiddle});
     }
   };
+  // A tombstoned room's: "This room has been replaced and is no longer
+  // active", and the room it goes on in, opened -- joined, where it is not
+  // yet (#11839).
+  using go_on = ask<Actions, &Actions::open_replacement>;
+  struct replaced_row : nodes::Stack {
+    struct parts_t {
+      nodes::Text line{"This room has been replaced and is no longer active.", 13.0f, dim_colour};
+      widgets::Button<go_on> go;
+    } parts;
+    explicit replaced_row(Actions* a) : parts{.go = widgets::Button<go_on>("The conversation continues here", {a})} {
+      this->setHorizontal();
+      this->setGap(10.0f);
+      fStack.justify = nodes::justify::middle{};
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {12.0f, 12.0f, 12.0f, 12.0f}});
+      parts.line.apply({.alignSelf = scene::align::kMiddle});
+      parts.go.setPrimary(true);
+      parts.go.apply({.height = 30.0f, .alignSelf = scene::align::kMiddle});
+    }
+  };
   struct parts_t {
     nodes::Box<> divider{band_colour};
     unsent_row unsent;
@@ -502,6 +521,8 @@ struct composer_bar : nodes::Stack {
     // Where the reader may not post: said in place of the field, as Element
     // says it.
     no_post_row no_post;
+    // Upgraded away: Element's notice, and the way to where it goes on.
+    replaced_row replaced;
   } parts;
   // The old name, for what reads it.
   typename input_row::field_t& field = parts.input.parts.field;
@@ -513,9 +534,11 @@ struct composer_bar : nodes::Stack {
                typename Where::emoji emoji, typename Where::send send)
       : parts{.unsent = unsent_row(a),
               .context_line = context_row(std::move(cancel)),
+              .replaced = replaced_row(a),
               .input = input_row(std::string(Where::placeholder), std::move(submit), std::move(attach), std::move(emoji), std::move(send))} {
     parts.unsent.setVisible(false);
     parts.no_post.setVisible(false);
+    parts.replaced.setVisible(false);
     parts.context_line.setVisible(false);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .background = sidebar_colour});
     parts.divider.apply({.fillX = true, .height = 1.0f});
@@ -556,6 +579,23 @@ struct composer_bar : nodes::Stack {
     parts.no_post.setVisible(!can);
     if (!can)
       parts.context_line.setVisible(false);
+  }
+  // Upgraded away: the notice in place of the field; or not.
+  // After set_can_post: replaced, the field stays hidden whatever it said.
+  void set_replaced(bool replaced) {
+    if (!replaced && !parts.replaced.visible())
+      return;
+    if (replaced && parts.replaced.visible() && !parts.input.visible() && !parts.no_post.visible())
+      return;
+    parts.replaced.setVisible(replaced);
+    if (replaced) {
+      parts.input.setVisible(false);
+      parts.no_post.setVisible(false);
+      parts.context_line.setVisible(false);
+    } else {
+      parts.input.setVisible(true);
+    }
+    this->invalidateLayout();
   }
   // Whether what is written answers or edits something.
   [[nodiscard]] bool answering() const { return parts.context_line.visible(); }

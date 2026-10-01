@@ -501,6 +501,10 @@ struct set_need {  // the level a thing done asks
   power_need_t need;
   std::int64_t level = 0;
 };
+// Upgraded to a room version: a new room made, this one tombstoned (#11839).
+struct upgrade {
+  std::string version;
+};
 // The level any kind of event asks, by its type as Matrix names it -- one
 // of the list's or not (#11826).
 struct set_event_need {
@@ -514,7 +518,7 @@ inline constexpr std::int64_t kCreatorPower = std::numeric_limits<std::int64_t>:
 using room_action_t =
     splice::variant<room_action::rename, room_action::retopic, room_action::set_join_rule, room_action::set_history,
                  room_action::invite, room_action::kick, room_action::ban, room_action::unban, room_action::set_power,
-                 room_action::encrypt, room_action::set_need, room_action::set_event_need>;
+                 room_action::encrypt, room_action::set_need, room_action::set_event_need, room_action::upgrade>;
 
 // A custom emoji: its shortcode, as written between colons, and its picture
 // on the server -- one of a Matrix room's packs, or the user's own.
@@ -642,6 +646,11 @@ struct conversation {
   power_needs needs;
   // Its room version, as it was made: what an upgrade goes from.
   std::string version;
+  // Upgraded away: the room it continues in (m.room.tombstone), and what
+  // its tombstone said; and the room this one continues, where it does.
+  std::optional<std::string> replaced_by;
+  std::string replaced_why;
+  std::optional<std::string> predecessor;
   // Its other published addresses, besides its alias.
   std::vector<std::string> other_aliases;
   // What is for the user in it, not yet seen, oldest first: kept to a number.
@@ -863,6 +872,11 @@ struct conversation_updated {
   std::int64_t power_default = 0;
   power_needs needs;
   std::string version;
+  // Upgraded away: the room it continues in (m.room.tombstone), and what
+  // its tombstone said; and the room this one continues, where it does.
+  std::optional<std::string> replaced_by;
+  std::string replaced_why;
+  std::optional<std::string> predecessor;
   std::vector<std::string> other_aliases;
   // Invited to, not joined: who asked.
   std::optional<invite_info> invite;
@@ -1300,6 +1314,9 @@ class model {
     kept.power_default = one.power_default;
     kept.needs = one.needs;
     kept.version = one.version;
+    kept.replaced_by = one.replaced_by;
+    kept.replaced_why = one.replaced_why;
+    kept.predecessor = one.predecessor;
     kept.other_aliases = one.other_aliases;
     kept.invite = one.invite;
   }

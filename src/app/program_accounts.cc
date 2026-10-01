@@ -698,6 +698,14 @@ void app::apply(const request::flip_account_strip&) {
   this->refresh();
 }
 
+// A tombstoned room's way on: the room it was upgraded to, as a matrix.to
+// link to it opens -- the chat where it is joined, its card where not.
+void app::apply(const request::open_replacement&) {
+  const auto& chosen = root().main().chosen;
+  if (const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr; chat && chat->replaced_by)
+    this->apply(request::open_url{"https://matrix.to/#/" + *chat->replaced_by});
+}
+
 // Chats in other accounts' lists (#11727): placed, taken out, their strips.
 mux::config::chat_placement* app::placement_of(const mux::conversation_id& chat, const mux::account_id& in) {
   const auto found = std::ranges::find_if(placements, [&](const mux::config::chat_placement& one) {

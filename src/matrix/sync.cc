@@ -232,7 +232,7 @@ void account<Sink>::run() {
     // and a room's head show, its spaces and its emoji -- members only those
     // who speak, and the user.
     static const std::vector<std::vector<std::string>> kRequiredState{
-        {"m.room.create", ""},           {"m.room.name", ""},          {"m.room.avatar", ""},
+        {"m.room.create", ""},           {"m.room.tombstone", ""},           {"m.room.name", ""},          {"m.room.avatar", ""},
         {"m.room.topic", ""},            {"m.room.encryption", ""},    {"m.room.canonical_alias", ""},
         {"m.room.join_rules", ""},       {"m.room.history_visibility", ""}, {"m.room.power_levels", ""},
         {"m.room.pinned_events", ""},    {"m.room.tombstone", ""},     {"m.space.child", "*"},
@@ -534,6 +534,19 @@ inline bool creators_outrank(std::string_view version) {
   const auto [end, failed] = std::from_chars(version.data(), version.data() + version.size(), number);
   return failed == std::errc{} && end == version.data() + version.size() && number >= 12;
 }
+// Upgraded away, and what the tombstone said; the room it continues.
+inline std::optional<std::string> replaced_by_of(const loom::client::joined_room& kept) {
+  const auto* stone = kept.state.content<loom::ev::m_room_tombstone_content_t>("m.room.tombstone");
+  return stone && !stone->replacement_room.empty() ? std::optional<std::string>(stone->replacement_room) : std::nullopt;
+}
+inline std::string replaced_why_of(const loom::client::joined_room& kept) {
+  const auto* stone = kept.state.content<loom::ev::m_room_tombstone_content_t>("m.room.tombstone");
+  return stone ? stone->body : std::string();
+}
+inline std::optional<std::string> predecessor_of(const loom::client::joined_room& kept) {
+  const auto* created = kept.state.content<loom::ev::m_room_create_content_t>("m.room.create");
+  return created && created->predecessor ? std::optional<std::string>(created->predecessor->room_id) : std::nullopt;
+}
 inline std::map<std::string, std::int64_t> powers_in(const loom::client::joined_room& kept) {
   auto out = powers_of(kept.state.content<power_levels_content>("m.room.power_levels"));
   if (!creators_outrank(kept.state.room_version()))
@@ -644,6 +657,9 @@ void account<Sink>::conversation(const conversation_id& in, const loom::client::
                                      .power_default = power_default_of(kept.state.template content<power_levels_content>("m.room.power_levels")),
                                      .needs = needs_of(kept.state.template content<power_levels_content>("m.room.power_levels")),
                                      .version = kept.state.room_version(),
+                                     .replaced_by = replaced_by_of(kept),
+                                     .replaced_why = replaced_why_of(kept),
+                                     .predecessor = predecessor_of(kept),
                                      .other_aliases = other_aliases_of(kept.state.template content<loom::ev::m_room_canonical_alias_content_t>("m.room.canonical_alias"))});
 }
 

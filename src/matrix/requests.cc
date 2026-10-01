@@ -217,6 +217,10 @@ void account<Sink>::manage(std::string room, room_action_t action) {
                          one.need);
               set("m.room.power_levels", content);
             },
+            // Upgraded: the server makes the new room and tombstones this one.
+            [&](const room_action::upgrade& one) {
+              told("upgrade", perform(*api_, loom::cs::upgrade_room{.room_id = room, .body = {.new_version = one.version}}));
+            },
             // Any kind of event's: by its type, in the power levels' events.
             [&](const room_action::set_event_need& one) {
               power_levels_content content = power_levels();

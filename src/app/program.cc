@@ -408,6 +408,7 @@ struct app : kept_settings {
   void apply(const request::flip_account_typing&);
   void apply(const request::set_account_colour& one);
   void apply(const request::flip_account_strip&);
+  void apply(const request::open_replacement&);
   void apply(const request::place_chat& one);
   void apply(const request::unplace_chat& one);
   void apply(const request::flip_chat_strip& one);

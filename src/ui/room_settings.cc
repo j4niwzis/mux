@@ -276,6 +276,10 @@ struct room_settings : nodes::Stack {
     room_settings* box;
     void operator()() const { box->apply_event_level(); }
   };
+  struct upgrade_press {
+    room_settings* box;
+    void operator()() const { box->upgrade(); }
+  };
   struct notify_as {
     room_settings* box;
     config::notify_mode_t mode;
@@ -745,22 +749,31 @@ struct room_settings : nodes::Stack {
       nodes::Text information = part_heading("Room information");
       copy_line id;
       nodes::Text version;
+      // Upgraded, as Element's: the version to go to, and the button. The
+      // server makes the new room and tombstones this one (#11839).
+      field upgrade_to;
+      widgets::Button<upgrade_press> upgrade;
       nodes::Text tools = part_heading("Developer tools");
       widgets::Button<ask<Actions, &Actions::explore_state>> explore;
       widgets::Button<ask<Actions, &Actions::open_send_custom>> send_custom;
       nodes::Text packs_heading = part_heading("Emojis & Stickers");
       widgets::Button<ask<Actions, &Actions::open_room_packs>> packs;
     } parts;
-    advanced_page(Actions* a, room_settings*, const room_settings_facts& facts)
+    advanced_page(Actions* a, room_settings* box, const room_settings_facts& facts)
         : parts{.id = copy_line("Internal room ID", facts.id),
                 .version = nodes::Text("Room version: " + facts.version, 14.0f, text_colour),
+                .upgrade_to = field("Upgrade to room version", "12", "12"),
+                .upgrade = widgets::Button<upgrade_press>("Upgrade this room", {box}),
                 .explore = widgets::Button<ask<Actions, &Actions::explore_state>>("Explore room state", {a}),
                 .send_custom = widgets::Button<ask<Actions, &Actions::open_send_custom>>("Send custom event", {a}),
                 .packs = widgets::Button<ask<Actions, &Actions::open_room_packs>>("Edit room packs", {a})} {
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
-      for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.explore, &parts.send_custom, &parts.packs})
+      for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.explore, &parts.send_custom, &parts.packs, &parts.upgrade})
         each->apply({.width = 180.0f, .height = 32.0f});
+      const bool may = facts.may(power_need::upgrade{});
+      parts.upgrade_to.setVisible(may);
+      parts.upgrade.setVisible(may);
     }
   };
 
@@ -934,6 +947,16 @@ struct room_settings : nodes::Stack {
                           },
                           [](auto&) {}},
                holder().parts.page);
+  }
+  // Upgraded to the version written: asked of the server.
+  void upgrade() {
+    if (!facts.may(power_need::upgrade{}))
+      return;
+    std::string version;
+    splice::visit(splice::overloaded{[&](advanced_page& page) { version = page.parts.upgrade_to.text(); }, [](auto&) {}},
+                  holder().parts.page);
+    if (!version.empty())
+      actions->room_act(room_action::upgrade{version});
   }
   // Any kind of event's level: asked, and shown so at once.
   void event_level(const std::string& event, std::int64_t level) {

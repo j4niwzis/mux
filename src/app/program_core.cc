@@ -225,8 +225,14 @@ void app::notify_of(const mux::message& said, bool mentions_me) {
   std::string text = "New message";
   if (notifications.show_text) {
     text = said.body.plain.empty() && said.attachment ? std::string("Picture or file") : said.body.plain;
-    if (text.size() > 300)
-      text = text.substr(0, 300) + "\u2026";
+    if (text.size() > 300) {
+      // Cut where a character starts: half of one is not UTF-8, and the bus
+      // drops a connection that sends it.
+      std::size_t cut = 300;
+      while (cut > 0 && (static_cast<unsigned char>(text[cut]) & 0xC0) == 0x80)
+        --cut;
+      text = text.substr(0, cut) + "\u2026";
+    }
   }
   // Shown by the backend chosen: the desktop's service, asked off the UI's
   // thread; or mux's own window, which comes next -- until then, the log.

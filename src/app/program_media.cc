@@ -29,6 +29,13 @@ void app::apply(const request::open_url& one) {
     this->follow(*where);
     return;
   }
+  // Only the web's and mail's links go to the system's opener: a link of a
+  // message is anyone's to write, and file://, smb://, or a scheme some
+  // program registered could open, mount or run what it names (review 5).
+  if (!mux::logic::opens_outside(one.url)) {
+    root().show_message("Not opened", std::format("mux opens only http, https and mailto links, not:\n{}", one.url));
+    return;
+  }
   mux::host::open_url(one.url);
 }
 

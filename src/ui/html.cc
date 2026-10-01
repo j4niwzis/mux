@@ -309,6 +309,15 @@ using html_tag_t = splice::variant<html_tag::line_break, html_tag::block_end, ht
                   **next);
   while (!out.text.empty() && out.text.back() == '\n')
     out.text.pop_back();
+  // Every stretch within the text left: one closed after a line break that
+  // is gone ran past its end (review 5).
+  const std::size_t size = out.text.size();
+  for (auto& span : out.spans)
+    span.last = std::min(span.last, size);
+  for (auto& style : out.styles)
+    style.last = std::min(style.last, size);
+  std::erase_if(out.spans, [](const auto& span) { return span.first >= span.last; });
+  std::erase_if(out.styles, [](const auto& style) { return style.first >= style.last; });
   // And the addresses written in it bare, as in a plain text: a message's
   // HTML has an <a> only where its client made one, and an edited message
   // comes with HTML -- a link typed into it was not a link.

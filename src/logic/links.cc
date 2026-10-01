@@ -140,6 +140,21 @@ inline std::optional<link_t> from_xmpp(std::string_view rest) {
 }
 }  // namespace detail
 
+// Whether a link is one the system's opener may be given: a web page or a
+// mail address, by its scheme, in any case (RFC 3986: schemes are
+// case-insensitive) -- nothing that names a file, a share or a program.
+[[nodiscard]] inline bool opens_outside(std::string_view url) {
+  static constexpr std::array<std::string_view, 3> allowed{"https:", "http:", "mailto:"};
+  const auto colon = url.find(':');
+  if (colon == std::string_view::npos)
+    return false;
+  const std::string scheme = url.substr(0, colon + 1) | std::views::transform([](char c) {
+                               return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                             }) |
+                             std::ranges::to<std::string>();
+  return std::ranges::contains(allowed, std::string_view(scheme));
+}
+
 // A link read into what it points at, by its scheme; none for one that
 // points outside the program -- the browser's.
 [[nodiscard]] inline std::optional<link_t> link_of(std::string_view url) {

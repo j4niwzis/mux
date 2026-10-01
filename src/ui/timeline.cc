@@ -96,6 +96,200 @@ inline void show_wallpaper_on(wallpaper_t& wall, const config::wallpaper_t& chos
                 chosen);
 }
 
+// A press on what is in a message -- a picture, a file, a reply's quote,
+// its sender -- as a click, wherever the message is shown: the timeline, a
+// thread (#11563). The press in the space its bubble is laid out in.
+template <class Actions>
+[[nodiscard]] bool press_in_bubble(Actions* actions, const message_bubble& one, float x, float y, const conversation* chat) {
+  const struct {
+    float x, y;
+  } press{x, y};
+  // A picture: seen whole. A file: saved and opened.
+  // A video, shown by its thumbnail: played in the viewer -- or, built
+  // without video, by the system's player, as a file is opened.
+  if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y) &&
+      one.said.attachment && one.said.attachment->video && !mux::video::kPlays) {
+    actions->open_file(*one.said.attachment->video, one.said.attachment->name);
+    return true;
+  }
+  if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y) &&
+      one.said.attachment && one.said.attachment->video) {
+    
+    const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
+    actions->open_video(one.parts.body.parts.picture->source, *one.said.attachment->video, one.sender,
+                        chat ? sender_name(*chat, one.sender) : one.sender,
+                        std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day}, clock_of(one.said.at)));
+    return true;
+  }
+  if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y)) {
+    
+    const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
+    actions->open_picture(one.parts.body.parts.picture->source, one.sender,
+                          chat ? sender_name(*chat, one.sender) : one.sender,
+                          std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day}, clock_of(one.said.at)));
+    return true;
+  }
+  // A picture of an album: seen whole, as one alone is.
+  if (one.parts.body.parts.album)
+    for (const auto& row : one.parts.body.parts.album->parts.rows)
+      for (const picture_view& cell : row.parts.cells)
+        if (cell.bounds().contains(press.x, press.y)) {
+          
+          const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
+          actions->open_picture(cell.source, one.sender, chat ? sender_name(*chat, one.sender) : one.sender,
+                                std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day},
+                                            clock_of(one.said.at)));
+          return true;
+        }
+  if (one.parts.body.parts.file && one.parts.body.parts.file->bounds().contains(press.x, press.y) && one.said.attachment) {
+    if (one.parts.body.parts.file->sound)
+      actions->play_audio(one.parts.body.parts.file->source);
+    else
+      actions->open_file(one.parts.body.parts.file->source, one.said.attachment->name);
+    return true;
+  }
+  // A reaction's chip: the user's own put or taken back.
+  if (one.parts.body.parts.reactions)
+    for (const reaction_chip& chip : one.parts.body.parts.reactions->chips())
+      if (chip.bounds().contains(press.x, press.y)) {
+        actions->react(one.message_id, chip.key);
+        return true;
+      }
+  // A card of a link to a room or a message: followed.
+  for (const link_card& card : one.parts.body.parts.cards)
+    if (card.bounds().contains(press.x, press.y)) {
+      actions->open_url(card.url);
+      return true;
+    }
+  // A link's preview: the link, followed.
+  if (const auto& preview = one.parts.body.parts.preview; preview && preview->bounds().contains(press.x, press.y)) {
+    actions->open_url(preview->url);
+    return true;
+  }
+  // A thread's summary under its root: the thread, beside the chat.
+  if (const auto& thread = one.parts.body.parts.thread; thread && thread->bounds().contains(press.x, press.y)) {
+    actions->open_thread(one.message_id);
+    return true;
+  }
+  // A reaction shown as a line: pressed anywhere, to what it is on.
+  if (one.said.service && one.said.replies_to && one.parts.body.bounds().contains(press.x, press.y) &&
+      splice::visit(splice::overloaded{[](room_event::reactions) { return true; },
+                                       [](room_event::unreactions) { return true; }, [](const auto&) { return false; }},
+                 one.said.event_kind)) {
+    actions->jump_to_message(*one.said.replies_to, std::nullopt, one.message_id);
+    return true;
+  }
+  // A quoted stretch of a reply's text -- the part of the message it
+  // answers, as "> " quotes it: to that message, the part marked, as
+  // the reply's own quote goes.
+  if (const auto& text = one.parts.body.parts.text;
+      one.said.replies_to && text.visible() && text.bounds().contains(press.x, press.y) && !text.hasSelection()) {
+    // The quote pressed, of those the reply has: its own words marked.
+    if (const auto quote = text.quoteAt(press.x, press.y)) {
+      actions->jump_to_message(*one.said.replies_to,
+                               trimmed_fragment(std::string_view(text.text()).substr(quote->first, quote->second - quote->first)),
+                               one.message_id);
+      return true;
+    }
+  }
+  // The reply's header: to the message it answers, as it is -- a part
+  // marked there only by a click on the quoted stretch itself.
+  if (one.parts.body.parts.quote && one.said.replies_to && one.parts.body.parts.quote->bounds().contains(press.x, press.y)) {
+    // Where the header shows the quote itself, the quoted part marked.
+    if (one.header_quote)
+      actions->jump_to_message(*one.said.replies_to, one.header_quote, one.message_id);
+    else
+      actions->jump_to_message(*one.said.replies_to, std::nullopt, one.message_id);
+    return true;
+  }
+  // A forward's line: its sender's pill, their page; its words, the
+  // original, where its link is.
+  if (one.parts.body.parts.forwarded && one.said.forwarded &&
+      one.parts.body.parts.forwarded->bounds().contains(press.x, press.y)) {
+    if (one.said.forwarded->from.starts_with('@') &&
+        one.parts.body.parts.forwarded->parts.who.bounds().contains(press.x, press.y)) {
+      actions->open_member_info(one.said.forwarded->from);
+      return true;
+    }
+    if (!one.said.forwarded->link.empty()) {
+      actions->open_url(one.said.forwarded->link);
+      return true;
+    }
+  }
+  // The sender, by their avatar or their name: their page.
+  if ((one.parts.face.visible() && one.parts.face.fState.fAlpha > 0.0f && one.parts.face.bounds().contains(press.x, press.y)) ||
+      (one.parts.body.parts.name && one.parts.body.parts.name->bounds().contains(press.x, press.y))) {
+    actions->open_member_info(one.sender);
+    return true;
+  }
+  return false;
+}
+
+// What a message's menu offers, for a right press on it wherever it is
+// shown: the timeline, a thread.
+[[nodiscard]] inline menu_facts facts_of_bubble(const message_bubble& one, const conversation* chat, float x, float y) {
+  const struct {
+    float x, y;
+  } press{x, y};
+  menu_facts facts;
+  facts.id = one.message_id;
+  facts.own = one.outgoing;
+  facts.text = one.plain;
+  facts.selection = one.parts.body.parts.text.hasSelection();
+  facts.copied = facts.selection ? one.parts.body.parts.text.selected() : one.plain;
+  if (one.said.attachment) {
+    facts.media = one.said.attachment->video.value_or(one.said.attachment->source);
+    facts.media_name = one.said.attachment->name;
+    facts.moving = moves(one.said.attachment->kind);
+    if (is_picture(one.said.attachment->kind) || one.said.attachment->video)
+      facts.picture = one.said.attachment->source;
+    facts.captioned = is_picture(one.said.attachment->kind) && !one.said.attachment->video;
+  }
+  if (chat) {
+    facts.pinned = std::ranges::contains(chat->pinned, one.message_id);
+    facts.pinnable = is_matrix(chat->id.account.speaks) && one.message_id.starts_with('$');
+    // Delete as the room's power levels allow it: one's own where one
+    // may send a redaction; another's where one may also redact.
+    facts.deletable = one.outgoing;
+    if (is_matrix(chat->id.account.speaks)) {
+      const auto mine = chat->powers.find(chat->id.account.address);
+      const std::int64_t level = mine != chat->powers.end() ? mine->second : chat->power_default;
+      const auto redaction = chat->needs.events.find("m.room.redaction");
+      const std::int64_t send = redaction != chat->needs.events.end() ? redaction->second : chat->needs.events_default;
+      facts.deletable = level >= send && (one.outgoing || level >= chat->needs.redact);
+    }
+    facts.reaction_events = !one.said.reaction_events.empty();
+    for (const auto& [key, who] : one.said.reactions)
+      facts.reaction_count += who.size();
+  }
+  // A Matrix message's link: matrix.to, to it in its room.
+  if (chat && is_matrix(chat->id.account.speaks) && one.message_id.starts_with('$'))
+    facts.link = logic::message_link(*chat, one.message_id);
+  // The link the press was on: one in the text -- its text asked a menu
+  // of its own with it, which this one is in place of -- or the
+  // preview's.
+  if (const auto& asked = skiff::nodes::textMenusAsked(); !asked.empty() && asked.back().link)
+    facts.pressed_link = *asked.back().link;
+  else if (const auto& preview = one.parts.body.parts.preview;
+           preview && preview->fState.fBounds.contains(press.x, press.y))
+    facts.pressed_link = preview->url;
+  // A sticker: what sending it again takes.
+  if (one.said.sticker && one.said.attachment)
+    facts.sticker = emote{.shortcode = one.said.attachment->name,
+                          .url = one.said.attachment->source,
+                          .body = one.said.attachment->name,
+                          .w = one.said.attachment->width > 0 ? std::optional<std::int64_t>(one.said.attachment->width) : std::nullopt,
+                          .h = one.said.attachment->height > 0 ? std::optional<std::int64_t>(one.said.attachment->height) : std::nullopt,
+                          .mimetype = one.said.attachment->mimetype.empty() ? std::nullopt
+                                                                            : std::optional<std::string>(one.said.attachment->mimetype)};
+  // A reaction shown as a line: what it is on, and with what.
+  if (!one.said.reaction_key.empty() && one.said.replies_to)
+    facts.reaction = menu_facts::reaction_facts{*one.said.replies_to, one.said.reaction_key};
+  facts.x = press.x;
+  facts.y = press.y;
+  return facts;
+}
+
 template <class Actions>
 struct timeline_area : scene::Node {
   // The loader's cross: the message jumped to no longer looked for.
@@ -288,130 +482,15 @@ struct timeline_area : scene::Node {
   // A press on what is in a message -- a picture, a file, a reply's quote,
   // its sender -- as a click: it comes here from what was pressed when that
   // did not take it, at once or, in a list that scrolls, on the release.
+  [[nodiscard]] const conversation* seen_chat_of() const { return seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr; }
   [[nodiscard]] bool onClick(float x, float y) {
     // In the space the rows are laid out in: the list draws them scrolled.
     const struct {
       float x, y;
     } press{x, y - parts.timeline.contentsShift()};
       for (const message_bubble& one : this->bubbles()) {
-        // A picture: seen whole. A file: saved and opened.
-        // A video, shown by its thumbnail: played in the viewer -- or, built
-        // without video, by the system's player, as a file is opened.
-        if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y) &&
-            one.said.attachment && one.said.attachment->video && !mux::video::kPlays) {
-          actions->open_file(*one.said.attachment->video, one.said.attachment->name);
+        if (press_in_bubble(actions, one, press.x, press.y, seen_chat_of()))
           return true;
-        }
-        if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y) &&
-            one.said.attachment && one.said.attachment->video) {
-          const conversation* chat = seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr;
-          const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
-          actions->open_video(one.parts.body.parts.picture->source, *one.said.attachment->video, one.sender,
-                              chat ? sender_name(*chat, one.sender) : one.sender,
-                              std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day}, clock_of(one.said.at)));
-          return true;
-        }
-        if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y)) {
-          const conversation* chat = seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr;
-          const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
-          actions->open_picture(one.parts.body.parts.picture->source, one.sender,
-                                chat ? sender_name(*chat, one.sender) : one.sender,
-                                std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day}, clock_of(one.said.at)));
-          return true;
-        }
-        // A picture of an album: seen whole, as one alone is.
-        if (one.parts.body.parts.album)
-          for (const auto& row : one.parts.body.parts.album->parts.rows)
-            for (const picture_view& cell : row.parts.cells)
-              if (cell.bounds().contains(press.x, press.y)) {
-                const conversation* chat = seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr;
-                const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
-                actions->open_picture(cell.source, one.sender, chat ? sender_name(*chat, one.sender) : one.sender,
-                                      std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day},
-                                                  clock_of(one.said.at)));
-                return true;
-              }
-        if (one.parts.body.parts.file && one.parts.body.parts.file->bounds().contains(press.x, press.y) && one.said.attachment) {
-          if (one.parts.body.parts.file->sound)
-            actions->play_audio(one.parts.body.parts.file->source);
-          else
-            actions->open_file(one.parts.body.parts.file->source, one.said.attachment->name);
-          return true;
-        }
-        // A reaction's chip: the user's own put or taken back.
-        if (one.parts.body.parts.reactions)
-          for (const reaction_chip& chip : one.parts.body.parts.reactions->chips())
-            if (chip.bounds().contains(press.x, press.y)) {
-              actions->react(one.message_id, chip.key);
-              return true;
-            }
-        // A card of a link to a room or a message: followed.
-        for (const link_card& card : one.parts.body.parts.cards)
-          if (card.bounds().contains(press.x, press.y)) {
-            actions->open_url(card.url);
-            return true;
-          }
-        // A link's preview: the link, followed.
-        if (const auto& preview = one.parts.body.parts.preview; preview && preview->bounds().contains(press.x, press.y)) {
-          actions->open_url(preview->url);
-          return true;
-        }
-        // A thread's summary under its root: the thread, beside the chat.
-        if (const auto& thread = one.parts.body.parts.thread; thread && thread->bounds().contains(press.x, press.y)) {
-          actions->open_thread(one.message_id);
-          return true;
-        }
-        // A reaction shown as a line: pressed anywhere, to what it is on.
-        if (one.said.service && one.said.replies_to && one.parts.body.bounds().contains(press.x, press.y) &&
-            splice::visit(splice::overloaded{[](room_event::reactions) { return true; },
-                                             [](room_event::unreactions) { return true; }, [](const auto&) { return false; }},
-                       one.said.event_kind)) {
-          actions->jump_to_message(*one.said.replies_to, std::nullopt, one.message_id);
-          return true;
-        }
-        // A quoted stretch of a reply's text -- the part of the message it
-        // answers, as "> " quotes it: to that message, the part marked, as
-        // the reply's own quote goes.
-        if (const auto& text = one.parts.body.parts.text;
-            one.said.replies_to && text.visible() && text.bounds().contains(press.x, press.y) && !text.hasSelection()) {
-          // The quote pressed, of those the reply has: its own words marked.
-          if (const auto quote = text.quoteAt(press.x, press.y)) {
-            actions->jump_to_message(*one.said.replies_to,
-                                     trimmed_fragment(std::string_view(text.text()).substr(quote->first, quote->second - quote->first)),
-                                     one.message_id);
-            return true;
-          }
-        }
-        // The reply's header: to the message it answers, as it is -- a part
-        // marked there only by a click on the quoted stretch itself.
-        if (one.parts.body.parts.quote && one.said.replies_to && one.parts.body.parts.quote->bounds().contains(press.x, press.y)) {
-          // Where the header shows the quote itself, the quoted part marked.
-          if (one.header_quote)
-            actions->jump_to_message(*one.said.replies_to, one.header_quote, one.message_id);
-          else
-            actions->jump_to_message(*one.said.replies_to, std::nullopt, one.message_id);
-          return true;
-        }
-        // A forward's line: its sender's pill, their page; its words, the
-        // original, where its link is.
-        if (one.parts.body.parts.forwarded && one.said.forwarded &&
-            one.parts.body.parts.forwarded->bounds().contains(press.x, press.y)) {
-          if (one.said.forwarded->from.starts_with('@') &&
-              one.parts.body.parts.forwarded->parts.who.bounds().contains(press.x, press.y)) {
-            actions->open_member_info(one.said.forwarded->from);
-            return true;
-          }
-          if (!one.said.forwarded->link.empty()) {
-            actions->open_url(one.said.forwarded->link);
-            return true;
-          }
-        }
-        // The sender, by their avatar or their name: their page.
-        if ((one.parts.face.visible() && one.parts.face.fState.fAlpha > 0.0f && one.parts.face.bounds().contains(press.x, press.y)) ||
-            (one.parts.body.parts.name && one.parts.body.parts.name->bounds().contains(press.x, press.y))) {
-          actions->open_member_info(one.sender);
-          return true;
-        }
       }
     return false;
   }
@@ -425,65 +504,8 @@ struct timeline_area : scene::Node {
     // is, and all of it if not.
     for (const message_bubble& one : this->bubbles())
       if (parts.timeline.toView(one.bounds()).contains(press.x, press.y)) {
-        menu_facts facts;
-        facts.id = one.message_id;
-        facts.own = one.outgoing;
-        facts.text = one.plain;
-        facts.selection = one.parts.body.parts.text.hasSelection();
-        facts.copied = facts.selection ? one.parts.body.parts.text.selected() : one.plain;
+        menu_facts facts = facts_of_bubble(one, seen_chat_of(), press.x, press.y);
         facts.seen = this->seen_by(one.message_id, one.sender);
-        if (one.said.attachment) {
-          facts.media = one.said.attachment->video.value_or(one.said.attachment->source);
-          facts.media_name = one.said.attachment->name;
-          facts.moving = moves(one.said.attachment->kind);
-          if (is_picture(one.said.attachment->kind) || one.said.attachment->video)
-            facts.picture = one.said.attachment->source;
-          facts.captioned = is_picture(one.said.attachment->kind) && !one.said.attachment->video;
-        }
-        if (const conversation* chat = seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr) {
-          facts.pinned = std::ranges::contains(chat->pinned, one.message_id);
-          facts.pinnable = is_matrix(chat->id.account.speaks) && one.message_id.starts_with('$');
-          // Delete as the room's power levels allow it: one's own where one
-          // may send a redaction; another's where one may also redact.
-          facts.deletable = one.outgoing;
-          if (is_matrix(chat->id.account.speaks)) {
-            const auto mine = chat->powers.find(chat->id.account.address);
-            const std::int64_t level = mine != chat->powers.end() ? mine->second : chat->power_default;
-            const auto redaction = chat->needs.events.find("m.room.redaction");
-            const std::int64_t send = redaction != chat->needs.events.end() ? redaction->second : chat->needs.events_default;
-            facts.deletable = level >= send && (one.outgoing || level >= chat->needs.redact);
-          }
-          facts.reaction_events = !one.said.reaction_events.empty();
-          for (const auto& [key, who] : one.said.reactions)
-            facts.reaction_count += who.size();
-        }
-        // A Matrix message's link: matrix.to, to it in its room.
-        if (seen_chat && is_matrix(seen_chat->account.speaks) &&
-            one.message_id.starts_with('$'))
-          if (const conversation* chat = seen_model ? seen_model->find(*seen_chat) : nullptr)
-            facts.link = logic::message_link(*chat, one.message_id);
-        // The link the press was on: one in the text -- its text asked a menu
-        // of its own with it, which this one is in place of -- or the
-        // preview's.
-        if (const auto& asked = skiff::nodes::textMenusAsked(); !asked.empty() && asked.back().link)
-          facts.pressed_link = *asked.back().link;
-        else if (const auto& preview = one.parts.body.parts.preview;
-                 preview && preview->fState.fBounds.contains(press.x, press.y))
-          facts.pressed_link = preview->url;
-        // A sticker: what sending it again takes.
-        if (one.said.sticker && one.said.attachment)
-          facts.sticker = emote{.shortcode = one.said.attachment->name,
-                                .url = one.said.attachment->source,
-                                .body = one.said.attachment->name,
-                                .w = one.said.attachment->width > 0 ? std::optional<std::int64_t>(one.said.attachment->width) : std::nullopt,
-                                .h = one.said.attachment->height > 0 ? std::optional<std::int64_t>(one.said.attachment->height) : std::nullopt,
-                                .mimetype = one.said.attachment->mimetype.empty() ? std::nullopt
-                                                                                  : std::optional<std::string>(one.said.attachment->mimetype)};
-        // A reaction shown as a line: what it is on, and with what.
-        if (!one.said.reaction_key.empty() && one.said.replies_to)
-          facts.reaction = menu_facts::reaction_facts{*one.said.replies_to, one.said.reaction_key};
-        facts.x = press.x;
-        facts.y = press.y;
         actions->message_menu(std::move(facts));
         reply.handle();
         return;

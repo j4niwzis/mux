@@ -262,6 +262,26 @@ void app::apply(const request::message_person& one) {
 // A quote pressed: to what it quotes -- or, a reaction's, to the message it
 // reacted to, as any quote's.
 void app::apply(const request::jump_to_message& one) {
+  // An answer in a thread, or the root of the thread open: there, in the
+  // thread's panel -- its quote pressed in the thread went nowhere (#11563).
+  if (const auto& chosen = root().main().chosen)
+    if (const mux::conversation* chat = model->find(*chosen))
+      if (const mux::message* said = mux::ui::held_message(*chat, one.id)) {
+        auto& screen = root().main();
+        const std::optional<std::string> thread = said->thread ? said->thread
+                                                  : screen.thread_open() == said->id ? std::optional<std::string>(said->id)
+                                                                                      : std::nullopt;
+        if (thread) {
+          if (screen.thread_open() != thread) {
+            screen.open_thread(*thread);
+            if (!shared.demo())
+              net->load_thread(chat->id, *thread);
+            this->refresh();
+          }
+          if (screen.parts.threads.scroll_to(one.id))
+            return;
+        }
+      }
   if (const auto& chosen = root().main().chosen) {
     root().main().return_from = one.from;
     this->go_to_message(*chosen, one.id, one.fragment);

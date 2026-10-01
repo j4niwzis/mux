@@ -1613,6 +1613,9 @@ struct threads_panel : nodes::Stack {
   std::optional<std::string> open;  // the thread open, else the list
   std::vector<message> shown;       // what the open thread shows now
   std::optional<std::string> answering;  // an answer in it, answered
+  // The chat it is of, as last shown: names and powers for its menus.
+  const model* seen_model = nullptr;
+  std::optional<conversation_id> seen_chat;
   struct close_it {
     Actions* actions;
     void operator()() const { actions->toggle_threads(); }
@@ -1719,6 +1722,8 @@ struct threads_panel : nodes::Stack {
   // Brought up to date with the chat: its threads listed, or the one open
   // shown -- made again only where what it shows changed.
   void show(const conversation& chat, const model* now) {
+    seen_model = now;
+    seen_chat = chat.id;
     parts.head.parts.back.setVisible(open.has_value());
     parts.head.parts.title.setText(open ? "Thread" : "Threads");
     parts.list.setVisible(!open);
@@ -1782,26 +1787,35 @@ struct threads_panel : nodes::Stack {
       return;
     for (const message_bubble& one : std::get<0>(std::get<0>(parts.answers.fChildren).fChildren))
       if (parts.answers.toView(one.bounds()).contains(press.x, press.y) && !one.message_id.empty()) {
-        menu_facts facts;
-        facts.id = one.message_id;
-        facts.own = one.outgoing;
-        facts.text = one.plain;
-        facts.selection = one.parts.body.parts.text.hasSelection();
-        facts.copied = facts.selection ? one.parts.body.parts.text.selected() : one.plain;
-        facts.deletable = one.outgoing;
-        for (const auto& [key, who] : one.said.reactions)
-          facts.reaction_count += who.size();
-        facts.reaction_events = !one.said.reaction_events.empty();
-        if (const auto& asked = skiff::nodes::textMenusAsked(); !asked.empty() && asked.back().link)
-          facts.pressed_link = *asked.back().link;
-        else if (const auto& preview = one.parts.body.parts.preview; preview && preview->fState.fBounds.contains(press.x, press.y))
-          facts.pressed_link = preview->url;
-        facts.x = press.x;
-        facts.y = press.y;
-        actions->message_menu(std::move(facts));
+        actions->message_menu(facts_of_bubble(one, this->chat_of(), press.x, press.y));
         reply.handle();
         return;
       }
+  }
+  // A press on what is in an answer -- a quote, a picture, a file, a
+  // sender -- as in the chat's timeline (#11563).
+  [[nodiscard]] bool onClick(float x, float y) {
+    if (!open || !parts.answers.visible())
+      return false;
+    const float in_y = y - parts.answers.contentsShift();
+    for (const message_bubble& one : std::get<0>(std::get<0>(parts.answers.fChildren).fChildren))
+      if (press_in_bubble(actions, one, x, in_y, this->chat_of()))
+        return true;
+    return false;
+  }
+  [[nodiscard]] const conversation* chat_of() const { return seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr; }
+  // Scrolled to an answer of the thread open, and flashed: a quote of it
+  // pressed. False where it is not one of its.
+  bool scroll_to(const std::string& id) {
+    auto& bubbles = std::get<0>(std::get<0>(parts.answers.fChildren).fChildren);
+    const auto found = std::ranges::find(bubbles, id, &message_bubble::message_id);
+    if (found == bubbles.end())
+      return false;
+    parts.answers.scrollTo(found->bounds().fTop - 8.0f);
+    found->flash.jump(1.0f);
+    found->flash.setTarget(0.0f);
+    found->markDamaged();
+    return true;
   }
   // A message of the thread open answered from its menu, as tdesktop's
   // "Reply to <name>" over the field: in the thread, not the chat (#11379).

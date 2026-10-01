@@ -137,9 +137,28 @@ inline bool follow_preview(std::optional<emote_preview>& shown, std::optional<pr
   return true;
 }
 
-// The chat's stickers, as tdesktop's tab: a grid of them; a press sends one.
+// The stickers sent lately, newest first, as tdesktop's Recent (at most 20):
+// kept while the program runs.
+inline std::vector<emote>& recent_stickers() {
+  static std::vector<emote> kept;
+  return kept;
+}
+inline void remember_sticker(const emote& one) {
+  constexpr std::size_t kKept = 20;
+  auto& all = recent_stickers();
+  std::erase_if(all, [&](const emote& each) { return each.url == one.url; });
+  all.insert(all.begin(), one);
+  if (all.size() > kKept)
+    all.resize(kKept);
+}
+
+// The chat's stickers, as tdesktop's tab: a search at its top; the packs one
+// under another in one list that scrolls -- Recent first -- each its name
+// over a grid of its stickers; and a footer of the packs' pictures that
+// brings each into view, lit for the one in view. A press sends one.
 template <class Actions>
 struct sticker_grid : nodes::Stack {
+  static constexpr float kCell = 78.0f;
   struct cell : nodes::Stack {
     Actions* actions;
     emote sticker;
@@ -148,8 +167,8 @@ struct sticker_grid : nodes::Stack {
     } parts;
     cell(Actions* a, emote one)
         : actions(a), sticker(one), parts{.picture = nodes::Image<from_avatars>({one.url})} {
-      fState.apply({.width = 80.0f, .height = 80.0f, .margin = {2.0f, 2.0f, 2.0f, 2.0f}, .cornerRadius = 6.0f,
-                    .hoverBackground = chosen_colour});
+      fState.apply({.width = kCell, .height = kCell, .margin = {2.0f, 2.0f, 2.0f, 2.0f}, .padding = {4.0f, 4.0f, 4.0f, 4.0f},
+                    .cornerRadius = 6.0f, .hoverBackground = chosen_colour});
       parts.picture.apply({.fill = true});
       parts.picture.keepBox();  // the cell's size, whatever the sticker
     }
@@ -159,36 +178,190 @@ struct sticker_grid : nodes::Stack {
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
+      remember_sticker(sticker);
       actions->send_sticker(sticker);
       return true;
     }
   };
-  using cells_t = nodes::Flow<std::vector<cell>>;
+  // A pack: its name over its stickers.
+  struct section : nodes::Stack {
+    using cells_t = nodes::Flow<std::vector<cell>>;
+    struct parts_t {
+      nodes::Text title;
+      cells_t cells{{.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, {}};
+    } parts;
+    section(Actions* a, std::string name, const std::vector<emote>& stickers)
+        : parts{.title = nodes::Text(std::move(name), 13.0f, dim_colour, true)} {
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+      parts.title.apply({.margin = {10.0f, 0.0f, 6.0f, 7.0f}});
+      parts.cells.apply({.fillX = true, .autoSize = scene::axes::kY});
+      auto& cells = std::get<0>(parts.cells.fChildren);
+      cells.reserve(stickers.size());
+      for (const emote& one : stickers)
+        cells.emplace_back(a, one);
+    }
+  };
+  // A pack's tab in the footer: its picture -- the pack's own, else its
+  // first sticker's -- or, for Recent, a clock.
+  struct tab : nodes::Stack {
+    sticker_grid* grid;
+    std::size_t at;
+    struct parts_t {
+      std::optional<nodes::Image<from_avatars>> picture;
+      std::optional<nodes::Text> mark;
+    } parts;
+    tab(sticker_grid* g, std::size_t place, std::optional<std::string> picture) : grid(g), at(place) {
+      this->setHorizontal();
+      fStack.justify = nodes::justify::middle{};
+      fState.apply({.width = 30.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 6.0f,
+                    .hoverBackground = chosen_colour, .selectedBackground = tile_colour});
+      if (picture) {
+        parts.picture.emplace(from_avatars{*picture});
+        parts.picture->apply({.width = 24.0f, .height = 24.0f, .alignSelf = scene::align::kMiddle});
+        parts.picture->keepBox();
+      } else {
+        parts.mark.emplace("⏲", 16.0f, text_colour);
+        parts.mark->apply({.alignSelf = scene::align::kMiddle});
+      }
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+    [[nodiscard]] bool onClick(float, float) {
+      grid->bring(at);
+      return true;
+    }
+  };
+  struct searched {
+    sticker_grid* grid;
+    void operator()(std::string_view text) const { grid->search(text); }
+  };
+  struct footer_row : nodes::Stack {
+    struct parts_t {
+      std::vector<tab> each;
+    } parts;
+  };
+  using field_t = widgets::TextBox<searched>;
+  using list_t = nodes::ScrollContainer<nodes::Flow<std::vector<section>>>;
   struct parts_t {
+    field_t field;
     nodes::Text empty;
-    nodes::ScrollContainer<cells_t> list{
-        cells_t({.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, {})};
+    list_t list{nodes::Flow<std::vector<section>>({.spacingY = 0.0f, .wrap = false}, {})};
+    footer_row footer;
     // Over the rest: the sticker the mouse rests on, large.
     std::optional<emote_preview> preview;
   } parts;
+  Actions* actions = nullptr;
   std::optional<previewed> preview_of;
+  bool searching = false;
   [[nodiscard]] bool settling() const { return previewed_emote() != preview_of; }
+
+  explicit sticker_grid(Actions* a)
+      : parts{.field = field_t("Search stickers", {this}),
+              .empty = nodes::Text("No stickers here. A room's sticker packs, and yours, show here.", 13.0f, dim_colour)},
+        actions(a) {
+    auto& [field, empty, list, footer, preview] = parts;
+    this->setGap(4.0f);
+    fState.apply({.padding = {7.0f, 0.0f, 4.0f, 7.0f}});
+    field.setSearchIcon(true);
+    field.apply({.fillX = true, .height = 32.0f, .margin = {0.0f, 7.0f, 0.0f, 0.0f}});
+    // Wrapped at the panel's width, not one line running past its edges.
+    empty.setWrapped(true);
+    empty.apply({.fillX = true, .margin = {12.0f, 12.0f, 0.0f, 12.0f}});
+    list.apply({.fillX = true, .grow = scene::axes::kY});
+    std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
+    footer.setHorizontal();
+    footer.setGap(4.0f);
+    footer.apply({.fillX = true, .height = 36.0f});
+    this->show_all();
+  }
+  [[nodiscard]] std::vector<section>& sections() { return std::get<0>(std::get<0>(parts.list.fChildren).fChildren); }
+  // The packs as the chat has them, in the order they first come; the
+  // unnamed together, as "Stickers".
+  [[nodiscard]] static std::string pack_of(const emote& one) { return one.pack.empty() ? std::string("Stickers") : one.pack; }
+  [[nodiscard]] static std::vector<std::pair<std::string, std::vector<emote>>> packs() {
+    const std::vector<std::string> names = chat_stickers() | std::views::transform(pack_of) | std::ranges::to<std::vector>();
+    return std::views::iota(std::size_t{0}, names.size()) |
+           std::views::filter([&](std::size_t i) { return std::ranges::find(names, names[i]) == names.begin() + static_cast<std::ptrdiff_t>(i); }) |
+           std::views::transform([&](std::size_t i) {
+             return std::pair{names[i], chat_stickers() | std::views::filter([&](const emote& one) { return pack_of(one) == names[i]; }) |
+                                            std::ranges::to<std::vector>()};
+           }) |
+           std::ranges::to<std::vector>();
+  }
+  // Recent, then every pack, one under another; a tab for each.
+  void show_all() {
+    auto& all = this->sections();
+    all.clear();
+    auto& tabs = parts.footer.parts.each;
+    tabs.clear();
+    // Recent: those sent lately that the chat still has.
+    std::vector<emote> recent = recent_stickers() | std::views::filter([](const emote& one) {
+                                  return std::ranges::contains(chat_stickers(), one.url, &emote::url);
+                                }) |
+                                std::ranges::to<std::vector>();
+    if (!recent.empty()) {
+      all.emplace_back(actions, "Recently used", recent);
+      tabs.emplace_back(this, all.size() - 1, std::nullopt);
+    }
+    for (auto& [name, stickers] : packs()) {
+      const std::optional<std::string> picture = stickers.front().pack_avatar ? stickers.front().pack_avatar
+                                                                              : std::optional<std::string>(stickers.front().url);
+      all.emplace_back(actions, name, stickers);
+      tabs.emplace_back(this, all.size() - 1, picture);
+    }
+    searching = false;
+    parts.empty.setVisible(chat_stickers().empty());
+    parts.footer.setVisible(tabs.size() > 1);
+    parts.list.invalidateLayout();
+    parts.footer.invalidateLayout();
+    parts.list.scrollTo(0.0f);
+  }
+  // Those whose shortcode, words or pack have what is typed.
+  void search(std::string_view query) {
+    if (query.empty()) {
+      this->show_all();
+      return;
+    }
+    const auto lower = [](std::string_view text) {
+      return text | std::views::transform([](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); }) |
+             std::ranges::to<std::string>();
+    };
+    const std::string wanted = lower(query);
+    const std::vector<emote> found = chat_stickers() | std::views::filter([&](const emote& one) {
+                                       return lower(one.shortcode).contains(wanted) || lower(one.body).contains(wanted) ||
+                                              lower(one.pack).contains(wanted);
+                                     }) |
+                                     std::ranges::to<std::vector>();
+    auto& all = this->sections();
+    all.clear();
+    all.emplace_back(actions, found.empty() ? std::string("Nothing found") : std::string("Search results"), found);
+    searching = true;
+    parts.list.invalidateLayout();
+    parts.list.scrollTo(0.0f);
+  }
+  // A pack brought to the top of the list, as its tab does.
+  void bring(std::size_t at) {
+    if (searching)
+      parts.field.setText({});
+    auto& all = this->sections();
+    if (at >= all.size() || all[at].bounds().isEmpty())
+      return;
+    auto& list = parts.list;
+    list.scrollTo(std::max(0.0f, list.current() + (list.toView(all[at].bounds()).fTop - list.bounds().fTop)));
+  }
+  // The tab of the pack at the top of the list lit; the preview kept to what
+  // the cells say.
   void update(double) {
     if (follow_preview(parts.preview, preview_of))
       this->invalidateLayout();
-  }
-  explicit sticker_grid(Actions* a)
-      : parts{.empty = nodes::Text("No stickers here. A room's sticker packs, and yours, show here.", 13.0f, dim_colour)} {
-    fState.apply({.padding = {4.0f, 4.0f, 4.0f, 4.0f}});
-    // Wrapped at the panel's width, not one line running past its edges.
-    parts.empty.setWrapped(true);
-    parts.empty.apply({.fillX = true, .margin = {12.0f, 12.0f, 0.0f, 12.0f}});
-    parts.list.apply({.fillX = true, .grow = scene::axes::kY});
-    std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
-    auto& cells = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
-    for (const emote& one : chat_stickers())
-      cells.emplace_back(a, one);
-    parts.empty.setVisible(chat_stickers().empty());
+    auto& all = this->sections();
+    std::size_t lit = 0;
+    const float top = parts.list.bounds().fTop + 1.0f;
+    for (std::size_t s = 0; s < all.size(); ++s)
+      if (!all[s].bounds().isEmpty() && parts.list.toView(all[s].bounds()).fTop <= top)
+        lit = s;
+    for (tab& each : parts.footer.parts.each)
+      if (const bool on = !searching && each.at == lit; on != each.fState.selected())
+        each.fState.apply({.selected = on});
   }
 };
 inline void remember_emoji(const std::string& glyph) {

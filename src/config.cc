@@ -222,7 +222,7 @@ struct proxy_settings {
 // level under says -- a chat's its account's, an account's every one's.
 struct room_event_kinds {
   std::optional<bool> joins, invites, names, avatars, room_name, topic, room_avatar, address, pins, permissions,
-      access, encryption, other, reactions, unreactions;
+      access, encryption, other, unreadable, reactions, unreactions;
   friend bool operator==(const room_event_kinds&, const room_event_kinds&) = default;
 };
 consteval auto json_schema(knot::type<room_event_kinds>) { return knot::schema<room_event_kinds>(); }

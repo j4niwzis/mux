@@ -26,6 +26,7 @@ using kinds_t = config::room_event_kinds;
 [[nodiscard]] constexpr std::optional<bool> kinds_t::* member_of(room_event::access) { return &kinds_t::access; }
 [[nodiscard]] constexpr std::optional<bool> kinds_t::* member_of(room_event::encryption) { return &kinds_t::encryption; }
 [[nodiscard]] constexpr std::optional<bool> kinds_t::* member_of(room_event::other) { return &kinds_t::other; }
+[[nodiscard]] constexpr std::optional<bool> kinds_t::* member_of(room_event::unreadable) { return &kinds_t::unreadable; }
 [[nodiscard]] constexpr std::optional<bool> kinds_t::* member_of(room_event::reactions) { return &kinds_t::reactions; }
 [[nodiscard]] constexpr std::optional<bool> kinds_t::* member_of(room_event::unreactions) { return &kinds_t::unreactions; }
 // What a kind is where nothing is chosen for it: shown, but reactions and
@@ -49,6 +50,7 @@ using kinds_t = config::room_event_kinds;
 [[nodiscard]] constexpr std::string_view word_of(room_event::access) { return "access"; }
 [[nodiscard]] constexpr std::string_view word_of(room_event::encryption) { return "encryption"; }
 [[nodiscard]] constexpr std::string_view word_of(room_event::other) { return "other"; }
+[[nodiscard]] constexpr std::string_view word_of(room_event::unreadable) { return "unreadable"; }
 [[nodiscard]] constexpr std::string_view word_of(room_event::reactions) { return "reactions"; }
 [[nodiscard]] constexpr std::string_view word_of(room_event::unreactions) { return "unreactions"; }
 [[nodiscard]] inline std::string_view word_of(const room_event_t& kind) {

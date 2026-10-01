@@ -235,7 +235,10 @@ struct encryption {
 };
 struct other {
   friend bool operator==(other, other) = default;
-};        // the room made, and what nothing here reads
+};        // the room made, and the rest of what is said of the room
+struct unreadable {
+  friend bool operator==(unreadable, unreadable) = default;
+};   // an event mux cannot read: said as "sent <its type>" (#11927)
 struct reactions {
   friend bool operator==(reactions, reactions) = default;
 };    // each reaction, as a line of its own: hidden unless chosen
@@ -247,13 +250,13 @@ using room_event_t =
     splice::variant<room_event::joins, room_event::invites, room_event::names, room_event::avatars, room_event::room_name,
                  room_event::topic, room_event::room_avatar, room_event::address, room_event::pins,
                  room_event::permissions, room_event::access, room_event::encryption, room_event::other,
-                 room_event::reactions, room_event::unreactions>;
+                 room_event::unreadable, room_event::reactions, room_event::unreactions>;
 inline constexpr std::size_t kRoomEventKinds = splice::variant_size_v<room_event_t>;
 inline const std::array<room_event_t, kRoomEventKinds> all_room_events{
     room_event::joins{},     room_event::invites{}, room_event::names{},       room_event::avatars{},
     room_event::room_name{}, room_event::topic{},   room_event::room_avatar{}, room_event::address{},
     room_event::pins{},      room_event::permissions{}, room_event::access{},  room_event::encryption{},
-    room_event::other{},     room_event::reactions{}, room_event::unreactions{}};
+    room_event::other{},     room_event::unreadable{}, room_event::reactions{}, room_event::unreactions{}};
 // Which kinds of room event a chat shows, as its choices resolve: each by
 // its place in room_event_t.
 struct room_event_filter {

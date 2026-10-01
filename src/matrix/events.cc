@@ -570,7 +570,7 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
             sink_(change::message_added{std::move(made), where});
           },
           // Any other: said by its type's name.
-          [&](const auto&) { say(room_event::other{}, std::format(" sent {}", one.type)); }},
+          [&](const auto&) { say(room_event::unreadable{}, std::format(" sent {}", one.type)); }},
       one.content.data());
 }
 

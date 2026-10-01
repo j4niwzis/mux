@@ -328,6 +328,7 @@ struct menu_button : scene::Node {
 [[nodiscard]] constexpr std::string_view label_of(room_event::access) { return "Who can join and read"; }
 [[nodiscard]] constexpr std::string_view label_of(room_event::encryption) { return "Encryption"; }
 [[nodiscard]] constexpr std::string_view label_of(room_event::other) { return "Everything else"; }
+[[nodiscard]] constexpr std::string_view label_of(room_event::unreadable) { return "Events mux cannot read"; }
 [[nodiscard]] constexpr std::string_view label_of(room_event::reactions) { return "Reactions, each as a line"; }
 [[nodiscard]] constexpr std::string_view label_of(room_event::unreactions) { return "Reactions taken back"; }
 

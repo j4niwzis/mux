@@ -1718,7 +1718,7 @@ struct threads_panel : nodes::Stack {
     nodes::Text empty{"No threads here yet.", 13.0f, dim_colour};
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 2.0f, .wrap = false}, {})};
     // The thread open: the chat's own timeline, its root and answers in it
-    // -- one renderer for both (#11677): runs, readers, quotes, presses,
+    // -- one renderer for both: runs, readers, quotes, presses,
     // menus, swipes, pictures, all as the chat has them.
     timeline_area<Actions> answers;
     composer_bar<Actions, in_thread> line;
@@ -1807,7 +1807,7 @@ struct threads_panel : nodes::Stack {
     return true;
   }
   // A message of the thread open answered from its menu, as tdesktop's
-  // "Reply to <name>" over the field: in the thread, not the chat (#11379).
+  // "Reply to <name>" over the field: in the thread, not the chat.
   void answer(std::string id, compose_context said) {
     answering = std::move(id);
     parts.line.show_context(std::move(said));

@@ -713,7 +713,7 @@ void account<Sink>::preview_room(std::string room, std::vector<std::string> via)
   });
 }
 
-// Asked to be let in, where the room lets people knock (#11857).
+// Asked to be let in, where the room lets people knock.
 template <class Sink>
 void account<Sink>::knock(std::string room, std::vector<std::string> via, std::string reason) {
   loop_->spawn([this, room = std::move(room), via = std::move(via), reason = std::move(reason)] {

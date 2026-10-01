@@ -766,7 +766,7 @@ struct history_settings {
   // account's server. On unless turned off.
   bool link_previews = true;
   // Link previews fetched from the site itself, through the account's proxy,
-  // instead of through its server (#12177): off -- the site then sees where
+  // instead of through its server: off -- the site then sees where
   // the request comes from.
   bool previews_direct = false;
   // How many events a search for a message jumped to (a reply's, a link's)

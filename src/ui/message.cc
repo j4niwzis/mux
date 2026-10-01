@@ -951,7 +951,7 @@ struct code_block : nodes::Stack {
     this->setGap(4.0f);
     // As wide as its code (and its head), within the bubble: filling a
     // bubble that takes its width from what it holds, neither said a width,
-    // and a short block was squeezed to a few letters a line (#11955).
+    // and a short block was squeezed to a few letters a line.
     fState.apply({.autoSize = scene::axes::kBoth, .minWidth = 120.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f},
                   .padding = {6.0f, 8.0f, 6.0f, 12.0f}, .cornerRadius = 5.0f,
                   .background = (colour & 0x00FFFFFFu) | (0x1Fu << 24), .masking = true});
@@ -1755,7 +1755,7 @@ struct message_bubble : nodes::Stack {
     }
     // A sticker's: no bubble under it, so what is over it -- the sender's
     // name, a forward's line, the quote of what it answers -- each on a small
-    // plate of its own, as Telegram's; they stood on the wallpaper (#11978).
+    // plate of its own, as Telegram's; they stood on the wallpaper.
     if (said.sticker && body.parts.picture) {
       const auto plated = [&](scene::Node& part) {
         part.apply({.padding = {3.0f, 8.0f, 3.0f, 8.0f}, .cornerRadius = 8.0f, .background = body.plate});

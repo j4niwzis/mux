@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.preview -- A link's preview fetched from its site itself, not through
-// any server (#12177): the page asked for over HTTPS, through the chat's
+// any server: the page asked for over HTTPS, through the chat's
 // account's proxy, its Open Graph tags read; and the picture they name.
 //
 // Off unless chosen: the site then sees the address the request comes from

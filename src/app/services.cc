@@ -48,7 +48,7 @@ struct services {
     model->apply(mux::change_t{mux::change::window_opened{in, std::string(), std::nullopt}});
     // As much as a chat holds in memory, not a screenful: going back from a
     // jump to where it came from, what was shown around it was made a window
-    // of the server's of its own and lost (#11910).
+    // of the server's of its own and lost.
     for (auto& one : store->older(in, message_store::time_point::max(), kLiveFromDisk))
       model->apply(
           mux::change_t{mux::change::message_added{.message = std::move(one), .where = mux::placement::in_window{}}});

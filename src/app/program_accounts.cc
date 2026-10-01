@@ -682,7 +682,7 @@ void app::apply(const request::flip_account_receipts&) {
 }
 
 // An account's colour chosen, and its strip on its chats in other lists:
-// kept, and the lists shown again (#11727).
+// kept, and the lists shown again.
 void app::apply(const request::set_account_colour& one) {
   this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
     mux::config::colour_in(account) = std::string(splice::visit([](const auto& each) { return mux::config::word_of(each); }, one.colour));
@@ -711,7 +711,7 @@ void app::apply(const request::open_replacement&) {
     this->apply(request::open_url{"https://matrix.to/#/" + *chat->replaced_by});
 }
 
-// Chats in other accounts' lists (#11727): placed, taken out, their strips.
+// Chats in other accounts' lists: placed, taken out, their strips.
 mux::config::chat_placement* app::placement_of(const mux::conversation_id& chat, const mux::account_id& in) {
   const auto found = std::ranges::find_if(placements, [&](const mux::config::chat_placement& one) {
     return one.account == chat.account.address && one.conversation == chat.id && one.listed_in == in.address;
@@ -992,7 +992,7 @@ void app::apply(const request::set_link_previews& one) {
   this->refresh();
 }
 
-// Where link previews come from, at a level (#12177).
+// Where link previews come from, at a level.
 void app::apply(const request::set_previews_direct& one) {
   splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) { history.previews_direct = one.direct.value_or(false); },
                                    [&](mux::choice_level::account) {
@@ -1014,7 +1014,7 @@ void app::apply(const request::set_previews_direct& one) {
   this->refresh();
 }
 
-// Whether others are told one is typing, at a level (#12156).
+// Whether others are told one is typing, at a level.
 void app::apply(const request::set_typing_sent& one) {
   splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) { history.send_typing = one.send.value_or(true); },
                                    [&](mux::choice_level::account) {

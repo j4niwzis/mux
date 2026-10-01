@@ -181,7 +181,7 @@ void app::apply(const request::jump_to_end&) {
   // The chat live again first -- its newest from the disk, what was shown
   // before the jump among them -- then back where a jump in it came from,
   // where there is one: found there, not fetched as a window of its own,
-  // which had only what the server put around it (#11910).
+  // which had only what the server put around it.
   if (screen.chosen)
     this->go_live(*screen.chosen);
   if (screen.go_back())

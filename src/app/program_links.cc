@@ -271,7 +271,7 @@ void app::apply(const request::message_person& one) {
 // reacted to, as any quote's.
 void app::apply(const request::jump_to_message& one) {
   // An answer in a thread, or the root of the thread open: there, in the
-  // thread's panel -- its quote pressed in the thread went nowhere (#11563).
+  // thread's panel -- its quote pressed in the thread went nowhere.
   if (const auto& chosen = root().main().chosen)
     if (const mux::conversation* chat = model->find(*chosen))
       if (const mux::message* said = mux::ui::held_message(*chat, one.id)) {

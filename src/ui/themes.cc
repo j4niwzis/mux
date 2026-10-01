@@ -3,6 +3,7 @@
 export module mux.ui:themes;
 
 import std;
+import mux.bytes;
 import splice;
 import skia;
 import skiff.paint;
@@ -152,7 +153,7 @@ inline bool codes(bits& from, std::string& out, const huffman& literals, const h
       from.at += 4;
       if (from.at + length > from.in.size())
         return std::nullopt;
-      out.append(reinterpret_cast<const char*>(from.in.data() + from.at), length);
+      out.append(mux::bytes::text_of(from.in.subspan(from.at, length)));
       from.at += length;
     } else if (type == 1) {
       std::array<short, 288> lengths{};

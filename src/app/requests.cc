@@ -352,7 +352,7 @@ struct set_room_events {
   std::optional<mux::config::room_event_kinds> kinds;
 };
 struct join_room_card {};
-// The room card's room asked to be let into (#11857).
+// The room card's room asked to be let into.
 struct knock_room_card {};
 struct decline_room_card {};
 struct toggle_emoji {};
@@ -365,7 +365,7 @@ struct flip_account_strip {};
 // The room the chosen one was upgraded to: opened, joined where it is not yet.
 struct open_replacement {};
 // A chat listed in another account's list too, or moved there; taken out of
-// one; its strip there on or off, or its colour (#11727).
+// one; its strip there on or off, or its colour.
 struct place_chat {
   mux::conversation_id chat;
   mux::account_id to;

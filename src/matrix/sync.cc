@@ -526,7 +526,7 @@ inline std::map<std::string, std::int64_t> powers_of(const power_levels_content*
 // From room version 12 on ("hydra", MSC4289) a room's creators -- who sent
 // its create event, and those it names besides -- outrank every level, and
 // the power levels do not list them: read as the default, the creator of a
-// new room had every permission greyed (#11826).
+// new room had every permission greyed.
 inline bool creators_outrank(std::string_view version) {
   if (version.contains("hydra"))
     return true;

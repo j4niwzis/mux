@@ -533,7 +533,7 @@ TEST(Emoji, ThePanelHasRowsAndScrolls) {
   skiff::paint::defaultFont() = nullptr;
 }
 
-// A one-letter message in a group, as in the screenshot of #5378: its bubble
+// A one-letter message in a group, as in a screenshot: its bubble
 // as wide as its name and its letter ask, not its widest; each part's width
 // said where it is not.
 TEST(Timeline, AOneLetterMessageIsNarrow) {

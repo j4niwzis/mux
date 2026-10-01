@@ -756,7 +756,7 @@ struct room_settings : nodes::Stack {
       copy_line id;
       nodes::Text version;
       // Upgraded, as Element's: the version to go to, and the button. The
-      // server makes the new room and tombstones this one (#11839).
+      // server makes the new room and tombstones this one.
       field upgrade_to;
       widgets::Button<upgrade_press> upgrade;
       nodes::Text tools = part_heading("Developer tools");

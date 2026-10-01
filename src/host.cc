@@ -1064,6 +1064,18 @@ int run(App& app, const options& how) {
             pieces.push_back(piece);
             repainted.join(piece);
           }
+          // What blurs what is under it, live: all of it repainted wherever
+          // any of what is under it is -- else it blurred its own last pixels.
+          for (const auto& [id, live] : skiff::scene::detail::liveBackdrops()) {
+            skia::SkRect whole_of = live;
+            whole_of.roundOut(&whole_of);
+            if (!whole_of.intersect(all))
+              continue;
+            if (std::ranges::any_of(pieces, [&](const skia::SkRect& piece) { return skia::SkRect::Intersects(piece, whole_of); })) {
+              pieces.push_back(whole_of);
+              repainted.join(whole_of);
+            }
+          }
         }
         skia::SkCanvas* into = kept->getCanvas();
         // A scroll view that only moved: last frame's pixels of it copied to
@@ -1111,7 +1123,9 @@ int run(App& app, const options& how) {
           area += piece.width() * piece.height();
         const unsigned team_size = std::min(4u, std::max(1u, std::thread::hardware_concurrency()));
         skia::SkPixmap pixels;
-        if (area > 300000.0f && team_size > 1 && kept->peekPixels(&pixels)) {
+        // Not in bands while something blurs what is under it, live: at a
+        // band's edge it would not see the band beside it.
+        if (area > 300000.0f && team_size > 1 && skiff::scene::detail::liveBackdrops().empty() && kept->peekPixels(&pixels)) {
           skia::SkPictureRecorder recorder;
           skia::SkCanvas* record = recorder.beginRecording(all);
           for (const skia::SkRect& piece : pieces) {

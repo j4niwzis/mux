@@ -788,6 +788,8 @@ struct file {
   // chat's background is behind the whole window, not only its messages.
   std::optional<int> window_opacity;
   std::optional<bool> wallpaper_behind;
+  // Frosted popups and sheets blurring what is really under them, live.
+  std::optional<bool> live_blur;
   // How much Frosted blurs what is behind, in percent (none, 30).
   // Frosted's blur, in percent of the most -- three times what it was
   // once (the old frost_blur's 100 is 33.3 here), any fraction of it.

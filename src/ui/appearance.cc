@@ -194,6 +194,7 @@ struct appearance_page : nodes::Stack {
     switch_row<flip_home_direct<Actions>> home_direct;
     spaces_choices<Actions> places;
     switch_row<ask<Actions, &Actions::flip_wallpaper_behind>> behind;
+    switch_row<ask<Actions, &Actions::flip_live_blur>> live_blur;
     nodes::Text window_title = section_title(std::format("WINDOW OPACITY: {}%", window_look().chosen));
     widgets::SliderBar<scene::NoAction, opacity_done<Actions>> opacity;
     nodes::Text window_note{window_look().see_through
@@ -215,6 +216,7 @@ struct appearance_page : nodes::Stack {
               .home_direct = switch_row<flip_home_direct<Actions>>("And without direct messages", {a}),
               .places = spaces_choices<Actions>(a),
               .behind = switch_row<ask<Actions, &Actions::flip_wallpaper_behind>>("Background behind the whole window", {a}),
+              .live_blur = switch_row<ask<Actions, &Actions::flip_live_blur>>("Frosted menus blur what is under them (live)", {a}),
               .opacity = widgets::SliderBar<scene::NoAction, opacity_done<Actions>>({}, {a})} {
     fState.apply({.fill = true});
     parts.theme_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
@@ -230,6 +232,7 @@ struct appearance_page : nodes::Stack {
       parts.home_direct.apply({.alpha = 0.4f, .disabled = true});
     parts.places.setVisible(window_look().spaces);
     parts.behind.parts.toggle.setOnNow(window_look().behind);
+    parts.live_blur.parts.toggle.setOnNow(window_look().live_blur);
     parts.window_title.apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
     parts.opacity.setFraction(static_cast<float>(window_look().chosen - 20) / 80.0f);
     parts.opacity.apply({.margin = {10.0f, 28.0f, 10.0f, 28.0f}});

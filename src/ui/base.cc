@@ -77,6 +77,7 @@ struct window_look_t {
   bool top_bar = true;       // the one along the top
   bool home_hides = false;   // Home without what spaces hold, for the client
   bool home_direct = false;  // and without direct messages
+  bool live_blur = false;   // frosted popups and sheets blur what is under them, live
 };
 inline window_look_t& window_look() {
   static window_look_t look;
@@ -358,6 +359,21 @@ inline scene::NodeId& panel_painted() {
   static scene::NodeId id = 0;
   return id;
 }
+// What is under a node, blurred as it is drawn: a backdrop filter in its
+// shape -- `blur` 0 to 1 as Frosted's, the window's where below 0 -- and
+// its rect noted, for the host to repaint all of it with what is under it.
+inline void live_backdrop(const scene::State& state, skia::SkCanvas* canvas, float blur, float alpha) {
+  scene::detail::liveBackdrops()[state.fId] = canvas->getTotalMatrix().mapRect(state.fBounds);
+  const float amount = blur >= 0.0f ? blur : static_cast<float>(window_look().frost / 100.0);
+  const float sigma = 1.0f + amount * 30.0f;
+  const auto filter = skia::SkImageFilters::Blur(sigma, sigma, nullptr);
+  skia::SkPaint paint;
+  paint.setAlphaf(alpha);
+  const int saved = canvas->save();
+  canvas->clipRRect(scene::detail::roundedBox(state, state.fBounds), true);
+  canvas->saveLayer(skia::SkCanvas::SaveLayerRec(&state.fBounds, &paint, filter.get(), 0));
+  canvas->restoreToCount(saved);
+}
 // How mux paints every box's fill, as skiff asks a program (ProgramPaint):
 // the panels' look.
 struct mux_paint {
@@ -366,6 +382,19 @@ struct mux_paint {
     const panel_look_t& look = panel_look();
     if (!fill || !look.active)
       return fill;
+    // Floating over others -- a popup, a sheet -- frosted, and asked so:
+    // what is really under it blurred, as it is drawn, its fill over that.
+    if (state.fFloats && look.frosted && window_look().live_blur) {
+      const bool panel = std::ranges::contains(look.panels, *fill);
+      if (panel && inside_panel())
+        return std::nullopt;
+      live_backdrop(state, canvas, look.blur, alpha);
+      if (panel) {
+        inside_panel() = true;
+        panel_painted() = state.fId;
+      }
+      return scene::detail::atOpacity(*fill, look.opacity);
+    }
     if (std::ranges::contains(look.panels, *fill)) {
       if (inside_panel())
         return std::nullopt;

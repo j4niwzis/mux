@@ -109,6 +109,13 @@ class settings_part {
       up->show_appearance(k_->theme, k_->accent);
     }
   }
+  // Frosted popups blurring what is under them, live: repainted with it.
+  void apply(const request::flip_live_blur&) {
+    k_->live_blur = !k_->live_blur;
+    mux::ui::window_look().live_blur = k_->live_blur;
+    (void)k_->write();
+    s_->refresh_due = true;
+  }
   // The background behind the whole window: everything made again over it.
   void apply(const request::flip_wallpaper_behind&) {
     k_->wallpaper_behind = !k_->wallpaper_behind;

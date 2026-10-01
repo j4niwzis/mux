@@ -1272,6 +1272,7 @@ struct context_menu : scene::Node {
                 .source = source_row("View Source", {a}, icon::info{}),
                 .remove = delete_row("Delete", {a}, icon::close{}),
                 .seen = seen_row<Actions>(a, facts.seen)} {
+      fState.setFloats(true);  // over the chat: frosted live, where asked
       auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, copy_image, save, save_gif, reactions, forward, source,
              remove, seen_band, seen, emoji] = parts;
       quick_band.apply({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 4.0f, 0.0f}});

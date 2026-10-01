@@ -156,6 +156,8 @@ int main(int argc, char** argv) {
   program.vsync = saved.vsync.value_or(true);
   program.window_opacity = opacity;
   program.wallpaper_behind = mux::ui::window_look().behind;
+  mux::ui::window_look().live_blur = saved.live_blur.value_or(false);
+  program.live_blur = mux::ui::window_look().live_blur;
   program.frost_blur = mux::ui::window_look().frost;
   program.spaces = saved.spaces.value_or(true);
   program.top_bar = saved.top_bar.value_or(true);

@@ -107,7 +107,9 @@ inline constexpr std::size_t kNonce = 12, kTag = 16;
   return out;
 }
 
-// Argon2id, as OpenSSL 3.2 on has it.
+// Argon2id, as OpenSSL 3.2 on has it. Its parameters by their names as
+// OpenSSL reads them: an older core_names.h on the include path ahead of
+// the OpenSSL linked has no macros for them.
 [[nodiscard]] inline key_t derive(std::string_view passphrase, std::span<const std::uint8_t> salt, const header& how) {
   std::unique_ptr<EVP_KDF, decltype(&EVP_KDF_free)> kdf(EVP_KDF_fetch(nullptr, "ARGON2ID", nullptr), &EVP_KDF_free);
   if (!kdf)
@@ -121,9 +123,9 @@ inline constexpr std::size_t kNonce = 12, kTag = 16;
       OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_PASSWORD, secret.data(), secret.size()),
       OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SALT, salted.data(), salted.size()),
       OSSL_PARAM_construct_uint32(OSSL_KDF_PARAM_ITER, &passes),
-      OSSL_PARAM_construct_uint32(OSSL_KDF_PARAM_ARGON2_MEMCOST, &memory),
-      OSSL_PARAM_construct_uint32(OSSL_KDF_PARAM_ARGON2_LANES, &lanes),
-      OSSL_PARAM_construct_uint32(OSSL_KDF_PARAM_THREADS, &threads),
+      OSSL_PARAM_construct_uint32("memcost", &memory),
+      OSSL_PARAM_construct_uint32("lanes", &lanes),
+      OSSL_PARAM_construct_uint32("threads", &threads),
       OSSL_PARAM_construct_end()};
   key_t key{};
   const bool made = ctx && EVP_KDF_derive(ctx.get(), key.data(), key.size(), params) == 1;

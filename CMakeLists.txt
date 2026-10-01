@@ -148,7 +148,7 @@ cme_find_package(vodozemac REQUIRED)
 # built.
 add_library(mux_modules)
 target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
-  FILES src/vault.cc src/core.cc src/net.cc src/xmpp.cc src/http.cc src/matrix.cc src/media.cc
+  FILES src/core.cc src/net.cc src/xmpp.cc src/http.cc src/matrix.cc src/media.cc
         src/matrix/base.cc src/matrix/names.cc src/matrix/account.cc src/matrix/requests.cc src/matrix/sync.cc
         src/matrix/events.cc src/matrix/media.cc src/matrix/crypto.cc
         src/logic/text.cc src/logic/search.cc src/logic/reading.cc src/logic/drafts.cc
@@ -193,11 +193,18 @@ option(MUX_ERASE_HANDLERS "Outside a release build, erase Asio completion handle
 target_compile_definitions(mux_modules PUBLIC
   $<$<AND:$<BOOL:${MUX_ERASE_HANDLERS}>,$<NOT:$<CONFIG:Release>>>:MUX_ERASED_HANDLERS>)
 
+# What mux keeps on disk, sealed where asked: below the settings, which read
+# and write through it.
+add_library(mux_vault)
+target_sources(mux_vault PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES src/vault.cc)
+target_compile_features(mux_vault PUBLIC cxx_std_26)
+target_compile_options(mux_vault PUBLIC ${mux_std_flags})
+target_link_libraries(mux_vault PUBLIC knot OpenSSL::Crypto)
 add_library(mux_config)
 target_sources(mux_config PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES src/config.cc)
 target_compile_features(mux_config PUBLIC cxx_std_26)
 target_compile_options(mux_config PUBLIC ${mux_std_flags})
-target_link_libraries(mux_config PUBLIC knot splice)
+target_link_libraries(mux_config PUBLIC knot splice mux_vault)
 target_link_libraries(mux_modules PUBLIC mux_config splice)
 foreach(name IN ITEMS core net xmpp http matrix media logic)
   add_library(mux_${name} ALIAS mux_modules)

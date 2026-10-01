@@ -242,6 +242,25 @@ struct conversations_screen : nodes::Stack {
   // too, where that is chosen as well.
   bool home_hides_spaced = false;
   bool home_hides_direct = false;
+  // The messages a search in the chat found, in the chats' place while it is
+  // asked; none, the chats again.
+  void show_search_results(std::vector<search_result> results, std::optional<std::size_t> count) {
+    auto& rows = std::get<0>(std::get<0>(side.found.fChildren).fChildren);
+    rows.clear();
+    rows.reserve(results.size());
+    for (const search_result& one : results)
+      rows.emplace_back(actions, one);
+    const bool on = count.has_value();
+    side.found_title.setText(!count ? std::string() : *count == 0 ? std::string("No messages found")
+                                    : *count == 1                ? std::string("1 message found")
+                                                                 : std::format("{} messages found", *count));
+    side.found_title.setVisible(on);
+    side.found.setVisible(on);
+    side.list.setVisible(!on);
+    side.found.scrollToStart();
+    side.invalidateLayout();
+    side.markDamaged();
+  }
   void open_forum(std::string room) {
     forum_open = std::move(room);
     this->slide_list(1.0f);
@@ -484,6 +503,61 @@ struct conversations_screen : nodes::Stack {
         parts.settings.apply({.alignSelf = scene::align::kMiddle});
       }
     };
+    // A message found, in the list of them: who, when, and its words.
+    struct pick_found {
+      Actions* actions;
+      std::size_t index;
+      void operator()() const { actions->search_pick(index); }
+    };
+    struct found_row : nodes::Stack {
+      pick_found pick;
+      struct lines_t : nodes::Stack {
+        struct top_t : nodes::Stack {
+          struct parts_t {
+            nodes::Text name;
+            nodes::Text when;
+          } parts;
+          top_t(std::string name, std::string when)
+              : parts{.name = nodes::Text(std::move(name), 13.0f, text_colour, true), .when = nodes::Text(std::move(when), 12.0f, dim_colour)} {
+            this->setHorizontal();
+            this->setGap(8.0f);
+            fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+            parts.name.setElided(true);
+            parts.name.apply({.grow = scene::axes::kX});
+          }
+        };
+        struct parts_t {
+          top_t top;
+          nodes::Text text;
+        } parts;
+        lines_t(const search_result& one)
+            : parts{.top = top_t(one.name, std::format("{:%d.%m.%y}", std::chrono::floor<std::chrono::days>(one.at))),
+                    .text = nodes::Text(one.snippet, 13.0f, dim_colour)} {
+          this->setGap(4.0f);
+          fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+          parts.text.setElided(true);
+          parts.text.apply({.fillX = true});
+        }
+      };
+      struct parts_t {
+        avatar_mark face;
+        lines_t lines;
+      } parts;
+      found_row(Actions* a, const search_result& one)
+          : pick{a, one.index}, parts{.face = avatar_mark(one.sender, one.name, 40.0f), .lines = lines_t(one)} {
+        this->setHorizontal();
+        this->setGap(10.0f);
+        fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = chosen_colour});
+        parts.face.apply({.alignSelf = scene::align::kMiddle});
+      }
+      [[nodiscard]] bool acceptsInput() const { return true; }
+      [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+      [[nodiscard]] bool onClick(float, float) {
+        pick();
+        return true;
+      }
+    };
+    using found_list_t = nodes::ScrollContainer<nodes::Flow<std::vector<found_row>>>;
     struct rest_t : nodes::Stack {
       struct parts_t {
         forum_head_t forum_head;
@@ -494,8 +568,16 @@ struct conversations_screen : nodes::Stack {
             {.direction = nodes::direction::horizontal{}, .spacingX = 2.0f, .spacingY = 2.0f}, {}};
         nodes::Text no_chats{"No chats yet.", 13.0f, dim_colour};
         list_t list{nodes::Flow<std::vector<conversation_row<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
+        // While a chat is searched: what was found, in the chats' place.
+        nodes::Text found_title{"", 13.0f, dim_colour, true};
+        found_list_t found{nodes::Flow<std::vector<found_row>>({.spacingY = 0.0f, .wrap = false}, {})};
       } parts;
       explicit rest_t(Actions* a) : parts{.forum_head = forum_head_t(a)} {
+        parts.found_title.apply({.margin = {4.0f, 16.0f, 6.0f, 16.0f}});
+        parts.found_title.setVisible(false);
+        parts.found.apply({.fillX = true, .grow = scene::axes::kY});
+        std::get<0>(parts.found.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
+        parts.found.setVisible(false);
         fState.apply({.fillY = true, .grow = scene::axes::kX});
         parts.forum_head.setVisible(false);
         parts.no_chats.apply({.margin = {12.0f, 16.0f, 0.0f, 16.0f}});
@@ -582,6 +664,8 @@ struct conversations_screen : nodes::Stack {
     head_row& head = parts.head;
     search_box& search = parts.body.parts.rest.parts.search;
     forum_head_t& forum_head = parts.body.parts.rest.parts.forum_head;
+    nodes::Text& found_title = parts.body.parts.rest.parts.found_title;
+    found_list_t& found = parts.body.parts.rest.parts.found;
     nodes::Flow<std::vector<folder_tab<pick_folder>>>& folders = parts.body.parts.rest.parts.folders;
     nodes::Text& no_chats = parts.body.parts.rest.parts.no_chats;
     list_t& list = parts.body.parts.rest.parts.list;

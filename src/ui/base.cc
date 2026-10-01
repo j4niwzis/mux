@@ -94,6 +94,15 @@ inline std::string& space_account_now() {
   static std::string account;
   return account;
 }
+// A message found by a chat's search, as the list of them shows it: its
+// place among them, who said it, when, and its words around what was found.
+struct search_result {
+  std::size_t index = 0;
+  std::string sender;
+  std::string name;
+  std::chrono::sys_time<std::chrono::milliseconds> at{};
+  std::string snippet;
+};
 // What each level holds of the looks, as the program last said: none, as
 // the level over it. For the choices to show what is chosen where.
 struct looks_held {

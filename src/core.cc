@@ -283,6 +283,14 @@ struct thread_summary {
   friend bool operator==(const thread_summary&, const thread_summary&) = default;
 };
 
+// A message forwarded, as the client that sent it marked it: who it is from
+// -- their id and name -- and a link to the original.
+struct forward_info {
+  std::string from;
+  std::string name;
+  std::string link;
+  friend bool operator==(const forward_info&, const forward_info&) = default;
+};
 struct message {
   conversation_id in;
   // The protocol's own id: an XMPP stanza id (or origin-id), a Matrix event
@@ -324,6 +332,8 @@ struct message {
   // its timeline. And, where it is a thread's root, the thread's summary.
   std::optional<std::string> thread;
   std::optional<thread_summary> threaded;
+  // Forwarded: from whom, and where it was.
+  std::optional<forward_info> forwarded;
   friend bool operator==(const message&, const message&) = default;
 };
 

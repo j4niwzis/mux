@@ -39,6 +39,35 @@ inline void carry_info(mux::attachment& carried, const auto& info) {
 }
 
 using member_content = loom::ev::m_room_member_content_t;
+// Extera's mark of a forwarded message, as it comes beside the content.
+struct forward_mark_in {
+  struct attribution_t {
+    std::optional<std::string> attribution;
+    knot::raw rest;
+    friend consteval auto json_schema(knot::type<attribution_t>) { return knot::schema<attribution_t>().member<"rest">(knot::rest); }
+  };
+  std::optional<attribution_t> forward;
+  knot::raw rest;
+  friend consteval auto json_schema(knot::type<forward_mark_in>) {
+    return knot::schema<forward_mark_in>().member<"forward">(knot::key("xyz.extera.forward")).member<"rest">(knot::rest);
+  }
+};
+// The links of an attribution, in order: where each goes, and its words.
+inline std::vector<std::pair<std::string, std::string>> links_in(std::string_view html) {
+  std::vector<std::pair<std::string, std::string>> out;
+  constexpr std::string_view open = "<a href=\"";
+  for (std::size_t at = html.find(open); at != std::string_view::npos; at = html.find(open, at)) {
+    const std::size_t from = at + open.size();
+    const std::size_t quote = html.find('"', from);
+    const std::size_t words = quote == std::string_view::npos ? quote : html.find('>', quote);
+    const std::size_t close = words == std::string_view::npos ? words : html.find("</a>", words);
+    if (close == std::string_view::npos)
+      break;
+    out.emplace_back(std::string(html.substr(from, quote - from)), std::string(html.substr(words + 1, close - words - 1)));
+    at = close;
+  }
+  return out;
+}
 // A membership as loom reads it, as mux's.
 inline membership_t membership_from(const member_content::membership_t& said) {
   using values = member_content::membership_values;
@@ -145,6 +174,26 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       }
     // Nothing mux can show of it: said so, so that it is there to be looked
     // at (View Source) rather than an empty space.
+    // Forwarded, as Extera marks it: who from and where, read from the mark;
+    // the attribution its text was given dropped from what is shown -- the
+    // bubble says it, as Telegram's does.
+    if (auto mark = knot::try_read<forward_mark_in>(content.rest.text); mark && mark->forward && mark->forward->attribution) {
+      const auto links = links_in(*mark->forward->attribution);
+      if (!links.empty()) {
+        constexpr std::string_view person = "https://matrix.to/#/";
+        const std::string& to = links.front().first;
+        made.forwarded = forward_info{.from = to.starts_with(person) ? to.substr(person.size()) : to,
+                                      .name = links.front().second,
+                                      .link = links.size() > 1 ? links[1].first : std::string()};
+        constexpr std::string_view head = "<strong>", quoted = "</strong><blockquote>", tail = "</blockquote>";
+        if (made.body.html && made.body.html->starts_with(head) && made.body.html->ends_with(tail))
+          if (const auto inner = made.body.html->find(quoted); inner != std::string::npos)
+            made.body.html = made.body.html->substr(inner + quoted.size(), made.body.html->size() - inner - quoted.size() - tail.size());
+        if (made.body.plain.starts_with("Forwarded from "))
+          if (const auto line = made.body.plain.find('\n'); line != std::string::npos)
+            made.body.plain = made.body.plain.substr(line + 1);
+      }
+    }
     if (made.body.plain.empty() && !made.body.html && !made.attachment && made.album.empty())
       made.body.plain = "Unsupported message (" + (content.msgtype.empty() ? std::string("no msgtype") : content.msgtype) + ")";
     if (relates && relates->m_in_reply_to)

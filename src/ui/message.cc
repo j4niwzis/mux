@@ -1019,6 +1019,8 @@ struct message_bubble : nodes::Stack {
     };
     struct parts_t {
       std::optional<name_row> name;
+      // Forwarded: from whom, in the accent, as Telegram's.
+      std::optional<nodes::Text> forwarded;
       std::optional<quote_row> quote;
       std::optional<picture_view> picture;
       std::optional<album_view> album;
@@ -1068,7 +1070,7 @@ struct message_bubble : nodes::Stack {
     // where it is narrower; on a line of its own only where they do not.
     // Decided from the last layout; a change is laid out at the next.
     void update(double now_ms) {
-      auto& [name, quote, picture, album, file, text, cards, preview, reactions, thread, time, inline_time, tail] = parts;
+      auto& [name, forwarded, quote, picture, album, file, text, cards, preview, reactions, thread, time, inline_time, tail] = parts;
       // Nothing left of the text -- all of it the quote the header shows --
       // or a text that ends in a quote, and nothing under it: the time on a
       // line of its own, as Telegram's -- not beside an empty last line, nor
@@ -1170,7 +1172,7 @@ struct message_bubble : nodes::Stack {
     // checks the guess, above.
     bool guessed = false;
     void guess_time(skia::SkFont& font) {
-      auto& [name, quote, picture, album, file, text, cards, preview, reactions, thread, time, inline_time, tail] = parts;
+      auto& [name, forwarded, quote, picture, album, file, text, cards, preview, reactions, thread, time, inline_time, tail] = parts;
       if (std::exchange(guessed, true) || text.text().empty())
         return;
       const skiff::paint::Painter p(nullptr, font);
@@ -1200,7 +1202,7 @@ struct message_bubble : nodes::Stack {
                 .time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour),
                 .inline_time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour)},
           plate(plate_of(mine)) {
-      auto& [name, quote, picture, album, file, text, cards, preview, reactions, thread, time, inline_time, tail] = parts;
+      auto& [name, forwarded, quote, picture, album, file, text, cards, preview, reactions, thread, time, inline_time, tail] = parts;
       this->setGap(2.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
                     .padding = {kPadY, kPadX, kPadY, kPadX}, .cornerRadius = 12.0f, .background = plate});
@@ -1341,6 +1343,11 @@ struct message_bubble : nodes::Stack {
       const std::int64_t power = level == in.powers.end() ? in.power_default : level->second;
       body.parts.name.emplace(sender_name(in, said.sender), avatar_colour(said.sender),
                               power >= 100 ? std::string("admin") : power >= 50 ? std::string("mod") : std::string());
+    }
+    // Forwarded: "Forwarded from" its sender, at its top, as Telegram's.
+    if (said.forwarded) {
+      body.parts.forwarded.emplace("Forwarded from " + said.forwarded->name, 13.0f, outgoing ? sent_time_colour : accent_colour);
+      body.parts.forwarded->setElided(true);
     }
     // Something done, not said: a line in the middle, on a plate of its own,
     // with no avatar and no name -- as tdesktop's service messages.

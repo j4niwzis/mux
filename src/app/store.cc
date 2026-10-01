@@ -58,6 +58,8 @@ struct message_line {
   // "Forwarded from" while its text stayed stripped of it.
   std::optional<forward_line> forwarded;
   std::optional<bool> sticker;
+  // Came end-to-end encrypted: kept, or read back it said "not encrypted".
+  std::optional<bool> encrypted;
   friend consteval auto json_schema(knot::type<message_line>) { return knot::schema<message_line>(); }
 };
 
@@ -292,6 +294,7 @@ class message_store {
       one.replies_to = std::move(o.reply);
       one.thread = std::move(o.thread);
       one.edited = o.edited.value_or(false);
+      one.encrypted = o.encrypted.value_or(false);
       one.redacted = o.redacted.value_or(false);
       one.outgoing = o.out.value_or(false);
       one.service = o.service.value_or(false);
@@ -361,6 +364,7 @@ class message_store {
                                                                               one.forwarded->link})
                                    : std::nullopt,
         .sticker = store_file::flag(one.sticker),
+        .encrypted = store_file::flag(one.encrypted),
     };
     if (!one.album.empty()) {
       line.album.emplace();

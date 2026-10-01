@@ -145,6 +145,20 @@ struct field_quotes {
       return open ? code_line::closing : code_line::opening;
     return open ? code_line::inside : code_line::none;
   }
+  // How long the paragraph at `start` is, up to its newline.
+  [[nodiscard]] static std::size_t paragraph_length(std::string_view text, std::size_t start) {
+    const std::size_t end = text.find('\n', start);
+    return (end == std::string_view::npos ? text.size() : end) - start;
+  }
+  // The language an opening fence names: what follows its ```, trimmed.
+  [[nodiscard]] static std::string_view language_of(std::string_view text, std::size_t start) {
+    std::string_view line = text.substr(start, paragraph_length(text, start)).substr(3);
+    while (!line.empty() && line.front() == ' ')
+      line.remove_prefix(1);
+    while (!line.empty() && line.back() == ' ')
+      line.remove_suffix(1);
+    return line;
+  }
   // Whether a block opened at `start` is closed somewhere after it.
   [[nodiscard]] static bool closed_after(std::string_view text, std::size_t start) {
     for (std::size_t at = text.find('\n', start); at != std::string_view::npos; at = text.find('\n', at + 1))
@@ -173,13 +187,14 @@ struct field_quotes {
   }
 
   [[nodiscard]] static widgets::BlockLook look(std::string_view text, std::size_t start) {
-    // A block's fences: their ``` hidden, as the field's other marks are --
-    // the opening one's language, after it, still there to be read and
-    // changed; the plate says where the block is.
+    // A block's fences not seen at all: each line of one hidden whole --
+    // ```cpp too -- the opening one the plate's head, where drawBehind puts
+    // the block's language (or "Code"), as a message's block shows it; the
+    // closing one the plate's foot.
     switch (code_at(text, start)) {
       case code_line::opening:
       case code_line::closing:
-        return {.hidden = 3, .indent = kCodeIndent, .right = kCodeRight, .monospace = true};
+        return {.hidden = paragraph_length(text, start), .indent = kCodeIndent, .right = kCodeRight, .monospace = true};
       case code_line::inside:
         return {.indent = kCodeIndent, .right = kCodeRight, .monospace = true};
       case code_line::none:
@@ -209,6 +224,13 @@ struct field_quotes {
       p.fillRect(plate, (theme.fAccent & 0x00FFFFFFu) | 0x1F000000u, alpha);
       p.fillRect(skia::SkRect::MakeXYWH(box.fLeft, plate.fTop, 3.0f, plate.height()), theme.fAccent, alpha);
       canvas->restoreToCount(save);
+      // Its head: the language its opening fence names, small, in the accent.
+      if (code_at(text, lines[i].paragraph) == code_line::opening) {
+        const std::string_view language = language_of(text, lines[i].paragraph);
+        const float label = size * 0.8f;
+        p.text(language.empty() ? std::string("Code") : std::string(language), box.fLeft + kCodeIndent,
+               lines[i].top + (lines[i].bottom - lines[i].top + label) * 0.5f - 1.0f, label, theme.fAccent, alpha, true);
+      }
       i = j;
     }
     int deepest = 0;

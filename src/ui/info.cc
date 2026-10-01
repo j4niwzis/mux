@@ -1921,6 +1921,35 @@ struct threads_panel : nodes::Stack {
     if (grew)
       parts.answers.scrollToEnd(false);
   }
+  // A right-click on an answer in the thread open: the message's menu, as in
+  // the chat -- Copy, its link under the pointer, Reply, Delete, reactions.
+  using scene::Node::onPointer;
+  void onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
+    if (press.button != 3 || !open)
+      return;
+    for (const message_bubble& one : std::get<0>(std::get<0>(parts.answers.fChildren).fChildren))
+      if (parts.answers.toView(one.bounds()).contains(press.x, press.y) && !one.message_id.empty()) {
+        menu_facts facts;
+        facts.id = one.message_id;
+        facts.own = one.outgoing;
+        facts.text = one.plain;
+        facts.selection = one.parts.body.parts.text.hasSelection();
+        facts.copied = facts.selection ? one.parts.body.parts.text.selected() : one.plain;
+        facts.deletable = one.outgoing;
+        for (const auto& [key, who] : one.said.reactions)
+          facts.reaction_count += who.size();
+        facts.reaction_events = !one.said.reaction_events.empty();
+        if (const auto& asked = skiff::nodes::textMenusAsked(); !asked.empty() && asked.back().link)
+          facts.pressed_link = *asked.back().link;
+        else if (const auto& preview = one.parts.body.parts.preview; preview && preview->fState.fBounds.contains(press.x, press.y))
+          facts.pressed_link = preview->url;
+        facts.x = press.x;
+        facts.y = press.y;
+        actions->message_menu(std::move(facts));
+        reply.handle();
+        return;
+      }
+  }
   // What is written, answered in the thread open.
   void send() {
     auto& field = parts.input.parts.field;

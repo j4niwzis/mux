@@ -69,7 +69,7 @@ class menu_part {
     std::string line;
     if (const auto& chosen = s_->root().main().chosen)
       if (const conversation* chat = s_->model->find(*chosen))
-        if (const auto it = std::ranges::find(chat->timeline, target_.id, &message::id); it != chat->timeline.end()) {
+        if (const message* it = mux::ui::held_message(*chat, target_.id)) {
           said = &*it;
           title = "Reply to " + mux::ui::sender_name(*chat, it->sender);
           // Its mentions by name, as the quote in the bubble shows them.
@@ -140,8 +140,8 @@ class menu_part {
     const conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
     if (!chat)
       return;
-    const auto said = std::ranges::find(chat->timeline, target_.id, &message::id);
-    if (said == chat->timeline.end())
+    const message* said = mux::ui::held_message(*chat, target_.id);
+    if (!said)
       return;
     auto events = said->reaction_events;
     std::ranges::stable_sort(events, {}, &message::reaction_event::at);
@@ -221,8 +221,8 @@ class menu_part {
     const conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
     if (!chat)
       return;
-    const auto said = std::ranges::find(chat->timeline, one.id, &message::id);
-    if (said == chat->timeline.end())
+    const message* said = mux::ui::held_message(*chat, one.id);
+    if (!said)
       return;
     const std::string& me = chosen->account.address;
     const bool on = logic::reaction_turns_on(*said, one.key, me);

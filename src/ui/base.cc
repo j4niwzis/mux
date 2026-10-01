@@ -452,6 +452,21 @@ struct mux_paint {
     }
   };
 };
+
+// A message a chat holds, wherever: its timeline, an answer in one of its
+// threads, or fetched aside for a quote. What a reply quotes, a menu acts
+// on, a reaction goes to -- an answer in a thread among them, which the
+// timeline alone does not have.
+[[nodiscard]] inline const message* held_message(const conversation& chat, std::string_view id) {
+  if (const auto it = std::ranges::find(chat.timeline, id, &message::id); it != chat.timeline.end())
+    return &*it;
+  for (const auto& [root, answers] : chat.threads)
+    if (const auto it = std::ranges::find(answers, id, &message::id); it != answers.end())
+      return &*it;
+  if (const auto aside = chat.quoted.find(std::string(id)); aside != chat.quoted.end())
+    return &aside->second;
+  return nullptr;
+}
 }  // namespace mux::ui
 
 // mux's way of painting fills, for skiff to find wherever mux's tree is drawn.

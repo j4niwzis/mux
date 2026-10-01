@@ -1672,11 +1672,7 @@ struct message_bubble : nodes::Stack {
     // one that has a piece of the quote, or another's words, is answered
     // with a quote of its own, shown as one.
     if (said.replies_to) {
-      const auto in_timeline = std::ranges::find(in.timeline, *said.replies_to, &message::id);
-      const auto aside = in.quoted.find(*said.replies_to);
-      const message* answered = in_timeline != in.timeline.end() ? &*in_timeline
-                                : aside != in.quoted.end()      ? &aside->second
-                                                                : nullptr;
+      const message* answered = held_message(in, *said.replies_to);
       mentioned taken = shown;
       if (const auto quote = take_opening_quote(taken);
           quote && answered && squeezed(quote_line_of(*answered, in, now)).contains(squeezed(*quote))) {
@@ -1714,11 +1710,8 @@ struct message_bubble : nodes::Stack {
         preview_known = true;
       }
     if (said.replies_to) {
-      const auto in_timeline = std::ranges::find(in.timeline, *said.replies_to, &message::id);
-      const auto aside = in.quoted.find(*said.replies_to);
-      const message* found = in_timeline != in.timeline.end() ? &*in_timeline
-                             : aside != in.quoted.end()      ? &aside->second
-                                                             : nullptr;
+      // In the timeline, in a thread -- an answer quoting another -- or aside.
+      const message* found = held_message(in, *said.replies_to);
       const bool known = found != nullptr;
       quote_known = known;
       // A picture's: its thumbnail, and its caption or "Photo"; a file's:

@@ -14,6 +14,8 @@ concurrency:
 
 env:
   CPM_SOURCE_CACHE: ${{ github.workspace }}/.cache/cpm
+  # clang 23 is the only one installed: its crashes print named frames.
+  LLVM_SYMBOLIZER_PATH: /usr/lib/llvm-23/bin/llvm-symbolizer
 
 jobs:
   clang:

@@ -29,7 +29,7 @@ namespace text_style {
 struct strong {};    // <b>, <strong>
 struct emphasis {};  // <i>, <em>
 struct struck {};    // <del>, <s>, <strike>
-struct code {};      // <code>, <pre>
+struct code {};      // <code>
 struct quote {};     // <blockquote>
 }  // namespace text_style
 using text_style_t =
@@ -72,11 +72,17 @@ struct image {         // <img src="mxc://..." alt="..."> -- a custom emoji, in 
   std::string src;
   std::string alt;
 };
+struct code_open {     // <code class="language-...">: code; in a block, its language
+  std::string language;
+};
+struct block_open {};   // <pre>: a block of code
+struct block_close {};  // </pre>
 struct other {};  // anything else: dropped
 }  // namespace html_tag
 using html_tag_t = splice::variant<html_tag::line_break, html_tag::block_end, html_tag::list_item, html_tag::quote,
                                 html_tag::reply, html_tag::link_open, html_tag::link_close, html_tag::image,
-                                html_tag::style_open, html_tag::style_close, html_tag::other>;
+                                html_tag::style_open, html_tag::style_close, html_tag::code_open, html_tag::block_open,
+                                html_tag::block_close, html_tag::other>;
 
 // An attribute's value in a tag's inside, quoted either way.
 [[nodiscard]] inline std::optional<std::string> attribute_of(std::string_view inside, std::string_view name) {
@@ -114,8 +120,8 @@ using html_tag_t = splice::variant<html_tag::line_break, html_tag::block_end, ht
       {"del", html_tag::style_open{text_style::struck{}}},     {"/del", html_tag::style_close{text_style::struck{}}},
       {"s", html_tag::style_open{text_style::struck{}}},       {"/s", html_tag::style_close{text_style::struck{}}},
       {"strike", html_tag::style_open{text_style::struck{}}},  {"/strike", html_tag::style_close{text_style::struck{}}},
-      {"code", html_tag::style_open{text_style::code{}}},      {"/code", html_tag::style_close{text_style::code{}}},
-      {"pre", html_tag::style_open{text_style::code{}}},       {"/pre", html_tag::style_close{text_style::code{}}},
+      {"code", html_tag::code_open{}},      {"/code", html_tag::style_close{text_style::code{}}},
+      {"pre", html_tag::block_open{}},       {"/pre", html_tag::block_close{}},
       {"blockquote", html_tag::style_open{text_style::quote{}}}, {"/blockquote", html_tag::style_close{text_style::quote{}}},
       {"a", html_tag::link_open{}},     {"/a", html_tag::link_close{}},  {"img", html_tag::image{}},
   };
@@ -131,6 +137,17 @@ using html_tag_t = splice::variant<html_tag::line_break, html_tag::block_end, ht
                                  const auto stop = inside.find(quote, href + 6);
                                  return html_tag::link_open{std::string(inside.substr(
                                      href + 6, stop == std::string_view::npos ? std::string_view::npos : stop - href - 6))};
+                               },
+                               // Code says its language as a class, language-...
+                               [&](html_tag::code_open) -> html_tag_t {
+                                 const std::string classes = attribute_of(inside, "class").value_or("");
+                                 constexpr std::string_view prefix = "language-";
+                                 const auto at = classes.find(prefix);
+                                 if (at == std::string::npos)
+                                   return html_tag::code_open{};
+                                 const auto end = classes.find(' ', at);
+                                 return html_tag::code_open{classes.substr(
+                                     at + prefix.size(), end == std::string::npos ? std::string::npos : end - at - prefix.size())};
                                },
                                [&](html_tag::image) -> html_tag_t {
                                  return html_tag::image{attribute_of(inside, "src").value_or(""),
@@ -159,11 +176,15 @@ using html_tag_t = splice::variant<html_tag::line_break, html_tag::block_end, ht
   std::vector<std::pair<text_style_t, std::size_t>> opened;
   std::string open_href;
   std::size_t link_start = 0;
+  // A block of code open: where it began, and its language -- its lines
+  // kept as they are, drawn as a block of their own.
+  std::optional<std::size_t> block_from;
+  std::string block_language;
   std::size_t at = 0;
   // A line ended: once, as a browser's blocks are -- never an empty line
   // between two, nor one at the start. Inside code, every line kept.
   const auto in_code = [&] {
-    return std::ranges::any_of(opened, [](const auto& one) {
+    return block_from.has_value() || std::ranges::any_of(opened, [](const auto& one) {
       return splice::visit(splice::overloaded{[](text_style::code) { return true; }, [](const auto&) { return false; }}, one.first);
     });
   };
@@ -180,6 +201,34 @@ using html_tag_t = splice::variant<html_tag::line_break, html_tag::block_end, ht
       html_tag_t read = tag_of(html.substr(at + 1, end - at - 1));
       at = end + 1;
       splice::visit(splice::overloaded{[&](html_tag::line_break) { out.text += '\n'; },
+                            // A block of code: on lines of its own, its language as its
+                            // code says, a stretch of the text marked as one.
+                            [&](html_tag::block_open) {
+                              end_line();
+                              block_from = out.text.size();
+                              block_language.clear();
+                            },
+                            [&](html_tag::block_close) {
+                              if (!block_from)
+                                return;
+                              if (out.text.size() > *block_from && out.text.back() == '\n')
+                                out.text.pop_back();
+                              if (out.text.size() > *block_from)
+                                out.styles.push_back({.first = *block_from, .last = out.text.size(), .code = true,
+                                                      .block = true, .language = std::move(block_language)});
+                              block_from.reset();
+                              end_line();
+                            },
+                            // Code: in a block, it says the block's language; else it
+                            // is code within a line.
+                            [&](html_tag::code_open& open) {
+                              if (block_from) {
+                                if (!open.language.empty())
+                                  block_language = std::move(open.language);
+                                return;
+                              }
+                              opened.emplace_back(text_style::code{}, out.text.size());
+                            },
                             [&](html_tag::block_end) { end_line(); },
                             [&](html_tag::list_item) { out.text += "• "; },
                             [&](html_tag::quote) {},

@@ -882,6 +882,129 @@ struct message_pictures {
   }
 };
 
+// A block of code, as Telegram draws one: a rounded plate faint in the
+// quote's colour with a bar at its left; over the code, its language in the
+// colour and a Copy at the right; the code in the monospace face, wrapped,
+// selectable.
+struct code_block : nodes::Stack {
+  // Copy: the block's code, as it is, onto the clipboard.
+  struct copy_mark : nodes::Text {
+    std::string code;
+    copy_mark(std::string what, skia::SkColor colour) : nodes::Text("Copy", 12.0f, colour, true), code(std::move(what)) {
+      fState.setCursor(scene::cursor::hand{});
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+    [[nodiscard]] bool onClick(float, float) {
+      skiff::scene::setClipboardText(code);
+      return true;
+    }
+  };
+  struct head_row : nodes::Stack {
+    struct parts_t {
+      nodes::Text language;
+      copy_mark copy;
+    } parts;
+    head_row(std::string language, std::string code, skia::SkColor colour)
+        : parts{.language = nodes::Text(language.empty() ? std::string("Code") : std::move(language), 12.0f, colour, true),
+                .copy = copy_mark(std::move(code), colour)} {
+      this->setHorizontal();
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+      parts.language.setElided(true);
+      parts.language.apply({.grow = scene::axes::kX});
+    }
+  };
+  struct parts_t {
+    nodes::Box<> bar;
+    head_row head;
+    nodes::BasicText<message_pictures> code;
+  } parts;
+  code_block(std::string code, std::string language, skia::SkColor colour, skia::SkColor text)
+      : parts{.bar = nodes::Box<>(colour),
+              .head = head_row(std::move(language), code, colour),
+              .code = nodes::BasicText<message_pictures>(code, 13.0f, text)} {
+    this->setGap(4.0f);
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 0.0f, 4.0f, 0.0f},
+                  .padding = {6.0f, 8.0f, 6.0f, 12.0f}, .cornerRadius = 5.0f,
+                  .background = (colour & 0x00FFFFFFu) | (0x1Fu << 24), .masking = true});
+    parts.bar.apply({.place = scene::anchor::kTopLeft, .x = -12.0f, .y = -6.0f, .fillY = true, .width = 3.0f});
+    parts.code.setMonospace(true);
+    parts.code.setWrapped(true);
+    parts.code.setSelectable(true);
+    parts.code.setSelectionColour((accent_colour & 0x00FFFFFFu) | (110u << 24));
+    parts.code.apply({.fillX = true});
+  }
+};
+// A message's text cut at its blocks of code: words, a block, words...
+struct text_piece {
+  bool code = false;
+  std::string text;
+  std::string language;
+  std::vector<nodes::Text::Link> links;
+  std::vector<nodes::Text::Styled> styles;
+};
+[[nodiscard]] inline std::vector<text_piece> pieces_of(const std::string& text, const std::vector<nodes::Text::Link>& links,
+                                                      const std::vector<nodes::Text::Styled>& styles) {
+  std::vector<nodes::Text::Styled> blocks =
+      styles | std::views::filter([](const nodes::Text::Styled& one) { return one.block; }) | std::ranges::to<std::vector>();
+  std::ranges::sort(blocks, {}, &nodes::Text::Styled::first);
+  // Words from `a` to `b`: their links and styles cut to them, counted from
+  // their start; the line breaks around a block gone.
+  const auto words = [&](std::size_t a, std::size_t b) {
+    while (a < b && text[a] == '\n')
+      ++a;
+    while (b > a && text[b - 1] == '\n')
+      --b;
+    text_piece out{.text = text.substr(a, b - a)};
+    out.links = links | std::views::filter([&](const auto& one) { return one.first >= a && one.last <= b; }) |
+                std::views::transform([&](auto one) {
+                  one.first -= a;
+                  one.last -= a;
+                  return one;
+                }) |
+                std::ranges::to<std::vector>();
+    out.styles = styles | std::views::filter([&](const auto& one) { return !one.block && one.last > a && one.first < b; }) |
+                 std::views::transform([&](auto one) {
+                   one.first = std::max(one.first, a) - a;
+                   one.last = std::min(one.last, b) - a;
+                   return one;
+                 }) |
+                 std::ranges::to<std::vector>();
+    return out;
+  };
+  std::vector<text_piece> out;
+  std::size_t at = 0;
+  for (const nodes::Text::Styled& block : blocks) {
+    if (block.first < at)
+      continue;
+    out.push_back(words(at, block.first));
+    out.push_back(text_piece{.code = true, .text = text.substr(block.first, block.last - block.first), .language = block.language});
+    at = block.last;
+  }
+  out.push_back(words(at, text.size()));
+  return out;
+}
+// After the first words: a block, then the words after it, as many times
+// as the text has blocks.
+struct code_piece : nodes::Stack {
+  struct parts_t {
+    code_block block;
+    std::optional<nodes::BasicText<message_pictures>> after;
+  } parts;
+  code_piece(const text_piece& code, const text_piece* words, skia::SkColor colour, skia::SkColor quote, skia::SkColor text)
+      : parts{.block = code_block(code.text, code.language, colour, text)} {
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    if (words && !words->text.empty()) {
+      parts.after.emplace(words->text, 13.0f, text);
+      parts.after->setWrapped(true);
+      parts.after->setSelectable(true);
+      parts.after->setSelectionColour((accent_colour & 0x00FFFFFFu) | (110u << 24));
+      parts.after->setLinks(words->links, accent_colour);
+      parts.after->setStyles(words->styles, quote);
+      parts.after->apply({.fillX = true});
+    }
+  }
+};
+
 // A forward's line over its message, as Telegram's: "Forwarded from" and
 // the sender -- a person's pill, its avatar drawn by the message's pictures,
 // as a mention's -- each a node of its own: the pill pressed opens them,
@@ -1076,6 +1199,8 @@ struct message_bubble : nodes::Stack {
       std::optional<album_view> album;
       std::optional<file_view> file;
       nodes::BasicText<message_pictures> text;
+      // Its blocks of code, each with the words after it.
+      std::vector<code_piece> blocks;
       std::vector<link_card> cards;
       std::optional<page_preview> preview;
       std::optional<reaction_row> reactions;
@@ -1120,7 +1245,7 @@ struct message_bubble : nodes::Stack {
     // where it is narrower; on a line of its own only where they do not.
     // Decided from the last layout; a change is laid out at the next.
     void update(double now_ms) {
-      auto& [name, forwarded, quote, picture, album, file, text, cards, preview, reactions, thread, time, inline_time, tail] = parts;
+      auto& [name, forwarded, quote, picture, album, file, text, blocks, cards, preview, reactions, thread, time, inline_time, tail] = parts;
       // Nothing left of the text -- all of it the quote the header shows --
       // or a text that ends in a quote, and nothing under it: the time on a
       // line of its own, as Telegram's -- not beside an empty last line, nor
@@ -1142,7 +1267,7 @@ struct message_bubble : nodes::Stack {
         }
         return;
       }
-      if (!cards.empty() || preview || (!text.visible() && !reactions)) {
+      if (!blocks.empty() || !cards.empty() || preview || (!text.visible() && !reactions)) {
         time_placed = true;  // under it, as it is
         return;
       }
@@ -1222,7 +1347,7 @@ struct message_bubble : nodes::Stack {
     // checks the guess, above.
     bool guessed = false;
     void guess_time(skia::SkFont& font) {
-      auto& [name, forwarded, quote, picture, album, file, text, cards, preview, reactions, thread, time, inline_time, tail] = parts;
+      auto& [name, forwarded, quote, picture, album, file, text, blocks, cards, preview, reactions, thread, time, inline_time, tail] = parts;
       if (std::exchange(guessed, true) || text.text().empty())
         return;
       const skiff::paint::Painter p(nullptr, font);
@@ -1252,7 +1377,7 @@ struct message_bubble : nodes::Stack {
                 .time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour),
                 .inline_time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour)},
           plate(plate_of(mine)) {
-      auto& [name, forwarded, quote, picture, album, file, text, cards, preview, reactions, thread, time, inline_time, tail] = parts;
+      auto& [name, forwarded, quote, picture, album, file, text, blocks, cards, preview, reactions, thread, time, inline_time, tail] = parts;
       this->setGap(2.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
                     .padding = {kPadY, kPadX, kPadY, kPadX}, .cornerRadius = 12.0f, .background = plate});
@@ -1487,12 +1612,18 @@ struct message_bubble : nodes::Stack {
     if (said.replies_to)
       header_quote = take_opening_quote(shown);
     {
-      body.parts.text.setText(shown.text);
-      body.parts.text.setLinks(std::move(shown.links), accent_colour);
       // The quote's colour: the accent on theirs; on one's own, the text's,
       // as tdesktop's outgoing blockquote -- not the accent on its accent.
-      body.parts.text.setStyles(std::move(shown.styles), outgoing ? text_colour : accent_colour);
-      body.parts.text.setVisible(!shown.text.empty());
+      const skia::SkColor quote_colour = outgoing ? text_colour : accent_colour;
+      // Cut at its blocks of code: the first words here, each block with the
+      // words after it below.
+      const std::vector<text_piece> pieces = pieces_of(shown.text, shown.links, shown.styles);
+      body.parts.text.setText(pieces.front().text);
+      body.parts.text.setLinks(pieces.front().links, accent_colour);
+      body.parts.text.setStyles(pieces.front().styles, quote_colour);
+      body.parts.text.setVisible(!pieces.front().text.empty());
+      for (std::size_t i = 1; i + 1 < pieces.size(); i += 2)
+        body.parts.blocks.emplace_back(pieces[i], &pieces[i + 1], quote_colour, quote_colour, text_colour);
       for (const auto& [url, room] : shown.cards)
         body.parts.cards.push_back(card_of(url, room, now));
     }

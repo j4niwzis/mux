@@ -1357,10 +1357,30 @@ class model {
                                 splice::overloaded{[](const delivery::sending&) { return true; },
                                                    [](const auto&) { return false; }},
                                 one.message.delivery);
-                            if (sending)
+                            if (sending) {
                               where.timeline.push_back(one.message);
-                            else
-                              in_time(where.timeline.end());
+                              return;
+                            }
+                            // One's own, from the server, while some of one's
+                            // own are still being sent: before the first of
+                            // those -- it was sent before them. After them, a
+                            // message sent a second before another, its copy
+                            // come by the sync unmatched to its echo, stood
+                            // below the next one until that one's came too
+                            // (#11542).
+                            if (one.message.outgoing) {
+                              const auto pending = std::ranges::find_if(where.timeline, [](const message& said) {
+                                return said.outgoing &&
+                                       splice::visit(splice::overloaded{[](const delivery::sending&) { return true; },
+                                                                        [](const auto&) { return false; }},
+                                                     said.delivery);
+                              });
+                              if (pending != where.timeline.end()) {
+                                where.timeline.insert(pending, one.message);
+                                return;
+                              }
+                            }
+                            in_time(where.timeline.end());
                           },
                           [&](placement::at_start) { in_time(where.timeline.begin()); },
                           [&](placement::in_window) { in_time(where.timeline.end()); },

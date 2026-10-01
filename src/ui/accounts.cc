@@ -700,7 +700,7 @@ struct accounts_panel : closes_on_escape<Actions> {
   // One of the chosen account's pages beside the list: 0 Connection, 1
   // Privacy, 2 Proxy.
   void show_page(int page, const config::account_t& one, const model& now,
-                 const std::vector<config::proxy_settings>& proxies, const config::theme_t& theme) {
+                 const std::vector<config::proxy_settings>& proxies = {}, const config::theme_t& theme = config::theme_t{}) {
     pages.light(page);
     if (page == 1) {
       detail.template emplace<3>(this->actions, config::read_receipts_of(one), config::send_typing_of(one),

@@ -120,6 +120,12 @@ class account {
   // A person's profile -- their name and picture -- from their server:
   // profile_found, for one met outside the rooms, a forward's sender.
   void fetch_profile(std::string user);
+  // Its sessions (devices), as Element's Sessions: listed; one renamed;
+  // some signed out -- the server asking for the password, it is given
+  // (the one typed, else the one logged in with).
+  void list_sessions();
+  void rename_session(std::string device, std::string name);
+  void sign_out_sessions(std::vector<std::string> devices, std::string password);
   // The developer tools, as Element's: an event as the server has it; the
   // room's state, every event of it; and an event of any type sent.
   void view_source(std::string room, std::string event);

@@ -68,6 +68,23 @@ void app::woken() {
                                  pictures.profile_avatars.insert_or_assign(found.user, found.avatar);
                                  pictures.ask();
                                },
+                               // The account's sessions, for its page where it is open.
+                               [&](const mux::change::sessions_listed& listed) {
+                                 if (auto* up = root().open_panel())
+                                   splice::visit([&](accounts& panel) {
+                                                   if (auto* page = panel.sessions(); page && panel.selected == listed.by.address)
+                                                     page->show(listed.current, listed.sessions);
+                                                 },
+                                                 *up);
+                               },
+                               [&](const mux::change::sessions_refused& said) {
+                                 if (auto* up = root().open_panel())
+                                   splice::visit([&](accounts& panel) {
+                                                   if (auto* page = panel.sessions(); page && panel.selected == said.by.address)
+                                                     page->refused(said.why, said.needs_password);
+                                                 },
+                                                 *up);
+                               },
                                [&](const mux::change::people_found& found) {
                                  root().show_found_people(found.people, found.query);
                                },

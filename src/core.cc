@@ -1041,6 +1041,28 @@ struct people_found {
   std::string query;
   std::vector<found_person> people;
 };
+// One of the account's sessions (Matrix's devices), as Element lists them:
+// its ID, its name, and where and when it was last seen.
+struct session_info {
+  std::string id;
+  std::string name;
+  std::optional<std::string> ip;
+  std::optional<std::chrono::sys_time<std::chrono::milliseconds>> last_seen;
+  friend bool operator==(const session_info&, const session_info&) = default;
+};
+// The account's sessions, this one's ID among them.
+struct sessions_listed {
+  account_id by;
+  std::string current;
+  std::vector<session_info> sessions;
+};
+// Sessions not signed out, or not renamed: why -- and whether the password
+// is what was missing.
+struct sessions_refused {
+  account_id by;
+  std::string why;
+  bool needs_password = false;
+};
 // A person's profile, as their server gives it: their name and their
 // picture -- one met outside the room, a forward's sender.
 struct profile_found {
@@ -1093,7 +1115,7 @@ using change_t = splice::variant<change::connection_changed, change::refused, ch
                               change::room_created, change::preview_loaded, change::devtools_text,
                               change::state_listed, change::room_previewed, change::mentioned,
                               change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine,
-                              change::directory_listed, change::people_found, change::profile_found, change::packs_listed, change::pack_saved, change::threads_listed,
+                              change::directory_listed, change::people_found, change::profile_found, change::sessions_listed, change::sessions_refused, change::packs_listed, change::pack_saved, change::threads_listed,
                               change::pack_picture_uploaded>;
 
 // The model: every account, and every change applied to it.
@@ -1413,6 +1435,8 @@ class model {
   void on(const change::directory_listed&) {}  // the window's: the Explore dialog
   void on(const change::people_found&) {}  // the window's: the Start chat dialog
   void on(const change::profile_found&) {}  // the window's: a pill's picture
+  void on(const change::sessions_listed&) {}  // the window's: the account's Sessions page
+  void on(const change::sessions_refused&) {}
   void on(const change::refused&) {}  // the window's: a notice
   void on(const change::packs_listed&) {}  // the window's: the packs' dialog
   void on(const change::pack_saved&) {}

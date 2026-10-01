@@ -50,6 +50,9 @@ struct stub {
   void menu_copy_link() {}
   void menu_copy_url() {}
   void menu_fave_sticker() {}
+  void sign_out_sessions(std::vector<std::string>, std::string) {}
+  void rename_session(std::string, std::string) {}
+  void refresh_sessions() {}
   void menu_save() {}
   void menu_react(std::string) {}
   void react(std::string, std::string) {}

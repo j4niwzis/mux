@@ -386,6 +386,14 @@ struct app : kept_settings {
         *up);
   }
   void apply(const request::account_page& one);
+  void apply(const request::sign_out_sessions& one);
+  void apply(const request::rename_session& one);
+  void apply(const request::refresh_sessions&);
+  // The account's id, as the model knows it, of a saved one.
+  [[nodiscard]] static mux::account_id id_of(const mux::config::account_t& account) {
+    const std::string address = mux::config::address_of(account);
+    return mux::account_id{mux::ui::protocol_of(address), address};
+  }
   void apply(const request::flip_account_receipts&);
   void apply(const request::flip_account_typing&);
   void apply(const request::proxy_kind& one);

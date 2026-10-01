@@ -506,6 +506,33 @@ struct network {
             one.account);
     });
   }
+  // The sessions of the Matrix account named: listed, one renamed, some
+  // signed out.
+  template <class F>
+  void with_matrix(const mux::account_id& by, F f) {
+    loop.post([this, by, f = std::move(f)] {
+      for (auto& one : accounts)
+        splice::visit(splice::overloaded{[&](std::unique_ptr<matrix_account>& account) {
+                                           if (account->id() == by)
+                                             f(*account);
+                                         },
+                                         [](auto&) {}},
+                      one.account);
+    });
+  }
+  void list_sessions(const mux::account_id& by) {
+    this->with_matrix(by, [](matrix_account& account) { account.list_sessions(); });
+  }
+  void rename_session(const mux::account_id& by, std::string device, std::string name) {
+    this->with_matrix(by, [device = std::move(device), name = std::move(name)](matrix_account& account) {
+      account.rename_session(device, name);
+    });
+  }
+  void sign_out_sessions(const mux::account_id& by, std::vector<std::string> devices, std::string password) {
+    this->with_matrix(by, [devices = std::move(devices), password = std::move(password)](matrix_account& account) {
+      account.sign_out_sessions(devices, password);
+    });
+  }
   // A person's profile, asked of the Matrix account named.
   void fetch_profile(const mux::account_id& by, std::string user) {
     loop.post([this, by, user = std::move(user)] {

@@ -610,7 +610,23 @@ void app::apply(const request::accounts_back&) {
 void app::apply(const request::account_page& one) {
   this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
     panel.show_page(one.page, account, *model, proxies);
+    // Sessions: asked of the server as the page opens.
+    if (one.page == 4)
+      net->list_sessions(id_of(account));
   });
+}
+void app::apply(const request::sign_out_sessions& one) {
+  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+    net->sign_out_sessions(id_of(account), one.devices, one.password);
+  });
+}
+void app::apply(const request::rename_session& one) {
+  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+    net->rename_session(id_of(account), one.device, one.name);
+  });
+}
+void app::apply(const request::refresh_sessions&) {
+  this->with_chosen_account([&](accounts&, mux::config::account_t& account) { net->list_sessions(id_of(account)); });
 }
 
 void app::apply(const request::flip_account_receipts&) {

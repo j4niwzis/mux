@@ -12,6 +12,7 @@ import skiff.nodes.scroll;
 import skiff.nodes.text;
 import skiff.widgets.button;
 import skiff.widgets.sliderbar;
+import skiff.widgets.textbox;
 import mux.core;
 import mux.config;
 import :base;
@@ -182,6 +183,7 @@ struct account_pages : nodes::Stack {
     row connection;
     row privacy;
     row chats;
+    row sessions;
     row proxy;
   } parts;
 
@@ -189,6 +191,7 @@ struct account_pages : nodes::Stack {
       : parts{.connection = row("Connection", {a, 0}, icon::sliders{}),
               .privacy = row("Privacy", {a, 1}, icon::eye{}),
               .chats = row("Chats", {a, 3}, icon::people{}),
+              .sessions = row("Sessions", {a, 4}, icon::info{}),
               .proxy = row("Proxy", {a, 2}, icon::gear{})} {
     fState.apply({.padding = {6.0f, 0.0f, 0.0f, 0.0f}});
     this->light(0);
@@ -197,6 +200,7 @@ struct account_pages : nodes::Stack {
     parts.connection.set_lit(page == 0);
     parts.privacy.set_lit(page == 1);
     parts.chats.set_lit(page == 3);
+    parts.sessions.set_lit(page == 4);
     parts.proxy.set_lit(page == 2);
   }
 };
@@ -295,6 +299,203 @@ struct account_chats : nodes::Stack {
   void say(std::string, bool) {}
 };
 
+// An account's Sessions page, as Element's: this session first, then the
+// others -- each its name, its ID, where and when it was last seen -- each to
+// rename or sign out, and all the others at once. Where the server asks for
+// the password to sign one out, a field for it.
+template <class Actions>
+struct account_sessions : nodes::Stack {
+  Actions* actions = nullptr;
+  struct sign_out_one {
+    account_sessions* page;
+    std::string device;
+    void operator()() const { page->sign_out({device}); }
+  };
+  struct sign_out_rest {
+    account_sessions* page;
+    void operator()() const { page->sign_out(page->others); }
+  };
+  struct start_rename {
+    account_sessions* page;
+    std::size_t row;
+    void operator()() const { page->renaming(row); }
+  };
+  struct save_rename {
+    account_sessions* page;
+    std::size_t row;
+    void operator()() const { page->rename(row); }
+  };
+  struct reload {
+    Actions* actions;
+    void operator()() const { actions->refresh_sessions(); }
+  };
+  // One session: its name over its ID, when and where it was last seen;
+  // Rename, and Sign out where it is not this one.
+  struct session_row : nodes::Stack {
+    std::string device;
+    std::string name;
+    struct lines_t : nodes::Stack {
+      struct parts_t {
+        nodes::Text name;
+        nodes::Text facts;
+      } parts;
+      lines_t(std::string shown, std::string facts)
+          : parts{.name = nodes::Text(std::move(shown), 15.0f, text_colour, true), .facts = nodes::Text(std::move(facts), 12.0f, dim_colour)} {
+        this->setGap(2.0f);
+        fState.apply({.grow = scene::axes::kX, .autoSize = scene::axes::kY, .alignSelf = scene::align::kMiddle});
+        parts.name.setElided(true);
+        parts.name.apply({.fillX = true});
+        parts.facts.setElided(true);
+        parts.facts.apply({.fillX = true});
+      }
+    };
+    struct parts_t {
+      lines_t lines;
+      widgets::TextBox<> field;
+      widgets::Button<save_rename> save;
+      widgets::Button<start_rename> rename;
+      std::optional<widgets::Button<sign_out_one>> sign_out;
+    } parts;
+    session_row(account_sessions* page, std::size_t index, const session_info& one, bool current)
+        : device(one.id), name(one.name),
+          parts{.lines = lines_t(one.name.empty() ? std::string("Unnamed session") : one.name, facts_of(one, current)),
+                .field = widgets::TextBox<>("Session name"),
+                .save = widgets::Button<save_rename>("Save", {page, index}),
+                .rename = widgets::Button<start_rename>("Rename", {page, index})} {
+      this->setHorizontal();
+      this->setGap(8.0f);
+      fState.apply({.fillX = true, .height = 60.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 8.0f,
+                    .background = tile_colour});
+      parts.field.setText(one.name);
+      parts.field.apply({.grow = scene::axes::kX, .height = 32.0f, .alignSelf = scene::align::kMiddle});
+      parts.field.setVisible(false);
+      parts.save.apply({.width = 70.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle});
+      parts.save.setVisible(false);
+      parts.rename.apply({.width = 80.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle});
+      if (!current) {
+        parts.sign_out.emplace("Sign out", sign_out_one{page, one.id});
+        parts.sign_out->apply({.width = 86.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle});
+      }
+    }
+    // Its ID, when it was last seen, from where: as Element says them.
+    [[nodiscard]] static std::string facts_of(const session_info& one, bool current) {
+      std::string out = one.id;
+      if (current)
+        out += " · this session";
+      if (one.last_seen)
+        out += std::format(" · last seen {:%d.%m.%Y %H:%M}", std::chrono::floor<std::chrono::minutes>(*one.last_seen));
+      if (one.ip)
+        out += " · " + *one.ip;
+      return out;
+    }
+    void show_field(bool on) {
+      parts.lines.setVisible(!on);
+      parts.field.setVisible(on);
+      parts.save.setVisible(on);
+      parts.rename.setVisible(!on);
+      this->invalidateLayout();
+    }
+  };
+  struct password_row : nodes::Stack {
+    struct parts_t {
+      nodes::Text label{"Your password, to sign sessions out:", 13.0f, dim_colour};
+      widgets::TextBox<> field{"Password"};
+    } parts;
+    password_row() {
+      this->setGap(6.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+      parts.field.setMasked(true);
+      parts.field.apply({.fillX = true, .height = 34.0f});
+    }
+  };
+  struct parts_t {
+    nodes::Text title = section_title("SESSIONS");
+    nodes::Text note{"Loading the sessions…", 13.0f, dim_colour};
+    nodes::Text current_title = section_title("CURRENT SESSION");
+    std::vector<session_row> current;
+    nodes::Text others_title = section_title("OTHER SESSIONS");
+    std::vector<session_row> rows;
+    password_row password;
+    widgets::Button<sign_out_rest> rest;
+    widgets::Button<reload> refresh;
+  } parts;
+  std::vector<std::string> others;
+
+  explicit account_sessions(Actions* a)
+      : actions(a), parts{.rest = widgets::Button<sign_out_rest>("Sign out of all other sessions", {this}),
+                          .refresh = widgets::Button<reload>("Refresh", {a})} {
+    this->setGap(8.0f);
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    parts.note.setWrapped(true);
+    parts.note.apply({.fillX = true});
+    for (nodes::Text* each : {&parts.current_title, &parts.others_title})
+      each->apply({.margin = {10.0f, 0.0f, 0.0f, 0.0f}});
+    parts.password.setVisible(false);
+    parts.rest.apply({.width = 260.0f, .height = 34.0f, .margin = {8.0f, 0.0f, 0.0f, 0.0f}});
+    parts.rest.setVisible(false);
+    parts.refresh.apply({.width = 100.0f, .height = 30.0f});
+    for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.current_title, &parts.others_title})
+      each->setVisible(false);
+  }
+  // The sessions, as the server listed them: this one first, the others by
+  // when they were last seen, the latest first.
+  void show(const std::string& current, std::vector<session_info> all) {
+    std::ranges::sort(all, std::ranges::greater{}, [](const session_info& one) {
+      return one.last_seen.value_or(std::chrono::sys_time<std::chrono::milliseconds>{});
+    });
+    parts.current.clear();
+    parts.rows.clear();
+    others.clear();
+    for (const session_info& one : all | std::views::filter([&](const session_info& s) { return s.id == current; }))
+      parts.current.emplace_back(this, 0, one, true);
+    std::size_t index = 0;
+    for (const session_info& one : all | std::views::filter([&](const session_info& s) { return s.id != current; })) {
+      parts.rows.emplace_back(this, ++index, one, false);
+      others.push_back(one.id);
+    }
+    parts.note.setText(all.empty() ? std::string("No sessions.") : std::string());
+    parts.note.setVisible(all.empty());
+    parts.current_title.setVisible(!parts.current.empty());
+    parts.others_title.setVisible(!parts.rows.empty());
+    parts.rest.setVisible(parts.rows.size() > 1);
+    this->invalidateLayout();
+  }
+  // The server said no: why; and the password field, where that is it.
+  void refused(const std::string& why, bool needs_password) {
+    parts.note.setText(why);
+    parts.note.setColour(error_colour);
+    parts.note.setVisible(true);
+    if (needs_password)
+      parts.password.setVisible(true);
+    this->invalidateLayout();
+  }
+  void sign_out(std::vector<std::string> devices) {
+    if (devices.empty())
+      return;
+    parts.note.setText("Signing out…");
+    parts.note.setColour(dim_colour);
+    parts.note.setVisible(true);
+    actions->sign_out_sessions(std::move(devices), parts.password.parts.field.text());
+    this->invalidateLayout();
+  }
+  [[nodiscard]] session_row* row_at(std::size_t index) {
+    if (index == 0)
+      return parts.current.empty() ? nullptr : &parts.current.front();
+    return index <= parts.rows.size() ? &parts.rows[index - 1] : nullptr;
+  }
+  void renaming(std::size_t index) {
+    if (session_row* row = this->row_at(index))
+      row->show_field(true);
+  }
+  void rename(std::size_t index) {
+    if (session_row* row = this->row_at(index)) {
+      row->show_field(false);
+      actions->rename_session(row->device, row->parts.field.text());
+    }
+  }
+  void say(std::string, bool) {}
+};
+
 // A proxy profile chosen for the chosen account: -1 for none.
 template <class Actions>
 struct choose_account_proxy {
@@ -374,7 +575,7 @@ struct accounts_panel : closes_on_escape<Actions> {
       }
     };
     using detail_t = splice::variant<nodes::Text, account_editor<Actions>, add_account_pane<Actions>, account_privacy<Actions>,
-                                     account_proxy<Actions>, account_chats<Actions>>;
+                                     account_proxy<Actions>, account_chats<Actions>, account_sessions<Actions>>;
     struct detail_column : nodes::Stack {
       // No account chosen, or the chosen one, or adding one.
       struct parts_t {
@@ -505,6 +706,8 @@ struct accounts_panel : closes_on_escape<Actions> {
       detail.template emplace<5>(this->actions, config::room_events_of(one), config::room_event_kinds_of(one),
                                    config::show_receipts_of(one), config::jump_search_of(one), config::link_previews_of(one),
                                    config::home_hides_of(one), config::home_direct_of(one));
+    } else if (page == 4) {
+      detail.template emplace<6>(this->actions);
     } else if (page == 2) {
       detail.template emplace<4>(this->actions, proxies, config::proxy_of(one));
     } else {
@@ -523,6 +726,11 @@ struct accounts_panel : closes_on_escape<Actions> {
   [[nodiscard]] account_chats<Actions>* chats_page() {
     return splice::visit(splice::overloaded{[](account_chats<Actions>& one) { return &one; },
                                             [](auto&) -> account_chats<Actions>* { return nullptr; }},
+                         detail);
+  }
+  [[nodiscard]] account_sessions<Actions>* sessions() {
+    return splice::visit(splice::overloaded{[](account_sessions<Actions>& one) { return &one; },
+                                            [](auto&) -> account_sessions<Actions>* { return nullptr; }},
                          detail);
   }
   [[nodiscard]] account_proxy<Actions>* proxy() {

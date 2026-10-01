@@ -103,6 +103,8 @@ std::string of(const change::pack_saved& one) {
 std::string of(const change::pack_picture_uploaded& one) { return std::format("uploaded {}", one.picture.url); }
 std::string of(const change::refused& one) { return one.what; }
 std::string of(const change::profile_found& one) { return std::format("profile of {}", one.user); }
+std::string of(const change::sessions_listed& one) { return std::format("{} sessions", one.sessions.size()); }
+std::string of(const change::sessions_refused& one) { return one.why; }
 std::string of(const change::people_found& one) {
   return std::format("{} found for {}", one.people.size(), one.query);
 }

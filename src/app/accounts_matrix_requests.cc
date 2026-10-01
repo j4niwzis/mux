@@ -42,6 +42,9 @@ template void account<mux::app::post_change>::delete_pack(std::string room, std:
 template void account<mux::app::post_change>::catch_up(std::string room, std::string from, std::string until);
 template void account<mux::app::post_change>::preview_room(std::string room, std::vector<std::string> via);
 template void account<mux::app::post_change>::fetch_profile(std::string user);
+template void account<mux::app::post_change>::list_sessions();
+template void account<mux::app::post_change>::rename_session(std::string device, std::string name);
+template void account<mux::app::post_change>::sign_out_sessions(std::vector<std::string> devices, std::string password);
 template void account<mux::app::post_change>::create_group(std::string name);
 template void account<mux::app::post_change>::forward(std::string from, std::string event, std::string to);
 template void account<mux::app::post_change>::fetch_quoted(std::string room, std::string target);

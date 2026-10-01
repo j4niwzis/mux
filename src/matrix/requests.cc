@@ -35,6 +35,7 @@ import loom.cs.sync;
 import loom.cs.typing;
 import loom.cs.wellknown;
 import loom.cs.profile;
+import loom.cs.device_management;
 import mux.config;
 import mux.core;
 import mux.http;
@@ -773,6 +774,91 @@ void account<Sink>::fetch_profile(std::string user) {
       return;
     }
     sink_(change::profile_found{id_, user, got->displayname, got->avatar_url});
+  });
+}
+
+// The password answered, as the spec's interactive auth takes it: who, by
+// their user ID, and the password -- beside its type and session.
+struct password_auth {
+  struct identifier_t {
+    std::string type = "m.id.user";
+    std::string user;
+    friend consteval auto json_schema(knot::type<identifier_t>) { return knot::schema<identifier_t>(); }
+  };
+  identifier_t identifier;
+  std::string password;
+  friend consteval auto json_schema(knot::type<password_auth>) { return knot::schema<password_auth>(); }
+};
+
+template <class Sink>
+void account<Sink>::list_sessions() {
+  loop_->spawn([this] {
+    if (!api_)
+      return;
+    auto got = perform(*api_, loom::cs::get_devices{});
+    if (!got) {
+      sink_(change::sessions_refused{id_, "Could not list the sessions: " + got.error().said()});
+      return;
+    }
+    std::vector<mux::session_info> out =
+        got->devices.value_or(std::vector<loom::cs::def::device_t>{}) | std::views::transform([](const loom::cs::def::device_t& one) {
+          return mux::session_info{
+              .id = one.device_id,
+              .name = one.display_name.value_or(""),
+              .ip = one.last_seen_ip,
+              .last_seen = one.last_seen_ts ? std::optional(std::chrono::sys_time<std::chrono::milliseconds>(
+                                                  std::chrono::milliseconds(*one.last_seen_ts)))
+                                            : std::nullopt};
+        }) |
+        std::ranges::to<std::vector>();
+    sink_(change::sessions_listed{id_, how_.device_id.value_or(""), std::move(out)});
+  });
+}
+
+template <class Sink>
+void account<Sink>::rename_session(std::string device, std::string name) {
+  loop_->spawn([this, device = std::move(device), name = std::move(name)] {
+    if (!api_)
+      return;
+    auto done = perform(*api_, loom::cs::update_device{.device_id = device, .body = {.display_name = name}});
+    if (!done)
+      sink_(change::sessions_refused{id_, "Could not rename the session: " + done.error().said()});
+    this->list_sessions();
+  });
+}
+
+template <class Sink>
+void account<Sink>::sign_out_sessions(std::vector<std::string> devices, std::string password) {
+  loop_->spawn([this, devices = std::move(devices), password = std::move(password)] {
+    if (!api_ || devices.empty())
+      return;
+    using body_t = loom::cs::delete_devices::body_t;
+    // Asked first without: the server says what it wants, and its session.
+    auto first = perform(*api_, loom::cs::delete_devices{.body = body_t{.devices = devices}});
+    if (first) {
+      this->list_sessions();
+      return;
+    }
+    const auto& said = first.error().server;
+    if (!said || said->status != 401 || !said->session) {
+      sink_(change::sessions_refused{id_, "Could not sign out: " + first.error().said()});
+      return;
+    }
+    const std::string given = !password.empty() ? password : how_.password;
+    if (given.empty()) {
+      sink_(change::sessions_refused{id_, "Your password is needed to sign sessions out.", true});
+      return;
+    }
+    body_t::authentication_data_t auth{.type = "m.login.password", .session = *said->session};
+    auth.rest = as_body(password_auth{.identifier = {.user = how_.user_id}, .password = given});
+    auto done = perform(*api_, loom::cs::delete_devices{.body = body_t{.devices = devices, .auth = std::move(auth)}});
+    if (!done) {
+      const bool wrong = done.error().server && done.error().server->status == 401;
+      sink_(change::sessions_refused{id_, wrong ? std::string("The password was not accepted.") : "Could not sign out: " + done.error().said(),
+                                     wrong});
+      return;
+    }
+    this->list_sessions();
   });
 }
 

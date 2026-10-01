@@ -20,11 +20,7 @@ if(NOT COMMAND cme_declare_port AND NOT CMAKE_PROJECT_TOP_LEVEL_INCLUDES)
   set(CMAKE_PROJECT_TOP_LEVEL_INCLUDES ${CMAKE_CURRENT_LIST_DIR}/cmake/get_cme.cmake)
 endif()
 
-# ASM: Boost.Context, which mux links itself (its stackful coroutines),
-# builds its switch in assembly and enables the language in its own
-# directory only -- not enough for the generate step, which stopped CI on
-# "Missing variable is: CMAKE_ASM_COMPILE_OBJECT".
-project(mux VERSION 0.1 LANGUAGES C CXX ASM)
+project(mux VERSION 0.1 LANGUAGES C CXX)
 
 # A release build is optimised across its units (ThinLTO with clang), where
 # the toolchain can: mux's own targets, set at the end -- not the libraries
@@ -208,7 +204,7 @@ if(MUX_UI)
   # skiff and skiff-widgets say the rest of what they are in their own trees.
   cme_declare_port(NAME skiff PROVIDES skiff
     GITHUB_REPOSITORY j4niwzis/skiff
-    GIT_TAG ac1ab12f57c6e82650624527db32f2d6a0511f46)
+    GIT_TAG a497651fe5922c8c5a3902ee2ea0c556ce30c46a)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
     GIT_TAG 21288009077d8d229172ebccdbc781a2c4e0275d)

@@ -1357,8 +1357,8 @@ struct message_bubble : nodes::Stack {
       mentioned shown = with_mentions(lead + who, std::move(spans), in, now);
       body.parts.forwarded.emplace(shown.text, 13.0f, outgoing ? sent_time_colour : accent_colour);
       body.parts.forwarded->setBold(true);
+      // Not elided: an elided line has no room for a pill, and drew nothing.
       body.parts.forwarded->setLinks(std::move(shown.links), accent_colour);
-      body.parts.forwarded->setElided(true);
     }
     // Something done, not said: a line in the middle, on a plate of its own,
     // with no avatar and no name -- as tdesktop's service messages.

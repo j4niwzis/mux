@@ -525,20 +525,21 @@ class olm_machine {
   olm_machine(std::filesystem::path store, std::string user_id, std::string device_id)
       : store_(std::move(store)), user_id_(std::move(user_id)), device_id_(std::move(device_id)) {}
 
-  // The store's key: 32 random bytes in a file of its own, readable by the
-  // user alone -- made the first time.
+  // The store's key: 32 random bytes in a file of its own, the user's alone
+  // and sealed where local data is encrypted (review 4, L5) -- made the
+  // first time.
   [[nodiscard]] std::array<std::uint8_t, 32> pickle_key() const {
     std::array<std::uint8_t, 32> key{};
     const auto path = std::filesystem::path(store_).concat(".key");
     // There: read whole, or an error. A key there that cannot be read --
-    // its permissions, or cut short -- was made anew over the old one, and
-    // the store under it lost for good.
+    // its permissions, cut short, sealed and locked -- was made anew over
+    // the old one, and the store under it lost for good.
     std::error_code ignored;
     if (std::filesystem::exists(path, ignored)) {
-      std::ifstream in(path, std::ios::binary);
-      in.read(reinterpret_cast<char*>(key.data()), key.size());
-      if (!in || in.gcount() != static_cast<std::streamsize>(key.size()) || in.peek() != std::char_traits<char>::eof())
+      const auto opened = mux::vault::the().read_file(path);
+      if (!opened || opened->size() != key.size())
         throw std::runtime_error("the encryption store's key cannot be read: " + path.string());
+      std::ranges::copy(*opened, reinterpret_cast<char*>(key.data()));
       return key;
     }
     // Not there, and a store there: its key lost -- an error, not a new key.
@@ -547,24 +548,9 @@ class olm_machine {
     // The system's own randomness (RAND_bytes), not std::random_device.
     const auto random = mux::vault::vault::random(key.size());
     std::ranges::copy(random, key.begin());
-    std::filesystem::create_directories(path.parent_path(), ignored);
-    private_file(path);
-    {
-      std::ofstream out(path, std::ios::binary | std::ios::trunc);
-      out.write(reinterpret_cast<const char*>(key.data()), key.size());
-      if (!out.flush())
-        throw std::runtime_error("the encryption store's key cannot be written: " + path.string());
-    }
+    if (!mux::vault::the().write_file(path, std::string_view(reinterpret_cast<const char*>(key.data()), key.size()), true))
+      throw std::runtime_error("the encryption store's key cannot be written: " + path.string());
     return key;
-  }
-
-  // A file made empty and the user's alone before anything is written in it:
-  // made, then narrowed, it was readable by others while its secret went in.
-  static void private_file(const std::filesystem::path& path) {
-    std::error_code ignored;
-    { std::ofstream(path, std::ios::binary | std::ios::trunc); }
-    std::filesystem::permissions(path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
-                                 std::filesystem::perm_options::replace, ignored);
   }
 
   void save() {

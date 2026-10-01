@@ -135,7 +135,8 @@ class message_store {
     std::filesystem::create_directories(where.parent_path(), failed);
     {
       std::lock_guard held(file_lock());
-      std::ofstream(where, std::ios::binary | std::ios::app) << mux::vault::the().line_of(line_of(*whole)) << '\n';
+      if (mux::vault::the().may_write(where))
+        std::ofstream(where, std::ios::binary | std::ios::app) << mux::vault::the().line_of(line_of(*whole), where) << '\n';
     }
     prune(mux::config::state_path("deleted"), deleted_budget, where);
   }
@@ -189,7 +190,8 @@ class message_store {
     std::filesystem::create_directories(where.parent_path(), failed);
     {
       std::lock_guard held(file_lock());
-      std::ofstream(where, std::ios::binary | std::ios::app) << mux::vault::the().line_of(line) << '\n';
+      if (mux::vault::the().may_write(where))
+        std::ofstream(where, std::ios::binary | std::ios::app) << mux::vault::the().line_of(line, where) << '\n';
     }
     if (++appended_ % 500 == 1)
       prune(mux::config::state_path("messages"), budget, where);
@@ -250,7 +252,7 @@ class message_store {
       {
         std::ofstream out(fresh, std::ios::binary | std::ios::trunc);
         for (const mux::message* one : order)
-          out << mux::vault::the().line_of(line_of(*one)) << '\n';
+          out << mux::vault::the().line_of(line_of(*one), where) << '\n';
       }
       // Put in its place only where nothing was written to it meanwhile:
       // a line written since the read would be lost.
@@ -274,7 +276,7 @@ class message_store {
       ++lines;
       // Sealed where local data is encrypted: a line that cannot be opened
       // is passed over, as one that cannot be read is.
-      const auto opened = mux::vault::the().open_line(text);
+      const auto opened = mux::vault::the().open_line(text, where);
       if (!opened)
         continue;
       auto parsed = knot::try_read<store_file::message_line>(std::string_view(*opened));

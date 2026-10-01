@@ -53,6 +53,11 @@ int main(int argc, char** argv) {
   // Local data encrypted, where the user turned it on: its header beside the
   // settings, and the vault unlocked before anything is read.
   mux::vault::the().place(config_path.parent_path() / "vault.json");
+  // Its directories the user's alone, whether the vault is on or not.
+  if (!demo)
+    for (const auto& dir : {config_path.parent_path(), mux::config::state_path("").parent_path(),
+                            mux::config::cache_path("").parent_path()})
+      mux::vault::vault::keep_private(dir);
   mux::config::file saved;
   std::optional<std::string> config_error;
   std::optional<std::string> config_note;

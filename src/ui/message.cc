@@ -1356,6 +1356,7 @@ struct message_bubble : nodes::Stack {
         spans.push_back(nodes::Text::Link{lead.size(), lead.size() + who.size(), target});
       mentioned shown = with_mentions(lead + who, std::move(spans), in, now);
       body.parts.forwarded.emplace(shown.text, 13.0f, outgoing ? sent_time_colour : accent_colour);
+      body.parts.forwarded->setBold(true);
       body.parts.forwarded->setLinks(std::move(shown.links), accent_colour);
       body.parts.forwarded->setElided(true);
     }

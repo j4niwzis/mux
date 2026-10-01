@@ -37,7 +37,7 @@ struct page {
   if (authority.empty() || authority.find('@') != std::string_view::npos)
     return std::nullopt;  // no user names: never sent anywhere
   auto site = http::url::parse(authority);
-  if (!site)
+  if (!site || !net::public_host(site->host))
     return std::nullopt;
   std::string target(end == std::string_view::npos ? std::string_view("/") : link.substr(end));
   if (target.starts_with('?'))

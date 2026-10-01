@@ -272,6 +272,8 @@ struct window : scene::Node {
     now.invalidateLayout();
     now.markDamaged();
   }
+  // A message's menu up: the right press was its.
+  [[nodiscard]] bool context_menu_up() { return layer().menu.has_value(); }
   void close_text_menu() {
     auto& now = *parts.now;
     if (now.parts.text_menu_up) {

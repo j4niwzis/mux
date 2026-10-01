@@ -46,6 +46,17 @@ void account<Sink>::fetch_media(std::string source, media_use_t use, int size, b
       return;
     const std::string server(rest.substr(0, slash));
     const std::string media(rest.substr(slash + 1));
+    // As the spec writes them: a server name (a host, maybe a port) and a
+    // media ID of letters, digits, '-' and '_'. Anything else -- "..", '/',
+    // '?' -- put into the path would ask the homeserver, with this
+    // account's token, for another endpoint than media (review 5).
+    const auto plain = [](std::string_view text, std::string_view also) {
+      return !text.empty() && std::ranges::all_of(text, [&](char c) {
+        return std::isalnum(static_cast<unsigned char>(c)) != 0 || also.contains(c);
+      });
+    };
+    if (!plain(server, ".-:[]") || !plain(media, "-_") || server.starts_with('.'))
+      return;
     const std::string query =
         size > 0 ? std::format("?width={0}&height={0}&method={1}", size, crop ? "crop" : "scale") : std::string();
     const auto bases = size > 0 ? std::array<std::string, 2>{"/_matrix/client/v1/media/thumbnail/",

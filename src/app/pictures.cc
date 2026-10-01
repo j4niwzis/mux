@@ -583,7 +583,7 @@ class pictures_part {
       return;
     const int width = 32;
     const int height = picture.width > 0 && picture.height > 0
-                           ? std::clamp(width * picture.height / picture.width, 8, 96)
+                           ? static_cast<int>(std::clamp<std::int64_t>(std::int64_t{width} * picture.height / picture.width, 8, 96))
                            : 24;
     s_->work->run([hash = *picture.blurhash, source = picture.source, width, height,
                    scene = s_->scene]() -> workers::done_t {
@@ -649,6 +649,20 @@ class pictures_part {
 
   // Bytes into Downloads, named as given -- a picture's type added where the
   // name has none, a number where the name is taken -- and opened, or said.
+  // Whether a file's name says it runs as a program where it is opened: on
+  // Windows, macOS or a Linux desktop. Such a file a message brought is
+  // saved and shown where, never opened from here (review 5).
+  [[nodiscard]] static bool runs_when_opened(const std::filesystem::path& name) {
+    static constexpr std::array<std::string_view, 34> kinds{
+        ".exe", ".com", ".bat", ".cmd", ".scr", ".pif", ".msi", ".msp", ".lnk", ".url", ".js",   ".jse",
+        ".vbs", ".vbe", ".wsf", ".wsh", ".ps1", ".psm1", ".hta", ".cpl", ".reg", ".jar", ".desktop", ".sh",
+        ".run", ".appimage", ".command", ".app", ".pkg", ".dmg", ".apk", ".py", ".pl", ".deb"};
+    const std::string extension = name.extension().string() | std::views::transform([](char c) {
+                                    return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                                  }) |
+                                  std::ranges::to<std::string>();
+    return std::ranges::contains(kinds, std::string_view(extension));
+  }
   void save_download(const std::string& bytes, std::string name, bool open) {
     if (const auto type = mux::media::picture_of(bytes); type && !name.contains('.'))
       name += std::format(".{}", mux::media::extension_of(*type));
@@ -665,7 +679,10 @@ class pictures_part {
     for (int n = 1; std::filesystem::exists(where, failed); ++n)
       where = downloads() / std::vformat("{} ({}){}", std::make_format_args(stem, n, extension));
     std::ofstream(where, std::ios::binary) << bytes;
-    if (open)
+    if (open && runs_when_opened(where))
+      s_->root().show_message("Saved, not opened",
+                              std::format("Saved to {}. It was not opened: a file like it runs as a program.", where.string()));
+    else if (open)
       mux::host::open_url("file://" + where.string());
     else
       s_->root().show_message("Saved", std::format("Saved to {}", where.string()));

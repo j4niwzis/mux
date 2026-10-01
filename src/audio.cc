@@ -49,6 +49,12 @@ struct pcm {
   return out;
 }
 
+// The most samples a sound is decoded to: 64 Mi floats, 256 MB -- some
+// eleven minutes in stereo at 48 kHz. A few megabytes of packets that each
+// decode to the longest frame would otherwise be gigabytes (review 5); what
+// is past it is not played.
+inline constexpr std::size_t kMostSamples = std::size_t{64} << 20;
+
 // Opus in Ogg: its head says the channels and the samples to skip at the
 // start; its tags are passed over; the rest are packets decoded at 48 kHz.
 [[nodiscard]] inline std::optional<pcm> decode_opus(const std::vector<std::string>& packets) {
@@ -69,6 +75,8 @@ struct pcm {
                                       static_cast<opus_int32>(packets[i].size()), frame.data(), 5760, 0);
     if (got > 0)
       out.samples.insert(out.samples.end(), frame.begin(), frame.begin() + got * channels);
+    if (out.samples.size() >= kMostSamples)
+      break;
   }
   opus_decoder_destroy(decoder);
   const auto skipped = std::min(out.samples.size(), static_cast<std::size_t>(pre_skip * channels));
@@ -111,10 +119,17 @@ struct memory_source {
   pcm out{.channels = info ? info->channels : 0, .rate = info ? static_cast<int>(info->rate) : 0};
   float** channels = nullptr;
   int section = 0;
-  for (long got = 0; (got = ov_read_float(&file, &channels, 4096, &section)) > 0;)
+  for (long got = 0; out.samples.size() < kMostSamples && (got = ov_read_float(&file, &channels, 4096, &section)) > 0;) {
+    // A chained stream's link may have other channels than the first: read
+    // past the arrays it gives, it was memory that is not theirs (review 5).
+    // Where it changes, what came so far is the sound.
+    const vorbis_info* now = ov_info(&file, section);
+    if (!now || now->channels != out.channels)
+      break;
     for (long i = 0; i < got; ++i)
       for (int c = 0; c < out.channels; ++c)
         out.samples.push_back(channels[c][i]);
+  }
   ov_clear(&file);
   if (out.channels < 1 || out.rate < 1)
     return std::nullopt;

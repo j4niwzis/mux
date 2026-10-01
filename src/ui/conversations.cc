@@ -1434,6 +1434,29 @@ struct conversations_screen : nodes::Stack {
   // scrolled to its top, the older messages are asked for, once for each.
   std::optional<std::string> history_from;
   std::optional<std::string> history_asked;
+  // When the older were asked: an answer that never comes -- the request
+  // failed, and nothing said so -- let go after a while, and asked again.
+  double history_asked_ms = 0.0;
+  static constexpr double kHistoryPatienceMs = 10000.0;
+  // Asked, and the answer not in yet: the page it brings moves where to
+  // page back from on.
+  [[nodiscard]] bool history_pending() const { return history_asked && history_from && *history_asked == *history_from; }
+  // Something to do at the top: the stretch made to slide up, or older to
+  // ask for -- looked at at every frame while the view is up there. The
+  // scroll that brought it there stopped in a frame whose tick had gone by
+  // here already, and nothing ticked this again: it sat at the top, and
+  // nothing more came.
+  [[nodiscard]] bool older_due() const {
+    if (!chosen || !last_model || jumping_to)
+      return false;
+    const float ahead = std::max(300.0f, timeline.bounds().height() * 1.5f);
+    if (timeline.current() > ahead)
+      return false;
+    if (const conversation* one = last_model->find(*chosen))
+      if (this->made_indices(one->timeline).first > 0)
+        return true;
+    return timeline.current() <= 4.0f && history_from.has_value() && !this->history_pending();
+  }
 
   // Frames wanted while a jump goes on: it is carried out a step a frame --
   // made, paged back to, fetched around, aimed at -- and skiff draws the next
@@ -1780,12 +1803,16 @@ struct conversations_screen : nodes::Stack {
   // by here already, and nothing ticked this again -- the arrow stayed.
   [[nodiscard]] bool wantsTick() const {
     return list_in.moving() || panel_ease().t.moving() || this->away() != chat.area.parts.jump.visible() ||
+           this->older_due() || this->history_pending() ||
            jumping_to.has_value() || aiming.has_value() || jump_age != 0 || timeline.moving() ||
            !rooms_waiting.empty() || !rooms_unfound.empty();
   }
   void update(double now_ms) {
     if (list_in.step(now_ms))
       this->place_list();
+    // The older asked long ago and not come: asked again.
+    if (this->history_pending() && now_ms - history_asked_ms > kHistoryPatienceMs)
+      history_asked.reset();
     // Near the last chat made, with more listed: the next few made.
     if (last_model && chats_made < chats_listed && list.visible() &&
         list.atEnd(std::max(300.0f, list.bounds().height() * 1.5f))) {
@@ -1891,6 +1918,7 @@ struct conversations_screen : nodes::Stack {
           this->stop_jump();
         } else {
           history_asked = history_from;
+          history_asked_ms = now_ms;
           actions->load_older(*chosen, *history_from);
         }
       } else if (!history_from && ++jump_tries > 120) {
@@ -1960,7 +1988,9 @@ struct conversations_screen : nodes::Stack {
       this->stop_jump();
       jump_age = 0;
     }
-    if (const bool loading = jump_age > 6; loading != chat.area.parts.loading.visible())
+    // And while the older, asked at the top, are on their way.
+    if (const bool loading = jump_age > 6 || (this->history_pending() && timeline.current() <= 300.0f);
+        loading != chat.area.parts.loading.visible())
       chat.area.parts.loading.setVisible(loading);
     this->find_mentions();
     // What is in the composer: typing while there is text in it.
@@ -2037,6 +2067,7 @@ struct conversations_screen : nodes::Stack {
           this->show_conversation(*last_model);
         } else if (timeline.current() <= 4.0f && from == 0 && history_from && history_asked != history_from) {
           history_asked = history_from;
+          history_asked_ms = now_ms;
           actions->load_older(*chosen, *history_from);
         } else if (made.to_end && one->detached && one->future_from && newer_asked != one->future_from &&
                    timeline.current() >= timeline.extent() - 300.0f) {

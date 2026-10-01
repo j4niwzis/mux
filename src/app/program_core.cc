@@ -819,14 +819,18 @@ mux::vault::vault::kept_files app::sealed_files() const {
 template <class Turn>
 bool app::reseal(Turn turn) {
   auto& vault = mux::vault::the();
-  const auto all = vault.read_all(this->sealed_files());
-  if (!all)
-    return false;
-  turn(vault);
-  if (!vault.write_all(*all))
-    return false;
-  vault.finish();
-  return true;
+  // All of it with every other read and write of the vault waiting: the
+  // network's saves and the store's lines come after, under the new key.
+  return vault.exclusive([&] {
+    const auto all = vault.read_all(this->sealed_files());
+    if (!all)
+      return false;
+    turn(vault);
+    if (!vault.write_all(*all))
+      return false;
+    vault.finish();
+    return true;
+  });
 }
 
 // Why a re-seal did not happen, or was not all done.

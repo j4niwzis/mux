@@ -591,16 +591,27 @@ class olm_machine {
     }
     if (!pre_key)
       return std::nullopt;
+    // Devices with sessions, a thousand at most: a new one past that takes
+    // the place of another's. The server holds this device's one-time keys
+    // and can make up identity keys without end -- each a new device, each
+    // its sessions written to the store.
+    constexpr std::size_t kMostDevices = 1000;
+    if (sessions.empty() && kept_.olm.size() > kMostDevices)
+      if (const auto other = std::ranges::find_if(kept_.olm, [&](const auto& one) { return one.first != their_key; });
+          other != kept_.olm.end())
+        kept_.olm.erase(other);
+    auto& still = kept_.olm[their_key];
     auto identity = vodozemac::types::curve_key_from_base64(their_key);
     auto config = vodozemac::olm::new_session_config_version_1();
     auto made = (*account_)->create_inbound_session(*config, *identity, message);
-    sessions.push_back(std::string(made.session->pickle(key_)));
+    still.push_back(std::string(made.session->pickle(key_)));
+    auto& sessions_now = still;
     // A few per device, the oldest going first: the server holds this
     // device's one-time keys, and could otherwise open sessions without end,
     // each written to the store (review 4, L1).
     constexpr std::size_t kMostSessions = 16;
-    if (sessions.size() > kMostSessions)
-      sessions.erase(sessions.begin(), sessions.end() - kMostSessions);
+    if (sessions_now.size() > kMostSessions)
+      sessions_now.erase(sessions_now.begin(), sessions_now.end() - kMostSessions);
     this->save();
     return std::string(made.plaintext.begin(), made.plaintext.end());
   }

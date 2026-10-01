@@ -174,7 +174,10 @@ struct migrating {};
 // The vault of this run: off, or on with its key once unlocked.
 class vault {
  public:
-  [[nodiscard]] bool on() const { return key_.has_value(); }
+  [[nodiscard]] bool on() const {
+    const std::scoped_lock held(lock_);
+    return key_.has_value();
+  }
   // Where its header is: on disk there, the vault is on, and locked until
   // its passphrase is given.
   void place(std::filesystem::path header_file) { header_file_ = std::move(header_file); }
@@ -182,10 +185,14 @@ class vault {
     std::error_code ignored;
     return !header_file_.empty() && std::filesystem::exists(header_file_, ignored);
   }
-  [[nodiscard]] bool locked() const { return this->exists() && !key_; }
+  [[nodiscard]] bool locked() const {
+    const std::scoped_lock held(lock_);
+    return this->exists() && !key_;
+  }
 
   // Unlocked with its passphrase: false where it is not the one.
   [[nodiscard]] bool unlock(std::string_view passphrase) {
+    const std::scoped_lock held(lock_);
     const auto key = this->key_for(passphrase);
     if (!key)
       return false;
@@ -209,12 +216,14 @@ class vault {
   // new one); or being turned off. What is on disk is then written again
   // (write_all), and finish() ends it.
   void begin_encrypt(std::string_view passphrase) {
+    const std::scoped_lock held(lock_);
     header how = this->fresh_header(passphrase);
     how.resealing = true;
     write_plain(header_file_, knot::to_json_string(how));
     resealing_ = true;
   }
   void begin_change(std::string_view passphrase) {
+    const std::scoped_lock held(lock_);
     const auto before = key_;
     header how = this->fresh_header(passphrase);
     how.resealing = true;
@@ -225,6 +234,7 @@ class vault {
     resealing_ = true;
   }
   void begin_decrypt() {
+    const std::scoped_lock held(lock_);
     auto how = this->header_read();
     if (!how)
       return;
@@ -237,6 +247,7 @@ class vault {
   // The re-seal done: the journal gone -- and, turned off, the header and
   // the key.
   void finish() {
+    const std::scoped_lock held(lock_);
     if (going_off_) {
       this->remove();
     } else if (auto how = this->header_read()) {
@@ -250,7 +261,10 @@ class vault {
     resealing_ = false;
     going_off_ = false;
   }
-  [[nodiscard]] bool resealing() const { return resealing_; }
+  [[nodiscard]] bool resealing() const {
+    const std::scoped_lock held(lock_);
+    return resealing_;
+  }
   // Whether it is the passphrase, the vault left as it is: asked before it
   // is changed or turned off.
   [[nodiscard]] bool matches(std::string_view passphrase) const { return this->key_for(passphrase).has_value(); }
@@ -262,10 +276,14 @@ class vault {
 
   // Turned on with a passphrase: its header written; what is on disk is
   // then sealed by the caller, through write_file.
-  void create(std::string_view passphrase) { write_plain(header_file_, knot::to_json_string(this->fresh_header(passphrase))); }
+  void create(std::string_view passphrase) {
+    const std::scoped_lock held(lock_);
+    write_plain(header_file_, knot::to_json_string(this->fresh_header(passphrase)));
+  }
   // A header for a new passphrase -- its salt, its check -- the key it
   // makes taken as this vault's.
   [[nodiscard]] header fresh_header(std::string_view passphrase) {
+    const std::scoped_lock held(lock_);
     header how;
     const auto salt = detail::random_bytes(16);
     how.salt = detail::to_base64(salt);
@@ -287,6 +305,7 @@ class vault {
   // Turned off: what is on disk opened by the caller first, then the header
   // and the key gone.
   void remove() {
+    const std::scoped_lock held(lock_);
     std::error_code ignored;
     std::filesystem::remove(header_file_, ignored);
     if (key_)
@@ -306,6 +325,7 @@ class vault {
     return this->read_whole(path, true);
   }
   [[nodiscard]] std::optional<std::string> read_whole(const std::filesystem::path& path, bool plain_too) const {
+    const std::scoped_lock held(lock_);
     std::ifstream in(path, std::ios::binary);
     if (!in)
       return std::nullopt;
@@ -327,12 +347,14 @@ class vault {
   // A whole file written, through a temporary renamed over it: sealed where
   // the vault is on. Made the user's alone first where `secret`.
   [[nodiscard]] bool write_file(const std::filesystem::path& path, std::string_view text, bool secret = false) const {
+    const std::scoped_lock held(lock_);
     if (!this->may_write(path))
       return false;
     return write_plain(path, this->encoded(path, text), secret);
   }
   // A whole file's bytes as they go on disk: sealed where the vault is on.
   [[nodiscard]] std::string encoded(const std::filesystem::path& path, std::string_view text) const {
+    const std::scoped_lock held(lock_);
     if (!key_ || going_off_)
       return std::string(text);
     const auto sealed = detail::seal(*key_, mux::bytes::of(text), detail::bound_of(path));
@@ -344,6 +366,7 @@ class vault {
   }
   // A line appended: sealed on its own where the vault is on.
   [[nodiscard]] bool append_line(const std::filesystem::path& path, std::string_view line) const {
+    const std::scoped_lock held(lock_);
     if (!this->may_write(path))
       return false;
     std::error_code ignored;
@@ -354,6 +377,7 @@ class vault {
   }
   // A line for the file at `path`: sealed, bound to it, where the vault is on.
   [[nodiscard]] std::string line_of(std::string_view line, const std::filesystem::path& path) const {
+    const std::scoped_lock held(lock_);
     if (!key_ || going_off_)
       return std::string(line);
     const auto sealed =
@@ -370,6 +394,7 @@ class vault {
   }
   [[nodiscard]] std::optional<std::string> open_one(std::string_view line, const std::filesystem::path& path,
                                                     bool plain_too) const {
+    const std::scoped_lock held(lock_);
     if (!line.starts_with(detail::kLinePrefix)) {
       if (key_ && !plain_too && !resealing_)
         return std::nullopt;
@@ -390,6 +415,7 @@ class vault {
   // (its header gone), where what is there is sealed -- plain text over it
   // would turn encryption at rest off without a word (review 4, M3).
   [[nodiscard]] bool may_write(const std::filesystem::path& path) const {
+    const std::scoped_lock held(lock_);
     if (key_)
       return true;
     std::ifstream in(path, std::ios::binary);
@@ -421,6 +447,7 @@ class vault {
   // All of them read, sealed or not: none where one there cannot be opened
   // -- then nothing is to be changed.
   [[nodiscard]] std::optional<contents> read_all(const kept_files& files) const {
+    const std::scoped_lock held(lock_);
     contents out;
     std::error_code ignored;
     for (const auto& path : files.whole) {
@@ -451,6 +478,7 @@ class vault {
   // All of it written again as the vault is now -- sealed under its key, or
   // plain where it is off -- each file put in its place whole.
   [[nodiscard]] bool write_all(const contents& all) const {
+    const std::scoped_lock held(lock_);
     const bool whole_written = std::ranges::all_of(all.whole, [&](const auto& one) {
       return write_plain(one.first, this->encoded(one.first, one.second), true);
     });
@@ -461,6 +489,14 @@ class vault {
       return write_plain(path, text, true);
     });
     return whole_written && lines_written;
+  }
+
+  // Something done with every read and write of the vault waiting for it:
+  // a re-seal, or a file put together and renamed into place.
+  template <class Body>
+  decltype(auto) exclusive(Body body) const {
+    const std::scoped_lock held(lock_);
+    return body();
   }
 
   // What the system gives for randomness: for keys made elsewhere (the E2EE
@@ -523,6 +559,12 @@ class vault {
 
   std::filesystem::path header_file_;
   std::optional<key_t> key_;
+  // Every read and write of what is kept, and every change of the key, one
+  // at a time, from whatever thread: a re-seal holds it from its first read
+  // to its last write, so that nothing saved meanwhile -- the E2EE store, a
+  // message's line -- is overwritten by the copy read before, or sealed
+  // under a key about to go. Recursive: the members call each other.
+  mutable std::recursive_mutex lock_;
 };
 
 // The one of this run: placed and unlocked at the start, before anything is read.

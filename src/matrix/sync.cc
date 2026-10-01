@@ -785,6 +785,10 @@ void account<Sink>::upload_keys(std::int64_t on_server) {
   if (!crypto_ || !api_)
     return;
   const bool first = !crypto_->device_keys_uploaded();
+  const auto now = std::chrono::steady_clock::now();
+  if (!first && keys_uploaded_at_ && now - *keys_uploaded_at_ < std::chrono::minutes(1))
+    return;
+  keys_uploaded_at_ = now;
   loom::cs::upload_keys ask;
   if (first)
     if (auto signed_keys = crypto_->signed_device_keys())

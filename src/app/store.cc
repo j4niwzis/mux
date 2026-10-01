@@ -136,8 +136,7 @@ class message_store {
     std::filesystem::create_directories(where.parent_path(), failed);
     {
       std::lock_guard held(file_lock());
-      if (mux::vault::the().may_write(where))
-        std::ofstream(where, std::ios::binary | std::ios::app) << mux::vault::the().line_of(line_of(*whole), where) << '\n';
+      (void)mux::vault::the().append_line(where, line_of(*whole));
     }
     prune(mux::config::state_path("deleted"), deleted_budget, where);
   }
@@ -191,8 +190,7 @@ class message_store {
     std::filesystem::create_directories(where.parent_path(), failed);
     {
       std::lock_guard held(file_lock());
-      if (mux::vault::the().may_write(where))
-        std::ofstream(where, std::ios::binary | std::ios::app) << mux::vault::the().line_of(line, where) << '\n';
+      (void)mux::vault::the().append_line(where, line);
     }
     if (++appended_ % 500 == 1)
       prune(mux::config::state_path("messages"), budget, where);
@@ -250,19 +248,24 @@ class message_store {
         order.push_back(&one);
       std::ranges::sort(order, {}, [](const mux::message* one) { return one->at; });
       const auto fresh = std::filesystem::path(where.string() + ".new");
-      {
-        std::ofstream out(fresh, std::ios::binary | std::ios::trunc);
-        for (const mux::message* one : order)
-          out << mux::vault::the().line_of(line_of(*one), where) << '\n';
-      }
-      // Put in its place only where nothing was written to it meanwhile:
-      // a line written since the read would be lost.
+      // Written and put in its place with the vault's other reads and writes
+      // waiting (the file's lock first, as an append takes them): a re-seal
+      // meanwhile would leave it under a key gone.
       std::lock_guard held(file_lock());
-      std::error_code failed;
-      if (std::filesystem::file_size(where, failed) == size_read && !sized && !failed)
-        std::filesystem::rename(fresh, where, failed);
-      else
-        std::filesystem::remove(fresh, failed);
+      mux::vault::the().exclusive([&] {
+        {
+          std::ofstream out(fresh, std::ios::binary | std::ios::trunc);
+          for (const mux::message* one : order)
+            out << mux::vault::the().line_of(line_of(*one), where) << '\n';
+        }
+        // Put in its place only where nothing was written to it meanwhile:
+        // a line written since the read would be lost.
+        std::error_code failed;
+        if (std::filesystem::file_size(where, failed) == size_read && !sized && !failed)
+          std::filesystem::rename(fresh, where, failed);
+        else
+          std::filesystem::remove(fresh, failed);
+      });
     }
     read_lines(deleted_file_of(in), in, all);
     return all;

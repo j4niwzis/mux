@@ -83,15 +83,18 @@ export namespace mux::ui {
 }
 // What someone is called in a chat, before telling them apart: their name
 // there, shown plainly, or their ID's local part.
+[[nodiscard]] inline std::string local_part(std::string_view who) {
+  if (who.starts_with('@'))
+    who.remove_prefix(1);
+  return std::string(who.substr(0, who.find_first_of("@:")));
+}
+[[nodiscard]] inline std::string called(const member& one) {
+  std::string name = shown_plainly(one.name);
+  return name.empty() ? local_part(one.id) : name;
+}
 [[nodiscard]] inline std::string called(const conversation& in, std::string_view who) {
-  for (const member& one : in.members)
-    if (one.id == who)
-      if (std::string name = shown_plainly(one.name); !name.empty())
-        return name;
-  std::string_view local = who;
-  if (local.starts_with('@'))
-    local.remove_prefix(1);
-  return std::string(local.substr(0, local.find_first_of("@:")));
+  const auto found = std::ranges::find(in.members, who, &member::id);
+  return found != in.members.end() ? called(*found) : local_part(who);
 }
 // What a sender is called in a chat -- with their whole ID after it where
 // someone else there is called the same, in any case: a display name, or a
@@ -105,7 +108,7 @@ export namespace mux::ui {
   };
   const std::string mine = folded(name);
   const bool shared = std::ranges::any_of(in.members, [&](const member& one) {
-    return one.id != sender && folded(called(in, one.id)) == mine;
+    return one.id != sender && folded(called(one)) == mine;
   });
   return shared ? std::format("{} ({})", name, sender) : name;
 }

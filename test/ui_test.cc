@@ -103,6 +103,7 @@ struct stub {
   void manage_space(std::string) {}
   void flip_forum(std::string) {}
   void close_forum() {}
+  void manage_forum() {}
   void explore_space(std::string, std::string = {}) {}
   void join_directory_room(std::string, std::string) {}
   void create_room(std::string, std::string, bool, std::string, bool = true) {}

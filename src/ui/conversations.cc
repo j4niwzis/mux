@@ -442,14 +442,19 @@ struct conversations_screen : nodes::Stack {
       struct parts_t {
         icon_button<ask<Actions, &Actions::close_forum>> back;
         nodes::Text name{"", 15.0f, text_colour, true};
+        // Its settings: it is in no bar, to be right-pressed.
+        icon_button<ask<Actions, &Actions::manage_forum>> settings;
       } parts;
-      explicit forum_head_t(Actions* a) : parts{.back = icon_button<ask<Actions, &Actions::close_forum>>(icon::back{}, {a})} {
+      explicit forum_head_t(Actions* a)
+          : parts{.back = icon_button<ask<Actions, &Actions::close_forum>>(icon::back{}, {a}),
+                  .settings = icon_button<ask<Actions, &Actions::manage_forum>>(icon::gear{}, {a})} {
         this->setHorizontal();
         this->setGap(8.0f);
         fState.apply({.fillX = true, .height = 40.0f, .padding = {0.0f, 8.0f, 0.0f, 8.0f}});
         parts.back.apply({.alignSelf = scene::align::kMiddle});
         parts.name.setElided(true);
         parts.name.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+        parts.settings.apply({.alignSelf = scene::align::kMiddle});
       }
     };
     struct rest_t : nodes::Stack {

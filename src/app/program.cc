@@ -304,6 +304,7 @@ struct app : kept_settings {
   void apply(const request::manage_space& one);
   void apply(const request::flip_forum& one);
   void apply(const request::close_forum&);
+  void apply(const request::manage_forum&);
   // The chat Manage is for: a space, where its settings are open -- what is
   // chosen there goes to it -- else the chat chosen.
   std::optional<mux::conversation_id> manage_target;

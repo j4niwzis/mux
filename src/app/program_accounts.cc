@@ -448,6 +448,10 @@ void app::apply(const request::flip_forum& one) {
     managing->show_tab(managing->tab);
 }
 void app::apply(const request::close_forum&) { root().main().close_forum(); }
+void app::apply(const request::manage_forum&) {
+  if (const auto& open = root().main().forum_open)
+    this->apply(request::manage_space{*open});
+}
 void app::manage_chat(const mux::conversation_id& id) {
   const mux::conversation* chat = model->find(id);
   if (!chat)

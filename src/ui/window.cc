@@ -40,7 +40,8 @@ struct window : scene::Node {
 
   // What the window holds, made anew when the theme changes: what is made
   // takes its colours then. Its layers, bottom to top.
-  // A selectable text's menu: Copy, what it selected.
+  // A selectable text's menu: Copy, what it selected; and Copy Link, where
+  // the press was on a link.
   struct text_menu : nodes::Stack {
     struct copy_it {
       Actions* actions;
@@ -49,8 +50,14 @@ struct window : scene::Node {
     };
     struct parts_t {
       widgets::Button<copy_it> copy;
+      std::optional<widgets::Button<copy_it>> copy_link;
     } parts;
-    text_menu(Actions* a, std::string text) : parts{.copy = widgets::Button<copy_it>("Copy", {a, std::move(text)})} {
+    text_menu(Actions* a, std::string text, std::optional<std::string> link)
+        : parts{.copy = widgets::Button<copy_it>("Copy", {a, std::move(text)})} {
+      if (link) {
+        parts.copy_link.emplace("Copy Link", copy_it{a, std::move(*link)});
+        parts.copy_link->apply({.fillX = true, .height = 30.0f});
+      }
       fState.apply({.width = 150.0f, .autoSize = scene::axes::kY, .padding = {6.0f, 6.0f, 6.0f, 6.0f}, .cornerRadius = 10.0f,
                     .background = popup_colour(), .border = scene::Border{band_colour, 1.0f},
                     .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
@@ -307,13 +314,14 @@ struct window : scene::Node {
   [[nodiscard]] settings_dialog<Actions>* settings_up() { return layer().settings.shown(); }
   // A selectable text's menu, where the pointer was pressed, kept in the
   // window; and gone.
-  void show_text_menu(std::string text) {
+  void show_text_menu(std::string text, std::optional<std::string> link = std::nullopt) {
     auto& now = *parts.now;
     const skia::SkRect box = fState.fBounds;
-    now.parts.text_menu_up.emplace(actions, std::move(text));
+    const float tall = link ? 80.0f : 44.0f;
+    now.parts.text_menu_up.emplace(actions, std::move(text), std::move(link));
     now.parts.text_menu_up->apply({.place = scene::anchor::kTopLeft,
                                     .x = std::clamp(now.last_press.x() - box.fLeft, 0.0f, std::max(0.0f, box.width() - 150.0f)),
-                                    .y = std::clamp(now.last_press.y() - box.fTop, 0.0f, std::max(0.0f, box.height() - 44.0f))});
+                                    .y = std::clamp(now.last_press.y() - box.fTop, 0.0f, std::max(0.0f, box.height() - tall))});
     now.invalidateLayout();
     now.markDamaged();
   }

@@ -27,6 +27,14 @@ struct attachment_line {
   friend consteval auto json_schema(knot::type<attachment_line>) { return knot::schema<attachment_line>(); }
 };
 
+// Where a forwarded message is from, as its line keeps it.
+struct forward_line {
+  std::string from;
+  std::string name;
+  std::string link;
+  friend consteval auto json_schema(knot::type<forward_line>) { return knot::schema<forward_line>(); }
+};
+
 // A line of a chat's messages: a message, or only its id and that it is
 // deleted or gone.
 struct message_line {
@@ -46,6 +54,9 @@ struct message_line {
   std::optional<std::string> kind;
   std::optional<attachment_line> attachment;
   std::optional<std::vector<attachment_line>> album;
+  // Forwarded: who from, kept -- read back without it, a forward lost its
+  // "Forwarded from" while its text stayed stripped of it.
+  std::optional<forward_line> forwarded;
   friend consteval auto json_schema(knot::type<message_line>) { return knot::schema<message_line>(); }
 };
 
@@ -287,6 +298,9 @@ class message_store {
         one.event_kind = mux::logic::room_event_of(*o.kind);
       if (o.attachment)
         one.attachment = attachment_of(*o.attachment);
+      if (o.forwarded)
+        one.forwarded = mux::forward_info{.from = std::move(o.forwarded->from), .name = std::move(o.forwarded->name),
+                                          .link = std::move(o.forwarded->link)};
       // A gallery's pictures, each as an attachment is.
       if (o.album)
         for (const auto& each : *o.album)
@@ -341,6 +355,9 @@ class message_store {
         .service = store_file::flag(one.service),
         .kind = one.service ? std::optional<std::string>(mux::logic::word_of(one.event_kind)) : std::nullopt,
         .attachment = one.attachment ? std::optional(line_of(*one.attachment)) : std::nullopt,
+        .forwarded = one.forwarded ? std::optional(store_file::forward_line{one.forwarded->from, one.forwarded->name,
+                                                                              one.forwarded->link})
+                                   : std::nullopt,
     };
     if (!one.album.empty()) {
       line.album.emplace();

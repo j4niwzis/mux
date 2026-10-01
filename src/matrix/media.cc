@@ -115,10 +115,10 @@ void account<Sink>::upload_pack_picture(pack_picture picture, std::string bytes)
 
 template <class Sink>
 void account<Sink>::send_file(std::string room, std::string local, std::string bytes, std::string name, std::string mimetype,
-                 bool image, int width, int height, std::string caption, std::optional<std::string> reply_to) {
+                 bool image, int width, int height, std::string caption, std::optional<std::string> reply_to, std::optional<thread_place> thread) {
   loop_->spawn([this, room = std::move(room), local = std::move(local), bytes = std::move(bytes),
                 name = std::move(name), mimetype = std::move(mimetype), image, width, height,
-                caption = std::move(caption), reply_to = std::move(reply_to)] {
+                caption = std::move(caption), reply_to = std::move(reply_to), thread = std::move(thread)] {
     const conversation_id in{id_, room};
     mux::attachment carried;
     if (image)
@@ -138,7 +138,8 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
                                         .replies_to = reply_to,
                                         .outgoing = true,
                                         .delivery = delivery::sending{},
-                                        .attachment = carried}});
+                                        .attachment = carried,
+                                        .thread = thread ? std::optional<std::string>(thread->root) : std::nullopt}});
     if (!api_) {
       sink_(change::delivery_changed{in, local, delivery::failed{}});
       return;
@@ -172,7 +173,9 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
                                         .caption = caption,
                                         .mimetype = mimetype,
                                         .size = static_cast<std::int64_t>(bytes.size()),
-                                        .reply_to = reply_to};
+                                        .reply_to = reply_to,
+                                        .thread = thread ? std::optional<std::string>(thread->root) : std::nullopt,
+                                        .thread_latest = thread ? std::optional<std::string>(thread->latest) : std::nullopt};
     knot::raw message = image ? as_body(loom::client::picture_message(said, width, height))
                               : as_body(loom::client::file_message(said));
     auto sent = perform(*api_, loom::cs::send_message{.room_id = room,

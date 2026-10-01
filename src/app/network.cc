@@ -198,15 +198,15 @@ struct network {
   // A file sent into a chat by the account it is of.
   void send_file(const mux::conversation_id& in, std::string local, std::string bytes, std::string name,
                  std::string mimetype, bool image, int width, int height, std::string caption,
-                 std::optional<std::string> reply_to = std::nullopt) {
+                 std::optional<std::string> reply_to = std::nullopt, std::optional<mux::thread_place> thread = std::nullopt) {
     loop.post([this, in, local = std::move(local), bytes = std::move(bytes), name = std::move(name),
                mimetype = std::move(mimetype), image, width, height, caption = std::move(caption),
-               reply_to = std::move(reply_to)] {
+               reply_to = std::move(reply_to), thread = std::move(thread)] {
       for (auto& one : accounts)
         splice::visit(
             [&](auto& account) {
               if (account->id() == in.account)
-                account->send_file(in.id, local, bytes, name, mimetype, image, width, height, caption, reply_to);
+                account->send_file(in.id, local, bytes, name, mimetype, image, width, height, caption, reply_to, thread);
             },
             one.account);
     });

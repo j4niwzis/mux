@@ -190,11 +190,23 @@ class outbox_part {
   // Files: chosen with the paperclip, or dropped; the send box closed, or
   // what is in it sent -- the caption with the first.
   void apply(const request::attach_files&) {
-    if (s_->root().main().chosen)
-      mux::host::choose_files();
+    if (!s_->root().main().chosen)
+      return;
+    if (to_send_.empty())
+      files_thread_.reset();
+    mux::host::choose_files();
+  }
+  // The thread panel's paperclip: what is chosen goes into the thread open.
+  void apply(const request::attach_in_thread&) {
+    if (!s_->root().main().chosen)
+      return;
+    if (to_send_.empty())
+      files_thread_ = s_->root().main().thread_open();
+    mux::host::choose_files();
   }
   void apply(const request::close_send_box&) {
     to_send_.clear();
+    files_thread_.reset();
     s_->root().close_send_box();
   }
   void apply(const request::send_files&) {
@@ -203,20 +215,38 @@ class outbox_part {
     if (!chosen || !box || to_send_.empty())
       return;
     std::string caption = box->parts.caption.text();
-    // Sent while answering: the first of them the answer, as Element sends.
-    std::optional<std::string> reply_to =
-        splice::visit(splice::overloaded{[](const compose::reply& r) { return std::optional<std::string>(r.id); },
-                              [](const auto&) { return std::optional<std::string>(); }},
-                   composing_);
+    auto& screen = s_->root().main();
+    // Into a thread: its root and its latest, and what is answered in it.
+    std::optional<mux::thread_place> thread;
+    std::optional<std::string> reply_to;
+    if (files_thread_) {
+      std::string latest = *files_thread_;
+      if (const mux::conversation* chat = s_->model->find(*chosen))
+        if (const auto found = chat->threads.find(*files_thread_); found != chat->threads.end() && !found->second.empty())
+          latest = found->second.back().id;
+      thread = mux::thread_place{*files_thread_, std::move(latest)};
+      if (screen.thread_open() == files_thread_)
+        reply_to = screen.parts.threads.answering;
+    } else {
+      // Sent while answering: the first of them the answer, as Element sends.
+      reply_to = splice::visit(splice::overloaded{[](const compose::reply& r) { return std::optional<std::string>(r.id); },
+                                                  [](const auto&) { return std::optional<std::string>(); }},
+                               composing_);
+    }
     for (file& one : to_send_)
       s_->net->send_file(*chosen, one.local, std::move(one.as.bytes), one.as.name, one.as.mimetype,
                          one.as.picture.has_value(), one.width, one.height, std::exchange(caption, std::string()),
-                         std::exchange(reply_to, std::nullopt));
-    if (splice::visit(splice::overloaded{[](const compose::reply&) { return true; }, [](const auto&) { return false; }}, composing_)) {
+                         std::exchange(reply_to, std::nullopt), thread);
+    if (thread) {
+      if (screen.thread_open() == files_thread_)
+        screen.parts.threads.stop_answering();
+    } else if (splice::visit(splice::overloaded{[](const compose::reply&) { return true; }, [](const auto&) { return false; }},
+                             composing_)) {
       composing_ = compose::plain{};
-      s_->root().main().line.show_context(std::nullopt);
+      screen.line.show_context(std::nullopt);
     }
     to_send_.clear();
+    files_thread_.reset();
     s_->root().close_send_box();
   }
   // A saved GIF sent into the chat, as a picture that moves -- as a file
@@ -273,6 +303,10 @@ class outbox_part {
   void files_given(std::vector<std::string> paths, bool dropped) {
     if (!s_->root().main().chosen)
       return;
+    // Dropped while the thread's field has the keys: into the thread, as
+    // its paperclip sends.
+    if (dropped && to_send_.empty())
+      files_thread_ = s_->root().main().writing_in_thread() ? s_->root().main().thread_open() : std::nullopt;
     for (const std::string& path : paths) {
       std::ifstream in(path, std::ios::binary);
       if (!in)
@@ -298,6 +332,8 @@ class outbox_part {
   }
 
  private:
+  // The thread what is in the send box goes into, where it is one.
+  std::optional<std::string> files_thread_;
   // The field's text sent: as a message, an answer, or an edit -- as what is
   // written says -- and the field and its draft emptied.
   void send(std::string text) {

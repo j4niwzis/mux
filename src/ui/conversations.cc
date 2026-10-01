@@ -1455,6 +1455,12 @@ struct conversations_screen : nodes::Stack {
     parts.threads.open.reset();
     parts.threads.stop_answering();
   }
+  // The thread open, where the panel shows one.
+  [[nodiscard]] std::optional<std::string> thread_open() const {
+    return threads_open ? parts.threads.open : std::nullopt;
+  }
+  // What is written goes into the thread open: its field has the keys.
+  [[nodiscard]] bool writing_in_thread() const { return thread_open() && parts.threads.parts.input.parts.field.focused(); }
   // An answer in the thread open answered there.
   [[nodiscard]] bool answer_in_thread(const std::string& root, std::string id, compose_context said) {
     if (!threads_open || parts.threads.open != root)

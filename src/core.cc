@@ -285,6 +285,12 @@ struct thread_summary {
 
 // A message forwarded, as the client that sent it marked it: who it is from
 // -- their id and name -- and a link to the original.
+// Sent into a thread: its root, and its latest event -- what a client that
+// does not know threads shows it as an answer to.
+struct thread_place {
+  std::string root;
+  std::string latest;
+};
 struct forward_info {
   std::string from;
   std::string name;

@@ -156,7 +156,7 @@ class account {
   // (Matrix 1.10) -- then known by the event the server gives it.
   void send_file(std::string room, std::string local, std::string bytes, std::string name, std::string mimetype,
                  bool image, int width, int height, std::string caption,
-                 std::optional<std::string> reply_to = std::nullopt);
+                 std::optional<std::string> reply_to = std::nullopt, std::optional<thread_place> thread = std::nullopt);
 
   // A message of one's own edited (m.replace): the new text in its place.
   void edit(std::string room, std::string event, std::string text);

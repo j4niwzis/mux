@@ -1691,9 +1691,8 @@ struct threads_panel : nodes::Stack {
     }
   };
   using head_t = page_header<back_it, close_it>;
-  // The chat's own field: files and emoji not sent into a thread yet, so
-  // their buttons hidden.
-  using input_t = message_input<sent, no_action, no_action, send_press>;
+  // The chat's own field, its paperclip and emoji sending into the thread.
+  using input_t = message_input<sent, ask<Actions, &Actions::attach_in_thread>, ask<Actions, &Actions::toggle_thread_emoji>, send_press>;
   using rows_t = nodes::Flow<std::vector<thread_row>>;
   using answers_t = nodes::Flow<std::vector<message_bubble>>;
   struct parts_t {
@@ -1705,14 +1704,12 @@ struct threads_panel : nodes::Stack {
     context_bar<stop_answer> replying;
     input_t input;
   } parts;
-  explicit threads_panel(Actions* a) : actions(a), parts{.head = head_t("Threads", {a}, {a}, false, true), .replying = context_bar<stop_answer>({this}), .input = input_t("Reply in thread…", {this}, {}, {}, {this})} {
+  explicit threads_panel(Actions* a) : actions(a), parts{.head = head_t("Threads", {a}, {a}, false, true), .replying = context_bar<stop_answer>({this}), .input = input_t("Reply in thread…", {this}, {a}, {a}, {this})} {
     fState.apply({.fillY = true, .background = sidebar_colour});
     parts.divider.apply({.fillX = true, .height = 1.0f});
     parts.empty.apply({.margin = {16.0f, 16.0f, 0.0f, 16.0f}});
     parts.replying.apply({.background = sidebar_colour});
     parts.input.apply({.background = sidebar_colour});
-    parts.input.parts.attach.setVisible(false);
-    parts.input.parts.emoji.setVisible(false);
     for (auto* list : std::initializer_list<scene::Node*>{&parts.list, &parts.answers})
       list->apply({.fillX = true, .grow = scene::axes::kY});
     std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 4.0f, 4.0f, 4.0f}});

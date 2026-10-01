@@ -240,7 +240,7 @@ class account {
   void join(std::string, std::vector<std::string>) {}
   // Files over XMPP (HTTP upload, XEP-0363) are not sent yet.
   void send_file(std::string, std::string, std::string, std::string, std::string, bool, int, int, std::string,
-                 std::optional<std::string> = std::nullopt) {}
+                 std::optional<std::string> = std::nullopt, std::optional<thread_place> = std::nullopt) {}
 
   void mark_read(std::string to, std::string id) {
     loop_->spawn([this, to = std::move(to), id = std::move(id)] {

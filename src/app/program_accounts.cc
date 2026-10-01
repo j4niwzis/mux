@@ -43,12 +43,26 @@ void app::apply(const request::toggle_emoji&) {
     root().close_emoji();
     return;
   }
+  emoji_into_ = request::writing::chat{};
   const auto at = root().main().line.parts.input.parts.emoji.bounds();
+  this->open_emoji_at(at.fRight, at.fTop);
+}
+// The thread's: the same panel, over its button, writing in its field.
+void app::apply(const request::toggle_thread_emoji&) {
+  if (root().emoji_open()) {
+    root().close_emoji();
+    return;
+  }
+  emoji_into_ = request::writing::thread{};
+  const auto at = root().main().parts.threads.parts.input.parts.emoji.bounds();
+  this->open_emoji_at(at.fRight, at.fTop);
+}
+void app::open_emoji_at(float right, float top) {
   const auto chosen = this->managed();
   const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
   mux::ui::chat_emotes() = chat ? chat->emotes : std::vector<mux::emote>{};
   mux::ui::chat_stickers() = chat ? chat->stickers : std::vector<mux::emote>{};
-  root().open_emoji(at.fRight, at.fTop - 6.0f);
+  root().open_emoji(right, top - 6.0f);
 }
 void app::apply(const request::close_emoji&) { root().close_emoji(); }
 
@@ -569,14 +583,19 @@ void app::apply(const request::room_act& one) {
 // An emoji picked: into what is written, where the caret is; the input keeps
 // the keys.
 void app::apply(const request::insert_emoji& one) {
-  auto& field = root().main().line.parts.input.parts.field;
+  auto& screen = root().main();
   // A custom emoji: its picture in the line, as the message will show it,
   // sent as its shortcode.
-  if (one.picture.empty())
-    field.insertText(one.text);
-  else
-    field.insertAtom("\u2003", one.picture, one.text, true);
-  scene.focus(root().main().line.field);
+  const auto put = [&](auto& field) {
+    if (one.picture.empty())
+      field.insertText(one.text);
+    else
+      field.insertAtom("\u2003", one.picture, one.text, true);
+    scene.focus(field);
+  };
+  splice::visit(splice::overloaded{[&](request::writing::chat) { put(screen.line.field); },
+                                   [&](request::writing::thread) { put(screen.parts.threads.parts.input.parts.field); }},
+                emoji_into_);
 }
 
 void app::apply(const request::not_implemented& one) { root().show_notice(one.what); }

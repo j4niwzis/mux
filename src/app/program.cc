@@ -324,6 +324,10 @@ struct app : kept_settings {
   void notify_invite(const mux::conversation_id& in, const mux::invite_info& invite, const std::string& name);
   std::set<mux::conversation_id> invites_told;
   void apply(const request::toggle_emoji&);
+  void apply(const request::toggle_thread_emoji&);
+  void open_emoji_at(float right, float top);
+  // Which field the emoji picker writes in, as its button opened it.
+  request::writing_t emoji_into_ = request::writing::chat{};
   void apply(const request::close_emoji&);
   void apply(const request::insert_emoji& one);
   void apply(const request::open_manage&);

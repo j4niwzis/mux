@@ -53,6 +53,7 @@ struct stub {
   void sign_out_sessions(std::vector<std::string>, std::string) {}
   void rename_session(std::string, std::string) {}
   void refresh_sessions() {}
+  void decline_room_card() {}
   void menu_save() {}
   void menu_react(std::string) {}
   void react(std::string, std::string) {}

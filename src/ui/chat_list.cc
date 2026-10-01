@@ -140,6 +140,7 @@ struct conversation_row : nodes::Stack {
     std::int64_t unread = 0;
     bool chosen = false, muted = false;
     std::string draft;
+    std::optional<invite_info> invite;
     friend bool operator==(const view&, const view&) = default;
   };
   // What it says of the chat -- its newest and its count -- as the chat
@@ -148,7 +149,7 @@ struct conversation_row : nodes::Stack {
                                     const room_event_filter& events = {}) {
     const message* last = newest(one, events);
     return {display_name(one), last ? std::optional<message>(*last) : std::nullopt, one.unread_here(events), is_chosen,
-            is_muted, std::move(draft)};
+            is_muted, std::move(draft), one.invite};
   }
   view shown;
 
@@ -205,6 +206,12 @@ struct conversation_row : nodes::Stack {
         preview.setText(std::move(shown.text));
         preview.setLinks(std::move(shown.links), accent_colour);
       }
+    }
+    // An invite: who asked, in the accent, where a message would be.
+    if (one.invite) {
+      said_by("Invite", accent_colour);
+      preview.setText(std::format("from {}", one.invite->from_name.empty() ? one.invite->from : one.invite->from_name));
+      preview.setLinks({}, accent_colour);
     }
     // A draft left in it: said instead, as tdesktop says it, in red.
     if (!shown.draft.empty() && !is_chosen) {

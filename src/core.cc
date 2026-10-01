@@ -579,6 +579,14 @@ struct mention {
   friend bool operator==(const mention&, const mention&) = default;
 };
 
+// An invite to a room not joined yet: who sent it, by their ID and their
+// name, and whether it is to a direct chat.
+struct invite_info {
+  std::string from;
+  std::string from_name;
+  bool direct = false;
+  friend bool operator==(const invite_info&, const invite_info&) = default;
+};
 struct conversation {
   conversation_id id;
   conversation_kind_t kind = conversation_kind::direct{};
@@ -683,6 +691,8 @@ struct conversation {
   // Counted up whenever its members change: what shows them is made again
   // only then -- a big room has thousands.
   std::uint64_t members_revision = 0;
+  // Invited to, not joined: who asked. Joined, or declined, it goes.
+  std::optional<invite_info> invite;
 };
 
 // Its newest message, as the chat list shows it and sorts by: the last of
@@ -787,6 +797,8 @@ struct room_preview {
   std::optional<std::string> avatar;
   std::optional<std::int64_t> members;
   std::string note;
+  // An invite to it: Accept and Decline, in place of Join.
+  bool invite = false;
   friend bool operator==(const room_preview&, const room_preview&) = default;
 };
 
@@ -834,6 +846,8 @@ struct conversation_updated {
   power_needs needs;
   std::string version;
   std::vector<std::string> other_aliases;
+  // Invited to, not joined: who asked.
+  std::optional<invite_info> invite;
 };
 
 // Receipts: who has read up to which message, as the server says.
@@ -1269,6 +1283,7 @@ class model {
     kept.needs = one.needs;
     kept.version = one.version;
     kept.other_aliases = one.other_aliases;
+    kept.invite = one.invite;
   }
   void on(const change::conversation_removed& one) { of(one.id.account).conversations.erase(one.id.id); }
   void on(const change::presence_changed& one) { of(one.account).presences[one.contact] = one.now; }

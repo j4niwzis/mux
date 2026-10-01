@@ -299,6 +299,10 @@ struct room_card : nodes::Stack {
     Actions* actions = nullptr;
     void operator()() const { actions->join_room_card(); }
   };
+  struct decline_it {
+    Actions* actions = nullptr;
+    void operator()() const { actions->decline_room_card(); }
+  };
   using close_button = icon_button<ask<Actions, &Actions::close_room_card>>;
   struct top_bar : nodes::Stack {
     struct parts_t {
@@ -344,6 +348,8 @@ struct room_card : nodes::Stack {
     nodes::Text about;
     id_line id;
     action_tile<join_it> join;
+    // An invite's: let go of.
+    std::optional<action_tile<decline_it>> decline;
   } parts;
 
   room_card(Actions* a, const std::string& asked, const room_preview& known)
@@ -352,8 +358,13 @@ struct room_card : nodes::Stack {
               .about = nodes::Text(!known.topic.empty() ? known.topic : !known.note.empty() ? known.note : std::string("No description"), 14.0f,
                                    known.topic.empty() ? dim_colour : text_colour),
               .id = id_line(known.id.empty() ? asked : known.id, ""),
-              .join = action_tile<join_it>("Join", icon::plus{}, {a})} {
+              .join = action_tile<join_it>(known.invite ? "Accept" : "Join", icon::plus{}, {a})} {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}});
+    if (known.invite) {
+      parts.top.parts.title.setText("Invite");
+      parts.decline.emplace("Decline", icon::close{}, decline_it{a});
+      parts.decline->apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
+    }
     parts.about.setWrapped(true);
     parts.about.apply({.fillX = true, .margin = {2.0f, 22.0f, 8.0f, 22.0f}});
     parts.join.apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});

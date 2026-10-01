@@ -182,6 +182,15 @@ void app::apply(const request::go_to_mark& one) {
 }
 void app::apply(const request::close_marks&) { root().close_marks(); }
 
+// The invite of the card declined: the room left, the card closed.
+void app::apply(const request::decline_room_card&) {
+  if (!previewing)
+    return;
+  const auto looked = *std::exchange(previewing, std::nullopt);
+  net->leave(mux::conversation_id{looked.step.by, looked.step.room});
+  root().close_room_card();
+}
+
 void app::apply(const request::close_room_card&) {
   previewing.reset();
   root().close_room_card();

@@ -2257,9 +2257,10 @@ struct conversations_screen : nodes::Stack {
           }
           one = &forum_shown.insert_or_assign(one->id, std::move(made)).first->second;
         }
+    // Invites first, as Element lists them; then by their newest.
     std::ranges::sort(chats, std::ranges::greater{}, [&](const conversation* one) {
       const message* last = newest(*one, events_of(one));
-      return last ? last->at : std::chrono::sys_time<std::chrono::milliseconds>{};
+      return std::pair{one->invite.has_value(), last ? last->at : std::chrono::sys_time<std::chrono::milliseconds>{}};
     });
     // The rows, as a function of the chats: those whose chat shows the same
     // are kept as they are.

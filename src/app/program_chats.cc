@@ -28,6 +28,19 @@ void app::apply(const request::choose& one) {
   // Its account told which room is read: a sliding sync follows it.
   if (!shared.demo())
     net->follow_room(one.which.account, one.which.id);
+  // An invite: its card -- who asked, Accept, Decline -- not a chat.
+  if (const mux::conversation* chat = model->find(one.which); chat && chat->invite) {
+    const std::string who = chat->invite->from_name.empty() ? chat->invite->from : chat->invite->from_name;
+    previewing = room_looked_up{mux::logic::link_step::join{one.which.account, one.which.id, {}}, std::nullopt};
+    root().open_room_card(one.which.id, mux::room_preview{.id = one.which.id,
+                                                          .name = mux::ui::display_name(*chat),
+                                                          .alias = chat->alias.value_or(""),
+                                                          .topic = chat->topic.value_or(""),
+                                                          .avatar = chat->avatar,
+                                                          .note = std::format("Invited by {}", who),
+                                                          .invite = true});
+    return;
+  }
   // A space shown as a forum: its rooms listed in it, as tdesktop opens a
   // forum's topics -- no chat opened.
   if (const mux::conversation* chat = model->find(one.which); chat && chat->space && forums.contains(one.which)) {

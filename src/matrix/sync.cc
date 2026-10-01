@@ -468,9 +468,51 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
           sink_(change::receipts_changed{in, std::move(read_by), std::move(read_at)});
       }
     }
+  // Invites: the room as its stripped state tells of it -- its name,
+  // picture, topic, address, whether it is a space -- and who asked, by the
+  // user's own m.room.member: its sender, and whether it is a direct chat.
   if (rooms.invite)
-    for (const auto& [room, part] : *rooms.invite)
-      sink_(change::conversation_updated{.id = {id_, room}, .kind = conversation_kind::group{}, .name = room});
+    for (const auto& [room, part] : *rooms.invite) {
+      change::conversation_updated made{.id = {id_, room}, .kind = conversation_kind::group{}, .name = room};
+      mux::invite_info invite;
+      std::map<std::string, std::string> names;
+      if (const auto kept = state_.invited.find(room); kept != state_.invited.end())
+        for (const auto& [key, one] : kept->second)
+          splice::visit(
+              splice::overloaded{
+                  [&](const loom::ev::m_room_name_content_t& c) {
+                    if (!c.name.empty())
+                      made.name = c.name;
+                  },
+                  [&](const loom::ev::m_room_avatar_content_t& c) { made.avatar = c.url; },
+                  [&](const loom::ev::m_room_topic_content_t& c) {
+                    if (!c.topic.empty())
+                      made.topic = c.topic;
+                  },
+                  [&](const loom::ev::m_room_canonical_alias_content_t& c) { made.alias = c.alias; },
+                  [&](const loom::ev::m_room_create_content_t& c) {
+                    made.space = splice::visit([](auto of) { return of.is_space; }, room_type_of(c.type));
+                  },
+                  [&](const loom::ev::m_room_member_content_t& c) {
+                    if (c.displayname)
+                      names.insert_or_assign(key.second, *c.displayname);
+                    if (key.second == id_.address) {
+                      invite.from = one.sender;
+                      invite.direct = c.is_direct.value_or(false);
+                    }
+                  },
+                  [](const auto&) {}},
+              one.content.data());
+      if (const auto found = names.find(invite.from); found != names.end())
+        invite.from_name = found->second;
+      if (invite.direct) {
+        made.kind = conversation_kind::direct{};
+        if (made.name == room)
+          made.name = invite.from_name.empty() ? invite.from : invite.from_name;
+      }
+      made.invite = std::move(invite);
+      sink_(std::move(made));
+    }
   if (rooms.leave)
     for (const auto& [room, part] : *rooms.leave)
       sink_(change::conversation_removed{{id_, room}});

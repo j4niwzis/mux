@@ -68,6 +68,11 @@ void app::woken() {
                                  pictures.profile_avatars.insert_or_assign(found.user, found.avatar);
                                  pictures.ask();
                                },
+                               // An invite come: said once a run.
+                               [&](const mux::change::conversation_updated& updated) {
+                                 if (updated.invite && invites_told.insert(updated.id).second)
+                                   this->notify_invite(updated.id, *updated.invite, updated.name);
+                               },
                                // The account's sessions, for its page where it is open.
                                [&](const mux::change::sessions_listed& listed) {
                                  if (auto* up = root().open_panel())
@@ -235,6 +240,29 @@ void app::notify_of(const mux::message& said, bool mentions_me) {
                                toasts_due.push_back({said.in, said.in.id, title, text});
                              }},
              mux::config::notify_backend_of(notifications.backend));
+}
+
+// An invite, as a notification: who asked, and to what -- by the backend
+// chosen, with the chime, as the settings say for its account.
+void app::notify_invite(const mux::conversation_id& in, const mux::invite_info& invite, const std::string& name) {
+  const auto decision = this->notify_for(in, true);
+  if (decision.sound)
+    mux::audio::play_chime(mux::audio::chime());
+  if (!decision.popup)
+    return;
+  const std::string who = invite.from_name.empty() ? invite.from : invite.from_name;
+  const std::string title = invite.direct ? std::format("{} invites you to chat", who) : std::format("Invite to {}", name);
+  const std::string text = invite.direct ? std::string("A direct chat") : std::format("from {}", who);
+  splice::visit(splice::overloaded{[&](mux::config::notify_backend::native) {
+                                     std::thread([title, text] {
+                                       if (!mux::dbus::notify(title, text))
+                                         std::println(std::cerr, "[notify] no desktop notification service; {}: {}", title, text);
+                                     }).detach();
+                                   },
+                                   [&](mux::config::notify_backend::built_in) {
+                                     toasts_due.push_back({in, in.id, title, text});
+                                   }},
+                mux::config::notify_backend_of(notifications.backend));
 }
 
 void app::save_marks() {

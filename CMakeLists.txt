@@ -297,6 +297,7 @@ if(MUX_UI)
     $<${mux_erased}:src/app/walks_window.cc>
     $<${mux_erased}:src/app/walks_chats.cc>
     $<${mux_erased}:src/app/walks_side.cc>
+    $<${mux_erased}:src/app/walks_column.cc>
     $<${mux_erased}:src/app/walks_bubbles.cc>
     $<${mux_erased}:src/app/walks_composer.cc>
     $<${mux_erased}:src/app/walks_info.cc>
@@ -311,7 +312,7 @@ if(MUX_UI)
   # optimizing them (walks_chats.cc: 4.4 of its 6.5 minutes in the
   # backend). A release build has none of these units.
   set(MUX_WALKS_OPTIMIZE "-O1" CACHE STRING "Optimization for the erased walks' units, outside a release build")
-  set_source_files_properties(src/app/walks_window.cc src/app/walks_chats.cc src/app/walks_side.cc src/app/walks_bubbles.cc
+  set_source_files_properties(src/app/walks_window.cc src/app/walks_chats.cc src/app/walks_side.cc src/app/walks_column.cc src/app/walks_bubbles.cc
     src/app/walks_composer.cc src/app/walks_info.cc src/app/walks_accounts.cc src/app/walks_drawer.cc
     src/app/walks_settings.cc src/app/walks_manage.cc src/app/walks_boxes.cc src/app/walks_popups.cc
     PROPERTIES COMPILE_OPTIONS "${MUX_WALKS_OPTIMIZE}")

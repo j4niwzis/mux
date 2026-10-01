@@ -347,6 +347,11 @@ class olm_machine {
       this->save();
   }
   [[nodiscard]] const std::optional<std::string>& to_device_since() const { return kept_.to_device_since; }
+  // What was read since the last save -- the replay indices -- saved.
+  void flush() {
+    if (unsaved_)
+      this->save();
+  }
   void went_on_to(std::string since) {
     kept_.to_device_since = std::move(since);
     this->save();
@@ -519,8 +524,11 @@ class olm_machine {
           read->content.data());
       if (!message_like)
         return std::nullopt;
-      seen.emplace(clear.message_index, event_id);
-      this->save();
+      // Kept with the next save, not one of its own: a whole store written
+      // for each message read was a cost any busy room could drive. Saved
+      // at the next sync at the latest (flush).
+      if (seen.emplace(clear.message_index, event_id).second)
+        unsaved_ = true;
       return decrypted{std::move(*read), origin->second.cross_signed.value_or(false)};
     } catch (const rust::Error&) {
       return std::nullopt;
@@ -559,7 +567,9 @@ class olm_machine {
     return key;
   }
 
+  bool unsaved_ = false;
   void save() {
+    unsaved_ = false;
     kept_.account = std::string((*account_)->pickle(key_));
     std::error_code ignored;
     std::filesystem::create_directories(store_.parent_path(), ignored);

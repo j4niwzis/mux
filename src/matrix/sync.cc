@@ -832,6 +832,8 @@ void account<Sink>::crypto_answer(const loom::cs::sliding_sync::response_t& got)
 }
 template <class Sink>
 void account<Sink>::crypto_answer_now(const loom::cs::sliding_sync::response_t& got) {
+  // What the last answer's messages left unsaved, saved first.
+  crypto_->flush();
   const auto& extensions = *got.extensions;
   if (extensions.to_device) {
     if (extensions.to_device->events)

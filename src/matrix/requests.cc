@@ -34,6 +34,7 @@ import loom.cs.inviting;
 import loom.cs.sync;
 import loom.cs.typing;
 import loom.cs.wellknown;
+import loom.cs.profile;
 import mux.config;
 import mux.core;
 import mux.http;
@@ -749,6 +750,20 @@ void account<Sink>::forward(std::string from, std::string event, std::string to)
                                                       .body = as_body(*content)});
     if (!done)
       log(id_, "could not forward {} to {}: {}", event, to, done.error().said());
+  });
+}
+
+template <class Sink>
+void account<Sink>::fetch_profile(std::string user) {
+  loop_->spawn([this, user = std::move(user)] {
+    if (!api_)
+      return;
+    auto got = perform(*api_, loom::cs::get_user_profile{.user_id = user});
+    if (!got) {
+      log(id_, "no profile of {}: {}", user, got.error().said());
+      return;
+    }
+    sink_(change::profile_found{id_, user, got->displayname, got->avatar_url});
   });
 }
 

@@ -63,6 +63,11 @@ void app::woken() {
                                // Something the server refused: a notice saying why.
                                [&](const mux::change::refused& said) { root().show_message("Not done", said.what); },
                                // People found: in Start chat, while it asks for them.
+                               // A person's profile: their picture asked for, where they have one.
+                               [&](const mux::change::profile_found& found) {
+                                 pictures.profile_avatars.insert_or_assign(found.user, found.avatar);
+                                 pictures.ask();
+                               },
                                [&](const mux::change::people_found& found) {
                                  root().show_found_people(found.people, found.query);
                                },

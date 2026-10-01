@@ -1031,6 +1031,14 @@ struct people_found {
   std::string query;
   std::vector<found_person> people;
 };
+// A person's profile, as their server gives it: their name and their
+// picture -- one met outside the room, a forward's sender.
+struct profile_found {
+  account_id by;
+  std::string user;
+  std::optional<std::string> name;
+  std::optional<std::string> avatar;
+};
 // A server's public directory, searched: what it listed.
 struct directory_listed {
   account_id by;
@@ -1075,7 +1083,7 @@ using change_t = splice::variant<change::connection_changed, change::refused, ch
                               change::room_created, change::preview_loaded, change::devtools_text,
                               change::state_listed, change::room_previewed, change::mentioned,
                               change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine,
-                              change::directory_listed, change::people_found, change::packs_listed, change::pack_saved, change::threads_listed,
+                              change::directory_listed, change::people_found, change::profile_found, change::packs_listed, change::pack_saved, change::threads_listed,
                               change::pack_picture_uploaded>;
 
 // The model: every account, and every change applied to it.
@@ -1394,6 +1402,7 @@ class model {
   }
   void on(const change::directory_listed&) {}  // the window's: the Explore dialog
   void on(const change::people_found&) {}  // the window's: the Start chat dialog
+  void on(const change::profile_found&) {}  // the window's: a pill's picture
   void on(const change::refused&) {}  // the window's: a notice
   void on(const change::packs_listed&) {}  // the window's: the packs' dialog
   void on(const change::pack_saved&) {}

@@ -877,12 +877,16 @@ struct message_pictures {
 // as a mention's -- each a node of its own: the pill pressed opens them,
 // the words the original.
 struct forward_line : nodes::Stack {
+  // Whose picture its pill waits for, where it has none yet: drawn again
+  // when it comes.
+  std::string from;
+  bool had = true;
   struct parts_t {
     nodes::Text label;
     nodes::BasicText<message_pictures> who;
   } parts;
-  forward_line(std::string who, std::vector<nodes::Text::Link> links, skia::SkColor colour)
-      : parts{.label = nodes::Text("Forwarded from", 13.0f, colour, true),
+  forward_line(std::string who, std::vector<nodes::Text::Link> links, skia::SkColor colour, std::string sender = {})
+      : from(std::move(sender)), parts{.label = nodes::Text("Forwarded from", 13.0f, colour, true),
               .who = nodes::BasicText<message_pictures>(std::move(who), 13.0f, colour)} {
     this->setHorizontal();
     this->setGap(4.0f);
@@ -891,6 +895,20 @@ struct forward_line : nodes::Stack {
     parts.who.setBold(true);
     parts.who.setLinks(std::move(links), accent_colour);
     parts.who.apply({.alignSelf = scene::align::kMiddle});
+    had = from.empty() || avatar_images().has(from);
+    if (!had)
+      avatar_images().waiting.wait(fState.fId);
+  }
+  // Woken as a picture comes: the pill drawn again where it is theirs.
+  void update(double) {
+    if (had)
+      return;
+    if (avatar_images().has(from)) {
+      had = true;
+      parts.who.markDamaged();
+    } else {
+      avatar_images().waiting.wait(fState.fId);
+    }
   }
 };
 
@@ -1374,7 +1392,8 @@ struct message_bubble : nodes::Stack {
       if (said.forwarded->from.starts_with('@') && !who.empty())
         spans.push_back(nodes::Text::Link{0, who.size(), "https://matrix.to/#/" + said.forwarded->from});
       mentioned shown = with_mentions(who, std::move(spans), in, now);
-      body.parts.forwarded.emplace(std::move(shown.text), std::move(shown.links), outgoing ? sent_time_colour : accent_colour);
+      body.parts.forwarded.emplace(std::move(shown.text), std::move(shown.links), outgoing ? sent_time_colour : accent_colour,
+                                   said.forwarded->from.starts_with('@') ? said.forwarded->from : std::string());
     }
     // Something done, not said: a line in the middle, on a plate of its own,
     // with no avatar and no name -- as tdesktop's service messages.

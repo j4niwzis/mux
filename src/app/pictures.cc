@@ -156,6 +156,19 @@ class pictures_part {
           for (const member& each : one.members)
             if (senders.contains(each.id))
               want(id, each.avatar, each.id);
+          // Those the forwards made are from: a member's picture as theirs,
+          // anyone else's profile asked of their server, once, and its
+          // picture then.
+          for (std::size_t i = first; i < last && i < one.timeline.size(); ++i)
+            if (const auto& forwarded = one.timeline[i].forwarded; forwarded && forwarded->from.starts_with('@')) {
+              const std::string& from = forwarded->from;
+              if (const auto member = std::ranges::find(one.members, from, &member::id); member != one.members.end() && member->avatar)
+                want(id, member->avatar, from);
+              else if (const auto known = profile_avatars.find(from); known != profile_avatars.end())
+                want(id, known->second, from);
+              else if (profiles_asked.insert(from).second)
+                s_->net->fetch_profile(id, from);
+            }
           // The reactions that are pictures -- custom emoji, mxc:// URLs --
           // on the bubbles made: fetched as avatars are, keyed by the URL.
           for (std::size_t i = first; i < last && i < one.timeline.size(); ++i)
@@ -653,6 +666,10 @@ public:
   // Rooms asked of for a message's pill: what their server says goes to the
   // pill, not a card.
   std::set<std::string> pill_rooms;
+  // People met outside the rooms -- a forward's sender: their pictures, by
+  // their ID, as their servers gave them; and whose were asked, once.
+  std::map<std::string, std::optional<std::string>> profile_avatars;
+  std::set<std::string> profiles_asked;
 
 private:
   std::size_t written_ = 0;

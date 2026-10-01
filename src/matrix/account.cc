@@ -117,6 +117,9 @@ class account {
   void catch_up(std::string room, std::string from, std::string until);
   // A room not joined, as its server tells of it, before it is joined.
   void preview_room(std::string room, std::vector<std::string> via);
+  // A person's profile -- their name and picture -- from their server:
+  // profile_found, for one met outside the rooms, a forward's sender.
+  void fetch_profile(std::string user);
   // The developer tools, as Element's: an event as the server has it; the
   // room's state, every event of it; and an event of any type sent.
   void view_source(std::string room, std::string event);

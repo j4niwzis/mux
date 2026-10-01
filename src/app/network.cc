@@ -506,6 +506,18 @@ struct network {
             one.account);
     });
   }
+  // A person's profile, asked of the Matrix account named.
+  void fetch_profile(const mux::account_id& by, std::string user) {
+    loop.post([this, by, user = std::move(user)] {
+      for (auto& one : accounts)
+        splice::visit(splice::overloaded{[&](std::unique_ptr<matrix_account>& account) {
+                                           if (account->id() == by)
+                                             account->fetch_profile(user);
+                                         },
+                                         [](auto&) {}},
+                      one.account);
+    });
+  }
   // A room joined by the account named, through the servers named.
   void join(const mux::account_id& by, std::string room, std::vector<std::string> via) {
     loop.post([this, by, room = std::move(room), via = std::move(via)] {

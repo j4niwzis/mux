@@ -149,7 +149,9 @@ inline bool show_panels(const config::bubble_look& look) {
       .frosted = splice::visit(splice::overloaded{[](config::bubbles::frosted) { return true; }, [](const auto&) { return false; }}, look.kind),
       .edge = splice::visit(splice::overloaded{[](config::bubbles::glass) { return true; }, [](const auto&) { return false; }}, look.kind),
       .panels = {sidebar_colour},
-      .tints = {chosen_colour}};
+      // Tinted at the opacity, never left out as a panel fill again: what is
+      // chosen or hovered, a tab lit, a menu.
+      .tints = {chosen_colour, tile_colour, popup_colour()}};
   if (!kinded)
     next = {};
   if (next == scene::detail::panelLook())

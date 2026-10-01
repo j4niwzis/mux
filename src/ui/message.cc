@@ -516,6 +516,8 @@ struct reaction_chip : nodes::Stack {
   std::size_t count = 0;
   bool mine = false;
   struct parts_t {
+    // Frosted, where the bubbles are: what is behind, blurred.
+    std::optional<frost_pane> frost;
     std::optional<nodes::Image<from_avatars>> picture;
     nodes::Text label;
     // Who reacted, as Telegram shows them: their avatars in place of the
@@ -550,8 +552,13 @@ struct reaction_chip : nodes::Stack {
                   .background = at_opacity(own ? accent_colour : tile_colour,
                                            element_opacity_of(bubble_look_now(), &config::element_opacity::reactions))});
     // Frosted, where the bubbles are, as its own blur says.
-    if (frosts(bubble_look_now()))
-      fState.setBackdrop(true, element_blur_of(bubble_look_now(), &config::element_blur::reactions));
+    if (frosts(bubble_look_now())) {
+      parts.frost.emplace(frost_source{}, element_blur_of(bubble_look_now(), &config::element_blur::reactions));
+      parts.frost->apply({.place = scene::anchor::kTopLeft, .fill = true, .margin = {0.0f, -9.0f, 0.0f, -9.0f}, .cornerRadius = 13.0f});
+      // Its colour over the frost: the pane's tint, its own none.
+      parts.frost->setTint(fState.fBackground);
+      fState.apply({.background = skia::SkColor{0}});
+    }
     if (pictured(key)) {
       parts.picture.emplace(from_avatars{key});
       parts.picture->apply({.width = 18.0f, .height = 18.0f, .alignSelf = scene::align::kMiddle});
@@ -1198,6 +1205,8 @@ struct message_bubble : nodes::Stack {
       }
     };
     struct parts_t {
+      // Frosted: what is behind, blurred, under all of it.
+      std::optional<frost_pane> frost;
       std::optional<name_row> name;
       // Forwarded: from whom, in the accent, as Telegram's.
       std::optional<forward_line> forwarded;
@@ -1252,7 +1261,7 @@ struct message_bubble : nodes::Stack {
     // where it is narrower; on a line of its own only where they do not.
     // Decided from the last layout; a change is laid out at the next.
     void update(double now_ms) {
-      auto& [name, forwarded, quote, picture, album, file, text, blocks, cards, preview, reactions, thread, time, inline_time, tail] = parts;
+      auto& [frost, name, forwarded, quote, picture, album, file, text, blocks, cards, preview, reactions, thread, time, inline_time, tail] = parts;
       // Nothing left of the text -- all of it the quote the header shows --
       // or a text that ends in a quote, and nothing under it: the time on a
       // line of its own, as Telegram's -- not beside an empty last line, nor
@@ -1354,7 +1363,7 @@ struct message_bubble : nodes::Stack {
     // checks the guess, above.
     bool guessed = false;
     void guess_time(skia::SkFont& font) {
-      auto& [name, forwarded, quote, picture, album, file, text, blocks, cards, preview, reactions, thread, time, inline_time, tail] = parts;
+      auto& [frost, name, forwarded, quote, picture, album, file, text, blocks, cards, preview, reactions, thread, time, inline_time, tail] = parts;
       if (std::exchange(guessed, true) || text.text().empty())
         return;
       const skiff::paint::Painter p(nullptr, font);
@@ -1378,18 +1387,28 @@ struct message_bubble : nodes::Stack {
                                               [&](const auto&) { return at_opacity(solid, look.opacity); }},
                            look.kind);
     }
+    // Frosted as much as `blur` says: a pane behind all of it, filling it to
+    // its edges, in its corners.
+    void frosted(float blur) {
+      parts.frost.emplace(frost_source{}, blur);
+      parts.frost->apply({.place = scene::anchor::kTopLeft, .fill = true, .margin = {-kPadY, -kPadX, -kPadY, -kPadX},
+                          .cornerRadius = 12.0f});
+      // Its plate over the frost, not under it: the pane's tint, its own none.
+      parts.frost->setTint(fState.fBackground);
+      fState.apply({.background = skia::SkColor{0}});
+    }
     body_column(bool mine, std::string said, std::string when)
         : outgoing(mine),
           parts{.text = nodes::BasicText<message_pictures>(std::move(said), 13.0f, text_colour),
                 .time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour),
                 .inline_time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour)},
           plate(plate_of(mine)) {
-      auto& [name, forwarded, quote, picture, album, file, text, blocks, cards, preview, reactions, thread, time, inline_time, tail] = parts;
+      auto& [frost, name, forwarded, quote, picture, album, file, text, blocks, cards, preview, reactions, thread, time, inline_time, tail] = parts;
       this->setGap(2.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
                     .padding = {kPadY, kPadX, kPadY, kPadX}, .cornerRadius = 12.0f, .background = plate});
       // Frosted: what is behind blurred under the tint; glass: a light edge.
-      splice::visit(splice::overloaded{[&](config::bubbles::frosted) { fState.setBackdrop(true, blur_of(bubble_look_now())); },
+      splice::visit(splice::overloaded{[&](config::bubbles::frosted) { this->frosted(blur_of(bubble_look_now())); },
                                        [&](config::bubbles::glass) {
                                          fState.apply({.border = scene::Border{skia::colorSetARGB(70, 255, 255, 255), 1.0f}});
                                        },
@@ -1546,7 +1565,7 @@ struct message_bubble : nodes::Stack {
                   .background = at_opacity(tile_colour, element_opacity_of(bubble_look_now(), &config::element_opacity::service))});
       // Frosted as its own blur says.
       if (frosts(bubble_look_now()))
-        body.fState.setBackdrop(true, element_blur_of(bubble_look_now(), &config::element_blur::service));
+        body.frosted(element_blur_of(bubble_look_now(), &config::element_blur::service));
       // Not shown where the chat's settings say so: kept, and out of the
       // flow, taking no room.
       events_shown = show_events;
@@ -1580,7 +1599,7 @@ struct message_bubble : nodes::Stack {
         body.parts.text.setVisible(false);
         body.parts.picture->show_time(when);
         body.parts.time.setVisible(false);
-        body.fState.setBackdrop(false);
+        body.parts.frost.reset();
         body.apply({.padding = {0.0f, 0.0f, 0.0f, 0.0f}, .background = skia::SkColor{0},
                     .border = scene::Border{skia::SkColor{0}, 0.0f}});
       } else if (said.body.plain.empty() && !said.body.html) {

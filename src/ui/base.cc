@@ -9,6 +9,7 @@ import skiff.paint;
 import skiff.scene;
 import skiff.nodes.box;
 import skiff.widgets.theme;
+import skiff.widgets.wallpaper;
 import mux.core;
 import mux.config;
 import mux.logic.text;
@@ -308,4 +309,99 @@ inline float element_blur_of(const config::bubble_look& look, std::optional<doub
     return static_cast<float>(*own / 100.0);
   return blur_of(look);
 }
+
+// ---- what is painted behind ---------------------------------------------------
+// The backdrop the wallpaper in view offered as it was drawn: what frosted
+// things draw a piece of. Each wallpaper is a wallpaper_t, offering it here.
+inline widgets::Backdrop& frost_backdrop() {
+  static widgets::Backdrop kept;
+  return kept;
+}
+struct frost_out {
+  static void offer(const widgets::Backdrop& one) { frost_backdrop() = one; }
+};
+using wallpaper_t = widgets::Wallpaper<frost_out>;
+struct frost_source {
+  [[nodiscard]] const widgets::Backdrop* operator()() const { return &frost_backdrop(); }
+};
+// Frosted glass behind what a node holds: its first part, filling it.
+using frost_pane = widgets::BackdropPane<frost_source>;
+
+// Panels -- a window's columns and bars -- over what is behind the whole
+// window: their fill at an opacity, frosted, or with a light edge, one look
+// for all of them, read as they are painted: set again (a chat opened may
+// change it) and the window repainted, nothing made again. A panel's fill is
+// known by its colour, one of `panels`; a fill of the same colour inside a
+// panel's is the same fill again, not drawn -- two at an opacity were
+// darker. `tints` -- a row hovered, the one chosen -- only at the opacity.
+struct panel_look_t {
+  bool active = false;
+  float opacity = 1.0f;
+  bool frosted = false;
+  float blur = -1.0f;  // how much the frost blurs, 0 to 1; below 0, the backdrop's own
+  bool edge = false;
+  std::vector<skia::SkColor> panels;
+  std::vector<skia::SkColor> tints;
+  friend bool operator==(const panel_look_t&, const panel_look_t&) = default;
+};
+inline panel_look_t& panel_look() {
+  static panel_look_t look;
+  return look;
+}
+// Being drawn inside a panel's fill: set by the fill, put back as the node
+// that has it is done; and the node whose fill was a panel's, for its edge.
+inline bool& inside_panel() {
+  static bool inside = false;
+  return inside;
+}
+inline scene::NodeId& panel_painted() {
+  static scene::NodeId id = 0;
+  return id;
+}
+// How mux paints every box's fill, as skiff asks a program (ProgramPaint):
+// the panels' look.
+struct mux_paint {
+  static std::optional<skia::SkColor> under(const scene::State& state, std::optional<skia::SkColor> fill, skia::SkCanvas* canvas,
+                                            float alpha) {
+    const panel_look_t& look = panel_look();
+    if (!fill || !look.active)
+      return fill;
+    if (std::ranges::contains(look.panels, *fill)) {
+      if (inside_panel())
+        return std::nullopt;
+      inside_panel() = true;
+      panel_painted() = state.fId;
+      if (look.frosted)
+        widgets::drawBackdrop(canvas, frost_backdrop(), look.blur, scene::detail::roundedBox(state, state.fBounds), alpha);
+      return scene::detail::atOpacity(*fill, look.opacity);
+    }
+    if (std::ranges::contains(look.tints, *fill))
+      return scene::detail::atOpacity(*fill, look.opacity);
+    return fill;
+  }
+  // Glass: a light edge round the panel.
+  static void over(const scene::State& state, skia::SkCanvas* canvas, float alpha) {
+    if (!panel_look().edge || panel_painted() != state.fId)
+      return;
+    skia::SkPaint paint;
+    paint.setAntiAlias(true);
+    paint.setStyle(skia::kStrokeStyle);
+    paint.setStrokeWidth(1.0f);
+    paint.setColor(scene::detail::atOpacity(0xFFFFFFFFu, 0.22f));
+    paint.setAlphaf(paint.getAlphaf() * alpha);
+    canvas->drawRRect(scene::detail::roundedBox(state, state.fBounds, 0.5f), paint);
+  }
+  // A panel's fill found in a node holds for what is under it, and no further.
+  struct scope {
+    bool was;
+    explicit scope(const scene::State&) : was(inside_panel()) {}
+    ~scope() { inside_panel() = was; }
+  };
+};
 }  // namespace mux::ui
+
+// mux's way of painting fills, for skiff to find wherever mux's tree is drawn.
+template <>
+struct skiff::scene::detail::ProgramPaint<void> {
+  using type = mux::ui::mux_paint;
+};

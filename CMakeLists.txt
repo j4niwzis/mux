@@ -197,10 +197,10 @@ if(MUX_UI)
   # skiff and skiff-widgets say the rest of what they are in their own trees.
   cme_declare_port(NAME skiff PROVIDES skiff
     GITHUB_REPOSITORY j4niwzis/skiff
-    GIT_TAG 6009e616851fd34fcf58ae10a77ad8cc0739d722)
+    GIT_TAG 8e313769be33f872cd3ffa3a18d1a154fce60990)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
-    GIT_TAG 4fef0711d3bd7bdc976b9f9f37916c0a3cd93558)
+    GIT_TAG ceefad4f7ebe3fcae1daf585339046a9f7e5e186)
   # Skia's features, each an option asking for its component: GL to draw on
   # the GPU (the software renderer is there either way), and the pictures
   # decoded. A system Skia without one is taken where its option is off.

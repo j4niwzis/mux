@@ -71,7 +71,7 @@ struct window : scene::Node {
       // The chat's background behind all of the window, where it is so:
       // drawn at its own opacity -- the desktop through it only where the
       // picture itself lets it be seen.
-      widgets::Wallpaper behind;
+      wallpaper_t behind;
       // The pages slide over the drawer too: Manage accounts comes in over it.
       frame_t frame;
       widgets::Dialog<settings_dialog<Actions>> settings;

@@ -587,7 +587,7 @@ inline bool show_panels(const config::bubble_look& look) {
   const bool kinded = window_look().behind && splice::visit(splice::overloaded{[](config::bubbles::solid) { return false; },
                                                                               [](const auto&) { return true; }},
                                                            look.kind);
-  scene::detail::PanelLook next{
+  panel_look_t next{
       .active = kinded,
       .opacity = static_cast<float>(look.opacity) / 100.0f,
       .frosted = splice::visit(splice::overloaded{[](config::bubbles::frosted) { return true; }, [](const auto&) { return false; }}, look.kind),
@@ -599,10 +599,10 @@ inline bool show_panels(const config::bubble_look& look) {
       .tints = {chosen_colour, tile_colour, popup_colour()}};
   if (!kinded)
     next = {};
-  if (next == scene::detail::panelLook())
+  if (next == panel_look())
     return false;
   // Only the opacity another: eased to it, from where it is now.
-  scene::detail::PanelLook& now = scene::detail::panelLook();
+  panel_look_t& now = panel_look();
   const bool same_but_opacity = now.active && next.active && now.frosted == next.frosted && now.blur == next.blur &&
                                 now.edge == next.edge &&
                                 now.panels == next.panels && now.tints == next.tints;

@@ -66,7 +66,7 @@ struct menu_facts {
 
 // A chat's background shown on a wallpaper: the theme's gradient and
 // Telegram's pattern, a plain colour (what is behind showing), or a picture.
-inline void show_wallpaper_on(widgets::Wallpaper& wall, const config::wallpaper_t& chosen) {
+inline void show_wallpaper_on(wallpaper_t& wall, const config::wallpaper_t& chosen) {
   // Frosted's blur, as chosen: 0 to 100 for none to about five pixels.
   wall.setBlur(static_cast<float>(window_look().frost) / 100.0f);
   // And each look's and element's own, where it frosts: made once for a size.
@@ -105,7 +105,7 @@ struct timeline_area : scene::Node {
   };
   struct parts_t {
     // Behind the messages: the theme's gradient, Telegram's pattern over it.
-    widgets::Wallpaper wall;
+    wallpaper_t wall;
     nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>> timeline{
         nodes::Flow<std::vector<message_bubble>>({.spacingY = 0.0f, .wrap = false}, {})};
     jump_button<Actions> jump;

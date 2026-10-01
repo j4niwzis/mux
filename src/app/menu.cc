@@ -214,16 +214,6 @@ class menu_part {
   // -- shown at once, and told to the server.
   void apply(const request::menu_react& one) {
     s_->root().close_menu();
-    // On one's own reaction: changed to the one chosen -- the old taken back,
-    // the new put on what it was on. On another's: put on what it is on.
-    if (target_.reaction) {
-      const auto [to, was] = *target_.reaction;
-      if (target_.own && was != one.key)
-        this->apply(request::react{to, was});
-      this->apply(request::react{to, one.key});
-      s_->root().close_reactions();
-      return;
-    }
     this->apply(request::react{target_.id, one.key});
   }
   void apply(const request::react& one) {

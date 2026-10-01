@@ -1300,8 +1300,10 @@ struct context_menu : scene::Node {
       compact(source);
       compact(remove);
       // One's own text, or one's own picture's caption, as Element edits it.
-      // A reaction is changed from the reactions at the top, not edited as text.
+      // A reaction is neither edited nor reacted to: Matrix changes none.
       edit.setVisible(facts.own && !facts.reaction && ((!facts.text.empty() && !facts.media) || facts.captioned));
+      quick.setVisible(!facts.reaction);
+      quick_band.setVisible(!facts.reaction);
       quote_reply.setVisible(facts.selection && !facts.own && !facts.copied.empty());
       copy.setVisible(!facts.copied.empty());
       copy_link.setVisible(!facts.link.empty());

@@ -185,8 +185,12 @@ class pictures_part {
           // The chat's own custom emoji and stickers, for its panels.
           for (const emote& custom : one.emotes)
             want(id, custom.url, custom.url);
-          for (const emote& sticker : one.stickers)
+          for (const emote& sticker : one.stickers) {
             want(id, sticker.url, sticker.url);
+            // Its pack picture, for the panel tab of its pack.
+            if (sticker.pack_avatar)
+              want(id, sticker.pack_avatar, *sticker.pack_avatar);
+          }
           // And the custom emoji in their text: an <img> of the server's.
           for (std::size_t i = first; i < last && i < one.timeline.size(); ++i)
             if (const auto& html = one.timeline[i].body.html)

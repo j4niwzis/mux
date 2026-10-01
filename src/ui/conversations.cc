@@ -2018,6 +2018,31 @@ struct conversations_screen : nodes::Stack {
       const auto found = event_filters.find(one->id);
       return found == event_filters.end() ? room_event_filter{} : found->second;
     };
+    // A forum's row, as tdesktop's: the newest of its topics, and their
+    // unread summed -- not the space's own, which says what was done to it.
+    std::map<conversation_id, conversation> forum_shown;
+    if (in)
+      for (const conversation*& one : chats)
+        if (one->space && forums.contains(one->id)) {
+          conversation made = *one;
+          made.timeline.clear();
+          made.read_up_to.reset();
+          made.detached = false;
+          made.unread = 0;
+          made.highlights = 0;
+          const message* best = nullptr;
+          for (const std::string& child : one->children)
+            if (const auto found = in->conversations.find(child); found != in->conversations.end() && !found->second.space) {
+              const conversation& topic = found->second;
+              made.unread += topic.unread_here(events_of(&topic));
+              made.highlights += topic.highlights;
+              if (const message* last = newest(topic, events_of(&topic)); last && (!best || last->at > best->at))
+                best = last;
+            }
+          if (best)
+            made.timeline.push_back(*best);
+          one = &forum_shown.insert_or_assign(one->id, std::move(made)).first->second;
+        }
     std::ranges::sort(chats, std::ranges::greater{}, [&](const conversation* one) {
       const message* last = newest(*one, events_of(one));
       return last ? last->at : std::chrono::sys_time<std::chrono::milliseconds>{};

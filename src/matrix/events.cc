@@ -344,7 +344,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     const auto deleted = [&] {
       message made{.in = in, .id = one.event_id, .sender = one.sender, .at = at, .body = {},
                    .outgoing = one.sender == id_.address};
-      if (one.unsigned_->m_relations && one.unsigned_->m_relations->m_thread) {
+      if (one.unsigned_ && one.unsigned_->m_relations && one.unsigned_->m_relations->m_thread) {
         const auto& thread = *one.unsigned_->m_relations->m_thread;
         thread_summary summary{.count = thread.count, .participated = thread.current_user_participated};
         if (thread.latest_event) {
@@ -360,12 +360,10 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       sink_(change::message_redacted{in, one.event_id});
     };
     splice::visit(splice::overloaded{[&](event_type::encrypted) { encrypted(in, one, at, where); },
-                          [&](event_type::message) {
-                            if (redacted)
-                              deleted();
-                            else
-                              done(in, one, type, at, where);
-                          },
+                          // Here only where its content is not a message's -- no
+                          // msgtype: emptied by a redaction, whether or not the
+                          // server said so in redacted_because (#11885). Deleted.
+                          [&](event_type::message) { deleted(); },
                           [&](event_type::reaction) {
                             if (!redacted)
                               done(in, one, type, at, where);

@@ -2425,7 +2425,10 @@ struct conversations_screen : nodes::Stack {
       // At the newest, it follows what comes -- not while a jump goes
       // elsewhere: a refresh each time the model changes put the view back
       // at the end under a jump on its way up, and it never got there.
-      timeline.scrollToEnd();
+      // Glided only to a newer message: rows above made again or grown kept
+      // at the end where they are, at once -- glided, every message slid by
+      // and settled.
+      timeline.scrollToEnd(last != shown_last);
       unseen = 0;
     } else if (last != shown_last) {
       // What came after the newest shown before: others' messages the view

@@ -845,6 +845,10 @@ void app::apply(const request::give_passphrase& one) {
   const auto fresh_refused = [&]() -> std::optional<std::string> {
     if (one.fresh.empty())
       return "Type a passphrase.";
+    // Its key is made slowly (Argon2id, 64 MiB), but a short passphrase is
+    // still few guesses away for whoever has the files.
+    if (std::ranges::distance(one.fresh | std::views::filter([](char c) { return (c & 0xC0) != 0x80; })) < 10)
+      return "A passphrase of at least 10 characters.";
     if (one.fresh != one.again)
       return "The new passphrase is not the same twice.";
     return std::nullopt;

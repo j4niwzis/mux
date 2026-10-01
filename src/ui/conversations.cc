@@ -1072,7 +1072,8 @@ struct conversations_screen : nodes::Stack {
         if (one.space)
           for (const std::string& child : one.children)
             if (const auto found = chats->find(child);
-                found != chats->end() && found->second.space && child != one.id.id && !parent_of.contains(child)) {
+                found != chats->end() && found->second.space && !forums.contains(found->second.id) && child != one.id.id &&
+                !parent_of.contains(child)) {
               parent_of.emplace(child, one.id.id);
               spaces_in[one.id.id].push_back(&found->second);
             }
@@ -1086,7 +1087,8 @@ struct conversations_screen : nodes::Stack {
       }
     if (chats)
       for (const auto& [key, one] : *chats)
-        if (one.space && !parent_of.contains(one.id.id))
+        // A space shown as a forum is a chat in the list, not an item of a bar.
+        if (one.space && !parent_of.contains(one.id.id) && !forums.contains(one.id))
           all.push_back({config::space_item::space{one.id.id}, folder::space{one.id.id}, one.id.id, display_name(one)});
     // A bar's icons: its items, and under an open space its own spaces --
     // smaller, a level at a time.

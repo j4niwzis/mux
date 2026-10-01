@@ -568,8 +568,8 @@ struct composer_bar : nodes::Stack {
                typename Where::emoji emoji, typename Where::send send)
       : parts{.unsent = unsent_row(a),
               .context_line = context_row(std::move(cancel)),
-              .replaced = replaced_row(a),
-              .input = input_row(std::string(Where::placeholder), std::move(submit), std::move(attach), std::move(emoji), std::move(send))} {
+              .input = input_row(std::string(Where::placeholder), std::move(submit), std::move(attach), std::move(emoji), std::move(send)),
+              .replaced = replaced_row(a)} {
     parts.unsent.setVisible(false);
     parts.no_post.setVisible(false);
     parts.replaced.setVisible(false);

@@ -375,11 +375,19 @@ struct timeline_area : scene::Node {
             actions->jump_to_message(*one.said.replies_to, std::nullopt, one.message_id);
           return true;
         }
-        // A forward's "Forwarded from": the original, where its link is.
-        if (one.parts.body.parts.forwarded && one.said.forwarded && !one.said.forwarded->link.empty() &&
+        // A forward's line: its sender's pill, their page; its words, the
+        // original, where its link is.
+        if (one.parts.body.parts.forwarded && one.said.forwarded &&
             one.parts.body.parts.forwarded->bounds().contains(press.x, press.y)) {
-          actions->open_url(one.said.forwarded->link);
-          return true;
+          if (one.said.forwarded->from.starts_with('@') &&
+              one.parts.body.parts.forwarded->parts.who.bounds().contains(press.x, press.y)) {
+            actions->open_member_info(one.said.forwarded->from);
+            return true;
+          }
+          if (!one.said.forwarded->link.empty()) {
+            actions->open_url(one.said.forwarded->link);
+            return true;
+          }
         }
         // The sender, by their avatar or their name: their page.
         if ((one.parts.face.visible() && one.parts.face.fState.fAlpha > 0.0f && one.parts.face.bounds().contains(press.x, press.y)) ||

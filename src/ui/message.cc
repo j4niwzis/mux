@@ -872,6 +872,28 @@ struct message_pictures {
   }
 };
 
+// A forward's line over its message, as Telegram's: "Forwarded from" and
+// the sender -- a person's pill, its avatar drawn by the message's pictures,
+// as a mention's -- each a node of its own: the pill pressed opens them,
+// the words the original.
+struct forward_line : nodes::Stack {
+  struct parts_t {
+    nodes::Text label;
+    nodes::BasicText<message_pictures> who;
+  } parts;
+  forward_line(std::string who, std::vector<nodes::Text::Link> links, skia::SkColor colour)
+      : parts{.label = nodes::Text("Forwarded from", 13.0f, colour, true),
+              .who = nodes::BasicText<message_pictures>(std::move(who), 13.0f, colour)} {
+    this->setHorizontal();
+    this->setGap(4.0f);
+    fState.apply({.autoSize = scene::axes::kBoth});
+    parts.label.apply({.alignSelf = scene::align::kMiddle});
+    parts.who.setBold(true);
+    parts.who.setLinks(std::move(links), accent_colour);
+    parts.who.apply({.alignSelf = scene::align::kMiddle});
+  }
+};
+
 // Who has read up to a message, as Element shows it: their small faces at
 // the row's right under it, three at most and the rest counted.
 struct readers_row : nodes::Stack {
@@ -1020,7 +1042,7 @@ struct message_bubble : nodes::Stack {
     struct parts_t {
       std::optional<name_row> name;
       // Forwarded: from whom, in the accent, as Telegram's.
-      std::optional<nodes::Text> forwarded;
+      std::optional<forward_line> forwarded;
       std::optional<quote_row> quote;
       std::optional<picture_view> picture;
       std::optional<album_view> album;
@@ -1347,18 +1369,12 @@ struct message_bubble : nodes::Stack {
     // Forwarded: "Forwarded from" its sender, at its top, as Telegram's.
     // The sender a person's pill, as a mention is, and pressed, opens them.
     if (said.forwarded) {
-      const std::string lead = "Forwarded from ";
-      const std::string& who = said.forwarded->name;
-      const std::string target = said.forwarded->from.starts_with('@') ? "https://matrix.to/#/" + said.forwarded->from
-                                                                       : said.forwarded->link;
+      const std::string& who = said.forwarded->name.empty() ? said.forwarded->from : said.forwarded->name;
       std::vector<nodes::Text::Link> spans;
-      if (!target.empty() && !who.empty())
-        spans.push_back(nodes::Text::Link{lead.size(), lead.size() + who.size(), target});
-      mentioned shown = with_mentions(lead + who, std::move(spans), in, now);
-      body.parts.forwarded.emplace(shown.text, 13.0f, outgoing ? sent_time_colour : accent_colour);
-      body.parts.forwarded->setBold(true);
-      // Not elided: an elided line has no room for a pill, and drew nothing.
-      body.parts.forwarded->setLinks(std::move(shown.links), accent_colour);
+      if (said.forwarded->from.starts_with('@') && !who.empty())
+        spans.push_back(nodes::Text::Link{0, who.size(), "https://matrix.to/#/" + said.forwarded->from});
+      mentioned shown = with_mentions(who, std::move(spans), in, now);
+      body.parts.forwarded.emplace(std::move(shown.text), std::move(shown.links), outgoing ? sent_time_colour : accent_colour);
     }
     // Something done, not said: a line in the middle, on a plate of its own,
     // with no avatar and no name -- as tdesktop's service messages.

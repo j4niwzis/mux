@@ -160,8 +160,18 @@ struct field_quotes {
   }
 
   [[nodiscard]] static widgets::BlockLook look(std::string_view text, std::size_t start) {
-    if (code_at(text, start) != code_line::none)
-      return {.indent = kCodeIndent, .right = kCodeRight, .monospace = true};
+    // A block's fences: their ``` hidden, as the field's other marks are --
+    // the opening one's language, after it, still there to be read and
+    // changed; the plate says where the block is.
+    switch (code_at(text, start)) {
+      case code_line::opening:
+      case code_line::closing:
+        return {.hidden = 3, .indent = kCodeIndent, .right = kCodeRight, .monospace = true};
+      case code_line::inside:
+        return {.indent = kCodeIndent, .right = kCodeRight, .monospace = true};
+      case code_line::none:
+        break;
+    }
     const int deep = depth(text, start);
     if (deep == 0)
       return {};

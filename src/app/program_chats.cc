@@ -178,11 +178,14 @@ void app::apply(const request::toggle_info&) { root().main().toggle_info(); }
 // newest from the disk first -- live again -- then to its end.
 void app::apply(const request::jump_to_end&) {
   auto& screen = root().main();
-  // Back where a jump in this chat came from first, where there is one.
-  if (screen.go_back())
-    return;
+  // The chat live again first -- its newest from the disk, what was shown
+  // before the jump among them -- then back where a jump in it came from,
+  // where there is one: found there, not fetched as a window of its own,
+  // which had only what the server put around it (#11910).
   if (screen.chosen)
     this->go_live(*screen.chosen);
+  if (screen.go_back())
+    return;
   screen.jump_to_end();
 }
 

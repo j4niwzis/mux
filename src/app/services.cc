@@ -40,12 +40,16 @@ struct services {
   // A chat that is a window of its history away from its newest: back to
   // its newest, live -- before anything is put at its end. Its newest from
   // the disk, where all that came meanwhile is kept.
+  static constexpr std::size_t kLiveFromDisk = 400;
   void go_live(const conversation_id& in) {
     const mux::conversation* chat = model->find(in);
     if (!chat || !chat->detached)
       return;
     model->apply(mux::change_t{mux::change::window_opened{in, std::string(), std::nullopt}});
-    for (auto& one : store->older(in, message_store::time_point::max(), 80))
+    // As much as a chat holds in memory, not a screenful: going back from a
+    // jump to where it came from, what was shown around it was made a window
+    // of the server's of its own and lost (#11910).
+    for (auto& one : store->older(in, message_store::time_point::max(), kLiveFromDisk))
       model->apply(
           mux::change_t{mux::change::message_added{.message = std::move(one), .where = mux::placement::in_window{}}});
     refresh_due = true;

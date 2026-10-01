@@ -18,6 +18,7 @@ import mux.host;
 import mux.ui;
 import skiff.paint;
 import skiff.scene;
+import skiff.nodes.text;
 import mux.app.network;
 import mux.app.demo;
 import mux.app.store;

@@ -949,7 +949,10 @@ struct code_block : nodes::Stack {
               .head = head_row(std::move(language), code, colour),
               .code = nodes::BasicText<message_pictures>(code, 13.0f, text)} {
     this->setGap(4.0f);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 0.0f, 4.0f, 0.0f},
+    // As wide as its code (and its head), within the bubble: filling a
+    // bubble that takes its width from what it holds, neither said a width,
+    // and a short block was squeezed to a few letters a line (#11955).
+    fState.apply({.autoSize = scene::axes::kBoth, .minWidth = 120.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f},
                   .padding = {6.0f, 8.0f, 6.0f, 12.0f}, .cornerRadius = 5.0f,
                   .background = (colour & 0x00FFFFFFu) | (0x1Fu << 24), .masking = true});
     parts.bar.apply({.place = scene::anchor::kTopLeft, .x = -12.0f, .y = -6.0f, .fillY = true, .width = 3.0f});
@@ -957,7 +960,7 @@ struct code_block : nodes::Stack {
     parts.code.setWrapped(true);
     parts.code.setSelectable(true);
     parts.code.setSelectionColour((accent_colour & 0x00FFFFFFu) | (110u << 24));
-    parts.code.apply({.fillX = true});
+    parts.code.setShrinksToLines(true);
   }
 };
 // A message's text cut at its blocks of code: words, a block, words...
@@ -1018,7 +1021,7 @@ struct code_piece : nodes::Stack {
   } parts;
   code_piece(const text_piece& code, const text_piece* words, skia::SkColor colour, skia::SkColor quote, skia::SkColor text)
       : parts{.block = code_block(code.text, code.language, colour, text)} {
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    fState.apply({.autoSize = scene::axes::kBoth});
     if (words && !words->text.empty()) {
       parts.after.emplace(words->text, 13.0f, text);
       parts.after->setWrapped(true);
@@ -1026,7 +1029,7 @@ struct code_piece : nodes::Stack {
       parts.after->setSelectionColour((accent_colour & 0x00FFFFFFu) | (110u << 24));
       parts.after->setLinks(words->links, accent_colour);
       parts.after->setStyles(words->styles, quote);
-      parts.after->apply({.fillX = true});
+      parts.after->setShrinksToLines(true);
     }
   }
 };

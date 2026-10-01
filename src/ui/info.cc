@@ -81,23 +81,8 @@ struct member_row : nodes::Stack {
   std::string id;
   std::optional<std::string> role;
   // Their name, and how they are under it.
-  struct texts_column : nodes::Stack {
-    struct parts_t {
-      nodes::Text name;
-      nodes::Text state;
-    } parts;
-    texts_column(std::string shown, std::string how)
-        : parts{.name = nodes::Text(std::move(shown), 14.0f, text_colour, true),
-                .state = nodes::Text(std::move(how), 12.0f, dim_colour)} {
-      this->setGap(4.0f);
-      fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      for (nodes::Text* each : {&parts.name, &parts.state}) {
-        each->setElided(true);
-        each->apply({.fillX = true});
-      }
-      // No presence known: no line kept for it, the name in the middle.
-      parts.state.setVisible(!parts.state.text().empty());
-    }
+  struct texts_column : two_lines {
+    texts_column(std::string shown, std::string how) : two_lines(std::move(shown), std::move(how), 14.0f, 4.0f) {}
   };
   // Their role, in a pill beside their name.
   struct role_pill : widgets::Pill {

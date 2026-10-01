@@ -692,10 +692,12 @@ struct jump_search_choice : nodes::Stack {
   }
 };
 
-// Whether link previews show, at one level: Show and Hide and, where a
-// level under decides for it, Default.
-template <class Actions>
-struct previews_choice : nodes::Stack {
+// A thing shown or hidden, at one level: Show and Hide and, where a level
+// under decides for it, Default -- as a room event kind's row. What it is
+// says its label, what it is everywhere when nothing was said, and how it is
+// set: link previews, read receipts as faces.
+template <class Actions, class Setting>
+struct show_hide_choice : nodes::Stack {
   struct row;
   struct choose {
     row* in = nullptr;
@@ -711,7 +713,7 @@ struct previews_choice : nodes::Stack {
     } parts;
     row(Actions* a, choice_level_t at, std::optional<bool> now)
         : actions(a), level(at),
-          parts{.label = nodes::Text("Link previews", 14.0f, text_colour),
+          parts{.label = nodes::Text(std::string(Setting::label), 14.0f, text_colour),
                 .fallback = segment<choose>("Default", {this, std::nullopt}),
                 .show = segment<choose>("Show", {this, true}),
                 .hide = segment<choose>("Hide", {this, false})} {
@@ -725,7 +727,7 @@ struct previews_choice : nodes::Stack {
       for (segment<choose>* each : {&parts.fallback, &parts.show, &parts.hide})
         each->apply({.width = 70.0f, .alignSelf = scene::align::kMiddle});
       parts.fallback.setVisible(!everywhere);
-      this->show_choice(everywhere ? std::optional<bool>(now.value_or(true)) : now);
+      this->show_choice(everywhere ? std::optional<bool>(now.value_or(Setting::unsaid)) : now);
     }
     void show_choice(std::optional<bool> now) {
       parts.fallback.set_active(!now);
@@ -734,75 +736,43 @@ struct previews_choice : nodes::Stack {
     }
     void chose(std::optional<bool> now) {
       this->show_choice(now);
-      actions->set_link_previews(level, now);
+      Setting::set(*actions, level, now);
     }
-  };
-  struct parts_t {
-    std::vector<row> rows;
-  } parts;
-  previews_choice(Actions* a, choice_level_t at, std::optional<bool> now) {
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-    parts.rows.reserve(1);
-    parts.rows.emplace_back(a, at, now);
-  }
-};
-
-// Whether read receipts show as faces, at one level: Show and Hide and,
-// where a level under decides for it, Default -- as a room event kind's row.
-template <class Actions>
-struct receipts_choice : nodes::Stack {
-  struct row;
-  struct choose {
-    row* in = nullptr;
-    std::optional<bool> show;
-    void operator()() const { in->chose(show); }
-  };
-  struct row : nodes::Stack {
-  Actions* actions = nullptr;
-  choice_level_t level;
-  struct parts_t {
-    nodes::Text label;
-    segment<choose> fallback, show, hide;
-  } parts;
-  row(Actions* a, choice_level_t at, std::optional<bool> now)
-      : actions(a), level(at),
-        parts{.label = nodes::Text("Read receipts as faces", 14.0f, text_colour),
-              .fallback = segment<choose>("Default", {this, std::nullopt}),
-              .show = segment<choose>("Show", {this, true}),
-              .hide = segment<choose>("Hide", {this, false})} {
-    const bool everywhere =
-        splice::visit(splice::overloaded{[](choice_level::everywhere) { return true; }, [](const auto&) { return false; }}, level);
-    this->setHorizontal();
-    this->setGap(4.0f);
-    fState.apply({.fillX = true, .height = 36.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
-    parts.label.setElided(true);
-    parts.label.apply({.grow = scene::axes::kX, .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-    for (segment<choose>* each : {&parts.fallback, &parts.show, &parts.hide})
-      each->apply({.width = 70.0f, .alignSelf = scene::align::kMiddle});
-    parts.fallback.setVisible(!everywhere);
-    this->show_choice(everywhere ? std::optional<bool>(now.value_or(false)) : now);
-  }
-  void show_choice(std::optional<bool> now) {
-    parts.fallback.set_active(!now);
-    parts.show.set_active(now == true);
-    parts.hide.set_active(now == false);
-  }
-  void chose(std::optional<bool> now) {
-    this->show_choice(now);
-    actions->set_receipts_shown(level, now);
-  }
   };
   // Made where it stays, apart from the page: its switches know it by its
   // address, as event_kind_list's rows.
   struct parts_t {
     std::vector<row> rows;
   } parts;
-  receipts_choice(Actions* a, choice_level_t at, std::optional<bool> now) {
+  show_hide_choice(Actions* a, choice_level_t at, std::optional<bool> now) {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     parts.rows.reserve(1);
     parts.rows.emplace_back(a, at, now);
   }
 };
+
+// Link previews: shown, where nothing says otherwise.
+struct link_previews_setting {
+  static constexpr std::string_view label = "Link previews";
+  static constexpr bool unsaid = true;
+  template <class Actions>
+  static void set(Actions& actions, choice_level_t level, std::optional<bool> now) {
+    actions.set_link_previews(level, now);
+  }
+};
+// Read receipts as faces: not, where nothing says otherwise.
+struct receipts_setting {
+  static constexpr std::string_view label = "Read receipts as faces";
+  static constexpr bool unsaid = false;
+  template <class Actions>
+  static void set(Actions& actions, choice_level_t level, std::optional<bool> now) {
+    actions.set_receipts_shown(level, now);
+  }
+};
+template <class Actions>
+using previews_choice = show_hide_choice<Actions, link_previews_setting>;
+template <class Actions>
+using receipts_choice = show_hide_choice<Actions, receipts_setting>;
 
 // A notification as mux shows it itself, as Telegram Desktop's own: a card
 // in a small window of its own -- the chat's avatar beside the title over

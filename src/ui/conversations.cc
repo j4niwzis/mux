@@ -408,9 +408,24 @@ struct conversations_screen : nodes::Stack {
   // The keys, while the list is up: Up and Down through it, Enter picks,
   // Esc closes it -- before the input reads Enter as sending.
   void onKey(scene::phase::capture, const scene::key::down& press, scene::Reply& reply) {
+    namespace keys = scene::keys;
+    // Alt+Right: into the forum gone to; Alt+Left: out of the one open, to
+    // its row. Taken before the field: it moves its caret on Left and Right
+    // whatever the modifiers, and took Alt+Left from under this (#11645).
+    if (press.modifiers.template has<scene::modifier::alt>() && press.key == keys::kRight && pointed) {
+      const conversation_id into = *std::exchange(pointed, std::nullopt);
+      actions->choose(into);
+      reply.handle();
+      return;
+    }
+    if (press.modifiers.template has<scene::modifier::alt>() && press.key == keys::kLeft && forum_open && current) {
+      pointed = conversation_id{*current, *forum_open};
+      this->close_forum();
+      reply.handle();
+      return;
+    }
     if (!chat.parts.mentions.visible() || mention_matches.empty())
       return;
-    namespace keys = scene::keys;
     auto& rows = chat.parts.mentions.parts.rows;
     if (press.key == keys::kUp || press.key == keys::kDown) {
       rows[mention_lit].set_lit(false);
@@ -1110,20 +1125,6 @@ struct conversations_screen : nodes::Stack {
       const auto& tabs = std::get<0>(side.folders.fChildren);
       if (const auto place = static_cast<std::size_t>(digit - kFolderKeys.begin()); place < tabs.size())
         this->choose_folder(tabs[place].which);
-      reply.handle();
-      return;
-    }
-    // Alt+Right: into the forum gone to; Alt+Left: out of the one open, to
-    // its row.
-    if (press.modifiers.template has<scene::modifier::alt>() && press.key == keys::kRight && pointed) {
-      const conversation_id into = *std::exchange(pointed, std::nullopt);
-      actions->choose(into);
-      reply.handle();
-      return;
-    }
-    if (press.modifiers.template has<scene::modifier::alt>() && press.key == keys::kLeft && forum_open && current) {
-      pointed = conversation_id{*current, *forum_open};
-      this->close_forum();
       reply.handle();
       return;
     }

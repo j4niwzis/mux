@@ -601,6 +601,7 @@ struct sticker_kept {
   std::optional<std::int64_t> w, h, size;
   std::optional<std::string> mimetype;
   friend bool operator==(const sticker_kept&, const sticker_kept&) = default;
+  friend consteval auto json_schema(knot::type<sticker_kept>) { return knot::schema<sticker_kept>(); }
 };
 
 // The file: a list for each protocol, so each entry says what it is by where

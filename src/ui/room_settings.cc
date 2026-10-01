@@ -736,10 +736,7 @@ struct room_settings : nodes::Stack {
     Actions* actions;
     void operator()() const { actions->close_manage(); }
   };
-  struct nothing_back {
-    void operator()() const {}
-  };
-  using header_t = page_header<nothing_back, close_it>;
+  using header_t = page_header<no_back, close_it>;
   struct body_row : nodes::Stack {
     struct parts_t {
       tab_list tabs;

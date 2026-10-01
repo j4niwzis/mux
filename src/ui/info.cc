@@ -231,19 +231,9 @@ struct person_card : nodes::Stack {
       actions->close_person_info();
     }
   };
-  using close_button = icon_button<ask<Actions, &Actions::close_person_info>>;
-  struct top_bar : nodes::Stack {
-    struct parts_t {
-      nodes::Text title{"User info", 16.0f, text_colour, true};
-      close_button close;
-    } parts;
-    explicit top_bar(Actions* a) : parts{.close = close_button(icon::close{}, {a})} {
-      this->setHorizontal();
-      fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 10.0f, 0.0f, 22.0f}});
-      parts.title.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      parts.close.apply({.alignSelf = scene::align::kMiddle});
-    }
-  };
+  using close_act = ask<Actions, &Actions::close_person_info>;
+  using close_button = icon_button<close_act>;
+  using top_bar = page_header<no_back, close_act>;
   // tdesktop's cover: 108 high, a 72 photo, the name and status beside it.
   struct cover : nodes::Stack {
     struct parts_t {
@@ -280,7 +270,7 @@ struct person_card : nodes::Stack {
   } parts;
 
   person_card(Actions* a, const account_id& account, const std::string& key, const person_facts& facts)
-      : parts{.top = top_bar(a),
+      : parts{.top = top_bar("User info", {}, {a}, false, true),
               .face = cover(a, key, facts),
               .id = id_line(key, ""),
               .message = action_tile<message_them>("Message", icon::send{}, {a, conversation_id{account, key}}),
@@ -309,19 +299,9 @@ struct room_card : nodes::Stack {
     Actions* actions = nullptr;
     void operator()() const { actions->decline_room_card(); }
   };
-  using close_button = icon_button<ask<Actions, &Actions::close_room_card>>;
-  struct top_bar : nodes::Stack {
-    struct parts_t {
-      nodes::Text title{"Room info", 16.0f, text_colour, true};
-      close_button close;
-    } parts;
-    explicit top_bar(Actions* a) : parts{.close = close_button(icon::close{}, {a})} {
-      this->setHorizontal();
-      fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 10.0f, 0.0f, 22.0f}});
-      parts.title.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      parts.close.apply({.alignSelf = scene::align::kMiddle});
-    }
-  };
+  using close_act = ask<Actions, &Actions::close_room_card>;
+  using close_button = icon_button<close_act>;
+  using top_bar = page_header<no_back, close_act>;
   struct cover : nodes::Stack {
     struct parts_t {
       avatar_mark photo;
@@ -359,7 +339,7 @@ struct room_card : nodes::Stack {
   } parts;
 
   room_card(Actions* a, const std::string& asked, const room_preview& known)
-      : parts{.top = top_bar(a),
+      : parts{.top = top_bar("Room info", {}, {a}, false, true),
               .face = cover(known.id.empty() ? asked : known.id, name_of(asked, known), line_of(asked, known)),
               .about = nodes::Text(!known.topic.empty() ? known.topic : !known.note.empty() ? known.note : std::string("No description"), 14.0f,
                                    known.topic.empty() ? dim_colour : text_colour),
@@ -397,19 +377,9 @@ struct reaction_entry {
 // message can reply to it.
 template <class Actions>
 struct reactions_box : nodes::Stack {
-  using close_button = icon_button<ask<Actions, &Actions::close_reactions>>;
-  struct top_bar : nodes::Stack {
-    struct parts_t {
-      nodes::Text title{"Reactions", 16.0f, text_colour, true};
-      close_button close;
-    } parts;
-    explicit top_bar(Actions* a) : parts{.close = close_button(icon::close{}, {a})} {
-      this->setHorizontal();
-      fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 10.0f, 0.0f, 22.0f}});
-      parts.title.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      parts.close.apply({.alignSelf = scene::align::kMiddle});
-    }
-  };
+  using close_act = ask<Actions, &Actions::close_reactions>;
+  using close_button = icon_button<close_act>;
+  using top_bar = page_header<no_back, close_act>;
   // A reaction as the chat would show it: a bubble from who reacted,
   // saying what they reacted with, in runs as the chat's bubbles are.
   // Pressed, it is answered.
@@ -488,7 +458,7 @@ struct reactions_box : nodes::Stack {
   } parts;
 
   reactions_box(Actions* a, const conversation& in, const std::vector<reaction_entry>& entries, const model* now)
-      : parts{.top = top_bar(a)} {
+      : parts{.top = top_bar("Reactions", {}, {a}, false, true)} {
     fState.apply({.fillX = true, .height = 420.0f, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
     parts.list.apply({.fillX = true, .grow = scene::axes::kY});
     auto& flow = std::get<0>(parts.list.fChildren);
@@ -515,20 +485,9 @@ struct mark_entry {
 // reacted and with what on a badge at its bottom right. Pressed, gone to.
 template <class Actions>
 struct marks_box : nodes::Stack {
-  using close_button = icon_button<ask<Actions, &Actions::close_marks>>;
-  struct top_bar : nodes::Stack {
-    struct parts_t {
-      nodes::Text title;
-      close_button close;
-    } parts;
-    top_bar(Actions* a, std::string title)
-        : parts{.title = nodes::Text(std::move(title), 16.0f, text_colour, true), .close = close_button(icon::close{}, {a})} {
-      this->setHorizontal();
-      fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 10.0f, 0.0f, 22.0f}});
-      parts.title.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      parts.close.apply({.alignSelf = scene::align::kMiddle});
-    }
-  };
+  using close_act = ask<Actions, &Actions::close_marks>;
+  using close_button = icon_button<close_act>;
+  using top_bar = page_header<no_back, close_act>;
   struct badge : nodes::Stack {
     struct parts_t {
       avatar_mark face;
@@ -574,9 +533,10 @@ struct marks_box : nodes::Stack {
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
   } parts;
   marks_box(Actions* a, mark_kind_t kind, const conversation& in, const std::vector<mark_entry>& entries, const model* now)
-      : parts{.top = top_bar(a, splice::visit(splice::overloaded{[](mark_kind::mention) { return std::string("Mentions"); },
-                                                      [](mark_kind::reaction) { return std::string("Reactions"); }},
-                                           kind))} {
+      : parts{.top = top_bar(splice::visit(splice::overloaded{[](mark_kind::mention) { return std::string("Mentions"); },
+                                                   [](mark_kind::reaction) { return std::string("Reactions"); }},
+                                kind),
+                             {}, {a}, false, true)} {
     fState.apply({.fillX = true, .height = 520.0f, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
     parts.list.apply({.fillX = true, .grow = scene::axes::kY});
     auto& flow = std::get<0>(parts.list.fChildren);
@@ -796,9 +756,6 @@ struct forward_box : nodes::Stack {
     Actions* actions;
     void operator()() const { actions->close_forward(); }
   };
-  struct nothing_back {
-    void operator()() const {}
-  };
   struct typed {
     forward_box* box;
     void operator()(std::string_view text) const { box->find(text); }
@@ -829,7 +786,7 @@ struct forward_box : nodes::Stack {
     }
   };
   using rows_t = nodes::Flow<std::vector<row>>;
-  using header_t = page_header<nothing_back, close_it>;
+  using header_t = page_header<no_back, close_it>;
   struct parts_t {
     header_t header;
     widgets::TextBox<typed> field;
@@ -883,9 +840,6 @@ struct start_chat_box : nodes::Stack {
     Actions* actions;
     void operator()() const { actions->close_new_chat(); }
   };
-  struct nothing_back {
-    void operator()() const {}
-  };
   struct typed {
     start_chat_box* box;
     void operator()(std::string_view text) const { box->search(text); }
@@ -938,7 +892,7 @@ struct start_chat_box : nodes::Stack {
       return true;
     }
   };
-  using header_t = page_header<nothing_back, close_it>;
+  using header_t = page_header<no_back, close_it>;
   using rows_t = nodes::Flow<std::vector<person_row>>;
   struct search_row : nodes::Stack {
     struct parts_t {
@@ -1076,9 +1030,6 @@ struct create_room_box : nodes::Stack {
     Actions* actions;
     void operator()() const { actions->close_new_room(); }
   };
-  struct nothing_back {
-    void operator()() const {}
-  };
   struct create_press {
     create_room_box* box;
     void operator()() const {
@@ -1210,7 +1161,7 @@ struct create_room_box : nodes::Stack {
         button->apply({.width = 120.0f, .height = 34.0f});
     }
   };
-  using header_t = page_header<nothing_back, close_it>;
+  using header_t = page_header<no_back, close_it>;
   struct parts_t {
     header_t header;
     field name;
@@ -1362,20 +1313,9 @@ struct bubbles_picker : nodes::Stack {
     }
   };
   struct element_row : nodes::Stack {
-    struct head_t : nodes::Stack {
-      struct parts_t {
-        nodes::Text label;
-        widgets::Button<element_reset> reset;
-      } parts;
+    struct head_t : label_button_row<element_reset> {
       head_t(std::string label, element_reset reset, bool own)
-          : parts{.label = nodes::Text(std::move(label), 13.0f, text_colour), .reset = widgets::Button<element_reset>("As bubbles", reset)} {
-        this->setHorizontal();
-        this->setGap(6.0f);
-        fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-        parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-        parts.reset.apply({.width = 96.0f, .height = 26.0f});
-        parts.reset.setVisible(own);
-      }
+          : label_button_row<element_reset>(std::move(label), "As bubbles", reset, own) {}
     };
     struct parts_t {
       head_t head;
@@ -1493,21 +1433,9 @@ struct bubbles_picker : nodes::Stack {
   };
   // An element drawn frosted: its blur, and a way back to the bubbles'.
   struct element_blur_row : nodes::Stack {
-    struct head_t : nodes::Stack {
-      struct parts_t {
-        nodes::Text label;
-        widgets::Button<element_blur_reset> reset;
-      } parts;
+    struct head_t : label_button_row<element_blur_reset> {
       head_t(std::string label, element_blur_reset reset, bool own)
-          : parts{.label = nodes::Text(std::move(label), 13.0f, text_colour),
-                  .reset = widgets::Button<element_blur_reset>("As bubbles", reset)} {
-        this->setHorizontal();
-        this->setGap(6.0f);
-        fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-        parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-        parts.reset.apply({.width = 96.0f, .height = 26.0f});
-        parts.reset.setVisible(own);
-      }
+          : label_button_row<element_blur_reset>(std::move(label), "As bubbles", reset, own) {}
     };
     struct parts_t {
       head_t head;
@@ -1707,10 +1635,7 @@ struct wallpaper_box : nodes::Stack {
     Actions* actions;
     void operator()() const { actions->close_wallpaper(); }
   };
-  struct nothing_back {
-    void operator()() const {}
-  };
-  using header_t = page_header<nothing_back, close_it>;
+  using header_t = page_header<no_back, close_it>;
   struct parts_t {
     header_t header;
     look_choices<Actions> choices;
@@ -1809,22 +1734,7 @@ struct threads_panel : nodes::Stack {
       return true;
     }
   };
-  struct head_t : nodes::Stack {
-    struct parts_t {
-      icon_button<back_it> back;
-      nodes::Text title{"Threads", 15.0f, text_colour, true};
-      icon_button<close_it> close;
-    } parts;
-    explicit head_t(Actions* a) : parts{.back = icon_button<back_it>(icon::back{}, {a}), .close = icon_button<close_it>(icon::close{}, {a})} {
-      this->setHorizontal();
-      this->setGap(8.0f);
-      fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}});
-      parts.title.setElided(true);
-      parts.title.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      parts.back.apply({.alignSelf = scene::align::kMiddle});
-      parts.close.apply({.alignSelf = scene::align::kMiddle});
-    }
-  };
+  using head_t = page_header<back_it, close_it>;
   struct input_t : nodes::Stack {
     struct parts_t {
       widgets::TextArea<sent> field;
@@ -1854,7 +1764,7 @@ struct threads_panel : nodes::Stack {
     context_bar<stop_answer> replying;
     input_t input;
   } parts;
-  explicit threads_panel(Actions* a) : actions(a), parts{.head = head_t(a), .replying = context_bar<stop_answer>({this}), .input = input_t(this)} {
+  explicit threads_panel(Actions* a) : actions(a), parts{.head = head_t("Threads", {a}, {a}, false, true), .replying = context_bar<stop_answer>({this}), .input = input_t(this)} {
     fState.apply({.fillY = true, .background = sidebar_colour});
     parts.divider.apply({.fillX = true, .height = 1.0f});
     parts.empty.apply({.margin = {16.0f, 16.0f, 0.0f, 16.0f}});
@@ -2004,9 +1914,6 @@ struct packs_box : nodes::Stack {
   struct back_press {
     packs_box* box;
     void operator()() const { box->show_list(); }
-  };
-  struct nothing_back {
-    void operator()() const {}
   };
   struct create_press {
     packs_box* box;
@@ -2195,7 +2102,7 @@ struct packs_box : nodes::Stack {
         each->apply({.width = 110.0f, .height = 34.0f});
     }
   };
-  using header_t = page_header<nothing_back, close_it>;
+  using header_t = page_header<no_back, close_it>;
   using packs_t = nodes::Flow<std::vector<pack_row>>;
   using pictures_t = nodes::Flow<std::vector<picture_row>>;
   struct parts_t {
@@ -2382,9 +2289,6 @@ struct explore_box : nodes::Stack {
     Actions* actions;
     void operator()() const { actions->close_explore(); }
   };
-  struct nothing_back {
-    void operator()() const {}
-  };
   struct search_press {
     explore_box* box;
     void operator()() const {
@@ -2473,7 +2377,7 @@ struct explore_box : nodes::Stack {
       parts.join.apply({.width = 70.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle});
     }
   };
-  using header_t = page_header<nothing_back, close_it>;
+  using header_t = page_header<no_back, close_it>;
   struct search_row : nodes::Stack {
     struct parts_t {
       field query;

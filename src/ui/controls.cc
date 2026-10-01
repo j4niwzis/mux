@@ -11,6 +11,7 @@ import skiff.nodes.flow;
 import skiff.nodes.icon;
 import skiff.nodes.text;
 import skiff.widgets.avatar;
+import skiff.widgets.button;
 import mux.core;
 import mux.logic.room_events;
 import mux.config;
@@ -194,8 +195,15 @@ struct icon_button : scene::Node {
   }
 };
 
+// A page with nowhere to go back to: its header's ← hidden, and pressing
+// it does nothing.
+struct no_back {
+  void operator()() const {}
+};
+
 // The head of a page: ← on the left where there is somewhere to go back to,
-// the page's name, and ✕ on the right where the page closes.
+// the page's name, and ✕ on the right where the page closes. Every panel,
+// box and page that has a title and a ✕ has this one (#11464).
 template <class Back, class Close>
 struct page_header : nodes::Stack {
   struct parts_t {
@@ -863,6 +871,46 @@ struct context_bar : nodes::Stack {
     parts.lines.parts.title.setText(said ? said->title : std::string());
     parts.lines.parts.line.setText(said ? said->line : std::string());
     this->markDamaged();
+  }
+};
+
+
+// A count on an accent badge over the top of a round button: the @ and the
+// heart's, and the down arrow's.
+struct count_badge : nodes::Stack {
+  struct parts_t {
+    nodes::Text count{"", 11.0f, on_accent_colour, true};
+  } parts;
+  count_badge() {
+    fState.apply({.place = scene::anchor::kTopCentre,
+                  .y = -10.0f,
+                  .height = 18.0f,
+                  .autoSize = scene::axes::kX,
+                  .minWidth = 20.0f,
+                  .padding = {1.0f, 5.0f, 1.0f, 5.0f},
+                  .cornerRadius = 9.0f,
+                  .background = accent_colour});
+    fStack.justify = nodes::justify::middle{};
+    parts.count.apply({.alignSelf = scene::align::kMiddle});
+  }
+};
+
+// A label, and a small button on its right that is there only where it
+// does something: an element's look over a way back to the bubbles'.
+template <class Act>
+struct label_button_row : nodes::Stack {
+  struct parts_t {
+    nodes::Text label;
+    widgets::Button<Act> reset;
+  } parts;
+  label_button_row(std::string label, std::string button, Act act, bool shown)
+      : parts{.label = nodes::Text(std::move(label), 13.0f, text_colour), .reset = widgets::Button<Act>(std::move(button), std::move(act))} {
+    this->setHorizontal();
+    this->setGap(6.0f);
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+    parts.reset.apply({.width = 96.0f, .height = 26.0f});
+    parts.reset.setVisible(shown);
   }
 };
 

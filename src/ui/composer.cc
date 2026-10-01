@@ -524,23 +524,7 @@ template <class Actions>
 struct mark_button : scene::Node {
   Actions* actions = nullptr;
   mark_kind_t kind;
-  struct badge_t : nodes::Stack {
-    struct parts_t {
-      nodes::Text count{"", 11.0f, on_accent_colour, true};
-    } parts;
-    badge_t() {
-      fState.apply({.place = scene::anchor::kTopCentre,
-                    .y = -10.0f,
-                    .height = 18.0f,
-                    .autoSize = scene::axes::kX,
-                    .minWidth = 20.0f,
-                    .padding = {1.0f, 5.0f, 1.0f, 5.0f},
-                    .cornerRadius = 9.0f,
-                    .background = accent_colour});
-      fStack.justify = nodes::justify::middle{};
-      parts.count.apply({.alignSelf = scene::align::kMiddle});
-    }
-  };
+  using badge_t = count_badge;
   struct parts_t {
     nodes::Text glyph;
     badge_t badge;
@@ -609,29 +593,13 @@ struct jump_button : scene::Node {
   int unseen = 0;
   // A round plate with a chevron down, and over its top the count of what
   // came while the reader was above, on a badge in the accent.
-  struct badge_t : nodes::Stack {
-    struct parts_t {
-      nodes::Text count{"", 11.0f, on_accent_colour, true};
-    } parts;
-    badge_t() {
-      fState.apply({.place = scene::anchor::kTopCentre,
-                     .y = -10.0f,
-                     .height = 18.0f,
-                     .autoSize = scene::axes::kX,
-                     .minWidth = 20.0f,
-                     .padding = {1.0f, 5.0f, 1.0f, 5.0f},
-                     .cornerRadius = 9.0f,
-                     .background = accent_colour});
-      fStack.justify = nodes::justify::middle{};
-      parts.count.apply({.alignSelf = scene::align::kMiddle});
-      this->setVisible(false);
-    }
-  };
+  using badge_t = count_badge;
   struct parts_t {
     nodes::Icon chevron;
     badge_t badge;
   } parts{.chevron = nodes::Icon(shape_of(icon::down{}), text_colour)};
   explicit jump_button(Actions* a) : actions(a) {
+    parts.badge.setVisible(false);
     fState.apply({.place = scene::anchor::kBottomRight,
                   .x = -18.0f,
                   .y = -12.0f,

@@ -909,7 +909,7 @@ consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
   return splice::visit([](auto& each) -> std::optional<bool>& { return each.strip; }, one);
 }
 // Whether the account tells whom it talks to that the user is typing.
-// What a passphrase is asked for (#12113, #12118): local data opened at the
+// What a passphrase is asked for: local data opened at the
 // start; encrypted, a new one twice; another one, the one now first; or
 // encryption turned off, the one now.
 namespace passphrase_for {

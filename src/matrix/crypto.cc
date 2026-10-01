@@ -22,6 +22,7 @@ import knot;
 import loom.ev;
 import loom.cs.keys;
 import mux.vault;
+import mux.bytes;
 
 export namespace mux::matrix::crypto {
 
@@ -175,8 +176,8 @@ using signatures_t = std::map<std::string, std::map<std::string, std::string>>;
   try {
     auto public_key = vodozemac::types::ed25519_key_from_base64(rust::Str(key.data(), key.size()));
     auto made = vodozemac::types::ed25519_signature_from_base64(rust::Str(signature.data(), signature.size()));
-    public_key->verify(rust::Slice<const std::uint8_t>(reinterpret_cast<const std::uint8_t*>(canonical.data()), canonical.size()),
-                       *made);
+    const auto bytes = mux::bytes::of(canonical);
+    public_key->verify(rust::Slice<const std::uint8_t>(bytes.data(), bytes.size()), *made);
     return true;
   } catch (const rust::Error&) {
     return false;
@@ -539,7 +540,7 @@ class olm_machine {
       const auto opened = mux::vault::the().read_file(path);
       if (!opened || opened->size() != key.size())
         throw std::runtime_error("the encryption store's key cannot be read: " + path.string());
-      std::ranges::copy(*opened, reinterpret_cast<char*>(key.data()));
+      std::ranges::copy(mux::bytes::of(*opened), key.begin());
       return key;
     }
     // Not there, and a store there: its key lost -- an error, not a new key.
@@ -548,7 +549,7 @@ class olm_machine {
     // The system's own randomness (RAND_bytes), not std::random_device.
     const auto random = mux::vault::vault::random(key.size());
     std::ranges::copy(random, key.begin());
-    if (!mux::vault::the().write_file(path, std::string_view(reinterpret_cast<const char*>(key.data()), key.size()), true))
+    if (!mux::vault::the().write_file(path, mux::bytes::text_of(key), true))
       throw std::runtime_error("the encryption store's key cannot be written: " + path.string());
     return key;
   }
@@ -566,7 +567,8 @@ class olm_machine {
   }
 
   [[nodiscard]] std::string sign(std::string_view canonical) const {
-    const rust::Slice<const std::uint8_t> bytes(reinterpret_cast<const std::uint8_t*>(canonical.data()), canonical.size());
+    const auto signed_bytes = mux::bytes::of(canonical);
+    const rust::Slice<const std::uint8_t> bytes(signed_bytes.data(), signed_bytes.size());
     return std::string((*account_)->sign(bytes)->to_base64());
   }
 

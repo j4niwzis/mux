@@ -29,6 +29,7 @@ export module mux.vault;
 
 import std;
 import knot;
+import mux.bytes;
 
 export namespace mux::vault {
 
@@ -40,7 +41,7 @@ struct header {
   std::int64_t passes = 3;
   std::int64_t lanes = 4;
   std::string check;   // base64 of an encrypted known text
-  // A re-seal under way (#12355): turned on, its passphrase changed, or
+  // A re-seal under way: turned on, its passphrase changed, or
   // being turned off -- what is on disk may be plain, or under the key
   // before, until it is done. Finished at the next start where it was cut
   // short; a file is never left that nothing can open.
@@ -60,16 +61,17 @@ inline constexpr std::string_view kCheckText = "mux vault check";
 inline constexpr std::size_t kNonce = 12, kTag = 16;
 
 [[nodiscard]] inline std::string to_base64(std::span<const std::uint8_t> bytes) {
-  std::string out(4 * ((bytes.size() + 2) / 3) + 1, '\0');
-  const int n = EVP_EncodeBlock(reinterpret_cast<unsigned char*>(out.data()), bytes.data(), static_cast<int>(bytes.size()));
+  std::vector<std::uint8_t> out(4 * ((bytes.size() + 2) / 3) + 1);
+  const int n = EVP_EncodeBlock(out.data(), bytes.data(), static_cast<int>(bytes.size()));
   out.resize(static_cast<std::size_t>(n));
-  return out;
+  return mux::bytes::text_of(out);
 }
 [[nodiscard]] inline std::optional<std::vector<std::uint8_t>> from_base64(std::string_view text) {
   if (text.size() % 4 != 0)
     return std::nullopt;
   std::vector<std::uint8_t> out(3 * text.size() / 4 + 1);
-  const int n = EVP_DecodeBlock(out.data(), reinterpret_cast<const unsigned char*>(text.data()), static_cast<int>(text.size()));
+  const auto in = mux::bytes::of(text);
+  const int n = EVP_DecodeBlock(out.data(), in.data(), static_cast<int>(in.size()));
   if (n < 0)
     return std::nullopt;
   std::size_t size = static_cast<std::size_t>(n);
@@ -97,8 +99,7 @@ inline constexpr std::size_t kNonce = 12, kTag = 16;
   int len = 0;
   int bound_len = 0;
   if (!ctx || EVP_EncryptInit_ex(ctx.get(), EVP_aes_256_gcm(), nullptr, key.data(), nonce.data()) != 1 ||
-      EVP_EncryptUpdate(ctx.get(), nullptr, &bound_len, reinterpret_cast<const unsigned char*>(bound.data()),
-                        static_cast<int>(bound.size())) != 1 ||
+      EVP_EncryptUpdate(ctx.get(), nullptr, &bound_len, mux::bytes::of(bound).data(), static_cast<int>(bound.size())) != 1 ||
       EVP_EncryptUpdate(ctx.get(), out.data() + kNonce, &len, plain.data(), static_cast<int>(plain.size())) != 1)
     throw std::runtime_error("encryption failed");
   int tail = 0;
@@ -118,8 +119,7 @@ inline constexpr std::size_t kNonce = 12, kTag = 16;
   std::array<std::uint8_t, kTag> tag{};
   std::ranges::copy(sealed.subspan(kNonce + size, kTag), tag.begin());
   if (!ctx || EVP_DecryptInit_ex(ctx.get(), EVP_aes_256_gcm(), nullptr, key.data(), sealed.data()) != 1 ||
-      EVP_DecryptUpdate(ctx.get(), nullptr, &bound_len, reinterpret_cast<const unsigned char*>(bound.data()),
-                        static_cast<int>(bound.size())) != 1 ||
+      EVP_DecryptUpdate(ctx.get(), nullptr, &bound_len, mux::bytes::of(bound).data(), static_cast<int>(bound.size())) != 1 ||
       EVP_DecryptUpdate(ctx.get(), out.data(), &len, sealed.data() + kNonce, static_cast<int>(size)) != 1 ||
       EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_SET_TAG, static_cast<int>(kTag), tag.data()) != 1 ||
       EVP_DecryptFinal_ex(ctx.get(), out.data() + len, &tail) != 1)
@@ -272,7 +272,7 @@ class vault {
     const key_t key = detail::derive(passphrase, salt, how);
     const std::string_view text = detail::kCheckText;
     how.check = detail::to_base64(
-        detail::seal(key, std::span(reinterpret_cast<const std::uint8_t*>(text.data()), text.size()), detail::kCheckBound));
+        detail::seal(key, mux::bytes::of(text), detail::kCheckBound));
     key_ = key;
     return how;
   }
@@ -317,7 +317,8 @@ class vault {
     }
     if (!key_)
       return std::nullopt;
-    const auto bytes = std::span(reinterpret_cast<const std::uint8_t*>(text.data()), text.size()).subspan(detail::kMagic.size());
+    const auto all = mux::bytes::of(text);
+    const auto bytes = std::span<const std::uint8_t>(all).subspan(detail::kMagic.size());
     auto opened = this->opened_by_either(bytes, detail::bound_of(path));
     if (!opened)
       return std::nullopt;
@@ -334,12 +335,11 @@ class vault {
   [[nodiscard]] std::string encoded(const std::filesystem::path& path, std::string_view text) const {
     if (!key_ || going_off_)
       return std::string(text);
-    const auto sealed = detail::seal(*key_, std::span(reinterpret_cast<const std::uint8_t*>(text.data()), text.size()),
-                                     detail::bound_of(path));
+    const auto sealed = detail::seal(*key_, mux::bytes::of(text), detail::bound_of(path));
     std::string out;
     out.reserve(detail::kMagic.size() + sealed.size());
     out.append(detail::kMagic);
-    out.append(reinterpret_cast<const char*>(sealed.data()), sealed.size());
+    out.append(mux::bytes::text_of(sealed));
     return out;
   }
   // A line appended: sealed on its own where the vault is on.
@@ -357,7 +357,7 @@ class vault {
     if (!key_ || going_off_)
       return std::string(line);
     const auto sealed =
-        detail::seal(*key_, std::span(reinterpret_cast<const std::uint8_t*>(line.data()), line.size()), detail::bound_of(path));
+        detail::seal(*key_, mux::bytes::of(line), detail::bound_of(path));
     return std::string(detail::kLinePrefix) + detail::to_base64(sealed);
   }
   // A line read back from the file at `path`: opened where it is sealed;

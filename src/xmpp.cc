@@ -405,7 +405,7 @@ class account {
   void say(connection_t state) { sink_(change::connection_changed{id_, std::move(state)}); }
   // A fiber of this account. What it throws past its own handling -- the
   // unforeseen, a bug -- is caught here: let out, it left the loop and
-  // stopped every account's network without a word (#12355). It is logged
+  // stopped every account's network without a word. It is logged
   // and said; the account shows as failed, to be connected again from what
   // it kept, so that nothing half done of it is relied on.
   template <class Body>

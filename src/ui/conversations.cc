@@ -173,7 +173,7 @@ struct conversations_screen : nodes::Stack {
     const auto found = event_filters.find(chat);
     return found == event_filters.end() || found->second.shows(said.event_kind);
   }
-  // Chats listed in another account's list than their own (#11727): each
+  // Chats listed in another account's list than their own: each
   // account's, the chats moved out of their own, and the strip each shows
   // where it is listed elsewhere -- none where it is off. As the program
   // keeps them.
@@ -418,7 +418,7 @@ struct conversations_screen : nodes::Stack {
     namespace keys = scene::keys;
     // Alt+Right: into the forum gone to; Alt+Left: out of the one open, to
     // its row. Taken before the field: it moves its caret on Left and Right
-    // whatever the modifiers, and took Alt+Left from under this (#11645).
+    // whatever the modifiers, and took Alt+Left from under this.
     if (press.modifiers.template has<scene::modifier::alt>() && press.key == keys::kRight && pointed) {
       const conversation_id into = *std::exchange(pointed, std::nullopt);
       actions->choose(into);
@@ -678,7 +678,7 @@ struct conversations_screen : nodes::Stack {
                          .background = popup_colour(), .border = scene::Border{band_colour, 1.0f},
                          .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
     }
-    // A chat's: its settings (#11727).
+    // A chat's: its settings.
     struct chat_settings_act {
       Actions* actions;
       conversation_id id;
@@ -2176,7 +2176,7 @@ struct conversations_screen : nodes::Stack {
     jump_age = jumping_to ? jump_age + 1 : 0;
     // No time limit: a jump goes on as long as there is history to page
     // back through, as far as the chat's own limit (none, where it says 0) --
-    // or until it is stopped by hand, at the loader (#10989).
+    // or until it is stopped by hand, at the loader.
     // And while the older, asked at the top, are on their way.
     if (const bool loading = jump_age > 6 || (this->history_pending() && timeline.current() <= 300.0f);
         loading != chat.area.parts.loading.visible())
@@ -2626,7 +2626,7 @@ struct conversations_screen : nodes::Stack {
              appeared.insert(all[i].id).second;
     };
     // The bubbles, as a function of the messages: the timeline's, as a
-    // thread's are made (#11677).
+    // thread's are made.
     chat.area.show_messages(*one, all, first_made, last_made, now,
                             shown_how{.filter = filter,
                                       .receipts = receipts_in.contains(one->id),
@@ -2686,7 +2686,7 @@ struct conversations_screen : nodes::Stack {
     } else if (last != shown_last && !one->detached && !shown_detached) {
       // A jump far back holds the timeline from there: the pages after it
       // loaded as the reader goes down are not new, and 30 of them were
-      // counted as new under the button (#11438) -- nor the page that joins
+      // counted as new under the button -- nor the page that joins
       // it to the newest again.
       // What came after the newest shown before: others' messages the view
       // shows. Where that one is not here any more -- its id changed as the

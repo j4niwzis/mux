@@ -56,7 +56,7 @@ struct kept_settings {
   mux::config::history_settings history;
   // The chats muted, and the proxy profiles.
   std::set<conversation_id> muted;
-  // The chats listed in other accounts' lists than their own (#11727).
+  // The chats listed in other accounts' lists than their own.
   std::vector<mux::config::chat_placement> placements;
   // The chats that chose for themselves whether their room events show.
   std::map<conversation_id, bool> room_events;

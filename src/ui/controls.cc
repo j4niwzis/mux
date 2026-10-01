@@ -207,7 +207,7 @@ using no_back = no_action;
 
 // The head of a page: ← on the left where there is somewhere to go back to,
 // the page's name, and ✕ on the right where the page closes. Every panel,
-// box and page that has a title and a ✕ has this one (#11464).
+// box and page that has a title and a ✕ has this one.
 template <class Back, class Close>
 struct page_header : nodes::Stack {
   struct parts_t {
@@ -775,7 +775,7 @@ struct receipts_setting {
   }
 };
 // Link previews fetched from the sites themselves, through the account's
-// proxy, or through its server (#12177): the server, where nothing says
+// proxy, or through its server: the server, where nothing says
 // otherwise.
 struct previews_direct_setting {
   static constexpr std::string_view label = "Fetch link previews";
@@ -788,7 +788,7 @@ struct previews_direct_setting {
 };
 template <class Actions>
 using previews_direct_choice = show_hide_choice<Actions, previews_direct_setting>;
-// Others told one is typing -- never what (#12156): sent, where nothing says
+// Others told one is typing -- never what: sent, where nothing says
 // otherwise.
 struct typing_setting {
   static constexpr std::string_view label = "Send typing notifications";
@@ -835,7 +835,7 @@ struct compose_context {
 // its icon in the left column (historyReplySkip wide), then two lines --
 // "Reply to <name>" or "Edit message" in the accent, semibold, over a line
 // of the message -- and ✕ on the right to go back to a plain one. One bar
-// for every field that answers: the chat's composer, a thread's (#11409);
+// for every field that answers: the chat's composer, a thread's;
 // Cancel is what its ✕ does there.
 template <class Cancel>
 struct context_bar : nodes::Stack {

@@ -148,6 +148,8 @@ inline bool notify(std::string_view title, std::string_view text) {
   } const closing{fd};
   timeval wait{.tv_sec = 2, .tv_usec = 0};
   ::setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &wait, sizeof wait);
+  // The one cast a C API asks for: connect() takes every
+  // kind of address as a sockaddr.
   if (::connect(fd, reinterpret_cast<const sockaddr*>(&where), length) != 0)
     return false;
   const auto send_all = [&](std::string_view bytes) {

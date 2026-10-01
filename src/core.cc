@@ -238,7 +238,7 @@ struct other {
 };        // the room made, and the rest of what is said of the room
 struct unreadable {
   friend bool operator==(unreadable, unreadable) = default;
-};   // an event mux cannot read: said as "sent <its type>" (#11927)
+};   // an event mux cannot read: said as "sent <its type>"
 struct reactions {
   friend bool operator==(reactions, reactions) = default;
 };    // each reaction, as a line of its own: hidden unless chosen
@@ -522,12 +522,12 @@ struct set_need {  // the level a thing done asks
   power_need_t need;
   std::int64_t level = 0;
 };
-// Upgraded to a room version: a new room made, this one tombstoned (#11839).
+// Upgraded to a room version: a new room made, this one tombstoned.
 struct upgrade {
   std::string version;
 };
 // The level any kind of event asks, by its type as Matrix names it -- one
-// of the list's or not (#11826).
+// of the list's or not.
 struct set_event_need {
   std::string event;
   std::int64_t level = 0;
@@ -835,7 +835,7 @@ struct link_preview {
   std::string title;
   std::string description;
   std::optional<std::string> image;
-  // Read from the site itself (#12177): its picture an https address, to
+  // Read from the site itself: its picture an https address, to
   // be fetched from there too -- and only where the chat fetches previews
   // so; else kept on the server (an mxc://).
   bool from_site = false;
@@ -987,7 +987,7 @@ struct session_given {
 struct members_changed {
   conversation_id in;
   std::vector<member> members;
-  std::vector<knock_request> knocking;  // asking to join (#11857)
+  std::vector<knock_request> knocking;  // asking to join
 };
 
 struct conversation_removed {
@@ -1442,8 +1442,7 @@ class model {
                             // those -- it was sent before them. After them, a
                             // message sent a second before another, its copy
                             // come by the sync unmatched to its echo, stood
-                            // below the next one until that one's came too
-                            // (#11542).
+                            // below the next one until that one's came too.
                             if (one.message.outgoing) {
                               const auto pending = std::ranges::find_if(where.timeline, [](const message& said) {
                                 return said.outgoing &&

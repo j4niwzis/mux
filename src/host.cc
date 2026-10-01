@@ -13,6 +13,7 @@ module;
 export module mux.host;
 
 import std;
+import mux.bytes;
 import splice;
 import skia;
 import skiff.paint;
@@ -364,8 +365,8 @@ inline gl_kind_t gl_kind_of(std::string_view renderer) {
   return gl_kind::hardware{};
 }
 // Said at the start, where it is seen: which renderer drawing got.
-inline void say_gl_renderer(const char* name) {
-  const std::string_view renderer = name ? name : "unknown";
+inline void say_gl_renderer(const std::string& name) {
+  const std::string_view renderer = name.empty() ? std::string_view("unknown") : std::string_view(name);
   std::println(std::cerr, "[render] OpenGL renderer: {}", renderer);
   splice::visit(splice::overloaded{[](gl_kind::hardware) {},
                                    [](gl_kind::emulated) {
@@ -390,6 +391,8 @@ class canvas_target {
         auto interface = skia::GrGLMakeNativeInterface();
         if (!interface)
           interface = skia::GrGLMakeAssembledInterface(nullptr, [](void*, const char name[]) -> skia::GrGLFuncPtr {
+            // The one cast a C API asks for: a loader gives
+            // every GL function as one pointer type, Skia takes another.
             return reinterpret_cast<skia::GrGLFuncPtr>(SDL_GL_GetProcAddress(name));
           });
         // Asked of the context SDL made, through SDL's own loader: Skia's
@@ -397,10 +400,11 @@ class canvas_target {
         // context made through EGL (Wayland, GLES) -- the renderer said
         // "unknown" while drawing went on.
         using get_string_t = const unsigned char* (*)(unsigned int);
+        // As above: the loader's one pointer type, made the function's.
         if (const auto get_string = reinterpret_cast<get_string_t>(SDL_GL_GetProcAddress("glGetString")))
-          say_gl_renderer(reinterpret_cast<const char*>(get_string(0x1F01 /* GL_RENDERER */)));
+          say_gl_renderer(mux::bytes::text_of_terminated(get_string(0x1F01 /* GL_RENDERER */)));
         else if (interface && interface->fFunctions.fGetString)
-          say_gl_renderer(reinterpret_cast<const char*>(interface->fFunctions.fGetString(0x1F01 /* GL_RENDERER */)));
+          say_gl_renderer(mux::bytes::text_of_terminated(interface->fFunctions.fGetString(0x1F01 /* GL_RENDERER */)));
         if (interface)
           context_ = skia::MakeGL(std::move(interface));
       }

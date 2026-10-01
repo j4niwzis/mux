@@ -83,7 +83,7 @@ class menu_part {
           if (!it->body.plain.empty())
             line = mux::ui::quote_line_of(*it, *chat, s_->model);
         }
-    // A thread's root or answer, its thread open: answered there (#11379).
+    // A thread's root or answer, its thread open: answered there.
     if (said) {
       const std::string root = said->thread ? *said->thread : said->id;
       if (s_->root().main().answer_in_thread(

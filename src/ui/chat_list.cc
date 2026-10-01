@@ -118,7 +118,7 @@ struct conversation_row : nodes::Stack {
     avatar_mark face;
     lines_column lines;
     // Listed in another account's list than its own: a rounded strip on its
-    // left in its colour (#11727) -- out of the flow, in the row's padding.
+    // left in its colour -- out of the flow, in the row's padding.
     nodes::Box<> strip{0u};
   } parts;
 

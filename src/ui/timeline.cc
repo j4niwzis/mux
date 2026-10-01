@@ -98,7 +98,7 @@ inline void show_wallpaper_on(wallpaper_t& wall, const config::wallpaper_t& chos
 
 // A press on what is in a message -- a picture, a file, a reply's quote,
 // its sender -- as a click, wherever the message is shown: the timeline, a
-// thread (#11563). The press in the space its bubble is laid out in.
+// thread. The press in the space its bubble is laid out in.
 template <class Actions>
 [[nodiscard]] bool press_in_bubble(Actions* actions, const message_bubble& one, float x, float y, const conversation* chat) {
   const struct {

@@ -221,8 +221,9 @@ class player {
     while (avcodec_receive_frame(audio_.get(), frame_.get()) == 0) {
       if (resampler_ && sound_) {
         const int most = swr_get_out_samples(resampler_.get(), frame_->nb_samples);
-        samples_.resize(static_cast<std::size_t>(std::max(0, most)) * 2u);
-        std::uint8_t* out[1] = {reinterpret_cast<std::uint8_t*>(samples_.data())};
+        // Bytes, as the resampler writes them: two floats a sample.
+        samples_.resize(static_cast<std::size_t>(std::max(0, most)) * 2u * sizeof(float));
+        std::uint8_t* out[1] = {samples_.data()};
         const int made = swr_convert(resampler_.get(), out, most,
                                      const_cast<const std::uint8_t**>(frame_->extended_data), frame_->nb_samples);
         if (made > 0)
@@ -264,7 +265,7 @@ class player {
   std::unique_ptr<SwrContext, resampler_closer> resampler_;
   std::unique_ptr<SDL_AudioStream, stream_closer> sound_;
   std::vector<std::uint8_t> rgba_;
-  std::vector<float> samples_;
+  std::vector<std::uint8_t> samples_;
   skia::Sp<skia::SkImage> picture_;
   std::optional<std::pair<skia::Sp<skia::SkImage>, double>> ahead_;
   bool started_ = false, paused_ = false, ended_ = false, draining_ = false;

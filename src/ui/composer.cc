@@ -224,7 +224,7 @@ struct field_quotes {
     switch (code_at(text, start)) {
       case code_line::opening:
         return {.hidden = paragraph_length(text, start), .indent = quoted + kCodeIndent, .right = right + kCodeRight, .monospace = true};
-      // Not seen at all, as a sent block has no foot (#11942).
+      // Not seen at all, as a sent block has no foot.
       case code_line::closing:
         return {.hidden = paragraph_length(text, start), .indent = quoted + kCodeIndent, .right = right + kCodeRight, .monospace = true,
                 .collapsed = true};
@@ -298,7 +298,7 @@ struct field_quotes {
   }
   // Typography as it is typed, as Telegram's: "--" an em dash, "<<" and
   // ">>" guillemets -- not in code, nor where a line begins (a quote's
-  // marks). Backspace right after one gives back the two it was (#11786).
+  // marks). Backspace right after one gives back the two it was.
   static constexpr std::array<std::pair<std::string_view, std::string_view>, 3> kTypography{
       {{"--", "\u2014"}, {"<<", "\u00AB"}, {">>", "\u00BB"}}};
   [[nodiscard]] static bool plain_at(std::string_view text, std::size_t caret) {
@@ -405,7 +405,7 @@ struct field_quotes {
 
 // Where a message is written: the paperclip, the field growing with what is
 // written in it -- quotes and custom emoji shown as they will be sent -- the
-// emoji, the arrow. The chat's composer and a thread's (#11409); what each
+// emoji, the arrow. The chat's composer and a thread's; what each
 // button does is said by where it is.
 template <class Submit, class Attach, class Emoji, class Send>
 struct message_input : nodes::Stack {
@@ -441,7 +441,7 @@ struct message_input : nodes::Stack {
 
 // Where what is written goes, as a composer is told it: what its ✕, its
 // Enter, its paperclip, its emoji and its arrow do, and what its empty field
-// says. The chat's own; a thread's is its panel's (#11677).
+// says. The chat's own; a thread's is its panel's.
 template <class Actions>
 struct in_chat {
   using cancel = ask<Actions, &Actions::cancel_compose>;
@@ -499,7 +499,7 @@ struct composer_bar : nodes::Stack {
   };
   // A tombstoned room's: "This room has been replaced and is no longer
   // active", and the room it goes on in, opened -- joined, where it is not
-  // yet (#11839).
+  // yet.
   using go_on = ask<Actions, &Actions::open_replacement>;
   struct replaced_row : nodes::Stack {
     struct parts_t {
@@ -516,7 +516,7 @@ struct composer_bar : nodes::Stack {
       parts.go.apply({.height = 30.0f, .alignSelf = scene::align::kMiddle});
     }
   };
-  // Those asking to join (#11857), for those who may let them in: the first
+  // Those asking to join, for those who may let them in: the first
   // of them -- who, and why -- with Approve (an invite) and Deny (their
   // knock refused), and how many more.
   struct approve_it {

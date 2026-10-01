@@ -273,7 +273,7 @@ class pictures_part {
             pictures_of(one.timeline[i]);
           // The thread open beside the chat: its answers' pictures, senders
           // and emoji, as the timeline's -- they were never asked for, and
-          // its pictures never came (#11630).
+          // its pictures never came.
           if (const auto thread = screen.thread_open())
             if (const auto found = one.threads.find(*thread); found != one.threads.end())
               for (const message& said : found->second) {

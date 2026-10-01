@@ -300,7 +300,7 @@ struct network {
     });
   }
   // A link's preview: asked of the account's server, or, where the chat
-  // chose so, of the site itself, through the account's proxy (#12177).
+  // chose so, of the site itself, through the account's proxy.
   void fetch_preview(const mux::account_id& by, std::string url, bool direct) {
     if (direct) {
       loop.post([this, by, url = std::move(url)] {

@@ -5,6 +5,7 @@
 export module mux.logic.emoji;
 
 import std;
+import mux.bytes;
 import mux.logic.text;
 export import alef.emoji;
 
@@ -35,9 +36,11 @@ namespace mux::logic {
 [[nodiscard]] inline const std::unordered_map<std::string, std::string>& emoji_keywords() {
   static const std::unordered_map<std::string, std::string> read = [] {
     std::unordered_map<std::string, std::string> out;
-    const std::array<std::string_view, 2> files{
-        std::string_view(reinterpret_cast<const char*>(mux_cldr_en), mux_cldr_en_size),
-        std::string_view(reinterpret_cast<const char*>(mux_cldr_ru), mux_cldr_ru_size)};
+    // Copied once, a byte at a time, into text.
+    const std::array<std::string, 2> texts{
+        mux::bytes::text_of(std::span<const std::uint8_t>(mux_cldr_en, mux_cldr_en_size)),
+        mux::bytes::text_of(std::span<const std::uint8_t>(mux_cldr_ru, mux_cldr_ru_size))};
+    const std::array<std::string_view, 2> files{texts[0], texts[1]};
     static constexpr std::string_view kOpen = "<annotation cp=\"";
     for (const std::string_view xml : files)
       for (std::size_t at = xml.find(kOpen); at != std::string_view::npos; at = xml.find(kOpen, at)) {

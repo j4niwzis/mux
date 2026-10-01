@@ -269,7 +269,7 @@ struct account_chats : nodes::Stack {
     }
   };
   struct parts_t {
-    // Its colour, as only this page shows it (#11727, #11758): the strip of
+    // Its colour, as only this page shows it: the strip of
     // its chats listed in other accounts' lists, unless they chose another.
     nodes::Text colour_title = section_title("COLOUR");
     accent_circles<set_colour> colours;

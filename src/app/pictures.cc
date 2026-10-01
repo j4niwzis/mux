@@ -162,8 +162,8 @@ class pictures_part {
           for (std::size_t i = first; i < last && i < one.timeline.size(); ++i)
             if (const auto& forwarded = one.timeline[i].forwarded; forwarded && forwarded->from.starts_with('@')) {
               const std::string& from = forwarded->from;
-              if (const auto member = std::ranges::find(one.members, from, &member::id); member != one.members.end() && member->avatar)
-                want(id, member->avatar, from);
+              if (const auto in_room = std::ranges::find(one.members, from, &member::id); in_room != one.members.end() && in_room->avatar)
+                want(id, in_room->avatar, from);
               else if (const auto known = profile_avatars.find(from); known != profile_avatars.end())
                 want(id, known->second, from);
               else if (profiles_asked.insert(from).second)

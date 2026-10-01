@@ -2458,51 +2458,6 @@ struct conversations_screen : nodes::Stack {
     const auto filter_found = event_filters.find(one->id);
     const room_event_filter filter = filter_found == event_filters.end() ? room_event_filter{} : filter_found->second;
     const auto shows = [&](const message& said) { return !said.service || filter.shows(said.event_kind); };
-    const auto neighbour = [&](std::size_t i, bool forward) -> std::optional<std::size_t> {
-      for (std::size_t j = i;;) {
-        if (forward ? j + 1 >= all.size() : j == 0)
-          return std::nullopt;
-        j = forward ? j + 1 : j - 1;
-        if (shows(all[j]))
-          return j;
-      }
-    };
-    const auto same = [&](std::size_t i, std::optional<std::size_t> j) {
-      return j && !all[i].service && !all[*j].service && all[*j].sender == all[i].sender &&
-             all[*j].outgoing == all[i].outgoing;
-    };
-    // Who has read up to where, where the chat shows it: each other person
-    // on the message their receipt points at -- or, pointing at what is not
-    // shown or not here, the nearest shown before it, by its time.
-    std::map<std::string, std::vector<std::string>> readers;
-    if (receipts_in.contains(one->id)) {
-      std::map<std::string, std::size_t> place;
-      for (std::size_t i = 0; i < all.size(); ++i)
-        place.emplace(all[i].id, i);
-      for (const auto& [user, event] : one->read_by) {
-        if (user == one->id.account.address)
-          continue;
-        std::optional<std::size_t> at;
-        if (const auto found = place.find(event); found != place.end())
-          at = found->second;
-        else if (const auto when = one->receipt_times.find(user); when != one->receipt_times.end())
-          for (std::size_t j = all.size(); j-- > 0;)
-            if (all[j].at <= when->second) {
-              at = j;
-              break;
-            }
-        while (at && !shows(all[*at]))
-          at = *at == 0 ? std::nullopt : std::optional<std::size_t>(*at - 1);
-        if (at)
-          readers[all[*at].id].push_back(user);
-      }
-    }
-    const auto readers_of = [&](std::size_t i) {
-      const auto found = readers.find(all[i].id);
-      return found == readers.end() ? std::vector<std::string>{} : found->second;
-    };
-    const auto first_of_run = [&](std::size_t i) { return !same(i, neighbour(i, false)); };
-    const auto last_of_run = [&](std::size_t i) { return !same(i, neighbour(i, true)); };
     // A chat shown anew: its stretch as it was left, or its newest.
     if (shown_chat != chosen)
       parts.threads.open.reset();
@@ -2524,16 +2479,6 @@ struct conversations_screen : nodes::Stack {
     const auto newest_before = std::ranges::find(all, shown_last, &message::id);
     const std::size_t new_from =
         newest_before == all.end() ? all.size() : static_cast<std::size_t>(newest_before - all.begin()) + 1;
-    // What the message a bubble replies to says now, where it is held: a
-    // bubble quoting it is made again as it changes -- edited, deleted --
-    // not left quoting what it said once.
-    const auto quote_body = [&](std::size_t i) -> std::optional<decltype(message::body)> {
-      if (!all[i].replies_to)
-        return std::nullopt;
-      if (const message* said = held_message(*one, *all[i].replies_to))
-        return said->body;
-      return std::nullopt;
-    };
     const auto arrives = [&](std::size_t i) {
       const bool acknowledged = all[i].outgoing && splice::visit(splice::overloaded{[](const delivery::sent&) { return true; },
                                                                          [](const auto&) { return false; }},
@@ -2541,37 +2486,14 @@ struct conversations_screen : nodes::Stack {
       return same_chat && was_at_end && i >= new_from && shows(all[i]) && !acknowledged &&
              appeared.insert(all[i].id).second;
     };
-    // The bubbles, as a function of the messages: those that show the same
-    // are kept -- with a selection in them -- and only the new are made.
-    if (nodes::reconcile(
-            entries, std::views::iota(first_made, last_made),
-            [&](std::size_t i) { return all[i].id; }, [](const message_bubble& row) { return row.message_id; },
-            [&](std::size_t i) {
-              message_bubble made(*one, all[i], first_of_run(i), last_of_run(i), &now, shows(all[i]),
-                                  !previews_off.contains(one->id));
-              made.quote_said = quote_body(i);
-              if (unread_from && all[i].id == *unread_from)
-                made.mark_unread_start();
-              made.show_readers(*one, readers_of(i));
-              rooms_wanted.insert(made.rooms_unknown.begin(), made.rooms_unknown.end());
-              if (arrives(i))
-                made.appear();
-              return made;
-            },
-            [&](const message_bubble& row, std::size_t i) {
-              const bool quote_known = !all[i].replies_to || one->quoted.contains(*all[i].replies_to) ||
-                                       std::ranges::find(all, *all[i].replies_to, &message::id) != all.end();
-              const auto link = first_link_of(all[i]);
-              const bool preview_known = link && now.previews.contains(*link);
-              return row.said == all[i] && row.quote_said == quote_body(i) && row.first == first_of_run(i) &&
-                     row.last == last_of_run(i) &&
-                     row.quote_known == quote_known && row.events_shown == shows(all[i]) && row.unread_start == (unread_from && all[i].id == *unread_from) &&
-                     row.preview_known == preview_known && row.readers_shown == readers_of(i) &&
-                     row.previews_shown == !previews_off.contains(one->id) && !row.rooms_came();
-            }))
-      // Laid out again; painted where rows came, went or moved -- a hidden
-      // one coming moves nothing, and paints nothing.
-      std::get<0>(timeline.fChildren).fState.relayoutQuietly();
+    // The bubbles, as a function of the messages: the timeline's, as a
+    // thread's are made (#11677).
+    chat.area.show_messages(*one, all, first_made, last_made, now,
+                            shown_how{.filter = filter,
+                                      .receipts = receipts_in.contains(one->id),
+                                      .previews = !previews_off.contains(one->id),
+                                      .unread_from = unread_from},
+                            arrives, rooms_wanted);
     rooms_waiting.clear();
     rooms_unfound.clear();
     for (const message_bubble& row : entries) {

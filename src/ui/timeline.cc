@@ -290,6 +290,15 @@ template <class Actions>
   return facts;
 }
 
+// How a stretch of messages is shown: which room events, whether readers
+// and link previews, and where the unread start.
+struct shown_how {
+  room_event_filter filter;
+  bool receipts = false;
+  bool previews = true;
+  std::optional<std::string> unread_from;
+};
+
 template <class Actions>
 struct timeline_area : scene::Node {
   // The loader's cross: the message jumped to no longer looked for.
@@ -346,6 +355,104 @@ struct timeline_area : scene::Node {
   // The bubbles in the list, as they are made.
   [[nodiscard]] std::vector<message_bubble>& bubbles() {
     return std::get<0>(std::get<0>(parts.timeline.fChildren).fChildren);
+  }
+  // The bubbles, as a function of the messages from first to last of
+  // all -- a chat's timeline, or a thread's root and answers: those that
+  // show the same are kept, with a selection in them, and only the new are
+  // made. Where each is in its sender's run (the first has the name, the
+  // last the avatar), who has read up to it, what its quote says now.
+  // Arrives(i): whether the bubble of all[i] comes in moving.
+  template <class Arrives>
+  void show_messages(const conversation& one, const std::vector<message>& all, std::size_t first_made, std::size_t last_made,
+                     const model& now, const shown_how& how, Arrives arrives, std::set<std::string>& rooms_wanted) {
+    auto& entries = this->bubbles();
+    const auto shows = [&](const message& said) { return !said.service || how.filter.shows(said.event_kind); };
+    const auto neighbour = [&](std::size_t i, bool forward) -> std::optional<std::size_t> {
+      for (std::size_t j = i;;) {
+        if (forward ? j + 1 >= all.size() : j == 0)
+          return std::nullopt;
+        j = forward ? j + 1 : j - 1;
+        if (shows(all[j]))
+          return j;
+      }
+    };
+    const auto same = [&](std::size_t i, std::optional<std::size_t> j) {
+      return j && !all[i].service && !all[*j].service && all[*j].sender == all[i].sender &&
+             all[*j].outgoing == all[i].outgoing;
+    };
+    // Who has read up to where, where the chat shows it: each other person
+    // on the message their receipt points at -- or, pointing at what is not
+    // shown or not here, the nearest shown before it, by its time.
+    std::map<std::string, std::vector<std::string>> readers;
+    if (how.receipts) {
+      std::map<std::string, std::size_t> place;
+      for (std::size_t i = 0; i < all.size(); ++i)
+        place.emplace(all[i].id, i);
+      for (const auto& [user, event] : one.read_by) {
+        if (user == one.id.account.address)
+          continue;
+        std::optional<std::size_t> at;
+        if (const auto found = place.find(event); found != place.end())
+          at = found->second;
+        else if (const auto when = one.receipt_times.find(user); when != one.receipt_times.end())
+          for (std::size_t j = all.size(); j-- > 0;)
+            if (all[j].at <= when->second) {
+              at = j;
+              break;
+            }
+        while (at && !shows(all[*at]))
+          at = *at == 0 ? std::nullopt : std::optional<std::size_t>(*at - 1);
+        if (at)
+          readers[all[*at].id].push_back(user);
+      }
+    }
+    const auto readers_of = [&](std::size_t i) {
+      const auto found = readers.find(all[i].id);
+      return found == readers.end() ? std::vector<std::string>{} : found->second;
+    };
+    const auto first_of_run = [&](std::size_t i) { return !same(i, neighbour(i, false)); };
+    const auto last_of_run = [&](std::size_t i) { return !same(i, neighbour(i, true)); };
+    // What the message a bubble replies to says now, where it is held: a
+    // bubble quoting it is made again as it changes -- edited, deleted --
+    // not left quoting what it said once.
+    const auto quote_body = [&](std::size_t i) -> std::optional<decltype(message::body)> {
+      if (!all[i].replies_to)
+        return std::nullopt;
+      if (const message* said = held_message(one, *all[i].replies_to))
+        return said->body;
+      return std::nullopt;
+    };
+    // The bubbles, as a function of the messages: those that show the same
+    // are kept -- with a selection in them -- and only the new are made.
+    if (nodes::reconcile(
+            entries, std::views::iota(first_made, last_made),
+            [&](std::size_t i) { return all[i].id; }, [](const message_bubble& row) { return row.message_id; },
+            [&](std::size_t i) {
+              message_bubble made(one, all[i], first_of_run(i), last_of_run(i), &now, shows(all[i]),
+                                  how.previews);
+              made.quote_said = quote_body(i);
+              if (how.unread_from && all[i].id == *how.unread_from)
+                made.mark_unread_start();
+              made.show_readers(one, readers_of(i));
+              rooms_wanted.insert(made.rooms_unknown.begin(), made.rooms_unknown.end());
+              if (arrives(i))
+                made.appear();
+              return made;
+            },
+            [&](const message_bubble& row, std::size_t i) {
+              const bool quote_known = !all[i].replies_to || one.quoted.contains(*all[i].replies_to) ||
+                                       std::ranges::find(all, *all[i].replies_to, &message::id) != all.end();
+              const auto link = first_link_of(all[i]);
+              const bool preview_known = link && now.previews.contains(*link);
+              return row.said == all[i] && row.quote_said == quote_body(i) && row.first == first_of_run(i) &&
+                     row.last == last_of_run(i) &&
+                     row.quote_known == quote_known && row.events_shown == shows(all[i]) && row.unread_start == (how.unread_from && all[i].id == *how.unread_from) &&
+                     row.preview_known == preview_known && row.readers_shown == readers_of(i) &&
+                     row.previews_shown == how.previews && !row.rooms_came();
+            }))
+      // Laid out again; painted where rows came, went or moved -- a hidden
+      // one coming moves nothing, and paints nothing.
+      std::get<0>(parts.timeline.fChildren).fState.relayoutQuietly();
   }
   // A message swiped left: watched from above, before the list's scrolling
   // and a text's selecting see the pointer. A press that moves left at once,

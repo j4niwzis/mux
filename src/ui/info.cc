@@ -1697,17 +1697,19 @@ struct threads_panel : nodes::Stack {
   // The chat's own field, its paperclip and emoji sending into the thread.
   using input_t = message_input<sent, ask<Actions, &Actions::attach_in_thread>, ask<Actions, &Actions::toggle_thread_emoji>, send_press>;
   using rows_t = nodes::Flow<std::vector<thread_row>>;
-  using answers_t = nodes::Flow<std::vector<message_bubble>>;
   struct parts_t {
     head_t head;
     nodes::Box<> divider{band_colour};
     nodes::Text empty{"No threads here yet.", 13.0f, dim_colour};
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 2.0f, .wrap = false}, {})};
-    nodes::ScrollContainer<answers_t> answers{answers_t({.spacingY = 0.0f, .wrap = false}, {})};
+    // The thread open: the chat's own timeline, its root and answers in it
+    // -- one renderer for both (#11677): runs, readers, quotes, presses,
+    // menus, swipes, pictures, all as the chat has them.
+    timeline_area<Actions> answers;
     context_bar<stop_answer> replying;
     input_t input;
   } parts;
-  explicit threads_panel(Actions* a) : actions(a), parts{.head = head_t("Threads", {a}, {a}, false, true), .replying = context_bar<stop_answer>({this}), .input = input_t("Reply in thread…", {this}, {a}, {a}, {this})} {
+  explicit threads_panel(Actions* a) : actions(a), parts{.head = head_t("Threads", {a}, {a}, false, true), .answers = timeline_area<Actions>(a), .replying = context_bar<stop_answer>({this}), .input = input_t("Reply in thread…", {this}, {a}, {a}, {this})} {
     fState.apply({.fillY = true, .background = sidebar_colour});
     parts.divider.apply({.fillX = true, .height = 1.0f});
     parts.empty.apply({.margin = {16.0f, 16.0f, 0.0f, 16.0f}});
@@ -1716,7 +1718,11 @@ struct threads_panel : nodes::Stack {
     for (auto* list : std::initializer_list<scene::Node*>{&parts.list, &parts.answers})
       list->apply({.fillX = true, .grow = scene::axes::kY});
     std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 4.0f, 4.0f, 4.0f}});
-    std::get<0>(parts.answers.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 4.0f, 8.0f, 4.0f}});
+    // The chat's buttons over its timeline are the chat's: not here.
+    for (scene::Node* button : std::initializer_list<scene::Node*>{&parts.answers.parts.jump, &parts.answers.parts.back,
+                                                                   &parts.answers.parts.mentions, &parts.answers.parts.reactions,
+                                                                   &parts.answers.parts.loading})
+      button->setVisible(false);
     this->setVisible(false);
   }
   // Brought up to date with the chat: its threads listed, or the one open
@@ -1767,51 +1773,23 @@ struct threads_panel : nodes::Stack {
       return;
     const bool grew = now_shown.size() > shown.size();
     shown = std::move(now_shown);
-    auto& bubbles = std::get<0>(std::get<0>(parts.answers.fChildren).fChildren);
-    bubbles.clear();
-    bubbles.reserve(shown.size());
-    for (std::size_t i = 0; i < shown.size(); ++i) {
-      const bool first = i == 0 || shown[i - 1].sender != shown[i].sender || i == 1;
-      const bool last = i + 1 == shown.size() || shown[i + 1].sender != shown[i].sender || i == 0;
-      bubbles.emplace_back(chat, shown[i], first, last, now);
-    }
+    parts.answers.seen_model = now;
+    parts.answers.seen_chat = chat.id;
+    std::set<std::string> rooms;
+    parts.answers.show_messages(chat, shown, 0, shown.size(), *now, shown_how{}, [](std::size_t) { return false; }, rooms);
     parts.answers.invalidateLayout();
     if (grew)
-      parts.answers.scrollToEnd(false);
-  }
-  // A right-click on an answer in the thread open: the message's menu, as in
-  // the chat -- Copy, its link under the pointer, Reply, Delete, reactions.
-  using scene::Node::onPointer;
-  void onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
-    if (press.button != 3 || !open)
-      return;
-    for (const message_bubble& one : std::get<0>(std::get<0>(parts.answers.fChildren).fChildren))
-      if (parts.answers.toView(one.bounds()).contains(press.x, press.y) && !one.message_id.empty()) {
-        actions->message_menu(facts_of_bubble(one, this->chat_of(), press.x, press.y));
-        reply.handle();
-        return;
-      }
-  }
-  // A press on what is in an answer -- a quote, a picture, a file, a
-  // sender -- as in the chat's timeline (#11563).
-  [[nodiscard]] bool onClick(float x, float y) {
-    if (!open || !parts.answers.visible())
-      return false;
-    const float in_y = y - parts.answers.contentsShift();
-    for (const message_bubble& one : std::get<0>(std::get<0>(parts.answers.fChildren).fChildren))
-      if (press_in_bubble(actions, one, x, in_y, this->chat_of()))
-        return true;
-    return false;
+      parts.answers.parts.timeline.scrollToEnd(false);
   }
   [[nodiscard]] const conversation* chat_of() const { return seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr; }
   // Scrolled to an answer of the thread open, and flashed: a quote of it
   // pressed. False where it is not one of its.
   bool scroll_to(const std::string& id) {
-    auto& bubbles = std::get<0>(std::get<0>(parts.answers.fChildren).fChildren);
+    auto& bubbles = parts.answers.bubbles();
     const auto found = std::ranges::find(bubbles, id, &message_bubble::message_id);
     if (found == bubbles.end())
       return false;
-    parts.answers.scrollTo(found->bounds().fTop - 8.0f);
+    parts.answers.parts.timeline.scrollTo(found->bounds().fTop - 8.0f);
     found->flash.jump(1.0f);
     found->flash.setTarget(0.0f);
     found->markDamaged();

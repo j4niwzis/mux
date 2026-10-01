@@ -58,7 +58,14 @@ class menu_part {
       at = end + 1;
     }
     quote += '\n';
-    auto& line = s_->root().main().line;
+    // Into the field that answers it: the thread's, where it is answered there.
+    auto& screen = s_->root().main();
+    if (screen.parts.threads.answering == target_.id) {
+      auto& field = screen.parts.threads.parts.input.parts.field;
+      field.setText(quote + std::string(field.text()));
+      return;
+    }
+    auto& line = screen.line;
     line.set_text(quote + std::string(line.text()));
   }
   // As tdesktop's: "Reply to <name>" over a line of the message.

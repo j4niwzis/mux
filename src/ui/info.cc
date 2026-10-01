@@ -550,7 +550,10 @@ struct devtools_box : nodes::Stack {
     devtools_box* box;
     std::string type;
     std::optional<std::string> key;
-    void operator()() const { box->pending = pick{box, type, key}; }
+    void operator()() const {
+      box->pending = pick{box, type, key};
+      scene::work::mark(box->fState.fId);  // its next frame asked for: nothing else asks
+    }
   };
   struct send_press {
     devtools_box* box;

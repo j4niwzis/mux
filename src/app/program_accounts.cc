@@ -184,10 +184,13 @@ void app::wallpaper_file(const std::string& path) {
     root().show_message("Chat background", "That file is not a picture mux can show.");
     return;
   }
-  const auto folder = mux::config::state_path("wallpapers");
+  // Kept under its own name -- shown where it is chosen -- in a folder its
+  // bytes name: two pictures of one name are two files.
+  const auto folder = mux::config::state_path("wallpapers") / std::format("{:016x}", std::hash<std::string>{}(bytes));
   std::error_code failed;
   std::filesystem::create_directories(folder, failed);
-  const auto kept = folder / std::format("{:016x}.{}", std::hash<std::string>{}(bytes), mux::media::extension_of(*type));
+  const std::filesystem::path given = std::filesystem::path(path).filename();
+  const auto kept = folder / (given.empty() ? std::filesystem::path(std::format("picture.{}", mux::media::extension_of(*type))) : given);
   std::ofstream(kept, std::ios::binary) << bytes;
   const mux::config::wallpaper_t chosen = mux::config::wallpaper::picture{kept.string()};
   splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) { wallpaper = chosen; },

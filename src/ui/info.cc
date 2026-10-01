@@ -1518,8 +1518,15 @@ struct look_choices : nodes::Stack {
       out.emplace_back(splice::visit(splice::overloaded{[](choice_level::chat) { return "As above"; },
                                                         [](const auto&) { return "As above"; }},
                                      level));
-    for (const char* name : {"Theme default", "Plain colour", "Image\u2026"})
+    for (const char* name : {"Theme default", "Plain colour"})
       out.emplace_back(name);
+    // The picture's: by its file's name, where one is chosen here.
+    out.emplace_back(splice::visit(
+        splice::overloaded{[](const config::wallpaper::picture& at) {
+                             return std::format("Image: {}", std::filesystem::path(at.path).filename().string());
+                           },
+                           [](const auto&) { return std::string("Image\u2026"); }},
+        looks_at(level).wallpaper.value_or(config::wallpaper_t{config::wallpaper::theme{}})));
     return out;
   }
   [[nodiscard]] static std::size_t background_index(const choice_level_t& level) {

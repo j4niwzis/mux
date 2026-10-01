@@ -1370,6 +1370,7 @@ struct message_bubble : nodes::Stack {
                          .width = 10.0f,
                          .height = 12.0f});
       fState.apply({.corners = mine ? scene::Corners{12.0f, 12.0f, 0.0f, 12.0f} : scene::Corners{12.0f, 12.0f, 12.0f, 0.0f}});
+      this->sync_frost();
     }
     // Before its first layout, where the time goes is guessed from the text
     // wrapped at the bubble's widest -- where it does wrap, but in a chat
@@ -1412,6 +1413,18 @@ struct message_bubble : nodes::Stack {
       // Its plate over the frost, not under it: the pane's tint, its own none.
       parts.frost->setTint(fState.fBackground);
       fState.apply({.background = skia::SkColor{0}});
+      this->sync_frost();
+    }
+    // The pane in its shape: to its edges past its padding, in its corners --
+    // each corner's own, where a tail squares one. Again as either changes:
+    // a pane left at other padding stood out of the bubble, over the rows
+    // around it and past what was repainted of it.
+    void sync_frost() {
+      if (!parts.frost)
+        return;
+      const scene::Margin& pad = fState.fPadding;
+      parts.frost->apply({.margin = {-pad.fTop, -pad.fRight, -pad.fBottom, -pad.fLeft}, .cornerRadius = fState.fCornerRadius,
+                          .corners = fState.fCorners});
     }
     body_column(bool mine, std::string said, std::string when)
         : outgoing(mine),
@@ -1625,6 +1638,7 @@ struct message_bubble : nodes::Stack {
           body.parts.picture->show_time(when);
           body.parts.time.setVisible(false);
           body.apply({.padding = {3.0f, 3.0f, 3.0f, 3.0f}});
+          body.sync_frost();
         }
       }
     }

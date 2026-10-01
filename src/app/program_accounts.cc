@@ -197,13 +197,24 @@ void app::wallpaper_file(const std::string& path) {
                                      });
                                    },
                                    [&](mux::choice_level::chat) {
-                                     if (const auto& chat = root().main().chosen)
+                                     // The chat Manage is for: a space, where its settings are open.
+                                     if (const auto chat = this->managed())
                                        wallpaper_in.insert_or_assign(*chat, chosen);
                                    }},
                 level);
+  picking_wallpaper.reset();
   (void)this->write();
   root().close_wallpaper();
   this->refresh();
+  // What shows the choice, shown again: the picture chosen in it.
+  if (auto* up = root().settings_up(); up && up->appearance())
+    up->show_appearance(theme, accent);
+  if (auto* managing = root().manage_up())
+    managing->show_tab(managing->tab);
+  this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
+    if (panel.chats_page())
+      panel.show_page(3, account, *model, proxies);
+  });
 }
 
 // Threads, as Element's panel: opened in place of the chat's info, the

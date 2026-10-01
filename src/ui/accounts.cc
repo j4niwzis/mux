@@ -520,6 +520,11 @@ struct accounts_panel : closes_on_escape<Actions> {
                                  [](auto&) -> account_privacy<Actions>* { return nullptr; }},
                       detail);
   }
+  [[nodiscard]] account_chats<Actions>* chats_page() {
+    return splice::visit(splice::overloaded{[](account_chats<Actions>& one) { return &one; },
+                                            [](auto&) -> account_chats<Actions>* { return nullptr; }},
+                         detail);
+  }
   [[nodiscard]] account_proxy<Actions>* proxy() {
     return splice::visit(splice::overloaded{[](account_proxy<Actions>& one) { return &one; },
                                  [](auto&) -> account_proxy<Actions>* { return nullptr; }},

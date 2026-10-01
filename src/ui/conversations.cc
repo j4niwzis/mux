@@ -277,8 +277,16 @@ struct conversations_screen : nodes::Stack {
   // opened or left: from the side it comes from, faded in; only drawn
   // moved, nothing laid out again for it.
   skiff::paint::Tween list_in{1.0f, 200.0f, skiff::paint::movement::subtle{}};
+  // How many of the chats listed are made into rows: the first few
+  // screens, more as the reader scrolls near the last made. A space of
+  // hundreds of chats was hundreds of rows made in the frame it was chosen
+  // in -- the slide waited on them.
+  static constexpr std::size_t kChatsFirst = 40, kChatsStep = 40;
+  std::size_t chats_made = kChatsFirst;
+  std::size_t chats_listed = 0;
   float list_from = 1.0f;
   void slide_list(float from) {
+    chats_made = kChatsFirst;
     list_from = from;
     list_in.jump(0.0f);
     list_in.setTarget(1.0f);
@@ -1755,6 +1763,12 @@ struct conversations_screen : nodes::Stack {
   void update(double now_ms) {
     if (list_in.step(now_ms))
       this->place_list();
+    // Near the last chat made, with more listed: the next few made.
+    if (last_model && chats_made < chats_listed && list.visible() &&
+        list.atEnd(std::max(300.0f, list.bounds().height() * 1.5f))) {
+      chats_made += kChatsStep;
+      this->show(*last_model);
+    }
     // The panels' opacity on its way to the chat's.
     if (auto& ease = panel_ease(); ease.t.step(now_ms)) {
       scene::detail::panelLook().opacity = ease.from + (ease.to - ease.from) * ease.t.value();
@@ -2193,8 +2207,9 @@ struct conversations_screen : nodes::Stack {
     const auto is_chosen = [&](const conversation* one) { return chosen && *chosen == one->id; };
     const std::vector<conversation_id> listed_before =
         rows | std::views::transform([](const conversation_row<Actions>& row) { return row.id; }) | std::ranges::to<std::vector>();
+    chats_listed = chats.size();
     if (nodes::reconcile(
-            rows, chats, [](const conversation* one) { return one->id; },
+            rows, chats | std::views::take(chats_made), [](const conversation* one) { return one->id; },
             [](const conversation_row<Actions>& row) { return row.id; },
             [&](const conversation* one) {
               return conversation_row<Actions>(actions, *one, is_chosen(one), muted.contains(one->id), draft_of(one->id),

@@ -1321,9 +1321,14 @@ class model {
       const auto by_time = [&] {
         timeline.insert(std::ranges::upper_bound(timeline, one.message.at, {}, &message::at), one.message);
       };
+      // Live, a little older than the newest: as the server sends it, after
+      // it. Each server stamps its own users' messages by its own clock, and
+      // a reply from one a few seconds behind went above what it answered.
+      // Only what is older by more than any clock is off goes by its time.
+      constexpr std::chrono::minutes kClocksDiffer{2};
       if (timeline.empty())
         timeline.push_back(one.message);
-      else if (at == timeline.end() && one.message.at >= timeline.back().at)
+      else if (at == timeline.end() && one.message.at + kClocksDiffer >= timeline.back().at)
         timeline.push_back(one.message);
       else if (at == timeline.begin() && one.message.at <= timeline.front().at)
         timeline.insert(timeline.begin(), one.message);

@@ -378,6 +378,11 @@ void app::before_frame() {
     recent_emoji = mux::ui::recent_emoji();
     (void)this->write();
   }
+  if (std::exchange(mux::ui::stickers_changed(), false)) {
+    recent_stickers = mux::ui::recent_stickers();
+    favourite_stickers = mux::ui::favourite_stickers();
+    (void)this->write();
+  }
   if (drawer_waits && !root().pages_moving()) {
     root().close_drawer_now();
     drawer_waits = false;

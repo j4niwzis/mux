@@ -593,6 +593,15 @@ struct muted_chat {
   std::string conversation;  // the chat's id in it
   friend bool operator==(const muted_chat&, const muted_chat&) = default;
 };
+// A sticker kept -- sent lately, or a favourite: what sending it again takes.
+struct sticker_kept {
+  std::string shortcode;
+  std::string url;
+  std::string body;
+  std::optional<std::int64_t> w, h, size;
+  std::optional<std::string> mimetype;
+  friend bool operator==(const sticker_kept&, const sticker_kept&) = default;
+};
 
 // The file: a list for each protocol, so each entry says what it is by where
 // it is, and has only its own protocol's keys.
@@ -705,6 +714,9 @@ struct file {
   std::optional<std::string> last_account;
   // The emoji picked lately, newest first.
   std::optional<std::vector<std::string>> recent_emoji;
+  // The stickers sent lately, newest first; and those made favourites.
+  std::optional<std::vector<sticker_kept>> recent_stickers;
+  std::optional<std::vector<sticker_kept>> favourite_stickers;
   std::optional<std::vector<muted_chat>> muted;
   // The chats that chose for themselves whether their room events show.
   std::optional<std::vector<room_events_choice>> room_events;

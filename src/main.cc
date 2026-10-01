@@ -126,6 +126,18 @@ int main(int argc, char** argv) {
   // The emoji picked lately: shown first in the panels, and kept as picked.
   program.recent_emoji = saved.recent_emoji.value_or(std::vector<std::string>{});
   mux::ui::recent_emoji() = program.recent_emoji;
+  // And the stickers sent lately, and the favourites.
+  const auto emotes_of = [](const std::optional<std::vector<mux::config::sticker_kept>>& kept) {
+    return kept.value_or(std::vector<mux::config::sticker_kept>{}) | std::views::transform([](const mux::config::sticker_kept& one) {
+             return mux::emote{.shortcode = one.shortcode, .url = one.url, .body = one.body, .w = one.w, .h = one.h, .size = one.size,
+                               .mimetype = one.mimetype};
+           }) |
+           std::ranges::to<std::vector>();
+  };
+  program.recent_stickers = emotes_of(saved.recent_stickers);
+  program.favourite_stickers = emotes_of(saved.favourite_stickers);
+  mux::ui::recent_stickers() = program.recent_stickers;
+  mux::ui::favourite_stickers() = program.favourite_stickers;
   if (saved.last_account)
     program.root().main().wanted = mux::account_id{mux::ui::protocol_of(*saved.last_account), *saved.last_account};
   program.theme = mux::config::theme_of(saved.theme);

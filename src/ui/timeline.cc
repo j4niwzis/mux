@@ -53,6 +53,7 @@ struct menu_facts {
   std::size_t reaction_count = 0;  // how many reactions it has, of anyone
   std::string link;  // a link to it, where it has one
   std::string pressed_link;  // the link pressed on: in its text, or its preview
+  std::optional<emote> sticker;  // a sticker's: what making it a favourite keeps
   float x = 0.0f, y = 0.0f;
 };
 
@@ -453,6 +454,15 @@ struct timeline_area : scene::Node {
         else if (const auto& preview = one.parts.body.parts.preview;
                  preview && preview->fState.fBounds.contains(press.x, press.y))
           facts.pressed_link = preview->url;
+        // A sticker: what sending it again takes.
+        if (one.said.sticker && one.said.attachment)
+          facts.sticker = emote{.shortcode = one.said.attachment->name,
+                                .url = one.said.attachment->source,
+                                .body = one.said.attachment->name,
+                                .w = one.said.attachment->width > 0 ? std::optional<std::int64_t>(one.said.attachment->width) : std::nullopt,
+                                .h = one.said.attachment->height > 0 ? std::optional<std::int64_t>(one.said.attachment->height) : std::nullopt,
+                                .mimetype = one.said.attachment->mimetype.empty() ? std::nullopt
+                                                                                  : std::optional<std::string>(one.said.attachment->mimetype)};
         facts.x = press.x;
         facts.y = press.y;
         actions->message_menu(std::move(facts));

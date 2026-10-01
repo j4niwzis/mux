@@ -23,6 +23,8 @@ struct kept_settings {
   std::optional<std::string> last_account;
   // The emoji picked lately, newest first.
   std::vector<std::string> recent_emoji;
+  // The stickers sent lately, and the favourites.
+  std::vector<mux::emote> recent_stickers, favourite_stickers;
   // The theme and the renderer, for the next start.
   mux::config::theme_t theme = mux::config::theme::tinted{};
   mux::config::accent_t accent = mux::config::accent::theme_own{};
@@ -226,6 +228,16 @@ struct kept_settings {
     out.last_account = last_account;
     if (!recent_emoji.empty())
       out.recent_emoji = recent_emoji;
+    const auto kept_of = [](const std::vector<mux::emote>& all) {
+      return all | std::views::transform([](const mux::emote& one) {
+               return mux::config::sticker_kept{one.shortcode, one.url, one.body, one.w, one.h, one.size, one.mimetype};
+             }) |
+             std::ranges::to<std::vector>();
+    };
+    if (!recent_stickers.empty())
+      out.recent_stickers = kept_of(recent_stickers);
+    if (!favourite_stickers.empty())
+      out.favourite_stickers = kept_of(favourite_stickers);
     if (!proxies.empty())
       out.proxies = proxies;
     out.theme = mux::config::word_of(theme);

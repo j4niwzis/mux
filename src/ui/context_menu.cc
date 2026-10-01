@@ -143,6 +143,17 @@ inline std::vector<emote>& recent_stickers() {
   static std::vector<emote> kept;
   return kept;
 }
+// The favourites, as tdesktop's Favorite stickers: from a sticker's menu,
+// in any chat; newest first.
+inline std::vector<emote>& favourite_stickers() {
+  static std::vector<emote> kept;
+  return kept;
+}
+// Whether either list changed since the program last kept them.
+inline bool& stickers_changed() {
+  static bool changed = false;
+  return changed;
+}
 inline void remember_sticker(const emote& one) {
   constexpr std::size_t kKept = 20;
   auto& all = recent_stickers();
@@ -150,6 +161,19 @@ inline void remember_sticker(const emote& one) {
   all.insert(all.begin(), one);
   if (all.size() > kKept)
     all.resize(kKept);
+  stickers_changed() = true;
+}
+[[nodiscard]] inline bool is_favourite(std::string_view url) {
+  return std::ranges::contains(favourite_stickers(), url, &emote::url);
+}
+// Made a favourite, or no longer one.
+inline void flip_favourite(const emote& one) {
+  auto& all = favourite_stickers();
+  if (is_favourite(one.url))
+    std::erase_if(all, [&](const emote& each) { return each.url == one.url; });
+  else
+    all.insert(all.begin(), one);
+  stickers_changed() = true;
 }
 
 // The chat's stickers, as tdesktop's tab: a search at its top; the packs one
@@ -210,7 +234,8 @@ struct sticker_grid : nodes::Stack {
       std::optional<nodes::Image<from_avatars>> picture;
       std::optional<nodes::Text> mark;
     } parts;
-    tab(sticker_grid* g, std::size_t place, std::optional<std::string> picture) : grid(g), at(place) {
+    tab(sticker_grid* g, std::size_t place, std::optional<std::string> picture, std::string mark = "\u23F2")
+        : grid(g), at(place) {
       this->setHorizontal();
       fStack.justify = nodes::justify::middle{};
       fState.apply({.width = 30.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 6.0f,
@@ -220,7 +245,7 @@ struct sticker_grid : nodes::Stack {
         parts.picture->apply({.width = 24.0f, .height = 24.0f, .alignSelf = scene::align::kMiddle});
         parts.picture->keepBox();
       } else {
-        parts.mark.emplace("⏲", 16.0f, text_colour);
+        parts.mark.emplace(std::move(mark), 16.0f, text_colour);
         parts.mark->apply({.alignSelf = scene::align::kMiddle});
       }
     }
@@ -300,7 +325,13 @@ struct sticker_grid : nodes::Stack {
                                 std::ranges::to<std::vector>();
     if (!recent.empty()) {
       all.emplace_back(actions, "Recently used", recent);
-      tabs.emplace_back(this, all.size() - 1, std::nullopt);
+      tabs.emplace_back(this, all.size() - 1, std::nullopt, "\u23F2");
+    }
+    // The favourites: whichever chat they came from -- a sticker is its
+    // picture's URL, sent anywhere.
+    if (!favourite_stickers().empty()) {
+      all.emplace_back(actions, "Favourites", favourite_stickers());
+      tabs.emplace_back(this, all.size() - 1, std::nullopt, "\u2605");
     }
     for (auto& [name, stickers] : packs()) {
       const std::optional<std::string> picture = stickers.front().pack_avatar ? stickers.front().pack_avatar
@@ -309,7 +340,7 @@ struct sticker_grid : nodes::Stack {
       tabs.emplace_back(this, all.size() - 1, picture);
     }
     searching = false;
-    parts.empty.setVisible(chat_stickers().empty());
+    parts.empty.setVisible(chat_stickers().empty() && favourite_stickers().empty());
     parts.footer.setVisible(tabs.size() > 1);
     parts.list.invalidateLayout();
     parts.footer.invalidateLayout();
@@ -1114,6 +1145,7 @@ struct context_menu : scene::Node {
     using copy_row = row_item<ask<Actions, &Actions::menu_copy>>;
     using link_row = row_item<ask<Actions, &Actions::menu_copy_link>>;
     using url_row = row_item<ask<Actions, &Actions::menu_copy_url>>;
+    using fave_row = row_item<ask<Actions, &Actions::menu_fave_sticker>>;
     using copy_image_row = row_item<ask<Actions, &Actions::menu_copy_image>>;
     using save_row = row_item<ask<Actions, &Actions::menu_save>>;
     using gif_row = row_item<ask<Actions, &Actions::menu_save_gif>>;
@@ -1140,6 +1172,8 @@ struct context_menu : scene::Node {
       link_row copy_link;
       // The link pressed on, in the text or its preview.
       url_row copy_url;
+      // A sticker: made a favourite, or no longer one.
+      fave_row fave;
       copy_image_row copy_image;
       save_row save;
       gif_row save_gif;
@@ -1154,7 +1188,7 @@ struct context_menu : scene::Node {
       std::optional<emoji_panel<react_with<Actions>>> emoji;
     } parts;
     void expand() {
-      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, copy_image, save, save_gif, reactions, forward, source,
+      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, copy_image, save, save_gif, reactions, forward, source,
              remove, seen_band, seen, emoji] = parts;
       if (emoji)
         return;
@@ -1181,9 +1215,9 @@ struct context_menu : scene::Node {
     // The items, once the list is down over them: gone, the menu keeping
     // its size by its least height.
     void hide_items() {
-      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, copy_image, save, save_gif, reactions, forward, source, remove,
+      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, copy_image, save, save_gif, reactions, forward, source, remove,
              seen_band, seen, emoji] = parts;
-      for (scene::Node* item : std::initializer_list<scene::Node*>{&reply, &thread_reply, &quote_reply, &edit, &pin, &copy, &copy_link, &copy_url, &copy_image, &save,
+      for (scene::Node* item : std::initializer_list<scene::Node*>{&reply, &thread_reply, &quote_reply, &edit, &pin, &copy, &copy_link, &copy_url, &fave, &copy_image, &save,
                                                                    &save_gif, &reactions, &forward, &source,
                                                                    &remove, &seen_band, &seen})
         item->setVisible(false);
@@ -1226,6 +1260,8 @@ struct context_menu : scene::Node {
                 .copy = copy_row(facts.selection ? "Copy Selected Text" : "Copy Text", {a}, icon::clip{}),
                 .copy_link = link_row("Copy Message Link", {a}, icon::info{}),
                 .copy_url = url_row("Copy Link", {a}, icon::clip{}),
+                .fave = fave_row(facts.sticker && is_favourite(facts.sticker->url) ? "Remove from Favourites" : "Add to Favourites",
+                                 {a}, icon::check{}),
                 .copy_image = copy_image_row("Copy Image", {a}, icon::clip{}),
                 .save = save_row("Save As…", {a}, icon::send{}),
                 .save_gif = gif_row("Save GIF", {a}, icon::check{}),
@@ -1236,7 +1272,7 @@ struct context_menu : scene::Node {
                 .source = source_row("View Source", {a}, icon::info{}),
                 .remove = delete_row("Delete", {a}, icon::close{}),
                 .seen = seen_row<Actions>(a, facts.seen)} {
-      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, copy_image, save, save_gif, reactions, forward, source,
+      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, copy_image, save, save_gif, reactions, forward, source,
              remove, seen_band, seen, emoji] = parts;
       quick_band.apply({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 4.0f, 0.0f}});
       // A menu's rows as tdesktop's menuWithIcons: 8 over and under the
@@ -1255,6 +1291,7 @@ struct context_menu : scene::Node {
       compact(copy);
       compact(copy_link);
       compact(copy_url);
+      compact(fave);
       compact(copy_image);
       compact(save);
       compact(save_gif);
@@ -1268,6 +1305,7 @@ struct context_menu : scene::Node {
       copy.setVisible(!facts.copied.empty());
       copy_link.setVisible(!facts.link.empty());
       copy_url.setVisible(!facts.pressed_link.empty());
+      fave.setVisible(facts.sticker.has_value());
       copy_image.setVisible(facts.picture.has_value());
       save.setVisible(facts.media.has_value());
       save_gif.setVisible(facts.media.has_value() && facts.moving);

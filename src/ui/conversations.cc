@@ -336,6 +336,43 @@ struct conversations_screen : nodes::Stack {
   // The chat list: the drawer's button and the name, then the chats.
   // A space bar: its items, in a line.
   using icons_t = nodes::Flow<std::vector<space_icon<pick_folder>>>;
+  // The top bar's view: its line of items, moved along by the wheel where
+  // it is longer than the view -- cut to it.
+  struct top_view : nodes::Stack {
+    float offset = 0.0f;
+    struct parts_t {
+      icons_t line{{.direction = nodes::direction::horizontal{}, .spacingX = 4.0f, .wrap = false}, {}};
+    } parts;
+    top_view() {
+      this->setHorizontal();
+      parts.line.apply({.fillY = true, .autoSize = scene::axes::kX});
+    }
+    [[nodiscard]] float most() const {
+      return std::max(0.0f, parts.line.bounds().width() - fState.contentBox().width());
+    }
+    void scroll_by(float delta) {
+      const float to = std::clamp(offset + delta, 0.0f, this->most());
+      if (to == offset)
+        return;
+      offset = to;
+      parts.line.apply({.shiftX = -offset});
+      this->markDamaged();
+    }
+    using Node::onPointer;
+    void onPointer(scene::phase::bubble, const scene::pointer::scroll& wheel, scene::PointerReply& reply) {
+      if (this->most() <= 0.0f)
+        return;
+      this->scroll_by(-(wheel.dx != 0.0f ? wheel.dx : wheel.dy) * 40.0f);
+      reply.handle();
+    }
+    void onPointer(scene::phase::target, const scene::pointer::scroll& wheel, scene::PointerReply& reply) {
+      if (this->most() <= 0.0f)
+        return;
+      this->scroll_by(-(wheel.dx != 0.0f ? wheel.dx : wheel.dy) * 40.0f);
+      reply.handle();
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+  };
   struct side_column : nodes::Stack {
     float wanted = 300.0f;
     struct head_row : nodes::Stack {
@@ -345,7 +382,8 @@ struct conversations_screen : nodes::Stack {
         nodes::Text name{"mux", 17.0f, text_colour, true};
         // The top bar of spaces, after the name: there, empty or not, unless
         // the settings say otherwise -- something can always be put in it.
-        icons_t top{{.direction = nodes::direction::horizontal{}, .spacingX = 4.0f, .wrap = false}, {}};
+        // Longer than its room, it scrolls sideways.
+        top_view top;
         // Explore rooms, out of the new chat's box: beside the chats, as
         // Element's compass is.
         explore_button explore;
@@ -355,7 +393,8 @@ struct conversations_screen : nodes::Stack {
         this->setGap(10.0f);
         fState.apply({.fillX = true, .height = 52.0f, .padding = {8.0f, 8.0f, 8.0f, 8.0f}});
         parts.name.apply({.alignSelf = scene::align::kMiddle});
-        parts.top.apply({.height = 34.0f, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle, .cornerRadius = 8.0f});
+        parts.top.apply({.height = 34.0f, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle, .cornerRadius = 8.0f,
+                         .masking = true});
         parts.explore.apply({.alignSelf = scene::align::kMiddle});
       }
     };
@@ -404,13 +443,15 @@ struct conversations_screen : nodes::Stack {
     // down to the window's bottom -- drawn where it holds any -- and the rest.
     struct body_t : nodes::Stack {
       struct parts_t {
-        icons_t side{{.spacingY = 8.0f, .wrap = false, .crossAlign = scene::align::kMiddle}, {}};
+        // Longer than the window, it scrolls.
+        nodes::ScrollContainer<icons_t> side{icons_t({.spacingY = 8.0f, .wrap = false, .crossAlign = scene::align::kMiddle}, {})};
         rest_t rest;
       } parts;
       body_t() {
         this->setHorizontal();
         fState.apply({.fillX = true, .grow = scene::axes::kY});
-        parts.side.apply({.fillY = true, .width = 56.0f, .padding = {4.0f, 6.0f, 8.0f, 6.0f}});
+        parts.side.apply({.fillY = true, .width = 56.0f});
+        std::get<0>(parts.side.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 6.0f, 8.0f, 6.0f}});
       }
     };
     // What a right press on an item offers: the bars it is in, or hidden.
@@ -467,8 +508,12 @@ struct conversations_screen : nodes::Stack {
     nodes::Flow<std::vector<folder_tab<pick_folder>>>& folders = parts.body.parts.rest.parts.folders;
     nodes::Text& no_chats = parts.body.parts.rest.parts.no_chats;
     list_t& list = parts.body.parts.rest.parts.list;
-    icons_t& top_bar = parts.head.parts.top;
-    icons_t& side_bar = parts.body.parts.side;
+    // The bars as they show -- what is hidden, lit, a drop's place -- and the
+    // lines of items in them.
+    top_view& top_bar = parts.head.parts.top;
+    nodes::ScrollContainer<icons_t>& side_bar = parts.body.parts.side;
+    icons_t& top_line = parts.head.parts.top.parts.line;
+    icons_t& side_line = std::get<0>(parts.body.parts.side.fChildren);
     Actions* actions = nullptr;
     // Whose spaces the bars hold, as the screen says as it shows them.
     std::string account;
@@ -486,12 +531,20 @@ struct conversations_screen : nodes::Stack {
     std::optional<drag_t> drag;
     bool menu_close_due = false;
     [[nodiscard]] std::vector<space_icon<pick_folder>>& icons_of(icons_t& bar) { return std::get<0>(bar.fChildren); }
+    [[nodiscard]] skia::SkRect shown_at(const space_icon<pick_folder>& one) const {
+      return splice::visit(splice::overloaded{[&](config::space_bar::top) { return one.bounds().makeOffset(-top_bar.offset, 0.0f); },
+                                              [&](const auto&) { return side_bar.toView(one.bounds()); }},
+                           one.bar);
+    }
     [[nodiscard]] const space_icon<pick_folder>* icon_at(float x, float y) {
-      for (icons_t* bar : {&top_bar, &side_bar})
-        if (bar->visible())
-          for (const auto& one : icons_of(*bar))
-            if (one.bounds().contains(x, y))
-              return &one;
+      if (top_bar.visible())
+        for (const auto& one : icons_of(top_line))
+          if (this->shown_at(one).contains(x, y))
+            return &one;
+      if (side_bar.visible())
+        for (const auto& one : icons_of(side_line))
+          if (this->shown_at(one).contains(x, y))
+            return &one;
       return nullptr;
     }
     // The bar a point is over: the head (the top bar, where there is one),
@@ -508,13 +561,14 @@ struct conversations_screen : nodes::Stack {
     [[nodiscard]] std::vector<config::space_item_t> order_with(const config::space_bar_t& bar, const config::space_item_t& item,
                                                                float x, float y) {
       const bool along_x = splice::visit(splice::overloaded{[](config::space_bar::top) { return true; }, [](const auto&) { return false; }}, bar);
-      icons_t& icons = along_x ? top_bar : side_bar;
+      icons_t& icons = along_x ? top_line : side_line;
       std::vector<config::space_item_t> out = icons_of(icons) |
                                               std::views::filter([&](const auto& one) { return one.item != item; }) |
                                               std::views::transform([](const auto& one) { return one.item; }) |
                                               std::ranges::to<std::vector>();
       const auto before = std::ranges::count_if(icons_of(icons), [&](const auto& one) {
-        return one.item != item && (along_x ? one.bounds().centerX() < x : one.bounds().centerY() < y);
+        const skia::SkRect at = this->shown_at(one);
+        return one.item != item && (along_x ? at.centerX() < x : at.centerY() < y);
       });
       out.insert(out.begin() + before, item);
       return out;
@@ -531,13 +585,18 @@ struct conversations_screen : nodes::Stack {
       top_bar.apply({.background = top ? chosen_colour : skia::SkColor{0}});
       side_bar.apply({.background = side ? chosen_colour : skia::SkColor{0}});
     }
-    void close_menu_soon() {
-      menu_close_due = true;
-      scene::work::mark(fState.fId);
+    void close_menu() {
+      if (!parts.menu)
+        return;
+      parts.menu.reset();
+      this->invalidateLayout();
+      this->markDamaged();
     }
     void drag_down(const scene::pointer::down& press, scene::PointerReply& reply) {
-      if (parts.menu)
-        this->close_menu_soon();
+      // A press off the menu closes it at once -- nothing of it is pressed;
+      // one on it chooses, and the program closes it then.
+      if (parts.menu && !parts.menu->bounds().contains(press.x, press.y))
+        this->close_menu();
       drag.reset();
       const space_icon<pick_folder>* one = this->icon_at(press.x, press.y);
       if (!one)
@@ -941,8 +1000,8 @@ struct conversations_screen : nodes::Stack {
     made.push_back(std::format("{}{}", spaces_on, top_bar_on));
     if (made != shown_bars) {
       shown_bars = made;
-      auto& side_icons = std::get<0>(side.side_bar.fChildren);
-      auto& top_icons = std::get<0>(side.top_bar.fChildren);
+      auto& side_icons = std::get<0>(side.side_line.fChildren);
+      auto& top_icons = std::get<0>(side.top_line.fChildren);
       side_icons.clear();
       top_icons.clear();
       // A space in a space: smaller for each level down.
@@ -960,8 +1019,8 @@ struct conversations_screen : nodes::Stack {
       };
       emit(side_icons, side_shown, config::space_bar::side{}, 40.0f);
       emit(top_icons, top_shown, config::space_bar::top{}, 30.0f);
-      side.side_bar.invalidateLayout();
-      side.top_bar.invalidateLayout();
+      side.side_line.invalidateLayout();
+      side.top_line.invalidateLayout();
       // A space come or gone: the bars painted again whole.
       side.side_bar.markDamaged();
       side.top_bar.markDamaged();
@@ -976,19 +1035,14 @@ struct conversations_screen : nodes::Stack {
   // once, where the press is not on it; one on it chooses first.
   using Node::onPointer;
   void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply&) {
-    if (side.parts.menu && !side.parts.menu->bounds().contains(press.x, press.y) && !side.bounds().contains(press.x, press.y)) {
-      side.parts.menu.reset();
-      side.invalidateLayout();
-      side.markDamaged();
-    }
+    if (side.parts.menu && !side.parts.menu->bounds().contains(press.x, press.y))
+      side.close_menu();
   }
   // Esc too.
-  [[nodiscard]] bool close_space_menu() {
+  bool close_space_menu() {
     if (!side.parts.menu)
       return false;
-    side.parts.menu.reset();
-    side.invalidateLayout();
-    side.markDamaged();
+    side.close_menu();
     return true;
   }
 

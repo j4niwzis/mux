@@ -387,8 +387,11 @@ void account<Sink>::explore_space(std::string room) {
                          .topic = one.topic.value_or(""),
                          .avatar = one.avatar_url,
                          .members = one.num_joined_members,
-                         .space = splice::visit([](auto of) { return of.is_space; },
+                         .space = !one.children_state.empty() ||
+                                  splice::visit([](auto of) { return of.is_space; },
                                                 room_type_of(one.room_type ? std::optional<std::string_view>(*one.room_type) : std::nullopt))});
+    log(id_, "the rooms of {}: {} listed, {} of them spaces", room, rooms.size(),
+        std::ranges::count_if(rooms, [](const directory_room& one) { return one.space; }));
     sink_(change::directory_listed{id_, "", "", std::move(rooms), room});
   });
 }

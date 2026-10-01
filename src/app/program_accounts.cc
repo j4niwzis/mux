@@ -346,6 +346,7 @@ void app::apply(const request::open_explore&) {
 void app::apply(const request::close_explore&) { root().close_explore(); }
 // A space's rooms and spaces, in Explore: asked of its account.
 void app::apply(const request::explore_space& one) {
+  (void)root().main().close_space_menu();
   const auto by = root().main().current;
   if (!by || shared.demo())
     return;
@@ -671,6 +672,7 @@ void app::apply(const request::place_spaces& one) {
 }
 // An item's bars, as chosen: the side, the top, both, or none -- hidden.
 void app::apply(const request::set_space_bars& one) {
+  (void)root().main().close_space_menu();
   std::erase_if(space_places, [&](const mux::config::space_placed& p) { return p.account == one.account && p.item == one.item; });
   if (one.side)
     space_places.push_back({one.account, one.item, mux::config::space_bar::side{}});

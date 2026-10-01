@@ -1130,24 +1130,7 @@ struct create_room_box : nodes::Stack {
       parts.toggle.apply({.alignSelf = scene::align::kMiddle});
     }
   };
-  struct buttons_row : nodes::Stack {
-    struct parts_t {
-      nodes::Box<> gap{skia::colorSetARGB(0, 0, 0, 0)};
-      widgets::Button<cancel_press> cancel;
-      widgets::Button<create_press> create;
-    } parts;
-    buttons_row(Actions* a, create_room_box* box)
-        : parts{.cancel = widgets::Button<cancel_press>("Cancel", {a}),
-                .create = widgets::Button<create_press>("Create room", {box})} {
-      this->setHorizontal();
-      this->setGap(8.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 10.0f, 0.0f, 10.0f}});
-      parts.gap.apply({.height = 1.0f, .grow = scene::axes::kX});
-      parts.create.setPrimary(true);
-      for (scene::Node* button : std::initializer_list<scene::Node*>{&parts.cancel, &parts.create})
-        button->apply({.width = 120.0f, .height = 34.0f});
-    }
-  };
+  using buttons_row = dialog_buttons<cancel_press, create_press>;
   using header_t = page_header<no_back, close_it>;
   struct parts_t {
     header_t header;
@@ -1178,7 +1161,7 @@ struct create_room_box : nodes::Stack {
               .address = field("Address", std::format("#room-name:{}", server)),
               .show_advanced = widgets::Button<flip_advanced>("Show advanced", {this}),
               .block = federate_row(this, server),
-              .buttons = buttons_row(a, this)} {
+              .buttons = buttons_row("Create room", {a}, {this}, 120.0f)} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 18.0f, 12.0f}});
     parts.rule_caption.apply({.margin = {4.0f, 10.0f, 0.0f, 10.0f}});

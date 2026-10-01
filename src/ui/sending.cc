@@ -77,23 +77,7 @@ struct send_box : nodes::Stack {
       }
     }
   };
-  struct buttons_row : nodes::Stack {
-    using cancel_button = widgets::Button<ask<Actions, &Actions::close_send_box>>;
-    using send_button = widgets::Button<ask<Actions, &Actions::send_files>>;
-    struct parts_t {
-      cancel_button cancel;
-      send_button send;
-    } parts;
-    explicit buttons_row(Actions* a) : parts{.cancel = cancel_button("Cancel", {a}), .send = send_button("Send", {a})} {
-      this->setHorizontal();
-      this->setGap(8.0f);
-      fStack.justify = nodes::justify::end{};
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-      parts.send.setPrimary(true);
-      parts.cancel.apply({.width = 96.0f, .height = 36.0f});
-      parts.send.apply({.width = 96.0f, .height = 36.0f});
-    }
-  };
+  using buttons_row = dialog_buttons<ask<Actions, &Actions::close_send_box>, ask<Actions, &Actions::send_files>>;
   // What a box of these says it sends.
   [[nodiscard]] static std::string title_of(const std::vector<pending_file>& all) {
     return all.size() == 1 ? std::string(all.front().image ? "Send a photo" : "Send a file")
@@ -114,7 +98,7 @@ struct send_box : nodes::Stack {
   send_box(Actions* a, const std::vector<pending_file>& all)
       : parts{.title = nodes::Text(title_of(all), 17.0f, text_colour, true),
               .previews = nodes::ScrollContainer<previews_column>(previews_column(all)),
-              .buttons = buttons_row(a)} {
+              .buttons = buttons_row("Send", {a}, {a})} {
     this->setGap(12.0f);
     // Sized by what it holds, not by the window: the dialog fits it (up to
     // most of the window, the previews scrolling past what fits of them).

@@ -944,4 +944,26 @@ struct tab_strip : nodes::Stack {
   } parts;
 };
 
+
+// A dialog's buttons, at its bottom right: Cancel, and what it does --
+// Send, Save, Create room -- the primary one.
+template <class Cancel, class Confirm>
+struct dialog_buttons : nodes::Stack {
+  struct parts_t {
+    widgets::Button<Cancel> cancel;
+    widgets::Button<Confirm> confirm;
+  } parts;
+  dialog_buttons(std::string confirm, Cancel cancel_it, Confirm confirm_it, float width = 96.0f)
+      : parts{.cancel = widgets::Button<Cancel>("Cancel", std::move(cancel_it)),
+              .confirm = widgets::Button<Confirm>(std::move(confirm), std::move(confirm_it))} {
+    this->setHorizontal();
+    this->setGap(8.0f);
+    fStack.justify = nodes::justify::end{};
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {8.0f, 0.0f, 0.0f, 0.0f}});
+    parts.confirm.setPrimary(true);
+    parts.cancel.apply({.width = width, .height = 36.0f});
+    parts.confirm.apply({.width = width, .height = 36.0f});
+  }
+};
+
 }  // namespace mux::ui

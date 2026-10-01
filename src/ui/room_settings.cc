@@ -376,22 +376,7 @@ struct room_settings : nodes::Stack {
     }
   };
   struct general_page : nodes::Stack {
-    struct buttons_row : nodes::Stack {
-      struct parts_t {
-        widgets::Button<cancel_general> cancel;
-        widgets::Button<save_general> save;
-      } parts;
-      explicit buttons_row(room_settings* box)
-          : parts{.cancel = widgets::Button<cancel_general>("Cancel", {box}),
-                  .save = widgets::Button<save_general>("Save", {box})} {
-        this->setHorizontal();
-        this->setGap(8.0f);
-        fState.apply({.autoSize = scene::axes::kBoth, .margin = {8.0f, 0.0f, 0.0f, 0.0f}});
-        parts.save.setPrimary(true);
-        for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.cancel, &parts.save})
-          each->apply({.width = 90.0f, .height = 32.0f});
-      }
-    };
+    using buttons_row = dialog_buttons<cancel_general, save_general>;
     struct parts_t {
       nodes::Text heading = tab_heading("General");
       avatar_mark photo;
@@ -423,7 +408,7 @@ struct room_settings : nodes::Stack {
         : parts{.photo = avatar_mark(facts.id, facts.name, 88.0f),
                 .name = field("Room Name", "", facts.name),
                 .topic = field("Room Topic", "", facts.topic),
-                .buttons = buttons_row(box),
+                .buttons = buttons_row("Save", {box}, {box}),
                 .main_address = nodes::Text(
                     "Main address: " + facts.alias.value_or("none"), 14.0f,
                     text_colour),

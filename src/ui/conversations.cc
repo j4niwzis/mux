@@ -2339,17 +2339,22 @@ struct conversations_screen : nodes::Stack {
     }
     const auto [first_made, last_made] = this->made_indices(all);
     this->set_made(all, first_made, last_made);
-    // A message that has just come into the chat being read comes in moving;
-    // one made again -- changed, or scrolled back into what is made -- and
-    // those of a chat just opened do not. One's own, once the server has it,
-    // is the same message under its new id, and does not come in twice.
+    // A bubble comes in moving only as its message comes: one newer than the
+    // newest this chat showed, shown -- not an event the room hides -- and
+    // seen, the reader being at the newest. Anything else made -- a row made
+    // again as it changed, history paged in, a chat opened, rows scrolled
+    // back into what is made -- is there at once. One's own, once the
+    // server has it, is the same message under its new id: not again.
     const bool same_chat = shown_chat == chosen;
+    const auto newest_before = std::ranges::find(all, shown_last, &message::id);
+    const std::size_t new_from =
+        newest_before == all.end() ? all.size() : static_cast<std::size_t>(newest_before - all.begin()) + 1;
     const auto arrives = [&](std::size_t i) {
-      const bool known = !appeared.insert(all[i].id).second;
       const bool acknowledged = all[i].outgoing && splice::visit(splice::overloaded{[](const delivery::sent&) { return true; },
                                                                          [](const auto&) { return false; }},
                                                               all[i].delivery);
-      return same_chat && !known && !acknowledged && i + 3 >= all.size();
+      return same_chat && was_at_end && i >= new_from && shows(all[i]) && !acknowledged &&
+             appeared.insert(all[i].id).second;
     };
     // The bubbles, as a function of the messages: those that show the same
     // are kept -- with a selection in them -- and only the new are made.

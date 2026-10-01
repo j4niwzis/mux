@@ -920,7 +920,7 @@ void account<Sink>::remember_encrypted(std::string_view room) {
 // What the file keeps: the rooms, and when each was encrypted at the latest.
 struct encrypted_kept {
   std::vector<std::string> rooms;
-  std::map<std::string, std::int64_t> since;
+  std::optional<std::map<std::string, std::int64_t>> since;
   friend consteval auto json_schema(knot::type<encrypted_kept>) { return knot::schema<encrypted_kept>(); }
 };
 template <class Sink>
@@ -953,7 +953,8 @@ void account<Sink>::load_encrypted() {
     return;
   if (auto read = knot::try_read<encrypted_kept>(std::string_view(*opened))) {
     encrypted_rooms_.insert(read->rooms.begin(), read->rooms.end());
-    encrypted_since_.insert(read->since.begin(), read->since.end());
+    if (read->since)
+      encrypted_since_.insert(read->since->begin(), read->since->end());
   } else if (auto old = knot::try_read<std::vector<std::string>>(std::string_view(*opened))) {
     encrypted_rooms_.insert(old->begin(), old->end());  // as kept before the times were
   }

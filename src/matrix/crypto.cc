@@ -54,10 +54,12 @@ struct kept_file {
   // index in another event is a replay.
   std::map<std::string, std::map<std::uint32_t, std::string>> indices;
   // The rooms known to be encrypted: never plain again.
-  std::set<std::string, std::less<>> encrypted_rooms;
+  // Optional, as every field added after the store was first written: knot
+  // requires the rest, and a store kept before it came would not open.
+  std::optional<std::set<std::string, std::less<>>> encrypted_rooms;
   // Each user's master cross-signing key, as first seen (trust on first
   // use): a server that swaps it later does not make its own devices theirs.
-  std::map<std::string, std::string> masters;
+  std::optional<std::map<std::string, std::string>> masters;  // optional, as encrypted_rooms
   friend consteval auto json_schema(knot::type<kept_file>) { return knot::schema<kept_file>(); }
 };
 
@@ -340,10 +342,12 @@ class olm_machine {
   [[nodiscard]] std::string curve25519() const { return std::string((*account_)->curve25519_key()->to_base64()); }
   [[nodiscard]] std::string ed25519() const { return std::string((*account_)->ed25519_key()->to_base64()); }
   [[nodiscard]] bool device_keys_uploaded() const { return kept_.device_keys_uploaded; }
-  [[nodiscard]] bool was_encrypted(std::string_view room) const { return kept_.encrypted_rooms.contains(room); }
+  [[nodiscard]] bool was_encrypted(std::string_view room) const { return kept_.encrypted_rooms && kept_.encrypted_rooms->contains(room); }
   // Kept where it is new; saved, and an error where that fails (as any save).
   void remember_encrypted(std::string_view room) {
-    if (kept_.encrypted_rooms.emplace(room).second)
+    if (!kept_.encrypted_rooms)
+      kept_.encrypted_rooms.emplace();
+    if (kept_.encrypted_rooms->emplace(room).second)
       this->save();
   }
   [[nodiscard]] const std::optional<std::string>& to_device_since() const { return kept_.to_device_since; }
@@ -466,11 +470,15 @@ class olm_machine {
   }
   // A user's master key as first seen; pinned the first time.
   [[nodiscard]] std::optional<std::string> pinned_master(const std::string& user) const {
-    const auto found = kept_.masters.find(user);
-    return found == kept_.masters.end() ? std::nullopt : std::optional<std::string>(found->second);
+    if (!kept_.masters)
+      return std::nullopt;
+    const auto found = kept_.masters->find(user);
+    return found == kept_.masters->end() ? std::nullopt : std::optional<std::string>(found->second);
   }
   void pin_master(const std::string& user, const std::string& key) {
-    if (kept_.masters.emplace(user, key).second)
+    if (!kept_.masters)
+      kept_.masters.emplace();
+    if (kept_.masters->emplace(user, key).second)
       this->save();
   }
 

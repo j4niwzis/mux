@@ -200,21 +200,40 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
                                     .name = where.sender,
                                     .link = std::format("https://matrix.to/#/{}/{}", where.room_id, where.event_id)};
     } else if (mark && mark->forward && mark->forward->attribution) {
-      const auto links = links_in(*mark->forward->attribution);
-      if (!links.empty()) {
+      // Who from, as an attribution's links say: the person, then where.
+      const auto from_links = [](const std::string& attribution) -> std::optional<forward_info> {
+        const auto links = links_in(attribution);
+        if (links.empty())
+          return std::nullopt;
         constexpr std::string_view person = "https://matrix.to/#/";
         const std::string& to = links.front().first;
-        made.forwarded = forward_info{.from = to.starts_with(person) ? to.substr(person.size()) : to,
-                                      .name = links.front().second,
-                                      .link = links.size() > 1 ? links[1].first : std::string()};
-        constexpr std::string_view head = "<strong>", quoted = "</strong><blockquote>", tail = "</blockquote>";
-        if (made.body.html && made.body.html->starts_with(head) && made.body.html->ends_with(tail))
-          if (const auto inner = made.body.html->find(quoted); inner != std::string::npos)
-            made.body.html = made.body.html->substr(inner + quoted.size(), made.body.html->size() - inner - quoted.size() - tail.size());
-        if (made.body.plain.starts_with("Forwarded from "))
-          if (const auto line = made.body.plain.find('\n'); line != std::string::npos)
-            made.body.plain = made.body.plain.substr(line + 1);
+        return forward_info{.from = to.starts_with(person) ? to.substr(person.size()) : to,
+                            .name = links.front().second,
+                            .link = links.size() > 1 ? links[1].first : std::string()};
+      };
+      made.forwarded = from_links(*mark->forward->attribution);
+      // Its attribution in bold, the message quoted under it -- and, forwarded
+      // again, the same inside, as many times over: each taken off, and the
+      // innermost's author said, as Telegram says a forward's first author.
+      // Only the first had Extera's mark; those inside are its text alone.
+      constexpr std::string_view head = "<strong>Forwarded from ", quoted = "</strong><blockquote>", tail = "</blockquote>";
+      for (bool outer = true; made.forwarded && made.body.html && made.body.html->starts_with(head) &&
+                              made.body.html->ends_with(tail);
+           outer = false) {
+        const std::string& html = *made.body.html;
+        const auto inner = html.find(quoted);
+        if (inner == std::string::npos)
+          break;
+        if (!outer)
+          if (auto deeper = from_links(html.substr(std::string_view("<strong>").size(), inner - std::string_view("<strong>").size())))
+            made.forwarded = std::move(deeper);
+        made.body.html = html.substr(inner + quoted.size(), html.size() - inner - quoted.size() - tail.size());
       }
+      while (made.forwarded && made.body.plain.starts_with("Forwarded from "))
+        if (const auto line = made.body.plain.find('\n'); line != std::string::npos)
+          made.body.plain = made.body.plain.substr(line + 1);
+        else
+          break;
     }
     if (made.body.plain.empty() && !made.body.html && !made.attachment && made.album.empty())
       made.body.plain = "Unsupported message (" + (content.msgtype.empty() ? std::string("no msgtype") : content.msgtype) + ")";

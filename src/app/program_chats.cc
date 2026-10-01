@@ -41,6 +41,8 @@ void app::apply(const request::choose& one) {
                                                           .invite = true});
     return;
   }
+  // Chosen, by a press or a key: no forum left lit as gone to.
+  root().main().pointed.reset();
   // A space shown as a forum: its rooms listed in it, as tdesktop opens a
   // forum's topics -- no chat opened.
   if (const mux::conversation* chat = model->find(one.which); chat && chat->space && forums.contains(one.which)) {

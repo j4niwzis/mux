@@ -254,6 +254,13 @@ struct conversations_screen : nodes::Stack {
   // Spaces whose rooms Home leaves out, each as it chose.
   std::set<conversation_id> hidden_from_home;
   std::optional<std::string> forum_open;
+  // A forum gone to by Alt+Up or Alt+Down: lit as chosen, not yet opened --
+  // Alt+Right opens it, as Alt+Left leaves one open.
+  std::optional<conversation_id> pointed;
+  [[nodiscard]] bool is_forum(const conversation_id& id) const {
+    const conversation* one = last_model ? last_model->find(id) : nullptr;
+    return one && one->space && forums.contains(id);
+  }
   // Home without what spaces hold, but direct messages -- and without those
   // too, where that is chosen as well.
   bool home_hides_spaced = false;
@@ -1116,7 +1123,24 @@ struct conversations_screen : nodes::Stack {
       reply.handle();
       return;
     }
-    if (!chosen)
+    // Alt+Right: into the forum gone to; Alt+Left: out of the one open, to
+    // its row.
+    if (press.modifiers.template has<scene::modifier::alt>() && press.key == keys::kRight && pointed) {
+      const conversation_id into = *std::exchange(pointed, std::nullopt);
+      actions->choose(into);
+      reply.handle();
+      return;
+    }
+    if (press.modifiers.template has<scene::modifier::alt>() && press.key == keys::kLeft && forum_open && current) {
+      pointed = conversation_id{*current, *forum_open};
+      this->close_forum();
+      reply.handle();
+      return;
+    }
+    if (!chosen && !pointed)
+      return;
+    // Only a forum gone to: Alt+Up and Alt+Down go on from it, nothing else.
+    if (!chosen && !((press.key == keys::kUp || press.key == keys::kDown) && press.modifiers.template has<scene::modifier::alt>()))
       return;
     if (press.key == keys::kF && control) {
       actions->open_search();
@@ -1144,12 +1168,21 @@ struct conversations_screen : nodes::Stack {
       // Ctrl+Shift+Tab, Alt+Down and Alt+Up.
       const bool back = press.key == keys::kUp || press.modifiers.template has<scene::modifier::shift>();
       const auto& rows = std::get<0>(std::get<0>(list.fChildren).fChildren);
-      const auto at = std::ranges::find(rows, *chosen, &conversation_row<Actions>::id);
+      // From the forum gone to, where one is; else from the chat open.
+      const auto at = std::ranges::find(rows, pointed ? *pointed : *chosen, &conversation_row<Actions>::id);
       if (at == rows.end() || rows.empty())
         return;
       const auto index = static_cast<std::size_t>(at - rows.begin());
       const std::size_t to = back ? (index == 0 ? rows.size() - 1 : index - 1) : (index + 1) % rows.size();
-      actions->choose(rows[to].id);
+      // A forum: gone to, lit, not opened -- Alt+Right opens it. A chat: opened.
+      if (is_forum(rows[to].id)) {
+        pointed = rows[to].id;
+        if (last_model)
+          this->show(*last_model, false);
+      } else {
+        pointed.reset();
+        actions->choose(rows[to].id);
+      }
     } else if (press.key == keys::kPageUp || press.key == keys::kPageDown) {
       // A page of the messages, most of what is in view.
       const float page = timeline.bounds().height() * 0.9f;
@@ -2295,7 +2328,10 @@ struct conversations_screen : nodes::Stack {
     });
     // The rows, as a function of the chats: those whose chat shows the same
     // are kept as they are.
-    const auto is_chosen = [&](const conversation* one) { return chosen && *chosen == one->id; };
+    // The chat open -- or, where Alt+Up or Alt+Down went to a forum, that.
+    const auto is_chosen = [&](const conversation* one) {
+      return pointed ? *pointed == one->id : chosen && *chosen == one->id;
+    };
     const std::vector<conversation_id> listed_before =
         rows | std::views::transform([](const conversation_row<Actions>& row) { return row.id; }) | std::ranges::to<std::vector>();
     chats_listed = chats.size();

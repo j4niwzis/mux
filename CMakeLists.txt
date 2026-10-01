@@ -81,14 +81,12 @@ cme_declare_port(NAME tern PROVIDES tern
   GITHUB_REPOSITORY j4niwzis/tern
   GIT_TAG 8144cacc26012dc1d349b75f6cf326f083c7a69b
   LICENSE AGPL-3.0-only
-  SYSTEM NEVER
   TARGETS tern)
 cme_options(tern "TERN_TESTS OFF" "TERN_EXAMPLES OFF")
 cme_declare_port(NAME loom PROVIDES loom
   GITHUB_REPOSITORY j4niwzis/loom
   GIT_TAG 67dae5205d24db9c65806f1cfbca81abc88dc361
   LICENSE AGPL-3.0-only
-  SYSTEM NEVER
   TARGETS loom)
 cme_options(loom "LOOM_TESTS OFF")
 
@@ -107,9 +105,8 @@ cme_find_package(OpenSSL REQUIRED)
 # for more of it finds it already built without that, and stops.
 cme_declare_port(NAME alef PROVIDES alef
   GITHUB_REPOSITORY j4niwzis/alef
-  GIT_TAG 902f701a1277335b228ca7252af9b6bf940468ac
+  GIT_TAG 6dc139f9590dc0d3ac1cc0e9748e67d7a1485480
   LICENSE AGPL-3.0-only
-  SYSTEM NEVER
   TARGETS alef)
 cme_options(alef "ALEF_TESTS OFF")
 cme_find_package(alef COMPONENTS precis idna grapheme line bidi emoji REQUIRED)
@@ -132,7 +129,7 @@ cme_find_package(splice REQUIRED)
 # one taken.
 cme_declare_port(NAME knot PROVIDES knot
   GITHUB_REPOSITORY j4niwzis/knot
-  GIT_TAG 9b482200bb588ac53977c215a41e3c27351a4004
+  GIT_TAG 035e53fdee8875614e350331a914256495b9bb22
   LICENSE AGPL-3.0-only
   SYSTEM NEVER)
 

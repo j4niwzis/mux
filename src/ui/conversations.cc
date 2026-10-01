@@ -1458,11 +1458,14 @@ struct conversations_screen : nodes::Stack {
     const std::vector<shown_icon> top_shown = expanded(top_items);
     for (const auto& [items, mark] : {std::pair{&side_shown, "s"}, std::pair{&top_shown, "t"}})
       for (const shown_icon& one : *items)
-        made.push_back(one.top ? std::format("{}|{}|{}|{}", mark, config::word_of(one.top->item), one.top->name,
-                                             avatar_images().has(one.top->id))
-                               : std::format("{}|{}|{}|{}|{}", mark, one.sub->id.id, display_name(*one.sub), one.depth,
-                                             avatar_images().has(one.sub->id.id)));
-    made.push_back(std::format("{}{}", spaces_on, top_bar_on));
+        // Joined, not std::format: clang 23 crashed instantiating these
+        // format strings in the UI test's build (TemplateArgument::
+        // isPackExpansion, in SubstType of the format_string).
+        made.push_back(one.top ? std::string(mark) + '|' + std::string(config::word_of(one.top->item)) + '|' + one.top->name + '|' +
+                                     (avatar_images().has(one.top->id) ? "1" : "0")
+                               : std::string(mark) + '|' + one.sub->id.id + '|' + display_name(*one.sub) + '|' +
+                                     std::to_string(one.depth) + '|' + (avatar_images().has(one.sub->id.id) ? "1" : "0"));
+    made.push_back(std::string(spaces_on ? "1" : "0") + (top_bar_on ? "1" : "0"));
     if (made != shown_bars) {
       shown_bars = made;
       auto& side_icons = std::get<0>(side.side_line.fChildren);

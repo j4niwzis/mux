@@ -1719,6 +1719,8 @@ struct message_bubble : nodes::Stack {
   // Whether the message its reply quotes was there to quote when it was
   // made: made again once it is, from the timeline or fetched beside it.
   bool quote_known = true;
+  // What the message replied to said as this was made: made again where it changes.
+  std::optional<decltype(message::body)> quote_said;
   // Whether room events were shown when it was made: made again when that
   // changes.
   bool events_shown = true;

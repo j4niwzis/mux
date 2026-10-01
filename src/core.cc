@@ -1388,9 +1388,16 @@ class model {
     where.detached = one.future_from.has_value();
   }
   void on(const change::message_edited& one) {
-    if (message* kept = message_in(of(one.in), one.id)) {
+    conversation& where = of(one.in);
+    if (message* kept = message_in(where, one.id)) {
       kept->body = one.now;
       kept->edited = true;
+    }
+    // And the copy fetched aside for the replies quoting it: what they quote
+    // is what it says now.
+    if (const auto aside = where.quoted.find(one.id); aside != where.quoted.end()) {
+      aside->second.body = one.now;
+      aside->second.edited = true;
     }
   }
   // A message deleted: where deleted messages are kept, it stays where it

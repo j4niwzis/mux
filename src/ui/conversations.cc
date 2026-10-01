@@ -2474,6 +2474,18 @@ struct conversations_screen : nodes::Stack {
     const auto newest_before = std::ranges::find(all, shown_last, &message::id);
     const std::size_t new_from =
         newest_before == all.end() ? all.size() : static_cast<std::size_t>(newest_before - all.begin()) + 1;
+    // What the message a bubble replies to says now, where it is held: a
+    // bubble quoting it is made again as it changes -- edited, deleted --
+    // not left quoting what it said once.
+    const auto quote_body = [&](std::size_t i) -> std::optional<decltype(message::body)> {
+      if (!all[i].replies_to)
+        return std::nullopt;
+      if (const auto found = std::ranges::find(all, *all[i].replies_to, &message::id); found != all.end())
+        return found->body;
+      if (const auto aside = one->quoted.find(*all[i].replies_to); aside != one->quoted.end())
+        return aside->second.body;
+      return std::nullopt;
+    };
     const auto arrives = [&](std::size_t i) {
       const bool acknowledged = all[i].outgoing && splice::visit(splice::overloaded{[](const delivery::sent&) { return true; },
                                                                          [](const auto&) { return false; }},
@@ -2489,6 +2501,7 @@ struct conversations_screen : nodes::Stack {
             [&](std::size_t i) {
               message_bubble made(*one, all[i], first_of_run(i), last_of_run(i), &now, shows(all[i]),
                                   !previews_off.contains(one->id));
+              made.quote_said = quote_body(i);
               if (unread_from && all[i].id == *unread_from)
                 made.mark_unread_start();
               made.show_readers(*one, readers_of(i));
@@ -2502,7 +2515,8 @@ struct conversations_screen : nodes::Stack {
                                        std::ranges::find(all, *all[i].replies_to, &message::id) != all.end();
               const auto link = first_link_of(all[i]);
               const bool preview_known = link && now.previews.contains(*link);
-              return row.said == all[i] && row.first == first_of_run(i) && row.last == last_of_run(i) &&
+              return row.said == all[i] && row.quote_said == quote_body(i) && row.first == first_of_run(i) &&
+                     row.last == last_of_run(i) &&
                      row.quote_known == quote_known && row.events_shown == shows(all[i]) && row.unread_start == (unread_from && all[i].id == *unread_from) &&
                      row.preview_known == preview_known && row.readers_shown == readers_of(i) &&
                      row.previews_shown == !previews_off.contains(one->id) && !row.rooms_came();

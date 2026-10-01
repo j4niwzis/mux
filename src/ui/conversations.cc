@@ -664,6 +664,36 @@ struct conversations_screen : nodes::Stack {
       std::string room;
       void operator()() const { actions->manage_space(room); }
     };
+    // The column's menus' look: a card over the rest, 190 wide.
+    static void as_popup(nodes::Stack& menu) {
+      menu.setGap(4.0f);
+      menu.fState.apply({.width = 190.0f, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 8.0f, 8.0f}, .cornerRadius = 10.0f,
+                         .background = popup_colour(), .border = scene::Border{band_colour, 1.0f},
+                         .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
+    }
+    // A chat's: its settings (#11727).
+    struct chat_settings_act {
+      Actions* actions;
+      conversation_id id;
+      void operator()() const {
+        actions->choose(id);
+        actions->open_manage();
+      }
+    };
+    struct chat_menu : nodes::Stack {
+      struct parts_t {
+        nodes::Text title;
+        widgets::Button<chat_settings_act> settings;
+      } parts;
+      chat_menu(Actions* a, conversation_id id, std::string name)
+          : parts{.title = nodes::Text(std::move(name), 13.0f, dim_colour, true),
+                  .settings = widgets::Button<chat_settings_act>("Chat settings\u2026", {a, std::move(id)})} {
+        as_popup(*this);
+        parts.title.setElided(true);
+        parts.title.apply({.fillX = true});
+        parts.settings.apply({.fillX = true, .height = 30.0f});
+      }
+    };
     struct space_menu : nodes::Stack {
       struct parts_t {
         nodes::Text title;
@@ -684,10 +714,7 @@ struct conversations_screen : nodes::Stack {
                   .top = widgets::Button<set_bars_act>("Top bar only", {a, account, item, false, true}),
                   .both = widgets::Button<set_bars_act>("Both bars", {a, account, item, true, true}),
                   .hide = widgets::Button<set_bars_act>("Hide", {a, account, item, false, false})} {
-        this->setGap(4.0f);
-        fState.apply({.width = 190.0f, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 8.0f, 8.0f}, .cornerRadius = 10.0f,
-                      .background = popup_colour(), .border = scene::Border{band_colour, 1.0f},
-                      .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
+        as_popup(*this);
         parts.title.setElided(true);
         parts.title.apply({.fillX = true});
         for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.explore, &parts.manage, &parts.side, &parts.top, &parts.both, &parts.hide})
@@ -699,8 +726,9 @@ struct conversations_screen : nodes::Stack {
     struct parts_t {
       head_row head;
       body_t body;
-      // A right press's menu, over the rest.
+      // A right press's menu, over the rest: a space's, or a chat's.
       std::optional<space_menu> menu;
+      std::optional<chat_menu> row_menu;
       // The item dragged: picked up off its place, it goes with the pointer;
       // let go, it flies to where it goes -- or back.
       std::optional<space_icon<pick_folder>> ghost;
@@ -850,19 +878,38 @@ struct conversations_screen : nodes::Stack {
       side_bar.apply({.background = side ? chosen_colour : skia::SkColor{0}});
     }
     void close_menu() {
-      if (!parts.menu)
+      if (!parts.menu && !parts.row_menu)
         return;
       parts.menu.reset();
+      parts.row_menu.reset();
       this->invalidateLayout();
       this->markDamaged();
+    }
+    [[nodiscard]] bool menu_up() const { return parts.menu || parts.row_menu; }
+    [[nodiscard]] bool menu_has(float x, float y) const {
+      return (parts.menu && parts.menu->bounds().contains(x, y)) || (parts.row_menu && parts.row_menu->bounds().contains(x, y));
     }
     void drag_down(const scene::pointer::down& press, scene::PointerReply& reply) {
       // A press off the menu closes it at once -- nothing of it is pressed;
       // one on it chooses, and the program closes it then.
-      if (parts.menu && !parts.menu->bounds().contains(press.x, press.y))
+      if (this->menu_up() && !this->menu_has(press.x, press.y))
         this->close_menu();
       drag.reset();
       const space_icon<pick_folder>* one = this->icon_at(press.x, press.y);
+      // A right press on a chat in the list: its menu, where it was pressed.
+      if (!one && press.button == 3 && list.visible())
+        for (const auto& row : std::get<0>(list.fChildren).fChildren)
+          if (list.toView(row.bounds()).contains(press.x, press.y)) {
+            const skia::SkRect box = fState.fBounds;
+            parts.row_menu.emplace(actions, row.id, row.parts.lines.parts.top.parts.name.text());
+            parts.row_menu->apply({.place = scene::anchor::kTopLeft,
+                                   .x = std::clamp(press.x - box.fLeft, 0.0f, std::max(0.0f, box.width() - 190.0f)),
+                                   .y = std::clamp(press.y - box.fTop, 0.0f, std::max(0.0f, box.height() - 80.0f))});
+            menu_close_due = false;
+            this->invalidateLayout();
+            reply.handle();
+            return;
+          }
       if (!one)
         return;
       // A right press: its menu, where it was pressed, kept in the column.
@@ -1395,12 +1442,12 @@ struct conversations_screen : nodes::Stack {
   // once, where the press is not on it; one on it chooses first.
   using Node::onPointer;
   void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply&) {
-    if (side.parts.menu && !side.parts.menu->bounds().contains(press.x, press.y))
+    if (side.menu_up() && !side.menu_has(press.x, press.y))
       side.close_menu();
   }
   // Esc too.
   bool close_space_menu() {
-    if (!side.parts.menu)
+    if (!side.menu_up())
       return false;
     side.close_menu();
     return true;

@@ -439,6 +439,7 @@ void app::apply(const request::start_group& one) {
 
 // The room's management: made from what the model knows of it now.
 void app::apply(const request::open_manage&) {
+  (void)root().main().close_space_menu();  // the chat menu its Settings came from
   manage_target.reset();
   if (const auto chosen = root().main().chosen)
     this->manage_chat(*chosen);

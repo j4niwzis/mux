@@ -285,12 +285,12 @@ struct conversations_screen : nodes::Stack {
     this->place_list();
     scene::work::mark(fState.fId);
   }
+  // Slid only, not faded: a faded list played each row back through a layer
+  // of its own, at every frame of the slide -- it crawled.
   void place_list() {
     const float value = list_in.value();
-    for (scene::Node* each : std::initializer_list<scene::Node*>{&side.list, &side.forum_head}) {
-      each->fState.setAlpha(value);
+    for (scene::Node* each : std::initializer_list<scene::Node*>{&side.list, &side.forum_head})
       each->apply({.shiftX = (1.0f - value) * 32.0f * list_from});
-    }
   }
   std::vector<config::space_placed> space_places;
   std::vector<std::string> shown_bars;

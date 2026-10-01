@@ -244,13 +244,34 @@ struct conversations_screen : nodes::Stack {
   bool home_hides_direct = false;
   void open_forum(std::string room) {
     forum_open = std::move(room);
+    this->slide_list(1.0f);
     if (last_model)
       this->show(*last_model);
   }
   void close_forum() {
     forum_open.reset();
+    this->slide_list(-1.0f);
     if (last_model)
       this->show(*last_model);
+  }
+  // The list sliding in as what it lists changes -- another space, a forum
+  // opened or left: from the side it comes from, faded in; only drawn
+  // moved, nothing laid out again for it.
+  skiff::paint::Tween list_in{1.0f, 200.0f, skiff::paint::movement::subtle{}};
+  float list_from = 1.0f;
+  void slide_list(float from) {
+    list_from = from;
+    list_in.jump(0.0f);
+    list_in.setTarget(1.0f);
+    this->place_list();
+    scene::work::mark(fState.fId);
+  }
+  void place_list() {
+    const float value = list_in.value();
+    for (scene::Node* each : std::initializer_list<scene::Node*>{&side.list, &side.forum_head}) {
+      each->fState.setAlpha(value);
+      each->apply({.shiftX = (1.0f - value) * 32.0f * list_from});
+    }
   }
   std::vector<config::space_placed> space_places;
   std::vector<std::string> shown_bars;
@@ -348,6 +369,8 @@ struct conversations_screen : nodes::Stack {
     }
   }
   void choose_folder(const folder_t& which) {
+    if (which != folder)
+      this->slide_list(1.0f);
     folder = which;
     if (last_model)
       this->show(*last_model);
@@ -1641,11 +1664,13 @@ struct conversations_screen : nodes::Stack {
   // that brought the view to the end stopped in a frame whose tick had gone
   // by here already, and nothing ticked this again -- the arrow stayed.
   [[nodiscard]] bool wantsTick() const {
-    return this->away() != chat.area.parts.jump.visible() ||
+    return list_in.moving() || this->away() != chat.area.parts.jump.visible() ||
            jumping_to.has_value() || aiming.has_value() || jump_age != 0 || timeline.moving() ||
            !rooms_waiting.empty() || !rooms_unfound.empty();
   }
-  void update(double) {
+  void update(double now_ms) {
+    if (list_in.step(now_ms))
+      this->place_list();
     // A room a bubble names has come -- its picture, or word that it is
     // there: the bubbles made again.
     if (last_model &&

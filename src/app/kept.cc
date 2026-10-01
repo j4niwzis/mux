@@ -70,8 +70,27 @@ struct kept_settings {
   std::map<conversation_id, mux::config::bubble_look> panels_in;
   // The spaces shown as one chat each, their rooms in them as topics.
   std::set<conversation_id> forums;
+  // The space each chat is in -- the first found holding it -- set by the
+  // program from the model at each refresh: a space's own choices are its
+  // rooms', where they have none, nearest first, through spaces in spaces.
+  std::map<conversation_id, conversation_id> space_above;
+  // A chat's own entry in a map of chats' choices, else the nearest space's
+  // above it; none, the map's end.
+  template <class Map>
+  [[nodiscard]] auto own_or_space(const Map& in, const conversation_id& chat) const -> decltype(in.find(chat)) {
+    auto own = in.find(chat);
+    conversation_id at = chat;
+    for (int steps = 0; own == in.end() && steps < 16; ++steps) {
+      const auto up = space_above.find(at);
+      if (up == space_above.end())
+        break;
+      at = up->second;
+      own = in.find(at);
+    }
+    return own;
+  }
   [[nodiscard]] mux::config::bubble_look panels_of(const conversation_id& chat) {
-    if (const auto own = panels_in.find(chat); own != panels_in.end())
+    if (const auto own = this->own_or_space(panels_in, chat); own != panels_in.end())
       return own->second;
     if (const auto* account = this->settings_of(chat.account.address))
       if (const auto& chosen = mux::config::panels_of(*account))
@@ -79,7 +98,7 @@ struct kept_settings {
     return panels.value_or(mux::config::bubble_look{});
   }
   [[nodiscard]] mux::config::bubble_look bubbles_of(const conversation_id& chat) {
-    if (const auto own = bubbles_in.find(chat); own != bubbles_in.end())
+    if (const auto own = this->own_or_space(bubbles_in, chat); own != bubbles_in.end())
       return own->second;
     if (const auto* account = this->settings_of(chat.account.address))
       if (const auto& chosen = mux::config::bubbles_of(*account))
@@ -89,7 +108,7 @@ struct kept_settings {
   // A chat's background: its own, else its account's, else every chat's,
   // else the theme's.
   [[nodiscard]] mux::config::wallpaper_t wallpaper_of(const conversation_id& chat) {
-    if (const auto own = wallpaper_in.find(chat); own != wallpaper_in.end())
+    if (const auto own = this->own_or_space(wallpaper_in, chat); own != wallpaper_in.end())
       return own->second;
     if (const auto* account = this->settings_of(chat.account.address))
       if (const auto& chosen = mux::config::wallpaper_of(*account))
@@ -125,7 +144,7 @@ struct kept_settings {
   // How far a jump's search pages back in a chat: its own limit, else its
   // account's, else every account's.
   [[nodiscard]] std::int64_t jump_search_of(const conversation_id& chat) {
-    if (const auto own = jump_search_in.find(chat); own != jump_search_in.end())
+    if (const auto own = this->own_or_space(jump_search_in, chat); own != jump_search_in.end())
       return own->second;
     if (const auto* account = this->settings_of(chat.account.address))
       if (const auto& chosen = mux::config::jump_search_of(*account))
@@ -135,7 +154,7 @@ struct kept_settings {
   // Whether a chat shows link previews: its own choice, else its account's,
   // else every account's.
   [[nodiscard]] bool previews_shown(const conversation_id& chat) {
-    if (const auto own = previews_shown_in.find(chat); own != previews_shown_in.end())
+    if (const auto own = this->own_or_space(previews_shown_in, chat); own != previews_shown_in.end())
       return own->second;
     if (const auto* account = this->settings_of(chat.account.address))
       if (const auto& chosen = mux::config::link_previews_of(*account))
@@ -143,7 +162,7 @@ struct kept_settings {
     return history.link_previews;
   }
   [[nodiscard]] bool receipts_shown(const conversation_id& chat) {
-    if (const auto own = receipts_shown_in.find(chat); own != receipts_shown_in.end())
+    if (const auto own = this->own_or_space(receipts_shown_in, chat); own != receipts_shown_in.end())
       return own->second;
     if (const auto* account = this->settings_of(chat.account.address))
       if (const auto& chosen = mux::config::show_receipts_of(*account))
@@ -153,7 +172,7 @@ struct kept_settings {
   // Whether a chat shows what is done in it: its own choice, else its
   // account's, else every account's.
   [[nodiscard]] bool room_events_shown(const conversation_id& chat) {
-    if (const auto own = room_events.find(chat); own != room_events.end())
+    if (const auto own = this->own_or_space(room_events, chat); own != room_events.end())
       return own->second;
     if (const auto* account = this->settings_of(chat.account.address))
       if (const auto& chosen = mux::config::room_events_of(*account))
@@ -190,8 +209,8 @@ struct kept_settings {
   // account's, every account's.
   [[nodiscard]] mux::room_event_filter room_event_filter_of(const conversation_id& chat) {
     const mux::config::account_t* account = this->settings_of(chat.account.address);
-    const auto own_all = room_events.find(chat);
-    const auto own_kinds = room_event_kinds.find(chat);
+    const auto own_all = this->own_or_space(room_events, chat);
+    const auto own_kinds = this->own_or_space(room_event_kinds, chat);
     return mux::logic::filter_of(
         own_kinds == room_event_kinds.end() ? std::nullopt : std::optional<mux::config::room_event_kinds>(own_kinds->second),
         own_all == room_events.end() ? std::nullopt : std::optional<bool>(own_all->second),

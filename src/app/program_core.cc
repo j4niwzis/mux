@@ -437,6 +437,14 @@ void app::refresh(std::source_location from) {
     std::println(std::cerr, "[frame] refresh from {}:{} ({})", std::filesystem::path(from.file_name()).filename().string(),
                  from.line(), from.function_name());
   pictures.ask();
+  // The space each chat is in: its choices, where the chat has none.
+  space_above.clear();
+  for (const auto& [id, account] : model->accounts())
+    for (const auto& [key, one] : account.conversations)
+      if (one.space)
+        for (const std::string& child : one.children)
+          if (child != one.id.id)
+            space_above.try_emplace(mux::conversation_id{one.id.account, child}, one.id);
   root().main().muted = muted;
   // Which chats show what is done in them, as the settings say now.
   auto& filters = root().main().event_filters;

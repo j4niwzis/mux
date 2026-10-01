@@ -119,11 +119,56 @@ struct window : scene::Node {
     // through here -- caught on its way, before the chat reads Esc as
     // letting an answer go.
     using Node::onKey;
+    // Esc closes what is on top, whatever has the keys -- a menu, the emoji
+    // popup, a picture, a dialog -- one at a time, the topmost first.
     void onKey(scene::phase::capture, const scene::key::down& press, scene::Reply& reply) {
-      if (press.key == scene::keys::kEscape && parts.emoji) {
-        actions_of->close_emoji();
-        reply.handle();
+      if (press.key != scene::keys::kEscape)
+        return;
+      Actions* a = actions_of;
+      const auto closed = [&] { reply.handle(); };
+      if (parts.text_menu_up) {
+        parts.text_menu_up.reset();
+        this->invalidateLayout();
+        this->markDamaged();
+        return closed();
       }
+      if (parts.menu)
+        return a->close_menu(), closed();
+      if (parts.emoji)
+        return a->close_emoji(), closed();
+      if (parts.viewer)
+        return a->close_picture(), closed();
+      // The dialogs, the one drawn last -- on top -- first.
+      if (parts.sending.shown())
+        return a->close_send_box(), closed();
+      if (parts.devtools.shown())
+        return a->close_devtools(), closed();
+      if (parts.explore.shown())
+        return a->close_explore(), closed();
+      if (parts.wallpaper.shown())
+        return a->close_wallpaper(), closed();
+      if (parts.packs.shown())
+        return a->close_packs(), closed();
+      if (parts.new_room.shown())
+        return a->close_new_room(), closed();
+      if (parts.new_chat.shown())
+        return a->close_new_chat(), closed();
+      if (parts.forwarding.shown())
+        return a->close_forward(), closed();
+      if (parts.manage.shown())
+        return a->close_manage(), closed();
+      if (parts.marks.shown())
+        return a->close_marks(), closed();
+      if (parts.reactions.shown())
+        return a->close_reactions(), closed();
+      if (parts.room.shown())
+        return a->close_room_card(), closed();
+      if (parts.person.shown())
+        return a->close_person_info(), closed();
+      if (parts.notice.shown())
+        return a->close_notice(), closed();
+      if (parts.settings.shown())
+        return a->close_settings(), closed();
     }
 
     explicit layers(Actions* a)

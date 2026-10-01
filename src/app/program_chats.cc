@@ -25,6 +25,12 @@ import mux.app.words;
 namespace mux::app {
 
 void app::apply(const request::choose& one) {
+  // A space shown as a forum: its rooms listed in it, as tdesktop opens a
+  // forum's topics -- no chat opened.
+  if (const mux::conversation* chat = model->find(one.which); chat && chat->space && forums.contains(one.which)) {
+    root().main().open_forum(one.which.id);
+    return;
+  }
   // What was being written where the reader was: kept as its draft; and
   // the chat opened's own put back in the field.
   auto& screen = root().main();

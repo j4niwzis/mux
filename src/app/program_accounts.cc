@@ -28,7 +28,7 @@ namespace mux::app {
 
 // A person's info: a box in the middle of the window, as tdesktop's.
 void app::apply(const request::open_member_info& one) {
-  const auto& chosen = root().main().chosen;
+  const auto chosen = this->managed();
   if (!chosen)
     return;
   const mux::conversation* in = model->find(*chosen);
@@ -44,7 +44,7 @@ void app::apply(const request::toggle_emoji&) {
     return;
   }
   const auto at = root().main().line.parts.input.parts.emoji.bounds();
-  const auto& chosen = root().main().chosen;
+  const auto chosen = this->managed();
   const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
   mux::ui::chat_emotes() = chat ? chat->emotes : std::vector<mux::emote>{};
   mux::ui::chat_stickers() = chat ? chat->stickers : std::vector<mux::emote>{};
@@ -98,7 +98,7 @@ void app::apply(const request::set_wallpaper& one) {
                                        });
                                      },
                                      [&](mux::choice_level::chat) {
-                                       const auto& chosen_chat = root().main().chosen;
+                                       const auto chosen_chat = this->managed();
                                        if (!chosen_chat)
                                          return;
                                        if (chosen)
@@ -154,7 +154,7 @@ void app::apply(const request::set_bubbles& one) {
                                      });
                                    },
                                    [&](mux::choice_level::chat) {
-                                     const auto& chosen = root().main().chosen;
+                                     const auto chosen = this->managed();
                                      if (!chosen)
                                        return;
                                      if (one.look)
@@ -235,7 +235,7 @@ void app::apply(const request::close_thread&) {
   this->refresh();
 }
 void app::apply(const request::send_in_thread& one) {
-  const auto& chosen = root().main().chosen;
+  const auto chosen = this->managed();
   const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
   if (!chat || shared.demo())
     return;
@@ -255,7 +255,7 @@ void app::apply(const request::open_packs&) {
     net->list_packs(*packs_account, std::nullopt);
 }
 void app::apply(const request::open_room_packs&) {
-  const auto& chosen = root().main().chosen;
+  const auto chosen = this->managed();
   const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
   if (!chat || !mux::is_matrix(chat->id.account.speaks))
     return;
@@ -411,8 +411,45 @@ void app::apply(const request::start_group& one) {
 
 // The room's management: made from what the model knows of it now.
 void app::apply(const request::open_manage&) {
-  const auto& chosen = root().main().chosen;
-  const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
+  manage_target.reset();
+  if (const auto chosen = root().main().chosen)
+    this->manage_chat(*chosen);
+}
+// A space's settings: Manage, for it.
+void app::apply(const request::manage_space& one) {
+  (void)root().main().close_space_menu();
+  const auto by = root().main().current;
+  if (!by)
+    return;
+  manage_target = mux::conversation_id{*by, one.room};
+  this->manage_chat(*manage_target);
+}
+// A space shown as one chat, its rooms as topics -- or as a space. Not one
+// that holds spaces: it is a space.
+void app::apply(const request::flip_forum& one) {
+  const auto by = root().main().current;
+  if (!by)
+    return;
+  const mux::conversation_id id{*by, one.room};
+  const mux::conversation* space = model->find(id);
+  if (!space || !space->space)
+    return;
+  const bool holds_spaces = std::ranges::any_of(space->children, [&](const std::string& child) {
+    const mux::conversation* in = model->find(mux::conversation_id{*by, child});
+    return in && in->space;
+  });
+  if (forums.contains(id))
+    forums.erase(id);
+  else if (!holds_spaces)
+    forums.insert(id);
+  (void)this->write();
+  this->refresh();
+  if (auto* managing = root().manage_up())
+    managing->show_tab(managing->tab);
+}
+void app::apply(const request::close_forum&) { root().main().close_forum(); }
+void app::manage_chat(const mux::conversation_id& id) {
+  const mux::conversation* chat = model->find(id);
   if (!chat)
     return;
   const auto level_of = [&](const std::string& user) {
@@ -445,7 +482,13 @@ void app::apply(const request::open_manage&) {
                                                         ? std::optional<mux::config::room_event_kinds>(room_event_kinds.at(chat->id))
                                                         : std::nullopt,
                                      .mine = level_of(chat->id.account.address),
-                                     .needs = chat->needs};
+                                     .needs = chat->needs,
+                                     .space = chat->space,
+                                     .holds_spaces = std::ranges::any_of(chat->children, [&](const std::string& child) {
+                                       const mux::conversation* in = model->find(mux::conversation_id{chat->id.account, child});
+                                       return in && in->space;
+                                     }),
+                                     .forum = forums.contains(chat->id)};
   // Element's privileged users: those the power levels name with a level of
   // their own, the highest first.
   for (const auto& [user, level] : chat->powers) {
@@ -458,10 +501,13 @@ void app::apply(const request::open_manage&) {
   std::ranges::stable_sort(facts.privileged, std::greater{}, &mux::ui::room_settings_facts::person::level);
   root().open_manage(facts);
 }
-void app::apply(const request::close_manage&) { root().close_manage(); }
+void app::apply(const request::close_manage&) {
+  manage_target.reset();
+  root().close_manage();
+}
 // The developer tools, for the chat being read.
 void app::apply(const request::explore_state&) {
-  const auto& chosen = root().main().chosen;
+  const auto chosen = this->managed();
   if (!chosen || shared.demo())
     return;
   root().close_manage();
@@ -473,14 +519,14 @@ void app::apply(const request::open_send_custom&) {
 }
 void app::apply(const request::close_devtools&) { root().close_devtools(); }
 void app::apply(const request::send_custom& one) {
-  const auto& chosen = root().main().chosen;
+  const auto chosen = this->managed();
   if (!chosen || shared.demo())
     return;
   net->send_custom(*chosen, one.type, one.state_key, one.json);
 }
 // Done to the room being read, by its account.
 void app::apply(const request::room_act& one) {
-  const auto& chosen = root().main().chosen;
+  const auto chosen = this->managed();
   if (!chosen || shared.demo())
     return;
   net->manage(*chosen, one.action);
@@ -605,7 +651,7 @@ void app::apply(const request::flip_account_notify_sound&) {
   });
 }
 void app::apply(const request::set_chat_notify& one) {
-  const auto& chosen = root().main().chosen;
+  const auto chosen = this->managed();
   if (!chosen)
     return;
   notify_modes.erase(*chosen);
@@ -641,7 +687,7 @@ void app::apply(const request::set_room_event_kind& one) {
                                });
                              },
                              [&](mux::choice_level::chat) {
-                               const auto& chosen = root().main().chosen;
+                               const auto chosen = this->managed();
                                if (!chosen)
                                  return;
                                if (one.kind)
@@ -702,7 +748,7 @@ void app::apply(const request::set_room_events& one) {
                                      });
                                    },
                                    [&](mux::choice_level::chat) {
-                                     const auto& chosen = root().main().chosen;
+                                     const auto chosen = this->managed();
                                      if (!chosen)
                                        return;
                                      if (one.all)
@@ -728,7 +774,7 @@ void app::apply(const request::set_jump_search& one) {
                                });
                              },
                              [&](mux::choice_level::chat) {
-                               const auto& chosen = root().main().chosen;
+                               const auto chosen = this->managed();
                                if (!chosen)
                                  return;
                                if (one.most)
@@ -750,7 +796,7 @@ void app::apply(const request::set_link_previews& one) {
                                });
                              },
                              [&](mux::choice_level::chat) {
-                               const auto& chosen = root().main().chosen;
+                               const auto chosen = this->managed();
                                if (!chosen)
                                  return;
                                if (one.show)
@@ -772,7 +818,7 @@ void app::apply(const request::set_receipts_shown& one) {
                                });
                              },
                              [&](mux::choice_level::chat) {
-                               const auto& chosen = root().main().chosen;
+                               const auto chosen = this->managed();
                                if (!chosen)
                                  return;
                                if (one.show)
@@ -798,7 +844,7 @@ void app::apply(const request::flip_account_room_events&) {
 }
 // Room events, for the chat being read, whatever its account's are.
 void app::apply(const request::flip_chat_room_events&) {
-  const auto& chosen = root().main().chosen;
+  const auto chosen = this->managed();
   if (!chosen)
     return;
   const bool now = this->room_events_shown(*chosen);

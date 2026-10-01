@@ -576,6 +576,7 @@ struct room_events_choice {
   std::optional<bool> previews;  // a card for a message's first link
   std::optional<std::int64_t> jump_search;  // events paged back looking for one; 0 no limit
   std::optional<std::string> wallpaper;  // its background, as word_of(wallpaper_t) says it
+  std::optional<bool> forum;  // a space: shown as one chat, its rooms in it as topics
   std::optional<std::string> bubbles;    // its bubbles, as word_of(bubble_look) says them
   std::optional<std::string> panels;  // its panels' look, as word_of(bubble_look) says it
   friend bool operator==(const room_events_choice&, const room_events_choice&) = default;

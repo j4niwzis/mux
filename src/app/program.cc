@@ -301,6 +301,16 @@ struct app : kept_settings {
   void notify_of(const mux::message& said, bool mentions_me);
   void apply(const request::set_room_event_kind& one);
   void apply(const request::set_room_events& one);
+  void apply(const request::manage_space& one);
+  void apply(const request::flip_forum& one);
+  void apply(const request::close_forum&);
+  // The chat Manage is for: a space, where its settings are open -- what is
+  // chosen there goes to it -- else the chat chosen.
+  std::optional<mux::conversation_id> manage_target;
+  [[nodiscard]] std::optional<mux::conversation_id> managed() {
+    return manage_target ? manage_target : root().main().chosen;
+  }
+  void manage_chat(const mux::conversation_id& id);
   void apply(const request::place_spaces& one);
   void apply(const request::set_space_bars& one);
   void apply(const request::join_room_card&);

@@ -234,6 +234,20 @@ struct conversations_screen : nodes::Stack {
   // each item is put; and what they were made for, not made again unchanged.
   bool spaces_on = true;
   bool top_bar_on = true;
+  // The spaces shown as forums, and the one open in the list -- its rooms
+  // listed, as tdesktop lists a forum's topics.
+  std::set<conversation_id> forums;
+  std::optional<std::string> forum_open;
+  void open_forum(std::string room) {
+    forum_open = std::move(room);
+    if (last_model)
+      this->show(*last_model);
+  }
+  void close_forum() {
+    forum_open.reset();
+    if (last_model)
+      this->show(*last_model);
+  }
   std::vector<config::space_placed> space_places;
   std::vector<std::string> shown_bars;
   struct pick_folder {
@@ -423,8 +437,24 @@ struct conversations_screen : nodes::Stack {
     };
     using list_t = nodes::ScrollContainer<nodes::Flow<std::vector<conversation_row<Actions>>>>;
     // What is right of the side bar: the search, the tabs, the chats.
+    // A forum open: its name, and the way back to the chats.
+    struct forum_head_t : nodes::Stack {
+      struct parts_t {
+        icon_button<ask<Actions, &Actions::close_forum>> back;
+        nodes::Text name{"", 15.0f, text_colour, true};
+      } parts;
+      explicit forum_head_t(Actions* a) : parts{.back = icon_button<ask<Actions, &Actions::close_forum>>(icon::back{}, {a})} {
+        this->setHorizontal();
+        this->setGap(8.0f);
+        fState.apply({.fillX = true, .height = 40.0f, .padding = {0.0f, 8.0f, 0.0f, 8.0f}});
+        parts.back.apply({.alignSelf = scene::align::kMiddle});
+        parts.name.setElided(true);
+        parts.name.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      }
+    };
     struct rest_t : nodes::Stack {
       struct parts_t {
+        forum_head_t forum_head;
         search_box search;
         // The folders, where the account has groups -- or spaces, with no
         // bars: a line of tabs.
@@ -433,8 +463,9 @@ struct conversations_screen : nodes::Stack {
         nodes::Text no_chats{"No chats yet.", 13.0f, dim_colour};
         list_t list{nodes::Flow<std::vector<conversation_row<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
       } parts;
-      rest_t() {
+      explicit rest_t(Actions* a) : parts{.forum_head = forum_head_t(a)} {
         fState.apply({.fillY = true, .grow = scene::axes::kX});
+        parts.forum_head.setVisible(false);
         parts.no_chats.apply({.margin = {12.0f, 16.0f, 0.0f, 16.0f}});
         parts.folders.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {0.0f, 8.0f, 6.0f, 8.0f}});
         parts.list.apply({.fillX = true, .grow = scene::axes::kY});
@@ -449,7 +480,7 @@ struct conversations_screen : nodes::Stack {
         nodes::ScrollContainer<icons_t> side{icons_t({.spacingY = 8.0f, .wrap = false, .crossAlign = scene::align::kMiddle}, {})};
         rest_t rest;
       } parts;
-      body_t() {
+      explicit body_t(Actions* a) : parts{.rest = rest_t(a)} {
         this->setHorizontal();
         fState.apply({.fillX = true, .grow = scene::axes::kY});
         parts.side.apply({.fillY = true, .width = 56.0f});
@@ -469,10 +500,16 @@ struct conversations_screen : nodes::Stack {
       std::string room;
       void operator()() const { actions->explore_space(room); }
     };
+    struct manage_act {
+      Actions* actions;
+      std::string room;
+      void operator()() const { actions->manage_space(room); }
+    };
     struct space_menu : nodes::Stack {
       struct parts_t {
         nodes::Text title;
         widgets::Button<explore_act> explore;
+        widgets::Button<manage_act> manage;
         widgets::Button<set_bars_act> side, top, both, hide;
       } parts;
       [[nodiscard]] static std::string room_of(const config::space_item_t& item) {
@@ -483,6 +520,7 @@ struct conversations_screen : nodes::Stack {
       space_menu(Actions* a, const std::string& account, const config::space_item_t& item, std::string name)
           : parts{.title = nodes::Text(std::move(name), 13.0f, dim_colour, true),
                   .explore = widgets::Button<explore_act>("Explore its rooms\u2026", {a, room_of(item)}),
+                  .manage = widgets::Button<manage_act>("Space settings\u2026", {a, room_of(item)}),
                   .side = widgets::Button<set_bars_act>("Side bar only", {a, account, item, true, false}),
                   .top = widgets::Button<set_bars_act>("Top bar only", {a, account, item, false, true}),
                   .both = widgets::Button<set_bars_act>("Both bars", {a, account, item, true, true}),
@@ -493,9 +531,10 @@ struct conversations_screen : nodes::Stack {
                       .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
         parts.title.setElided(true);
         parts.title.apply({.fillX = true});
-        for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.explore, &parts.side, &parts.top, &parts.both, &parts.hide})
+        for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.explore, &parts.manage, &parts.side, &parts.top, &parts.both, &parts.hide})
           each->apply({.fillX = true, .height = 30.0f});
         parts.explore.setVisible(!room_of(item).empty());
+        parts.manage.setVisible(!room_of(item).empty());
       }
     };
     struct parts_t {
@@ -510,6 +549,7 @@ struct conversations_screen : nodes::Stack {
     // Its parts by their names, for what reads them: it is never moved.
     head_row& head = parts.head;
     search_box& search = parts.body.parts.rest.parts.search;
+    forum_head_t& forum_head = parts.body.parts.rest.parts.forum_head;
     nodes::Flow<std::vector<folder_tab<pick_folder>>>& folders = parts.body.parts.rest.parts.folders;
     nodes::Text& no_chats = parts.body.parts.rest.parts.no_chats;
     list_t& list = parts.body.parts.rest.parts.list;
@@ -522,7 +562,7 @@ struct conversations_screen : nodes::Stack {
     Actions* actions = nullptr;
     // Whose spaces the bars hold, as the screen says as it shows them.
     std::string account;
-    explicit side_column(Actions* a) : parts{.head = head_row(a)}, actions(a) {
+    explicit side_column(Actions* a) : parts{.head = head_row(a), .body = body_t(a)}, actions(a) {
       fState.apply({.fillY = true, .background = sidebar_colour});
     }
 
@@ -1928,8 +1968,27 @@ struct conversations_screen : nodes::Stack {
             }
         }
       }
+    // Forums: each listed as one chat; their rooms in them, not beside them.
+    std::set<std::string> in_forums;
+    if (in)
+      for (const conversation_id& one : forums)
+        if (one.account == *current)
+          if (const auto found = in->conversations.find(one.id); found != in->conversations.end())
+            in_forums.insert(found->second.children.begin(), found->second.children.end());
+    // The forum open: still one; its rooms, the list.
+    if (forum_open && (!current || !forums.contains(conversation_id{*current, *forum_open})))
+      forum_open.reset();
+    const conversation* forum = forum_open && in && in->conversations.contains(*forum_open) ? &in->conversations.at(*forum_open) : nullptr;
+    side.forum_head.setVisible(forum != nullptr);
+    if (forum)
+      side.forum_head.parts.name.setText(display_name(*forum));
     const auto in_folder = [&](const conversation& one) {
-      if (one.space)
+      if (forum)
+        return !one.space && std::ranges::contains(forum->children, one.id.id);
+      // A space is a folder, not a chat -- but a forum is one chat.
+      if (one.space && !forums.contains(one.id))
+        return false;
+      if (!one.space && in_forums.contains(one.id.id))
         return false;
       return splice::visit(splice::overloaded{[](const folder::all&) { return true; },
                                    [&](const folder::space&) { return in_space.contains(one.id.id); },

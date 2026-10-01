@@ -56,6 +56,10 @@ struct room_settings_facts {
   // The user's own level, and what each thing done asks.
   std::int64_t mine = 0;
   power_needs needs;
+  // A space: whether it holds spaces, and whether it is shown as a forum.
+  bool space = false;
+  bool holds_spaces = false;
+  bool forum = false;
   // Those whose level is not the default: Element's privileged users.
   struct person {
     std::string id;
@@ -320,6 +324,34 @@ struct room_settings : nodes::Stack {
   };
 
   // ---- General -------------------------------------------------------------------
+  // A space as one chat, its rooms as topics: a switch, off for a space
+  // that holds spaces.
+  struct flip_forum_act {
+    Actions* actions;
+    std::string room;
+    bool allowed = true;
+    void operator()() const {
+      if (allowed)
+        actions->flip_forum(room);
+    }
+  };
+  struct forum_row : nodes::Stack {
+    struct parts_t {
+      nodes::Text label{"One chat, its rooms as topics", 14.0f, text_colour};
+      widgets::Toggle<flip_forum_act> toggle;
+    } parts;
+    forum_row(Actions* a, const room_settings_facts& facts)
+        : parts{.toggle = widgets::Toggle<flip_forum_act>({a, facts.id, !facts.holds_spaces})} {
+      this->setHorizontal();
+      this->setGap(12.0f);
+      fState.apply({.fillX = true, .height = 36.0f});
+      parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      parts.toggle.apply({.alignSelf = scene::align::kMiddle});
+      parts.toggle.setOnNow(facts.forum);
+      if (facts.holds_spaces)
+        fState.apply({.alpha = 0.4f, .disabled = true});
+    }
+  };
   struct general_page : nodes::Stack {
     struct buttons_row : nodes::Stack {
       struct parts_t {
@@ -357,6 +389,9 @@ struct room_settings : nodes::Stack {
       receipts_choice<Actions> receipts;
       previews_choice<Actions> previews;
       jump_search_choice<Actions> jump_search;
+      nodes::Text forum_heading = part_heading("Shown as");
+      forum_row forum;
+      nodes::Text forum_about;
       nodes::Text leave_heading = part_heading("Leave room");
       widgets::Button<ask<Actions, &Actions::leave_chat>> leave;
     } parts;
@@ -372,7 +407,13 @@ struct room_settings : nodes::Stack {
                 .receipts = receipts_choice<Actions>(a, choice_level::chat{}, facts.receipts),
                 .previews = previews_choice<Actions>(a, choice_level::chat{}, facts.previews),
                 .jump_search = jump_search_choice<Actions>(a, choice_level::chat{}, facts.jump_search),
+                .forum = forum_row(a, facts),
+                .forum_about = explained(facts.holds_spaces
+                                             ? "A space that holds spaces is shown as a space."
+                                             : "On: in the chat list as one chat; its rooms open inside it, as Telegram's topics."),
                 .leave = widgets::Button<ask<Actions, &Actions::leave_chat>>("Leave room", {a})} {
+      for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.forum_heading, &parts.forum, &parts.forum_about})
+        each->setVisible(facts.space);
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
       parts.photo.apply({.alignSelf = scene::align::kStart});

@@ -64,6 +64,8 @@ struct kept_settings {
   // Every chat's panels, and chats' own.
   std::optional<mux::config::bubble_look> panels;
   std::map<conversation_id, mux::config::bubble_look> panels_in;
+  // The spaces shown as one chat each, their rooms in them as topics.
+  std::set<conversation_id> forums;
   [[nodiscard]] mux::config::bubble_look panels_of(const conversation_id& chat) {
     if (const auto own = panels_in.find(chat); own != panels_in.end())
       return own->second;
@@ -247,7 +249,7 @@ struct kept_settings {
     }
     if (!room_events.empty() || !room_event_kinds.empty() || !receipts_shown_in.empty() || !jump_search_in.empty() ||
         !previews_shown_in.empty() || !wallpaper_in.empty() || !bubbles_in.empty() ||
-        !panels_in.empty()) {
+        !panels_in.empty() || !forums.empty()) {
       std::map<conversation_id, mux::config::room_events_choice> chosen;
       for (const auto& [chat, show] : room_events) {
         auto& one = chosen[chat];
@@ -296,6 +298,12 @@ struct kept_settings {
         one.account = chat.account.address;
         one.conversation = chat.id;
         one.panels = mux::config::word_of(look);
+      }
+      for (const conversation_id& chat : forums) {
+        auto& one = chosen[chat];
+        one.account = chat.account.address;
+        one.conversation = chat.id;
+        one.forum = true;
       }
       out.room_events.emplace();
       for (auto& [chat, one] : chosen)

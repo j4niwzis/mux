@@ -455,6 +455,7 @@ void app::refresh(std::source_location from) {
   root().main().spaces_on = spaces;
   root().main().top_bar_on = top_bar;
   root().main().space_places = space_places;
+  root().main().forums = forums;
   // What each level holds of the looks, for the choices to show: every
   // chat's; the chosen chat's own, and its account's.
   {

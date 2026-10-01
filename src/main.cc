@@ -188,6 +188,8 @@ int main(int argc, char** argv) {
       program.bubbles_in.insert_or_assign(chat, mux::config::bubble_look_of(*one.bubbles));
     if (one.panels)
       program.panels_in.insert_or_assign(chat, mux::config::bubble_look_of(*one.panels));
+    if (one.forum.value_or(false))
+      program.forums.insert(chat);
   }
   for (const auto& one : saved.muted.value_or(std::vector<mux::config::muted_chat>{}))
     program.muted.insert({{mux::ui::protocol_of(one.account), one.account}, one.conversation});

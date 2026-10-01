@@ -518,6 +518,9 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
                          .outgoing = one.sender == id_.address};
             made.attachment = std::move(carried);
             made.sticker = true;
+            // An answer, as a message is one.
+            if (content.m_relates_to && content.m_relates_to->m_in_reply_to && content.m_relates_to->m_in_reply_to->event_id)
+              made.replies_to = *content.m_relates_to->m_in_reply_to->event_id;
             sink_(change::message_added{std::move(made), where});
           },
           // Any other: said by its type's name.

@@ -1664,13 +1664,18 @@ struct conversations_screen : nodes::Stack {
   // that brought the view to the end stopped in a frame whose tick had gone
   // by here already, and nothing ticked this again -- the arrow stayed.
   [[nodiscard]] bool wantsTick() const {
-    return list_in.moving() || this->away() != chat.area.parts.jump.visible() ||
+    return list_in.moving() || panel_ease().t.moving() || this->away() != chat.area.parts.jump.visible() ||
            jumping_to.has_value() || aiming.has_value() || jump_age != 0 || timeline.moving() ||
            !rooms_waiting.empty() || !rooms_unfound.empty();
   }
   void update(double now_ms) {
     if (list_in.step(now_ms))
       this->place_list();
+    // The panels' opacity on its way to the chat's.
+    if (auto& ease = panel_ease(); ease.t.step(now_ms)) {
+      scene::detail::panelLook().opacity = ease.from + (ease.to - ease.from) * ease.t.value();
+      this->markDamaged();
+    }
     // A room a bubble names has come -- its picture, or word that it is
     // there: the bubbles made again.
     if (last_model &&

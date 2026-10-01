@@ -458,8 +458,10 @@ void app::refresh(std::source_location from) {
   // the whole window repainted where it changes -- nothing made again.
   mux::ui::panel_look_now() = root().main().chosen ? this->panels_of(*root().main().chosen)
                                                    : panels.value_or(mux::config::bubble_look{});
-  if (mux::ui::show_panels(mux::ui::panel_look_now()))
+  if (mux::ui::show_panels(mux::ui::panel_look_now())) {
     root().markDamaged();
+    skiff::scene::work::mark(root().main().fState.fId);  // an ease ticked by the screen
+  }
   // The space bars, as the settings put them.
   root().main().spaces_on = spaces;
   root().main().top_bar_on = top_bar;

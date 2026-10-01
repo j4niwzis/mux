@@ -117,6 +117,16 @@ inline config::bubble_look& panel_look_now() {
   static config::bubble_look look;
   return look;
 }
+// The panels' opacity going from one chat's to another's: eased, the look
+// otherwise as it is.
+struct panel_ease_t {
+  skiff::paint::Tween t{1.0f, 260.0f};
+  float from = 1.0f, to = 1.0f;
+};
+inline panel_ease_t& panel_ease() {
+  static panel_ease_t ease;
+  return ease;
+}
 // The panels' look put in place, for skiff to paint them in: only over the
 // background behind the whole window. Whether it changed -- the window to
 // be repainted.
@@ -135,7 +145,22 @@ inline bool show_panels(const config::bubble_look& look) {
     next = {};
   if (next == scene::detail::panelLook())
     return false;
-  scene::detail::panelLook() = std::move(next);
+  // Only the opacity another: eased to it, from where it is now.
+  scene::detail::PanelLook& now = scene::detail::panelLook();
+  const bool same_but_opacity = now.active && next.active && now.frosted == next.frosted && now.edge == next.edge &&
+                                now.panels == next.panels && now.tints == next.tints;
+  if (same_but_opacity) {
+    auto& ease = panel_ease();
+    if (ease.t.moving() && ease.to == next.opacity)
+      return false;
+    ease.from = now.opacity;
+    ease.to = next.opacity;
+    ease.t.jump(0.0f);
+    ease.t.setTarget(1.0f);
+    return true;
+  }
+  panel_ease().t.jump(1.0f);
+  now = std::move(next);
   return true;
 }
 // A chat background's dialog, for a level.

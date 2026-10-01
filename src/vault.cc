@@ -40,6 +40,14 @@ struct header {
   std::int64_t passes = 3;
   std::int64_t lanes = 4;
   std::string check;   // base64 of an encrypted known text
+  // A re-seal under way (#12355): turned on, its passphrase changed, or
+  // being turned off -- what is on disk may be plain, or under the key
+  // before, until it is done. Finished at the next start where it was cut
+  // short; a file is never left that nothing can open.
+  std::optional<bool> resealing;
+  std::optional<bool> going_off;
+  // The key before, sealed under this one, while a change is under way.
+  std::optional<std::string> previous;
   friend consteval auto json_schema(knot::type<header>) { return knot::schema<header>(); }
 };
 
@@ -149,6 +157,7 @@ inline constexpr std::size_t kNonce = 12, kTag = 16;
 // The associated data a file is sealed with: its name.
 [[nodiscard]] inline std::string bound_of(const std::filesystem::path& path) { return path.filename().string(); }
 inline constexpr std::string_view kCheckBound = "vault.json check";
+inline constexpr std::string_view kPreviousBound = "vault.json previous key";
 
 // Argon2's settings as vault.json may hold them: within these, or the file
 // is not one -- a huge memory cost would make unlocking run out (review 4, L4).
@@ -181,8 +190,67 @@ class vault {
     if (!key)
       return false;
     key_ = *key;
+    // A re-seal cut short: what it was doing, and the key before.
+    if (const auto how = this->header_read()) {
+      resealing_ = how->resealing.value_or(false);
+      going_off_ = how->going_off.value_or(false);
+      if (how->previous)
+        if (const auto sealed = detail::from_base64(*how->previous))
+          if (auto opened = detail::open(*key_, *sealed, detail::kPreviousBound); opened && opened->size() == 32) {
+            key_t before{};
+            std::ranges::copy(*opened, before.begin());
+            previous_ = before;
+          }
+    }
     return true;
   }
+  // A re-seal begun, its journal in the header first: turned on with a
+  // passphrase; changed to another (the key before kept, sealed under the
+  // new one); or being turned off. What is on disk is then written again
+  // (write_all), and finish() ends it.
+  void begin_encrypt(std::string_view passphrase) {
+    header how = this->fresh_header(passphrase);
+    how.resealing = true;
+    write_plain(header_file_, knot::to_json_string(how));
+    resealing_ = true;
+  }
+  void begin_change(std::string_view passphrase) {
+    const auto before = key_;
+    header how = this->fresh_header(passphrase);
+    how.resealing = true;
+    if (before)
+      how.previous = detail::to_base64(detail::seal(*key_, std::span(before->data(), before->size()), detail::kPreviousBound));
+    write_plain(header_file_, knot::to_json_string(how));
+    previous_ = before;
+    resealing_ = true;
+  }
+  void begin_decrypt() {
+    auto how = this->header_read();
+    if (!how)
+      return;
+    how->resealing = true;
+    how->going_off = true;
+    write_plain(header_file_, knot::to_json_string(*how));
+    resealing_ = true;
+    going_off_ = true;
+  }
+  // The re-seal done: the journal gone -- and, turned off, the header and
+  // the key.
+  void finish() {
+    if (going_off_) {
+      this->remove();
+    } else if (auto how = this->header_read()) {
+      how->resealing.reset();
+      how->previous.reset();
+      write_plain(header_file_, knot::to_json_string(*how));
+    }
+    if (previous_)
+      OPENSSL_cleanse(previous_->data(), previous_->size());
+    previous_.reset();
+    resealing_ = false;
+    going_off_ = false;
+  }
+  [[nodiscard]] bool resealing() const { return resealing_; }
   // Whether it is the passphrase, the vault left as it is: asked before it
   // is changed or turned off.
   [[nodiscard]] bool matches(std::string_view passphrase) const { return this->key_for(passphrase).has_value(); }
@@ -194,7 +262,10 @@ class vault {
 
   // Turned on with a passphrase: its header written; what is on disk is
   // then sealed by the caller, through write_file.
-  void create(std::string_view passphrase) {
+  void create(std::string_view passphrase) { write_plain(header_file_, knot::to_json_string(this->fresh_header(passphrase))); }
+  // A header for a new passphrase -- its salt, its check -- the key it
+  // makes taken as this vault's.
+  [[nodiscard]] header fresh_header(std::string_view passphrase) {
     header how;
     const auto salt = detail::random_bytes(16);
     how.salt = detail::to_base64(salt);
@@ -202,8 +273,16 @@ class vault {
     const std::string_view text = detail::kCheckText;
     how.check = detail::to_base64(
         detail::seal(key, std::span(reinterpret_cast<const std::uint8_t*>(text.data()), text.size()), detail::kCheckBound));
-    write_plain(header_file_, knot::to_json_string(how));
     key_ = key;
+    return how;
+  }
+  [[nodiscard]] std::optional<header> header_read() const {
+    std::ifstream in(header_file_, std::ios::binary);
+    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    auto how = knot::try_read<header>(text);
+    if (!how)
+      return std::nullopt;
+    return std::move(*how);
   }
   // Turned off: what is on disk opened by the caller first, then the header
   // and the key gone.
@@ -213,6 +292,7 @@ class vault {
     if (key_)
       OPENSSL_cleanse(key_->data(), key_->size());
     key_.reset();
+    going_off_ = false;
   }
 
   // A whole file: read, opened where it is sealed (a sealed file with the
@@ -231,14 +311,14 @@ class vault {
       return std::nullopt;
     std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     if (!text.starts_with(detail::kMagic)) {
-      if (key_ && !plain_too && !text.empty())
+      if (key_ && !plain_too && !resealing_ && !text.empty())
         return std::nullopt;
       return text;
     }
     if (!key_)
       return std::nullopt;
     const auto bytes = std::span(reinterpret_cast<const std::uint8_t*>(text.data()), text.size()).subspan(detail::kMagic.size());
-    auto opened = detail::open(*key_, bytes, detail::bound_of(path));
+    auto opened = this->opened_by_either(bytes, detail::bound_of(path));
     if (!opened)
       return std::nullopt;
     return std::string(opened->begin(), opened->end());
@@ -252,7 +332,7 @@ class vault {
   }
   // A whole file's bytes as they go on disk: sealed where the vault is on.
   [[nodiscard]] std::string encoded(const std::filesystem::path& path, std::string_view text) const {
-    if (!key_)
+    if (!key_ || going_off_)
       return std::string(text);
     const auto sealed = detail::seal(*key_, std::span(reinterpret_cast<const std::uint8_t*>(text.data()), text.size()),
                                      detail::bound_of(path));
@@ -274,7 +354,7 @@ class vault {
   }
   // A line for the file at `path`: sealed, bound to it, where the vault is on.
   [[nodiscard]] std::string line_of(std::string_view line, const std::filesystem::path& path) const {
-    if (!key_)
+    if (!key_ || going_off_)
       return std::string(line);
     const auto sealed =
         detail::seal(*key_, std::span(reinterpret_cast<const std::uint8_t*>(line.data()), line.size()), detail::bound_of(path));
@@ -291,7 +371,7 @@ class vault {
   [[nodiscard]] std::optional<std::string> open_one(std::string_view line, const std::filesystem::path& path,
                                                     bool plain_too) const {
     if (!line.starts_with(detail::kLinePrefix)) {
-      if (key_ && !plain_too)
+      if (key_ && !plain_too && !resealing_)
         return std::nullopt;
       return std::string(line);
     }
@@ -300,7 +380,7 @@ class vault {
     const auto bytes = detail::from_base64(line.substr(detail::kLinePrefix.size()));
     if (!bytes)
       return std::nullopt;
-    auto opened = detail::open(*key_, *bytes, detail::bound_of(path));
+    auto opened = this->opened_by_either(*bytes, detail::bound_of(path));
     if (!opened)
       return std::nullopt;
     return std::string(opened->begin(), opened->end());
@@ -388,6 +468,18 @@ class vault {
   [[nodiscard]] static std::vector<std::uint8_t> random(std::size_t n) { return detail::random_bytes(n); }
 
  private:
+  // Sealed bytes opened by the key, or, mid-change, by the one before.
+  [[nodiscard]] std::optional<std::vector<std::uint8_t>> opened_by_either(std::span<const std::uint8_t> sealed,
+                                                                         std::string_view bound) const {
+    if (auto opened = detail::open(*key_, sealed, bound))
+      return opened;
+    if (previous_)
+      return detail::open(*previous_, sealed, bound);
+    return std::nullopt;
+  }
+  std::optional<key_t> previous_;
+  bool resealing_ = false;
+  bool going_off_ = false;
   // The key a passphrase makes, where it is this vault's.
   [[nodiscard]] std::optional<key_t> key_for(std::string_view passphrase) const {
     std::ifstream in(header_file_, std::ios::binary);

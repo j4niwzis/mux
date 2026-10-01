@@ -185,7 +185,7 @@ class account {
 
   // Connected, and kept connected, by a fiber of its own.
   void start() {
-    loop_->spawn([this] { run(); });
+    this->spawn_guarded([this] { run(); });
   }
 
   // A chat message sent: from any fiber, or posted to the loop from another
@@ -244,7 +244,7 @@ class account {
                  std::optional<std::string> = std::nullopt, std::optional<thread_place> = std::nullopt) {}
 
   void mark_read(std::string to, std::string id) {
-    loop_->spawn([this, to = std::move(to), id = std::move(id)] {
+    this->spawn_guarded([this, to = std::move(to), id = std::move(id)] {
       if (!session_)
         return;
       if (rooms_.contains(to)) {
@@ -266,7 +266,7 @@ class account {
   void load_context(std::string, std::string) {}
   void load_newer(std::string, std::string) {}
   void load_older(std::string with, std::string before) {
-    loop_->spawn([this, with = std::move(with), before = std::move(before)] {
+    this->spawn_guarded([this, with = std::move(with), before = std::move(before)] {
       if (!session_)
         return;
       const bool room = rooms_.contains(with);
@@ -321,7 +321,7 @@ class account {
 
   // A room left: unavailable to it, and the conversation gone.
   void leave(std::string room) {
-    loop_->spawn([this, room = std::move(room)] {
+    this->spawn_guarded([this, room = std::move(room)] {
       const auto found = rooms_.find(room);
       if (found == rooms_.end())
         return;
@@ -334,7 +334,7 @@ class account {
 
   void send(std::string to, std::string text, std::optional<std::string> reply_to = std::nullopt,
             std::vector<mux::mention> = {}) {
-    loop_->spawn([this, to = bare(to), text = std::move(text), reply_to = std::move(reply_to)] {
+    this->spawn_guarded([this, to = bare(to), text = std::move(text), reply_to = std::move(reply_to)] {
       message out{.in = {id_, to},
                   .id = "mux-" + std::to_string(++sent_),
                   .sender = id_.address,
@@ -358,7 +358,7 @@ class account {
 
   // A message of one's own corrected (XEP-0308): the new text in its place.
   void edit(std::string to, std::string id, std::string text) {
-    loop_->spawn([this, to = bare(to), id = std::move(id), text = std::move(text)] {
+    this->spawn_guarded([this, to = bare(to), id = std::move(id), text = std::move(text)] {
       if (!session_)
         return;
       this->send_to(to, "mux-" + std::to_string(++sent_), text,
@@ -368,7 +368,7 @@ class account {
   }
   // A message of one's own taken back (XEP-0424).
   void remove(std::string to, std::string id) {
-    loop_->spawn([this, to = bare(to), id = std::move(id)] {
+    this->spawn_guarded([this, to = bare(to), id = std::move(id)] {
       if (!session_)
         return;
       this->send_to(to, "mux-" + std::to_string(++sent_), "This message was retracted.",
@@ -394,7 +394,7 @@ class account {
 
   // Unavailable, and the stream closed.
   void stop() {
-    loop_->spawn([this] {
+    this->spawn_guarded([this] {
       stopping_ = true;
       if (session_)
         session_->close();
@@ -403,6 +403,23 @@ class account {
 
  private:
   void say(connection_t state) { sink_(change::connection_changed{id_, std::move(state)}); }
+  // A fiber of this account. What it throws past its own handling -- the
+  // unforeseen, a bug -- is caught here: let out, it left the loop and
+  // stopped every account's network without a word (#12355). It is logged
+  // and said; the account shows as failed, to be connected again from what
+  // it kept, so that nothing half done of it is relied on.
+  template <class Body>
+  void spawn_guarded(Body body) {
+    loop_->spawn([this, body = std::move(body)] mutable {
+      try {
+        body();
+      } catch (const std::exception& failed) {
+        log(id_, "stopped by an error: {}", failed.what());
+        this->say(connection::failed{std::format("Stopped by an error: {}", failed.what())});
+      }
+    });
+  }
+
 
   void run() {
     say(connection::connecting{});

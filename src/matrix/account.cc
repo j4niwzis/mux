@@ -280,10 +280,26 @@ class account {
     this->refuse_plaintext(ask.room_id, ask.txn_id);
     return perform(*api_, ask);
   }
+  // A fiber of this account. What it throws past its own handling -- the
+  // unforeseen, a bug -- is caught here: let out, it left the loop and
+  // stopped every account's network without a word (#12355). It is logged
+  // and said; the account shows as failed, to be connected again from what
+  // it kept, so that nothing half done of it is relied on.
+  template <class Body>
+  void spawn_guarded(Body body) {
+    loop_->spawn([this, body = std::move(body)] mutable {
+      try {
+        body();
+      } catch (const std::exception& failed) {
+        log(id_, "stopped by an error: {}", failed.what());
+        this->say(connection::failed{std::format("Stopped by an error: {}", failed.what())});
+      }
+    });
+  }
   // A fiber that sends: a refusal of it caught here, for every sender alike.
   template <class Body>
   void spawn_sending(Body body) {
-    loop_->spawn([this, body = std::move(body)] mutable {
+    this->spawn_guarded([this, body = std::move(body)] mutable {
       try {
         body();
       } catch (const plaintext_refused& refused) {

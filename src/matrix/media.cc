@@ -35,7 +35,7 @@ struct upload_answer {
 
 template <class Sink>
 void account<Sink>::fetch_media(std::string source, media_use_t use, int size, bool crop) {
-  loop_->spawn([this, source = std::move(source), use = std::move(use), size, crop] {
+  this->spawn_guarded([this, source = std::move(source), use = std::move(use), size, crop] {
     if (!api_ || !source.starts_with("mxc://"))
       return;
     // Asked again: a stop asked before is let go.
@@ -97,7 +97,7 @@ void account<Sink>::fetch_media(std::string source, media_use_t use, int size, b
 // An image uploaded for a pack: its mxc://, said as pack_picture_uploaded.
 template <class Sink>
 void account<Sink>::upload_pack_picture(pack_picture picture, std::string bytes) {
-  loop_->spawn([this, picture = std::move(picture), bytes = std::move(bytes)]() mutable {
+  this->spawn_guarded([this, picture = std::move(picture), bytes = std::move(bytes)]() mutable {
     std::optional<std::string> uri;
     if (api_) {
       std::string target = "/_matrix/media/v3/upload?filename=";

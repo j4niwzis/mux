@@ -51,7 +51,7 @@ auto account<Sink>::id() const noexcept -> const account_id& { return id_; }
 
 template <class Sink>
 void account<Sink>::start() {
-  loop_->spawn([this] { run(); });
+  this->spawn_guarded([this] { run(); });
 }
 
 template <class Sink>
@@ -59,7 +59,7 @@ void account<Sink>::stop() { stopping_ = true; }
 
 template <class Sink>
 void account<Sink>::mark_read(std::string room, std::string event) {
-  loop_->spawn([this, room = std::move(room), event = std::move(event)] {
+  this->spawn_guarded([this, room = std::move(room), event = std::move(event)] {
     if (api_)
       (void)perform(*api_, loom::cs::post_receipt{.room_id = room,
                                                   .receipt_type = loom::cs::post_receipt::receipt_type_values::m_read{},
@@ -69,7 +69,7 @@ void account<Sink>::mark_read(std::string room, std::string event) {
 
 template <class Sink>
 void account<Sink>::load_older(std::string room, std::string from) {
-  loop_->spawn([this, room = std::move(room), from = std::move(from)] {
+  this->spawn_guarded([this, room = std::move(room), from = std::move(from)] {
     if (!api_)
       return;
     // No token: from the room's newest, back.
@@ -121,7 +121,7 @@ using power_levels_content = loom::ev::m_room_power_levels_content_t;
 
 template <class Sink>
 void account<Sink>::manage(std::string room, room_action_t action) {
-  loop_->spawn([this, room = std::move(room), action = std::move(action)] {
+  this->spawn_guarded([this, room = std::move(room), action = std::move(action)] {
     if (!api_)
       return;
     // A state event of the room set, its content given.
@@ -235,7 +235,7 @@ void account<Sink>::manage(std::string room, room_action_t action) {
 
 template <class Sink>
 void account<Sink>::create_direct(std::string user) {
-  loop_->spawn([this, user = std::move(user)] {
+  this->spawn_guarded([this, user = std::move(user)] {
     if (!api_)
       return;
     auto made = perform(*api_, loom::cs::create_room{.body = {.invite = std::vector<std::string>{user},
@@ -282,7 +282,7 @@ void account<Sink>::send_sticker(std::string room, mux::emote sticker, std::opti
 
 template <class Sink>
 void account<Sink>::view_source(std::string room, std::string event) {
-  loop_->spawn([this, room = std::move(room), event = std::move(event)] {
+  this->spawn_guarded([this, room = std::move(room), event = std::move(event)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::get_one_room_event{.room_id = room, .event_id = event});
@@ -296,7 +296,7 @@ void account<Sink>::view_source(std::string room, std::string event) {
 
 template <class Sink>
 void account<Sink>::list_state(std::string room) {
-  loop_->spawn([this, room = std::move(room)] {
+  this->spawn_guarded([this, room = std::move(room)] {
     std::vector<change::state_entry> entries;
     if (const auto kept = state_.joined.find(room); kept != state_.joined.end())
       for (const auto& [key, one] : kept->second.state.events)
@@ -334,7 +334,7 @@ void account<Sink>::send_custom(std::string room, std::string type, std::optiona
 
 template <class Sink>
 void account<Sink>::fetch_preview(std::string url) {
-  loop_->spawn([this, url = std::move(url)] {
+  this->spawn_guarded([this, url = std::move(url)] {
     if (!api_)
       return;
     // The authenticated endpoint (Matrix 1.11), and the old one where the
@@ -367,7 +367,7 @@ void account<Sink>::fetch_preview(std::string url) {
 
 template <class Sink>
 void account<Sink>::search_directory(std::string server, std::string query) {
-  loop_->spawn([this, server = std::move(server), query = std::move(query)] {
+  this->spawn_guarded([this, server = std::move(server), query = std::move(query)] {
     if (!api_)
       return;
     using asked = loom::cs::query_public_rooms;
@@ -395,7 +395,7 @@ void account<Sink>::search_directory(std::string server, std::string query) {
 
 template <class Sink>
 void account<Sink>::explore_space(std::string room) {
-  loop_->spawn([this, room = std::move(room)] {
+  this->spawn_guarded([this, room = std::move(room)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::get_space_hierarchy{.room_id = room, .limit = 100, .max_depth = 1});
@@ -507,7 +507,7 @@ template <class Content>
 
 template <class Sink>
 void account<Sink>::list_packs(std::optional<std::string> room) {
-  loop_->spawn([this, room = std::move(room)] {
+  this->spawn_guarded([this, room = std::move(room)] {
     std::vector<emote_pack> found;
     if (!room) {
       if (const auto own = state_.account_data.find("im.ponies.user_emotes"); own != state_.account_data.end())
@@ -535,7 +535,7 @@ void account<Sink>::list_packs(std::optional<std::string> room) {
 
 template <class Sink>
 void account<Sink>::save_pack(emote_pack pack) {
-  loop_->spawn([this, pack = std::move(pack)] {
+  this->spawn_guarded([this, pack = std::move(pack)] {
     bool done = false;
     if (api_) {
       if (pack.room)
@@ -560,7 +560,7 @@ void account<Sink>::save_pack(emote_pack pack) {
 
 template <class Sink>
 void account<Sink>::delete_pack(std::string room, std::string state_key) {
-  loop_->spawn([this, room = std::move(room), state_key = std::move(state_key)] {
+  this->spawn_guarded([this, room = std::move(room), state_key = std::move(state_key)] {
     // Taken away as the MSC has it: its state emptied.
     const bool done = api_ && static_cast<bool>(perform(
                                   *api_, loom::cs::set_room_state_with_key{.room_id = room,
@@ -573,7 +573,7 @@ void account<Sink>::delete_pack(std::string room, std::string state_key) {
 
 template <class Sink>
 void account<Sink>::search_people(std::string term) {
-  loop_->spawn([this, term = std::move(term)] {
+  this->spawn_guarded([this, term = std::move(term)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::search_user_directory{.body = {.search_term = term, .limit = 30}});
@@ -589,7 +589,7 @@ void account<Sink>::search_people(std::string term) {
 
 template <class Sink>
 void account<Sink>::create_room(std::string name, std::string topic, bool open, std::string alias, bool federate) {
-  loop_->spawn([this, name = std::move(name), topic = std::move(topic), open, alias = std::move(alias), federate] {
+  this->spawn_guarded([this, name = std::move(name), topic = std::move(topic), open, alias = std::move(alias), federate] {
     if (!api_)
       return;
     using made_t = loom::cs::create_room::body_t;
@@ -616,7 +616,7 @@ void account<Sink>::create_room(std::string name, std::string topic, bool open, 
 
 template <class Sink>
 void account<Sink>::catch_up(std::string room, std::string from, std::string until) {
-  loop_->spawn([this, room = std::move(room), from = std::move(from), until = std::move(until)] {
+  this->spawn_guarded([this, room = std::move(room), from = std::move(from), until = std::move(until)] {
     const conversation_id in{id_, room};
     std::map<std::string, std::string> sender_of;  // of every event the pages held
     struct reaction_found {
@@ -690,7 +690,7 @@ void account<Sink>::catch_up(std::string room, std::string from, std::string unt
 
 template <class Sink>
 void account<Sink>::preview_room(std::string room, std::vector<std::string> via) {
-  loop_->spawn([this, room = std::move(room), via = std::move(via)] {
+  this->spawn_guarded([this, room = std::move(room), via = std::move(via)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::get_room_summary{
@@ -716,7 +716,7 @@ void account<Sink>::preview_room(std::string room, std::vector<std::string> via)
 // Asked to be let in, where the room lets people knock (#11857).
 template <class Sink>
 void account<Sink>::knock(std::string room, std::vector<std::string> via, std::string reason) {
-  loop_->spawn([this, room = std::move(room), via = std::move(via), reason = std::move(reason)] {
+  this->spawn_guarded([this, room = std::move(room), via = std::move(via), reason = std::move(reason)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::knock_room{.room_id_or_alias = room,
@@ -729,7 +729,7 @@ void account<Sink>::knock(std::string room, std::vector<std::string> via, std::s
 
 template <class Sink>
 void account<Sink>::create_group(std::string name) {
-  loop_->spawn([this, name = std::move(name)] {
+  this->spawn_guarded([this, name = std::move(name)] {
     if (!api_)
       return;
     auto made = perform(*api_, loom::cs::create_room{.body = {.name = name,
@@ -798,7 +798,7 @@ void account<Sink>::forward(std::string from, std::string event, std::string to)
 
 template <class Sink>
 void account<Sink>::fetch_profile(std::string user) {
-  loop_->spawn([this, user = std::move(user)] {
+  this->spawn_guarded([this, user = std::move(user)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::get_user_profile{.user_id = user});
@@ -825,7 +825,7 @@ struct password_auth {
 
 template <class Sink>
 void account<Sink>::list_sessions() {
-  loop_->spawn([this] {
+  this->spawn_guarded([this] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::get_devices{});
@@ -850,7 +850,7 @@ void account<Sink>::list_sessions() {
 
 template <class Sink>
 void account<Sink>::rename_session(std::string device, std::string name) {
-  loop_->spawn([this, device = std::move(device), name = std::move(name)] {
+  this->spawn_guarded([this, device = std::move(device), name = std::move(name)] {
     if (!api_)
       return;
     auto done = perform(*api_, loom::cs::update_device{.device_id = device, .body = {.display_name = name}});
@@ -862,7 +862,7 @@ void account<Sink>::rename_session(std::string device, std::string name) {
 
 template <class Sink>
 void account<Sink>::sign_out_sessions(std::vector<std::string> devices, std::string password) {
-  loop_->spawn([this, devices = std::move(devices), password = std::move(password)] {
+  this->spawn_guarded([this, devices = std::move(devices), password = std::move(password)] {
     if (!api_ || devices.empty())
       return;
     using body_t = loom::cs::delete_devices::body_t;
@@ -897,7 +897,7 @@ void account<Sink>::sign_out_sessions(std::vector<std::string> devices, std::str
 
 template <class Sink>
 void account<Sink>::fetch_quoted(std::string room, std::string target) {
-  loop_->spawn([this, room = std::move(room), target = std::move(target)] {
+  this->spawn_guarded([this, room = std::move(room), target = std::move(target)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::get_one_room_event{.room_id = room, .event_id = target});
@@ -911,7 +911,7 @@ void account<Sink>::fetch_quoted(std::string room, std::string target) {
 
 template <class Sink>
 void account<Sink>::load_context(std::string room, std::string target) {
-  loop_->spawn([this, room = std::move(room), target = std::move(target)] {
+  this->spawn_guarded([this, room = std::move(room), target = std::move(target)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::get_event_context{.room_id = room, .event_id = target, .limit = 60});
@@ -938,7 +938,7 @@ void account<Sink>::load_context(std::string room, std::string target) {
 
 template <class Sink>
 void account<Sink>::load_newer(std::string room, std::string from) {
-  loop_->spawn([this, room = std::move(room), from = std::move(from)] {
+  this->spawn_guarded([this, room = std::move(room), from = std::move(from)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::get_room_events{.room_id = room,
@@ -1001,7 +1001,7 @@ void account<Sink>::edit_caption(std::string room, std::string event, std::strin
 
 template <class Sink>
 void account<Sink>::remove(std::string room, std::string event) {
-  loop_->spawn([this, room = std::move(room), event = std::move(event)] {
+  this->spawn_guarded([this, room = std::move(room), event = std::move(event)] {
     if (!api_)
       return;
     // Taken out only where the server did it; else why not, said.
@@ -1044,7 +1044,7 @@ void account<Sink>::react(std::string room, std::string target, std::string key,
 
 template <class Sink>
 void account<Sink>::pin(std::string room, std::string target, bool on) {
-  loop_->spawn([this, room = std::move(room), target = std::move(target), on] {
+  this->spawn_guarded([this, room = std::move(room), target = std::move(target), on] {
     if (!api_)
       return;
     std::vector<std::string> pinned;
@@ -1066,7 +1066,7 @@ void account<Sink>::pin(std::string room, std::string target, bool on) {
 
 template <class Sink>
 void account<Sink>::leave(std::string room) {
-  loop_->spawn([this, room = std::move(room)] {
+  this->spawn_guarded([this, room = std::move(room)] {
     if (api_)
       (void)perform(*api_, loom::cs::leave_room{.room_id = room});
   });
@@ -1209,7 +1209,7 @@ void account<Sink>::send(std::string room, std::string body, std::optional<std::
 
 template <class Sink>
 void account<Sink>::list_threads(std::string room) {
-  loop_->spawn([this, room = std::move(room)] {
+  this->spawn_guarded([this, room = std::move(room)] {
     if (!api_)
       return;
     using asked = loom::cs::get_thread_roots;
@@ -1230,7 +1230,7 @@ void account<Sink>::list_threads(std::string room) {
 
 template <class Sink>
 void account<Sink>::load_thread(std::string room, std::string root) {
-  loop_->spawn([this, room = std::move(room), root = std::move(root)] {
+  this->spawn_guarded([this, room = std::move(room), root = std::move(root)] {
     if (!api_)
       return;
     using asked = loom::cs::get_relating_events_with_rel_type;
@@ -1291,7 +1291,7 @@ void account<Sink>::send_in_thread(std::string room, std::string body, std::stri
 
 template <class Sink>
 void account<Sink>::typing(std::string room, bool on) {
-  loop_->spawn([this, room = std::move(room), on] {
+  this->spawn_guarded([this, room = std::move(room), on] {
     if (api_)
       (void)perform(*api_, loom::cs::set_typing{.user_id = id_.address,
                                                 .room_id = room,
@@ -1303,7 +1303,7 @@ void account<Sink>::typing(std::string room, bool on) {
 
 template <class Sink>
 void account<Sink>::join(std::string room, std::vector<std::string> via) {
-  loop_->spawn([this, room = std::move(room), via = std::move(via)] {
+  this->spawn_guarded([this, room = std::move(room), via = std::move(via)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::join_room{.room_id_or_alias = room,
@@ -1318,7 +1318,7 @@ void account<Sink>::join(std::string room, std::vector<std::string> via) {
 
 template <class Sink>
 void account<Sink>::fetch_members(std::string room) {
-  loop_->spawn([this, room = std::move(room)] {
+  this->spawn_guarded([this, room = std::move(room)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::get_joined_members_by_room{.room_id = room});

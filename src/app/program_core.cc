@@ -812,6 +812,10 @@ mux::vault::vault::kept_files app::sealed_files() const {
   return out;
 }
 
+// Read first, as the vault is; then its journal begun (turn), everything
+// written again, and the journal ended. Cut short after the turn -- an
+// error, a crash -- the journal stays: every file is still opened, by
+// either key or plain, and the re-seal is finished at the next start.
 template <class Turn>
 bool app::reseal(Turn turn) {
   auto& vault = mux::vault::the();
@@ -819,8 +823,16 @@ bool app::reseal(Turn turn) {
   if (!all)
     return false;
   turn(vault);
-  return vault.write_all(*all);
+  if (!vault.write_all(*all))
+    return false;
+  vault.finish();
+  return true;
 }
+
+// Why a re-seal did not happen, or was not all done.
+inline constexpr std::string_view kUnread = "Something kept could not be read, so nothing was changed.";
+inline constexpr std::string_view kCutShort =
+    "Not everything could be written. Everything stays readable, and it is finished at the next start.";
 
 // A passphrase given, by what it was asked for.
 void app::apply(const request::give_passphrase& one) {
@@ -844,6 +856,10 @@ void app::apply(const request::give_passphrase& one) {
           [&](mux::config::passphrase_for::unlock) {
             if (!vault.unlock(one.current))
               return root().passphrase_refused("That is not the passphrase.");
+            // A re-seal cut short last time: finished first.
+            if (vault.resealing() && !this->reseal([](mux::vault::vault&) {}))
+              root().show_message("Local data", "Re-sealing what is kept, begun before, could not be finished. It is "
+                                                "tried again at the next start; everything stays readable.");
             root().close_passphrase();
             mux::config::file saved;
             std::optional<std::string> error;
@@ -858,8 +874,8 @@ void app::apply(const request::give_passphrase& one) {
               return done();
             if (auto refused = fresh_refused())
               return root().passphrase_refused(*refused);
-            if (!this->reseal([&](mux::vault::vault& v) { v.create(one.fresh); }))
-              return root().passphrase_refused("Something kept could not be read, so nothing was changed.");
+            if (!this->reseal([&](mux::vault::vault& v) { v.begin_encrypt(one.fresh); }))
+              return root().passphrase_refused(std::string(vault.resealing() ? kCutShort : kUnread));
             // Pictures are not kept on disk while it is on: those there go.
             std::error_code ignored;
             std::filesystem::remove_all(mux::config::cache_path("").parent_path(), ignored);
@@ -870,15 +886,15 @@ void app::apply(const request::give_passphrase& one) {
               return root().passphrase_refused("That is not the passphrase now.");
             if (auto refused = fresh_refused())
               return root().passphrase_refused(*refused);
-            if (!this->reseal([&](mux::vault::vault& v) { v.create(one.fresh); }))
-              return root().passphrase_refused("Something kept could not be read, so nothing was changed.");
+            if (!this->reseal([&](mux::vault::vault& v) { v.begin_change(one.fresh); }))
+              return root().passphrase_refused(std::string(vault.resealing() ? kCutShort : kUnread));
             done();
           },
           [&](mux::config::passphrase_for::decrypt) {
             if (!vault.matches(one.current))
               return root().passphrase_refused("That is not the passphrase.");
-            if (!this->reseal([](mux::vault::vault& v) { v.remove(); }))
-              return root().passphrase_refused("Something kept could not be read, so nothing was changed.");
+            if (!this->reseal([](mux::vault::vault& v) { v.begin_decrypt(); }))
+              return root().passphrase_refused(std::string(vault.resealing() ? kCutShort : kUnread));
             done();
           }},
       one.why);

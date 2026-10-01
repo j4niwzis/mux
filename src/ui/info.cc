@@ -1409,7 +1409,8 @@ struct bubbles_picker : nodes::Stack {
   struct blur_done {
     Actions* actions;
     void operator()(float fraction) const {
-      actions->set_frost_blur(static_cast<int>(std::lround(std::clamp(fraction, 0.0f, 1.0f) * 100.0f)));
+      // Where it was let go, as it is: 55.2%, not rounded to a whole.
+      actions->set_frost_blur(static_cast<double>(std::clamp(fraction, 0.0f, 1.0f)) * 100.0);
     }
   };
   struct kinds_row : nodes::Stack {
@@ -1458,7 +1459,7 @@ struct bubbles_picker : nodes::Stack {
                                                  pick_kind_at{a, level, part, inherits(level)}),
               .opacity_label = nodes::Text("Opacity", 13.0f, text_colour),
               .opacity = widgets::SliderBar<scene::NoAction, opacity_done>({}, opacity_done{a, level, part}),
-              .blur_label = nodes::Text(std::format("Blur: {}%", window_look().frost), 13.0f, text_colour),
+              .blur_label = nodes::Text(std::format("Blur: {:.1f}%", window_look().frost), 13.0f, text_colour),
               .blur = widgets::SliderBar<scene::NoAction, blur_done>({}, blur_done{a})} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 10.0f, 0.0f, 10.0f}});
@@ -1475,7 +1476,7 @@ struct bubbles_picker : nodes::Stack {
                                        current(level, part).kind);
     parts.blur_label.setVisible(frosted);
     parts.blur.setVisible(frosted);
-    parts.blur.setFraction(static_cast<float>(window_look().frost) / 100.0f);
+    parts.blur.setFraction(static_cast<float>(window_look().frost / 100.0));
     parts.blur.apply({.margin = {4.0f, 8.0f, 8.0f, 8.0f}});
     const bool bubbles = splice::visit(splice::overloaded{[](config::look_part::bubbles) { return true; },
                                                           [](const auto&) { return false; }},

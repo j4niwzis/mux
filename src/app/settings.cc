@@ -119,7 +119,7 @@ class settings_part {
   }
   // Frosted's blur: kept, the backgrounds' frost made again, and shown.
   void apply(const request::set_frost_blur& one) {
-    k_->frost_blur = std::clamp(one.percent, 0, 100);
+    k_->frost_blur = std::clamp(one.percent, 0.0, 100.0);
     mux::ui::window_look().frost = k_->frost_blur;
     (void)k_->write();
     s_->refresh_due = true;

@@ -746,6 +746,10 @@ struct file {
   std::optional<int> window_opacity;
   std::optional<bool> wallpaper_behind;
   // How much Frosted blurs what is behind, in percent (none, 30).
+  // Frosted's blur, in percent of the most -- three times what it was
+  // once (the old frost_blur's 100 is 33.3 here), any fraction of it.
+  std::optional<double> frost;
+  // The old setting, read where the new is not there yet: a third of it.
   std::optional<int> frost_blur;
   // Spaces in bars at all (none, yes); the bar along the top (none, yes);
   // and where each item is put, in order.

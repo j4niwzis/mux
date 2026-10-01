@@ -36,7 +36,7 @@ struct kept_settings {
   bool vsync = true;
   int window_opacity = 100;
   bool wallpaper_behind = false;
-  int frost_blur = 30;
+  double frost_blur = 10.0;
   // The space bars: whether there are any, whether the top one is, and
   // where each item is put, in order.
   bool spaces = true;
@@ -259,8 +259,9 @@ struct kept_settings {
       out.window_opacity = window_opacity;
     if (wallpaper_behind)
       out.wallpaper_behind = true;
-    if (frost_blur != 30)
-      out.frost_blur = frost_blur;
+    if (frost_blur != 10.0)
+      out.frost = frost_blur;
+    out.frost_blur = std::nullopt;
     if (!spaces)
       out.spaces = false;
     if (!top_bar)

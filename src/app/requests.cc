@@ -283,7 +283,7 @@ struct set_home_direct {
 struct flip_top_bar {};
 // How much Frosted blurs, in percent.
 struct set_frost_blur {
-  int percent = 30;
+  double percent = 10.0;
 };
 // Bubbles at a level: a look, or none -- as the level over it says.
 struct set_bubbles {
@@ -766,7 +766,7 @@ struct actions {
   void flip_show_fps() { requests.emplace_back(request::flip_show_fps{}); }
   void set_window_opacity(int percent) { requests.emplace_back(request::set_window_opacity{percent}); }
   void flip_wallpaper_behind() { requests.emplace_back(request::flip_wallpaper_behind{}); }
-  void set_frost_blur(int percent) { requests.emplace_back(request::set_frost_blur{percent}); }
+  void set_frost_blur(double percent) { requests.emplace_back(request::set_frost_blur{percent}); }
   void place_spaces(std::string account, mux::config::space_bar_t bar, std::vector<mux::config::space_item_t> order,
                     std::optional<mux::config::space_bar_t> from, std::optional<mux::config::space_item_t> moved) {
     requests.emplace_back(request::place_spaces{std::move(account), bar, std::move(order), from, std::move(moved)});

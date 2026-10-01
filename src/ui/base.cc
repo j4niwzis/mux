@@ -63,7 +63,7 @@ struct window_look_t {
   int chosen = 100;
   bool behind = false;
   bool see_through = false;  // the window made with an alpha channel: opacity changes at once
-  int frost = 30;            // how much Frosted blurs, in percent
+  double frost = 10.0;       // how much Frosted blurs, in percent of the most
   bool spaces = true;        // the space bars at all
   bool top_bar = true;       // the one along the top
   bool home_hides = false;   // Home without what spaces hold, for the client

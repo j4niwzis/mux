@@ -170,11 +170,19 @@ class pictures_part {
                 s_->net->fetch_profile(id, from);
             }
           // The reactions that are pictures -- custom emoji, mxc:// URLs --
-          // on the bubbles made: fetched as avatars are, keyed by the URL.
-          for (std::size_t i = first; i < last && i < one.timeline.size(); ++i)
-            for (const auto& [reaction, who] : one.timeline[i].reactions)
+          // and the custom emoji in the text (an <img> of the server's) of a
+          // message shown: fetched as avatars are, keyed by the URL.
+          const auto emoji_of = [&](const message& said) {
+            for (const auto& [reaction, who] : said.reactions)
               if (reaction.starts_with("mxc://"))
                 want(id, reaction, reaction);
+            if (const auto& html = said.body.html)
+              for (const auto& span : mux::ui::read_html(*html).spans)
+                if (span.picture)
+                  want(id, span.target, span.target);
+          };
+          for (std::size_t i = first; i < last && i < one.timeline.size(); ++i)
+            emoji_of(one.timeline[i]);
           // The chat's pinned messages not loaded: fetched on their own, as
           // a quoted one is, for the pinned bar.
           for (const std::string& pinned : one.pinned)
@@ -191,12 +199,6 @@ class pictures_part {
             if (sticker.pack_avatar)
               want(id, sticker.pack_avatar, *sticker.pack_avatar);
           }
-          // And the custom emoji in their text: an <img> of the server's.
-          for (std::size_t i = first; i < last && i < one.timeline.size(); ++i)
-            if (const auto& html = one.timeline[i].body.html)
-              for (const auto& span : mux::ui::read_html(*html).spans)
-                if (span.picture)
-                  want(id, span.target, span.target);
           // Those on screen and near it, at twice the size they are drawn
           // at -- not every picture in its history, which pushed the rest out.
           // While a message is being jumped to, only those right around it:
@@ -218,8 +220,8 @@ class pictures_part {
               to = std::min(one.timeline.size(), at + kAround + 1);
             }
           }
-          for (std::size_t i = from; i < to && i < one.timeline.size(); ++i) {
-            const message& said = one.timeline[i];
+          // A message's pictures, its link's preview, and what it quotes.
+          const auto pictures_of = [&](const message& said) {
             if (said.attachment && is_picture(said.attachment->kind)) {
               this->want_thumbnail(id, said.attachment->source);
               this->make_preview(*said.attachment);
@@ -247,16 +249,27 @@ class pictures_part {
             }
             // A message quoted that is neither in the timeline nor fetched:
             // fetched on its own, once.
-            if (said.replies_to && !one.quoted.contains(*said.replies_to) &&
-                std::ranges::find(one.timeline, *said.replies_to, &message::id) == one.timeline.end() &&
-                this->quote_due(*said.replies_to))
+            if (said.replies_to && !mux::ui::held_message(one, *said.replies_to) && this->quote_due(*said.replies_to))
               s_->net->fetch_quoted(one.id, *said.replies_to);
             // And of a picture a message made quotes, for its quote.
             if (said.replies_to)
-              if (const auto quoted = std::ranges::find(one.timeline, *said.replies_to, &message::id);
-                  quoted != one.timeline.end() && quoted->attachment && is_picture(quoted->attachment->kind))
+              if (const message* quoted = mux::ui::held_message(one, *said.replies_to);
+                  quoted && quoted->attachment && is_picture(quoted->attachment->kind))
                 this->want_thumbnail(id, quoted->attachment->source);
-          }
+          };
+          for (std::size_t i = from; i < to && i < one.timeline.size(); ++i)
+            pictures_of(one.timeline[i]);
+          // The thread open beside the chat: its answers' pictures, senders
+          // and emoji, as the timeline's -- they were never asked for, and
+          // its pictures never came (#11630).
+          if (const auto thread = screen.thread_open())
+            if (const auto found = one.threads.find(*thread); found != one.threads.end())
+              for (const message& said : found->second) {
+                pictures_of(said);
+                emoji_of(said);
+                if (const auto by = std::ranges::find(one.members, said.sender, &member::id); by != one.members.end())
+                  want(id, by->avatar, by->id);
+              }
         }
       }
   }

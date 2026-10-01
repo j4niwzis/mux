@@ -744,11 +744,13 @@ void account<Sink>::forward(std::string from, std::string event, std::string to)
              }) |
              std::views::join | std::ranges::to<std::string>();
     };
-    const std::string who = name_in(from, got->sender);
+    // The sender by their Matrix ID, as other clients write it: their
+    // pill shows the name, wherever it is read.
+    const std::string& who = got->sender;
     const std::string link = std::format("https://matrix.to/#/{}/{}", from, event);
     const std::string attribution =
         std::format(R"(Forwarded from <a href="https://matrix.to/#/{}">{}</a> - <a href="{}">view original message</a>)",
-                    escaped(got->sender), escaped(who), escaped(link));
+                    escaped(who), escaped(who), escaped(link));
     const bool words = splice::visit(splice::overloaded{[](msgtype::other) { return true; }, [](msgtype::emote) { return true; },
                                                         [](const auto&) { return false; }},
                                      msgtype_of(content->msgtype));

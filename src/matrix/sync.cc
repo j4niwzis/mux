@@ -5,6 +5,8 @@ export module mux.matrix:sync;
 import std;
 import splice;
 import knot;
+import loom.cs.sliding_sync;
+import loom.cs.versions;
 import loom.api;
 import loom.ev;
 import loom.state;
@@ -57,6 +59,74 @@ auto account<Sink>::homeserver() -> std::optional<http::url> {
   return std::nullopt;
 }
 
+// A sliding sync answer in the shape of a /sync one: what reads and keeps
+// /sync's reads it as it is. A plain function from the one type to the
+// other. Receipts, typing and account data of rooms the answer does not
+// carry are left out: a room comes in with them once it is in the window.
+inline loom::cs::sync::response legacy_of(const loom::cs::sliding_sync::response& got) {
+  using response = loom::cs::sync::response;
+  using joined_t = response::rooms_t::joined_room_t;
+  using invited_t = response::rooms_t::invited_room_t;
+  response out;
+  out.next_batch = got.pos;
+  std::map<std::string, joined_t> join;
+  std::map<std::string, invited_t> invite;
+  if (got.rooms)
+    for (const auto& [id, room] : *got.rooms) {
+      if (room.invite_state) {
+        invited_t one;
+        one.invite_state = invited_t::invite_state_t{.events = *room.invite_state};
+        invite.emplace(id, std::move(one));
+        continue;
+      }
+      joined_t one;
+      if (room.required_state)
+        one.state = joined_t::state_t{.events = *room.required_state};
+      if (room.timeline || room.limited || room.prev_batch)
+        one.timeline = joined_t::timeline_t{.limited = room.limited,
+                                            .prev_batch = room.prev_batch,
+                                            .events = room.timeline.value_or(std::vector<loom::ev::timeline_event>{})};
+      if (room.heroes || room.joined_count || room.invited_count)
+        one.summary = joined_t::room_summary_t{
+            .m_heroes = room.heroes ? std::optional(*room.heroes | std::views::transform([](const auto& hero) { return hero.user_id; }) |
+                                                    std::ranges::to<std::vector>())
+                                    : std::nullopt,
+            .m_joined_member_count = room.joined_count,
+            .m_invited_member_count = room.invited_count};
+      if (room.notification_count || room.highlight_count)
+        one.unread_notifications =
+            joined_t::unread_notification_counts_t{.highlight_count = room.highlight_count, .notification_count = room.notification_count};
+      join.emplace(id, std::move(one));
+    }
+  if (got.extensions) {
+    const auto& extensions = *got.extensions;
+    if (extensions.account_data) {
+      if (extensions.account_data->global)
+        out.account_data = response::account_data_t{.events = *extensions.account_data->global};
+      if (extensions.account_data->rooms)
+        for (const auto& [id, events] : *extensions.account_data->rooms)
+          if (const auto in = join.find(id); in != join.end())
+            in->second.account_data = joined_t::account_data_t{.events = events};
+    }
+    const auto ephemeral = [&](const auto& part) {
+      if (part && part->rooms)
+        for (const auto& [id, event] : *part->rooms)
+          if (const auto in = join.find(id); in != join.end()) {
+            auto& kept = in->second.ephemeral;
+            if (!kept)
+              kept.emplace();
+            if (!kept->events)
+              kept->events.emplace();
+            kept->events->push_back(event);
+          }
+    };
+    ephemeral(extensions.receipts);
+    ephemeral(extensions.typing);
+  }
+  out.rooms = response::rooms_t{.join = std::move(join), .invite = std::move(invite)};
+  return out;
+}
+
 template <class Sink>
 void account<Sink>::run() {
   say(connection::connecting{});
@@ -106,6 +176,13 @@ void account<Sink>::run() {
     return;
   }
   say(connection::online{});
+  // Simplified sliding sync, where the server says it has it: the rooms by
+  // their activity, a window of them -- not every room at the first sync.
+  if (auto versions = perform(api, loom::cs::get_versions{}); versions && versions->unstable_features)
+    if (const auto found = versions->unstable_features->find("org.matrix.simplified_msc3575");
+        found != versions->unstable_features->end() && found->second)
+      sliding_ = true;
+  log(id_, sliding_ ? "syncing by simplified sliding sync (MSC4186)" : "syncing by /sync");
   // Where the last run left the sync: its rooms at once, and the sync goes
   // on from there rather than asking for every room again.
   this->load_kept();
@@ -123,13 +200,42 @@ void account<Sink>::run() {
     const bool first = !state_.since.has_value();
     if (first)
       log(id_, "the first sync: asking for every room (on a large account, this takes a while)");
-    auto got = perform(syncing,
+    // The state a room of the sliding list comes with: what the chat list
+    // and a room's head show, its spaces and its emoji -- members only those
+    // who speak, and the user.
+    static const std::vector<std::vector<std::string>> kRequiredState{
+        {"m.room.create", ""},           {"m.room.name", ""},          {"m.room.avatar", ""},
+        {"m.room.topic", ""},            {"m.room.encryption", ""},    {"m.room.canonical_alias", ""},
+        {"m.room.join_rules", ""},       {"m.room.history_visibility", ""}, {"m.room.power_levels", ""},
+        {"m.room.pinned_events", ""},    {"m.room.tombstone", ""},     {"m.space.child", "*"},
+        {"m.space.parent", "*"},         {"im.ponies.room_emotes", "*"}, {"m.room.member", "$LAZY"},
+        {"m.room.member", "$ME"}};
+    const bool sliding_first = sliding_ && !sliding_pos_;
+    using sync_result = decltype(perform(syncing, loom::cs::sync{}, std::chrono::seconds(1)));
+    auto got = [&]() -> sync_result {
+      if (!sliding_)
+        return perform(syncing,
                        loom::cs::sync{.filter = std::string(kFilter),
                                       .since = state_.since,
                                       .timeout = first ? 0 : how_.sync_timeout.count()},
                        first ? std::chrono::seconds(600)
                              : std::chrono::duration_cast<std::chrono::seconds>(how_.sync_timeout) +
                                    std::chrono::seconds(30));
+      loom::cs::sliding_sync ask{.pos = sliding_pos_, .timeout = sliding_first ? 0 : how_.sync_timeout.count()};
+      ask.body.lists.emplace("all", loom::cs::sliding_sync::body_t::list_t{.ranges = {{0, sliding_range_ - 1}},
+                                                                             .required_state = kRequiredState,
+                                                                             .timeline_limit = 20});
+      using extension = loom::cs::sliding_sync::body_t::extension_t;
+      ask.body.extensions = loom::cs::sliding_sync::body_t::extensions_t{
+          .account_data = extension{.enabled = true}, .receipts = extension{.enabled = true}, .typing = extension{.enabled = true}};
+      auto slid = perform(syncing, ask,
+                          sliding_first ? std::chrono::seconds(300)
+                                        : std::chrono::duration_cast<std::chrono::seconds>(how_.sync_timeout) + std::chrono::seconds(30));
+      if (!slid)
+        return std::unexpected(slid.error());
+      sliding_pos_ = slid->pos;
+      return legacy_of(*slid);
+    }();
     if (!got) {
       const failure& why = got.error();
       if (why.server && splice::visit([](auto code) { return code.gone; }, errcode_of(why.server->errcode))) {
@@ -143,6 +249,11 @@ void account<Sink>::run() {
         }
         say(connection::failed{why.said()});
         break;
+      }
+      if (sliding_ && sliding_pos_ && why.server) {
+        log(id_, "the sliding sync's position refused ({}): beginning it again", why.said());
+        sliding_pos_.reset();
+        continue;
       }
       log(id_, "{} failed: {}; trying again", state_.since ? "sync" : "the first sync", why.said());
       say(connection::connecting{why.said()});
@@ -165,7 +276,7 @@ void account<Sink>::run() {
     // The rooms whose news the sync cut short, since the last run: where
     // each had got to, to catch up on the gap between.
     std::vector<std::tuple<std::string, std::string, std::string>> gaps;
-    if (!first && got->rooms && got->rooms->join)
+    if (!first && !sliding_first && got->rooms && got->rooms->join)
       for (const auto& [room, part] : *got->rooms->join)
         if (part.timeline && part.timeline->limited.value_or(false) && part.timeline->prev_batch)
           if (const auto had = state_.joined.find(room); had != state_.joined.end() && !had->second.timeline.empty())

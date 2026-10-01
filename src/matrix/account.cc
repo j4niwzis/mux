@@ -300,6 +300,12 @@ class account {
   std::set<std::string> paged_;
   http::pool* api_ = nullptr;
   loom::client::state state_;
+  // Simplified sliding sync (MSC4186), where the server has it: whether it
+  // is used, where its last answer left off, and how many rooms its list
+  // holds.
+  bool sliding_ = false;
+  std::optional<std::string> sliding_pos_;
+  std::int64_t sliding_range_ = 200;
   std::map<std::string, reaction> reactions_;
   // A transaction id, unique across runs and not only within one. A server
   // remembers the ids it has seen per access token and answers a repeated

@@ -362,6 +362,18 @@ struct network {
             one.account);
     });
   }
+  // The room being read, told to its account: a sliding sync follows it.
+  void follow_room(const mux::account_id& by, std::optional<std::string> room) {
+    loop.post([this, by, room = std::move(room)] {
+      for (auto& one : accounts)
+        splice::visit(
+            [&](auto& account) {
+              if (account->id() == by)
+                account->follow(room);
+            },
+            one.account);
+    });
+  }
   // A space's rooms, asked by the account named.
   void explore_space(const mux::account_id& by, std::string room) {
     loop.post([this, by, room = std::move(room)] {

@@ -63,16 +63,44 @@ auto account<Sink>::homeserver() -> std::optional<http::url> {
 // /sync's reads it as it is. A plain function from the one type to the
 // other. Receipts, typing and account data of rooms the answer does not
 // carry are left out: a room comes in with them once it is in the window.
-inline loom::cs::sync::response legacy_of(const loom::cs::sliding_sync::response& got) {
+inline loom::cs::sync::response legacy_of(const loom::cs::sliding_sync::response& got, std::string_view user) {
   using response = loom::cs::sync::response;
   using joined_t = response::rooms_t::joined_room_t;
   using invited_t = response::rooms_t::invited_room_t;
+  using left_t = response::rooms_t::left_room_t;
   response out;
   out.next_batch = got.pos;
   std::map<std::string, joined_t> join;
   std::map<std::string, invited_t> invite;
+  std::map<std::string, left_t> leave;
+  // Whether the user's own membership in what a room brings says they are
+  // gone from it: left, or banned.
+  const auto gone = [&](const auto& room) {
+    bool out_of_it = false;
+    const auto look = [&](const std::optional<std::vector<loom::ev::timeline_event>>& events) {
+      if (events)
+        for (const auto& one : *events)
+          if (one.state_key && *one.state_key == user)
+            splice::visit(splice::overloaded{[&](const loom::ev::m_room_member_content_t& member) {
+                                               using values = loom::ev::m_room_member_content_t::membership_values;
+                                               out_of_it = splice::visit(splice::overloaded{[](values::leave) { return true; },
+                                                                                            [](values::ban) { return true; },
+                                                                                            [](const auto&) { return false; }},
+                                                                         member.membership);
+                                             },
+                                             [](const auto&) {}},
+                          one.content.data());
+    };
+    look(room.required_state);
+    look(room.timeline);
+    return out_of_it;
+  };
   if (got.rooms)
     for (const auto& [id, room] : *got.rooms) {
+      if (gone(room)) {
+        leave.emplace(id, left_t{});
+        continue;
+      }
       if (room.invite_state) {
         invited_t one;
         one.invite_state = invited_t::invite_state_t{.events = *room.invite_state};
@@ -123,7 +151,7 @@ inline loom::cs::sync::response legacy_of(const loom::cs::sliding_sync::response
     ephemeral(extensions.receipts);
     ephemeral(extensions.typing);
   }
-  out.rooms = response::rooms_t{.join = std::move(join), .invite = std::move(invite)};
+  out.rooms = response::rooms_t{.join = std::move(join), .invite = std::move(invite), .leave = std::move(leave)};
   return out;
 }
 
@@ -225,6 +253,10 @@ void account<Sink>::run() {
       ask.body.lists.emplace("all", loom::cs::sliding_sync::body_t::list_t{.ranges = {{0, sliding_range_ - 1}},
                                                                              .required_state = kRequiredState,
                                                                              .timeline_limit = 20});
+      // The room being read: more of its newest, wherever it is in the list.
+      if (followed_room_)
+        ask.body.room_subscriptions = std::map<std::string, loom::cs::sliding_sync::body_t::subscription_t>{
+            {*followed_room_, {.required_state = kRequiredState, .timeline_limit = 50}}};
       using extension = loom::cs::sliding_sync::body_t::extension_t;
       ask.body.extensions = loom::cs::sliding_sync::body_t::extensions_t{
           .account_data = extension{.enabled = true}, .receipts = extension{.enabled = true}, .typing = extension{.enabled = true}};
@@ -234,7 +266,13 @@ void account<Sink>::run() {
       if (!slid)
         return std::unexpected(slid.error());
       sliding_pos_ = slid->pos;
-      return legacy_of(*slid);
+      // Fewer rooms in the window than the account has: two hundred more at
+      // the next, until all are -- every room, a window at a time.
+      if (slid->lists)
+        if (const auto all = slid->lists->find("all"); all != slid->lists->end() && all->second.count &&
+                                                       *all->second.count > sliding_range_)
+          sliding_range_ = std::min(*all->second.count, sliding_range_ + 200);
+      return legacy_of(*slid, id_.address);
     }();
     if (!got) {
       const failure& why = got.error();

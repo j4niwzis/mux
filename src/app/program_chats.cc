@@ -25,6 +25,9 @@ import mux.app.words;
 namespace mux::app {
 
 void app::apply(const request::choose& one) {
+  // Its account told which room is read: a sliding sync follows it.
+  if (!shared.demo())
+    net->follow_room(one.which.account, one.which.id);
   // A space shown as a forum: its rooms listed in it, as tdesktop opens a
   // forum's topics -- no chat opened.
   if (const mux::conversation* chat = model->find(one.which); chat && chat->space && forums.contains(one.which)) {

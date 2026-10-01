@@ -87,6 +87,8 @@ class account {
   // A server's public directory searched -- the account's own where none is
   // named -- for what matches, all of it where nothing is asked.
   void search_directory(std::string server, std::string query);
+  // The room being read, for the sliding sync to follow apart; none, none.
+  void follow(std::optional<std::string> room) { followed_room_ = std::move(room); }
   // What a space holds -- its rooms and spaces, joined or not -- as its
   // server's hierarchy lists them, a level down.
   void explore_space(std::string room);
@@ -306,6 +308,9 @@ class account {
   bool sliding_ = false;
   std::optional<std::string> sliding_pos_;
   std::int64_t sliding_range_ = 200;
+  // The room being read: followed apart, with more of its newest -- set from
+  // the program's thread through the loop, read by the sync.
+  std::optional<std::string> followed_room_;
   std::map<std::string, reaction> reactions_;
   // A transaction id, unique across runs and not only within one. A server
   // remembers the ids it has seen per access token and answers a repeated

@@ -632,6 +632,9 @@ struct conversation {
   std::optional<std::string> topic;
   bool encrypted = false;
   std::int64_t unread = 0;
+  // When it was turned on (m.room.encryption's time): what was said before
+  // was said in the clear, and is not marked for it.
+  std::optional<std::chrono::sys_time<std::chrono::milliseconds>> encrypted_since;
   std::int64_t highlights = 0;
   std::vector<std::string> typing;
   std::vector<knock_request> knocking;  // asking to join, where it lets them knock
@@ -875,6 +878,9 @@ struct conversation_updated {
   std::optional<std::string> topic;
   bool encrypted = false;
   std::int64_t unread = 0;
+  // When it was turned on (m.room.encryption's time): what was said before
+  // was said in the clear, and is not marked for it.
+  std::optional<std::chrono::sys_time<std::chrono::milliseconds>> encrypted_since;
   std::int64_t highlights = 0;
   bool space = false;
   std::vector<std::string> children;
@@ -1326,6 +1332,7 @@ class model {
     kept.avatar = one.avatar;
     kept.topic = one.topic;
     kept.encrypted = one.encrypted;
+    kept.encrypted_since = one.encrypted_since;
     kept.unread = one.unread;
     kept.highlights = one.highlights;
     kept.space = one.space;

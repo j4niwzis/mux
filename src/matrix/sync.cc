@@ -542,6 +542,13 @@ inline bool creators_outrank(std::string_view version) {
   const auto [end, failed] = std::from_chars(version.data(), version.data() + version.size(), number);
   return failed == std::errc{} && end == version.data() + version.size() && number >= 12;
 }
+// When the room's encryption was turned on: its m.room.encryption's time.
+inline std::optional<std::chrono::sys_time<std::chrono::milliseconds>> encrypted_since_of(const loom::client::joined_room& kept) {
+  const auto found = kept.state.events.find(std::pair<std::string, std::string>{"m.room.encryption", ""});
+  if (found == kept.state.events.end())
+    return std::nullopt;
+  return std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(found->second.origin_server_ts));
+}
 // Upgraded away, and what the tombstone said; the room it continues.
 inline std::optional<std::string> replaced_by_of(const loom::client::joined_room& kept) {
   const auto* stone = kept.state.content<loom::ev::m_room_tombstone_content_t>("m.room.tombstone");
@@ -648,6 +655,7 @@ void account<Sink>::conversation(const conversation_id& in, const loom::client::
                                      .avatar = avatar_of(in.id, kept),
                                      .topic = kept.state.topic(),
                                      .encrypted = kept.state.encrypted(),
+                                     .encrypted_since = encrypted_since_of(kept),
                                      .unread = kept.unread.notification,
                                      .highlights = kept.unread.highlight,
                                      .space = space(kept),

@@ -230,7 +230,7 @@ struct sticker_grid : nodes::Stack {
         : grid(g), at(place) {
       this->setHorizontal();
       fStack.justify = nodes::justify::middle{};
-      fState.apply({.width = 30.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 6.0f,
+      fState.apply({.width = 30.0f, .height = 30.0f, .shrink = scene::axes::kX, .minWidth = 16.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 6.0f,
                     .hoverBackground = chosen_colour, .selectedBackground = tile_colour});
       if (picture) {
         parts.picture.emplace(from_avatars{*picture});
@@ -535,7 +535,7 @@ struct emoji_panel : nodes::Stack {
           parts{.face = nodes::Text(logic::emoji_text(logic::emoji_group_face(g)), 16.0f, text_colour)} {
       this->setHorizontal();
       fStack.justify = nodes::justify::middle{};
-      fState.apply({.width = 28.0f, .height = 28.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 6.0f,
+      fState.apply({.width = 28.0f, .height = 28.0f, .shrink = scene::axes::kX, .minWidth = 16.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 6.0f,
                     .hoverBackground = chosen_colour, .selectedBackground = tile_colour});
       parts.face.apply({.alignSelf = scene::align::kMiddle});
     }

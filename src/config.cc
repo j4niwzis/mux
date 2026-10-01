@@ -9,6 +9,7 @@ export module mux.config;
 import std;
 import splice;
 import knot;
+import mux.vault;
 
 export namespace mux::config {
 
@@ -1147,10 +1148,13 @@ std::expected<file, std::string> load(const std::filesystem::path& where) {
   std::error_code failed;
   if (!std::filesystem::exists(where, failed))
     return file{};
-  std::ifstream in(where, std::ios::binary);
-  if (!in)
-    return std::unexpected(std::format("cannot open {}", where.string()));
-  const std::string text{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+  // Through the vault: sealed where local data is encrypted, and not read
+  // with it locked or with another key.
+  const auto opened = mux::vault::the().read_file(where);
+  if (!opened)
+    return std::unexpected(std::format("cannot open {}{}", where.string(),
+                                       mux::vault::the().locked() ? ": local data is encrypted and locked" : ""));
+  const std::string& text = *opened;
   auto read = knot::try_read<file>(text);
   if (!read)
     return std::unexpected(
@@ -1170,28 +1174,13 @@ std::expected<void, std::string> save(const std::filesystem::path& where, const 
       return std::unexpected(std::format("cannot make {}: {}", where.parent_path().string(), failed.message()));
     fs::permissions(where.parent_path(), fs::perms::owner_all, fs::perm_options::replace, failed);
   }
-  fs::path temporary = where;
-  temporary += ".new";
-  {
-    std::ofstream made(temporary, std::ios::binary | std::ios::trunc);
-    if (!made)
-      return std::unexpected(std::format("cannot write {}", temporary.string()));
-  }
-  fs::permissions(temporary, fs::perms::owner_read | fs::perms::owner_write, fs::perm_options::replace, failed);
-  if (failed)
-    return std::unexpected(std::format("cannot make {} private: {}", temporary.string(), failed.message()));
+  // Through the vault: made the owner's alone before the passwords go in,
+  // sealed where local data is encrypted, put in place in one rename.
   std::string text;
   knot::write(text, accounts);
-  {
-    std::ofstream out(temporary, std::ios::binary | std::ios::trunc);
-    out << text << '\n';
-    out.flush();
-    if (!out)
-      return std::unexpected(std::format("cannot write {}", temporary.string()));
-  }
-  fs::rename(temporary, where, failed);
-  if (failed)
-    return std::unexpected(std::format("cannot replace {}: {}", where.string(), failed.message()));
+  text += '\n';
+  if (!mux::vault::the().write_file(where, text, true))
+    return std::unexpected(std::format("cannot write {}", where.string()));
   return {};
 }
 

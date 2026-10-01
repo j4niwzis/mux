@@ -12,6 +12,7 @@ import loom.cs.joining;
 import loom.cs.keys;
 import loom.cs.sliding_sync;
 import mux.matrix.crypto;
+import mux.vault;
 import loom.cs.leaving;
 import loom.cs.login;
 import loom.cs.message_pagination;

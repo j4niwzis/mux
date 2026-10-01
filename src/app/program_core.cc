@@ -2,6 +2,7 @@
 // The program: waking on changes, keeping what changed, frames, drafts, the screens shown.
 module mux.app.program;
 
+import mux.vault;
 import std;
 import splice;
 import knot;
@@ -286,15 +287,14 @@ void app::save_marks() {
   // And those of chats not here yet, as they were read.
   for (const auto& [id, chat] : marks_not_here)
     out.chats.push_back(chat);
-  std::ofstream(mux::config::state_path("marks.json"), std::ios::binary | std::ios::trunc)
-      << knot::to_json_string(out);
+  (void)mux::vault::the().write_file(mux::config::state_path("marks.json"), knot::to_json_string(out));
 }
 
 void app::load_marks() {
-  std::ifstream in(mux::config::state_path("marks.json"), std::ios::binary);
-  if (!in)
+  const auto opened = mux::vault::the().read_file(mux::config::state_path("marks.json"));
+  if (!opened)
     return;
-  const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  const std::string& text = *opened;
   const auto read = knot::try_read<mux::config::marks_file>(std::string_view(text));
   if (!read)
     return;

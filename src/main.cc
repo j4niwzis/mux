@@ -12,6 +12,7 @@
 //                         nothing kept
 //
 // With no accounts at all it opens all the same, and says how to add one.
+import mux.vault;
 import std;
 import knot;
 import skia;
@@ -49,6 +50,9 @@ int main(int argc, char** argv) {
   // `mux --demo`: fake accounts and conversations, no network, nothing kept.
   const bool demo = argc > 1 && std::string_view(argv[1]) == "--demo";
   const std::filesystem::path config_path = mux::config::default_path();
+  // Local data encrypted, where the user turned it on: its header beside the
+  // settings, and the vault unlocked before anything is read.
+  mux::vault::the().place(config_path.parent_path() / "vault.json");
   mux::config::file saved;
   std::optional<std::string> config_error;
   std::optional<std::string> config_note;

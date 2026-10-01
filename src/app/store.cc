@@ -4,6 +4,7 @@ export module mux.app.store;
 
 import std;
 import knot;
+import mux.vault;
 import mux.core;
 import mux.logic.room_events;
 import mux.config;
@@ -98,7 +99,7 @@ class message_store {
     const auto where = reads_file_of(in);
     std::error_code failed;
     std::filesystem::create_directories(where.parent_path(), failed);
-    std::ofstream(where, std::ios::binary | std::ios::trunc) << knot::to_json_string(all);
+    (void)mux::vault::the().write_file(where, knot::to_json_string(all));
   }
   struct reads {
     std::map<std::string, std::string> read_by;
@@ -106,8 +107,7 @@ class message_store {
   };
   [[nodiscard]] static reads read_reads(const mux::conversation_id& in) {
     reads out;
-    std::ifstream file(reads_file_of(in), std::ios::binary);
-    const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    const std::string text = mux::vault::the().read_file(reads_file_of(in)).value_or(std::string());
     auto parsed = knot::try_read<store_file::reads_file>(std::string_view(text));
     if (!parsed)
       return out;
@@ -133,7 +133,7 @@ class message_store {
     std::filesystem::create_directories(where.parent_path(), failed);
     {
       std::lock_guard held(file_lock());
-      std::ofstream(where, std::ios::binary | std::ios::app) << line_of(*whole) << '\n';
+      std::ofstream(where, std::ios::binary | std::ios::app) << mux::vault::the().line_of(line_of(*whole)) << '\n';
     }
     prune(mux::config::state_path("deleted"), deleted_budget, where);
   }
@@ -187,7 +187,7 @@ class message_store {
     std::filesystem::create_directories(where.parent_path(), failed);
     {
       std::lock_guard held(file_lock());
-      std::ofstream(where, std::ios::binary | std::ios::app) << line << '\n';
+      std::ofstream(where, std::ios::binary | std::ios::app) << mux::vault::the().line_of(line) << '\n';
     }
     if (++appended_ % 500 == 1)
       prune(mux::config::state_path("messages"), budget, where);
@@ -248,7 +248,7 @@ class message_store {
       {
         std::ofstream out(fresh, std::ios::binary | std::ios::trunc);
         for (const mux::message* one : order)
-          out << line_of(*one) << '\n';
+          out << mux::vault::the().line_of(line_of(*one)) << '\n';
       }
       // Put in its place only where nothing was written to it meanwhile:
       // a line written since the read would be lost.
@@ -270,7 +270,12 @@ class message_store {
     std::size_t lines = 0;
     while (std::getline(file, text)) {
       ++lines;
-      auto parsed = knot::try_read<store_file::message_line>(std::string_view(text));
+      // Sealed where local data is encrypted: a line that cannot be opened
+      // is passed over, as one that cannot be read is.
+      const auto opened = mux::vault::the().open_line(text);
+      if (!opened)
+        continue;
+      auto parsed = knot::try_read<store_file::message_line>(std::string_view(*opened));
       if (!parsed)
         continue;
       auto& o = *parsed;

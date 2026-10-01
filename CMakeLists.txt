@@ -148,7 +148,7 @@ cme_find_package(vodozemac REQUIRED)
 # built.
 add_library(mux_modules)
 target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
-  FILES src/core.cc src/net.cc src/xmpp.cc src/http.cc src/matrix.cc src/media.cc
+  FILES src/vault.cc src/core.cc src/net.cc src/xmpp.cc src/http.cc src/matrix.cc src/media.cc
         src/matrix/base.cc src/matrix/names.cc src/matrix/account.cc src/matrix/requests.cc src/matrix/sync.cc
         src/matrix/events.cc src/matrix/media.cc src/matrix/crypto.cc
         src/logic/text.cc src/logic/search.cc src/logic/reading.cc src/logic/drafts.cc

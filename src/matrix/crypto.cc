@@ -20,6 +20,7 @@ import std;
 import splice;
 import knot;
 import loom.ev;
+import mux.vault;
 
 export namespace mux::matrix::crypto {
 
@@ -136,8 +137,12 @@ class olm_machine {
   static olm_machine open(std::filesystem::path store, std::string user_id, std::string device_id) {
     olm_machine made(std::move(store), std::move(user_id), std::move(device_id));
     made.key_ = made.pickle_key();
-    std::ifstream in(made.store_, std::ios::binary);
-    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    std::error_code there;
+    const bool exists = std::filesystem::exists(made.store_, there);
+    const auto opened = exists ? mux::vault::the().read_file(made.store_) : std::optional<std::string>(std::string());
+    if (!opened)
+      throw std::runtime_error("the encryption store cannot be opened (local data locked?): " + made.store_.string());
+    const std::string& text = *opened;
     // A store there that cannot be read -- damaged, or its key lost -- is not
     // replaced by a new identity: the device's keys on the server would no
     // longer be its own, and every session would be lost without a word.
@@ -342,9 +347,9 @@ class olm_machine {
     // Not there, and a store there: its key lost -- an error, not a new key.
     if (std::filesystem::exists(store_, ignored))
       throw std::runtime_error("the encryption store's key is missing: " + path.string());
-    std::random_device random;
-    for (auto& b : key)
-      b = static_cast<std::uint8_t>(random());
+    // The system's own randomness (RAND_bytes), not std::random_device.
+    const auto random = mux::vault::vault::random(key.size());
+    std::ranges::copy(random, key.begin());
     std::filesystem::create_directories(path.parent_path(), ignored);
     private_file(path);
     {
@@ -369,21 +374,12 @@ class olm_machine {
     kept_.account = std::string((*account_)->pickle(key_));
     std::error_code ignored;
     std::filesystem::create_directories(store_.parent_path(), ignored);
-    const auto fresh = std::filesystem::path(store_).concat(".new");
-    private_file(fresh);
-    {
-      std::ofstream out(fresh, std::ios::binary | std::ios::trunc);
-      out << knot::to_json_string(kept_);
-      if (!out.flush())
-        throw std::runtime_error("the encryption store cannot be written: " + fresh.string());
-    }
     // Not kept is an error, not a word to no one: an account whose used
     // one-time key comes back at the next start opens a session again for a
-    // pre-key message replayed to it.
-    std::error_code failed;
-    std::filesystem::rename(fresh, store_, failed);
-    if (failed)
-      throw std::runtime_error("the encryption store cannot be replaced: " + failed.message());
+    // pre-key message replayed to it. Through the vault: sealed where local
+    // data is encrypted, the user's alone either way.
+    if (!mux::vault::the().write_file(store_, knot::to_json_string(kept_), true))
+      throw std::runtime_error("the encryption store cannot be written: " + store_.string());
   }
 
   [[nodiscard]] std::string sign(std::string_view canonical) const {

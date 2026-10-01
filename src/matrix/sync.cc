@@ -2,6 +2,7 @@
 // mux.matrix:sync -- The sync: logging in, /sync long-polled, kept on disk, and what it brought told as changes.
 export module mux.matrix:sync;
 
+import mux.vault;
 import std;
 import splice;
 import knot;
@@ -383,28 +384,19 @@ void account<Sink>::save_kept() const {
   for (const auto& [type, event] : state_.account_data)
     data.push_back(event);
   out.account_data = response::account_data_t{.events = std::move(data)};
+  // Through the vault: the rooms' events and state, sealed where local data
+  // is encrypted.
   const std::filesystem::path where = this->kept_file();
-  std::error_code failed;
-  std::filesystem::create_directories(where.parent_path(), failed);
-  const std::filesystem::path fresh = where.string() + ".new";
-  {
-    std::ofstream file(fresh, std::ios::binary | std::ios::trunc);
-    file << knot::to_json_string(out);
-    if (!file) {
-      log(id_, "the sync could not be kept in {}", where.string());
-      return;
-    }
-  }
-  std::filesystem::rename(fresh, where, failed);
+  if (!mux::vault::the().write_file(where, knot::to_json_string(out)))
+    log(id_, "the sync could not be kept in {}", where.string());
 }
 
 template <class Sink>
 void account<Sink>::load_kept() {
-  std::ifstream file(this->kept_file(), std::ios::binary);
-  if (!file)
+  const auto opened = mux::vault::the().read_file(this->kept_file());
+  if (!opened)
     return;
-  const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-  auto saved = knot::try_read<loom::cs::sync::response>(std::string_view(text));
+  auto saved = knot::try_read<loom::cs::sync::response>(std::string_view(*opened));
   if (!saved) {
     log(id_, "the sync kept could not be read: starting afresh");
     return;

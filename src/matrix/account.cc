@@ -231,20 +231,48 @@ class account {
   // Rooms known to be encrypted: never sent to in the clear, whatever their
   // state says later -- a server that drops or hides m.room.encryption does
   // not turn a room back to plain text (the spec's "no downgrade"). Kept in
-  // the E2EE store where there is one.
+  // a file of their own beside the sync, apart from the E2EE store: one that
+  // does not start does not make them forgotten (review 4, M1).
   std::set<std::string, std::less<>> encrypted_rooms_;
   [[nodiscard]] bool encrypted_room(std::string_view room);
-  // A room event sent: refused where the room is encrypted, for this client
-  // does not send encrypted yet (part 2 of the E2EE PR) -- sent in the clear,
-  // what was typed into an encrypted room was the server's to read.
+  void remember_encrypted(std::string_view room);
+  [[nodiscard]] std::filesystem::path encrypted_rooms_file() const;
+  void load_encrypted();
+  // What was to go in the clear into an encrypted room (#12169, review 4,
+  // H2): thrown where it would leave, before any of it does -- the text, the
+  // file's bytes -- and caught where its fiber began: the message marked not
+  // sent, the user told in a dialog. This client does not send encrypted
+  // yet (part 2 of the E2EE PR).
+  struct plaintext_refused : std::runtime_error {
+    conversation_id in;
+    std::string local;  // the message's id here, its transaction
+    plaintext_refused(conversation_id room, std::string txn)
+        : std::runtime_error("Not sent: this room is end-to-end encrypted, and nothing goes into it in the clear."),
+          in(std::move(room)), local(std::move(txn)) {}
+  };
+  void refuse_plaintext(std::string_view room, std::string_view local) {
+    if (!this->encrypted_room(room))
+      return;
+    log(id_, "not sent: {} is encrypted, and this client does not send encrypted yet", room);
+    throw plaintext_refused(conversation_id{id_, std::string(room)}, std::string(local));
+  }
+  // A room event sent: refused where the room is encrypted.
   template <class Ask>
   auto send_room_event(Ask ask) {
-    using result = decltype(perform(*api_, ask));
-    if (this->encrypted_room(ask.room_id)) {
-      log(id_, "not sent: {} is encrypted, and this client does not send encrypted yet", ask.room_id);
-      return result(std::unexpected(failure{.network = "not sent: the room is end-to-end encrypted"}));
-    }
+    this->refuse_plaintext(ask.room_id, ask.txn_id);
     return perform(*api_, ask);
+  }
+  // A fiber that sends: a refusal of it caught here, for every sender alike.
+  template <class Body>
+  void spawn_sending(Body body) {
+    loop_->spawn([this, body = std::move(body)] mutable {
+      try {
+        body();
+      } catch (const plaintext_refused& refused) {
+        sink_(change::delivery_changed{refused.in, refused.local, delivery::failed{}});
+        sink_(change::refused{id_, refused.what()});
+      }
+    });
   }
   void upload_keys(std::int64_t on_server);
   void crypto_answer(const loom::cs::sliding_sync::response_t& got);
@@ -308,7 +336,10 @@ class account {
 
   // An event of a room's timeline, as changes: at the end, or before the
   // rest where it is history paged back to.
-  void event(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where = placement::at_end{});
+  // `sealed`: it came end-to-end encrypted, and was read here -- an edit
+  // so is one an encrypted message may take (review 4, H3).
+  void event(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where = placement::at_end{},
+             bool sealed = false);
 
   // An encrypted message: said to be there, not yet readable.
   void encrypted(const conversation_id& in, const loom::ev::timeline_event& one,

@@ -393,6 +393,7 @@ void account<Sink>::save_kept() const {
 
 template <class Sink>
 void account<Sink>::load_kept() {
+  this->load_encrypted();
   const auto opened = mux::vault::the().read_file(this->kept_file());
   if (!opened)
     return;
@@ -845,8 +846,9 @@ void account<Sink>::crypto_answer_now(const loom::cs::sliding_sync::response_t& 
 }
 
 // Encrypted, once known so: by its state now, or by what was known before --
-// kept in the E2EE store, so that a server hiding m.room.encryption later, or
-// at the next start, does not make it plain.
+// kept beside the sync, and in the E2EE store where there is one, so that a
+// server hiding m.room.encryption later, or at the next start, does not make
+// it plain.
 template <class Sink>
 bool account<Sink>::encrypted_room(std::string_view room) {
   if (encrypted_rooms_.contains(room))
@@ -856,12 +858,37 @@ bool account<Sink>::encrypted_room(std::string_view room) {
     now = kept->second.state.encrypted();
   if (!now && crypto_)
     now = crypto_->was_encrypted(room);
-  if (now) {
-    encrypted_rooms_.emplace(room);
-    if (crypto_)
-      crypto_->remember_encrypted(room);
-  }
+  if (now)
+    this->remember_encrypted(room);
   return now;
+}
+template <class Sink>
+void account<Sink>::remember_encrypted(std::string_view room) {
+  if (!encrypted_rooms_.emplace(room).second)
+    return;
+  const std::vector<std::string> all(encrypted_rooms_.begin(), encrypted_rooms_.end());
+  if (!mux::vault::the().write_file(this->encrypted_rooms_file(), knot::to_json_string(all), true))
+    log(id_, "the encrypted rooms could not be kept in {}", this->encrypted_rooms_file().string());
+  if (crypto_) {
+    try {
+      crypto_->remember_encrypted(room);
+    } catch (const std::exception& failed) {
+      log(id_, "encryption stopped: {}", failed.what());
+      crypto_.reset();
+    }
+  }
+}
+template <class Sink>
+std::filesystem::path account<Sink>::encrypted_rooms_file() const {
+  return std::filesystem::path(this->kept_file()).concat(".encrypted");
+}
+template <class Sink>
+void account<Sink>::load_encrypted() {
+  const auto opened = mux::vault::the().read_file(this->encrypted_rooms_file());
+  if (!opened)
+    return;
+  if (auto read = knot::try_read<std::vector<std::string>>(std::string_view(*opened)))
+    encrypted_rooms_.insert(read->begin(), read->end());
 }
 
 }  // namespace mux::matrix

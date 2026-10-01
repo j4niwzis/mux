@@ -116,7 +116,7 @@ void account<Sink>::upload_pack_picture(pack_picture picture, std::string bytes)
 template <class Sink>
 void account<Sink>::send_file(std::string room, std::string local, std::string bytes, std::string name, std::string mimetype,
                  bool image, int width, int height, std::string caption, std::optional<std::string> reply_to, std::optional<thread_place> thread) {
-  loop_->spawn([this, room = std::move(room), local = std::move(local), bytes = std::move(bytes),
+  this->spawn_sending([this, room = std::move(room), local = std::move(local), bytes = std::move(bytes),
                 name = std::move(name), mimetype = std::move(mimetype), image, width, height,
                 caption = std::move(caption), reply_to = std::move(reply_to), thread = std::move(thread)] {
     const conversation_id in{id_, room};
@@ -140,6 +140,9 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
                                         .delivery = delivery::sending{},
                                         .attachment = carried,
                                         .thread = thread ? std::optional<std::string>(thread->root) : std::nullopt}});
+    // Before the upload: the bytes of a file for an encrypted room never
+    // reach the server in the clear (review 4, H2).
+    this->refuse_plaintext(room, local);
     if (!api_) {
       sink_(change::delivery_changed{in, local, delivery::failed{}});
       return;

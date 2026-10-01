@@ -256,7 +256,7 @@ void account<Sink>::create_direct(std::string user) {
 
 template <class Sink>
 void account<Sink>::send_sticker(std::string room, mux::emote sticker, std::optional<std::string> reply_to) {
-  loop_->spawn([this, room = std::move(room), sticker = std::move(sticker), reply_to = std::move(reply_to)] {
+  this->spawn_sending([this, room = std::move(room), sticker = std::move(sticker), reply_to = std::move(reply_to)] {
     if (!api_)
       return;
     // As the spec has it: its words, and its info -- its size and type, by
@@ -308,7 +308,7 @@ void account<Sink>::list_state(std::string room) {
 template <class Sink>
 void account<Sink>::send_custom(std::string room, std::string type, std::optional<std::string> state_key,
                                 std::string json) {
-  loop_->spawn([this, room = std::move(room), type = std::move(type), state_key = std::move(state_key),
+  this->spawn_sending([this, room = std::move(room), type = std::move(type), state_key = std::move(state_key),
                 json = std::move(json)] {
     const std::string title = "Sent " + type;
     // Only an object is a content: read as one, its keys' values left as text.
@@ -760,7 +760,7 @@ struct forwarded_mark {
 
 template <class Sink>
 void account<Sink>::forward(std::string from, std::string event, std::string to) {
-  loop_->spawn([this, from = std::move(from), event = std::move(event), to = std::move(to)] {
+  this->spawn_sending([this, from = std::move(from), event = std::move(event), to = std::move(to)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::get_one_room_event{.room_id = from, .event_id = event});
@@ -967,7 +967,7 @@ void account<Sink>::fetch_avatar(std::string source, std::string of) {
 
 template <class Sink>
 void account<Sink>::edit(std::string room, std::string event, std::string text) {
-  loop_->spawn([this, room = std::move(room), event = std::move(event), text = std::move(text)] {
+  this->spawn_sending([this, room = std::move(room), event = std::move(event), text = std::move(text)] {
     if (!api_)
       return;
     // Made HTML as a message sent is: its Markdown, the room's emoji.
@@ -983,7 +983,7 @@ void account<Sink>::edit(std::string room, std::string event, std::string text) 
 
 template <class Sink>
 void account<Sink>::edit_caption(std::string room, std::string event, std::string caption, mux::attachment picture) {
-  loop_->spawn([this, room = std::move(room), event = std::move(event), caption = std::move(caption),
+  this->spawn_sending([this, room = std::move(room), event = std::move(event), caption = std::move(caption),
                 picture = std::move(picture)] {
     if (!api_)
       return;
@@ -1016,7 +1016,7 @@ void account<Sink>::remove(std::string room, std::string event) {
 
 template <class Sink>
 void account<Sink>::react(std::string room, std::string target, std::string key, bool on) {
-  loop_->spawn([this, room = std::move(room), target = std::move(target), key = std::move(key), on] {
+  this->spawn_sending([this, room = std::move(room), target = std::move(target), key = std::move(key), on] {
     if (!api_)
       return;
     if (on) {
@@ -1154,7 +1154,7 @@ void account<Sink>::leave(std::string room) {
 template <class Sink>
 void account<Sink>::send(std::string room, std::string body, std::optional<std::string> reply_to,
                          std::vector<mention> mentions) {
-  loop_->spawn([this, room = std::move(room), body = std::move(body), reply_to = std::move(reply_to),
+  this->spawn_sending([this, room = std::move(room), body = std::move(body), reply_to = std::move(reply_to),
                 mentions = std::move(mentions)] {
     const std::string txn = this->transaction();
     const conversation_id in{id_, room};
@@ -1256,7 +1256,7 @@ void account<Sink>::load_thread(std::string room, std::string root) {
 
 template <class Sink>
 void account<Sink>::send_in_thread(std::string room, std::string body, std::string root, std::string latest, std::optional<std::string> reply_to) {
-  loop_->spawn([this, room = std::move(room), body = std::move(body), root = std::move(root), latest = std::move(latest),
+  this->spawn_sending([this, room = std::move(room), body = std::move(body), root = std::move(root), latest = std::move(latest),
                  reply_to = std::move(reply_to)] {
     const std::string txn = this->transaction();
     const conversation_id in{id_, room};

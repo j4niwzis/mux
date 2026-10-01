@@ -113,7 +113,7 @@ inline std::optional<std::string> thread_of(const loom::ev::m_room_message_conte
 }
 
 template <class Sink>
-void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where) {
+void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where, bool sealed) {
   const auto at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(one.origin_server_ts));
   // By the content's type: a message, a reaction, or the rest by the type
   // it says.
@@ -125,7 +125,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
         sink_(change::message_edited{in, *relates->event_id,
                                      body_of(content.m_new_content->body.value_or(""), content.m_new_content->format,
                                              content.m_new_content->formatted_body),
-                                     one.sender});
+                                     one.sender, !sealed});
       return;
     }
     message made{.in = in,
@@ -381,6 +381,8 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
 template <class Sink>
 void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timeline_event& one,
                  std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where) {
+  // An encrypted event seen: the room is one, whatever its state says.
+  this->remember_encrypted(in.id);
   // Read with the room's Megolm session, where this device has it: the event
   // it was, its type and content, as any event is read -- the rest of it,
   // who sent it and when, the encrypted one's.
@@ -400,7 +402,7 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
       loom::ev::timeline_event made = one;
       made.type = std::move(clear->type);
       made.content = std::move(clear->content);
-      this->event(in, made, where);
+      this->event(in, made, where, true);
       sink_(change::message_encrypted{in, one.event_id});
       return;
     }

@@ -1020,6 +1020,9 @@ struct message_edited {
   // Who edited it: applied only where they sent what it edits. Anyone in a
   // room could otherwise rewrite anyone's message.
   std::optional<std::string> by;
+  // Came from the server in the clear: never applied to a message that came
+  // encrypted -- the server could otherwise rewrite it (review 4, H3).
+  bool plain = false;
 };
 
 // A message that came encrypted and was read so.
@@ -1484,7 +1487,7 @@ class model {
   void on(const change::message_edited& one) {
     conversation& where = of(one.in);
     if (message* kept = message_in(where, one.id)) {
-      if (one.by && *one.by != kept->sender)
+      if ((one.by && *one.by != kept->sender) || (one.plain && kept->encrypted))
         return;
       kept->body = one.now;
       kept->edited = true;
@@ -1492,7 +1495,8 @@ class model {
     // And the copy fetched aside for the replies quoting it: what they quote
     // is what it says now.
     if (const auto aside = where.quoted.find(one.id);
-        aside != where.quoted.end() && (!one.by || *one.by == aside->second.sender)) {
+        aside != where.quoted.end() && (!one.by || *one.by == aside->second.sender) &&
+        !(one.plain && aside->second.encrypted)) {
       aside->second.body = one.now;
       aside->second.edited = true;
     }

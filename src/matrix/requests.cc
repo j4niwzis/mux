@@ -800,9 +800,9 @@ void account<Sink>::list_sessions() {
       sink_(change::sessions_refused{id_, "Could not list the sessions: " + got.error().said()});
       return;
     }
-    std::vector<mux::session_info> out =
+    std::vector<mux::change::session_info> out =
         got->devices.value_or(std::vector<loom::cs::def::device_t>{}) | std::views::transform([](const loom::cs::def::device_t& one) {
-          return mux::session_info{
+          return mux::change::session_info{
               .id = one.device_id,
               .name = one.display_name.value_or(""),
               .ip = one.last_seen_ip,

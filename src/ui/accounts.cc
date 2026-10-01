@@ -356,7 +356,7 @@ struct account_sessions : nodes::Stack {
       widgets::Button<start_rename> rename;
       std::optional<widgets::Button<sign_out_one>> sign_out;
     } parts;
-    session_row(account_sessions* page, std::size_t index, const session_info& one, bool current)
+    session_row(account_sessions* page, std::size_t index, const change::session_info& one, bool current)
         : device(one.id), name(one.name),
           parts{.lines = lines_t(one.name.empty() ? std::string("Unnamed session") : one.name, facts_of(one, current)),
                 .field = widgets::TextBox<>("Session name"),
@@ -378,7 +378,7 @@ struct account_sessions : nodes::Stack {
       }
     }
     // Its ID, when it was last seen, from where: as Element says them.
-    [[nodiscard]] static std::string facts_of(const session_info& one, bool current) {
+    [[nodiscard]] static std::string facts_of(const change::session_info& one, bool current) {
       std::string out = one.id;
       if (current)
         out += " · this session";
@@ -439,17 +439,17 @@ struct account_sessions : nodes::Stack {
   }
   // The sessions, as the server listed them: this one first, the others by
   // when they were last seen, the latest first.
-  void show(const std::string& current, std::vector<session_info> all) {
-    std::ranges::sort(all, std::ranges::greater{}, [](const session_info& one) {
+  void show(const std::string& current, std::vector<change::session_info> all) {
+    std::ranges::sort(all, std::ranges::greater{}, [](const change::session_info& one) {
       return one.last_seen.value_or(std::chrono::sys_time<std::chrono::milliseconds>{});
     });
     parts.current.clear();
     parts.rows.clear();
     others.clear();
-    for (const session_info& one : all | std::views::filter([&](const session_info& s) { return s.id == current; }))
+    for (const change::session_info& one : all | std::views::filter([&](const change::session_info& s) { return s.id == current; }))
       parts.current.emplace_back(this, 0, one, true);
     std::size_t index = 0;
-    for (const session_info& one : all | std::views::filter([&](const session_info& s) { return s.id != current; })) {
+    for (const change::session_info& one : all | std::views::filter([&](const change::session_info& s) { return s.id != current; })) {
       parts.rows.emplace_back(this, ++index, one, false);
       others.push_back(one.id);
     }

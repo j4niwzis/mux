@@ -177,7 +177,10 @@ struct conversation_row : nodes::Stack {
       }
       std::ranges::replace(shown.text, '\n', ' ');
       std::erase_if(shown.links, [](const nodes::Text::Link& link) { return !link.pill; });
-      if (last.outgoing)
+      // A forum's: the topic it is in, then who.
+      if (one.forum_topic)
+        said_by(*one.forum_topic + " \u00b7 " + (last.outgoing ? std::string("You") : sender_name(one, last.sender)), accent_colour);
+      else if (last.outgoing)
         said_by("You", accent_colour);
       else if (is_group(one))
         said_by(sender_name(one, last.sender), accent_colour);

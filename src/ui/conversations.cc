@@ -2074,16 +2074,25 @@ struct conversations_screen : nodes::Stack {
           made.unread = 0;
           made.highlights = 0;
           const message* best = nullptr;
+          std::string best_in;
           for (const std::string& child : one->children)
             if (const auto found = in->conversations.find(child); found != in->conversations.end() && !found->second.space) {
               const conversation& topic = found->second;
               made.unread += topic.unread_here(events_of(&topic));
               made.highlights += topic.highlights;
-              if (const message* last = newest(topic, events_of(&topic)); last && (!best || last->at > best->at))
+              if (const message* last = newest(topic, events_of(&topic)); last && (!best || last->at > best->at)) {
                 best = last;
+                best_in = topic.id.id;
+              }
             }
-          if (best)
+          if (best) {
             made.timeline.push_back(*best);
+            // Said as tdesktop says a forum's newest: in which topic, by whom.
+            if (const auto found = in->conversations.find(best_in); found != in->conversations.end()) {
+              made.forum_topic = display_name(found->second);
+              made.members = found->second.members;
+            }
+          }
           one = &forum_shown.insert_or_assign(one->id, std::move(made)).first->second;
         }
     std::ranges::sort(chats, std::ranges::greater{}, [&](const conversation* one) {

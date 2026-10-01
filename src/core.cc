@@ -647,6 +647,8 @@ struct conversation {
   std::uint64_t read_at = 0;
   // A Matrix space, and the rooms it holds: a folder of chats, not a chat.
   bool space = false;
+  // Made for a forum's row in the chat list only: the room its newest is in.
+  std::optional<std::string> forum_topic;
   std::vector<std::string> children;
   // The named groups it is in, as an XMPP roster's.
   std::vector<std::string> groups;

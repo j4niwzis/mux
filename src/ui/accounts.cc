@@ -409,14 +409,37 @@ struct accounts_panel : closes_on_escape<Actions> {
     swap.setTarget(1.0f);
     this->fade();
   }
+  // The page coming in: faded in, and slid in from the side it comes from.
+  float swap_side = 1.0f;
   void fade() {
     const float value = swap.value();
-    splice::visit([value](auto& one) { one.fState.setAlpha(value); }, detail);
+    const float shift = (1.0f - value) * 28.0f * swap_side;
+    splice::visit(
+        [&](auto& one) {
+          one.fState.setAlpha(value);
+          one.apply({.shiftX = shift});
+        },
+        detail);
   }
-  [[nodiscard]] bool settling() const { return swap.moving(); }
+  // The side column's switch, the accounts' list for an account's pages and
+  // back: the one coming in slid in and faded in, as the page beside it.
+  skiff::paint::Tween side_swap{1.0f, 220.0f, skiff::paint::movement::subtle{}};
+  float side_from = 1.0f;
+  void slide_side() {
+    const float value = side_swap.value();
+    const float shift = (1.0f - value) * 36.0f * side_from;
+    for (scene::Node* each : pages.visible() ? std::initializer_list<scene::Node*>{&pages}
+                                             : std::initializer_list<scene::Node*>{&list, &add}) {
+      each->fState.setAlpha(value);
+      each->apply({.shiftX = shift});
+    }
+  }
+  [[nodiscard]] bool settling() const { return swap.moving() || side_swap.moving(); }
   void update(double now_ms) {
     if (swap.step(now_ms))
       this->fade();
+    if (side_swap.step(now_ms))
+      this->slide_side();
   }
 
   explicit accounts_panel(Actions* a)
@@ -497,9 +520,18 @@ struct accounts_panel : closes_on_escape<Actions> {
   // Adding an account, beside the list.
   // The account list, or the chosen account's pages, down the side.
   void show_pages(bool shown) {
+    // Into an account: its pages come in from the right, and the page beside
+    // them with them; back: the list comes in from the left.
+    if (shown != pages.visible()) {
+      side_from = shown ? 1.0f : -1.0f;
+      swap_side = side_from;
+      side_swap.jump(0.0f);
+      side_swap.setTarget(1.0f);
+    }
     pages.setVisible(shown);
     add.setVisible(!shown);
     list.setVisible(!shown);
+    this->slide_side();
     header.parts.title.setText(shown && selected ? *selected : std::string("Accounts"));
     this->invalidateLayout();
   }

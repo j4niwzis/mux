@@ -99,7 +99,8 @@ struct network {
                            .host = kept->host,
                            .port = static_cast<std::uint16_t>(kept->port),
                            .username = kept->username,
-                           .password = kept->password};
+                           .password = kept->password,
+                           .srv = mux::net::srv_lookup_of(kept->srv_resolver)};
   }
 
   void start_one(const mux::config::xmpp_account& saved, std::optional<mux::net::proxy> via) {

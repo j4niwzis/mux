@@ -216,6 +216,10 @@ struct proxy_settings {
   std::int64_t port = 1080;
   std::optional<std::string> username;
   std::optional<std::string> password;
+  // Who XMPP's SRV records are asked of, through it: a nameserver's address;
+  // "off" for none (the domain itself on 5222, resolved by the proxy);
+  // unset, the system's own nameserver, where the proxy can reach it.
+  std::optional<std::string> srv_resolver;
   friend bool operator==(const proxy_settings&, const proxy_settings&) = default;
 };
 

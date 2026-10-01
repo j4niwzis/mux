@@ -467,12 +467,39 @@ struct http {};
 }  // namespace proxy_kind
 using proxy_kind_t = splice::variant<proxy_kind::socks5, proxy_kind::http>;
 
+// Who a domain's SRV records are asked of, through a proxy: the system's
+// nameserver (where the proxy can reach it), none at all, or one chosen --
+// whoever is asked learns which domain is looked up.
+namespace srv_lookup {
+struct system {};
+struct none {};
+struct server {
+  asio::ip::address address;
+};
+}  // namespace srv_lookup
+using srv_lookup_t = splice::variant<srv_lookup::system, srv_lookup::none, srv_lookup::server>;
+// As a profile says it, read once: unset the system's; "off" none; else a
+// nameserver's address -- and none where it is not one, rather than the
+// system's, which the user had chosen not to ask.
+[[nodiscard]] inline srv_lookup_t srv_lookup_of(const std::optional<std::string>& said) {
+  if (!said)
+    return srv_lookup::system{};
+  if (*said == "off")
+    return srv_lookup::none{};
+  error_code bad;
+  const auto address = asio::ip::make_address(*said, bad);
+  if (bad)
+    return srv_lookup::none{};
+  return srv_lookup::server{address};
+}
+
 struct proxy {
   proxy_kind_t kind = proxy_kind::socks5{};
   std::string host;
   std::uint16_t port = 1080;
   std::optional<std::string> username;
   std::optional<std::string> password;
+  srv_lookup_t srv = srv_lookup::system{};
 };
 
 namespace detail {
@@ -709,8 +736,18 @@ inline std::vector<tern::srv::target> xmpp_targets(loop& owner, const std::optio
   if (!via)
     return xmpp_targets(owner, domain);
   std::vector<tern::srv::target> found;
-  const auto server = nameserver();
-  if (!local_only(server)) {
+  // Whom to ask: the system's nameserver, where one the proxy can reach;
+  // the one chosen; or none.
+  const std::optional<asio::ip::address> asked = splice::visit(
+      splice::overloaded{[](srv_lookup::system) -> std::optional<asio::ip::address> {
+                           const auto server = nameserver();
+                           return local_only(server) ? std::nullopt : std::optional(server);
+                         },
+                         [](srv_lookup::none) -> std::optional<asio::ip::address> { return std::nullopt; },
+                         [](const srv_lookup::server& chosen) -> std::optional<asio::ip::address> { return chosen.address; }},
+      via->srv);
+  if (asked) {
+    const auto& server = *asked;
     try {
       tcp::socket socket = connect(owner, via, server.to_string(), 53);
       std::random_device entropy;

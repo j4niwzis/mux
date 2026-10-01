@@ -2575,6 +2575,8 @@ struct conversations_screen : nodes::Stack {
       const std::int64_t needs = asked != one->needs.events.end() ? asked->second : one->needs.events_default;
       chat.line.set_can_post(level >= needs);
       chat.line.set_replaced(one->replaced_by.has_value());
+      // Those knocking, for whoever may invite.
+      chat.line.show_knocks(actions, one->knocking, level >= one->needs.invite);
       chat.line.show_unsent(std::ranges::any_of(one->timeline, [](const message& said) {
         return said.outgoing &&
                splice::visit(splice::overloaded{[](const delivery::failed&) { return true; }, [](const auto&) { return false; }},

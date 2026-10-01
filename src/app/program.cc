@@ -319,6 +319,7 @@ struct app : kept_settings {
   void apply(const request::set_home_hides& one);
   void apply(const request::set_home_direct& one);
   void apply(const request::join_room_card&);
+  void apply(const request::knock_room_card&);
   void apply(const request::decline_room_card&);
   // An invite come: said, as a message is -- once a run.
   void notify_invite(const mux::conversation_id& in, const mux::invite_info& invite, const std::string& name);

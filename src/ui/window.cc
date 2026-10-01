@@ -128,6 +128,17 @@ struct window : scene::Node {
     using Node::onKey;
     // Esc closes what is on top, whatever has the keys -- a menu, the emoji
     // popup, a picture, a dialog -- one at a time, the topmost first.
+    // Ctrl+C, where nothing under the keys took it: what any text shows
+    // selected -- a dialog's, a notice's -- copied. The chat's own Ctrl+C
+    // comes first, for its messages.
+    void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
+      if (press.key != scene::keys::kC || !press.modifiers.template has<scene::modifier::control>())
+        return;
+      if (const std::string selected = scene::selectedText(); !selected.empty()) {
+        skiff::scene::setClipboardText(selected);
+        reply.handle();
+      }
+    }
     void onKey(scene::phase::capture, const scene::key::down& press, scene::Reply& reply) {
       if (press.key != scene::keys::kEscape)
         return;

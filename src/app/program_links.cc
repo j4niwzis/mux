@@ -91,6 +91,14 @@ void app::follow(const mux::logic::link_t& where) {
 }
 
 // The room of the card joined: opened when it comes, in woken().
+void app::apply(const request::knock_room_card&) {
+  if (!previewing)
+    return;
+  const auto looked = *std::exchange(previewing, std::nullopt);
+  net->knock(looked.step.by, looked.step.room, looked.step.via, std::string());
+  root().close_room_card();
+  root().show_notice("Asked to join. You'll be let in once someone in the room accepts.");
+}
 void app::apply(const request::join_room_card&) {
   if (!previewing)
     return;

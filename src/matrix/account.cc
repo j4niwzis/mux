@@ -269,6 +269,7 @@ class account {
   // A room joined, by its id or an alias, through the servers `via` names:
   // it comes with the next sync.
   void join(std::string room, std::vector<std::string> via);
+  void knock(std::string room, std::vector<std::string> via, std::string reason);
   // A room's members, all of them, from the server: kept, and said.
   void fetch_members(std::string room);
   std::map<std::string, std::map<std::string, mux::member>> full_members_;

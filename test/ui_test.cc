@@ -141,6 +141,7 @@ struct stub {
   void set_account_colour(mux::config::accent_t) {}
   void flip_account_strip() {}
   void open_replacement() {}
+  void knock_room_card() {}
   void place_chat(mux::conversation_id, mux::account_id, bool) {}
   void unplace_chat(mux::conversation_id, mux::account_id) {}
   void flip_chat_strip(mux::conversation_id, mux::account_id) {}

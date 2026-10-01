@@ -360,6 +360,14 @@ struct member {
   friend bool operator==(const member&, const member&) = default;
 };
 
+// One asking to join a room that lets people knock: who, and why they say.
+struct knock_request {
+  std::string id;
+  std::string name;
+  std::string reason;
+  friend bool operator==(const knock_request&, const knock_request&) = default;
+};
+
 // Who may join a room, as its join rule says.
 namespace join_rule {
 struct open {};      // anyone: "public"
@@ -619,6 +627,7 @@ struct conversation {
   std::int64_t unread = 0;
   std::int64_t highlights = 0;
   std::vector<std::string> typing;
+  std::vector<knock_request> knocking;  // asking to join, where it lets them knock
   std::vector<member> members;  // a group's, as far as they are known
   std::vector<message> timeline;  // oldest first, as far back as is loaded
   // Where to page back from, in the protocol's terms: a MAM id, a Matrix
@@ -826,6 +835,8 @@ struct room_preview {
   std::string note;
   // An invite to it: Accept and Decline, in place of Join.
   bool invite = false;
+  // Its join rule lets people ask: Ask to join, in place of Join.
+  bool knock = false;
   friend bool operator==(const room_preview&, const room_preview&) = default;
 };
 
@@ -953,6 +964,7 @@ struct session_given {
 struct members_changed {
   conversation_id in;
   std::vector<member> members;
+  std::vector<knock_request> knocking;  // asking to join (#11857)
 };
 
 struct conversation_removed {
@@ -1586,6 +1598,7 @@ class model {
   void on(const change::members_changed& one) {
     conversation& where = of(one.in);
     where.members = one.members;
+    where.knocking = one.knocking;
     ++where.members_revision;
   }
   void on(const change::session_given&) {}  // the program's to keep, not the model's

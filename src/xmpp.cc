@@ -238,6 +238,7 @@ class account {
   void typing(std::string, bool) {}
   // Rooms are joined through their bookmarks; not from a link yet.
   void join(std::string, std::vector<std::string>) {}
+  void knock(std::string, std::vector<std::string>, std::string) {}
   // Files over XMPP (HTTP upload, XEP-0363) are not sent yet.
   void send_file(std::string, std::string, std::string, std::string, std::string, bool, int, int, std::string,
                  std::optional<std::string> = std::nullopt, std::optional<thread_place> = std::nullopt) {}

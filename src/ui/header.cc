@@ -38,8 +38,10 @@ struct notice_box : nodes::Stack {
     // As high as what it says: no room left empty under its button.
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
     this->setGap(10.0f);
+    // What it says can be selected and copied (#11872).
     for (nodes::Text* each : {&parts.title, &parts.note}) {
       each->setWrapped(true);
+      each->setSelectable(true);
       each->apply({.fillX = true});
     }
     parts.ok.setPrimary(true);

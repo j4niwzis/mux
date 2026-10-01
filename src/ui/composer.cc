@@ -513,8 +513,42 @@ struct composer_bar : nodes::Stack {
       parts.go.apply({.height = 30.0f, .alignSelf = scene::align::kMiddle});
     }
   };
+  // Those asking to join (#11857), for those who may let them in: the first
+  // of them -- who, and why -- with Approve (an invite) and Deny (their
+  // knock refused), and how many more.
+  struct approve_it {
+    Actions* actions;
+    std::string user;
+    void operator()() const { actions->room_act(room_action::invite{user}); }
+  };
+  struct deny_it {
+    Actions* actions;
+    std::string user;
+    void operator()() const { actions->room_act(room_action::kick{user}); }
+  };
+  struct knock_row : nodes::Stack {
+    struct parts_t {
+      nodes::Text said;
+      widgets::Button<deny_it> deny;
+      widgets::Button<approve_it> approve;
+    } parts;
+    knock_row(Actions* a, const knock_request& one, std::size_t more)
+        : parts{.said = nodes::Text(std::format("{} asks to join{}{}", one.name, one.reason.empty() ? std::string() : ": " + one.reason,
+                                                more ? std::format(" (and {} more)", more) : std::string()),
+                                    13.0f, text_colour),
+                .deny = widgets::Button<deny_it>("Deny", {a, one.id}),
+                .approve = widgets::Button<approve_it>("Approve", {a, one.id})} {
+      this->setHorizontal();
+      this->setGap(8.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 12.0f, 6.0f, 12.0f}});
+      parts.said.setElided(true);
+      parts.said.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      parts.approve.setPrimary(true);
+    }
+  };
   struct parts_t {
     nodes::Box<> divider{band_colour};
+    std::optional<knock_row> knocks;
     unsent_row unsent;
     context_row context_line;
     input_row input;
@@ -580,6 +614,25 @@ struct composer_bar : nodes::Stack {
     if (!can)
       parts.context_line.setVisible(false);
   }
+  // Those asking to join, where one may let them in: the first, and how many
+  // more. Made again only as who is first changes.
+  void show_knocks(Actions* a, const std::vector<knock_request>& knocking, bool may) {
+    if (!may || knocking.empty()) {
+      if (parts.knocks) {
+        parts.knocks.reset();
+        knocks_shown.clear();
+        this->invalidateLayout();
+      }
+      return;
+    }
+    const std::string key = std::format("{}\n{}", knocking.front().id, knocking.size());
+    if (key == knocks_shown)
+      return;
+    knocks_shown = key;
+    parts.knocks.emplace(a, knocking.front(), knocking.size() - 1);
+    this->invalidateLayout();
+  }
+  std::string knocks_shown;
   // Upgraded away: the notice in place of the field; or not.
   // After set_can_post: replaced, the field stays hidden whatever it said.
   void set_replaced(bool replaced) {

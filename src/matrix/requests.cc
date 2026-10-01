@@ -706,7 +706,24 @@ void account<Sink>::preview_room(std::string room, std::vector<std::string> via)
                                   .alias = got->canonical_alias.value_or(""),
                                   .topic = got->topic.value_or(""),
                                   .avatar = got->avatar_url,
-                                  .members = got->num_joined_members}});
+                                  .members = got->num_joined_members,
+                                  .knock = splice::visit(splice::overloaded{[](mux::join_rule::knock) { return true; },
+                                                                            [](const auto&) { return false; }},
+                                                         join_rule_of(got->join_rule))}});
+  });
+}
+
+// Asked to be let in, where the room lets people knock (#11857).
+template <class Sink>
+void account<Sink>::knock(std::string room, std::vector<std::string> via, std::string reason) {
+  loop_->spawn([this, room = std::move(room), via = std::move(via), reason = std::move(reason)] {
+    if (!api_)
+      return;
+    auto got = perform(*api_, loom::cs::knock_room{.room_id_or_alias = room,
+                                                   .via = via.empty() ? std::nullopt : std::optional<std::vector<std::string>>(via),
+                                                   .body = {.reason = reason.empty() ? std::nullopt : std::optional<std::string>(reason)}});
+    if (!got)
+      log(id_, "could not knock on {}: {}", room, got.error().said());
   });
 }
 

@@ -559,6 +559,18 @@ struct network {
             one.account);
     });
   }
+  // Asked to be let in (Matrix's knock), with a reason where one is given.
+  void knock(const mux::account_id& by, std::string room, std::vector<std::string> via, std::string reason) {
+    loop.post([this, by, room = std::move(room), via = std::move(via), reason = std::move(reason)] {
+      for (auto& one : accounts)
+        splice::visit(
+            [&](auto& account) {
+              if (account->id() == by)
+                account->knock(room, via, reason);
+            },
+            one.account);
+    });
+  }
   // All the members of a room, from its server.
   void fetch_members(const mux::conversation_id& in) {
     loop.post([this, in] {

@@ -734,14 +734,20 @@ void account<Sink>::members(const conversation_id& in, const loom::client::joine
     who.insert_or_assign(user, mux::member{user, kept.state.display_name(user).value_or(user), std::nullopt,
                                            joined ? joined->avatar_url : std::nullopt});
   }
-  for (const char* gone : {"leave", "ban"})
+  for (const char* gone : {"leave", "ban", "knock"})
     for (const std::string& user : kept.state.members(gone))
       who.erase(user);
   std::vector<mux::member> out;
   out.reserve(who.size());
   for (auto& [id, one] : who)
     out.push_back(std::move(one));
-  sink_(change::members_changed{in, std::move(out)});
+  // Those knocking: their name and their reason, as their member event says.
+  std::vector<mux::knock_request> knocking;
+  for (const std::string& user : kept.state.members("knock")) {
+    const auto* asked = kept.state.content<loom::ev::m_room_member_content_t>("m.room.member", user);
+    knocking.push_back({user, kept.state.display_name(user).value_or(user), asked && asked->reason ? *asked->reason : std::string()});
+  }
+  sink_(change::members_changed{in, std::move(out), std::move(knocking)});
 }
 
 }  // namespace mux::matrix

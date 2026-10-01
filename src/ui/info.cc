@@ -279,7 +279,13 @@ template <class Actions>
 struct room_card : nodes::Stack {
   struct join_it {
     Actions* actions = nullptr;
-    void operator()() const { actions->join_room_card(); }
+    bool knock = false;  // asked to be let in, where it lets people knock
+    void operator()() const {
+      if (knock)
+        actions->knock_room_card();
+      else
+        actions->join_room_card();
+    }
   };
   struct decline_it {
     Actions* actions = nullptr;
@@ -330,7 +336,8 @@ struct room_card : nodes::Stack {
               .about = nodes::Text(!known.topic.empty() ? known.topic : !known.note.empty() ? known.note : std::string("No description"), 14.0f,
                                    known.topic.empty() ? dim_colour : text_colour),
               .id = id_line(known.id.empty() ? asked : known.id, ""),
-              .join = action_tile<join_it>(known.invite ? "Accept" : "Join", icon::plus{}, {a})} {
+              .join = action_tile<join_it>(known.invite ? "Accept" : known.knock ? "Ask to join" : "Join", icon::plus{},
+                                           {a, known.knock && !known.invite})} {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}});
     if (known.invite) {
       parts.top.parts.title.setText("Invite");

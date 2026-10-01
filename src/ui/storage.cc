@@ -98,8 +98,8 @@ struct storage_page : nodes::Stack {
                                                    history.room_event_kinds),
                 .receipts = receipts_choice<Actions>(a, choice_level::everywhere{}, history.show_receipts),
                 .previews = previews_choice<Actions>(a, choice_level::everywhere{}, history.link_previews),
-                .previews_direct = previews_direct_choice<Actions>(a, choice_level::everywhere{}, history.previews_direct),
-                .typing = typing_choice<Actions>(a, choice_level::everywhere{}, history.send_typing),
+                .previews_direct = previews_direct_choice<Actions>(a, choice_level::everywhere{}, history.previews_direct.value_or(false)),
+                .typing = typing_choice<Actions>(a, choice_level::everywhere{}, history.send_typing.value_or(true)),
                 .jump_search = jump_search_choice<Actions>(a, choice_level::everywhere{}, history.jump_search)} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
       parts.memory_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});

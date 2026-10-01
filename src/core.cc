@@ -1310,14 +1310,34 @@ class model {
     }
     // In the timeline now: what was fetched for a quote is not needed.
     where.quoted.erase(one.message.id);
+    // In the timeline by its time, wherever it was said to go: the newest at
+    // the end as they come, history before the rest -- but one that is older
+    // than its place says (a sliding sync sending a room's last events again
+    // as it is followed, a page arriving after newer ones) goes where its
+    // time puts it, not after the newest, shown as new until the chat was
+    // made again.
+    const auto in_time = [&](auto at) {
+      auto& timeline = where.timeline;
+      const auto by_time = [&] {
+        timeline.insert(std::ranges::upper_bound(timeline, one.message.at, {}, &message::at), one.message);
+      };
+      if (timeline.empty())
+        timeline.push_back(one.message);
+      else if (at == timeline.end() && one.message.at >= timeline.back().at)
+        timeline.push_back(one.message);
+      else if (at == timeline.begin() && one.message.at <= timeline.front().at)
+        timeline.insert(timeline.begin(), one.message);
+      else
+        by_time();
+    };
     splice::visit(splice::overloaded{[&](placement::at_end) {
                             if (!where.latest || one.message.at >= where.latest->at)
                               where.latest = one.message;
                             if (!where.detached)
-                              where.timeline.push_back(one.message);
+                              in_time(where.timeline.end());
                           },
-                          [&](placement::at_start) { where.timeline.insert(where.timeline.begin(), one.message); },
-                          [&](placement::in_window) { where.timeline.push_back(one.message); },
+                          [&](placement::at_start) { in_time(where.timeline.begin()); },
+                          [&](placement::in_window) { in_time(where.timeline.end()); },
                           [&](placement::aside) {
                             // Held to a number: what nothing here quotes or
                             // pins goes first, then one more -- never all at

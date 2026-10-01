@@ -958,6 +958,9 @@ struct conversations_screen : nodes::Stack {
     // The menu closed after the press that chose from it, or one off it:
     // not from inside that press's handling.
     [[nodiscard]] bool wantsTick() const { return menu_close_due || fly.moving() || (parts.ghost && !drag); }
+    // Frames asked for while a bar flies back to its place: ticked only, it
+    // moved at the frames something else asked for.
+    [[nodiscard]] bool settling() const { return fly.moving() || (parts.ghost && !drag); }
     void update(double now) {
       if (parts.ghost && !drag) {
         fly.step(now);
@@ -1464,8 +1467,14 @@ struct conversations_screen : nodes::Stack {
 
   // Frames wanted while a jump goes on: it is carried out a step a frame --
   // made, paged back to, fetched around, aimed at -- and skiff draws the next
-  // frame only for what is still settling. Nothing else here asks for one.
-  [[nodiscard]] bool settling() const { return jumping_to.has_value() || aiming.has_value(); }
+  // frame only for what is still settling. And while the list slides in --
+  // another space, a forum -- and the panels ease to a chat's opacity: only
+  // ticked (wantsTick), they moved a step at a frame something else asked
+  // for, and the slide went by in jerks unless the mouse moved.
+  [[nodiscard]] bool settling() const {
+    return jumping_to.has_value() || aiming.has_value() || slide_wait > 0 || list_in.moving() ||
+           panel_ease().t.moving();
+  }
   // Where jumps in a chat came from -- a reply's quote, a link to a
   // message: "↓" goes back to each in turn, the last first, before it goes
   // to the newest, as Telegram's. And the chats jumps went out of, to a

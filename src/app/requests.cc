@@ -810,6 +810,18 @@ template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::window<mu
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::window<mux::app::actions>::layers>() noexcept;
 template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::conversations_screen<mux::app::actions>> = true;
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::conversations_screen<mux::app::actions>>() noexcept;
+// The chats screen cut further: its heaviest subtrees each in a unit of
+// their own, compiled side by side -- the one unit was six minutes.
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::conversations_screen<mux::app::actions>::side_column> = true;
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::conversations_screen<mux::app::actions>::side_column>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::message_bubble> = true;
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::message_bubble>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::composer_bar<mux::app::actions>> = true;
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::composer_bar<mux::app::actions>>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::info_panel<mux::app::actions>> = true;
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::info_panel<mux::app::actions>>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::threads_panel<mux::app::actions>> = true;
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::threads_panel<mux::app::actions>>() noexcept;
 template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::drawer_panel<mux::app::actions>> = true;
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::drawer_panel<mux::app::actions>>() noexcept;
 template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::accounts_panel<mux::app::actions>> = true;

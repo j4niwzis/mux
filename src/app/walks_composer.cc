@@ -3,11 +3,12 @@
 // requests.cc): built only where walks are erased, outside a release build.
 // Part of mux.app.requests, where these tables are declared: a definition
 // outside that module would be another entity (module attachment).
+// Where a message is written: its field, its header, its buttons.
 module mux.app.requests;
 import std;
 import skiff.scene;
 import mux.ui;
 
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::conversations_screen<mux::app::actions>>() noexcept {
-  return skiff::scene::AnyNode::opsOf<mux::ui::conversations_screen<mux::app::actions>>();
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::composer_bar<mux::app::actions>>() noexcept {
+  return skiff::scene::AnyNode::opsOf<mux::ui::composer_bar<mux::app::actions>>();
 }

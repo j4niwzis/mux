@@ -108,10 +108,18 @@ struct conversation_row : nodes::Stack {
     };
     struct parts_t {
       top_line top;
+      // A forum's: the topic -- the room -- its newest is in, on a line of
+      // its own between the name and what was said, as tdesktop's.
+      nodes::Text topic;
       bottom_line bottom;
     } parts;
     lines_column(std::string shown, std::int64_t count, bool chosen, bool muted)
-        : parts{.top = top_line(std::move(shown), chosen), .bottom = bottom_line(count, chosen, muted)} {
+        : parts{.top = top_line(std::move(shown), chosen),
+                .topic = nodes::Text("", 13.0f, chosen ? selected_text_colour : text_colour),
+                .bottom = bottom_line(count, chosen, muted)} {
+      parts.topic.setElided(true);
+      parts.topic.apply({.fillX = true});
+      parts.topic.setVisible(false);
       this->setGap(6.0f);
       fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
     }
@@ -177,10 +185,15 @@ struct conversation_row : nodes::Stack {
       }
       std::ranges::replace(shown.text, '\n', ' ');
       std::erase_if(shown.links, [](const nodes::Text::Link& link) { return !link.pill; });
-      // A forum's: the topic it is in, then who.
-      if (one.forum_topic)
-        said_by(*one.forum_topic + " \u00b7 " + (last.outgoing ? std::string("You") : sender_name(one, last.sender)), accent_colour);
-      else if (last.outgoing)
+      // A forum's: the topic it is in on a line of its own -- the row taller
+      // for it -- then who, before what was said.
+      if (one.forum_topic) {
+        auto& topic = parts.lines.parts.topic;
+        topic.setText(*one.forum_topic);
+        topic.setVisible(true);
+        fState.apply({.height = kHeight + 20.0f});
+        said_by(last.outgoing ? std::string("You") : sender_name(one, last.sender), accent_colour);
+      } else if (last.outgoing)
         said_by("You", accent_colour);
       else if (is_group(one))
         said_by(sender_name(one, last.sender), accent_colour);

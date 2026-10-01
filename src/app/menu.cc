@@ -92,6 +92,11 @@ class menu_part {
     s_->root().close_menu();
     skiff::scene::setClipboardText(target_.link);
   }
+  // The link pressed on, in the text or the preview.
+  void apply(const request::menu_copy_url&) {
+    s_->root().close_menu();
+    skiff::scene::setClipboardText(target_.pressed_link);
+  }
   void apply(const request::menu_copy_image&) {
     s_->root().close_menu();
     if (target_.picture)

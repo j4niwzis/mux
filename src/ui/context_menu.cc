@@ -940,6 +940,7 @@ struct context_menu : scene::Node {
     using later_row = row_item<not_yet<Actions>>;
     using copy_row = row_item<ask<Actions, &Actions::menu_copy>>;
     using link_row = row_item<ask<Actions, &Actions::menu_copy_link>>;
+    using url_row = row_item<ask<Actions, &Actions::menu_copy_url>>;
     using copy_image_row = row_item<ask<Actions, &Actions::menu_copy_image>>;
     using save_row = row_item<ask<Actions, &Actions::menu_save>>;
     using gif_row = row_item<ask<Actions, &Actions::menu_save_gif>>;
@@ -964,6 +965,8 @@ struct context_menu : scene::Node {
       pin_row pin;
       copy_row copy;
       link_row copy_link;
+      // The link pressed on, in the text or its preview.
+      url_row copy_url;
       copy_image_row copy_image;
       save_row save;
       gif_row save_gif;
@@ -978,7 +981,7 @@ struct context_menu : scene::Node {
       std::optional<emoji_panel<react_with<Actions>>> emoji;
     } parts;
     void expand() {
-      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_image, save, save_gif, reactions, forward, source,
+      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, copy_image, save, save_gif, reactions, forward, source,
              remove, seen_band, seen, emoji] = parts;
       if (emoji)
         return;
@@ -1005,9 +1008,9 @@ struct context_menu : scene::Node {
     // The items, once the list is down over them: gone, the menu keeping
     // its size by its least height.
     void hide_items() {
-      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_image, save, save_gif, reactions, forward, source, remove,
+      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, copy_image, save, save_gif, reactions, forward, source, remove,
              seen_band, seen, emoji] = parts;
-      for (scene::Node* item : std::initializer_list<scene::Node*>{&reply, &thread_reply, &quote_reply, &edit, &pin, &copy, &copy_link, &copy_image, &save,
+      for (scene::Node* item : std::initializer_list<scene::Node*>{&reply, &thread_reply, &quote_reply, &edit, &pin, &copy, &copy_link, &copy_url, &copy_image, &save,
                                                                    &save_gif, &reactions, &forward, &source,
                                                                    &remove, &seen_band, &seen})
         item->setVisible(false);
@@ -1049,6 +1052,7 @@ struct context_menu : scene::Node {
                 .pin = pin_row(facts.pinned ? "Unpin" : "Pin", {a}, icon::check{}),
                 .copy = copy_row(facts.selection ? "Copy Selected Text" : "Copy Text", {a}, icon::clip{}),
                 .copy_link = link_row("Copy Message Link", {a}, icon::info{}),
+                .copy_url = url_row("Copy Link", {a}, icon::clip{}),
                 .copy_image = copy_image_row("Copy Image", {a}, icon::clip{}),
                 .save = save_row("Save As…", {a}, icon::send{}),
                 .save_gif = gif_row("Save GIF", {a}, icon::check{}),
@@ -1059,7 +1063,7 @@ struct context_menu : scene::Node {
                 .source = source_row("View Source", {a}, icon::info{}),
                 .remove = delete_row("Delete", {a}, icon::close{}),
                 .seen = seen_row<Actions>(a, facts.seen)} {
-      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_image, save, save_gif, reactions, forward, source,
+      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, copy_image, save, save_gif, reactions, forward, source,
              remove, seen_band, seen, emoji] = parts;
       quick_band.apply({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 4.0f, 0.0f}});
       // A menu's rows as tdesktop's menuWithIcons: 8 over and under the
@@ -1077,6 +1081,7 @@ struct context_menu : scene::Node {
       compact(thread_reply);
       compact(copy);
       compact(copy_link);
+      compact(copy_url);
       compact(copy_image);
       compact(save);
       compact(save_gif);
@@ -1089,6 +1094,7 @@ struct context_menu : scene::Node {
       quote_reply.setVisible(facts.selection && !facts.own && !facts.copied.empty());
       copy.setVisible(!facts.copied.empty());
       copy_link.setVisible(!facts.link.empty());
+      copy_url.setVisible(!facts.pressed_link.empty());
       copy_image.setVisible(facts.picture.has_value());
       save.setVisible(facts.media.has_value());
       save_gif.setVisible(facts.media.has_value() && facts.moving);

@@ -9,6 +9,7 @@ import skiff.paint;
 import skiff.scene;
 import skiff.nodes.flow;
 import skiff.nodes.scroll;
+import skiff.nodes.text;
 import skiff.widgets.loader;
 import skiff.widgets.wallpaper;
 import mux.core;
@@ -51,6 +52,7 @@ struct menu_facts {
   bool reaction_events = false;  // reacted to, the reactions being events
   std::size_t reaction_count = 0;  // how many reactions it has, of anyone
   std::string link;  // a link to it, where it has one
+  std::string pressed_link;  // the link pressed on: in its text, or its preview
   float x = 0.0f, y = 0.0f;
 };
 
@@ -435,6 +437,14 @@ struct timeline_area : scene::Node {
             one.message_id.starts_with('$'))
           if (const conversation* chat = seen_model ? seen_model->find(*seen_chat) : nullptr)
             facts.link = logic::message_link(*chat, one.message_id);
+        // The link the press was on: one in the text -- its text asked a menu
+        // of its own with it, which this one is in place of -- or the
+        // preview's.
+        if (const auto& asked = skiff::nodes::textMenusAsked(); !asked.empty() && asked.back().link)
+          facts.pressed_link = *asked.back().link;
+        else if (const auto& preview = one.parts.body.parts.preview;
+                 preview && preview->fState.fBounds.contains(press.x, press.y))
+          facts.pressed_link = preview->url;
         facts.x = press.x;
         facts.y = press.y;
         actions->message_menu(std::move(facts));

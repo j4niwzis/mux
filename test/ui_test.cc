@@ -48,6 +48,7 @@ struct stub {
   void return_to_chat() {}
   void message_menu(mux::ui::menu_facts) {}
   void menu_copy_link() {}
+  void menu_copy_url() {}
   void menu_save() {}
   void menu_react(std::string) {}
   void react(std::string, std::string) {}

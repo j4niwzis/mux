@@ -822,29 +822,22 @@ struct room_settings : nodes::Stack {
       fState.apply({.fillX = true, .grow = scene::axes::kY});
       parts.content.apply({.fillY = true, .grow = scene::axes::kX});
     }
-    // Narrow -- a phone's -- the tabs a row of their icons over the page, and
-    // the page all of the width: beside a column of 220, it had a hundred.
+    // Narrow -- a phone's -- the tabs a thin column of their icons beside the
+    // page, the page the rest of the width: beside a column of 220 it had a
+    // hundred. Their sizing as it is, only narrower -- flipped from a column
+    // to a row and back, the sizes clashed and the page was left empty.
     bool narrow = false;
     void layoutChildren() {
       if (const bool now = fState.contentBox().width() < 560.0f; now != narrow) {
         narrow = now;
         auto& [tabs, content] = parts;
-        fStack.direction = narrow ? nodes::Direction{nodes::direction::vertical{}} : nodes::Direction{nodes::direction::horizontal{}};
-        tabs.fStack.direction = narrow ? nodes::Direction{nodes::direction::horizontal{}} : nodes::Direction{nodes::direction::vertical{}};
-        tabs.apply(narrow ? scene::Spec{.fillX = true, .fillY = false, .width = 0.0f, .height = 44.0f}
-                          : scene::Spec{.fillX = false, .fillY = true, .width = 220.0f, .height = 0.0f});
+        tabs.apply({.width = narrow ? 60.0f : 220.0f,
+                    .padding = narrow ? scene::Margin{4.0f, 6.0f, 12.0f, 6.0f} : scene::Margin{4.0f, 12.0f, 12.0f, 12.0f}});
         auto& [general, security, roles, notifications, looks, advanced] = tabs.parts;
-        for (tab_row* one : {&general, &security, &roles, &notifications, &looks, &advanced}) {
+        for (tab_row* one : {&general, &security, &roles, &notifications, &looks, &advanced})
           one->parts.label.setVisible(!narrow);
-          one->apply(narrow ? scene::Spec{.fillX = false, .width = 44.0f} : scene::Spec{.fillX = true, .width = 0.0f});
-        }
-        content.apply(narrow ? scene::Spec{.fillX = true, .fillY = false, .grow = scene::axes::kY}
-                             : scene::Spec{.fillX = false, .fillY = true, .grow = scene::axes::kX});
-        // Laid out again, each: their flows written to, not told -- the tabs
-        // kept their column in a row of 44, only the first of them shown.
         tabs.invalidateLayout();
         content.invalidateLayout();
-        std::get<0>(content.fChildren).invalidateLayout();
         this->invalidateLayout();
       }
       this->nodes::Stack::layoutChildren();

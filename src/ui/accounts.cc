@@ -688,26 +688,18 @@ struct accounts_panel : closes_on_escape<Actions> {
       this->setHorizontal();
       fState.apply({.fillX = true, .grow = scene::axes::kY});
     }
-    // Narrow -- a phone's -- all of the width: the list of accounts alone;
-    // or, one chosen (or being added), its settings in its place -- its pages
-    // a row over the page shown -- and the header's arrow back to the list.
+    // Narrow -- a phone's -- one column at a time, all of the width, side by
+    // side as wide: the accounts (or a chosen one's pages, its settings), or
+    // the page chosen from them; the header's arrow a step back. Nothing of
+    // either column's sizing is changed -- the side as wide as the panel, the
+    // page growing into what the side leaves: flipped from column to row and
+    // back, the sizes clashed, the page had no width, and its buttons took no
+    // press.
     bool narrow = false;
     bool detail_up = false;
     void show_columns() {
-      const bool settings = narrow && detail_up;
-      fStack.direction = settings ? nodes::Direction{nodes::direction::vertical{}} : nodes::Direction{nodes::direction::horizontal{}};
-      parts.side.setVisible(!settings || parts.side.pages.visible());
+      parts.side.setVisible(!narrow || !detail_up);
       parts.main.setVisible(!narrow || detail_up);
-      parts.side.apply(!narrow    ? scene::Spec{.fillX = false, .fillY = true, .width = kListWidth, .autoSize = scene::axes::kNone}
-                       : settings ? scene::Spec{.fillX = true, .fillY = false, .autoSize = scene::axes::kY}
-                                  : scene::Spec{.fillX = true, .fillY = true, .autoSize = scene::axes::kNone});
-      // The page: across all of it, and the rest of the height, where they
-      // are stacked -- growing across in a column, it had no width, what it
-      // held stood out of it, and its buttons took no press.
-      parts.main.apply(settings ? scene::Spec{.fillX = true, .fillY = false, .grow = scene::axes::kY}
-                                : scene::Spec{.fillX = false, .fillY = true, .grow = scene::axes::kX});
-      parts.side.invalidateLayout();
-      parts.main.invalidateLayout();
       this->invalidateLayout();
     }
     void layoutChildren() {
@@ -715,6 +707,7 @@ struct accounts_panel : closes_on_escape<Actions> {
         narrow = now;
         this->show_columns();
       }
+      parts.side.apply({.width = narrow ? fState.contentBox().width() : kListWidth});
       this->nodes::Stack::layoutChildren();
     }
   };
@@ -878,6 +871,8 @@ struct accounts_panel : closes_on_escape<Actions> {
     selected = config::address_of(one);
     this->show_pages(true);
     this->show_page(0, one, now);
+    // Narrow: its settings -- its pages -- first, not the first of them.
+    this->show_detail(false);
   }
   // Narrow, the page beside the list in its place, or the list back.
   void show_detail(bool up) {
@@ -887,7 +882,12 @@ struct accounts_panel : closes_on_escape<Actions> {
   }
   // Narrow, a step back of its own before the list's: none -- the arrow
   // goes from an account's settings to the list, as it does wide.
-  [[nodiscard]] bool step_back() { return false; }
+  [[nodiscard]] bool step_back() {
+    if (!parts.body.narrow || !parts.body.detail_up)
+      return false;
+    this->show_detail(false);  // from a page to the account's pages
+    return true;
+  }
 
   // Adding an account, beside the list.
   // The account list, or the chosen account's pages, down the side.

@@ -1528,26 +1528,21 @@ class model {
   }
   void on(const change::reaction_changed& one) {
     if (message* kept = message_in(of(one.in), one.id)) {
-      // One emoji, however written: some clients add the variation selector
-      // (U+FE0F) to it and some do not, and the one reaction stood as two.
-      std::string key = one.key;
-      for (std::size_t at; (at = key.find("\xEF\xB8\x8F")) != std::string::npos;)
-        key.erase(at, 3);
-      auto& who = kept->reactions[key];
+      auto& who = kept->reactions[one.key];
       std::erase_if(kept->reaction_events, [&](const message::reaction_event& each) {
-        return each.key == key && each.who == one.who;
+        return each.key == one.key && each.who == one.who;
       });
       if (one.added) {
         who.insert(one.who);
         if (!one.event.empty())
-          kept->reaction_events.push_back({one.event, key, one.who, one.at});
+          kept->reaction_events.push_back({one.event, one.key, one.who, one.at});
         // Another's reaction to the user's own, as it happened: for them.
         if (one.live && kept->outgoing && one.who != one.in.account.address && !one.event.empty())
           keep_mark(of(one.in), of(one.in).unread_reactions, {one.event, one.id, one.at});
       } else {
         who.erase(one.who);
         if (who.empty())
-          kept->reactions.erase(key);
+          kept->reactions.erase(one.key);
       }
     }
   }

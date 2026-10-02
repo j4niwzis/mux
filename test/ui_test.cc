@@ -112,7 +112,7 @@ struct stub {
   void manage_forum() {}
   void explore_space(std::string, std::string = {}) {}
   void join_directory_room(std::string, std::string) {}
-  void create_room(std::string, std::string, bool, std::string, bool = true) {}
+  void create_room(std::string, std::string, bool, std::string, bool = true, bool = false) {}
   void find_people(std::string) {}
   void open_packs() {}
   void toggle_threads() {}

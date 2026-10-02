@@ -60,11 +60,17 @@ struct kept_file {
   std::map<std::string, origin> origins;  // session id -> where it came from
   // Each session's message indices read, and the event each was: the same
   // index in another event is a replay.
-  std::map<std::string, std::map<std::uint32_t, std::string>> indices;
+  struct read_index {
+    std::uint32_t index = 0;
+    std::string event;
+    friend consteval auto json_schema(knot::type<read_index>) { return knot::schema<read_index>(); }
+  };
+  std::map<std::string, std::vector<read_index>> indices;
   // The rooms known to be encrypted: never plain again.
   // Optional, as every field added after the store was first written: knot
   // requires the rest, and a store kept before it came would not open.
-  std::optional<std::set<std::string, std::less<>>> encrypted_rooms;
+  // A set, as an object knot reads: each room to true.
+  std::optional<std::map<std::string, bool, std::less<>>> encrypted_rooms;
   // Each user's master cross-signing key, as first seen (trust on first
   // use): a server that swaps it later does not make its own devices theirs.
   std::optional<std::map<std::string, std::string>> masters;  // optional, as encrypted_rooms
@@ -92,7 +98,7 @@ struct kept_file {
   // Optional, as encrypted_rooms.
   std::optional<std::string> backup_version;
   std::optional<std::string> backup_key;
-  std::optional<std::set<std::string, std::less<>>> backed_up;
+  std::optional<std::map<std::string, bool, std::less<>>> backed_up;  // a set, as encrypted_rooms
   friend consteval auto json_schema(knot::type<kept_file>) { return knot::schema<kept_file>(); }
 };
 
@@ -1273,7 +1279,7 @@ class olm_machine {
   void remember_encrypted(std::string_view room) {
     if (!kept_.encrypted_rooms)
       kept_.encrypted_rooms.emplace();
-    if (kept_.encrypted_rooms->emplace(room).second)
+    if (kept_.encrypted_rooms->emplace(room, true).second)
       this->save();
   }
   [[nodiscard]] const std::optional<std::string>& to_device_since() const { return kept_.to_device_since; }
@@ -1696,7 +1702,7 @@ class olm_machine {
   }
   void backed_up(const std::vector<std::string>& ids) {
     auto& all = kept_.backed_up ? *kept_.backed_up : kept_.backed_up.emplace();
-    all.insert(ids.begin(), ids.end());
+    all.insert_range(ids | std::views::transform([](const std::string& id) { return std::pair(id, true); }));
     this->save();
   }
 
@@ -1747,7 +1753,8 @@ class olm_machine {
       const auto clear = session->decrypt(*message);
       // The same index in another event: a replay, refused.
       auto& seen = kept_.indices[*content.session_id];
-      if (const auto before = seen.find(clear.message_index); before != seen.end() && before->second != event_id)
+      const auto before = std::ranges::find(seen, clear.message_index, &kept_file::read_index::index);
+      if (before != seen.end() && before->event != event_id)
         return std::nullopt;
       const std::string text(clear.plaintext.begin(), clear.plaintext.end());
       auto read = knot::try_read<megolm_payload>(text);
@@ -1771,8 +1778,10 @@ class olm_machine {
       // Kept with the next save, not one of its own: a whole store written
       // for each message read was a cost any busy room could drive. Saved
       // at the next sync at the latest (flush).
-      if (seen.emplace(clear.message_index, event_id).second)
+      if (before == seen.end()) {
+        seen.push_back({clear.message_index, std::string(event_id)});
         unsaved_ = true;
+      }
       return decrypted{std::move(*read), origin->second.cross_signed.value_or(false),
                        origin->second.imported.value_or(false) ? std::optional<std::string>(origin->second.sender_key)
                                                                : std::nullopt};

@@ -227,6 +227,9 @@ struct stub {
   void flip_only_verified() {}
   void accept_identity(mux::conversation_id) {}
   void reset_identity() {}
+  void reset_backup() {}
+  void delete_backup() {}
+  void sign_out_unverified() {}
   void proxy_kind(mux::config::proxy_kind_t) {}
   void choose_account_proxy(int) {}
   void manage_proxies() {}

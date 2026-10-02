@@ -965,6 +965,11 @@ struct cross_signing {
 struct reset_identity {
   friend bool operator==(reset_identity, reset_identity) = default;
 };
+// One's own sessions not verified, signed out: the password, as the server
+// asks for it.
+struct sign_out_unverified {
+  friend bool operator==(sign_out_unverified, sign_out_unverified) = default;
+};
 // Cross-signing taken back with the recovery key.
 struct recovery {
   friend bool operator==(recovery, recovery) = default;
@@ -973,7 +978,7 @@ struct recovery {
 using passphrase_for_t = splice::variant<passphrase_for::unlock, passphrase_for::encrypt, passphrase_for::change,
                                          passphrase_for::decrypt, passphrase_for::export_keys, passphrase_for::import_keys,
                                          passphrase_for::cross_signing, passphrase_for::recovery,
-                                         passphrase_for::reset_identity>;
+                                         passphrase_for::reset_identity, passphrase_for::sign_out_unverified>;
 
 // Its own choice, if it made one; else as every account's.
 [[nodiscard]] inline const std::optional<bool>& send_typing_of(const account_t& one) {

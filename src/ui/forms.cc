@@ -98,6 +98,12 @@ struct passphrase_box : nodes::Stack {
             "lost every verified session and the recovery key. Your server asks for your account's password.",
             "Reset", true, false};
   }
+  static constexpr words words_of(config::passphrase_for::sign_out_unverified) {
+    return {"Sign out unverified sessions",
+            "Every session of yours that is not verified -- not cross-signed, nor verified by emoji here -- is "
+            "signed out. Your server asks for your account's password.",
+            "Sign out", true, false};
+  }
   static constexpr words words_of(config::passphrase_for::recovery) {
     return {"Restore with the recovery key",
             "The recovery key written down when cross-signing was set up: with it, this device takes your "

@@ -145,6 +145,13 @@ class account {
   void set_only_verified(bool on);
   // A person's reset identity accepted: Element's "Withdraw verification".
   void accept_identity(std::string user);
+  // Element's Secure Backup: the key backup made anew (the old one deleted,
+  // a new recovery key shown), or deleted.
+  void reset_backup();
+  void delete_backup();
+  // Element's "Sign out unverified sessions": one's own not cross-signed,
+  // nor verified by emoji here.
+  void sign_out_unverified(std::string password);
   // Element's toasts, as notices once a run: this session not verified --
   // others cannot be sure what it sends is the user's; and other sessions of
   // the user's that are not ("New login. Was this you?").

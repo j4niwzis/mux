@@ -460,6 +460,9 @@ struct account_sessions : nodes::Stack {
   using set_up_row = row_item<ask<Actions, &Actions::setup_cross_signing>>;
   using restore_row = row_item<ask<Actions, &Actions::restore_cross_signing>>;
   using reset_row = row_item<ask<Actions, &Actions::reset_identity>>;
+  using reset_backup_row = row_item<ask<Actions, &Actions::reset_backup>>;
+  using delete_backup_row = row_item<ask<Actions, &Actions::delete_backup>>;
+  using sign_out_unverified_row = row_item<ask<Actions, &Actions::sign_out_unverified>>;
   struct parts_t {
     nodes::Text verification_title = section_title("DEVICE VERIFICATION");
     nodes::Text verification_note{"To verify device identity and grant access to encrypted messages: cross-signing. "
@@ -471,12 +474,17 @@ struct account_sessions : nodes::Stack {
     // Element's last resort: new cross-signing keys, the dialog saying what
     // it undoes.
     reset_row reset;
+    // Element's Secure Backup: made anew, or deleted.
+    reset_backup_row reset_backup;
+    delete_backup_row delete_backup;
     nodes::Text title = section_title("SESSIONS");
     nodes::Text note{"Loading the sessions…", 13.0f, dim_colour};
     nodes::Text current_title = section_title("CURRENT SESSION");
     std::vector<session_row> current;
     nodes::Text others_title = section_title("OTHER SESSIONS");
     std::vector<session_row> rows;
+    // Element's: every session of one's own not verified, signed out.
+    sign_out_unverified_row sign_out_unverified;
     password_row password;
     widgets::Button<sign_out_rest> rest;
     widgets::Button<reload> refresh;
@@ -487,6 +495,9 @@ struct account_sessions : nodes::Stack {
       : actions(a), parts{.set_up = set_up_row("Set up cross-signing\u2026", {a}),
                           .restore = restore_row("Restore with the recovery key\u2026", {a}),
                           .reset = reset_row("Reset your identity\u2026", {a}),
+                          .reset_backup = reset_backup_row("Reset the key backup", {a}),
+                          .delete_backup = delete_backup_row("Delete the key backup", {a}),
+                          .sign_out_unverified = sign_out_unverified_row("Sign out unverified sessions\u2026", {a}),
                           .rest = widgets::Button<sign_out_rest>("Sign out of all other sessions", {this}),
                           .refresh = widgets::Button<reload>("Refresh", {a})} {
     this->setGap(8.0f);
@@ -515,6 +526,8 @@ struct account_sessions : nodes::Stack {
         backup ? "\u2713 on" : "\u26A0 off"));
     parts.set_up.setVisible(!cross_signing);
     parts.restore.setVisible(!cross_signing);
+    parts.reset_backup.setVisible(cross_signing);
+    parts.delete_backup.setVisible(backup);
     this->invalidateLayout();
   }
   // The sessions, as the server listed them: this one first, the others by

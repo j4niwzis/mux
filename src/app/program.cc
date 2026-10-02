@@ -478,6 +478,9 @@ struct app : kept_settings {
   void apply(const request::flip_account_receipts&);
   void apply(const request::flip_only_verified&);
   void apply(const request::reset_identity&);
+  void apply(const request::reset_backup&);
+  void apply(const request::delete_backup&);
+  void apply(const request::sign_out_unverified&);
   void apply(const request::accept_identity& one);
   void apply(const request::set_account_colour& one);
   void apply(const request::flip_account_strip&);

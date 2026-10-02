@@ -637,6 +637,15 @@ struct network {
   void restore_cross_signing(const mux::account_id& by, std::string recovery) {
     this->with_matrix(by, [recovery = std::move(recovery)](matrix_account& account) { account.restore_cross_signing(recovery); });
   }
+  void reset_backup(const mux::account_id& by) {
+    this->with_matrix(by, [](matrix_account& account) { account.reset_backup(); });
+  }
+  void delete_backup(const mux::account_id& by) {
+    this->with_matrix(by, [](matrix_account& account) { account.delete_backup(); });
+  }
+  void sign_out_unverified(const mux::account_id& by, std::string password) {
+    this->with_matrix(by, [password = std::move(password)](matrix_account& account) { account.sign_out_unverified(password); });
+  }
   void setup_cross_signing(const mux::account_id& by, std::string password, bool reset = false) {
     this->with_matrix(by, [password = std::move(password), reset](matrix_account& account) { account.setup_cross_signing(password, reset); });
   }

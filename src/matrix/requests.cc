@@ -1698,3 +1698,82 @@ void account<Sink>::fetch_members(std::string room) {
 }
 
 }  // namespace mux::matrix
+
+namespace mux::matrix {
+template <class Sink>
+void account<Sink>::reset_backup() {
+  this->spawn_guarded([this] {
+    if (!crypto_ || !api_)
+      return;
+    const auto keys = crypto_->cross_signing_keys();
+    if (!keys) {
+      sink_(change::refused{id_, "Not reset: this session has no cross-signing keys. Set up cross-signing, or restore "
+                                 "it with your recovery key, first."});
+      return;
+    }
+    if (const auto old = crypto_->backup())
+      (void)perform(*api_, loom::cs::delete_room_keys_version{.version = old->first});
+    crypto_->forget_backup();
+    const auto backup_secret = this->make_backup(*keys);
+    const auto recovery = this->store_secrets(*keys, backup_secret);
+    sink_(change::notice{id_, "Key backup reset",
+                         recovery ? std::format("A new key backup holds your room keys from now. Your cross-signing keys and "
+                                                "its key are kept on your server under this new recovery key -- the old "
+                                                "one no longer opens them. Write it down:\n\n{}",
+                                                *recovery)
+                                  : std::string("A new key backup holds your room keys from now.")});
+  });
+}
+template <class Sink>
+void account<Sink>::delete_backup() {
+  this->spawn_guarded([this] {
+    if (!crypto_ || !api_)
+      return;
+    const auto old = crypto_->backup();
+    if (!old) {
+      sink_(change::refused{id_, "This session writes to no key backup."});
+      return;
+    }
+    if (auto gone = perform(*api_, loom::cs::delete_room_keys_version{.version = old->first}); !gone) {
+      sink_(change::refused{id_, "The key backup was not deleted: " + gone.error().said()});
+      return;
+    }
+    crypto_->forget_backup();
+    sink_(change::notice{id_, "Key backup deleted",
+                         "Your room keys are no longer backed up on your server: a session you sign in to anew will not "
+                         "read what was said before it."});
+  });
+}
+template <class Sink>
+void account<Sink>::sign_out_unverified(std::string password) {
+  this->spawn_guarded([this, password = std::move(password)] {
+    if (!crypto_ || !api_)
+      return;
+    loom::cs::query_keys ask;
+    ask.body.device_keys.emplace(id_.address, std::vector<std::string>{});
+    auto got = perform(*api_, ask);
+    if (!got || !got->device_keys)
+      return;
+    const auto mine = got->device_keys->find(id_.address);
+    if (mine == got->device_keys->end())
+      return;
+    const auto verified_here = crypto_->verified_keys(id_.address);
+    std::vector<std::string> unverified;
+    for (const auto& [id, info] : mine->second) {
+      if (id == crypto_->device_id())
+        continue;
+      const auto curve = info.keys.find("curve25519:" + id);
+      const auto identity = curve == info.keys.end()
+                                ? std::nullopt
+                                : crypto::device_of(*got, id_.address, curve->second, crypto_->pinned_master(id_.address));
+      if (!identity || !(identity->cross_signed || std::ranges::contains(verified_here, identity->ed25519)))
+        unverified.push_back(id);
+    }
+    if (unverified.empty()) {
+      sink_(change::notice{id_, "Sign out unverified sessions", "Every other session of yours is verified."});
+      return;
+    }
+    this->sign_out_sessions(std::move(unverified), password);
+  });
+}
+}  // namespace mux::matrix

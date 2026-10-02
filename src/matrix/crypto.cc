@@ -1742,6 +1742,13 @@ class olm_machine {
   }
   // The key backup written to: its version and private key, sealed; the
   // sessions not in it yet; and those that now are.
+  // The key backup let go of: deleted on the server, nothing kept of it.
+  void forget_backup() {
+    kept_.backup_version.reset();
+    kept_.backup_key.reset();
+    kept_.backed_up.reset();
+    this->save();
+  }
   void keep_backup(const std::string& version, const std::string& secret_b64) {
     kept_.backup_version = version;
     kept_.backup_key = mux::bytes::base64_text(mux::vault::detail::seal(key_, mux::bytes::of(secret_b64), "key backup"));

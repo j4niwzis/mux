@@ -1135,6 +1135,11 @@ void app::apply(const request::give_passphrase& one) {
               net->setup_cross_signing(*keys_of, one.current);
             root().close_passphrase();
           },
+          [&](mux::config::passphrase_for::sign_out_unverified) {
+            if (keys_of)
+              net->sign_out_unverified(*keys_of, one.current);
+            root().close_passphrase();
+          },
           [&](mux::config::passphrase_for::reset_identity) {
             if (keys_of)
               net->setup_cross_signing(*keys_of, one.current, true);
@@ -1168,6 +1173,27 @@ void app::apply(const request::setup_cross_signing&) {
   this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
     keys_of = id_of(account);
     root().ask_passphrase(mux::config::passphrase_for::cross_signing{});
+  });
+}
+// Element's Secure Backup and Sessions: the backup made anew or deleted,
+// for the account whose page is open; one's unverified sessions signed out,
+// the password asked first.
+void app::apply(const request::reset_backup&) {
+  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+    if (const auto by = id_of(account); by && !shared.demo())
+      net->reset_backup(*by);
+  });
+}
+void app::apply(const request::delete_backup&) {
+  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+    if (const auto by = id_of(account); by && !shared.demo())
+      net->delete_backup(*by);
+  });
+}
+void app::apply(const request::sign_out_unverified&) {
+  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+    keys_of = id_of(account);
+    root().ask_passphrase(mux::config::passphrase_for::sign_out_unverified{});
   });
 }
 void app::apply(const request::reset_identity&) {

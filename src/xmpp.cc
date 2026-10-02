@@ -218,6 +218,9 @@ class account {
   void tell_trust(std::string) {}
   void set_only_verified(bool) {}
   void accept_identity(std::string) {}
+  void reset_backup() {}
+  void delete_backup() {}
+  void sign_out_unverified(std::string) {}
   void tell_devices(std::string) {}
   void list_packs(std::optional<std::string>) {}
   void list_threads(std::string) {}

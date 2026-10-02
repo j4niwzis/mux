@@ -214,9 +214,15 @@ void app::apply(const request::list_marks& one) {
   // In the timeline, in a thread, or aside.
   const auto find = [&](const std::string& id) -> const mux::message* { return mux::ui::held_message(*chat, id); };
   std::vector<mux::ui::mark_entry> entries;
+  // What was kept with the marks, for those not held now.
+  const auto kept = shared.demo() ? std::map<std::string, mux::message>{} : message_store::marked(*chosen);
   for (const mux::unread_mark& mark : marks) {
     mux::ui::mark_entry entry{.event = mark.event};
-    if (const mux::message* said = find(mark.target)) {
+    const mux::message* said = find(mark.target);
+    if (said == nullptr)
+      if (const auto found = kept.find(mark.target); found != kept.end())
+        said = &found->second;
+    if (said != nullptr) {
       entry.said = *said;
       if (const auto reacted = std::ranges::find(said->reaction_events, mark.event, &mux::message::reaction_event::event);
           reacted != said->reaction_events.end()) {

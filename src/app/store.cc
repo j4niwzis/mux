@@ -139,6 +139,23 @@ class message_store {
     append(in, knot::to_json_string(store_file::message_line{.id = id, .gone = true}));
   }
 
+  // A marked message -- one mentioning this user, one of theirs reacted to --
+  // kept apart as the mark is made, and never pruned with the history: the
+  // list of marks shows it whatever else was let go, and needs nothing from
+  // the server. From any thread.
+  static void keep_marked(const mux::conversation_id& in, const mux::message& one) {
+    const auto where = kept_of("marked", in, ".jsonl");
+    std::error_code failed;
+    std::filesystem::create_directories(where.parent_path(), failed);
+    std::lock_guard held(file_lock());
+    std::ofstream(where, std::ios::binary | std::ios::app) << line_of(one) << '\n';
+  }
+  static std::map<std::string, mux::message> marked(const mux::conversation_id& in) {
+    std::map<std::string, mux::message> all;
+    read_lines(kept_of("marked", in, ".jsonl"), in, all);
+    return all;
+  }
+
   // All of a chat's messages kept, by id. From any thread: a worker's.
   static std::map<std::string, mux::message> everything(const mux::conversation_id& in) {
     auto all = read(in);

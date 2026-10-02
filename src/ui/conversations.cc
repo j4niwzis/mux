@@ -2164,6 +2164,12 @@ struct conversations_screen : nodes::Stack {
             timeline.setCurrent(std::max(0.0f, timeline.current() + (above ? -page : page)));
           }
         }
+      } else if (const message* held = held_message(*one, *jumping_to); held && held->thread) {
+        // Come with the context, but as an answer in a thread: kept with its
+        // thread, never in the timeline -- paged back for, the whole chat was
+        // fetched to the beginning and it was not found. Its thread opened.
+        actions->open_thread(*held->thread);
+        this->stop_jump();
       } else if (is_matrix(chosen->account.speaks) && !jump_paging) {
         // Not here: a window of the history around it, from the server --
         // not all of it from here to there. Where that does not bring it,

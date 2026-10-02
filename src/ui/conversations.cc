@@ -701,6 +701,9 @@ struct conversations_screen : nodes::Stack {
         parts.no_chats.apply({.margin = {12.0f, 16.0f, 0.0f, 16.0f}});
         parts.folders.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {0.0f, 8.0f, 6.0f, 8.0f}});
         parts.list.apply({.fillX = true, .grow = scene::axes::kY});
+        // Chats change places by their newest: the view stays at its offset,
+        // not following the row it showed first down the list.
+        parts.list.setHoldsInView(false);
         std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
       }
     };

@@ -792,12 +792,12 @@ struct actions {
   }
   void set_link_previews(mux::choice_level_t level, std::optional<bool> show) {
     requests.emplace_back(request::set_link_previews{level, show});
+  }
   void set_previews_direct(mux::choice_level_t level, std::optional<bool> direct) {
     requests.emplace_back(request::set_previews_direct{level, direct});
   }
   void set_typing_sent(mux::choice_level_t level, std::optional<bool> send) {
     requests.emplace_back(request::set_typing_sent{level, send});
-  }
   }
   void set_receipts_shown(mux::choice_level_t level, std::optional<bool> show) {
     requests.emplace_back(request::set_receipts_shown{level, show});

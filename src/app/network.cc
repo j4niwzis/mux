@@ -551,6 +551,18 @@ struct network {
             one.account);
     });
   }
+  // A person's reset identity accepted ("Withdraw verification").
+  void accept_identity(const mux::account_id& by, std::string user) {
+    loop.post([this, by, user = std::move(user)] {
+      for (auto& one : accounts)
+        splice::visit(
+            [&](auto& account) {
+              if (account->id() == by)
+                account->accept_identity(user);
+            },
+            one.account);
+    });
+  }
   // Room keys to verified sessions only, or not: told to the account.
   void set_only_verified(const mux::account_id& by, bool on) {
     loop.post([this, by, on] {

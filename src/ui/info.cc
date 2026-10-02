@@ -260,6 +260,11 @@ struct person_card : nodes::Stack {
     }
   };
   // Verified by comparing emoji with each of their devices that answers.
+  struct accept_them {
+    Actions* actions;
+    conversation_id who;
+    void operator()() const { actions->accept_identity(who); }
+  };
   struct verify_them {
     Actions* actions = nullptr;
     conversation_id who;
@@ -275,6 +280,9 @@ struct person_card : nodes::Stack {
     id_line id;
     action_tile<message_them> message;
     action_tile<verify_them> verify;
+    // Their identity reset: taken as theirs now, unverified (Element's
+    // "Withdraw verification").
+    action_tile<accept_them> accept;
     action_tile<to_them> remove;
     action_tile<to_them> ban;
     // Their sessions, as Element lists them on a person: each with its
@@ -289,10 +297,11 @@ struct person_card : nodes::Stack {
               .id = id_line(key, ""),
               .message = action_tile<message_them>("Message", icon::send{}, {a, conversation_id{account, key}}),
               .verify = action_tile<verify_them>("Verify with emoji", icon::check{}, {a, conversation_id{account, key}}),
+              .accept = action_tile<accept_them>("Withdraw verification", icon::close{}, {a, conversation_id{account, key}}),
               .remove = action_tile<to_them>("Remove from room", icon::leave{}, {a, room_action::kick{key}}),
               .ban = action_tile<to_them>("Ban from room", icon::close{}, {a, room_action::ban{key}})} {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}});
-    for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.message, &parts.verify, &parts.remove, &parts.ban})
+    for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.message, &parts.verify, &parts.accept, &parts.remove, &parts.ban})
       each->apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
     // Offered only where the user may: no button for what they cannot do.
     parts.remove.setVisible(facts.may_kick);
@@ -309,6 +318,9 @@ struct person_card : nodes::Stack {
       line.setElided(true);
       line.apply({.fillX = true, .margin = {2.0f, 22.0f, 0.0f, 22.0f}});
     }
+    parts.accept.setVisible(facts.trust && splice::visit(splice::overloaded{[](trust::changed) { return true; },
+                                                                            [](const auto&) { return false; }},
+                                                         *facts.trust));
     // Verify where they are not, or not any more: not for one verified.
     parts.verify.setVisible(!facts.trust || !splice::visit(splice::overloaded{[](trust::verified) { return true; },
                                                                               [](const auto&) { return false; }},

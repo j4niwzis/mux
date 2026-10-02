@@ -225,6 +225,7 @@ struct stub {
   void account_page(int) {}
   void flip_account_receipts() {}
   void flip_only_verified() {}
+  void accept_identity(mux::conversation_id) {}
   void proxy_kind(mux::config::proxy_kind_t) {}
   void choose_account_proxy(int) {}
   void manage_proxies() {}

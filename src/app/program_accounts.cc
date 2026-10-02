@@ -686,6 +686,10 @@ void app::apply(const request::refresh_sessions&) {
   this->with_chosen_account([&](accounts&, mux::config::account_t& account) { net->list_sessions(id_of(account)); });
 }
 
+void app::apply(const request::accept_identity& one) {
+  if (!shared.demo())
+    net->accept_identity(one.who.account, one.who.id);
+}
 void app::apply(const request::flip_only_verified&) {
   this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
     auto* kept = mux::config::only_verified_in(account);

@@ -1801,6 +1801,17 @@ class olm_machine {
     const auto found = kept_.masters->find(user);
     return found == kept_.masters->end() ? std::nullopt : std::optional<std::string>(found->second);
   }
+  // A user's reset identity taken as theirs now (Element's "Withdraw
+  // verification"): their new master key pinned in the old one's place, and
+  // what was verified of them dropped -- it was of the old one.
+  void accept_master(const std::string& user, const std::string& key) {
+    (kept_.masters ? *kept_.masters : kept_.masters.emplace()).insert_or_assign(user, key);
+    if (kept_.verified_masters)
+      kept_.verified_masters->erase(user);
+    if (kept_.verified)
+      kept_.verified->erase(user);
+    this->save();
+  }
   void pin_master(const std::string& user, const std::string& key) {
     if (!kept_.masters)
       kept_.masters.emplace();

@@ -477,6 +477,7 @@ struct app : kept_settings {
   }
   void apply(const request::flip_account_receipts&);
   void apply(const request::flip_only_verified&);
+  void apply(const request::accept_identity& one);
   void apply(const request::set_account_colour& one);
   void apply(const request::flip_account_strip&);
   void apply(const request::open_replacement&);

@@ -217,6 +217,7 @@ class account {
   void search_people(std::string) {}
   void tell_trust(std::string) {}
   void set_only_verified(bool) {}
+  void accept_identity(std::string) {}
   void tell_devices(std::string) {}
   void list_packs(std::optional<std::string>) {}
   void list_threads(std::string) {}

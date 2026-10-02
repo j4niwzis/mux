@@ -1811,3 +1811,20 @@ void account<Sink>::set_only_verified(bool on) {
   how_.only_verified = on;
 }
 }  // namespace mux::matrix
+
+namespace mux::matrix {
+template <class Sink>
+void account<Sink>::accept_identity(std::string user) {
+  if (!api_ || !crypto_)
+    return;
+  loom::cs::query_keys ask;
+  ask.body.device_keys.emplace(user, std::vector<std::string>{});
+  auto got = perform(*api_, ask);
+  const auto master = got ? crypto::master_of(*got, user) : std::nullopt;
+  if (!master)
+    return;
+  crypto_->accept_master(user, *master);
+  identity_changed_.erase(user);
+  this->tell_trust(std::move(user));
+}
+}  // namespace mux::matrix

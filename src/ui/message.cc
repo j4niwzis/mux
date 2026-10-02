@@ -1633,9 +1633,13 @@ struct message_bubble : nodes::Stack {
                                     (said.came_plain || !in.encrypted_since || said.at >= *in.encrypted_since);
     // And one that came encrypted from a device its sender did not
     // cross-sign: the server may have made that device up.
-    const std::string warning = plain_in_encrypted ? std::string("not encrypted \u00b7 ")
-                                : said.encrypted && said.unverified ? std::string("unverified device \u00b7 ")
-                                                                    : std::string();
+    // Element's warnings, shortened to fit beside the time: not encrypted;
+    // encrypted by a device not verified by its owner; its authenticity not
+    // guaranteed on this device (its key from the backup or an import).
+    const std::string warning = plain_in_encrypted                        ? std::string("not encrypted \u00b7 ")
+                                : said.encrypted && said.unverified       ? std::string("not verified by its owner \u00b7 ")
+                                : said.encrypted && said.unauthenticated ? std::string("authenticity not guaranteed \u00b7 ")
+                                                                          : std::string();
     std::string when = warning + mark_of(said) + clock_of(said.at);
     when += splice::visit(splice::overloaded{[](const delivery::sending&) { return " · sending"; },
                                   [](const delivery::failed&) { return " · not sent"; },

@@ -64,6 +64,7 @@ struct message_line {
   // And from a device its sender did not cross-sign.
   std::optional<bool> unverified;
   std::optional<bool> came_plain;
+  std::optional<bool> unauthenticated;
   // Its reactions: each by its key and who sent it, and its own event and
   // when, where known -- read back from the disk, a message had none.
   struct reaction_line {
@@ -366,6 +367,7 @@ class message_store {
       one.encrypted = o.encrypted.value_or(false);
       one.unverified = o.unverified.value_or(false);
       one.came_plain = o.came_plain.value_or(false);
+      one.unauthenticated = o.unauthenticated.value_or(false);
       one.redacted = o.redacted.value_or(false);
       one.outgoing = o.out.value_or(false);
       one.service = o.service.value_or(false);
@@ -445,6 +447,7 @@ class message_store {
         .encrypted = store_file::flag(one.encrypted),
         .unverified = store_file::flag(one.unverified),
         .came_plain = store_file::flag(one.came_plain),
+        .unauthenticated = store_file::flag(one.unauthenticated),
     };
     if (!one.album.empty()) {
       line.album.emplace();

@@ -329,6 +329,8 @@ struct message {
   // Came in the clear, live, into a room known then to be encrypted: marked
   // "not encrypted" whatever time it says it was sent at.
   bool came_plain = false;
+  // Its key from the backup or an import: its authenticity not guaranteed.
+  bool unauthenticated = false;
   bool outgoing = false;
   // Not something said but something done -- someone joined, the room was
   // renamed, an event nothing here reads -- shown as a line of its own in
@@ -1132,6 +1134,10 @@ struct message_encrypted {
   std::string id;
   // From a device its sender cross-signed.
   bool verified = false;
+  // Read with a key that came from the backup or an import, not from its
+  // sender: its authenticity cannot be guaranteed on this device (Element's
+  // words).
+  bool imported = false;
 };
 
 struct message_redacted {
@@ -1625,6 +1631,7 @@ class model {
     if (message* kept = message_in(of(one.in), one.id)) {
       kept->encrypted = true;
       kept->unverified = !one.verified;
+      kept->unauthenticated = one.imported;
     }
   }
   void on(const change::message_edited& one) {

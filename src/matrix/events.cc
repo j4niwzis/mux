@@ -466,7 +466,7 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
         ~forget_reference() { kept.reset(); }
       } const forgetting{outer_reference_};
       this->event(in, made, where, true);
-      sink_(change::message_encrypted{in, one.event_id, clear->verified});
+      sink_(change::message_encrypted{in, one.event_id, clear->verified, clear->imported_sender_key.has_value()});
       return;
     }
   }
@@ -475,7 +475,9 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
                                       .id = one.event_id,
                                       .sender = one.sender,
                                       .at = at,
-                                      .body = {"🔒 an encrypted message (not yet readable here)", std::nullopt},
+                                      // Element's words, for a key not here yet: it may come
+                                      // (a room key, the backup), and the message is read then.
+                                      .body = {"🔒 Waiting for this message, this may take a while.", std::nullopt},
                                       .outgoing = one.sender == id_.address},
                               where});
 }

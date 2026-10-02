@@ -289,10 +289,10 @@ if(MUX_UI)
     ${mux_video_libraries})
   add_executable(mux src/main.cc)
   # The program's own units -- its many partitions, each importing all of
-  # the UI and the accounts -- two at a time at most: four at once ran a
+  # the UI and the accounts -- one at a time: four at once ran a
   # 16 GB runner out of memory near the end of the build, and the runner
   # was shut down ("received a shutdown signal") with nothing said.
-  set_property(GLOBAL APPEND PROPERTY JOB_POOLS mux_heavy=2)
+  set_property(GLOBAL APPEND PROPERTY JOB_POOLS mux_heavy=1)
   set_property(TARGET mux PROPERTY JOB_POOL_COMPILE mux_heavy)
   # Outside a release build, with walks erased: the big subtrees' tables and
   # walks each in a unit of its own, not all in scene.cc.

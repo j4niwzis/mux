@@ -1266,6 +1266,12 @@ struct history_position {
   conversation_id in;
   std::optional<std::string> from;
 };
+// An event the server says is not there -- not found, or not this user's
+// to see: the marks on it let go, for nothing will ever show it.
+struct event_missing {
+  conversation_id in;
+  std::string id;
+};
 
 }  // namespace change
 
@@ -1273,7 +1279,7 @@ using change_t = splice::variant<change::message_encrypted, change::connection_c
                               change::conversation_removed,
                               change::presence_changed, change::message_added, change::message_edited,
                               change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed,
-                              change::typing_changed, change::history_position, change::members_changed,
+                              change::typing_changed, change::history_position, change::event_missing, change::members_changed,
                               change::session_given, change::avatar_loaded, change::receipts_changed,
                               change::window_opened, change::window_extended, change::media_progress,
                               change::room_created, change::preview_loaded, change::devtools_text,
@@ -1587,6 +1593,10 @@ class model {
   // was with all it said and its time, marked; else it is taken out.
   void on(const change::message_redacted& one) {
     conversation& where = of(one.in);
+    // A mark on the event taken back -- a reaction to the user's own,
+    // removed where the message it was on is not here to match it: gone too.
+    for (auto* marks : {&where.unread_reactions, &where.unread_mentions})
+      std::erase_if(*marks, [&](const unread_mark& mark) { return mark.event == one.id; });
     if (show_deleted) {
       if (message* kept = message_in(where, one.id))
         kept->redacted = true;
@@ -1625,6 +1635,12 @@ class model {
   void on(const change::reaction_changed& one) {
     if (message* kept = message_in(of(one.in), one.id)) {
       auto& who = kept->reactions[one.key];
+      // Taken back: its mark too -- a reaction changed for another was
+      // counted twice by the heart, the one taken back still in it.
+      if (!one.added)
+        for (const message::reaction_event& each : kept->reaction_events)
+          if (each.key == one.key && each.who == one.who)
+            std::erase_if(of(one.in).unread_reactions, [&](const unread_mark& mark) { return mark.event == each.event; });
       std::erase_if(kept->reaction_events, [&](const message::reaction_event& each) {
         return each.key == one.key && each.who == one.who;
       });
@@ -1713,6 +1729,14 @@ class model {
   }
   void on(const change::typing_changed& one) { of(one.in).typing = one.who; }
   void on(const change::history_position& one) { of(one.in).history_from = one.from; }
+  void on(const change::event_missing& one) {
+    conversation& where = of(one.in);
+    for (auto* marks : {&where.unread_mentions, &where.unread_reactions})
+      for (const unread_mark& gone : *marks)
+        if (gone.target == one.id && !std::ranges::contains(where.seen_marks, gone.event))
+          where.seen_marks.push_back(gone.event);
+      std::erase_if(*marks, [&](const unread_mark& mark) { return mark.target == one.id; });
+  }
   void on(const change::members_changed& one) {
     conversation& where = of(one.in);
     where.members = one.members;

@@ -107,6 +107,7 @@ std::string of(const change::message_encrypted& one) {
   return std::format("{} {} came encrypted{}", one.in.id, one.id, one.verified ? ", from a verified device" : "");
 }
 std::string of(const change::verification_changed& one) { return std::format("verifying {} {}: {}", one.user, one.device, one.txn); }
+std::string of(const change::event_missing& one) { return std::format("{} has no {}", one.in.id, one.id); }
 std::string of(const change::profile_found& one) { return std::format("profile of {}", one.user); }
 std::string of(const change::sessions_listed& one) { return std::format("{} sessions", one.sessions.size()); }
 std::string of(const change::sessions_refused& one) { return one.why; }

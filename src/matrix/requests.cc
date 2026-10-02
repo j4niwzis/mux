@@ -1241,6 +1241,10 @@ void account<Sink>::fetch_quoted(std::string room, std::string target) {
     auto got = perform(*api_, loom::cs::get_one_room_event{.room_id = room, .event_id = target});
     if (!got) {
       log(id_, "could not fetch {} in {}: {}", target, room, got.error().said());
+      // Not there, or not to be seen by this user: said so, and whatever
+      // waits on it (a mark) let go. A network's failure is not that.
+      if (const auto& server = got.error().server; server && (server->status == 404 || server->status == 403))
+        sink_(change::event_missing{conversation_id{id_, room}, target});
       return;
     }
     event(conversation_id{id_, room}, *got, placement::aside{});

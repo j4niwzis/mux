@@ -226,6 +226,10 @@ struct chat_header : nodes::Stack {
     using info_button = icon_button<ask<Actions, &Actions::toggle_info>>;
     using threads_button = icon_button<ask<Actions, &Actions::toggle_threads>>;
     using back_button = icon_button<ask<Actions, &Actions::close_chat>>;
+    // Shown one thing at a time, a tap on the chat's name or avatar opens
+    // its info, as on Telegram's phones.
+    Actions* actions = nullptr;
+    bool taps_to_info = false;
     struct parts_t {
       back_button back;
       avatar_mark face;
@@ -236,7 +240,8 @@ struct chat_header : nodes::Stack {
       info_button info;
     } parts;
     head_row(Actions* a, const view& shown)
-        : parts{.back = back_button(icon::back{}, {a}),
+        : actions(a), taps_to_info(shown.back && shown.key.has_value()),
+          parts{.back = back_button(icon::back{}, {a}),
                 .face = avatar_mark(shown.key.value_or(""), shown.title, 38.0f),
                 .texts = two_lines(shown.title, shown.status, 15.0f, 3.0f),
                 .find = find_button(icon::search{}, {a}),
@@ -255,6 +260,13 @@ struct chat_header : nodes::Stack {
       parts.find.setVisible(shown.key.has_value());
       parts.info.setVisible(shown.key.has_value());
       parts.texts.parts.state.setVisible(shown.key.has_value());
+    }
+    [[nodiscard]] bool acceptsInput() const { return taps_to_info; }
+    [[nodiscard]] bool onClick(float, float) {
+      if (!taps_to_info)
+        return false;
+      actions->toggle_info();
+      return true;
     }
   };
   struct parts_t {

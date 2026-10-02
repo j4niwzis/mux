@@ -1620,8 +1620,11 @@ struct conversations_screen : nodes::Stack {
   void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply& reply) {
     if (side.menu_up() && !side.menu_has(press.x, press.y))
       side.close_menu();
-    // Single: a swipe across the chat begun here.
+    // Single: a swipe across the chat begun here -- or across the chats,
+    // none open, which pulls the drawer out, as Telegram's apps do.
     swipe_from.reset();
+    if (single && !chosen && press.button <= 1 && side.visible() && side.bounds().contains(press.x, press.y))
+      swipe_from = skia::SkPoint{press.x, press.y};
     if (single && chosen && press.button <= 1 &&
         ((chat.visible() && chat.bounds().contains(press.x, press.y)) ||
          (info.visible() && info.bounds().contains(press.x, press.y)) ||
@@ -1643,12 +1646,15 @@ struct conversations_screen : nodes::Stack {
   // out of the chat, to the chats.
   void onPointer(scene::phase::capture, const scene::pointer::up& lift, scene::PointerReply& reply) {
     const std::optional<skia::SkPoint> from = std::exchange(swipe_from, std::nullopt);
-    if (!from || !single || !chosen)
+    if (!from || !single)
       return;
     const float dx = lift.x - from->fX;
     const float dy = lift.y - from->fY;
     if (dx > 90.0f && std::abs(dy) < dx * 0.5f) {
-      this->step_back();
+      if (chosen)
+        this->step_back();
+      else
+        actions->open_drawer();
       reply.handle();
     }
   }

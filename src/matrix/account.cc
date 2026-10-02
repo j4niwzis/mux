@@ -142,6 +142,10 @@ class account {
   // password asked by the server's user-interactive auth), kept here
   // sealed, and this device signed with the self-signing key.
   void setup_cross_signing(std::string password);
+  // The cross-signing keys put in secret storage under a new recovery key,
+  // which is said to the user to write down; and taken back with one.
+  std::optional<std::string> store_secrets(const crypto::cross_signing_secrets& secrets);
+  void restore_cross_signing(std::string recovery);
   // After emoji verification, the other side signed where this device has
   // the keys for it: one's own device with the self-signing key, another
   // user's master key with the user-signing key.

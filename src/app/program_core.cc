@@ -936,6 +936,11 @@ void app::apply(const request::give_passphrase& one) {
               net->setup_cross_signing(*keys_of, one.current);
             root().close_passphrase();
           },
+          [&](mux::config::passphrase_for::recovery) {
+            if (keys_of)
+              net->restore_cross_signing(*keys_of, one.current);
+            root().close_passphrase();
+          },
           [&](mux::config::passphrase_for::decrypt) {
             if (!vault.matches(one.current))
               return root().passphrase_refused("That is not the passphrase.");
@@ -959,6 +964,12 @@ void app::apply(const request::setup_cross_signing&) {
   this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
     keys_of = id_of(account);
     root().ask_passphrase(mux::config::passphrase_for::cross_signing{});
+  });
+}
+void app::apply(const request::restore_cross_signing&) {
+  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+    keys_of = id_of(account);
+    root().ask_passphrase(mux::config::passphrase_for::recovery{});
   });
 }
 void app::apply(const request::verify_person& one) { net->verify_start(one.who.account, one.who.id, std::nullopt); }

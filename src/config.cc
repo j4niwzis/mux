@@ -944,10 +944,14 @@ struct import_keys {
 struct cross_signing {
   friend bool operator==(cross_signing, cross_signing) = default;
 };
+// Cross-signing taken back with the recovery key.
+struct recovery {
+  friend bool operator==(recovery, recovery) = default;
+};
 }  // namespace passphrase_for
 using passphrase_for_t = splice::variant<passphrase_for::unlock, passphrase_for::encrypt, passphrase_for::change,
                                          passphrase_for::decrypt, passphrase_for::export_keys, passphrase_for::import_keys,
-                                         passphrase_for::cross_signing>;
+                                         passphrase_for::cross_signing, passphrase_for::recovery>;
 
 // Its own choice, if it made one; else as every account's.
 [[nodiscard]] inline const std::optional<bool>& send_typing_of(const account_t& one) {

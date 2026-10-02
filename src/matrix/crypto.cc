@@ -773,6 +773,160 @@ struct signed_key_part {
   }
 };
 
+// Secret storage (the spec's m.secret_storage.v1.aes-hmac-sha2): secrets
+// kept in account data, each sealed under a key only the user holds -- the
+// recovery key, written down as 48 base58 letters. With it, a new device
+// takes the cross-signing keys back from the server it cannot read them on.
+struct storage_key_info {
+  std::string algorithm = "m.secret_storage.v1.aes-hmac-sha2";
+  std::string iv;
+  std::string mac;
+  friend consteval auto json_schema(knot::type<storage_key_info>) { return knot::schema<storage_key_info>(); }
+};
+struct default_storage_key {
+  std::string key;
+  friend consteval auto json_schema(knot::type<default_storage_key>) { return knot::schema<default_storage_key>(); }
+};
+struct sealed_secret {
+  std::string iv;
+  std::string ciphertext;
+  std::string mac;
+  friend consteval auto json_schema(knot::type<sealed_secret>) { return knot::schema<sealed_secret>(); }
+};
+struct stored_secret {
+  std::map<std::string, sealed_secret> encrypted;
+  friend consteval auto json_schema(knot::type<stored_secret>) { return knot::schema<stored_secret>(); }
+};
+namespace detail {
+// HKDF-SHA-256 with a zero salt, 64 bytes: AES key then HMAC key.
+[[nodiscard]] inline std::array<std::uint8_t, 64> hkdf64(std::span<const std::uint8_t> key, std::string_view info) {
+  const std::array<std::uint8_t, 32> salt{};
+  const auto prk = hmac_sha256(salt, key);
+  auto first_in = mux::bytes::of(info);
+  first_in.push_back(1);
+  const auto first = hmac_sha256(prk, first_in);
+  std::vector<std::uint8_t> second_in(first.begin(), first.end());
+  const auto tail = mux::bytes::of(info);
+  second_in.insert(second_in.end(), tail.begin(), tail.end());
+  second_in.push_back(2);
+  const auto second = hmac_sha256(prk, second_in);
+  std::array<std::uint8_t, 64> out{};
+  std::ranges::copy(first, out.begin());
+  std::ranges::copy(second, out.begin() + 32);
+  return out;
+}
+inline constexpr std::string_view kBase58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+[[nodiscard]] inline std::string base58(std::span<const std::uint8_t> bytes) {
+  std::vector<std::uint8_t> digits;  // base 58, least significant first
+  for (const std::uint8_t byte : bytes) {
+    std::uint32_t carry = byte;
+    for (std::uint8_t& digit : digits) {
+      carry += std::uint32_t{digit} << 8;
+      digit = static_cast<std::uint8_t>(carry % 58);
+      carry /= 58;
+    }
+    for (; carry > 0; carry /= 58)
+      digits.push_back(static_cast<std::uint8_t>(carry % 58));
+  }
+  const auto zeros = std::ranges::distance(bytes | std::views::take_while([](std::uint8_t b) { return b == 0; }));
+  return std::string(static_cast<std::size_t>(zeros), '1') +
+         (digits | std::views::reverse | std::views::transform([](std::uint8_t d) { return kBase58[d]; }) |
+          std::ranges::to<std::string>());
+}
+[[nodiscard]] inline std::optional<std::vector<std::uint8_t>> from_base58(std::string_view text) {
+  std::vector<std::uint8_t> bytes;  // base 256, least significant first
+  for (const char c : text) {
+    const auto at = kBase58.find(c);
+    if (at == std::string_view::npos)
+      return std::nullopt;
+    std::uint32_t carry = static_cast<std::uint32_t>(at);
+    for (std::uint8_t& byte : bytes) {
+      carry += std::uint32_t{byte} * 58;
+      byte = static_cast<std::uint8_t>(carry & 0xFF);
+      carry >>= 8;
+    }
+    for (; carry > 0; carry >>= 8)
+      bytes.push_back(static_cast<std::uint8_t>(carry & 0xFF));
+  }
+  const auto zeros = std::ranges::distance(text | std::views::take_while([](char c) { return c == '1'; }));
+  std::vector<std::uint8_t> out(static_cast<std::size_t>(zeros), 0);
+  out.insert(out.end(), bytes.rbegin(), bytes.rend());
+  return out;
+}
+// A secret sealed under a storage key, for its name.
+[[nodiscard]] inline sealed_secret seal_secret(std::span<const std::uint8_t> key, std::string_view name, std::string_view secret) {
+  const auto keys = hkdf64(key, name);
+  auto iv = mux::vault::vault::random(16);
+  iv[8] &= 0x7F;
+  const auto ciphertext = aes_ctr(std::span(keys).first(32), iv, mux::bytes::of(secret));
+  if (!ciphertext)
+    throw std::runtime_error("the secret could not be encrypted");
+  const auto mac = hmac_sha256(std::span(keys).last(32), *ciphertext);
+  return sealed_secret{.iv = to_base64(iv), .ciphertext = to_base64(*ciphertext), .mac = to_base64(mac)};
+}
+[[nodiscard]] inline std::optional<std::string> open_secret(std::span<const std::uint8_t> key, std::string_view name,
+                                                            const sealed_secret& sealed) {
+  const auto keys = hkdf64(key, name);
+  const auto iv = from_base64(sealed.iv);
+  const auto ciphertext = from_base64(sealed.ciphertext);
+  const auto mac = from_base64(sealed.mac);
+  if (!iv || !ciphertext || !mac || mac->size() != 32)
+    return std::nullopt;
+  const auto expected = hmac_sha256(std::span(keys).last(32), *ciphertext);
+  if (CRYPTO_memcmp(expected.data(), mac->data(), 32) != 0)
+    return std::nullopt;
+  const auto plain = aes_ctr(std::span(keys).first(32), *iv, *ciphertext);
+  if (!plain)
+    return std::nullopt;
+  return mux::bytes::text_of(*plain);
+}
+}  // namespace detail
+// A new storage key: its 32 bytes, its ID, what account data says of it (an
+// empty secret sealed, by which a key typed later is checked), and the
+// recovery key the user writes down.
+struct new_storage_key {
+  std::vector<std::uint8_t> key;
+  std::string id;
+  storage_key_info info;
+  std::string recovery;
+};
+[[nodiscard]] inline std::string recovery_key_of(std::span<const std::uint8_t> key) {
+  std::vector<std::uint8_t> bytes{0x8B, 0x01};
+  bytes.insert(bytes.end(), key.begin(), key.end());
+  bytes.push_back(std::ranges::fold_left(bytes, std::uint8_t{0}, [](std::uint8_t a, std::uint8_t b) { return static_cast<std::uint8_t>(a ^ b); }));
+  const std::string plain = detail::base58(bytes);
+  return plain | std::views::chunk(4) | std::views::join_with(' ') | std::ranges::to<std::string>();
+}
+[[nodiscard]] inline std::optional<std::vector<std::uint8_t>> key_of_recovery(std::string_view recovery) {
+  const std::string plain = recovery | std::views::filter([](char c) { return std::isspace(static_cast<unsigned char>(c)) == 0; }) |
+                            std::ranges::to<std::string>();
+  const auto bytes = detail::from_base58(plain);
+  if (!bytes || bytes->size() != 35 || (*bytes)[0] != 0x8B || (*bytes)[1] != 0x01)
+    return std::nullopt;
+  const auto parity = std::ranges::fold_left(*bytes, std::uint8_t{0}, [](std::uint8_t a, std::uint8_t b) { return static_cast<std::uint8_t>(a ^ b); });
+  if (parity != 0)
+    return std::nullopt;
+  return std::vector<std::uint8_t>(bytes->begin() + 2, bytes->begin() + 34);
+}
+[[nodiscard]] inline new_storage_key make_storage_key() {
+  auto key = mux::vault::vault::random(32);
+  const std::string id = to_base64(mux::vault::vault::random(24));
+  const auto check = detail::seal_secret(key, "", std::string(32, '\0'));
+  return new_storage_key{.key = key, .id = id, .info = {.iv = check.iv, .mac = check.mac}, .recovery = recovery_key_of(key)};
+}
+// Whether a key is the one account data describes: the empty secret it
+// sealed opens to zeros under it.
+[[nodiscard]] inline bool is_storage_key(std::span<const std::uint8_t> key, const storage_key_info& info) {
+  const auto keys = detail::hkdf64(key, "");
+  const auto zeros = detail::aes_ctr(std::span(keys).first(32), from_base64(info.iv).value_or(std::vector<std::uint8_t>{}),
+                                     std::vector<std::uint8_t>(32, 0));
+  const auto mac = from_base64(info.mac);
+  if (!zeros || !mac || mac->size() != 32)
+    return false;
+  const auto expected = detail::hmac_sha256(std::span(keys).last(32), *zeros);
+  return CRYPTO_memcmp(expected.data(), mac->data(), 32) == 0;
+}
+
 // What a start that offers SAS says beyond the start itself: read from its
 // remainder, where it comes as a start of any method.
 struct sas_offer {

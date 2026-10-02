@@ -91,6 +91,12 @@ struct passphrase_box : nodes::Stack {
             "the people you verify. Your server asks for your account's password to take them.",
             "Set up", true, false};
   }
+  static constexpr words words_of(config::passphrase_for::recovery) {
+    return {"Restore with the recovery key",
+            "The recovery key written down when cross-signing was set up: with it, this device takes your "
+            "cross-signing keys back from your server.",
+            "Restore", true, false};
+  }
   static constexpr words words_of(config::passphrase_for::decrypt) {
     return {"Stop encrypting local data", "Everything kept is written in the clear again, readable by whoever can read "
                                           "these files.",

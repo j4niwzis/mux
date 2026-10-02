@@ -170,6 +170,7 @@ struct stub {
   void give_passphrase(mux::config::passphrase_for_t, std::string, std::string, std::string, std::string) {}
   void export_room_keys() {}
   void setup_cross_signing() {}
+  void restore_cross_signing() {}
   void verify_person(mux::conversation_id) {}
   void verify_session(std::string) {}
   void verify_accept_now() {}

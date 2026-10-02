@@ -966,9 +966,84 @@ void account<Sink>::setup_cross_signing(std::string password) {
         (void)perform(*api_, loom::cs::upload_cross_signing_signatures{.body = std::move(signed_body)});
       }
     }
-    sink_(change::notice{id_, "Cross-signing set up",
-                         "This account now has its own cross-signing keys, kept on this device. Devices you verify with "
-                         "emoji are signed with them, and so are the people you verify."});
+    const auto recovery = this->store_secrets(secrets);
+    sink_(change::notice{
+        id_, "Cross-signing set up",
+        recovery ? std::format("This account now has its own cross-signing keys. They are kept on this device, and on "
+                               "your server sealed under this recovery key -- write it down and keep it safe: with it, "
+                               "another device takes them back; without it, they are lost with this device.\n\n{}",
+                               *recovery)
+                 : std::string("This account now has its own cross-signing keys, kept on this device only: they could "
+                               "not be put in secret storage.")});
+  });
+}
+
+template <class Sink>
+std::optional<std::string> account<Sink>::store_secrets(const crypto::cross_signing_secrets& secrets) {
+  const auto made = crypto::make_storage_key();
+  const auto put = [&](std::string type, const auto& value) {
+    return perform(*api_, loom::cs::set_account_data{.user_id = id_.address, .type = std::move(type),
+                                                     .body = knot::raw{knot::to_json_string(value)}})
+        .has_value();
+  };
+  const auto sealed = [&](std::string_view name, const std::string& secret) {
+    return crypto::stored_secret{.encrypted = {{made.id, crypto::detail::seal_secret(made.key, name, secret)}}};
+  };
+  const bool all = put("m.secret_storage.key." + made.id, made.info) &&
+                   put("m.cross_signing.master", sealed("m.cross_signing.master", secrets.master)) &&
+                   put("m.cross_signing.self_signing", sealed("m.cross_signing.self_signing", secrets.self_signing)) &&
+                   put("m.cross_signing.user_signing", sealed("m.cross_signing.user_signing", secrets.user_signing)) &&
+                   put("m.secret_storage.default_key", crypto::default_storage_key{made.id});
+  return all ? std::optional<std::string>(made.recovery) : std::nullopt;
+}
+
+template <class Sink>
+void account<Sink>::restore_cross_signing(std::string recovery) {
+  this->spawn_guarded([this, recovery = std::move(recovery)] {
+    if (!crypto_ || !api_)
+      return;
+    const auto refused = [&](std::string why) { sink_(change::refused{id_, "Not restored: " + why}); };
+    const auto key = crypto::key_of_recovery(recovery);
+    if (!key)
+      return refused("that is not a recovery key (a letter wrong, or one missing).");
+    const auto get = [&](std::string type) { return perform(*api_, loom::cs::get_account_data{.user_id = id_.address, .type = std::move(type)}); };
+    const auto chosen = get("m.secret_storage.default_key");
+    const auto id = chosen ? knot::try_read<crypto::default_storage_key>(chosen->text) : std::nullopt;
+    if (!id)
+      return refused("this account keeps no secrets on its server.");
+    const auto info_raw = get("m.secret_storage.key." + id->key);
+    const auto info = info_raw ? knot::try_read<crypto::storage_key_info>(info_raw->text) : std::nullopt;
+    if (!info || !crypto::is_storage_key(*key, *info))
+      return refused("that is not this account's recovery key.");
+    const auto secret = [&](std::string name) -> std::optional<std::string> {
+      const auto raw = get(name);
+      const auto stored = raw ? knot::try_read<crypto::stored_secret>(raw->text) : std::nullopt;
+      if (!stored)
+        return std::nullopt;
+      const auto sealed = stored->encrypted.find(id->key);
+      return sealed == stored->encrypted.end() ? std::nullopt : crypto::detail::open_secret(*key, name, sealed->second);
+    };
+    const auto master = secret("m.cross_signing.master");
+    const auto self = secret("m.cross_signing.self_signing");
+    const auto users = secret("m.cross_signing.user_signing");
+    if (!master || !self || !users)
+      return refused("the keys kept there could not be opened.");
+    const crypto::cross_signing_secrets secrets{.master = *master, .self_signing = *self, .user_signing = *users};
+    // Taken only where they are the keys the server lists for this user.
+    loom::cs::query_keys ask;
+    ask.body.device_keys.emplace(id_.address, std::vector<std::string>{});
+    auto got = perform(*api_, ask);
+    const auto listed = got ? crypto::master_of(*got, id_.address) : std::nullopt;
+    if (!listed || crypto::detail::ed25519_public(secrets.master) != listed)
+      return refused("the keys kept there are not the ones your account has.");
+    crypto_->keep_cross_signing(secrets);
+    crypto_->verify_master(id_.address, *listed);
+    if (got->device_keys)
+      if (const auto own = got->device_keys->find(id_.address); own != got->device_keys->end())
+        if (const auto device = own->second.find(crypto_->device_id()); device != own->second.end())
+          this->cross_sign_device(device->second);
+    sink_(change::notice{id_, "Cross-signing restored",
+                         "This device has your cross-signing keys back, and has signed itself with them."});
   });
 }
 

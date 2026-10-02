@@ -219,6 +219,7 @@ struct account_privacy : nodes::Stack {
   using export_row = row_item<ask<Actions, &Actions::export_room_keys>>;
   using import_row = row_item<ask<Actions, &Actions::import_room_keys>>;
   using cross_signing_row = row_item<ask<Actions, &Actions::setup_cross_signing>>;
+  using recovery_row = row_item<ask<Actions, &Actions::restore_cross_signing>>;
   struct parts_t {
     nodes::Text title = section_title("PRIVACY");
     receipts_row receipts;
@@ -229,6 +230,7 @@ struct account_privacy : nodes::Stack {
     export_row export_keys;
     import_row import_keys;
     cross_signing_row cross_signing;
+    recovery_row recovery;
     nodes::Text note{"Off, the people you talk to through this account are not told when you have read their "
                      "messages, or that you are typing. Theirs are still shown, and receipts are still kept here.",
                      13.0f, dim_colour};
@@ -244,7 +246,8 @@ struct account_privacy : nodes::Stack {
               .notify_sound = notify_sound_row("Their sound", {a}),
               .export_keys = export_row("Export room keys\u2026", {a}),
               .import_keys = import_row("Import room keys\u2026", {a}),
-              .cross_signing = cross_signing_row("Set up cross-signing\u2026", {a})} {
+              .cross_signing = cross_signing_row("Set up cross-signing\u2026", {a}),
+              .recovery = recovery_row("Restore with the recovery key\u2026", {a})} {
     (void)events_all, (void)kinds, (void)faces_on, (void)jump_most, (void)previews_on;
     this->setGap(8.0f);
     parts.note.apply({.fillX = true});

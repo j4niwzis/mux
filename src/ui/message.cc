@@ -1275,6 +1275,7 @@ struct message_bubble : nodes::Stack {
     // (countCurrentSize's _additionalOnTop). They stood over every sticker.
     bool beside = false;
     bool beside_left = false;
+    float beside_room = 0.0f;  // how wide what goes beside it may be
     static constexpr float kBesideGap = 8.0f;
     void layoutChildren() {
       // Beside, where the room it was given holds the sticker and the widest
@@ -1290,7 +1291,12 @@ struct message_bubble : nodes::Stack {
         widest_of(parts.forwarded);
         widest_of(parts.quote);
         const float sticker = std::max(parts.picture->bounds().width(), parts.picture->fState.fWidth);
-        side = sticker + kBesideGap + widest <= fState.fLastConstraint.width();
+        // countCurrentSize: beside where the sticker and the least of what
+        // goes beside it fit -- msgReplyPadding.left() + msgMinWidth / 2 --
+        // what goes beside it narrowed to what is left.
+        constexpr float kLeastBeside = 10.0f + 190.0f / 2.0f;
+        side = sticker + kBesideGap + std::min(widest, kLeastBeside) <= fState.fLastConstraint.width();
+        beside_room = std::max(0.0f, fState.fLastConstraint.width() - sticker - kBesideGap);
       }
       const auto flow = [&](auto& part) {
         if (!part)
@@ -1354,8 +1360,9 @@ struct message_bubble : nodes::Stack {
       // reactions too, it was shown twice.
       if (picture && picture->sticker) {
         time_placed = true;
-        if (time.visible() || inline_time.visible()) {
-          time.setVisible(false);
+        // Over it where it was sent; beside it, its own, where it came.
+        if (inline_time.visible() || time.visible() == beside_left) {
+          time.setVisible(!beside_left);
           inline_time.setVisible(false);
           this->invalidateLayout();
         }
@@ -1737,8 +1744,16 @@ struct message_bubble : nodes::Stack {
       if (said.sticker && body.parts.picture) {
         body.parts.picture->as_sticker();
         body.parts.text.setVisible(false);
-        body.parts.picture->show_time(when);
-        body.parts.time.setVisible(false);
+        // Its time as tdesktop's (UnwrappedMedia, calculateFullRight): one
+        // sent, at its bottom right corner, over it; one that came, beside
+        // it at the bottom, to its right, on a plate of its own.
+        if (said.outgoing) {
+          body.parts.picture->show_time(when);
+          body.parts.time.setVisible(false);
+        } else {
+          body.parts.time.apply({.place = scene::anchor::kBottomRight, .origin = scene::anchor::kBottomLeft, .x = 6.0f,
+                                 .padding = {2.0f, 6.0f, 2.0f, 6.0f}, .cornerRadius = 8.0f, .background = body.plate});
+        }
         body.parts.frost.reset();
         body.apply({.padding = {0.0f, 0.0f, 0.0f, 0.0f}, .background = skia::SkColor{0},
                     .border = scene::Border{skia::SkColor{0}, 0.0f}});
@@ -1868,8 +1883,10 @@ struct message_bubble : nodes::Stack {
       const auto plated = [&](scene::Node& part) {
         part.apply({.padding = {3.0f, 8.0f, 3.0f, 8.0f}, .cornerRadius = 8.0f, .background = body.plate});
       };
+      // No sender's name over it: tdesktop's drawSurrounding draws a topic,
+      // a forward, via and the reply, never the name.
       if (body.parts.name)
-        plated(*body.parts.name);
+        body.parts.name->setVisible(false);
       if (body.parts.forwarded)
         plated(*body.parts.forwarded);
       if (body.parts.quote)

@@ -393,6 +393,17 @@ struct conversations_screen : nodes::Stack {
   std::optional<conversation_id> swipe_row;
   // The spaces along the top bigger, for a finger: a long press on them.
   bool big_spaces = false;
+  // Single, the one shown -- the chats (0), the chat (1), its info or
+  // threads (2) -- and it sliding in as it changes, as a phone's: from the
+  // right going in, from the left coming back (the user's, #13662).
+  int pane_shown = -1;
+  float pane_from = 0.0f;
+  skiff::paint::Tween pane_in{1.0f, 240.0f, skiff::paint::movement::sweeping{}};
+  void place_pane() {
+    const float shift = single ? (1.0f - pane_in.value()) * single_width * pane_from : 0.0f;
+    for (scene::Node* each : std::initializer_list<scene::Node*>{&side, &chat, &info, &parts.threads})
+      each->apply({.shiftX = shift});
+  }
   // What the head was last made from: made again with its back arrow, or
   // without, as the window goes single or not.
   typename chat_header<Actions>::view head_shown;
@@ -1718,6 +1729,15 @@ struct conversations_screen : nodes::Stack {
     const float across = single ? single_width : info_width;
     info.apply({.width = across});
     parts.threads.apply({.width = across});
+    const int now_pane = !single ? -1 : !chosen.has_value() ? 0 : shown ? 2 : 1;
+    if (single && pane_shown >= 0 && now_pane != pane_shown) {
+      pane_from = now_pane > pane_shown ? 1.0f : -1.0f;
+      pane_in.jump(0.0f);
+      pane_in.setTarget(1.0f);
+      scene::work::mark(fState.fId);
+    }
+    pane_shown = now_pane;
+    this->place_pane();
   }
   // Single or not as the window is now: looked at as it is laid out.
   void layoutChildren() {
@@ -1825,7 +1845,7 @@ struct conversations_screen : nodes::Stack {
   // for, and the slide went by in jerks unless the mouse moved.
   [[nodiscard]] bool settling() const {
     return jumping_to.has_value() || aiming.has_value() || slide_wait > 0 || list_in.moving() ||
-           panel_ease().t.moving();
+           panel_ease().t.moving() || pane_in.moving();
   }
   // Where jumps in a chat came from -- a reply's quote, a link to a
   // message: "↓" goes back to each in turn, the last first, before it goes
@@ -2180,7 +2200,8 @@ struct conversations_screen : nodes::Stack {
   // that brought the view to the end stopped in a frame whose tick had gone
   // by here already, and nothing ticked this again -- the arrow stayed.
   [[nodiscard]] bool wantsTick() const {
-    return slide_wait > 0 || list_in.moving() || panel_ease().t.moving() || this->away() != chat.area.parts.jump.visible() ||
+    return slide_wait > 0 || list_in.moving() || pane_in.moving() || panel_ease().t.moving() ||
+           this->away() != chat.area.parts.jump.visible() ||
            this->older_due() || this->history_pending() ||
            jumping_to.has_value() || aiming.has_value() || jump_age != 0 || timeline.moving() ||
            !rooms_waiting.empty() || !rooms_unfound.empty();
@@ -2190,6 +2211,10 @@ struct conversations_screen : nodes::Stack {
       list_in.setTarget(1.0f);
     if (list_in.step(now_ms))
       this->place_list();
+    if (pane_in.step(now_ms)) {
+      this->place_pane();
+      this->markDamaged();
+    }
     // The older asked long ago and not come: asked again.
     if (this->history_pending() && now_ms - history_asked_ms > kHistoryPatienceMs)
       history_asked.reset();

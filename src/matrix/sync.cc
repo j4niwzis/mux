@@ -818,6 +818,26 @@ void account<Sink>::upload_keys(std::int64_t on_server) {
   log(id_, "keys uploaded{}", ask.body.device_keys ? ", the device's with them" : "");
 }
 
+template <class Sink>
+void account<Sink>::upload_fallback_key() {
+  if (!crypto_ || !api_)
+    return;
+  const auto now = std::chrono::steady_clock::now();
+  if (fallback_uploaded_at_ && now - *fallback_uploaded_at_ < std::chrono::hours(1))
+    return;
+  fallback_uploaded_at_ = now;
+  loom::cs::upload_keys ask;
+  ask.body.fallback_keys = crypto_->fresh_fallback_key();
+  if (ask.body.fallback_keys->empty())
+    return;
+  if (auto done = perform(*api_, ask); !done) {
+    log(id_, "fallback key not uploaded: {}", done.error().said());
+    return;
+  }
+  crypto_->published(false);
+  log(id_, "fallback key uploaded");
+}
+
 // What a sliding sync's answer brought for this device: to-device messages
 // -- Olm, carrying room keys -- and how many one-time keys the server holds.
 template <class Sink>
@@ -847,6 +867,10 @@ void account<Sink>::crypto_answer_now(const loom::cs::sliding_sync::response_t& 
                       one.content.data());
     crypto_->went_on_to(extensions.to_device->next_batch);
   }
+  // No unused fallback key on the server (none, or one used): a new one.
+  if (extensions.e2ee && extensions.e2ee->device_unused_fallback_key_types &&
+      !std::ranges::contains(*extensions.e2ee->device_unused_fallback_key_types, std::string_view("signed_curve25519")))
+    this->upload_fallback_key();
   if (extensions.e2ee && extensions.e2ee->device_one_time_keys_count)
     if (const auto left = extensions.e2ee->device_one_time_keys_count->find("signed_curve25519");
         left != extensions.e2ee->device_one_time_keys_count->end())

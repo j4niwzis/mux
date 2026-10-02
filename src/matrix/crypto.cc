@@ -118,6 +118,18 @@ struct bare_key {
   std::string key;
   friend consteval auto json_schema(knot::type<bare_key>) { return knot::schema<bare_key>(); }
 };
+// A fallback key, as it is signed and uploaded: the key, and that it is one.
+struct fallback_bare {
+  bool fallback = true;
+  std::string key;
+  friend consteval auto json_schema(knot::type<fallback_bare>) { return knot::schema<fallback_bare>(); }
+};
+struct signed_fallback {
+  bool fallback = true;
+  std::string key;
+  std::map<std::string, std::map<std::string, std::string>> signatures;
+  friend consteval auto json_schema(knot::type<signed_fallback>) { return knot::schema<signed_fallback>(); }
+};
 // This device's keys, as keys/upload takes them: without their signatures
 // they are what is signed.
 struct device_keys {
@@ -653,6 +665,23 @@ class olm_machine {
       const signed_key signed_one{.key = key, .signatures = {{user_id_, {{"ed25519:" + device_id_, this->sign(*canonical)}}}}};
       out.emplace("signed_curve25519:" + std::string(one.key_id), knot::raw{knot::to_json_string(signed_one)});
     }
+    return out;
+  }
+  // A fallback key made anew and signed: what others start Olm with once
+  // the server has given out every one-time key (the one before stays,
+  // until a message made with it has come).
+  [[nodiscard]] std::map<std::string, knot::raw> fresh_fallback_key() {
+    (void)(*account_)->generate_fallback_key();
+    std::map<std::string, knot::raw> out;
+    for (const auto& one : (*account_)->fallback_key()) {
+      const std::string key(one.key->to_base64());
+      const auto canonical = knot::to_canonical_json(fallback_bare{.key = key});
+      if (!canonical)
+        continue;
+      const signed_fallback signed_one{.key = key, .signatures = {{user_id_, {{"ed25519:" + device_id_, this->sign(*canonical)}}}}};
+      out.emplace("signed_curve25519:" + std::string(one.key_id), knot::raw{knot::to_json_string(signed_one)});
+    }
+    this->save();
     return out;
   }
   // The server has them: kept as published, and the device keys too.

@@ -352,6 +352,10 @@ class account {
   // that says, sync after sync, that it holds none would otherwise have a
   // batch made and signed every time.
   std::optional<std::chrono::steady_clock::time_point> keys_uploaded_at_;
+  // A fallback key uploaded where the server has none unused: once an hour
+  // at most, whatever the server says.
+  void upload_fallback_key();
+  std::optional<std::chrono::steady_clock::time_point> fallback_uploaded_at_;
   void crypto_answer(const loom::cs::sliding_sync::response_t& got);
   void crypto_answer_now(const loom::cs::sliding_sync::response_t& got);
   // A room key offered: taken only from a device the sender's device list

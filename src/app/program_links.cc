@@ -231,12 +231,13 @@ void app::apply(const request::list_marks& one) {
       }
     } else {
       entry.said = mux::message{.in = *chosen, .id = mark.target, .at = mark.at, .body = {"Loading…", std::nullopt}};
-      if (!shared.demo())
+      if (!shared.demo() && marks_fetched_.insert(mark.target).second)
         net->fetch_quoted(*chosen, mark.target);
     }
     entries.push_back(std::move(entry));
   }
   root().open_marks(one.kind, *chat, entries, &*model);
+  marks_listed_ = one.kind;
 }
 // One of the list, gone to, and let go.
 void app::apply(const request::go_to_mark& one) {
@@ -254,7 +255,10 @@ void app::apply(const request::go_to_mark& one) {
   const std::string target = found->target;
   this->go_to_marked(*chat, one.kind, one.event, target);
 }
-void app::apply(const request::close_marks&) { root().close_marks(); }
+void app::apply(const request::close_marks&) {
+  marks_listed_.reset();
+  root().close_marks();
+}
 
 // The invite of the card declined: the room left, the card closed.
 void app::apply(const request::decline_room_card&) {

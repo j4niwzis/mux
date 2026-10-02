@@ -365,6 +365,11 @@ class account {
   // A fallback key uploaded where the server has none unused: once an hour
   // at most, whatever the server says.
   void upload_fallback_key();
+  // A device whose Olm messages no session here opens, given a new session
+  // (an m.dummy over one made from its one-time key): once an hour at most
+  // for each, whatever comes.
+  void mend_session(const std::string& user, const std::string& curve25519);
+  std::map<std::string, std::chrono::steady_clock::time_point> mended_at_;
   std::optional<std::chrono::steady_clock::time_point> fallback_uploaded_at_;
   void crypto_answer(const loom::cs::sliding_sync::response_t& got);
   void crypto_answer_now(const loom::cs::sliding_sync::response_t& got);

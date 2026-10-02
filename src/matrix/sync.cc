@@ -819,6 +819,45 @@ void account<Sink>::upload_keys(std::int64_t on_server) {
 }
 
 template <class Sink>
+void account<Sink>::mend_session(const std::string& user, const std::string& curve25519) {
+  const auto now = std::chrono::steady_clock::now();
+  if (const auto last = mended_at_.find(curve25519); last != mended_at_.end() && now - last->second < std::chrono::hours(1))
+    return;
+  mended_at_.insert_or_assign(curve25519, now);
+  loom::cs::query_keys ask;
+  ask.body.device_keys.emplace(user, std::vector<std::string>{});
+  auto got = perform(*api_, ask);
+  if (!got)
+    return;
+  const auto theirs = crypto::recipients_of(*got, user, crypto_->pinned_master(user), std::string_view());
+  const auto device = std::ranges::find(theirs, curve25519, &crypto::recipient::curve25519);
+  if (device == theirs.end())
+    return;  // not a device of theirs that passes the checks: nothing sent to it
+  loom::cs::claim_keys claim;
+  claim.body.one_time_keys[user][device->device_id] = "signed_curve25519";
+  auto claimed = perform(*api_, claim);
+  if (!claimed)
+    return;
+  std::optional<std::string> key;
+  if (const auto by_user = claimed->one_time_keys.find(user); by_user != claimed->one_time_keys.end())
+    if (const auto by_device = by_user->second.find(device->device_id); by_device != by_user->second.end())
+      for (const auto& [id, raw] : by_device->second)
+        if (!key)
+          key = crypto::one_time_key_of(raw, *device);
+  if (!key)
+    return;
+  const auto sealed = crypto_->mend(*device, *key);
+  if (!sealed)
+    return;
+  std::map<std::string, std::map<std::string, knot::raw>> messages;
+  messages[user][device->device_id] = knot::raw{
+      knot::to_json_string(crypto::olm_content{.sender_key = crypto_->curve25519(), .ciphertext = {{curve25519, *sealed}}})};
+  if (perform(*api_, loom::cs::send_to_device{.event_type = "m.room.encrypted", .txn_id = this->transaction(),
+                                              .body = {.messages = std::move(messages)}}))
+    log(id_, "a broken session with {}'s device {} mended", user, device->device_id);
+}
+
+template <class Sink>
 void account<Sink>::upload_fallback_key() {
   if (!crypto_ || !api_)
     return;
@@ -865,6 +904,8 @@ void account<Sink>::crypto_answer_now(const loom::cs::sliding_sync::response_t& 
                                          },
                                          [](const auto&) {}},
                       one.content.data());
+    for (const auto& [user, curve] : crypto_->take_wedged())
+      this->mend_session(user, curve);
     crypto_->went_on_to(extensions.to_device->next_batch);
   }
   // No unused fallback key on the server (none, or one used): a new one.

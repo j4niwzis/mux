@@ -408,6 +408,21 @@ struct room_key_payload {
   olm_envelope::ed25519_key keys;
   friend consteval auto json_schema(knot::type<room_key_payload>) { return knot::schema<room_key_payload>(); }
 };
+// What goes over a new Olm session to mend a broken one (the spec's
+// m.dummy): nothing, but a pre-key message, which the other side opens a
+// session with.
+struct dummy_payload {
+  struct content_t {
+    friend consteval auto json_schema(knot::type<content_t>) { return knot::schema<content_t>(); }
+  };
+  std::string type = "m.dummy";
+  content_t content;
+  std::string sender;
+  std::string recipient;
+  olm_envelope::ed25519_key recipient_keys;
+  olm_envelope::ed25519_key keys;
+  friend consteval auto json_schema(knot::type<dummy_payload>) { return knot::schema<dummy_payload>(); }
+};
 // An m.room.encrypted to a device: Olm ciphertexts by their curve25519 key.
 struct olm_content {
   std::string algorithm = "m.olm.v1.curve25519-aes-sha2";
@@ -830,8 +845,12 @@ class olm_machine {
       auto message = vodozemac::olm::olm_message_from_parts(parts);
       plaintext = this->olm_decrypt(*content.sender_key, *message, mine->second.type == 0);
     } catch (const rust::Error&) {
-      return std::nullopt;
+      plaintext.reset();
     }
+    // A normal message no session here opens: theirs is one this device has
+    // lost (a store restored, say). Noted, to be mended with a new session.
+    if (!plaintext && mine->second.type != 0)
+      wedged_.emplace_back(sender, *content.sender_key);
     if (!plaintext)
       return std::nullopt;
     auto payload = knot::try_read<olm_payload>(*plaintext);
@@ -980,6 +999,29 @@ class olm_machine {
     }
   }
   [[nodiscard]] const std::string& device_id() const { return device_id_; }
+
+  // The devices whose Olm messages no session here opened, since asked
+  // last: by user, their curve25519 key.
+  [[nodiscard]] std::vector<std::pair<std::string, std::string>> take_wedged() { return std::exchange(wedged_, {}); }
+  // A broken session mended: a new one made from the device's one-time key,
+  // whatever sessions there are, and an m.dummy sent over it.
+  [[nodiscard]] std::optional<olm_ciphertext> mend(const recipient& to, const std::string& one_time_key) {
+    const dummy_payload payload{.sender = user_id_, .recipient = to.user, .recipient_keys = {to.ed25519}, .keys = {this->ed25519()}};
+    try {
+      auto config = vodozemac::olm::new_session_config_version_1();
+      auto identity = vodozemac::types::curve_key_from_base64(to.curve25519);
+      auto otk = vodozemac::types::curve_key_from_base64(one_time_key);
+      auto made = (*account_)->create_outbound_session(*config, *identity, *otk);
+      auto message = made->encrypt(knot::to_json_string(payload));
+      kept_.olm[to.curve25519].push_back(std::string(made->pickle(key_)));
+      this->save();
+      const auto parts = message->to_parts();
+      return olm_ciphertext{.type = static_cast<std::int64_t>(parts.message_type),
+                            .body = to_base64(std::span<const std::uint8_t>(parts.ciphertext.data(), parts.ciphertext.size()))};
+    } catch (const rust::Error&) {
+      return std::nullopt;
+    }
+  }
 
   // Every room key held, at the first message each can read: what a key
   // file holds.
@@ -1139,6 +1181,7 @@ class olm_machine {
   }
 
   bool unsaved_ = false;
+  std::vector<std::pair<std::string, std::string>> wedged_;
   void save() {
     unsaved_ = false;
     kept_.account = std::string((*account_)->pickle(key_));

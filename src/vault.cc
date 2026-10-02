@@ -60,17 +60,16 @@ inline constexpr std::string_view kLinePrefix = "v1:";
 inline constexpr std::string_view kCheckText = "mux vault check";
 inline constexpr std::size_t kNonce = 12, kTag = 16;
 
-[[nodiscard]] inline std::string to_base64(std::span<const std::uint8_t> bytes) {
-  std::vector<std::uint8_t> out(4 * ((bytes.size() + 2) / 3) + 1);
-  const int n = EVP_EncodeBlock(out.data(), bytes.data(), static_cast<int>(bytes.size()));
-  out.resize(static_cast<std::size_t>(n));
-  return mux::bytes::text_of(out);
-}
+// Bytes, as OpenSSL takes them: any range of them, made whole for its
+// pointer only where it keeps one.
+template <class Bytes>
+concept byte_range = std::ranges::input_range<Bytes> && std::same_as<std::ranges::range_value_t<Bytes>, std::uint8_t>;
+
 [[nodiscard]] inline std::optional<std::vector<std::uint8_t>> from_base64(std::string_view text) {
   if (text.size() % 4 != 0)
     return std::nullopt;
   std::vector<std::uint8_t> out(3 * text.size() / 4 + 1);
-  const auto in = mux::bytes::of(text);
+  const auto in = mux::bytes::buffer_of(mux::bytes::of(text));  // EVP_DecodeBlock reads one block
   const int n = EVP_DecodeBlock(out.data(), in.data(), static_cast<int>(in.size()));
   if (n < 0)
     return std::nullopt;
@@ -90,40 +89,75 @@ inline constexpr std::size_t kNonce = 12, kTag = 16;
 }
 
 // AES-256-GCM: nonce | ciphertext | tag; `bound` the associated data -- the
-// file it is for.
-[[nodiscard]] inline std::vector<std::uint8_t> seal(const key_t& key, std::span<const std::uint8_t> plain, std::string_view bound) {
+// file it is for. What is sealed comes as any range of bytes, taken a piece
+// at a time: a string seen as bytes, knot's lazy JSON -- never copied whole.
+template <byte_range Plain>
+[[nodiscard]] inline std::vector<std::uint8_t> seal(const key_t& key, Plain&& plain, std::string_view bound) {
   const auto nonce = random_bytes(kNonce);
-  std::vector<std::uint8_t> out(kNonce + plain.size() + kTag);
-  std::ranges::copy(nonce, out.begin());
+  std::vector<std::uint8_t> out(nonce.begin(), nonce.end());
   std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)> ctx(EVP_CIPHER_CTX_new(), &EVP_CIPHER_CTX_free);
-  int len = 0;
-  int bound_len = 0;
-  if (!ctx || EVP_EncryptInit_ex(ctx.get(), EVP_aes_256_gcm(), nullptr, key.data(), nonce.data()) != 1 ||
-      EVP_EncryptUpdate(ctx.get(), nullptr, &bound_len, mux::bytes::of(bound).data(), static_cast<int>(bound.size())) != 1 ||
-      EVP_EncryptUpdate(ctx.get(), out.data() + kNonce, &len, plain.data(), static_cast<int>(plain.size())) != 1)
+  if (!ctx || EVP_EncryptInit_ex(ctx.get(), EVP_aes_256_gcm(), nullptr, key.data(), nonce.data()) != 1)
     throw std::runtime_error("encryption failed");
+  bool fine = true;
+  mux::bytes::in_pieces(mux::bytes::of(bound), [&](std::span<const std::uint8_t> piece) {
+    int len = 0;
+    fine = fine && EVP_EncryptUpdate(ctx.get(), nullptr, &len, piece.data(), static_cast<int>(piece.size())) == 1;
+  });
+  mux::bytes::in_pieces(std::forward<Plain>(plain), [&](std::span<const std::uint8_t> piece) {
+    const std::size_t at = out.size();
+    out.resize(at + piece.size());
+    int len = 0;
+    fine = fine && EVP_EncryptUpdate(ctx.get(), out.data() + at, &len, piece.data(), static_cast<int>(piece.size())) == 1;
+    out.resize(at + static_cast<std::size_t>(len));
+  });
   int tail = 0;
-  if (EVP_EncryptFinal_ex(ctx.get(), out.data() + kNonce + len, &tail) != 1 ||
-      EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_GET_TAG, static_cast<int>(kTag), out.data() + kNonce + plain.size()) != 1)
+  const std::size_t at = out.size();
+  out.resize(at + kTag);
+  if (!fine || EVP_EncryptFinal_ex(ctx.get(), out.data() + at, &tail) != 1 ||
+      EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_GET_TAG, static_cast<int>(kTag), out.data() + at + tail) != 1)
     throw std::runtime_error("encryption failed");
+  out.resize(at + static_cast<std::size_t>(tail) + kTag);
   return out;
 }
-[[nodiscard]] inline std::optional<std::vector<std::uint8_t>> open(const key_t& key, std::span<const std::uint8_t> sealed,
-                                                                  std::string_view bound) {
-  if (sealed.size() < kNonce + kTag)
+// Opened: none where the key is another or the bytes were changed. The
+// sealed bytes as any sized range that can be walked more than once (a
+// file's text seen as bytes): its nonce, its tag, and what is between.
+template <class Sealed>
+  requires byte_range<Sealed> && std::ranges::forward_range<Sealed> && std::ranges::sized_range<Sealed>
+[[nodiscard]] inline std::optional<std::vector<std::uint8_t>> open(const key_t& key, Sealed&& sealed, std::string_view bound) {
+  const std::size_t total = std::ranges::size(sealed);
+  if (total < kNonce + kTag)
     return std::nullopt;
-  const std::size_t size = sealed.size() - kNonce - kTag;
-  std::vector<std::uint8_t> out(size);
+  const auto nonce = mux::bytes::exactly<kNonce>(sealed | std::views::take(kNonce));
+  auto tag = mux::bytes::exactly<kTag>(sealed | std::views::drop(total - kTag));
+  if (!nonce || !tag)
+    return std::nullopt;
   std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)> ctx(EVP_CIPHER_CTX_new(), &EVP_CIPHER_CTX_free);
-  int len = 0, tail = 0, bound_len = 0;
-  std::array<std::uint8_t, kTag> tag{};
-  std::ranges::copy(sealed.subspan(kNonce + size, kTag), tag.begin());
-  if (!ctx || EVP_DecryptInit_ex(ctx.get(), EVP_aes_256_gcm(), nullptr, key.data(), sealed.data()) != 1 ||
-      EVP_DecryptUpdate(ctx.get(), nullptr, &bound_len, mux::bytes::of(bound).data(), static_cast<int>(bound.size())) != 1 ||
-      EVP_DecryptUpdate(ctx.get(), out.data(), &len, sealed.data() + kNonce, static_cast<int>(size)) != 1 ||
-      EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_SET_TAG, static_cast<int>(kTag), tag.data()) != 1 ||
-      EVP_DecryptFinal_ex(ctx.get(), out.data() + len, &tail) != 1)
+  if (!ctx || EVP_DecryptInit_ex(ctx.get(), EVP_aes_256_gcm(), nullptr, key.data(), nonce->data()) != 1)
+    return std::nullopt;
+  bool fine = true;
+  mux::bytes::in_pieces(mux::bytes::of(bound), [&](std::span<const std::uint8_t> piece) {
+    int len = 0;
+    fine = fine && EVP_DecryptUpdate(ctx.get(), nullptr, &len, piece.data(), static_cast<int>(piece.size())) == 1;
+  });
+  std::vector<std::uint8_t> out;
+  out.reserve(total - kNonce - kTag);
+  mux::bytes::in_pieces(sealed | std::views::drop(kNonce) | std::views::take(total - kNonce - kTag),
+                        [&](std::span<const std::uint8_t> piece) {
+                          const std::size_t at = out.size();
+                          out.resize(at + piece.size());
+                          int len = 0;
+                          fine = fine && EVP_DecryptUpdate(ctx.get(), out.data() + at, &len, piece.data(),
+                                                           static_cast<int>(piece.size())) == 1;
+                          out.resize(at + static_cast<std::size_t>(len));
+                        });
+  int tail = 0;
+  const std::size_t at = out.size();
+  out.resize(at + kTag);
+  if (!fine || EVP_CIPHER_CTX_ctrl(ctx.get(), EVP_CTRL_GCM_SET_TAG, static_cast<int>(kTag), tag->data()) != 1 ||
+      EVP_DecryptFinal_ex(ctx.get(), out.data() + at, &tail) != 1)
     return std::nullopt;  // a wrong key, or a file changed: not read
+  out.resize(at + static_cast<std::size_t>(tail));
   return out;
 }
 
@@ -228,7 +262,7 @@ class vault {
     header how = this->fresh_header(passphrase);
     how.resealing = true;
     if (before)
-      how.previous = detail::to_base64(detail::seal(*key_, std::span(before->data(), before->size()), detail::kPreviousBound));
+      how.previous = mux::bytes::base64_padded_text(detail::seal(*key_, std::span(before->data(), before->size()), detail::kPreviousBound));
     write_plain(header_file_, knot::to_json_string(how));
     previous_ = before;
     resealing_ = true;
@@ -286,10 +320,10 @@ class vault {
     const std::scoped_lock held(lock_);
     header how;
     const auto salt = detail::random_bytes(16);
-    how.salt = detail::to_base64(salt);
+    how.salt = mux::bytes::base64_padded_text(salt);
     const key_t key = detail::derive(passphrase, salt, how);
     const std::string_view text = detail::kCheckText;
-    how.check = detail::to_base64(
+    how.check = mux::bytes::base64_padded_text(
         detail::seal(key, mux::bytes::of(text), detail::kCheckBound));
     key_ = key;
     return how;
@@ -337,12 +371,10 @@ class vault {
     }
     if (!key_)
       return std::nullopt;
-    const auto all = mux::bytes::of(text);
-    const auto bytes = std::span<const std::uint8_t>(all).subspan(detail::kMagic.size());
-    auto opened = this->opened_by_either(bytes, detail::bound_of(path));
+    auto opened = this->opened_by_either(mux::bytes::of(text) | std::views::drop(detail::kMagic.size()), detail::bound_of(path));
     if (!opened)
       return std::nullopt;
-    return std::string(opened->begin(), opened->end());
+    return mux::bytes::text_of(*opened);
   }
   // A whole file written, through a temporary renamed over it: sealed where
   // the vault is on. Made the user's alone first where `secret`.
@@ -361,7 +393,7 @@ class vault {
     std::string out;
     out.reserve(detail::kMagic.size() + sealed.size());
     out.append(detail::kMagic);
-    out.append(mux::bytes::text_of(sealed));
+    std::ranges::copy(mux::bytes::chars(sealed), std::back_inserter(out));
     return out;
   }
   // A line appended: sealed on its own where the vault is on.
@@ -382,7 +414,9 @@ class vault {
       return std::string(line);
     const auto sealed =
         detail::seal(*key_, mux::bytes::of(line), detail::bound_of(path));
-    return std::string(detail::kLinePrefix) + detail::to_base64(sealed);
+    std::string out(detail::kLinePrefix);
+    std::ranges::copy(mux::bytes::base64_padded(sealed), std::back_inserter(out));
+    return out;
   }
   // A line read back from the file at `path`: opened where it is sealed;
   // nullopt where it cannot be, and, with the vault on, where it is not.
@@ -505,8 +539,8 @@ class vault {
 
  private:
   // Sealed bytes opened by the key, or, mid-change, by the one before.
-  [[nodiscard]] std::optional<std::vector<std::uint8_t>> opened_by_either(std::span<const std::uint8_t> sealed,
-                                                                         std::string_view bound) const {
+  template <class Sealed>
+  [[nodiscard]] std::optional<std::vector<std::uint8_t>> opened_by_either(Sealed&& sealed, std::string_view bound) const {
     if (auto opened = detail::open(*key_, sealed, bound))
       return opened;
     if (previous_)

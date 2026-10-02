@@ -14,7 +14,8 @@
 module;
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
-#include <openssl/hmac.h>
+#include <openssl/core_names.h>
+#include <openssl/params.h>
 #include <rust/cxx.h>
 #include <vodozemac/src/lib.rs.h>
 export module mux.matrix.crypto;
@@ -222,7 +223,7 @@ using signatures_t = std::map<std::string, std::map<std::string, std::string>>;
   try {
     auto public_key = vodozemac::types::ed25519_key_from_base64(rust::Str(key.data(), key.size()));
     auto made = vodozemac::types::ed25519_signature_from_base64(rust::Str(signature.data(), signature.size()));
-    const auto bytes = mux::bytes::of(canonical);
+    const auto bytes = mux::bytes::buffer_of(mux::bytes::of(canonical));  // the Slice is read whole
     public_key->verify(rust::Slice<const std::uint8_t>(bytes.data(), bytes.size()), *made);
     return true;
   } catch (const rust::Error&) {
@@ -353,23 +354,6 @@ struct decrypted {
   std::optional<std::string> imported_sender_key;
 };
 
-// Unpadded base64, as Olm's bodies and Matrix's keys are written.
-[[nodiscard]] constexpr std::string to_base64(std::span<const std::uint8_t> bytes) {
-  constexpr std::string_view alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  std::string out;
-  out.reserve((bytes.size() + 2) / 3 * 4);
-  for (std::size_t i = 0; i < bytes.size(); i += 3) {
-    const std::uint32_t n = (std::uint32_t{bytes[i]} << 16) | (i + 1 < bytes.size() ? std::uint32_t{bytes[i + 1]} << 8 : 0u) |
-                            (i + 2 < bytes.size() ? std::uint32_t{bytes[i + 2]} : 0u);
-    out += alphabet[(n >> 18) & 63];
-    out += alphabet[(n >> 12) & 63];
-    if (i + 1 < bytes.size())
-      out += alphabet[(n >> 6) & 63];
-    if (i + 2 < bytes.size())
-      out += alphabet[n & 63];
-  }
-  return out;
-}
 
 // A device a room's key may go to: who, which, and its keys -- found and
 // checked as device_of() checks one.
@@ -547,26 +531,54 @@ struct file_part {
 };
 
 namespace detail {
-// AES-256-CTR, either way: the same operation.
-[[nodiscard]] inline std::optional<std::vector<std::uint8_t>> aes_ctr(std::span<const std::uint8_t> key,
-                                                                      std::span<const std::uint8_t> iv,
-                                                                      std::span<const std::uint8_t> in) {
-  if (key.size() != 32 || iv.size() != 16)
+template <class Bytes>
+concept byte_range = std::ranges::input_range<Bytes> && std::same_as<std::ranges::range_value_t<Bytes>, std::uint8_t>;
+// A cipher run over any range of bytes, a piece at a time (CTR, CBC): its
+// key and counter taken as exactly the sizes they are.
+template <byte_range Key, byte_range Iv, byte_range In>
+[[nodiscard]] inline std::optional<std::vector<std::uint8_t>> cipher(const EVP_CIPHER* kind, bool encrypt, Key&& key, Iv&& iv,
+                                                                     In&& in) {
+  const auto k = mux::bytes::exactly<32>(std::forward<Key>(key));
+  const auto v = mux::bytes::exactly<16>(std::forward<Iv>(iv));
+  if (!k || !v)
     return std::nullopt;
   std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)> ctx(EVP_CIPHER_CTX_new(), &EVP_CIPHER_CTX_free);
-  std::vector<std::uint8_t> out(in.size() + 16);
-  int len = 0, tail = 0;
-  if (!ctx || EVP_EncryptInit_ex(ctx.get(), EVP_aes_256_ctr(), nullptr, key.data(), iv.data()) != 1 ||
-      EVP_EncryptUpdate(ctx.get(), out.data(), &len, in.data(), static_cast<int>(in.size())) != 1 ||
-      EVP_EncryptFinal_ex(ctx.get(), out.data() + len, &tail) != 1)
+  if (!ctx || EVP_CipherInit_ex(ctx.get(), kind, nullptr, k->data(), v->data(), encrypt ? 1 : 0) != 1)
     return std::nullopt;
-  out.resize(static_cast<std::size_t>(len + tail));
+  std::vector<std::uint8_t> out;
+  bool fine = true;
+  mux::bytes::in_pieces(std::forward<In>(in), [&](std::span<const std::uint8_t> piece) {
+    const std::size_t at = out.size();
+    out.resize(at + piece.size() + 32);
+    int len = 0;
+    fine = fine && EVP_CipherUpdate(ctx.get(), out.data() + at, &len, piece.data(), static_cast<int>(piece.size())) == 1;
+    out.resize(at + static_cast<std::size_t>(len));
+  });
+  const std::size_t at = out.size();
+  out.resize(at + 32);
+  int tail = 0;
+  if (!fine || EVP_CipherFinal_ex(ctx.get(), out.data() + at, &tail) != 1)
+    return std::nullopt;
+  out.resize(at + static_cast<std::size_t>(tail));
   return out;
 }
-[[nodiscard]] inline std::array<std::uint8_t, 32> sha256(std::span<const std::uint8_t> bytes) {
+// AES-256-CTR, either way: the same operation.
+template <byte_range Key, byte_range Iv, byte_range In>
+[[nodiscard]] inline std::optional<std::vector<std::uint8_t>> aes_ctr(Key&& key, Iv&& iv, In&& in) {
+  return cipher(EVP_aes_256_ctr(), true, std::forward<Key>(key), std::forward<Iv>(iv), std::forward<In>(in));
+}
+// SHA-256 of any ranges of bytes, one after another.
+template <byte_range... Parts>
+[[nodiscard]] inline std::array<std::uint8_t, 32> sha256(Parts&&... parts) {
+  std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> md(EVP_MD_CTX_new(), &EVP_MD_CTX_free);
+  bool fine = md && EVP_DigestInit_ex(md.get(), EVP_sha256(), nullptr) == 1;
+  (mux::bytes::in_pieces(std::forward<Parts>(parts), [&](std::span<const std::uint8_t> piece) {
+     fine = fine && EVP_DigestUpdate(md.get(), piece.data(), piece.size()) == 1;
+   }),
+   ...);
   std::array<std::uint8_t, 32> out{};
   unsigned int size = 0;
-  if (EVP_Digest(bytes.data(), bytes.size(), out.data(), &size, EVP_sha256(), nullptr) != 1 || size != out.size())
+  if (!fine || EVP_DigestFinal_ex(md.get(), out.data(), &size) != 1 || size != out.size())
     throw std::runtime_error("SHA-256 failed");
   return out;
 }
@@ -581,25 +593,28 @@ struct sealed_file {
   std::vector<std::uint8_t> bytes;
   encrypted_file info;
 };
-[[nodiscard]] inline sealed_file seal_file(std::span<const std::uint8_t> plain) {
+template <detail::byte_range Plain>
+[[nodiscard]] inline sealed_file seal_file(Plain&& plain) {
   const auto key = mux::vault::vault::random(32);
   // The counter's start: 8 random bytes, then a zero counter (as the spec
   // has it, so that no file is long enough to wrap it).
   auto iv = mux::vault::vault::random(8);
   iv.resize(16, 0);
-  auto ciphertext = detail::aes_ctr(key, iv, plain);
+  auto ciphertext = detail::aes_ctr(key, iv, std::forward<Plain>(plain));
   if (!ciphertext)
     throw std::runtime_error("the file could not be encrypted");
   const auto hash = detail::sha256(*ciphertext);
   return sealed_file{.bytes = std::move(*ciphertext),
-                     .info = encrypted_file{.key = jwk{.k = detail::url_safe(to_base64(key))},
-                                            .iv = to_base64(iv),
-                                            .hashes = {{"sha256", to_base64(hash)}}}};
+                     .info = encrypted_file{.key = jwk{.k = detail::url_safe(mux::bytes::base64_text(key))},
+                                            .iv = mux::bytes::base64_text(iv),
+                                            .hashes = {{"sha256", mux::bytes::base64_text(hash)}}}};
 }
 // A file opened: none where it is not what its event says -- its hash
 // another, its key or counter not AES-256-CTR's.
-[[nodiscard]] inline std::optional<std::vector<std::uint8_t>> open_file(std::span<const std::uint8_t> sealed,
-                                                                       const encrypted_file& info) {
+// The sealed bytes walked twice -- hashed, then decrypted -- never copied.
+template <class Sealed>
+  requires detail::byte_range<Sealed> && std::ranges::forward_range<Sealed>
+[[nodiscard]] inline std::optional<std::vector<std::uint8_t>> open_file(Sealed&& sealed, const encrypted_file& info) {
   if (info.key.alg != "A256CTR" || info.key.kty != "oct")
     return std::nullopt;
   const auto key = from_base64(info.key.k);
@@ -634,20 +649,33 @@ inline constexpr std::string_view kExportFooter = "-----END MEGOLM SESSION DATA-
 inline constexpr std::uint32_t kExportRounds = 500000;
 // The AES key and the HMAC key a passphrase makes with a salt: PBKDF2,
 // HMAC-SHA-512, 64 bytes.
-[[nodiscard]] inline std::optional<std::array<std::uint8_t, 64>> export_keys_of(std::string_view passphrase,
-                                                                              std::span<const std::uint8_t> salt,
+template <byte_range Salt>
+[[nodiscard]] inline std::optional<std::array<std::uint8_t, 64>> export_keys_of(std::string_view passphrase, Salt&& salted,
                                                                               std::uint32_t rounds) {
   std::array<std::uint8_t, 64> out{};
   const std::string secret(passphrase);
+  const auto salt = mux::bytes::buffer_of(std::forward<Salt>(salted));  // PBKDF2 reads it whole
   if (PKCS5_PBKDF2_HMAC(secret.data(), static_cast<int>(secret.size()), salt.data(), static_cast<int>(salt.size()),
                         static_cast<int>(rounds), EVP_sha512(), static_cast<int>(out.size()), out.data()) != 1)
     return std::nullopt;
   return out;
 }
-[[nodiscard]] inline std::array<std::uint8_t, 32> hmac_sha256(std::span<const std::uint8_t> key, std::span<const std::uint8_t> data) {
+// HMAC-SHA-256 of any ranges of bytes, one after another, under a key.
+template <byte_range Key, byte_range... Parts>
+[[nodiscard]] inline std::array<std::uint8_t, 32> hmac_sha256(Key&& key, Parts&&... parts) {
+  const auto secret = mux::bytes::buffer_of(std::forward<Key>(key));  // OpenSSL keeps the key whole
+  std::unique_ptr<EVP_MAC, decltype(&EVP_MAC_free)> mac(EVP_MAC_fetch(nullptr, "HMAC", nullptr), &EVP_MAC_free);
+  std::unique_ptr<EVP_MAC_CTX, decltype(&EVP_MAC_CTX_free)> ctx(mac ? EVP_MAC_CTX_new(mac.get()) : nullptr, &EVP_MAC_CTX_free);
+  std::string digest = "SHA256";
+  const OSSL_PARAM params[] = {OSSL_PARAM_construct_utf8_string("digest", digest.data(), 0), OSSL_PARAM_construct_end()};
+  bool fine = ctx && EVP_MAC_init(ctx.get(), secret.data(), secret.size(), params) == 1;
+  (mux::bytes::in_pieces(std::forward<Parts>(parts), [&](std::span<const std::uint8_t> piece) {
+     fine = fine && EVP_MAC_update(ctx.get(), piece.data(), piece.size()) == 1;
+   }),
+   ...);
   std::array<std::uint8_t, 32> out{};
-  unsigned int size = 0;
-  if (!HMAC(EVP_sha256(), key.data(), static_cast<int>(key.size()), data.data(), data.size(), out.data(), &size) || size != 32)
+  std::size_t size = 0;
+  if (!fine || EVP_MAC_final(ctx.get(), out.data(), &size, out.size()) != 1 || size != out.size())
     throw std::runtime_error("HMAC-SHA-256 failed");
   return out;
 }
@@ -663,8 +691,7 @@ inline constexpr std::uint32_t kExportRounds = 500000;
   const auto keys = detail::export_keys_of(passphrase, salt, detail::kExportRounds);
   if (!keys)
     throw std::runtime_error("the key could not be made from the passphrase");
-  const auto plain = mux::bytes::of(knot::to_json_string(sessions));
-  const auto ciphertext = detail::aes_ctr(std::span(*keys).first(32), iv, plain);
+  const auto ciphertext = detail::aes_ctr(std::span(*keys).first(32), iv, mux::bytes::of(knot::to_json(sessions)));
   if (!ciphertext)
     throw std::runtime_error("the keys could not be encrypted");
   std::vector<std::uint8_t> body{1};
@@ -675,9 +702,8 @@ inline constexpr std::uint32_t kExportRounds = 500000;
   body.insert(body.end(), ciphertext->begin(), ciphertext->end());
   const auto mac = detail::hmac_sha256(std::span(*keys).last(32), body);
   body.insert(body.end(), mac.begin(), mac.end());
-  std::string text = to_base64(body);
-  text.append((4 - text.size() % 4) % 4, '=');
-  const std::string lines = text | std::views::chunk(96) | std::views::join_with('\n') | std::ranges::to<std::string>();
+  const std::string lines = mux::bytes::base64_padded(body) | std::views::chunk(96) | std::views::join_with('\n') |
+                            std::ranges::to<std::string>();
   return std::format("{}\n{}\n{}\n", detail::kExportHeader, lines, detail::kExportFooter);
 }
 // A key file opened: none where it is not one, its passphrase another, or
@@ -711,7 +737,7 @@ inline constexpr std::uint32_t kExportRounds = 500000;
   const auto plain = detail::aes_ctr(std::span(*keys).first(32), iv, all.subspan(37, all.size() - 37 - 32));
   if (!plain)
     return std::nullopt;
-  auto read = knot::try_read<std::vector<exported_session>>(mux::bytes::text_of(*plain));
+  auto read = knot::try_read<std::vector<exported_session>>(mux::bytes::chars(*plain));
   if (!read)
     return std::nullopt;
   return std::move(*read);
@@ -729,8 +755,12 @@ struct pkey_free {
   void operator()(EVP_PKEY* key) const { EVP_PKEY_free(key); }
 };
 // An Ed25519 key from its seed; its public half, and a signature made with it.
-[[nodiscard]] inline std::unique_ptr<EVP_PKEY, pkey_free> ed25519_of(std::span<const std::uint8_t> seed) {
-  return std::unique_ptr<EVP_PKEY, pkey_free>(EVP_PKEY_new_raw_private_key(EVP_PKEY_ED25519, nullptr, seed.data(), seed.size()));
+template <byte_range Seed>
+[[nodiscard]] inline std::unique_ptr<EVP_PKEY, pkey_free> ed25519_of(Seed&& seed) {
+  const auto exact = mux::bytes::exactly<32>(std::forward<Seed>(seed));
+  if (!exact)
+    return nullptr;
+  return std::unique_ptr<EVP_PKEY, pkey_free>(EVP_PKEY_new_raw_private_key(EVP_PKEY_ED25519, nullptr, exact->data(), exact->size()));
 }
 [[nodiscard]] inline std::optional<std::string> ed25519_public(std::string_view seed_b64) {
   const auto seed = from_base64(seed_b64);
@@ -741,7 +771,7 @@ struct pkey_free {
   std::size_t size = out.size();
   if (!key || EVP_PKEY_get_raw_public_key(key.get(), out.data(), &size) != 1 || size != out.size())
     return std::nullopt;
-  return to_base64(out);
+  return mux::bytes::base64_text(out);
 }
 [[nodiscard]] inline std::optional<std::string> ed25519_sign(std::string_view seed_b64, std::string_view message) {
   const auto seed = from_base64(seed_b64);
@@ -749,20 +779,20 @@ struct pkey_free {
     return std::nullopt;
   const auto key = ed25519_of(*seed);
   std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> md(EVP_MD_CTX_new(), &EVP_MD_CTX_free);
-  const auto bytes = mux::bytes::of(message);
+  const auto bytes = mux::bytes::buffer_of(mux::bytes::of(message));  // Ed25519 signs the message whole
   std::array<std::uint8_t, 64> out{};
   std::size_t size = out.size();
   if (!key || !md || EVP_DigestSignInit(md.get(), nullptr, nullptr, nullptr, key.get()) != 1 ||
       EVP_DigestSign(md.get(), out.data(), &size, bytes.data(), bytes.size()) != 1 || size != out.size())
     return std::nullopt;
-  return to_base64(out);
+  return mux::bytes::base64_text(out);
 }
 }  // namespace detail
 // Three new seeds: master, self-signing, user-signing.
 [[nodiscard]] inline cross_signing_secrets new_cross_signing() {
-  return {.master = to_base64(mux::vault::vault::random(32)),
-          .self_signing = to_base64(mux::vault::vault::random(32)),
-          .user_signing = to_base64(mux::vault::vault::random(32))};
+  return {.master = mux::bytes::base64_text(mux::vault::vault::random(32)),
+          .self_signing = mux::bytes::base64_text(mux::vault::vault::random(32)),
+          .user_signing = mux::bytes::base64_text(mux::vault::vault::random(32))};
 }
 // A device's keys with signatures, as /keys/signatures/upload takes them.
 struct signed_device_part {
@@ -815,24 +845,20 @@ struct stored_secret {
 };
 namespace detail {
 // HKDF-SHA-256 with a zero salt, 64 bytes: AES key then HMAC key.
-[[nodiscard]] inline std::array<std::uint8_t, 64> hkdf64(std::span<const std::uint8_t> key, std::string_view info) {
+template <byte_range Key>
+[[nodiscard]] inline std::array<std::uint8_t, 64> hkdf64(Key&& key, std::string_view info) {
   const std::array<std::uint8_t, 32> salt{};
   const auto prk = hmac_sha256(salt, key);
-  auto first_in = mux::bytes::of(info);
-  first_in.push_back(1);
-  const auto first = hmac_sha256(prk, first_in);
-  std::vector<std::uint8_t> second_in(first.begin(), first.end());
-  const auto tail = mux::bytes::of(info);
-  second_in.insert(second_in.end(), tail.begin(), tail.end());
-  second_in.push_back(2);
-  const auto second = hmac_sha256(prk, second_in);
+  const auto first = hmac_sha256(prk, mux::bytes::of(info), std::array<std::uint8_t, 1>{1});
+  const auto second = hmac_sha256(prk, first, mux::bytes::of(info), std::array<std::uint8_t, 1>{2});
   std::array<std::uint8_t, 64> out{};
   std::ranges::copy(first, out.begin());
   std::ranges::copy(second, out.begin() + 32);
   return out;
 }
 inline constexpr std::string_view kBase58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-[[nodiscard]] inline std::string base58(std::span<const std::uint8_t> bytes) {
+template <byte_range Bytes>
+[[nodiscard]] inline std::string base58(Bytes&& bytes) {
   std::vector<std::uint8_t> digits;  // base 58, least significant first
   for (const std::uint8_t byte : bytes) {
     std::uint32_t carry = byte;
@@ -844,7 +870,7 @@ inline constexpr std::string_view kBase58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZab
     for (; carry > 0; carry /= 58)
       digits.push_back(static_cast<std::uint8_t>(carry % 58));
   }
-  const auto zeros = std::ranges::distance(bytes | std::views::take_while([](std::uint8_t b) { return b == 0; }));
+  const auto zeros = std::ranges::distance(bytes | std::views::take_while([](std::uint8_t b) { return b == 0; }));  // walked again
   return std::string(static_cast<std::size_t>(zeros), '1') +
          (digits | std::views::reverse | std::views::transform([](std::uint8_t d) { return kBase58[d]; }) |
           std::ranges::to<std::string>());
@@ -870,7 +896,8 @@ inline constexpr std::string_view kBase58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZab
   return out;
 }
 // A secret sealed under a storage key, for its name.
-[[nodiscard]] inline sealed_secret seal_secret(std::span<const std::uint8_t> key, std::string_view name, std::string_view secret) {
+template <byte_range Key>
+[[nodiscard]] inline sealed_secret seal_secret(Key&& key, std::string_view name, std::string_view secret) {
   const auto keys = hkdf64(key, name);
   auto iv = mux::vault::vault::random(16);
   iv[8] &= 0x7F;
@@ -878,9 +905,10 @@ inline constexpr std::string_view kBase58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZab
   if (!ciphertext)
     throw std::runtime_error("the secret could not be encrypted");
   const auto mac = hmac_sha256(std::span(keys).last(32), *ciphertext);
-  return sealed_secret{.iv = to_base64(iv), .ciphertext = to_base64(*ciphertext), .mac = to_base64(mac)};
+  return sealed_secret{.iv = mux::bytes::base64_text(iv), .ciphertext = mux::bytes::base64_text(*ciphertext), .mac = mux::bytes::base64_text(mac)};
 }
-[[nodiscard]] inline std::optional<std::string> open_secret(std::span<const std::uint8_t> key, std::string_view name,
+template <byte_range Key>
+[[nodiscard]] inline std::optional<std::string> open_secret(Key&& key, std::string_view name,
                                                             const sealed_secret& sealed) {
   const auto keys = hkdf64(key, name);
   const auto iv = from_base64(sealed.iv);
@@ -894,7 +922,7 @@ inline constexpr std::string_view kBase58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZab
   const auto plain = aes_ctr(std::span(keys).first(32), *iv, *ciphertext);
   if (!plain)
     return std::nullopt;
-  return mux::bytes::text_of(*plain);
+  return mux::bytes::text_of(*plain);  // the secret, kept as text
 }
 }  // namespace detail
 // A new storage key: its 32 bytes, its ID, what account data says of it (an
@@ -906,7 +934,8 @@ struct new_storage_key {
   storage_key_info info;
   std::string recovery;
 };
-[[nodiscard]] inline std::string recovery_key_of(std::span<const std::uint8_t> key) {
+template <detail::byte_range Key>
+[[nodiscard]] inline std::string recovery_key_of(Key&& key) {
   std::vector<std::uint8_t> bytes{0x8B, 0x01};
   bytes.insert(bytes.end(), key.begin(), key.end());
   bytes.push_back(std::ranges::fold_left(bytes, std::uint8_t{0}, [](std::uint8_t a, std::uint8_t b) { return static_cast<std::uint8_t>(a ^ b); }));
@@ -926,13 +955,14 @@ struct new_storage_key {
 }
 [[nodiscard]] inline new_storage_key make_storage_key() {
   auto key = mux::vault::vault::random(32);
-  const std::string id = to_base64(mux::vault::vault::random(24));
+  const std::string id = mux::bytes::base64_text(mux::vault::vault::random(24));
   const auto check = detail::seal_secret(key, "", std::string(32, '\0'));
   return new_storage_key{.key = key, .id = id, .info = {.iv = check.iv, .mac = check.mac}, .recovery = recovery_key_of(key)};
 }
 // Whether a key is the one account data describes: the empty secret it
 // sealed opens to zeros under it.
-[[nodiscard]] inline bool is_storage_key(std::span<const std::uint8_t> key, const storage_key_info& info) {
+template <detail::byte_range Key>
+[[nodiscard]] inline bool is_storage_key(Key&& key, const storage_key_info& info) {
   const auto keys = detail::hkdf64(key, "");
   const auto zeros = detail::aes_ctr(std::span(keys).first(32), from_base64(info.iv).value_or(std::vector<std::uint8_t>{}),
                                      std::vector<std::uint8_t>(32, 0));
@@ -972,18 +1002,26 @@ struct backup_auth_signed_part {
   friend consteval auto json_schema(knot::type<backup_auth_signed_part>) { return knot::schema<backup_auth_signed_part>(); }
 };
 namespace detail {
-[[nodiscard]] inline std::optional<std::array<std::uint8_t, 32>> x25519_public(std::span<const std::uint8_t> secret) {
-  const std::unique_ptr<EVP_PKEY, pkey_free> key(EVP_PKEY_new_raw_private_key(EVP_PKEY_X25519, nullptr, secret.data(), secret.size()));
+template <byte_range Secret>
+[[nodiscard]] inline std::optional<std::array<std::uint8_t, 32>> x25519_public(Secret&& secret_bytes) {
+  const auto secret = mux::bytes::exactly<32>(std::forward<Secret>(secret_bytes));
+  if (!secret)
+    return std::nullopt;
+  const std::unique_ptr<EVP_PKEY, pkey_free> key(EVP_PKEY_new_raw_private_key(EVP_PKEY_X25519, nullptr, secret->data(), secret->size()));
   std::array<std::uint8_t, 32> out{};
   std::size_t size = out.size();
   if (!key || EVP_PKEY_get_raw_public_key(key.get(), out.data(), &size) != 1 || size != out.size())
     return std::nullopt;
   return out;
 }
-[[nodiscard]] inline std::optional<std::array<std::uint8_t, 32>> x25519_shared(std::span<const std::uint8_t> secret,
-                                                                             std::span<const std::uint8_t> theirs) {
-  const std::unique_ptr<EVP_PKEY, pkey_free> ours(EVP_PKEY_new_raw_private_key(EVP_PKEY_X25519, nullptr, secret.data(), secret.size()));
-  const std::unique_ptr<EVP_PKEY, pkey_free> other(EVP_PKEY_new_raw_public_key(EVP_PKEY_X25519, nullptr, theirs.data(), theirs.size()));
+template <byte_range Secret, byte_range Theirs>
+[[nodiscard]] inline std::optional<std::array<std::uint8_t, 32>> x25519_shared(Secret&& secret_bytes, Theirs&& their_bytes) {
+  const auto secret = mux::bytes::exactly<32>(std::forward<Secret>(secret_bytes));
+  const auto theirs = mux::bytes::exactly<32>(std::forward<Theirs>(their_bytes));
+  if (!secret || !theirs)
+    return std::nullopt;
+  const std::unique_ptr<EVP_PKEY, pkey_free> ours(EVP_PKEY_new_raw_private_key(EVP_PKEY_X25519, nullptr, secret->data(), secret->size()));
+  const std::unique_ptr<EVP_PKEY, pkey_free> other(EVP_PKEY_new_raw_public_key(EVP_PKEY_X25519, nullptr, theirs->data(), theirs->size()));
   if (!ours || !other)
     return std::nullopt;
   std::unique_ptr<EVP_PKEY_CTX, decltype(&EVP_PKEY_CTX_free)> ctx(EVP_PKEY_CTX_new(ours.get(), nullptr), &EVP_PKEY_CTX_free);
@@ -995,32 +1033,23 @@ namespace detail {
   return out;
 }
 // HKDF-SHA-256, zero salt, empty info, 80 bytes: AES key, HMAC key, IV.
-[[nodiscard]] inline std::array<std::uint8_t, 80> hkdf80(std::span<const std::uint8_t> shared) {
+template <byte_range Shared>
+[[nodiscard]] inline std::array<std::uint8_t, 80> hkdf80(Shared&& shared) {
   const std::array<std::uint8_t, 32> salt{};
   const auto prk = hmac_sha256(salt, shared);
   std::array<std::uint8_t, 80> out{};
   std::vector<std::uint8_t> previous;
   for (std::uint8_t round = 1, at = 0; at < out.size(); ++round) {
-    std::vector<std::uint8_t> input = previous;
-    input.push_back(round);
-    const auto block = hmac_sha256(prk, input);
+    const auto block = hmac_sha256(prk, previous, std::array<std::uint8_t, 1>{round});
     previous.assign(block.begin(), block.end());
     for (std::size_t i = 0; i < block.size() && at < out.size(); ++i, ++at)
       out[at] = block[i];
   }
   return out;
 }
-[[nodiscard]] inline std::optional<std::vector<std::uint8_t>> aes_cbc(bool encrypt, std::span<const std::uint8_t> key,
-                                                                      std::span<const std::uint8_t> iv, std::span<const std::uint8_t> in) {
-  std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)> ctx(EVP_CIPHER_CTX_new(), &EVP_CIPHER_CTX_free);
-  std::vector<std::uint8_t> out(in.size() + 32);
-  int len = 0, tail = 0;
-  if (!ctx || EVP_CipherInit_ex(ctx.get(), EVP_aes_256_cbc(), nullptr, key.data(), iv.data(), encrypt ? 1 : 0) != 1 ||
-      EVP_CipherUpdate(ctx.get(), out.data(), &len, in.data(), static_cast<int>(in.size())) != 1 ||
-      EVP_CipherFinal_ex(ctx.get(), out.data() + len, &tail) != 1)
-    return std::nullopt;
-  out.resize(static_cast<std::size_t>(len + tail));
-  return out;
+template <byte_range Key, byte_range Iv, byte_range In>
+[[nodiscard]] inline std::optional<std::vector<std::uint8_t>> aes_cbc(bool encrypt, Key&& key, Iv&& iv, In&& in) {
+  return cipher(EVP_aes_256_cbc(), encrypt, std::forward<Key>(key), std::forward<Iv>(iv), std::forward<In>(in));
 }
 }  // namespace detail
 // A backup key pair: its private half, and its public half as auth_data has it.
@@ -1029,14 +1058,14 @@ namespace detail {
   const auto public_key = detail::x25519_public(secret);
   if (!public_key)
     throw std::runtime_error("the backup key could not be made");
-  return {to_base64(secret), to_base64(*public_key)};
+  return {mux::bytes::base64_text(secret), mux::bytes::base64_text(*public_key)};
 }
 [[nodiscard]] inline std::optional<std::string> backup_public_of(std::string_view secret_b64) {
   const auto secret = from_base64(secret_b64);
   if (!secret || secret->size() != 32)
     return std::nullopt;
   const auto public_key = detail::x25519_public(*secret);
-  return public_key ? std::optional<std::string>(to_base64(*public_key)) : std::nullopt;
+  return public_key ? std::optional<std::string>(mux::bytes::base64_text(*public_key)) : std::nullopt;
 }
 // A room key sealed to the backup's public key. Its MAC, as libolm made it
 // and every client checks it, is of nothing: the first 8 bytes of
@@ -1052,13 +1081,13 @@ namespace detail {
     return std::nullopt;
   const auto keys = detail::hkdf80(*shared);
   const auto ciphertext =
-      detail::aes_cbc(true, std::span(keys).first(32), std::span(keys).subspan(64, 16), mux::bytes::of(knot::to_json_string(plain)));
+      detail::aes_cbc(true, std::span(keys).first(32), std::span(keys).subspan(64, 16), mux::bytes::of(knot::to_json(plain)));
   if (!ciphertext)
     return std::nullopt;
-  const auto mac = detail::hmac_sha256(std::span(keys).subspan(32, 32), std::span<const std::uint8_t>());
-  return backup_session_data{.ephemeral = to_base64(*ephemeral_public),
-                             .ciphertext = to_base64(*ciphertext),
-                             .mac = to_base64(std::span(mac).first(8))};
+  const auto mac = detail::hmac_sha256(std::span(keys).subspan(32, 32));
+  return backup_session_data{.ephemeral = mux::bytes::base64_text(*ephemeral_public),
+                             .ciphertext = mux::bytes::base64_text(*ciphertext),
+                             .mac = mux::bytes::base64_text(std::span(mac).first(8))};
 }
 [[nodiscard]] inline std::optional<backup_plaintext> open_backup(std::string_view secret_b64, const backup_session_data& sealed) {
   const auto secret = from_base64(secret_b64);
@@ -1073,14 +1102,14 @@ namespace detail {
   const auto keys = detail::hkdf80(*shared);
   // Of nothing, as libolm and those after it write it; or of the
   // ciphertext, as the spec's text says.
-  const auto of_nothing = detail::hmac_sha256(std::span(keys).subspan(32, 32), std::span<const std::uint8_t>());
+  const auto of_nothing = detail::hmac_sha256(std::span(keys).subspan(32, 32));
   const auto of_ciphertext = detail::hmac_sha256(std::span(keys).subspan(32, 32), *ciphertext);
   if (CRYPTO_memcmp(of_nothing.data(), mac->data(), 8) != 0 && CRYPTO_memcmp(of_ciphertext.data(), mac->data(), 8) != 0)
     return std::nullopt;
   const auto plain = detail::aes_cbc(false, std::span(keys).first(32), std::span(keys).subspan(64, 16), *ciphertext);
   if (!plain)
     return std::nullopt;
-  auto read = knot::try_read<backup_plaintext>(mux::bytes::text_of(*plain));
+  auto read = knot::try_read<backup_plaintext>(mux::bytes::chars(*plain));
   if (!read)
     return std::nullopt;
   return std::move(*read);
@@ -1192,7 +1221,7 @@ struct reference_part {
 // The commitment to a key and a start: unpadded base64 of SHA-256 of the
 // key's base64 then the start's canonical JSON.
 [[nodiscard]] inline std::string commitment_of(std::string_view key, std::string_view start_canonical) {
-  return to_base64(detail::sha256(mux::bytes::of(std::string(key) + std::string(start_canonical))));
+  return mux::bytes::base64_text(detail::sha256(mux::bytes::of(key), mux::bytes::of(start_canonical)));
 }
 
 // A room's session as it is to be used now: its ID and key, and the
@@ -1469,7 +1498,7 @@ class olm_machine {
       this->save();
       const auto parts = message->to_parts();
       return olm_ciphertext{.type = static_cast<std::int64_t>(parts.message_type),
-                            .body = to_base64(std::span<const std::uint8_t>(parts.ciphertext.data(), parts.ciphertext.size()))};
+                            .body = mux::bytes::base64_text(parts.ciphertext)};
     } catch (const rust::Error&) {
       return std::nullopt;
     }
@@ -1522,7 +1551,7 @@ class olm_machine {
       this->save();
       const auto parts = message->to_parts();
       return olm_ciphertext{.type = static_cast<std::int64_t>(parts.message_type),
-                            .body = to_base64(std::span<const std::uint8_t>(parts.ciphertext.data(), parts.ciphertext.size()))};
+                            .body = mux::bytes::base64_text(parts.ciphertext)};
     } catch (const rust::Error&) {
       return std::nullopt;
     }
@@ -1604,8 +1633,8 @@ class olm_machine {
   // This user's cross-signing private keys, kept sealed under the store's
   // key; and read back.
   void keep_cross_signing(const cross_signing_secrets& secrets) {
-    const auto sealed = mux::vault::detail::seal(key_, mux::bytes::of(knot::to_json_string(secrets)), "cross-signing");
-    kept_.cross_signing = to_base64(sealed);
+    const auto sealed = mux::vault::detail::seal(key_, mux::bytes::of(knot::to_json(secrets)), "cross-signing");
+    kept_.cross_signing = mux::bytes::base64_text(sealed);
     this->save();
   }
   [[nodiscard]] std::optional<cross_signing_secrets> cross_signing_keys() const {
@@ -1617,7 +1646,7 @@ class olm_machine {
     const auto opened = mux::vault::detail::open(key_, *sealed, "cross-signing");
     if (!opened)
       return std::nullopt;
-    auto read = knot::try_read<cross_signing_secrets>(mux::bytes::text_of(*opened));
+    auto read = knot::try_read<cross_signing_secrets>(mux::bytes::chars(*opened));
     if (!read)
       return std::nullopt;
     return std::move(*read);
@@ -1626,7 +1655,7 @@ class olm_machine {
   // sessions not in it yet; and those that now are.
   void keep_backup(const std::string& version, const std::string& secret_b64) {
     kept_.backup_version = version;
-    kept_.backup_key = to_base64(mux::vault::detail::seal(key_, mux::bytes::of(secret_b64), "key backup"));
+    kept_.backup_key = mux::bytes::base64_text(mux::vault::detail::seal(key_, mux::bytes::of(secret_b64), "key backup"));
     kept_.backed_up.reset();
     this->save();
   }
@@ -1801,7 +1830,7 @@ class olm_machine {
   }
 
   [[nodiscard]] std::string sign(std::string_view canonical) const {
-    const auto signed_bytes = mux::bytes::of(canonical);
+    const auto signed_bytes = mux::bytes::buffer_of(mux::bytes::of(canonical));  // the Slice is read whole
     const rust::Slice<const std::uint8_t> bytes(signed_bytes.data(), signed_bytes.size());
     return std::string((*account_)->sign(bytes)->to_base64());
   }

@@ -1211,12 +1211,33 @@ struct conversations_screen : nodes::Stack {
       fState.fWidth = std::clamp(wanted, std::min(kMinSidebar, parent.width()),
                                  std::max(kMinSidebar, parent.width() * 0.6f));
     }
-    // The head, and its bar of spaces, taller for a finger -- or as they were.
-    void set_big_spaces(bool big) {
-      parts.head.apply({.height = big ? 76.0f : 52.0f});
-      parts.head.parts.top.apply({.height = big ? 58.0f : 34.0f});
+    // The bar of spaces taller for a finger, and under Search, all of the
+    // column across, as the user would have it (#13671) -- or as it was, in
+    // the head after "mux".
+    bool big = false;
+    static constexpr float kBigBar = 58.0f;
+    void set_big_spaces(bool on) {
+      big = on;
+      parts.head.parts.top.apply({.height = on ? kBigBar : 34.0f});
+      // Room under Search for it: the chats below it moved down by as much.
+      search.apply({.margin = {0.0f, 10.0f, on ? 8.0f + kBigBar + 8.0f : 8.0f, 10.0f}});
       this->invalidateLayout();
       this->markDamaged();
+    }
+    void layoutChildren() {
+      auto& top = parts.head.parts.top;
+      top.fState.fOutOfFlow = big;
+      if (big)
+        top.apply({.width = std::max(0.0f, fState.contentBox().width() - 16.0f)});
+      this->nodes::Stack::layoutChildren();
+      if (!big) {
+        top.fState.setShift(0.0f, 0.0f);
+        return;
+      }
+      // Laid out where the head put it, moved under Search.
+      const skia::SkRect at = top.bounds();
+      const skia::SkRect under = search.bounds();
+      top.fState.setShift(fState.contentBox().fLeft + 8.0f - at.fLeft, under.fBottom + 8.0f - at.fTop);
     }
   };
   // The chat: its header, its messages, and where one writes; or, with no
@@ -1653,7 +1674,8 @@ struct conversations_screen : nodes::Stack {
     // on the spaces along the top, or near them: they grow for a finger, or
     // go back to as they were. Not their menu.
     if (single && press.button == 3 && side.top_bar.visible() &&
-        side.parts.head.bounds().makeOutset(0.0f, 16.0f).contains(press.x, press.y)) {
+        (side.parts.head.bounds().makeOutset(0.0f, 16.0f).contains(press.x, press.y) ||
+         side.top_bar.fState.fDrawnBounds.makeOutset(0.0f, 16.0f).contains(press.x, press.y))) {
       big_spaces = !big_spaces;
       side.set_big_spaces(big_spaces);
       if (last_model)

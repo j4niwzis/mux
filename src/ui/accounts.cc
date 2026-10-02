@@ -688,14 +688,20 @@ struct accounts_panel : closes_on_escape<Actions> {
       this->setHorizontal();
       fState.apply({.fillX = true, .grow = scene::axes::kY});
     }
-    // Narrow -- a phone's -- one column at a time, all of the width: the
-    // list or an account's pages, or the page chosen from them.
+    // Narrow -- a phone's -- all of the width: the list of accounts alone;
+    // or, one chosen (or being added), its settings in its place -- its pages
+    // a row over the page shown -- and the header's arrow back to the list.
     bool narrow = false;
     bool detail_up = false;
     void show_columns() {
-      parts.side.setVisible(!narrow || !detail_up);
+      const bool settings = narrow && detail_up;
+      fStack.direction = settings ? nodes::Direction{nodes::direction::vertical{}} : nodes::Direction{nodes::direction::horizontal{}};
+      parts.side.setVisible(!settings || parts.side.pages.visible());
       parts.main.setVisible(!narrow || detail_up);
-      parts.side.apply(narrow ? scene::Spec{.fillX = true} : scene::Spec{.fillX = false, .width = kListWidth});
+      parts.side.apply(!narrow    ? scene::Spec{.fillX = false, .fillY = true, .width = kListWidth, .autoSize = scene::axes::kNone}
+                       : settings ? scene::Spec{.fillX = true, .fillY = false, .autoSize = scene::axes::kY}
+                                  : scene::Spec{.fillX = true, .fillY = true, .autoSize = scene::axes::kNone});
+      this->invalidateLayout();
     }
     void layoutChildren() {
       if (const bool now = fState.contentBox().width() < 600.0f; now != narrow) {
@@ -865,8 +871,6 @@ struct accounts_panel : closes_on_escape<Actions> {
     selected = config::address_of(one);
     this->show_pages(true);
     this->show_page(0, one, now);
-    // Narrow: its pages first, not the first of them.
-    this->show_detail(false);
   }
   // Narrow, the page beside the list in its place, or the list back.
   void show_detail(bool up) {
@@ -874,13 +878,9 @@ struct accounts_panel : closes_on_escape<Actions> {
     parts.body.show_columns();
     this->invalidateLayout();
   }
-  // Narrow, a page up: back to the list of pages first. Whether it was.
-  [[nodiscard]] bool step_back() {
-    if (!parts.body.narrow || !parts.body.detail_up)
-      return false;
-    this->show_detail(false);
-    return true;
-  }
+  // Narrow, a step back of its own before the list's: none -- the arrow
+  // goes from an account's settings to the list, as it does wide.
+  [[nodiscard]] bool step_back() { return false; }
 
   // Adding an account, beside the list.
   // The account list, or the chosen account's pages, down the side.

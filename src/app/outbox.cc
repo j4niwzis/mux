@@ -15,6 +15,7 @@ import mux.app.network;
 import mux.app.requests;
 import mux.app.services;
 import mux.app.drafts;
+import mux.video;
 import mux.logic.sending;
 import mux.logic.messages;
 
@@ -236,7 +237,7 @@ class outbox_part {
     for (file& one : to_send_)
       s_->net->send_file(*chosen, one.local, std::move(one.as.bytes), one.as.name, one.as.mimetype,
                          one.as.picture.has_value(), one.width, one.height, std::exchange(caption, std::string()),
-                         std::exchange(reply_to, std::nullopt), thread);
+                         std::exchange(reply_to, std::nullopt), thread, std::move(one.video));
     if (thread) {
       if (screen.thread_open() == files_thread_)
         screen.parts.threads.stop_answering();
@@ -320,6 +321,18 @@ class outbox_part {
           one.height = image->height();
           mux::ui::thumbnails().put(one.local, std::move(image));
         }
+      // A video: its size, length and first picture, sent with it as m.video
+      // says them; the picture shown under its local id while it goes.
+      if (!one.as.picture && one.as.mimetype.starts_with("video/"))
+        if (auto seen = mux::video::player::look(path)) {
+          one.width = seen->width;
+          one.height = seen->height;
+          one.video = mux::video_look{.duration_ms = static_cast<std::int64_t>(seen->seconds * 1000.0),
+                                      .thumbnail = skia::encodeImage(*seen->first, false),
+                                      .thumbnail_width = seen->width,
+                                      .thumbnail_height = seen->height};
+          mux::ui::thumbnails().put(one.local, std::move(seen->first));
+        }
       to_send_.push_back(std::move(one));
     }
     if (to_send_.empty())
@@ -385,6 +398,7 @@ class outbox_part {
     logic::prepared as;
     std::string local;  // its id until the server gives one; its thumbnail's
     int width = 0, height = 0;
+    std::optional<mux::video_look> video;
   };
 
   services* s_;

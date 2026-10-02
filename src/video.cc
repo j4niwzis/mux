@@ -78,8 +78,26 @@ inline constexpr int kRate = 48000;
 
 class player {
  public:
+  // What a video is, looked at before it is sent: its size, its length and
+  // its first picture -- what a message of it says, the picture its
+  // thumbnail. Nothing where it cannot be read.
+  struct look_t {
+    int width = 0, height = 0;
+    double seconds = 0.0;
+    skia::Sp<skia::SkImage> first;
+  };
+  [[nodiscard]] static std::optional<look_t> look(const std::filesystem::path& where) {
+    auto made = open(where, false);
+    if (!made)
+      return std::nullopt;
+    auto first = made->decode_next();
+    if (!first || !first->first)
+      return std::nullopt;
+    return look_t{first->first->width(), first->first->height(), made->length(), std::move(first->first)};
+  }
   // Opened from a file; nothing where it cannot be read or has no picture.
-  [[nodiscard]] static std::unique_ptr<player> open(const std::filesystem::path& where) {
+  // Without its sound, where only looked at: nothing goes to the speakers.
+  [[nodiscard]] static std::unique_ptr<player> open(const std::filesystem::path& where, bool with_sound = true) {
     AVFormatContext* raw = nullptr;
     if (avformat_open_input(&raw, where.string().c_str(), nullptr, nullptr) < 0)
       return nullptr;
@@ -90,7 +108,8 @@ class player {
     std::tie(made->video_index_, made->video_) = decoder_of(raw, AVMEDIA_TYPE_VIDEO);
     if (!made->video_)
       return nullptr;
-    std::tie(made->audio_index_, made->audio_) = decoder_of(raw, AVMEDIA_TYPE_AUDIO);
+    if (with_sound)
+      std::tie(made->audio_index_, made->audio_) = decoder_of(raw, AVMEDIA_TYPE_AUDIO);
     made->packet_.reset(av_packet_alloc());
     made->frame_.reset(av_frame_alloc());
     if (made->audio_)

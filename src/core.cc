@@ -294,6 +294,14 @@ struct thread_place {
   std::string root;
   std::string latest;
 };
+// A video sent: its length, and its first picture (PNG) as its thumbnail,
+// with that picture's size -- what m.video says, so that it is shown as a
+// video, not a file.
+struct video_look {
+  std::int64_t duration_ms = 0;
+  std::string thumbnail;
+  int thumbnail_width = 0, thumbnail_height = 0;
+};
 struct forward_info {
   std::string from;
   std::string name;

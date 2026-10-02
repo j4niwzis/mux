@@ -126,14 +126,20 @@ void account<Sink>::upload_pack_picture(pack_picture picture, std::string bytes)
 
 template <class Sink>
 void account<Sink>::send_file(std::string room, std::string local, std::string bytes, std::string name, std::string mimetype,
-                 bool image, int width, int height, std::string caption, std::optional<std::string> reply_to, std::optional<thread_place> thread) {
+                 bool image, int width, int height, std::string caption, std::optional<std::string> reply_to, std::optional<thread_place> thread,
+                 std::optional<video_look> video) {
   loop_->spawn([this, room = std::move(room), local = std::move(local), bytes = std::move(bytes),
                 name = std::move(name), mimetype = std::move(mimetype), image, width, height,
-                caption = std::move(caption), reply_to = std::move(reply_to), thread = std::move(thread)] {
+                caption = std::move(caption), reply_to = std::move(reply_to), thread = std::move(thread),
+                video = std::move(video)] {
     const conversation_id in{id_, room};
     mux::attachment carried;
-    if (image)
+    // A video: shown here by its first picture, as one that came is by its
+    // thumbnail.
+    if (image || video)
       carried.kind = attachment_kind::image{};
+    if (video)
+      carried.duration_ms = video->duration_ms;
     carried.source = "local:" + local;
     carried.name = name;
     carried.mimetype = mimetype;
@@ -154,6 +160,20 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
     if (!api_) {
       sink_(change::delivery_changed{in, local, delivery::failed{}});
       return;
+    }
+    // A video's thumbnail, uploaded first: the message names it.
+    std::optional<std::string> thumbnail_uri;
+    if (video && !video->thumbnail.empty()) {
+      try {
+        const auto got = api_->request("POST", "/_matrix/media/v3/upload?filename=thumbnail.png", video->thumbnail,
+                                       token_ ? std::optional<std::string_view>(*token_) : std::nullopt,
+                                       std::chrono::seconds(120), std::string_view("image/png"));
+        if (got.status == 200)
+          if (auto answer = knot::try_read<upload_answer>(std::string_view(got.body)))
+            thumbnail_uri = std::move(answer->content_uri);
+      } catch (const net::failure& failed) {
+        log(id_, "upload of the thumbnail of {} failed: {}", name, failed.what());
+      }
     }
     std::string target = "/_matrix/media/v3/upload?filename=";
     for (const char c : name)
@@ -187,8 +207,27 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
                                         .reply_to = reply_to,
                                         .thread = thread ? std::optional<std::string>(thread->root) : std::nullopt,
                                         .thread_latest = thread ? std::optional<std::string>(thread->latest) : std::nullopt};
-    knot::raw message = image ? as_body(loom::client::picture_message(said, width, height))
-                              : as_body(loom::client::file_message(said));
+    // A video: m.video, its size, length and thumbnail said -- as a file,
+    // every client showed it as one.
+    const auto video_message = [&] {
+      loom::ev::m_room_message_m_video_content_t content;
+      loom::client::detail::fill_media(content, said);
+      content.info->w = width;
+      content.info->h = height;
+      content.info->duration = video->duration_ms;
+      if (thumbnail_uri) {
+        content.info->thumbnail_url = *thumbnail_uri;
+        auto& thumb = content.info->thumbnail_info.emplace();
+        thumb.w = video->thumbnail_width;
+        thumb.h = video->thumbnail_height;
+        thumb.mimetype = "image/png";
+        thumb.size = static_cast<std::int64_t>(video->thumbnail.size());
+      }
+      return as_body(content);
+    };
+    knot::raw message = video   ? video_message()
+                        : image ? as_body(loom::client::picture_message(said, width, height))
+                                : as_body(loom::client::file_message(said));
     auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.room.message",
                                                       .txn_id = local,

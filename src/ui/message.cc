@@ -1642,6 +1642,10 @@ struct message_bubble : nodes::Stack {
                                   [](const auto&) { return ""; }},
                        said.delivery);
     body.parts.time.setText(when);
+    // And the time beside the last line, which is the one shown wherever it
+    // fits: made with the bare time, it never said "not encrypted", nor
+    // "sending" -- a short message, the most of them, hid both.
+    body.parts.inline_time.setText(when);
     // What it carries: a picture, sized as tdesktop's; or a file's row.
     if (said.attachment) {
       const mux::attachment& carried = *said.attachment;

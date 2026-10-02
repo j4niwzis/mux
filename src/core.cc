@@ -967,6 +967,13 @@ struct device_view {
 };
 // This session, as Element's Cryptography section names it: its ID, and
 // its key (ed25519), to be compared with what another session shows.
+// Element's Security section: whether this session has the cross-signing
+// keys, and whether the room keys are backed up.
+struct security_state {
+  account_id by;
+  bool cross_signing = false;
+  bool backup = false;
+};
 struct own_session {
   account_id by;
   std::string device_id;
@@ -1325,7 +1332,7 @@ struct event_missing {
 
 }  // namespace change
 
-using change_t = splice::variant<change::own_session, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::verification_changed, change::account_removed, change::conversation_updated,
+using change_t = splice::variant<change::security_state, change::own_session, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::verification_changed, change::account_removed, change::conversation_updated,
                               change::conversation_removed,
                               change::presence_changed, change::message_added, change::message_edited,
                               change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed,
@@ -1806,6 +1813,7 @@ class model {
     ++trust_revision_;
   }
   std::uint64_t trust_revision_ = 0;
+  void on(const change::security_state&) {}  // the window's: the Sessions page
   void on(const change::own_session& one) { own_sessions_.insert_or_assign(one.by, std::pair{one.device_id, one.ed25519}); }
   std::map<account_id, std::pair<std::string, std::string>> own_sessions_;
   void on(const change::devices_listed& one) {

@@ -500,6 +500,18 @@ struct account_sessions : nodes::Stack {
     for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.current_title, &parts.others_title})
       each->setVisible(false);
   }
+  // Element's Security, under Device verification: whether this session has
+  // the cross-signing keys, and whether room keys are backed up.
+  void show_security(bool cross_signing, bool backup) {
+    parts.verification_note.setText(std::format(
+        "Cross-signing: {}  \u00b7  Key backup: {}\nTo verify device identity and grant access to encrypted messages: "
+        "set it up here, or, where another session of yours has it, bring it back with your recovery key.",
+        cross_signing ? "\u2713 ready on this session" : "\u26A0 not on this session",
+        backup ? "\u2713 on" : "\u26A0 off"));
+    parts.set_up.setVisible(!cross_signing);
+    parts.restore.setVisible(!cross_signing);
+    this->invalidateLayout();
+  }
   // The sessions, as the server listed them: this one first, the others by
   // when they were last seen, the latest first.
   void show(const std::string& current, std::vector<change::session_info> all) {

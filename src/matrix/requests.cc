@@ -891,6 +891,7 @@ void account<Sink>::list_sessions() {
         }) |
         std::ranges::to<std::vector>();
     sink_(change::sessions_listed{id_, how_.device_id.value_or(""), std::move(out)});
+    sink_(change::security_state{id_, crypto_ && crypto_->cross_signing_keys().has_value(), crypto_ && crypto_->backup().has_value()});
   });
 }
 

@@ -92,6 +92,14 @@ void app::woken() {
                                                  },
                                                  *up);
                                },
+                               [&](const mux::change::security_state& state) {
+                                 if (auto* up = root().open_panel())
+                                   splice::visit([&](accounts& panel) {
+                                                   if (auto* page = panel.sessions(); page && panel.selected == state.by.address)
+                                                     page->show_security(state.cross_signing, state.backup);
+                                                 },
+                                                 *up);
+                               },
                                [&](const mux::change::sessions_refused& said) {
                                  if (auto* up = root().open_panel())
                                    splice::visit([&](accounts& panel) {

@@ -680,7 +680,14 @@ void account<Sink>::catch_up(std::string room, std::string from, std::string unt
         splice::visit(
             splice::overloaded{
                 [&](const loom::ev::m_room_message_content_t& content) {
-                  if (loom::client::mentions(content, id_.address)) {
+                  // Not an edit: it is never shown under its own id -- its
+                  // mark said "Loading..." for ever, the server finding it.
+                  using values = loom::ev::m_room_message_content_t::m_relates_to_t::rel_type_values;
+                  const bool edit = content.m_relates_to && content.m_relates_to->rel_type &&
+                                    splice::visit(splice::overloaded{[](values::m_replace) { return true; },
+                                                                     [](const auto&) { return false; }},
+                                                  *content.m_relates_to->rel_type);
+                  if (!edit && loom::client::mentions(content, id_.address)) {
                     ++mentions;
                     sink_(change::mentioned{in, one.event_id, at});
                   }

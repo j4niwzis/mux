@@ -619,7 +619,8 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
           [&](const loom::ev::m_room_avatar_content_t&) { say(room_event::room_avatar{}, std::format(" changed the room's picture")); },
           // As Element says it: encryption turned on, for every message from here on.
           [&](const loom::ev::m_room_encryption_content_t&) {
-            say(room_event::encryption{}, std::format(" turned on end-to-end encryption"));
+            say(room_event::encryption{}, std::format(" enabled encryption: messages in this room are end-to-end encrypted. "
+                                                     "When people join, you can verify them in their profile."));
           },
           [&](const loom::ev::m_room_create_content_t&) { say(room_event::other{}, std::format(" created the room")); },
           [&](const loom::ev::m_room_power_levels_content_t&) { say(room_event::permissions{}, std::format(" changed who may do what here")); },

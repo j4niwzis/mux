@@ -375,18 +375,102 @@ inline scene::NodeId& panel_painted() {
   static scene::NodeId id = 0;
   return id;
 }
+// A float's backdrop kept while it moves -- sliding in, fading -- as the
+// user asked (#13420): what is under the window taken once, as it comes up,
+// blurred once, small, and drawn from until it stands still; then blurred
+// live again, what is under it being what changes. Not blurred anew at each
+// frame of its animation, all of what it covers at full size.
+struct kept_blur {
+  skia::SkRect at = skia::SkRect::MakeEmpty();  // where it was last drawn, on the device
+  float alpha = -1.0f;                          // and at what alpha
+  bool moved = false;                           // whether it had moved then
+  skia::Sp<skia::SkImage> blurred;              // the window under it, blurred, small
+  skia::SkRect device = skia::SkRect::MakeEmpty();  // where that is on the device: all of the window
+};
+inline std::vector<std::pair<scene::NodeId, kept_blur>>& kept_blurs() {
+  static std::vector<std::pair<scene::NodeId, kept_blur>> kept;
+  return kept;
+}
+// What is drawn on a canvas's pixels so far, blurred by `sigma` (in its
+// pixels): taken a quarter of the size and blurred there -- a sixteenth of
+// the pixels. None where the canvas has no pixels of its own (a recording).
+[[nodiscard]] inline skia::Sp<skia::SkImage> blurred_window(skia::SkCanvas* canvas, float sigma, skia::SkRect& device) {
+  skia::SkSurface* surface = canvas->getSurface();
+  if (!surface)
+    return nullptr;
+  constexpr float shrink = 4.0f;
+  skia::SkBitmap small;
+  {
+    // Let go of before anything more is drawn: kept, it would make the
+    // window's pixels be copied at the next draw.
+    const skia::Sp<skia::SkImage> under = surface->makeImageSnapshot();
+    if (!under)
+      return nullptr;
+    const int width = std::max(1, static_cast<int>(std::ceil(static_cast<float>(under->width()) / shrink)));
+    const int height = std::max(1, static_cast<int>(std::ceil(static_cast<float>(under->height()) / shrink)));
+    if (!small.tryAllocN32Pixels(width, height))
+      return nullptr;
+    small.eraseColor(0);
+    skia::SkCanvas into(small);
+    skia::SkPaint paint;
+    paint.setImageFilter(skia::SkImageFilters::Blur(sigma / shrink, sigma / shrink, skia::SkTileMode::kClamp, nullptr));
+    into.drawImageRect(under, skia::SkRect::MakeWH(static_cast<float>(width), static_cast<float>(height)),
+                       skia::SkSamplingOptions(skia::SkFilterMode::kLinear), &paint);
+    device = skia::SkRect::MakeIWH(under->width(), under->height());
+  }
+  return small.asImage();
+}
 // What is under a node, blurred as it is drawn: a backdrop filter in its
 // shape -- `blur` 0 to 1 as Frosted's, the window's where below 0 -- and
 // its rect noted, for the host to repaint all of it with what is under it.
+// While it moves, the window under it as it came up, blurred once (above).
 inline void live_backdrop(const scene::State& state, skia::SkCanvas* canvas, float blur, float alpha) {
-  scene::detail::liveBackdrops()[state.fId] = canvas->getTotalMatrix().mapRect(state.fBounds);
+  const skia::SkRect on = canvas->getTotalMatrix().mapRect(state.fBounds);
+  scene::detail::liveBackdrops()[state.fId] = on;
   const float amount = blur >= 0.0f ? blur : static_cast<float>(window_look().frost / 100.0);
   const float sigma = 1.0f + amount * 30.0f;
+  const skia::SkRRect shape = scene::detail::roundedBox(state, state.fBounds);
+
+  auto& all = kept_blurs();
+  std::erase_if(all, [](const auto& each) { return scene::work::entry(each.first) == nullptr; });
+  auto found = std::ranges::find(all, state.fId, &std::pair<scene::NodeId, kept_blur>::first);
+  // Come up now: what is under it is all that is drawn yet -- what is not
+  // repainted is the frame before, without it.
+  const bool new_one = found == all.end();
+  if (new_one) {
+    all.emplace_back(state.fId, kept_blur{});
+    found = std::prev(all.end());
+  }
+  kept_blur& kept = found->second;
+  const bool moved = new_one || kept.at != on || kept.alpha != alpha;
+  // Set off again from standing still, where all of the window is being
+  // repainted: what is under it all drawn anew, it not yet -- taken again.
+  const skia::SkIRect clip = canvas->getDeviceClipBounds();
+  const bool whole = canvas->getSurface() && clip.width() >= canvas->getSurface()->width() &&
+                     clip.height() >= canvas->getSurface()->height();
+  if (new_one || (moved && !kept.moved && whole))
+    kept.blurred = blurred_window(canvas, sigma, kept.device);
+  kept.at = on;
+  kept.alpha = alpha;
+  kept.moved = moved;
+
+  skia::SkMatrix inverse;
+  if (moved && kept.blurred && canvas->getTotalMatrix().invert(&inverse)) {
+    const skia::SkMatrix local = skia::SkMatrix::RectToRect(
+        skia::SkRect::MakeIWH(kept.blurred->width(), kept.blurred->height()), inverse.mapRect(kept.device));
+    skia::SkPaint paint;
+    paint.setAntiAlias(true);
+    paint.setAlphaf(alpha);
+    paint.setShader(kept.blurred->makeShader(skia::SkTileMode::kClamp, skia::SkTileMode::kClamp,
+                                             skia::SkSamplingOptions(skia::SkFilterMode::kLinear), &local));
+    canvas->drawRRect(shape, paint);
+    return;
+  }
   const auto filter = skia::SkImageFilters::Blur(sigma, sigma, nullptr);
   skia::SkPaint paint;
   paint.setAlphaf(alpha);
   const int saved = canvas->save();
-  canvas->clipRRect(scene::detail::roundedBox(state, state.fBounds), true);
+  canvas->clipRRect(shape, true);
   canvas->saveLayer(skia::SkCanvas::SaveLayerRec(&state.fBounds, &paint, filter.get(), 0));
   canvas->restoreToCount(saved);
 }

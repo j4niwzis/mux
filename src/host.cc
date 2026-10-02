@@ -872,26 +872,39 @@ int run(App& app, const options& how) {
             break;
           case SDL_EVENT_MOUSE_MOTION:
             motion = skiff::scene::pointer::move{event.motion.x * to_scene, event.motion.y * to_scene};
+            // Moved off where it went down: no long press -- the press held
+            // back is given now, where it was, and the move after it.
             if (held && !held->fired &&
-                std::hypot(event.motion.x * to_scene - held->x, event.motion.y * to_scene - held->y) > kHoldSlop)
+                std::hypot(event.motion.x * to_scene - held->x, event.motion.y * to_scene - held->y) > kHoldSlop) {
+              router.pointer(skiff::scene::pointer::down{held->x, held->y, SDL_BUTTON_LEFT});
               held.reset();
+            }
             break;
           case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            // Where it may be a long press, the press is held back until it
+            // is known not to be: given on a move or a lift, never where it
+            // becomes the right press -- given at once, it began a selection
+            // where it went down, and a selection held was gone before its
+            // menu came (the user, #13637).
             if (event.button.button == SDL_BUTTON_LEFT &&
-                (event.button.which == SDL_TOUCH_MOUSEID || (last_width < 600.0f && last_height > last_width)))
+                (event.button.which == SDL_TOUCH_MOUSEID || (last_width < 600.0f && last_height > last_width))) {
               held = held_t{event.button.x * to_scene, event.button.y * to_scene, detail::now_ms(), false};
-            else
-              held.reset();
+              break;
+            }
+            held.reset();
             router.pointer(
                 skiff::scene::pointer::down{event.button.x * to_scene, event.button.y * to_scene, event.button.button});
             break;
           case SDL_EVENT_MOUSE_BUTTON_UP:
             // Its lifting, where the hold was made a right press: that press
             // was all of it.
-            if (event.button.button == SDL_BUTTON_LEFT && held && std::exchange(held, std::nullopt)->fired)
-              break;
-            if (event.button.button == SDL_BUTTON_LEFT)
-              held.reset();
+            if (event.button.button == SDL_BUTTON_LEFT && held) {
+              const held_t was = *std::exchange(held, std::nullopt);
+              if (was.fired)
+                break;
+              // A tap: the press held back, then this.
+              router.pointer(skiff::scene::pointer::down{was.x, was.y, SDL_BUTTON_LEFT});
+            }
             router.pointer(
                 skiff::scene::pointer::up{event.button.x * to_scene, event.button.y * to_scene, event.button.button});
             break;
@@ -981,7 +994,6 @@ int run(App& app, const options& how) {
       // gesture, and it is pressed and let go of with the right button.
       if (held && !held->fired && detail::now_ms() - held->since >= kHoldMs) {
         held->fired = true;
-        router.pointer(skiff::scene::pointer::cancel{held->x, held->y});
         router.pointer(skiff::scene::pointer::down{held->x, held->y, SDL_BUTTON_RIGHT});
         router.pointer(skiff::scene::pointer::up{held->x, held->y, SDL_BUTTON_RIGHT});
       }

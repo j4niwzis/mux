@@ -102,6 +102,11 @@ std::string of(const change::pack_saved& one) {
 }
 std::string of(const change::pack_picture_uploaded& one) { return std::format("uploaded {}", one.picture.url); }
 std::string of(const change::refused& one) { return one.what; }
+std::string of(const change::notice& one) { return one.heading + ": " + one.what; }
+std::string of(const change::message_encrypted& one) {
+  return std::format("{} {} came encrypted{}", one.in.id, one.id, one.verified ? ", from a verified device" : "");
+}
+std::string of(const change::verification_changed& one) { return std::format("verifying {} {}: {}", one.user, one.device, one.txn); }
 std::string of(const change::profile_found& one) { return std::format("profile of {}", one.user); }
 std::string of(const change::sessions_listed& one) { return std::format("{} sessions", one.sessions.size()); }
 std::string of(const change::sessions_refused& one) { return one.why; }

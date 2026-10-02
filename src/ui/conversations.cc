@@ -380,6 +380,16 @@ struct conversations_screen : nodes::Stack {
   }
   std::vector<config::space_placed> space_places;
   std::vector<std::string> shown_bars;
+  // A phone's way (the user's, #13548): a window narrow and taller than it is
+  // wide shows one thing at a time, all of it across -- the chats, a chat,
+  // or its info or threads -- not side by side; and how wide it is.
+  bool single = false;
+  float single_width = 0.0f;
+  // Where a swipe across the chat began, single: left to right, back to
+  // the chats.
+  std::optional<skia::SkPoint> swipe_from;
+  // The spaces along the top bigger, for a finger: a long press on them.
+  bool big_spaces = false;
   struct pick_folder {
     conversations_screen* screen;
     void operator()(const folder_t& which) const { screen->choose_folder(which); }
@@ -538,6 +548,8 @@ struct conversations_screen : nodes::Stack {
   };
   struct side_column : nodes::Stack {
     float wanted = 300.0f;
+    // All of the window across: one thing at a time (single, below).
+    bool whole = false;
     struct head_row : nodes::Stack {
       using explore_button = icon_button<ask<Actions, &Actions::open_explore>>;
       struct parts_t {
@@ -1175,8 +1187,19 @@ struct conversations_screen : nodes::Stack {
     }
     // Its own width, as far as the window has room for it.
     void measure(const skia::SkRect& parent) {
+      if (whole) {
+        fState.fWidth = parent.width();
+        return;
+      }
       fState.fWidth = std::clamp(wanted, std::min(kMinSidebar, parent.width()),
                                  std::max(kMinSidebar, parent.width() * 0.6f));
+    }
+    // The head, and its bar of spaces, taller for a finger -- or as they were.
+    void set_big_spaces(bool big) {
+      parts.head.apply({.height = big ? 76.0f : 52.0f});
+      parts.head.parts.top.apply({.height = big ? 58.0f : 34.0f});
+      this->invalidateLayout();
+      this->markDamaged();
     }
   };
   // The chat: its header, its messages, and where one writes; or, with no
@@ -1543,7 +1566,7 @@ struct conversations_screen : nodes::Stack {
                                      (avatar_images().has(one.top->id) ? "1" : "0")
                                : std::string(mark) + '|' + one.sub->id.id + '|' + display_name(*one.sub) + '|' +
                                      std::to_string(one.depth) + '|' + (avatar_images().has(one.sub->id.id) ? "1" : "0"));
-    made.push_back(std::string(spaces_on ? "1" : "0") + (top_bar_on ? "1" : "0"));
+    made.push_back(std::string(spaces_on ? "1" : "0") + (top_bar_on ? "1" : "0") + (big_spaces ? "1" : "0"));
     if (made != shown_bars) {
       shown_bars = made;
       auto& side_icons = std::get<0>(side.side_line.fChildren);
@@ -1564,7 +1587,7 @@ struct conversations_screen : nodes::Stack {
         }
       };
       emit(side_icons, side_shown, config::space_bar::side{}, 40.0f);
-      emit(top_icons, top_shown, config::space_bar::top{}, 30.0f);
+      emit(top_icons, top_shown, config::space_bar::top{}, big_spaces ? 50.0f : 30.0f);
       side.side_line.invalidateLayout();
       side.top_line.invalidateLayout();
       if (side.landing)
@@ -1589,9 +1612,37 @@ struct conversations_screen : nodes::Stack {
   // The space menu closed by any press off it, wherever on the screen: at
   // once, where the press is not on it; one on it chooses first.
   using Node::onPointer;
-  void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply&) {
+  void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply& reply) {
     if (side.menu_up() && !side.menu_has(press.x, press.y))
       side.close_menu();
+    // Single: a swipe across the chat begun here.
+    swipe_from.reset();
+    if (single && chosen && press.button <= 1 && chat.visible() && chat.bounds().contains(press.x, press.y))
+      swipe_from = skia::SkPoint{press.x, press.y};
+    // Single: a long press -- a right press, as the host makes one of it --
+    // on the spaces along the top, or near them: they grow for a finger, or
+    // go back to as they were. Not their menu.
+    if (single && press.button == 3 && side.top_bar.visible() &&
+        side.parts.head.bounds().makeOutset(0.0f, 16.0f).contains(press.x, press.y)) {
+      big_spaces = !big_spaces;
+      side.set_big_spaces(big_spaces);
+      if (last_model)
+        this->show_space_bars(*last_model);
+      reply.handle();
+    }
+  }
+  // The swipe let go: far enough to the right, and more across than down --
+  // out of the chat, to the chats.
+  void onPointer(scene::phase::capture, const scene::pointer::up& lift, scene::PointerReply& reply) {
+    const std::optional<skia::SkPoint> from = std::exchange(swipe_from, std::nullopt);
+    if (!from || !single || !chosen)
+      return;
+    const float dx = lift.x - from->fX;
+    const float dy = lift.y - from->fY;
+    if (dx > 90.0f && std::abs(dy) < dx * 0.5f) {
+      actions->close_chat();
+      reply.handle();
+    }
   }
   // Esc too.
   bool close_space_menu() {
@@ -1622,10 +1673,27 @@ struct conversations_screen : nodes::Stack {
     const bool shown = (info_open || threads_open) && chosen.has_value();
     info.setVisible(shown && !threads_open);
     parts.threads.setVisible(shown && threads_open);
-    info_edge.setVisible(shown);
+    info_edge.setVisible(shown && !single);
     side.wanted = side_width;
-    info.apply({.width = info_width});
-    parts.threads.apply({.width = info_width});
+    // Single: the chats with none chosen; the chat; or its info in its place.
+    side.whole = single;
+    side.setVisible(!single || !chosen.has_value());
+    edge.setVisible(!single);
+    chat.setVisible(!single || (chosen.has_value() && !shown));
+    const float across = single ? single_width : info_width;
+    info.apply({.width = across});
+    parts.threads.apply({.width = across});
+  }
+  // Single or not as the window is now: looked at as it is laid out.
+  void layoutChildren() {
+    const skia::SkRect box = fState.contentBox();
+    const bool now = box.width() < 600.0f && box.height() > box.width();
+    if (now != single || (now && box.width() != single_width)) {
+      single = now;
+      single_width = box.width();
+      this->show_info();
+    }
+    this->nodes::Stack::layoutChildren();
   }
   bool threads_open = false;
   // The chosen chat's background, as the program resolves it.

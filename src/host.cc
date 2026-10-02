@@ -784,9 +784,26 @@ int run(App& app, const options& how) {
     // keeps its pixels: put back before the next frame is drawn.
     std::vector<std::pair<skia::Sp<skia::SkImage>, skia::SkIRect>> overlays;
     bool vsync_on = true;
+    // A long press, as a phone's (the user's, #13548): the main button held
+    // where it went down for half a second is a right press there -- what is
+    // under it given way first (a scroll, a selection begun), then its menu,
+    // with a selection or without. Where it went down, when, and whether it
+    // has been made a right press: its own lifting is then swallowed. From a
+    // finger, or in a window shaped as a phone's (single, in the screen).
+    struct held_t {
+      float x = 0.0f, y = 0.0f;
+      double since = 0.0;
+      bool fired = false;
+    };
+    std::optional<held_t> held;
+    constexpr double kHoldMs = 500.0;
+    constexpr float kHoldSlop = 8.0f;
+    float last_width = 0.0f, last_height = 0.0f;
     while (running) {
       SDL_Event event;
-      const double wake_in = wake_at - detail::now_ms();
+      const double hold_in = held && !held->fired ? held->since + kHoldMs - detail::now_ms()
+                                                  : std::numeric_limits<double>::infinity();
+      const double wake_in = std::min(wake_at - detail::now_ms(), hold_in);
       bool got = (redraw || animating)       ? SDL_WaitEventTimeout(&event, 16)
                  : std::isfinite(wake_in) ? SDL_WaitEventTimeout(&event, static_cast<std::int32_t>(
                                                                     std::clamp(wake_in, 1.0, 60000.0)))
@@ -842,12 +859,26 @@ int run(App& app, const options& how) {
             break;
           case SDL_EVENT_MOUSE_MOTION:
             motion = skiff::scene::pointer::move{event.motion.x * to_scene, event.motion.y * to_scene};
+            if (held && !held->fired &&
+                std::hypot(event.motion.x * to_scene - held->x, event.motion.y * to_scene - held->y) > kHoldSlop)
+              held.reset();
             break;
           case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            if (event.button.button == SDL_BUTTON_LEFT &&
+                (event.button.which == SDL_TOUCH_MOUSEID || (last_width < 600.0f && last_height > last_width)))
+              held = held_t{event.button.x * to_scene, event.button.y * to_scene, detail::now_ms(), false};
+            else
+              held.reset();
             router.pointer(
                 skiff::scene::pointer::down{event.button.x * to_scene, event.button.y * to_scene, event.button.button});
             break;
           case SDL_EVENT_MOUSE_BUTTON_UP:
+            // Its lifting, where the hold was made a right press: that press
+            // was all of it.
+            if (event.button.button == SDL_BUTTON_LEFT && held && std::exchange(held, std::nullopt)->fired)
+              break;
+            if (event.button.button == SDL_BUTTON_LEFT)
+              held.reset();
             router.pointer(
                 skiff::scene::pointer::up{event.button.x * to_scene, event.button.y * to_scene, event.button.button});
             break;
@@ -905,6 +936,14 @@ int run(App& app, const options& how) {
       give_motion();
       if (!running)
         break;
+      // Held long enough where it went down: what is under it lets go of the
+      // gesture, and it is pressed and let go of with the right button.
+      if (held && !held->fired && detail::now_ms() - held->since >= kHoldMs) {
+        held->fired = true;
+        router.pointer(skiff::scene::pointer::cancel{held->x, held->y});
+        router.pointer(skiff::scene::pointer::down{held->x, held->y, SDL_BUTTON_RIGHT});
+        router.pointer(skiff::scene::pointer::up{held->x, held->y, SDL_BUTTON_RIGHT});
+      }
 
       // The display's scale, times the interface's (Settings, Appearance).
       const float scale = SDL_GetWindowDisplayScale(window) * static_cast<float>(app.interface_scale) / 100.0f;
@@ -919,6 +958,8 @@ int run(App& app, const options& how) {
       SDL_GetWindowSizeInPixels(window, &pixel_width, &pixel_height);
       const float width = static_cast<float>(pixel_width) / scale;
       const float height = static_cast<float>(pixel_height) / scale;
+      last_width = width;
+      last_height = height;
       // What the scene left for the host: the text input started or stopped
       // as a field takes the focus or lets it go, what was copied put on
       // the clipboard, the links pressed followed.

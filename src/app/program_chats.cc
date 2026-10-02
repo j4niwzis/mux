@@ -92,6 +92,17 @@ void app::apply(const request::choose& one) {
   root().main().show(*model);
 }
 
+void app::apply(const request::close_chat&) {
+  auto& screen = root().main();
+  if (!screen.chosen)
+    return;
+  drafts.keep(*screen.chosen, screen.line.plain());
+  screen.line.set_text({});
+  screen.info_open = false;
+  screen.chosen.reset();
+  screen.show(*model);
+}
+
 void app::apply(const request::leave_chat&) {
   const auto& chosen = root().main().chosen;
   if (!chosen)

@@ -215,6 +215,8 @@ struct app : kept_settings {
 
   // The chosen chat left: a Matrix room here; XMPP rooms are not there yet.
   void apply(const request::leave_chat&);
+  // Out of the chat open, back to the chats: what was written kept as its draft.
+  void apply(const request::close_chat&);
   void apply(const request::back&);
   void apply(const request::open_accounts&);
   void apply(const request::open_new_account&);

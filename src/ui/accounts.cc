@@ -701,6 +701,13 @@ struct accounts_panel : closes_on_escape<Actions> {
       parts.side.apply(!narrow    ? scene::Spec{.fillX = false, .fillY = true, .width = kListWidth, .autoSize = scene::axes::kNone}
                        : settings ? scene::Spec{.fillX = true, .fillY = false, .autoSize = scene::axes::kY}
                                   : scene::Spec{.fillX = true, .fillY = true, .autoSize = scene::axes::kNone});
+      // The page: across all of it, and the rest of the height, where they
+      // are stacked -- growing across in a column, it had no width, what it
+      // held stood out of it, and its buttons took no press.
+      parts.main.apply(settings ? scene::Spec{.fillX = true, .fillY = false, .grow = scene::axes::kY}
+                                : scene::Spec{.fillX = false, .fillY = true, .grow = scene::axes::kX});
+      parts.side.invalidateLayout();
+      parts.main.invalidateLayout();
       this->invalidateLayout();
     }
     void layoutChildren() {

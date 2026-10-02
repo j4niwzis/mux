@@ -1089,6 +1089,10 @@ void account<Sink>::sas_check_mac(crypto::sas_state& state) {
   this->send_step(state, "m.key.verification.done", loom::ev::m_key_verification_done_content_t{});
   this->verification_said(state, verification_step::done{});
   this->tell_trust(state.their_user);
+  // One's own other session, verified: the cross-signing keys asked of it,
+  // where this device has none -- with them it signs itself.
+  if (state.their_user == id_.address && !crypto_->cross_signing_keys())
+    this->request_secrets(state.their_device);
   verifications_.erase(txn);
 }
 template <class Sink>
@@ -1239,8 +1243,13 @@ void account<Sink>::crypto_answer_now(const loom::cs::sliding_sync::response_t& 
     if (extensions.to_device->events)
       for (const auto& one : *extensions.to_device->events)
         splice::visit(splice::overloaded{[&](const loom::ev::m_room_encrypted_content_t& content) {
-                                           if (auto offer = crypto_->to_device(one.sender.value_or(""), content))
-                                             this->vet_room_key(*offer);
+                                           if (auto said = crypto_->to_device(one.sender.value_or(""), content))
+                                             splice::visit(splice::overloaded{[&](const crypto::room_key_offer& offer) { this->vet_room_key(offer); },
+                                                                              [&](const crypto::secret_got& got) { this->secret_in(got); }},
+                                                           *said);
+                                         },
+                                         [&](const loom::ev::m_secret_request_content_t& content) {
+                                           this->secret_request_in(one.sender.value_or(""), content);
                                          },
                                          [&](const loom::ev::m_key_verification_request_content_t& content) {
                                            this->verification_in(one.sender.value_or(""), content);
@@ -1567,5 +1576,132 @@ void account<Sink>::tell_trust(std::string user) {
   else if (crypto_->master_verified(user) || !crypto_->verified_keys(user).empty())
     now = trust::verified{};
   sink_(change::trust_changed{id_, std::move(user), std::move(now)});
+}
+}  // namespace mux::matrix
+
+namespace mux::matrix {
+
+template <class Sink>
+void account<Sink>::request_secrets(const std::string& device) {
+  if (!api_ || !crypto_)
+    return;
+  for (const auto& [name, at] : crypto::kSecretNames) {
+    const std::string request = this->transaction();
+    secrets_asked_.insert_or_assign(request, crypto::secret_name_at(at));
+    std::map<std::string, std::map<std::string, knot::raw>> messages;
+    messages[id_.address][device] = knot::raw{knot::to_json_string(crypto::secret_request_part{
+        .name = std::string(name), .requesting_device_id = crypto_->device_id(), .request_id = request})};
+    (void)perform(*api_, loom::cs::send_to_device{.event_type = "m.secret.request", .txn_id = this->transaction(),
+                                                  .body = {.messages = std::move(messages)}});
+  }
+  log(id_, "asked {} for the cross-signing keys and the backup key", device);
+}
+
+// A secret given: taken only as the answer to one asked here, from this
+// user, from a device of theirs verified here by emoji. The three
+// cross-signing keys, together, checked against the master key the server
+// lists, kept, and this device signed with them; the backup's key, the
+// backup restored.
+template <class Sink>
+void account<Sink>::secret_in(const crypto::secret_got& got) {
+  if (!api_ || !crypto_)
+    return;
+  const auto asked = secrets_asked_.find(got.request_id);
+  if (asked == secrets_asked_.end() || got.sender != id_.address)
+    return;
+  if (!std::ranges::contains(crypto_->verified_keys(id_.address), got.ed25519)) {
+    log(id_, "a secret refused: not from a session of yours verified here");
+    return;
+  }
+  const crypto::secret_name_t which = asked->second;
+  secrets_asked_.erase(asked);
+  splice::visit(splice::overloaded{[&](crypto::secret_name::master) { secrets_got_.master = got.secret; },
+                                   [&](crypto::secret_name::self_signing) { secrets_got_.self_signing = got.secret; },
+                                   [&](crypto::secret_name::user_signing) { secrets_got_.user_signing = got.secret; },
+                                   [&](crypto::secret_name::backup) {
+                                     const std::size_t restored = this->restore_backup(got.secret);
+                                     log(id_, "the backup key given: {} room keys restored", restored);
+                                   }},
+                which);
+  if (!secrets_got_.master || !secrets_got_.self_signing || !secrets_got_.user_signing)
+    return;
+  const crypto::cross_signing_secrets secrets{.master = *secrets_got_.master, .self_signing = *secrets_got_.self_signing,
+                                              .user_signing = *secrets_got_.user_signing};
+  loom::cs::query_keys ask;
+  ask.body.device_keys.emplace(id_.address, std::vector<std::string>{});
+  auto listed = perform(*api_, ask);
+  const auto server_master = listed ? crypto::master_of(*listed, id_.address) : std::nullopt;
+  if (!server_master || crypto::detail::ed25519_public(secrets.master) != server_master) {
+    sink_(change::refused{id_, "The cross-signing keys your other session gave are not the ones your account has."});
+    return;
+  }
+  crypto_->keep_cross_signing(secrets);
+  crypto_->verify_master(id_.address, *server_master);
+  if (listed->device_keys)
+    if (const auto own = listed->device_keys->find(id_.address); own != listed->device_keys->end())
+      if (const auto device = own->second.find(crypto_->device_id()); device != own->second.end())
+        this->cross_sign_device(device->second);
+  secrets_got_ = {};
+  sink_(change::notice{id_, "Verified",
+                       "Your other session gave this one your cross-signing keys: it has signed itself with them, and "
+                       "the people you talk to see it as yours."});
+}
+
+// A secret asked by one of this user's own other sessions: given where this
+// device has it and the asker is a device of theirs verified here by emoji
+// -- over Olm, a session with it opened from its one-time key where none is.
+template <class Sink>
+void account<Sink>::secret_request_in(const std::string& sender, const loom::ev::m_secret_request_content_t& content) {
+  if (!api_ || !crypto_ || sender != id_.address || content.requesting_device_id == crypto_->device_id() || !content.name)
+    return;
+  const bool asking = splice::visit(splice::overloaded{[](loom::ev::m_secret_request_content_t::action_values::request_) { return true; },
+                                                       [](const auto&) { return false; }},
+                                    content.action);
+  if (!asking)
+    return;
+  const auto keys = crypto_->cross_signing_keys();
+  const auto which = crypto::secret_name_of(*content.name);
+  if (!keys || !which)
+    return;
+  const std::optional<std::string> secret =
+      splice::visit(splice::overloaded{[&](crypto::secret_name::master) { return std::optional<std::string>(keys->master); },
+                                       [&](crypto::secret_name::self_signing) { return std::optional<std::string>(keys->self_signing); },
+                                       [&](crypto::secret_name::user_signing) { return std::optional<std::string>(keys->user_signing); },
+                                       [](crypto::secret_name::backup) { return std::optional<std::string>(); }},
+                    *which);
+  if (!secret)
+    return;
+  loom::cs::query_keys ask;
+  ask.body.device_keys.emplace(id_.address, std::vector<std::string>{});
+  auto got = perform(*api_, ask);
+  if (!got)
+    return;
+  const auto mine = crypto::recipients_of(*got, id_.address, crypto_->pinned_master(id_.address), std::string_view(),
+                                          crypto_->verified_keys(id_.address));
+  const auto device = std::ranges::find(mine, content.requesting_device_id, &crypto::recipient::device_id);
+  if (device == mine.end() || !std::ranges::contains(crypto_->verified_keys(id_.address), device->ed25519)) {
+    log(id_, "{} asked for {}: not a session of yours verified here, not given", content.requesting_device_id, *content.name);
+    return;
+  }
+  std::optional<std::string> one_time_key;
+  if (!crypto_->has_session(device->curve25519)) {
+    loom::cs::claim_keys claim;
+    claim.body.one_time_keys[id_.address][device->device_id] = "signed_curve25519";
+    if (auto claimed = perform(*api_, claim))
+      if (const auto by_user = claimed->one_time_keys.find(id_.address); by_user != claimed->one_time_keys.end())
+        if (const auto by_device = by_user->second.find(device->device_id); by_device != by_user->second.end())
+          for (const auto& [id, raw] : by_device->second)
+            if (!one_time_key)
+              one_time_key = crypto::one_time_key_of(raw, *device);
+  }
+  const auto sealed = crypto_->secret_for(*device, content.request_id, *secret, one_time_key);
+  if (!sealed)
+    return;
+  std::map<std::string, std::map<std::string, knot::raw>> messages;
+  messages[id_.address][device->device_id] = knot::raw{
+      knot::to_json_string(crypto::olm_content{.sender_key = crypto_->curve25519(), .ciphertext = {{device->curve25519, *sealed}}})};
+  if (perform(*api_, loom::cs::send_to_device{.event_type = "m.room.encrypted", .txn_id = this->transaction(),
+                                              .body = {.messages = std::move(messages)}}))
+    log(id_, "{} given to your session {}", *content.name, device->device_id);
 }
 }  // namespace mux::matrix

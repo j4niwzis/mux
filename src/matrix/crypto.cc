@@ -350,6 +350,16 @@ struct room_key_offer {
   loom::ev::m_room_key_content_t key;
   kept_file::origin from;
 };
+// A secret come over Olm (m.secret.send): the request it answers, the
+// secret, and who sent it -- the user and the ed25519 key of the device the
+// Olm payload says it came from.
+struct secret_got {
+  std::string request_id;
+  std::string secret;
+  std::string sender;
+  std::string ed25519;
+};
+using to_device_said = splice::variant<room_key_offer, secret_got>;
 // A room event read, and whether the device it came from is cross-signed.
 struct decrypted {
   loom::ev::basic_event<loom::ev::timeline_content> event;
@@ -424,6 +434,61 @@ struct room_key_payload {
   olm_envelope::ed25519_key recipient_keys;
   olm_envelope::ed25519_key keys;
   friend consteval auto json_schema(knot::type<room_key_payload>) { return knot::schema<room_key_payload>(); }
+};
+// A secret, over Olm, to one of this user's own devices that asked for it
+// (the spec's m.secret.send): the request's id and the secret.
+struct secret_send_payload {
+  struct content_t {
+    std::string request_id;
+    std::string secret;
+    friend consteval auto json_schema(knot::type<content_t>) { return knot::schema<content_t>(); }
+  };
+  std::string type = "m.secret.send";
+  content_t content;
+  std::string sender;
+  std::string recipient;
+  olm_envelope::ed25519_key recipient_keys;
+  olm_envelope::ed25519_key keys;
+  friend consteval auto json_schema(knot::type<secret_send_payload>) { return knot::schema<secret_send_payload>(); }
+};
+// The secrets shared between one's own devices, by what they are -- read
+// from their names once, here, by the table below.
+namespace secret_name {
+struct master {};
+struct self_signing {};
+struct user_signing {};
+struct backup {};
+}  // namespace secret_name
+using secret_name_t = splice::variant<secret_name::master, secret_name::self_signing, secret_name::user_signing, secret_name::backup>;
+inline constexpr std::array<std::pair<std::string_view, std::size_t>, 4> kSecretNames{{{"m.cross_signing.master", 0},
+                                                                                       {"m.cross_signing.self_signing", 1},
+                                                                                       {"m.cross_signing.user_signing", 2},
+                                                                                       {"m.megolm_backup.v1", 3}}};
+[[nodiscard]] inline secret_name_t secret_name_at(std::size_t at) {
+  switch (at) {
+    case 0: return secret_name::master{};
+    case 1: return secret_name::self_signing{};
+    case 2: return secret_name::user_signing{};
+    default: return secret_name::backup{};
+  }
+}
+[[nodiscard]] inline std::optional<secret_name_t> secret_name_of(std::string_view name) {
+  const auto found = std::ranges::find(kSecretNames, name, &std::pair<std::string_view, std::size_t>::first);
+  return found == kSecretNames.end() ? std::nullopt : std::optional<secret_name_t>(secret_name_at(found->second));
+}
+// The secrets of one's own, as they come: the three cross-signing keys,
+// kept until all are here.
+struct secrets_gathered {
+  std::optional<std::string> master, self_signing, user_signing;
+};
+// A secret asked of this user's other devices (m.secret.request), sent as
+// it is, unencrypted, as the spec has it.
+struct secret_request_part {
+  std::string name;
+  std::string action = "request";
+  std::string requesting_device_id;
+  std::string request_id;
+  friend consteval auto json_schema(knot::type<secret_request_part>) { return knot::schema<secret_request_part>(); }
 };
 // What goes over a new Olm session to mend a broken one (the spec's
 // m.dummy): nothing, but a pre-key message, which the other side opens a
@@ -1359,7 +1424,7 @@ class olm_machine {
   // read, and the room key it carries offered -- taken only once the
   // account has found the device it came from (accept_room_key). Nothing
   // where it is not for this device, cannot be read, or carries no key.
-  [[nodiscard]] std::optional<room_key_offer> to_device(const std::string& sender,
+  [[nodiscard]] std::optional<to_device_said> to_device(const std::string& sender,
                                                         const loom::ev::m_room_encrypted_content_t& content) {
     const bool olm = splice::visit(
         splice::overloaded{[](loom::ev::m_room_encrypted_content_t::algorithm_values::m_olm_v1_curve25519_aes_sha2) { return true; },
@@ -1402,12 +1467,15 @@ class olm_machine {
     if (envelope->sender != sender || envelope->recipient != user_id_ || envelope->recipient_keys.ed25519 != this->ed25519())
       return std::nullopt;
     return splice::visit(
-        splice::overloaded{[&](const loom::ev::m_room_key_content_t& key) -> std::optional<room_key_offer> {
-                             return room_key_offer{key, kept_file::origin{.sender_key = *content.sender_key,
-                                                                          .ed25519 = envelope->keys.ed25519,
-                                                                          .sender = sender}};
+        splice::overloaded{[&](const loom::ev::m_room_key_content_t& key) -> std::optional<to_device_said> {
+                             return to_device_said{room_key_offer{key, kept_file::origin{.sender_key = *content.sender_key,
+                                                                                         .ed25519 = envelope->keys.ed25519,
+                                                                                         .sender = sender}}};
                            },
-                           [](const auto&) -> std::optional<room_key_offer> { return std::nullopt; }},
+                           [&](const loom::ev::m_secret_send_content_t& said) -> std::optional<to_device_said> {
+                             return to_device_said{secret_got{said.request_id, said.secret, sender, envelope->keys.ed25519}};
+                           },
+                           [](const auto&) -> std::optional<to_device_said> { return std::nullopt; }},
         payload->content.data());
   }
 
@@ -1485,7 +1553,23 @@ class olm_machine {
                                    .recipient = to.user,
                                    .recipient_keys = {to.ed25519},
                                    .keys = {this->ed25519()}};
-    const std::string plaintext = knot::to_json_string(payload);
+    return this->seal_olm(to, knot::to_json_string(payload), one_time_key);
+  }
+  // A secret, for one of this user's own devices that asked, over Olm.
+  [[nodiscard]] std::optional<olm_ciphertext> secret_for(const recipient& to, const std::string& request_id,
+                                                         const std::string& secret,
+                                                         const std::optional<std::string>& one_time_key) {
+    const secret_send_payload payload{.content = {.request_id = request_id, .secret = secret},
+                                      .sender = user_id_,
+                                      .recipient = to.user,
+                                      .recipient_keys = {to.ed25519},
+                                      .keys = {this->ed25519()}};
+    return this->seal_olm(to, knot::to_json_string(payload), one_time_key);
+  }
+  // A payload, for a device, over Olm: through its newest session, or one
+  // made from its one-time key.
+  [[nodiscard]] std::optional<olm_ciphertext> seal_olm(const recipient& to, const std::string& plaintext,
+                                                       const std::optional<std::string>& one_time_key) {
     try {
       auto& sessions = kept_.olm[to.curve25519];
       if (sessions.empty()) {

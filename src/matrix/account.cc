@@ -597,6 +597,14 @@ class account {
   // The direct rooms, as m.direct said at the sync they were read at.
   mutable std::set<std::string, std::less<>> direct_rooms_;
   mutable std::optional<std::optional<std::string>> direct_rooms_since_;
+  // The secrets (cross-signing keys, the backup's key) shared with this
+  // user's own other devices: asked of one verified here by emoji, taken
+  // from it, and given to one verified so that asks (m.secret.request/send).
+  void request_secrets(const std::string& device);
+  void secret_in(const crypto::secret_got& got);
+  void secret_request_in(const std::string& sender, const loom::ev::m_secret_request_content_t& content);
+  std::map<std::string, crypto::secret_name_t> secrets_asked_;  // request id -> which secret
+  crypto::secrets_gathered secrets_got_;
   [[nodiscard]] std::string transaction() { return std::format("mux-{}-{}", run_, ++transactions_); }
   std::uint64_t transactions_ = 0;
   // When this run began, in the clock's ticks: what makes its ids its own.

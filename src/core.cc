@@ -1529,6 +1529,12 @@ class model {
   void on(const change::reaction_changed& one) {
     if (message* kept = message_in(of(one.in), one.id)) {
       auto& who = kept->reactions[one.key];
+      // Taken back: its mark too -- a reaction changed for another was
+      // counted twice by the heart, the one taken back still in it.
+      if (!one.added)
+        for (const message::reaction_event& each : kept->reaction_events)
+          if (each.key == one.key && each.who == one.who)
+            std::erase_if(of(one.in).unread_reactions, [&](const unread_mark& mark) { return mark.event == each.event; });
       std::erase_if(kept->reaction_events, [&](const message::reaction_event& each) {
         return each.key == one.key && each.who == one.who;
       });

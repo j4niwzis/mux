@@ -237,7 +237,10 @@ class pictures_part {
           // A message's pictures, its link's preview, and what it quotes.
           const auto pictures_of = [&](const message& said) {
             if (said.attachment && is_picture(said.attachment->kind)) {
-              this->want_thumbnail(id, said.attachment->source);
+              // A video with no thumbnail: nothing to fetch as a picture --
+              // its file is the video, its plate shown as it is.
+              if (said.attachment->video != said.attachment->source)
+                this->want_thumbnail(id, said.attachment->source);
               this->make_preview(*said.attachment);
               // One that moves: the whole of it, for its frames.
               if (moves(said.attachment->kind))

@@ -882,11 +882,11 @@ void account<Sink>::crypto_answer_now(const loom::cs::sliding_sync::response_t& 
 // got it: over an Olm session where there is one, else one made from a
 // one-time key claimed for the device and signed by it.
 template <class Sink>
-bool account<Sink>::share_room_key(const std::string& room) {
+std::optional<std::string> account<Sink>::share_room_key(const std::string& room) {
   auto members = perform(*api_, loom::cs::get_joined_members_by_room{.room_id = room});
   if (!members || !members->joined) {
     log(id_, "{}: its members could not be fetched", room);
-    return false;
+    return std::nullopt;
   }
   loom::cs::query_keys ask;
   for (const auto& [user, profile] : *members->joined)
@@ -894,7 +894,7 @@ bool account<Sink>::share_room_key(const std::string& room) {
   auto got = perform(*api_, ask);
   if (!got) {
     log(id_, "{}: its members' devices could not be fetched: {}", room, got.error().said());
-    return false;
+    return std::nullopt;
   }
   std::vector<crypto::recipient> readers;
   for (const auto& [user, profile] : *members->joined) {
@@ -913,7 +913,7 @@ bool account<Sink>::share_room_key(const std::string& room) {
       std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
   const auto plan = crypto_->outbound_for(room, readers, limits, now_ms);
   if (plan.to_share.empty())
-    return true;
+    return plan.session_id;
   // One-time keys for the devices there is no session with yet.
   loom::cs::claim_keys claim;
   for (const crypto::recipient& one : plan.to_share)
@@ -943,17 +943,17 @@ bool account<Sink>::share_room_key(const std::string& room) {
     given.push_back(one);
   }
   if (messages.empty())
-    return true;
+    return plan.session_id;
   auto sent = perform(*api_, loom::cs::send_to_device{.event_type = "m.room.encrypted",
                                                       .txn_id = this->transaction(),
                                                       .body = {.messages = std::move(messages)}});
   if (!sent) {
     log(id_, "{}: the room's key could not be sent: {}", room, sent.error().said());
-    return false;
+    return std::nullopt;
   }
   for (const crypto::recipient& one : given)
     crypto_->shared(room, one);
-  return true;
+  return plan.session_id;
 }
 
 // A room key offered: the sender's devices asked of the server, and the key

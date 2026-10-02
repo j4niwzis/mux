@@ -294,10 +294,16 @@ class account {
     if (!crypto_)
       throw plaintext_refused(in, ask.txn_id, std::string(kNot) + "encryption is not running for this account.");
     try {
-      if (!this->share_room_key(ask.room_id))
-        throw plaintext_refused(in, ask.txn_id, std::string(kNot) + "the room's key could not be given to its members.");
+      // Shared, then sealed with that very session: where another send
+      // rotated it in between, shared and sealed again.
       const auto relation = knot::try_read<crypto::relation_part>(ask.body.text);
-      auto sealed = crypto_->encrypt(ask.room_id, ask.event_type, ask.body, relation ? relation->relates_to : std::nullopt);
+      std::optional<crypto::megolm_content> sealed;
+      for (int attempt = 0; attempt < 3 && !sealed; ++attempt) {
+        const auto session = this->share_room_key(ask.room_id);
+        if (!session)
+          throw plaintext_refused(in, ask.txn_id, std::string(kNot) + "the room's key could not be given to its members.");
+        sealed = crypto_->encrypt(ask.room_id, *session, ask.event_type, ask.body, relation ? relation->relates_to : std::nullopt);
+      }
       if (!sealed)
         throw plaintext_refused(in, ask.txn_id, std::string(kNot) + "the room's session failed.");
       return perform(*api_, loom::cs::send_message{.room_id = ask.room_id,
@@ -313,9 +319,9 @@ class account {
     }
   }
   // The room's key given to every device of its members that should read it
-  // and has not got it: false where they could not be known, or the key
-  // could not be sent.
-  bool share_room_key(const std::string& room);
+  // and has not got it: the session's ID, or none where they could not be
+  // known, or the key could not be sent.
+  std::optional<std::string> share_room_key(const std::string& room);
   // The encrypted files events named, by their mxc:// URI: what opens each
   // once it is downloaded.
   std::map<std::string, crypto::encrypted_file, std::less<>> encrypted_media_;

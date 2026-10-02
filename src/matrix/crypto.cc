@@ -843,8 +843,10 @@ class olm_machine {
   }
   // A room event encrypted with the room's session, as m.room.encrypted's
   // content; its relation kept in the clear.
-  [[nodiscard]] std::optional<megolm_content> encrypt(const std::string& room, std::string type, knot::raw content,
-                                                      std::optional<knot::raw> relates_to) {
+  // Only with the session that was given out: where another took its place
+  // meanwhile (another send, rotating), none -- its readers may not have it.
+  [[nodiscard]] std::optional<megolm_content> encrypt(const std::string& room, const std::string& session_id, std::string type,
+                                                      knot::raw content, std::optional<knot::raw> relates_to) {
     if (!kept_.outbound)
       return std::nullopt;
     const auto kept = kept_.outbound->find(room);
@@ -852,6 +854,8 @@ class olm_machine {
       return std::nullopt;
     try {
       auto session = vodozemac::megolm::group_session_from_pickle(kept->second.pickle, key_);
+      if (std::string(session->session_id()) != session_id)
+        return std::nullopt;
       const megolm_plaintext plain{.type = std::move(type), .content = std::move(content), .room_id = room};
       auto message = session->encrypt(knot::to_json_string(plain));
       kept->second.pickle = std::string(session->pickle(key_));

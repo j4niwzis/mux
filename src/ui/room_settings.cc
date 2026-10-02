@@ -840,6 +840,11 @@ struct room_settings : nodes::Stack {
         }
         content.apply(narrow ? scene::Spec{.fillX = true, .fillY = false, .grow = scene::axes::kY}
                              : scene::Spec{.fillX = false, .fillY = true, .grow = scene::axes::kX});
+        // Laid out again, each: their flows written to, not told -- the tabs
+        // kept their column in a row of 44, only the first of them shown.
+        tabs.invalidateLayout();
+        content.invalidateLayout();
+        std::get<0>(content.fChildren).invalidateLayout();
         this->invalidateLayout();
       }
       this->nodes::Stack::layoutChildren();

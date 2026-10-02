@@ -687,6 +687,12 @@ void account<Sink>::catch_up(std::string room, std::string from, std::string unt
                                     splice::visit(splice::overloaded{[](values::m_replace) { return true; },
                                                                      [](const auto&) { return false; }},
                                                   *content.m_relates_to->rel_type);
+                  // An edit that mentions the user: the message it edits, as
+                  // a live one is (tdesktop's mention added by an edit).
+                  if (edit && content.m_relates_to->event_id && loom::client::mentions(content, id_.address)) {
+                    ++mentions;
+                    sink_(change::mentioned{in, *content.m_relates_to->event_id, at});
+                  }
                   if (!edit && loom::client::mentions(content, id_.address)) {
                     ++mentions;
                     sink_(change::mentioned{in, one.event_id, at});

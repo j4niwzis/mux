@@ -226,6 +226,9 @@ struct account_privacy : nodes::Stack {
     receipts_row receipts;
     // Element's: room keys to verified sessions only.
     only_verified_row only_verified;
+    // This session, as Element's Cryptography names it: its ID and its key,
+    // in fours, to be compared with what another session shows.
+    nodes::Text session_line{"", 13.0f, dim_colour};
     typing_choice<Actions> typing;
     notify_row notify;
     notify_sound_row notify_sound;
@@ -263,6 +266,17 @@ struct account_privacy : nodes::Stack {
   }
   void show(bool receipts_on) { parts.receipts.parts.toggle.setOn(receipts_on); }
   void show_only_verified(bool on) { parts.only_verified.parts.toggle.setOn(on); }
+  void show_session(const std::pair<std::string, std::string>* own) {
+    parts.session_line.setVisible(own != nullptr);
+    if (own == nullptr)
+      return;
+    const std::string grouped = own->second | std::views::enumerate | std::views::transform([](const auto& at) {
+                                  const auto [index, letter] = at;
+                                  return index > 0 && index % 4 == 0 ? std::string{' ', letter} : std::string(1, letter);
+                                }) |
+                                std::views::join | std::ranges::to<std::string>();
+    parts.session_line.setText(std::format("Session ID: {}\nSession key: {}", own->first, grouped));
+  }
   void say(std::string, bool) {}
 };
 
@@ -751,8 +765,15 @@ struct accounts_panel : closes_on_escape<Actions> {
                                    config::notify_of(one).value_or(true), config::notify_sound_of(one).value_or(true),
                                    config::show_receipts_of(one), config::jump_search_of(one),
                                    config::link_previews_of(one));
-      if (auto* privacy = this->privacy())
+      if (auto* privacy = this->privacy()) {
         privacy->show_only_verified(config::only_verified_of(one));
+        splice::visit(splice::overloaded{[&](const config::matrix_account& matrix) {
+                                           privacy->show_session(
+                                               now.own_session_of(account_id{protocol_of(matrix.user_id), matrix.user_id}));
+                                         },
+                                         [&](const auto&) { privacy->show_session(nullptr); }},
+                      one);
+      }
     } else if (page == 3) {
       detail.template emplace<5>(this->actions, config::room_events_of(one), config::room_event_kinds_of(one),
                                    config::show_receipts_of(one), config::jump_search_of(one), config::link_previews_of(one),

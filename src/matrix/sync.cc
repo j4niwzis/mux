@@ -782,6 +782,7 @@ void account<Sink>::start_crypto() {
     return;
   }
   log(id_, "encryption: this device's curve25519 key is {}", crypto_->curve25519());
+  sink_(change::own_session{id_, crypto_->device_id(), crypto_->ed25519()});
   this->upload_keys(0);
   this->check_own_sessions();
 }

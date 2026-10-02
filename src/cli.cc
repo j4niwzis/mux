@@ -102,6 +102,7 @@ std::string of(const change::pack_saved& one) {
 }
 std::string of(const change::pack_picture_uploaded& one) { return std::format("uploaded {}", one.picture.url); }
 std::string of(const change::refused& one) { return one.what; }
+std::string of(const change::own_session& one) { return std::format("this session: {} {}", one.device_id, one.ed25519); }
 std::string of(const change::devices_listed& one) { return std::format("{} has {} sessions", one.user, one.devices.size()); }
 std::string of(const change::trust_changed& one) {
   return one.user + splice::visit(splice::overloaded{[](trust::verified) { return std::string(" is verified"); },

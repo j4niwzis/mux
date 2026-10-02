@@ -965,6 +965,13 @@ struct device_view {
   bool verified = false;
   friend bool operator==(const device_view&, const device_view&) = default;
 };
+// This session, as Element's Cryptography section names it: its ID, and
+// its key (ed25519), to be compared with what another session shows.
+struct own_session {
+  account_id by;
+  std::string device_id;
+  std::string ed25519;
+};
 struct devices_listed {
   account_id by;
   std::string user;
@@ -1318,7 +1325,7 @@ struct event_missing {
 
 }  // namespace change
 
-using change_t = splice::variant<change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::verification_changed, change::account_removed, change::conversation_updated,
+using change_t = splice::variant<change::own_session, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::verification_changed, change::account_removed, change::conversation_updated,
                               change::conversation_removed,
                               change::presence_changed, change::message_added, change::message_edited,
                               change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed,
@@ -1344,6 +1351,11 @@ class model {
   // How many times what is known of anyone's identity changed: what shows
   // it is made again when it moves.
   [[nodiscard]] std::uint64_t trust_revision() const { return trust_revision_; }
+  // This session of an account: its ID and key, where encryption runs.
+  [[nodiscard]] const std::pair<std::string, std::string>* own_session_of(const account_id& by) const {
+    const auto found = own_sessions_.find(by);
+    return found == own_sessions_.end() ? nullptr : &found->second;
+  }
   // A person's sessions, where their account listed them.
   [[nodiscard]] const std::vector<change::device_view>* devices_of(const account_id& by, const std::string& user) const {
     const auto found = devices_.find({by, user});
@@ -1794,6 +1806,8 @@ class model {
     ++trust_revision_;
   }
   std::uint64_t trust_revision_ = 0;
+  void on(const change::own_session& one) { own_sessions_.insert_or_assign(one.by, std::pair{one.device_id, one.ed25519}); }
+  std::map<account_id, std::pair<std::string, std::string>> own_sessions_;
   void on(const change::devices_listed& one) {
     devices_.insert_or_assign({one.by, one.user}, one.devices);
     ++trust_revision_;

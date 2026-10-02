@@ -276,6 +276,10 @@ struct app : kept_settings {
   // The mentions and reactions not yet seen, written as they change and read
   // back at the start -- each put in once its chat is there.
   void save_marks();
+  // The list of marks open, by its kind: shown again as what it waits for
+  // comes; and each message it fetched, fetched once.
+  std::optional<mux::mark_kind_t> marks_listed_;
+  std::set<std::string> marks_fetched_;
   // Marked messages kept whole as their marks are made; those not here yet,
   // fetched and kept when they come.
   void keep_marked(const mux::conversation_id& in, const std::string& id);

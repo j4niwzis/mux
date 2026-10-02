@@ -904,8 +904,12 @@ void account<Sink>::fetch_quoted(std::string room, std::string target) {
     if (!got) {
       log(id_, "could not fetch {} in {}: {}", target, room, got.error().said());
       // Not there, or not to be seen by this user: said so, and whatever
-      // waits on it (a mark) let go. A network's failure is not that.
-      if (const auto& server = got.error().server; server && (server->status == 404 || server->status == 403))
+      // waits on it (a mark) let go. A network's failure is not that; the
+      // server's word is -- its status, or its code where the status is
+      // another (an id it cannot read is a 400).
+      if (const auto& server = got.error().server;
+          server && (server->status == 404 || server->status == 403 || server->status == 400 ||
+                     server->errcode == "M_NOT_FOUND" || server->errcode == "M_FORBIDDEN"))
         sink_(change::event_missing{conversation_id{id_, room}, target});
       return;
     }

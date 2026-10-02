@@ -242,6 +242,25 @@ void app::woken() {
                                      },
                                      [](const auto&) {}},
                   one);
+  // The list of marks open, shown again where what it waited for came -- a
+  // message fetched for it, or the word that it is not there (its mark
+  // then gone): it said "Loading…" until it was opened again.
+  if (marks_listed_ && root().marks_up()) {
+    const bool waited = std::ranges::any_of(changes, [](const mux::change_t& one) {
+      return splice::visit(splice::overloaded{[](const mux::change::message_added& c) {
+                                                return splice::visit(splice::overloaded{[](mux::placement::aside) { return true; },
+                                                                                        [](const auto&) { return false; }},
+                                                                     c.where);
+                                              },
+                                              [](const mux::change::event_missing&) { return true; },
+                                              [](const auto&) { return false; }},
+                           one);
+    });
+    if (waited)
+      this->apply(request::list_marks{*marks_listed_});
+  } else {
+    marks_listed_.reset();
+  }
   // A link's message fetched: in its thread, where it is in one.
   if (linked_)
     if (const mux::conversation* chat = model->find(linked_->first); chat && mux::ui::held_message(*chat, linked_->second)) {

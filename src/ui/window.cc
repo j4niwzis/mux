@@ -395,6 +395,7 @@ struct window : scene::Node {
     layer().marks.open(actions, kind, in, entries, now);
   }
   void close_marks() { layer().marks.close(); }
+  [[nodiscard]] bool marks_up() { return layer().marks.shown() != nullptr; }
   void open_manage(const room_settings_facts& facts) { layer().manage.open(actions, facts); }
   void close_manage() { layer().manage.close(); }
   void open_forward(const std::vector<forward_target>& chats) { layer().forwarding.open(actions, chats); }

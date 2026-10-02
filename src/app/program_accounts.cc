@@ -91,6 +91,13 @@ void app::apply(const request::find_people& one) {
     return;
   net->search_people(*by, one.query);
 }
+void app::apply(const request::search_elsewhere& one) {
+  const auto by = this->matrix_account();
+  if (!by || shared.demo())
+    return;
+  net->search_directory(*by, std::string(), one.query);
+  net->search_people(*by, one.query);
+}
 void app::apply(const request::open_new_room&) {
   const auto by = this->matrix_account();
   root().open_new_room(by ? by->address.substr(by->address.find(':') + 1) : std::string());

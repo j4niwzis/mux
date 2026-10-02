@@ -338,6 +338,7 @@ struct app : kept_settings {
   void apply(const request::send_custom& one);
   void apply(const request::open_new_chat&);
   void apply(const request::find_people& one);
+  void apply(const request::search_elsewhere& one);
   void apply(const request::open_new_room&);
   void apply(const request::open_wallpaper& one);
   void apply(const request::close_wallpaper&);

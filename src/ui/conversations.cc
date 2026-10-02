@@ -291,6 +291,45 @@ struct conversations_screen : nodes::Stack {
     side.invalidateLayout();
     side.markDamaged();
   }
+  // The server's answers for what is searched, where nothing joined matched
+  // it: kept while they are for what is typed now.
+  void found_rooms_elsewhere(const std::string& query, const std::vector<directory_room>& rooms) {
+    if (query.empty() || query != asked_elsewhere)
+      return;
+    rooms_elsewhere = rooms;
+    rooms_came = true;
+    this->show_elsewhere();
+  }
+  void found_people_elsewhere(const std::string& query, const std::vector<found_person>& people) {
+    if (query.empty() || query != asked_elsewhere)
+      return;
+    people_elsewhere = people;
+    people_came = true;
+    for (const found_person& one : people)
+      if (one.avatar && !one.avatar->empty())
+        listed_avatars().emplace_back(one.id, *one.avatar);
+    this->show_elsewhere();
+  }
+  void show_elsewhere() {
+    auto& shown = std::get<0>(side.elsewhere.fChildren);
+    auto& rooms = std::get<0>(shown.parts.rooms.fChildren);
+    rooms.clear();
+    for (const directory_room& one : rooms_elsewhere | std::views::take(30))
+      rooms.emplace_back(actions, one, std::string());
+    auto& people = std::get<0>(shown.parts.people.fChildren);
+    people.clear();
+    for (const found_person& one : people_elsewhere | std::views::take(30))
+      people.emplace_back(actions, one);
+    shown.parts.rooms_title.setVisible(!rooms.empty());
+    shown.parts.people_title.setVisible(!people.empty());
+    const bool waiting = !rooms_came || !people_came;
+    shown.parts.status.setText(waiting ? "Searching the server\u2026" : "No rooms or people found.");
+    shown.parts.status.setVisible(rooms.empty() && people.empty());
+    side.elsewhere.scrollToStart();
+    side.elsewhere.invalidateLayout();
+    side.invalidateLayout();
+    side.markDamaged();
+  }
   void open_forum(std::string room) {
     forum_open = std::move(room);
     this->slide_list(1.0f);
@@ -610,6 +649,30 @@ struct conversations_screen : nodes::Stack {
       }
     };
     using found_list_t = nodes::ScrollContainer<nodes::Flow<std::vector<found_row>>>;
+    // Nothing joined matching what is searched: the rooms of the server's
+    // directory and the people of its user directory that do -- as Explore
+    // and Start chat list them, to join or to write to.
+    using room_rows_t = nodes::Flow<std::vector<directory_row<Actions>>>;
+    using people_rows_t = nodes::Flow<std::vector<found_person_row<Actions>>>;
+    struct elsewhere_list : nodes::Stack {
+      struct parts_t {
+        nodes::Text rooms_title{"Rooms", 13.0f, dim_colour, true};
+        room_rows_t rooms{room_rows_t({.spacingY = 0.0f, .wrap = false}, {})};
+        nodes::Text people_title{"People", 13.0f, dim_colour, true};
+        people_rows_t people{people_rows_t({.spacingY = 0.0f, .wrap = false}, {})};
+        nodes::Text status{"", 13.0f, dim_colour};
+      } parts;
+      elsewhere_list() {
+        this->setGap(4.0f);
+        fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 0.0f, 8.0f, 0.0f}});
+        for (nodes::Text* each : {&parts.rooms_title, &parts.people_title, &parts.status})
+          each->apply({.margin = {6.0f, 16.0f, 2.0f, 16.0f}});
+        parts.status.setWrapped(true);
+        parts.rooms.apply({.fillX = true, .autoSize = scene::axes::kY});
+        parts.people.apply({.fillX = true, .autoSize = scene::axes::kY});
+      }
+    };
+    using elsewhere_t = nodes::ScrollContainer<elsewhere_list>;
     struct rest_t : nodes::Stack {
       struct parts_t {
         forum_head_t forum_head;
@@ -623,6 +686,7 @@ struct conversations_screen : nodes::Stack {
         // While a chat is searched: what was found, in the chats' place.
         nodes::Text found_title{"", 13.0f, dim_colour, true};
         found_list_t found{nodes::Flow<std::vector<found_row>>({.spacingY = 0.0f, .wrap = false}, {})};
+        elsewhere_t elsewhere{elsewhere_list()};
       } parts;
       explicit rest_t(Actions* a) : parts{.forum_head = forum_head_t(a)} {
         parts.found_title.apply({.margin = {4.0f, 16.0f, 6.0f, 16.0f}});
@@ -630,6 +694,8 @@ struct conversations_screen : nodes::Stack {
         parts.found.apply({.fillX = true, .grow = scene::axes::kY});
         std::get<0>(parts.found.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
         parts.found.setVisible(false);
+        parts.elsewhere.apply({.fillX = true, .grow = scene::axes::kY});
+        parts.elsewhere.setVisible(false);
         fState.apply({.fillY = true, .grow = scene::axes::kX});
         parts.forum_head.setVisible(false);
         parts.no_chats.apply({.margin = {12.0f, 16.0f, 0.0f, 16.0f}});
@@ -800,6 +866,7 @@ struct conversations_screen : nodes::Stack {
     forum_head_t& forum_head = parts.body.parts.rest.parts.forum_head;
     nodes::Text& found_title = parts.body.parts.rest.parts.found_title;
     found_list_t& found = parts.body.parts.rest.parts.found;
+    elsewhere_t& elsewhere = parts.body.parts.rest.parts.elsewhere;
     nodes::Flow<std::vector<folder_tab<pick_folder>>>& folders = parts.body.parts.rest.parts.folders;
     nodes::Text& no_chats = parts.body.parts.rest.parts.no_chats;
     list_t& list = parts.body.parts.rest.parts.list;
@@ -1723,6 +1790,13 @@ struct conversations_screen : nodes::Stack {
   // What was searched for last, and the model last shown: typing into the
   // search filters the list again.
   std::string searched;
+  // What the server was last asked for where nothing joined matched, and
+  // what came of it.
+  std::string asked_elsewhere;
+  std::vector<directory_room> rooms_elsewhere;
+  std::vector<found_person> people_elsewhere;
+  bool rooms_came = false;
+  bool people_came = false;
   const model* last_model = nullptr;
 
   bool was_typing = false;
@@ -2529,7 +2603,26 @@ struct conversations_screen : nodes::Stack {
     for (scene::Node* shown : std::initializer_list<scene::Node*>{&header, &chat.area, &line})
       shown->setVisible(open);
     chat.hint.setVisible(!none && !chosen.has_value());
-    no_chats.setVisible(!none && chats.empty());
+    // Nothing joined matching what is searched -- two letters or more --
+    // the server is asked for rooms and people that do, once for each
+    // thing typed.
+    const std::string& typed = side.search.field.text();
+    const bool elsewhere = !none && !wanted.empty() && chats.empty() && typed.size() >= 2;
+    if (elsewhere && typed != asked_elsewhere) {
+      asked_elsewhere = typed;
+      rooms_elsewhere.clear();
+      people_elsewhere.clear();
+      rooms_came = people_came = false;
+      actions->search_elsewhere(typed);
+      this->show_elsewhere();
+    } else if (!elsewhere && !asked_elsewhere.empty()) {
+      asked_elsewhere.clear();
+      rooms_elsewhere.clear();
+      people_elsewhere.clear();
+      this->show_elsewhere();
+    }
+    side.elsewhere.setVisible(elsewhere);
+    no_chats.setVisible(!none && chats.empty() && !elsewhere);
     chat.empty.setVisible(none);
     this->show_info();
     // Laid out again, repainting only what moves: what changed repaints

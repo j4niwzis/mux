@@ -53,6 +53,9 @@ void app::woken() {
                                // A directory searched: its rooms, in Explore.
                                [&](const mux::change::directory_listed& listed) {
                                  root().show_directory(listed.rooms, listed.server, listed.space);
+                                 // The own server's, for what the chat list searched.
+                                 if (listed.server.empty() && !listed.space)
+                                   root().main().found_rooms_elsewhere(listed.query, listed.rooms);
                                },
                                // Packs: listed, saved, an image uploaded -- in their dialog.
                                [&](const mux::change::packs_listed& listed) { root().show_packs(listed.packs); },
@@ -92,6 +95,7 @@ void app::woken() {
                                },
                                [&](const mux::change::people_found& found) {
                                  root().show_found_people(found.people, found.query);
+                                 root().main().found_people_elsewhere(found.query, found.people);
                                },
                                [&](const mux::change::state_listed& listed) {
                                  root().show_room_state(listed.entries);

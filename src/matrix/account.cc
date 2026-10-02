@@ -389,6 +389,43 @@ class account {
   // asked of a user's devices, or of one; answered; compared; ended.
   std::map<std::string, crypto::sas_state, std::less<>> verifications_;
   bool send_plain(std::string type, const std::string& user, const std::string& device, knot::raw content);
+  // A step's content as its transport has it -- a transaction ID to a
+  // device, a reference to the request in a room -- and sent so.
+  template <class Content>
+  Content stamped(const crypto::sas_state& state, Content content) {
+    if (state.room) {
+      content.transaction_id.reset();
+      content.m_relates_to = loom::ev::def::verification_relates_to_t{
+          .rel_type = loom::ev::def::verification_relates_to_t::rel_type_values::m_reference{}, .event_id = state.txn};
+    } else {
+      content.transaction_id = state.txn;
+    }
+    return content;
+  }
+  template <class Content>
+  void send_step(const crypto::sas_state& state, std::string type, const Content& content) {
+    const knot::raw body{knot::to_json_string(this->stamped(state, content))};
+    if (!state.room) {
+      (void)this->send_plain(std::move(type), state.their_user, state.their_device.empty() ? std::string("*") : state.their_device,
+                             body);
+      return;
+    }
+    try {
+      (void)this->send_room_event(
+          loom::cs::send_message{.room_id = *state.room, .event_type = std::move(type), .txn_id = this->transaction(), .body = body});
+    } catch (const plaintext_refused& refused) {
+      log(id_, "verification step not sent: {}", refused.what());
+    }
+  }
+  // A verification in a room: its request (a message to this user), and its
+  // steps, by their events -- live ones only, and never this side's own.
+  void verification_request_in_room(const conversation_id& in, const loom::ev::timeline_event& one,
+                                     const crypto::room_request_fields& fields);
+  [[nodiscard]] bool verification_in_room(const conversation_id& in, const loom::ev::timeline_event& one, const knot::raw& raw,
+                                          placement_t where);
+  // While a decrypted event is read: the event its cleartext relation
+  // refers to, where its content does not say.
+  std::optional<std::string> outer_reference_;
   void verification_said(const crypto::sas_state& state, verification_step_t step);
   void cancel_verification(const std::string& txn, std::string code, std::string reason);
   void sas_start(crypto::sas_state& state);

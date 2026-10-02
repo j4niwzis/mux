@@ -947,7 +947,8 @@ struct sas_offer {
 // One verification, by its transaction: with whom, which of the two sent
 // the start, what was committed to, and the keys exchanged.
 struct sas_state {
-  std::string txn;
+  std::string txn;              // to-device: its transaction ID; in a room: the request's event ID
+  std::optional<std::string> room;  // in a room, as Element verifies people from a DM
   std::string their_user;
   std::string their_device;     // empty until one of theirs answers
   bool we_requested = false;
@@ -998,6 +999,27 @@ struct sas_state {
     } catch (const rust::Error&) {
       return false;
     }
+  }
+};
+// A verification request made as a message in a room: to whom, from which
+// device, by which methods (read from the message's remainder).
+struct room_request_fields {
+  std::string to;
+  std::string from_device;
+  std::vector<std::string> methods;
+  friend consteval auto json_schema(knot::type<room_request_fields>) { return knot::schema<room_request_fields>(); }
+};
+// The event an encrypted event refers to, from its cleartext relation: what
+// a verification step in an encrypted room names its request by, where the
+// relation is kept out of the ciphertext, as the spec has it.
+struct reference_part {
+  struct relation {
+    std::optional<std::string> event_id;
+    friend consteval auto json_schema(knot::type<relation>) { return knot::schema<relation>(); }
+  };
+  std::optional<relation> relates_to;
+  friend consteval auto json_schema(knot::type<reference_part>) {
+    return knot::schema<reference_part>().member<"relates_to">(knot::key("m.relates_to"));
   }
 };
 // The commitment to a key and a start: unpadded base64 of SHA-256 of the

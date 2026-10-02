@@ -116,9 +116,22 @@ inline std::optional<std::string> thread_of(const loom::ev::m_room_message_conte
 template <class Sink>
 void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where, bool sealed) {
   const auto at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(one.origin_server_ts));
+  // A verification step in the room: taken by the verification, not shown.
+  const bool verification = splice::visit(
+      splice::overloaded{[&](const knot::raw& raw) { return this->verification_in_room(in, one, raw, where); },
+                         [](const auto&) { return false; }},
+      one.content.data());
+  if (verification)
+    return;
   // By the content's type: a message, a reaction, or the rest by the type
   // it says.
   splice::visit(splice::overloaded{[&](const loom::ev::m_room_message_content_t& content) {
+    // A verification request, to this user: asked of them (and shown as
+    // the message it is).
+    if (verification_request_of(content.msgtype) &&
+        splice::visit(splice::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where))
+      if (auto fields = knot::try_read<crypto::room_request_fields>(content.rest.text))
+        this->verification_request_in_room(in, one, *fields);
     const auto& relates = content.m_relates_to;
     // An edit: the event it replaces takes its new content.
     if (relates && replaces(*relates)) {
@@ -412,7 +425,15 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
       loom::ev::timeline_event made = one;
       made.type = std::move(clear->event.type);
       made.content = std::move(clear->event.content);
+      splice::visit(splice::overloaded{[&](const loom::ev::m_room_encrypted_content_t& content) {
+                                         if (auto outer = knot::try_read<crypto::reference_part>(content.rest.text);
+                                             outer && outer->relates_to)
+                                           outer_reference_ = outer->relates_to->event_id;
+                                       },
+                                       [](const auto&) {}},
+                    one.content.data());
       this->event(in, made, where, true);
+      outer_reference_.reset();
       sink_(change::message_encrypted{in, one.event_id, clear->verified});
       return;
     }

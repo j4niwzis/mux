@@ -412,8 +412,26 @@ struct album_view : nodes::Stack {
         const float h = count == 1 ? std::clamp(w * ratio, 120.0f, 300.0f) : std::clamp(w * 0.8f, 100.0f, 220.0f);
         made.parts.cells.emplace_back(item.source, item.width, item.height);
         made.parts.cells.back().set_cell(std::floor(w), std::floor(h));
+        sizes.emplace_back(w, h);
       }
     }
+  }
+  // Each cell's size at the album's own width, and the share of it the
+  // album is laid out at: in a column narrower than 360 -- a thread's panel,
+  // a narrow window -- the album is fitted to it, as a single picture is,
+  // rather than standing out of its bubble.
+  std::vector<std::pair<float, float>> sizes;
+  float fitted = 1.0f;
+  void measure(const skia::SkRect& parent) {
+    // Less the gap a row of two keeps, so that a row of two fits too.
+    const float scale = parent.width() > 0.0f ? std::min(1.0f, (parent.width() - kGap) / (kWidth - kGap)) : 1.0f;
+    if (scale <= 0.0f || scale == fitted)
+      return;
+    fitted = scale;
+    auto cells = parts.rows | std::views::transform([](row& one) -> std::vector<picture_view>& { return one.parts.cells; }) |
+                 std::views::join;
+    for (auto&& [cell, size] : std::views::zip(cells, sizes))
+      cell.set_cell(std::floor(size.first * scale), std::floor(size.second * scale));
   }
 };
 

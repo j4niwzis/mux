@@ -1350,6 +1350,17 @@ struct message_bubble : nodes::Stack {
     // Decided from the last layout; a change is laid out at the next.
     void update(double now_ms) {
       auto& [frost, name, forwarded, quote, picture, album, file, text, blocks, cards, preview, reactions, thread, time, inline_time, tail] = parts;
+      // A sticker's time is over it, and nowhere else: placed beside its
+      // reactions too, it was shown twice.
+      if (picture && picture->sticker) {
+        time_placed = true;
+        if (time.visible() || inline_time.visible()) {
+          time.setVisible(false);
+          inline_time.setVisible(false);
+          this->invalidateLayout();
+        }
+        return;
+      }
       // Nothing left of the text -- all of it the quote the header shows --
       // or a text that ends in a quote, and nothing under it: the time on a
       // line of its own, as Telegram's -- not beside an empty last line, nor

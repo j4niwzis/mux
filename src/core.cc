@@ -957,6 +957,19 @@ struct notice {
 
 // Something asked of the server that it refused: said to the user, as a
 // notice, with what the server gave as its reason.
+// A person's sessions, as their keys list them: each by its id and name,
+// and whether it is verified -- cross-signed by them, or by emoji here.
+struct device_view {
+  std::string id;
+  std::string name;
+  bool verified = false;
+  friend bool operator==(const device_view&, const device_view&) = default;
+};
+struct devices_listed {
+  account_id by;
+  std::string user;
+  std::vector<device_view> devices;
+};
 struct trust_changed {
   account_id by;
   std::string user;
@@ -1305,7 +1318,7 @@ struct event_missing {
 
 }  // namespace change
 
-using change_t = splice::variant<change::trust_changed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::verification_changed, change::account_removed, change::conversation_updated,
+using change_t = splice::variant<change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::verification_changed, change::account_removed, change::conversation_updated,
                               change::conversation_removed,
                               change::presence_changed, change::message_added, change::message_edited,
                               change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed,
@@ -1331,6 +1344,11 @@ class model {
   // How many times what is known of anyone's identity changed: what shows
   // it is made again when it moves.
   [[nodiscard]] std::uint64_t trust_revision() const { return trust_revision_; }
+  // A person's sessions, where their account listed them.
+  [[nodiscard]] const std::vector<change::device_view>* devices_of(const account_id& by, const std::string& user) const {
+    const auto found = devices_.find({by, user});
+    return found == devices_.end() ? nullptr : &found->second;
+  }
   [[nodiscard]] std::optional<trust_t> trust_of(const account_id& by, const std::string& user) const {
     const auto found = trust_.find({by, user});
     return found == trust_.end() ? std::nullopt : std::optional<trust_t>(found->second);
@@ -1776,6 +1794,11 @@ class model {
     ++trust_revision_;
   }
   std::uint64_t trust_revision_ = 0;
+  void on(const change::devices_listed& one) {
+    devices_.insert_or_assign({one.by, one.user}, one.devices);
+    ++trust_revision_;
+  }
+  std::map<std::pair<account_id, std::string>, std::vector<change::device_view>> devices_;
   std::map<std::pair<account_id, std::string>, trust_t> trust_;
   void on(const change::notice&) {}
   void on(const change::verification_changed&) {}

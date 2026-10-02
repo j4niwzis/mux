@@ -1705,3 +1705,30 @@ void account<Sink>::secret_request_in(const std::string& sender, const loom::ev:
     log(id_, "{} given to your session {}", *content.name, device->device_id);
 }
 }  // namespace mux::matrix
+
+namespace mux::matrix {
+template <class Sink>
+void account<Sink>::tell_devices(std::string user) {
+  if (!api_ || !crypto_)
+    return;
+  loom::cs::query_keys ask;
+  ask.body.device_keys.emplace(user, std::vector<std::string>{});
+  auto got = perform(*api_, ask);
+  if (!got || !got->device_keys)
+    return;
+  const auto theirs = got->device_keys->find(user);
+  if (theirs == got->device_keys->end())
+    return;
+  const auto verified_here = crypto_->verified_keys(user);
+  std::vector<change::device_view> devices;
+  for (const auto& [id, info] : theirs->second) {
+    const auto curve = info.keys.find("curve25519:" + id);
+    const auto identity = curve == info.keys.end() ? std::nullopt
+                                                   : crypto::device_of(*got, user, curve->second, crypto_->pinned_master(user));
+    devices.push_back({.id = id,
+                       .name = info.unsigned_ && info.unsigned_->device_display_name ? *info.unsigned_->device_display_name : std::string(),
+                       .verified = identity && (identity->cross_signed || std::ranges::contains(verified_here, identity->ed25519))});
+  }
+  sink_(change::devices_listed{id_, std::move(user), std::move(devices)});
+}
+}  // namespace mux::matrix

@@ -550,6 +550,18 @@ struct network {
             one.account);
     });
   }
+  // A person's sessions, each verified or not, asked for.
+  void ask_devices(const mux::account_id& by, std::string user) {
+    loop.post([this, by, user = std::move(user)] {
+      for (auto& one : accounts)
+        splice::visit(
+            [&](auto& account) {
+              if (account->id() == by)
+                account->tell_devices(user);
+            },
+            one.account);
+    });
+  }
   void search_people(const mux::account_id& by, std::string term) {
     loop.post([this, by, term = std::move(term)] {
       for (auto& one : accounts)

@@ -34,8 +34,10 @@ void app::apply(const request::open_member_info& one) {
   const mux::conversation* in = model->find(*chosen);
   root().open_person(chosen->account, one.id, mux::ui::person_of(in, *model, chosen->account, one.id));
   person_open_ = std::pair{*chosen, one.id};
-  if (!shared.demo())
+  if (!shared.demo()) {
     net->ask_trust(chosen->account, one.id);
+    net->ask_devices(chosen->account, one.id);
+  }
 }
 
 void app::apply(const request::close_person_info&) {

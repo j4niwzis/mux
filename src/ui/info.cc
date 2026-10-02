@@ -182,11 +182,15 @@ struct person_facts {
   bool may_ban = false;
   // What is known of their encryption identity, where the account said.
   std::optional<trust_t> trust;
+  // Their sessions, each verified or not, where their keys were listed.
+  std::vector<change::device_view> devices;
 };
 [[nodiscard]] inline person_facts person_of(const conversation* in, const model& now, const account_id& account,
                                             const std::string& id) {
   person_facts out{id, presence_of(now, account, id)};
   out.trust = now.trust_of(account, id);
+  if (const auto* listed = now.devices_of(account, id))
+    out.devices = *listed;
   if (out.trust) {
     const std::string said = splice::visit(splice::overloaded{[](trust::verified) { return std::string("Verified"); },
                                                               [](trust::unverified) { return std::string("Not verified"); },
@@ -273,6 +277,10 @@ struct person_card : nodes::Stack {
     action_tile<verify_them> verify;
     action_tile<to_them> remove;
     action_tile<to_them> ban;
+    // Their sessions, as Element lists them on a person: each with its
+    // name or id, and verified or not.
+    nodes::Text sessions_title{"", 13.0f, dim_colour, true};
+    std::vector<nodes::Text> sessions;
   } parts;
 
   person_card(Actions* a, const account_id& account, const std::string& key, const person_facts& facts)
@@ -289,6 +297,18 @@ struct person_card : nodes::Stack {
     // Offered only where the user may: no button for what they cannot do.
     parts.remove.setVisible(facts.may_kick);
     parts.ban.setVisible(facts.may_ban);
+    parts.sessions_title.setText(facts.devices.empty() ? std::string()
+                                                       : std::format("SESSIONS ({})", facts.devices.size()));
+    parts.sessions_title.setVisible(!facts.devices.empty());
+    parts.sessions_title.apply({.margin = {14.0f, 22.0f, 2.0f, 22.0f}});
+    for (const change::device_view& one : facts.devices) {
+      auto& line = parts.sessions.emplace_back(
+          std::format("{} {}{}", one.verified ? "\u2713" : "\u26A0", one.name.empty() ? one.id : one.name,
+                      one.verified ? std::string(" \u00b7 Verified") : std::string(" \u00b7 Not verified")),
+          13.0f, one.verified ? text_colour : dim_colour);
+      line.setElided(true);
+      line.apply({.fillX = true, .margin = {2.0f, 22.0f, 0.0f, 22.0f}});
+    }
     // Verify where they are not, or not any more: not for one verified.
     parts.verify.setVisible(!facts.trust || !splice::visit(splice::overloaded{[](trust::verified) { return true; },
                                                                               [](const auto&) { return false; }},

@@ -1227,17 +1227,18 @@ struct conversations_screen : nodes::Stack {
     void layoutChildren() {
       auto& top = parts.head.parts.top;
       top.fState.setOutOfFlow(big);
-      if (big)
-        top.apply({.width = std::max(0.0f, fState.contentBox().width() - 16.0f)});
-      this->nodes::Stack::layoutChildren();
-      if (!big) {
-        top.fState.shiftTo(0.0f, 0.0f);
-        return;
+      if (big) {
+        // Placed under Search by its anchor in the head, not shifted there:
+        // where it is laid out is where it is drawn, pressed and repainted.
+        // Search where the last layout put it, the head where it is.
+        const float below = search.bounds().fBottom + 8.0f - parts.head.fState.contentBox().fTop;
+        top.apply({.place = scene::anchor::kTopLeft, .x = 0.0f, .y = below,
+                   .width = std::max(0.0f, fState.contentBox().width() - 16.0f)});
+      } else {
+        top.apply({.x = 0.0f, .y = 0.0f});
       }
-      // Laid out where the head put it, moved under Search.
-      const skia::SkRect at = top.bounds();
-      const skia::SkRect under = search.bounds();
-      top.fState.shiftTo(fState.contentBox().fLeft + 8.0f - at.fLeft, under.fBottom + 8.0f - at.fTop);
+      top.fState.shiftTo(0.0f, 0.0f);
+      this->nodes::Stack::layoutChildren();
     }
   };
   // The chat: its header, its messages, and where one writes; or, with no

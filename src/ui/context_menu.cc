@@ -853,6 +853,48 @@ struct emoji_popup : scene::Node {
       parts.gifs.apply({.fillX = true, .grow = scene::axes::kY});
       this->show(popup_page::emoji{});
     }
+    // Docked as Telegram's apps have it, on a phone: across all of the window
+    // over the field, square, its tabs a row along its bottom -- or a card
+    // by its button, as tdesktop's.
+    bool docked = false;
+    static constexpr float kTabsHigh = 40.0f;
+    void set_docked(bool on) {
+      if (on == docked)
+        return;
+      docked = on;
+      fState.apply({.padding = {0.0f, 0.0f, on ? kTabsHigh : 0.0f, 0.0f}, .cornerRadius = on ? 0.0f : 8.0f});
+      parts.tabs.fState.fOutOfFlow = on;
+      if (on)
+        parts.tabs.apply({.place = scene::anchor::kBottomLeft});
+      parts.tabs.fStack.justify = on ? nodes::Justify{nodes::justify::middle{}} : nodes::Justify{nodes::justify::start{}};
+      this->invalidateLayout();
+      this->markDamaged();
+    }
+    // The tab shown, and a swipe across the card to the next or the one
+    // before, as Telegram's apps do: where it began.
+    int page_at = 0;
+    std::optional<skia::SkPoint> swipe_from;
+    using Node::onPointer;
+    void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply&) {
+      swipe_from.reset();
+      if (docked && press.button <= 1)
+        swipe_from = skia::SkPoint{press.x, press.y};
+    }
+    void onPointer(scene::phase::capture, const scene::pointer::up& lift, scene::PointerReply& reply) {
+      const std::optional<skia::SkPoint> from = std::exchange(swipe_from, std::nullopt);
+      if (!from)
+        return;
+      const float dx = lift.x - from->fX;
+      const float dy = lift.y - from->fY;
+      if (std::abs(dx) < 90.0f || std::abs(dy) > std::abs(dx) * 0.5f)
+        return;
+      static const std::array<popup_page_t, 3> kPages{popup_page::emoji{}, popup_page::stickers{}, popup_page::gifs{}};
+      const int to = std::clamp(page_at + (dx < 0.0f ? 1 : -1), 0, 2);
+      if (to != page_at) {
+        this->show(kPages[static_cast<std::size_t>(to)]);
+        reply.handle();
+      }
+    }
     // One tab's page shown, the others hidden; the GIFs asked of the program
     // as their tab opens, for what was saved since.
     void show(const popup_page_t& page) {
@@ -864,6 +906,7 @@ struct emoji_popup : scene::Node {
       parts.panel.setVisible(emoji);
       parts.stickers.setVisible(stickers);
       parts.gifs.setVisible(gifs);
+      page_at = emoji ? 0 : stickers ? 1 : 2;
       parts.tabs.parts.emoji.fState.apply({.selected = emoji});
       parts.tabs.parts.stickers.fState.apply({.selected = stickers});
       parts.tabs.parts.gifs.fState.apply({.selected = gifs});
@@ -894,13 +937,23 @@ struct emoji_popup : scene::Node {
     const float room = std::max(0.0f, bottom - box.fTop - kEdge);
     const float h = std::min(std::clamp(box.height() * 0.6f, 278.0f, 640.0f), room);
     const float x = std::clamp(right - kWidth, kEdge, std::max(kEdge, box.width() - kWidth - kEdge));
-    const float y = std::max(box.fTop + kEdge, bottom - h) - box.fTop;
-    if (x != placed_x || y != placed_y || h != placed_h || kWidth != placed_w) {
-      placed_x = x;
+    float y = std::max(box.fTop + kEdge, bottom - h) - box.fTop;
+    // A phone's window: docked across it over the field, as Telegram's apps.
+    const bool phone = box.width() < 600.0f && box.height() > box.width();
+    parts.card.set_docked(phone);
+    float x_at = x, w_at = kWidth, h_at = h;
+    if (phone) {
+      x_at = 0.0f;
+      w_at = box.width();
+      h_at = std::min(box.height() * 0.45f, std::max(160.0f, bottom - box.fTop));
+      y = std::max(0.0f, bottom - box.fTop - h_at);
+    }
+    if (x_at != placed_x || y != placed_y || h_at != placed_h || w_at != placed_w) {
+      placed_x = x_at;
       placed_y = y;
-      placed_h = h;
-      placed_w = kWidth;
-      parts.card.apply({.x = x, .y = y, .width = kWidth, .height = h});
+      placed_h = h_at;
+      placed_w = w_at;
+      parts.card.apply({.x = x_at, .y = y, .width = w_at, .height = h_at});
     }
     scene::layoutChildrenInContentBox(*this);
   }

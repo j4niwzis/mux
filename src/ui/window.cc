@@ -195,6 +195,61 @@ struct window : scene::Node {
         return a->close_settings(), closed();
     }
 
+    // While a dialog fades in or out, what is under it -- the window's
+    // background, its wallpaper, the chats and the messages -- drawn once,
+    // as the fade sets off, into pixels kept: each frame of the fade puts
+    // those down and draws only the dialogs and what floats over them, its
+    // one blur taken from them (the user's, #13520). Every frame of a fade
+    // repainted all of the window under its scrim, and blurred it again.
+    // Done, it is let go of: the frame the fade ends on draws all of it as
+    // it is, whatever changed under it meanwhile.
+    skia::Sp<skia::SkImage> frozen;
+    skia::SkRect frozen_at = skia::SkRect::MakeEmpty();  // where it is on the device
+
+    [[nodiscard]] bool dialog_fading() {
+      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, devtools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up] = parts;
+      return settings.settling() || notice.settling() || person.settling() || room.settling() || reactions.settling() ||
+             marks.settling() || manage.settling() || forwarding.settling() || new_chat.settling() ||
+             new_room.settling() || packs.settling() || wallpaper.settling() || explore.settling() ||
+             devtools.settling() || sending.settling() || passphrase.settling() || verifying.settling();
+    }
+    void draw(skia::SkCanvas* canvas, float alpha) {
+      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, devtools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up] = parts;
+      skia::SkMatrix inverse;
+      if (!this->dialog_fading() || !canvas->getTotalMatrix().invert(&inverse)) {
+        frozen = nullptr;
+        scene::drawDefault(*this, canvas, alpha);
+        return;
+      }
+      if (!frozen) {
+        const skia::SkRect device = canvas->getTotalMatrix().mapRect(fState.fBounds);
+        const int width = std::max(1, static_cast<int>(std::ceil(device.width())));
+        const int height = std::max(1, static_cast<int>(std::ceil(device.height())));
+        skia::SkBitmap pixels;
+        if (pixels.tryAllocN32Pixels(width, height)) {
+          pixels.eraseColor(0);
+          skia::SkCanvas into(pixels);
+          into.translate(-device.fLeft, -device.fTop);
+          into.concat(canvas->getTotalMatrix());
+          scene::draw(backdrop, &into, alpha);
+          scene::draw(behind, &into, alpha);
+          scene::draw(frame, &into, alpha);
+          frozen = pixels.asImage();
+          frozen_at = skia::SkRect::MakeXYWH(device.fLeft, device.fTop, static_cast<float>(width), static_cast<float>(height));
+        }
+      }
+      if (!frozen) {
+        scene::drawDefault(*this, canvas, alpha);
+        return;
+      }
+      canvas->drawImageRect(frozen, inverse.mapRect(frozen_at), skia::SkSamplingOptions(skia::SkFilterMode::kNearest));
+      const auto over = [&](auto&... each) { (scene::draw(each, canvas, alpha), ...); };
+      over(settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore,
+           devtools, sending, passphrase, verifying);
+      const auto over_if = [&](auto&... each) { ((each ? scene::draw(*each, canvas, alpha) : void()), ...); };
+      over_if(emoji, menu, viewer, text_menu_up);
+    }
+
     explicit layers(Actions* a)
         : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a))},
           actions_of(a) {

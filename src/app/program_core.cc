@@ -205,8 +205,24 @@ void app::woken() {
   if (joining)
     if (const auto found = mux::logic::chat_of(*model, *joining)) {
       const auto room = std::exchange(joining, std::nullopt);
-      this->open_chat(*found, room->event);
+      if (room->event)
+        this->go_to_linked(*found, *room->event);
+      else
+        this->open_chat(*found, std::nullopt);
     }
+  // A link's message fetched: in its thread, where it is in one.
+  if (linked_)
+    if (const mux::conversation* chat = model->find(linked_->first); chat && mux::ui::held_message(*chat, linked_->second)) {
+      const auto [in, event] = *std::exchange(linked_, std::nullopt);
+      if (root().main().chosen == in)
+        (void)this->open_in_thread(*chat, event);
+    }
+  // An answer gone to, scrolled to once its thread's panel has it.
+  if (thread_target_) {
+    auto& screen = root().main();
+    if (!screen.thread_open() || screen.parts.threads.scroll_to(*thread_target_))
+      thread_target_.reset();
+  }
 }
 
 // A message as it came, notified as the settings say: nothing where it is

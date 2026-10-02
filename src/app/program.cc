@@ -122,6 +122,12 @@ struct app : kept_settings {
   skiff::scene::Scene<window_type>& window();
 
   void woken();
+  // A link's message gone to, and a thread's answer to be scrolled to once
+  // its panel shows it.
+  void go_to_linked(const mux::conversation_id& in, const std::string& event);
+  bool open_in_thread(const mux::conversation& chat, const std::string& id);
+  std::optional<std::pair<mux::conversation_id, std::string>> linked_;
+  std::optional<std::string> thread_target_;
 
   // -- messages on disk: every change to one written as it is now
   message_store store;

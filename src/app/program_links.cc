@@ -70,7 +70,12 @@ void app::go_to_message(const mux::conversation_id& in, std::string id, std::opt
 
 void app::follow(const mux::logic::link_t& where) {
   auto& screen = root().main();
-  splice::visit(splice::overloaded{[&](const mux::logic::link_step::open_chat& step) { this->open_chat(step.chat, step.event); },
+  splice::visit(splice::overloaded{[&](const mux::logic::link_step::open_chat& step) {
+                               if (step.event)
+                                 this->go_to_linked(step.chat, *step.event);
+                               else
+                                 this->open_chat(step.chat, std::nullopt);
+                             },
                              [&](const mux::logic::link_step::member_page& step) {
                                this->apply(request::open_member_info{step.user});
                              },
@@ -88,6 +93,50 @@ void app::follow(const mux::logic::link_t& where) {
                                net->preview_room(step.by, step.room, step.via);
                              }},
              mux::logic::where_to(*model, where, screen.current));
+}
+
+// A link's message gone to. An answer in a thread -- or a thread's root --
+// in the thread's panel: the timeline shows no answers, and a jump to one
+// there never landed, the message seeming never to load. One not here yet
+// is fetched on its own, and gone to again once it is (woken); meanwhile
+// the timeline jumps to it, as to any message.
+void app::go_to_linked(const mux::conversation_id& in, const std::string& event) {
+  const mux::conversation* chat = model->find(in);
+  if (chat && mux::ui::held_message(*chat, event)) {
+    auto& screen = root().main();
+    if (!(screen.chosen && *screen.chosen == in)) {
+      screen.note_chat_return();
+      this->open_chat(in, std::nullopt);
+    }
+    if (const mux::conversation* now = model->find(in); now && this->open_in_thread(*now, event))
+      return;
+  } else if (chat && !shared.demo()) {
+    linked_ = {in, event};
+    net->fetch_quoted(in, event);
+  }
+  this->go_to_message(in, event, std::nullopt);
+}
+bool app::open_in_thread(const mux::conversation& chat, const std::string& id) {
+  const mux::message* said = mux::ui::held_message(chat, id);
+  if (said == nullptr)
+    return false;
+  const std::optional<std::string> thread = said->thread                                    ? said->thread
+                                            : said->threaded && said->threaded->count > 0 ? std::optional<std::string>(said->id)
+                                                                                          : std::nullopt;
+  if (!thread)
+    return false;
+  auto& screen = root().main();
+  screen.stop_jump();
+  if (screen.thread_open() != thread) {
+    screen.open_thread(*thread);
+    if (!shared.demo())
+      net->load_thread(chat.id, *thread);
+  }
+  this->refresh();
+  // Its answers still on their way: scrolled to once they are (woken).
+  if (!screen.parts.threads.scroll_to(id))
+    thread_target_ = id;
+  return true;
 }
 
 // The room of the card joined: opened when it comes, in woken().

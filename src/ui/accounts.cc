@@ -688,6 +688,22 @@ struct accounts_panel : closes_on_escape<Actions> {
       this->setHorizontal();
       fState.apply({.fillX = true, .grow = scene::axes::kY});
     }
+    // Narrow -- a phone's -- one column at a time, all of the width: the
+    // list or an account's pages, or the page chosen from them.
+    bool narrow = false;
+    bool detail_up = false;
+    void show_columns() {
+      parts.side.setVisible(!narrow || !detail_up);
+      parts.main.setVisible(!narrow || detail_up);
+      parts.side.apply(narrow ? scene::Spec{.fillX = true} : scene::Spec{.fillX = false, .width = kListWidth});
+    }
+    void layoutChildren() {
+      if (const bool now = fState.contentBox().width() < 600.0f; now != narrow) {
+        narrow = now;
+        this->show_columns();
+      }
+      this->nodes::Stack::layoutChildren();
+    }
   };
   struct parts_t {
     header_t header;
@@ -789,6 +805,7 @@ struct accounts_panel : closes_on_escape<Actions> {
   void show_page(int page, const config::account_t& one, const model& now,
                  const std::vector<config::proxy_settings>& proxies = {}, const config::theme_t& theme = config::theme_t{}) {
     pages.light(page);
+    this->show_detail(true);
     if (page == 1) {
       detail.template emplace<3>(this->actions, config::read_receipts_of(one), config::send_typing_of(one),
                                    config::room_events_of(one), config::room_event_kinds_of(one),
@@ -848,6 +865,21 @@ struct accounts_panel : closes_on_escape<Actions> {
     selected = config::address_of(one);
     this->show_pages(true);
     this->show_page(0, one, now);
+    // Narrow: its pages first, not the first of them.
+    this->show_detail(false);
+  }
+  // Narrow, the page beside the list in its place, or the list back.
+  void show_detail(bool up) {
+    parts.body.detail_up = up;
+    parts.body.show_columns();
+    this->invalidateLayout();
+  }
+  // Narrow, a page up: back to the list of pages first. Whether it was.
+  [[nodiscard]] bool step_back() {
+    if (!parts.body.narrow || !parts.body.detail_up)
+      return false;
+    this->show_detail(false);
+    return true;
   }
 
   // Adding an account, beside the list.
@@ -871,6 +903,7 @@ struct accounts_panel : closes_on_escape<Actions> {
   // Back to the list of accounts, nothing chosen.
   void close_pages() {
     selected.reset();
+    this->show_detail(false);
     this->show_pages(false);
     detail.template emplace<0>("Choose an account.", 15.0f, dim_colour);
     this->fit_detail();
@@ -881,6 +914,7 @@ struct accounts_panel : closes_on_escape<Actions> {
     this->show_pages(false);
     selected.reset();
     add.set_lit(true);
+    this->show_detail(true);
     detail.template emplace<2>(this->actions, proxies);
     this->fit_detail();
     this->begin_swap();

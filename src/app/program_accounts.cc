@@ -663,6 +663,8 @@ void app::apply(const request::accounts_back&) {
     return;
   splice::visit(
       [this](accounts& panel) {
+        if (panel.step_back())
+          return;
         if (panel.pages_open())
           panel.close_pages();
         else

@@ -645,6 +645,13 @@ void app::apply(const request::toggle_mute&) {
   this->refresh();
 }
 
+void app::apply(const request::toggle_mute_of& one) {
+  if (!muted.erase(one.which))
+    muted.insert(one.which);
+  (void)this->write();
+  this->refresh();
+}
+
 void app::apply(const request::close_account_pages&) {
   if (auto* up = root().open_panel())
     splice::visit([](accounts& panel) { panel.close_pages(); }, *up);

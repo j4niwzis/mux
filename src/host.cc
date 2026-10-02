@@ -799,6 +799,19 @@ int run(App& app, const options& how) {
     constexpr double kHoldMs = 500.0;
     constexpr float kHoldSlop = 8.0f;
     float last_width = 0.0f, last_height = 0.0f;
+    // Fingers on the screen, where they are in the scene's points: two of
+    // them drawn apart or together zoom -- a pinch, given to what is under
+    // its middle as the wheel's zoom (the picture viewer's), a step of it
+    // for each quarter of a step the distance went.
+    std::map<SDL_FingerID, skia::SkPoint> fingers;
+    float pinch_from = 0.0f;
+    const auto pinch_distance = [&] {
+      const auto first = fingers.begin();
+      const auto second = std::next(first);
+      return std::hypot(second->second.fX - first->second.fX, second->second.fY - first->second.fY);
+    };
+    // Where the field typed into was last told to the system.
+    std::optional<skia::SkRect> typing_told;
     while (running) {
       SDL_Event event;
       const double hold_in = held && !held->fired ? held->since + kHoldMs - detail::now_ms()
@@ -881,6 +894,34 @@ int run(App& app, const options& how) {
               held.reset();
             router.pointer(
                 skiff::scene::pointer::up{event.button.x * to_scene, event.button.y * to_scene, event.button.button});
+            break;
+          case SDL_EVENT_FINGER_DOWN:
+            fingers[event.tfinger.fingerID] = {event.tfinger.x * last_width, event.tfinger.y * last_height};
+            if (fingers.size() == 2) {
+              pinch_from = pinch_distance();
+              held.reset();  // two fingers are no long press
+            }
+            break;
+          case SDL_EVENT_FINGER_MOTION:
+            if (const auto found = fingers.find(event.tfinger.fingerID); found != fingers.end()) {
+              found->second = {event.tfinger.x * last_width, event.tfinger.y * last_height};
+              if (fingers.size() == 2 && pinch_from > 0.0f) {
+                const float now = pinch_distance();
+                const float ticks = std::log(now / pinch_from) / std::log(1.25f);
+                if (std::abs(ticks) >= 0.25f) {
+                  const auto first = fingers.begin();
+                  const auto second = std::next(first);
+                  router.pointer(skiff::scene::pointer::scroll{(first->second.fX + second->second.fX) * 0.5f,
+                                                               (first->second.fY + second->second.fY) * 0.5f, 0.0f, ticks});
+                  pinch_from = now;
+                }
+              }
+            }
+            break;
+          case SDL_EVENT_FINGER_UP:
+          case SDL_EVENT_FINGER_CANCELED:
+            fingers.erase(event.tfinger.fingerID);
+            pinch_from = 0.0f;
             break;
           case SDL_EVENT_MOUSE_WHEEL:
             router.pointer(skiff::scene::pointer::scroll{event.wheel.mouse_x * to_scene, event.wheel.mouse_y * to_scene, event.wheel.x,
@@ -970,6 +1011,18 @@ int run(App& app, const options& how) {
           SDL_StartTextInput(window);
         else
           SDL_StopTextInput(window);
+      }
+      // The field typed into, told to the system where it moved: in the
+      // window's coordinates, the scene's points times the interface's scale.
+      if (typing && work.typingAt && work.typingAt != typing_told) {
+        typing_told = work.typingAt;
+        const float to_window = static_cast<float>(app.interface_scale) / 100.0f;
+        const SDL_Rect area{static_cast<int>(work.typingAt->fLeft * to_window), static_cast<int>(work.typingAt->fTop * to_window),
+                            static_cast<int>(work.typingAt->width() * to_window),
+                            static_cast<int>(work.typingAt->height() * to_window)};
+        SDL_SetTextInputArea(window, &area, 0);
+      } else if (!typing) {
+        typing_told.reset();
       }
       if (auto copied = std::exchange(work.copied, std::nullopt)) {
         SDL_SetClipboardText(copied->c_str());

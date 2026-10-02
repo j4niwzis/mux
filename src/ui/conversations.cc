@@ -388,6 +388,9 @@ struct conversations_screen : nodes::Stack {
   // Where a swipe across the chat began, single: left to right, back to
   // the chats.
   std::optional<skia::SkPoint> swipe_from;
+  // The row a swipe across the chats began on: right to left, muted or not,
+  // as Telegram's quick action.
+  std::optional<conversation_id> swipe_row;
   // The spaces along the top bigger, for a finger: a long press on them.
   bool big_spaces = false;
   // What the head was last made from: made again with its back arrow, or
@@ -1623,8 +1626,13 @@ struct conversations_screen : nodes::Stack {
     // Single: a swipe across the chat begun here -- or across the chats,
     // none open, which pulls the drawer out, as Telegram's apps do.
     swipe_from.reset();
-    if (single && !chosen && press.button <= 1 && side.visible() && side.bounds().contains(press.x, press.y))
+    swipe_row.reset();
+    if (single && !chosen && press.button <= 1 && side.visible() && side.bounds().contains(press.x, press.y)) {
       swipe_from = skia::SkPoint{press.x, press.y};
+      for (const conversation_row<Actions>& row : std::get<0>(std::get<0>(list.fChildren).fChildren))
+        if (list.toView(row.bounds()).contains(press.x, press.y))
+          swipe_row = row.id;
+    }
     if (single && chosen && press.button <= 1 &&
         ((chat.visible() && chat.bounds().contains(press.x, press.y)) ||
          (info.visible() && info.bounds().contains(press.x, press.y)) ||
@@ -1655,6 +1663,9 @@ struct conversations_screen : nodes::Stack {
         this->step_back();
       else
         actions->open_drawer();
+      reply.handle();
+    } else if (const auto row = std::exchange(swipe_row, std::nullopt); row && !chosen && -dx > 90.0f && std::abs(dy) < -dx * 0.5f) {
+      actions->toggle_mute_of(*row);
       reply.handle();
     }
   }

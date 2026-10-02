@@ -449,6 +449,7 @@ struct app : kept_settings {
   void apply(const request::choose_new_proxy& one);
   // The chosen chat muted, or not: kept in the file.
   void apply(const request::toggle_mute&);
+  void apply(const request::toggle_mute_of& one);
   void apply(const request::close_account_pages&);
   // ← on the accounts page: from an account's pages to the list, from the
   // list to the chats.

@@ -822,6 +822,28 @@ struct room_settings : nodes::Stack {
       fState.apply({.fillX = true, .grow = scene::axes::kY});
       parts.content.apply({.fillY = true, .grow = scene::axes::kX});
     }
+    // Narrow -- a phone's -- the tabs a row of their icons over the page, and
+    // the page all of the width: beside a column of 220, it had a hundred.
+    bool narrow = false;
+    void layoutChildren() {
+      if (const bool now = fState.contentBox().width() < 560.0f; now != narrow) {
+        narrow = now;
+        auto& [tabs, content] = parts;
+        fStack.direction = narrow ? nodes::Direction{nodes::direction::vertical{}} : nodes::Direction{nodes::direction::horizontal{}};
+        tabs.fStack.direction = narrow ? nodes::Direction{nodes::direction::horizontal{}} : nodes::Direction{nodes::direction::vertical{}};
+        tabs.apply(narrow ? scene::Spec{.fillX = true, .fillY = false, .width = 0.0f, .height = 44.0f}
+                          : scene::Spec{.fillX = false, .fillY = true, .width = 220.0f, .height = 0.0f});
+        auto& [general, security, roles, notifications, looks, advanced] = tabs.parts;
+        for (tab_row* one : {&general, &security, &roles, &notifications, &looks, &advanced}) {
+          one->parts.label.setVisible(!narrow);
+          one->apply(narrow ? scene::Spec{.fillX = false, .width = 44.0f} : scene::Spec{.fillX = true, .width = 0.0f});
+        }
+        content.apply(narrow ? scene::Spec{.fillX = true, .fillY = false, .grow = scene::axes::kY}
+                             : scene::Spec{.fillX = false, .fillY = true, .grow = scene::axes::kX});
+        this->invalidateLayout();
+      }
+      this->nodes::Stack::layoutChildren();
+    }
   };
   struct parts_t {
     header_t header;

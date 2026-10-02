@@ -10,6 +10,7 @@ import loom.ev;
 import loom.state;
 import loom.cs.joining;
 import loom.cs.keys;
+import loom.cs.to_device;
 import loom.cs.sliding_sync;
 import mux.matrix.crypto;
 import mux.vault;
@@ -264,22 +265,57 @@ class account {
   struct plaintext_refused : std::runtime_error {
     conversation_id in;
     std::string local;  // the message's id here, its transaction
-    plaintext_refused(conversation_id room, std::string txn)
-        : std::runtime_error("Not sent: this room is end-to-end encrypted, and nothing goes into it in the clear."),
-          in(std::move(room)), local(std::move(txn)) {}
+    plaintext_refused(conversation_id room, std::string txn,
+                      std::string why = "Not sent: this room is end-to-end encrypted, and nothing goes into it in the clear.")
+        : std::runtime_error(std::move(why)), in(std::move(room)), local(std::move(txn)) {}
   };
   void refuse_plaintext(std::string_view room, std::string_view local) {
     if (!this->encrypted_room(room))
       return;
-    log(id_, "not sent: {} is encrypted, and this client does not send encrypted yet", room);
+    log(id_, "not sent: {} is encrypted, and files are not sent encrypted yet", room);
     throw plaintext_refused(conversation_id{id_, std::string(room)}, std::string(local));
   }
-  // A room event sent: refused where the room is encrypted.
+  // A room event sent: encrypted where the room is -- or, where it cannot
+  // be, not sent at all.
   template <class Ask>
   auto send_room_event(Ask ask) {
-    this->refuse_plaintext(ask.room_id, ask.txn_id);
+    if (this->encrypted_room(ask.room_id))
+      return this->send_encrypted(std::move(ask));
     return perform(*api_, ask);
   }
+  // Into an encrypted room: the room's key given to its readers' devices
+  // that lack it, then the event sealed with it and sent as m.room.encrypted
+  // under the same transaction. Anything that fails on the way refuses it,
+  // with what failed: it never goes in the clear.
+  template <class Ask>
+  auto send_encrypted(Ask ask) {
+    const conversation_id in{id_, ask.room_id};
+    constexpr std::string_view kNot = "Not sent: it could not be encrypted -- ";
+    if (!crypto_)
+      throw plaintext_refused(in, ask.txn_id, std::string(kNot) + "encryption is not running for this account.");
+    try {
+      if (!this->share_room_key(ask.room_id))
+        throw plaintext_refused(in, ask.txn_id, std::string(kNot) + "the room's key could not be given to its members.");
+      const auto relation = knot::try_read<crypto::relation_part>(ask.body.text);
+      auto sealed = crypto_->encrypt(ask.room_id, ask.event_type, ask.body, relation ? relation->relates_to : std::nullopt);
+      if (!sealed)
+        throw plaintext_refused(in, ask.txn_id, std::string(kNot) + "the room's session failed.");
+      return perform(*api_, loom::cs::send_message{.room_id = ask.room_id,
+                                                   .event_type = "m.room.encrypted",
+                                                   .txn_id = ask.txn_id,
+                                                   .body = knot::raw{knot::to_json_string(*sealed)}});
+    } catch (const plaintext_refused&) {
+      throw;
+    } catch (const std::exception& failed) {
+      log(id_, "encryption stopped: {}", failed.what());
+      crypto_.reset();
+      throw plaintext_refused(in, ask.txn_id, std::string(kNot) + failed.what());
+    }
+  }
+  // The room's key given to every device of its members that should read it
+  // and has not got it: false where they could not be known, or the key
+  // could not be sent.
+  bool share_room_key(const std::string& room);
   // A fiber of this account. What it throws past its own handling -- the
   // unforeseen, a bug -- is caught here: let out, it left the loop and
   // stopped every account's network without a word. It is logged

@@ -60,6 +60,17 @@ struct kept_file {
   // Each user's master cross-signing key, as first seen (trust on first
   // use): a server that swaps it later does not make its own devices theirs.
   std::optional<std::map<std::string, std::string>> masters;  // optional, as encrypted_rooms
+  // Each room's Megolm session this device sends with now: its pickle, when
+  // it was made, how many messages it has sent, and the devices it was given
+  // to (by user, their IDs). Optional, as encrypted_rooms.
+  struct outbound_session {
+    std::string pickle;
+    std::int64_t created_ms = 0;
+    std::int64_t messages = 0;
+    std::map<std::string, std::vector<std::string>> shared_with;
+    friend consteval auto json_schema(knot::type<outbound_session>) { return knot::schema<outbound_session>(); }
+  };
+  std::optional<std::map<std::string, outbound_session>> outbound;
   friend consteval auto json_schema(knot::type<kept_file>) { return knot::schema<kept_file>(); }
 };
 
@@ -305,6 +316,158 @@ struct decrypted {
   bool verified = false;
 };
 
+// Unpadded base64, as Olm's bodies and Matrix's keys are written.
+[[nodiscard]] constexpr std::string to_base64(std::span<const std::uint8_t> bytes) {
+  constexpr std::string_view alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  std::string out;
+  out.reserve((bytes.size() + 2) / 3 * 4);
+  for (std::size_t i = 0; i < bytes.size(); i += 3) {
+    const std::uint32_t n = (std::uint32_t{bytes[i]} << 16) | (i + 1 < bytes.size() ? std::uint32_t{bytes[i + 1]} << 8 : 0u) |
+                            (i + 2 < bytes.size() ? std::uint32_t{bytes[i + 2]} : 0u);
+    out += alphabet[(n >> 18) & 63];
+    out += alphabet[(n >> 12) & 63];
+    if (i + 1 < bytes.size())
+      out += alphabet[(n >> 6) & 63];
+    if (i + 2 < bytes.size())
+      out += alphabet[n & 63];
+  }
+  return out;
+}
+
+// A device a room's key may go to: who, which, and its keys -- found and
+// checked as device_of() checks one.
+struct recipient {
+  std::string user;
+  std::string device_id;
+  std::string curve25519;
+  std::string ed25519;
+  friend bool operator==(const recipient&, const recipient&) = default;
+};
+// The devices of a user that a room's key goes to: every one that signed
+// its own keys -- and, where the user has cross-signing, only those their
+// self-signing key signed too, so that a device the server made up for them
+// gets nothing. Never this device itself.
+[[nodiscard]] inline std::vector<recipient> recipients_of(const keys_answer& got, const std::string& user,
+                                                         const std::optional<std::string>& pinned,
+                                                         std::string_view own_device) {
+  std::vector<recipient> out;
+  if (!got.device_keys)
+    return out;
+  const auto devices = got.device_keys->find(user);
+  if (devices == got.device_keys->end())
+    return out;
+  const bool cross_signing = got.master_keys && got.master_keys->contains(user);
+  for (const auto& [id, info] : devices->second) {
+    if (id == own_device && info.user_id == user)
+      continue;
+    const auto curve = info.keys.find("curve25519:" + id);
+    if (curve == info.keys.end())
+      continue;
+    const auto device = device_of(got, user, curve->second, pinned);
+    if (!device || device->device_id != id || (cross_signing && !device->cross_signed))
+      continue;
+    out.push_back(recipient{user, id, curve->second, device->ed25519});
+  }
+  return out;
+}
+
+// What goes over Olm to give a device a room's key (the spec's m.room_key
+// in an Olm payload).
+struct room_key_payload {
+  struct content_t {
+    std::string algorithm = "m.megolm.v1.aes-sha2";
+    std::string room_id;
+    std::string session_id;
+    std::string session_key;
+    friend consteval auto json_schema(knot::type<content_t>) { return knot::schema<content_t>(); }
+  };
+  std::string type = "m.room_key";
+  content_t content;
+  std::string sender;
+  std::string recipient;
+  olm_envelope::ed25519_key recipient_keys;
+  olm_envelope::ed25519_key keys;
+  friend consteval auto json_schema(knot::type<room_key_payload>) { return knot::schema<room_key_payload>(); }
+};
+// An m.room.encrypted to a device: Olm ciphertexts by their curve25519 key.
+struct olm_content {
+  std::string algorithm = "m.olm.v1.curve25519-aes-sha2";
+  std::string sender_key;
+  std::map<std::string, olm_ciphertext> ciphertext;
+  friend consteval auto json_schema(knot::type<olm_content>) { return knot::schema<olm_content>(); }
+};
+// A room event as Megolm takes it in: its type, its content as it was made,
+// and its room.
+struct megolm_plaintext {
+  std::string type;
+  knot::raw content;
+  std::string room_id;
+  friend consteval auto json_schema(knot::type<megolm_plaintext>) { return knot::schema<megolm_plaintext>(); }
+};
+// An m.room.encrypted in a room: Megolm's ciphertext, and what says where
+// it is from. A relation stays in the clear, as the spec has it, for the
+// server to group edits and threads by.
+struct megolm_content {
+  std::string algorithm = "m.megolm.v1.aes-sha2";
+  std::string ciphertext;
+  std::string device_id;
+  std::string sender_key;
+  std::string session_id;
+  std::optional<knot::raw> relates_to;
+  friend consteval auto json_schema(knot::type<megolm_content>) {
+    return knot::schema<megolm_content>().member<"relates_to">(knot::key("m.relates_to"));
+  }
+};
+// How long a room's session may send, as its m.room.encryption says --
+// bounded, for that state is the server's to write: a week and a hundred
+// messages at most, an hour and one message at least.
+struct rotation {
+  std::int64_t most_ms = 7LL * 24 * 3600 * 1000;
+  std::int64_t most_messages = 100;
+};
+[[nodiscard]] constexpr rotation rotation_of(std::optional<std::int64_t> ms, std::optional<std::int64_t> messages) {
+  constexpr rotation widest;
+  return {.most_ms = std::clamp<std::int64_t>(ms.value_or(widest.most_ms), 3600LL * 1000, widest.most_ms),
+          .most_messages = std::clamp<std::int64_t>(messages.value_or(widest.most_messages), 1, widest.most_messages)};
+}
+// A user's master cross-signing key, as /keys/query gave it: to be pinned
+// the first time it is seen.
+[[nodiscard]] inline std::optional<std::string> master_of(const keys_answer& got, const std::string& user) {
+  if (!got.master_keys)
+    return std::nullopt;
+  const auto found = got.master_keys->find(user);
+  if (found == got.master_keys->end())
+    return std::nullopt;
+  return cross_key_of<keys_answer::cross_signing_key_t::usage_item_values::master>(found->second, user);
+}
+// A one-time key a device's owner claimed for it: its key, where its
+// signature is that device's own -- else the server's to have made up.
+[[nodiscard]] inline std::optional<std::string> one_time_key_of(const knot::raw& claimed, const recipient& of) {
+  const auto read = knot::try_read<signed_key>(claimed.text);
+  if (!read)
+    return std::nullopt;
+  const auto canonical = knot::to_canonical_json(bare_key{read->key});
+  const auto signature = signature_of(read->signatures, of.user, "ed25519:" + of.device_id);
+  if (!canonical || !signature || !signed_by(*canonical, of.ed25519, *signature))
+    return std::nullopt;
+  return read->key;
+}
+// What of a content stays in the clear: its relation.
+struct relation_part {
+  std::optional<knot::raw> relates_to;
+  friend consteval auto json_schema(knot::type<relation_part>) {
+    return knot::schema<relation_part>().member<"relates_to">(knot::key("m.relates_to"));
+  }
+};
+
+// A room's session as it is to be used now: its ID and key, and the
+// devices that do not have it yet.
+struct outbound_plan {
+  std::string session_id;
+  std::string session_key;
+  std::vector<recipient> to_share;
+};
+
 class olm_machine {
  public:
   // The machine of this device: read from its file, else made anew.
@@ -468,6 +631,120 @@ class olm_machine {
     from.cross_signed = device.cross_signed;
     return this->room_key(offer.key, std::move(from));
   }
+  // A room's session to send with, for the devices that are its readers
+  // now: kept where it may go on, else made anew -- none yet, too old or too
+  // used, or any device it was given to no longer among them (someone left,
+  // or a device went: they read nothing sent after). Made, it is kept for
+  // this device to read its own messages by, as anyone's.
+  [[nodiscard]] outbound_plan outbound_for(const std::string& room, const std::vector<recipient>& readers, rotation limits,
+                                           std::int64_t now_ms) {
+    auto& all = kept_.outbound ? *kept_.outbound : kept_.outbound.emplace();
+    const auto kept = all.find(room);
+    const auto is_reader = [&](const std::string& user, const std::string& device) {
+      return std::ranges::any_of(readers, [&](const recipient& one) { return one.user == user && one.device_id == device; });
+    };
+    const bool fresh = kept == all.end() || now_ms - kept->second.created_ms >= limits.most_ms ||
+                       kept->second.messages >= limits.most_messages ||
+                       std::ranges::any_of(kept->second.shared_with, [&](const auto& by_user) {
+                         return std::ranges::any_of(by_user.second,
+                                                    [&](const std::string& device) { return !is_reader(by_user.first, device); });
+                       });
+    if (fresh) {
+      auto made = vodozemac::megolm::new_group_session();
+      const std::string id(made->session_id());
+      const std::string key(made->session_key()->to_base64());
+      all.insert_or_assign(room, kept_file::outbound_session{.pickle = std::string(made->pickle(key_)), .created_ms = now_ms});
+      // Its first index readable here too, from this device, cross-signed
+      // by definition.
+      (void)this->keep_inbound(room, id, key,
+                               kept_file::origin{.sender_key = this->curve25519(), .ed25519 = this->ed25519(), .sender = user_id_,
+                                                 .device = device_id_, .cross_signed = true});
+      this->save();
+    }
+    auto& now = all.at(room);
+    auto session = vodozemac::megolm::group_session_from_pickle(now.pickle, key_);
+    outbound_plan plan{.session_id = std::string(session->session_id()),
+                       .session_key = std::string(session->session_key()->to_base64())};
+    for (const recipient& one : readers) {
+      const auto had = now.shared_with.find(one.user);
+      if (had == now.shared_with.end() || !std::ranges::contains(had->second, one.device_id))
+        plan.to_share.push_back(one);
+    }
+    return plan;
+  }
+  // The session given to a device: it is not given again.
+  void shared(const std::string& room, const recipient& with) {
+    if (!kept_.outbound)
+      return;
+    if (const auto kept = kept_.outbound->find(room); kept != kept_.outbound->end())
+      kept->second.shared_with[with.user].push_back(with.device_id);
+    this->save();
+  }
+  // Whether this device has an Olm session with that one.
+  [[nodiscard]] bool has_session(const std::string& curve25519) const {
+    const auto found = kept_.olm.find(curve25519);
+    return found != kept_.olm.end() && !found->second.empty();
+  }
+  // A room's key, for a device, over Olm: through its newest session, or one
+  // made from its one-time key. None where there is neither.
+  [[nodiscard]] std::optional<olm_ciphertext> room_key_for(const recipient& to, const std::string& room,
+                                                           const outbound_plan& plan,
+                                                           const std::optional<std::string>& one_time_key) {
+    const room_key_payload payload{.content = {.room_id = room, .session_id = plan.session_id, .session_key = plan.session_key},
+                                   .sender = user_id_,
+                                   .recipient = to.user,
+                                   .recipient_keys = {to.ed25519},
+                                   .keys = {this->ed25519()}};
+    const std::string plaintext = knot::to_json_string(payload);
+    try {
+      auto& sessions = kept_.olm[to.curve25519];
+      if (sessions.empty()) {
+        if (!one_time_key)
+          return std::nullopt;
+        auto config = vodozemac::olm::new_session_config_version_1();
+        auto identity = vodozemac::types::curve_key_from_base64(to.curve25519);
+        auto otk = vodozemac::types::curve_key_from_base64(*one_time_key);
+        auto made = (*account_)->create_outbound_session(*config, *identity, *otk);
+        sessions.push_back(std::string(made->pickle(key_)));
+      }
+      auto session = vodozemac::olm::session_from_pickle(sessions.back(), key_);
+      auto message = session->encrypt(plaintext);
+      sessions.back() = std::string(session->pickle(key_));
+      this->save();
+      const auto parts = message->to_parts();
+      return olm_ciphertext{.type = static_cast<std::int64_t>(parts.message_type),
+                            .body = to_base64(std::span<const std::uint8_t>(parts.ciphertext.data(), parts.ciphertext.size()))};
+    } catch (const rust::Error&) {
+      return std::nullopt;
+    }
+  }
+  // A room event encrypted with the room's session, as m.room.encrypted's
+  // content; its relation kept in the clear.
+  [[nodiscard]] std::optional<megolm_content> encrypt(const std::string& room, std::string type, knot::raw content,
+                                                      std::optional<knot::raw> relates_to) {
+    if (!kept_.outbound)
+      return std::nullopt;
+    const auto kept = kept_.outbound->find(room);
+    if (kept == kept_.outbound->end())
+      return std::nullopt;
+    try {
+      auto session = vodozemac::megolm::group_session_from_pickle(kept->second.pickle, key_);
+      const megolm_plaintext plain{.type = std::move(type), .content = std::move(content), .room_id = room};
+      auto message = session->encrypt(knot::to_json_string(plain));
+      kept->second.pickle = std::string(session->pickle(key_));
+      ++kept->second.messages;
+      this->save();
+      return megolm_content{.ciphertext = std::string(message->to_base64()),
+                            .device_id = device_id_,
+                            .sender_key = this->curve25519(),
+                            .session_id = std::string(session->session_id()),
+                            .relates_to = std::move(relates_to)};
+    } catch (const rust::Error&) {
+      return std::nullopt;
+    }
+  }
+  [[nodiscard]] const std::string& device_id() const { return device_id_; }
+
   // A user's master key as first seen; pinned the first time.
   [[nodiscard]] std::optional<std::string> pinned_master(const std::string& user) const {
     if (!kept_.masters)
@@ -643,17 +920,21 @@ class olm_machine {
   // from. Never over one already held under its id: a second key for the
   // same session, from whoever, would replace the first one's messages'.
   bool room_key(const loom::ev::m_room_key_content_t& key, kept_file::origin from) {
-    if (key.room_id.empty() || kept_.origins.contains(key.session_id))
+    return this->keep_inbound(key.room_id, key.session_id, key.session_key, std::move(from));
+  }
+  bool keep_inbound(const std::string& room, const std::string& session_id, const std::string& session_key,
+                    kept_file::origin from) {
+    if (room.empty() || kept_.origins.contains(session_id))
       return false;
     try {
-      auto session_key = vodozemac::megolm::session_key_from_base64(key.session_key);
-      auto session = vodozemac::megolm::new_inbound_group_session(*session_key);
+      auto key = vodozemac::megolm::session_key_from_base64(session_key);
+      auto session = vodozemac::megolm::new_inbound_group_session(*key);
       // The id the key says is the session's own: else it would be kept
       // under another session's name.
-      if (std::string(session->session_id()) != key.session_id)
+      if (std::string(session->session_id()) != session_id)
         return false;
-      kept_.megolm[key.room_id][key.session_id] = std::string(session->pickle(key_));
-      kept_.origins.emplace(key.session_id, std::move(from));
+      kept_.megolm[room][session_id] = std::string(session->pickle(key_));
+      kept_.origins.emplace(session_id, std::move(from));
       this->save();
       return true;
     } catch (const rust::Error&) {

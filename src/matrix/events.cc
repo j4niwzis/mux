@@ -273,7 +273,10 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       if (thread.latest_event) {
         summary.last_id = thread.latest_event->event_id;
         summary.last_sender = thread.latest_event->sender;
-        summary.last_text = thread.latest_event->content.body.value_or("");
+        // In an encrypted room the server's summary is no one's word: its
+        // text is not shown (the thread's own messages are, decrypted).
+        if (!this->encrypted_room(in.id))
+          summary.last_text = thread.latest_event->content.body.value_or("");
         summary.last_at = std::chrono::sys_time<std::chrono::milliseconds>(
             std::chrono::milliseconds(thread.latest_event->origin_server_ts));
       }
@@ -372,7 +375,10 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
         if (thread.latest_event) {
           summary.last_id = thread.latest_event->event_id;
           summary.last_sender = thread.latest_event->sender;
-          summary.last_text = thread.latest_event->content.body.value_or("");
+          // In an encrypted room the server's summary is no one's word: its
+          // text is not shown (the thread's own messages are, decrypted).
+          if (!this->encrypted_room(in.id))
+            summary.last_text = thread.latest_event->content.body.value_or("");
           summary.last_at = std::chrono::sys_time<std::chrono::milliseconds>(
               std::chrono::milliseconds(thread.latest_event->origin_server_ts));
         }
@@ -436,8 +442,13 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
                                        },
                                        [](const auto&) {}},
                     one.content.data());
+      // Gone however the event's reading ends -- thrown out of too: else the
+      // next one read would take this one's reference.
+      struct forget_reference {
+        std::optional<std::string>& kept;
+        ~forget_reference() { kept.reset(); }
+      } const forgetting{outer_reference_};
       this->event(in, made, where, true);
-      outer_reference_.reset();
       sink_(change::message_encrypted{in, one.event_id, clear->verified});
       return;
     }

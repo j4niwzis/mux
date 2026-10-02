@@ -443,13 +443,14 @@ struct network {
   }
   // A room made by the account named, as Element's Create room.
   void create_room(const mux::account_id& by, std::string name, std::string topic, bool open, std::string alias,
-                   bool federate = true) {
-    loop.post([this, by, name = std::move(name), topic = std::move(topic), open, alias = std::move(alias), federate] {
+                   bool federate = true, bool encrypted = false) {
+    loop.post([this, by, name = std::move(name), topic = std::move(topic), open, alias = std::move(alias), federate,
+               encrypted] {
       for (auto& one : accounts)
         splice::visit(
             [&](auto& account) {
               if (account->id() == by)
-                account->create_room(name, topic, open, alias, federate);
+                account->create_room(name, topic, open, alias, federate, encrypted);
             },
             one.account);
     });

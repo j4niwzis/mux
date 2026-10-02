@@ -237,18 +237,29 @@ void account<Sink>::manage(std::string room, room_action_t action) {
   });
 }
 
+// A room encrypted from its first event: m.room.encryption in its initial
+// state, as Element makes direct chats and private rooms -- never a first
+// message in the clear while the state catches up.
+inline std::vector<loom::cs::create_room::body_t::state_event_t> encrypted_from_the_start() {
+  loom::ev::m_room_encryption_content_t content;
+  content.algorithm = loom::ev::m_room_encryption_content_t::algorithm_values::m_megolm_v1_aes_sha2{};
+  return {{.type = "m.room.encryption", .state_key = "", .content = knot::raw{knot::to_json_string(content)}}};
+}
+
 template <class Sink>
 void account<Sink>::create_direct(std::string user) {
   this->spawn_guarded([this, user = std::move(user)] {
     if (!api_)
       return;
     auto made = perform(*api_, loom::cs::create_room{.body = {.invite = std::vector<std::string>{user},
+                                                              .initial_state = encrypted_from_the_start(),
                                                               .preset = loom::cs::create_room::body_t::preset_values::trusted_private_chat{},
                                                               .is_direct = true}});
     if (!made) {
       log(id_, "could not start a chat with {}: {}", user, made.error().said());
       return;
     }
+    this->remember_encrypted(made->room_id);
     // m.direct as it is, with the new room under its person.
     loom::client::direct_rooms_t direct = loom::client::direct_rooms(state_);
     direct[user].push_back(made->room_id);
@@ -592,8 +603,10 @@ void account<Sink>::search_people(std::string term) {
 }
 
 template <class Sink>
-void account<Sink>::create_room(std::string name, std::string topic, bool open, std::string alias, bool federate) {
-  this->spawn_guarded([this, name = std::move(name), topic = std::move(topic), open, alias = std::move(alias), federate] {
+void account<Sink>::create_room(std::string name, std::string topic, bool open, std::string alias, bool federate,
+                                bool encrypted) {
+  this->spawn_guarded([this, name = std::move(name), topic = std::move(topic), open, alias = std::move(alias), federate,
+                       encrypted] {
     if (!api_)
       return;
     using made_t = loom::cs::create_room::body_t;
@@ -608,12 +621,16 @@ void account<Sink>::create_room(std::string name, std::string topic, bool open, 
                             // the room's creation content, as the spec has it.
                             .creation_content = federate ? std::nullopt
                                                          : std::optional<knot::raw>(knot::raw{R"({"m.federate":false})"}),
+                            // Encrypted, when asked, from the very start.
+                            .initial_state = encrypted ? std::optional(encrypted_from_the_start()) : std::nullopt,
                             .preset = open ? made_t::preset_t{made_t::preset_values::public_chat{}}
                                            : made_t::preset_t{made_t::preset_values::private_chat{}}}});
     if (!made) {
       log(id_, "could not make the room {}: {}", name, made.error().said());
       return;
     }
+    if (encrypted)
+      this->remember_encrypted(made->room_id);
     sink_(change::room_created{{id_, made->room_id}});
   });
 }
@@ -737,11 +754,13 @@ void account<Sink>::create_group(std::string name) {
     if (!api_)
       return;
     auto made = perform(*api_, loom::cs::create_room{.body = {.name = name,
+                                                              .initial_state = encrypted_from_the_start(),
                                                               .preset = loom::cs::create_room::body_t::preset_values::private_chat{}}});
     if (!made) {
       log(id_, "could not make the room {}: {}", name, made.error().said());
       return;
     }
+    this->remember_encrypted(made->room_id);
     sink_(change::room_created{{id_, made->room_id}});
   });
 }
@@ -767,6 +786,12 @@ void account<Sink>::forward(std::string from, std::string event, std::string to)
   this->spawn_sending([this, from = std::move(from), event = std::move(event), to = std::move(to)] {
     if (!api_)
       return;
+    // What came end-to-end encrypted never goes on in the clear: into a
+    // room that is not encrypted, it is not forwarded (review 3, L3).
+    if (this->encrypted_room(from) && !this->encrypted_room(to)) {
+      sink_(change::refused{id_, "Not forwarded: it came end-to-end encrypted, and the room it would go to is not."});
+      return;
+    }
     auto got = perform(*api_, loom::cs::get_one_room_event{.room_id = from, .event_id = event});
     if (!got) {
       log(id_, "could not fetch {} to forward: {}", event, got.error().said());

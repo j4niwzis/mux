@@ -213,7 +213,7 @@ class account {
   void search_directory(std::string, std::string) {}
   void follow(std::optional<std::string>) {}
   void explore_space(std::string) {}
-  void create_room(std::string, std::string, bool, std::string, bool = true) {}
+  void create_room(std::string, std::string, bool, std::string, bool = true, bool = false) {}
   void search_people(std::string) {}
   void list_packs(std::optional<std::string>) {}
   void list_threads(std::string) {}

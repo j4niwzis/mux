@@ -1471,8 +1471,14 @@ bool account<Sink>::encrypted_room(std::string_view room) {
   if (encrypted_rooms_.contains(room))
     return true;
   bool now = false;
-  if (const auto kept = state_.joined.find(std::string(room)); kept != state_.joined.end())
+  if (const auto kept = state_.joined.find(std::string(room)); kept != state_.joined.end()) {
     now = kept->second.state.encrypted();
+    // The room an encrypted room was upgraded into: encrypted too, whatever
+    // its state says -- a server dropping m.room.encryption from the new
+    // room would otherwise have its first messages in the clear.
+    if (const auto before = predecessor_of(kept->second); !now && before && encrypted_rooms_.contains(*before))
+      now = true;
+  }
   if (!now && crypto_)
     now = crypto_->was_encrypted(room);
   if (now)

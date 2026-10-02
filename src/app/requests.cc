@@ -234,6 +234,7 @@ struct create_room {
   bool open = false;
   std::string alias;
   bool federate = true;  // those of other servers may join
+  bool encrypted = true;  // end-to-end, from the start
 };
 // Element's Start chat and Create a room: people searched for, a room's
 // box opened and closed; and a text put on the clipboard (one's link).
@@ -723,8 +724,8 @@ struct actions {
   void join_directory_room(std::string room, std::string server) {
     requests.emplace_back(request::join_directory_room{std::move(room), std::move(server)});
   }
-  void create_room(std::string name, std::string topic, bool open, std::string alias, bool federate = true) {
-    requests.emplace_back(request::create_room{std::move(name), std::move(topic), open, std::move(alias), federate});
+  void create_room(std::string name, std::string topic, bool open, std::string alias, bool federate, bool encrypted) {
+    requests.emplace_back(request::create_room{std::move(name), std::move(topic), open, std::move(alias), federate, encrypted});
   }
   void find_people(std::string query) { requests.emplace_back(request::find_people{std::move(query)}); }
   void open_new_room() { requests.emplace_back(request::open_new_room{}); }

@@ -31,7 +31,8 @@ template void account<mux::app::post_change>::fetch_preview(std::string url);
 template void account<mux::app::post_change>::search_directory(std::string server, std::string query);
 template void account<mux::app::post_change>::explore_space(std::string room);
 template void account<mux::app::post_change>::follow(std::optional<std::string> room);
-template void account<mux::app::post_change>::create_room(std::string name, std::string topic, bool open, std::string alias, bool federate);
+template void account<mux::app::post_change>::create_room(std::string name, std::string topic, bool open, std::string alias, bool federate,
+                                                                  bool encrypted);
 template void account<mux::app::post_change>::search_people(std::string term);
 template void account<mux::app::post_change>::list_threads(std::string room);
 template void account<mux::app::post_change>::load_thread(std::string room, std::string root);

@@ -1328,6 +1328,9 @@ class model {
 
   const std::map<account_id, account>& accounts() const noexcept { return accounts_; }
   // What an account knows of a person's encryption identity, where it said.
+  // How many times what is known of anyone's identity changed: what shows
+  // it is made again when it moves.
+  [[nodiscard]] std::uint64_t trust_revision() const { return trust_revision_; }
   [[nodiscard]] std::optional<trust_t> trust_of(const account_id& by, const std::string& user) const {
     const auto found = trust_.find({by, user});
     return found == trust_.end() ? std::nullopt : std::optional<trust_t>(found->second);
@@ -1768,7 +1771,11 @@ class model {
   void on(const change::sessions_listed&) {}  // the window's: the account's Sessions page
   void on(const change::sessions_refused&) {}
   void on(const change::refused&) {}  // the window's: a notice
-  void on(const change::trust_changed& one) { trust_.insert_or_assign({one.by, one.user}, one.now); }
+  void on(const change::trust_changed& one) {
+    trust_.insert_or_assign({one.by, one.user}, one.now);
+    ++trust_revision_;
+  }
+  std::uint64_t trust_revision_ = 0;
   std::map<std::pair<account_id, std::string>, trust_t> trust_;
   void on(const change::notice&) {}
   void on(const change::verification_changed&) {}

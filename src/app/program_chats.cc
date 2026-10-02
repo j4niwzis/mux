@@ -176,7 +176,16 @@ void app::apply(const request::show_account& one) { (void)this->show_account(one
 
 void app::apply(const request::quit&) { mux::host::request_quit(); }
 
-void app::apply(const request::toggle_info&) { root().main().toggle_info(); }
+void app::apply(const request::toggle_info&) {
+  root().main().toggle_info();
+  // An encrypted room's members, what is known of each one's identity asked
+  // for, for their rows -- up to two hundred: the account answers from what
+  // it holds, and no more than a page of rows is looked at.
+  if (const auto& chosen = root().main().chosen; chosen && !shared.demo())
+    if (const mux::conversation* chat = model->find(*chosen); chat && chat->encrypted)
+      for (const mux::member& each : chat->members | std::views::take(200))
+        net->ask_trust(chosen->account, each.id);
+}
 
 // To the newest: where the chat is a window away from it, back to the
 // newest from the disk first -- live again -- then to its end.

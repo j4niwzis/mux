@@ -2482,6 +2482,7 @@ struct info_panel : nodes::Stack {
   // Whose members those are, at which revision of them.
   std::optional<conversation_id> members_of;
   std::uint64_t members_revision = 0;
+  std::uint64_t trust_seen = 0;
 
   // What a press does, to the panel -- which stays where it is while its
   // pages are made again.
@@ -2703,9 +2704,11 @@ struct info_panel : nodes::Stack {
     std::ranges::copy(one.other_aliases, std::back_inserter(group_view.addresses));
     // Its members made again only where they changed -- or another chat's
     // are shown: a big room has thousands, and every refresh rebuilt them.
-    const bool same_members = members_of == one.id && members_revision == one.members_revision;
+    const bool same_members =
+        members_of == one.id && members_revision == one.members_revision && trust_seen == now.trust_revision();
     members_of = one.id;
     members_revision = one.members_revision;
+    trust_seen = now.trust_revision();
     if (!same_members) {
       shown_members.clear();
       for (const member& each : one.members) {
@@ -2715,7 +2718,18 @@ struct info_panel : nodes::Stack {
         if (!shown.role)
           if (const auto level = one.powers.find(each.id); level != one.powers.end() && level->second >= 50)
             shown.role = role_of(level->second);
-        shown_members.emplace_back(std::move(shown), presence_of(now, one.id.account, each.id));
+        // In an encrypted room, what is known of their identity beside how
+        // they are -- Element's shield on each member.
+        std::string how = presence_of(now, one.id.account, each.id);
+        if (one.encrypted)
+          if (const auto trust = now.trust_of(one.id.account, each.id)) {
+            const std::string said = splice::visit(splice::overloaded{[](trust::verified) { return std::string("Verified"); },
+                                                                      [](trust::unverified) { return std::string("Not verified"); },
+                                                                      [](trust::changed) { return std::string("Identity reset"); }},
+                                                   *trust);
+            how = how.empty() ? said : std::format("{} \u00b7 {}", how, said);
+          }
+        shown_members.emplace_back(std::move(shown), std::move(how));
       }
     }
     auto& rows = std::get<0>(members.fChildren);

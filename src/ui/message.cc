@@ -313,8 +313,6 @@ struct picture_view : scene::Node {
   // was ticked at every frame for as long as its whole picture was not
   // fetched -- that is, nearly always.
   [[nodiscard]] bool wantsTick() const { return parts.loader.visible() || animations().has(source); }
-  // A sticker: its message's time shown while the pointer is over it.
-  [[nodiscard]] bool hoverChangesAppearance() const { return sticker; }
   void update(double) {
     const bool moving = animations().has(source);
     const bool coming = !moving && !thumbnails().has(source) && !whole_pictures().has(source);
@@ -1358,10 +1356,7 @@ struct message_bubble : nodes::Stack {
     // Ticked only until the time is placed: every bubble in view was ticked
     // at every frame for as long as it was shown. What moves it again --
     // its text, its reactions -- marks it.
-    [[nodiscard]] bool wantsTick() const {
-      // And a sticker that came, while its time is not as the pointer says.
-      return !time_placed || (beside && !beside_left && parts.picture && parts.picture->hovered() != parts.time.visible());
-    }
+    [[nodiscard]] bool wantsTick() const { return !time_placed; }
     [[nodiscard]] static skia::SkColor mixed(skia::SkColor from, skia::SkColor to, float amount) {
       const auto channel = [&](int shift) {
         const float a = static_cast<float>((from >> shift) & 0xFF), b = static_cast<float>((to >> shift) & 0xFF);
@@ -1379,12 +1374,11 @@ struct message_bubble : nodes::Stack {
       // reactions too, it was shown twice.
       if (picture && picture->sticker) {
         time_placed = true;
-        // Over it where it was sent; beside it, its own, where it came --
-        // and that only while the pointer is over it, as tdesktop's
-        // needInfoDisplay (isUnderCursor), or while it is being sent.
-        const bool shown = !beside_left && picture->hovered();
-        if (inline_time.visible() || time.visible() != shown) {
-          time.setVisible(shown);
+        // Over it where it was sent; beside it where it came, shown by
+        // skiff while the message is under the pointer (revealOnHover).
+        if (inline_time.visible() || (beside_left && time.visible())) {
+          if (beside_left)
+            time.setVisible(false);
           inline_time.setVisible(false);
           this->invalidateLayout();
         }
@@ -1773,8 +1767,11 @@ struct message_bubble : nodes::Stack {
           body.parts.picture->show_time(when);
           body.parts.time.setVisible(false);
         } else {
+          // Shown while the pointer is over the message, as tdesktop's
+          // needInfoDisplay (isUnderCursor): skiff shows and hides it.
           body.parts.time.apply({.place = scene::anchor::kBottomRight, .origin = scene::anchor::kBottomLeft, .x = 6.0f,
-                                 .padding = {2.0f, 6.0f, 2.0f, 6.0f}, .cornerRadius = 8.0f, .background = body.plate});
+                                 .padding = {2.0f, 6.0f, 2.0f, 6.0f}, .cornerRadius = 8.0f, .background = body.plate,
+                                 .visible = false, .revealOnHover = true});
         }
         body.parts.frost.reset();
         body.apply({.padding = {0.0f, 0.0f, 0.0f, 0.0f}, .background = skia::SkColor{0},

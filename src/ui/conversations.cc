@@ -390,6 +390,9 @@ struct conversations_screen : nodes::Stack {
   std::optional<skia::SkPoint> swipe_from;
   // The spaces along the top bigger, for a finger: a long press on them.
   bool big_spaces = false;
+  // What the head was last made from: made again with its back arrow, or
+  // without, as the window goes single or not.
+  typename chat_header<Actions>::view head_shown;
   struct pick_folder {
     conversations_screen* screen;
     void operator()(const folder_t& which) const { screen->choose_folder(which); }
@@ -1397,6 +1400,8 @@ struct conversations_screen : nodes::Stack {
       timeline.scrollTo(std::max(0.0f, timeline.current() + (press.key == keys::kPageUp ? -page : page)));
     } else if (press.key == keys::kEnd && control) {
       actions->jump_to_end();
+    } else if (press.key == keys::kEscape && !any && single) {
+      this->step_back();
     } else {
       return;
     }
@@ -1617,7 +1622,10 @@ struct conversations_screen : nodes::Stack {
       side.close_menu();
     // Single: a swipe across the chat begun here.
     swipe_from.reset();
-    if (single && chosen && press.button <= 1 && chat.visible() && chat.bounds().contains(press.x, press.y))
+    if (single && chosen && press.button <= 1 &&
+        ((chat.visible() && chat.bounds().contains(press.x, press.y)) ||
+         (info.visible() && info.bounds().contains(press.x, press.y)) ||
+         (parts.threads.visible() && parts.threads.bounds().contains(press.x, press.y))))
       swipe_from = skia::SkPoint{press.x, press.y};
     // Single: a long press -- a right press, as the host makes one of it --
     // on the spaces along the top, or near them: they grow for a finger, or
@@ -1640,9 +1648,19 @@ struct conversations_screen : nodes::Stack {
     const float dx = lift.x - from->fX;
     const float dy = lift.y - from->fY;
     if (dx > 90.0f && std::abs(dy) < dx * 0.5f) {
-      actions->close_chat();
+      this->step_back();
       reply.handle();
     }
+  }
+  // Single, a step back: from the threads or the info to the chat, from
+  // the chat to the chats -- a swipe across, or Esc.
+  void step_back() {
+    if (threads_open)
+      actions->toggle_threads();
+    else if (info_open)
+      actions->toggle_info();
+    else
+      actions->close_chat();
   }
   // Esc too.
   bool close_space_menu() {
@@ -1689,6 +1707,10 @@ struct conversations_screen : nodes::Stack {
     const skia::SkRect box = fState.contentBox();
     const bool now = box.width() < 600.0f && box.height() > box.width();
     if (now != single || (now && box.width() != single_width)) {
+      if (now != single) {
+        head_shown.back = now;
+        header.show(head_shown, [this](const auto& shown) { return chat_header<Actions>(actions, shown); });
+      }
       single = now;
       single_width = box.width();
       this->show_info();
@@ -2760,8 +2782,9 @@ struct conversations_screen : nodes::Stack {
     const float left_at = timeline.current();
     auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
     const conversation* one = chosen ? now.find(*chosen) : nullptr;
-    header.show(chat_header<Actions>::view_of(one, now),
-                [this](const auto& shown) { return chat_header<Actions>(actions, shown); });
+    head_shown = chat_header<Actions>::view_of(one, now);
+    head_shown.back = single;
+    header.show(head_shown, [this](const auto& shown) { return chat_header<Actions>(actions, shown); });
     this->show_trust_warning(one, now);
     if (pinned_of != chosen) {
       pinned_of = chosen;

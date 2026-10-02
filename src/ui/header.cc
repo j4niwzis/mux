@@ -180,6 +180,8 @@ struct chat_header : nodes::Stack {
     std::optional<std::string> key;
     std::string title = "Choose a chat";
     std::string status;
+    // A back arrow before it, to the chats: shown one thing at a time.
+    bool back = false;
     friend bool operator==(const view&, const view&) = default;
   };
   [[nodiscard]] static view view_of(const conversation* one, const model& now) {
@@ -223,7 +225,9 @@ struct chat_header : nodes::Stack {
     using find_button = icon_button<ask<Actions, &Actions::open_search>>;
     using info_button = icon_button<ask<Actions, &Actions::toggle_info>>;
     using threads_button = icon_button<ask<Actions, &Actions::toggle_threads>>;
+    using back_button = icon_button<ask<Actions, &Actions::close_chat>>;
     struct parts_t {
+      back_button back;
       avatar_mark face;
       two_lines texts;
       find_button find;
@@ -232,7 +236,8 @@ struct chat_header : nodes::Stack {
       info_button info;
     } parts;
     head_row(Actions* a, const view& shown)
-        : parts{.face = avatar_mark(shown.key.value_or(""), shown.title, 38.0f),
+        : parts{.back = back_button(icon::back{}, {a}),
+                .face = avatar_mark(shown.key.value_or(""), shown.title, 38.0f),
                 .texts = two_lines(shown.title, shown.status, 15.0f, 3.0f),
                 .find = find_button(icon::search{}, {a}),
                 .threads = threads_button(icon::threads{}, {a}),
@@ -244,6 +249,8 @@ struct chat_header : nodes::Stack {
       parts.threads.apply({.alignSelf = scene::align::kMiddle});
       parts.threads.setVisible(shown.key.has_value());
       parts.info.apply({.alignSelf = scene::align::kMiddle});
+      parts.back.apply({.alignSelf = scene::align::kMiddle});
+      parts.back.setVisible(shown.back && shown.key.has_value());
       parts.face.setVisible(shown.key.has_value());
       parts.find.setVisible(shown.key.has_value());
       parts.info.setVisible(shown.key.has_value());

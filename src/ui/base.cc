@@ -80,8 +80,11 @@ struct window_look_t {
   bool live_blur = false;   // frosted popups and sheets blur what is under them, live
   int interface_scale = 100;  // in percent of the display's scale
 };
-// The interface scales one can choose, in percent, as Telegram Desktop's.
-inline constexpr std::array kScales{100, 110, 120, 125, 130, 140, 150, 160, 170, 175, 180, 190, 200, 225, 250, 275, 300};
+// The interface scales one can choose, in percent: Telegram Desktop's from
+// 100 up, and smaller ones under it -- a window on a small screen, or one
+// that wants more in it (the user, #13738).
+inline constexpr std::array kScales{50,  60,  70,  75,  80,  90,  100, 110, 120, 125, 130, 140,
+                                    150, 160, 170, 175, 180, 190, 200, 225, 250, 275, 300};
 inline constexpr int kScaleLeast = kScales.front();
 inline constexpr int kScaleMost = kScales.back();
 inline window_look_t& window_look() {

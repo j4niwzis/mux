@@ -82,9 +82,11 @@ inline constexpr auto base64_group = [](auto&& group) {
   for (const std::uint8_t byte : group)
     in[taken++] = byte;
   const std::uint32_t joined = (std::uint32_t{in[0]} << 16) | (std::uint32_t{in[1]} << 8) | std::uint32_t{in[2]};
-  const std::array<char, 4> out{kBase64[(joined >> 18) & 63], kBase64[(joined >> 12) & 63],
-                                taken > 1 ? kBase64[(joined >> 6) & 63] : '=', taken > 2 ? kBase64[joined & 63] : '='};
-  return std::views::take(out, static_cast<std::ptrdiff_t>(Padded ? 4 : taken + 1));
+  std::array<char, 4> out{kBase64[(joined >> 18) & 63], kBase64[(joined >> 12) & 63],
+                          taken > 1 ? kBase64[(joined >> 6) & 63] : '=', taken > 2 ? kBase64[joined & 63] : '='};
+  // Moved into the view, which owns it: a view of this local array would be
+  // read after the lambda is gone.
+  return std::views::take(std::views::all(std::move(out)), static_cast<std::ptrdiff_t>(Padded ? 4 : taken + 1));
 };
 }  // namespace detail
 template <std::ranges::viewable_range Bytes>

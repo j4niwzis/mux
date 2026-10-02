@@ -1268,6 +1268,57 @@ struct message_bubble : nodes::Stack {
       std::optional<nodes::Icon> tail;
     } parts;
     skia::SkColor plate = bubble_colour;
+    // A sticker's name, forward and quote beside it, as tdesktop's unwrapped
+    // media (history_view_media_unwrapped.cpp, drawSurrounding): to its right
+    // where it came in, to its left where it was sent, from its top down;
+    // over it, as before, only where the row has no room for both
+    // (countCurrentSize's _additionalOnTop). They stood over every sticker.
+    bool beside = false;
+    bool beside_left = false;
+    static constexpr float kBesideGap = 8.0f;
+    void layoutChildren() {
+      // Beside, where the room it was given holds the sticker and the widest
+      // of them (as last laid out; a quote's least width before it was).
+      bool side = false;
+      if (beside && parts.picture) {
+        float widest = 0.0f;
+        const auto widest_of = [&](auto& part) {
+          if (part && part->visible())
+            widest = std::max(widest, part->bounds().isEmpty() ? 120.0f : part->bounds().width());
+        };
+        widest_of(parts.name);
+        widest_of(parts.forwarded);
+        widest_of(parts.quote);
+        const float sticker = std::max(parts.picture->bounds().width(), parts.picture->fState.fWidth);
+        side = sticker + kBesideGap + widest <= fState.fLastConstraint.width();
+      }
+      const auto flow = [&](auto& part) {
+        if (!part)
+          return;
+        part->fState.fOutOfFlow = side;
+        if (!side)
+          part->fState.setShift(0.0f, 0.0f);
+      };
+      flow(parts.name);
+      flow(parts.forwarded);
+      flow(parts.quote);
+      this->nodes::Stack::layoutChildren();
+      if (!side)
+        return;
+      const skia::SkRect sticker = parts.picture->bounds();
+      float y = 0.0f;
+      const auto put = [&](auto& part) {
+        if (!part || !part->visible())
+          return;
+        const skia::SkRect at = part->bounds();
+        const float x = beside_left ? sticker.fLeft - kBesideGap - at.width() : sticker.fRight + kBesideGap;
+        part->fState.setShift(x - at.fLeft, sticker.fTop + y - at.fTop);
+        y += at.height() + 4.0f;
+      };
+      put(parts.name);
+      put(parts.forwarded);
+      put(parts.quote);
+    }
     // Its least width as the message asks it (a quote's), and as the time
     // beside the last line asks it: the bubble widened to hold both.
     float base_min = 0.0f;
@@ -1804,6 +1855,11 @@ struct message_bubble : nodes::Stack {
         plated(*body.parts.forwarded);
       if (body.parts.quote)
         plated(*body.parts.quote);
+      // Beside it, not over it: the sticker's own width, not a quote's.
+      body.beside = true;
+      body.beside_left = said.outgoing;
+      body.base_min = 0.0f;
+      body.apply({.minWidth = 0.0f});
     }
     if (said.threaded && said.threaded->count > 0) {
       const thread_summary& summary = *said.threaded;

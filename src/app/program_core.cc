@@ -100,6 +100,13 @@ void app::woken() {
                                                  },
                                                  *up);
                                },
+                               [&](const mux::change::trust_changed& told) {
+                                 if (person_open_ && person_open_->first.account == told.by && person_open_->second == told.user) {
+                                   const auto [chat, user] = *person_open_;
+                                   root().open_person(chat.account, user,
+                                                      mux::ui::person_of(model->find(chat), *model, chat.account, user));
+                                 }
+                               },
                                [&](const mux::change::people_found& found) {
                                  root().show_found_people(found.people, found.query);
                                  root().main().found_people_elsewhere(found.query, found.people);

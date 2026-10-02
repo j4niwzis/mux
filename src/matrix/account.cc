@@ -135,6 +135,9 @@ class account {
   void send_in_thread(std::string room, std::string body, std::string root, std::string latest, std::optional<std::string> reply_to);
   // The user directory searched: people_found for what was asked.
   void search_people(std::string term);
+  // What this account knows of a person's encryption identity, said
+  // (trust_changed): when asked, after a verification, when it changes.
+  void tell_trust(std::string user);
   // A room's gap since the last run, from where the sync left it back to
   // the event it had last: read for mentions of the user and reactions to
   // theirs, and nothing else -- no message kept, nothing fetched.

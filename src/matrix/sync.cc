@@ -1088,6 +1088,7 @@ void account<Sink>::sas_check_mac(crypto::sas_state& state) {
       this->cross_sign_user(state.their_user, theirs->second);
   this->send_step(state, "m.key.verification.done", loom::ev::m_key_verification_done_content_t{});
   this->verification_said(state, verification_step::done{});
+  this->tell_trust(state.their_user);
   verifications_.erase(txn);
 }
 template <class Sink>
@@ -1455,9 +1456,12 @@ void account<Sink>::vet_room_key(const crypto::room_key_offer& offer) {
   // server that swaps it is making their devices its own (review 6).
   if (const auto pinned = crypto_->pinned_master(user);
       device->master && pinned && *pinned != *device->master && identity_changed_.emplace(user).second)
+  {
     sink_(change::refused{id_, std::format("{}'s encryption identity changed. Their messages are marked as from an "
                                            "unverified device until it is verified.",
                                            user)});
+    this->tell_trust(user);
+  }
   // Cross-signed, or verified here by comparing emoji.
   crypto::device_identity trusted = *device;
   trusted.cross_signed = device->cross_signed || std::ranges::contains(crypto_->verified_keys(user), device->ed25519);
@@ -1548,4 +1552,20 @@ void account<Sink>::load_encrypted() {
   }
 }
 
+}  // namespace mux::matrix
+
+namespace mux::matrix {
+// A changed identity first -- whatever was verified was the old one; then
+// verified, by emoji (a device of theirs) or their master key; else not.
+template <class Sink>
+void account<Sink>::tell_trust(std::string user) {
+  if (!crypto_)
+    return;
+  trust_t now = trust::unverified{};
+  if (identity_changed_.contains(user))
+    now = trust::changed{};
+  else if (crypto_->master_verified(user) || !crypto_->verified_keys(user).empty())
+    now = trust::verified{};
+  sink_(change::trust_changed{id_, std::move(user), std::move(now)});
+}
 }  // namespace mux::matrix

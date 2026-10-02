@@ -79,4 +79,5 @@ template void account<mux::app::post_change>::save_encrypted();
 template std::optional<typename account<mux::app::post_change>::since_t> account<mux::app::post_change>::encrypted_by(std::string_view room, std::optional<since_t> seen);
 template std::filesystem::path account<mux::app::post_change>::encrypted_rooms_file() const;
 template void account<mux::app::post_change>::load_encrypted();
+template void account<mux::app::post_change>::tell_trust(std::string user);
 }  // namespace mux::matrix

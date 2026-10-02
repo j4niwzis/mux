@@ -286,6 +286,9 @@ struct app : kept_settings {
   // The mentions and reactions not yet seen, written as they change and read
   // back at the start -- each put in once its chat is there.
   void save_marks();
+  // The person whose card is open, in which chat: shown again as what is
+  // known of their keys comes.
+  std::optional<std::pair<mux::conversation_id, std::string>> person_open_;
   // The list of marks open, by its kind: shown again as what it waits for
   // comes; and each message it fetched, fetched once.
   std::optional<mux::mark_kind_t> marks_listed_;

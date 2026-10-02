@@ -33,9 +33,15 @@ void app::apply(const request::open_member_info& one) {
     return;
   const mux::conversation* in = model->find(*chosen);
   root().open_person(chosen->account, one.id, mux::ui::person_of(in, *model, chosen->account, one.id));
+  person_open_ = std::pair{*chosen, one.id};
+  if (!shared.demo())
+    net->ask_trust(chosen->account, one.id);
 }
 
-void app::apply(const request::close_person_info&) { root().close_person(); }
+void app::apply(const request::close_person_info&) {
+  person_open_.reset();
+  root().close_person();
+}
 
 // The input's emoji panel: opened over the chat above its button, or closed.
 void app::apply(const request::toggle_emoji&) {

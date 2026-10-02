@@ -215,6 +215,7 @@ class account {
   void explore_space(std::string) {}
   void create_room(std::string, std::string, bool, std::string, bool = true, bool = false) {}
   void search_people(std::string) {}
+  void tell_trust(std::string) {}
   void list_packs(std::optional<std::string>) {}
   void list_threads(std::string) {}
   void load_thread(std::string, std::string) {}

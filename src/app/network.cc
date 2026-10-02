@@ -538,6 +538,18 @@ struct network {
     });
   }
   // The user directory of the account named, searched.
+  // What the account knows of a person's encryption identity, asked for.
+  void ask_trust(const mux::account_id& by, std::string user) {
+    loop.post([this, by, user = std::move(user)] {
+      for (auto& one : accounts)
+        splice::visit(
+            [&](auto& account) {
+              if (account->id() == by)
+                account->tell_trust(user);
+            },
+            one.account);
+    });
+  }
   void search_people(const mux::account_id& by, std::string term) {
     loop.post([this, by, term = std::move(term)] {
       for (auto& one : accounts)

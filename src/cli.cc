@@ -102,6 +102,12 @@ std::string of(const change::pack_saved& one) {
 }
 std::string of(const change::pack_picture_uploaded& one) { return std::format("uploaded {}", one.picture.url); }
 std::string of(const change::refused& one) { return one.what; }
+std::string of(const change::trust_changed& one) {
+  return one.user + splice::visit(splice::overloaded{[](trust::verified) { return std::string(" is verified"); },
+                                                     [](trust::unverified) { return std::string(" is not verified"); },
+                                                     [](trust::changed) { return std::string("'s identity changed"); }},
+                                  one.now);
+}
 std::string of(const change::notice& one) { return one.heading + ": " + one.what; }
 std::string of(const change::message_encrypted& one) {
   return std::format("{} {} came encrypted{}", one.in.id, one.id, one.verified ? ", from a verified device" : "");

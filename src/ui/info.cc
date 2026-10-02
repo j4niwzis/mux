@@ -180,10 +180,20 @@ struct person_facts {
   // levels allow: only above them, and only where the room lets them.
   bool may_kick = false;
   bool may_ban = false;
+  // What is known of their encryption identity, where the account said.
+  std::optional<trust_t> trust;
 };
 [[nodiscard]] inline person_facts person_of(const conversation* in, const model& now, const account_id& account,
                                             const std::string& id) {
   person_facts out{id, presence_of(now, account, id)};
+  out.trust = now.trust_of(account, id);
+  if (out.trust) {
+    const std::string said = splice::visit(splice::overloaded{[](trust::verified) { return std::string("Verified"); },
+                                                              [](trust::unverified) { return std::string("Not verified"); },
+                                                              [](trust::changed) { return std::string("Identity changed: verify again"); }},
+                                           *out.trust);
+    out.status = out.status.empty() ? said : std::format("{} · {}", out.status, said);
+  }
   if (in == nullptr)
     return out;
   if (const auto found = std::ranges::find(in->members, id, &member::id); found != in->members.end()) {
@@ -279,6 +289,10 @@ struct person_card : nodes::Stack {
     // Offered only where the user may: no button for what they cannot do.
     parts.remove.setVisible(facts.may_kick);
     parts.ban.setVisible(facts.may_ban);
+    // Verify where they are not, or not any more: not for one verified.
+    parts.verify.setVisible(!facts.trust || !splice::visit(splice::overloaded{[](trust::verified) { return true; },
+                                                                              [](const auto&) { return false; }},
+                                                           *facts.trust));
   }
 };
 

@@ -913,6 +913,23 @@ struct cancelled {
 }  // namespace verification_step
 using verification_step_t = splice::variant<verification_step::asked, verification_step::waiting, verification_step::compare,
                                             verification_step::done, verification_step::cancelled>;
+// What this account knows of another's encryption identity, as Element
+// says it: verified (here, by emoji, or their master key verified), not
+// verified, or changed since it was first seen -- a new identity, which may
+// be the server's, until verified again.
+namespace trust {
+struct unverified {
+  friend bool operator==(unverified, unverified) = default;
+};
+struct verified {
+  friend bool operator==(verified, verified) = default;
+};
+struct changed {
+  friend bool operator==(changed, changed) = default;
+};
+}  // namespace trust
+using trust_t = splice::variant<trust::unverified, trust::verified, trust::changed>;
+
 namespace change {
 
 struct connection_changed {
@@ -938,6 +955,11 @@ struct notice {
 
 // Something asked of the server that it refused: said to the user, as a
 // notice, with what the server gave as its reason.
+struct trust_changed {
+  account_id by;
+  std::string user;
+  trust_t now;
+};
 struct refused {
   account_id by;
   std::string what;
@@ -1277,7 +1299,7 @@ struct event_missing {
 
 }  // namespace change
 
-using change_t = splice::variant<change::message_encrypted, change::connection_changed, change::refused, change::notice, change::verification_changed, change::account_removed, change::conversation_updated,
+using change_t = splice::variant<change::trust_changed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::verification_changed, change::account_removed, change::conversation_updated,
                               change::conversation_removed,
                               change::presence_changed, change::message_added, change::message_edited,
                               change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed,
@@ -1299,6 +1321,11 @@ class model {
   std::map<std::string, link_preview> previews;
 
   const std::map<account_id, account>& accounts() const noexcept { return accounts_; }
+  // What an account knows of a person's encryption identity, where it said.
+  [[nodiscard]] std::optional<trust_t> trust_of(const account_id& by, const std::string& user) const {
+    const auto found = trust_.find({by, user});
+    return found == trust_.end() ? std::nullopt : std::optional<trust_t>(found->second);
+  }
 
   account& add(account_id id, std::string display_name = {}) {
     account& made = accounts_[id];
@@ -1734,6 +1761,8 @@ class model {
   void on(const change::sessions_listed&) {}  // the window's: the account's Sessions page
   void on(const change::sessions_refused&) {}
   void on(const change::refused&) {}  // the window's: a notice
+  void on(const change::trust_changed& one) { trust_.insert_or_assign({one.by, one.user}, one.now); }
+  std::map<std::pair<account_id, std::string>, trust_t> trust_;
   void on(const change::notice&) {}
   void on(const change::verification_changed&) {}
   void on(const change::packs_listed&) {}  // the window's: the packs' dialog

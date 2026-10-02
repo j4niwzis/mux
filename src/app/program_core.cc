@@ -64,6 +64,11 @@ void app::woken() {
                                // Something the server refused: a notice saying why.
                                [&](const mux::change::refused& said) { root().show_message("Not done", said.what); },
                                [&](const mux::change::notice& said) { root().show_message(said.heading, said.what); },
+                               // An emoji verification, as it goes: its dialog.
+                               [&](const mux::change::verification_changed& one) {
+                                 verifying = std::pair(one.by, one.txn);
+                                 root().show_verification(mux::ui::verification_view{one.user, one.device, one.step});
+                               },
                                // People found: in Start chat, while it asks for them.
                                // A person's profile: their picture asked for, where they have one.
                                [&](const mux::change::profile_found& found) {
@@ -943,6 +948,36 @@ void app::apply(const request::flip_local_encryption&) {
     root().ask_passphrase(mux::config::passphrase_for::encrypt{});
 }
 void app::apply(const request::change_passphrase&) { root().ask_passphrase(mux::config::passphrase_for::change{}); }
+// Emoji verification: begun from a person's card or a session's row; its
+// dialog's answers, to the verification it shows.
+void app::apply(const request::verify_person& one) { net->verify_start(one.who.account, one.who.id, std::nullopt); }
+void app::apply(const request::verify_session& one) {
+  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+    net->verify_start(id_of(account), mux::config::address_of(account), one.device);
+  });
+}
+void app::apply(const request::verify_accept_now&) {
+  if (verifying)
+    net->verify_accept(verifying->first, verifying->second);
+}
+void app::apply(const request::verify_cancel_now&) {
+  if (verifying)
+    net->verify_cancel(verifying->first, verifying->second);
+  root().close_verification();
+}
+void app::apply(const request::verify_match&) {
+  if (verifying)
+    net->verify_confirm(verifying->first, verifying->second, true);
+}
+void app::apply(const request::verify_mismatch&) {
+  if (verifying)
+    net->verify_confirm(verifying->first, verifying->second, false);
+}
+void app::apply(const request::close_verification&) {
+  verifying.reset();
+  root().close_verification();
+}
+
 // From an account's Privacy page: its room keys, to a file or from one.
 void app::apply(const request::export_room_keys&) {
   this->with_chosen_account([&](accounts&, mux::config::account_t& account) {

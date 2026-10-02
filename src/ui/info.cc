@@ -245,12 +245,22 @@ struct person_card : nodes::Stack {
       actions->close_person_info();
     }
   };
+  // Verified by comparing emoji with each of their devices that answers.
+  struct verify_them {
+    Actions* actions = nullptr;
+    conversation_id who;
+    void operator()() const {
+      actions->verify_person(who);
+      actions->close_person_info();
+    }
+  };
   struct parts_t {
     top_bar top;
     cover face;
     nodes::Box<> band = section_band();
     id_line id;
     action_tile<message_them> message;
+    action_tile<verify_them> verify;
     action_tile<to_them> remove;
     action_tile<to_them> ban;
   } parts;
@@ -260,10 +270,11 @@ struct person_card : nodes::Stack {
               .face = cover(a, key, facts),
               .id = id_line(key, ""),
               .message = action_tile<message_them>("Message", icon::send{}, {a, conversation_id{account, key}}),
+              .verify = action_tile<verify_them>("Verify with emoji", icon::check{}, {a, conversation_id{account, key}}),
               .remove = action_tile<to_them>("Remove from room", icon::leave{}, {a, room_action::kick{key}}),
               .ban = action_tile<to_them>("Ban from room", icon::close{}, {a, room_action::ban{key}})} {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}});
-    for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.message, &parts.remove, &parts.ban})
+    for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.message, &parts.verify, &parts.remove, &parts.ban})
       each->apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
     // Offered only where the user may: no button for what they cannot do.
     parts.remove.setVisible(facts.may_kick);

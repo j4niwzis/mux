@@ -383,6 +383,15 @@ struct app : kept_settings {
   void apply(const request::set_previews_direct&);
   void apply(const request::give_passphrase&);
   void apply(const request::export_room_keys&);
+  void apply(const request::verify_person&);
+  void apply(const request::verify_session&);
+  void apply(const request::verify_accept_now&);
+  void apply(const request::verify_cancel_now&);
+  void apply(const request::verify_match&);
+  void apply(const request::verify_mismatch&);
+  void apply(const request::close_verification&);
+  // The verification its dialog shows: its account, and its transaction.
+  std::optional<std::pair<mux::account_id, std::string>> verifying;
   void apply(const request::import_room_keys&);
   // The account whose room keys a passphrase was asked for.
   std::optional<mux::account_id> keys_of;

@@ -339,6 +339,11 @@ struct account_sessions : nodes::Stack {
     account_sessions* page;
     void operator()() const { page->sign_out(page->others); }
   };
+  struct verify_one {
+    account_sessions* page;
+    std::string device;
+    void operator()() const { page->actions->verify_session(device); }
+  };
   struct start_rename {
     account_sessions* page;
     std::size_t row;
@@ -366,6 +371,7 @@ struct account_sessions : nodes::Stack {
       widgets::TextBox<> field;
       widgets::Button<save_rename> save;
       widgets::Button<start_rename> rename;
+      std::optional<widgets::Button<verify_one>> verify;
       std::optional<widgets::Button<sign_out_one>> sign_out;
     } parts;
     session_row(account_sessions* page, std::size_t index, const change::session_info& one, bool current)
@@ -385,6 +391,8 @@ struct account_sessions : nodes::Stack {
       parts.save.setVisible(false);
       parts.rename.apply({.width = 80.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle});
       if (!current) {
+        parts.verify.emplace("Verify", verify_one{page, one.id});
+        parts.verify->apply({.width = 70.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle});
         parts.sign_out.emplace("Sign out", sign_out_one{page, one.id});
         parts.sign_out->apply({.width = 86.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle});
       }

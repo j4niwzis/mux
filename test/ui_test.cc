@@ -169,6 +169,13 @@ struct stub {
   void set_previews_direct(mux::choice_level_t, std::optional<bool>) {}
   void give_passphrase(mux::config::passphrase_for_t, std::string, std::string, std::string, std::string) {}
   void export_room_keys() {}
+  void verify_person(mux::conversation_id) {}
+  void verify_session(std::string) {}
+  void verify_accept_now() {}
+  void verify_cancel_now() {}
+  void verify_match() {}
+  void verify_mismatch() {}
+  void close_verification() {}
   void import_room_keys() {}
   void flip_local_encryption() {}
   void change_passphrase() {}

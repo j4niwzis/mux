@@ -860,12 +860,26 @@ struct room_preview {
   friend bool operator==(const room_preview&, const room_preview&) = default;
 };
 
-namespace change {
-
-struct connection_changed {
-  account_id account;
-  connection_t state;
-};
+// Emoji verification (SAS, the spec's m.sas.v1): the 64 emoji it shows, by
+// the index its bytes give, with the names the spec gives them.
+inline constexpr std::array<std::pair<std::string_view, std::string_view>, 64> sas_emoji{{
+    {"\U0001F436", "Dog"},       {"\U0001F431", "Cat"},        {"\U0001F981", "Lion"},       {"\U0001F40E", "Horse"},
+    {"\U0001F984", "Unicorn"},   {"\U0001F437", "Pig"},        {"\U0001F418", "Elephant"},   {"\U0001F430", "Rabbit"},
+    {"\U0001F43C", "Panda"},     {"\U0001F413", "Rooster"},    {"\U0001F427", "Penguin"},    {"\U0001F422", "Turtle"},
+    {"\U0001F41F", "Fish"},      {"\U0001F419", "Octopus"},    {"\U0001F98B", "Butterfly"},  {"\U0001F337", "Flower"},
+    {"\U0001F333", "Tree"},      {"\U0001F335", "Cactus"},     {"\U0001F344", "Mushroom"},   {"\U0001F30F", "Globe"},
+    {"\U0001F319", "Moon"},      {"\u2601\uFE0F", "Cloud"},     {"\U0001F525", "Fire"},       {"\U0001F34C", "Banana"},
+    {"\U0001F34E", "Apple"},     {"\U0001F353", "Strawberry"}, {"\U0001F33D", "Corn"},       {"\U0001F355", "Pizza"},
+    {"\U0001F382", "Cake"},      {"\u2764\uFE0F", "Heart"},     {"\U0001F600", "Smiley"},     {"\U0001F916", "Robot"},
+    {"\U0001F3A9", "Hat"},       {"\U0001F453", "Glasses"},    {"\U0001F527", "Spanner"},    {"\U0001F385", "Santa"},
+    {"\U0001F44D", "Thumbs Up"}, {"\u2602\uFE0F", "Umbrella"},  {"\u231B", "Hourglass"},     {"\u23F0", "Clock"},
+    {"\U0001F381", "Gift"},      {"\U0001F4A1", "Light Bulb"}, {"\U0001F4D5", "Book"},       {"\u270F\uFE0F", "Pencil"},
+    {"\U0001F4CE", "Paperclip"}, {"\u2702\uFE0F", "Scissors"},  {"\U0001F512", "Lock"},       {"\U0001F511", "Key"},
+    {"\U0001F528", "Hammer"},    {"\u260E\uFE0F", "Telephone"}, {"\U0001F3C1", "Flag"},       {"\U0001F682", "Train"},
+    {"\U0001F6B2", "Bicycle"},   {"\u2708\uFE0F", "Aeroplane"}, {"\U0001F680", "Rocket"},     {"\U0001F3C6", "Trophy"},
+    {"\u26BD", "Ball"},          {"\U0001F3B8", "Guitar"},     {"\U0001F3BA", "Trumpet"},    {"\U0001F514", "Bell"},
+    {"\u2693", "Anchor"},        {"\U0001F3A7", "Headphones"}, {"\U0001F4C1", "Folder"},     {"\U0001F4CC", "Pin"},
+}};
 
 // How far an emoji verification has come: asked by them, to be accepted;
 // waiting on the other side; the emoji to compare (by the spec's indices);
@@ -891,6 +905,13 @@ struct cancelled {
 }  // namespace verification_step
 using verification_step_t = splice::variant<verification_step::asked, verification_step::waiting, verification_step::compare,
                                             verification_step::done, verification_step::cancelled>;
+namespace change {
+
+struct connection_changed {
+  account_id account;
+  connection_t state;
+};
+
 struct verification_changed {
   account_id by;
   std::string txn;

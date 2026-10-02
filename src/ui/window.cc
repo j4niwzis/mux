@@ -104,6 +104,8 @@ struct window : scene::Node {
       // A passphrase asked for: at the start, where local data is encrypted;
       // or to turn that on or off, or change it. Over everything.
       widgets::Dialog<passphrase_box<Actions>> passphrase;
+      // An emoji verification, as it goes.
+      widgets::Dialog<verification_box<Actions>> verifying;
       std::optional<emoji_popup<Actions>> emoji;
       std::optional<context_menu<Actions>> menu;
       std::optional<picture_viewer<Actions>> viewer;
@@ -196,7 +198,7 @@ struct window : scene::Node {
     explicit layers(Actions* a)
         : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a))},
           actions_of(a) {
-      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, devtools, sending, passphrase,
+      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, devtools, sending, passphrase, verifying,
              emoji, menu, viewer, text_menu_up] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
@@ -210,6 +212,9 @@ struct window : scene::Node {
       sending.setSheetColour(sidebar_colour);
       passphrase.setSheetColour(sidebar_colour);
       passphrase.setWidthFittingContent(420.0f);
+      verifying.setSheetColour(sidebar_colour);
+      verifying.setWidthFittingContent(440.0f);
+      verifying.setDismissable(false);
       settings.setSize(440.0f, 520.0f);
       notice.setSheetColour(sidebar_colour);
       notice.setWidthFittingContent(440.0f);
@@ -394,6 +399,8 @@ struct window : scene::Node {
       box->say(std::move(why));
   }
   void close_passphrase() { layer().passphrase.close(); }
+  void show_verification(const verification_view& view) { layer().verifying.open(actions, view); }
+  void close_verification() { layer().verifying.close(); }
 
   void open_person(const account_id& account, const std::string& key, const person_facts& facts) {
     layer().person.open(actions, account, key, facts);

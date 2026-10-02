@@ -3,6 +3,7 @@
 export module mux.ui:header;
 
 import std;
+import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
@@ -49,6 +50,124 @@ struct notice_box : nodes::Stack {
   }
 };
 
+
+// An emoji verification, as Element shows it: with whom, and where it is --
+// asked of you (Accept, Decline), waiting on them (Cancel), the 7 emoji to
+// compare with what their screen shows (They match, They don't match), done,
+// or stopped and why (OK).
+struct verification_view {
+  std::string user;
+  std::string device;
+  verification_step_t step;
+};
+template <class Actions>
+struct verification_box : nodes::Stack {
+  template <auto Member>
+  struct press {
+    Actions* actions;
+    void operator()() const { (actions->*Member)(); }
+  };
+  using accept_button = widgets::Button<press<&Actions::verify_accept_now>>;
+  using decline_button = widgets::Button<press<&Actions::verify_cancel_now>>;
+  using match_button = widgets::Button<press<&Actions::verify_match>>;
+  using mismatch_button = widgets::Button<press<&Actions::verify_mismatch>>;
+  using close_button = widgets::Button<press<&Actions::close_verification>>;
+  // One emoji, big, its name under it.
+  struct emoji_cell : nodes::Stack {
+    struct parts_t {
+      nodes::Text picture;
+      nodes::Text name;
+    } parts;
+    emoji_cell(std::string_view picture, std::string_view name)
+        : parts{.picture = nodes::Text(std::string(picture), 30.0f, text_colour),
+                .name = nodes::Text(std::string(name), 11.0f, dim_colour)} {
+      this->setGap(4.0f);
+      fState.apply({.width = 52.0f, .autoSize = scene::axes::kY});
+      for (nodes::Text* each : {&parts.picture, &parts.name})
+        each->apply({.alignSelf = scene::align::kMiddle});
+    }
+  };
+  struct emoji_row : nodes::Stack {
+    struct parts_t {
+      std::vector<emoji_cell> cells;
+    } parts;
+    explicit emoji_row(const std::array<int, 7>& indices) {
+      this->setHorizontal();
+      this->setGap(4.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+      parts.cells.reserve(indices.size());
+      for (const int index : indices)
+        parts.cells.emplace_back(sas_emoji[static_cast<std::size_t>(index & 63)].first,
+                                 sas_emoji[static_cast<std::size_t>(index & 63)].second);
+    }
+  };
+  struct parts_t {
+    nodes::Text title;
+    nodes::Text note;
+    std::optional<emoji_row> emoji;
+    accept_button accept;
+    decline_button decline;
+    match_button match;
+    mismatch_button mismatch;
+    close_button close;
+  } parts;
+
+  verification_box(Actions* a, const verification_view& view)
+      : parts{.title = nodes::Text("Verify " + view.user, 17.0f, text_colour, true),
+              .note = nodes::Text(note_of(view), 14.0f, dim_colour),
+              .accept = accept_button("Accept", {a}),
+              .decline = decline_button(declines(view.step) ? "Decline" : "Cancel", {a}),
+              .match = match_button("They match", {a}),
+              .mismatch = mismatch_button("They don't match", {a}),
+              .close = close_button("OK", {a})} {
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
+    this->setGap(10.0f);
+    for (nodes::Text* each : {&parts.title, &parts.note}) {
+      each->setWrapped(true);
+      each->setSelectable(true);
+      each->apply({.fillX = true});
+    }
+    splice::visit(splice::overloaded{[&](const verification_step::compare& shown) { parts.emoji.emplace(shown.emoji); },
+                                     [](const auto&) {}},
+                  view.step);
+    const auto shown_in = [&](auto in_step) { return splice::visit(in_step, view.step); };
+    parts.accept.setVisible(shown_in(splice::overloaded{[](verification_step::asked) { return true; }, [](const auto&) { return false; }}));
+    parts.decline.setVisible(shown_in(splice::overloaded{[](verification_step::asked) { return true; },
+                                                         [](verification_step::waiting) { return true; },
+                                                         [](const auto&) { return false; }}));
+    const bool comparing = shown_in(splice::overloaded{[](const verification_step::compare&) { return true; }, [](const auto&) { return false; }});
+    parts.match.setVisible(comparing);
+    parts.mismatch.setVisible(comparing);
+    parts.close.setVisible(shown_in(splice::overloaded{[](verification_step::done) { return true; },
+                                                       [](const verification_step::cancelled&) { return true; },
+                                                       [](const auto&) { return false; }}));
+    parts.accept.setPrimary(true);
+    parts.match.setPrimary(true);
+    parts.close.setPrimary(true);
+    parts.accept.apply({.width = 120.0f, .height = 34.0f, .alignSelf = scene::align::kEnd});
+    parts.decline.apply({.width = 120.0f, .height = 34.0f, .alignSelf = scene::align::kEnd});
+    parts.match.apply({.width = 160.0f, .height = 34.0f, .alignSelf = scene::align::kEnd});
+    parts.mismatch.apply({.width = 160.0f, .height = 34.0f, .alignSelf = scene::align::kEnd});
+    parts.close.apply({.width = 90.0f, .height = 34.0f, .alignSelf = scene::align::kEnd});
+  }
+  [[nodiscard]] static bool declines(const verification_step_t& step) {
+    return splice::visit(splice::overloaded{[](verification_step::asked) { return true; }, [](const auto&) { return false; }}, step);
+  }
+  [[nodiscard]] static std::string note_of(const verification_view& view) {
+    const std::string device = view.device.empty() ? std::string("one of their devices") : "device " + view.device;
+    return splice::visit(
+        splice::overloaded{
+            [&](verification_step::asked) { return std::format("{} ({}) asks to verify with emoji.", view.user, device); },
+            [&](verification_step::waiting) { return std::format("Waiting for {} ({})\u2026", view.user, device); },
+            [&](const verification_step::compare&) {
+              return std::string("Compare these emoji with the ones on the other screen, in the same order. Only if all of "
+                                 "them match, say so.");
+            },
+            [&](verification_step::done) { return std::format("Verified: {} ({}).", view.user, device); },
+            [&](const verification_step::cancelled& why) { return "Not verified: " + why.reason; }},
+        view.step);
+  }
+};
 
 // What a chat says of itself, over its messages: its avatar, name and who
 // is in it or how they are, a line under it, and the button that opens its

@@ -85,7 +85,7 @@ cme_declare_port(NAME tern PROVIDES tern
 cme_options(tern "TERN_TESTS OFF" "TERN_EXAMPLES OFF")
 cme_declare_port(NAME loom PROVIDES loom
   GITHUB_REPOSITORY j4niwzis/loom
-  GIT_TAG 823bded41602b99d1f1eee1b2bb8bb847618672f
+  GIT_TAG 624543c7c846070b02305e7864672488a78a33c3
   LICENSE AGPL-3.0-only
   TARGETS loom)
 cme_options(loom "LOOM_TESTS OFF")
@@ -129,7 +129,7 @@ cme_find_package(splice REQUIRED)
 # one taken.
 cme_declare_port(NAME knot PROVIDES knot
   GITHUB_REPOSITORY j4niwzis/knot
-  GIT_TAG 035e53fdee8875614e350331a914256495b9bb22
+  GIT_TAG 3e99d385a6a3d9869d0366ce6194dfc5ee651763
   LICENSE AGPL-3.0-only)
 
 # Found by itself, and linked by itself: mux imports it (a message's HTML),
@@ -138,7 +138,10 @@ cme_find_package(chevron REQUIRED)
 cme_find_package(tern REQUIRED)
 # Of loom, what mux uses: the state a sync leaves, and the parts of the API it
 # calls -- logging in, sending, syncing, finding the homeserver.
-cme_find_package(loom COMPONENTS state cs-joining cs-leaving cs-login cs-message_pagination cs-event_context cs-receipts cs-redaction cs-room_send cs-rooms cs-sync cs-typing cs-wellknown cs-room_state cs-kicking cs-banning cs-inviting cs-create_room cs-account_data cs-content_repo cs-authed_content_repo cs-room_summary cs-list_public_rooms cs-space_hierarchy cs-sliding_sync cs-versions cs-users cs-relations cs-threads_list cs-profile cs-device_management cs-room_upgrades cs-knocking REQUIRED)
+cme_find_package(loom COMPONENTS state cs-joining cs-leaving cs-login cs-message_pagination cs-event_context cs-receipts cs-redaction cs-room_send cs-rooms cs-sync cs-typing cs-wellknown cs-room_state cs-kicking cs-banning cs-inviting cs-create_room cs-account_data cs-content_repo cs-authed_content_repo cs-room_summary cs-list_public_rooms cs-space_hierarchy cs-sliding_sync cs-versions cs-users cs-relations cs-threads_list cs-profile cs-device_management cs-room_upgrades cs-knocking cs-keys cs-to_device cs-cross_signing cs-key_backup REQUIRED)
+# End-to-end encryption: Olm and Megolm, by vodozemac -- the kazv project's
+# C++ bindings, a Rust library built by cargo through cmake-everywhere.
+cme_find_package(vodozemac REQUIRED)
 
 # One library of mux's modules, as the libraries it stands on have: modules
 # are what separates them. The window's two join it where the window is
@@ -147,7 +150,7 @@ add_library(mux_modules)
 target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
   FILES src/core.cc src/net.cc src/xmpp.cc src/http.cc src/preview.cc src/matrix.cc src/media.cc
         src/matrix/base.cc src/matrix/names.cc src/matrix/account.cc src/matrix/requests.cc src/matrix/sync.cc
-        src/matrix/events.cc src/matrix/media.cc
+        src/matrix/events.cc src/matrix/media.cc src/matrix/crypto.cc
         src/logic/text.cc src/logic/search.cc src/logic/reading.cc src/logic/drafts.cc
         src/logic/links.cc src/logic/sending.cc src/logic/messages.cc
         src/logic/blurhash.cc src/logic/emoji.cc src/logic/markdown.cc src/logic/room_events.cc)
@@ -178,7 +181,7 @@ set(mux_std_flags
   $<$<COMPILE_LANG_AND_ID:CXX,Clang,AppleClang>:-fconstexpr-steps=${MUX_CONSTEXPR_STEPS}>
   $<$<AND:$<COMPILE_LANG_AND_ID:CXX,Clang>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,23>>:-fno-experimental-new-constant-interpreter>)
 target_compile_options(mux_modules PUBLIC ${mux_std_flags})
-target_link_libraries(mux_modules PUBLIC chevron tern loom Boost::asio Boost::beast Boost::context
+target_link_libraries(mux_modules PUBLIC chevron tern loom vodozemac::vodozemac Boost::asio Boost::beast Boost::context
   OpenSSL::SSL OpenSSL::Crypto)
 
 # The accounts kept between runs: a library of its own, on knot alone, so
@@ -195,11 +198,18 @@ add_library(mux_bytes)
 target_sources(mux_bytes PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES src/bytes.cc)
 target_compile_features(mux_bytes PUBLIC cxx_std_26)
 target_compile_options(mux_bytes PUBLIC ${mux_std_flags})
+# What mux keeps on disk, sealed where asked: below the settings, which read
+# and write through it.
+add_library(mux_vault)
+target_sources(mux_vault PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES src/vault.cc)
+target_compile_features(mux_vault PUBLIC cxx_std_26)
+target_compile_options(mux_vault PUBLIC ${mux_std_flags})
+target_link_libraries(mux_vault PUBLIC knot OpenSSL::Crypto mux_bytes)
 add_library(mux_config)
 target_sources(mux_config PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES src/config.cc)
 target_compile_features(mux_config PUBLIC cxx_std_26)
 target_compile_options(mux_config PUBLIC ${mux_std_flags})
-target_link_libraries(mux_config PUBLIC knot splice mux_bytes)
+target_link_libraries(mux_config PUBLIC knot splice mux_vault mux_bytes)
 target_link_libraries(mux_modules PUBLIC mux_config splice)
 foreach(name IN ITEMS core net xmpp http matrix media logic)
   add_library(mux_${name} ALIAS mux_modules)
@@ -212,7 +222,7 @@ if(MUX_UI)
     GIT_TAG 0531469ad26b78ff839e9660c9bfc6e9448b8b64)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
-    GIT_TAG 99bf5557a3713aa414cd14ee550c5dbb7bc75cf4)
+    GIT_TAG 92cfe15231d77076ca0da3ddcd43fda7cb7364b4)
   # Skia's features, each an option asking for its component: GL to draw on
   # the GPU (the software renderer is there either way), and the pictures
   # decoded. A system Skia without one is taken where its option is off.

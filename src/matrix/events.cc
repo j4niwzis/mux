@@ -3,6 +3,7 @@
 export module mux.matrix:events;
 
 import std;
+import mux.matrix.crypto;
 import splice;
 import knot;
 import loom.api;
@@ -113,18 +114,32 @@ inline std::optional<std::string> thread_of(const loom::ev::m_room_message_conte
 }
 
 template <class Sink>
-void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where) {
+void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where, bool sealed) {
   const auto at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(one.origin_server_ts));
+  // A verification step in the room: taken by the verification, not shown.
+  const bool verification = splice::visit(
+      splice::overloaded{[&](const knot::raw& raw) { return this->verification_in_room(in, one, raw, where); },
+                         [](const auto&) { return false; }},
+      one.content.data());
+  if (verification)
+    return;
   // By the content's type: a message, a reaction, or the rest by the type
   // it says.
   splice::visit(splice::overloaded{[&](const loom::ev::m_room_message_content_t& content) {
+    // A verification request, to this user: asked of them (and shown as
+    // the message it is).
+    if (verification_request_of(content.msgtype) &&
+        splice::visit(splice::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where))
+      if (auto fields = knot::try_read<crypto::room_request_fields>(content.rest.text))
+        this->verification_request_in_room(in, one, *fields);
     const auto& relates = content.m_relates_to;
     // An edit: the event it replaces takes its new content.
     if (relates && replaces(*relates)) {
       if (relates->event_id && content.m_new_content)
         sink_(change::message_edited{in, *relates->event_id,
                                      body_of(content.m_new_content->body.value_or(""), content.m_new_content->format,
-                                             content.m_new_content->formatted_body)});
+                                             content.m_new_content->formatted_body),
+                                     one.sender, !sealed});
       // Nothing shows an edit under its own id: what waits for it there --
       // a mark made of it before edits were told apart -- let go.
       sink_(change::event_missing{in, one.event_id, relates->event_id});
@@ -153,6 +168,13 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       if (picture)
         carried.kind = attachment_kind::image{};
       carried.source = content.url.value_or("");
+      // Encrypted: its ciphertext's URI, and what opens it kept for when it
+      // is downloaded.
+      if (carried.source.empty())
+        if (auto sealed = knot::try_read<crypto::file_part>(content.rest.text)) {
+          carried.source = sealed->file.url;
+          encrypted_media_.insert_or_assign(sealed->file.url, std::move(sealed->file));
+        }
       carried.name = content.filename.value_or(content.body);
       if (content.info) {
         carry_info(carried, *content.info);
@@ -267,7 +289,10 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       if (thread.latest_event) {
         summary.last_id = thread.latest_event->event_id;
         summary.last_sender = thread.latest_event->sender;
-        summary.last_text = thread.latest_event->content.body.value_or("");
+        // In an encrypted room the server's summary is no one's word: its
+        // text is not shown (the thread's own messages are, decrypted).
+        if (!this->encrypted_room(in.id))
+          summary.last_text = thread.latest_event->content.body.value_or("");
         summary.last_at = std::chrono::sys_time<std::chrono::milliseconds>(
             std::chrono::milliseconds(thread.latest_event->origin_server_ts));
       }
@@ -284,7 +309,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     // send's answer does, and both were shown until then.
     if (one.unsigned_ && one.unsigned_->transaction_id)
       sink_(change::message_acknowledged{in, *one.unsigned_->transaction_id, one.event_id});
-    sink_(change::message_added{std::move(made), where});
+    this->added(std::move(made), where, sealed);
   }, [&](const loom::ev::m_reaction_content_t& content) {
     if (content.m_relates_to && content.m_relates_to->event_id && content.m_relates_to->key) {
       reactions_[one.event_id] = {*content.m_relates_to->event_id, *content.m_relates_to->key, one.sender};
@@ -324,7 +349,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
                                            .outgoing = one.sender == id_.address,
                                            .reaction = true,
                                            .reaction_key = std::string(key)};
-                              sink_(change::message_added{std::move(made), where});
+                              this->added(std::move(made), where, sealed);
                             },
                             // Else a line of its own too, quoting what it is on: shown
                             // where the chat's settings show reactions so.
@@ -345,7 +370,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
                                            .service = true,
                                            .event_kind = room_event::reactions{},
                                            .reaction_key = std::string(key)};
-                              sink_(change::message_added{std::move(made), where});
+                              this->added(std::move(made), where, sealed);
                             }},
                  where);
     }
@@ -366,13 +391,16 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
         if (thread.latest_event) {
           summary.last_id = thread.latest_event->event_id;
           summary.last_sender = thread.latest_event->sender;
-          summary.last_text = thread.latest_event->content.body.value_or("");
+          // In an encrypted room the server's summary is no one's word: its
+          // text is not shown (the thread's own messages are, decrypted).
+          if (!this->encrypted_room(in.id))
+            summary.last_text = thread.latest_event->content.body.value_or("");
           summary.last_at = std::chrono::sys_time<std::chrono::milliseconds>(
               std::chrono::milliseconds(thread.latest_event->origin_server_ts));
         }
         made.threaded = summary;
       }
-      sink_(change::message_added{std::move(made), where});
+      this->added(std::move(made), where, sealed);
       sink_(change::message_redacted{in, one.event_id});
     };
     splice::visit(splice::overloaded{[&](event_type::encrypted) { encrypted(in, one, at, where); },
@@ -396,7 +424,53 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
 template <class Sink>
 void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timeline_event& one,
                  std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where) {
-  // By its type: loom's timeline union does not have its content yet.
+  // An encrypted event seen: the room is one, whatever its state says --
+  // and was, at the latest, when this one was sent.
+  this->remember_encrypted(in.id);
+  // Only noted: when it began to be is not wanted here.
+  std::ignore = this->encrypted_by(in.id, std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(one.origin_server_ts)));
+  // Read with the room's Megolm session, where this device has it: the event
+  // it was, its type and content, as any event is read -- the rest of it,
+  // who sent it and when, the encrypted one's.
+  if (crypto_) {
+    std::optional<crypto::decrypted> clear;
+    try {
+      splice::visit(splice::overloaded{[&](const loom::ev::m_room_encrypted_content_t& content) {
+                                         clear = crypto_->room_event(in.id, one.event_id, one.sender, content);
+                                       },
+                                       [](const auto&) {}},
+                    one.content.data());
+    } catch (const std::exception& failed) {
+      log(id_, "encryption stopped: {}", failed.what());
+      crypto_.reset();
+    }
+    // Read with an imported session: shown only where the sender has a
+    // device with the key the session came from -- else anyone's name.
+    if (clear && clear->imported_sender_key && !this->owns_key(one.sender, *clear->imported_sender_key))
+      clear.reset();
+    if (clear) {
+      loom::ev::timeline_event made = one;
+      made.type = std::move(clear->event.type);
+      made.content = std::move(clear->event.content);
+      splice::visit(splice::overloaded{[&](const loom::ev::m_room_encrypted_content_t& content) {
+                                         if (auto outer = knot::try_read<crypto::reference_part>(content.rest.text);
+                                             outer && outer->relates_to)
+                                           outer_reference_ = outer->relates_to->event_id;
+                                       },
+                                       [](const auto&) {}},
+                    one.content.data());
+      // Gone however the event's reading ends -- thrown out of too: else the
+      // next one read would take this one's reference.
+      struct forget_reference {
+        std::optional<std::string>& kept;
+        ~forget_reference() { kept.reset(); }
+      } const forgetting{outer_reference_};
+      this->event(in, made, where, true);
+      sink_(change::message_encrypted{in, one.event_id, clear->verified});
+      return;
+    }
+  }
+  // Not readable here (yet): said so.
   sink_(change::message_added{message{.in = in,
                                       .id = one.event_id,
                                       .sender = one.sender,

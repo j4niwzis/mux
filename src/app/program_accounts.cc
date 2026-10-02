@@ -432,7 +432,7 @@ void app::apply(const request::create_room& one) {
   std::string alias = one.alias;
   if (alias.starts_with('#'))
     alias = alias.substr(1, alias.find(':') == std::string::npos ? std::string::npos : alias.find(':') - 1);
-  net->create_room(*by, one.name, one.topic, one.open, one.open ? alias : std::string(), one.federate);
+  net->create_room(*by, one.name, one.topic, one.open, one.open ? alias : std::string(), one.federate, one.encrypted);
   root().show_message("New room", "Making " + one.name + "\u2026");
 }
 void app::apply(const request::start_group& one) {

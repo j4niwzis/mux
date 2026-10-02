@@ -6,6 +6,7 @@
 export module mux.app.pictures;
 
 import std;
+import mux.vault;
 import splice;
 import skia;
 import mux.core;
@@ -254,7 +255,10 @@ class pictures_part {
               }
             // Its first link's preview, once, where the chat shows them;
             // and the preview's picture.
-            if (const auto link = s_->root().main().previews_off.contains(one.id)
+            // Never for an encrypted room: the preview is fetched through the
+            // homeserver (/preview_url), which would be handed every link
+            // said in it -- as Element does not by default.
+            if (const auto link = s_->root().main().previews_off.contains(one.id) || one.encrypted
                                       ? std::nullopt
                                       : mux::ui::first_link_of(said)) {
               if (const auto found = s_->model->previews.find(*link); found != s_->model->previews.end()) {
@@ -555,6 +559,10 @@ class pictures_part {
   // before -- an avatar by its source, a thumbnail and a whole picture with
   // thumb_ and full_ before it -- so what was kept is found.
   static std::optional<std::filesystem::path> kept_file(const media_use_t& use, std::string_view source) {
+    // Local data encrypted: pictures are kept in memory only -- none is
+    // written in the clear beside what is sealed, nor read back from there.
+    if (mux::vault::the().on())
+      return std::nullopt;
     const auto named = [&](std::string_view kind) {
       return std::optional(mux::config::cache_path("avatars") / (std::string(kind) + mux::config::file_name_of(source)));
     };

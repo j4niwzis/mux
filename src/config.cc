@@ -9,6 +9,7 @@ export module mux.config;
 import std;
 import splice;
 import knot;
+import mux.vault;
 
 export namespace mux::config {
 
@@ -915,6 +916,43 @@ consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
   return splice::visit([](auto& each) -> std::optional<bool>& { return each.strip; }, one);
 }
 // Whether the account tells whom it talks to that the user is typing.
+// What a passphrase is asked for: local data opened at the
+// start; encrypted, a new one twice; another one, the one now first; or
+// encryption turned off, the one now.
+namespace passphrase_for {
+struct unlock {
+  friend bool operator==(unlock, unlock) = default;
+};
+struct encrypt {
+  friend bool operator==(encrypt, encrypt) = default;
+};
+struct change {
+  friend bool operator==(change, change) = default;
+};
+struct decrypt {
+  friend bool operator==(decrypt, decrypt) = default;
+};
+// An account's room keys: written to a file under a new passphrase, or read
+// from one under its own.
+struct export_keys {
+  friend bool operator==(export_keys, export_keys) = default;
+};
+struct import_keys {
+  friend bool operator==(import_keys, import_keys) = default;
+};
+// Cross-signing set up: the account's password, which the server asks for.
+struct cross_signing {
+  friend bool operator==(cross_signing, cross_signing) = default;
+};
+// Cross-signing taken back with the recovery key.
+struct recovery {
+  friend bool operator==(recovery, recovery) = default;
+};
+}  // namespace passphrase_for
+using passphrase_for_t = splice::variant<passphrase_for::unlock, passphrase_for::encrypt, passphrase_for::change,
+                                         passphrase_for::decrypt, passphrase_for::export_keys, passphrase_for::import_keys,
+                                         passphrase_for::cross_signing, passphrase_for::recovery>;
+
 // Its own choice, if it made one; else as every account's.
 [[nodiscard]] inline const std::optional<bool>& send_typing_of(const account_t& one) {
   return splice::visit([](const auto& each) -> const std::optional<bool>& { return each.send_typing; }, one);
@@ -1174,10 +1212,13 @@ std::expected<file, std::string> load(const std::filesystem::path& where) {
   std::error_code failed;
   if (!std::filesystem::exists(where, failed))
     return file{};
-  std::ifstream in(where, std::ios::binary);
-  if (!in)
-    return std::unexpected(std::format("cannot open {}", where.string()));
-  const std::string text{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+  // Through the vault: sealed where local data is encrypted, and not read
+  // with it locked or with another key.
+  const auto opened = mux::vault::the().read_file(where);
+  if (!opened)
+    return std::unexpected(std::format("cannot open {}{}", where.string(),
+                                       mux::vault::the().locked() ? ": local data is encrypted and locked" : ""));
+  const std::string& text = *opened;
   auto read = knot::try_read<file>(text);
   if (!read)
     return std::unexpected(
@@ -1197,28 +1238,13 @@ std::expected<void, std::string> save(const std::filesystem::path& where, const 
       return std::unexpected(std::format("cannot make {}: {}", where.parent_path().string(), failed.message()));
     fs::permissions(where.parent_path(), fs::perms::owner_all, fs::perm_options::replace, failed);
   }
-  fs::path temporary = where;
-  temporary += ".new";
-  {
-    std::ofstream made(temporary, std::ios::binary | std::ios::trunc);
-    if (!made)
-      return std::unexpected(std::format("cannot write {}", temporary.string()));
-  }
-  fs::permissions(temporary, fs::perms::owner_read | fs::perms::owner_write, fs::perm_options::replace, failed);
-  if (failed)
-    return std::unexpected(std::format("cannot make {} private: {}", temporary.string(), failed.message()));
+  // Through the vault: made the owner's alone before the passwords go in,
+  // sealed where local data is encrypted, put in place in one rename.
   std::string text;
   knot::write(text, accounts);
-  {
-    std::ofstream out(temporary, std::ios::binary | std::ios::trunc);
-    out << text << '\n';
-    out.flush();
-    if (!out)
-      return std::unexpected(std::format("cannot write {}", temporary.string()));
-  }
-  fs::rename(temporary, where, failed);
-  if (failed)
-    return std::unexpected(std::format("cannot replace {}: {}", where.string(), failed.message()));
+  text += '\n';
+  if (!mux::vault::the().write_file(where, text, true))
+    return std::unexpected(std::format("cannot write {}", where.string()));
   return {};
 }
 

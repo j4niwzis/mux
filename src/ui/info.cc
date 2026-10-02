@@ -245,12 +245,22 @@ struct person_card : nodes::Stack {
       actions->close_person_info();
     }
   };
+  // Verified by comparing emoji with each of their devices that answers.
+  struct verify_them {
+    Actions* actions = nullptr;
+    conversation_id who;
+    void operator()() const {
+      actions->verify_person(who);
+      actions->close_person_info();
+    }
+  };
   struct parts_t {
     top_bar top;
     cover face;
     nodes::Box<> band = section_band();
     id_line id;
     action_tile<message_them> message;
+    action_tile<verify_them> verify;
     action_tile<to_them> remove;
     action_tile<to_them> ban;
   } parts;
@@ -260,10 +270,11 @@ struct person_card : nodes::Stack {
               .face = cover(a, key, facts),
               .id = id_line(key, ""),
               .message = action_tile<message_them>("Message", icon::send{}, {a, conversation_id{account, key}}),
+              .verify = action_tile<verify_them>("Verify with emoji", icon::check{}, {a, conversation_id{account, key}}),
               .remove = action_tile<to_them>("Remove from room", icon::leave{}, {a, room_action::kick{key}}),
               .ban = action_tile<to_them>("Ban from room", icon::close{}, {a, room_action::ban{key}})} {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}});
-    for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.message, &parts.remove, &parts.ban})
+    for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.message, &parts.verify, &parts.remove, &parts.ban})
       each->apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
     // Offered only where the user may: no button for what they cannot do.
     parts.remove.setVisible(facts.may_kick);
@@ -1008,6 +1019,7 @@ struct create_room_box : nodes::Stack {
   std::string server;
   bool open_room = false;
   bool federate = true;
+  bool encrypted = true;  // as Element: on for a private room, off for a public one
   bool advanced = false;
   bool choosing = false;  // the list of who can join, open
   struct close_it {
@@ -1019,7 +1031,8 @@ struct create_room_box : nodes::Stack {
     void operator()() const {
       const std::string& name = box->parts.name.text();
       if (!name.empty())
-        box->actions->create_room(name, box->parts.topic.text(), box->open_room, box->parts.address.text(), box->federate);
+        box->actions->create_room(name, box->parts.topic.text(), box->open_room, box->parts.address.text(), box->federate,
+                                  box->encrypted);
     }
   };
   struct cancel_press {
@@ -1037,6 +1050,7 @@ struct create_room_box : nodes::Stack {
     create_room_box* box;
     void operator()() const {
       box->open_room = false;
+      box->encrypted = true;
       box->choosing = false;
       box->show_choice();
     }
@@ -1045,6 +1059,7 @@ struct create_room_box : nodes::Stack {
     create_room_box* box;
     void operator()() const {
       box->open_room = true;
+      box->encrypted = false;
       box->choosing = false;
       box->show_choice();
     }
@@ -1061,6 +1076,13 @@ struct create_room_box : nodes::Stack {
     void operator()() const {
       box->federate = !box->federate;
       box->parts.block.parts.toggle.setOn(!box->federate);  // on: blocked
+    }
+  };
+  struct flip_encrypted {
+    create_room_box* box;
+    void operator()() const {
+      box->encrypted = !box->encrypted;
+      box->show_choice();
     }
   };
   // Who can join, as Element's dropdown shows it: the choice and a chevron.
@@ -1110,15 +1132,15 @@ struct create_room_box : nodes::Stack {
       return true;
     }
   };
-  struct federate_row : nodes::Stack {
+  // A switch with what it does: blocking other servers, encrypting.
+  template <class Flip>
+  struct switch_row : nodes::Stack {
     struct parts_t {
       nodes::Text label;
-      widgets::Toggle<flip_federate> toggle;
+      widgets::Toggle<Flip> toggle;
     } parts;
-    federate_row(create_room_box* box, const std::string& server)
-        : parts{.label = nodes::Text(std::format("Block anyone not part of {} from ever joining this room.", server), 13.0f,
-                                     text_colour),
-                .toggle = widgets::Toggle<flip_federate>({box})} {
+    switch_row(create_room_box* box, std::string label)
+        : parts{.label = nodes::Text(std::move(label), 13.0f, text_colour), .toggle = widgets::Toggle<Flip>({box})} {
       this->setHorizontal();
       this->setGap(12.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 10.0f, 4.0f, 10.0f}});
@@ -1139,8 +1161,10 @@ struct create_room_box : nodes::Stack {
     option_row<choose_public> public_option;
     nodes::Text rule_note{"", 13.0f, dim_colour};
     field address;
+    switch_row<flip_encrypted> encryption;
+    nodes::Text encryption_note{"", 12.0f, dim_colour};
     widgets::Button<flip_advanced> show_advanced;
-    federate_row block;
+    switch_row<flip_federate> block;
     nodes::Text block_note{"You might enable this if the room will only be used for collaborating with internal teams "
                            "on your homeserver. This cannot be changed later.",
                            12.0f, dim_colour};
@@ -1156,8 +1180,10 @@ struct create_room_box : nodes::Stack {
                                                            "Only people invited will be able to find and join this room."),
               .public_option = option_row<choose_public>(this, "Public room", "Anyone will be able to find and join this room."),
               .address = field("Address", std::format("#room-name:{}", server)),
+              .encryption = switch_row<flip_encrypted>(this, "Enable end-to-end encryption"),
               .show_advanced = widgets::Button<flip_advanced>("Show advanced", {this}),
-              .block = federate_row(this, server),
+              .block = switch_row<flip_federate>(
+                  this, std::format("Block anyone not part of {} from ever joining this room.", server)),
               .buttons = buttons_row("Create room", {a}, {this}, 120.0f)} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 18.0f, 12.0f}});
@@ -1167,6 +1193,8 @@ struct create_room_box : nodes::Stack {
     parts.show_advanced.apply({.width = 150.0f, .height = 30.0f, .margin = {4.0f, 10.0f, 0.0f, 10.0f}});
     parts.block_note.setWrapped(true);
     parts.block_note.apply({.fillX = true, .margin = {0.0f, 10.0f, 0.0f, 10.0f}});
+    parts.encryption_note.setWrapped(true);
+    parts.encryption_note.apply({.fillX = true, .margin = {0.0f, 10.0f, 0.0f, 10.0f}});
     this->show_choice();
   }
   // What is shown for the choices made: the list open or not, the address
@@ -1180,6 +1208,13 @@ struct create_room_box : nodes::Stack {
                                       : "Only people invited will be able to find and join this room. You can change "
                                         "this at any time from room settings.");
     parts.address.setVisible(open_room);
+    parts.encryption.parts.toggle.setOn(encrypted);
+    parts.encryption_note.setText(
+        encrypted ? "Only those in the room will read its messages -- not the server. You can't turn this off later."
+        : open_room
+            ? "Not encrypted: a public room is for anyone to read. You can turn encryption on later, not off."
+            : "Not encrypted: the server and anyone with access to it can read the messages. You can turn "
+              "encryption on later, not off.");
     parts.show_advanced.setLabel(advanced ? "Hide advanced" : "Show advanced");
     parts.block.setVisible(advanced);
     parts.block_note.setVisible(advanced);

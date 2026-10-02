@@ -13,6 +13,7 @@ import skiff.widgets.wallpaper;
 import mux.core;
 import mux.config;
 import :base;
+import :forms;
 import :header;
 import :info;
 import :room_settings;
@@ -100,6 +101,11 @@ struct window : scene::Node {
       // The developer tools.
       widgets::Dialog<devtools_box<Actions>> devtools;
       widgets::Dialog<send_box<Actions>> sending;
+      // A passphrase asked for: at the start, where local data is encrypted;
+      // or to turn that on or off, or change it. Over everything.
+      widgets::Dialog<passphrase_box<Actions>> passphrase;
+      // An emoji verification, as it goes.
+      widgets::Dialog<verification_box<Actions>> verifying;
       std::optional<emoji_popup<Actions>> emoji;
       std::optional<context_menu<Actions>> menu;
       std::optional<picture_viewer<Actions>> viewer;
@@ -192,7 +198,7 @@ struct window : scene::Node {
     explicit layers(Actions* a)
         : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a))},
           actions_of(a) {
-      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, devtools, sending,
+      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, devtools, sending, passphrase, verifying,
              emoji, menu, viewer, text_menu_up] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
@@ -204,6 +210,11 @@ struct window : scene::Node {
       frame.base().setSheetColour(sidebar_colour);
       settings.setSheetColour(sidebar_colour);
       sending.setSheetColour(sidebar_colour);
+      passphrase.setSheetColour(sidebar_colour);
+      passphrase.setWidthFittingContent(420.0f);
+      verifying.setSheetColour(sidebar_colour);
+      verifying.setWidthFittingContent(440.0f);
+      verifying.setDismissable(false);
       settings.setSize(440.0f, 520.0f);
       notice.setSheetColour(sidebar_colour);
       notice.setWidthFittingContent(440.0f);
@@ -376,6 +387,20 @@ struct window : scene::Node {
     layer().notice.open(actions, std::move(heading), std::move(text));
   }
   void close_notice() { layer().notice.close(); }
+  // A passphrase asked for: the one at the start is not dismissed.
+  void ask_passphrase(config::passphrase_for_t why) {
+    auto& dialog = layer().passphrase;
+    dialog.setDismissable(splice::visit(
+        splice::overloaded{[](config::passphrase_for::unlock) { return false; }, [](const auto&) { return true; }}, why));
+    dialog.open(actions, why);
+  }
+  void passphrase_refused(std::string why) {
+    if (auto* box = layer().passphrase.shown())
+      box->say(std::move(why));
+  }
+  void close_passphrase() { layer().passphrase.close(); }
+  void show_verification(const verification_view& view) { layer().verifying.open(actions, view); }
+  void close_verification() { layer().verifying.close(); }
 
   void open_person(const account_id& account, const std::string& key, const person_facts& facts) {
     layer().person.open(actions, account, key, facts);

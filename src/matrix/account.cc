@@ -9,6 +9,11 @@ import loom.api;
 import loom.ev;
 import loom.state;
 import loom.cs.joining;
+import loom.cs.keys;
+import loom.cs.to_device;
+import loom.cs.sliding_sync;
+import mux.matrix.crypto;
+import mux.vault;
 import loom.cs.leaving;
 import loom.cs.login;
 import loom.cs.message_pagination;
@@ -40,6 +45,22 @@ struct failure {
     return network;
   }
 };
+
+// What is refused in the clear, thrown: the room, the message's id here (its
+// transaction) and why. Out of the account template, its destructor its key
+// function: as a member of the template, its vtable and type information
+// were made nowhere, and the link failed.
+struct plaintext_refused : std::runtime_error {
+  conversation_id in;
+  std::string local;
+  plaintext_refused(conversation_id room, std::string txn,
+                    std::string why = "Not sent: this room is end-to-end encrypted, and nothing goes into it in the clear.")
+      : std::runtime_error(std::move(why)), in(std::move(room)), local(std::move(txn)) {}
+  plaintext_refused(const plaintext_refused&) = default;
+  plaintext_refused& operator=(const plaintext_refused&) = default;
+  ~plaintext_refused() override;
+};
+plaintext_refused::~plaintext_refused() = default;
 
 template <class Sink>
 class account {
@@ -96,7 +117,8 @@ class account {
   void explore_space(std::string room);
   // A room made, as Element's Create room makes one: named, about
   // something, public -- with an address -- or private.
-  void create_room(std::string name, std::string topic, bool open, std::string alias, bool federate = true);
+  void create_room(std::string name, std::string topic, bool open, std::string alias, bool federate = true,
+                   bool encrypted = false);
   // A picture's caption edited: the picture kept, its caption the text.
   void edit_caption(std::string room, std::string event, std::string caption, mux::attachment picture);
   // Packs of custom emoji and stickers (MSC2545): a room's, or one's own
@@ -126,6 +148,39 @@ class account {
   // some signed out -- the server asking for the password, it is given
   // (the one typed, else the one logged in with).
   void list_sessions();
+  // Emoji verification, as the user asks it: begun with a user (one of
+  // their devices, or all), accepted, the emoji said to match or not, or
+  // cancelled.
+  void verify_start(std::string user, std::optional<std::string> device);
+  void verify_accept(std::string txn);
+  void verify_confirm(std::string txn, bool match);
+  void verify_cancel(std::string txn);
+  // Cross-signing set up for this user: three keys made, uploaded (the
+  // password asked by the server's user-interactive auth), kept here
+  // sealed, and this device signed with the self-signing key.
+  void setup_cross_signing(std::string password);
+  // The cross-signing keys put in secret storage under a new recovery key,
+  // which is said to the user to write down; and taken back with one.
+  std::optional<std::string> store_secrets(const crypto::cross_signing_secrets& secrets,
+                                           const std::optional<std::string>& backup_secret);
+  // A key backup made on the server, its auth data signed by this device and
+  // the master key: its private key, for secret storage.
+  std::optional<std::string> make_backup(const crypto::cross_signing_secrets& secrets);
+  // The room keys not in the backup yet, put in it: after each sync.
+  void upload_backup();
+  // The backup read with its private key, from secret storage: how many
+  // room keys were taken.
+  std::size_t restore_backup(const std::string& secret);
+  void restore_cross_signing(std::string recovery);
+  // After emoji verification, the other side signed where this device has
+  // the keys for it: one's own device with the self-signing key, another
+  // user's master key with the user-signing key.
+  void cross_sign_device(const loom::cs::query_keys::response_t::device_information_t& info);
+  void cross_sign_user(const std::string& user, const loom::cs::query_keys::response_t::cross_signing_key_t& master);
+  // This account's room keys written to `path`, sealed under a passphrase,
+  // as Element writes them; and read back from one.
+  void export_room_keys(std::string path, std::string passphrase);
+  void import_room_keys(std::string path, std::string passphrase);
   void rename_session(std::string device, std::string name);
   void sign_out_sessions(std::vector<std::string> devices, std::string password);
   // The developer tools, as Element's: an event as the server has it; the
@@ -221,6 +276,207 @@ class account {
 
   void run();
 
+  // End-to-end encryption: this device's machine, made once the device is
+  // known; its keys uploaded, and what comes for it read.
+  std::optional<crypto::olm_machine> crypto_;
+  void start_crypto();
+  // Rooms known to be encrypted: never sent to in the clear, whatever their
+  // state says later -- a server that drops or hides m.room.encryption does
+  // not turn a room back to plain text (the spec's "no downgrade"). Kept in
+  // a file of their own beside the sync, apart from the E2EE store: one that
+  // does not start does not make them forgotten (review 4, M1).
+  std::set<std::string, std::less<>> encrypted_rooms_;
+  [[nodiscard]] bool encrypted_room(std::string_view room);
+  void remember_encrypted(std::string_view room);
+  // When each room was encrypted, at the latest: the earliest time ever
+  // seen for it -- its m.room.encryption's, or an encrypted event's -- kept
+  // beside the rooms. A server that sends that state again later, or with
+  // a later time, does not move it: messages put in the clear before it
+  // would no longer say "not encrypted" (review 6).
+  std::map<std::string, std::int64_t, std::less<>> encrypted_since_;
+  using since_t = std::chrono::sys_time<std::chrono::milliseconds>;
+  [[nodiscard]] std::optional<since_t> encrypted_by(std::string_view room, std::optional<since_t> seen);
+  void save_encrypted();
+  // A message, added: one that came in the clear, live, into a room known
+  // to be encrypted, says so whatever its time says (review 6).
+  void added(message made, placement_t where, bool sealed) {
+    const bool live = splice::visit(splice::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
+    made.came_plain = !sealed && live && encrypted_rooms_.contains(made.in.id);
+    sink_(change::message_added{std::move(made), where});
+  }
+  // Users whose master key changed from the one pinned, told once a run.
+  std::set<std::string, std::less<>> identity_changed_;
+  [[nodiscard]] std::filesystem::path encrypted_rooms_file() const;
+  void load_encrypted();
+  // What was to go in the clear into an encrypted room (#12169, review 4,
+  // H2): thrown where it would leave, before any of it does -- the text, the
+  // file's bytes -- and caught where its fiber began: the message marked not
+  // sent, the user told in a dialog. This client does not send encrypted
+  // yet (part 2 of the E2EE PR).
+  using plaintext_refused = matrix::plaintext_refused;
+  void refuse_plaintext(std::string_view room, std::string_view local) {
+    if (!this->encrypted_room(room))
+      return;
+    log(id_, "not sent: {} is encrypted, and files are not sent encrypted yet", room);
+    throw plaintext_refused(conversation_id{id_, std::string(room)}, std::string(local));
+  }
+  // A room event sent: encrypted where the room is -- or, where it cannot
+  // be, not sent at all.
+  template <class Ask>
+  auto send_room_event(Ask ask) {
+    if (this->encrypted_room(ask.room_id))
+      return this->send_encrypted(std::move(ask));
+    return perform(*api_, ask);
+  }
+  // Into an encrypted room: the room's key given to its readers' devices
+  // that lack it, then the event sealed with it and sent as m.room.encrypted
+  // under the same transaction. Anything that fails on the way refuses it,
+  // with what failed: it never goes in the clear.
+  template <class Ask>
+  auto send_encrypted(Ask ask) {
+    const conversation_id in{id_, ask.room_id};
+    constexpr std::string_view kNot = "Not sent: it could not be encrypted -- ";
+    if (!crypto_)
+      throw plaintext_refused(in, ask.txn_id, std::string(kNot) + "encryption is not running for this account.");
+    try {
+      // Shared, then sealed with that very session: where another send
+      // rotated it in between, shared and sealed again.
+      const auto relation = knot::try_read<crypto::relation_part>(ask.body.text);
+      std::optional<crypto::megolm_content> sealed;
+      for (int attempt = 0; attempt < 3 && !sealed; ++attempt) {
+        const auto session = this->share_room_key(ask.room_id);
+        if (!session)
+          throw plaintext_refused(in, ask.txn_id, std::string(kNot) + "the room's key could not be given to its members.");
+        sealed = crypto_->encrypt(ask.room_id, *session, ask.event_type, ask.body, relation ? relation->relates_to : std::nullopt);
+      }
+      if (!sealed)
+        throw plaintext_refused(in, ask.txn_id, std::string(kNot) + "the room's session failed.");
+      return perform(*api_, loom::cs::send_message{.room_id = ask.room_id,
+                                                   .event_type = "m.room.encrypted",
+                                                   .txn_id = ask.txn_id,
+                                                   .body = knot::raw{knot::to_json_string(*sealed)}});
+    } catch (const plaintext_refused&) {
+      throw;
+    } catch (const std::exception& failed) {
+      log(id_, "encryption stopped: {}", failed.what());
+      crypto_.reset();
+      throw plaintext_refused(in, ask.txn_id, std::string(kNot) + failed.what());
+    }
+  }
+  // The room's key given to every device of its members that should read it
+  // and has not got it: the session's ID, or none where they could not be
+  // known, or the key could not be sent.
+  std::optional<std::string> share_room_key(const std::string& room);
+  // The encrypted files events named, by their mxc:// URI: what opens each
+  // once it is downloaded.
+  std::map<std::string, crypto::encrypted_file, std::less<>> encrypted_media_;
+  // A fiber of this account. What it throws past its own handling -- the
+  // unforeseen, a bug -- is caught here: let out, it left the loop and
+  // stopped every account's network without a word. It is logged
+  // and said; the account shows as failed, to be connected again from what
+  // it kept, so that nothing half done of it is relied on.
+  template <class Body>
+  void spawn_guarded(Body body) {
+    loop_->spawn([this, body = std::move(body)] mutable {
+      try {
+        body();
+      } catch (const std::exception& failed) {
+        log(id_, "stopped by an error: {}", failed.what());
+        this->say(connection::failed{std::format("Stopped by an error: {}", failed.what())});
+      }
+    });
+  }
+  // A fiber that sends: a refusal of it caught here, for every sender alike.
+  template <class Body>
+  void spawn_sending(Body body) {
+    this->spawn_guarded([this, body = std::move(body)] mutable {
+      try {
+        body();
+      } catch (const plaintext_refused& refused) {
+        sink_(change::delivery_changed{refused.in, refused.local, delivery::failed{}});
+        sink_(change::refused{id_, refused.what()});
+      }
+    });
+  }
+  void upload_keys(std::int64_t on_server);
+  // When one-time keys were last uploaded: once a minute at most. A server
+  // that says, sync after sync, that it holds none would otherwise have a
+  // batch made and signed every time.
+  std::optional<std::chrono::steady_clock::time_point> keys_uploaded_at_;
+  // A fallback key uploaded where the server has none unused: once an hour
+  // at most, whatever the server says.
+  void upload_fallback_key();
+  // Emoji verification (SAS), over to-device messages as Element does it:
+  // asked of a user's devices, or of one; answered; compared; ended.
+  std::map<std::string, crypto::sas_state, std::less<>> verifications_;
+  bool send_plain(std::string type, const std::string& user, const std::string& device, knot::raw content);
+  // A step's content as its transport has it -- a transaction ID to a
+  // device, a reference to the request in a room -- and sent so.
+  template <class Content>
+  Content stamped(const crypto::sas_state& state, Content content) {
+    if (state.room) {
+      content.transaction_id.reset();
+      content.m_relates_to = loom::ev::def::verification_relates_to_t{
+          .rel_type = loom::ev::def::verification_relates_to_t::rel_type_values::m_reference{}, .event_id = state.txn};
+    } else {
+      content.transaction_id = state.txn;
+    }
+    return content;
+  }
+  template <class Content>
+  void send_step(const crypto::sas_state& state, std::string type, const Content& content) {
+    const knot::raw body{knot::to_json_string(this->stamped(state, content))};
+    if (!state.room) {
+      (void)this->send_plain(std::move(type), state.their_user, state.their_device.empty() ? std::string("*") : state.their_device,
+                             body);
+      return;
+    }
+    try {
+      (void)this->send_room_event(
+          loom::cs::send_message{.room_id = *state.room, .event_type = std::move(type), .txn_id = this->transaction(), .body = body});
+    } catch (const plaintext_refused& refused) {
+      log(id_, "verification step not sent: {}", refused.what());
+    }
+  }
+  // A verification in a room: its request (a message to this user), and its
+  // steps, by their events -- live ones only, and never this side's own.
+  void verification_request_in_room(const conversation_id& in, const loom::ev::timeline_event& one,
+                                     const crypto::room_request_fields& fields);
+  [[nodiscard]] bool verification_in_room(const conversation_id& in, const loom::ev::timeline_event& one, const knot::raw& raw,
+                                          placement_t where);
+  // While a decrypted event is read: the event its cleartext relation
+  // refers to, where its content does not say.
+  std::optional<std::string> outer_reference_;
+  // Whose device each curve25519 key is, as /keys/query said: for messages
+  // read with an imported session, whose sender is taken only where it
+  // holds the key. Asked once per user and key.
+  std::map<std::pair<std::string, std::string>, bool> owns_key_;
+  [[nodiscard]] bool owns_key(const std::string& user, const std::string& curve25519);
+  void verification_said(const crypto::sas_state& state, verification_step_t step);
+  void cancel_verification(const std::string& txn, std::string code, std::string reason);
+  void sas_start(crypto::sas_state& state);
+  void sas_show(crypto::sas_state& state);
+  void sas_send_mac(crypto::sas_state& state);
+  void sas_check_mac(crypto::sas_state& state);
+  void verification_in(const std::string& sender, const loom::ev::m_key_verification_request_content_t& content);
+  void verification_in(const std::string& sender, const loom::ev::m_key_verification_ready_content_t& content);
+  void verification_in(const std::string& sender, const loom::ev::m_key_verification_start_content_t& content);
+  void verification_in(const std::string& sender, const loom::ev::m_key_verification_accept_content_t& content);
+  void verification_in(const std::string& sender, const loom::ev::m_key_verification_key_content_t& content);
+  void verification_in(const std::string& sender, const loom::ev::m_key_verification_mac_content_t& content);
+  void verification_in(const std::string& sender, const loom::ev::m_key_verification_cancel_content_t& content);
+  // A device whose Olm messages no session here opens, given a new session
+  // (an m.dummy over one made from its one-time key): once an hour at most
+  // for each, whatever comes.
+  void mend_session(const std::string& user, const std::string& curve25519);
+  std::map<std::string, std::chrono::steady_clock::time_point> mended_at_;
+  std::optional<std::chrono::steady_clock::time_point> fallback_uploaded_at_;
+  void crypto_answer(const loom::cs::sliding_sync::response_t& got);
+  void crypto_answer_now(const loom::cs::sliding_sync::response_t& got);
+  // A room key offered: taken only from a device the sender's device list
+  // has, signed by itself; marked unverified unless cross-signed.
+  void vet_room_key(const crypto::room_key_offer& offer);
+
   // The file the sync is kept in, for this account.
   std::filesystem::path kept_file() const;
   // The sync as it stands, as a sync's answer: every joined room's state,
@@ -279,7 +535,10 @@ class account {
 
   // An event of a room's timeline, as changes: at the end, or before the
   // rest where it is history paged back to.
-  void event(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where = placement::at_end{});
+  // `sealed`: it came end-to-end encrypted, and was read here -- an edit
+  // so is one an encrypted message may take (review 4, H3).
+  void event(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where = placement::at_end{},
+             bool sealed = false);
 
   // An encrypted message: said to be there, not yet readable.
   void encrypted(const conversation_id& in, const loom::ev::timeline_event& one,

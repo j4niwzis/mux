@@ -4,6 +4,7 @@ export module mux.app.store;
 
 import std;
 import knot;
+import mux.vault;
 import mux.core;
 import mux.logic.room_events;
 import mux.config;
@@ -58,6 +59,11 @@ struct message_line {
   // "Forwarded from" while its text stayed stripped of it.
   std::optional<forward_line> forwarded;
   std::optional<bool> sticker;
+  // Came end-to-end encrypted: kept, or read back it said "not encrypted".
+  std::optional<bool> encrypted;
+  // And from a device its sender did not cross-sign.
+  std::optional<bool> unverified;
+  std::optional<bool> came_plain;
   // Its reactions: each by its key and who sent it, and its own event and
   // when, where known -- read back from the disk, a message had none.
   struct reaction_line {
@@ -106,7 +112,7 @@ class message_store {
     const auto where = reads_file_of(in);
     std::error_code failed;
     std::filesystem::create_directories(where.parent_path(), failed);
-    std::ofstream(where, std::ios::binary | std::ios::trunc) << knot::to_json_string(all);
+    (void)mux::vault::the().write_file(where, knot::to_json_string(all));
   }
   struct reads {
     std::map<std::string, std::string> read_by;
@@ -114,8 +120,7 @@ class message_store {
   };
   [[nodiscard]] static reads read_reads(const mux::conversation_id& in) {
     reads out;
-    std::ifstream file(reads_file_of(in), std::ios::binary);
-    const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    const std::string text = mux::vault::the().read_file(reads_file_of(in)).value_or(std::string());
     auto parsed = knot::try_read<store_file::reads_file>(std::string_view(text));
     if (!parsed)
       return out;
@@ -141,7 +146,7 @@ class message_store {
     std::filesystem::create_directories(where.parent_path(), failed);
     {
       std::lock_guard held(file_lock());
-      std::ofstream(where, std::ios::binary | std::ios::app) << line_of(*whole) << '\n';
+      (void)mux::vault::the().append_line(where, line_of(*whole));
     }
     prune(mux::config::state_path("deleted"), deleted_budget, where);
   }
@@ -241,7 +246,7 @@ class message_store {
     std::filesystem::create_directories(where.parent_path(), failed);
     {
       std::lock_guard held(file_lock());
-      std::ofstream(where, std::ios::binary | std::ios::app) << line << '\n';
+      (void)mux::vault::the().append_line(where, line);
     }
     if (++appended_ % 500 == 1)
       prune(mux::config::state_path("messages"), budget, where);
@@ -299,19 +304,24 @@ class message_store {
         order.push_back(&one);
       std::ranges::sort(order, {}, [](const mux::message* one) { return one->at; });
       const auto fresh = std::filesystem::path(where.string() + ".new");
-      {
-        std::ofstream out(fresh, std::ios::binary | std::ios::trunc);
-        for (const mux::message* one : order)
-          out << line_of(*one) << '\n';
-      }
-      // Put in its place only where nothing was written to it meanwhile:
-      // a line written since the read would be lost.
+      // Written and put in its place with the vault's other reads and writes
+      // waiting (the file's lock first, as an append takes them): a re-seal
+      // meanwhile would leave it under a key gone.
       std::lock_guard held(file_lock());
-      std::error_code failed;
-      if (std::filesystem::file_size(where, failed) == size_read && !sized && !failed)
-        std::filesystem::rename(fresh, where, failed);
-      else
-        std::filesystem::remove(fresh, failed);
+      mux::vault::the().exclusive([&] {
+        {
+          std::ofstream out(fresh, std::ios::binary | std::ios::trunc);
+          for (const mux::message* one : order)
+            out << mux::vault::the().line_of(line_of(*one), where) << '\n';
+        }
+        // Put in its place only where nothing was written to it meanwhile:
+        // a line written since the read would be lost.
+        std::error_code failed;
+        if (std::filesystem::file_size(where, failed) == size_read && !sized && !failed)
+          std::filesystem::rename(fresh, where, failed);
+        else
+          std::filesystem::remove(fresh, failed);
+      });
     }
     read_lines(deleted_file_of(in), in, all);
     return all;
@@ -324,7 +334,12 @@ class message_store {
     std::size_t lines = 0;
     while (std::getline(file, text)) {
       ++lines;
-      auto parsed = knot::try_read<store_file::message_line>(std::string_view(text));
+      // Sealed where local data is encrypted: a line that cannot be opened
+      // is passed over, as one that cannot be read is.
+      const auto opened = mux::vault::the().open_line(text, where);
+      if (!opened)
+        continue;
+      auto parsed = knot::try_read<store_file::message_line>(std::string_view(*opened));
       if (!parsed)
         continue;
       auto& o = *parsed;
@@ -348,6 +363,9 @@ class message_store {
       one.replies_to = std::move(o.reply);
       one.thread = std::move(o.thread);
       one.edited = o.edited.value_or(false);
+      one.encrypted = o.encrypted.value_or(false);
+      one.unverified = o.unverified.value_or(false);
+      one.came_plain = o.came_plain.value_or(false);
       one.redacted = o.redacted.value_or(false);
       one.outgoing = o.out.value_or(false);
       one.service = o.service.value_or(false);
@@ -424,6 +442,9 @@ class message_store {
                                                                               one.forwarded->link})
                                    : std::nullopt,
         .sticker = store_file::flag(one.sticker),
+        .encrypted = store_file::flag(one.encrypted),
+        .unverified = store_file::flag(one.unverified),
+        .came_plain = store_file::flag(one.came_plain),
     };
     if (!one.album.empty()) {
       line.album.emplace();

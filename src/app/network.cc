@@ -124,7 +124,13 @@ struct network {
                               .device_name = saved.device_name,
                               .proxy = via,
                               .access_token = saved.access_token,
-                              .device_id = saved.device_id};
+                              .device_id = saved.device_id,
+                              // Named by the user ID with what a file name cannot hold put
+                              // aside: ':' is not one on Windows.
+                              .crypto_store = mux::config::state_path("crypto") /
+                                              ((saved.user_id | std::views::transform([](char c) {
+                                                  return std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_' ? c : '_';
+                                                }) | std::ranges::to<std::string>()) + ".json")};
     this->run(saved.user_id, std::make_unique<matrix_account>(loop, tls, std::move(how), post_change{box, live}),
               live, std::move(via));
   }
@@ -438,13 +444,14 @@ struct network {
   }
   // A room made by the account named, as Element's Create room.
   void create_room(const mux::account_id& by, std::string name, std::string topic, bool open, std::string alias,
-                   bool federate = true) {
-    loop.post([this, by, name = std::move(name), topic = std::move(topic), open, alias = std::move(alias), federate] {
+                   bool federate = true, bool encrypted = false) {
+    loop.post([this, by, name = std::move(name), topic = std::move(topic), open, alias = std::move(alias), federate,
+               encrypted] {
       for (auto& one : accounts)
         splice::visit(
             [&](auto& account) {
               if (account->id() == by)
-                account->create_room(name, topic, open, alias, federate);
+                account->create_room(name, topic, open, alias, federate, encrypted);
             },
             one.account);
     });
@@ -567,6 +574,36 @@ struct network {
                                          [](auto&) {}},
                       one.account);
     });
+  }
+  void export_room_keys(const mux::account_id& by, std::string path, std::string passphrase) {
+    this->with_matrix(by, [path = std::move(path), passphrase = std::move(passphrase)](matrix_account& account) {
+      account.export_room_keys(path, passphrase);
+    });
+  }
+  void import_room_keys(const mux::account_id& by, std::string path, std::string passphrase) {
+    this->with_matrix(by, [path = std::move(path), passphrase = std::move(passphrase)](matrix_account& account) {
+      account.import_room_keys(path, passphrase);
+    });
+  }
+  void restore_cross_signing(const mux::account_id& by, std::string recovery) {
+    this->with_matrix(by, [recovery = std::move(recovery)](matrix_account& account) { account.restore_cross_signing(recovery); });
+  }
+  void setup_cross_signing(const mux::account_id& by, std::string password) {
+    this->with_matrix(by, [password = std::move(password)](matrix_account& account) { account.setup_cross_signing(password); });
+  }
+  void verify_start(const mux::account_id& by, std::string user, std::optional<std::string> device) {
+    this->with_matrix(by, [user = std::move(user), device = std::move(device)](matrix_account& account) {
+      account.verify_start(user, device);
+    });
+  }
+  void verify_accept(const mux::account_id& by, std::string txn) {
+    this->with_matrix(by, [txn = std::move(txn)](matrix_account& account) { account.verify_accept(txn); });
+  }
+  void verify_confirm(const mux::account_id& by, std::string txn, bool match) {
+    this->with_matrix(by, [txn = std::move(txn), match](matrix_account& account) { account.verify_confirm(txn, match); });
+  }
+  void verify_cancel(const mux::account_id& by, std::string txn) {
+    this->with_matrix(by, [txn = std::move(txn)](matrix_account& account) { account.verify_cancel(txn); });
   }
   void list_sessions(const mux::account_id& by) {
     this->with_matrix(by, [](matrix_account& account) { account.list_sessions(); });

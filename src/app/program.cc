@@ -5,6 +5,7 @@
 export module mux.app.program;
 
 import std;
+import mux.vault;
 import splice;
 import knot;
 import skia;
@@ -177,6 +178,15 @@ struct app : kept_settings {
   // `from`: who asked -- said on stderr where MUX_TRACE_FRAMES is set, to
   // find what rebuilds the window when nothing should.
   void refresh(std::source_location from = std::source_location::current());
+  // What is kept, applied: the settings read at the start -- or, where local
+  // data is encrypted, once it is unlocked -- and the accounts started.
+  void begin(const mux::config::file& saved, std::vector<mux::config::account_t> extra, bool demo,
+             std::optional<std::string> error);
+  // Local data encrypted and locked: the unlock screen, and what the start
+  // would have done kept until it is opened.
+  void lock(std::vector<mux::config::account_t> extra, bool demo);
+  std::vector<mux::config::account_t> waiting_extra;
+  bool waiting_demo = false;
   void bring_up_to_date(accounts& panel);
 
   // A new account waiting to log in: online is done, failed is said.
@@ -400,6 +410,32 @@ struct app : kept_settings {
   void apply(const request::set_link_previews&);
   void apply(const request::set_typing_sent&);
   void apply(const request::set_previews_direct&);
+  void apply(const request::give_passphrase&);
+  void apply(const request::export_room_keys&);
+  void apply(const request::setup_cross_signing&);
+  void apply(const request::restore_cross_signing&);
+  void apply(const request::verify_person&);
+  void apply(const request::verify_session&);
+  void apply(const request::verify_accept_now&);
+  void apply(const request::verify_cancel_now&);
+  void apply(const request::verify_match&);
+  void apply(const request::verify_mismatch&);
+  void apply(const request::close_verification&);
+  // The verification its dialog shows: its account, and its transaction.
+  std::optional<std::pair<mux::account_id, std::string>> verifying;
+  void apply(const request::import_room_keys&);
+  // The account whose room keys a passphrase was asked for.
+  std::optional<mux::account_id> keys_of;
+  void apply(const request::flip_local_encryption&);
+  void apply(const request::change_passphrase&);
+  // The files local data's encryption seals: the settings, and what is kept
+  // in the state directory through the vault.
+  [[nodiscard]] mux::vault::vault::kept_files sealed_files() const;
+  // Everything kept sealed again as the vault is after `turn` -- on, off, or
+  // under another passphrase; false, and nothing changed, where it could
+  // not all be read.
+  template <class Turn>
+  [[nodiscard]] bool reseal(Turn turn);
   void apply(const request::set_jump_search&);
   void apply(const request::flip_chat_room_events&);
   void apply(const request::close_manage&);

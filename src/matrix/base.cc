@@ -40,6 +40,9 @@ struct settings {
   std::optional<std::string> device_id;
   // How long a sync waits on the server for something to happen.
   std::chrono::milliseconds sync_timeout = std::chrono::seconds(30);
+  // Where its end-to-end encryption is kept: this device's Olm account and
+  // sessions, and the rooms' Megolm sessions. None: no encryption.
+  std::filesystem::path crypto_store;
 };
 
 // A typed content as a request's body: its JSON text.

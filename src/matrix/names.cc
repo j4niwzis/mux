@@ -151,6 +151,34 @@ template <class Variant, class Other>
   };
   return named<msgtype_t, msgtype::other>(known, name);
 }
+// Whether a message is a verification request (msgtype
+// m.key.verification.request): read where the message comes in.
+[[nodiscard]] inline bool verification_request_of(std::optional<std::string_view> msgtype) {
+  return msgtype == std::optional<std::string_view>("m.key.verification.request");
+}
+// A verification step sent in a room, by its event type.
+namespace verification_kind {
+struct none {};
+struct ready {};
+struct start {};
+struct accept {};
+struct key {};
+struct mac {};
+struct cancel {};
+struct done {};
+}  // namespace verification_kind
+using verification_kind_t =
+    splice::variant<verification_kind::none, verification_kind::ready, verification_kind::start, verification_kind::accept,
+                    verification_kind::key, verification_kind::mac, verification_kind::cancel, verification_kind::done>;
+[[nodiscard]] inline verification_kind_t verification_kind_of(std::optional<std::string_view> name) {
+  static const std::unordered_map<std::string_view, verification_kind_t> known = {
+      {"m.key.verification.ready", verification_kind::ready{}},   {"m.key.verification.start", verification_kind::start{}},
+      {"m.key.verification.accept", verification_kind::accept{}}, {"m.key.verification.key", verification_kind::key{}},
+      {"m.key.verification.mac", verification_kind::mac{}},       {"m.key.verification.cancel", verification_kind::cancel{}},
+      {"m.key.verification.done", verification_kind::done{}},
+  };
+  return named<verification_kind_t, verification_kind::none>(known, name);
+}
 [[nodiscard]] inline event_type_t event_type_of(std::optional<std::string_view> name) {
   static const std::unordered_map<std::string_view, event_type_t> known = {
       {"m.room.encrypted", event_type::encrypted{}},

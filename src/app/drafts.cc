@@ -4,6 +4,7 @@
 // chat, and in a small file under the state directory.
 export module mux.app.drafts;
 
+import mux.vault;
 import std;
 import knot;
 import mux.core;
@@ -24,16 +25,12 @@ class drafts_part {
     auto& drafts = s_->root().main().drafts;
     if (!logic::keep_draft(drafts, in, text) || s_->demo())
       return;
-    const auto where = mux::config::state_path("drafts.json");
-    std::error_code failed;
-    std::filesystem::create_directories(where.parent_path(), failed);
-    std::ofstream(where, std::ios::binary | std::ios::trunc) << logic::drafts_text(drafts);
+    (void)mux::vault::the().write_file(mux::config::state_path("drafts.json"), logic::drafts_text(drafts));
   }
 
   // The drafts kept, back in the window: at the start.
   void load() {
-    std::ifstream file(mux::config::state_path("drafts.json"), std::ios::binary);
-    const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    const std::string text = mux::vault::the().read_file(mux::config::state_path("drafts.json")).value_or(std::string());
     for (auto& [in, draft] : logic::drafts_from(text))
       s_->root().main().drafts.insert_or_assign(in, std::move(draft));
   }

@@ -23,11 +23,15 @@ import loom.cs.list_public_rooms;
 import loom.cs.space_hierarchy;
 import loom.cs.room_send;
 import loom.cs.rooms;
+import mux.matrix.crypto;
+import loom.cs.keys;
+import loom.cs.cross_signing;
 import loom.cs.room_state;
 import loom.cs.content_repo;
 import loom.cs.authed_content_repo;
 import loom.cs.create_room;
 import loom.cs.account_data;
+import loom.cs.key_backup;
 import loom.cs.kicking;
 import loom.cs.banning;
 import loom.cs.inviting;
@@ -51,7 +55,7 @@ auto account<Sink>::id() const noexcept -> const account_id& { return id_; }
 
 template <class Sink>
 void account<Sink>::start() {
-  loop_->spawn([this] { run(); });
+  this->spawn_guarded([this] { run(); });
 }
 
 template <class Sink>
@@ -59,7 +63,7 @@ void account<Sink>::stop() { stopping_ = true; }
 
 template <class Sink>
 void account<Sink>::mark_read(std::string room, std::string event) {
-  loop_->spawn([this, room = std::move(room), event = std::move(event)] {
+  this->spawn_guarded([this, room = std::move(room), event = std::move(event)] {
     if (api_)
       (void)perform(*api_, loom::cs::post_receipt{.room_id = room,
                                                   .receipt_type = loom::cs::post_receipt::receipt_type_values::m_read{},
@@ -69,7 +73,7 @@ void account<Sink>::mark_read(std::string room, std::string event) {
 
 template <class Sink>
 void account<Sink>::load_older(std::string room, std::string from) {
-  loop_->spawn([this, room = std::move(room), from = std::move(from)] {
+  this->spawn_guarded([this, room = std::move(room), from = std::move(from)] {
     if (!api_)
       return;
     // No token: from the room's newest, back.
@@ -121,7 +125,7 @@ using power_levels_content = loom::ev::m_room_power_levels_content_t;
 
 template <class Sink>
 void account<Sink>::manage(std::string room, room_action_t action) {
-  loop_->spawn([this, room = std::move(room), action = std::move(action)] {
+  this->spawn_guarded([this, room = std::move(room), action = std::move(action)] {
     if (!api_)
       return;
     // A state event of the room set, its content given.
@@ -233,18 +237,39 @@ void account<Sink>::manage(std::string room, room_action_t action) {
   });
 }
 
+// A room encrypted from its first event: m.room.encryption in its initial
+// state, as Element makes direct chats and private rooms -- never a first
+// message in the clear while the state catches up.
+// What an account data request answered, read as a type: nothing where it
+// failed or is not that type (knot's error is not wanted here).
+template <class Type, class Answer>
+[[nodiscard]] std::optional<Type> read_answer(const Answer& answer) {
+  if (!answer)
+    return std::nullopt;
+  auto read = knot::try_read<Type>(answer->text);
+  return read ? std::optional<Type>(std::move(*read)) : std::nullopt;
+}
+
+inline std::vector<loom::cs::create_room::body_t::state_event_t> encrypted_from_the_start() {
+  loom::ev::m_room_encryption_content_t content;
+  content.algorithm = loom::ev::m_room_encryption_content_t::algorithm_values::m_megolm_v1_aes_sha2{};
+  return {{.type = "m.room.encryption", .state_key = "", .content = knot::raw{knot::to_json_string(content)}}};
+}
+
 template <class Sink>
 void account<Sink>::create_direct(std::string user) {
-  loop_->spawn([this, user = std::move(user)] {
+  this->spawn_guarded([this, user = std::move(user)] {
     if (!api_)
       return;
     auto made = perform(*api_, loom::cs::create_room{.body = {.invite = std::vector<std::string>{user},
+                                                              .initial_state = encrypted_from_the_start(),
                                                               .preset = loom::cs::create_room::body_t::preset_values::trusted_private_chat{},
                                                               .is_direct = true}});
     if (!made) {
       log(id_, "could not start a chat with {}: {}", user, made.error().said());
       return;
     }
+    this->remember_encrypted(made->room_id);
     // m.direct as it is, with the new room under its person.
     loom::client::direct_rooms_t direct = loom::client::direct_rooms(state_);
     direct[user].push_back(made->room_id);
@@ -256,7 +281,7 @@ void account<Sink>::create_direct(std::string user) {
 
 template <class Sink>
 void account<Sink>::send_sticker(std::string room, mux::emote sticker, std::optional<std::string> reply_to) {
-  loop_->spawn([this, room = std::move(room), sticker = std::move(sticker), reply_to = std::move(reply_to)] {
+  this->spawn_sending([this, room = std::move(room), sticker = std::move(sticker), reply_to = std::move(reply_to)] {
     if (!api_)
       return;
     // As the spec has it: its words, and its info -- its size and type, by
@@ -271,7 +296,7 @@ void account<Sink>::send_sticker(std::string room, mux::emote sticker, std::opti
     if (reply_to)
       content.m_relates_to = loom::ev::m_sticker_content_t::m_relates_to_t{
           .m_in_reply_to = loom::ev::m_sticker_content_t::m_relates_to_t::m_in_reply_to_t{.event_id = *reply_to}};
-    auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
+    auto sent = this->send_room_event(loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.sticker",
                                                       .txn_id = this->transaction(),
                                                       .body = as_body(content)});
@@ -282,7 +307,7 @@ void account<Sink>::send_sticker(std::string room, mux::emote sticker, std::opti
 
 template <class Sink>
 void account<Sink>::view_source(std::string room, std::string event) {
-  loop_->spawn([this, room = std::move(room), event = std::move(event)] {
+  this->spawn_guarded([this, room = std::move(room), event = std::move(event)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::get_one_room_event{.room_id = room, .event_id = event});
@@ -296,7 +321,7 @@ void account<Sink>::view_source(std::string room, std::string event) {
 
 template <class Sink>
 void account<Sink>::list_state(std::string room) {
-  loop_->spawn([this, room = std::move(room)] {
+  this->spawn_guarded([this, room = std::move(room)] {
     std::vector<change::state_entry> entries;
     if (const auto kept = state_.joined.find(room); kept != state_.joined.end())
       for (const auto& [key, one] : kept->second.state.events)
@@ -308,7 +333,7 @@ void account<Sink>::list_state(std::string room) {
 template <class Sink>
 void account<Sink>::send_custom(std::string room, std::string type, std::optional<std::string> state_key,
                                 std::string json) {
-  loop_->spawn([this, room = std::move(room), type = std::move(type), state_key = std::move(state_key),
+  this->spawn_sending([this, room = std::move(room), type = std::move(type), state_key = std::move(state_key),
                 json = std::move(json)] {
     const std::string title = "Sent " + type;
     // Only an object is a content: read as one, its keys' values left as text.
@@ -325,7 +350,7 @@ void account<Sink>::send_custom(std::string room, std::string type, std::optiona
                                      .room_id = room, .event_type = type, .state_key = *state_key, .body = knot::raw{json}});
       sink_(change::devtools_text{title, done ? "Sent: " + done->event_id : "Not sent: " + done.error().said()});
     } else {
-      auto done = perform(*api_, loom::cs::send_message{
+      auto done = this->send_room_event(loom::cs::send_message{
                                      .room_id = room, .event_type = type, .txn_id = this->transaction(), .body = knot::raw{json}});
       sink_(change::devtools_text{title, done ? "Sent: " + done->event_id : "Not sent: " + done.error().said()});
     }
@@ -334,7 +359,7 @@ void account<Sink>::send_custom(std::string room, std::string type, std::optiona
 
 template <class Sink>
 void account<Sink>::fetch_preview(std::string url) {
-  loop_->spawn([this, url = std::move(url)] {
+  this->spawn_guarded([this, url = std::move(url)] {
     if (!api_)
       return;
     // The authenticated endpoint (Matrix 1.11), and the old one where the
@@ -367,7 +392,7 @@ void account<Sink>::fetch_preview(std::string url) {
 
 template <class Sink>
 void account<Sink>::search_directory(std::string server, std::string query) {
-  loop_->spawn([this, server = std::move(server), query = std::move(query)] {
+  this->spawn_guarded([this, server = std::move(server), query = std::move(query)] {
     if (!api_)
       return;
     using asked = loom::cs::query_public_rooms;
@@ -395,7 +420,7 @@ void account<Sink>::search_directory(std::string server, std::string query) {
 
 template <class Sink>
 void account<Sink>::explore_space(std::string room) {
-  loop_->spawn([this, room = std::move(room)] {
+  this->spawn_guarded([this, room = std::move(room)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::get_space_hierarchy{.room_id = room, .limit = 100, .max_depth = 1});
@@ -507,7 +532,7 @@ template <class Content>
 
 template <class Sink>
 void account<Sink>::list_packs(std::optional<std::string> room) {
-  loop_->spawn([this, room = std::move(room)] {
+  this->spawn_guarded([this, room = std::move(room)] {
     std::vector<emote_pack> found;
     if (!room) {
       if (const auto own = state_.account_data.find("im.ponies.user_emotes"); own != state_.account_data.end())
@@ -535,7 +560,7 @@ void account<Sink>::list_packs(std::optional<std::string> room) {
 
 template <class Sink>
 void account<Sink>::save_pack(emote_pack pack) {
-  loop_->spawn([this, pack = std::move(pack)] {
+  this->spawn_guarded([this, pack = std::move(pack)] {
     bool done = false;
     if (api_) {
       if (pack.room)
@@ -560,7 +585,7 @@ void account<Sink>::save_pack(emote_pack pack) {
 
 template <class Sink>
 void account<Sink>::delete_pack(std::string room, std::string state_key) {
-  loop_->spawn([this, room = std::move(room), state_key = std::move(state_key)] {
+  this->spawn_guarded([this, room = std::move(room), state_key = std::move(state_key)] {
     // Taken away as the MSC has it: its state emptied.
     const bool done = api_ && static_cast<bool>(perform(
                                   *api_, loom::cs::set_room_state_with_key{.room_id = room,
@@ -573,7 +598,7 @@ void account<Sink>::delete_pack(std::string room, std::string state_key) {
 
 template <class Sink>
 void account<Sink>::search_people(std::string term) {
-  loop_->spawn([this, term = std::move(term)] {
+  this->spawn_guarded([this, term = std::move(term)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::search_user_directory{.body = {.search_term = term, .limit = 30}});
@@ -588,8 +613,10 @@ void account<Sink>::search_people(std::string term) {
 }
 
 template <class Sink>
-void account<Sink>::create_room(std::string name, std::string topic, bool open, std::string alias, bool federate) {
-  loop_->spawn([this, name = std::move(name), topic = std::move(topic), open, alias = std::move(alias), federate] {
+void account<Sink>::create_room(std::string name, std::string topic, bool open, std::string alias, bool federate,
+                                bool encrypted) {
+  this->spawn_guarded([this, name = std::move(name), topic = std::move(topic), open, alias = std::move(alias), federate,
+                       encrypted] {
     if (!api_)
       return;
     using made_t = loom::cs::create_room::body_t;
@@ -604,19 +631,23 @@ void account<Sink>::create_room(std::string name, std::string topic, bool open, 
                             // the room's creation content, as the spec has it.
                             .creation_content = federate ? std::nullopt
                                                          : std::optional<knot::raw>(knot::raw{R"({"m.federate":false})"}),
+                            // Encrypted, when asked, from the very start.
+                            .initial_state = encrypted ? std::optional(encrypted_from_the_start()) : std::nullopt,
                             .preset = open ? made_t::preset_t{made_t::preset_values::public_chat{}}
                                            : made_t::preset_t{made_t::preset_values::private_chat{}}}});
     if (!made) {
       log(id_, "could not make the room {}: {}", name, made.error().said());
       return;
     }
+    if (encrypted)
+      this->remember_encrypted(made->room_id);
     sink_(change::room_created{{id_, made->room_id}});
   });
 }
 
 template <class Sink>
 void account<Sink>::catch_up(std::string room, std::string from, std::string until) {
-  loop_->spawn([this, room = std::move(room), from = std::move(from), until = std::move(until)] {
+  this->spawn_guarded([this, room = std::move(room), from = std::move(from), until = std::move(until)] {
     const conversation_id in{id_, room};
     std::map<std::string, std::string> sender_of;  // of every event the pages held
     struct reaction_found {
@@ -703,7 +734,7 @@ void account<Sink>::catch_up(std::string room, std::string from, std::string unt
 
 template <class Sink>
 void account<Sink>::preview_room(std::string room, std::vector<std::string> via) {
-  loop_->spawn([this, room = std::move(room), via = std::move(via)] {
+  this->spawn_guarded([this, room = std::move(room), via = std::move(via)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::get_room_summary{
@@ -729,7 +760,7 @@ void account<Sink>::preview_room(std::string room, std::vector<std::string> via)
 // Asked to be let in, where the room lets people knock.
 template <class Sink>
 void account<Sink>::knock(std::string room, std::vector<std::string> via, std::string reason) {
-  loop_->spawn([this, room = std::move(room), via = std::move(via), reason = std::move(reason)] {
+  this->spawn_guarded([this, room = std::move(room), via = std::move(via), reason = std::move(reason)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::knock_room{.room_id_or_alias = room,
@@ -742,15 +773,17 @@ void account<Sink>::knock(std::string room, std::vector<std::string> via, std::s
 
 template <class Sink>
 void account<Sink>::create_group(std::string name) {
-  loop_->spawn([this, name = std::move(name)] {
+  this->spawn_guarded([this, name = std::move(name)] {
     if (!api_)
       return;
     auto made = perform(*api_, loom::cs::create_room{.body = {.name = name,
+                                                              .initial_state = encrypted_from_the_start(),
                                                               .preset = loom::cs::create_room::body_t::preset_values::private_chat{}}});
     if (!made) {
       log(id_, "could not make the room {}: {}", name, made.error().said());
       return;
     }
+    this->remember_encrypted(made->room_id);
     sink_(change::room_created{{id_, made->room_id}});
   });
 }
@@ -773,7 +806,7 @@ struct forwarded_mark {
 
 template <class Sink>
 void account<Sink>::forward(std::string from, std::string event, std::string to) {
-  loop_->spawn([this, from = std::move(from), event = std::move(event), to = std::move(to)] {
+  this->spawn_sending([this, from = std::move(from), event = std::move(event), to = std::move(to)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::get_one_room_event{.room_id = from, .event_id = event});
@@ -800,7 +833,7 @@ void account<Sink>::forward(std::string from, std::string event, std::string to)
                                                          .room_id = from,
                                                          .sender = got->sender,
                                                          .origin_server_ts = static_cast<std::int64_t>(got->origin_server_ts)}});
-    auto done = perform(*api_, loom::cs::send_message{.room_id = to,
+    auto done = this->send_room_event(loom::cs::send_message{.room_id = to,
                                                       .event_type = "m.room.message",
                                                       .txn_id = this->transaction(),
                                                       .body = as_body(*content)});
@@ -811,7 +844,7 @@ void account<Sink>::forward(std::string from, std::string event, std::string to)
 
 template <class Sink>
 void account<Sink>::fetch_profile(std::string user) {
-  loop_->spawn([this, user = std::move(user)] {
+  this->spawn_guarded([this, user = std::move(user)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::get_user_profile{.user_id = user});
@@ -838,7 +871,7 @@ struct password_auth {
 
 template <class Sink>
 void account<Sink>::list_sessions() {
-  loop_->spawn([this] {
+  this->spawn_guarded([this] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::get_devices{});
@@ -863,7 +896,7 @@ void account<Sink>::list_sessions() {
 
 template <class Sink>
 void account<Sink>::rename_session(std::string device, std::string name) {
-  loop_->spawn([this, device = std::move(device), name = std::move(name)] {
+  this->spawn_guarded([this, device = std::move(device), name = std::move(name)] {
     if (!api_)
       return;
     auto done = perform(*api_, loom::cs::update_device{.device_id = device, .body = {.display_name = name}});
@@ -875,7 +908,7 @@ void account<Sink>::rename_session(std::string device, std::string name) {
 
 template <class Sink>
 void account<Sink>::sign_out_sessions(std::vector<std::string> devices, std::string password) {
-  loop_->spawn([this, devices = std::move(devices), password = std::move(password)] {
+  this->spawn_guarded([this, devices = std::move(devices), password = std::move(password)] {
     if (!api_ || devices.empty())
       return;
     using body_t = loom::cs::delete_devices::body_t;
@@ -909,8 +942,313 @@ void account<Sink>::sign_out_sessions(std::vector<std::string> devices, std::str
 }
 
 template <class Sink>
+void account<Sink>::setup_cross_signing(std::string password) {
+  this->spawn_guarded([this, password = std::move(password)] {
+    if (!crypto_ || !api_) {
+      sink_(change::refused{id_, "Not set up: encryption is not running for this account."});
+      return;
+    }
+    // Already set up -- by another device, another client: never replaced
+    // from here. A new identity would undo every verification of it, and
+    // whoever had verified the account would see it change.
+    {
+      loom::cs::query_keys ask;
+      ask.body.device_keys.emplace(id_.address, std::vector<std::string>{});
+      auto got = perform(*api_, ask);
+      if (!got) {
+        sink_(change::refused{id_, "Not set up: this account's keys could not be fetched: " + got.error().said()});
+        return;
+      }
+      if (crypto::master_of(*got, id_.address)) {
+        sink_(change::refused{id_, "This account has cross-signing already. Use Restore with the recovery key to give "
+                                   "this device its keys, or verify this device from one that has them."});
+        return;
+      }
+    }
+    using upload = loom::cs::upload_cross_signing_keys;
+    using master_t = upload::body_t::cross_signing_key_t;
+    using self_t = upload::body_t::cross_signing_key_2_t;
+    using user_t = upload::body_t::cross_signing_key_3_t;
+    const auto secrets = crypto::new_cross_signing();
+    const auto master_pub = crypto::detail::ed25519_public(secrets.master);
+    const auto self_pub = crypto::detail::ed25519_public(secrets.self_signing);
+    const auto user_pub = crypto::detail::ed25519_public(secrets.user_signing);
+    if (!master_pub || !self_pub || !user_pub) {
+      sink_(change::refused{id_, "Not set up: the keys could not be made."});
+      return;
+    }
+    const auto signatures_raw = [&](const std::string& key_id, const std::string& signature) {
+      return knot::raw{knot::to_json_string(crypto::signatures_t{{id_.address, {{key_id, signature}}}})};
+    };
+    // Each key signed: the master by this device, the other two by the master.
+    master_t master{.user_id = id_.address, .usage = {master_t::usage_item_values::master{}}, .keys = {{"ed25519:" + *master_pub, *master_pub}}};
+    self_t self{.user_id = id_.address, .usage = {self_t::usage_item_values::self_signing{}}, .keys = {{"ed25519:" + *self_pub, *self_pub}}};
+    user_t users{.user_id = id_.address, .usage = {user_t::usage_item_values::user_signing{}}, .keys = {{"ed25519:" + *user_pub, *user_pub}}};
+    const auto master_canonical = knot::to_canonical_json(crypto::key_signed_part<master_t>{master.user_id, master.usage, master.keys, {}});
+    const auto self_canonical = knot::to_canonical_json(crypto::key_signed_part<self_t>{self.user_id, self.usage, self.keys, {}});
+    const auto user_canonical = knot::to_canonical_json(crypto::key_signed_part<user_t>{users.user_id, users.usage, users.keys, {}});
+    if (!master_canonical || !self_canonical || !user_canonical)
+      return;
+    master.signatures = signatures_raw("ed25519:" + crypto_->device_id(), crypto_->sign_as_device(*master_canonical));
+    self.signatures = signatures_raw("ed25519:" + *master_pub, crypto::detail::ed25519_sign(secrets.master, *self_canonical).value_or(""));
+    users.signatures = signatures_raw("ed25519:" + *master_pub, crypto::detail::ed25519_sign(secrets.master, *user_canonical).value_or(""));
+    upload::body_t body{.master_key = master, .self_signing_key = self, .user_signing_key = users};
+    auto first = perform(*api_, upload{.body = body});
+    if (!first) {
+      const auto& said = first.error().server;
+      if (!said || said->status != 401 || !said->session) {
+        sink_(change::refused{id_, "Cross-signing not set up: " + first.error().said()});
+        return;
+      }
+      const std::string given = !password.empty() ? password : how_.password;
+      upload::body_t::authentication_data_t auth{.type = "m.login.password", .session = *said->session};
+      auth.rest = as_body(password_auth{.identifier = {.user = how_.user_id}, .password = given});
+      body.auth = std::move(auth);
+      if (auto done = perform(*api_, upload{.body = body}); !done) {
+        sink_(change::refused{id_, "Cross-signing not set up: " + done.error().said()});
+        return;
+      }
+    }
+    crypto_->keep_cross_signing(secrets);
+    crypto_->verify_master(id_.address, *master_pub);
+    // This device, signed with the self-signing key.
+    if (const auto own = crypto_->signed_device_keys()) {
+      const auto canonical = knot::to_canonical_json(own->keys);
+      const auto by_self = canonical ? crypto::detail::ed25519_sign(secrets.self_signing, *canonical) : std::nullopt;
+      if (by_self) {
+        const crypto::signed_device_part signed_one{.algorithms = own->keys.algorithms,
+                                                    .device_id = own->keys.device_id,
+                                                    .keys = own->keys.keys,
+                                                    .user_id = own->keys.user_id,
+                                                    .signatures = {{id_.address, {{"ed25519:" + *self_pub, *by_self}}}}};
+        std::map<std::string, std::map<std::string, knot::raw>> signed_body;
+        signed_body[id_.address][own->keys.device_id] = knot::raw{knot::to_json_string(signed_one)};
+        (void)perform(*api_, loom::cs::upload_cross_signing_signatures{.body = std::move(signed_body)});
+      }
+    }
+    const auto backup_secret = this->make_backup(secrets);
+    const auto recovery = this->store_secrets(secrets, backup_secret);
+    sink_(change::notice{
+        id_, "Cross-signing set up",
+        recovery ? std::format("This account now has its own cross-signing keys. They are kept on this device, and on "
+                               "your server sealed under this recovery key -- write it down and keep it safe: with it, "
+                               "another device takes them back; without it, they are lost with this device.\n\n{}",
+                               *recovery)
+                 : std::string("This account now has its own cross-signing keys, kept on this device only: they could "
+                               "not be put in secret storage.")});
+  });
+}
+
+template <class Sink>
+std::optional<std::string> account<Sink>::make_backup(const crypto::cross_signing_secrets& secrets) {
+  const auto [secret, public_key] = crypto::new_backup_key();
+  const auto canonical = knot::to_canonical_json(crypto::backup_auth_signed_part{public_key});
+  const auto master_pub = crypto::detail::ed25519_public(secrets.master);
+  const auto by_master = canonical ? crypto::detail::ed25519_sign(secrets.master, *canonical) : std::nullopt;
+  if (!canonical || !master_pub || !by_master)
+    return std::nullopt;
+  const crypto::backup_auth_data auth{
+      .public_key = public_key,
+      .signatures = {{id_.address,
+                      {{"ed25519:" + crypto_->device_id(), crypto_->sign_as_device(*canonical)}, {"ed25519:" + *master_pub, *by_master}}}}};
+  using version_t = loom::cs::post_room_keys_version;
+  auto made = perform(*api_, version_t{.body = {.algorithm = version_t::body_t::algorithm_values::m_megolm_backup_v1_curve25519_aes_sha2{},
+                                                .auth_data = knot::raw{knot::to_json_string(auth)}}});
+  if (!made) {
+    log(id_, "key backup not made: {}", made.error().said());
+    return std::nullopt;
+  }
+  crypto_->keep_backup(made->version, secret);
+  this->upload_backup();
+  return secret;
+}
+
+template <class Sink>
+void account<Sink>::upload_backup() {
+  if (!crypto_ || !api_)
+    return;
+  const auto backup = crypto_->backup();
+  if (!backup)
+    return;
+  const auto public_key = crypto::backup_public_of(backup->second);
+  if (!public_key)
+    return;
+  const auto entries = crypto_->not_backed_up(100);
+  if (entries.empty())
+    return;
+  loom::cs::put_room_keys ask{.version = backup->first};
+  std::vector<std::string> ids;
+  for (const crypto::backup_entry& one : entries) {
+    const auto sealed = crypto::seal_backup(*public_key, one.plain);
+    if (!sealed)
+      continue;
+    ask.body.rooms[one.room].sessions.insert_or_assign(
+        one.session_id, loom::cs::def::key_backup_data_t{.first_message_index = one.first_index,
+                                                          .forwarded_count = 0,
+                                                          .is_verified = one.verified,
+                                                          .session_data = knot::raw{knot::to_json_string(*sealed)}});
+    ids.push_back(one.session_id);
+  }
+  if (auto done = perform(*api_, ask); !done) {
+    log(id_, "room keys not backed up: {}", done.error().said());
+    return;
+  }
+  crypto_->backed_up(ids);
+}
+
+template <class Sink>
+std::size_t account<Sink>::restore_backup(const std::string& secret) {
+  auto current = perform(*api_, loom::cs::get_room_keys_version_current{});
+  if (!current)
+    return 0;
+  const auto auth = knot::try_read<crypto::backup_auth_data>(current->auth_data.text);
+  // The backup's key is the one secret storage gave: else it is not this
+  // account's backup to read, nor to write to.
+  if (!auth || crypto::backup_public_of(secret) != auth->public_key)
+    return 0;
+  auto keys = perform(*api_, loom::cs::get_room_keys{.version = current->version});
+  if (!keys)
+    return 0;
+  std::vector<crypto::exported_session> sessions;
+  for (const auto& [room, backup] : keys->rooms)
+    for (const auto& [id, data] : backup.sessions) {
+      const auto sealed = knot::try_read<crypto::backup_session_data>(data.session_data.text);
+      const auto plain = sealed ? crypto::open_backup(secret, *sealed) : std::nullopt;
+      if (!plain)
+        continue;
+      sessions.push_back(crypto::exported_session{.room_id = room,
+                                                  .sender_key = plain->sender_key,
+                                                  .sender_claimed_keys = plain->sender_claimed_keys,
+                                                  .session_id = id,
+                                                  .session_key = plain->session_key});
+    }
+  const std::size_t taken = crypto_->import_sessions(sessions);
+  crypto_->keep_backup(current->version, secret);
+  return taken;
+}
+
+template <class Sink>
+std::optional<std::string> account<Sink>::store_secrets(const crypto::cross_signing_secrets& secrets,
+                                                        const std::optional<std::string>& backup_secret) {
+  const auto made = crypto::make_storage_key();
+  const auto put = [&](std::string type, const auto& value) {
+    return perform(*api_, loom::cs::set_account_data{.user_id = id_.address, .type = std::move(type),
+                                                     .body = knot::raw{knot::to_json_string(value)}})
+        .has_value();
+  };
+  const auto sealed = [&](std::string_view name, const std::string& secret) {
+    return crypto::stored_secret{.encrypted = {{made.id, crypto::detail::seal_secret(made.key, name, secret)}}};
+  };
+  const bool all = put("m.secret_storage.key." + made.id, made.info) &&
+                   put("m.cross_signing.master", sealed("m.cross_signing.master", secrets.master)) &&
+                   put("m.cross_signing.self_signing", sealed("m.cross_signing.self_signing", secrets.self_signing)) &&
+                   put("m.cross_signing.user_signing", sealed("m.cross_signing.user_signing", secrets.user_signing)) &&
+                   (!backup_secret || put("m.megolm_backup.v1", sealed("m.megolm_backup.v1", *backup_secret))) &&
+                   put("m.secret_storage.default_key", crypto::default_storage_key{made.id});
+  return all ? std::optional<std::string>(made.recovery) : std::nullopt;
+}
+
+template <class Sink>
+void account<Sink>::restore_cross_signing(std::string recovery) {
+  this->spawn_guarded([this, recovery = std::move(recovery)] {
+    if (!crypto_ || !api_)
+      return;
+    const auto refused = [&](std::string why) { sink_(change::refused{id_, "Not restored: " + why}); };
+    const auto key = crypto::key_of_recovery(recovery);
+    if (!key)
+      return refused("that is not a recovery key (a letter wrong, or one missing).");
+    const auto get = [&](std::string type) { return perform(*api_, loom::cs::get_account_data{.user_id = id_.address, .type = std::move(type)}); };
+    const auto chosen = get("m.secret_storage.default_key");
+    const auto id = read_answer<crypto::default_storage_key>(chosen);
+    if (!id)
+      return refused("this account keeps no secrets on its server.");
+    const auto info_raw = get("m.secret_storage.key." + id->key);
+    const auto info = read_answer<crypto::storage_key_info>(info_raw);
+    if (!info || !crypto::is_storage_key(*key, *info))
+      return refused("that is not this account's recovery key.");
+    const auto secret = [&](std::string name) -> std::optional<std::string> {
+      const auto raw = get(name);
+      const auto stored = read_answer<crypto::stored_secret>(raw);
+      if (!stored)
+        return std::nullopt;
+      const auto sealed = stored->encrypted.find(id->key);
+      return sealed == stored->encrypted.end() ? std::nullopt : crypto::detail::open_secret(*key, name, sealed->second);
+    };
+    const auto master = secret("m.cross_signing.master");
+    const auto self = secret("m.cross_signing.self_signing");
+    const auto users = secret("m.cross_signing.user_signing");
+    if (!master || !self || !users)
+      return refused("the keys kept there could not be opened.");
+    const crypto::cross_signing_secrets secrets{.master = *master, .self_signing = *self, .user_signing = *users};
+    // Taken only where they are the keys the server lists for this user.
+    loom::cs::query_keys ask;
+    ask.body.device_keys.emplace(id_.address, std::vector<std::string>{});
+    auto got = perform(*api_, ask);
+    const auto listed = got ? crypto::master_of(*got, id_.address) : std::nullopt;
+    if (!listed || crypto::detail::ed25519_public(secrets.master) != listed)
+      return refused("the keys kept there are not the ones your account has.");
+    crypto_->keep_cross_signing(secrets);
+    crypto_->verify_master(id_.address, *listed);
+    if (got->device_keys)
+      if (const auto own = got->device_keys->find(id_.address); own != got->device_keys->end())
+        if (const auto device = own->second.find(crypto_->device_id()); device != own->second.end())
+          this->cross_sign_device(device->second);
+    // And the room keys in the key backup, where there is one.
+    const auto backup_secret = secret("m.megolm_backup.v1");
+    const std::size_t restored = backup_secret ? this->restore_backup(*backup_secret) : 0;
+    sink_(change::notice{id_, "Cross-signing restored",
+                         std::format("This device has your cross-signing keys back, and has signed itself with them. {} room "
+                                     "keys were taken from the key backup.",
+                                     restored)});
+  });
+}
+
+template <class Sink>
+void account<Sink>::cross_sign_device(const loom::cs::query_keys::response_t::device_information_t& info) {
+  const auto secrets = crypto_ ? crypto_->cross_signing_keys() : std::nullopt;
+  if (!secrets || !api_ || info.user_id != id_.address)
+    return;
+  const auto self_pub = crypto::detail::ed25519_public(secrets->self_signing);
+  const auto canonical =
+      knot::to_canonical_json(crypto::device_signed_part{info.algorithms, info.device_id, info.keys, info.user_id, info.rest});
+  const auto signature = canonical ? crypto::detail::ed25519_sign(secrets->self_signing, *canonical) : std::nullopt;
+  if (!self_pub || !signature)
+    return;
+  const crypto::signed_device_part signed_one{.algorithms = info.algorithms,
+                                              .device_id = info.device_id,
+                                              .keys = info.keys,
+                                              .user_id = info.user_id,
+                                              .signatures = {{id_.address, {{"ed25519:" + *self_pub, *signature}}}},
+                                              .rest = info.rest};
+  std::map<std::string, std::map<std::string, knot::raw>> body;
+  body[id_.address][info.device_id] = knot::raw{knot::to_json_string(signed_one)};
+  (void)perform(*api_, loom::cs::upload_cross_signing_signatures{.body = std::move(body)});
+}
+
+template <class Sink>
+void account<Sink>::cross_sign_user(const std::string& user, const loom::cs::query_keys::response_t::cross_signing_key_t& master) {
+  const auto secrets = crypto_ ? crypto_->cross_signing_keys() : std::nullopt;
+  if (!secrets || !api_ || user == id_.address || master.keys.size() != 1)
+    return;
+  using key_t = loom::cs::query_keys::response_t::cross_signing_key_t;
+  const auto user_pub = crypto::detail::ed25519_public(secrets->user_signing);
+  const auto canonical = knot::to_canonical_json(crypto::key_signed_part<key_t>{master.user_id, master.usage, master.keys, master.rest});
+  const auto signature = canonical ? crypto::detail::ed25519_sign(secrets->user_signing, *canonical) : std::nullopt;
+  if (!user_pub || !signature)
+    return;
+  const crypto::signed_key_part<key_t> signed_one{.user_id = master.user_id,
+                                                  .usage = master.usage,
+                                                  .keys = master.keys,
+                                                  .signatures = {{id_.address, {{"ed25519:" + *user_pub, *signature}}}},
+                                                  .rest = master.rest};
+  std::map<std::string, std::map<std::string, knot::raw>> body;
+  body[user][master.keys.begin()->second] = knot::raw{knot::to_json_string(signed_one)};
+  (void)perform(*api_, loom::cs::upload_cross_signing_signatures{.body = std::move(body)});
+}
+
+template <class Sink>
 void account<Sink>::fetch_quoted(std::string room, std::string target) {
-  loop_->spawn([this, room = std::move(room), target = std::move(target)] {
+  this->spawn_guarded([this, room = std::move(room), target = std::move(target)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::get_one_room_event{.room_id = room, .event_id = target});
@@ -931,7 +1269,7 @@ void account<Sink>::fetch_quoted(std::string room, std::string target) {
 
 template <class Sink>
 void account<Sink>::load_context(std::string room, std::string target) {
-  loop_->spawn([this, room = std::move(room), target = std::move(target)] {
+  this->spawn_guarded([this, room = std::move(room), target = std::move(target)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::get_event_context{.room_id = room, .event_id = target, .limit = 60});
@@ -962,7 +1300,7 @@ void account<Sink>::load_context(std::string room, std::string target) {
 
 template <class Sink>
 void account<Sink>::load_newer(std::string room, std::string from) {
-  loop_->spawn([this, room = std::move(room), from = std::move(from)] {
+  this->spawn_guarded([this, room = std::move(room), from = std::move(from)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::get_room_events{.room_id = room,
@@ -991,13 +1329,13 @@ void account<Sink>::fetch_avatar(std::string source, std::string of) {
 
 template <class Sink>
 void account<Sink>::edit(std::string room, std::string event, std::string text) {
-  loop_->spawn([this, room = std::move(room), event = std::move(event), text = std::move(text)] {
+  this->spawn_sending([this, room = std::move(room), event = std::move(event), text = std::move(text)] {
     if (!api_)
       return;
     // Made HTML as a message sent is: its Markdown, the room's emoji.
     const auto html = html_of(text, emotes_in(room));
     const auto content = loom::client::edit_message(event, text, html);
-    if (perform(*api_, loom::cs::send_message{.room_id = room,
+    if (this->send_room_event(loom::cs::send_message{.room_id = room,
                                               .event_type = "m.room.message",
                                               .txn_id = this->transaction(),
                                               .body = as_body(content)}))
@@ -1007,7 +1345,7 @@ void account<Sink>::edit(std::string room, std::string event, std::string text) 
 
 template <class Sink>
 void account<Sink>::edit_caption(std::string room, std::string event, std::string caption, mux::attachment picture) {
-  loop_->spawn([this, room = std::move(room), event = std::move(event), caption = std::move(caption),
+  this->spawn_sending([this, room = std::move(room), event = std::move(event), caption = std::move(caption),
                 picture = std::move(picture)] {
     if (!api_)
       return;
@@ -1015,7 +1353,7 @@ void account<Sink>::edit_caption(std::string room, std::string event, std::strin
         event, loom::client::media_said{.uri = picture.source, .name = picture.name, .caption = caption,
                                         .mimetype = picture.mimetype, .size = picture.size},
         picture.width, picture.height);
-    if (perform(*api_, loom::cs::send_message{.room_id = room,
+    if (this->send_room_event(loom::cs::send_message{.room_id = room,
                                               .event_type = "m.room.message",
                                               .txn_id = this->transaction(),
                                               .body = as_body(content)}))
@@ -1025,7 +1363,7 @@ void account<Sink>::edit_caption(std::string room, std::string event, std::strin
 
 template <class Sink>
 void account<Sink>::remove(std::string room, std::string event) {
-  loop_->spawn([this, room = std::move(room), event = std::move(event)] {
+  this->spawn_guarded([this, room = std::move(room), event = std::move(event)] {
     if (!api_)
       return;
     // Taken out only where the server did it; else why not, said.
@@ -1040,7 +1378,7 @@ void account<Sink>::remove(std::string room, std::string event) {
 
 template <class Sink>
 void account<Sink>::react(std::string room, std::string target, std::string key, bool on) {
-  loop_->spawn([this, room = std::move(room), target = std::move(target), key = std::move(key), on] {
+  this->spawn_sending([this, room = std::move(room), target = std::move(target), key = std::move(key), on] {
     if (!api_)
       return;
     if (on) {
@@ -1050,7 +1388,7 @@ void account<Sink>::react(std::string room, std::string target, std::string key,
         if (const auto found = std::ranges::find(emotes, key, &mux::emote::url); found != emotes.end())
           content.rest = as_body(reaction_shortcode{std::format(":{}:", found->shortcode)});
       }
-      (void)perform(*api_, loom::cs::send_message{.room_id = room,
+      (void)this->send_room_event(loom::cs::send_message{.room_id = room,
                                                   .event_type = "m.reaction",
                                                   .txn_id = this->transaction(),
                                                   .body = as_body(content)});
@@ -1068,7 +1406,7 @@ void account<Sink>::react(std::string room, std::string target, std::string key,
 
 template <class Sink>
 void account<Sink>::pin(std::string room, std::string target, bool on) {
-  loop_->spawn([this, room = std::move(room), target = std::move(target), on] {
+  this->spawn_guarded([this, room = std::move(room), target = std::move(target), on] {
     if (!api_)
       return;
     std::vector<std::string> pinned;
@@ -1090,7 +1428,7 @@ void account<Sink>::pin(std::string room, std::string target, bool on) {
 
 template <class Sink>
 void account<Sink>::leave(std::string room) {
-  loop_->spawn([this, room = std::move(room)] {
+  this->spawn_guarded([this, room = std::move(room)] {
     if (api_)
       (void)perform(*api_, loom::cs::leave_room{.room_id = room});
   });
@@ -1178,7 +1516,7 @@ void account<Sink>::leave(std::string room) {
 template <class Sink>
 void account<Sink>::send(std::string room, std::string body, std::optional<std::string> reply_to,
                          std::vector<mention> mentions) {
-  loop_->spawn([this, room = std::move(room), body = std::move(body), reply_to = std::move(reply_to),
+  this->spawn_sending([this, room = std::move(room), body = std::move(body), reply_to = std::move(reply_to),
                 mentions = std::move(mentions)] {
     const std::string txn = this->transaction();
     const conversation_id in{id_, room};
@@ -1219,7 +1557,7 @@ void account<Sink>::send(std::string room, std::string body, std::optional<std::
     for (const mention& one : mentions)
       said.mentions.push_back(one.user);
     const auto content = loom::client::text_message(said);
-    auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
+    auto sent = this->send_room_event(loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.room.message",
                                                       .txn_id = txn,
                                                       .body = as_body(content)});
@@ -1233,7 +1571,7 @@ void account<Sink>::send(std::string room, std::string body, std::optional<std::
 
 template <class Sink>
 void account<Sink>::list_threads(std::string room) {
-  loop_->spawn([this, room = std::move(room)] {
+  this->spawn_guarded([this, room = std::move(room)] {
     if (!api_)
       return;
     using asked = loom::cs::get_thread_roots;
@@ -1254,7 +1592,7 @@ void account<Sink>::list_threads(std::string room) {
 
 template <class Sink>
 void account<Sink>::load_thread(std::string room, std::string root) {
-  loop_->spawn([this, room = std::move(room), root = std::move(root)] {
+  this->spawn_guarded([this, room = std::move(room), root = std::move(root)] {
     if (!api_)
       return;
     using asked = loom::cs::get_relating_events_with_rel_type;
@@ -1280,7 +1618,7 @@ void account<Sink>::load_thread(std::string room, std::string root) {
 
 template <class Sink>
 void account<Sink>::send_in_thread(std::string room, std::string body, std::string root, std::string latest, std::optional<std::string> reply_to) {
-  loop_->spawn([this, room = std::move(room), body = std::move(body), root = std::move(root), latest = std::move(latest),
+  this->spawn_sending([this, room = std::move(room), body = std::move(body), root = std::move(root), latest = std::move(latest),
                  reply_to = std::move(reply_to)] {
     const std::string txn = this->transaction();
     const conversation_id in{id_, room};
@@ -1301,7 +1639,7 @@ void account<Sink>::send_in_thread(std::string room, std::string body, std::stri
     }
     const auto content = loom::client::text_message(
         loom::client::text_said{.body = body, .html = html, .reply_to = reply_to, .thread = root, .thread_latest = latest});
-    auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
+    auto sent = this->send_room_event(loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.room.message",
                                                       .txn_id = txn,
                                                       .body = as_body(content)});
@@ -1315,7 +1653,7 @@ void account<Sink>::send_in_thread(std::string room, std::string body, std::stri
 
 template <class Sink>
 void account<Sink>::typing(std::string room, bool on) {
-  loop_->spawn([this, room = std::move(room), on] {
+  this->spawn_guarded([this, room = std::move(room), on] {
     if (api_)
       (void)perform(*api_, loom::cs::set_typing{.user_id = id_.address,
                                                 .room_id = room,
@@ -1327,7 +1665,7 @@ void account<Sink>::typing(std::string room, bool on) {
 
 template <class Sink>
 void account<Sink>::join(std::string room, std::vector<std::string> via) {
-  loop_->spawn([this, room = std::move(room), via = std::move(via)] {
+  this->spawn_guarded([this, room = std::move(room), via = std::move(via)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::join_room{.room_id_or_alias = room,
@@ -1342,7 +1680,7 @@ void account<Sink>::join(std::string room, std::vector<std::string> via) {
 
 template <class Sink>
 void account<Sink>::fetch_members(std::string room) {
-  loop_->spawn([this, room = std::move(room)] {
+  this->spawn_guarded([this, room = std::move(room)] {
     if (!api_)
       return;
     auto got = perform(*api_, loom::cs::get_joined_members_by_room{.room_id = room});

@@ -3,6 +3,8 @@
 export module mux.matrix:media;
 
 import std;
+import mux.bytes;
+import mux.matrix.crypto;
 import knot;
 import loom.api;
 import loom.ev;
@@ -35,7 +37,7 @@ struct upload_answer {
 
 template <class Sink>
 void account<Sink>::fetch_media(std::string source, media_use_t use, int size, bool crop) {
-  loop_->spawn([this, source = std::move(source), use = std::move(use), size, crop] {
+  this->spawn_guarded([this, source = std::move(source), use = std::move(use), size, crop] {
     if (!api_ || !source.starts_with("mxc://"))
       return;
     // Asked again: a stop asked before is let go.
@@ -44,6 +46,10 @@ void account<Sink>::fetch_media(std::string source, media_use_t use, int size, b
     const auto slash = rest.find('/');
     if (slash == std::string_view::npos)
       return;
+    // Encrypted: whole, for the server cannot make a thumbnail of
+    // ciphertext; and opened here.
+    const auto sealed = encrypted_media_.find(source);
+    const int asked = sealed != encrypted_media_.end() ? 0 : size;
     const std::string server(rest.substr(0, slash));
     const std::string media(rest.substr(slash + 1));
     // As the spec writes them: a server name (a host, maybe a port) and a
@@ -58,8 +64,8 @@ void account<Sink>::fetch_media(std::string source, media_use_t use, int size, b
     if (!plain(server, ".-:[]") || !plain(media, "-_") || server.starts_with('.'))
       return;
     const std::string query =
-        size > 0 ? std::format("?width={0}&height={0}&method={1}", size, crop ? "crop" : "scale") : std::string();
-    const auto bases = size > 0 ? std::array<std::string, 2>{"/_matrix/client/v1/media/thumbnail/",
+        asked > 0 ? std::format("?width={0}&height={0}&method={1}", asked, crop ? "crop" : "scale") : std::string();
+    const auto bases = asked > 0 ? std::array<std::string, 2>{"/_matrix/client/v1/media/thumbnail/",
                                                              "/_matrix/media/v3/thumbnail/"}
                                 : std::array<std::string, 2>{"/_matrix/client/v1/media/download/",
                                                              "/_matrix/media/v3/download/"};
@@ -82,9 +88,18 @@ void account<Sink>::fetch_media(std::string source, media_use_t use, int size, b
         };
         const auto got = api_->request("GET", base + server + "/" + media + query, {},
                                        token_ ? std::optional<std::string_view>(*token_) : std::nullopt,
-                                       std::chrono::seconds(60), {}, size > 0 ? nullptr : &progress);
+                                       std::chrono::seconds(60), {}, asked > 0 ? nullptr : &progress);
         if (got.status == 200 && !got.body.empty()) {
-          sink_(change::avatar_loaded{use, source, got.body});
+          if (sealed == encrypted_media_.end()) {
+            sink_(change::avatar_loaded{use, source, got.body});
+            return;
+          }
+          const auto opened = crypto::open_file(mux::bytes::of(got.body), sealed->second);
+          if (!opened) {
+            log(id_, "{} is not what its event says: not shown", source);
+            return;
+          }
+          sink_(change::avatar_loaded{use, source, mux::bytes::text_of(*opened)});
           return;
         }
       } catch (const net::failure&) {
@@ -97,7 +112,7 @@ void account<Sink>::fetch_media(std::string source, media_use_t use, int size, b
 // An image uploaded for a pack: its mxc://, said as pack_picture_uploaded.
 template <class Sink>
 void account<Sink>::upload_pack_picture(pack_picture picture, std::string bytes) {
-  loop_->spawn([this, picture = std::move(picture), bytes = std::move(bytes)]() mutable {
+  this->spawn_guarded([this, picture = std::move(picture), bytes = std::move(bytes)]() mutable {
     std::optional<std::string> uri;
     if (api_) {
       std::string target = "/_matrix/media/v3/upload?filename=";
@@ -128,7 +143,7 @@ template <class Sink>
 void account<Sink>::send_file(std::string room, std::string local, std::string bytes, std::string name, std::string mimetype,
                  bool image, int width, int height, std::string caption, std::optional<std::string> reply_to, std::optional<thread_place> thread,
                  std::optional<video_look> video) {
-  loop_->spawn([this, room = std::move(room), local = std::move(local), bytes = std::move(bytes),
+  this->spawn_sending([this, room = std::move(room), local = std::move(local), bytes = std::move(bytes),
                 name = std::move(name), mimetype = std::move(mimetype), image, width, height,
                 caption = std::move(caption), reply_to = std::move(reply_to), thread = std::move(thread),
                 video = std::move(video)] {
@@ -157,17 +172,37 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
                                         .delivery = delivery::sending{},
                                         .attachment = carried,
                                         .thread = thread ? std::optional<std::string>(thread->root) : std::nullopt}});
+    // Before the upload: the bytes of a file for an encrypted room never
+    // reach the server in the clear (review 4, H2).
+    // In an encrypted room, sealed here first: what reaches the server is
+    // ciphertext, under no name and no type.
+    std::optional<crypto::sealed_file> sealed;
+    if (this->encrypted_room(room)) {
+      if (!crypto_)
+        throw plaintext_refused(in, local, "Not sent: it could not be encrypted -- encryption is not running for this account.");
+      sealed = crypto::seal_file(mux::bytes::of(bytes));
+    }
+    const std::string ciphertext = sealed ? mux::bytes::text_of(sealed->bytes) : std::string();
+    const std::string_view uploaded = sealed ? std::string_view(ciphertext) : std::string_view(bytes);
     if (!api_) {
       sink_(change::delivery_changed{in, local, delivery::failed{}});
       return;
     }
-    // A video's thumbnail, uploaded first: the message names it.
+    // A video's thumbnail, uploaded first: the message names it. In an
+    // encrypted room sealed as the video is -- its first picture is what it
+    // shows, and goes to the server no more in the clear than the rest.
     std::optional<std::string> thumbnail_uri;
+    std::optional<crypto::sealed_file> sealed_thumbnail;
     if (video && !video->thumbnail.empty()) {
+      if (sealed)
+        sealed_thumbnail = crypto::seal_file(mux::bytes::of(video->thumbnail));
+      const std::string thumbnail_cipher = sealed_thumbnail ? mux::bytes::text_of(sealed_thumbnail->bytes) : std::string();
       try {
-        const auto got = api_->request("POST", "/_matrix/media/v3/upload?filename=thumbnail.png", video->thumbnail,
-                                       token_ ? std::optional<std::string_view>(*token_) : std::nullopt,
-                                       std::chrono::seconds(120), std::string_view("image/png"));
+        const auto got = api_->request(
+            "POST", sealed_thumbnail ? "/_matrix/media/v3/upload" : "/_matrix/media/v3/upload?filename=thumbnail.png",
+            sealed_thumbnail ? std::string_view(thumbnail_cipher) : std::string_view(video->thumbnail),
+            token_ ? std::optional<std::string_view>(*token_) : std::nullopt, std::chrono::seconds(120),
+            sealed_thumbnail ? std::string_view("application/octet-stream") : std::string_view("image/png"));
         if (got.status == 200)
           if (auto answer = knot::try_read<upload_answer>(std::string_view(got.body)))
             thumbnail_uri = std::move(answer->content_uri);
@@ -175,16 +210,17 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
         log(id_, "upload of the thumbnail of {} failed: {}", name, failed.what());
       }
     }
-    std::string target = "/_matrix/media/v3/upload?filename=";
-    for (const char c : name)
-      target += std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_'
-                    ? std::string(1, c)
-                    : std::format("%{:02X}", static_cast<unsigned>(static_cast<unsigned char>(c)));
+    std::string target = sealed ? "/_matrix/media/v3/upload" : "/_matrix/media/v3/upload?filename=";
+    if (!sealed)
+      for (const char c : name)
+        target += std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_'
+                      ? std::string(1, c)
+                      : std::format("%{:02X}", static_cast<unsigned>(static_cast<unsigned char>(c)));
     std::optional<std::string> uri;
     try {
-      const auto got = api_->request("POST", target, bytes, token_ ? std::optional<std::string_view>(*token_) : std::nullopt,
+      const auto got = api_->request("POST", target, uploaded, token_ ? std::optional<std::string_view>(*token_) : std::nullopt,
                                      std::chrono::seconds(600),
-                                     mimetype.empty() ? std::string_view("application/octet-stream") : mimetype);
+                                     sealed || mimetype.empty() ? std::string_view("application/octet-stream") : mimetype);
       if (got.status == 200)
         if (auto answer = knot::try_read<upload_answer>(std::string_view(got.body)))
           uri = std::move(answer->content_uri);
@@ -207,8 +243,19 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
                                         .reply_to = reply_to,
                                         .thread = thread ? std::optional<std::string>(thread->root) : std::nullopt,
                                         .thread_latest = thread ? std::optional<std::string>(thread->latest) : std::nullopt};
+    // Sealed: the file named by what opens it, its URL not in the clear.
+    const auto with_file = [&](auto content) {
+      if (sealed) {
+        sealed->info.url = *uri;
+        content.url.reset();
+        content.rest = knot::raw{knot::to_json_string(crypto::file_part{sealed->info})};
+        encrypted_media_.insert_or_assign(*uri, sealed->info);
+      }
+      return as_body(content);
+    };
     // A video: m.video, its size, length and thumbnail said -- as a file,
-    // every client showed it as one.
+    // every client showed it as one. Its thumbnail sealed where the room is
+    // encrypted: named by what opens it (thumbnail_file), not by its URL.
     const auto video_message = [&] {
       loom::ev::m_room_message_m_video_content_t content;
       loom::client::detail::fill_media(content, said);
@@ -216,19 +263,25 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
       content.info->h = height;
       content.info->duration = video->duration_ms;
       if (thumbnail_uri) {
-        content.info->thumbnail_url = *thumbnail_uri;
+        if (sealed_thumbnail) {
+          sealed_thumbnail->info.url = *thumbnail_uri;
+          content.info->thumbnail_file = knot::raw{knot::to_json_string(sealed_thumbnail->info)};
+          encrypted_media_.insert_or_assign(*thumbnail_uri, sealed_thumbnail->info);
+        } else {
+          content.info->thumbnail_url = *thumbnail_uri;
+        }
         auto& thumb = content.info->thumbnail_info.emplace();
         thumb.w = video->thumbnail_width;
         thumb.h = video->thumbnail_height;
         thumb.mimetype = "image/png";
         thumb.size = static_cast<std::int64_t>(video->thumbnail.size());
       }
-      return as_body(content);
+      return content;
     };
-    knot::raw message = video   ? video_message()
-                        : image ? as_body(loom::client::picture_message(said, width, height))
-                                : as_body(loom::client::file_message(said));
-    auto sent = perform(*api_, loom::cs::send_message{.room_id = room,
+    knot::raw message = video   ? with_file(video_message())
+                        : image ? with_file(loom::client::picture_message(said, width, height))
+                                : with_file(loom::client::file_message(said));
+    auto sent = this->send_room_event(loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.room.message",
                                                       .txn_id = local,
                                                       .body = std::move(message)});

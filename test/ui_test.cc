@@ -112,7 +112,7 @@ struct stub {
   void manage_forum() {}
   void explore_space(std::string, std::string = {}) {}
   void join_directory_room(std::string, std::string) {}
-  void create_room(std::string, std::string, bool, std::string, bool = true) {}
+  void create_room(std::string, std::string, bool, std::string, bool = true, bool = false) {}
   void find_people(std::string) {}
   void search_elsewhere(std::string) {}
   void open_packs() {}
@@ -168,6 +168,20 @@ struct stub {
   void set_link_previews(mux::choice_level_t, std::optional<bool>) {}
   void set_typing_sent(mux::choice_level_t, std::optional<bool>) {}
   void set_previews_direct(mux::choice_level_t, std::optional<bool>) {}
+  void give_passphrase(mux::config::passphrase_for_t, std::string, std::string, std::string, std::string) {}
+  void export_room_keys() {}
+  void setup_cross_signing() {}
+  void restore_cross_signing() {}
+  void verify_person(mux::conversation_id) {}
+  void verify_session(std::string) {}
+  void verify_accept_now() {}
+  void verify_cancel_now() {}
+  void verify_match() {}
+  void verify_mismatch() {}
+  void close_verification() {}
+  void import_room_keys() {}
+  void flip_local_encryption() {}
+  void change_passphrase() {}
   void set_jump_search(mux::choice_level_t, std::optional<std::int64_t>) {}
   void press_loader(std::string) {}
   void stop_jump() {}

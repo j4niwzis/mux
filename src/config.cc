@@ -850,6 +850,9 @@ struct file {
   std::optional<std::vector<space_place>> space_places;
   // Frames a second, and the last frame's time, in the window's corner.
   std::optional<bool> show_fps;
+  // The interface's scale, in percent of the display's own (none, 100): as
+  // Telegram Desktop's "Interface scale".
+  std::optional<int> interface_scale;
   std::optional<cache_limits> cache;
   std::optional<sending_settings> sending;
   std::optional<history_settings> history;

@@ -110,6 +110,15 @@ class settings_part {
       up->show_appearance(k_->theme, k_->accent);
     }
   }
+  // The interface's scale: kept, and taken by the host at the next frame --
+  // all of the window laid out again at it; the page shows it chosen.
+  void apply(const request::set_interface_scale& one) {
+    k_->interface_scale = std::clamp(one.percent, mux::ui::kScaleLeast, mux::ui::kScaleMost);
+    mux::ui::window_look().interface_scale = k_->interface_scale;
+    (void)k_->write();
+    if (auto* up = s_->root().settings_up(); up && up->appearance())
+      up->show_appearance(k_->theme, k_->accent);
+  }
   // Frosted popups blurring what is under them, live: repainted with it.
   void apply(const request::flip_live_blur&) {
     k_->live_blur = !k_->live_blur;

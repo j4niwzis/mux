@@ -942,6 +942,8 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
                            }) |
                            std::ranges::to<std::vector>();
   this->show_fps = saved.show_fps.value_or(false);
+  this->interface_scale = std::clamp(saved.interface_scale.value_or(100), mux::ui::kScaleLeast, mux::ui::kScaleMost);
+  mux::ui::window_look().interface_scale = this->interface_scale;
   this->limits = saved.cache.value_or(mux::config::cache_limits{});
   if (!demo)
     this->drafts.load();

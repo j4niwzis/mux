@@ -48,6 +48,9 @@ struct kept_settings {
   bool home_hides_direct = false;  // and direct messages, where that is so
   std::vector<mux::config::space_placed> space_places;
   bool show_fps = false;
+  // The interface's scale, in percent of the display's: read by the host at
+  // each frame.
+  int interface_scale = 100;
   // How much is kept, in memory and on disk.
   mux::config::cache_limits limits;
   // What is done to a picture dropped before it is sent.
@@ -322,6 +325,8 @@ struct kept_settings {
                          std::ranges::to<std::vector>();
     if (show_fps)
       out.show_fps = true;
+    if (interface_scale != 100)
+      out.interface_scale = interface_scale;
     out.cache = limits;
     out.sending = sending;
     out.history = history;

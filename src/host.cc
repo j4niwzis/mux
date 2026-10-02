@@ -803,8 +803,9 @@ int run(App& app, const options& how) {
           router.pointer(*std::exchange(motion, std::nullopt));
       };
       while (got) {
-        const float scale = SDL_GetWindowDisplayScale(window);
-        (void)scale;
+        // The interface's scale: the scene's points are larger than the
+        // window's by it, and what the pointer says is taken in the scene's.
+        const float to_scene = 100.0f / static_cast<float>(std::max(1, app.interface_scale));
         // An event of a notification's window: a press opens its chat, in
         // the window brought up; nothing else of it reaches the scene.
         if (SDL_Window* over = SDL_GetWindowFromEvent(&event); over && over != window && shown_toasts.owns(over)) {
@@ -840,16 +841,18 @@ int run(App& app, const options& how) {
             redraw = true;
             break;
           case SDL_EVENT_MOUSE_MOTION:
-            motion = skiff::scene::pointer::move{event.motion.x, event.motion.y};
+            motion = skiff::scene::pointer::move{event.motion.x * to_scene, event.motion.y * to_scene};
             break;
           case SDL_EVENT_MOUSE_BUTTON_DOWN:
-            router.pointer(skiff::scene::pointer::down{event.button.x, event.button.y, event.button.button});
+            router.pointer(
+                skiff::scene::pointer::down{event.button.x * to_scene, event.button.y * to_scene, event.button.button});
             break;
           case SDL_EVENT_MOUSE_BUTTON_UP:
-            router.pointer(skiff::scene::pointer::up{event.button.x, event.button.y, event.button.button});
+            router.pointer(
+                skiff::scene::pointer::up{event.button.x * to_scene, event.button.y * to_scene, event.button.button});
             break;
           case SDL_EVENT_MOUSE_WHEEL:
-            router.pointer(skiff::scene::pointer::scroll{event.wheel.mouse_x, event.wheel.mouse_y, event.wheel.x,
+            router.pointer(skiff::scene::pointer::scroll{event.wheel.mouse_x * to_scene, event.wheel.mouse_y * to_scene, event.wheel.x,
                                                          event.wheel.y});
             break;
           case SDL_EVENT_KEY_DOWN:
@@ -903,7 +906,14 @@ int run(App& app, const options& how) {
       if (!running)
         break;
 
-      const float scale = SDL_GetWindowDisplayScale(window);
+      // The display's scale, times the interface's (Settings, Appearance).
+      const float scale = SDL_GetWindowDisplayScale(window) * static_cast<float>(app.interface_scale) / 100.0f;
+      // Another: all of it laid out and painted again at it.
+      static float scale_before = scale;
+      if (scale != std::exchange(scale_before, scale)) {
+        scene.state().invalidateLayout();
+        redraw = true;
+      }
       skiff::scene::pixelScale() = scale;
       int pixel_width = 0, pixel_height = 0;
       SDL_GetWindowSizeInPixels(window, &pixel_width, &pixel_height);

@@ -52,6 +52,16 @@ struct opacity_done {
     actions->set_window_opacity(static_cast<int>(std::lround(20.0f + std::clamp(fraction, 0.0f, 1.0f) * 80.0f)));
   }
 };
+// The interface's scale, let go at on its slider: the nearest of kScales.
+template <class Actions>
+struct scale_done {
+  Actions* actions = nullptr;
+  void operator()(float fraction) const {
+    const auto last = static_cast<float>(kScales.size() - 1);
+    const auto at = static_cast<std::size_t>(std::lround(std::clamp(fraction, 0.0f, 1.0f) * last));
+    actions->set_interface_scale(kScales[at]);
+  }
+};
 template <class Actions>
 struct choose_renderer {
   Actions* actions = nullptr;
@@ -157,6 +167,8 @@ struct appearance_page : nodes::Stack {
     spaces_choices<Actions> places;
     switch_row<ask<Actions, &Actions::flip_wallpaper_behind>> behind;
     switch_row<ask<Actions, &Actions::flip_live_blur>> live_blur;
+    nodes::Text scale_title = section_title(std::format("INTERFACE SCALE: {}%", window_look().interface_scale));
+    widgets::SliderBar<scene::NoAction, scale_done<Actions>> scale;
     nodes::Text window_title = section_title(std::format("WINDOW OPACITY: {}%", window_look().chosen));
     widgets::SliderBar<scene::NoAction, opacity_done<Actions>> opacity;
     nodes::Text window_note{window_look().see_through
@@ -179,6 +191,7 @@ struct appearance_page : nodes::Stack {
               .places = spaces_choices<Actions>(a),
               .behind = switch_row<ask<Actions, &Actions::flip_wallpaper_behind>>("Background behind the whole window", {a}),
               .live_blur = switch_row<ask<Actions, &Actions::flip_live_blur>>("Frosted menus blur what is under them (live)", {a}),
+              .scale = widgets::SliderBar<scene::NoAction, scale_done<Actions>>({}, {a}),
               .opacity = widgets::SliderBar<scene::NoAction, opacity_done<Actions>>({}, {a})} {
     fState.apply({.fill = true});
     parts.theme_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
@@ -195,6 +208,13 @@ struct appearance_page : nodes::Stack {
     parts.places.setVisible(window_look().spaces);
     parts.behind.parts.toggle.setOnNow(window_look().behind);
     parts.live_blur.parts.toggle.setOnNow(window_look().live_blur);
+    parts.scale_title.apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
+    // Where the scale up is among those one can choose.
+    const auto chosen_scale = std::ranges::find(kScales, window_look().interface_scale);
+    parts.scale.setFraction(chosen_scale == kScales.end()
+                                ? 0.0f
+                                : static_cast<float>(chosen_scale - kScales.begin()) / static_cast<float>(kScales.size() - 1));
+    parts.scale.apply({.margin = {10.0f, 28.0f, 10.0f, 28.0f}});
     parts.window_title.apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
     parts.opacity.setFraction(static_cast<float>(window_look().chosen - 20) / 80.0f);
     parts.opacity.apply({.margin = {10.0f, 28.0f, 10.0f, 28.0f}});

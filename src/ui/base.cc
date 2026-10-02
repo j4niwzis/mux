@@ -78,7 +78,12 @@ struct window_look_t {
   bool home_hides = false;   // Home without what spaces hold, for the client
   bool home_direct = false;  // and without direct messages
   bool live_blur = false;   // frosted popups and sheets blur what is under them, live
+  int interface_scale = 100;  // in percent of the display's scale
 };
+// The interface scales one can choose, in percent, as Telegram Desktop's.
+inline constexpr std::array kScales{100, 110, 120, 125, 130, 140, 150, 160, 170, 175, 180, 190, 200, 225, 250, 275, 300};
+inline constexpr int kScaleLeast = kScales.front();
+inline constexpr int kScaleMost = kScales.back();
 inline window_look_t& window_look() {
   static window_look_t look;
   return look;

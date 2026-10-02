@@ -1631,6 +1631,7 @@ class model {
       for (const unread_mark& gone : *marks)
         if (gone.target == one.id && !std::ranges::contains(where.seen_marks, gone.event))
           where.seen_marks.push_back(gone.event);
+    for (auto* marks : {&where.unread_mentions, &where.unread_reactions})
       std::erase_if(*marks, [&](const unread_mark& mark) { return mark.target == one.id; });
   }
   void on(const change::members_changed& one) {

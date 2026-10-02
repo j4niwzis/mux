@@ -91,6 +91,10 @@ struct conversation_row : nodes::Stack {
         parts.sender.apply({.alignSelf = scene::align::kMiddle});
         parts.unread.apply({.margin = {0.0f, 0.0f, 0.0f, 4.0f}});
         parts.sender.setVisible(false);
+        // A member's long name gives way too, cut with an ellipsis: not cut, it
+        // pushed the unread count past the row's end once the preview had
+        // given all it could.
+        parts.sender.setElided(true);
         parts.preview.setElided(true);
         parts.preview.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
         parts.unread.setVisible(count > 0);

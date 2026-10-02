@@ -347,6 +347,10 @@ struct room_key_offer {
 struct decrypted {
   loom::ev::basic_event<loom::ev::timeline_content> event;
   bool verified = false;
+  // From a session imported (a key file, the key backup): who sent with it
+  // was not said, so the sender is taken only where a device of theirs has
+  // this curve25519 key -- checked by the account against /keys/query.
+  std::optional<std::string> imported_sender_key;
 };
 
 // Unpadded base64, as Olm's bodies and Matrix's keys are written.
@@ -383,14 +387,20 @@ struct recipient {
 [[nodiscard]] inline std::vector<recipient> recipients_of(const keys_answer& got, const std::string& user,
                                                          const std::optional<std::string>& pinned,
                                                          std::string_view own_device,
-                                                         const std::vector<std::string>& verified_keys = {}) {
+                                                         const std::vector<std::string>& verified_keys = {},
+                                                         bool strict = false) {
   std::vector<recipient> out;
   if (!got.device_keys)
     return out;
   const auto devices = got.device_keys->find(user);
   if (devices == got.device_keys->end())
     return out;
-  const bool cross_signing = got.master_keys && got.master_keys->contains(user);
+  // Strict -- cross-signed or verified here, nothing else -- where the user
+  // has cross-signing, or had it (a master key pinned: a server hiding it now
+  // would have every self-signed device taken, its own made-up one too), or
+  // is this account itself (its own devices read all it writes; a device the
+  // server adds to it gets nothing until verified).
+  const bool cross_signing = (got.master_keys && got.master_keys->contains(user)) || pinned.has_value() || strict;
   for (const auto& [id, info] : devices->second) {
     if (id == own_device && info.user_id == user)
       continue;
@@ -471,14 +481,14 @@ struct megolm_content {
 };
 // How long a room's session may send, as its m.room.encryption says --
 // bounded, for that state is the server's to write: a week and a hundred
-// messages at most, an hour and one message at least.
+// messages at most, a minute and one message at least.
 struct rotation {
   std::int64_t most_ms = 7LL * 24 * 3600 * 1000;
   std::int64_t most_messages = 100;
 };
 [[nodiscard]] constexpr rotation rotation_of(std::optional<std::int64_t> ms, std::optional<std::int64_t> messages) {
   constexpr rotation widest;
-  return {.most_ms = std::clamp<std::int64_t>(ms.value_or(widest.most_ms), 3600LL * 1000, widest.most_ms),
+  return {.most_ms = std::clamp<std::int64_t>(ms.value_or(widest.most_ms), 60LL * 1000, widest.most_ms),
           .most_messages = std::clamp<std::int64_t>(messages.value_or(widest.most_messages), 1, widest.most_messages)};
 }
 // A user's master cross-signing key, as /keys/query gave it: to be pinned
@@ -1735,7 +1745,9 @@ class olm_machine {
       // at the next sync at the latest (flush).
       if (seen.emplace(clear.message_index, event_id).second)
         unsaved_ = true;
-      return decrypted{std::move(*read), origin->second.cross_signed.value_or(false)};
+      return decrypted{std::move(*read), origin->second.cross_signed.value_or(false),
+                       origin->second.imported.value_or(false) ? std::optional<std::string>(origin->second.sender_key)
+                                                               : std::nullopt};
     } catch (const rust::Error&) {
       return std::nullopt;
     }

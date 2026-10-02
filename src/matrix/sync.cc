@@ -1318,6 +1318,21 @@ void account<Sink>::import_room_keys(std::string path, std::string passphrase) {
   });
 }
 
+template <class Sink>
+bool account<Sink>::owns_key(const std::string& user, const std::string& curve25519) {
+  const auto key = std::pair(user, curve25519);
+  if (const auto known = owns_key_.find(key); known != owns_key_.end())
+    return known->second;
+  loom::cs::query_keys ask;
+  ask.body.device_keys.emplace(user, std::vector<std::string>{});
+  auto got = perform(*api_, ask);
+  if (!got)
+    return false;  // not known now: asked again next time
+  const bool owns = crypto::device_of(*got, user, curve25519, crypto_ ? crypto_->pinned_master(user) : std::nullopt).has_value();
+  owns_key_.insert_or_assign(key, owns);
+  return owns;
+}
+
 // The room's readers now -- its joined members' devices that pass the
 // checks (recipients_of) -- and its session given to those that have not
 // got it: over an Olm session where there is one, else one made from a
@@ -1344,7 +1359,7 @@ std::optional<std::string> account<Sink>::share_room_key(const std::string& room
         crypto_->pin_master(user, *master);
     auto theirs = crypto::recipients_of(*got, user, crypto_->pinned_master(user),
                                         user == id_.address ? std::string_view(crypto_->device_id()) : std::string_view(),
-                                        crypto_->verified_keys(user));
+                                        crypto_->verified_keys(user), user == id_.address);
     readers.insert(readers.end(), std::make_move_iterator(theirs.begin()), std::make_move_iterator(theirs.end()));
   }
   crypto::rotation limits;

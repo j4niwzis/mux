@@ -421,6 +421,10 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
       log(id_, "encryption stopped: {}", failed.what());
       crypto_.reset();
     }
+    // Read with an imported session: shown only where the sender has a
+    // device with the key the session came from -- else anyone's name.
+    if (clear && clear->imported_sender_key && !this->owns_key(one.sender, *clear->imported_sender_key))
+      clear.reset();
     if (clear) {
       loom::ev::timeline_event made = one;
       made.type = std::move(clear->event.type);

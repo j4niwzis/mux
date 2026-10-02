@@ -435,6 +435,11 @@ class account {
   // While a decrypted event is read: the event its cleartext relation
   // refers to, where its content does not say.
   std::optional<std::string> outer_reference_;
+  // Whose device each curve25519 key is, as /keys/query said: for messages
+  // read with an imported session, whose sender is taken only where it
+  // holds the key. Asked once per user and key.
+  std::map<std::pair<std::string, std::string>, bool> owns_key_;
+  [[nodiscard]] bool owns_key(const std::string& user, const std::string& curve25519);
   void verification_said(const crypto::sas_state& state, verification_step_t step);
   void cancel_verification(const std::string& txn, std::string code, std::string reason);
   void sas_start(crypto::sas_state& state);

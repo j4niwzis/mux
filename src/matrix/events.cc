@@ -411,7 +411,8 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
   // An encrypted event seen: the room is one, whatever its state says --
   // and was, at the latest, when this one was sent.
   this->remember_encrypted(in.id);
-  this->encrypted_by(in.id, std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(one.origin_server_ts)));
+  // Only noted: when it began to be is not wanted here.
+  std::ignore = this->encrypted_by(in.id, std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(one.origin_server_ts)));
   // Read with the room's Megolm session, where this device has it: the event
   // it was, its type and content, as any event is read -- the rest of it,
   // who sent it and when, the encrypted one's.

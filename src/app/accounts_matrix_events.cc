@@ -16,7 +16,8 @@ import mux.net;
 import mux.matrix;
 
 namespace mux::matrix {
-template void account<mux::app::post_change>::event(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where);
+template void account<mux::app::post_change>::event(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where,
+                                                     bool sealed);
 template void account<mux::app::post_change>::encrypted(const conversation_id& in, const loom::ev::timeline_event& one, std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where);
 template void account<mux::app::post_change>::service(const conversation_id& in, const loom::ev::timeline_event& one, std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where, std::string said, room_event_t kind, std::optional<std::string> html);
 template auto account<mux::app::post_change>::name_in(const std::string& room, const std::string& user) const -> std::string;

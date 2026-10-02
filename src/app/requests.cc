@@ -815,6 +815,7 @@ struct actions {
   }
   void set_link_previews(mux::choice_level_t level, std::optional<bool> show) {
     requests.emplace_back(request::set_link_previews{level, show});
+  }
   void give_passphrase(mux::config::passphrase_for_t why, std::string current, std::string fresh, std::string again,
                        std::string file) {
     requests.emplace_back(request::give_passphrase{why, std::move(current), std::move(fresh), std::move(again), std::move(file)});
@@ -837,7 +838,6 @@ struct actions {
   }
   void set_typing_sent(mux::choice_level_t level, std::optional<bool> send) {
     requests.emplace_back(request::set_typing_sent{level, send});
-  }
   }
   void set_receipts_shown(mux::choice_level_t level, std::optional<bool> show) {
     requests.emplace_back(request::set_receipts_shown{level, show});

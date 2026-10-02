@@ -1355,7 +1355,24 @@ class model {
   }
   void on(const change::conversation_removed& one) { of(one.id.account).conversations.erase(one.id.id); }
   void on(const change::presence_changed& one) { of(one.account).presences[one.contact] = one.now; }
+  // Reactions come before the message they are on is here (it is further
+  // back, or in a thread not loaded): kept until it comes, then put on it.
+  // Dropped, they were lost for good -- the event seen in the history, the
+  // message without it.
+  std::map<std::pair<conversation_id, std::string>, std::vector<change::reaction_changed>> waiting_reactions_;
+  static constexpr std::size_t kReactionsWaiting = 2000;
   void on(const change::message_added& one) {
+    this->add_message(one);
+    if (one.message.id.empty())
+      return;
+    if (const auto waiting = waiting_reactions_.find({one.message.in, one.message.id}); waiting != waiting_reactions_.end()) {
+      const auto held = std::move(waiting->second);
+      waiting_reactions_.erase(waiting);
+      for (const change::reaction_changed& reaction : held)
+        this->on(reaction);
+    }
+  }
+  void add_message(const change::message_added& one) {
     // A deleted one, read back from the disk: only where deleted messages
     // are kept, and something of it is left to show.
     if (one.message.redacted &&
@@ -1363,7 +1380,16 @@ class model {
       return;
     conversation& where = of(one.message.in);
     if (message* kept = one.message.id.empty() ? nullptr : message_in(where, one.message.id)) {
+      // Come again -- a page, the disk, a window around it: its reactions
+      // kept, which what came may not carry.
+      auto reactions = std::move(kept->reactions);
+      auto reaction_events = std::move(kept->reaction_events);
       *kept = one.message;
+      for (auto& [key, who] : reactions)
+        kept->reactions[key].insert(who.begin(), who.end());
+      for (auto& each : reaction_events)
+        if (!std::ranges::contains(kept->reaction_events, each))
+          kept->reaction_events.push_back(std::move(each));
       return;
     }
     // An answer in a thread: with the thread's, in time's order, not in the
@@ -1531,6 +1557,16 @@ class model {
       where.latest.reset();
   }
   void on(const change::reaction_changed& one) {
+    if (message_in(of(one.in), one.id) == nullptr) {
+      auto& waiting = waiting_reactions_[{one.in, one.id}];
+      if (one.added) {
+        if (waiting.size() < kReactionsWaiting)
+          waiting.push_back(one);
+      } else {
+        std::erase_if(waiting, [&](const change::reaction_changed& each) { return each.key == one.key && each.who == one.who; });
+      }
+      return;
+    }
     if (message* kept = message_in(of(one.in), one.id)) {
       auto& who = kept->reactions[one.key];
       // Taken back: its mark too -- a reaction changed for another was

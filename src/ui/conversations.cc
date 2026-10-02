@@ -393,6 +393,17 @@ struct conversations_screen : nodes::Stack {
   std::optional<conversation_id> swipe_row;
   // The spaces along the top bigger, for a finger: a long press on them.
   bool big_spaces = false;
+  // The panel docked under the field, as high as it is: the chat standing
+  // over it, its field just above it.
+  float docked_applied = 0.0f;
+  void follow_docked() {
+    if (docked_panel_height() == docked_applied)
+      return;
+    docked_applied = docked_panel_height();
+    chat.apply({.padding = {0.0f, 0.0f, docked_applied, 0.0f}});
+    chat.invalidateLayout();
+    this->markDamaged();
+  }
   // Single, the one shown -- the chats (0), the chat (1), its info or
   // threads (2) -- and it sliding in as it changes, as a phone's: from the
   // right going in, from the left coming back (the user's, #13662).
@@ -1476,6 +1487,7 @@ struct conversations_screen : nodes::Stack {
               .threads = threads_panel<Actions>(a)} {
     fState.apply({.fill = true});
     this->setHorizontal();
+    docked_panel_watcher() = fState.fId;
     // The edges take a pixel between the columns, their line, and are
     // wider than that over them to be caught.
     edge.apply({.fillY = true, .width = 7.0f, .margin = {0.0f, -3.0f, 0.0f, -3.0f}});
@@ -2230,7 +2242,8 @@ struct conversations_screen : nodes::Stack {
   // that brought the view to the end stopped in a frame whose tick had gone
   // by here already, and nothing ticked this again -- the arrow stayed.
   [[nodiscard]] bool wantsTick() const {
-    return slide_wait > 0 || list_in.moving() || pane_in.moving() || panel_ease().t.moving() ||
+    return slide_wait > 0 || list_in.moving() || pane_in.moving() || docked_panel_height() != docked_applied ||
+           panel_ease().t.moving() ||
            this->away() != chat.area.parts.jump.visible() ||
            this->older_due() || this->history_pending() ||
            jumping_to.has_value() || aiming.has_value() || jump_age != 0 || timeline.moving() ||
@@ -2241,6 +2254,7 @@ struct conversations_screen : nodes::Stack {
       list_in.setTarget(1.0f);
     if (list_in.step(now_ms))
       this->place_list();
+    this->follow_docked();
     if (pane_in.step(now_ms)) {
       this->place_pane();
       this->markDamaged();

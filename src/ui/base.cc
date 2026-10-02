@@ -88,6 +88,25 @@ inline window_look_t& window_look() {
   static window_look_t look;
   return look;
 }
+// The emoji, stickers and GIFs docked at the bottom of a phone's window, as
+// Telegram's apps have them -- where the keyboard would be: how high it is,
+// for the chat to stand its field over it; and the screen that does, told
+// as it changes. None while it is not up.
+inline float& docked_panel_height() {
+  static float high = 0.0f;
+  return high;
+}
+inline scene::NodeId& docked_panel_watcher() {
+  static scene::NodeId id = 0;
+  return id;
+}
+inline void set_docked_panel_height(float high) {
+  if (high == docked_panel_height())
+    return;
+  docked_panel_height() = high;
+  if (docked_panel_watcher() != 0)
+    scene::work::mark(docked_panel_watcher());
+}
 // Every chat's bubbles, as chosen for the client.
 inline config::bubble_look& bubble_look_everywhere() {
   static config::bubble_look look;

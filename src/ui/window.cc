@@ -425,7 +425,10 @@ struct window : scene::Node {
   void close_menu() { layer().menu.reset(); }
   // The input's emoji panel, over the chat above its button.
   void open_emoji(float right, float bottom) { layer().emoji.emplace(actions, right, bottom); }
-  void close_emoji() { layer().emoji.reset(); }
+  void close_emoji() {
+    layer().emoji.reset();
+    set_docked_panel_height(0.0f);  // the field back at the bottom
+  }
   // The GIFs saved, for the popup's GIF tab, where it is open.
   void show_gifs(const std::vector<std::string>& paths) {
     if (layer().emoji)

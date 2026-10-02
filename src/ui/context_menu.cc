@@ -943,11 +943,14 @@ struct emoji_popup : scene::Node {
     parts.card.set_docked(phone);
     float x_at = x, w_at = kWidth, h_at = h;
     if (phone) {
+      // Where the keyboard would be, as Telegram's: along the window's
+      // bottom, the chat's field standing over it.
       x_at = 0.0f;
       w_at = box.width();
-      h_at = std::min(box.height() * 0.45f, std::max(160.0f, bottom - box.fTop));
-      y = std::max(0.0f, bottom - box.fTop - h_at);
+      h_at = std::round(box.height() * 0.4f);
+      y = box.height() - h_at;
     }
+    set_docked_panel_height(phone ? h_at : 0.0f);
     if (x_at != placed_x || y != placed_y || h_at != placed_h || w_at != placed_w) {
       placed_x = x_at;
       placed_y = y;

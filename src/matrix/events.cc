@@ -182,6 +182,13 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
             carried.width = static_cast<int>(thumb->w.value_or(0));
             carried.height = static_cast<int>(thumb->h.value_or(0));
           }
+        } else if (video) {
+          // No thumbnail -- as many clients send one: a video all the same,
+          // its plate with the play mark and its length, played when
+          // pressed; no picture fetched for it (video == source says so).
+          carried.video = carried.source;
+          carried.duration_ms = content.info->duration.value_or(0);
+          carried.kind = attachment_kind::image{};
         }
       }
       if (picture)

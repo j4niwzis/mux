@@ -826,6 +826,36 @@ struct forward_box : nodes::Stack {
   }
 };
 
+// Someone found: their picture, name and ID; pressed, the chat with them --
+// in Start chat, and in the chat list where nothing joined matches.
+template <class Actions>
+struct found_person_row : nodes::Stack {
+  Actions* actions;
+  std::string id;
+  struct lines_t : two_lines {
+    explicit lines_t(const found_person& one) : two_lines(one.name.empty() ? one.id : one.name, one.id, 14.0f, 2.0f) {}
+  };
+  struct parts_t {
+    avatar_mark face;
+    lines_t lines;
+  } parts;
+  found_person_row(Actions* a, const found_person& one)
+      : actions(a), id(one.id),
+        parts{.face = avatar_mark(one.id, one.name.empty() ? one.id : one.name, 36.0f), .lines = lines_t(one)} {
+    this->setHorizontal();
+    this->setGap(12.0f);
+    fState.apply({.fillX = true, .height = 52.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f}, .cornerRadius = 8.0f,
+                  .hoverBackground = chosen_colour});
+    parts.face.apply({.alignSelf = scene::align::kMiddle});
+  }
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+  [[nodiscard]] bool onClick(float, float) {
+    actions->start_direct(id);
+    return true;
+  }
+};
+
 // Element's Start chat (its InviteDialog, for a direct chat): who to talk
 // to, found as it is typed -- among those one already has chats with, and
 // in the server's user directory -- each with their picture, name and ID,
@@ -856,33 +886,7 @@ struct start_chat_box : nodes::Stack {
     start_chat_box* box;
     void operator()() const { box->actions->copy_text(box->link); }
   };
-  // Someone found: their picture, name and ID; pressed, the chat with them.
-  struct person_row : nodes::Stack {
-    Actions* actions;
-    std::string id;
-    struct lines_t : two_lines {
-      explicit lines_t(const found_person& one) : two_lines(one.name.empty() ? one.id : one.name, one.id, 14.0f, 2.0f) {}
-    };
-    struct parts_t {
-      avatar_mark face;
-      lines_t lines;
-    } parts;
-    person_row(Actions* a, const found_person& one)
-        : actions(a), id(one.id),
-          parts{.face = avatar_mark(one.id, one.name.empty() ? one.id : one.name, 36.0f), .lines = lines_t(one)} {
-      this->setHorizontal();
-      this->setGap(12.0f);
-      fState.apply({.fillX = true, .height = 52.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f}, .cornerRadius = 8.0f,
-                    .hoverBackground = chosen_colour});
-      parts.face.apply({.alignSelf = scene::align::kMiddle});
-    }
-    [[nodiscard]] bool acceptsInput() const { return true; }
-    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-    [[nodiscard]] bool onClick(float, float) {
-      actions->start_direct(id);
-      return true;
-    }
-  };
+  using person_row = found_person_row<Actions>;
   using header_t = page_header<no_back, close_it>;
   using rows_t = nodes::Flow<std::vector<person_row>>;
   struct search_row : nodes::Stack {
@@ -2239,6 +2243,69 @@ struct packs_box : nodes::Stack {
   }
 };
 
+// Join a room; a space in a space's listing, opened -- its own listed.
+template <class Actions>
+struct directory_join {
+  Actions* actions;
+  std::string room;
+  std::string server;
+  bool open = false;
+  std::string name;
+  void operator()() const {
+    if (open)
+      actions->explore_space(room, name);
+    else
+      actions->join_directory_room(room, server);
+  }
+};
+
+// A room of a directory: its picture, name, address, members and topic, and
+// Join -- in Explore, and in the chat list where nothing joined matches.
+template <class Actions>
+struct directory_row : nodes::Stack {
+  struct texts_t : nodes::Stack {
+    struct parts_t {
+      nodes::Text name;
+      nodes::Text line;
+      nodes::Text topic;
+    } parts;
+    explicit texts_t(const directory_room& one)
+        : parts{.name = nodes::Text(one.name.empty() ? (one.alias.empty() ? one.id : one.alias) : one.name, 14.0f,
+                                    text_colour, true),
+                .line = nodes::Text(std::format("{}{}{} member{}", one.alias, one.alias.empty() ? "" : " \u00b7 ",
+                                                one.members, one.members == 1 ? "" : "s"),
+                                    12.0f, dim_colour),
+                .topic = nodes::Text(one.topic, 13.0f, text_colour)} {
+      this->setGap(2.0f);
+      fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .shrink = scene::axes::kX,
+                    .alignSelf = scene::align::kMiddle});
+      parts.name.setElided(true);
+      parts.line.setElided(true);
+      parts.topic.setElided(true);
+      parts.topic.setVisible(!one.topic.empty());
+      for (nodes::Text* each : {&parts.name, &parts.line, &parts.topic})
+        each->apply({.fillX = true});
+    }
+  };
+  struct parts_t {
+    avatar_mark face;
+    texts_t texts;
+    widgets::Button<directory_join<Actions>> join;
+  } parts;
+  directory_row(Actions* a, const directory_room& one, const std::string& server)
+      : parts{.face = avatar_mark(one.id, one.name.empty() ? one.alias : one.name, 40.0f),
+              .texts = texts_t(one),
+              .join = widgets::Button<directory_join<Actions>>(one.space ? "Open" : "Join",
+                                                  {a, one.space ? one.id : (one.alias.empty() ? one.id : one.alias), server, one.space,
+                                                   one.name})} {
+    this->setHorizontal();
+    this->setGap(12.0f);
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 16.0f, 8.0f, 16.0f}});
+    parts.join.setPrimary(true);
+    parts.join.apply({.width = 70.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle});
+  }
+};
+
 // Element's Explore rooms: a server's public directory, searched -- one's
 // own, or another named -- each room with its picture, name, address, how
 // many are in it and what it is about, and Join. An address typed in is
@@ -2281,63 +2348,8 @@ struct explore_box : nodes::Stack {
       parts.name.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
     }
   };
-  // Join a room; a space in a space's listing, opened -- its own listed.
-  struct join_press {
-    Actions* actions;
-    std::string room;
-    std::string server;
-    bool open = false;
-    std::string name;
-    void operator()() const {
-      if (open)
-        actions->explore_space(room, name);
-      else
-        actions->join_directory_room(room, server);
-    }
-  };
-  struct result_row : nodes::Stack {
-    struct texts_t : nodes::Stack {
-      struct parts_t {
-        nodes::Text name;
-        nodes::Text line;
-        nodes::Text topic;
-      } parts;
-      explicit texts_t(const directory_room& one)
-          : parts{.name = nodes::Text(one.name.empty() ? (one.alias.empty() ? one.id : one.alias) : one.name, 14.0f,
-                                      text_colour, true),
-                  .line = nodes::Text(std::format("{}{}{} member{}", one.alias, one.alias.empty() ? "" : " \u00b7 ",
-                                                  one.members, one.members == 1 ? "" : "s"),
-                                      12.0f, dim_colour),
-                  .topic = nodes::Text(one.topic, 13.0f, text_colour)} {
-        this->setGap(2.0f);
-        fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .shrink = scene::axes::kX,
-                      .alignSelf = scene::align::kMiddle});
-        parts.name.setElided(true);
-        parts.line.setElided(true);
-        parts.topic.setElided(true);
-        parts.topic.setVisible(!one.topic.empty());
-        for (nodes::Text* each : {&parts.name, &parts.line, &parts.topic})
-          each->apply({.fillX = true});
-      }
-    };
-    struct parts_t {
-      avatar_mark face;
-      texts_t texts;
-      widgets::Button<join_press> join;
-    } parts;
-    result_row(Actions* a, const directory_room& one, const std::string& server)
-        : parts{.face = avatar_mark(one.id, one.name.empty() ? one.alias : one.name, 40.0f),
-                .texts = texts_t(one),
-                .join = widgets::Button<join_press>(one.space ? "Open" : "Join",
-                                                    {a, one.space ? one.id : (one.alias.empty() ? one.id : one.alias), server, one.space,
-                                                     one.name})} {
-      this->setHorizontal();
-      this->setGap(12.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 16.0f, 8.0f, 16.0f}});
-      parts.join.setPrimary(true);
-      parts.join.apply({.width = 70.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle});
-    }
-  };
+  using join_press = directory_join<Actions>;
+  using result_row = directory_row<Actions>;
   using header_t = page_header<no_back, close_it>;
   struct search_row : nodes::Stack {
     struct parts_t {

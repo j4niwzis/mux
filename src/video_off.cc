@@ -14,7 +14,16 @@ inline constexpr bool kPlays = false;
 
 class player {
  public:
-  [[nodiscard]] static std::unique_ptr<player> open(const std::filesystem::path&) { return nullptr; }
+  // What a video is, looked at before it is sent: its size, its length and
+  // its first picture -- what a message of it says, the picture its
+  // thumbnail. Nothing where it cannot be read.
+  struct look_t {
+    int width = 0, height = 0;
+    double seconds = 0.0;
+    skia::Sp<skia::SkImage> first;
+  };
+  [[nodiscard]] static std::optional<look_t> look(const std::filesystem::path&) { return std::nullopt; }
+  [[nodiscard]] static std::unique_ptr<player> open(const std::filesystem::path&, bool = true) { return nullptr; }
   bool advance(double) { return false; }
   void toggle() {}
   void seek(double) {}

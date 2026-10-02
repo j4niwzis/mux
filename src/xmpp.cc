@@ -241,7 +241,8 @@ class account {
   void knock(std::string, std::vector<std::string>, std::string) {}
   // Files over XMPP (HTTP upload, XEP-0363) are not sent yet.
   void send_file(std::string, std::string, std::string, std::string, std::string, bool, int, int, std::string,
-                 std::optional<std::string> = std::nullopt, std::optional<thread_place> = std::nullopt) {}
+                 std::optional<std::string> = std::nullopt, std::optional<thread_place> = std::nullopt,
+                 std::optional<video_look> = std::nullopt) {}
 
   void mark_read(std::string to, std::string id) {
     this->spawn_guarded([this, to = std::move(to), id = std::move(id)] {

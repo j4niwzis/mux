@@ -141,14 +141,20 @@ void account<Sink>::upload_pack_picture(pack_picture picture, std::string bytes)
 
 template <class Sink>
 void account<Sink>::send_file(std::string room, std::string local, std::string bytes, std::string name, std::string mimetype,
-                 bool image, int width, int height, std::string caption, std::optional<std::string> reply_to, std::optional<thread_place> thread) {
+                 bool image, int width, int height, std::string caption, std::optional<std::string> reply_to, std::optional<thread_place> thread,
+                 std::optional<video_look> video) {
   this->spawn_sending([this, room = std::move(room), local = std::move(local), bytes = std::move(bytes),
                 name = std::move(name), mimetype = std::move(mimetype), image, width, height,
-                caption = std::move(caption), reply_to = std::move(reply_to), thread = std::move(thread)] {
+                caption = std::move(caption), reply_to = std::move(reply_to), thread = std::move(thread),
+                video = std::move(video)] {
     const conversation_id in{id_, room};
     mux::attachment carried;
-    if (image)
+    // A video: shown here by its first picture, as one that came is by its
+    // thumbnail.
+    if (image || video)
       carried.kind = attachment_kind::image{};
+    if (video)
+      carried.duration_ms = video->duration_ms;
     carried.source = "local:" + local;
     carried.name = name;
     carried.mimetype = mimetype;
@@ -181,6 +187,28 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
     if (!api_) {
       sink_(change::delivery_changed{in, local, delivery::failed{}});
       return;
+    }
+    // A video's thumbnail, uploaded first: the message names it. In an
+    // encrypted room sealed as the video is -- its first picture is what it
+    // shows, and goes to the server no more in the clear than the rest.
+    std::optional<std::string> thumbnail_uri;
+    std::optional<crypto::sealed_file> sealed_thumbnail;
+    if (video && !video->thumbnail.empty()) {
+      if (sealed)
+        sealed_thumbnail = crypto::seal_file(mux::bytes::of(video->thumbnail));
+      const std::string thumbnail_cipher = sealed_thumbnail ? mux::bytes::text_of(sealed_thumbnail->bytes) : std::string();
+      try {
+        const auto got = api_->request(
+            "POST", sealed_thumbnail ? "/_matrix/media/v3/upload" : "/_matrix/media/v3/upload?filename=thumbnail.png",
+            sealed_thumbnail ? std::string_view(thumbnail_cipher) : std::string_view(video->thumbnail),
+            token_ ? std::optional<std::string_view>(*token_) : std::nullopt, std::chrono::seconds(120),
+            sealed_thumbnail ? std::string_view("application/octet-stream") : std::string_view("image/png"));
+        if (got.status == 200)
+          if (auto answer = knot::try_read<upload_answer>(std::string_view(got.body)))
+            thumbnail_uri = std::move(answer->content_uri);
+      } catch (const net::failure& failed) {
+        log(id_, "upload of the thumbnail of {} failed: {}", name, failed.what());
+      }
     }
     std::string target = sealed ? "/_matrix/media/v3/upload" : "/_matrix/media/v3/upload?filename=";
     if (!sealed)
@@ -225,8 +253,34 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
       }
       return as_body(content);
     };
-    knot::raw message = image ? with_file(loom::client::picture_message(said, width, height))
-                              : with_file(loom::client::file_message(said));
+    // A video: m.video, its size, length and thumbnail said -- as a file,
+    // every client showed it as one. Its thumbnail sealed where the room is
+    // encrypted: named by what opens it (thumbnail_file), not by its URL.
+    const auto video_message = [&] {
+      loom::ev::m_room_message_m_video_content_t content;
+      loom::client::detail::fill_media(content, said);
+      content.info->w = width;
+      content.info->h = height;
+      content.info->duration = video->duration_ms;
+      if (thumbnail_uri) {
+        if (sealed_thumbnail) {
+          sealed_thumbnail->info.url = *thumbnail_uri;
+          content.info->thumbnail_file = knot::raw{knot::to_json_string(sealed_thumbnail->info)};
+          encrypted_media_.insert_or_assign(*thumbnail_uri, sealed_thumbnail->info);
+        } else {
+          content.info->thumbnail_url = *thumbnail_uri;
+        }
+        auto& thumb = content.info->thumbnail_info.emplace();
+        thumb.w = video->thumbnail_width;
+        thumb.h = video->thumbnail_height;
+        thumb.mimetype = "image/png";
+        thumb.size = static_cast<std::int64_t>(video->thumbnail.size());
+      }
+      return content;
+    };
+    knot::raw message = video   ? with_file(video_message())
+                        : image ? with_file(loom::client::picture_message(said, width, height))
+                                : with_file(loom::client::file_message(said));
     auto sent = this->send_room_event(loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.room.message",
                                                       .txn_id = local,

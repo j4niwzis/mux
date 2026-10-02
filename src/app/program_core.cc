@@ -54,6 +54,9 @@ void app::woken() {
                                // A directory searched: its rooms, in Explore.
                                [&](const mux::change::directory_listed& listed) {
                                  root().show_directory(listed.rooms, listed.server, listed.space);
+                                 // The own server's, for what the chat list searched.
+                                 if (listed.server.empty() && !listed.space)
+                                   root().main().found_rooms_elsewhere(listed.query, listed.rooms);
                                },
                                // Packs: listed, saved, an image uploaded -- in their dialog.
                                [&](const mux::change::packs_listed& listed) { root().show_packs(listed.packs); },
@@ -99,6 +102,7 @@ void app::woken() {
                                },
                                [&](const mux::change::people_found& found) {
                                  root().show_found_people(found.people, found.query);
+                                 root().main().found_people_elsewhere(found.query, found.people);
                                },
                                [&](const mux::change::state_listed& listed) {
                                  root().show_room_state(listed.entries);
@@ -198,6 +202,14 @@ void app::woken() {
                                  [](const auto&) {}},
                  one);
   }
+  // A mark made: its message kept with it, whole, as it is now -- the list of
+  // marks shows it from there, never "Loading…".
+  if (!ask.demo)
+    for (const mux::change_t& one : changes)
+      splice::visit(splice::overloaded{[&](const mux::change::mentioned& m) { this->keep_marked(m.in, m.event); },
+                                       [&](const mux::change::reacted_to_mine& r) { this->keep_marked(r.in, r.target); },
+                                       [](const auto&) {}},
+                    one);
   // Messages held to a number in all, least recently read out first.
   model->trim(static_cast<std::size_t>(limits.messages_in_memory), root().main().chosen);
   this->refresh();
@@ -208,8 +220,36 @@ void app::woken() {
   if (joining)
     if (const auto found = mux::logic::chat_of(*model, *joining)) {
       const auto room = std::exchange(joining, std::nullopt);
-      this->open_chat(*found, room->event);
+      if (room->event)
+        this->go_to_linked(*found, *room->event);
+      else
+        this->open_chat(*found, std::nullopt);
     }
+  // Marked messages fetched: kept with their marks now.
+  for (auto it = marked_wanted_.begin(); it != marked_wanted_.end();) {
+    const mux::conversation* chat = model->find(it->second);
+    const mux::message* said = chat ? mux::ui::held_message(*chat, it->first) : nullptr;
+    if (said == nullptr) {
+      ++it;
+      continue;
+    }
+    marked_kept_.insert(it->first);
+    message_store::keep_marked(it->second, *said);
+    it = marked_wanted_.erase(it);
+  }
+  // A link's message fetched: in its thread, where it is in one.
+  if (linked_)
+    if (const mux::conversation* chat = model->find(linked_->first); chat && mux::ui::held_message(*chat, linked_->second)) {
+      const auto [in, event] = *std::exchange(linked_, std::nullopt);
+      if (root().main().chosen == in)
+        (void)this->open_in_thread(*chat, event);
+    }
+  // An answer gone to, scrolled to once its thread's panel has it.
+  if (thread_target_) {
+    auto& screen = root().main();
+    if (!screen.thread_open() || screen.parts.threads.scroll_to(*thread_target_))
+      thread_target_.reset();
+  }
 }
 
 // A message as it came, notified as the settings say: nothing where it is
@@ -276,6 +316,29 @@ void app::notify_invite(const mux::conversation_id& in, const mux::invite_info& 
                                      toasts_due.push_back({in, in.id, title, text});
                                    }},
                 mux::config::notify_backend_of(notifications.backend));
+}
+
+void app::keep_marked(const mux::conversation_id& in, const std::string& id) {
+  if (!marked_kept_.insert(id).second)
+    return;
+  if (const mux::conversation* chat = model->find(in))
+    if (const mux::message* said = mux::ui::held_message(*chat, id)) {
+      message_store::keep_marked(in, *said);
+      return;
+    }
+  // Kept already, in an earlier run: the marks read back at the start are
+  // not fetched again.
+  auto on_disk = marked_on_disk_.find(in);
+  if (on_disk == marked_on_disk_.end())
+    on_disk = marked_on_disk_
+                  .emplace(in, message_store::marked(in) | std::views::keys | std::ranges::to<std::set<std::string>>())
+                  .first;
+  if (on_disk->second.contains(id))
+    return;
+  // Not here yet: kept once it comes (quoted, in woken), fetched now.
+  marked_kept_.erase(id);
+  marked_wanted_.insert_or_assign(id, in);
+  net->fetch_quoted(in, id);
 }
 
 void app::save_marks() {

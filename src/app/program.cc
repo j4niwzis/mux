@@ -123,6 +123,12 @@ struct app : kept_settings {
   skiff::scene::Scene<window_type>& window();
 
   void woken();
+  // A link's message gone to, and a thread's answer to be scrolled to once
+  // its panel shows it.
+  void go_to_linked(const mux::conversation_id& in, const std::string& event);
+  bool open_in_thread(const mux::conversation& chat, const std::string& id);
+  std::optional<std::pair<mux::conversation_id, std::string>> linked_;
+  std::optional<std::string> thread_target_;
 
   // -- messages on disk: every change to one written as it is now
   message_store store;
@@ -268,6 +274,12 @@ struct app : kept_settings {
   // The mentions and reactions not yet seen, written as they change and read
   // back at the start -- each put in once its chat is there.
   void save_marks();
+  // Marked messages kept whole as their marks are made; those not here yet,
+  // fetched and kept when they come.
+  void keep_marked(const mux::conversation_id& in, const std::string& id);
+  std::set<std::string> marked_kept_;
+  std::map<mux::conversation_id, std::set<std::string>> marked_on_disk_;
+  std::map<std::string, mux::conversation_id> marked_wanted_;
   void load_marks();
   std::vector<std::pair<mux::conversation_id, mux::change_t>> pending_marks;
   // The marks read back of chats not here yet, as the file had them: written
@@ -348,6 +360,7 @@ struct app : kept_settings {
   void apply(const request::send_custom& one);
   void apply(const request::open_new_chat&);
   void apply(const request::find_people& one);
+  void apply(const request::search_elsewhere& one);
   void apply(const request::open_new_room&);
   void apply(const request::open_wallpaper& one);
   void apply(const request::close_wallpaper&);

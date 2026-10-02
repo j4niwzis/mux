@@ -245,6 +245,7 @@ inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 //   void jump_to_mark(mark_kind_t)   -- the oldest unseen mention or reaction, gone to
 //   void list_marks(mark_kind_t), go_to_mark(mark_kind_t, std::string event), close_marks()  -- all of them listed
 //   void open_explore(), close_explore(), search_rooms(server, query), join_directory_room(room, server),
+//        search_elsewhere(query)  -- the chat list's search, where nothing joined matches,
 //        create_room(name, topic, open, alias, federate, encrypted)  -- rooms found and made
 //   void settings_notifications(), flip_notify(notify_flag_t), set_notify_backend(notify_backend_t),
 //        flip_account_notify(), flip_account_notify_sound(), set_chat_notify(notify_mode_t)  -- notifications

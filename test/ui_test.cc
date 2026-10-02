@@ -114,6 +114,7 @@ struct stub {
   void join_directory_room(std::string, std::string) {}
   void create_room(std::string, std::string, bool, std::string, bool = true, bool = false) {}
   void find_people(std::string) {}
+  void search_elsewhere(std::string) {}
   void open_packs() {}
   void toggle_threads() {}
   void open_wallpaper(mux::choice_level_t) {}

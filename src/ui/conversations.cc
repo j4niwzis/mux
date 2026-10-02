@@ -1655,6 +1655,13 @@ struct conversations_screen : nodes::Stack {
   void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply& reply) {
     if (side.menu_up() && !side.menu_has(press.x, press.y))
       side.close_menu();
+    // The spaces made big: any press off them makes them as they were.
+    if (big_spaces && press.button <= 1 && !side.top_bar.fState.fDrawnBounds.contains(press.x, press.y)) {
+      big_spaces = false;
+      side.set_big_spaces(false);
+      if (last_model)
+        this->show_space_bars(*last_model);
+    }
     // Single: a swipe across the chat begun here -- or across the chats,
     // none open, which pulls the drawer out, as Telegram's apps do.
     swipe_from.reset();

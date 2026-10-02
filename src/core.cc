@@ -1491,6 +1491,10 @@ class model {
   // was with all it said and its time, marked; else it is taken out.
   void on(const change::message_redacted& one) {
     conversation& where = of(one.in);
+    // A mark on the event taken back -- a reaction to the user's own,
+    // removed where the message it was on is not here to match it: gone too.
+    for (auto* marks : {&where.unread_reactions, &where.unread_mentions})
+      std::erase_if(*marks, [&](const unread_mark& mark) { return mark.event == one.id; });
     if (show_deleted) {
       if (message* kept = message_in(where, one.id))
         kept->redacted = true;

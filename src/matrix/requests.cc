@@ -240,6 +240,16 @@ void account<Sink>::manage(std::string room, room_action_t action) {
 // A room encrypted from its first event: m.room.encryption in its initial
 // state, as Element makes direct chats and private rooms -- never a first
 // message in the clear while the state catches up.
+// What an account data request answered, read as a type: nothing where it
+// failed or is not that type (knot's error is not wanted here).
+template <class Type, class Answer>
+[[nodiscard]] std::optional<Type> read_answer(const Answer& answer) {
+  if (!answer)
+    return std::nullopt;
+  auto read = knot::try_read<Type>(answer->text);
+  return read ? std::optional<Type>(std::move(*read)) : std::nullopt;
+}
+
 inline std::vector<loom::cs::create_room::body_t::state_event_t> encrypted_from_the_start() {
   loom::ev::m_room_encryption_content_t content;
   content.algorithm = loom::ev::m_room_encryption_content_t::algorithm_values::m_megolm_v1_aes_sha2{};
@@ -1136,16 +1146,16 @@ void account<Sink>::restore_cross_signing(std::string recovery) {
       return refused("that is not a recovery key (a letter wrong, or one missing).");
     const auto get = [&](std::string type) { return perform(*api_, loom::cs::get_account_data{.user_id = id_.address, .type = std::move(type)}); };
     const auto chosen = get("m.secret_storage.default_key");
-    const auto id = chosen ? knot::try_read<crypto::default_storage_key>(chosen->text) : std::nullopt;
+    const auto id = read_answer<crypto::default_storage_key>(chosen);
     if (!id)
       return refused("this account keeps no secrets on its server.");
     const auto info_raw = get("m.secret_storage.key." + id->key);
-    const auto info = info_raw ? knot::try_read<crypto::storage_key_info>(info_raw->text) : std::nullopt;
+    const auto info = read_answer<crypto::storage_key_info>(info_raw);
     if (!info || !crypto::is_storage_key(*key, *info))
       return refused("that is not this account's recovery key.");
     const auto secret = [&](std::string name) -> std::optional<std::string> {
       const auto raw = get(name);
-      const auto stored = raw ? knot::try_read<crypto::stored_secret>(raw->text) : std::nullopt;
+      const auto stored = read_answer<crypto::stored_secret>(raw);
       if (!stored)
         return std::nullopt;
       const auto sealed = stored->encrypted.find(id->key);

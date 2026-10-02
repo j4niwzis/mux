@@ -286,18 +286,47 @@ void app::apply(const request::load_older& one) {
   const mux::conversation* chat = model->find(one.in);
   const auto before = chat && !chat->timeline.empty() ? chat->timeline.front().at
                                                       : message_store::time_point::max();
-  // From the disk first -- read on a worker -- but not before a window of the
-  // history, whose messages the disk may not have up to: from the server,
-  // from its token, where the disk has none.
-  if (chat && chat->detached) {
-    net->load_older(one.in, one.from);
+  const std::optional<std::string> front = chat && !chat->timeline.empty() ? std::optional(chat->timeline.front().id) : std::nullopt;
+  // From the server: from the token of the gap before the message paged
+  // from, where there is one -- else the one the model has.
+  const auto from_server = [this](const mux::conversation_id& in, const std::optional<std::string>& paged_from,
+                                  std::string from) {
+    if (paged_from) {
+      paging_from_.insert_or_assign(in, *paged_from);
+      if (const auto gap = gaps_of(in).find(*paged_from); gap != gaps_of(in).end()) {
+        if (gap->second.start)
+          return;  // the room's beginning: nothing older anywhere
+        if (gap->second.token)
+          from = *gap->second.token;
+      }
+    }
+    net->load_older(in, std::move(from));
+  };
+  // A window of the history, where gaps were not kept for this chat: the
+  // disk may not have what is next to it. From the server.
+  this->gaps_of(one.in);  // read from its file, where it has one
+  const bool gaps_known = gaps_kept_before_.contains(one.in);
+  if (chat && chat->detached && !gaps_known) {
+    from_server(one.in, front, one.from);
     return;
   }
-  work.run([this, in = one.in, from = one.from, before]() -> workers::done_t {
+  // The message paged from has a gap before it: nothing on disk follows.
+  if (front && gaps_of(one.in).contains(*front)) {
+    from_server(one.in, front, one.from);
+    return;
+  }
+  work.run([this, in = one.in, from = one.from, before, front, from_server]() -> workers::done_t {
     auto kept = message_store::older(in, before, 100);
-    return [this, in, from, kept = std::move(kept)]() mutable {
+    return [this, in, from, front, from_server, kept = std::move(kept)]() mutable {
+      // Up to the first gap from the newest: what is before it is not
+      // known to follow.
+      const auto& gaps = gaps_of(in);
+      const auto cut = std::ranges::find_if(kept | std::views::reverse,
+                                            [&](const mux::message& said) { return gaps.contains(said.id); });
+      if (cut != (kept | std::views::reverse).end())
+        kept.erase(kept.begin(), std::prev(cut.base()));
       if (kept.empty()) {
-        net->load_older(in, from);
+        from_server(in, front, from);
         return;
       }
       for (auto it = kept.rbegin(); it != kept.rend(); ++it)

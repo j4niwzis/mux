@@ -139,6 +139,35 @@ class message_store {
     append(in, knot::to_json_string(store_file::message_line{.id = id, .gone = true}));
   }
 
+  // Where a chat's history on disk has gaps: before each message named
+  // here, the older history is not on disk (or not known to be) -- what
+  // to ask the server for it with, or the room's beginning. A message not
+  // named follows the one before it on disk with nothing missing between.
+  struct gap_mark {
+    std::optional<std::string> token;  // the server's token, to page back from
+    bool start = false;                // the room's beginning: nothing older
+    friend consteval auto json_schema(knot::type<gap_mark>) { return knot::schema<gap_mark>(); }
+  };
+  using gaps_t = std::map<std::string, gap_mark>;
+  static std::filesystem::path gaps_file_of(const mux::conversation_id& in) { return kept_of("messages", in, ".gaps.json"); }
+  // Nothing where no file was kept: the history before gaps were kept is
+  // not known to be whole.
+  static std::optional<gaps_t> gaps(const mux::conversation_id& in) {
+    std::ifstream file(gaps_file_of(in), std::ios::binary);
+    if (!file)
+      return std::nullopt;
+    const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    auto read = knot::try_read<gaps_t>(std::string_view(text));
+    return read ? std::optional<gaps_t>(std::move(*read)) : std::optional<gaps_t>(gaps_t{});
+  }
+  static void keep_gaps(const mux::conversation_id& in, const gaps_t& all) {
+    const auto where = gaps_file_of(in);
+    std::error_code failed;
+    std::filesystem::create_directories(where.parent_path(), failed);
+    std::lock_guard held(file_lock());
+    std::ofstream(where, std::ios::binary | std::ios::trunc) << knot::to_json_string(all);
+  }
+
   // A marked message -- one mentioning this user, one of theirs reacted to --
   // kept apart as the mark is made, and never pruned with the history: the
   // list of marks shows it whatever else was let go, and needs nothing from

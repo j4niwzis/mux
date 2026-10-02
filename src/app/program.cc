@@ -132,6 +132,15 @@ struct app : kept_settings {
   // -- messages on disk: every change to one written as it is now
   message_store store;
   void keep_on_disk(const mux::change_t& one);
+  // The gaps of each chat's history on disk, as read and as changed; the
+  // message each chat was paged back from, on the server, while it is; and
+  // the token of a first sync, for the first message it brings.
+  message_store::gaps_t& gaps_of(const mux::conversation_id& in);
+  void gaps_changed(const mux::conversation_id& in);
+  std::map<mux::conversation_id, message_store::gaps_t> gaps_;
+  std::set<mux::conversation_id> gaps_kept_before_;
+  std::map<mux::conversation_id, std::string> paging_from_;
+  std::map<mux::conversation_id, std::optional<std::string>> sync_gap_;
 
   std::set<mux::conversation_id> members_fetched;
 

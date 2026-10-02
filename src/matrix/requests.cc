@@ -905,6 +905,23 @@ void account<Sink>::setup_cross_signing(std::string password) {
       sink_(change::refused{id_, "Not set up: encryption is not running for this account."});
       return;
     }
+    // Already set up -- by another device, another client: never replaced
+    // from here. A new identity would undo every verification of it, and
+    // whoever had verified the account would see it change.
+    {
+      loom::cs::query_keys ask;
+      ask.body.device_keys.emplace(id_.address, std::vector<std::string>{});
+      auto got = perform(*api_, ask);
+      if (!got) {
+        sink_(change::refused{id_, "Not set up: this account's keys could not be fetched: " + got.error().said()});
+        return;
+      }
+      if (crypto::master_of(*got, id_.address)) {
+        sink_(change::refused{id_, "This account has cross-signing already. Use Restore with the recovery key to give "
+                                   "this device its keys, or verify this device from one that has them."});
+        return;
+      }
+    }
     using upload = loom::cs::upload_cross_signing_keys;
     using master_t = upload::body_t::cross_signing_key_t;
     using self_t = upload::body_t::cross_signing_key_2_t;

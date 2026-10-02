@@ -434,7 +434,20 @@ struct account_sessions : nodes::Stack {
       parts.field.apply({.fillX = true, .height = 34.0f});
     }
   };
+  // Device verification, as Cinny puts it over the sessions: cross-signing
+  // set up here, or brought back with the recovery key -- the Privacy page's
+  // own rows, the same buttons. Without it, a session verified by emoji is
+  // trusted only by the client that verified it, and nothing is signed.
+  using set_up_row = row_item<ask<Actions, &Actions::setup_cross_signing>>;
+  using restore_row = row_item<ask<Actions, &Actions::restore_cross_signing>>;
   struct parts_t {
+    nodes::Text verification_title = section_title("DEVICE VERIFICATION");
+    nodes::Text verification_note{"To verify device identity and grant access to encrypted messages: cross-signing. "
+                                  "Set it up here, or, where another session of yours has it, bring it back with "
+                                  "your recovery key.",
+                                  13.0f, dim_colour};
+    set_up_row set_up;
+    restore_row restore;
     nodes::Text title = section_title("SESSIONS");
     nodes::Text note{"Loading the sessions…", 13.0f, dim_colour};
     nodes::Text current_title = section_title("CURRENT SESSION");
@@ -448,10 +461,15 @@ struct account_sessions : nodes::Stack {
   std::vector<std::string> others;
 
   explicit account_sessions(Actions* a)
-      : actions(a), parts{.rest = widgets::Button<sign_out_rest>("Sign out of all other sessions", {this}),
+      : actions(a), parts{.set_up = set_up_row("Set up cross-signing\u2026", {a}),
+                          .restore = restore_row("Restore with the recovery key\u2026", {a}),
+                          .rest = widgets::Button<sign_out_rest>("Sign out of all other sessions", {this}),
                           .refresh = widgets::Button<reload>("Refresh", {a})} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    parts.verification_note.setWrapped(true);
+    parts.verification_note.apply({.fillX = true});
+    parts.title.apply({.margin = {14.0f, 0.0f, 0.0f, 0.0f}});
     parts.note.setWrapped(true);
     parts.note.apply({.fillX = true});
     for (nodes::Text* each : {&parts.current_title, &parts.others_title})

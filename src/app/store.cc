@@ -58,6 +58,16 @@ struct message_line {
   // "Forwarded from" while its text stayed stripped of it.
   std::optional<forward_line> forwarded;
   std::optional<bool> sticker;
+  // Its reactions: each by its key and who sent it, and its own event and
+  // when, where known -- read back from the disk, a message had none.
+  struct reaction_line {
+    std::string key;
+    std::string who;
+    std::optional<std::string> event;
+    std::optional<std::int64_t> at;
+    friend consteval auto json_schema(knot::type<reaction_line>) { return knot::schema<reaction_line>(); }
+  };
+  std::optional<std::vector<reaction_line>> reactions;
   friend consteval auto json_schema(knot::type<message_line>) { return knot::schema<message_line>(); }
 };
 
@@ -346,6 +356,13 @@ class message_store {
       if (o.attachment)
         one.attachment = attachment_of(*o.attachment);
       one.sticker = o.sticker.value_or(false);
+      for (const auto& reaction : o.reactions.value_or(std::vector<store_file::message_line::reaction_line>{})) {
+        one.reactions[reaction.key].insert(reaction.who);
+        if (reaction.event)
+          one.reaction_events.push_back({*reaction.event, reaction.key, reaction.who,
+                                         std::chrono::sys_time<std::chrono::milliseconds>(
+                                             std::chrono::milliseconds(reaction.at.value_or(0)))});
+      }
       if (o.forwarded)
         one.forwarded = mux::forward_info{.from = std::move(o.forwarded->from), .name = std::move(o.forwarded->name),
                                           .link = std::move(o.forwarded->link)};
@@ -413,6 +430,21 @@ class message_store {
       for (const mux::attachment& each : one.album)
         line.album->push_back(line_of(each));
     }
+    // Every reaction: who, under which key -- with its event where it is
+    // known, which is what taking it back or a mark on it needs.
+    for (const auto& [key, who] : one.reactions)
+      for (const std::string& person : who) {
+        const auto known = std::ranges::find_if(one.reaction_events, [&](const mux::message::reaction_event& each) {
+          return each.key == key && each.who == person;
+        });
+        auto& kept = line.reactions ? *line.reactions : line.reactions.emplace();
+        kept.push_back({.key = key,
+                        .who = person,
+                        .event = known != one.reaction_events.end() ? std::optional(known->event) : std::nullopt,
+                        .at = known != one.reaction_events.end()
+                                  ? std::optional(static_cast<std::int64_t>(known->at.time_since_epoch().count()))
+                                  : std::nullopt});
+      }
     return knot::to_json_string(line);
   }
 };

@@ -786,12 +786,6 @@ void account<Sink>::forward(std::string from, std::string event, std::string to)
   this->spawn_sending([this, from = std::move(from), event = std::move(event), to = std::move(to)] {
     if (!api_)
       return;
-    // What came end-to-end encrypted never goes on in the clear: into a
-    // room that is not encrypted, it is not forwarded (review 3, L3).
-    if (this->encrypted_room(from) && !this->encrypted_room(to)) {
-      sink_(change::refused{id_, "Not forwarded: it came end-to-end encrypted, and the room it would go to is not."});
-      return;
-    }
     auto got = perform(*api_, loom::cs::get_one_room_event{.room_id = from, .event_id = event});
     if (!got) {
       log(id_, "could not fetch {} to forward: {}", event, got.error().said());

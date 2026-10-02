@@ -313,18 +313,27 @@ inline float element_blur_of(const config::bubble_look& look, std::optional<doub
 }
 
 // ---- what is painted behind ---------------------------------------------------
-// The backdrop the wallpaper in view offered as it was drawn: what frosted
-// things draw a piece of. Each wallpaper is a wallpaper_t, offering it here.
-inline widgets::Backdrop& frost_backdrop() {
-  static widgets::Backdrop kept;
+// The backdrops the wallpapers offered as they were drawn, by wallpaper, in
+// the order they lie -- the window's own under a chat's: what frosted things
+// draw a piece of, those under them. Each wallpaper is a wallpaper_t,
+// offering it here; one gone is let go of as another offers.
+inline std::vector<std::pair<scene::NodeId, widgets::Backdrop>>& frost_backdrops() {
+  static std::vector<std::pair<scene::NodeId, widgets::Backdrop>> kept;
   return kept;
 }
 struct frost_out {
-  static void offer(const widgets::Backdrop& one) { frost_backdrop() = one; }
+  static void offer(scene::NodeId id, const widgets::Backdrop& one) {
+    auto& all = frost_backdrops();
+    std::erase_if(all, [](const auto& each) { return scene::work::entry(each.first) == nullptr; });
+    if (const auto at = std::ranges::find(all, id, &std::pair<scene::NodeId, widgets::Backdrop>::first); at != all.end())
+      at->second = one;
+    else
+      all.emplace_back(id, one);
+  }
 };
 using wallpaper_t = widgets::Wallpaper<frost_out>;
 struct frost_source {
-  [[nodiscard]] const widgets::Backdrop* operator()() const { return &frost_backdrop(); }
+  [[nodiscard]] auto operator()() const { return frost_backdrops() | std::views::values; }
 };
 // Frosted glass behind what a node holds: its first part, filling it.
 using frost_pane = widgets::BackdropPane<frost_source>;
@@ -414,7 +423,7 @@ struct mux_paint {
       inside_panel() = true;
       panel_painted() = state.fId;
       if (look.frosted)
-        widgets::drawBackdrop(canvas, frost_backdrop(), look.blur, scene::detail::roundedBox(state, state.fBounds), alpha);
+        widgets::drawBackdrops(canvas, frost_source{}(), look.blur, scene::detail::roundedBox(state, state.fBounds), alpha);
       return scene::detail::atOpacity(*fill, look.opacity);
     }
     // A popup's plate on another floating one -- a submenu over its menu,

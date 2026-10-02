@@ -1053,8 +1053,12 @@ int run(App& app, const options& how) {
         }
         // Each rect of the damage on its own, in the window's pixels -- a pixel
         // out for antialiasing: their union could be the whole view.
+        // Whether what is repainted has something blurring what is under it,
+        // live: all of the window, while one is shown; a part, where one is in it.
+        bool live_under = !skiff::scene::detail::liveBackdrops().empty();
         if (!whole && !fresh) {
           show_all = false;
+          live_under = false;
           pieces.clear();
           repainted.setEmpty();
           const std::vector<skia::SkRect> said =
@@ -1078,6 +1082,7 @@ int run(App& app, const options& how) {
             if (std::ranges::any_of(pieces, [&](const skia::SkRect& piece) { return skia::SkRect::Intersects(piece, whole_of); })) {
               pieces.push_back(whole_of);
               repainted.join(whole_of);
+              live_under = true;
             }
           }
         }
@@ -1127,9 +1132,10 @@ int run(App& app, const options& how) {
           area += piece.width() * piece.height();
         const unsigned team_size = std::min(4u, std::max(1u, std::thread::hardware_concurrency()));
         skia::SkPixmap pixels;
-        // Not in bands while something blurs what is under it, live: at a
-        // band's edge it would not see the band beside it.
-        if (area > 300000.0f && team_size > 1 && skiff::scene::detail::liveBackdrops().empty() && kept->peekPixels(&pixels)) {
+        // Not in bands while something blurs what is under it, live, in what
+        // is repainted: at a band's edge it would not see the band beside it.
+        // A menu up elsewhere keeps the rest of the window in bands.
+        if (area > 300000.0f && team_size > 1 && !live_under && kept->peekPixels(&pixels)) {
           skia::SkPictureRecorder recorder;
           skia::SkCanvas* record = recorder.beginRecording(all);
           for (const skia::SkRect& piece : pieces) {
@@ -1176,10 +1182,12 @@ int run(App& app, const options& how) {
         for (const skia::SkRect& piece : pieces)
           changed.push_back(piece.roundOut());
         if (kept != surface) {
-          // Drawn over what the buffer had: see-through, that cleared first.
-          if (how.transparent)
-            canvas->clear(skia::SkColor{0});
-          canvas->drawImage(kept_frame->makeImageSnapshot(), 0.0f, 0.0f);
+          // Put in place of what the buffer had, not over it: one copy -- a
+          // see-through window's was a clear and then a blend of the whole
+          // frame, twice its pixels at every frame of an animation.
+          skia::SkPaint copy;
+          copy.setBlendMode(skia::SkBlendMode::kSrc);
+          canvas->drawImage(kept_frame->makeImageSnapshot(), 0.0f, 0.0f, skia::SkSamplingOptions(), &copy);
         }
       } else {
         kept_frame = nullptr;

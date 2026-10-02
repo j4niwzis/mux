@@ -12,7 +12,9 @@
 // parts, an Olm payload's type and content (a room key, by loom's types), a
 // Megolm message's plaintext -- a room event, read as loom reads any.
 module;
+#include <openssl/crypto.h>
 #include <openssl/evp.h>
+#include <openssl/hmac.h>
 #include <rust/cxx.h>
 #include <vodozemac/src/lib.rs.h>
 export module mux.matrix.crypto;
@@ -48,6 +50,10 @@ struct kept_file {
     // before that was checked -- unverified.
     std::optional<std::string> device;
     std::optional<bool> cross_signed;
+    // Imported from a key file: who sent with it is not said there, so it
+    // reads any sender's messages whose sender_key matches -- marked as
+    // from an unverified device, as the file is only as good as its source.
+    std::optional<bool> imported;
     friend consteval auto json_schema(knot::type<origin>) { return knot::schema<origin>(); }
   };
   std::map<std::string, origin> origins;  // session id -> where it came from
@@ -566,6 +572,109 @@ struct sealed_file {
   return detail::aes_ctr(*key, *iv, sealed);
 }
 
+// Room keys as Element exports them (the spec's key export format): each
+// session's room, where it came from, and its key from the first message it
+// can read.
+struct exported_session {
+  std::string algorithm = "m.megolm.v1.aes-sha2";
+  std::vector<std::string> forwarding_curve25519_key_chain;
+  std::string room_id;
+  std::string sender_key;
+  std::map<std::string, std::string> sender_claimed_keys;
+  std::string session_id;
+  std::string session_key;
+  friend consteval auto json_schema(knot::type<exported_session>) { return knot::schema<exported_session>(); }
+};
+
+namespace detail {
+inline constexpr std::string_view kExportHeader = "-----BEGIN MEGOLM SESSION DATA-----";
+inline constexpr std::string_view kExportFooter = "-----END MEGOLM SESSION DATA-----";
+inline constexpr std::uint32_t kExportRounds = 500000;
+// The AES key and the HMAC key a passphrase makes with a salt: PBKDF2,
+// HMAC-SHA-512, 64 bytes.
+[[nodiscard]] inline std::optional<std::array<std::uint8_t, 64>> export_keys_of(std::string_view passphrase,
+                                                                              std::span<const std::uint8_t> salt,
+                                                                              std::uint32_t rounds) {
+  std::array<std::uint8_t, 64> out{};
+  const std::string secret(passphrase);
+  if (PKCS5_PBKDF2_HMAC(secret.data(), static_cast<int>(secret.size()), salt.data(), static_cast<int>(salt.size()),
+                        static_cast<int>(rounds), EVP_sha512(), static_cast<int>(out.size()), out.data()) != 1)
+    return std::nullopt;
+  return out;
+}
+[[nodiscard]] inline std::array<std::uint8_t, 32> hmac_sha256(std::span<const std::uint8_t> key, std::span<const std::uint8_t> data) {
+  std::array<std::uint8_t, 32> out{};
+  unsigned int size = 0;
+  if (!HMAC(EVP_sha256(), key.data(), static_cast<int>(key.size()), data.data(), data.size(), out.data(), &size) || size != 32)
+    throw std::runtime_error("HMAC-SHA-256 failed");
+  return out;
+}
+}  // namespace detail
+
+// Sessions sealed under a passphrase, as a file Element reads: version 1,
+// a salt, a counter's start with bit 63 clear, the rounds, the ciphertext,
+// and an HMAC-SHA-256 of all of it -- in base64, between its two lines.
+[[nodiscard]] inline std::string export_file(const std::vector<exported_session>& sessions, std::string_view passphrase) {
+  const auto salt = mux::vault::vault::random(16);
+  auto iv = mux::vault::vault::random(16);
+  iv[8] &= 0x7F;
+  const auto keys = detail::export_keys_of(passphrase, salt, detail::kExportRounds);
+  if (!keys)
+    throw std::runtime_error("the key could not be made from the passphrase");
+  const auto plain = mux::bytes::of(knot::to_json_string(sessions));
+  const auto ciphertext = detail::aes_ctr(std::span(*keys).first(32), iv, plain);
+  if (!ciphertext)
+    throw std::runtime_error("the keys could not be encrypted");
+  std::vector<std::uint8_t> body{1};
+  body.insert(body.end(), salt.begin(), salt.end());
+  body.insert(body.end(), iv.begin(), iv.end());
+  for (const int shift : {24, 16, 8, 0})
+    body.push_back(static_cast<std::uint8_t>((detail::kExportRounds >> shift) & 0xFF));
+  body.insert(body.end(), ciphertext->begin(), ciphertext->end());
+  const auto mac = detail::hmac_sha256(std::span(*keys).last(32), body);
+  body.insert(body.end(), mac.begin(), mac.end());
+  std::string text = to_base64(body);
+  text.append((4 - text.size() % 4) % 4, '=');
+  const std::string lines = text | std::views::chunk(96) | std::views::join_with('\n') | std::ranges::to<std::string>();
+  return std::format("{}\n{}\n{}\n", detail::kExportHeader, lines, detail::kExportFooter);
+}
+// A key file opened: none where it is not one, its passphrase another, or
+// it was changed (its HMAC). Its rounds bounded, as anyone could write them.
+[[nodiscard]] inline std::optional<std::vector<exported_session>> import_file(std::string_view text, std::string_view passphrase) {
+  const auto begin = text.find(detail::kExportHeader);
+  const auto end = text.find(detail::kExportFooter);
+  if (begin == std::string_view::npos || end == std::string_view::npos || end < begin)
+    return std::nullopt;
+  const std::string encoded = text.substr(begin + detail::kExportHeader.size(), end - begin - detail::kExportHeader.size()) |
+                              std::views::filter([](char c) { return std::isspace(static_cast<unsigned char>(c)) == 0; }) |
+                              std::ranges::to<std::string>();
+  const auto body = from_base64(encoded);
+  if (!body || body->size() < 1 + 16 + 16 + 4 + 32 || (*body)[0] != 1)
+    return std::nullopt;
+  const std::span<const std::uint8_t> all(*body);
+  const auto salt = all.subspan(1, 16);
+  const auto iv = all.subspan(17, 16);
+  const std::uint32_t rounds = (std::uint32_t{all[33]} << 24) | (std::uint32_t{all[34]} << 16) | (std::uint32_t{all[35]} << 8) |
+                               std::uint32_t{all[36]};
+  if (rounds < 1 || rounds > 10'000'000)
+    return std::nullopt;
+  const auto signed_part = all.first(all.size() - 32);
+  const auto mac = all.last(32);
+  const auto keys = detail::export_keys_of(passphrase, salt, rounds);
+  if (!keys)
+    return std::nullopt;
+  const auto expected = detail::hmac_sha256(std::span(*keys).last(32), signed_part);
+  if (CRYPTO_memcmp(expected.data(), mac.data(), 32) != 0)
+    return std::nullopt;
+  const auto plain = detail::aes_ctr(std::span(*keys).first(32), iv, all.subspan(37, all.size() - 37 - 32));
+  if (!plain)
+    return std::nullopt;
+  auto read = knot::try_read<std::vector<exported_session>>(mux::bytes::text_of(*plain));
+  if (!read)
+    return std::nullopt;
+  return std::move(*read);
+}
+
 // A room's session as it is to be used now: its ID and key, and the
 // devices that do not have it yet.
 struct outbound_plan {
@@ -872,6 +981,56 @@ class olm_machine {
   }
   [[nodiscard]] const std::string& device_id() const { return device_id_; }
 
+  // Every room key held, at the first message each can read: what a key
+  // file holds.
+  [[nodiscard]] std::vector<exported_session> export_sessions() {
+    std::vector<exported_session> out;
+    for (const auto& [room, sessions] : kept_.megolm)
+      for (const auto& [id, pickled] : sessions) {
+        const auto origin = kept_.origins.find(id);
+        if (origin == kept_.origins.end())
+          continue;
+        try {
+          auto session = vodozemac::megolm::inbound_group_session_from_pickle(pickled, key_);
+          auto key = session->export_at(session->first_known_index());
+          out.push_back(exported_session{.room_id = room,
+                                         .sender_key = origin->second.sender_key,
+                                         .sender_claimed_keys = {{"ed25519", origin->second.ed25519}},
+                                         .session_id = id,
+                                         .session_key = std::string(key->to_base64())});
+        } catch (const rust::Error&) {
+        }
+      }
+    return out;
+  }
+  // Room keys from a key file, taken where none is held under their ID:
+  // how many were.
+  [[nodiscard]] std::size_t import_sessions(const std::vector<exported_session>& sessions) {
+    std::size_t taken = 0;
+    for (const exported_session& one : sessions) {
+      if (one.algorithm != "m.megolm.v1.aes-sha2" || one.room_id.empty() || kept_.origins.contains(one.session_id))
+        continue;
+      try {
+        auto key = vodozemac::megolm::exported_session_key_from_base64(one.session_key);
+        auto session = vodozemac::megolm::import_inbound_group_session(*key);
+        if (std::string(session->session_id()) != one.session_id)
+          continue;
+        const auto claimed = one.sender_claimed_keys.find("ed25519");
+        kept_.megolm[one.room_id][one.session_id] = std::string(session->pickle(key_));
+        kept_.origins.emplace(one.session_id,
+                              kept_file::origin{.sender_key = one.sender_key,
+                                                .ed25519 = claimed == one.sender_claimed_keys.end() ? std::string() : claimed->second,
+                                                .cross_signed = false,
+                                                .imported = true});
+        ++taken;
+      } catch (const rust::Error&) {
+      }
+    }
+    if (taken > 0)
+      this->save();
+    return taken;
+  }
+
   // A user's master key as first seen; pinned the first time.
   [[nodiscard]] std::optional<std::string> pinned_master(const std::string& user) const {
     if (!kept_.masters)
@@ -897,7 +1056,7 @@ class olm_machine {
     // event still says (sender_key, deprecated but sent): a session shared
     // by one is not another's to send with.
     const auto origin = kept_.origins.find(*content.session_id);
-    if (origin == kept_.origins.end() || origin->second.sender != sender ||
+    if (origin == kept_.origins.end() || (!origin->second.imported.value_or(false) && origin->second.sender != sender) ||
         (content.sender_key && *content.sender_key != origin->second.sender_key))
       return std::nullopt;
     const auto in_room = kept_.megolm.find(room);

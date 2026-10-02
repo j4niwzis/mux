@@ -877,6 +877,56 @@ void account<Sink>::crypto_answer_now(const loom::cs::sliding_sync::response_t& 
       this->upload_keys(left->second);
 }
 
+template <class Sink>
+void account<Sink>::export_room_keys(std::string path, std::string passphrase) {
+  this->spawn_guarded([this, path = std::move(path), passphrase = std::move(passphrase)] {
+    if (!crypto_) {
+      sink_(change::refused{id_, "Not exported: encryption is not running for this account."});
+      return;
+    }
+    const auto sessions = crypto_->export_sessions();
+    const std::string text = crypto::export_file(sessions, passphrase);
+    std::error_code failed;
+    std::filesystem::create_directories(std::filesystem::path(path).parent_path(), failed);
+    { std::ofstream(path, std::ios::binary | std::ios::trunc); }
+    std::filesystem::permissions(path, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
+                                 std::filesystem::perm_options::replace, failed);
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    out << text;
+    if (!out.flush()) {
+      sink_(change::refused{id_, std::format("Not exported: {} could not be written.", path)});
+      return;
+    }
+    sink_(change::notice{id_, "Room keys exported",
+                         std::format("{} room keys written to {}, sealed under the passphrase.", sessions.size(), path)});
+  });
+}
+template <class Sink>
+void account<Sink>::import_room_keys(std::string path, std::string passphrase) {
+  this->spawn_guarded([this, path = std::move(path), passphrase = std::move(passphrase)] {
+    if (!crypto_) {
+      sink_(change::refused{id_, "Not imported: encryption is not running for this account."});
+      return;
+    }
+    std::ifstream in(path, std::ios::binary);
+    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    if (!in && text.empty()) {
+      sink_(change::refused{id_, std::format("Not imported: {} could not be read.", path)});
+      return;
+    }
+    const auto sessions = crypto::import_file(text, passphrase);
+    if (!sessions) {
+      sink_(change::refused{id_, "Not imported: not a key file, the passphrase is another, or the file was changed."});
+      return;
+    }
+    const std::size_t taken = crypto_->import_sessions(*sessions);
+    sink_(change::notice{id_, "Room keys imported",
+                         std::format("{} of {} room keys taken (the rest were held already). Messages read with them are "
+                                     "marked as from an unverified device: the file is only as good as where it came from.",
+                                     taken, sessions->size())});
+  });
+}
+
 // The room's readers now -- its joined members' devices that pass the
 // checks (recipients_of) -- and its session given to those that have not
 // got it: over an Olm session where there is one, else one made from a

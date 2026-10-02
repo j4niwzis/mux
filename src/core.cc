@@ -867,6 +867,14 @@ struct connection_changed {
   connection_t state;
 };
 
+// Something done that is said to the user, as a notice: its heading, and
+// what it says.
+struct notice {
+  account_id by;
+  std::string heading;
+  std::string what;
+};
+
 // Something asked of the server that it refused: said to the user, as a
 // notice, with what the server gave as its reason.
 struct refused {
@@ -1200,7 +1208,7 @@ struct history_position {
 
 }  // namespace change
 
-using change_t = splice::variant<change::message_encrypted, change::connection_changed, change::refused, change::account_removed, change::conversation_updated,
+using change_t = splice::variant<change::message_encrypted, change::connection_changed, change::refused, change::notice, change::account_removed, change::conversation_updated,
                               change::conversation_removed,
                               change::presence_changed, change::message_added, change::message_edited,
                               change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed,
@@ -1611,6 +1619,7 @@ class model {
   void on(const change::sessions_listed&) {}  // the window's: the account's Sessions page
   void on(const change::sessions_refused&) {}
   void on(const change::refused&) {}  // the window's: a notice
+  void on(const change::notice&) {}
   void on(const change::packs_listed&) {}  // the window's: the packs' dialog
   void on(const change::pack_saved&) {}
   void on(const change::pack_picture_uploaded&) {}

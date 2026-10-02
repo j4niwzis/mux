@@ -61,6 +61,7 @@ struct passphrase_box : nodes::Stack {
   struct words {
     std::string_view title, note, button;
     bool current, fresh;  // the passphrase now asked; a new one, twice
+    bool file = false;    // a file's path asked too
   };
   static constexpr words words_of(config::passphrase_for::unlock) {
     return {"Local data is encrypted", "Type its passphrase to open your settings, chats and keys.", "Unlock", true, false};
@@ -74,6 +75,16 @@ struct passphrase_box : nodes::Stack {
   static constexpr words words_of(config::passphrase_for::change) {
     return {"Change the passphrase", "Everything kept is sealed again under the new one.", "Change", true, true};
   }
+  static constexpr words words_of(config::passphrase_for::export_keys) {
+    return {"Export room keys",
+            "This account's room keys are written to your Downloads folder, sealed under a new passphrase: with "
+            "them and it, any client reads every encrypted message they open. Keep both safe.",
+            "Export", false, true};
+  }
+  static constexpr words words_of(config::passphrase_for::import_keys) {
+    return {"Import room keys", "Room keys from a key file Element or mux wrote, under its passphrase.", "Import", true, false,
+            true};
+  }
   static constexpr words words_of(config::passphrase_for::decrypt) {
     return {"Stop encrypting local data", "Everything kept is written in the clear again, readable by whoever can read "
                                           "these files.",
@@ -82,7 +93,8 @@ struct passphrase_box : nodes::Stack {
   struct submit {
     passphrase_box* box;
     void operator()() const {
-      box->actions->give_passphrase(box->purpose, box->parts.current.text(), box->parts.fresh.text(), box->parts.again.text());
+      box->actions->give_passphrase(box->purpose, box->parts.current.text(), box->parts.fresh.text(), box->parts.again.text(),
+                                    box->parts.file.text());
     }
   };
   Actions* actions = nullptr;
@@ -90,6 +102,7 @@ struct passphrase_box : nodes::Stack {
   struct parts_t {
     nodes::Text title;
     nodes::Text note;
+    field file;
     field current;
     field fresh;
     field again;
@@ -101,6 +114,7 @@ struct passphrase_box : nodes::Stack {
       : actions(a), purpose(why),
         parts{.title = nodes::Text(std::string(said().title), 17.0f, text_colour, true),
               .note = nodes::Text(std::string(said().note), 14.0f, dim_colour),
+              .file = field("Key file", "/home/you/element-keys.txt"),
               .current = field(said().fresh ? "Passphrase now" : "Passphrase", "Passphrase"),
               .fresh = field("New passphrase", "New passphrase"),
               .again = field("The new one again", "New passphrase"),
@@ -115,6 +129,7 @@ struct passphrase_box : nodes::Stack {
     for (field* each : {&parts.current, &parts.fresh, &parts.again})
       each->parts.box.setMasked(true);
     parts.current.setVisible(said().current);
+    parts.file.setVisible(said().file);
     parts.fresh.setVisible(said().fresh);
     parts.again.setVisible(said().fresh);
     parts.error.setVisible(false);

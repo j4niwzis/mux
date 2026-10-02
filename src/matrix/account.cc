@@ -131,6 +131,10 @@ class account {
   // some signed out -- the server asking for the password, it is given
   // (the one typed, else the one logged in with).
   void list_sessions();
+  // This account's room keys written to `path`, sealed under a passphrase,
+  // as Element writes them; and read back from one.
+  void export_room_keys(std::string path, std::string passphrase);
+  void import_room_keys(std::string path, std::string passphrase);
   void rename_session(std::string device, std::string name);
   void sign_out_sessions(std::vector<std::string> devices, std::string password);
   // The developer tools, as Element's: an event as the server has it; the

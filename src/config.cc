@@ -932,9 +932,17 @@ struct change {
 struct decrypt {
   friend bool operator==(decrypt, decrypt) = default;
 };
+// An account's room keys: written to a file under a new passphrase, or read
+// from one under its own.
+struct export_keys {
+  friend bool operator==(export_keys, export_keys) = default;
+};
+struct import_keys {
+  friend bool operator==(import_keys, import_keys) = default;
+};
 }  // namespace passphrase_for
-using passphrase_for_t =
-    splice::variant<passphrase_for::unlock, passphrase_for::encrypt, passphrase_for::change, passphrase_for::decrypt>;
+using passphrase_for_t = splice::variant<passphrase_for::unlock, passphrase_for::encrypt, passphrase_for::change,
+                                         passphrase_for::decrypt, passphrase_for::export_keys, passphrase_for::import_keys>;
 
 // Its own choice, if it made one; else as every account's.
 [[nodiscard]] inline const std::optional<bool>& send_typing_of(const account_t& one) {

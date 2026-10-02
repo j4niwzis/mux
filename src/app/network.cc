@@ -573,6 +573,16 @@ struct network {
                       one.account);
     });
   }
+  void export_room_keys(const mux::account_id& by, std::string path, std::string passphrase) {
+    this->with_matrix(by, [path = std::move(path), passphrase = std::move(passphrase)](matrix_account& account) {
+      account.export_room_keys(path, passphrase);
+    });
+  }
+  void import_room_keys(const mux::account_id& by, std::string path, std::string passphrase) {
+    this->with_matrix(by, [path = std::move(path), passphrase = std::move(passphrase)](matrix_account& account) {
+      account.import_room_keys(path, passphrase);
+    });
+  }
   void list_sessions(const mux::account_id& by) {
     this->with_matrix(by, [](matrix_account& account) { account.list_sessions(); });
   }

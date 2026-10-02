@@ -63,6 +63,7 @@ void app::woken() {
                                },
                                // Something the server refused: a notice saying why.
                                [&](const mux::change::refused& said) { root().show_message("Not done", said.what); },
+                               [&](const mux::change::notice& said) { root().show_message(said.heading, said.what); },
                                // People found: in Start chat, while it asks for them.
                                // A person's profile: their picture asked for, where they have one.
                                [&](const mux::change::profile_found& found) {
@@ -906,6 +907,25 @@ void app::apply(const request::give_passphrase& one) {
               return root().passphrase_refused(std::string(vault.resealing() ? kCutShort : kUnread));
             done();
           },
+          [&](mux::config::passphrase_for::export_keys) {
+            if (auto refused = fresh_refused())
+              return root().passphrase_refused(*refused);
+            if (!keys_of)
+              return root().close_passphrase();
+            const char* home = std::getenv("HOME");
+            const auto folder = home && *home ? std::filesystem::path(home) / "Downloads" : std::filesystem::current_path();
+            net->export_room_keys(*keys_of, (folder / std::format("mux-room-keys-{}.txt", mux::config::file_name_of(keys_of->address))).string(),
+                                  one.fresh);
+            root().close_passphrase();
+          },
+          [&](mux::config::passphrase_for::import_keys) {
+            if (one.file.empty())
+              return root().passphrase_refused("Type the key file's path.");
+            if (!keys_of)
+              return root().close_passphrase();
+            net->import_room_keys(*keys_of, one.file, one.current);
+            root().close_passphrase();
+          },
           [&](mux::config::passphrase_for::decrypt) {
             if (!vault.matches(one.current))
               return root().passphrase_refused("That is not the passphrase.");
@@ -923,5 +943,18 @@ void app::apply(const request::flip_local_encryption&) {
     root().ask_passphrase(mux::config::passphrase_for::encrypt{});
 }
 void app::apply(const request::change_passphrase&) { root().ask_passphrase(mux::config::passphrase_for::change{}); }
+// From an account's Privacy page: its room keys, to a file or from one.
+void app::apply(const request::export_room_keys&) {
+  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+    keys_of = id_of(account);
+    root().ask_passphrase(mux::config::passphrase_for::export_keys{});
+  });
+}
+void app::apply(const request::import_room_keys&) {
+  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+    keys_of = id_of(account);
+    root().ask_passphrase(mux::config::passphrase_for::import_keys{});
+  });
+}
 
 }  // namespace mux::app

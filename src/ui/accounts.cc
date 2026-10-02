@@ -216,12 +216,17 @@ struct account_privacy : nodes::Stack {
   using receipts_row = switch_row<ask<Actions, &Actions::flip_account_receipts>>;
   using notify_row = switch_row<ask<Actions, &Actions::flip_account_notify>>;
   using notify_sound_row = switch_row<ask<Actions, &Actions::flip_account_notify_sound>>;
+  using export_row = row_item<ask<Actions, &Actions::export_room_keys>>;
+  using import_row = row_item<ask<Actions, &Actions::import_room_keys>>;
   struct parts_t {
     nodes::Text title = section_title("PRIVACY");
     receipts_row receipts;
     typing_choice<Actions> typing;
     notify_row notify;
     notify_sound_row notify_sound;
+    // Its room keys (Matrix's end-to-end encryption), as Element exports them.
+    export_row export_keys;
+    import_row import_keys;
     nodes::Text note{"Off, the people you talk to through this account are not told when you have read their "
                      "messages, or that you are typing. Theirs are still shown, and receipts are still kept here.",
                      13.0f, dim_colour};
@@ -234,7 +239,9 @@ struct account_privacy : nodes::Stack {
       : parts{.receipts = receipts_row("Send read receipts", {a}),
               .typing = typing_choice<Actions>(a, choice_level::account{}, typing_on),
               .notify = notify_row("Desktop notifications from it", {a}),
-              .notify_sound = notify_sound_row("Their sound", {a})} {
+              .notify_sound = notify_sound_row("Their sound", {a}),
+              .export_keys = export_row("Export room keys\u2026", {a}),
+              .import_keys = import_row("Import room keys\u2026", {a})} {
     (void)events_all, (void)kinds, (void)faces_on, (void)jump_most, (void)previews_on;
     this->setGap(8.0f);
     parts.note.apply({.fillX = true});

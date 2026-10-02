@@ -382,6 +382,10 @@ struct app : kept_settings {
   void apply(const request::set_typing_sent&);
   void apply(const request::set_previews_direct&);
   void apply(const request::give_passphrase&);
+  void apply(const request::export_room_keys&);
+  void apply(const request::import_room_keys&);
+  // The account whose room keys a passphrase was asked for.
+  std::optional<mux::account_id> keys_of;
   void apply(const request::flip_local_encryption&);
   void apply(const request::change_passphrase&);
   // The files local data's encryption seals: the settings, and what is kept

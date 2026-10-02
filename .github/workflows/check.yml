@@ -32,8 +32,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      # The build directory and the fetched sources kept between runs.
-      - uses: actions/cache@v4
+      # The build directory and the fetched sources kept between runs:
+      # restored here, and saved at the end whether the build went through or
+      # not (below) -- actions/cache saves only after a job that passed, and
+      # a run that failed at its link left the next one an older build to
+      # start from, ffmpeg cloned again and all of libav built again.
+      - uses: actions/cache/restore@v4
         with:
           path: |
             build
@@ -158,3 +162,14 @@ jobs:
                   for f in flags:
                       print("   ", f[:400])
           EOF
+
+      # What was built kept for the next run, the build gone through or not:
+      # what failed is built again from it, the rest is not.
+      - name: keep the build for the next run
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            build
+            .cache/cpm
+          key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ github.sha }}

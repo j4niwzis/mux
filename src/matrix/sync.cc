@@ -831,6 +831,8 @@ inline constexpr std::string_view kMacInfo = "MATRIX_KEY_VERIFICATION_MAC";
 
 template <class Sink>
 bool account<Sink>::send_plain(std::string type, const std::string& user, const std::string& device, knot::raw content) {
+  if (!api_)
+    return false;
   std::map<std::string, std::map<std::string, knot::raw>> messages;
   messages[user][device] = std::move(content);
   return perform(*api_, loom::cs::send_to_device{.event_type = std::move(type),
@@ -1042,6 +1044,8 @@ void account<Sink>::sas_check_mac(crypto::sas_state& state) {
   const std::string ids = *state.their_mac | std::views::keys | std::views::join_with(',') | std::ranges::to<std::string>();
   if (!state.mac_ok(ids, base + "KEY_IDS", state.their_keys_mac))
     return this->cancel_verification(txn, "m.key_mismatch", "The keys they listed are not the ones they sent.");
+  if (!api_)
+    return this->cancel_verification(txn, "m.key_mismatch", "Not connected.");
   loom::cs::query_keys ask;
   ask.body.device_keys.emplace(state.their_user, std::vector<std::string>{});
   auto got = perform(*api_, ask);
@@ -1147,6 +1151,8 @@ void account<Sink>::verify_cancel(std::string txn) {
 
 template <class Sink>
 void account<Sink>::mend_session(const std::string& user, const std::string& curve25519) {
+  if (!api_ || !crypto_)
+    return;
   const auto now = std::chrono::steady_clock::now();
   if (const auto last = mended_at_.find(curve25519); last != mended_at_.end() && now - last->second < std::chrono::hours(1))
     return;
@@ -1323,6 +1329,10 @@ bool account<Sink>::owns_key(const std::string& user, const std::string& curve25
   const auto key = std::pair(user, curve25519);
   if (const auto known = owns_key_.find(key); known != owns_key_.end())
     return known->second;
+  // Not connected (a kept sync read at the start): not known yet, so not
+  // shown -- asked once there is a server to ask.
+  if (!api_)
+    return false;
   loom::cs::query_keys ask;
   ask.body.device_keys.emplace(user, std::vector<std::string>{});
   auto got = perform(*api_, ask);
@@ -1339,6 +1349,8 @@ bool account<Sink>::owns_key(const std::string& user, const std::string& curve25
 // one-time key claimed for the device and signed by it.
 template <class Sink>
 std::optional<std::string> account<Sink>::share_room_key(const std::string& room) {
+  if (!api_ || !crypto_)
+    return std::nullopt;
   auto members = perform(*api_, loom::cs::get_joined_members_by_room{.room_id = room});
   if (!members || !members->joined) {
     log(id_, "{}: its members could not be fetched", room);

@@ -1164,7 +1164,7 @@ void account<Sink>::restore_cross_signing(std::string recovery) {
 template <class Sink>
 void account<Sink>::cross_sign_device(const loom::cs::query_keys::response_t::device_information_t& info) {
   const auto secrets = crypto_ ? crypto_->cross_signing_keys() : std::nullopt;
-  if (!secrets || info.user_id != id_.address)
+  if (!secrets || !api_ || info.user_id != id_.address)
     return;
   const auto self_pub = crypto::detail::ed25519_public(secrets->self_signing);
   const auto canonical =
@@ -1186,7 +1186,7 @@ void account<Sink>::cross_sign_device(const loom::cs::query_keys::response_t::de
 template <class Sink>
 void account<Sink>::cross_sign_user(const std::string& user, const loom::cs::query_keys::response_t::cross_signing_key_t& master) {
   const auto secrets = crypto_ ? crypto_->cross_signing_keys() : std::nullopt;
-  if (!secrets || user == id_.address || master.keys.size() != 1)
+  if (!secrets || !api_ || user == id_.address || master.keys.size() != 1)
     return;
   using key_t = loom::cs::query_keys::response_t::cross_signing_key_t;
   const auto user_pub = crypto::detail::ed25519_public(secrets->user_signing);

@@ -142,6 +142,10 @@ class account {
   // cross-signed by them (their master key the one pinned), or verified by
   // emoji here.
   void tell_devices(std::string user);
+  // Element's toasts, as notices once a run: this session not verified --
+  // others cannot be sure what it sends is the user's; and other sessions of
+  // the user's that are not ("New login. Was this you?").
+  void check_own_sessions();
   // A room's gap since the last run, from where the sync left it back to
   // the event it had last: read for mentions of the user and reactions to
   // theirs, and nothing else -- no message kept, nothing fetched.

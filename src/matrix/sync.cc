@@ -783,6 +783,7 @@ void account<Sink>::start_crypto() {
   }
   log(id_, "encryption: this device's curve25519 key is {}", crypto_->curve25519());
   this->upload_keys(0);
+  this->check_own_sessions();
 }
 
 // Keys put on the server: the device's, the first time; one-time keys where
@@ -1730,5 +1731,49 @@ void account<Sink>::tell_devices(std::string user) {
                        .verified = identity && (identity->cross_signed || std::ranges::contains(verified_here, identity->ed25519))});
   }
   sink_(change::devices_listed{id_, std::move(user), std::move(devices)});
+}
+}  // namespace mux::matrix
+
+namespace mux::matrix {
+template <class Sink>
+void account<Sink>::check_own_sessions() {
+  if (!api_ || !crypto_)
+    return;
+  loom::cs::query_keys ask;
+  ask.body.device_keys.emplace(id_.address, std::vector<std::string>{});
+  auto got = perform(*api_, ask);
+  if (!got || !got->device_keys)
+    return;
+  const auto mine = got->device_keys->find(id_.address);
+  if (mine == got->device_keys->end())
+    return;
+  const auto verified_here = crypto_->verified_keys(id_.address);
+  const auto trusted = [&](const std::string& id, const auto& info) {
+    const auto curve = info.keys.find("curve25519:" + id);
+    const auto identity = curve == info.keys.end()
+                              ? std::nullopt
+                              : crypto::device_of(*got, id_.address, curve->second, crypto_->pinned_master(id_.address));
+    return identity && (identity->cross_signed || std::ranges::contains(verified_here, identity->ed25519));
+  };
+  std::vector<std::string> others;
+  bool this_one = false;
+  for (const auto& [id, info] : mine->second) {
+    if (id == crypto_->device_id())
+      this_one = trusted(id, info);
+    else if (!trusted(id, info))
+      others.push_back(info.unsigned_ && info.unsigned_->device_display_name ? *info.unsigned_->device_display_name : id);
+  }
+  if (!this_one)
+    sink_(change::notice{id_, "Verify this session",
+                         "Verify this session to allow it to read your message history, and so that others can trust "
+                         "what it sends: verify it with emoji from another session of yours (Sessions), or restore "
+                         "with your recovery key (Sessions, Device verification)."});
+  if (!others.empty()) {
+    std::string listed;
+    for (const std::string& one : others)
+      listed += (listed.empty() ? "" : ", ") + one;
+    sink_(change::notice{id_, "New login. Was this you?",
+                         std::format("Not verified: {}. Verify each from Sessions -- or sign it out, if it was not you.", listed)});
+  }
 }
 }  // namespace mux::matrix

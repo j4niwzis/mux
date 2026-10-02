@@ -81,6 +81,7 @@ template std::filesystem::path account<mux::app::post_change>::encrypted_rooms_f
 template void account<mux::app::post_change>::load_encrypted();
 template void account<mux::app::post_change>::tell_trust(std::string user);
 template void account<mux::app::post_change>::tell_devices(std::string user);
+template void account<mux::app::post_change>::check_own_sessions();
 template void account<mux::app::post_change>::request_secrets(const std::string& device);
 template void account<mux::app::post_change>::secret_in(const crypto::secret_got& got);
 template void account<mux::app::post_change>::secret_request_in(const std::string& sender, const loom::ev::m_secret_request_content_t& content);

@@ -1063,6 +1063,14 @@ int run(App& app, const options& how) {
         // drawn there is no longer shown, and is let go of once it is drawn.
         std::vector<skiff::scene::NodeId> live_repainted;
         bool all_repainted = true;
+        // The rings round a live blur's piece, as they were: put back once
+        // the frame is drawn (above).
+        struct ring_kept {
+          skia::Sp<skia::SkImage> before;
+          skia::SkRect ring;     // where it was taken, on the device
+          skia::SkRect reached;  // what of it was drawn anew, and stays
+        };
+        std::vector<ring_kept> put_back;
         if (!whole && !fresh) {
           show_all = false;
           live_under = false;
@@ -1080,14 +1088,49 @@ int run(App& app, const options& how) {
             pieces.push_back(piece);
             repainted.join(piece);
           }
-          // What blurs what is under it, live: all of it repainted wherever
-          // any of what is under it is -- else it blurred its own last pixels.
+          // What blurs what is under it, live: repainted wherever any of what
+          // is under it is -- else it blurred its own last pixels. Only as far
+          // as a change under it reaches into what it shows (the user's,
+          // #13523): that, and as far again round it for what that blurs,
+          // drawn; and of the ring round it, which blurred what was cut at the
+          // piece's edge, what was there before put back -- nothing under it
+          // changed. Most of it reached: all of it, as before.
+          const std::vector<skia::SkRect> damaged = pieces;
           for (const auto& [id, live] : skiff::scene::detail::liveBackdrops()) {
             skia::SkRect whole_of = live.rect;
             whole_of.roundOut(&whole_of);
             if (!whole_of.intersect(all))
               continue;
-            if (std::ranges::any_of(pieces, [&](const skia::SkRect& piece) { return skia::SkRect::Intersects(piece, whole_of); })) {
+            skia::SkRect reached = skia::SkRect::MakeEmpty();
+            for (const skia::SkRect& piece : damaged)
+              if (skia::SkRect inside = piece; inside.intersect(whole_of))
+                reached.join(inside);
+            if (reached.isEmpty())
+              continue;
+            reached.outset(live.reach, live.reach);
+            reached.roundOut(&reached);
+            // A scroll under it moved all it shows there, not only its damage.
+            const bool scrolled_under = std::ranges::any_of(frame.fMoves, [&](const skiff::scene::ScrollMove& move) {
+              return skia::SkRect::Intersects(skia::SkRect::MakeLTRB(move.rect.fLeft * scale, move.rect.fTop * scale,
+                                                                     move.rect.fRight * scale, move.rect.fBottom * scale),
+                                              whole_of);
+            });
+            if (!scrolled_under && live.reach > 0.0f && reached.intersect(whole_of) &&
+                reached.width() * reached.height() < 0.6f * whole_of.width() * whole_of.height()) {
+              skia::SkRect drawn = reached.makeOutset(live.reach, live.reach);
+              drawn.roundOut(&drawn);
+              if (drawn.intersect(all)) {
+                skia::SkRect ring = drawn;
+                if (ring.intersect(whole_of))
+                  if (auto before = kept->makeImageSnapshot(ring.roundOut()))
+                    put_back.push_back({std::move(before), ring, reached});
+                pieces.push_back(drawn);
+                repainted.join(drawn);
+                live_under = live_under || !live.kept;
+              }
+              continue;
+            }
+            {
               pieces.push_back(whole_of);
               repainted.join(whole_of);
               live_under = live_under || !live.kept;
@@ -1185,6 +1228,25 @@ int run(App& app, const options& how) {
               into->clear(skia::SkColor{0});
             into->scale(scale, scale);
             scene.draw(into);
+            into->restore();
+          }
+        }
+        // Each ring put back where the blur under it was cut: the four sides
+        // of what was taken round what was drawn anew.
+        for (const ring_kept& one : put_back) {
+          const skia::SkRect& r = one.ring;
+          const skia::SkRect& in = one.reached;
+          for (const skia::SkRect& side : {skia::SkRect::MakeLTRB(r.fLeft, r.fTop, r.fRight, in.fTop),
+                                           skia::SkRect::MakeLTRB(r.fLeft, in.fBottom, r.fRight, r.fBottom),
+                                           skia::SkRect::MakeLTRB(r.fLeft, in.fTop, in.fLeft, in.fBottom),
+                                           skia::SkRect::MakeLTRB(in.fRight, in.fTop, r.fRight, in.fBottom)}) {
+            if (side.isEmpty())
+              continue;
+            into->save();
+            into->clipRect(side);
+            skia::SkPaint copy;
+            copy.setBlendMode(skia::SkBlendMode::kSrc);
+            into->drawImage(one.before, r.fLeft, r.fTop, skia::SkSamplingOptions(), &copy);
             into->restore();
           }
         }

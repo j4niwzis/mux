@@ -436,6 +436,8 @@ inline void live_backdrop(const scene::State& state, skia::SkCanvas* canvas, flo
   const float amount = blur >= 0.0f ? blur : static_cast<float>(window_look().frost / 100.0);
   const float sigma = 1.0f + amount * 30.0f;
   const skia::SkRRect shape = scene::detail::roundedBox(state, state.fBounds);
+  // A Gaussian's reach: three sigmas, on the device.
+  noted.reach = std::ceil(3.0f * sigma * std::max(1.0f, canvas->getTotalMatrix().getScaleX())) + 1.0f;
 
   auto& all = kept_blurs();
   std::erase_if(all, [](const auto& each) { return scene::work::entry(each.first) == nullptr; });

@@ -31,6 +31,7 @@ import loom.cs.content_repo;
 import loom.cs.authed_content_repo;
 import loom.cs.create_room;
 import loom.cs.account_data;
+import loom.cs.key_backup;
 import loom.cs.kicking;
 import loom.cs.banning;
 import loom.cs.inviting;
@@ -983,7 +984,8 @@ void account<Sink>::setup_cross_signing(std::string password) {
         (void)perform(*api_, loom::cs::upload_cross_signing_signatures{.body = std::move(signed_body)});
       }
     }
-    const auto recovery = this->store_secrets(secrets);
+    const auto backup_secret = this->make_backup(secrets);
+    const auto recovery = this->store_secrets(secrets, backup_secret);
     sink_(change::notice{
         id_, "Cross-signing set up",
         recovery ? std::format("This account now has its own cross-signing keys. They are kept on this device, and on "
@@ -996,7 +998,96 @@ void account<Sink>::setup_cross_signing(std::string password) {
 }
 
 template <class Sink>
-std::optional<std::string> account<Sink>::store_secrets(const crypto::cross_signing_secrets& secrets) {
+std::optional<std::string> account<Sink>::make_backup(const crypto::cross_signing_secrets& secrets) {
+  const auto [secret, public_key] = crypto::new_backup_key();
+  const auto canonical = knot::to_canonical_json(crypto::backup_auth_signed_part{public_key});
+  const auto master_pub = crypto::detail::ed25519_public(secrets.master);
+  const auto by_master = canonical ? crypto::detail::ed25519_sign(secrets.master, *canonical) : std::nullopt;
+  if (!canonical || !master_pub || !by_master)
+    return std::nullopt;
+  const crypto::backup_auth_data auth{
+      .public_key = public_key,
+      .signatures = {{id_.address,
+                      {{"ed25519:" + crypto_->device_id(), crypto_->sign_as_device(*canonical)}, {"ed25519:" + *master_pub, *by_master}}}}};
+  using version_t = loom::cs::post_room_keys_version;
+  auto made = perform(*api_, version_t{.body = {.algorithm = version_t::body_t::algorithm_values::m_megolm_backup_v1_curve25519_aes_sha2{},
+                                                .auth_data = knot::raw{knot::to_json_string(auth)}}});
+  if (!made) {
+    log(id_, "key backup not made: {}", made.error().said());
+    return std::nullopt;
+  }
+  crypto_->keep_backup(made->version, secret);
+  this->upload_backup();
+  return secret;
+}
+
+template <class Sink>
+void account<Sink>::upload_backup() {
+  if (!crypto_ || !api_)
+    return;
+  const auto backup = crypto_->backup();
+  if (!backup)
+    return;
+  const auto public_key = crypto::backup_public_of(backup->second);
+  if (!public_key)
+    return;
+  const auto entries = crypto_->not_backed_up(100);
+  if (entries.empty())
+    return;
+  loom::cs::put_room_keys ask{.version = backup->first};
+  std::vector<std::string> ids;
+  for (const crypto::backup_entry& one : entries) {
+    const auto sealed = crypto::seal_backup(*public_key, one.plain);
+    if (!sealed)
+      continue;
+    ask.body.rooms[one.room].sessions.insert_or_assign(
+        one.session_id, loom::cs::def::key_backup_data_t{.first_message_index = one.first_index,
+                                                          .forwarded_count = 0,
+                                                          .is_verified = one.verified,
+                                                          .session_data = knot::raw{knot::to_json_string(*sealed)}});
+    ids.push_back(one.session_id);
+  }
+  if (auto done = perform(*api_, ask); !done) {
+    log(id_, "room keys not backed up: {}", done.error().said());
+    return;
+  }
+  crypto_->backed_up(ids);
+}
+
+template <class Sink>
+std::size_t account<Sink>::restore_backup(const std::string& secret) {
+  auto current = perform(*api_, loom::cs::get_room_keys_version_current{});
+  if (!current)
+    return 0;
+  const auto auth = knot::try_read<crypto::backup_auth_data>(current->auth_data.text);
+  // The backup's key is the one secret storage gave: else it is not this
+  // account's backup to read, nor to write to.
+  if (!auth || crypto::backup_public_of(secret) != auth->public_key)
+    return 0;
+  auto keys = perform(*api_, loom::cs::get_room_keys{.version = current->version});
+  if (!keys)
+    return 0;
+  std::vector<crypto::exported_session> sessions;
+  for (const auto& [room, backup] : keys->rooms)
+    for (const auto& [id, data] : backup.sessions) {
+      const auto sealed = knot::try_read<crypto::backup_session_data>(data.session_data.text);
+      const auto plain = sealed ? crypto::open_backup(secret, *sealed) : std::nullopt;
+      if (!plain)
+        continue;
+      sessions.push_back(crypto::exported_session{.room_id = room,
+                                                  .sender_key = plain->sender_key,
+                                                  .sender_claimed_keys = plain->sender_claimed_keys,
+                                                  .session_id = id,
+                                                  .session_key = plain->session_key});
+    }
+  const std::size_t taken = crypto_->import_sessions(sessions);
+  crypto_->keep_backup(current->version, secret);
+  return taken;
+}
+
+template <class Sink>
+std::optional<std::string> account<Sink>::store_secrets(const crypto::cross_signing_secrets& secrets,
+                                                        const std::optional<std::string>& backup_secret) {
   const auto made = crypto::make_storage_key();
   const auto put = [&](std::string type, const auto& value) {
     return perform(*api_, loom::cs::set_account_data{.user_id = id_.address, .type = std::move(type),
@@ -1010,6 +1101,7 @@ std::optional<std::string> account<Sink>::store_secrets(const crypto::cross_sign
                    put("m.cross_signing.master", sealed("m.cross_signing.master", secrets.master)) &&
                    put("m.cross_signing.self_signing", sealed("m.cross_signing.self_signing", secrets.self_signing)) &&
                    put("m.cross_signing.user_signing", sealed("m.cross_signing.user_signing", secrets.user_signing)) &&
+                   (!backup_secret || put("m.megolm_backup.v1", sealed("m.megolm_backup.v1", *backup_secret))) &&
                    put("m.secret_storage.default_key", crypto::default_storage_key{made.id});
   return all ? std::optional<std::string>(made.recovery) : std::nullopt;
 }
@@ -1059,8 +1151,13 @@ void account<Sink>::restore_cross_signing(std::string recovery) {
       if (const auto own = got->device_keys->find(id_.address); own != got->device_keys->end())
         if (const auto device = own->second.find(crypto_->device_id()); device != own->second.end())
           this->cross_sign_device(device->second);
+    // And the room keys in the key backup, where there is one.
+    const auto backup_secret = secret("m.megolm_backup.v1");
+    const std::size_t restored = backup_secret ? this->restore_backup(*backup_secret) : 0;
     sink_(change::notice{id_, "Cross-signing restored",
-                         "This device has your cross-signing keys back, and has signed itself with them."});
+                         std::format("This device has your cross-signing keys back, and has signed itself with them. {} room "
+                                     "keys were taken from the key backup.",
+                                     restored)});
   });
 }
 

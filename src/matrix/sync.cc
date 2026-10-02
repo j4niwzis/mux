@@ -1255,6 +1255,8 @@ void account<Sink>::crypto_answer_now(const loom::cs::sliding_sync::response_t& 
     for (const auto& [user, curve] : crypto_->take_wedged())
       this->mend_session(user, curve);
     crypto_->went_on_to(extensions.to_device->next_batch);
+    // Room keys that came, into the key backup.
+    this->upload_backup();
   }
   // No unused fallback key on the server (none, or one used): a new one.
   if (extensions.e2ee && extensions.e2ee->device_unused_fallback_key_types &&

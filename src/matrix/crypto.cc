@@ -86,6 +86,12 @@ struct kept_file {
   // them: sealed under the store's key (AES-256-GCM), base64. Optional, as
   // encrypted_rooms.
   std::optional<std::string> cross_signing;
+  // The server-side key backup this device writes to: its version, and its
+  // private key sealed as cross_signing is; and the sessions in it already.
+  // Optional, as encrypted_rooms.
+  std::optional<std::string> backup_version;
+  std::optional<std::string> backup_key;
+  std::optional<std::set<std::string, std::less<>>> backed_up;
   friend consteval auto json_schema(knot::type<kept_file>) { return knot::schema<kept_file>(); }
 };
 
@@ -927,6 +933,157 @@ struct new_storage_key {
   return CRYPTO_memcmp(expected.data(), mac->data(), 32) == 0;
 }
 
+// Server-side key backup (the spec's m.megolm_backup.v1.curve25519-aes-sha2):
+// each room key sealed to the backup's Curve25519 public key -- an
+// ephemeral key, ECDH, HKDF-SHA-256 to an AES-256-CBC key, an HMAC key and
+// an IV -- so that only whoever has the backup's private key (kept in
+// secret storage, under the recovery key) reads it.
+struct backup_session_data {
+  std::string ephemeral;
+  std::string ciphertext;
+  std::string mac;
+  friend consteval auto json_schema(knot::type<backup_session_data>) { return knot::schema<backup_session_data>(); }
+};
+struct backup_plaintext {
+  std::string algorithm = "m.megolm.v1.aes-sha2";
+  std::vector<std::string> forwarding_curve25519_key_chain;
+  std::map<std::string, std::string> sender_claimed_keys;
+  std::string sender_key;
+  std::string session_key;
+  friend consteval auto json_schema(knot::type<backup_plaintext>) { return knot::schema<backup_plaintext>(); }
+};
+struct backup_auth_data {
+  std::string public_key;
+  signatures_t signatures;
+  friend consteval auto json_schema(knot::type<backup_auth_data>) { return knot::schema<backup_auth_data>(); }
+};
+struct backup_auth_signed_part {
+  std::string public_key;
+  friend consteval auto json_schema(knot::type<backup_auth_signed_part>) { return knot::schema<backup_auth_signed_part>(); }
+};
+namespace detail {
+[[nodiscard]] inline std::optional<std::array<std::uint8_t, 32>> x25519_public(std::span<const std::uint8_t> secret) {
+  const std::unique_ptr<EVP_PKEY, pkey_free> key(EVP_PKEY_new_raw_private_key(EVP_PKEY_X25519, nullptr, secret.data(), secret.size()));
+  std::array<std::uint8_t, 32> out{};
+  std::size_t size = out.size();
+  if (!key || EVP_PKEY_get_raw_public_key(key.get(), out.data(), &size) != 1 || size != out.size())
+    return std::nullopt;
+  return out;
+}
+[[nodiscard]] inline std::optional<std::array<std::uint8_t, 32>> x25519_shared(std::span<const std::uint8_t> secret,
+                                                                             std::span<const std::uint8_t> theirs) {
+  const std::unique_ptr<EVP_PKEY, pkey_free> ours(EVP_PKEY_new_raw_private_key(EVP_PKEY_X25519, nullptr, secret.data(), secret.size()));
+  const std::unique_ptr<EVP_PKEY, pkey_free> other(EVP_PKEY_new_raw_public_key(EVP_PKEY_X25519, nullptr, theirs.data(), theirs.size()));
+  if (!ours || !other)
+    return std::nullopt;
+  std::unique_ptr<EVP_PKEY_CTX, decltype(&EVP_PKEY_CTX_free)> ctx(EVP_PKEY_CTX_new(ours.get(), nullptr), &EVP_PKEY_CTX_free);
+  std::array<std::uint8_t, 32> out{};
+  std::size_t size = out.size();
+  if (!ctx || EVP_PKEY_derive_init(ctx.get()) != 1 || EVP_PKEY_derive_set_peer(ctx.get(), other.get()) != 1 ||
+      EVP_PKEY_derive(ctx.get(), out.data(), &size) != 1 || size != out.size())
+    return std::nullopt;
+  return out;
+}
+// HKDF-SHA-256, zero salt, empty info, 80 bytes: AES key, HMAC key, IV.
+[[nodiscard]] inline std::array<std::uint8_t, 80> hkdf80(std::span<const std::uint8_t> shared) {
+  const std::array<std::uint8_t, 32> salt{};
+  const auto prk = hmac_sha256(salt, shared);
+  std::array<std::uint8_t, 80> out{};
+  std::vector<std::uint8_t> previous;
+  for (std::uint8_t round = 1, at = 0; at < out.size(); ++round) {
+    std::vector<std::uint8_t> input = previous;
+    input.push_back(round);
+    const auto block = hmac_sha256(prk, input);
+    previous.assign(block.begin(), block.end());
+    for (std::size_t i = 0; i < block.size() && at < out.size(); ++i, ++at)
+      out[at] = block[i];
+  }
+  return out;
+}
+[[nodiscard]] inline std::optional<std::vector<std::uint8_t>> aes_cbc(bool encrypt, std::span<const std::uint8_t> key,
+                                                                      std::span<const std::uint8_t> iv, std::span<const std::uint8_t> in) {
+  std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)> ctx(EVP_CIPHER_CTX_new(), &EVP_CIPHER_CTX_free);
+  std::vector<std::uint8_t> out(in.size() + 32);
+  int len = 0, tail = 0;
+  if (!ctx || EVP_CipherInit_ex(ctx.get(), EVP_aes_256_cbc(), nullptr, key.data(), iv.data(), encrypt ? 1 : 0) != 1 ||
+      EVP_CipherUpdate(ctx.get(), out.data(), &len, in.data(), static_cast<int>(in.size())) != 1 ||
+      EVP_CipherFinal_ex(ctx.get(), out.data() + len, &tail) != 1)
+    return std::nullopt;
+  out.resize(static_cast<std::size_t>(len + tail));
+  return out;
+}
+}  // namespace detail
+// A backup key pair: its private half, and its public half as auth_data has it.
+[[nodiscard]] inline std::pair<std::string, std::string> new_backup_key() {
+  const auto secret = mux::vault::vault::random(32);
+  const auto public_key = detail::x25519_public(secret);
+  if (!public_key)
+    throw std::runtime_error("the backup key could not be made");
+  return {to_base64(secret), to_base64(*public_key)};
+}
+[[nodiscard]] inline std::optional<std::string> backup_public_of(std::string_view secret_b64) {
+  const auto secret = from_base64(secret_b64);
+  if (!secret || secret->size() != 32)
+    return std::nullopt;
+  const auto public_key = detail::x25519_public(*secret);
+  return public_key ? std::optional<std::string>(to_base64(*public_key)) : std::nullopt;
+}
+// A room key sealed to the backup's public key. Its MAC, as libolm made it
+// and every client checks it, is of nothing: the first 8 bytes of
+// HMAC-SHA-256 of an empty message.
+[[nodiscard]] inline std::optional<backup_session_data> seal_backup(std::string_view public_b64, const backup_plaintext& plain) {
+  const auto theirs = from_base64(public_b64);
+  const auto ephemeral = mux::vault::vault::random(32);
+  const auto ephemeral_public = detail::x25519_public(ephemeral);
+  if (!theirs || theirs->size() != 32 || !ephemeral_public)
+    return std::nullopt;
+  const auto shared = detail::x25519_shared(ephemeral, *theirs);
+  if (!shared)
+    return std::nullopt;
+  const auto keys = detail::hkdf80(*shared);
+  const auto ciphertext =
+      detail::aes_cbc(true, std::span(keys).first(32), std::span(keys).subspan(64, 16), mux::bytes::of(knot::to_json_string(plain)));
+  if (!ciphertext)
+    return std::nullopt;
+  const auto mac = detail::hmac_sha256(std::span(keys).subspan(32, 32), std::span<const std::uint8_t>());
+  return backup_session_data{.ephemeral = to_base64(*ephemeral_public),
+                             .ciphertext = to_base64(*ciphertext),
+                             .mac = to_base64(std::span(mac).first(8))};
+}
+[[nodiscard]] inline std::optional<backup_plaintext> open_backup(std::string_view secret_b64, const backup_session_data& sealed) {
+  const auto secret = from_base64(secret_b64);
+  const auto ephemeral = from_base64(sealed.ephemeral);
+  const auto ciphertext = from_base64(sealed.ciphertext);
+  const auto mac = from_base64(sealed.mac);
+  if (!secret || secret->size() != 32 || !ephemeral || ephemeral->size() != 32 || !ciphertext || !mac || mac->size() != 8)
+    return std::nullopt;
+  const auto shared = detail::x25519_shared(*secret, *ephemeral);
+  if (!shared)
+    return std::nullopt;
+  const auto keys = detail::hkdf80(*shared);
+  // Of nothing, as libolm and those after it write it; or of the
+  // ciphertext, as the spec's text says.
+  const auto of_nothing = detail::hmac_sha256(std::span(keys).subspan(32, 32), std::span<const std::uint8_t>());
+  const auto of_ciphertext = detail::hmac_sha256(std::span(keys).subspan(32, 32), *ciphertext);
+  if (CRYPTO_memcmp(of_nothing.data(), mac->data(), 8) != 0 && CRYPTO_memcmp(of_ciphertext.data(), mac->data(), 8) != 0)
+    return std::nullopt;
+  const auto plain = detail::aes_cbc(false, std::span(keys).first(32), std::span(keys).subspan(64, 16), *ciphertext);
+  if (!plain)
+    return std::nullopt;
+  auto read = knot::try_read<backup_plaintext>(mux::bytes::text_of(*plain));
+  if (!read)
+    return std::nullopt;
+  return std::move(*read);
+}
+// A room key to back up: its room, ID, first index and what is sealed.
+struct backup_entry {
+  std::string room;
+  std::string session_id;
+  std::int64_t first_index = 0;
+  bool verified = false;
+  backup_plaintext plain;
+};
+
 // What a start that offers SAS says beyond the start itself: read from its
 // remainder, where it comes as a start of any method.
 struct sas_offer {
@@ -1455,6 +1612,56 @@ class olm_machine {
       return std::nullopt;
     return std::move(*read);
   }
+  // The key backup written to: its version and private key, sealed; the
+  // sessions not in it yet; and those that now are.
+  void keep_backup(const std::string& version, const std::string& secret_b64) {
+    kept_.backup_version = version;
+    kept_.backup_key = to_base64(mux::vault::detail::seal(key_, mux::bytes::of(secret_b64), "key backup"));
+    kept_.backed_up.reset();
+    this->save();
+  }
+  [[nodiscard]] std::optional<std::pair<std::string, std::string>> backup() const {
+    if (!kept_.backup_version || !kept_.backup_key)
+      return std::nullopt;
+    const auto sealed = from_base64(*kept_.backup_key);
+    const auto opened = sealed ? mux::vault::detail::open(key_, *sealed, "key backup") : std::nullopt;
+    if (!opened)
+      return std::nullopt;
+    return std::pair(*kept_.backup_version, mux::bytes::text_of(*opened));
+  }
+  [[nodiscard]] std::vector<backup_entry> not_backed_up(std::size_t most) {
+    std::vector<backup_entry> out;
+    for (const auto& [room, sessions] : kept_.megolm)
+      for (const auto& [id, pickled] : sessions) {
+        if (out.size() >= most)
+          return out;
+        if (kept_.backed_up && kept_.backed_up->contains(id))
+          continue;
+        const auto origin = kept_.origins.find(id);
+        if (origin == kept_.origins.end())
+          continue;
+        try {
+          auto session = vodozemac::megolm::inbound_group_session_from_pickle(pickled, key_);
+          const auto first = session->first_known_index();
+          auto key = session->export_at(first);
+          out.push_back(backup_entry{.room = room,
+                                     .session_id = id,
+                                     .first_index = static_cast<std::int64_t>(first),
+                                     .verified = origin->second.cross_signed.value_or(false),
+                                     .plain = {.sender_claimed_keys = {{"ed25519", origin->second.ed25519}},
+                                               .sender_key = origin->second.sender_key,
+                                               .session_key = std::string(key->to_base64())}});
+        } catch (const rust::Error&) {
+        }
+      }
+    return out;
+  }
+  void backed_up(const std::vector<std::string>& ids) {
+    auto& all = kept_.backed_up ? *kept_.backed_up : kept_.backed_up.emplace();
+    all.insert(ids.begin(), ids.end());
+    this->save();
+  }
+
   // Signed with this device's own key: what the master key carries, so that
   // this device's word for it can be seen.
   [[nodiscard]] std::string sign_as_device(std::string_view canonical) const { return this->sign(canonical); }

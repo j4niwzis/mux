@@ -1308,6 +1308,12 @@ struct message_bubble : nodes::Stack {
       flow(parts.name);
       flow(parts.forwarded);
       flow(parts.quote);
+      // Beside it, as wide as what is left at the most, as tdesktop narrows
+      // its reply to the surrounding width; over it, as the bubble lets.
+      if (parts.forwarded)
+        parts.forwarded->apply({.maxWidth = side ? beside_room : 0.0f});
+      if (parts.quote)
+        parts.quote->apply({.maxWidth = side ? beside_room : 0.0f});
       this->nodes::Stack::layoutChildren();
       if (!side)
         return;

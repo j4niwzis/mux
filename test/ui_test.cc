@@ -253,6 +253,9 @@ struct stub {
   void set_renderer(mux::config::renderer_t) {}
   void set_accent(mux::config::accent_t) {}
   void leave_chat() {}
+  void close_chat() {}
+  void toggle_mute_of(mux::conversation_id) {}
+  void set_interface_scale(int) {}
 };
 
 TEST(Composer, TakesWhatIsTypedIntoIt) {

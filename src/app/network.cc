@@ -583,6 +583,20 @@ struct network {
       account.import_room_keys(path, passphrase);
     });
   }
+  void verify_start(const mux::account_id& by, std::string user, std::optional<std::string> device) {
+    this->with_matrix(by, [user = std::move(user), device = std::move(device)](matrix_account& account) {
+      account.verify_start(user, device);
+    });
+  }
+  void verify_accept(const mux::account_id& by, std::string txn) {
+    this->with_matrix(by, [txn = std::move(txn)](matrix_account& account) { account.verify_accept(txn); });
+  }
+  void verify_confirm(const mux::account_id& by, std::string txn, bool match) {
+    this->with_matrix(by, [txn = std::move(txn), match](matrix_account& account) { account.verify_confirm(txn, match); });
+  }
+  void verify_cancel(const mux::account_id& by, std::string txn) {
+    this->with_matrix(by, [txn = std::move(txn)](matrix_account& account) { account.verify_cancel(txn); });
+  }
   void list_sessions(const mux::account_id& by) {
     this->with_matrix(by, [](matrix_account& account) { account.list_sessions(); });
   }

@@ -131,6 +131,13 @@ class account {
   // some signed out -- the server asking for the password, it is given
   // (the one typed, else the one logged in with).
   void list_sessions();
+  // Emoji verification, as the user asks it: begun with a user (one of
+  // their devices, or all), accepted, the emoji said to match or not, or
+  // cancelled.
+  void verify_start(std::string user, std::optional<std::string> device);
+  void verify_accept(std::string txn);
+  void verify_confirm(std::string txn, bool match);
+  void verify_cancel(std::string txn);
   // This account's room keys written to `path`, sealed under a passphrase,
   // as Element writes them; and read back from one.
   void export_room_keys(std::string path, std::string passphrase);
@@ -365,6 +372,23 @@ class account {
   // A fallback key uploaded where the server has none unused: once an hour
   // at most, whatever the server says.
   void upload_fallback_key();
+  // Emoji verification (SAS), over to-device messages as Element does it:
+  // asked of a user's devices, or of one; answered; compared; ended.
+  std::map<std::string, crypto::sas_state, std::less<>> verifications_;
+  bool send_plain(std::string type, const std::string& user, const std::string& device, knot::raw content);
+  void verification_said(const crypto::sas_state& state, verification_step_t step);
+  void cancel_verification(const std::string& txn, std::string code, std::string reason);
+  void sas_start(crypto::sas_state& state);
+  void sas_show(crypto::sas_state& state);
+  void sas_send_mac(crypto::sas_state& state);
+  void sas_check_mac(crypto::sas_state& state);
+  void verification_in(const std::string& sender, const loom::ev::m_key_verification_request_content_t& content);
+  void verification_in(const std::string& sender, const loom::ev::m_key_verification_ready_content_t& content);
+  void verification_in(const std::string& sender, const loom::ev::m_key_verification_start_content_t& content);
+  void verification_in(const std::string& sender, const loom::ev::m_key_verification_accept_content_t& content);
+  void verification_in(const std::string& sender, const loom::ev::m_key_verification_key_content_t& content);
+  void verification_in(const std::string& sender, const loom::ev::m_key_verification_mac_content_t& content);
+  void verification_in(const std::string& sender, const loom::ev::m_key_verification_cancel_content_t& content);
   // A device whose Olm messages no session here opens, given a new session
   // (an m.dummy over one made from its one-time key): once an hour at most
   // for each, whatever comes.

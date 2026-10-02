@@ -818,6 +818,271 @@ void account<Sink>::upload_keys(std::int64_t on_server) {
   log(id_, "keys uploaded{}", ask.body.device_keys ? ", the device's with them" : "");
 }
 
+// ---- Emoji verification (SAS) ----------------------------------------------
+//
+// Over to-device messages, as Element does between devices: request, ready,
+// start, accept, key both ways, the emoji compared by the user on both
+// sides, MACs of each side's keys, done. A device is taken as verified only
+// once the user said the emoji match and the other side's MAC of its own
+// ed25519 key checks against the key /keys/query gives: a server that
+// swapped keys is caught there (and could not have made the emoji match).
+inline constexpr std::string_view kSasInfo = "MATRIX_KEY_VERIFICATION_SAS|";
+inline constexpr std::string_view kMacInfo = "MATRIX_KEY_VERIFICATION_MAC";
+
+template <class Sink>
+bool account<Sink>::send_plain(std::string type, const std::string& user, const std::string& device, knot::raw content) {
+  std::map<std::string, std::map<std::string, knot::raw>> messages;
+  messages[user][device] = std::move(content);
+  return perform(*api_, loom::cs::send_to_device{.event_type = std::move(type),
+                                                 .txn_id = this->transaction(),
+                                                 .body = {.messages = std::move(messages)}})
+      .has_value();
+}
+template <class Sink>
+void account<Sink>::verification_said(const crypto::sas_state& state, verification_step_t step) {
+  sink_(change::verification_changed{id_, state.txn, state.their_user, state.their_device, std::move(step)});
+}
+template <class Sink>
+void account<Sink>::cancel_verification(const std::string& txn, std::string code, std::string reason) {
+  const auto found = verifications_.find(txn);
+  if (found == verifications_.end())
+    return;
+  const crypto::sas_state& state = found->second;
+  (void)this->send_plain("m.key.verification.cancel", state.their_user,
+                         state.their_device.empty() ? std::string("*") : state.their_device,
+                         knot::raw{knot::to_json_string(loom::ev::m_key_verification_cancel_content_t{
+                             .transaction_id = txn, .reason = reason, .code = std::move(code)})});
+  this->verification_said(state, verification_step::cancelled{std::move(reason)});
+  verifications_.erase(found);
+}
+
+template <class Sink>
+void account<Sink>::verify_start(std::string user, std::optional<std::string> device) {
+  this->spawn_guarded([this, user = std::move(user), device = std::move(device)] {
+    if (!crypto_)
+      return;
+    crypto::sas_state state{.txn = this->transaction(), .their_user = user, .we_requested = true};
+    const auto now =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    const loom::ev::m_key_verification_request_content_t asked{
+        .from_device = crypto_->device_id(), .transaction_id = state.txn, .methods = {"m.sas.v1"}, .timestamp = now};
+    if (!this->send_plain("m.key.verification.request", user, device.value_or("*"), knot::raw{knot::to_json_string(asked)})) {
+      this->verification_said(state, verification_step::cancelled{"The request could not be sent."});
+      return;
+    }
+    this->verification_said(state, verification_step::waiting{});
+    verifications_.insert_or_assign(state.txn, std::move(state));
+  });
+}
+template <class Sink>
+void account<Sink>::verification_in(const std::string& sender, const loom::ev::m_key_verification_request_content_t& content) {
+  if (!crypto_ || !content.transaction_id || (sender == id_.address && content.from_device == crypto_->device_id()) ||
+      !std::ranges::contains(content.methods, std::string_view("m.sas.v1")))
+    return;
+  crypto::sas_state state{.txn = *content.transaction_id, .their_user = sender, .their_device = content.from_device};
+  this->verification_said(state, verification_step::asked{});
+  verifications_.insert_or_assign(state.txn, std::move(state));
+}
+template <class Sink>
+void account<Sink>::verify_accept(std::string txn) {
+  this->spawn_guarded([this, txn = std::move(txn)] {
+    const auto found = verifications_.find(txn);
+    if (found == verifications_.end() || !crypto_)
+      return;
+    const loom::ev::m_key_verification_ready_content_t ready{
+        .from_device = crypto_->device_id(), .transaction_id = txn, .methods = {"m.sas.v1"}};
+    (void)this->send_plain("m.key.verification.ready", found->second.their_user, found->second.their_device,
+                           knot::raw{knot::to_json_string(ready)});
+    this->verification_said(found->second, verification_step::waiting{});
+  });
+}
+template <class Sink>
+void account<Sink>::verification_in(const std::string& sender, const loom::ev::m_key_verification_ready_content_t& content) {
+  const auto found = content.transaction_id ? verifications_.find(*content.transaction_id) : verifications_.end();
+  if (found == verifications_.end() || !found->second.we_requested || found->second.their_user != sender ||
+      !found->second.their_device.empty())
+    return;
+  found->second.their_device = content.from_device;
+  this->sas_start(found->second);
+}
+template <class Sink>
+void account<Sink>::sas_start(crypto::sas_state& state) {
+  using start_t = loom::ev::m_key_verification_start_m_sas_v1_content_t;
+  using sas_kind = start_t::short_authentication_string_item_values;
+  state.begin();
+  const start_t start{.from_device = crypto_->device_id(),
+                      .transaction_id = state.txn,
+                      .method = start_t::method_values::m_sas_v1{},
+                      .key_agreement_protocols = {"curve25519-hkdf-sha256"},
+                      .hashes = {"sha256"},
+                      .message_authentication_codes = {"hkdf-hmac-sha256.v2"},
+                      .short_authentication_string = {sas_kind::decimal{}, sas_kind::emoji{}}};
+  const auto canonical = knot::to_canonical_json(start);
+  if (!canonical)
+    return this->cancel_verification(state.txn, "m.unexpected_message", "The start could not be written.");
+  state.start_canonical = *canonical;
+  state.we_started = true;
+  (void)this->send_plain("m.key.verification.start", state.their_user, state.their_device,
+                         knot::raw{knot::to_json_string(start)});
+}
+template <class Sink>
+void account<Sink>::verification_in(const std::string& sender, const loom::ev::m_key_verification_start_content_t& content) {
+  const auto found = content.transaction_id ? verifications_.find(*content.transaction_id) : verifications_.end();
+  if (found == verifications_.end() || found->second.their_user != sender || found->second.their_device != content.from_device)
+    return;
+  crypto::sas_state& state = found->second;
+  // Both sides started: the one whose user and device sort first keeps its.
+  if (state.we_started && std::pair(id_.address, crypto_->device_id()) < std::pair(sender, content.from_device))
+    return;
+  const auto offer = knot::try_read<crypto::sas_offer>(content.rest.text);
+  if (content.method != "m.sas.v1" || !offer || !crypto::speaks(*offer))
+    return this->cancel_verification(state.txn, "m.unknown_method", "Only emoji verification is spoken here.");
+  const auto canonical = knot::to_canonical_json(content);
+  if (!canonical)
+    return this->cancel_verification(state.txn, "m.unexpected_message", "The start could not be read.");
+  state.start_canonical = *canonical;
+  state.we_started = false;
+  state.begin();
+  using accept_t = loom::ev::m_key_verification_accept_content_t;
+  using sas_kind = accept_t::short_authentication_string_item_values;
+  const accept_t accept{.transaction_id = state.txn,
+                        .key_agreement_protocol = "curve25519-hkdf-sha256",
+                        .hash = "sha256",
+                        .message_authentication_code = "hkdf-hmac-sha256.v2",
+                        .short_authentication_string = {sas_kind::decimal{}, sas_kind::emoji{}},
+                        .commitment = crypto::commitment_of(state.our_key, state.start_canonical)};
+  (void)this->send_plain("m.key.verification.accept", state.their_user, state.their_device,
+                         knot::raw{knot::to_json_string(accept)});
+  this->verification_said(state, verification_step::waiting{});
+}
+template <class Sink>
+void account<Sink>::verification_in(const std::string& sender, const loom::ev::m_key_verification_accept_content_t& content) {
+  const auto found = content.transaction_id ? verifications_.find(*content.transaction_id) : verifications_.end();
+  if (found == verifications_.end() || found->second.their_user != sender || !found->second.we_started)
+    return;
+  found->second.commitment = content.commitment;
+  (void)this->send_plain("m.key.verification.key", found->second.their_user, found->second.their_device,
+                         knot::raw{knot::to_json_string(loom::ev::m_key_verification_key_content_t{
+                             .transaction_id = found->second.txn, .key = found->second.our_key})});
+}
+template <class Sink>
+void account<Sink>::verification_in(const std::string& sender, const loom::ev::m_key_verification_key_content_t& content) {
+  const auto found = content.transaction_id ? verifications_.find(*content.transaction_id) : verifications_.end();
+  if (found == verifications_.end() || found->second.their_user != sender || found->second.their_key)
+    return;
+  crypto::sas_state& state = found->second;
+  // Where this side started: their key is the one they committed to before
+  // seeing ours -- else they chose it to make the emoji come out.
+  if (state.we_started && (!state.commitment || crypto::commitment_of(content.key, state.start_canonical) != *state.commitment))
+    return this->cancel_verification(state.txn, "m.mismatched_commitment", "Their key is not the one they committed to.");
+  if (!state.establish(content.key))
+    return this->cancel_verification(state.txn, "m.key_mismatch", "Their key is not a key.");
+  if (!state.we_started)
+    (void)this->send_plain("m.key.verification.key", state.their_user, state.their_device,
+                           knot::raw{knot::to_json_string(loom::ev::m_key_verification_key_content_t{
+                               .transaction_id = state.txn, .key = state.our_key})});
+  this->sas_show(state);
+}
+template <class Sink>
+void account<Sink>::sas_show(crypto::sas_state& state) {
+  const std::string ours = std::format("{}|{}|{}", id_.address, crypto_->device_id(), state.our_key);
+  const std::string theirs = std::format("{}|{}|{}", state.their_user, state.their_device, *state.their_key);
+  const std::string info = std::string(kSasInfo) + (state.we_started ? ours + "|" + theirs : theirs + "|" + ours) + "|" + state.txn;
+  this->verification_said(state, verification_step::compare{state.emoji(info)});
+}
+template <class Sink>
+void account<Sink>::verify_confirm(std::string txn, bool match) {
+  this->spawn_guarded([this, txn = std::move(txn), match] {
+    const auto found = verifications_.find(txn);
+    if (found == verifications_.end() || !found->second.established)
+      return;
+    if (!match)
+      return this->cancel_verification(txn, "m.mismatched_sas", "The emoji did not match.");
+    found->second.we_confirmed = true;
+    this->sas_send_mac(found->second);
+    if (found->second.their_mac)
+      this->sas_check_mac(found->second);
+    else
+      this->verification_said(found->second, verification_step::waiting{});
+  });
+}
+template <class Sink>
+void account<Sink>::sas_send_mac(crypto::sas_state& state) {
+  const std::string base = std::string(kMacInfo) + id_.address + crypto_->device_id() + state.their_user + state.their_device + state.txn;
+  std::map<std::string, std::string> macs;
+  const std::string device_key = "ed25519:" + crypto_->device_id();
+  macs.emplace(device_key, state.mac(crypto_->ed25519(), base + device_key));
+  if (const auto master = crypto_->pinned_master(id_.address)) {
+    const std::string master_key = "ed25519:" + *master;
+    macs.emplace(master_key, state.mac(*master, base + master_key));
+  }
+  const std::string ids = macs | std::views::keys | std::views::join_with(',') | std::ranges::to<std::string>();
+  (void)this->send_plain("m.key.verification.mac", state.their_user, state.their_device,
+                         knot::raw{knot::to_json_string(loom::ev::m_key_verification_mac_content_t{
+                             .transaction_id = state.txn, .mac = std::move(macs), .keys = state.mac(ids, base + "KEY_IDS")})});
+}
+template <class Sink>
+void account<Sink>::verification_in(const std::string& sender, const loom::ev::m_key_verification_mac_content_t& content) {
+  const auto found = content.transaction_id ? verifications_.find(*content.transaction_id) : verifications_.end();
+  if (found == verifications_.end() || found->second.their_user != sender || !found->second.established)
+    return;
+  found->second.their_mac = content.mac;
+  found->second.their_keys_mac = content.keys;
+  if (found->second.we_confirmed)
+    this->sas_check_mac(found->second);
+}
+template <class Sink>
+void account<Sink>::sas_check_mac(crypto::sas_state& state) {
+  const std::string txn = state.txn;
+  const std::string base = std::string(kMacInfo) + state.their_user + state.their_device + id_.address + crypto_->device_id() + txn;
+  const std::string ids = *state.their_mac | std::views::keys | std::views::join_with(',') | std::ranges::to<std::string>();
+  if (!state.mac_ok(ids, base + "KEY_IDS", state.their_keys_mac))
+    return this->cancel_verification(txn, "m.key_mismatch", "The keys they listed are not the ones they sent.");
+  loom::cs::query_keys ask;
+  ask.body.device_keys.emplace(state.their_user, std::vector<std::string>{});
+  auto got = perform(*api_, ask);
+  if (!got || !got->device_keys)
+    return this->cancel_verification(txn, "m.key_mismatch", "Their keys could not be fetched.");
+  const auto user = got->device_keys->find(state.their_user);
+  if (user == got->device_keys->end())
+    return this->cancel_verification(txn, "m.key_mismatch", "Their devices are not listed.");
+  const auto device = user->second.find(state.their_device);
+  if (device == user->second.end())
+    return this->cancel_verification(txn, "m.key_mismatch", "Their device is not listed.");
+  const auto ed25519 = device->second.keys.find("ed25519:" + state.their_device);
+  if (ed25519 == device->second.keys.end())
+    return this->cancel_verification(txn, "m.key_mismatch", "Their device has no signing key.");
+  const auto master = crypto::master_of(*got, state.their_user);
+  bool device_ok = false, master_ok = false;
+  for (const auto& [key_id, mac] : *state.their_mac) {
+    if (key_id == "ed25519:" + state.their_device)
+      device_ok = state.mac_ok(ed25519->second, base + key_id, mac);
+    else if (master && key_id == "ed25519:" + *master)
+      master_ok = state.mac_ok(*master, base + key_id, mac);
+  }
+  if (!device_ok)
+    return this->cancel_verification(txn, "m.key_mismatch", "Their device's key is not the one the server lists.");
+  crypto_->mark_verified(state.their_user, ed25519->second);
+  if (master_ok)
+    crypto_->verify_master(state.their_user, *master);
+  (void)this->send_plain("m.key.verification.done", state.their_user, state.their_device,
+                         knot::raw{knot::to_json_string(loom::ev::m_key_verification_done_content_t{.transaction_id = txn})});
+  this->verification_said(state, verification_step::done{});
+  verifications_.erase(txn);
+}
+template <class Sink>
+void account<Sink>::verification_in(const std::string& sender, const loom::ev::m_key_verification_cancel_content_t& content) {
+  const auto found = content.transaction_id ? verifications_.find(*content.transaction_id) : verifications_.end();
+  if (found == verifications_.end() || found->second.their_user != sender)
+    return;
+  this->verification_said(found->second, verification_step::cancelled{content.reason.empty() ? content.code : content.reason});
+  verifications_.erase(found);
+}
+template <class Sink>
+void account<Sink>::verify_cancel(std::string txn) {
+  this->spawn_guarded([this, txn = std::move(txn)] { this->cancel_verification(txn, "m.user", "Cancelled."); });
+}
+
 template <class Sink>
 void account<Sink>::mend_session(const std::string& user, const std::string& curve25519) {
   const auto now = std::chrono::steady_clock::now();
@@ -829,7 +1094,7 @@ void account<Sink>::mend_session(const std::string& user, const std::string& cur
   auto got = perform(*api_, ask);
   if (!got)
     return;
-  const auto theirs = crypto::recipients_of(*got, user, crypto_->pinned_master(user), std::string_view());
+  const auto theirs = crypto::recipients_of(*got, user, crypto_->pinned_master(user), std::string_view(), crypto_->verified_keys(user));
   const auto device = std::ranges::find(theirs, curve25519, &crypto::recipient::curve25519);
   if (device == theirs.end())
     return;  // not a device of theirs that passes the checks: nothing sent to it
@@ -901,6 +1166,27 @@ void account<Sink>::crypto_answer_now(const loom::cs::sliding_sync::response_t& 
         splice::visit(splice::overloaded{[&](const loom::ev::m_room_encrypted_content_t& content) {
                                            if (auto offer = crypto_->to_device(one.sender.value_or(""), content))
                                              this->vet_room_key(*offer);
+                                         },
+                                         [&](const loom::ev::m_key_verification_request_content_t& content) {
+                                           this->verification_in(one.sender.value_or(""), content);
+                                         },
+                                         [&](const loom::ev::m_key_verification_ready_content_t& content) {
+                                           this->verification_in(one.sender.value_or(""), content);
+                                         },
+                                         [&](const loom::ev::m_key_verification_start_content_t& content) {
+                                           this->verification_in(one.sender.value_or(""), content);
+                                         },
+                                         [&](const loom::ev::m_key_verification_accept_content_t& content) {
+                                           this->verification_in(one.sender.value_or(""), content);
+                                         },
+                                         [&](const loom::ev::m_key_verification_key_content_t& content) {
+                                           this->verification_in(one.sender.value_or(""), content);
+                                         },
+                                         [&](const loom::ev::m_key_verification_mac_content_t& content) {
+                                           this->verification_in(one.sender.value_or(""), content);
+                                         },
+                                         [&](const loom::ev::m_key_verification_cancel_content_t& content) {
+                                           this->verification_in(one.sender.value_or(""), content);
                                          },
                                          [](const auto&) {}},
                       one.content.data());
@@ -993,7 +1279,8 @@ std::optional<std::string> account<Sink>::share_room_key(const std::string& room
       if (const auto master = crypto::master_of(*got, user))
         crypto_->pin_master(user, *master);
     auto theirs = crypto::recipients_of(*got, user, crypto_->pinned_master(user),
-                                        user == id_.address ? std::string_view(crypto_->device_id()) : std::string_view());
+                                        user == id_.address ? std::string_view(crypto_->device_id()) : std::string_view(),
+                                        crypto_->verified_keys(user));
     readers.insert(readers.end(), std::make_move_iterator(theirs.begin()), std::make_move_iterator(theirs.end()));
   }
   crypto::rotation limits;
@@ -1074,7 +1361,10 @@ void account<Sink>::vet_room_key(const crypto::room_key_offer& offer) {
     sink_(change::refused{id_, std::format("{}'s encryption identity changed. Their messages are marked as from an "
                                            "unverified device until it is verified.",
                                            user)});
-  if (!crypto_->accept_room_key(offer, *device)) {
+  // Cross-signed, or verified here by comparing emoji.
+  crypto::device_identity trusted = *device;
+  trusted.cross_signed = device->cross_signed || std::ranges::contains(crypto_->verified_keys(user), device->ed25519);
+  if (!crypto_->accept_room_key(offer, trusted)) {
     log(id_, "room key from {} ({}) not taken", user, device->device_id);
     return;
   }

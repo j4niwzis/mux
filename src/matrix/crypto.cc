@@ -78,6 +78,10 @@ struct kept_file {
     friend consteval auto json_schema(knot::type<outbound_session>) { return knot::schema<outbound_session>(); }
   };
   std::optional<std::map<std::string, outbound_session>> outbound;
+  // Devices verified here, by comparing emoji (SAS): by user, their ed25519
+  // keys; and users' master keys verified so. Optional, as encrypted_rooms.
+  std::optional<std::map<std::string, std::vector<std::string>>> verified;
+  std::optional<std::map<std::string, std::string>> verified_masters;
   friend consteval auto json_schema(knot::type<kept_file>) { return knot::schema<kept_file>(); }
 };
 
@@ -368,7 +372,8 @@ struct recipient {
 // gets nothing. Never this device itself.
 [[nodiscard]] inline std::vector<recipient> recipients_of(const keys_answer& got, const std::string& user,
                                                          const std::optional<std::string>& pinned,
-                                                         std::string_view own_device) {
+                                                         std::string_view own_device,
+                                                         const std::vector<std::string>& verified_keys = {}) {
   std::vector<recipient> out;
   if (!got.device_keys)
     return out;
@@ -383,7 +388,9 @@ struct recipient {
     if (curve == info.keys.end())
       continue;
     const auto device = device_of(got, user, curve->second, pinned);
-    if (!device || device->device_id != id || (cross_signing && !device->cross_signed))
+    // Cross-signed, or verified here by comparing emoji.
+    if (!device || device->device_id != id ||
+        (cross_signing && !device->cross_signed && !std::ranges::contains(verified_keys, device->ed25519)))
       continue;
     out.push_back(recipient{user, id, curve->second, device->ed25519});
   }
@@ -688,6 +695,106 @@ inline constexpr std::uint32_t kExportRounds = 500000;
   if (!read)
     return std::nullopt;
   return std::move(*read);
+}
+
+// Emoji verification (SAS, the spec's m.sas.v1): the 64 emoji it shows, by
+// the index its bytes give, with the names the spec gives them.
+inline constexpr std::array<std::pair<std::string_view, std::string_view>, 64> kSasEmoji{{
+    {"\U0001F436", "Dog"},       {"\U0001F431", "Cat"},        {"\U0001F981", "Lion"},       {"\U0001F40E", "Horse"},
+    {"\U0001F984", "Unicorn"},   {"\U0001F437", "Pig"},        {"\U0001F418", "Elephant"},   {"\U0001F430", "Rabbit"},
+    {"\U0001F43C", "Panda"},     {"\U0001F413", "Rooster"},    {"\U0001F427", "Penguin"},    {"\U0001F422", "Turtle"},
+    {"\U0001F41F", "Fish"},      {"\U0001F419", "Octopus"},    {"\U0001F98B", "Butterfly"},  {"\U0001F337", "Flower"},
+    {"\U0001F333", "Tree"},      {"\U0001F335", "Cactus"},     {"\U0001F344", "Mushroom"},   {"\U0001F30F", "Globe"},
+    {"\U0001F319", "Moon"},      {"\u2601\uFE0F", "Cloud"},     {"\U0001F525", "Fire"},       {"\U0001F34C", "Banana"},
+    {"\U0001F34E", "Apple"},     {"\U0001F353", "Strawberry"}, {"\U0001F33D", "Corn"},       {"\U0001F355", "Pizza"},
+    {"\U0001F382", "Cake"},      {"\u2764\uFE0F", "Heart"},     {"\U0001F600", "Smiley"},     {"\U0001F916", "Robot"},
+    {"\U0001F3A9", "Hat"},       {"\U0001F453", "Glasses"},    {"\U0001F527", "Spanner"},    {"\U0001F385", "Santa"},
+    {"\U0001F44D", "Thumbs Up"}, {"\u2602\uFE0F", "Umbrella"},  {"\u231B", "Hourglass"},     {"\u23F0", "Clock"},
+    {"\U0001F381", "Gift"},      {"\U0001F4A1", "Light Bulb"}, {"\U0001F4D5", "Book"},       {"\u270F\uFE0F", "Pencil"},
+    {"\U0001F4CE", "Paperclip"}, {"\u2702\uFE0F", "Scissors"},  {"\U0001F512", "Lock"},       {"\U0001F511", "Key"},
+    {"\U0001F528", "Hammer"},    {"\u260E\uFE0F", "Telephone"}, {"\U0001F3C1", "Flag"},       {"\U0001F682", "Train"},
+    {"\U0001F6B2", "Bicycle"},   {"\u2708\uFE0F", "Aeroplane"}, {"\U0001F680", "Rocket"},     {"\U0001F3C6", "Trophy"},
+    {"\u26BD", "Ball"},          {"\U0001F3B8", "Guitar"},     {"\U0001F3BA", "Trumpet"},    {"\U0001F514", "Bell"},
+    {"\u2693", "Anchor"},        {"\U0001F3A7", "Headphones"}, {"\U0001F4C1", "Folder"},     {"\U0001F4CC", "Pin"},
+}};
+
+// What a start that offers SAS says beyond the start itself: read from its
+// remainder, where it comes as a start of any method.
+struct sas_offer {
+  std::vector<std::string> key_agreement_protocols;
+  std::vector<std::string> hashes;
+  std::vector<std::string> message_authentication_codes;
+  std::vector<std::string> short_authentication_string;
+  friend consteval auto json_schema(knot::type<sas_offer>) { return knot::schema<sas_offer>(); }
+};
+// Whether an offer has what this client speaks.
+[[nodiscard]] inline bool speaks(const sas_offer& offer) {
+  return std::ranges::contains(offer.key_agreement_protocols, std::string_view("curve25519-hkdf-sha256")) &&
+         std::ranges::contains(offer.hashes, std::string_view("sha256")) &&
+         std::ranges::contains(offer.message_authentication_codes, std::string_view("hkdf-hmac-sha256.v2")) &&
+         std::ranges::contains(offer.short_authentication_string, std::string_view("emoji"));
+}
+
+// One verification, by its transaction: with whom, which of the two sent
+// the start, what was committed to, and the keys exchanged.
+struct sas_state {
+  std::string txn;
+  std::string their_user;
+  std::string their_device;     // empty until one of theirs answers
+  bool we_requested = false;
+  bool we_started = false;      // this side sent m.key.verification.start
+  std::string start_canonical;  // the start's content, canonical, for the commitment
+  std::optional<std::string> commitment;  // theirs, where this side started
+  std::optional<rust::Box<vodozemac::sas::Sas>> sas;
+  std::optional<rust::Box<vodozemac::sas::EstablishedSas>> established;
+  std::string our_key;
+  std::optional<std::string> their_key;
+  bool we_confirmed = false;
+  std::optional<std::map<std::string, std::string>> their_mac;  // their MACs, where they came first
+  std::string their_keys_mac;
+
+  // This side's key pair made: its public key kept to send.
+  void begin() {
+    sas.emplace(vodozemac::sas::new_sas());
+    our_key = std::string((*sas)->public_key()->to_base64());
+  }
+  // Their key taken: the shared secret, from which the emoji and the MACs
+  // come. False where it is not a key.
+  [[nodiscard]] bool establish(const std::string& theirs) {
+    if (!sas)
+      return false;
+    try {
+      auto key = vodozemac::types::curve_key_from_base64(theirs);
+      established.emplace((*sas)->diffie_hellman(*key));
+      their_key = theirs;
+      return true;
+    } catch (const rust::Error&) {
+      return false;
+    }
+  }
+  [[nodiscard]] std::array<int, 7> emoji(std::string_view info) const {
+    const auto indices = (*established)->bytes(std::string(info))->emoji_indices();
+    std::array<int, 7> out{};
+    std::ranges::copy(indices | std::views::transform([](std::uint8_t i) { return static_cast<int>(i); }), out.begin());
+    return out;
+  }
+  [[nodiscard]] std::string mac(std::string_view input, std::string_view info) const {
+    return std::string((*established)->calculate_mac(std::string(input), std::string(info))->to_base64());
+  }
+  [[nodiscard]] bool mac_ok(std::string_view input, std::string_view info, std::string_view mac) const {
+    try {
+      auto read = vodozemac::sas::mac_from_base64(std::string(mac));
+      (*established)->verify_mac(std::string(input), std::string(info), *read);
+      return true;
+    } catch (const rust::Error&) {
+      return false;
+    }
+  }
+};
+// The commitment to a key and a start: unpadded base64 of SHA-256 of the
+// key's base64 then the start's canonical JSON.
+[[nodiscard]] inline std::string commitment_of(std::string_view key, std::string_view start_canonical) {
+  return to_base64(detail::sha256(mux::bytes::of(std::string(key) + std::string(start_canonical))));
 }
 
 // A room's session as it is to be used now: its ID and key, and the
@@ -1071,6 +1178,29 @@ class olm_machine {
     if (taken > 0)
       this->save();
     return taken;
+  }
+
+  // Verified here by comparing emoji: a device's key, and a master key --
+  // the one pinned from then on, whatever was pinned before.
+  [[nodiscard]] std::vector<std::string> verified_keys(const std::string& user) const {
+    if (!kept_.verified)
+      return {};
+    const auto found = kept_.verified->find(user);
+    return found == kept_.verified->end() ? std::vector<std::string>{} : found->second;
+  }
+  void mark_verified(const std::string& user, const std::string& ed25519) {
+    auto& all = kept_.verified ? *kept_.verified : kept_.verified.emplace();
+    if (!std::ranges::contains(all[user], ed25519))
+      all[user].push_back(ed25519);
+    this->save();
+  }
+  void verify_master(const std::string& user, const std::string& master) {
+    (kept_.verified_masters ? *kept_.verified_masters : kept_.verified_masters.emplace()).insert_or_assign(user, master);
+    (kept_.masters ? *kept_.masters : kept_.masters.emplace()).insert_or_assign(user, master);
+    this->save();
+  }
+  [[nodiscard]] bool master_verified(const std::string& user) const {
+    return kept_.verified_masters && kept_.verified_masters->contains(user);
   }
 
   // A user's master key as first seen; pinned the first time.

@@ -867,6 +867,38 @@ struct connection_changed {
   connection_t state;
 };
 
+// How far an emoji verification has come: asked by them, to be accepted;
+// waiting on the other side; the emoji to compare (by the spec's indices);
+// done; or stopped, and why.
+namespace verification_step {
+struct asked {
+  friend bool operator==(asked, asked) = default;
+};
+struct waiting {
+  friend bool operator==(waiting, waiting) = default;
+};
+struct compare {
+  std::array<int, 7> emoji{};
+  friend bool operator==(const compare&, const compare&) = default;
+};
+struct done {
+  friend bool operator==(done, done) = default;
+};
+struct cancelled {
+  std::string reason;
+  friend bool operator==(const cancelled&, const cancelled&) = default;
+};
+}  // namespace verification_step
+using verification_step_t = splice::variant<verification_step::asked, verification_step::waiting, verification_step::compare,
+                                            verification_step::done, verification_step::cancelled>;
+struct verification_changed {
+  account_id by;
+  std::string txn;
+  std::string user;
+  std::string device;
+  verification_step_t step;
+};
+
 // Something done that is said to the user, as a notice: its heading, and
 // what it says.
 struct notice {
@@ -1208,7 +1240,7 @@ struct history_position {
 
 }  // namespace change
 
-using change_t = splice::variant<change::message_encrypted, change::connection_changed, change::refused, change::notice, change::account_removed, change::conversation_updated,
+using change_t = splice::variant<change::message_encrypted, change::connection_changed, change::refused, change::notice, change::verification_changed, change::account_removed, change::conversation_updated,
                               change::conversation_removed,
                               change::presence_changed, change::message_added, change::message_edited,
                               change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed,
@@ -1620,6 +1652,7 @@ class model {
   void on(const change::sessions_refused&) {}
   void on(const change::refused&) {}  // the window's: a notice
   void on(const change::notice&) {}
+  void on(const change::verification_changed&) {}
   void on(const change::packs_listed&) {}  // the window's: the packs' dialog
   void on(const change::pack_saved&) {}
   void on(const change::pack_picture_uploaded&) {}

@@ -3,6 +3,7 @@
 export module mux.matrix:events;
 
 import std;
+import mux.matrix.crypto;
 import splice;
 import knot;
 import loom.api;
@@ -145,6 +146,13 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       if (picture)
         carried.kind = attachment_kind::image{};
       carried.source = content.url.value_or("");
+      // Encrypted: its ciphertext's URI, and what opens it kept for when it
+      // is downloaded.
+      if (carried.source.empty())
+        if (auto sealed = knot::try_read<crypto::file_part>(content.rest.text)) {
+          carried.source = sealed->file.url;
+          encrypted_media_.insert_or_assign(sealed->file.url, std::move(sealed->file));
+        }
       carried.name = content.filename.value_or(content.body);
       if (content.info) {
         carry_info(carried, *content.info);

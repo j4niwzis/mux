@@ -4,6 +4,7 @@ export module mux.matrix:sync;
 
 import mux.vault;
 import std;
+import mux.matrix.crypto;
 import splice;
 import knot;
 import loom.cs.sliding_sync;

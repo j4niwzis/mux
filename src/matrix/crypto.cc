@@ -12,6 +12,7 @@
 // parts, an Olm payload's type and content (a room key, by loom's types), a
 // Megolm message's plaintext -- a room event, read as loom reads any.
 module;
+#include <openssl/evp.h>
 #include <rust/cxx.h>
 #include <vodozemac/src/lib.rs.h>
 export module mux.matrix.crypto;
@@ -459,6 +460,99 @@ struct relation_part {
     return knot::schema<relation_part>().member<"relates_to">(knot::key("m.relates_to"));
   }
 };
+
+// An encrypted file, as an event carries it (the spec's EncryptedFile): where
+// its ciphertext is, its AES-256-CTR key as a JWK, its counter's start, and
+// the ciphertext's SHA-256 -- the server keeps only ciphertext, under no name.
+struct jwk {
+  std::string kty = "oct";
+  std::vector<std::string> key_ops{"encrypt", "decrypt"};
+  std::string alg = "A256CTR";
+  std::string k;  // unpadded base64url
+  bool ext = true;
+  friend consteval auto json_schema(knot::type<jwk>) { return knot::schema<jwk>(); }
+};
+struct encrypted_file {
+  std::string url;
+  jwk key;
+  std::string iv;
+  std::map<std::string, std::string> hashes;
+  std::string v = "v2";
+  friend consteval auto json_schema(knot::type<encrypted_file>) { return knot::schema<encrypted_file>(); }
+};
+// The part of a message's content that names it.
+struct file_part {
+  encrypted_file file;
+  friend consteval auto json_schema(knot::type<file_part>) { return knot::schema<file_part>(); }
+};
+
+namespace detail {
+// AES-256-CTR, either way: the same operation.
+[[nodiscard]] inline std::optional<std::vector<std::uint8_t>> aes_ctr(std::span<const std::uint8_t> key,
+                                                                      std::span<const std::uint8_t> iv,
+                                                                      std::span<const std::uint8_t> in) {
+  if (key.size() != 32 || iv.size() != 16)
+    return std::nullopt;
+  std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)> ctx(EVP_CIPHER_CTX_new(), &EVP_CIPHER_CTX_free);
+  std::vector<std::uint8_t> out(in.size() + 16);
+  int len = 0, tail = 0;
+  if (!ctx || EVP_EncryptInit_ex(ctx.get(), EVP_aes_256_ctr(), nullptr, key.data(), iv.data()) != 1 ||
+      EVP_EncryptUpdate(ctx.get(), out.data(), &len, in.data(), static_cast<int>(in.size())) != 1 ||
+      EVP_EncryptFinal_ex(ctx.get(), out.data() + len, &tail) != 1)
+    return std::nullopt;
+  out.resize(static_cast<std::size_t>(len + tail));
+  return out;
+}
+[[nodiscard]] inline std::array<std::uint8_t, 32> sha256(std::span<const std::uint8_t> bytes) {
+  std::array<std::uint8_t, 32> out{};
+  unsigned int size = 0;
+  if (EVP_Digest(bytes.data(), bytes.size(), out.data(), &size, EVP_sha256(), nullptr) != 1 || size != out.size())
+    throw std::runtime_error("SHA-256 failed");
+  return out;
+}
+[[nodiscard]] inline std::string url_safe(std::string text) {
+  return text | std::views::transform([](char c) { return c == '+' ? '-' : c == '/' ? '_' : c; }) | std::ranges::to<std::string>();
+}
+}  // namespace detail
+
+// A file sealed for an encrypted room: its ciphertext, and what opens it --
+// its URL filled in once it is uploaded.
+struct sealed_file {
+  std::vector<std::uint8_t> bytes;
+  encrypted_file info;
+};
+[[nodiscard]] inline sealed_file seal_file(std::span<const std::uint8_t> plain) {
+  const auto key = mux::vault::vault::random(32);
+  // The counter's start: 8 random bytes, then a zero counter (as the spec
+  // has it, so that no file is long enough to wrap it).
+  auto iv = mux::vault::vault::random(8);
+  iv.resize(16, 0);
+  auto ciphertext = detail::aes_ctr(key, iv, plain);
+  if (!ciphertext)
+    throw std::runtime_error("the file could not be encrypted");
+  const auto hash = detail::sha256(*ciphertext);
+  return sealed_file{.bytes = std::move(*ciphertext),
+                     .info = encrypted_file{.key = jwk{.k = detail::url_safe(to_base64(key))},
+                                            .iv = to_base64(iv),
+                                            .hashes = {{"sha256", to_base64(hash)}}}};
+}
+// A file opened: none where it is not what its event says -- its hash
+// another, its key or counter not AES-256-CTR's.
+[[nodiscard]] inline std::optional<std::vector<std::uint8_t>> open_file(std::span<const std::uint8_t> sealed,
+                                                                       const encrypted_file& info) {
+  if (info.key.alg != "A256CTR" || info.key.kty != "oct")
+    return std::nullopt;
+  const auto key = from_base64(info.key.k);
+  const auto iv = from_base64(info.iv);
+  const auto said = info.hashes.find("sha256");
+  if (!key || !iv || said == info.hashes.end())
+    return std::nullopt;
+  const auto expected = from_base64(said->second);
+  const auto hash = detail::sha256(sealed);
+  if (!expected || !std::ranges::equal(*expected, hash))
+    return std::nullopt;
+  return detail::aes_ctr(*key, *iv, sealed);
+}
 
 // A room's session as it is to be used now: its ID and key, and the
 // devices that do not have it yet.

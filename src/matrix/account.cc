@@ -316,6 +316,9 @@ class account {
   // and has not got it: false where they could not be known, or the key
   // could not be sent.
   bool share_room_key(const std::string& room);
+  // The encrypted files events named, by their mxc:// URI: what opens each
+  // once it is downloaded.
+  std::map<std::string, crypto::encrypted_file, std::less<>> encrypted_media_;
   // A fiber of this account. What it throws past its own handling -- the
   // unforeseen, a bug -- is caught here: let out, it left the loop and
   // stopped every account's network without a word. It is logged

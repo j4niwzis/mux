@@ -3,6 +3,8 @@
 export module mux.matrix:media;
 
 import std;
+import mux.bytes;
+import mux.matrix.crypto;
 import knot;
 import loom.api;
 import loom.ev;
@@ -44,6 +46,10 @@ void account<Sink>::fetch_media(std::string source, media_use_t use, int size, b
     const auto slash = rest.find('/');
     if (slash == std::string_view::npos)
       return;
+    // Encrypted: whole, for the server cannot make a thumbnail of
+    // ciphertext; and opened here.
+    const auto sealed = encrypted_media_.find(source);
+    const int asked = sealed != encrypted_media_.end() ? 0 : size;
     const std::string server(rest.substr(0, slash));
     const std::string media(rest.substr(slash + 1));
     // As the spec writes them: a server name (a host, maybe a port) and a
@@ -58,8 +64,8 @@ void account<Sink>::fetch_media(std::string source, media_use_t use, int size, b
     if (!plain(server, ".-:[]") || !plain(media, "-_") || server.starts_with('.'))
       return;
     const std::string query =
-        size > 0 ? std::format("?width={0}&height={0}&method={1}", size, crop ? "crop" : "scale") : std::string();
-    const auto bases = size > 0 ? std::array<std::string, 2>{"/_matrix/client/v1/media/thumbnail/",
+        asked > 0 ? std::format("?width={0}&height={0}&method={1}", asked, crop ? "crop" : "scale") : std::string();
+    const auto bases = asked > 0 ? std::array<std::string, 2>{"/_matrix/client/v1/media/thumbnail/",
                                                              "/_matrix/media/v3/thumbnail/"}
                                 : std::array<std::string, 2>{"/_matrix/client/v1/media/download/",
                                                              "/_matrix/media/v3/download/"};
@@ -82,9 +88,18 @@ void account<Sink>::fetch_media(std::string source, media_use_t use, int size, b
         };
         const auto got = api_->request("GET", base + server + "/" + media + query, {},
                                        token_ ? std::optional<std::string_view>(*token_) : std::nullopt,
-                                       std::chrono::seconds(60), {}, size > 0 ? nullptr : &progress);
+                                       std::chrono::seconds(60), {}, asked > 0 ? nullptr : &progress);
         if (got.status == 200 && !got.body.empty()) {
-          sink_(change::avatar_loaded{use, source, got.body});
+          if (sealed == encrypted_media_.end()) {
+            sink_(change::avatar_loaded{use, source, got.body});
+            return;
+          }
+          const auto opened = crypto::open_file(mux::bytes::of(got.body), sealed->second);
+          if (!opened) {
+            log(id_, "{} is not what its event says: not shown", source);
+            return;
+          }
+          sink_(change::avatar_loaded{use, source, mux::bytes::text_of(*opened)});
           return;
         }
       } catch (const net::failure&) {
@@ -153,21 +168,31 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
                                         .thread = thread ? std::optional<std::string>(thread->root) : std::nullopt}});
     // Before the upload: the bytes of a file for an encrypted room never
     // reach the server in the clear (review 4, H2).
-    this->refuse_plaintext(room, local);
+    // In an encrypted room, sealed here first: what reaches the server is
+    // ciphertext, under no name and no type.
+    std::optional<crypto::sealed_file> sealed;
+    if (this->encrypted_room(room)) {
+      if (!crypto_)
+        throw plaintext_refused(in, local, "Not sent: it could not be encrypted -- encryption is not running for this account.");
+      sealed = crypto::seal_file(mux::bytes::of(bytes));
+    }
+    const std::string ciphertext = sealed ? mux::bytes::text_of(sealed->bytes) : std::string();
+    const std::string_view uploaded = sealed ? std::string_view(ciphertext) : std::string_view(bytes);
     if (!api_) {
       sink_(change::delivery_changed{in, local, delivery::failed{}});
       return;
     }
-    std::string target = "/_matrix/media/v3/upload?filename=";
-    for (const char c : name)
-      target += std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_'
-                    ? std::string(1, c)
-                    : std::format("%{:02X}", static_cast<unsigned>(static_cast<unsigned char>(c)));
+    std::string target = sealed ? "/_matrix/media/v3/upload" : "/_matrix/media/v3/upload?filename=";
+    if (!sealed)
+      for (const char c : name)
+        target += std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_'
+                      ? std::string(1, c)
+                      : std::format("%{:02X}", static_cast<unsigned>(static_cast<unsigned char>(c)));
     std::optional<std::string> uri;
     try {
-      const auto got = api_->request("POST", target, bytes, token_ ? std::optional<std::string_view>(*token_) : std::nullopt,
+      const auto got = api_->request("POST", target, uploaded, token_ ? std::optional<std::string_view>(*token_) : std::nullopt,
                                      std::chrono::seconds(600),
-                                     mimetype.empty() ? std::string_view("application/octet-stream") : mimetype);
+                                     sealed || mimetype.empty() ? std::string_view("application/octet-stream") : mimetype);
       if (got.status == 200)
         if (auto answer = knot::try_read<upload_answer>(std::string_view(got.body)))
           uri = std::move(answer->content_uri);
@@ -190,8 +215,18 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
                                         .reply_to = reply_to,
                                         .thread = thread ? std::optional<std::string>(thread->root) : std::nullopt,
                                         .thread_latest = thread ? std::optional<std::string>(thread->latest) : std::nullopt};
-    knot::raw message = image ? as_body(loom::client::picture_message(said, width, height))
-                              : as_body(loom::client::file_message(said));
+    // Sealed: the file named by what opens it, its URL not in the clear.
+    const auto with_file = [&](auto content) {
+      if (sealed) {
+        sealed->info.url = *uri;
+        content.url.reset();
+        content.rest = knot::raw{knot::to_json_string(crypto::file_part{sealed->info})};
+        encrypted_media_.insert_or_assign(*uri, sealed->info);
+      }
+      return as_body(content);
+    };
+    knot::raw message = image ? with_file(loom::client::picture_message(said, width, height))
+                              : with_file(loom::client::file_message(said));
     auto sent = this->send_room_event(loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.room.message",
                                                       .txn_id = local,

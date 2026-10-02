@@ -1180,14 +1180,14 @@ void app::apply(const request::setup_cross_signing&) {
 // the password asked first.
 void app::apply(const request::reset_backup&) {
   this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-    if (const auto by = id_of(account); by && !shared.demo())
-      net->reset_backup(*by);
+    if (!shared.demo())
+      net->reset_backup(id_of(account));
   });
 }
 void app::apply(const request::delete_backup&) {
   this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-    if (const auto by = id_of(account); by && !shared.demo())
-      net->delete_backup(*by);
+    if (!shared.demo())
+      net->delete_backup(id_of(account));
   });
 }
 void app::apply(const request::sign_out_unverified&) {

@@ -442,9 +442,15 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
       const conversation_id in{id_, room};
       conversation(in, found->second);
       members(in, found->second);
-      // Where to page back from: the first time a room is seen.
-      if (part.timeline && part.timeline->prev_batch && paged_.insert(room).second)
-        sink_(change::history_position{in, *part.timeline->prev_batch});
+      // Where to page back from: the first time a room is seen -- and every
+      // time its timeline comes cut short (limited: more was sent than the
+      // sync gives), for between what came before and this is a gap the
+      // history on disk has to know of (the app marks it).
+      if (part.timeline && part.timeline->prev_batch) {
+        const bool first = paged_.insert(room).second;
+        if (first || part.timeline->limited.value_or(false))
+          sink_(change::history_position{in, *part.timeline->prev_batch});
+      }
       if (part.timeline)
         for (const auto& one : part.timeline->events)
           event(in, one);

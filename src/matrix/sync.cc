@@ -938,7 +938,16 @@ void account<Sink>::verification_in(const std::string& sender, const loom::ev::m
   const auto offer = knot::try_read<crypto::sas_offer>(content.rest.text);
   if (content.method != "m.sas.v1" || !offer || !crypto::speaks(*offer))
     return this->cancel_verification(state.txn, "m.unknown_method", "Only emoji verification is spoken here.");
-  const auto canonical = knot::to_canonical_json(content);
+  // Committed to as its sender wrote it: in a room, with its reference (out
+  // of the ciphertext where the room is encrypted) and no transaction ID.
+  auto as_sent = content;
+  if (state.room) {
+    as_sent.transaction_id.reset();
+    if (!as_sent.m_relates_to)
+      as_sent.m_relates_to = loom::ev::def::verification_relates_to_t{
+          .rel_type = loom::ev::def::verification_relates_to_t::rel_type_values::m_reference{}, .event_id = state.txn};
+  }
+  const auto canonical = knot::to_canonical_json(as_sent);
   if (!canonical)
     return this->cancel_verification(state.txn, "m.unexpected_message", "The start could not be read.");
   state.start_canonical = *canonical;

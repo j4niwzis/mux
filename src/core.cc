@@ -1175,6 +1175,12 @@ struct history_position {
   conversation_id in;
   std::optional<std::string> from;
 };
+// An event the server says is not there -- not found, or not this user's
+// to see: the marks on it let go, for nothing will ever show it.
+struct event_missing {
+  conversation_id in;
+  std::string id;
+};
 
 }  // namespace change
 
@@ -1182,7 +1188,7 @@ using change_t = splice::variant<change::connection_changed, change::refused, ch
                               change::conversation_removed,
                               change::presence_changed, change::message_added, change::message_edited,
                               change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed,
-                              change::typing_changed, change::history_position, change::members_changed,
+                              change::typing_changed, change::history_position, change::event_missing, change::members_changed,
                               change::session_given, change::avatar_loaded, change::receipts_changed,
                               change::window_opened, change::window_extended, change::media_progress,
                               change::room_created, change::preview_loaded, change::devtools_text,
@@ -1609,6 +1615,14 @@ class model {
   }
   void on(const change::typing_changed& one) { of(one.in).typing = one.who; }
   void on(const change::history_position& one) { of(one.in).history_from = one.from; }
+  void on(const change::event_missing& one) {
+    conversation& where = of(one.in);
+    for (auto* marks : {&where.unread_mentions, &where.unread_reactions})
+      for (const unread_mark& gone : *marks)
+        if (gone.target == one.id && !std::ranges::contains(where.seen_marks, gone.event))
+          where.seen_marks.push_back(gone.event);
+      std::erase_if(*marks, [&](const unread_mark& mark) { return mark.target == one.id; });
+  }
   void on(const change::members_changed& one) {
     conversation& where = of(one.in);
     where.members = one.members;

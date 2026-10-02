@@ -759,8 +759,13 @@ struct conversation {
 
 // Its newest message, as the chat list shows it and sorts by: the last of
 // its timeline, or the newest that came while it is a window elsewhere.
+// Live, its timeline has all that came: `latest` is a copy of what came last
+// by its time, not changed as the timeline's is -- one's own still with the
+// id and the clock it was sent with, an edit or a deletion not in it -- and,
+// a clock ahead, it stayed "newest" over what others said after it: the list
+// said one thing and the chat another.
 [[nodiscard]] inline const message* newest(const conversation& one) {
-  if (one.latest && (one.detached || one.timeline.empty() || one.latest->at > one.timeline.back().at))
+  if (one.latest && (one.detached || one.timeline.empty()))
     return &*one.latest;
   return one.timeline.empty() ? nullptr : &one.timeline.back();
 }
@@ -768,8 +773,7 @@ struct conversation {
 // its preview in the list says what is in it.
 [[nodiscard]] inline const message* newest(const conversation& one, const room_event_filter& shown) {
   const auto visible = [&](const message& said) { return !said.service || shown.shows(said.event_kind); };
-  if (one.latest && visible(*one.latest) &&
-      (one.detached || one.timeline.empty() || one.latest->at > one.timeline.back().at))
+  if (one.latest && visible(*one.latest) && (one.detached || one.timeline.empty()))
     return &*one.latest;
   for (auto it = one.timeline.rbegin(); it != one.timeline.rend(); ++it)
     if (visible(*it))
@@ -1446,6 +1450,14 @@ class model {
     made.id = id;
     return made;
   }
+  // The copy of the newest kept while the chat is a window elsewhere, where it
+  // is the message changed: changed as the timeline's is, the list saying
+  // what the chat says.
+  template <class Change>
+  static void in_latest(conversation& where, std::string_view id, Change change) {
+    if (where.latest && where.latest->id == id)
+      change(*where.latest);
+  }
   static message* message_in(conversation& where, std::string_view id) {
     for (auto it = where.timeline.rbegin(); it != where.timeline.rend(); ++it)
       if (it->id == id)
@@ -1668,11 +1680,14 @@ class model {
     where.detached = one.future_from.has_value();
   }
   void on(const change::message_encrypted& one) {
-    if (message* kept = message_in(of(one.in), one.id)) {
-      kept->encrypted = true;
-      kept->unverified = !one.verified;
-      kept->unauthenticated = one.imported;
-    }
+    const auto mark = [&](message& kept) {
+      kept.encrypted = true;
+      kept.unverified = !one.verified;
+      kept.unauthenticated = one.imported;
+    };
+    if (message* kept = message_in(of(one.in), one.id))
+      mark(*kept);
+    in_latest(of(one.in), one.id, mark);
   }
   void on(const change::message_edited& one) {
     conversation& where = of(one.in);
@@ -1682,6 +1697,12 @@ class model {
       kept->body = one.now;
       kept->edited = true;
     }
+    in_latest(where, one.id, [&](message& kept) {
+      if ((one.by && *one.by != kept.sender) || (one.plain && kept.encrypted))
+        return;
+      kept.body = one.now;
+      kept.edited = true;
+    });
     // And the copy fetched aside for the replies quoting it: what they quote
     // is what it says now.
     if (const auto aside = where.quoted.find(one.id);
@@ -1702,6 +1723,7 @@ class model {
     if (show_deleted) {
       if (message* kept = message_in(where, one.id))
         kept->redacted = true;
+      in_latest(where, one.id, [](message& kept) { kept.redacted = true; });
       return;
     }
     std::erase_if(where.timeline, [&](const message& each) { return each.id == one.id; });
@@ -1713,6 +1735,10 @@ class model {
   void on(const change::threads_listed& one) { of(one.in).thread_roots = one.roots; }
   void on(const change::message_acknowledged& one) {
     conversation& where = of(one.in);
+    in_latest(where, one.local_id, [&](message& kept) {
+      kept.id = one.id;
+      kept.delivery = delivery::sent{};
+    });
     if (message_in(where, one.id)) {
       std::erase_if(where.timeline, [&](const message& kept) { return kept.id == one.local_id; });
       for (auto& [root, answers] : where.threads)
@@ -1727,6 +1753,7 @@ class model {
   void on(const change::delivery_changed& one) {
     if (message* kept = message_in(of(one.in), one.id))
       kept->delivery = one.now;
+    in_latest(of(one.in), one.id, [&](message& kept) { kept.delivery = one.now; });
   }
   void on(const change::message_discarded& one) {
     conversation& where = of(one.in);

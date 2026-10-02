@@ -128,6 +128,12 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       // Nothing shows an edit under its own id: what waits for it there --
       // a mark made of it before edits were told apart -- let go.
       sink_(change::event_missing{in, one.event_id, relates->event_id});
+      // An edit that mentions the user, by another: the message it edits
+      // marked as mentioning them, as tdesktop counts a mention added by an
+      // edit -- the @ to go to, and no notification.
+      const bool live = splice::visit(splice::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
+      if (live && relates->event_id && one.sender != id_.address && loom::client::mentions(content, id_.address))
+        sink_(change::mentioned{in, *relates->event_id, at});
       return;
     }
     message made{.in = in,

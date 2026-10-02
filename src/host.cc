@@ -1056,9 +1056,14 @@ int run(App& app, const options& how) {
         // Whether what is repainted has something blurring what is under it,
         // live: all of the window, while one is shown; a part, where one is in it.
         bool live_under = !skiff::scene::detail::liveBackdrops().empty();
+        // What blurs live whose rect is repainted whole this frame: one not
+        // drawn there is no longer shown, and is let go of once it is drawn.
+        std::vector<skiff::scene::NodeId> live_repainted;
+        bool all_repainted = true;
         if (!whole && !fresh) {
           show_all = false;
           live_under = false;
+          all_repainted = false;
           pieces.clear();
           repainted.setEmpty();
           const std::vector<skia::SkRect> said =
@@ -1075,7 +1080,7 @@ int run(App& app, const options& how) {
           // What blurs what is under it, live: all of it repainted wherever
           // any of what is under it is -- else it blurred its own last pixels.
           for (const auto& [id, live] : skiff::scene::detail::liveBackdrops()) {
-            skia::SkRect whole_of = live;
+            skia::SkRect whole_of = live.rect;
             whole_of.roundOut(&whole_of);
             if (!whole_of.intersect(all))
               continue;
@@ -1083,6 +1088,7 @@ int run(App& app, const options& how) {
               pieces.push_back(whole_of);
               repainted.join(whole_of);
               live_under = true;
+              live_repainted.push_back(id);
             }
           }
         }
@@ -1181,6 +1187,10 @@ int run(App& app, const options& how) {
         }
         for (const skia::SkRect& piece : pieces)
           changed.push_back(piece.roundOut());
+        std::erase_if(skiff::scene::detail::liveBackdrops(), [&](const auto& one) {
+          return one.second.frame != skiff::scene::work::frameNumber() &&
+                 (all_repainted || std::ranges::contains(live_repainted, one.first));
+        });
         if (kept != surface) {
           // Put in place of what the buffer had, not over it: one copy -- a
           // see-through window's was a clear and then a blend of the whole
@@ -1197,6 +1207,9 @@ int run(App& app, const options& how) {
         canvas->scale(scale, scale);
         scene.draw(canvas);
         canvas->restore();
+        // All of it drawn: what blurs live and was not drawn is not shown.
+        std::erase_if(skiff::scene::detail::liveBackdrops(),
+                      [](const auto& one) { return one.second.frame != skiff::scene::work::frameNumber(); });
         if (!whole)
           repainted = skia::SkRect::MakeLTRB(frame.fDamage.fLeft * scale, frame.fDamage.fTop * scale,
                                              frame.fDamage.fRight * scale, frame.fDamage.fBottom * scale);

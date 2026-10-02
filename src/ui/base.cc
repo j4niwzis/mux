@@ -426,7 +426,10 @@ inline std::vector<std::pair<scene::NodeId, kept_blur>>& kept_blurs() {
 // While it moves, the window under it as it came up, blurred once (above).
 inline void live_backdrop(const scene::State& state, skia::SkCanvas* canvas, float blur, float alpha) {
   const skia::SkRect on = canvas->getTotalMatrix().mapRect(state.fBounds);
-  scene::detail::liveBackdrops()[state.fId] = on;
+  // Shown again after it was let go of -- a dialog's sheet, shut and opened
+  // again: come up now, as a new one.
+  const bool shown_before = scene::detail::liveBackdrops().contains(state.fId);
+  scene::detail::liveBackdrops()[state.fId] = {on, scene::work::frameNumber()};
   const float amount = blur >= 0.0f ? blur : static_cast<float>(window_look().frost / 100.0);
   const float sigma = 1.0f + amount * 30.0f;
   const skia::SkRRect shape = scene::detail::roundedBox(state, state.fBounds);
@@ -436,11 +439,13 @@ inline void live_backdrop(const scene::State& state, skia::SkCanvas* canvas, flo
   auto found = std::ranges::find(all, state.fId, &std::pair<scene::NodeId, kept_blur>::first);
   // Come up now: what is under it is all that is drawn yet -- what is not
   // repainted is the frame before, without it.
-  const bool new_one = found == all.end();
-  if (new_one) {
+  const bool new_one = found == all.end() || !shown_before;
+  if (found == all.end()) {
     all.emplace_back(state.fId, kept_blur{});
     found = std::prev(all.end());
   }
+  if (new_one)
+    found->second = kept_blur{};
   kept_blur& kept = found->second;
   const bool moved = new_one || kept.at != on || kept.alpha != alpha;
   // Set off again from standing still, where all of the window is being

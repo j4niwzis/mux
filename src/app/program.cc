@@ -476,6 +476,7 @@ struct app : kept_settings {
     return mux::account_id{mux::ui::protocol_of(address), address};
   }
   void apply(const request::flip_account_receipts&);
+  void apply(const request::flip_only_verified&);
   void apply(const request::set_account_colour& one);
   void apply(const request::flip_account_strip&);
   void apply(const request::open_replacement&);

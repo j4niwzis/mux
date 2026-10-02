@@ -130,7 +130,8 @@ struct network {
                               .crypto_store = mux::config::state_path("crypto") /
                                               ((saved.user_id | std::views::transform([](char c) {
                                                   return std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_' ? c : '_';
-                                                }) | std::ranges::to<std::string>()) + ".json")};
+                                                }) | std::ranges::to<std::string>()) + ".json"),
+                              .only_verified = saved.only_verified.value_or(false)};
     this->run(saved.user_id, std::make_unique<matrix_account>(loop, tls, std::move(how), post_change{box, live}),
               live, std::move(via));
   }
@@ -546,6 +547,18 @@ struct network {
             [&](auto& account) {
               if (account->id() == by)
                 account->tell_trust(user);
+            },
+            one.account);
+    });
+  }
+  // Room keys to verified sessions only, or not: told to the account.
+  void set_only_verified(const mux::account_id& by, bool on) {
+    loop.post([this, by, on] {
+      for (auto& one : accounts)
+        splice::visit(
+            [&](auto& account) {
+              if (account->id() == by)
+                account->set_only_verified(on);
             },
             one.account);
     });

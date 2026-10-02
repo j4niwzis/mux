@@ -214,6 +214,7 @@ inline nodes::Text section_title(std::string text) { return nodes::Text(std::mov
 template <class Actions>
 struct account_privacy : nodes::Stack {
   using receipts_row = switch_row<ask<Actions, &Actions::flip_account_receipts>>;
+  using only_verified_row = switch_row<ask<Actions, &Actions::flip_only_verified>>;
   using notify_row = switch_row<ask<Actions, &Actions::flip_account_notify>>;
   using notify_sound_row = switch_row<ask<Actions, &Actions::flip_account_notify_sound>>;
   using export_row = row_item<ask<Actions, &Actions::export_room_keys>>;
@@ -223,6 +224,8 @@ struct account_privacy : nodes::Stack {
   struct parts_t {
     nodes::Text title = section_title("PRIVACY");
     receipts_row receipts;
+    // Element's: room keys to verified sessions only.
+    only_verified_row only_verified;
     typing_choice<Actions> typing;
     notify_row notify;
     notify_sound_row notify_sound;
@@ -241,6 +244,7 @@ struct account_privacy : nodes::Stack {
                   bool notify_sound_on = true, std::optional<bool> faces_on = std::nullopt,
                   std::optional<std::int64_t> jump_most = std::nullopt, std::optional<bool> previews_on = std::nullopt)
       : parts{.receipts = receipts_row("Send read receipts", {a}),
+              .only_verified = only_verified_row("Never send encrypted messages to unverified sessions", {a}),
               .typing = typing_choice<Actions>(a, choice_level::account{}, typing_on),
               .notify = notify_row("Desktop notifications from it", {a}),
               .notify_sound = notify_sound_row("Their sound", {a}),
@@ -258,6 +262,7 @@ struct account_privacy : nodes::Stack {
     parts.notify_sound.parts.toggle.setOnNow(notify_sound_on);
   }
   void show(bool receipts_on) { parts.receipts.parts.toggle.setOn(receipts_on); }
+  void show_only_verified(bool on) { parts.only_verified.parts.toggle.setOn(on); }
   void say(std::string, bool) {}
 };
 
@@ -746,6 +751,8 @@ struct accounts_panel : closes_on_escape<Actions> {
                                    config::notify_of(one).value_or(true), config::notify_sound_of(one).value_or(true),
                                    config::show_receipts_of(one), config::jump_search_of(one),
                                    config::link_previews_of(one));
+      if (auto* privacy = this->privacy())
+        privacy->show_only_verified(config::only_verified_of(one));
     } else if (page == 3) {
       detail.template emplace<5>(this->actions, config::room_events_of(one), config::room_event_kinds_of(one),
                                    config::show_receipts_of(one), config::jump_search_of(one), config::link_previews_of(one),

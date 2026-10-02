@@ -686,6 +686,24 @@ void app::apply(const request::refresh_sessions&) {
   this->with_chosen_account([&](accounts&, mux::config::account_t& account) { net->list_sessions(id_of(account)); });
 }
 
+void app::apply(const request::flip_only_verified&) {
+  this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
+    auto* kept = mux::config::only_verified_in(account);
+    if (kept == nullptr)
+      return;
+    *kept = !kept->value_or(false);
+    if (auto* page = panel.privacy())
+      page->show_only_verified(**kept);
+    // Told to that account, running: its sessions' keys go so from now.
+    splice::visit(splice::overloaded{[&](const mux::config::matrix_account& matrix) {
+                                       net->set_only_verified(
+                                           mux::account_id{mux::ui::protocol_of(matrix.user_id), matrix.user_id}, **kept);
+                                     },
+                                     [](const auto&) {}},
+                  account);
+    (void)this->write();
+  });
+}
 void app::apply(const request::flip_account_receipts&) {
   this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
     auto& kept = mux::config::read_receipts_in(account);

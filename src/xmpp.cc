@@ -216,6 +216,7 @@ class account {
   void create_room(std::string, std::string, bool, std::string, bool = true, bool = false) {}
   void search_people(std::string) {}
   void tell_trust(std::string) {}
+  void set_only_verified(bool) {}
   void tell_devices(std::string) {}
   void list_packs(std::optional<std::string>) {}
   void list_threads(std::string) {}

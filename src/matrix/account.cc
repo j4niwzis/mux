@@ -142,6 +142,7 @@ class account {
   // cross-signed by them (their master key the one pinned), or verified by
   // emoji here.
   void tell_devices(std::string user);
+  void set_only_verified(bool on);
   // Element's toasts, as notices once a run: this session not verified --
   // others cannot be sure what it sends is the user's; and other sessions of
   // the user's that are not ("New login. Was this you?").

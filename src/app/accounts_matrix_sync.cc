@@ -82,6 +82,7 @@ template void account<mux::app::post_change>::load_encrypted();
 template void account<mux::app::post_change>::tell_trust(std::string user);
 template void account<mux::app::post_change>::tell_devices(std::string user);
 template void account<mux::app::post_change>::check_own_sessions();
+template void account<mux::app::post_change>::set_only_verified(bool on);
 template void account<mux::app::post_change>::withheld_in(const loom::ev::m_room_key_withheld_content_t& content);
 template void account<mux::app::post_change>::request_secrets(const std::string& device);
 template void account<mux::app::post_change>::secret_in(const crypto::secret_got& got);

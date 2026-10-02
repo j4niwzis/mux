@@ -43,6 +43,10 @@ struct settings {
   // Where its end-to-end encryption is kept: this device's Olm account and
   // sessions, and the rooms' Megolm sessions. None: no encryption.
   std::filesystem::path crypto_store;
+  // Room keys only to sessions verified -- cross-signed by their owner, or
+  // by emoji here: Element's "Never send encrypted messages to unverified
+  // sessions".
+  bool only_verified = false;
 };
 
 // A typed content as a request's body: its JSON text.

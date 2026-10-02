@@ -337,6 +337,9 @@ struct matrix_account {
   std::string device_name = "mux";
   std::optional<bool> read_receipts;
   std::optional<bool> send_typing;  // others' typing is always shown
+  // Element's "Never send encrypted messages to unverified sessions": room
+  // keys only to sessions cross-signed by their owner or verified here.
+  std::optional<bool> only_verified;
   // Whether its chats show what is done in them (joins, renames, ...);
   // nothing said is as the settings say for every account.
   std::optional<bool> room_events;
@@ -879,6 +882,18 @@ consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
 // Whether an account sends read receipts, and the proxy it goes through.
 [[nodiscard]] inline bool read_receipts_of(const account_t& one) {
   return splice::visit([](const auto& each) { return each.read_receipts.value_or(true); }, one);
+}
+[[nodiscard]] inline bool only_verified_of(const account_t& one) {
+  return splice::visit(splice::overloaded{[](const matrix_account& matrix) { return matrix.only_verified.value_or(false); },
+                                          [](const auto&) { return false; }},
+                       one);
+}
+// Whether an account sends room keys to verified sessions only: a Matrix
+// account's; none for another.
+[[nodiscard]] inline std::optional<bool>* only_verified_in(account_t& one) {
+  return splice::visit(splice::overloaded{[](matrix_account& matrix) -> std::optional<bool>* { return &matrix.only_verified; },
+                                          [](auto&) -> std::optional<bool>* { return nullptr; }},
+                       one);
 }
 [[nodiscard]] inline std::optional<bool>& read_receipts_in(account_t& one) {
   return splice::visit([](auto& each) -> std::optional<bool>& { return each.read_receipts; }, one);

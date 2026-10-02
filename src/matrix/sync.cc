@@ -1389,7 +1389,7 @@ std::optional<std::string> account<Sink>::share_room_key(const std::string& room
         crypto_->pin_master(user, *master);
     auto theirs = crypto::recipients_of(*got, user, crypto_->pinned_master(user),
                                         user == id_.address ? std::string_view(crypto_->device_id()) : std::string_view(),
-                                        crypto_->verified_keys(user), user == id_.address);
+                                        crypto_->verified_keys(user), user == id_.address || how_.only_verified);
     readers.insert(readers.end(), std::make_move_iterator(theirs.begin()), std::make_move_iterator(theirs.end()));
   }
   crypto::rotation limits;
@@ -1801,5 +1801,12 @@ void account<Sink>::withheld_in(const loom::ev::m_room_key_withheld_content_t& c
       one.body = {said, std::nullopt};
       sink_(change::message_added{std::move(one), placement::aside{}});
     }
+}
+}  // namespace mux::matrix
+
+namespace mux::matrix {
+template <class Sink>
+void account<Sink>::set_only_verified(bool on) {
+  how_.only_verified = on;
 }
 }  // namespace mux::matrix

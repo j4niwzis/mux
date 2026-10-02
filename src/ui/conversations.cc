@@ -1232,6 +1232,10 @@ struct conversations_screen : nodes::Stack {
       pinned_t pinned;
       timeline_area<Actions> area;
       mention_list mentions;
+      // Over the composer, as Element's: a direct chat whose other is not
+      // verified -- what is sent is encrypted to them all the same -- or
+      // whose identity was reset.
+      nodes::Text trust_warning{"", 13.0f, text_colour};
       composer_bar<Actions> line;
       empty_state empty;
       select_hint hint;
@@ -1259,6 +1263,10 @@ struct conversations_screen : nodes::Stack {
                     .background = window_look().behind ? skia::SkColor{0} : chat_colour});
       area.apply({.fillX = true, .grow = scene::axes::kY});
       parts.mentions.setVisible(false);
+      parts.trust_warning.setWrapped(true);
+      parts.trust_warning.apply({.fillX = true, .padding = {6.0f, 14.0f, 6.0f, 14.0f},
+                                 .background = (accent_colour & 0x00FFFFFFu) | (0x22u << 24)});
+      parts.trust_warning.setVisible(false);
     }
   };
   using side_edge = drag_edge<resize_sidebar_to<Actions>>;
@@ -2645,6 +2653,35 @@ struct conversations_screen : nodes::Stack {
       this->show_conversation(now);
   }
 
+  // Element's warning over the composer, in a direct encrypted chat: the
+  // other not verified -- messages are still encrypted to them -- or their
+  // identity reset, to be verified again or withdrawn on their card.
+  void show_trust_warning(const conversation* one, const model& now) {
+    std::string said;
+    if (one && one->encrypted && !is_group(*one))
+      if (const auto trust = now.trust_of(one->id.account, contact_of(*one)))
+        said = splice::visit(
+            splice::overloaded{
+                [](trust::verified) { return std::string(); },
+                [&](trust::unverified) {
+                  return std::format("\u26A0 {} is not verified. Messages are encrypted to them, but verify them "
+                                     "(their card) to be sure who reads them.",
+                                     display_name(*one));
+                },
+                [&](trust::changed) {
+                  return std::format("\u26A0 {}'s identity was reset. Verify them again, or withdraw the verification, "
+                                     "on their card.",
+                                     display_name(*one));
+                }},
+            *trust);
+    auto& bar = chat.parts.trust_warning;
+    if (bar.text() != said)
+      bar.setText(said);
+    if (bar.visible() != !said.empty()) {
+      bar.setVisible(!said.empty());
+      chat.invalidateLayout();
+    }
+  }
   void show_conversation(const model& now) {
     // Whether the reader was at the newest: then the view follows it; and
     // where the view was, for the chat being left.
@@ -2654,6 +2691,7 @@ struct conversations_screen : nodes::Stack {
     const conversation* one = chosen ? now.find(*chosen) : nullptr;
     header.show(chat_header<Actions>::view_of(one, now),
                 [this](const auto& shown) { return chat_header<Actions>(actions, shown); });
+    this->show_trust_warning(one, now);
     if (pinned_of != chosen) {
       pinned_of = chosen;
       pinned_step = std::numeric_limits<std::size_t>::max();

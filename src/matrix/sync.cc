@@ -879,6 +879,10 @@ void account<Sink>::verification_in(const std::string& sender, const loom::ev::m
   if (!crypto_ || !content.transaction_id || (sender == id_.address && content.from_device == crypto_->device_id()) ||
       !std::ranges::contains(content.methods, std::string_view("m.sas.v1")))
     return;
+  // One asked of this side at a time: anyone may send requests, and each
+  // would put the dialog up again.
+  if (std::ranges::any_of(verifications_, [](const auto& one) { return !one.second.we_requested; }))
+    return;
   crypto::sas_state state{.txn = *content.transaction_id, .their_user = sender, .their_device = content.from_device};
   this->verification_said(state, verification_step::asked{});
   verifications_.insert_or_assign(state.txn, std::move(state));

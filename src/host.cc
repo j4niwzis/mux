@@ -1055,7 +1055,10 @@ int run(App& app, const options& how) {
         // out for antialiasing: their union could be the whole view.
         // Whether what is repainted has something blurring what is under it,
         // live: all of the window, while one is shown; a part, where one is in it.
-        bool live_under = !skiff::scene::detail::liveBackdrops().empty();
+        // Only what reads what is under it, live -- not one drawn from what it
+        // keeps as it moves -- keeps the frame from being played in bands.
+        bool live_under = std::ranges::any_of(skiff::scene::detail::liveBackdrops(),
+                                              [](const auto& one) { return !one.second.kept; });
         // What blurs live whose rect is repainted whole this frame: one not
         // drawn there is no longer shown, and is let go of once it is drawn.
         std::vector<skiff::scene::NodeId> live_repainted;
@@ -1087,7 +1090,7 @@ int run(App& app, const options& how) {
             if (std::ranges::any_of(pieces, [&](const skia::SkRect& piece) { return skia::SkRect::Intersects(piece, whole_of); })) {
               pieces.push_back(whole_of);
               repainted.join(whole_of);
-              live_under = true;
+              live_under = live_under || !live.kept;
               live_repainted.push_back(id);
             }
           }
@@ -1191,6 +1194,14 @@ int run(App& app, const options& how) {
           return one.second.frame != skiff::scene::work::frameNumber() &&
                  (all_repainted || std::ranges::contains(live_repainted, one.first));
         });
+        // Something that blurs live was drawn into the bands where it had to
+        // read what is under it: all of it again at the next frame, not in
+        // bands -- what it reads, it then reads.
+        if (std::exchange(skiff::scene::detail::liveBackdropsStale(), false)) {
+          redraw = true;
+          for (auto& [id, one] : skiff::scene::detail::liveBackdrops())
+            one.kept = false;
+        }
         if (kept != surface) {
           // Put in place of what the buffer had, not over it: one copy -- a
           // see-through window's was a clear and then a blend of the whole

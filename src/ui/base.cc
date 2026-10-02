@@ -429,7 +429,10 @@ inline void live_backdrop(const scene::State& state, skia::SkCanvas* canvas, flo
   // Shown again after it was let go of -- a dialog's sheet, shut and opened
   // again: come up now, as a new one.
   const bool shown_before = scene::detail::liveBackdrops().contains(state.fId);
-  scene::detail::liveBackdrops()[state.fId] = {on, scene::work::frameNumber()};
+  scene::detail::LiveBackdrop& noted = scene::detail::liveBackdrops()[state.fId];
+  noted = {on, scene::work::frameNumber(), false};
+  // Into a recording, played back in bands: nothing under it to read.
+  const bool recording = canvas->getSurface() == nullptr;
   const float amount = blur >= 0.0f ? blur : static_cast<float>(window_look().frost / 100.0);
   const float sigma = 1.0f + amount * 30.0f;
   const skia::SkRRect shape = scene::detail::roundedBox(state, state.fBounds);
@@ -453,14 +456,23 @@ inline void live_backdrop(const scene::State& state, skia::SkCanvas* canvas, flo
   const skia::SkIRect clip = canvas->getDeviceClipBounds();
   const bool whole = canvas->getSurface() && clip.width() >= canvas->getSurface()->width() &&
                      clip.height() >= canvas->getSurface()->height();
-  if (new_one || (moved && !kept.moved && whole))
+  if (new_one || (moved && (!kept.moved || !kept.blurred) && whole))
     kept.blurred = blurred_window(canvas, sigma, kept.device);
   kept.at = on;
   kept.alpha = alpha;
   kept.moved = moved;
 
+  // Moving, the frame may go in bands: what it keeps reads nothing under it.
+  noted.kept = moved && kept.blurred;
+  // Still, in a recording: drawn from what it keeps for this frame, and all
+  // of the window repainted at the next, not in bands, blurred live. With
+  // nothing kept, blurred live here, cut at the bands' edges, and the same.
+  if (recording && !moved)
+    scene::detail::liveBackdropsStale() = true;
+  if (recording && !kept.blurred)
+    scene::detail::liveBackdropsStale() = true;
   skia::SkMatrix inverse;
-  if (moved && kept.blurred && canvas->getTotalMatrix().invert(&inverse)) {
+  if ((moved || recording) && kept.blurred && canvas->getTotalMatrix().invert(&inverse)) {
     const skia::SkMatrix local = skia::SkMatrix::RectToRect(
         skia::SkRect::MakeIWH(kept.blurred->width(), kept.blurred->height()), inverse.mapRect(kept.device));
     skia::SkPaint paint;

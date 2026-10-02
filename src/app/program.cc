@@ -141,6 +141,9 @@ struct app : kept_settings {
   std::set<mux::conversation_id> gaps_kept_before_;
   std::map<mux::conversation_id, std::string> paging_from_;
   std::map<mux::conversation_id, std::optional<std::string>> sync_gap_;
+  // The ids of each chat's messages on disk, read once when a window is
+  // loaded in it: a window over what is there leaves no gap.
+  std::map<mux::conversation_id, std::set<std::string>> on_disk_;
 
   std::set<mux::conversation_id> members_fetched;
 

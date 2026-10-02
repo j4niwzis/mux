@@ -447,8 +447,19 @@ void app::keep_on_disk(const mux::change_t& one) {
                                 }
                               },
                               [&](mux::placement::in_window) {
+                                // A window over history already on disk -- a jump back
+                                // to what was read before -- leaves no gap: what is
+                                // before it is there already, as it was. Only one
+                                // over what the disk did not have does.
+                                auto known = on_disk_.find(c.message.in);
+                                if (known == on_disk_.end())
+                                  known = on_disk_
+                                              .emplace(c.message.in, message_store::everything(c.message.in) | std::views::keys |
+                                                                         std::ranges::to<std::set<std::string>>())
+                                              .first;
+                                const bool was_kept = !known->second.insert(c.message.id).second;
                                 const mux::conversation* chat = model->find(c.message.in);
-                                if (chat && !chat->timeline.empty() && chat->timeline.front().id == c.message.id) {
+                                if (!was_kept && chat && !chat->timeline.empty() && chat->timeline.front().id == c.message.id) {
                                   gaps_of(c.message.in).insert_or_assign(c.message.id, message_store::gap_mark{});
                                   this->gaps_changed(c.message.in);
                                 }

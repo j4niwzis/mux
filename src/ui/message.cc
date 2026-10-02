@@ -544,19 +544,16 @@ struct reaction_chip : nodes::Stack {
   } parts;
   [[nodiscard]] static bool pictured(std::string_view k) { return k.starts_with("mxc://"); }
   static constexpr std::size_t kFacesShown = 3;
-  // What the chip says: the count beside a picture; else the reaction, cut
-  // at a character's edge past 20 bytes, and the count.
+  // What the chip says: the count beside a picture; else the reaction and
+  // the count -- cut where it is drawn, by its width (kLabelMost), not by
+  // its bytes: cut at 20 bytes, ten Cyrillic letters had an ellipsis with
+  // room to spare.
   [[nodiscard]] static std::string label_of(std::string_view k, std::size_t n) {
     if (pictured(k))
       return std::to_string(n);
-    constexpr std::size_t kLong = 20;
-    if (k.size() <= kLong)
-      return std::format("{} {}", k, n);
-    std::size_t cut = kLong;
-    while (cut > 0 && (static_cast<unsigned char>(k[cut]) & 0xC0) == 0x80)
-      --cut;
-    return std::format("{}… {}", k.substr(0, cut), n);
+    return std::format("{} {}", k, n);
   }
+  static constexpr float kLabelMost = 240.0f;
   // `people`: who reacted, by id and name.
   reaction_chip(std::string k, std::size_t n, bool own,
                 const std::vector<std::pair<std::string, std::string>>& people = {})
@@ -582,6 +579,8 @@ struct reaction_chip : nodes::Stack {
       parts.picture->apply({.width = 18.0f, .height = 18.0f, .alignSelf = scene::align::kMiddle});
     }
     parts.label.apply({.alignSelf = scene::align::kMiddle});
+    parts.label.setElided(true);
+    parts.label.setMaxWidth(kLabelMost);
     if (!people.empty() && people.size() <= kFacesShown) {
       // The count's place taken by the faces: the reaction alone before them.
       parts.label.setText(pictured(key) ? std::string() : label_of(key, 0).substr(0, label_of(key, 0).size() - 2));

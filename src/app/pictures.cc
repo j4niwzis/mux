@@ -153,6 +153,18 @@ class pictures_part {
           const auto [first, last] = screen.made_indices(one.timeline);
           for (std::size_t i = first; i < last && i < one.timeline.size(); ++i)
             senders.insert(one.timeline[i].sender);
+          // The thread open in its panel: its root and its answers, which
+          // are kept apart from the timeline -- their people were never
+          // asked for, and showed no picture there.
+          std::vector<const message*> in_thread;
+          if (const auto open = screen.thread_open()) {
+            if (const message* root = mux::ui::held_message(one, *open))
+              in_thread.push_back(root);
+            if (const auto found = one.threads.find(*open); found != one.threads.end())
+              std::ranges::copy(found->second | std::views::transform([](const message& answer) { return &answer; }),
+                                std::back_inserter(in_thread));
+          }
+          senders.insert_range(in_thread | std::views::transform([](const message* said) -> std::string_view { return said->sender; }));
           for (const member& each : one.members)
             if (senders.contains(each.id))
               want(id, each.avatar, each.id);
@@ -183,6 +195,8 @@ class pictures_part {
           };
           for (std::size_t i = first; i < last && i < one.timeline.size(); ++i)
             emoji_of(one.timeline[i]);
+          for (const message* said : in_thread)
+            emoji_of(*said);
           // The chat's pinned messages not loaded: fetched on their own, as
           // a quoted one is, for the pinned bar.
           for (const std::string& pinned : one.pinned)

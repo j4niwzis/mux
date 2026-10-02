@@ -426,7 +426,14 @@ void app::keep_on_disk(const mux::change_t& one) {
             if (const auto paged = paging_from_.find(c.in); paged != paging_from_.end()) {
               auto& gaps = gaps_of(c.in);
               gaps.erase(paged->second);
-              if (chat && !chat->timeline.empty())
+              // The page reached what the disk had before it was asked for
+              // (on_disk_, read then): the gap is closed, and the disk goes
+              // on from there -- else every run's first page back left a
+              // gap past which everything was asked of the server again.
+              const auto known = on_disk_.find(c.in);
+              const bool overlapped = chat && !chat->timeline.empty() && known != on_disk_.end() &&
+                                      known->second.contains(chat->timeline.front().id);
+              if (chat && !chat->timeline.empty() && !overlapped)
                 gaps.insert_or_assign(chat->timeline.front().id,
                                       message_store::gap_mark{.token = c.from, .start = !c.from.has_value()});
               paging_from_.erase(paged);

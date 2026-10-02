@@ -293,6 +293,10 @@ void app::apply(const request::load_older& one) {
                                   std::string from) {
     if (paged_from) {
       paging_from_.insert_or_assign(in, *paged_from);
+      // What the disk has, before the page comes and is kept: whether it
+      // reaches it is told by this.
+      if (!on_disk_.contains(in))
+        on_disk_.emplace(in, message_store::everything(in) | std::views::keys | std::ranges::to<std::set<std::string>>());
       if (const auto gap = gaps_of(in).find(*paged_from); gap != gaps_of(in).end()) {
         if (gap->second.start)
           return;  // the room's beginning: nothing older anywhere

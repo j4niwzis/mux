@@ -243,8 +243,13 @@ void app::woken() {
     splice::visit(splice::overloaded{[&](const mux::change::event_missing& gone) {
                                        auto& screen = root().main();
                                        if (screen.jumping_to == gone.id) {
-                                         screen.stop_jump();
-                                         root().show_notice("That message isn't there any more, or can't be seen from this account.");
+                                         // An edit: to the message it edits, which is where it shows.
+                                         if (gone.instead) {
+                                           screen.jump_to(*gone.instead);
+                                         } else {
+                                           screen.stop_jump();
+                                           root().show_notice("That message isn't there any more, or can't be seen from this account.");
+                                         }
                                        }
                                      },
                                      [](const auto&) {}},

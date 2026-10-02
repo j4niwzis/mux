@@ -1271,6 +1271,8 @@ struct history_position {
 struct event_missing {
   conversation_id in;
   std::string id;
+  // Shown under another's id instead: an edit, in the message it edits.
+  std::optional<std::string> instead{};
 };
 
 }  // namespace change

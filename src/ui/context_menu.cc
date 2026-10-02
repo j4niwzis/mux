@@ -880,6 +880,7 @@ struct emoji_popup : scene::Node {
   // Where the button that opened it is: its right, its top.
   float right = 0.0f, bottom = 0.0f;
   float placed_x = -1.0f, placed_y = -1.0f, placed_h = -1.0f;
+  float placed_w = 0.0f;
 
   emoji_popup(Actions* a, float at_right, float at_bottom)
       : parts{.card = card_t(a)}, actions(a), right(at_right), bottom(at_bottom) {
@@ -887,16 +888,19 @@ struct emoji_popup : scene::Node {
   }
   void layoutChildren() {
     const skia::SkRect box = fState.contentBox();
-    constexpr float kWidth = 345.0f, kEdge = 10.0f;
+    constexpr float kMostWidth = 345.0f, kEdge = 10.0f;
+    // As wide as tdesktop's panel, or as the window leaves -- a phone's.
+    const float kWidth = std::min(kMostWidth, std::max(160.0f, box.width() - 2.0f * kEdge));
     const float room = std::max(0.0f, bottom - box.fTop - kEdge);
     const float h = std::min(std::clamp(box.height() * 0.6f, 278.0f, 640.0f), room);
     const float x = std::clamp(right - kWidth, kEdge, std::max(kEdge, box.width() - kWidth - kEdge));
     const float y = std::max(box.fTop + kEdge, bottom - h) - box.fTop;
-    if (x != placed_x || y != placed_y || h != placed_h) {
+    if (x != placed_x || y != placed_y || h != placed_h || kWidth != placed_w) {
       placed_x = x;
       placed_y = y;
       placed_h = h;
-      parts.card.apply({.x = x, .y = y, .height = h});
+      placed_w = kWidth;
+      parts.card.apply({.x = x, .y = y, .width = kWidth, .height = h});
     }
     scene::layoutChildrenInContentBox(*this);
   }

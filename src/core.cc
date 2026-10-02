@@ -1893,6 +1893,11 @@ class model {
   }
   void on(const change::members_changed& one) {
     conversation& where = of(one.in);
+    // Who was in it and is no longer -- left, kicked, banned -- types no
+    // more: their typing, said before they went, stayed under the name.
+    std::erase_if(where.typing, [&](const std::string& who) {
+      return std::ranges::contains(where.members, who, &member::id) && !std::ranges::contains(one.members, who, &member::id);
+    });
     where.members = one.members;
     where.knocking = one.knocking;
     ++where.members_revision;

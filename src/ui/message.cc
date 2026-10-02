@@ -1323,6 +1323,7 @@ struct message_bubble : nodes::Stack {
     // beside the last line asks it: the bubble widened to hold both.
     float base_min = 0.0f;
     float widened = 0.0f;
+    float placed_most = 0.0f;  // the widest the text could be, as last placed
     // Whether where the time goes has been decided, from a layout: until it
     // has, the bubble asks for frames, for a window at rest updates nothing
     // and the time stayed under the text.
@@ -1392,14 +1393,21 @@ struct message_bubble : nodes::Stack {
         last_width = reactions->chips().empty() ? 0.0f : reactions->chips().back().bounds().fRight - last.fLeft;
       // Measured again only where what it goes beside moved or changed: not
       // a font's measuring for every bubble in view, every frame.
-      if (last == placed_beside && last_width == placed_width && inline_time.text() == placed_time)
+      // The widest the text can be here: the bubble's widest, or what the
+      // row gives it where that is less -- a phone's window. Against the
+      // widest alone, the time was put beside a last line the bubble could
+      // not widen for, over its last words.
+      const float given = fState.fLastConstraint.width() - 2.0f * kPadX;
+      const float most = given > 0.0f ? std::min(kMaxWidth, given) : kMaxWidth;
+      if (last == placed_beside && last_width == placed_width && inline_time.text() == placed_time && most == placed_most)
         return;
       placed_beside = last;
       placed_width = last_width;
       placed_time = inline_time.text();
+      placed_most = most;
       const float needs =
           last_width + skiff::paint::Painter(nullptr, *font).measure(inline_time.text(), 11.0f) + 10.0f;
-      const bool inside = needs <= kMaxWidth;
+      const bool inside = needs <= most;
       const float widest = inside ? std::ceil(needs) + 2.0f * kPadX : 0.0f;
       if (inside == time.visible() || widest != widened) {
         time.setVisible(!inside);

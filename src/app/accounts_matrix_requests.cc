@@ -14,6 +14,8 @@ import mux.config;
 import mux.http;
 import mux.net;
 import mux.matrix;
+import loom.cs.keys;
+import mux.matrix.crypto;
 
 namespace mux::matrix {
 template auto account<mux::app::post_change>::id() const noexcept -> const account_id&;
@@ -68,4 +70,15 @@ template void account<mux::app::post_change>::fetch_members(std::string room);
 // is instantiated through them.
 template void account<mux::app::post_change>::setup_cross_signing(std::string password);
 template void account<mux::app::post_change>::restore_cross_signing(std::string recovery);
+// What the members above call, defined in the same partition: made here
+// too, for nothing instantiates them elsewhere.
+// The exception a message refused in the clear is thrown as: its members
+// defined in the class are not inline in a module, and are made here.
+template struct account<mux::app::post_change>::plaintext_refused;
+template std::optional<std::string> account<mux::app::post_change>::make_backup(const crypto::cross_signing_secrets& secrets);
+template void account<mux::app::post_change>::upload_backup();
+template std::size_t account<mux::app::post_change>::restore_backup(const std::string& secret);
+template std::optional<std::string> account<mux::app::post_change>::store_secrets(const crypto::cross_signing_secrets& secrets, const std::optional<std::string>& backup_secret);
+template void account<mux::app::post_change>::cross_sign_device(const loom::cs::query_keys::response_t::device_information_t& info);
+template void account<mux::app::post_change>::cross_sign_user(const std::string& user, const loom::cs::query_keys::response_t::cross_signing_key_t& master);
 }  // namespace mux::matrix

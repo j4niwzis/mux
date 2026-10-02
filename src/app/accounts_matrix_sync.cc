@@ -14,6 +14,8 @@ import mux.config;
 import mux.http;
 import mux.net;
 import mux.matrix;
+import loom.cs.sliding_sync;
+import mux.matrix.crypto;
 
 namespace mux::matrix {
 // Defined in the class, but a member of a module's class is not inline: the
@@ -38,4 +40,43 @@ template auto account<mux::app::post_change>::pinned_of(const loom::client::join
 template auto account<mux::app::post_change>::space(const loom::client::joined_room& kept) -> bool;
 template auto account<mux::app::post_change>::children_of(const loom::client::joined_room& kept) -> std::vector<std::string>;
 template void account<mux::app::post_change>::members(const conversation_id& in, const loom::client::joined_room& kept);
+// What the members above call, defined in the same partition: made here
+// too, for nothing instantiates them elsewhere.
+template void account<mux::app::post_change>::start_crypto();
+template void account<mux::app::post_change>::upload_keys(std::int64_t on_server);
+template bool account<mux::app::post_change>::send_plain(std::string type, const std::string& user, const std::string& device, knot::raw content);
+template void account<mux::app::post_change>::verification_said(const crypto::sas_state& state, verification_step_t step);
+template void account<mux::app::post_change>::cancel_verification(const std::string& txn, std::string code, std::string reason);
+template void account<mux::app::post_change>::verify_start(std::string user, std::optional<std::string> device);
+template void account<mux::app::post_change>::verification_in(const std::string& sender, const loom::ev::m_key_verification_request_content_t& content);
+template void account<mux::app::post_change>::verify_accept(std::string txn);
+template void account<mux::app::post_change>::verification_in(const std::string& sender, const loom::ev::m_key_verification_ready_content_t& content);
+template void account<mux::app::post_change>::sas_start(crypto::sas_state& state);
+template void account<mux::app::post_change>::verification_in(const std::string& sender, const loom::ev::m_key_verification_start_content_t& content);
+template void account<mux::app::post_change>::verification_in(const std::string& sender, const loom::ev::m_key_verification_accept_content_t& content);
+template void account<mux::app::post_change>::verification_in(const std::string& sender, const loom::ev::m_key_verification_key_content_t& content);
+template void account<mux::app::post_change>::sas_show(crypto::sas_state& state);
+template void account<mux::app::post_change>::verify_confirm(std::string txn, bool match);
+template void account<mux::app::post_change>::sas_send_mac(crypto::sas_state& state);
+template void account<mux::app::post_change>::verification_in(const std::string& sender, const loom::ev::m_key_verification_mac_content_t& content);
+template void account<mux::app::post_change>::sas_check_mac(crypto::sas_state& state);
+template void account<mux::app::post_change>::verification_in(const std::string& sender, const loom::ev::m_key_verification_cancel_content_t& content);
+template void account<mux::app::post_change>::verification_request_in_room(const conversation_id& in, const loom::ev::timeline_event& one, const crypto::room_request_fields& fields);
+template bool account<mux::app::post_change>::verification_in_room(const conversation_id& in, const loom::ev::timeline_event& one, const knot::raw& raw, placement_t where);
+template void account<mux::app::post_change>::verify_cancel(std::string txn);
+template void account<mux::app::post_change>::mend_session(const std::string& user, const std::string& curve25519);
+template void account<mux::app::post_change>::upload_fallback_key();
+template void account<mux::app::post_change>::crypto_answer(const loom::cs::sliding_sync::response_t& got);
+template void account<mux::app::post_change>::crypto_answer_now(const loom::cs::sliding_sync::response_t& got);
+template void account<mux::app::post_change>::export_room_keys(std::string path, std::string passphrase);
+template void account<mux::app::post_change>::import_room_keys(std::string path, std::string passphrase);
+template bool account<mux::app::post_change>::owns_key(const std::string& user, const std::string& curve25519);
+template std::optional<std::string> account<mux::app::post_change>::share_room_key(const std::string& room);
+template void account<mux::app::post_change>::vet_room_key(const crypto::room_key_offer& offer);
+template bool account<mux::app::post_change>::encrypted_room(std::string_view room);
+template void account<mux::app::post_change>::remember_encrypted(std::string_view room);
+template void account<mux::app::post_change>::save_encrypted();
+template std::optional<typename account<mux::app::post_change>::since_t> account<mux::app::post_change>::encrypted_by(std::string_view room, std::optional<since_t> seen);
+template std::filesystem::path account<mux::app::post_change>::encrypted_rooms_file() const;
+template void account<mux::app::post_change>::load_encrypted();
 }  // namespace mux::matrix

@@ -178,7 +178,7 @@ class account {
   // Cross-signing set up for this user: three keys made, uploaded (the
   // password asked by the server's user-interactive auth), kept here
   // sealed, and this device signed with the self-signing key.
-  void setup_cross_signing(std::string password);
+  void setup_cross_signing(std::string password, bool reset = false);
   // The cross-signing keys put in secret storage under a new recovery key,
   // which is said to the user to write down; and taken back with one.
   std::optional<std::string> store_secrets(const crypto::cross_signing_secrets& secrets,

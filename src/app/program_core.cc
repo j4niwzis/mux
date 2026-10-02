@@ -1135,6 +1135,11 @@ void app::apply(const request::give_passphrase& one) {
               net->setup_cross_signing(*keys_of, one.current);
             root().close_passphrase();
           },
+          [&](mux::config::passphrase_for::reset_identity) {
+            if (keys_of)
+              net->setup_cross_signing(*keys_of, one.current, true);
+            root().close_passphrase();
+          },
           [&](mux::config::passphrase_for::recovery) {
             if (keys_of)
               net->restore_cross_signing(*keys_of, one.current);
@@ -1163,6 +1168,12 @@ void app::apply(const request::setup_cross_signing&) {
   this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
     keys_of = id_of(account);
     root().ask_passphrase(mux::config::passphrase_for::cross_signing{});
+  });
+}
+void app::apply(const request::reset_identity&) {
+  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+    keys_of = id_of(account);
+    root().ask_passphrase(mux::config::passphrase_for::reset_identity{});
   });
 }
 void app::apply(const request::restore_cross_signing&) {

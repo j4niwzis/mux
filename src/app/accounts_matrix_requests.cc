@@ -68,7 +68,7 @@ template void account<mux::app::post_change>::fetch_members(std::string room);
 // Cross-signing set up with the password, and restored with the recovery key:
 // what they call -- the backup made and stored, devices and people signed --
 // is instantiated through them.
-template void account<mux::app::post_change>::setup_cross_signing(std::string password);
+template void account<mux::app::post_change>::setup_cross_signing(std::string password, bool reset);
 template void account<mux::app::post_change>::restore_cross_signing(std::string recovery);
 // What the members above call, defined in the same partition: made here
 // too, for nothing instantiates them elsewhere.

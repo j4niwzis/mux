@@ -637,8 +637,8 @@ struct network {
   void restore_cross_signing(const mux::account_id& by, std::string recovery) {
     this->with_matrix(by, [recovery = std::move(recovery)](matrix_account& account) { account.restore_cross_signing(recovery); });
   }
-  void setup_cross_signing(const mux::account_id& by, std::string password) {
-    this->with_matrix(by, [password = std::move(password)](matrix_account& account) { account.setup_cross_signing(password); });
+  void setup_cross_signing(const mux::account_id& by, std::string password, bool reset = false) {
+    this->with_matrix(by, [password = std::move(password), reset](matrix_account& account) { account.setup_cross_signing(password, reset); });
   }
   void verify_start(const mux::account_id& by, std::string user, std::optional<std::string> device) {
     this->with_matrix(by, [user = std::move(user), device = std::move(device)](matrix_account& account) {

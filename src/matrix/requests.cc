@@ -943,8 +943,8 @@ void account<Sink>::sign_out_sessions(std::vector<std::string> devices, std::str
 }
 
 template <class Sink>
-void account<Sink>::setup_cross_signing(std::string password) {
-  this->spawn_guarded([this, password = std::move(password)] {
+void account<Sink>::setup_cross_signing(std::string password, bool reset) {
+  this->spawn_guarded([this, password = std::move(password), reset] {
     if (!crypto_ || !api_) {
       sink_(change::refused{id_, "Not set up: encryption is not running for this account."});
       return;
@@ -960,7 +960,8 @@ void account<Sink>::setup_cross_signing(std::string password) {
         sink_(change::refused{id_, "Not set up: this account's keys could not be fetched: " + got.error().said()});
         return;
       }
-      if (crypto::master_of(*got, id_.address)) {
+      // Unless the identity is being reset, by the user's word.
+      if (!reset && crypto::master_of(*got, id_.address)) {
         sink_(change::refused{id_, "This account has cross-signing already. Use Restore with the recovery key to give "
                                    "this device its keys, or verify this device from one that has them."});
         return;

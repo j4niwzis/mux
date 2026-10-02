@@ -459,6 +459,7 @@ struct account_sessions : nodes::Stack {
   // trusted only by the client that verified it, and nothing is signed.
   using set_up_row = row_item<ask<Actions, &Actions::setup_cross_signing>>;
   using restore_row = row_item<ask<Actions, &Actions::restore_cross_signing>>;
+  using reset_row = row_item<ask<Actions, &Actions::reset_identity>>;
   struct parts_t {
     nodes::Text verification_title = section_title("DEVICE VERIFICATION");
     nodes::Text verification_note{"To verify device identity and grant access to encrypted messages: cross-signing. "
@@ -467,6 +468,9 @@ struct account_sessions : nodes::Stack {
                                   13.0f, dim_colour};
     set_up_row set_up;
     restore_row restore;
+    // Element's last resort: new cross-signing keys, the dialog saying what
+    // it undoes.
+    reset_row reset;
     nodes::Text title = section_title("SESSIONS");
     nodes::Text note{"Loading the sessions…", 13.0f, dim_colour};
     nodes::Text current_title = section_title("CURRENT SESSION");
@@ -482,6 +486,7 @@ struct account_sessions : nodes::Stack {
   explicit account_sessions(Actions* a)
       : actions(a), parts{.set_up = set_up_row("Set up cross-signing\u2026", {a}),
                           .restore = restore_row("Restore with the recovery key\u2026", {a}),
+                          .reset = reset_row("Reset your identity\u2026", {a}),
                           .rest = widgets::Button<sign_out_rest>("Sign out of all other sessions", {this}),
                           .refresh = widgets::Button<reload>("Refresh", {a})} {
     this->setGap(8.0f);

@@ -91,6 +91,13 @@ struct passphrase_box : nodes::Stack {
             "the people you verify. Your server asks for your account's password to take them.",
             "Set up", true, false};
   }
+  static constexpr words words_of(config::passphrase_for::reset_identity) {
+    return {"Reset your identity",
+            "New cross-signing keys replace your account's: everyone who verified you, and every session of yours, "
+            "must verify again, and messages only your old keys could read stay unreadable here. Only if you have "
+            "lost every verified session and the recovery key. Your server asks for your account's password.",
+            "Reset", true, false};
+  }
   static constexpr words words_of(config::passphrase_for::recovery) {
     return {"Restore with the recovery key",
             "The recovery key written down when cross-signing was set up: with it, this device takes your "

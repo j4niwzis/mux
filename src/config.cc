@@ -959,6 +959,12 @@ struct import_keys {
 struct cross_signing {
   friend bool operator==(cross_signing, cross_signing) = default;
 };
+// The account's identity reset (Element's "Reset identity"): new
+// cross-signing keys in place of the old, the password asked as for a
+// setting up.
+struct reset_identity {
+  friend bool operator==(reset_identity, reset_identity) = default;
+};
 // Cross-signing taken back with the recovery key.
 struct recovery {
   friend bool operator==(recovery, recovery) = default;
@@ -966,7 +972,8 @@ struct recovery {
 }  // namespace passphrase_for
 using passphrase_for_t = splice::variant<passphrase_for::unlock, passphrase_for::encrypt, passphrase_for::change,
                                          passphrase_for::decrypt, passphrase_for::export_keys, passphrase_for::import_keys,
-                                         passphrase_for::cross_signing, passphrase_for::recovery>;
+                                         passphrase_for::cross_signing, passphrase_for::recovery,
+                                         passphrase_for::reset_identity>;
 
 // Its own choice, if it made one; else as every account's.
 [[nodiscard]] inline const std::optional<bool>& send_typing_of(const account_t& one) {

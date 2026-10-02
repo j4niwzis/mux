@@ -1226,18 +1226,18 @@ struct conversations_screen : nodes::Stack {
     }
     void layoutChildren() {
       auto& top = parts.head.parts.top;
-      top.fState.fOutOfFlow = big;
+      top.fState.setOutOfFlow(big);
       if (big)
         top.apply({.width = std::max(0.0f, fState.contentBox().width() - 16.0f)});
       this->nodes::Stack::layoutChildren();
       if (!big) {
-        top.fState.setShift(0.0f, 0.0f);
+        top.fState.shiftTo(0.0f, 0.0f);
         return;
       }
       // Laid out where the head put it, moved under Search.
       const skia::SkRect at = top.bounds();
       const skia::SkRect under = search.bounds();
-      top.fState.setShift(fState.contentBox().fLeft + 8.0f - at.fLeft, under.fBottom + 8.0f - at.fTop);
+      top.fState.shiftTo(fState.contentBox().fLeft + 8.0f - at.fLeft, under.fBottom + 8.0f - at.fTop);
     }
   };
   // The chat: its header, its messages, and where one writes; or, with no

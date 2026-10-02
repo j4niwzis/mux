@@ -1295,9 +1295,9 @@ struct message_bubble : nodes::Stack {
       const auto flow = [&](auto& part) {
         if (!part)
           return;
-        part->fState.fOutOfFlow = side;
+        part->fState.setOutOfFlow(side);
         if (!side)
-          part->fState.setShift(0.0f, 0.0f);
+          part->fState.shiftTo(0.0f, 0.0f);
       };
       flow(parts.name);
       flow(parts.forwarded);
@@ -1312,7 +1312,7 @@ struct message_bubble : nodes::Stack {
           return;
         const skia::SkRect at = part->bounds();
         const float x = beside_left ? sticker.fLeft - kBesideGap - at.width() : sticker.fRight + kBesideGap;
-        part->fState.setShift(x - at.fLeft, sticker.fTop + y - at.fTop);
+        part->fState.shiftTo(x - at.fLeft, sticker.fTop + y - at.fTop);
         y += at.height() + 4.0f;
       };
       put(parts.name);

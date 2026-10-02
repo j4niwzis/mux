@@ -863,7 +863,7 @@ struct emoji_popup : scene::Node {
         return;
       docked = on;
       fState.apply({.padding = {0.0f, 0.0f, on ? kTabsHigh : 0.0f, 0.0f}, .cornerRadius = on ? 0.0f : 8.0f});
-      parts.tabs.fState.fOutOfFlow = on;
+      parts.tabs.fState.setOutOfFlow(on);
       if (on)
         parts.tabs.apply({.place = scene::anchor::kBottomLeft});
       parts.tabs.fStack.justify = on ? nodes::Justify{nodes::justify::middle{}} : nodes::Justify{nodes::justify::start{}};

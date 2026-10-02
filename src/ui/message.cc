@@ -313,6 +313,8 @@ struct picture_view : scene::Node {
   // was ticked at every frame for as long as its whole picture was not
   // fetched -- that is, nearly always.
   [[nodiscard]] bool wantsTick() const { return parts.loader.visible() || animations().has(source); }
+  // A sticker: its message's time shown while the pointer is over it.
+  [[nodiscard]] bool hoverChangesAppearance() const { return sticker; }
   void update(double) {
     const bool moving = animations().has(source);
     const bool coming = !moving && !thumbnails().has(source) && !whole_pictures().has(source);
@@ -1318,18 +1320,26 @@ struct message_bubble : nodes::Stack {
       if (!side)
         return;
       const skia::SkRect sticker = parts.picture->bounds();
+      // The forward and the reply on one plate, as tdesktop's one service
+      // rect: the forward's corners round at its top, the reply's at its
+      // bottom, nothing between them.
+      const bool both = parts.forwarded && parts.forwarded->visible() && parts.quote && parts.quote->visible();
+      if (parts.forwarded)
+        parts.forwarded->apply({.corners = both ? scene::Corners{8.0f, 8.0f, 0.0f, 0.0f} : scene::Corners{8.0f, 8.0f, 8.0f, 8.0f}});
+      if (parts.quote)
+        parts.quote->apply({.corners = both ? scene::Corners{0.0f, 0.0f, 8.0f, 8.0f} : scene::Corners{8.0f, 8.0f, 8.0f, 8.0f}});
       float y = 0.0f;
-      const auto put = [&](auto& part) {
+      const auto put = [&](auto& part, float after) {
         if (!part || !part->visible())
           return;
         const skia::SkRect at = part->bounds();
         const float x = beside_left ? sticker.fLeft - kBesideGap - at.width() : sticker.fRight + kBesideGap;
         part->fState.shiftTo(x - at.fLeft, sticker.fTop + y - at.fTop);
-        y += at.height() + 4.0f;
+        y += at.height() + after;
       };
-      put(parts.name);
-      put(parts.forwarded);
-      put(parts.quote);
+      put(parts.name, 4.0f);
+      put(parts.forwarded, both ? 0.0f : 4.0f);
+      put(parts.quote, 4.0f);
     }
     // Its least width as the message asks it (a quote's), and as the time
     // beside the last line asks it: the bubble widened to hold both.
@@ -1348,7 +1358,10 @@ struct message_bubble : nodes::Stack {
     // Ticked only until the time is placed: every bubble in view was ticked
     // at every frame for as long as it was shown. What moves it again --
     // its text, its reactions -- marks it.
-    [[nodiscard]] bool wantsTick() const { return !time_placed; }
+    [[nodiscard]] bool wantsTick() const {
+      // And a sticker that came, while its time is not as the pointer says.
+      return !time_placed || (beside && !beside_left && parts.picture && parts.picture->hovered() != parts.time.visible());
+    }
     [[nodiscard]] static skia::SkColor mixed(skia::SkColor from, skia::SkColor to, float amount) {
       const auto channel = [&](int shift) {
         const float a = static_cast<float>((from >> shift) & 0xFF), b = static_cast<float>((to >> shift) & 0xFF);
@@ -1366,9 +1379,12 @@ struct message_bubble : nodes::Stack {
       // reactions too, it was shown twice.
       if (picture && picture->sticker) {
         time_placed = true;
-        // Over it where it was sent; beside it, its own, where it came.
-        if (inline_time.visible() || time.visible() == beside_left) {
-          time.setVisible(!beside_left);
+        // Over it where it was sent; beside it, its own, where it came --
+        // and that only while the pointer is over it, as tdesktop's
+        // needInfoDisplay (isUnderCursor), or while it is being sent.
+        const bool shown = !beside_left && picture->hovered();
+        if (inline_time.visible() || time.visible() != shown) {
+          time.setVisible(shown);
           inline_time.setVisible(false);
           this->invalidateLayout();
         }

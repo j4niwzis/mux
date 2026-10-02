@@ -46,6 +46,22 @@ struct failure {
   }
 };
 
+// What is refused in the clear, thrown: the room, the message's id here (its
+// transaction) and why. Out of the account template, its destructor its key
+// function: as a member of the template, its vtable and type information
+// were made nowhere, and the link failed.
+struct plaintext_refused : std::runtime_error {
+  conversation_id in;
+  std::string local;
+  plaintext_refused(conversation_id room, std::string txn,
+                    std::string why = "Not sent: this room is end-to-end encrypted, and nothing goes into it in the clear.")
+      : std::runtime_error(std::move(why)), in(std::move(room)), local(std::move(txn)) {}
+  plaintext_refused(const plaintext_refused&) = default;
+  plaintext_refused& operator=(const plaintext_refused&) = default;
+  ~plaintext_refused() override;
+};
+plaintext_refused::~plaintext_refused() = default;
+
 template <class Sink>
 class account {
  public:
@@ -296,13 +312,7 @@ class account {
   // file's bytes -- and caught where its fiber began: the message marked not
   // sent, the user told in a dialog. This client does not send encrypted
   // yet (part 2 of the E2EE PR).
-  struct plaintext_refused : std::runtime_error {
-    conversation_id in;
-    std::string local;  // the message's id here, its transaction
-    plaintext_refused(conversation_id room, std::string txn,
-                      std::string why = "Not sent: this room is end-to-end encrypted, and nothing goes into it in the clear.")
-        : std::runtime_error(std::move(why)), in(std::move(room)), local(std::move(txn)) {}
-  };
+  using plaintext_refused = matrix::plaintext_refused;
   void refuse_plaintext(std::string_view room, std::string_view local) {
     if (!this->encrypted_room(room))
       return;

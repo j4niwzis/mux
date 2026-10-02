@@ -72,9 +72,6 @@ template void account<mux::app::post_change>::setup_cross_signing(std::string pa
 template void account<mux::app::post_change>::restore_cross_signing(std::string recovery);
 // What the members above call, defined in the same partition: made here
 // too, for nothing instantiates them elsewhere.
-// The exception a message refused in the clear is thrown as: its members
-// defined in the class are not inline in a module, and are made here.
-template struct account<mux::app::post_change>::plaintext_refused;
 template std::optional<std::string> account<mux::app::post_change>::make_backup(const crypto::cross_signing_secrets& secrets);
 template void account<mux::app::post_change>::upload_backup();
 template std::size_t account<mux::app::post_change>::restore_backup(const std::string& secret);

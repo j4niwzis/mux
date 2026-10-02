@@ -540,8 +540,16 @@ void app::refresh(std::source_location from) {
   auto& filters = root().main().event_filters;
   filters.clear();
   for (const auto& [id, account] : model->accounts())
-    for (const auto& [key, one] : account.conversations)
-      filters.emplace(one.id, this->room_event_filter_of(one.id));
+    for (const auto& [key, one] : account.conversations) {
+      auto filter = this->room_event_filter_of(one.id);
+      // In an encrypted room, who joins and who is invited is always shown:
+      // each of them is given the room's key, and the server could put
+      // anyone there -- the one thing to see before writing on.
+      if (one.encrypted)
+        for (const mux::room_event_t kind : {mux::room_event_t{mux::room_event::joins{}}, mux::room_event_t{mux::room_event::invites{}}})
+          filter.shown[kind.index()] = true;
+      filters.emplace(one.id, filter);
+    }
   // The chosen chat's bubbles, as its levels say.
   root().main().bubbles = root().main().chosen ? this->bubbles_of(*root().main().chosen) : mux::config::bubble_look{};
   // The panels' look, as the chosen chat's levels say, else every chat's:

@@ -230,6 +230,18 @@ void app::woken() {
     message_store::keep_marked(it->second, *said);
     it = marked_wanted_.erase(it);
   }
+  // A message jumped to that the server says is not there: the jump
+  // stopped, and said why -- it paged the whole history back for it.
+  for (const mux::change_t& one : changes)
+    splice::visit(splice::overloaded{[&](const mux::change::event_missing& gone) {
+                                       auto& screen = root().main();
+                                       if (screen.jumping_to == gone.id) {
+                                         screen.stop_jump();
+                                         root().show_notice("That message isn't there any more, or can't be seen from this account.");
+                                       }
+                                     },
+                                     [](const auto&) {}},
+                  one);
   // A link's message fetched: in its thread, where it is in one.
   if (linked_)
     if (const mux::conversation* chat = model->find(linked_->first); chat && mux::ui::held_message(*chat, linked_->second)) {

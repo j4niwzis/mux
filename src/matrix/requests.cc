@@ -921,6 +921,10 @@ void account<Sink>::load_context(std::string room, std::string target) {
     auto got = perform(*api_, loom::cs::get_event_context{.room_id = room, .event_id = target, .limit = 60});
     if (!got) {
       log(id_, "context of {} in {}: {}", target, room, got.error().said());
+      // Not there, or not to be seen: said so -- a jump to it stops, rather
+      // than paging the whole history back for it.
+      if (const auto& server = got.error().server; server && (server->status == 404 || server->status == 403))
+        sink_(change::event_missing{conversation_id{id_, room}, target});
       return;
     }
     const conversation_id in{id_, room};

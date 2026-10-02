@@ -583,6 +583,9 @@ struct network {
       account.import_room_keys(path, passphrase);
     });
   }
+  void setup_cross_signing(const mux::account_id& by, std::string password) {
+    this->with_matrix(by, [password = std::move(password)](matrix_account& account) { account.setup_cross_signing(password); });
+  }
   void verify_start(const mux::account_id& by, std::string user, std::optional<std::string> device) {
     this->with_matrix(by, [user = std::move(user), device = std::move(device)](matrix_account& account) {
       account.verify_start(user, device);

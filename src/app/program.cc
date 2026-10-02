@@ -383,6 +383,7 @@ struct app : kept_settings {
   void apply(const request::set_previews_direct&);
   void apply(const request::give_passphrase&);
   void apply(const request::export_room_keys&);
+  void apply(const request::setup_cross_signing&);
   void apply(const request::verify_person&);
   void apply(const request::verify_session&);
   void apply(const request::verify_accept_now&);

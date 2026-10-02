@@ -82,6 +82,10 @@ struct kept_file {
   // keys; and users' master keys verified so. Optional, as encrypted_rooms.
   std::optional<std::map<std::string, std::vector<std::string>>> verified;
   std::optional<std::map<std::string, std::string>> verified_masters;
+  // This user's cross-signing private keys, where this device made or got
+  // them: sealed under the store's key (AES-256-GCM), base64. Optional, as
+  // encrypted_rooms.
+  std::optional<std::string> cross_signing;
   friend consteval auto json_schema(knot::type<kept_file>) { return knot::schema<kept_file>(); }
 };
 
@@ -697,6 +701,78 @@ inline constexpr std::uint32_t kExportRounds = 500000;
   return std::move(*read);
 }
 
+// Cross-signing's private keys: 32-byte Ed25519 seeds, unpadded base64.
+struct cross_signing_secrets {
+  std::string master;
+  std::string self_signing;
+  std::string user_signing;
+  friend consteval auto json_schema(knot::type<cross_signing_secrets>) { return knot::schema<cross_signing_secrets>(); }
+};
+namespace detail {
+struct pkey_free {
+  void operator()(EVP_PKEY* key) const { EVP_PKEY_free(key); }
+};
+// An Ed25519 key from its seed; its public half, and a signature made with it.
+[[nodiscard]] inline std::unique_ptr<EVP_PKEY, pkey_free> ed25519_of(std::span<const std::uint8_t> seed) {
+  return std::unique_ptr<EVP_PKEY, pkey_free>(EVP_PKEY_new_raw_private_key(EVP_PKEY_ED25519, nullptr, seed.data(), seed.size()));
+}
+[[nodiscard]] inline std::optional<std::string> ed25519_public(std::string_view seed_b64) {
+  const auto seed = from_base64(seed_b64);
+  if (!seed || seed->size() != 32)
+    return std::nullopt;
+  const auto key = ed25519_of(*seed);
+  std::array<std::uint8_t, 32> out{};
+  std::size_t size = out.size();
+  if (!key || EVP_PKEY_get_raw_public_key(key.get(), out.data(), &size) != 1 || size != out.size())
+    return std::nullopt;
+  return to_base64(out);
+}
+[[nodiscard]] inline std::optional<std::string> ed25519_sign(std::string_view seed_b64, std::string_view message) {
+  const auto seed = from_base64(seed_b64);
+  if (!seed || seed->size() != 32)
+    return std::nullopt;
+  const auto key = ed25519_of(*seed);
+  std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> md(EVP_MD_CTX_new(), &EVP_MD_CTX_free);
+  const auto bytes = mux::bytes::of(message);
+  std::array<std::uint8_t, 64> out{};
+  std::size_t size = out.size();
+  if (!key || !md || EVP_DigestSignInit(md.get(), nullptr, nullptr, nullptr, key.get()) != 1 ||
+      EVP_DigestSign(md.get(), out.data(), &size, bytes.data(), bytes.size()) != 1 || size != out.size())
+    return std::nullopt;
+  return to_base64(out);
+}
+}  // namespace detail
+// Three new seeds: master, self-signing, user-signing.
+[[nodiscard]] inline cross_signing_secrets new_cross_signing() {
+  return {.master = to_base64(mux::vault::vault::random(32)),
+          .self_signing = to_base64(mux::vault::vault::random(32)),
+          .user_signing = to_base64(mux::vault::vault::random(32))};
+}
+// A device's keys with signatures, as /keys/signatures/upload takes them.
+struct signed_device_part {
+  std::vector<std::string> algorithms;
+  std::string device_id;
+  std::map<std::string, std::string> keys;
+  std::string user_id;
+  signatures_t signatures;
+  knot::raw rest;
+  friend consteval auto json_schema(knot::type<signed_device_part>) {
+    return knot::schema<signed_device_part>().member<"rest">(knot::rest);
+  }
+};
+// A cross-signing key with signatures, likewise.
+template <class Key>
+struct signed_key_part {
+  std::string user_id;
+  std::vector<typename Key::usage_item_t> usage;
+  std::map<std::string, std::string> keys;
+  signatures_t signatures;
+  knot::raw rest;
+  friend consteval auto json_schema(knot::type<signed_key_part>) {
+    return knot::schema<signed_key_part>().template member<"rest">(knot::rest);
+  }
+};
+
 // What a start that offers SAS says beyond the start itself: read from its
 // remainder, where it comes as a start of any method.
 struct sas_offer {
@@ -1181,6 +1257,31 @@ class olm_machine {
   [[nodiscard]] bool master_verified(const std::string& user) const {
     return kept_.verified_masters && kept_.verified_masters->contains(user);
   }
+
+  // This user's cross-signing private keys, kept sealed under the store's
+  // key; and read back.
+  void keep_cross_signing(const cross_signing_secrets& secrets) {
+    const auto sealed = mux::vault::detail::seal(key_, mux::bytes::of(knot::to_json_string(secrets)), "cross-signing");
+    kept_.cross_signing = to_base64(sealed);
+    this->save();
+  }
+  [[nodiscard]] std::optional<cross_signing_secrets> cross_signing_keys() const {
+    if (!kept_.cross_signing)
+      return std::nullopt;
+    const auto sealed = from_base64(*kept_.cross_signing);
+    if (!sealed)
+      return std::nullopt;
+    const auto opened = mux::vault::detail::open(key_, *sealed, "cross-signing");
+    if (!opened)
+      return std::nullopt;
+    auto read = knot::try_read<cross_signing_secrets>(mux::bytes::text_of(*opened));
+    if (!read)
+      return std::nullopt;
+    return std::move(*read);
+  }
+  // Signed with this device's own key: what the master key carries, so that
+  // this device's word for it can be seen.
+  [[nodiscard]] std::string sign_as_device(std::string_view canonical) const { return this->sign(canonical); }
 
   // A user's master key as first seen; pinned the first time.
   [[nodiscard]] std::optional<std::string> pinned_master(const std::string& user) const {

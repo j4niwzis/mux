@@ -85,6 +85,12 @@ struct passphrase_box : nodes::Stack {
     return {"Import room keys", "Room keys from a key file Element or mux wrote, under its passphrase.", "Import", true, false,
             true};
   }
+  static constexpr words words_of(config::passphrase_for::cross_signing) {
+    return {"Set up cross-signing",
+            "Three keys are made for your account and kept on this device: with them it signs your devices and "
+            "the people you verify. Your server asks for your account's password to take them.",
+            "Set up", true, false};
+  }
   static constexpr words words_of(config::passphrase_for::decrypt) {
     return {"Stop encrypting local data", "Everything kept is written in the clear again, readable by whoever can read "
                                           "these files.",

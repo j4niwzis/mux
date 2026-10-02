@@ -931,6 +931,11 @@ void app::apply(const request::give_passphrase& one) {
             net->import_room_keys(*keys_of, one.file, one.current);
             root().close_passphrase();
           },
+          [&](mux::config::passphrase_for::cross_signing) {
+            if (keys_of)
+              net->setup_cross_signing(*keys_of, one.current);
+            root().close_passphrase();
+          },
           [&](mux::config::passphrase_for::decrypt) {
             if (!vault.matches(one.current))
               return root().passphrase_refused("That is not the passphrase.");
@@ -950,6 +955,12 @@ void app::apply(const request::flip_local_encryption&) {
 void app::apply(const request::change_passphrase&) { root().ask_passphrase(mux::config::passphrase_for::change{}); }
 // Emoji verification: begun from a person's card or a session's row; its
 // dialog's answers, to the verification it shows.
+void app::apply(const request::setup_cross_signing&) {
+  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+    keys_of = id_of(account);
+    root().ask_passphrase(mux::config::passphrase_for::cross_signing{});
+  });
+}
 void app::apply(const request::verify_person& one) { net->verify_start(one.who.account, one.who.id, std::nullopt); }
 void app::apply(const request::verify_session& one) {
   this->with_chosen_account([&](accounts&, mux::config::account_t& account) {

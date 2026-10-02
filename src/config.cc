@@ -940,9 +940,14 @@ struct export_keys {
 struct import_keys {
   friend bool operator==(import_keys, import_keys) = default;
 };
+// Cross-signing set up: the account's password, which the server asks for.
+struct cross_signing {
+  friend bool operator==(cross_signing, cross_signing) = default;
+};
 }  // namespace passphrase_for
 using passphrase_for_t = splice::variant<passphrase_for::unlock, passphrase_for::encrypt, passphrase_for::change,
-                                         passphrase_for::decrypt, passphrase_for::export_keys, passphrase_for::import_keys>;
+                                         passphrase_for::decrypt, passphrase_for::export_keys, passphrase_for::import_keys,
+                                         passphrase_for::cross_signing>;
 
 // Its own choice, if it made one; else as every account's.
 [[nodiscard]] inline const std::optional<bool>& send_typing_of(const account_t& one) {

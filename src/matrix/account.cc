@@ -138,6 +138,15 @@ class account {
   void verify_accept(std::string txn);
   void verify_confirm(std::string txn, bool match);
   void verify_cancel(std::string txn);
+  // Cross-signing set up for this user: three keys made, uploaded (the
+  // password asked by the server's user-interactive auth), kept here
+  // sealed, and this device signed with the self-signing key.
+  void setup_cross_signing(std::string password);
+  // After emoji verification, the other side signed where this device has
+  // the keys for it: one's own device with the self-signing key, another
+  // user's master key with the user-signing key.
+  void cross_sign_device(const loom::cs::query_keys::response_t::device_information_t& info);
+  void cross_sign_user(const std::string& user, const loom::cs::query_keys::response_t::cross_signing_key_t& master);
   // This account's room keys written to `path`, sealed under a passphrase,
   // as Element writes them; and read back from one.
   void export_room_keys(std::string path, std::string passphrase);

@@ -1065,6 +1065,13 @@ void account<Sink>::sas_check_mac(crypto::sas_state& state) {
   crypto_->mark_verified(state.their_user, ed25519->second);
   if (master_ok)
     crypto_->verify_master(state.their_user, *master);
+  // Signed, where this device has the cross-signing keys: one's own device
+  // with the self-signing key, another's master key with the user-signing one.
+  if (state.their_user == id_.address)
+    this->cross_sign_device(device->second);
+  else if (master_ok && got->master_keys)
+    if (const auto theirs = got->master_keys->find(state.their_user); theirs != got->master_keys->end())
+      this->cross_sign_user(state.their_user, theirs->second);
   (void)this->send_plain("m.key.verification.done", state.their_user, state.their_device,
                          knot::raw{knot::to_json_string(loom::ev::m_key_verification_done_content_t{.transaction_id = txn})});
   this->verification_said(state, verification_step::done{});

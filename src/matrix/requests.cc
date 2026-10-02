@@ -23,6 +23,9 @@ import loom.cs.list_public_rooms;
 import loom.cs.space_hierarchy;
 import loom.cs.room_send;
 import loom.cs.rooms;
+import mux.matrix.crypto;
+import loom.cs.keys;
+import loom.cs.cross_signing;
 import loom.cs.room_state;
 import loom.cs.content_repo;
 import loom.cs.authed_content_repo;
@@ -893,6 +896,123 @@ void account<Sink>::sign_out_sessions(std::vector<std::string> devices, std::str
     }
     this->list_sessions();
   });
+}
+
+template <class Sink>
+void account<Sink>::setup_cross_signing(std::string password) {
+  this->spawn_guarded([this, password = std::move(password)] {
+    if (!crypto_ || !api_) {
+      sink_(change::refused{id_, "Not set up: encryption is not running for this account."});
+      return;
+    }
+    using upload = loom::cs::upload_cross_signing_keys;
+    using master_t = upload::body_t::cross_signing_key_t;
+    using self_t = upload::body_t::cross_signing_key_2_t;
+    using user_t = upload::body_t::cross_signing_key_3_t;
+    const auto secrets = crypto::new_cross_signing();
+    const auto master_pub = crypto::detail::ed25519_public(secrets.master);
+    const auto self_pub = crypto::detail::ed25519_public(secrets.self_signing);
+    const auto user_pub = crypto::detail::ed25519_public(secrets.user_signing);
+    if (!master_pub || !self_pub || !user_pub) {
+      sink_(change::refused{id_, "Not set up: the keys could not be made."});
+      return;
+    }
+    const auto signatures_raw = [&](const std::string& key_id, const std::string& signature) {
+      return knot::raw{knot::to_json_string(crypto::signatures_t{{id_.address, {{key_id, signature}}}})};
+    };
+    // Each key signed: the master by this device, the other two by the master.
+    master_t master{.user_id = id_.address, .usage = {master_t::usage_item_values::master{}}, .keys = {{"ed25519:" + *master_pub, *master_pub}}};
+    self_t self{.user_id = id_.address, .usage = {self_t::usage_item_values::self_signing{}}, .keys = {{"ed25519:" + *self_pub, *self_pub}}};
+    user_t users{.user_id = id_.address, .usage = {user_t::usage_item_values::user_signing{}}, .keys = {{"ed25519:" + *user_pub, *user_pub}}};
+    const auto master_canonical = knot::to_canonical_json(crypto::key_signed_part<master_t>{master.user_id, master.usage, master.keys, {}});
+    const auto self_canonical = knot::to_canonical_json(crypto::key_signed_part<self_t>{self.user_id, self.usage, self.keys, {}});
+    const auto user_canonical = knot::to_canonical_json(crypto::key_signed_part<user_t>{users.user_id, users.usage, users.keys, {}});
+    if (!master_canonical || !self_canonical || !user_canonical)
+      return;
+    master.signatures = signatures_raw("ed25519:" + crypto_->device_id(), crypto_->sign_as_device(*master_canonical));
+    self.signatures = signatures_raw("ed25519:" + *master_pub, crypto::detail::ed25519_sign(secrets.master, *self_canonical).value_or(""));
+    users.signatures = signatures_raw("ed25519:" + *master_pub, crypto::detail::ed25519_sign(secrets.master, *user_canonical).value_or(""));
+    upload::body_t body{.master_key = master, .self_signing_key = self, .user_signing_key = users};
+    auto first = perform(*api_, upload{.body = body});
+    if (!first) {
+      const auto& said = first.error().server;
+      if (!said || said->status != 401 || !said->session) {
+        sink_(change::refused{id_, "Cross-signing not set up: " + first.error().said()});
+        return;
+      }
+      const std::string given = !password.empty() ? password : how_.password;
+      upload::body_t::authentication_data_t auth{.type = "m.login.password", .session = *said->session};
+      auth.rest = as_body(password_auth{.identifier = {.user = how_.user_id}, .password = given});
+      body.auth = std::move(auth);
+      if (auto done = perform(*api_, upload{.body = body}); !done) {
+        sink_(change::refused{id_, "Cross-signing not set up: " + done.error().said()});
+        return;
+      }
+    }
+    crypto_->keep_cross_signing(secrets);
+    crypto_->verify_master(id_.address, *master_pub);
+    // This device, signed with the self-signing key.
+    if (const auto own = crypto_->signed_device_keys()) {
+      const auto canonical = knot::to_canonical_json(own->keys);
+      const auto by_self = canonical ? crypto::detail::ed25519_sign(secrets.self_signing, *canonical) : std::nullopt;
+      if (by_self) {
+        const crypto::signed_device_part signed_one{.algorithms = own->keys.algorithms,
+                                                    .device_id = own->keys.device_id,
+                                                    .keys = own->keys.keys,
+                                                    .user_id = own->keys.user_id,
+                                                    .signatures = {{id_.address, {{"ed25519:" + *self_pub, *by_self}}}}};
+        std::map<std::string, std::map<std::string, knot::raw>> signed_body;
+        signed_body[id_.address][own->keys.device_id] = knot::raw{knot::to_json_string(signed_one)};
+        (void)perform(*api_, loom::cs::upload_cross_signing_signatures{.body = std::move(signed_body)});
+      }
+    }
+    sink_(change::notice{id_, "Cross-signing set up",
+                         "This account now has its own cross-signing keys, kept on this device. Devices you verify with "
+                         "emoji are signed with them, and so are the people you verify."});
+  });
+}
+
+template <class Sink>
+void account<Sink>::cross_sign_device(const loom::cs::query_keys::response_t::device_information_t& info) {
+  const auto secrets = crypto_ ? crypto_->cross_signing_keys() : std::nullopt;
+  if (!secrets || info.user_id != id_.address)
+    return;
+  const auto self_pub = crypto::detail::ed25519_public(secrets->self_signing);
+  const auto canonical =
+      knot::to_canonical_json(crypto::device_signed_part{info.algorithms, info.device_id, info.keys, info.user_id, info.rest});
+  const auto signature = canonical ? crypto::detail::ed25519_sign(secrets->self_signing, *canonical) : std::nullopt;
+  if (!self_pub || !signature)
+    return;
+  const crypto::signed_device_part signed_one{.algorithms = info.algorithms,
+                                              .device_id = info.device_id,
+                                              .keys = info.keys,
+                                              .user_id = info.user_id,
+                                              .signatures = {{id_.address, {{"ed25519:" + *self_pub, *signature}}}},
+                                              .rest = info.rest};
+  std::map<std::string, std::map<std::string, knot::raw>> body;
+  body[id_.address][info.device_id] = knot::raw{knot::to_json_string(signed_one)};
+  (void)perform(*api_, loom::cs::upload_cross_signing_signatures{.body = std::move(body)});
+}
+
+template <class Sink>
+void account<Sink>::cross_sign_user(const std::string& user, const loom::cs::query_keys::response_t::cross_signing_key_t& master) {
+  const auto secrets = crypto_ ? crypto_->cross_signing_keys() : std::nullopt;
+  if (!secrets || user == id_.address || master.keys.size() != 1)
+    return;
+  using key_t = loom::cs::query_keys::response_t::cross_signing_key_t;
+  const auto user_pub = crypto::detail::ed25519_public(secrets->user_signing);
+  const auto canonical = knot::to_canonical_json(crypto::key_signed_part<key_t>{master.user_id, master.usage, master.keys, master.rest});
+  const auto signature = canonical ? crypto::detail::ed25519_sign(secrets->user_signing, *canonical) : std::nullopt;
+  if (!user_pub || !signature)
+    return;
+  const crypto::signed_key_part<key_t> signed_one{.user_id = master.user_id,
+                                                  .usage = master.usage,
+                                                  .keys = master.keys,
+                                                  .signatures = {{id_.address, {{"ed25519:" + *user_pub, *signature}}}},
+                                                  .rest = master.rest};
+  std::map<std::string, std::map<std::string, knot::raw>> body;
+  body[user][master.keys.begin()->second] = knot::raw{knot::to_json_string(signed_one)};
+  (void)perform(*api_, loom::cs::upload_cross_signing_signatures{.body = std::move(body)});
 }
 
 template <class Sink>

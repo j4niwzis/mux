@@ -702,8 +702,7 @@ template <byte_range Key, byte_range... Parts>
   body.insert(body.end(), ciphertext->begin(), ciphertext->end());
   const auto mac = detail::hmac_sha256(std::span(*keys).last(32), body);
   body.insert(body.end(), mac.begin(), mac.end());
-  const std::string lines = mux::bytes::base64_padded(body) | std::views::chunk(96) | std::views::join_with('\n') |
-                            std::ranges::to<std::string>();
+  const std::string lines = mux::bytes::every(mux::bytes::base64_padded(body), 96, '\n') | std::ranges::to<std::string>();
   return std::format("{}\n{}\n{}\n", detail::kExportHeader, lines, detail::kExportFooter);
 }
 // A key file opened: none where it is not one, its passphrase another, or
@@ -940,7 +939,7 @@ template <detail::byte_range Key>
   bytes.insert(bytes.end(), key.begin(), key.end());
   bytes.push_back(std::ranges::fold_left(bytes, std::uint8_t{0}, [](std::uint8_t a, std::uint8_t b) { return static_cast<std::uint8_t>(a ^ b); }));
   const std::string plain = detail::base58(bytes);
-  return plain | std::views::chunk(4) | std::views::join_with(' ') | std::ranges::to<std::string>();
+  return mux::bytes::every(plain, 4, ' ') | std::ranges::to<std::string>();
 }
 [[nodiscard]] inline std::optional<std::vector<std::uint8_t>> key_of_recovery(std::string_view recovery) {
   const std::string plain = recovery | std::views::filter([](char c) { return std::isspace(static_cast<unsigned char>(c)) == 0; }) |

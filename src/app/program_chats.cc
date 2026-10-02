@@ -28,6 +28,10 @@ void app::apply(const request::choose& one) {
   // Its account told which room is read: a sliding sync follows it.
   if (!shared.demo())
     net->follow_room(one.which.account, one.which.id);
+  // A direct chat that is encrypted: what is known of the other's identity,
+  // asked for, for its header.
+  if (const mux::conversation* chat = model->find(one.which); chat && !shared.demo() && chat->encrypted && !mux::ui::is_group(*chat))
+    net->ask_trust(one.which.account, mux::ui::contact_of(*chat));
   // An invite: its card -- who asked, Accept, Decline -- not a chat.
   if (const mux::conversation* chat = model->find(one.which); chat && chat->invite) {
     const std::string who = chat->invite->from_name.empty() ? chat->invite->from : chat->invite->from_name;

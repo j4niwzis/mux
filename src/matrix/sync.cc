@@ -1249,6 +1249,7 @@ void account<Sink>::crypto_answer_now(const loom::cs::sliding_sync::response_t& 
                                                                               [&](const crypto::secret_got& got) { this->secret_in(got); }},
                                                            *said);
                                          },
+                                         [&](const loom::ev::m_room_key_withheld_content_t& content) { this->withheld_in(content); },
                                          [&](const loom::ev::m_secret_request_content_t& content) {
                                            this->secret_request_in(one.sender.value_or(""), content);
                                          },
@@ -1775,5 +1776,30 @@ void account<Sink>::check_own_sessions() {
     sink_(change::notice{id_, "New login. Was this you?",
                          std::format("Not verified: {}. Verify each from Sessions -- or sign it out, if it was not you.", listed)});
   }
+}
+}  // namespace mux::matrix
+
+namespace mux::matrix {
+template <class Sink>
+void account<Sink>::withheld_in(const loom::ev::m_room_key_withheld_content_t& content) {
+  if (!content.session_id)
+    return;
+  using codes = loom::ev::m_room_key_withheld_content_t::code_values;
+  const std::string said = splice::visit(
+      splice::overloaded{
+          [](codes::m_unverified) { return std::string("🔒 You don't have access to this message: the sender does not trust this session (it is not verified)."); },
+          [](codes::m_blacklisted) { return std::string("🔒 You don't have access to this message: the sender has blocked this session."); },
+          [](codes::m_unauthorised) { return std::string("🔒 You don't have access to this message."); },
+          [](codes::m_history_not_shared) { return std::string("🔒 You don't have access to this message: it was sent before you joined."); },
+          [](codes::m_unavailable) { return std::string("🔒 Unable to decrypt message: its key could not be sent."); },
+          [](codes::m_no_olm) { return std::string("🔒 Unable to decrypt message: the sender could not reach this session."); },
+          [](const std::string&) { return std::string("🔒 Unable to decrypt message."); }},
+      content.code);
+  withheld_.insert_or_assign(*content.session_id, said);
+  if (const auto kept = undecrypted_.find(*content.session_id); kept != undecrypted_.end())
+    for (message one : kept->second) {
+      one.body = {said, std::nullopt};
+      sink_(change::message_added{std::move(one), placement::aside{}});
+    }
 }
 }  // namespace mux::matrix

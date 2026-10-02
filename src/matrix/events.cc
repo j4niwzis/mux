@@ -470,16 +470,28 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
       return;
     }
   }
-  // Not readable here (yet): said so.
-  sink_(change::message_added{message{.in = in,
-                                      .id = one.event_id,
-                                      .sender = one.sender,
-                                      .at = at,
-                                      // Element's words, for a key not here yet: it may come
-                                      // (a room key, the backup), and the message is read then.
-                                      .body = {"🔒 Waiting for this message, this may take a while.", std::nullopt},
-                                      .outgoing = one.sender == id_.address},
-                              where});
+  // Not readable here (yet): said so -- in Element's words, why, where the
+  // sender said why its key is withheld; else waiting for it, which may come
+  // (a room key, the backup). Kept by its session, to be said again if the
+  // reason comes after it.
+  std::optional<std::string> session;
+  splice::visit(splice::overloaded{[&](const loom::ev::m_room_encrypted_content_t& content) { session = content.session_id; },
+                                   [](const auto&) {}},
+                one.content.data());
+  message waiting{.in = in,
+                  .id = one.event_id,
+                  .sender = one.sender,
+                  .at = at,
+                  .body = {"🔒 Waiting for this message, this may take a while.", std::nullopt},
+                  .outgoing = one.sender == id_.address};
+  if (session) {
+    if (const auto why = withheld_.find(*session); why != withheld_.end())
+      waiting.body = {why->second, std::nullopt};
+    auto& kept = undecrypted_[*session];
+    if (kept.size() < 200)
+      kept.push_back(waiting);
+  }
+  sink_(change::message_added{std::move(waiting), where});
 }
 
 template <class Sink>

@@ -146,6 +146,12 @@ class account {
   // others cannot be sure what it sends is the user's; and other sessions of
   // the user's that are not ("New login. Was this you?").
   void check_own_sessions();
+  // Messages not read for want of their session's key, by that session; and
+  // why a sender withheld a session's key (m.room_key.withheld), in
+  // Element's words -- the messages said so, those that come later too.
+  std::map<std::string, std::vector<message>> undecrypted_;
+  std::map<std::string, std::string> withheld_;
+  void withheld_in(const loom::ev::m_room_key_withheld_content_t& content);
   // A room's gap since the last run, from where the sync left it back to
   // the event it had last: read for mentions of the user and reactions to
   // theirs, and nothing else -- no message kept, nothing fetched.

@@ -223,7 +223,7 @@ struct marks_box : nodes::Stack {
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
   } parts;
   marks_box(const ui_needs<Actions>& n, mark_kind_t kind, const conversation& in, const std::vector<mark_entry>& entries, const model* now)
-      : parts{.top = top_bar(splice::visit(splice::overloaded{[](mark_kind::mention) { return std::string("Mentions"); },
+      : parts{.top = top_bar(*n.colours, splice::visit(splice::overloaded{[](mark_kind::mention) { return std::string("Mentions"); },
                                                    [](mark_kind::reaction) { return std::string("Reactions"); }},
                                 kind),
                              {}, {n.actions}, false, true)} {

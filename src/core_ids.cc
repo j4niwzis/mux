@@ -523,9 +523,9 @@ struct conversation {
   std::vector<emote> emotes;
   // And the stickers, of the same packs.
   std::vector<emote> stickers;
-  // A Matrix room's own: who may join it and read its history, each one's
-  // say in it and what each thing done asks, its version.
-  proto::matrix::room_rules rules;
+  // What its protocol keeps of it beyond this (Matrix: its rules and power
+  // levels), or none.
+  room_part_t theirs;
   // Upgraded away: the room it continues in (m.room.tombstone), and what
   // its tombstone said; and the room this one continues, where it does.
   std::optional<std::string> replaced_by;

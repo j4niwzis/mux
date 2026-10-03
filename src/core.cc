@@ -93,7 +93,7 @@ struct conversation_updated {
   std::vector<std::string> pinned;
   std::vector<emote> emotes;
   std::vector<emote> stickers;
-  proto::matrix::room_rules rules;
+  room_part_t theirs;  // its protocol's own part of it
   // Upgraded away: the room it continues in (m.room.tombstone), and what
   // its tombstone said; and the room this one continues, where it does.
   std::optional<std::string> replaced_by;
@@ -563,7 +563,7 @@ class model {
     kept.pinned = one.pinned;
     kept.emotes = one.emotes;
     kept.stickers = one.stickers;
-    kept.rules = one.rules;
+    kept.theirs = one.theirs;
     kept.replaced_by = one.replaced_by;
     kept.replaced_why = one.replaced_why;
     kept.predecessor = one.predecessor;

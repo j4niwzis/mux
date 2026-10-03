@@ -722,7 +722,7 @@ void account<Sink>::conversation(const conversation_id& in, const loom::client::
                                      .pinned = pinned_of(kept),
                                      .emotes = emotes_of(kept),
                                      .stickers = emotes_of(kept, true),
-                                     .rules = {.join_rule = join_rule_of(rule_text(kept.state.template content<loom::ev::m_room_join_rules_content_t>("m.room.join_rules"),
+                                     .theirs = proto::matrix::room_rules{.join_rule = join_rule_of(rule_text(kept.state.template content<loom::ev::m_room_join_rules_content_t>("m.room.join_rules"),
                                                                          &loom::ev::m_room_join_rules_content_t::join_rule)),
                                      .history = history_rule_of(rule_text(kept.state.template content<loom::ev::m_room_history_visibility_content_t>("m.room.history_visibility"),
                                                                           &loom::ev::m_room_history_visibility_content_t::history_visibility)),

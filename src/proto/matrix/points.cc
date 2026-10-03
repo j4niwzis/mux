@@ -59,22 +59,63 @@ inline std::string local_part(const state&, std::string_view address) {
     address.remove_prefix(1);
   return std::string(address.substr(0, address.find(':')));
 }
+// A room's rules and levels, as Matrix keeps them in a chat's part: none
+// kept, the defaults.
+[[nodiscard]] inline const room_rules& rules_of(const room_part_t& part) {
+  static const room_rules none{};
+  return splice::visit(splice::overloaded{[](const room_rules& kept) -> const room_rules& { return kept; },
+                                          [](const auto&) -> const room_rules& { return none; }},
+                       part);
+}
+[[nodiscard]] inline const room_rules& rules_of(const conversation& in) { return rules_of(in.theirs); }
+// And to change: the part made Matrix's where it was none.
+[[nodiscard]] inline room_rules& rules_in(room_part_t& part) {
+  return splice::visit(splice::overloaded{[](room_rules& kept) -> room_rules& { return kept; },
+                                          [&](auto&) -> room_rules& { return part.template emplace<room_rules>(); }},
+                       part);
+}
 // What the account may do in a room, as its power levels allow: write
 // in it, let in those who knock; and to someone in it, only above them.
-[[nodiscard]] inline std::int64_t level_of(const conversation& in, std::string_view who) {
-  const auto level = in.rules.powers.find(std::string(who));
-  return level == in.rules.powers.end() ? in.rules.power_default : level->second;
+[[nodiscard]] inline std::int64_t level_of(const room_rules& rules, std::string_view who) {
+  const auto level = rules.powers.find(std::string(who));
+  return level == rules.powers.end() ? rules.power_default : level->second;
+}
+[[nodiscard]] inline std::int64_t level_of(const conversation& in, std::string_view who) { return level_of(rules_of(in), who); }
+// Whether what a room's Manage facts say of one lets one do a thing.
+[[nodiscard]] inline bool may(const auto& facts, const power_need_t& need) {
+  return facts.mine >= rules_of(facts.theirs).needs.of(need);
+}
+// The Manage dialog's facts, as Matrix fills them: one's own level, and
+// those the power levels name with one of their own (Element's privileged
+// users), the highest first.
+template <class Facts>
+void manage_facts(const state&, const conversation& chat, Facts& facts) {
+  const room_rules& rules = rules_of(chat);
+  facts.mine = level_of(rules, chat.id.account.address);
+  facts.privileged = rules.powers |
+                     std::views::filter([&](const auto& each) { return each.second != rules.needs.users_default; }) |
+                     std::views::transform([&](const auto& each) {
+                       const auto member = std::ranges::find(chat.members, each.first, &mux::member::id);
+                       return typename decltype(facts.privileged)::value_type{
+                           each.first, member != chat.members.end() && !member->name.empty() ? member->name : each.first,
+                           each.second};
+                     }) |
+                     std::ranges::to<decltype(facts.privileged)>();
+  std::ranges::stable_sort(facts.privileged, std::greater{}, &decltype(facts.privileged)::value_type::level);
 }
 inline part::chat_rights chat_rights(const state&, const conversation& in) {
   const std::int64_t mine = level_of(in, in.id.account.address);
-  const auto asked = in.rules.needs.events.find("m.room.message");
-  const std::int64_t needs = asked != in.rules.needs.events.end() ? asked->second : in.rules.needs.events_default;
-  return {mine >= needs, mine >= in.rules.needs.invite};
+  const auto asked = rules_of(in).needs.events.find("m.room.message");
+  const std::int64_t needs = asked != rules_of(in).needs.events.end() ? asked->second : rules_of(in).needs.events_default;
+  // Its packs (MSC2545's im.ponies.room_emotes), as a state event's level asks.
+  const auto packs = rules_of(in).needs.events.find("im.ponies.room_emotes");
+  const std::int64_t packs_need = packs != rules_of(in).needs.events.end() ? packs->second : rules_of(in).needs.state_default;
+  return {mine >= needs, mine >= rules_of(in).needs.invite, mine >= packs_need};
 }
 inline part::person_rights person_rights(const state&, const conversation& in, std::string_view who) {
   const std::int64_t mine = level_of(in, in.id.account.address), theirs = level_of(in, who);
   const bool above = who != in.id.account.address && mine > theirs;
-  return {above && mine >= in.rules.needs.of(power_need::kick{}), above && mine >= in.rules.needs.of(power_need::ban{})};
+  return {above && mine >= rules_of(in).needs.of(power_need::kick{}), above && mine >= rules_of(in).needs.of(power_need::ban{})};
 }
 // What is known of someone's identity: on their card, and beside them in an
 // encrypted room's members.
@@ -148,11 +189,11 @@ constexpr bool can_pin(const state&, std::string_view event) { return event.star
 // As the room's power levels allow it: one's own where one may send a
 // redaction; another's where one may also redact.
 inline bool may_delete(const state&, const conversation& chat, bool outgoing) {
-  const auto mine = chat.rules.powers.find(chat.id.account.address);
-  const std::int64_t level = mine != chat.rules.powers.end() ? mine->second : chat.rules.power_default;
-  const auto redaction = chat.rules.needs.events.find("m.room.redaction");
-  const std::int64_t send = redaction != chat.rules.needs.events.end() ? redaction->second : chat.rules.needs.events_default;
-  return level >= send && (outgoing || level >= chat.rules.needs.redact);
+  const auto mine = rules_of(chat).powers.find(chat.id.account.address);
+  const std::int64_t level = mine != rules_of(chat).powers.end() ? mine->second : rules_of(chat).power_default;
+  const auto redaction = rules_of(chat).needs.events.find("m.room.redaction");
+  const std::int64_t send = redaction != rules_of(chat).needs.events.end() ? redaction->second : rules_of(chat).needs.events_default;
+  return level >= send && (outgoing || level >= rules_of(chat).needs.redact);
 }
 
 }  // namespace mux::proto::matrix

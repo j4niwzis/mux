@@ -137,5 +137,6 @@ struct room_rules {
   power_needs needs;
   std::string version;
 };
+constexpr room_part_list<room_rules> room_parts(const state&) { return {}; }
 
 }  // namespace mux::proto::matrix

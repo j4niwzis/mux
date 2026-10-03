@@ -20,6 +20,13 @@ struct id {
   friend constexpr std::strong_ordering operator<=>(id, id) noexcept { return std::strong_ordering::equal; }
 };
 
+// What a protocol keeps of a chat beyond what every chat has -- Matrix's
+// rules and power levels -- as room_parts(state) lists its types: a
+// conversation holds one of them all (room_part_t), or none.
+template <class... Parts>
+struct room_part_list {};
+struct no_room_part {};
+
 }  // namespace mux::proto
 
 export namespace mux {

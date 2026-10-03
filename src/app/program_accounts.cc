@@ -309,11 +309,8 @@ void app::apply(const request::open_room_packs&) {
   if (!chat || !mux::proto::offers(mux::ui::protocol_state_of(chat->id.account), mux::proto::feature::sticker_packs{}))
     return;
   packs_account = chat->id.account;
-  const auto mine = chat->rules.powers.find(chat->id.account.address);
-  const std::int64_t level = mine != chat->rules.powers.end() ? mine->second : chat->rules.power_default;
-  const auto asked = chat->rules.needs.events.find("im.ponies.room_emotes");
-  const std::int64_t needs = asked != chat->rules.needs.events.end() ? asked->second : chat->rules.needs.state_default;
-  root().open_packs(chat->id.id, level >= needs);
+  // Whether its packs may be changed, as its protocol says.
+  root().open_packs(chat->id.id, mux::proto::chat_rights(mux::ui::protocol_state_of(chat->id.account), *chat).edit_packs);
   if (!shared.demo())
     net->list_packs(*packs_account, chat->id.id);
 }
@@ -514,17 +511,13 @@ void app::manage_chat(const mux::conversation_id& id) {
   const mux::conversation* chat = model->find(id);
   if (!chat)
     return;
-  const auto level_of = [&](const std::string& user) {
-    const auto found = chat->rules.powers.find(user);
-    return found == chat->rules.powers.end() ? chat->rules.power_default : found->second;
-  };
   mux::ui::room_settings_facts facts{.id = chat->id.id,
                                      .name = chat->name,
                                      .topic = chat->topic.value_or(""),
                                      .alias = chat->alias,
                                      .other_aliases = chat->other_aliases,
                                      .encrypted = chat->encrypted,
-                                     .rules = chat->rules,
+                                     .theirs = chat->theirs,
                                      .notify_mode = this->notify_mode_of(chat->id),
                                      .events_all = room_events.contains(chat->id)
                                                        ? std::optional<bool>(room_events.at(chat->id))
@@ -546,7 +539,6 @@ void app::manage_chat(const mux::conversation_id& id) {
                                      .event_kinds = room_event_kinds.contains(chat->id)
                                                         ? std::optional<mux::config::room_event_kinds>(room_event_kinds.at(chat->id))
                                                         : std::nullopt,
-                                     .mine = level_of(chat->id.account.address),
                                      .space = chat->space,
                                      .holds_spaces = std::ranges::any_of(chat->children, [&](const std::string& child) {
                                        const mux::conversation* in = model->find(mux::conversation_id{chat->id.account, child});
@@ -555,16 +547,8 @@ void app::manage_chat(const mux::conversation_id& id) {
                                      .forum = forums.contains(chat->id),
                                      .hidden_from_home = hidden_from_home.contains(chat->id),
                                      .speaks = chat->id.account.speaks};
-  // Element's privileged users: those the power levels name with a level of
-  // their own, the highest first.
-  for (const auto& [user, level] : chat->rules.powers) {
-    if (level == chat->rules.needs.users_default)
-      continue;
-    const auto member = std::ranges::find(chat->members, user, &mux::member::id);
-    facts.privileged.push_back(
-        {user, member != chat->members.end() && !member->name.empty() ? member->name : user, level});
-  }
-  std::ranges::stable_sort(facts.privileged, std::greater{}, &mux::ui::room_settings_facts::person::level);
+  // What its protocol fills of them: Matrix's own level and privileged users.
+  mux::proto::manage_facts(mux::ui::protocol_state_of(chat->id.account), *chat, facts);
   root().open_manage(facts);
 }
 void app::apply(const request::close_manage&) {

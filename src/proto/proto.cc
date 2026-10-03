@@ -138,6 +138,7 @@ using banner = banner_of<>;
 struct chat_rights {
   bool post = true;
   bool invite = true;
+  bool edit_packs = false;  // its sticker and emoji packs changed
 };
 // What one may do to someone in a chat: remove them, ban them.
 struct person_rights {
@@ -188,6 +189,8 @@ inline std::vector<part::badge> row_badges(const auto&, const conversation&) { r
 inline std::string local_part(const auto&, std::string_view address) { return std::string(address); }
 // Bubbles.
 inline part::style_t message_style(const auto&) { return part::style::bubbles{}; }
+// Nothing of its own in the Manage dialog's facts.
+inline void manage_facts(const auto&, const conversation&, auto&) {}
 // Anything one may do in a chat; nothing to anyone in it.
 inline part::chat_rights chat_rights(const auto&, const conversation&) { return {}; }
 inline part::person_rights person_rights(const auto&, const conversation&, std::string_view) { return {}; }
@@ -364,7 +367,7 @@ inline constexpr struct chat_rights_t {
     return splice::visit([&](const auto& now) {
       using defaults::available;
       using defaults::chat_rights;
-      return available(now) ? chat_rights(now, chat) : part::chat_rights{false, false};
+      return available(now) ? chat_rights(now, chat) : part::chat_rights{false, false, false};
     }, state);
   }
 } chat_rights{};
@@ -390,6 +393,17 @@ inline constexpr struct person_badges_t {
     }, state);
   }
 } person_badges{};
+// The Manage dialog's facts, as a protocol fills its part of them: nothing
+// by default.
+inline constexpr struct manage_facts_t {
+  template <class State, class Facts>
+  void operator()(const State& state, const conversation& chat, Facts& facts) const {
+    splice::visit([&](const auto& now) {
+      using defaults::manage_facts;
+      manage_facts(now, chat, facts);
+    }, state);
+  }
+} manage_facts{};
 // The layout a protocol's chats show their messages in.
 inline constexpr struct message_style_t {
   template <class State>

@@ -123,24 +123,24 @@ struct part {
 // the page made again from them.
 template <class Box>
 void chose(Box* box, const join_rule_t& rule) {
-  if (!box->facts.may(power_need::change_access{}))
+  if (!may(box->facts, power_need::change_access{}))
     return;
-  box->facts.rules.join_rule = rule;
+  rules_in(box->facts.theirs).join_rule = rule;
   box->actions->ask_for(request::change_room{room_change::set_join_rule{rule}});
   box->show_again();
 }
 template <class Box>
 void chose(Box* box, const history_rule_t& rule) {
-  if (!box->facts.may(power_need::change_history{}))
+  if (!may(box->facts, power_need::change_history{}))
     return;
-  box->facts.rules.history = rule;
+  rules_in(box->facts.theirs).history = rule;
   box->actions->ask_for(request::change_room{room_change::set_history{rule}});
   box->show_again();
 }
 template <class Box>
 void encrypt(Box* box) {
   auto& facts = box->facts;
-  if (facts.encrypted || !facts.may(power_need::encrypt{}))
+  if (facts.encrypted || !may(facts, power_need::encrypt{}))
     return;
   part& kept = box->template part<state>();
   if (!kept.confirming_encryption) {
@@ -155,25 +155,25 @@ void encrypt(Box* box) {
 template <class Box>
 void needs_level(Box* box, const power_need_t& need, std::int64_t level) {
   auto& facts = box->facts;
-  if (!facts.may(power_need::change_permissions{}) || level > facts.mine)
+  if (!may(facts, power_need::change_permissions{}) || level > facts.mine)
     return;
   box->actions->ask_for(request::change_room{room_change::set_need{need, level}});
-  splice::visit(splice::overloaded{[&](power_need::default_role) { facts.rules.needs.users_default = level; },
-                                   [&](power_need::send_messages) { facts.rules.needs.events_default = level; },
-                                   [&](power_need::change_settings) { facts.rules.needs.state_default = level; },
-                                   [&](power_need::invite) { facts.rules.needs.invite = level; },
-                                   [&](power_need::kick) { facts.rules.needs.kick = level; },
-                                   [&](power_need::ban) { facts.rules.needs.ban = level; },
-                                   [&](power_need::redact) { facts.rules.needs.redact = level; },
-                                   [&](power_need::notify_everyone) { facts.rules.needs.notify_room = level; },
-                                   [&]<sends_state Need>(Need) { facts.rules.needs.events.insert_or_assign(std::string(Need::event), level); }},
+  splice::visit(splice::overloaded{[&](power_need::default_role) { rules_in(facts.theirs).needs.users_default = level; },
+                                   [&](power_need::send_messages) { rules_in(facts.theirs).needs.events_default = level; },
+                                   [&](power_need::change_settings) { rules_in(facts.theirs).needs.state_default = level; },
+                                   [&](power_need::invite) { rules_in(facts.theirs).needs.invite = level; },
+                                   [&](power_need::kick) { rules_in(facts.theirs).needs.kick = level; },
+                                   [&](power_need::ban) { rules_in(facts.theirs).needs.ban = level; },
+                                   [&](power_need::redact) { rules_in(facts.theirs).needs.redact = level; },
+                                   [&](power_need::notify_everyone) { rules_in(facts.theirs).needs.notify_room = level; },
+                                   [&]<sends_state Need>(Need) { rules_in(facts.theirs).needs.events.insert_or_assign(std::string(Need::event), level); }},
                 need);
   box->show_again();
 }
 template <class Box>
 void user_level(Box* box, const std::string& user, std::int64_t level) {
   auto& facts = box->facts;
-  if (!facts.may(power_need::change_permissions{}) || level > facts.mine)
+  if (!may(facts, power_need::change_permissions{}) || level > facts.mine)
     return;
   box->actions->ask_for(request::change_room{room_change::set_power{user, level}});
   const auto found = std::ranges::find(facts.privileged, user, &room_settings_facts::person::id);
@@ -184,10 +184,10 @@ void user_level(Box* box, const std::string& user, std::int64_t level) {
 template <class Box>
 void event_level(Box* box, const std::string& event, std::int64_t level) {
   auto& facts = box->facts;
-  if (!facts.may(power_need::change_permissions{}) || level > facts.mine || event.empty())
+  if (!may(facts, power_need::change_permissions{}) || level > facts.mine || event.empty())
     return;
   box->actions->ask_for(request::change_room{room_change::set_event_need{event, level}});
-  facts.rules.needs.events.insert_or_assign(event, level);
+  rules_in(facts.theirs).needs.events.insert_or_assign(event, level);
   box->show_again();
 }
 
@@ -250,11 +250,11 @@ struct room_page : nodes::Stack {
       auto& facts = box->facts;
       const std::string& name = page->parts.name.text();
       const std::string& topic = page->parts.topic.text();
-      if (name != facts.name && facts.may(power_need::rename{})) {
+      if (name != facts.name && may(facts, power_need::rename{})) {
         box->actions->room_act(room_action::rename{name});
         facts.name = name;
       }
-      if (topic != facts.topic && facts.may(power_need::retopic{})) {
+      if (topic != facts.topic && may(facts, power_need::retopic{})) {
         box->actions->room_act(room_action::retopic{topic});
         facts.topic = topic;
       }
@@ -289,8 +289,8 @@ struct room_page : nodes::Stack {
     this->setGap(6.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
     parts.photo.apply({.alignSelf = scene::align::kStart});
-    const bool rename = facts.may(power_need::rename{});
-    const bool retopic = facts.may(power_need::retopic{});
+    const bool rename = may(facts, power_need::rename{});
+    const bool retopic = may(facts, power_need::retopic{});
     parts.name.apply({.disabled = !rename});
     parts.topic.apply({.disabled = !retopic});
     parts.buttons.setVisible(rename || retopic);
@@ -326,7 +326,7 @@ struct security_page : nodes::Stack {
   } parts;
   security_page(Actions*, Box* box, const room_settings_facts& facts)
       : parts{.encrypted = toggle_line<turn_encryption_on<Box>>("Encrypted", {box}, facts.encrypted,
-                                                                !facts.encrypted && facts.may(power_need::encrypt{})),
+                                                                !facts.encrypted && may(facts, power_need::encrypt{})),
               .encryption_warning = nodes::Text(box->template part<state>().confirming_encryption
                                                     ? "Press again to enable encryption. mux cannot read encrypted "
                                                       "rooms yet: what is sent after this will not show here."
@@ -334,21 +334,21 @@ struct security_page : nodes::Stack {
                                                 13.0f, error_colour),
               .access_about = explained("Decide who can join " + facts.name + "."),
               .invite = join_choice("Private (invite only)", "Only invited people can join.", {box, join_rule::invite{}},
-                                    is_rule<join_rule::invite>(facts.rules.join_rule), facts.may(power_need::change_access{})),
+                                    is_rule<join_rule::invite>(rules_of(facts.theirs).join_rule), may(facts, power_need::change_access{})),
               .knock = join_choice("Ask to join", "People cannot join unless access is granted.", {box, join_rule::knock{}},
-                                   is_rule<join_rule::knock>(facts.rules.join_rule), facts.may(power_need::change_access{})),
+                                   is_rule<join_rule::knock>(rules_of(facts.theirs).join_rule), may(facts, power_need::change_access{})),
               .open = join_choice("Public", "Anyone can find and join.", {box, join_rule::open{}},
-                                  is_rule<join_rule::open>(facts.rules.join_rule), facts.may(power_need::change_access{})),
+                                  is_rule<join_rule::open>(rules_of(facts.theirs).join_rule), may(facts, power_need::change_access{})),
               .anyone = history_choice("Anyone", "", {box, history_rule::world_readable{}},
-                                       is_rule<history_rule::world_readable>(facts.rules.history),
-                                       facts.may(power_need::change_history{})),
+                                       is_rule<history_rule::world_readable>(rules_of(facts.theirs).history),
+                                       may(facts, power_need::change_history{})),
               .shared = history_choice("Members only (since the point in time of selecting this option)", "",
-                                       {box, history_rule::shared{}}, is_rule<history_rule::shared>(facts.rules.history),
-                                       facts.may(power_need::change_history{})),
+                                       {box, history_rule::shared{}}, is_rule<history_rule::shared>(rules_of(facts.theirs).history),
+                                       may(facts, power_need::change_history{})),
               .invited = history_choice("Members only (since they were invited)", "", {box, history_rule::invited{}},
-                                        is_rule<history_rule::invited>(facts.rules.history), facts.may(power_need::change_history{})),
+                                        is_rule<history_rule::invited>(rules_of(facts.theirs).history), may(facts, power_need::change_history{})),
               .joined = history_choice("Members only (since they joined)", "", {box, history_rule::joined{}},
-                                       is_rule<history_rule::joined>(facts.rules.history), facts.may(power_need::change_history{}))} {
+                                       is_rule<history_rule::joined>(rules_of(facts.theirs).history), may(facts, power_need::change_history{}))} {
     this->setGap(4.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
     parts.encryption_warning.setWrapped(true);
@@ -412,7 +412,7 @@ struct roles_page : nodes::Stack {
         return;
       auto& facts = box->facts;
       if (std::ranges::find(facts.privileged, user, &room_settings_facts::person::id) == facts.privileged.end())
-        facts.privileged.push_back({user, user, facts.rules.needs.users_default});
+        facts.privileged.push_back({user, user, rules_of(facts.theirs).needs.users_default});
       user_level(box, user, box->template part<state>().new_level);
     }
   };
@@ -432,8 +432,8 @@ struct roles_page : nodes::Stack {
     event_row(Box* box, const std::string& event, std::int64_t level, const room_settings_facts& facts)
         : parts{.label = nodes::Text(event, 14.0f, text_colour),
                 .levels = level_choice<set_event_level<Box>, event_maker>(
-                    event_maker{box, event}, level, facts.rules.needs.state_default,
-                    facts.may(power_need::change_permissions{}) && level <= facts.mine)} {
+                    event_maker{box, event}, level, rules_of(facts.theirs).needs.state_default,
+                    may(facts, power_need::change_permissions{}) && level <= facts.mine)} {
       this->setHorizontal();
       this->setGap(10.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 0.0f, 4.0f, 0.0f}});
@@ -471,8 +471,8 @@ struct roles_page : nodes::Stack {
     permission_row(Box* box, std::string text, power_need_t need, const room_settings_facts& facts)
         : parts{.label = nodes::Text(std::move(text), 14.0f, text_colour),
                 .levels = level_choice<set_need<Box>, need_maker>(
-                    need_maker{box, need}, facts.rules.needs.of(need), facts.rules.needs.users_default,
-                    facts.may(power_need::change_permissions{}) && facts.rules.needs.of(need) <= facts.mine)} {
+                    need_maker{box, need}, rules_of(facts.theirs).needs.of(need), rules_of(facts.theirs).needs.users_default,
+                    may(facts, power_need::change_permissions{}) && rules_of(facts.theirs).needs.of(need) <= facts.mine)} {
       this->setHorizontal();
       this->setGap(10.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 0.0f, 4.0f, 0.0f}});
@@ -490,8 +490,8 @@ struct roles_page : nodes::Stack {
         : parts{.face = avatar_mark(one.id, one.name, 32.0f),
                 .texts = two_lines(one.name, one.id, 14.0f, 2.0f),
                 .levels = level_choice<set_level<Box>, user_maker>(
-                    user_maker{box, one.id}, one.level, facts.rules.needs.users_default,
-                    facts.may(power_need::change_permissions{}) && (one.level < facts.mine))} {
+                    user_maker{box, one.id}, one.level, rules_of(facts.theirs).needs.users_default,
+                    may(facts, power_need::change_permissions{}) && (one.level < facts.mine))} {
       this->setHorizontal();
       this->setGap(10.0f);
       fState.apply({.fillX = true, .height = 48.0f});
@@ -542,7 +542,7 @@ struct roles_page : nodes::Stack {
     for (const auto& one : facts.privileged)
       parts.users.emplace_back(box, one, facts);
     parts.none_privileged.setVisible(facts.privileged.empty());
-    const bool may_add = facts.may(power_need::change_permissions{});
+    const bool may_add = may(facts, power_need::change_permissions{});
     for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.add, &parts.add_about, &parts.adding})
       each->setVisible(may_add);
     // Element's list, in its order and words.
@@ -574,7 +574,7 @@ struct roles_page : nodes::Stack {
     std::set<std::string_view> listed;
     for (const auto& [text, need] : all)
       splice::visit(splice::overloaded{[&]<sends_state Need>(const Need&) { listed.insert(Need::event); }, [](const auto&) {}}, need);
-    for (const auto& [event, level] : facts.rules.needs.events)
+    for (const auto& [event, level] : rules_of(facts.theirs).needs.events)
       if (!listed.contains(event))
         parts.others.emplace_back(box, event, level, facts);
     for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.add_event, &parts.adding_event})
@@ -597,7 +597,7 @@ struct advanced_page : nodes::Stack {
     Box* box;
     advanced_page* page;
     void operator()() const {
-      if (!box->facts.may(power_need::upgrade{}))
+      if (!may(box->facts, power_need::upgrade{}))
         return;
       if (const std::string version = page->parts.upgrade_to.text(); !version.empty())
         box->actions->ask_for(request::change_room{room_change::upgrade{version}});
@@ -620,7 +620,7 @@ struct advanced_page : nodes::Stack {
   } parts;
   advanced_page(Actions* a, Box* box, const room_settings_facts& facts)
       : parts{.id = copy_line("Internal room ID", facts.id),
-              .version = nodes::Text("Room version: " + facts.rules.version, 14.0f, text_colour),
+              .version = nodes::Text("Room version: " + rules_of(facts.theirs).version, 14.0f, text_colour),
               .upgrade_to = field("Upgrade to room version", "12", "12"),
               .upgrade = widgets::Button<upgrade_press>("Upgrade this room", {box, this}),
               .explore = widgets::Button<asks<Actions, request::explore_state>>("Explore room state", {a}),
@@ -630,9 +630,9 @@ struct advanced_page : nodes::Stack {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
     for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.explore, &parts.send_custom, &parts.packs, &parts.upgrade})
       each->apply({.width = 180.0f, .height = 32.0f});
-    const bool may = facts.may(power_need::upgrade{});
-    parts.upgrade_to.setVisible(may);
-    parts.upgrade.setVisible(may);
+    const bool allowed = may(facts, power_need::upgrade{});
+    parts.upgrade_to.setVisible(allowed);
+    parts.upgrade.setVisible(allowed);
   }
 };
 

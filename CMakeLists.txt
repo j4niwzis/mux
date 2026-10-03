@@ -73,7 +73,7 @@ endforeach()
 # is the one tern is built with as well.
 cme_declare_port(NAME chevron PROVIDES chevron
   GITHUB_REPOSITORY j4niwzis/chevron
-  GIT_TAG babd0d528a68b844f21888e06f8c4ca5283c866f
+  GIT_TAG 8941c61344f5eb7aaae29ab11e5de944da6b36b7
   LICENSE AGPL-3.0-only
   TARGETS chevron)
 cme_options(chevron "CHEVRON_TESTS OFF")
@@ -118,11 +118,12 @@ cme_find_package(alef COMPONENTS precis idna grapheme line bidi emoji REQUIRED)
 set(SPLICE_ERASE ${MUX_ERASE_HANDLERS} CACHE BOOL "splice::variant through tables outside a release build, as mux's handlers")
 cme_declare_port(NAME splice PROVIDES splice
   GITHUB_REPOSITORY j4niwzis/splice
-  GIT_TAG 6345152905317e80ec870389cd64416b677190cd
+  GIT_TAG c45833699c8788b540f7140f4a84b6a3e0d522e8
   LICENSE GPL-3.0-only
   TARGETS splice)
 cme_options(splice "SPLICE_TESTS OFF")
-cme_find_package(splice REQUIRED)
+# 0.2: what has remapped; an installed 0.1 is passed over.
+cme_find_package(splice 0.2 REQUIRED)
 
 # knot, at knot::raw as a rest member (4903935): what is not typed kept as
 # its JSON text, no tree -- loom asks for the same. The project's pin is the
@@ -134,7 +135,7 @@ cme_declare_port(NAME knot PROVIDES knot
 
 # Found by itself, and linked by itself: mux imports it (a message's HTML),
 # not only tern.
-cme_find_package(chevron REQUIRED)
+cme_find_package(chevron 0.2 REQUIRED)  # 0.2: chevron.escape
 cme_find_package(tern REQUIRED)
 # Of loom, what mux uses: the state a sync leaves, and the parts of the API it
 # calls -- logging in, sending, syncing, finding the homeserver.

@@ -3,6 +3,7 @@
 export module mux.app.network;
 
 import std;
+import mux.vault;
 import splice;
 import mux.core;
 import mux.config;
@@ -37,7 +38,7 @@ export namespace mux::app {
 // keeps) makes it for the program's sink; and any of them, from the list.
 template <class Kept>
 using account_type_of = typename decltype(make_account(std::declval<const Kept&>(), std::declval<mux::net::loop&>(),
-                                                       std::declval<mux::net::tls&>(),
+                                                       std::declval<mux::net::tls&>(), std::declval<mux::vault::vault&>(),
                                                        std::declval<std::optional<mux::net::proxy>>(),
                                                        std::declval<post_change>()))::element_type;
 template <class>
@@ -83,6 +84,8 @@ struct network {
   mux::net::loop loop;
   mux::net::tls tls = mux::net::client_tls();
   mailbox_type* box = nullptr;
+  // What is kept on disk is read and written through: the program's.
+  mux::vault::vault* vault = nullptr;
   std::vector<running_account> accounts;
   // Accounts taken away, kept until the program ends: their fibers may still
   // be finishing, and they must not be destroyed under them.
@@ -107,7 +110,7 @@ struct network {
     splice::visit([&](const auto& each) {
       auto live = std::make_shared<std::atomic<bool>>(true);
       std::optional<mux::net::proxy> through = proxy_of(via);
-      this->run(std::string(address_of(each)), make_account(each, loop, tls, through, post_change{box, live}), live,
+      this->run(std::string(address_of(each)), make_account(each, loop, tls, *vault, through, post_change{box, live}), live,
                 std::move(through));
     }, saved.own);
   }

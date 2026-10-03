@@ -5,6 +5,7 @@
 // a formatted message, a reply, an edit, a reaction and typing; a message
 // sent and acknowledged; a later sync; stopped.
 import std;
+import mux.vault;
 import splice;
 import mux.core;
 import mux.net;
@@ -151,10 +152,12 @@ TEST(Matrix, AgainstAHomeserverOverTls) {
     }
   });
 
+  mux::vault::vault vault;
   mux::proto::matrix::client::settings how{.user_id = "@a:x.org",
                             .password = "pw",
                             .homeserver = "https://127.0.0.1:" + std::to_string(listening.port()),
-                            .sync_timeout = std::chrono::milliseconds(0)};
+                            .sync_timeout = std::chrono::milliseconds(0),
+                            .vault = &vault};
   seen.account.emplace(running, client_tls, how, sink{&seen});
   seen.account->start();
   running.run();

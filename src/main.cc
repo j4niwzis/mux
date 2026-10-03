@@ -42,15 +42,19 @@ using namespace mux::app;
 int main(int argc, char** argv) {
   mailbox_type box{wake_window{}};
   mux::model model;
+  // What is kept on disk is read and written through this one: placed and
+  // unlocked here, before anything is read, and handed to all that keeps.
+  mux::vault::vault vault;
   network net;
   net.box = &box;
+  net.vault = &vault;
 
   // `mux --demo`: fake accounts and conversations, no network, nothing kept.
   const bool demo = argc > 1 && std::string_view(argv[1]) == "--demo";
   const std::filesystem::path config_path = mux::config::default_path();
   // Local data encrypted, where the user turned it on: its header beside the
   // settings, and the vault unlocked before anything is read.
-  mux::vault::the().place(config_path.parent_path() / "vault.json");
+  vault.place(config_path.parent_path() / "vault.json");
   // Its directories the user's alone, whether the vault is on or not.
   if (!demo)
     for (const auto& dir : {config_path.parent_path(), mux::config::state_path("").parent_path(),
@@ -62,14 +66,14 @@ int main(int argc, char** argv) {
   if (demo) {
     saved = mux::config::file_of(fake::accounts());
     fake::fill(model);
-  } else if (mux::vault::the().locked()) {
+  } else if (vault.locked()) {
     // Read once the vault is opened.
-  } else if (mux::vault::the().sealed_without_header(config_path)) {
+  } else if (vault.sealed_without_header(config_path)) {
     // Sealed, and vault.json gone: never put aside as unreadable nor written
     // over -- nothing is changed, nothing started, until it is put back.
     config_error = "Local data here is encrypted, but vault.json, beside the settings, is gone. Put it back and "
                    "start mux again; nothing is changed until then.";
-  } else if (auto loaded = mux::config::load(config_path))
+  } else if (auto loaded = mux::config::load(config_path, vault))
     saved = std::move(*loaded);
   else {
     // Not a file this mux can read -- one of an older mux, most likely: kept
@@ -110,6 +114,7 @@ int main(int argc, char** argv) {
   mux::ui::use_theme(mux::config::theme_of(saved.theme), mux::config::accent_of(saved.accent));
   app program;
   program.box = &box;
+  program.vault = &vault;
   program.model = &model;
   program.net = &net;
   program.ask.net = &net;
@@ -119,10 +124,10 @@ int main(int argc, char** argv) {
   program.config_path = config_path;
   // Encrypted local data, locked: the window comes up on the unlock screen,
   // and what is kept is read once it is opened (app::unlock). Else at once.
-  if (mux::vault::the().locked())
+  if (vault.locked())
     program.lock(std::move(extra), demo);
   else
-    program.begin(saved, std::move(extra), demo || mux::vault::the().sealed_without_header(config_path),
+    program.begin(saved, std::move(extra), demo || vault.sealed_without_header(config_path),
                   std::move(config_error));
 
   if (config_note)

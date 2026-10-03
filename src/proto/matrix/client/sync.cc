@@ -445,14 +445,14 @@ void account<Sink>::save_kept() const {
   // Through the vault: the rooms' events and state, sealed where local data
   // is encrypted.
   const std::filesystem::path where = this->kept_file();
-  if (!mux::vault::the().write_file(where, knot::to_json_string(out)))
+  if (!how_.vault->write_file(where, knot::to_json_string(out)))
     log(id_, "the sync could not be kept in {}", where.string());
 }
 
 template <class Sink>
 void account<Sink>::load_kept() {
   this->load_encrypted();
-  const auto opened = mux::vault::the().read_file(this->kept_file());
+  const auto opened = how_.vault->read_file(this->kept_file());
   if (!opened)
     return;
   auto saved = knot::try_read<loom::cs::sync::response>(std::string_view(*opened));
@@ -833,7 +833,7 @@ void account<Sink>::start_crypto() {
   if (crypto_ || !how_.device_id || how_.crypto_store.empty())
     return;
   try {
-    crypto_.emplace(crypto::olm_machine::open(how_.crypto_store, id_.address, *how_.device_id));
+    crypto_.emplace(crypto::olm_machine::open(*how_.vault, how_.crypto_store, id_.address, *how_.device_id));
   } catch (const std::exception& failed) {
     log(id_, "encryption not started: {}", failed.what());
     return;
@@ -1592,7 +1592,7 @@ template <class Sink>
 void account<Sink>::save_encrypted() {
   const encrypted_kept all{.rooms = std::vector<std::string>(encrypted_rooms_.begin(), encrypted_rooms_.end()),
                            .since = std::map<std::string, std::int64_t>(encrypted_since_.begin(), encrypted_since_.end())};
-  if (!mux::vault::the().write_file(this->encrypted_rooms_file(), knot::to_json_string(all), true))
+  if (!how_.vault->write_file(this->encrypted_rooms_file(), knot::to_json_string(all), true))
     log(id_, "the encrypted rooms could not be kept in {}", this->encrypted_rooms_file().string());
 }
 template <class Sink>
@@ -1613,7 +1613,7 @@ std::filesystem::path account<Sink>::encrypted_rooms_file() const {
 }
 template <class Sink>
 void account<Sink>::load_encrypted() {
-  const auto opened = mux::vault::the().read_file(this->encrypted_rooms_file());
+  const auto opened = how_.vault->read_file(this->encrypted_rooms_file());
   if (!opened)
     return;
   if (auto read = knot::try_read<encrypted_kept>(std::string_view(*opened))) {

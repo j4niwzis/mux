@@ -99,6 +99,8 @@ constexpr std::optional<bool> flag(bool on) { return on ? std::optional<bool>(tr
 // old versions of each other is written again with one line each.
 class message_store {
  public:
+  // What the files are read and written through: the program's.
+  mux::vault::vault* vault = nullptr;
   using time_point = std::chrono::sys_time<std::chrono::milliseconds>;
 
   void record(const mux::message& one) {
@@ -113,15 +115,15 @@ class message_store {
     const auto where = reads_file_of(in);
     std::error_code failed;
     std::filesystem::create_directories(where.parent_path(), failed);
-    (void)mux::vault::the().write_file(where, knot::to_json_string(all));
+    (void)vault->write_file(where, knot::to_json_string(all));
   }
   struct reads {
     std::map<std::string, std::string> read_by;
     std::optional<std::string> me;
   };
-  [[nodiscard]] static reads read_reads(const mux::conversation_id& in) {
+  [[nodiscard]] reads read_reads(const mux::conversation_id& in) const {
     reads out;
-    const std::string text = mux::vault::the().read_file(reads_file_of(in)).value_or(std::string());
+    const std::string text = vault->read_file(reads_file_of(in)).value_or(std::string());
     auto parsed = knot::try_read<store_file::reads_file>(std::string_view(text));
     if (!parsed)
       return out;
@@ -147,7 +149,7 @@ class message_store {
     std::filesystem::create_directories(where.parent_path(), failed);
     {
       std::lock_guard held(file_lock());
-      (void)mux::vault::the().append_line(where, line_of(*whole));
+      (void)vault->append_line(where, line_of(*whole));
     }
     prune(mux::config::state_path("deleted"), deleted_budget, where);
   }
@@ -168,7 +170,7 @@ class message_store {
   static std::filesystem::path gaps_file_of(const mux::conversation_id& in) { return kept_of("messages", in, ".gaps.json"); }
   // Nothing where no file was kept: the history before gaps were kept is
   // not known to be whole.
-  static std::optional<gaps_t> gaps(const mux::conversation_id& in) {
+  std::optional<gaps_t> gaps(const mux::conversation_id& in) const {
     std::ifstream file(gaps_file_of(in), std::ios::binary);
     if (!file)
       return std::nullopt;
@@ -176,7 +178,7 @@ class message_store {
     auto read = knot::try_read<gaps_t>(std::string_view(text));
     return read ? std::optional<gaps_t>(std::move(*read)) : std::optional<gaps_t>(gaps_t{});
   }
-  static void keep_gaps(const mux::conversation_id& in, const gaps_t& all) {
+  void keep_gaps(const mux::conversation_id& in, const gaps_t& all) const {
     const auto where = gaps_file_of(in);
     std::error_code failed;
     std::filesystem::create_directories(where.parent_path(), failed);
@@ -188,28 +190,28 @@ class message_store {
   // kept apart as the mark is made, and never pruned with the history: the
   // list of marks shows it whatever else was let go, and needs nothing from
   // the server. From any thread.
-  static void keep_marked(const mux::conversation_id& in, const mux::message& one) {
+  void keep_marked(const mux::conversation_id& in, const mux::message& one) const {
     const auto where = kept_of("marked", in, ".jsonl");
     std::error_code failed;
     std::filesystem::create_directories(where.parent_path(), failed);
     std::lock_guard held(file_lock());
     std::ofstream(where, std::ios::binary | std::ios::app) << line_of(one) << '\n';
   }
-  static std::map<std::string, mux::message> marked(const mux::conversation_id& in) {
+  std::map<std::string, mux::message> marked(const mux::conversation_id& in) const {
     std::map<std::string, mux::message> all;
     read_lines(kept_of("marked", in, ".jsonl"), in, all);
     return all;
   }
 
   // All of a chat's messages kept, by id. From any thread: a worker's.
-  static std::map<std::string, mux::message> everything(const mux::conversation_id& in) {
+  std::map<std::string, mux::message> everything(const mux::conversation_id& in) const {
     auto all = read(in);
     return {std::make_move_iterator(all.begin()), std::make_move_iterator(all.end())};
   }
 
   // Up to `count` of a chat's messages from before `before`, oldest first.
   // Reading a chat's file counts as using it. From any thread: a worker's.
-  static std::vector<mux::message> older(const mux::conversation_id& in, time_point before, std::size_t count) {
+  std::vector<mux::message> older(const mux::conversation_id& in, time_point before, std::size_t count) const {
     std::error_code failed;
     std::filesystem::last_write_time(file_of(in), std::filesystem::file_time_type::clock::now(), failed);
     auto all = read(in);
@@ -237,17 +239,15 @@ class message_store {
   static std::filesystem::path file_of(const mux::conversation_id& in) { return kept_of("messages", in, ".jsonl"); }
   // The files are read on workers and written on the UI's thread: a line
   // written, and a file written again whole, hold this.
-  static std::mutex& file_lock() {
-    static std::mutex held;
-    return held;
-  }
+  std::mutex& file_lock() const { return lock_; }
+  mutable std::mutex lock_;
   void append(const mux::conversation_id& in, const std::string& line) {
     const auto where = file_of(in);
     std::error_code failed;
     std::filesystem::create_directories(where.parent_path(), failed);
     {
       std::lock_guard held(file_lock());
-      (void)mux::vault::the().append_line(where, line);
+      (void)vault->append_line(where, line);
     }
     if (++appended_ % 500 == 1)
       prune(mux::config::state_path("messages"), budget, where);
@@ -262,7 +262,7 @@ class message_store {
  private:
   // What is under `dir` held to `cap`: the chats used longest ago -- read
   // or written -- go first, whole; `keep`, just written, never does.
-  static void prune(const std::filesystem::path& dir, std::uintmax_t cap, const std::filesystem::path& keep) {
+  void prune(const std::filesystem::path& dir, std::uintmax_t cap, const std::filesystem::path& keep) {
     const std::uintmax_t kDiskBudget = cap;
     std::error_code failed;
     std::vector<std::pair<std::filesystem::file_time_type, std::filesystem::path>> files;
@@ -292,7 +292,7 @@ class message_store {
   // The chat's messages as its file says, each as its last line says -- the
   // file written again with one line each where most of its lines were old
   // -- and what was deleted in it, from the archive apart.
-  static std::map<std::string, mux::message> read(const mux::conversation_id& in) {
+  std::map<std::string, mux::message> read(const mux::conversation_id& in) const {
     std::map<std::string, mux::message> all;
     const auto where = file_of(in);
     std::error_code sized;
@@ -309,11 +309,11 @@ class message_store {
       // waiting (the file's lock first, as an append takes them): a re-seal
       // meanwhile would leave it under a key gone.
       std::lock_guard held(file_lock());
-      mux::vault::the().exclusive([&] {
+      vault->exclusive([&] {
         {
           std::ofstream out(fresh, std::ios::binary | std::ios::trunc);
           for (const mux::message* one : order)
-            out << mux::vault::the().line_of(line_of(*one), where) << '\n';
+            out << vault->line_of(line_of(*one), where) << '\n';
         }
         // Put in its place only where nothing was written to it meanwhile:
         // a line written since the read would be lost.
@@ -328,8 +328,8 @@ class message_store {
     return all;
   }
   // One file's lines, into `all`: how many there were.
-  static std::size_t read_lines(const std::filesystem::path& where, const mux::conversation_id& in,
-                                std::map<std::string, mux::message>& all) {
+  std::size_t read_lines(const std::filesystem::path& where, const mux::conversation_id& in,
+                                std::map<std::string, mux::message>& all) const {
     std::ifstream file(where, std::ios::binary);
     std::string text;
     std::size_t lines = 0;
@@ -337,7 +337,7 @@ class message_store {
       ++lines;
       // Sealed where local data is encrypted: a line that cannot be opened
       // is passed over, as one that cannot be read is.
-      const auto opened = mux::vault::the().open_line(text, where);
+      const auto opened = vault->open_line(text, where);
       if (!opened)
         continue;
       auto parsed = knot::try_read<store_file::message_line>(std::string_view(*opened));

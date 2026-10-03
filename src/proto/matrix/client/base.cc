@@ -3,6 +3,7 @@
 export module mux.proto.matrix.client:base;
 
 import std;
+import mux.vault;
 import knot;
 import loom.api;
 import loom.ev;
@@ -59,6 +60,8 @@ struct settings {
   // by emoji here: Element's "Never send encrypted messages to unverified
   // sessions".
   bool only_verified = false;
+  // What is kept on disk is read and written through: the program's.
+  mux::vault::vault* vault = nullptr;
 };
 
 // A typed content as a request's body: its JSON text.

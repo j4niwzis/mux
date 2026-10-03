@@ -7,6 +7,7 @@
 export module mux.app.kept;
 
 import std;
+import mux.vault;
 import splice;
 import mux.core;
 import mux.config;
@@ -15,6 +16,8 @@ import mux.logic.room_events;
 export namespace mux::app {
 
 struct kept_settings {
+  // What is kept is read and written through: the program's, given by main.
+  mux::vault::vault* vault = nullptr;
   std::filesystem::path config_path;
   std::vector<mux::config::account_t> saved;
   // The file's accounts of a protocol this build has not: written back as
@@ -435,7 +438,7 @@ struct kept_settings {
       return std::nullopt;
     if (config_error)
       return "Not saved: " + *config_error;
-    if (auto done = mux::config::save(config_path, this->file()); !done)
+    if (auto done = mux::config::save(config_path, this->file(), *vault); !done)
       return "Not saved: " + done.error();
     return std::nullopt;
   }

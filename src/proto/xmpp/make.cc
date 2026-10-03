@@ -5,6 +5,7 @@
 export module mux.proto.xmpp.make;
 
 import std;
+import mux.vault;
 import mux.core;
 import mux.net;
 import mux.proto.xmpp.client;
@@ -14,7 +15,7 @@ export namespace mux::proto::xmpp {
 
 template <class Sink>
 [[nodiscard]] std::unique_ptr<::mux::proto::xmpp::client::account<Sink>> make_account(const kept& saved, ::mux::net::loop& loop,
-                                                                       ::mux::net::tls& tls,
+                                                                       ::mux::net::tls& tls, ::mux::vault::vault&,
                                                                        std::optional<::mux::net::proxy> via, Sink sink) {
   ::mux::proto::xmpp::client::settings how{.address = saved.address,
                             .password = saved.password,

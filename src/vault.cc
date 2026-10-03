@@ -601,10 +601,5 @@ class vault {
   mutable std::recursive_mutex lock_;
 };
 
-// The one of this run: placed and unlocked at the start, before anything is read.
-inline vault& the() {
-  static vault one;
-  return one;
-}
 
 }  // namespace mux::vault

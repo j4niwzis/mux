@@ -209,7 +209,7 @@ void app::apply(const request::list_marks& one) {
   const auto find = [&](const std::string& id) -> const mux::message* { return mux::ui::held_message(*chat, id); };
   std::vector<mux::ui::mark_entry> entries;
   // What was kept with the marks, for those not held now.
-  const auto kept = shared.demo() ? std::map<std::string, mux::message>{} : message_store::marked(*chosen);
+  const auto kept = shared.demo() ? std::map<std::string, mux::message>{} : store.marked(*chosen);
   for (const mux::unread_mark& mark : marks) {
     mux::ui::mark_entry entry{.event = mark.event};
     const mux::message* said = find(mark.target);
@@ -294,7 +294,7 @@ void app::apply(const request::load_older& one) {
       // What the disk has, before the page comes and is kept: whether it
       // reaches it is told by this.
       if (!on_disk_.contains(in))
-        on_disk_.emplace(in, message_store::everything(in) | std::views::keys | std::ranges::to<std::set<std::string>>());
+        on_disk_.emplace(in, store.everything(in) | std::views::keys | std::ranges::to<std::set<std::string>>());
       if (const auto gap = gaps_of(in).find(*paged_from); gap != gaps_of(in).end()) {
         if (gap->second.start)
           return;  // the room's beginning: nothing older anywhere
@@ -322,7 +322,7 @@ void app::apply(const request::load_older& one) {
     return;
   }
   work.run([this, in = one.in, from = one.from, before, front, from_server]() -> workers::done_t {
-    auto kept = message_store::older(in, before, 100);
+    auto kept = store.older(in, before, 100);
     return [this, in, from, front, from_server, kept = std::move(kept)]() mutable {
       // Up to the first gap from the newest: what is before it is not
       // known to follow.

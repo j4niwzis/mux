@@ -226,7 +226,7 @@ void app::woken() {
       continue;
     }
     marked_kept_.insert(it->first);
-    message_store::keep_marked(it->second, *said);
+    store.keep_marked(it->second, *said);
     it = marked_wanted_.erase(it);
   }
   // A message jumped to that the server says is not there: the jump
@@ -351,7 +351,7 @@ void app::keep_marked(const mux::conversation_id& in, const std::string& id) {
     return;
   if (const mux::conversation* chat = model->find(in))
     if (const mux::message* said = mux::ui::held_message(*chat, id)) {
-      message_store::keep_marked(in, *said);
+      store.keep_marked(in, *said);
       return;
     }
   // Kept already, in an earlier run: the marks read back at the start are
@@ -359,7 +359,7 @@ void app::keep_marked(const mux::conversation_id& in, const std::string& id) {
   auto on_disk = marked_on_disk_.find(in);
   if (on_disk == marked_on_disk_.end())
     on_disk = marked_on_disk_
-                  .emplace(in, message_store::marked(in) | std::views::keys | std::ranges::to<std::set<std::string>>())
+                  .emplace(in, store.marked(in) | std::views::keys | std::ranges::to<std::set<std::string>>())
                   .first;
   if (on_disk->second.contains(id))
     return;
@@ -390,11 +390,11 @@ void app::save_marks() {
   // And those of chats not here yet, as they were read.
   for (const auto& [id, chat] : marks_not_here)
     out.chats.push_back(chat);
-  (void)mux::vault::the().write_file(mux::config::state_path("marks.json"), knot::to_json_string(out));
+  (void)vault->write_file(mux::config::state_path("marks.json"), knot::to_json_string(out));
 }
 
 void app::load_marks() {
-  const auto opened = mux::vault::the().read_file(mux::config::state_path("marks.json"));
+  const auto opened = vault->read_file(mux::config::state_path("marks.json"));
   if (!opened)
     return;
   const std::string& text = *opened;
@@ -420,7 +420,7 @@ void app::load_marks() {
 message_store::gaps_t& app::gaps_of(const mux::conversation_id& in) {
   auto found = gaps_.find(in);
   if (found == gaps_.end()) {
-    auto read = message_store::gaps(in);
+    auto read = store.gaps(in);
     if (read)
       gaps_kept_before_.insert(in);
     found = gaps_.emplace(in, read.value_or(message_store::gaps_t{})).first;
@@ -429,7 +429,7 @@ message_store::gaps_t& app::gaps_of(const mux::conversation_id& in) {
 }
 void app::gaps_changed(const mux::conversation_id& in) {
   gaps_kept_before_.insert(in);
-  message_store::keep_gaps(in, gaps_of(in));
+  store.keep_gaps(in, gaps_of(in));
 }
 
 void app::keep_on_disk(const mux::change_t& one) {
@@ -483,7 +483,7 @@ void app::keep_on_disk(const mux::change_t& one) {
                                 auto known = on_disk_.find(c.message.in);
                                 if (known == on_disk_.end())
                                   known = on_disk_
-                                              .emplace(c.message.in, message_store::everything(c.message.in) | std::views::keys |
+                                              .emplace(c.message.in, store.everything(c.message.in) | std::views::keys |
                                                                          std::ranges::to<std::set<std::string>>())
                                               .first;
                                 const bool was_kept = !known->second.insert(c.message.id).second;
@@ -546,7 +546,9 @@ void app::wire() {
                     .ask = &ask,
                     .scene = &scene,
                     .kept = this,
+                    .vault = vault,
                     .work = &work};
+  store.vault = vault;
 }
 
 void app::before_frame() {
@@ -1011,7 +1013,7 @@ mux::vault::vault::kept_files app::sealed_files() const {
 // either key or plain, and the re-seal is finished at the next start.
 template <class Turn>
 bool app::reseal(Turn turn) {
-  auto& vault = mux::vault::the();
+  auto& vault = *this->vault;
   // All of it with every other read and write of the vault waiting: the
   // network's saves and the store's lines come after, under the new key.
   return vault.exclusive([&] {
@@ -1033,7 +1035,7 @@ inline constexpr std::string_view kCutShort =
 
 // A passphrase given, by what it was asked for.
 void app::apply(const request::give_passphrase& one) {
-  auto& vault = mux::vault::the();
+  auto& vault = *this->vault;
   // A new one: not empty, and the same twice.
   const auto fresh_refused = [&] { return mux::config::new_passphrase_refused(one.fresh, one.again); };
   const auto done = [&] {
@@ -1054,7 +1056,7 @@ void app::apply(const request::give_passphrase& one) {
             root().close_passphrase();
             mux::config::file saved;
             std::optional<std::string> error;
-            if (auto loaded = mux::config::load(config_path))
+            if (auto loaded = mux::config::load(config_path, *vault))
               saved = std::move(*loaded);
             else
               error = loaded.error();
@@ -1094,7 +1096,7 @@ void app::apply(const request::give_passphrase& one) {
 }
 // From Storage: on asks for a new passphrase, off for the one now.
 void app::apply(const request::flip_local_encryption&) {
-  if (mux::vault::the().on())
+  if (vault->on())
     root().ask_passphrase(mux::config::passphrase_for::decrypt{});
   else
     root().ask_passphrase(mux::config::passphrase_for::encrypt{});

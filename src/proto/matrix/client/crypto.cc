@@ -1305,12 +1305,12 @@ struct outbound_plan {
 class olm_machine {
  public:
   // The machine of this device: read from its file, else made anew.
-  static olm_machine open(std::filesystem::path store, std::string user_id, std::string device_id) {
-    olm_machine made(std::move(store), std::move(user_id), std::move(device_id));
+  static olm_machine open(mux::vault::vault& vault, std::filesystem::path store, std::string user_id, std::string device_id) {
+    olm_machine made(vault, std::move(store), std::move(user_id), std::move(device_id));
     made.key_ = made.pickle_key();
     std::error_code there;
     const bool exists = std::filesystem::exists(made.store_, there);
-    const auto opened = exists ? mux::vault::the().read_file(made.store_) : std::optional<std::string>(std::string());
+    const auto opened = exists ? made.vault_->read_file(made.store_) : std::optional<std::string>(std::string());
     if (!opened)
       throw std::runtime_error("the encryption store cannot be opened (local data locked?): " + made.store_.string());
     const std::string& text = *opened;
@@ -1893,8 +1893,8 @@ class olm_machine {
   }
 
  private:
-  olm_machine(std::filesystem::path store, std::string user_id, std::string device_id)
-      : store_(std::move(store)), user_id_(std::move(user_id)), device_id_(std::move(device_id)) {}
+  olm_machine(mux::vault::vault& vault, std::filesystem::path store, std::string user_id, std::string device_id)
+      : vault_(&vault), store_(std::move(store)), user_id_(std::move(user_id)), device_id_(std::move(device_id)) {}
 
   // The store's key: 32 random bytes in a file of its own, the user's alone
   // and sealed where local data is encrypted (review 4, L5) -- made the
@@ -1907,7 +1907,7 @@ class olm_machine {
     // the old one, and the store under it lost for good.
     std::error_code ignored;
     if (std::filesystem::exists(path, ignored)) {
-      const auto opened = mux::vault::the().read_file(path);
+      const auto opened = vault_->read_file(path);
       if (!opened || opened->size() != key.size())
         throw std::runtime_error("the encryption store's key cannot be read: " + path.string());
       std::ranges::copy(mux::bytes::of(*opened), key.begin());
@@ -1919,7 +1919,7 @@ class olm_machine {
     // The system's own randomness (RAND_bytes), not std::random_device.
     const auto random = mux::vault::vault::random(key.size());
     std::ranges::copy(random, key.begin());
-    if (!mux::vault::the().write_file(path, mux::bytes::text_of(key), true))
+    if (!vault_->write_file(path, mux::bytes::text_of(key), true))
       throw std::runtime_error("the encryption store's key cannot be written: " + path.string());
     return key;
   }
@@ -1935,7 +1935,7 @@ class olm_machine {
     // one-time key comes back at the next start opens a session again for a
     // pre-key message replayed to it. Through the vault: sealed where local
     // data is encrypted, the user's alone either way.
-    if (!mux::vault::the().write_file(store_, knot::to_json_string(kept_), true))
+    if (!vault_->write_file(store_, knot::to_json_string(kept_), true))
       throw std::runtime_error("the encryption store cannot be written: " + store_.string());
   }
 
@@ -2015,6 +2015,8 @@ class olm_machine {
     }
   }
 
+  // The program's vault, which the store and its key are sealed by.
+  mux::vault::vault* vault_;
   std::filesystem::path store_;
   std::string user_id_;
   std::string device_id_;

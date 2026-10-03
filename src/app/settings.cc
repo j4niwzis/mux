@@ -186,7 +186,7 @@ class settings_part {
   // of it cleared.
   void apply(const request::settings_storage&) {
     if (auto* up = s_->root().settings_up())
-      up->show_storage(k_->limits, k_->history, mux::vault::the().on());
+      up->show_storage(k_->limits, k_->history, s_->vault->on());
   }
   void apply(const request::change_limit& one) {
     std::int64_t& value = mux::config::value_of(k_->limits, one.which);

@@ -1230,16 +1230,16 @@ template <class... Tags>
   return out;
 }
 
-std::expected<file, std::string> load(const std::filesystem::path& where) {
+std::expected<file, std::string> load(const std::filesystem::path& where, mux::vault::vault& vault) {
   std::error_code failed;
   if (!std::filesystem::exists(where, failed))
     return file{};
   // Through the vault: sealed where local data is encrypted, and not read
   // with it locked or with another key.
-  const auto opened = mux::vault::the().read_file(where);
+  const auto opened = vault.read_file(where);
   if (!opened)
     return std::unexpected(std::format("cannot open {}{}", where.string(),
-                                       mux::vault::the().locked() ? ": local data is encrypted and locked" : ""));
+                                       vault.locked() ? ": local data is encrypted and locked" : ""));
   const std::string& text = *opened;
   auto read = knot::try_read<file>(text);
   if (!read)
@@ -1258,7 +1258,7 @@ std::expected<file, std::string> load(const std::filesystem::path& where) {
 // The accounts written to `where`: the directory made (its owner's alone),
 // the new file made its owner's alone before the passwords go into it, and
 // put in place of the old one in one rename.
-std::expected<void, std::string> save(const std::filesystem::path& where, const file& accounts) {
+std::expected<void, std::string> save(const std::filesystem::path& where, const file& accounts, mux::vault::vault& vault) {
   namespace fs = std::filesystem;
   std::error_code failed;
   if (where.has_parent_path() && !fs::exists(where.parent_path(), failed)) {
@@ -1272,7 +1272,7 @@ std::expected<void, std::string> save(const std::filesystem::path& where, const 
   std::string text;
   knot::write(text, accounts);
   text += '\n';
-  if (!mux::vault::the().write_file(where, text, true))
+  if (!vault.write_file(where, text, true))
     return std::unexpected(std::format("cannot write {}", where.string()));
   return {};
 }

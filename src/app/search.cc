@@ -43,7 +43,7 @@ class search_part {
     if (const conversation* chat = s_->model->find(searching_->in))
       in_memory = chat->timeline;
     s_->work->run([this, in = searching_->in, query = one.text, in_memory = std::move(in_memory)]() -> workers::done_t {
-      std::map<std::string, message> all = message_store::everything(in);
+      std::map<std::string, message> all = s_->store->everything(in);
       for (const message& each : in_memory)
         all.insert_or_assign(each.id, each);
       auto found = logic::found_in(all, query);

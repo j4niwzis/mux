@@ -66,7 +66,7 @@ void app::apply(const request::choose& one) {
   // What was kept of its reads, where the model has nothing newer.
   if (model->find(one.which) && !ask.demo)
     work.run([this, which = one.which]() -> workers::done_t {
-      auto kept = message_store::read_reads(which);
+      auto kept = store.read_reads(which);
       return [this, which, kept = std::move(kept)]() mutable {
         const mux::conversation* chat = model->find(which);
         if (!chat)

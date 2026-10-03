@@ -6,6 +6,7 @@
 export module mux.app.services;
 
 import std;
+import mux.vault;
 import skiff.scene;
 import mux.core;
 import mux.config;
@@ -33,6 +34,7 @@ struct services {
   // The settings as saved -- an account's privacy, its proxy, by its
   // address -- the program's.
   kept_settings* kept = nullptr;
+  mux::vault::vault* vault = nullptr;
   // Work off the UI's thread.
   workers* work = nullptr;
 

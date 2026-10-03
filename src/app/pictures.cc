@@ -566,10 +566,10 @@ class pictures_part {
   // file fetched to be saved, which goes to Downloads instead. Named as
   // before -- an avatar by its source, a thumbnail and a whole picture with
   // thumb_ and full_ before it -- so what was kept is found.
-  static std::optional<std::filesystem::path> kept_file(const media_use_t& use, std::string_view source) {
+  std::optional<std::filesystem::path> kept_file(const media_use_t& use, std::string_view source) const {
     // Local data encrypted: pictures are kept in memory only -- none is
     // written in the clear beside what is sealed, nor read back from there.
-    if (mux::vault::the().on())
+    if (s_->vault->on())
       return std::nullopt;
     const auto named = [&](std::string_view kind) {
       return std::optional(mux::config::cache_path("avatars") / (std::string(kind) + mux::config::file_name_of(source)));

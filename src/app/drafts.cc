@@ -25,12 +25,12 @@ class drafts_part {
     auto& drafts = s_->root().main().drafts;
     if (!logic::keep_draft(drafts, in, text) || s_->demo())
       return;
-    (void)mux::vault::the().write_file(mux::config::state_path("drafts.json"), logic::drafts_text(drafts));
+    (void)s_->vault->write_file(mux::config::state_path("drafts.json"), logic::drafts_text(drafts));
   }
 
   // The drafts kept, back in the window: at the start.
   void load() {
-    const std::string text = mux::vault::the().read_file(mux::config::state_path("drafts.json")).value_or(std::string());
+    const std::string text = s_->vault->read_file(mux::config::state_path("drafts.json")).value_or(std::string());
     for (auto& [in, draft] : logic::drafts_from(text))
       s_->root().main().drafts.insert_or_assign(in, std::move(draft));
   }

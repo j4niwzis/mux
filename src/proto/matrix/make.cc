@@ -5,6 +5,7 @@
 export module mux.proto.matrix.make;
 
 import std;
+import mux.vault;
 import mux.core;
 import mux.config;
 import mux.net;
@@ -15,7 +16,7 @@ export namespace mux::proto::matrix {
 
 template <class Sink>
 [[nodiscard]] std::unique_ptr<::mux::proto::matrix::client::account<Sink>> make_account(const kept& saved, ::mux::net::loop& loop,
-                                                                         ::mux::net::tls& tls,
+                                                                         ::mux::net::tls& tls, ::mux::vault::vault& vault,
                                                                          std::optional<::mux::net::proxy> via, Sink sink) {
   ::mux::proto::matrix::client::settings how{.user_id = saved.user_id,
                               .password = saved.password,
@@ -30,7 +31,8 @@ template <class Sink>
                                               ((saved.user_id | std::views::transform([](char c) {
                                                   return std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_' ? c : '_';
                                                 }) | std::ranges::to<std::string>()) + ".json"),
-                              .only_verified = saved.only_verified.value_or(false)};
+                              .only_verified = saved.only_verified.value_or(false),
+                              .vault = &vault};
   return std::make_unique<::mux::proto::matrix::client::account<Sink>>(loop, tls, std::move(how), std::move(sink));
 }
 

@@ -63,14 +63,15 @@ struct account_entry : nodes::Stack {
 
   // Declared: its address over its protocol and state, on a plate lit
   // while it is the one chosen.
-  account_entry(Actions* a, const config::account_t& saved, const model& now, bool is_selected)
-      : actions(a), address(config::address_of(saved)), selected(is_selected),
-        parts{.name = nodes::Text(address, 15.0f, text_colour, true), .state = nodes::Text("", 13.0f, dim_colour)} {
+  account_entry(const ui_needs<Actions>& n, const config::account_t& saved, const model& now, bool is_selected)
+      : actions(n.actions), address(config::address_of(saved)), selected(is_selected),
+        parts{.name = nodes::Text(address, 15.0f, n.colours->text, true), .state = nodes::Text("", 13.0f, n.colours->dim)} {
+    const palette& colours = *n.colours;
     this->setGap(4.0f);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {7.0f, 16.0f, 7.0f, 16.0f}, .background = sidebar_colour, .selectedBackground = chosen_colour, .selected = selected});
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {7.0f, 16.0f, 7.0f, 16.0f}, .background = colours.sidebar, .selectedBackground = colours.chosen, .selected = selected});
     const auto [how, failed] = state_of(saved, now);
     parts.state.setText(std::format("{} · {}", config::protocol_name(saved), how));
-    parts.state.setColour(failed ? error_colour : dim_colour);
+    parts.state.setColour(failed ? colours.error : colours.dim);
     for (nodes::Text* each : {&parts.name, &parts.state}) {
       each->setElided(true);
       each->apply({.fillX = true});
@@ -99,12 +100,13 @@ struct account_editor : nodes::Stack {
   struct head_row : nodes::Stack {
     struct parts_t {
       nodes::Text heading;
-      nodes::Text enabled_label{"On", 13.0f, dim_colour};
+      nodes::Text enabled_label;
       widgets::Toggle<flip_account<Actions>> enabled;
       widgets::Button<remove_account<Actions>> remove;
     } parts;
-    head_row(Actions* a, const config::account_t& saved)
-        : parts{.heading = nodes::Text(config::address_of(saved), 20.0f, text_colour, true),
+    head_row(const palette& colours, Actions* a, const config::account_t& saved)
+        : parts{.heading = nodes::Text(config::address_of(saved), 20.0f, colours.text, true),
+                .enabled_label = nodes::Text("On", 13.0f, colours.dim),
                 .enabled = widgets::Toggle<flip_account<Actions>>(flip_account<Actions>{a, config::address_of(saved)}),
                 .remove = widgets::Button<remove_account<Actions>>(
                     "Remove", remove_account<Actions>{a, config::address_of(saved)})} {
@@ -119,14 +121,19 @@ struct account_editor : nodes::Stack {
       parts.remove.apply({.width = 100.0f, .height = 32.0f});
     }
   };
+  // The colours its state is said in as it changes.
+  const palette* colours_ = nullptr;
   struct parts_t {
     head_row head;
-    nodes::Text state{"", 13.0f, dim_colour};
+    nodes::Text state;
     account_form<Actions> form;
   } parts;
 
-  account_editor(Actions* a, const config::account_t& saved)
-      : parts{.head = head_row(a, saved), .form = form_of(a, saved)} {
+  account_editor(const ui_needs<Actions>& n, const config::account_t& saved)
+      : colours_(n.colours),
+        parts{.head = head_row(*n.colours, n.actions, saved),
+              .state = nodes::Text("", 13.0f, n.colours->dim),
+              .form = form_of(n.actions, saved)} {
     fState.apply({.fill = true});
     this->setGap(6.0f);
     parts.state.setElided(true);
@@ -137,7 +144,7 @@ struct account_editor : nodes::Stack {
   void show(const config::account_t& saved, const model& now) {
     const auto [how, failed] = state_of(saved, now);
     parts.state.setText(std::format("{} · {}", config::protocol_name(saved), how));
-    parts.state.setColour(failed ? error_colour : dim_colour);
+    parts.state.setColour(failed ? colours_->error : colours_->dim);
     parts.head.parts.enabled.setOn(config::enabled_of(saved));
   }
 
@@ -208,6 +215,8 @@ template <class Actions>
 struct account_pages : nodes::Stack {
   using row = row_item<choose_account_page<Actions>>;
   Actions* actions = nullptr;
+  // The colours its protocol's rows are made in, as they change.
+  const palette* colours_ = nullptr;
   struct parts_t {
     row connection;
     row privacy;
@@ -216,18 +225,19 @@ struct account_pages : nodes::Stack {
     row proxy;
   } parts;
 
-  explicit account_pages(Actions* a)
-      : actions(a), parts{.connection = row("Connection", {a, account_page::connection{}}, icon::sliders{}),
-                          .privacy = row("Privacy", {a, account_page::privacy{}}, icon::eye{}),
-                          .chats = row("Chats", {a, account_page::chats{}}, icon::people{}),
-                          .proxy = row("Proxy", {a, account_page::proxy{}}, icon::gear{})} {
+  account_pages(const palette& colours, Actions* a)
+      : actions(a), colours_(&colours),
+        parts{.connection = row(colours, "Connection", {a, account_page::connection{}}, icon::sliders{}),
+              .privacy = row(colours, "Privacy", {a, account_page::privacy{}}, icon::eye{}),
+              .chats = row(colours, "Chats", {a, account_page::chats{}}, icon::people{}),
+              .proxy = row(colours, "Proxy", {a, account_page::proxy{}}, icon::gear{})} {
     fState.apply({.padding = {6.0f, 0.0f, 0.0f, 0.0f}});
     this->light(account_page::connection{});
   }
   // A protocol's pages: each its title and icon, by its own overloads.
   template <class... Pages>
   void add(proto::account_page_list<Pages...>) {
-    (parts.own.emplace_back(std::string(page_title(Pages{})), choose_account_page<Actions>{actions, account_page_t{Pages{}}},
+    (parts.own.emplace_back(*colours_, std::string(page_title(Pages{})), choose_account_page<Actions>{actions, account_page_t{Pages{}}},
                             page_icon(Pages{})),
      ...);
   }
@@ -261,24 +271,28 @@ struct account_privacy : nodes::Stack {
   using notify_row = switch_row<ask<Actions, &Actions::flip_account_notify>>;
   using notify_sound_row = switch_row<ask<Actions, &Actions::flip_account_notify_sound>>;
   struct parts_t {
-    nodes::Text title = section_title("PRIVACY");
+    nodes::Text title;
     receipts_row receipts;
     typing_choice<Actions> typing;
     notify_row notify;
     notify_sound_row notify_sound;
-    nodes::Text note{"Off, the people you talk to through this account are not told when you have read their "
-                     "messages, or that you are typing. Theirs are still shown, and receipts are still kept here.",
-                     13.0f, dim_colour};
+    nodes::Text note;
   } parts;
 
-  account_privacy(Actions* a, bool receipts_on, std::optional<bool> typing_on, std::optional<bool> events_all = std::nullopt,
+  template <class... Rest>
+  account_privacy(const ui_needs<Actions>& n, Rest&&... rest) : account_privacy(*n.colours, n.actions, std::forward<Rest>(rest)...) {}
+  account_privacy(const palette& colours, Actions* a, bool receipts_on, std::optional<bool> typing_on, std::optional<bool> events_all = std::nullopt,
                   const std::optional<config::room_event_kinds>& kinds = std::nullopt, bool notify_on = true,
                   bool notify_sound_on = true, std::optional<bool> faces_on = std::nullopt,
                   std::optional<std::int64_t> jump_most = std::nullopt, std::optional<bool> previews_on = std::nullopt)
-      : parts{.receipts = receipts_row("Send read receipts", {a}),
+      : parts{.title = section_title(colours, "PRIVACY"),
+              .receipts = receipts_row(colours, "Send read receipts", {a}),
               .typing = typing_choice<Actions>(a, choice_level::account{}, typing_on),
-              .notify = notify_row("Desktop notifications from it", {a}),
-              .notify_sound = notify_sound_row("Their sound", {a})} {
+              .notify = notify_row(colours, "Desktop notifications from it", {a}),
+              .notify_sound = notify_sound_row(colours, "Their sound", {a}),
+              .note = note_text(colours, "Off, the people you talk to through this account are not told when you have read "
+                                         "their messages, or that you are typing. Theirs are still shown, and receipts are "
+                                         "still kept here.")} {
     (void)events_all, (void)kinds, (void)faces_on, (void)jump_most, (void)previews_on;
     this->setGap(8.0f);
     parts.note.apply({.fillX = true});
@@ -427,7 +441,7 @@ struct accounts_panel : closes_on_escape<Actions> {
       struct parts_t {
         add_row add;
         account_pages<Actions> pages;
-        nodes::Text message{"", 13.0f, error_colour};
+        nodes::Text message;
         nodes::ScrollContainer<nodes::Flow<std::vector<account_entry<Actions>>>> list{
             nodes::Flow<std::vector<account_entry<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
       } parts;
@@ -435,9 +449,11 @@ struct accounts_panel : closes_on_escape<Actions> {
       account_pages<Actions>& pages = parts.pages;
       nodes::Text& message = parts.message;
       decltype(parts_t::list)& list = parts.list;
-      explicit side_column(Actions* a)
-          : parts{.add = add_row("Add account", {a}, icon::plus{}), .pages = account_pages<Actions>(a)} {
-        fState.apply({.fillY = true, .width = kListWidth, .background = sidebar_colour});
+      side_column(const palette& colours, Actions* a)
+          : parts{.add = add_row(colours, "Add account", {a}, icon::plus{}),
+                  .pages = account_pages<Actions>(colours, a),
+                  .message = nodes::Text("", 13.0f, colours.error)} {
+        fState.apply({.fillY = true, .width = kListWidth, .background = colours.sidebar});
         pages.setVisible(false);
         pages.apply({.fillX = true, .autoSize = scene::axes::kY});
         message.setWrapped(true);
@@ -455,9 +471,10 @@ struct accounts_panel : closes_on_escape<Actions> {
       // No account chosen, or the chosen one, or adding one.
       struct parts_t {
         // In a scroll view: a page taller than the window scrolls.
-        nodes::ScrollContainer<detail_t> scroll{detail_t{std::in_place_index<0>, "Choose an account.", 15.0f, dim_colour}};
+        nodes::ScrollContainer<detail_t> scroll;
       } parts;
-      detail_column() {
+      explicit detail_column(const palette& colours)
+          : parts{.scroll = nodes::ScrollContainer<detail_t>(detail_t{std::in_place_index<0>, "Choose an account.", 15.0f, colours.dim})} {
         fState.apply({.fillY = true, .grow = scene::axes::kX, .padding = {24.0f, 28.0f, 24.0f, 28.0f}});
         parts.scroll.apply({.fill = true});
       }
@@ -466,7 +483,7 @@ struct accounts_panel : closes_on_escape<Actions> {
       side_column side;
       detail_column main;
     } parts;
-    explicit body_row(Actions* a) : parts{.side = side_column(a)} {
+    body_row(const palette& colours, Actions* a) : parts{.side = side_column(colours, a), .main = detail_column(colours)} {
       this->setHorizontal();
       fState.apply({.fillX = true, .grow = scene::axes::kY});
     }
@@ -560,7 +577,9 @@ struct accounts_panel : closes_on_escape<Actions> {
   ui_needs<Actions> needs_;
   explicit accounts_panel(const ui_needs<Actions>& n) : accounts_panel(n, n.actions) {}
   accounts_panel(const ui_needs<Actions>& n, Actions* a)
-      : closes_on_escape<Actions>(a), parts{.header = header_t("Accounts", {a}, {a}, true, false), .body = body_row(a)}, needs_(n) {
+      : closes_on_escape<Actions>(a),
+        parts{.header = header_t(*n.colours, "Accounts", {a}, {a}, true, false), .body = body_row(*n.colours, a)},
+        needs_(n) {
     this->fState.apply({.fill = true});
   }
 
@@ -574,7 +593,7 @@ struct accounts_panel : closes_on_escape<Actions> {
       const bool is_it = selected && config::address_of(one) == *selected;
       if (is_it)
         chosen = &one;
-      entries.emplace_back(this->actions, one, now, is_it);
+      entries.emplace_back(needs_, one, now, is_it);
     }
     if (chosen) {
       if (auto* up = this->editor())
@@ -585,7 +604,7 @@ struct accounts_panel : closes_on_escape<Actions> {
       if (saved.empty())
         this->show_adding();
       else
-        detail.template emplace<0>("Choose an account.", 15.0f, dim_colour);
+        detail.template emplace<0>("Choose an account.", 15.0f, needs_.colours->dim);
     }
     this->invalidateLayout();
   }
@@ -598,11 +617,11 @@ struct accounts_panel : closes_on_escape<Actions> {
     splice::visit(
         splice::overloaded{
             [&](account_page::connection) {
-              detail.template emplace<1>(this->actions, one);
+              detail.template emplace<1>(needs_, one);
               splice::get<1>(detail).show(one, now);
             },
             [&](account_page::privacy) {
-              detail.template emplace<3>(this->actions, config::read_receipts_of(one), config::send_typing_of(one),
+              detail.template emplace<3>(needs_, config::read_receipts_of(one), config::send_typing_of(one),
                                            config::room_events_of(one), config::room_event_kinds_of(one),
                                            config::notify_of(one).value_or(true), config::notify_sound_of(one).value_or(true),
                                            config::show_receipts_of(one), config::jump_search_of(one),
@@ -710,7 +729,7 @@ struct accounts_panel : closes_on_escape<Actions> {
     selected.reset();
     this->show_detail(false);
     this->show_pages(false);
-    detail.template emplace<0>("Choose an account.", 15.0f, dim_colour);
+    detail.template emplace<0>("Choose an account.", 15.0f, needs_.colours->dim);
     this->fit_detail();
     this->begin_swap();
   }

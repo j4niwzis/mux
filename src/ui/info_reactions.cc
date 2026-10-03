@@ -83,7 +83,7 @@ struct reactions_box : nodes::Stack {
         : actions(n.actions), entry(one),
           parts{.bubble = message_bubble<Actions>(splice::remapped<typename message_bubble<Actions>::needs>(n), in, message_of(in, one), first, last, now)} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 0.0f, 12.0f},
-                    .hoverBackground = chosen_colour});
+                    .hoverBackground = n.colours->chosen});
       fState.setCursor(scene::cursor::hand{});
     }
     // What it said, as a message: its key; a picture's, as a custom emoji
@@ -182,13 +182,13 @@ struct marks_box : nodes::Stack {
       avatar_mark face;
       nodes::Text key;
     } parts;
-    badge(const std::string& who, const std::string& name, const std::string& key)
+    badge(const palette& colours, const std::string& who, const std::string& name, const std::string& key)
         : parts{.face = avatar_mark(who, name, 20.0f),
-                .key = nodes::Text(proto::is_media(key) ? std::string(":emoji:") : key, 15.0f, text_colour)} {
+                .key = nodes::Text(proto::is_media(key) ? std::string(":emoji:") : key, 15.0f, colours.text)} {
       this->setHorizontal();
       this->setGap(4.0f);
       fState.apply({.place = scene::anchor::kBottomRight, .x = -14.0f, .y = -2.0f, .autoSize = scene::axes::kBoth,
-                    .padding = {2.0f, 6.0f, 2.0f, 3.0f}, .cornerRadius = 12.0f, .background = sidebar_colour});
+                    .padding = {2.0f, 6.0f, 2.0f, 3.0f}, .cornerRadius = 12.0f, .background = colours.sidebar});
       parts.key.apply({.alignSelf = scene::align::kMiddle});
     }
   };
@@ -204,10 +204,10 @@ struct marks_box : nodes::Stack {
         : actions(n.actions), kind(which), event(one.event),
           parts{.bubble = message_bubble<Actions>(splice::remapped<typename message_bubble<Actions>::needs>(n), in, one.said, true, true, now)} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 8.0f, 12.0f},
-                    .hoverBackground = chosen_colour});
+                    .hoverBackground = n.colours->chosen});
       fState.setCursor(scene::cursor::hand{});
       if (one.who)
-        parts.reacted.emplace(*one.who, sender_name(in, *one.who), one.key);
+        parts.reacted.emplace(*n.colours, *one.who, sender_name(in, *one.who), one.key);
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }

@@ -223,7 +223,7 @@ add_library(mux_config)
 # settings read them, and everything above reads the settings.
 target_sources(mux_config PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
   FILES src/proto/identity.cc src/proto/tags.cc src/proto/xmpp/kept.cc src/proto/matrix/kept.cc src/proto/kept.cc
-        src/proto/xmpp/state.cc src/proto/matrix/state.cc src/proto/state.cc src/config.cc)
+        src/proto/xmpp/state.cc src/proto/matrix/state.cc src/proto/state.cc src/config_choices.cc src/config_settings.cc src/config_looks.cc src/config_limits.cc src/config_accounts.cc src/config.cc)
 target_compile_features(mux_config PUBLIC cxx_std_26)
 target_compile_options(mux_config PUBLIC ${mux_std_flags})
 target_link_libraries(mux_config PUBLIC knot splice mux_vault mux_bytes)

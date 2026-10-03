@@ -38,6 +38,14 @@ struct rename_session {
   std::string name;
 };
 struct refresh_sessions {};
+// The developer tools: the room's state explored, an event of any type sent.
+struct explore_state {};
+struct open_send_custom {};
+struct send_custom {
+  std::string type;
+  std::optional<std::string> state_key;
+  std::string json;
+};
 // The other person of a direct chat verified by emoji, from the banner
 // that says they are not.
 struct verify_them {
@@ -49,7 +57,8 @@ struct verify_them {
 constexpr request_list<request::setup_cross_signing, request::restore_cross_signing, request::reset_identity,
                        request::sign_out_unverified, request::reset_backup, request::delete_backup, request::export_room_keys,
                        request::import_room_keys, request::verify_session, request::sign_out_sessions, request::rename_session,
-                       request::refresh_sessions, request::verify_them>
+                       request::refresh_sessions, request::verify_them, request::explore_state,
+                       request::open_send_custom, request::send_custom>
 requests_of(const state&) {
   return {};
 }

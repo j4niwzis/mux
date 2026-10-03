@@ -80,6 +80,11 @@ struct account_page_list {};
 // program_asked(app, request) in the protocol's program glue.
 template <class... Requests>
 struct request_list {};
+// The dialogs a protocol has of its own, over the window: their types, as
+// dialogs(state) lists them, each made by its dialog_type overload in the
+// protocol's UI module and opened by the protocol's program glue.
+template <class... Dialogs>
+struct dialog_list {};
 
 // What a protocol shows of its own beside the client's, made of the
 // client's basic components: each said as data, drawn by the client's own
@@ -147,6 +152,8 @@ inline std::string unheard_presence(const auto&) { return {}; }
 constexpr account_page_list<> account_pages(const auto&) { return {}; }
 // No requests of its own.
 constexpr request_list<> requests_of(const auto&) { return {}; }
+// No dialogs of its own.
+constexpr dialog_list<> dialogs(const auto&) { return {}; }
 // Nothing shown of its own.
 inline std::vector<part::line> message_lines(const auto&, const conversation&, const message&) { return {}; }
 inline std::vector<part::badge> header_badges(const auto&, const conversation&, const auto&) { return {}; }
@@ -360,6 +367,12 @@ inline constexpr struct row_badges_t {
   }
 } row_badges{};
 
+// A protocol's own dialogs, asked of its state type.
+template <class State>
+constexpr auto dialogs_of(const State& state) {
+  using defaults::dialogs;
+  return dialogs(state);
+}
 // A protocol's own requests, asked of its state type.
 template <class State>
 constexpr auto protocol_requests_of(const State& state) {

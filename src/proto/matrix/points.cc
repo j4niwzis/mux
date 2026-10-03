@@ -30,6 +30,11 @@ inline std::optional<std::string> message_link(const state&, const conversation&
     return std::nullopt;
   return message_link_to(chat, event);
 }
+// Its own dialog: the developer tools, as Element's.
+namespace tool {
+struct devtools {};
+}  // namespace tool
+constexpr dialog_list<tool::devtools> dialogs(const state&) { return {}; }
 // Its own account pages: its encryption, and its sessions under
 // cross-signing and the key backup.
 namespace settings {

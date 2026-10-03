@@ -575,24 +575,7 @@ void app::apply(const request::close_manage&) {
   root().close_manage();
 }
 // The developer tools, for the chat being read.
-void app::apply(const request::explore_state&) {
-  const auto chosen = this->managed();
-  if (!chosen || shared.demo())
-    return;
-  root().close_manage();
-  net->list_state(*chosen);
-}
-void app::apply(const request::open_send_custom&) {
-  root().close_manage();
-  root().open_send_custom();
-}
-void app::apply(const request::close_devtools&) { root().close_devtools(); }
-void app::apply(const request::send_custom& one) {
-  const auto chosen = this->managed();
-  if (!chosen || shared.demo())
-    return;
-  net->send_custom(*chosen, one.type, one.state_key, one.json);
-}
+void app::apply(const request::close_dialog&) { root().close_dialog(); }
 // Done to the room being read, by its account.
 void app::apply(const request::room_act& one) {
   const auto chosen = this->managed();

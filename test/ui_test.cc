@@ -195,10 +195,7 @@ struct stub {
   void open_manage() {}
   void menu_forward() {}
   void menu_view_source() {}
-  void explore_state() {}
-  void open_send_custom() {}
-  void close_devtools() {}
-  void send_custom(std::string, std::optional<std::string>, std::string) {}
+  void close_dialog() {}
   void open_new_chat() {}
   void close_new_chat() {}
   void start_direct(std::string) {}

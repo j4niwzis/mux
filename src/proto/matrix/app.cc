@@ -19,12 +19,12 @@ export namespace mux::proto::matrix {
 // What the developer tools asked, shown.
 template <class App>
 void program_told(App& app, const devtools_text& shown) {
-  app.root().show_devtools_text(shown.title, shown.text);
+  app.root().template open_dialog<devtools_page<typename App::accounts::actions_type>>(shown.title, shown.text);
 }
 // The room's state, for the developer tools.
 template <class App>
 void program_told(App& app, const state_listed& listed) {
-  app.root().show_room_state(listed.entries);
+  app.root().template open_dialog<devtools_page<typename App::accounts::actions_type>>(listed.entries);
 }
 // Packs: listed, saved, an image uploaded -- in their dialog.
 template <class App>
@@ -142,6 +142,28 @@ void program_asked(App& app, const rename_session& one) {
   app.with_chosen_account([&](auto&, config::account_t& account) {
     app.net->rename_session(App::id_of(account), one.device, one.name);
   });
+}
+// The developer tools: for the room being managed, by its account.
+template <class App>
+void program_asked(App& app, const explore_state&) {
+  const auto chosen = app.managed();
+  if (!chosen || app.shared.demo())
+    return;
+  app.root().close_manage();
+  app.net->list_state(*chosen);
+}
+template <class App>
+void program_asked(App& app, const open_send_custom&) {
+  using page = devtools_page<typename App::accounts::actions_type>;
+  app.root().close_manage();
+  app.root().template open_dialog<page>(typename page::send_form_t{});
+}
+template <class App>
+void program_asked(App& app, const send_custom& one) {
+  const auto chosen = app.managed();
+  if (!chosen || app.shared.demo())
+    return;
+  app.net->send_custom(*chosen, one.type, one.state_key, one.json);
 }
 template <class App>
 void program_asked(App& app, const verify_them& one) {

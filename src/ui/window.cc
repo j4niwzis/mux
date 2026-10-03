@@ -65,6 +65,24 @@ struct window : scene::Node {
       parts.copy.apply({.fillX = true, .height = 30.0f});
     }
   };
+  // The dialogs protocols have of their own (dialogs(state), made by their
+  // dialog_type, found by ADL where the window is made): one of them up at
+  // a time, in one dialog of the window's.
+  template <class List>
+  struct dialog_nodes;
+  template <class... Ds>
+  struct dialog_nodes<proto::dialog_list<Ds...>> {
+    using type = type_list<typename decltype(dialog_type(Ds{}, type_tag<Actions>{}))::type...>;
+  };
+  template <class>
+  struct protocol_dialog_nodes;
+  template <class... Tags>
+  struct protocol_dialog_nodes<protocol_list<Tags...>> {
+    using type = typename joined<type_list<>, typename dialog_nodes<decltype(proto::dialogs_of(::mux::state_of<Tags>{}))>::type...>::type;
+  };
+  // Never empty: a text, where no protocol has a dialog.
+  using tool_t = typename variant_of_types<
+      typename joined<type_list<nodes::Text>, typename protocol_dialog_nodes<protocols>::type>::type>::type;
   struct layers : scene::Node {
     using frame_t = widgets::SlideOver<with_drawer, panel_type>;
     struct parts_t {
@@ -98,8 +116,8 @@ struct window : scene::Node {
       widgets::Dialog<wallpaper_box<Actions>> wallpaper;
       // A server's public rooms, searched.
       widgets::Dialog<explore_box<Actions>> explore;
-      // The developer tools.
-      widgets::Dialog<devtools_box<Actions>> devtools;
+      // A protocol's own dialog: Matrix's developer tools, for one.
+      widgets::Dialog<tool_t> tools;
       widgets::Dialog<send_box<Actions>> sending;
       // A passphrase asked for: at the start, where local data is encrypted;
       // or to turn that on or off, or change it. Over everything.
@@ -165,8 +183,8 @@ struct window : scene::Node {
       // The dialogs, the one drawn last -- on top -- first.
       if (parts.sending.shown())
         return a->close_send_box(), closed();
-      if (parts.devtools.shown())
-        return a->close_devtools(), closed();
+      if (parts.tools.shown())
+        return a->close_dialog(), closed();
       if (parts.explore.shown())
         return a->close_explore(), closed();
       if (parts.wallpaper.shown())
@@ -207,14 +225,14 @@ struct window : scene::Node {
     skia::SkRect frozen_at = skia::SkRect::MakeEmpty();  // where it is on the device
 
     [[nodiscard]] bool dialog_fading() {
-      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, devtools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up] = parts;
+      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up] = parts;
       return settings.settling() || notice.settling() || person.settling() || room.settling() || reactions.settling() ||
              marks.settling() || manage.settling() || forwarding.settling() || new_chat.settling() ||
              new_room.settling() || packs.settling() || wallpaper.settling() || explore.settling() ||
-             devtools.settling() || sending.settling() || passphrase.settling() || verifying.settling();
+             tools.settling() || sending.settling() || passphrase.settling() || verifying.settling();
     }
     void draw(skia::SkCanvas* canvas, float alpha) {
-      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, devtools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up] = parts;
+      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up] = parts;
       skia::SkMatrix inverse;
       if (!this->dialog_fading() || !canvas->getTotalMatrix().invert(&inverse)) {
         frozen = nullptr;
@@ -245,7 +263,7 @@ struct window : scene::Node {
       canvas->drawImageRect(frozen, inverse.mapRect(frozen_at), skia::SkSamplingOptions(skia::SkFilterMode::kNearest));
       const auto over = [&](auto&... each) { (scene::draw(each, canvas, alpha), ...); };
       over(settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore,
-           devtools, sending, passphrase, verifying);
+           tools, sending, passphrase, verifying);
       const auto over_if = [&](auto&... each) { ((each ? scene::draw(*each, canvas, alpha) : void()), ...); };
       over_if(emoji, menu, viewer, text_menu_up);
     }
@@ -253,7 +271,7 @@ struct window : scene::Node {
     explicit layers(Actions* a)
         : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a))},
           actions_of(a) {
-      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, devtools, sending, passphrase, verifying,
+      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying,
              emoji, menu, viewer, text_menu_up] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
@@ -299,8 +317,8 @@ struct window : scene::Node {
       wallpaper.setWidthFittingContent(380.0f);
       explore.setSheetColour(sidebar_colour);
       explore.setSize(640.0f, 560.0f);
-      devtools.setSheetColour(sidebar_colour);
-      devtools.setSize(560.0f, 560.0f);
+      tools.setSheetColour(sidebar_colour);
+      tools.setSize(560.0f, 560.0f);
     }
   };
 
@@ -362,7 +380,7 @@ struct window : scene::Node {
     layer().packs.dropClosed();
     layer().wallpaper.dropClosed();
     layer().explore.dropClosed();
-    layer().devtools.dropClosed();
+    layer().tools.dropClosed();
     layer().sending.dropClosed();
   }
 
@@ -562,12 +580,12 @@ struct window : scene::Node {
     if (auto* up = layer().explore.shown())
       up->show(rooms, server, space);
   }
-  void show_devtools_text(std::string title, std::string text) {
-    layer().devtools.open(actions, std::move(title), std::move(text));
+  // A protocol's own dialog up (Node, one of its dialogs), made from args.
+  template <class Node, class... Args>
+  void open_dialog(Args&&... args) {
+    layer().tools.open(std::in_place_type<Node>, actions, std::forward<Args>(args)...);
   }
-  void show_room_state(std::vector<proto::matrix::state_entry> entries) { layer().devtools.open(actions, std::move(entries)); }
-  void open_send_custom() { layer().devtools.open(actions, typename devtools_box<Actions>::send_form_t{}); }
-  void close_devtools() { layer().devtools.close(); }
+  void close_dialog() { layer().tools.close(); }
 
   void show(const std::vector<config::account_t>& saved, const model& now) {
     const auto& current = layer().frame.base().base().current;

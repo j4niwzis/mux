@@ -16,7 +16,7 @@ import mux.net;
 import mux.proto.matrix.client;
 import mux.proto.matrix.requests;
 import loom.cs.keys;
-import mux.proto.matrix.crypto;
+import loom.crypto;
 
 namespace mux::proto::matrix::client {
 template auto account<mux::app::post_change>::id() const noexcept -> const account_id&;

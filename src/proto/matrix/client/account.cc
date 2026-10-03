@@ -12,7 +12,7 @@ import loom.cs.joining;
 import loom.cs.keys;
 import loom.cs.to_device;
 import loom.cs.sliding_sync;
-import mux.proto.matrix.crypto;
+import loom.crypto;
 import mux.vault;
 import loom.cs.leaving;
 import loom.cs.login;
@@ -354,7 +354,7 @@ class account {
 
   // End-to-end encryption: this device's machine, made once the device is
   // known; its keys uploaded, and what comes for it read.
-  std::optional<crypto::olm_machine> crypto_;
+  std::optional<olm_machine> crypto_;
   void start_crypto();
   // Rooms known to be encrypted: never sent to in the clear, whatever their
   // state says later -- a server that drops or hides m.room.encryption does

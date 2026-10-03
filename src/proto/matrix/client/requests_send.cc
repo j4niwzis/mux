@@ -25,7 +25,7 @@ import loom.cs.list_public_rooms;
 import loom.cs.space_hierarchy;
 import loom.cs.room_send;
 import loom.cs.rooms;
-import mux.proto.matrix.crypto;
+import loom.crypto;
 import loom.cs.keys;
 import loom.cs.cross_signing;
 import loom.cs.room_state;

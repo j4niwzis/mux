@@ -4,7 +4,7 @@ export module mux.proto.matrix.client:sync_crypto;
 
 import mux.vault;
 import std;
-import mux.proto.matrix.crypto;
+import loom.crypto;
 import splice;
 import knot;
 import loom.cs.sliding_sync;
@@ -43,7 +43,7 @@ void account<Sink>::start_crypto() {
   if (crypto_ || !how_.device_id || how_.crypto_store.empty())
     return;
   try {
-    crypto_.emplace(crypto::olm_machine::open(*how_.vault, how_.crypto_store, id_.address, *how_.device_id));
+    crypto_.emplace(olm_machine::open(vault_keeper{how_.vault}, how_.crypto_store, id_.address, *how_.device_id));
   } catch (const std::exception& failed) {
     log(id_, "encryption not started: {}", failed.what());
     return;

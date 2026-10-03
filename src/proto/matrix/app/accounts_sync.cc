@@ -15,7 +15,7 @@ import mux.http;
 import mux.net;
 import mux.proto.matrix.client;
 import loom.cs.sliding_sync;
-import mux.proto.matrix.crypto;
+import loom.crypto;
 
 namespace mux::proto::matrix::client {
 // Defined in the class, but a member of a module's class is not inline: the

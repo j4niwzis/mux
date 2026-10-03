@@ -19,12 +19,34 @@ import loom.cs.rooms;
 import loom.cs.sync;
 import loom.cs.typing;
 import loom.cs.wellknown;
+export import loom.crypto;
 import mux.config;
 import mux.core;
 import mux.http;
 import mux.net;
 
 export namespace mux::proto::matrix::client {
+
+// End-to-end encryption: loom's (loom.crypto), its store kept in the
+// program's vault -- sealed where local data is encrypted, the user's alone
+// either way.
+namespace crypto = loom::crypto;
+struct vault_keeper {
+  mux::vault::vault* vault = nullptr;
+  [[nodiscard]] std::optional<std::string> read_file(const std::filesystem::path& path) const { return vault->read_file(path); }
+  [[nodiscard]] bool write_file(const std::filesystem::path& path, std::string_view text, bool secret) const {
+    return vault->write_file(path, text, secret);
+  }
+  template <class Plain>
+  [[nodiscard]] std::vector<std::uint8_t> seal(const mux::vault::key_t& key, Plain&& plain, std::string_view bound) const {
+    return mux::vault::detail::seal(key, std::forward<Plain>(plain), bound);
+  }
+  template <class Sealed>
+  [[nodiscard]] std::optional<std::vector<std::uint8_t>> open(const mux::vault::key_t& key, Sealed&& sealed, std::string_view bound) const {
+    return mux::vault::detail::open(key, std::forward<Sealed>(sealed), bound);
+  }
+};
+using olm_machine = crypto::olm_machine<vault_keeper>;
 
 // Matrix's room rules and levels, as its protocol's state module has them
 // (mux.proto.matrix.state): named here as before.

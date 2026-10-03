@@ -5,7 +5,7 @@ export module mux.proto.matrix.client:events;
 import std;
 import loom.media;
 import chevron.escape;
-import mux.proto.matrix.crypto;
+import loom.crypto;
 import splice;
 import knot;
 import loom.api;

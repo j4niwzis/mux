@@ -5,7 +5,7 @@ export module mux.proto.matrix.client:media;
 import std;
 import loom.media;
 import splice.bytes;
-import mux.proto.matrix.crypto;
+import loom.crypto;
 import knot;
 import loom.api;
 import loom.ev;

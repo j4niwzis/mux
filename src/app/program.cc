@@ -47,6 +47,7 @@ import mux.app.verification;
 import mux.app.proxies;
 import mux.app.packs;
 import mux.app.rooms;
+import mux.app.room_card;
 import mux.logic.links;
 
 export namespace mux::app {
@@ -80,6 +81,7 @@ struct app : kept_settings {
   proxies_part proxying{shared, *this};
   packs_part packs{shared};
   rooms_part rooms{shared};
+  room_card_part room_card{shared};
   // Work off the UI's thread: decoding pictures, reading the disk.
   workers work;
   // Files chosen in the dialog, or dropped on the window: to the outbox.
@@ -122,12 +124,12 @@ struct app : kept_settings {
   }
   template <class Request>
   void route(const Request& one) {
-    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> || takes<marks_part, Request> || takes<history_part, Request> || takes<verification_part, Request> || takes<proxies_part, Request> || takes<packs_part, Request> || takes<rooms_part, Request> ||
+    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> || takes<marks_part, Request> || takes<history_part, Request> || takes<verification_part, Request> || takes<proxies_part, Request> || takes<packs_part, Request> || takes<rooms_part, Request> || takes<room_card_part, Request> ||
                       takes<app, Request>, "a request no part of the program takes");
     if (!offer(search, one) && !offer(pictures, one) && !offer(reading, one) && !offer(outbox, one) &&
         !offer(settings, one) && !offer(menu, one) && !offer(notices, one) && !offer(marks, one) && !offer(paging, one) &&
         !offer(verification, one) && !offer(proxying, one) && !offer(packs, one) &&
-        !offer(rooms, one))
+        !offer(rooms, one) && !offer(room_card, one))
       offer(*this, one);
   }
 
@@ -282,13 +284,6 @@ struct app : kept_settings {
   // A link followed, as where it leads says: a chat opened -- and a message
   // in it jumped to -- a person's page, a word said, or a room joined, and
   // opened when it comes.
-  // A room not joined, looked up from a link: its card up, until it is
-  // joined from there or closed.
-  struct room_looked_up {
-    mux::logic::link_step::join step;
-    std::optional<mux::logic::link_t> link;
-  };
-  std::optional<room_looked_up> previewing;
   void follow(const mux::logic::link_t& where);
   void open_chat(const mux::conversation_id& which, const std::optional<std::string>& event);
   void go_to_message(const mux::conversation_id& in, std::string id, std::optional<std::string> fragment);
@@ -305,7 +300,6 @@ struct app : kept_settings {
   void apply(const request::not_implemented& one);
   void apply(const request::close_notice&);
   void apply(const request::close_person_info&);
-  void apply(const request::close_room_card&);
   // The person whose card is open, in which chat: shown again as what is
   // known of their keys comes.
   std::optional<std::pair<mux::conversation_id, std::string>> person_open_;
@@ -347,9 +341,6 @@ struct app : kept_settings {
   void apply(const request::set_space_bars& one);
   void apply(const request::set_home_hides& one);
   void apply(const request::set_home_direct& one);
-  void apply(const request::join_room_card&);
-  void apply(const request::knock_room_card&);
-  void apply(const request::decline_room_card&);
   void apply(const request::toggle_emoji&);
   void apply(const request::toggle_thread_emoji&);
   void open_emoji_at(float right, float top);

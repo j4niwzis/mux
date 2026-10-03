@@ -90,7 +90,7 @@ void app::woken() {
                                  // Asked for a pill: the room there or not, and
                                  // its picture, under the address it was named by.
                                  if (pictures.pill_rooms.contains(shown.asked) &&
-                                     !(previewing && previewing->step.room == shown.asked)) {
+                                     !room_card.looking_at(shown.asked)) {
                                    if (!shown.preview.id.empty()) {
                                      mux::ui::rooms_found().insert_or_assign(shown.asked, shown.preview.name);
                                      if (shown.preview.avatar)
@@ -98,21 +98,7 @@ void app::woken() {
                                    }
                                    return;
                                  }
-                                 if (!previewing || !root().room_card_up() || previewing->step.by != shown.by ||
-                                     previewing->step.room != shown.asked)
-                                   return;
-                                 // A room joined after all -- by an address not
-                                 // known here: opened, not offered to join.
-                                 for (const auto& [id, account] : model->accounts())
-                                   for (const auto& [key, chat] : account.conversations)
-                                     if (!shown.preview.id.empty() && chat.id.id == shown.preview.id) {
-                                       root().close_room_card();
-                                       this->open_chat(chat.id, std::nullopt);
-                                       return;
-                                     }
-                                 if (shown.preview.avatar && !shown.preview.id.empty())
-                                   net->fetch_avatar(shown.by, *shown.preview.avatar, shown.preview.id);
-                                 root().open_room_card(shown.asked, shown.preview);
+                                 room_card.previewed(shown);
                                },
                                [&](const mux::change::media_progress& how) {
                                  mux::ui::download_progress().insert_or_assign(how.source, how.done);

@@ -82,9 +82,7 @@ void app::follow(const mux::logic::link_t& where) {
                                // Its card first, as a person's: filled when
                                // its server answers, in woken(), and joined
                                // from there.
-                               previewing = room_looked_up{step, where};
-                               root().open_room_card(step.room, mux::room_preview{.note = "Looking it up…"});
-                               net->preview_room(step.by, step.room, step.via);
+                               room_card.look_up(step, where);
                              }},
              mux::logic::where_to(*model, where, screen.current));
 }
@@ -132,44 +130,6 @@ bool app::open_in_thread(const mux::conversation& chat, const std::string& id) {
     thread_target_ = id;
   return true;
 }
-
-// The room of the card joined: opened when it comes, in woken().
-void app::apply(const request::knock_room_card&) {
-  if (!previewing)
-    return;
-  const auto looked = *std::exchange(previewing, std::nullopt);
-  net->knock(looked.step.by, looked.step.room, looked.step.via, std::string());
-  root().close_room_card();
-  root().show_notice("Asked to join. You'll be let in once someone in the room accepts.");
-}
-void app::apply(const request::join_room_card&) {
-  if (!previewing)
-    return;
-  const auto looked = *std::exchange(previewing, std::nullopt);
-  shared.joining = looked.link;
-  net->join(looked.step.by, looked.step.room, looked.step.via);
-  root().close_room_card();
-}
-
-
-
-
-// The invite of the card declined: the room left, the card closed.
-void app::apply(const request::decline_room_card&) {
-  if (!previewing)
-    return;
-  const auto looked = *std::exchange(previewing, std::nullopt);
-  net->leave(mux::conversation_id{looked.step.by, looked.step.room});
-  root().close_room_card();
-}
-
-void app::apply(const request::close_room_card&) {
-  previewing.reset();
-  root().close_room_card();
-}
-
-
-
 
 void app::apply(const request::resize_sidebar& one) { root().main().resize_sidebar(one.x); }
 

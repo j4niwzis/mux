@@ -33,15 +33,7 @@ void app::apply(const request::choose& one) {
     net->ask_trust(one.which.account, mux::ui::contact_of(*chat));
   // An invite: its card -- who asked, Accept, Decline -- not a chat.
   if (const mux::conversation* chat = model->find(one.which); chat && chat->invite) {
-    const std::string who = chat->invite->from_name.empty() ? chat->invite->from : chat->invite->from_name;
-    previewing = room_looked_up{mux::logic::link_step::join{one.which.account, one.which.id, {}}, std::nullopt};
-    root().open_room_card(one.which.id, mux::room_preview{.id = one.which.id,
-                                                          .name = mux::ui::display_name(*chat),
-                                                          .alias = chat->alias.value_or(""),
-                                                          .topic = chat->topic.value_or(""),
-                                                          .avatar = chat->avatar,
-                                                          .note = std::format("Invited by {}", who),
-                                                          .invite = true});
+    room_card.invited(*chat);
     return;
   }
   // Chosen, by a press or a key: no forum left lit as gone to.

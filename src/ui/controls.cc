@@ -824,6 +824,39 @@ using previews_choice = show_hide_choice<Actions, link_previews_setting>;
 template <class Actions>
 using receipts_choice = show_hide_choice<Actions, receipts_setting>;
 
+// What a chat shows, at a level -- its room events, read receipts as faces,
+// link previews (and in direct messages), how far a jump looks back -- as
+// in effect there: the same rows wherever they are chosen (every chat's in
+// Storage, an account's, one room's).
+struct chat_choice_values {
+  std::optional<bool> events_all;
+  std::optional<config::room_event_kinds> event_kinds;
+  std::optional<bool> receipts;
+  std::optional<bool> previews;
+  std::optional<bool> previews_direct;
+  std::optional<std::int64_t> jump_search;
+};
+template <class Actions>
+struct chat_choices : nodes::Stack {
+  struct parts_t {
+    event_kind_list<Actions> events;
+    receipts_choice<Actions> receipts;
+    previews_choice<Actions> previews;
+    previews_direct_choice<Actions> previews_direct;
+    jump_search_choice<Actions> jump_search;
+  } parts;
+  // Spaced as the page it is in spaces its rows.
+  chat_choices(Actions* a, choice_level_t level, const chat_choice_values& now, float gap)
+      : parts{.events = event_kind_list<Actions>(a, level, now.events_all, now.event_kinds),
+              .receipts = receipts_choice<Actions>(a, level, now.receipts),
+              .previews = previews_choice<Actions>(a, level, now.previews),
+              .previews_direct = previews_direct_choice<Actions>(a, level, now.previews_direct),
+              .jump_search = jump_search_choice<Actions>(a, level, now.jump_search)} {
+    this->setGap(gap);
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+  }
+};
+
 // A notification as mux shows it itself, as Telegram Desktop's own: a card
 // in a small window of its own -- the chat's avatar beside the title over
 // the text.

@@ -80,12 +80,8 @@ struct storage_page : nodes::Stack {
       keep_row show_deleted;
       stepper deleted_on_disk;
       nodes::Text events_title;
-      event_kind_list<Actions> events;
-      receipts_choice<Actions> receipts;
-      previews_choice<Actions> previews;
-      previews_direct_choice<Actions> previews_direct;
+      chat_choices<Actions> chats;
       typing_choice<Actions> typing;
-      jump_search_choice<Actions> jump_search;
       nodes::Text history_note;
     } parts;
     body(const palette& colours, Actions* a, const config::history_settings& history, bool sealed)
@@ -108,13 +104,15 @@ struct storage_page : nodes::Stack {
                 .show_deleted = keep_row(colours, "Show deleted messages", {a}),
                 .deleted_on_disk = stepper(colours, a, "On disk", config::limit::deleted_on_disk{}),
                 .events_title = section_title(colours, "ROOM EVENTS"),
-                .events = event_kind_list<Actions>(a, choice_level::everywhere{}, history.show_room_events,
-                                                   history.room_event_kinds),
-                .receipts = receipts_choice<Actions>(a, choice_level::everywhere{}, history.show_receipts),
-                .previews = previews_choice<Actions>(a, choice_level::everywhere{}, history.link_previews),
-                .previews_direct = previews_direct_choice<Actions>(a, choice_level::everywhere{}, history.previews_direct.value_or(false)),
+                .chats = chat_choices<Actions>(a, choice_level::everywhere{},
+                                               {.events_all = history.show_room_events,
+                                                .event_kinds = history.room_event_kinds,
+                                                .receipts = history.show_receipts,
+                                                .previews = history.link_previews,
+                                                .previews_direct = history.previews_direct.value_or(false),
+                                                .jump_search = history.jump_search},
+                                               0.0f),
                 .typing = typing_choice<Actions>(a, choice_level::everywhere{}, history.send_typing.value_or(true)),
-                .jump_search = jump_search_choice<Actions>(a, choice_level::everywhere{}, history.jump_search),
                 .history_note = note_text(colours, "Deleted messages are kept on disk, apart from the rest and up to their own size, the "
                                "oldest going first past it. Shown, one stays where it was, with all it said and its "
                                "time, marked removed.")} {

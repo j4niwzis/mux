@@ -417,12 +417,8 @@ struct room_settings : nodes::Stack {
     struct parts_t {
       nodes::Text heading;
       nodes::Text events_about;
-      event_kind_list<Actions> events;
-      receipts_choice<Actions> receipts;
-      previews_choice<Actions> previews;
-      previews_direct_choice<Actions> previews_direct;
+      chat_choices<Actions> chats;
       typing_choice<Actions> typing;
-      jump_search_choice<Actions> jump_search;
       nodes::Text forum_heading;
       forum_row forum;
       nodes::Text forum_about;
@@ -433,12 +429,15 @@ struct room_settings : nodes::Stack {
     general_page(Actions* a, room_settings* box, const room_settings_facts& facts)
         : parts{.heading = tab_heading(*box->colours_, "General"),
                 .events_about = explained(*box->colours_, "Room events shown in this room, for you: Default is as your account's."),
-                .events = event_kind_list<Actions>(a, choice_level::chat{}, facts.events_all, facts.event_kinds),
-                .receipts = receipts_choice<Actions>(a, choice_level::chat{}, facts.receipts),
-                .previews = previews_choice<Actions>(a, choice_level::chat{}, facts.previews),
-                .previews_direct = previews_direct_choice<Actions>(a, choice_level::chat{}, facts.previews_direct),
+                .chats = chat_choices<Actions>(a, choice_level::chat{},
+                                               {.events_all = facts.events_all,
+                                                .event_kinds = facts.event_kinds,
+                                                .receipts = facts.receipts,
+                                                .previews = facts.previews,
+                                                .previews_direct = facts.previews_direct,
+                                                .jump_search = facts.jump_search},
+                                               6.0f),
                 .typing = typing_choice<Actions>(a, choice_level::chat{}, facts.typing),
-                .jump_search = jump_search_choice<Actions>(a, choice_level::chat{}, facts.jump_search),
                 .forum_heading = part_heading(*box->colours_, "Shown as"),
                 .forum = forum_row(*box->colours_, a, facts),
                 .forum_about = explained(*box->colours_, facts.holds_spaces

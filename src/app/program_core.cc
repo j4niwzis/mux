@@ -49,10 +49,6 @@ void app::woken() {
                                },
                                // A room the user made: shown, once the model has it.
                                [&](const mux::change::room_created& made) { made_room_ = made.id; },
-                               // What the developer tools asked, shown.
-                               [&](const mux::proto::matrix::devtools_text& shown) {
-                                 root().show_devtools_text(shown.title, shown.text);
-                               },
                                // A directory searched: its rooms, in Explore.
                                [&](const mux::change::directory_listed& listed) {
                                  root().show_directory(listed.rooms, listed.server, listed.space);
@@ -60,20 +56,9 @@ void app::woken() {
                                  if (listed.server.empty() && !listed.space)
                                    root().main().found_rooms_elsewhere(listed.query, listed.rooms);
                                },
-                               // Packs: listed, saved, an image uploaded -- in their dialog.
-                               [&](const mux::proto::matrix::packs_listed& listed) { root().show_packs(listed.packs); },
-                               [&](const mux::proto::matrix::pack_saved& saved) { root().pack_saved(saved.pack, saved.removed, saved.done); },
-                               [&](const mux::proto::matrix::pack_picture_uploaded& uploaded) {
-                                 root().pack_picture_uploaded(uploaded.picture, uploaded.done);
-                               },
                                // Something the server refused: a notice saying why.
                                [&](const mux::change::refused& said) { root().show_message("Not done", said.what); },
                                [&](const mux::change::notice& said) { root().show_message(said.heading, said.what); },
-                               // An emoji verification, as it goes: its dialog.
-                               [&](const mux::proto::matrix::verification_changed& one) {
-                                 verifying = std::pair(one.by, one.txn);
-                                 root().show_verification(mux::ui::verification_view{one.user, one.device, one.step});
-                               },
                                // People found: in Start chat, while it asks for them.
                                // A person's profile: their picture asked for, where they have one.
                                [&](const mux::change::profile_found& found) {
@@ -84,31 +69,6 @@ void app::woken() {
                                [&](const mux::change::conversation_updated& updated) {
                                  if (updated.invite && invites_told.insert(updated.id).second)
                                    this->notify_invite(updated.id, *updated.invite, updated.name);
-                               },
-                               // The account's sessions, for its page where it is open.
-                               [&](const mux::proto::matrix::sessions_listed& listed) {
-                                 if (auto* up = root().open_panel())
-                                   splice::visit([&](accounts& panel) {
-                                                   if (auto* page = panel.template shown_page<mux::proto::matrix::sessions_page<accounts::actions_type>>(); page && panel.selected == listed.by.address)
-                                                     page->show(listed.current, listed.sessions);
-                                                 },
-                                                 *up);
-                               },
-                               [&](const mux::proto::matrix::security_state& state) {
-                                 if (auto* up = root().open_panel())
-                                   splice::visit([&](accounts& panel) {
-                                                   if (auto* page = panel.template shown_page<mux::proto::matrix::sessions_page<accounts::actions_type>>(); page && panel.selected == state.by.address)
-                                                     page->show_security(state.cross_signing, state.backup);
-                                                 },
-                                                 *up);
-                               },
-                               [&](const mux::proto::matrix::sessions_refused& said) {
-                                 if (auto* up = root().open_panel())
-                                   splice::visit([&](accounts& panel) {
-                                                   if (auto* page = panel.template shown_page<mux::proto::matrix::sessions_page<accounts::actions_type>>(); page && panel.selected == said.by.address)
-                                                     page->refused(said.why, said.needs_password);
-                                                 },
-                                                 *up);
                                },
                                [&](const mux::change::devices_listed& listed) {
                                  if (person_open_ && person_open_->first.account == listed.by && person_open_->second == listed.user) {
@@ -127,9 +87,6 @@ void app::woken() {
                                [&](const mux::change::people_found& found) {
                                  root().show_found_people(found.people, found.query);
                                  root().main().found_people_elsewhere(found.query, found.people);
-                               },
-                               [&](const mux::proto::matrix::state_listed& listed) {
-                                 root().show_room_state(listed.entries);
                                },
                                // A room looked up: its card filled, while it
                                // is up for that room still.
@@ -170,7 +127,12 @@ void app::woken() {
                                  mux::ui::protocol_states().insert_or_assign(now.account, now.now);
                                  this->refresh();
                                },
-                               [](const auto&) {}},
+                               // A protocol's own: what the program does with it, as the
+                               // protocol says (mux.app.proto); nothing by default.
+                               [&](const auto& theirs) {
+                                 using mux::app::defaults::program_told;
+                                 program_told(*this, theirs);
+                               }},
                one);
     // A message deleted: marked where it is kept, and kept whole apart --
     // as it was, before the model takes it out of view.

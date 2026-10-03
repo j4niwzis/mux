@@ -20,6 +20,7 @@ import mux.dbus;
 import mux.protocols;
 import mux.ui;
 import mux.ui.proto;
+import mux.app.proto;
 import skiff.paint;
 import skiff.scene;
 import mux.app.network;

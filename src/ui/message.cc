@@ -1688,11 +1688,18 @@ struct message_bubble : nodes::Stack {
     // row's flow, the row keeping its width on the left. In the flow, a
     // 34-high avatar made a one-line bubble's row taller, and the last
     // bubble of a run stood apart from the rest.
+    // Laid out as the chat's protocol says: bubbles, or lines.
+    const bool as_lines = splice::visit(splice::overloaded{[](proto::part::style::lines) { return true; },
+                                                           [](proto::part::style::bubbles) { return false; }},
+                                        proto::message_style(protocol_state_of(in.id.account)));
     const bool with_face = group && !outgoing && !said.service;
     fState.apply({.fillX = true, .autoSize = scene::axes::kY,
                   .padding = {first_of_run ? 8.0f : 1.0f, 0.0f, 1.0f, with_face ? kAvatar + 8.0f : 0.0f}});
-    if (outgoing)
+    if (outgoing && !as_lines)
       fStack.justify = nodes::justify::end{};
+    // Lines: full width, on the wallpaper, no plate.
+    if (as_lines)
+      body.apply({.fillX = true, .maxWidth = 0.0f, .cornerRadius = 0.0f, .background = skia::SkColor{0}});
     face.setVisible(with_face);
     // Placed in the content box: back over the padding kept for it.
     face.apply({.place = scene::anchor::kBottomLeft, .x = -(kAvatar + 8.0f), .y = -1.0f});
@@ -1700,7 +1707,7 @@ struct message_bubble : nodes::Stack {
       face.fState.setAlpha(0.0f);  // its room kept, so the run's bubbles line up
     else
       face.fState.setAlpha(static_cast<float>(element_opacity_of(bubble_look_now(), &config::element_opacity::avatars)) / 100.0f);
-    if (group && !outgoing && first_of_run && !said.service) {
+    if (((group && !outgoing) || as_lines) && first_of_run && !said.service) {
       // Their role, as the chat's protocol says it (Matrix: its power levels).
       body.parts.name.emplace(sender_name(in, said.sender), avatar_colour(said.sender),
                               proto::sender_role(protocol_state_of(in.id.account), in, said.sender));
@@ -1865,7 +1872,7 @@ struct message_bubble : nodes::Stack {
     // a tail grown from it, as Telegram draws one -- not for a line of what
     // was done, nor a picture with nothing under it.
     const bool bare_picture = said.attachment && said.body.plain.empty() && !said.body.html && body.parts.picture;
-    if (last_of_run && !said.service && !bare_picture)
+    if (last_of_run && !said.service && !bare_picture && !as_lines)
       body.grow_tail(outgoing);
     // The first link's preview, where it has come.
     previews_shown = show_preview;

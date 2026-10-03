@@ -115,6 +115,15 @@ struct banner_of {
   std::optional<Asks> asks;
 };
 using banner = banner_of<>;
+// How a chat's messages are laid out, of the client's basic layouts:
+// Telegram's bubbles, or lines as IRC clients show them -- full width, on
+// the wallpaper, each sender's name over their run, theirs and one's own
+// alike on the left.
+namespace style {
+struct bubbles {};
+struct lines {};
+}  // namespace style
+using style_t = splice::variant<style::bubbles, style::lines>;
 }  // namespace part
 
 }  // namespace mux::proto
@@ -144,6 +153,8 @@ inline std::vector<part::badge> row_badges(const auto&, const conversation&) { r
 // An address's local part, what someone is called before their name is
 // known: the whole of it, unless the protocol says.
 inline std::string local_part(const auto&, std::string_view address) { return std::string(address); }
+// Bubbles.
+inline part::style_t message_style(const auto&) { return part::style::bubbles{}; }
 // No role said beside a sender's name.
 inline std::string sender_role(const auto&, const conversation&, std::string_view) { return {}; }
 // Any chat may be left.
@@ -293,6 +304,16 @@ inline constexpr struct header_badges_t {
     }, state);
   }
 } header_badges{};
+// The layout a protocol's chats show their messages in.
+inline constexpr struct message_style_t {
+  template <class State>
+  part::style_t operator()(const State& state) const {
+    return splice::visit([](const auto& now) {
+      using defaults::message_style;
+      return message_style(now);
+    }, state);
+  }
+} message_style{};
 // An address's local part (alice of alice@example.com, of @alice:x.org).
 inline constexpr struct local_part_t {
   template <class State>

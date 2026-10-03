@@ -69,13 +69,13 @@ struct directory_row : nodes::Stack {
       nodes::Text line;
       nodes::Text topic;
     } parts;
-    explicit texts_t(const directory_room& one)
+    texts_t(const palette& colours, const directory_room& one)
         : parts{.name = nodes::Text(one.name.empty() ? (one.alias.empty() ? one.id : one.alias) : one.name, 14.0f,
-                                    text_colour, true),
+                                    colours.text, true),
                 .line = nodes::Text(std::format("{}{}{} member{}", one.alias, one.alias.empty() ? "" : " \u00b7 ",
                                                 one.members, one.members == 1 ? "" : "s"),
-                                    12.0f, dim_colour),
-                .topic = nodes::Text(one.topic, 13.0f, text_colour)} {
+                                    12.0f, colours.dim),
+                .topic = nodes::Text(one.topic, 13.0f, colours.text)} {
       this->setGap(2.0f);
       fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .shrink = scene::axes::kX,
                     .alignSelf = scene::align::kMiddle});
@@ -92,10 +92,10 @@ struct directory_row : nodes::Stack {
     texts_t texts;
     widgets::Button<directory_join<Actions>> join;
   } parts;
-  directory_row(Actions* a, const directory_room& one, const std::string& server)
+  directory_row(Actions* a, const palette& colours, const directory_room& one, const std::string& server)
       : parts{.face = avatar_mark(one.id, one.name.empty() ? one.alias : one.name, 40.0f),
-              .texts = texts_t(one),
-              .join = widgets::Button<directory_join<Actions>>(legacy_palette().widgets, one.space ? "Open" : "Join",
+              .texts = texts_t(colours, one),
+              .join = widgets::Button<directory_join<Actions>>(colours.widgets, one.space ? "Open" : "Join",
                                                   {a, one.space ? one.id : (one.alias.empty() ? one.id : one.alias), server, one.space,
                                                    one.name})} {
     this->setHorizontal();
@@ -115,6 +115,8 @@ struct explore_box : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{640.0f, 560.0f}}; }
   Actions* actions = nullptr;
+  // The colours it is made in, for its parts and the rows it makes later.
+  const palette* colours_ = nullptr;
   struct close_it {
     Actions* actions;
     void operator()() const { actions->close_explore(); }
@@ -140,9 +142,9 @@ struct explore_box : nodes::Stack {
   struct space_head_t : nodes::Stack {
     struct parts_t {
       std::optional<avatar_mark> face;
-      nodes::Text name{"", 17.0f, text_colour, true};
+      nodes::Text name;
     } parts;
-    space_head_t() {
+    explicit space_head_t(const palette& colours) : parts{.name = nodes::Text("", 17.0f, colours.text, true)} {
       this->setHorizontal();
       this->setGap(10.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 10.0f, 8.0f, 10.0f}});
@@ -162,7 +164,7 @@ struct explore_box : nodes::Stack {
     search_row(explore_box* box, const std::string& own)
         : parts{.query = field("Find a room", "Name, topic, or #address:server"),
                 .server = field("Server", own, own),
-                .search = widgets::Button<search_press>(legacy_palette().widgets, "Search", {box})} {
+                .search = widgets::Button<search_press>(box->colours_->widgets, "Search", {box})} {
       this->setHorizontal();
       this->setGap(8.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 6.0f, 0.0f, 6.0f}});
@@ -181,13 +183,18 @@ struct explore_box : nodes::Stack {
     header_t header;
     space_head_t space_head;
     search_row search;
-    nodes::Text status{"", 13.0f, dim_colour};
+    nodes::Text status;
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
   } parts;
   // The row's fields, by their names, for what reads them.
   field& query_field() { return parts.search.parts.query; }
-  explore_box(Actions* a, const std::string& own_server)
-      : actions(a), parts{.header = header_t("Explore rooms", {}, {a}, false, true), .search = search_row(this, own_server)} {
+  explore_box(Actions* a, const palette& colours, const std::string& own_server)
+      : actions(a),
+        colours_(&colours),
+        parts{.header = header_t(colours, "Explore rooms", {}, {a}, false, true),
+              .space_head = space_head_t(colours),
+              .search = search_row(this, own_server),
+              .status = nodes::Text("", 13.0f, colours.dim)} {
     fState.apply({.fillX = true, .height = 560.0f, .padding = {0.0f, 12.0f, 12.0f, 12.0f}});
     parts.status.setWrapped(true);
     parts.status.apply({.fillX = true, .margin = {6.0f, 10.0f, 4.0f, 10.0f}});
@@ -231,7 +238,7 @@ struct explore_box : nodes::Stack {
     rows.clear();
     rows.reserve(rooms.size());
     for (const directory_room& one : rooms)
-      rows.emplace_back(actions, one, server);
+      rows.emplace_back(actions, *colours_, one, server);
     // Their pictures, asked for as a chat's are.
     for (const directory_room& one : rooms)
       if (one.avatar && !one.avatar->empty())

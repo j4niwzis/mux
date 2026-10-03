@@ -543,7 +543,7 @@ struct window : scene::Node {
   void open_explore(const std::string& own_server) {
     close_drawer();
     layer().new_chat.close();
-    layer().explore.open(actions, own_server);
+    layer().explore.open(actions, *needs_.colours, own_server);
   }
   void close_explore() { layer().explore.close(); }
   void explore_as_space(const std::string& room, const std::string& name) {

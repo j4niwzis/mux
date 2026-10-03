@@ -869,7 +869,7 @@ struct emoji_popup : scene::Node {
       // which the padding has already taken off -- at its bottom left alone,
       // the tabs stood over the emoji groups' row.
       if (on)
-        parts.tabs.apply({.place = scene::anchor::kBottomLeft, .y = kTabsHigh});
+        parts.tabs.apply({.place = scene::anchor::kBottomLeft, .y = kTabsHigh, .depth = 1.0f});
       parts.tabs.fStack.justify = on ? nodes::Justify{nodes::justify::middle{}} : nodes::Justify{nodes::justify::start{}};
       this->invalidateLayout();
       this->markDamaged();

@@ -742,6 +742,14 @@ int run(App& app, const options& how) {
     return 1;
   }
   the_window() = window;
+  // A phone's from the start: a touch screen and no mouse. Not known until
+  // the first press otherwise, and the field given the focus meanwhile put
+  // the on-screen keyboard up as the program opened.
+  {
+    int touch_screens = 0;
+    SDL_free(SDL_GetTouchDevices(&touch_screens));  // the list SDL made, given back: only its count is read
+    app.by_touch = touch_screens > 0 && !SDL_HasMouse();
+  }
   int result = 0;
   {
     detail::canvas_target target(window, how.software);

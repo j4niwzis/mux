@@ -454,7 +454,7 @@ struct reactions_box : nodes::Stack {
     } parts;
     row(const ui_needs<Actions>& n, const conversation& in, reaction_entry one, bool first, bool last, const model* now)
         : actions(n.actions), entry(one),
-          parts{.bubble = message_bubble<Actions>(given<typename message_bubble<Actions>::needs>(n), in, message_of(in, one), first, last, now)} {
+          parts{.bubble = message_bubble<Actions>(splice::remapped<typename message_bubble<Actions>::needs>(n), in, message_of(in, one), first, last, now)} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 0.0f, 12.0f},
                     .hoverBackground = chosen_colour});
       fState.setCursor(scene::cursor::hand{});
@@ -577,7 +577,7 @@ struct marks_box : nodes::Stack {
     } parts;
     row(const ui_needs<Actions>& n, mark_kind_t which, const conversation& in, const mark_entry& one, const model* now)
         : actions(n.actions), kind(which), event(one.event),
-          parts{.bubble = message_bubble<Actions>(given<typename message_bubble<Actions>::needs>(n), in, one.said, true, true, now)} {
+          parts{.bubble = message_bubble<Actions>(splice::remapped<typename message_bubble<Actions>::needs>(n), in, one.said, true, true, now)} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 8.0f, 12.0f},
                     .hoverBackground = chosen_colour});
       fState.setCursor(scene::cursor::hand{});

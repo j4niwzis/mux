@@ -192,23 +192,18 @@ struct person_facts {
   out.trust = now.trust_of(account, id);
   if (const auto* listed = now.devices_of(account, id))
     out.devices = *listed;
-  if (out.trust) {
-    const std::string said = splice::visit(splice::overloaded{[](trust::verified) { return std::string("Verified"); },
-                                                              [](trust::unverified) { return std::string("Not verified"); },
-                                                              [](trust::changed) { return std::string("Identity changed: verify again"); }},
-                                           *out.trust);
-    out.status = out.status.empty() ? said : std::format("{} · {}", out.status, said);
-  }
+  // What their protocol says of them beside how they are (Matrix: their identity).
+  out.status = std::ranges::fold_left(proto::person_badges(protocol_state_of(account), nullptr, now, account, id),
+                                      std::move(out.status), [](std::string so_far, const proto::part::badge& badge) {
+                                        return so_far.empty() ? badge.text : std::format("{} · {}", so_far, badge.text);
+                                      });
   if (in == nullptr)
     return out;
   if (const auto found = std::ranges::find(in->members, id, &member::id); found != in->members.end()) {
-    const auto level_of = [&](const std::string& who) {
-      const auto level = in->powers.find(who);
-      return level == in->powers.end() ? in->power_default : level->second;
-    };
-    const std::int64_t mine = level_of(account.address), theirs = level_of(id);
-    out.may_kick = id != account.address && mine > theirs && mine >= in->needs.of(power_need::kick{});
-    out.may_ban = id != account.address && mine > theirs && mine >= in->needs.of(power_need::ban{});
+    // What may be done to them, as the chat's protocol says (Matrix: its power levels).
+    const proto::part::person_rights may = proto::person_rights(protocol_state_of(account), *in, id);
+    out.may_kick = may.kick;
+    out.may_ban = may.ban;
     if (!found->name.empty())
       out.name = found->name;
     if (found->role)
@@ -2562,23 +2557,19 @@ struct info_panel : nodes::Stack {
     if (!same_members) {
       shown_members.clear();
       for (const member& each : one.members) {
-        // A Matrix room's say as their role, where it gives them one, as
-        // Element marks its admins and moderators.
+        // Their role, as the chat's protocol says it (Matrix: its power
+        // levels, as Element marks its admins and moderators).
         member shown = each;
         if (!shown.role)
-          if (const auto level = one.powers.find(each.id); level != one.powers.end() && level->second >= 50)
-            shown.role = role_of(level->second);
-        // In an encrypted room, what is known of their identity beside how
-        // they are -- Element's shield on each member.
-        std::string how = presence_of(now, one.id.account, each.id);
-        if (one.encrypted)
-          if (const auto trust = now.trust_of(one.id.account, each.id)) {
-            const std::string said = splice::visit(splice::overloaded{[](trust::verified) { return std::string("Verified"); },
-                                                                      [](trust::unverified) { return std::string("Not verified"); },
-                                                                      [](trust::changed) { return std::string("Identity reset"); }},
-                                                   *trust);
-            how = how.empty() ? said : std::format("{} \u00b7 {}", how, said);
-          }
+          if (std::string role = proto::sender_role(protocol_state_of(one.id.account), one, each.id); !role.empty())
+            shown.role = std::move(role);
+        // What their protocol says of them beside how they are (Matrix: in an
+        // encrypted room, their identity -- Element's shield on each member).
+        const std::string how = std::ranges::fold_left(
+            proto::person_badges(protocol_state_of(one.id.account), &one, now, one.id.account, each.id),
+            presence_of(now, one.id.account, each.id), [](std::string so_far, const proto::part::badge& badge) {
+              return so_far.empty() ? badge.text : std::format("{} \u00b7 {}", so_far, badge.text);
+            });
         shown_members.emplace_back(std::move(shown), std::move(how));
       }
     }

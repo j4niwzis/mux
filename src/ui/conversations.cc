@@ -2917,18 +2917,14 @@ struct conversations_screen : nodes::Stack {
     chat.area.show_wallpaper(wallpaper);
     if (parts.threads.visible())
       parts.threads.show(*one, &now);
-    // Whether the reader may post here: their power against what a message
-    // asks, as the room's power levels say; and whether any message of
-    // theirs here was not sent.
+    // Whether the reader may post here, as the chat's protocol says (Matrix:
+    // its power levels); and whether any message of theirs here was not sent.
     {
-      const auto mine = one->powers.find(one->id.account.address);
-      const std::int64_t level = mine != one->powers.end() ? mine->second : one->power_default;
-      const auto asked = one->needs.events.find("m.room.message");
-      const std::int64_t needs = asked != one->needs.events.end() ? asked->second : one->needs.events_default;
-      chat.line.set_can_post(level >= needs);
+      const proto::part::chat_rights may = proto::chat_rights(protocol_state_of(one->id.account), *one);
+      chat.line.set_can_post(may.post);
       chat.line.set_replaced(one->replaced_by.has_value());
       // Those knocking, for whoever may invite.
-      chat.line.show_knocks(actions, one->knocking, level >= one->needs.invite);
+      chat.line.show_knocks(actions, one->knocking, may.invite);
       chat.line.show_unsent(std::ranges::any_of(one->timeline, [](const message& said) {
         return said.outgoing &&
                splice::visit(splice::overloaded{[](const delivery::failed&) { return true; }, [](const auto&) { return false; }},

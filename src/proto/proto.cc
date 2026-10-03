@@ -121,6 +121,17 @@ struct banner_of {
   std::optional<Asks> asks;
 };
 using banner = banner_of<>;
+// What one may do in a chat, as its protocol says: write in it, let in
+// those who knock.
+struct chat_rights {
+  bool post = true;
+  bool invite = true;
+};
+// What one may do to someone in a chat: remove them, ban them.
+struct person_rights {
+  bool kick = false;
+  bool ban = false;
+};
 // How a chat's messages are laid out, of the client's basic layouts:
 // Telegram's bubbles, or lines as IRC clients show them -- full width, on
 // the wallpaper, each sender's name over their run, theirs and one's own
@@ -163,6 +174,13 @@ inline std::vector<part::badge> row_badges(const auto&, const conversation&) { r
 inline std::string local_part(const auto&, std::string_view address) { return std::string(address); }
 // Bubbles.
 inline part::style_t message_style(const auto&) { return part::style::bubbles{}; }
+// Anything one may do in a chat; nothing to anyone in it.
+inline part::chat_rights chat_rights(const auto&, const conversation&) { return {}; }
+inline part::person_rights person_rights(const auto&, const conversation&, std::string_view) { return {}; }
+// Nothing said of someone beside how they are.
+inline std::vector<part::badge> person_badges(const auto&, const conversation*, const auto&, const account_id&, std::string_view) {
+  return {};
+}
 // Any ID reads as a name, written in a message.
 constexpr bool id_reads_as_name(const auto&, std::string_view) { return true; }
 // No role said beside a sender's name.
@@ -325,6 +343,39 @@ inline constexpr struct id_reads_as_name_t {
     }, state);
   }
 } id_reads_as_name{};
+// What one may do in a chat, and to someone in it.
+inline constexpr struct chat_rights_t {
+  template <class State>
+  part::chat_rights operator()(const State& state, const conversation& chat) const {
+    return splice::visit([&](const auto& now) {
+      using defaults::available;
+      using defaults::chat_rights;
+      return available(now) ? chat_rights(now, chat) : part::chat_rights{false, false};
+    }, state);
+  }
+} chat_rights{};
+inline constexpr struct person_rights_t {
+  template <class State>
+  part::person_rights operator()(const State& state, const conversation& chat, std::string_view who) const {
+    return splice::visit([&](const auto& now) {
+      using defaults::available;
+      using defaults::person_rights;
+      return available(now) ? person_rights(now, chat, who) : part::person_rights{};
+    }, state);
+  }
+} person_rights{};
+// What is said of someone beside how they are, in a chat (none: their
+// card): Matrix's word on their identity.
+inline constexpr struct person_badges_t {
+  template <class State, class Model>
+  std::vector<part::badge> operator()(const State& state, const conversation* chat, const Model& known, const account_id& by,
+                                      std::string_view who) const {
+    return splice::visit([&](const auto& now) {
+      using defaults::person_badges;
+      return person_badges(now, chat, known, by, who);
+    }, state);
+  }
+} person_badges{};
 // The layout a protocol's chats show their messages in.
 inline constexpr struct message_style_t {
   template <class State>

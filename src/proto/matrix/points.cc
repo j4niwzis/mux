@@ -56,10 +56,40 @@ inline std::string local_part(const state&, std::string_view address) {
     address.remove_prefix(1);
   return std::string(address.substr(0, address.find(':')));
 }
+// What the account may do in a room, as its power levels allow: write
+// in it, let in those who knock; and to someone in it, only above them.
+[[nodiscard]] inline std::int64_t level_of(const conversation& in, std::string_view who) {
+  const auto level = in.powers.find(std::string(who));
+  return level == in.powers.end() ? in.power_default : level->second;
+}
+inline part::chat_rights chat_rights(const state&, const conversation& in) {
+  const std::int64_t mine = level_of(in, in.id.account.address);
+  const auto asked = in.needs.events.find("m.room.message");
+  const std::int64_t needs = asked != in.needs.events.end() ? asked->second : in.needs.events_default;
+  return {mine >= needs, mine >= in.needs.invite};
+}
+inline part::person_rights person_rights(const state&, const conversation& in, std::string_view who) {
+  const std::int64_t mine = level_of(in, in.id.account.address), theirs = level_of(in, who);
+  const bool above = who != in.id.account.address && mine > theirs;
+  return {above && mine >= in.needs.of(power_need::kick{}), above && mine >= in.needs.of(power_need::ban{})};
+}
+// What is known of someone's identity: on their card, and beside them in an
+// encrypted room's members.
+inline std::vector<part::badge> person_badges(const state&, const conversation* in, const model& known, const account_id& by,
+                                              std::string_view who) {
+  if (in && !in->encrypted)
+    return {};
+  const auto trust = known.trust_of(by, std::string(who));
+  if (!trust)
+    return {};
+  return {splice::visit(splice::overloaded{[](trust::verified) { return part::badge{"Verified", part::tone::accent{}}; },
+                                           [](trust::unverified) { return part::badge{"Not verified"}; },
+                                           [](trust::changed) { return part::badge{"Identity reset", part::tone::danger{}}; }},
+                        *trust)};
+}
 // A sender's role, as the room's power levels give it: 100 and 50.
 inline std::string sender_role(const state&, const conversation& in, std::string_view who) {
-  const auto level = in.powers.find(std::string(who));
-  const std::int64_t power = level == in.powers.end() ? in.power_default : level->second;
+  const std::int64_t power = level_of(in, who);
   return power >= 100 ? std::string("admin") : power >= 50 ? std::string("mod") : std::string();
 }
 // What is known of the other person's identity, in a direct encrypted chat.

@@ -478,13 +478,15 @@ struct file_view : nodes::Stack {
   bool shown_playing = false;
   std::string shown_time;
   std::string size_line;
-  [[nodiscard]] bool settling() const { return sound && mux::platform::audio::the_speaker().holds(source); }
+  // What plays it: the program's, handed down; none where nothing plays.
+  platform::audio::speaker* speaker_ = nullptr;
+  [[nodiscard]] bool settling() const { return sound && speaker_ && speaker_->holds(source); }
   // A voice message's is ticked, for its button and its time; a file's not.
   [[nodiscard]] bool wantsTick() const { return sound; }
   void update(double) {
-    if (!sound)
+    if (!sound || !speaker_)
       return;
-    auto& speaker = mux::platform::audio::the_speaker();
+    auto& speaker = *speaker_;
     speaker.tick();
     const bool playing = speaker.playing(source);
     if (playing != shown_playing) {
@@ -509,9 +511,9 @@ struct file_view : nodes::Stack {
       return std::format("{:.1f} KB", static_cast<double>(bytes) / 1024.0);
     return std::format("{:.1f} MB", static_cast<double>(bytes) / (1024.0 * 1024.0));
   }
-  file_view(std::string where, std::string name, std::int64_t bytes, bool is_sound = false)
+  file_view(platform::audio::speaker* speaker, std::string where, std::string name, std::int64_t bytes, bool is_sound = false)
       : source(std::move(where)), parts{.texts = texts_column(name, size_text(bytes))}, sound(is_sound),
-        size_line(size_text(bytes)) {
+        size_line(size_text(bytes)), speaker_(speaker) {
     if (sound)
       parts.icon.setShape(shape_of(icon::play{}));
     this->setHorizontal();
@@ -1755,12 +1757,16 @@ struct message_bubble : nodes::Stack {
   // Declared: the avatar's room and the bubble, at the right where it is
   // one's own; the bubble a column of the name, the quote, the text, the
   // links, the reactions and the time.
-  message_bubble(const conversation& in, const message& given, bool first_of_run, bool last_of_run,
+  // What it is handed down: what plays a voice message in it.
+  struct needs {
+    platform::audio::speaker* sound = nullptr;
+  };
+  message_bubble(const needs& n, const conversation& in, const message& given, bool first_of_run, bool last_of_run,
                  const model* now = nullptr, bool show_events = true, bool show_preview = true)
-      : message_bubble(in, with_actor(in, given), first_of_run, last_of_run, now, show_events, show_preview, made_t{}) {}
+      : message_bubble(n, in, with_actor(in, given), first_of_run, last_of_run, now, show_events, show_preview, made_t{}) {}
   // What the one above makes it of: the message with its pills.
   struct made_t {};
-  message_bubble(const conversation& in, const message& said, bool first_of_run, bool last_of_run, const model* now,
+  message_bubble(const needs& n, const conversation& in, const message& said, bool first_of_run, bool last_of_run, const model* now,
                  bool show_events, bool show_preview, made_t)
       : said(said), first(first_of_run), last(last_of_run), message_id(said.id), plain(said.body.plain),
         outgoing(said.outgoing), sender(said.sender),
@@ -1893,7 +1899,7 @@ struct message_bubble : nodes::Stack {
                                 body.parts.picture->show_video(carried.duration_ms);
                             },
                             [&](attachment_kind::file) {
-                              body.parts.file.emplace(carried.source, carried.name, carried.size,
+                              body.parts.file.emplace(n.sound, carried.source, carried.name, carried.size,
                                                       audio_type(carried.mimetype, carried.name));
                             }},
                  carried.kind);

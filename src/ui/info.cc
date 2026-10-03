@@ -452,8 +452,9 @@ struct reactions_box : nodes::Stack {
     struct parts_t {
       message_bubble<Actions> bubble;
     } parts;
-    row(Actions* a, const conversation& in, reaction_entry one, bool first, bool last, const model* now)
-        : actions(a), entry(one), parts{.bubble = message_bubble<Actions>(in, message_of(in, one), first, last, now)} {
+    row(const ui_needs<Actions>& n, const conversation& in, reaction_entry one, bool first, bool last, const model* now)
+        : actions(n.actions), entry(one),
+          parts{.bubble = message_bubble<Actions>(given<typename message_bubble<Actions>::needs>(n), in, message_of(in, one), first, last, now)} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 0.0f, 12.0f},
                     .hoverBackground = chosen_colour});
       fState.setCursor(scene::cursor::hand{});
@@ -520,8 +521,8 @@ struct reactions_box : nodes::Stack {
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
   } parts;
 
-  reactions_box(Actions* a, const conversation& in, const std::vector<reaction_entry>& entries, const model* now)
-      : parts{.top = top_bar("Reactions", {}, {a}, false, true)} {
+  reactions_box(const ui_needs<Actions>& n, const conversation& in, const std::vector<reaction_entry>& entries, const model* now)
+      : parts{.top = top_bar("Reactions", {}, {n.actions}, false, true)} {
     fState.apply({.fillX = true, .height = 420.0f, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
     parts.list.apply({.fillX = true, .grow = scene::axes::kY});
     auto& flow = std::get<0>(parts.list.fChildren);
@@ -529,7 +530,7 @@ struct reactions_box : nodes::Stack {
     auto& rows = std::get<0>(flow.fChildren);
     rows.reserve(entries.size());
     for (std::size_t i = 0; i < entries.size(); ++i)
-      rows.emplace_back(a, in, entries[i], i == 0 || entries[i - 1].who != entries[i].who,
+      rows.emplace_back(n, in, entries[i], i == 0 || entries[i - 1].who != entries[i].who,
                         i + 1 == entries.size() || entries[i + 1].who != entries[i].who, now);
   }
 };
@@ -574,8 +575,9 @@ struct marks_box : nodes::Stack {
       message_bubble<Actions> bubble;
       std::optional<badge> reacted;
     } parts;
-    row(Actions* a, mark_kind_t which, const conversation& in, const mark_entry& one, const model* now)
-        : actions(a), kind(which), event(one.event), parts{.bubble = message_bubble<Actions>(in, one.said, true, true, now)} {
+    row(const ui_needs<Actions>& n, mark_kind_t which, const conversation& in, const mark_entry& one, const model* now)
+        : actions(n.actions), kind(which), event(one.event),
+          parts{.bubble = message_bubble<Actions>(given<typename message_bubble<Actions>::needs>(n), in, one.said, true, true, now)} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 8.0f, 12.0f},
                     .hoverBackground = chosen_colour});
       fState.setCursor(scene::cursor::hand{});
@@ -595,11 +597,11 @@ struct marks_box : nodes::Stack {
     top_bar top;
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
   } parts;
-  marks_box(Actions* a, mark_kind_t kind, const conversation& in, const std::vector<mark_entry>& entries, const model* now)
+  marks_box(const ui_needs<Actions>& n, mark_kind_t kind, const conversation& in, const std::vector<mark_entry>& entries, const model* now)
       : parts{.top = top_bar(splice::visit(splice::overloaded{[](mark_kind::mention) { return std::string("Mentions"); },
                                                    [](mark_kind::reaction) { return std::string("Reactions"); }},
                                 kind),
-                             {}, {a}, false, true)} {
+                             {}, {n.actions}, false, true)} {
     fState.apply({.fillX = true, .height = 520.0f, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
     parts.list.apply({.fillX = true, .grow = scene::axes::kY});
     auto& flow = std::get<0>(parts.list.fChildren);
@@ -607,7 +609,7 @@ struct marks_box : nodes::Stack {
     auto& rows = std::get<0>(flow.fChildren);
     rows.reserve(entries.size());
     for (const mark_entry& one : entries)
-      rows.emplace_back(a, kind, in, one, now);
+      rows.emplace_back(n, kind, in, one, now);
   }
 };
 
@@ -1633,7 +1635,8 @@ struct threads_panel : nodes::Stack {
     timeline_area<Actions> answers;
     composer_bar<Actions, in_thread> line;
   } parts;
-  explicit threads_panel(Actions* a) : actions(a), parts{.head = head_t("Threads", {a}, {a}, false, true), .answers = timeline_area<Actions>(a), .line = composer_bar<Actions, in_thread>(a, {this}, {this}, {a}, {a}, {this})} {
+  explicit threads_panel(const ui_needs<Actions>& n) : threads_panel(n, n.actions) {}
+  threads_panel(const ui_needs<Actions>& n, Actions* a) : actions(a), parts{.head = head_t("Threads", {a}, {a}, false, true), .answers = timeline_area<Actions>(n), .line = composer_bar<Actions, in_thread>(a, {this}, {this}, {a}, {a}, {this})} {
     fState.apply({.fillY = true, .background = sidebar_colour});
     parts.divider.apply({.fillX = true, .height = 1.0f});
     parts.empty.apply({.margin = {16.0f, 16.0f, 0.0f, 16.0f}});

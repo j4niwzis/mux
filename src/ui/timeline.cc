@@ -326,13 +326,17 @@ struct timeline_area : scene::Node {
     widgets::RadialLoader<stop_jump> loading;
   } parts;
   Actions* actions = nullptr;
-  explicit timeline_area(Actions* a)
+  // What it was handed down, for the bubbles it makes.
+  ui_needs<Actions> needs_;
+  explicit timeline_area(const ui_needs<Actions>& n) : timeline_area(n, n.actions) {}
+  timeline_area(const ui_needs<Actions>& n, Actions* a)
       : parts{.jump = jump_button<Actions>(a),
               .back = back_button<Actions>(a),
               .mentions = mark_button<Actions>(a, mark_kind::mention{}, "@"),
               .reactions = mark_button<Actions>(a, mark_kind::reaction{}, "\u2665"),
               .loading = widgets::RadialLoader<stop_jump>(44.0f, {a})},
-        actions(a) {
+        actions(a),
+        needs_(n) {
     parts.wall.apply({.fill = true});
     this->show_wallpaper(config::wallpaper::theme{});
     parts.timeline.apply({.fill = true});
@@ -434,7 +438,7 @@ struct timeline_area : scene::Node {
             entries, std::views::iota(first_made, last_made),
             [&](std::size_t i) { return all[i].id; }, [](const message_bubble<Actions>& row) { return row.message_id; },
             [&](std::size_t i) {
-              message_bubble<Actions> made(one, all[i], first_of_run(i), last_of_run(i), &now, shows(all[i]),
+              message_bubble<Actions> made(given<typename message_bubble<Actions>::needs>(needs_), one, all[i], first_of_run(i), last_of_run(i), &now, shows(all[i]),
                                   how.previews);
               made.quote_said = quote_body(i);
               if (how.unread_from && all[i].id == *how.unread_from)

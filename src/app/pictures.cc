@@ -410,7 +410,7 @@ class pictures_part {
   // from the disk where it was fetched before, from the account where not
   // -- on a worker, and played.
   void apply(const request::play_audio& one) {
-    auto& speaker = mux::platform::audio::the_speaker();
+    auto& speaker = *s_->speaker;
     if (speaker.holds(one.source)) {
       speaker.toggle();
       return;
@@ -425,11 +425,11 @@ class pictures_part {
   void play(const std::string& source, const std::string& bytes) {
     auto kept = std::make_shared<const std::string>(bytes);
     auto* scene = s_->scene;
-    s_->work->run([kept, source, scene]() -> workers::done_t {
+    s_->work->run([kept, source, scene, speaker = s_->speaker]() -> workers::done_t {
       auto sound = mux::platform::audio::decode(*kept);
-      return [sound = std::move(sound), source, scene]() {
+      return [sound = std::move(sound), source, scene, speaker]() {
         if (sound)
-          mux::platform::audio::the_speaker().play(source, *sound);
+          speaker->play(source, *sound);
         scene->state().markDamaged();
       };
     });

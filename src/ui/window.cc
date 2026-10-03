@@ -279,8 +279,9 @@ struct window : scene::Node {
       over_if(emoji, menu, viewer, text_menu_up);
     }
 
-    explicit layers(Actions* a)
-        : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(a), std::forward_as_tuple(a))},
+    explicit layers(const ui_needs<Actions>& n) : layers(n, n.actions) {}
+    layers(const ui_needs<Actions>& n, Actions* a)
+        : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(n), std::forward_as_tuple(a))},
           actions_of(a) {
       auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying,
              emoji, menu, viewer, text_menu_up] = parts;
@@ -340,14 +341,16 @@ struct window : scene::Node {
   // The layers as they are.
   [[nodiscard]] typename layers::parts_t& layer() { return parts.now->parts; }
 
-  explicit window(Actions* a) : actions(a) {
+  // What it was handed: the program's own objects, for the layers it makes.
+  ui_needs<Actions> needs_;
+  explicit window(const ui_needs<Actions>& n) : actions(n.actions), needs_(n) {
     fState.apply({.fill = true});
-    parts.now.emplace(a);
+    parts.now.emplace(n);
   }
   // Everything made again, in the colours of the theme now in place.
   void rebuild() {
     parts.now.reset();
-    parts.now.emplace(actions);
+    parts.now.emplace(needs_);
     this->invalidateLayout();
     this->markDamaged();
   }
@@ -508,11 +511,11 @@ struct window : scene::Node {
   void close_room_card() { layer().room.close(); }
   [[nodiscard]] bool room_card_up() { return layer().room.shown() != nullptr; }
   void open_reactions(const conversation& in, const std::vector<reaction_entry>& entries, const model* now) {
-    layer().reactions.open(actions, in, entries, now);
+    layer().reactions.open(needs_, in, entries, now);
   }
   void close_reactions() { layer().reactions.close(); }
   void open_marks(mark_kind_t kind, const conversation& in, const std::vector<mark_entry>& entries, const model* now) {
-    layer().marks.open(actions, kind, in, entries, now);
+    layer().marks.open(needs_, kind, in, entries, now);
   }
   void close_marks() { layer().marks.close(); }
   [[nodiscard]] bool marks_up() { return layer().marks.shown() != nullptr; }

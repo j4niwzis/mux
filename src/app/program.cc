@@ -142,8 +142,10 @@ struct app : kept_settings {
   std::optional<mux::conversation_id> made_room_;
   // The account being added that a login is waiting to hear about.
   std::optional<std::string> pending_login;
+  // What plays voice messages: handed to the window and to the parts.
+  mux::platform::audio::speaker speaker;
   actions ask;
-  skiff::scene::Scene<window_type> scene{std::in_place, &ask};
+  skiff::scene::Scene<window_type> scene{std::in_place, mux::ui::ui_needs<actions>{.actions = &ask, .sound = &speaker}};
 
   // -- what the host asks
   skiff::scene::Scene<window_type>& window();

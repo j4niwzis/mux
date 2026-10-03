@@ -243,7 +243,8 @@ void app::wire() {
                     .vault = vault,
                     .work = &work,
                     .system_dialogs = &system_dialogs,
-                    .wake = &wake};
+                    .wake = &wake,
+                    .speaker = &speaker};
   store.vault = vault;
 }
 

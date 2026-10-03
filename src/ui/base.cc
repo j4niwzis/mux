@@ -14,6 +14,7 @@ import mux.core;
 import mux.protocols;
 import mux.config;
 import mux.logic.text;
+import mux.platform.audio;
 
 export namespace mux::ui {
 
@@ -230,6 +231,28 @@ struct variant_of_types;
 template <class... Ts>
 struct variant_of_types<type_list<Ts...>> {
   using type = splice::variant<Ts...>;
+};
+// What a node needs, handed down from what its parent was given: each field
+// of `To` taken from the field of `from` of its type. Overload resolution
+// matches them, one overload for each of the parent's fields -- a type the
+// parent has not, or has twice, does not compile.
+template <class To, class From>
+[[nodiscard]] constexpr To given(const From& from) {
+  const auto& [... had] = from;
+  const auto pick = splice::overloaded{[&had](mux::type_tag<std::remove_cvref_t<decltype(had)>>) { return had; }...};
+  To out{};
+  auto& [... wanted] = out;
+  ((wanted = pick(mux::type_tag<std::remove_cvref_t<decltype(wanted)>>{})), ...);
+  return out;
+}
+// What the window's nodes are handed down, from the root -- the program's
+// own objects, each a pointer of a type of its own: what a node reads, it is
+// given by its parent, and takes what it needs of it with given<>.
+template <class Actions>
+struct ui_needs {
+  Actions* actions = nullptr;
+  // What plays voice messages: the program's.
+  platform::audio::speaker* sound = nullptr;
 };
 // Each account's protocol state, as its client last said it: what the
 // extension points are asked with. One not said yet: its protocol's default.

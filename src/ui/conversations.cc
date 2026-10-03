@@ -1423,9 +1423,10 @@ struct conversations_screen : nodes::Stack {
     composer_bar<Actions>& line = parts.line;
     empty_state& empty = parts.empty;
     select_hint& hint = parts.hint;
-    explicit chat_column(Actions* a)
+    explicit chat_column(const ui_needs<Actions>& n) : chat_column(n, n.actions) {}
+    chat_column(const ui_needs<Actions>& n, Actions* a)
         : parts{.search = search_bar<Actions>(a),
-                .area = timeline_area<Actions>(a),
+                .area = timeline_area<Actions>(n),
                 .line = composer_bar<Actions>(a),
                 .empty = empty_state(a)} {
       header.apply({.fillX = true, .height = chat_header<Actions>::kHeight});
@@ -1577,14 +1578,15 @@ struct conversations_screen : nodes::Stack {
   int unseen = 0;
   composer_bar<Actions>& line = chat.line;
 
-  explicit conversations_screen(Actions* a)
+  explicit conversations_screen(const ui_needs<Actions>& n) : conversations_screen(n, n.actions) {}
+  conversations_screen(const ui_needs<Actions>& n, Actions* a)
       : actions(a),
         parts{.side = side_column(a),
               .edge = side_edge(resize_sidebar_to<Actions>{a}),
-              .chat = chat_column(a),
+              .chat = chat_column(n),
               .info_edge = info_edge_t(resize_info_to<Actions>{a}, false),
               .info = info_panel<Actions>(a),
-              .threads = threads_panel<Actions>(a)} {
+              .threads = threads_panel<Actions>(n)} {
     fState.apply({.fill = true});
     this->setHorizontal();
     docked_panel_watcher() = fState.fId;

@@ -202,10 +202,6 @@ class speaker {
   double per_second_ = 0.0;
   bool paused_ = false;
 };
-inline speaker& the_speaker() {
-  static speaker kept;
-  return kept;
-}
 
 // A time, as a player shows it: minutes and seconds.
 [[nodiscard]] inline std::string clock(double seconds) {

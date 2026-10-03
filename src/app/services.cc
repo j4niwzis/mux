@@ -7,6 +7,7 @@ export module mux.app.services;
 
 import std;
 import mux.platform.dialogs;
+import mux.platform.audio;
 import mux.vault;
 import skiff.scene;
 import mux.core;
@@ -41,6 +42,8 @@ struct services {
   mux::platform::dialogs::dialogs* system_dialogs = nullptr;
   // What wakes the window from another thread.
   wake_window* wake = nullptr;
+  // What plays voice messages.
+  mux::platform::audio::speaker* speaker = nullptr;
 
   [[nodiscard]] window_type& root() const { return scene->root(); }
   // A chat that is a window of its history away from its newest: back to

@@ -71,14 +71,14 @@ struct menu_facts {
 // Telegram's pattern, a plain colour (what is behind showing), or a picture.
 inline void show_wallpaper_on(wallpaper_t& wall, const config::wallpaper_t& chosen, const palette& colours, const looks_shown& looks) {
   // Frosted's blur, as chosen: 0 to 100 for none to about five pixels.
-  wall.setBlur(static_cast<float>(window_look().frost) / 100.0f);
+  wall.setBlur(static_cast<float>(looks.window.frost) / 100.0f);
   // And each look's and element's own, where it frosts: made once for a size.
   std::vector<float> blurs;
   for (const config::bubble_look* look : {&looks.bubbles, &looks.panels, &looks.bubbles_everywhere, &looks.panels_everywhere})
     if (frosts(*look)) {
-      blurs.push_back(blur_of(*look));
+      blurs.push_back(blur_of(*look, looks.window));
       for (const auto& [name, member] : config::kElementBlurNames)
-        blurs.push_back(element_blur_of(*look, member));
+        blurs.push_back(element_blur_of(*look, member, looks.window));
     }
   wall.setBlurs(std::move(blurs));
   splice::visit(splice::overloaded{[&](config::wallpaper::theme) {
@@ -358,8 +358,8 @@ struct timeline_area : scene::Node {
   // Not here where it is behind the whole window: the window's shows
   // through. Else at the window's opacity, as the panels are.
   void show_wallpaper(const config::wallpaper_t& chosen) {
-    parts.wall.setVisible(!window_look().behind);
-    parts.wall.setOpacity(static_cast<float>(window_look().opacity) / 100.0f);
+    parts.wall.setVisible(!needs_.looks->window.behind);
+    parts.wall.setOpacity(static_cast<float>(needs_.looks->window.opacity) / 100.0f);
     show_wallpaper_on(parts.wall, chosen, *needs_.colours, *needs_.looks);
   }
   // The bubbles in the list, as they are made.

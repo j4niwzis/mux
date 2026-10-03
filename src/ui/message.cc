@@ -561,23 +561,23 @@ struct message_bubble : nodes::Stack {
       parts.frost->apply({.margin = {-pad.fTop, -pad.fRight, -pad.fBottom, -pad.fLeft}, .cornerRadius = fState.fCornerRadius,
                           .corners = fState.fCorners});
     }
-    body_column(const palette& colours, const config::bubble_look& look, bool mine, std::string said, std::string when)
+    body_column(const palette& colours, const looks_shown& looks, bool mine, std::string said, std::string when)
         : outgoing(mine),
           parts{.text = nodes::BasicText<message_pictures>(std::move(said), 13.0f, colours.text),
                 .time = nodes::Text(when, 11.0f, mine ? colours.sent_time : colours.dim),
                 .inline_time = nodes::Text(when, 11.0f, mine ? colours.sent_time : colours.dim)},
-          plate(plate_of(colours, look, mine)) {
+          plate(plate_of(colours, looks.bubbles, mine)) {
       auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, their_view, time, inline_time, tail] = parts;
       this->setGap(2.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
                     .padding = {kPadY, kPadX, kPadY, kPadX}, .cornerRadius = 12.0f, .background = plate});
       // Frosted: what is behind blurred under the tint; glass: a light edge.
-      splice::visit(splice::overloaded{[&](config::bubbles::frosted) { this->frosted(blur_of(look)); },
+      splice::visit(splice::overloaded{[&](config::bubbles::frosted) { this->frosted(blur_of(looks.bubbles, looks.window)); },
                                        [&](config::bubbles::glass) {
                                          fState.apply({.border = scene::Border{skia::colorSetARGB(70, 255, 255, 255), 1.0f}});
                                        },
                                        [](const auto&) {}},
-                    look.kind);
+                    looks.bubbles.kind);
       text.setWrapped(true);
       text.setShrinksToLines(true);
       // Wrapped at the bubble's width however wide the room it is first
@@ -671,7 +671,7 @@ struct message_bubble : nodes::Stack {
       : said(said), first(first_of_run), last(last_of_run), message_id(said.id), plain(said.body.plain),
         outgoing(said.outgoing), sender(said.sender), colours_(n.colours), looks_(n.looks),
         parts{.face = avatar_mark(said.sender, sender_name(in, said.sender), kAvatar),
-              .body = body_column(*n.colours, n.looks->bubbles, said.outgoing, said.body.plain, mark_of(said) + clock_of(said.at)),
+              .body = body_column(*n.colours, *n.looks, said.outgoing, said.body.plain, mark_of(said) + clock_of(said.at)),
               .swipe_mark = nodes::Icon(shape_of(icon::back{}), n.colours->dim)} {
     // Drawn once and played back until something in it changes: a strip of
     // the list repainted went through every part of every message in it.
@@ -747,7 +747,7 @@ struct message_bubble : nodes::Stack {
                   .background = at_opacity(colours_->tile, element_opacity_of(looks_->bubbles, &config::element_opacity::service))});
       // Frosted as its own blur says.
       if (frosts(looks_->bubbles))
-        body.frosted(element_blur_of(looks_->bubbles, &config::element_blur::service));
+        body.frosted(element_blur_of(looks_->bubbles, &config::element_blur::service, looks_->window));
       // Not shown where the chat's settings say so: kept, and out of the
       // flow, taking no room.
       events_shown = show_events;
@@ -989,7 +989,7 @@ struct message_bubble : nodes::Stack {
       body.parts.reactions.emplace();
       for (const auto& [key, who] : said.reactions)
         if (!who.empty())
-          body.parts.reactions->chips().emplace_back(*colours_, looks_->bubbles, key, who.size(), who.contains(said.in.account.address), [&] {
+          body.parts.reactions->chips().emplace_back(*colours_, *looks_, key, who.size(), who.contains(said.in.account.address), [&] {
             std::vector<std::pair<std::string, std::string>> people;
             for (const std::string& one : who)
               people.emplace_back(one, sender_name(in, one));

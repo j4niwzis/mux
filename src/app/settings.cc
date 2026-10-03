@@ -98,7 +98,7 @@ class settings_part {
   // start, where the window is made see-through or not.
   void apply(const request::set_window_opacity& one) {
     k_->window_opacity = std::clamp(one.percent, 20, 100);
-    auto& look = mux::ui::window_look();
+    auto& look = s_->looks.window;
     look.chosen = k_->window_opacity;
     (void)k_->write();
     // A window made see-through: at once, everything in its colours again.
@@ -114,7 +114,7 @@ class settings_part {
   // all of the window laid out again at it; the page shows it chosen.
   void apply(const request::set_interface_scale& one) {
     k_->interface_scale = std::clamp(one.percent, mux::ui::kScaleLeast, mux::ui::kScaleMost);
-    mux::ui::window_look().interface_scale = k_->interface_scale;
+    s_->looks.window.interface_scale = k_->interface_scale;
     (void)k_->write();
     if (auto* up = s_->root().settings_up(); up && up->appearance())
       up->show_appearance(k_->theme, k_->accent);
@@ -122,14 +122,14 @@ class settings_part {
   // Frosted popups blurring what is under them, live: repainted with it.
   void apply(const request::flip_live_blur&) {
     k_->live_blur = !k_->live_blur;
-    mux::ui::window_look().live_blur = k_->live_blur;
+    s_->looks.window.live_blur = k_->live_blur;
     (void)k_->write();
     s_->refresh_due = true;
   }
   // The background behind the whole window: everything made again over it.
   void apply(const request::flip_wallpaper_behind&) {
     k_->wallpaper_behind = !k_->wallpaper_behind;
-    mux::ui::window_look().behind = k_->wallpaper_behind;
+    s_->looks.window.behind = k_->wallpaper_behind;
     (void)k_->write();
     skiff::scene::forgetStyles();
     s_->rebuild_due = true;
@@ -137,7 +137,7 @@ class settings_part {
   // Frosted's blur: kept, the backgrounds' frost made again, and shown.
   void apply(const request::set_frost_blur& one) {
     k_->frost_blur = std::clamp(one.percent, 0.0, 100.0);
-    mux::ui::window_look().frost = k_->frost_blur;
+    s_->looks.window.frost = k_->frost_blur;
     (void)k_->write();
     s_->refresh_due = true;
     if (auto* up = s_->root().settings_up(); up && up->appearance())
@@ -146,7 +146,7 @@ class settings_part {
   // The space bars at all, and the top one.
   void apply(const request::flip_spaces&) {
     k_->spaces = !k_->spaces;
-    mux::ui::window_look().spaces = k_->spaces;
+    s_->looks.window.spaces = k_->spaces;
     (void)k_->write();
     s_->refresh_due = true;
     if (auto* up = s_->root().settings_up(); up && up->appearance())
@@ -154,7 +154,7 @@ class settings_part {
   }
   void apply(const request::flip_top_bar&) {
     k_->top_bar = !k_->top_bar;
-    mux::ui::window_look().top_bar = k_->top_bar;
+    s_->looks.window.top_bar = k_->top_bar;
     (void)k_->write();
     s_->refresh_due = true;
     if (auto* up = s_->root().settings_up(); up && up->appearance())

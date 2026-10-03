@@ -79,9 +79,11 @@ inline skia::SkColor chat_top_colour = skia::colorSetARGB(255, 22, 38, 58);
                        look.kind);
 }
 // How much a look's Frosted blurs, 0 to 1: its own, else the window's.
-[[nodiscard]] inline float blur_of(const config::bubble_look& look);
+struct window_look_t;
+[[nodiscard]] inline float blur_of(const config::bubble_look& look, const window_look_t& window);
 // An element's, drawn frosted: its own, else its look's.
-[[nodiscard]] inline float element_blur_of(const config::bubble_look& look, std::optional<double> config::element_blur::* which);
+[[nodiscard]] inline float element_blur_of(const config::bubble_look& look, std::optional<double> config::element_blur::* which,
+                                           const window_look_t& window);
 // Whether a look frosts.
 [[nodiscard]] inline bool frosts(const config::bubble_look& look) {
   return splice::visit(splice::overloaded{[](config::bubbles::frosted) { return true; }, [](const auto&) { return false; }}, look.kind);
@@ -117,10 +119,6 @@ inline constexpr std::array kScales{50,  60,  70,  75,  80,  90,  100, 110, 120,
                                     150, 160, 170, 175, 180, 190, 200, 225, 250, 275, 300};
 inline constexpr int kScaleLeast = kScales.front();
 inline constexpr int kScaleMost = kScales.back();
-inline window_look_t& window_look() {
-  static window_look_t look;
-  return look;
-}
 // The emoji, stickers and GIFs docked at the bottom of a phone's window, as
 // Telegram's apps have them -- where the keyboard would be: how high it is,
 // for the chat to stand its field over it; and the screen that does, told
@@ -175,6 +173,8 @@ struct looks_held {
 // The looks the window shows, as the program holds them: handed down with
 // the colours (ui_needs).
 struct looks_shown {
+  // The window's own: its opacity, the background behind it, Frosted's blur.
+  window_look_t window;
   // How the bubbles of the chat shown look -- set before its bubbles are
   // made -- and the panels; and every chat's of each.
   config::bubble_look bubbles, panels;
@@ -483,13 +483,15 @@ struct column_stack {
 }
 
 
-inline float blur_of(const config::bubble_look& look) {
-  return static_cast<float>(look.blur.value_or(window_look().frost) / 100.0);
+// A look's blur, 0 to 1: its own, else the window's Frosted blur.
+[[nodiscard]] inline float blur_of(const config::bubble_look& look, const window_look_t& window) {
+  return static_cast<float>(look.blur.value_or(window.frost) / 100.0);
 }
-inline float element_blur_of(const config::bubble_look& look, std::optional<double> config::element_blur::* which) {
+[[nodiscard]] inline float element_blur_of(const config::bubble_look& look, std::optional<double> config::element_blur::* which,
+                                           const window_look_t& window) {
   if (const auto& own = look.blurs.*which)
     return static_cast<float>(*own / 100.0);
-  return blur_of(look);
+  return blur_of(look, window);
 }
 
 // ---- what is painted behind ---------------------------------------------------
@@ -581,7 +583,7 @@ struct kept_blur {
 // its rect noted, for the host to repaint all of it with what is under it.
 // While it moves, the window under it as it came up, blurred once (above).
 inline void live_backdrop(std::vector<std::pair<scene::NodeId, kept_blur>>& all, const scene::State& state, skia::SkCanvas* canvas,
-                          float blur, float alpha) {
+                          float blur, double frost, float alpha) {
   const skia::SkRect on = canvas->getTotalMatrix().mapRect(state.fBounds);
   // Shown again after it was let go of -- a dialog's sheet, shut and opened
   // again: come up now, as a new one.
@@ -590,7 +592,7 @@ inline void live_backdrop(std::vector<std::pair<scene::NodeId, kept_blur>>& all,
   noted = {on, scene::work::frameNumber(), false};
   // Into a recording, played back in bands: nothing under it to read.
   const bool recording = canvas->getSurface() == nullptr;
-  const float amount = blur >= 0.0f ? blur : static_cast<float>(window_look().frost / 100.0);
+  const float amount = blur >= 0.0f ? blur : static_cast<float>(frost / 100.0);
   const float sigma = 1.0f + amount * 30.0f;
   const skia::SkRRect shape = scene::detail::roundedBox(state, state.fBounds);
   // A Gaussian's reach: three sigmas, on the device.
@@ -652,6 +654,8 @@ inline void live_backdrop(std::vector<std::pair<scene::NodeId, kept_blur>>& all,
 // How mux paints every box's fill, as skiff asks a program (ProgramPaint):
 // the panels' look.
 struct mux_paint : scene::Painting {
+  // The looks it paints by: the program's.
+  const looks_shown* looks = nullptr;
   // The panels' look, as the program put it (show_panels), and its opacity
   // eased from one chat's to another's.
   panel_look_t panel;
@@ -674,16 +678,16 @@ struct mux_paint : scene::Painting {
     // A panel's fill on what floats, live: its sheet under it shows what is
     // behind already -- frosted again from the wallpaper, a title bar showed
     // the picture over the messages the sheet blurred.
-    if (inside_float && !state.fFloats && look.frosted && window_look().live_blur &&
+    if (inside_float && !state.fFloats && look.frosted && looks->window.live_blur &&
         std::ranges::contains(look.panels, *fill))
       return std::nullopt;
     // Floating over others -- a popup, a sheet -- frosted, and asked so:
     // what is really under it blurred, as it is drawn, its fill over that.
-    if (state.fFloats && look.frosted && window_look().live_blur) {
+    if (state.fFloats && look.frosted && looks->window.live_blur) {
       const bool panel = std::ranges::contains(look.panels, *fill);
       if (panel && inside_panel)
         return std::nullopt;
-      live_backdrop(blurs, state, canvas, look.blur, alpha);
+      live_backdrop(blurs, state, canvas, look.blur, looks->window.frost, alpha);
       if (panel) {
         inside_panel = true;
         panel_painted = state.fId;

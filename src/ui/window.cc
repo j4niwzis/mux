@@ -292,7 +292,7 @@ struct window : scene::Node {
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
       behind.apply({.fill = true});
-      behind.setVisible(window_look().behind);
+      behind.setVisible(n.looks->window.behind);
       // The pages over the chats (Accounts) on the panels' colour: as
       // see-through as the panels are.
       frame.setSheetColour(n.colours->sidebar);
@@ -326,7 +326,7 @@ struct window : scene::Node {
   [[nodiscard]] conversations_screen<Actions>& main() { return layer().frame.base().base(); }
   // The background behind the whole window, where it is so.
   void show_behind(const config::wallpaper_t& chosen) {
-    if (window_look().behind)
+    if (needs_.looks->window.behind)
       show_wallpaper_on(layer().behind, chosen, *needs_.colours, *needs_.looks);
   }
   // The panel that is up, not on its way out.

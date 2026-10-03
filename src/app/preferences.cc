@@ -219,7 +219,7 @@ class preferences_part {
   void apply(const request::set_home_hides& one) {
     splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) {
                                        k_->home_hides_spaced = one.on.value_or(false);
-                                       mux::ui::window_look().home_hides = k_->home_hides_spaced;
+                                       s_->looks.window.home_hides = k_->home_hides_spaced;
                                      },
                                      [&](mux::choice_level::account) {
                                        s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
@@ -236,7 +236,7 @@ class preferences_part {
   void apply(const request::set_home_direct& one) {
     splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) {
                                        k_->home_hides_direct = one.on.value_or(false);
-                                       mux::ui::window_look().home_direct = k_->home_hides_direct;
+                                       s_->looks.window.home_direct = k_->home_hides_direct;
                                      },
                                      [&](mux::choice_level::account) {
                                        s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {

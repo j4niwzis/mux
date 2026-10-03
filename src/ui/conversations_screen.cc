@@ -605,7 +605,7 @@ struct conversations_screen : nodes::Stack {
       // Wallpaper -- not behind Select a chat, where Telegram has none.
       // Nothing, where the background is behind the whole window.
       fState.apply({.fillY = true, .grow = scene::axes::kX,
-                    .background = window_look().behind ? skia::SkColor{0} : n.colours->chat});
+                    .background = n.looks->window.behind ? skia::SkColor{0} : n.colours->chat});
       area.apply({.fillX = true, .grow = scene::axes::kY});
       parts.mentions.setVisible(false);
       parts.trust_warning.setWrapped(true);

@@ -34,14 +34,16 @@ struct choose_theme {
 template <class Actions>
 struct flip_home_hides {
   Actions* actions = nullptr;
-  void operator()() const { actions->set_home_hides(choice_level::everywhere{}, !window_look().home_hides); }
+  const looks_shown* looks = nullptr;
+  void operator()() const { actions->set_home_hides(choice_level::everywhere{}, !looks->window.home_hides); }
 };
 template <class Actions>
 struct flip_home_direct {
   Actions* actions = nullptr;
+  const looks_shown* looks = nullptr;
   void operator()() const {
-    if (window_look().home_hides)
-      actions->set_home_direct(choice_level::everywhere{}, !window_look().home_direct);
+    if (looks->window.home_hides)
+      actions->set_home_direct(choice_level::everywhere{}, !looks->window.home_direct);
   }
 };
 // The window's opacity, let go at on its slider: 20% to 100%.
@@ -189,16 +191,16 @@ struct appearance_page : nodes::Stack {
               .spaces_title = section_title(colours, "SPACES"),
               .spaces = switch_row<ask<Actions, &Actions::flip_spaces>>(colours, "Space bars", {a}),
               .top_bar = switch_row<ask<Actions, &Actions::flip_top_bar>>(colours, "The bar after \"mux\"", {a}),
-              .home_hides = switch_row<flip_home_hides<Actions>>(colours, "Home without chats spaces hold (not direct messages)", {a}),
-              .home_direct = switch_row<flip_home_direct<Actions>>(colours, "And without direct messages", {a}),
+              .home_hides = switch_row<flip_home_hides<Actions>>(colours, "Home without chats spaces hold (not direct messages)", {a, &looks}),
+              .home_direct = switch_row<flip_home_direct<Actions>>(colours, "And without direct messages", {a, &looks}),
               .places = spaces_choices<Actions>(a),
               .behind = switch_row<ask<Actions, &Actions::flip_wallpaper_behind>>(colours, "Background behind the whole window", {a}),
               .live_blur = switch_row<ask<Actions, &Actions::flip_live_blur>>(colours, "Frosted menus blur what is under them (live)", {a}),
-              .scale_title = section_title(colours, std::format("INTERFACE SCALE: {}%", window_look().interface_scale)),
+              .scale_title = section_title(colours, std::format("INTERFACE SCALE: {}%", looks.window.interface_scale)),
               .scale = widgets::SliderBar<scene::NoAction, scale_done<Actions>>(colours.widgets, {}, {a}),
-              .window_title = section_title(colours, std::format("WINDOW OPACITY: {}%", window_look().chosen)),
+              .window_title = section_title(colours, std::format("WINDOW OPACITY: {}%", looks.window.chosen)),
               .opacity = widgets::SliderBar<scene::NoAction, opacity_done<Actions>>(colours.widgets, {}, {a}),
-              .window_note = note_text(colours, window_look().see_through
+              .window_note = note_text(colours, looks.window.see_through
                                 ? "The panels at this opacity, and what is under the window through them."
                                 : "Below 100% the window shows what is under it, where a compositor (picom, KWin, "
                                   "Mutter) blends windows. Made see-through when mux starts again; from then on, "
@@ -208,25 +210,25 @@ struct appearance_page : nodes::Stack {
     parts.accent_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
     parts.looks.apply({.margin = {6.0f, 10.0f, 0.0f, 10.0f}});
     parts.spaces_title.apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
-    parts.spaces.parts.toggle.setOnNow(window_look().spaces);
-    parts.top_bar.parts.toggle.setOnNow(window_look().top_bar);
-    parts.home_hides.parts.toggle.setOnNow(window_look().home_hides);
-    parts.home_direct.parts.toggle.setOnNow(window_look().home_direct);
+    parts.spaces.parts.toggle.setOnNow(looks.window.spaces);
+    parts.top_bar.parts.toggle.setOnNow(looks.window.top_bar);
+    parts.home_hides.parts.toggle.setOnNow(looks.window.home_hides);
+    parts.home_direct.parts.toggle.setOnNow(looks.window.home_direct);
     // Only where Home is without what spaces hold.
-    if (!window_look().home_hides)
+    if (!looks.window.home_hides)
       parts.home_direct.apply({.alpha = 0.4f, .disabled = true});
-    parts.places.setVisible(window_look().spaces);
-    parts.behind.parts.toggle.setOnNow(window_look().behind);
-    parts.live_blur.parts.toggle.setOnNow(window_look().live_blur);
+    parts.places.setVisible(looks.window.spaces);
+    parts.behind.parts.toggle.setOnNow(looks.window.behind);
+    parts.live_blur.parts.toggle.setOnNow(looks.window.live_blur);
     parts.scale_title.apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
     // Where the scale up is among those one can choose.
-    const auto chosen_scale = std::ranges::find(kScales, window_look().interface_scale);
+    const auto chosen_scale = std::ranges::find(kScales, looks.window.interface_scale);
     parts.scale.setFraction(chosen_scale == kScales.end()
                                 ? 0.0f
                                 : static_cast<float>(chosen_scale - kScales.begin()) / static_cast<float>(kScales.size() - 1));
     parts.scale.apply({.margin = {10.0f, 28.0f, 10.0f, 28.0f}});
     parts.window_title.apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
-    parts.opacity.setFraction(static_cast<float>(window_look().chosen - 20) / 80.0f);
+    parts.opacity.setFraction(static_cast<float>(looks.window.chosen - 20) / 80.0f);
     parts.opacity.apply({.margin = {10.0f, 28.0f, 10.0f, 28.0f}});
     parts.window_note.apply({.fillX = true, .margin = {0.0f, 20.0f, 0.0f, 20.0f}});
     parts.window_note.setWrapped(true);

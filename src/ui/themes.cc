@@ -605,8 +605,8 @@ inline palette& legacy_palette_now() {
 inline const palette& legacy_palette() { return legacy_palette_now(); }
 // For the code not handed its palette yet: the palette put in the colours
 // read by name. Goes with them.
-inline void use_theme(const config::theme_t& chosen, const config::accent_t& accent) {
-  const palette now = palette_of(chosen, accent, window_look().opacity);
+inline void use_theme(const config::theme_t& chosen, const config::accent_t& accent, int opacity) {
+  const palette now = palette_of(chosen, accent, opacity);
   legacy_palette_now() = now;
   background = now.background;
   sidebar_colour = now.sidebar;
@@ -633,15 +633,15 @@ inline void use_theme(const config::theme_t& chosen, const config::accent_t& acc
 // The panels' look put in place, for skiff to paint them in: only over the
 // background behind the whole window. Whether it changed -- the window to
 // be repainted.
-inline bool show_panels(mux_paint& paint, const config::bubble_look& look) {
-  const bool kinded = window_look().behind && splice::visit(splice::overloaded{[](config::bubbles::solid) { return false; },
+inline bool show_panels(mux_paint& paint, const config::bubble_look& look, const window_look_t& window) {
+  const bool kinded = window.behind && splice::visit(splice::overloaded{[](config::bubbles::solid) { return false; },
                                                                               [](const auto&) { return true; }},
                                                            look.kind);
   panel_look_t next{
       .active = kinded,
       .opacity = static_cast<float>(look.opacity) / 100.0f,
       .frosted = splice::visit(splice::overloaded{[](config::bubbles::frosted) { return true; }, [](const auto&) { return false; }}, look.kind),
-      .blur = blur_of(look),
+      .blur = blur_of(look, window),
       .edge = splice::visit(splice::overloaded{[](config::bubbles::glass) { return true; }, [](const auto&) { return false; }}, look.kind),
       .panels = {sidebar_colour},
       // Tinted at the opacity, never left out as a panel fill again: what is

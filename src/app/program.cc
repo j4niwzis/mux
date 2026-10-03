@@ -64,7 +64,12 @@ export namespace mux::app {
 // accounts file keeps, its base.
 struct app : kept_settings {
   // Made in the theme's colours, which are in place before the window is.
-  explicit app(const mux::ui::palette& theme_colours) : colours(theme_colours) {}
+  // Made in the theme's colours and the window's look as the program
+  // starts: the window, made here, is shown in them.
+  app(const mux::ui::palette& theme_colours, const mux::ui::window_look_t& window)
+      : shared{.looks = {.window = window}}, colours(theme_colours) {
+    shared.paint.looks = &shared.looks;
+  }
   // -- the parts: each owns its state, and reaches the rest through what
   // they share
   services shared;

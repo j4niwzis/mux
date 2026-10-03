@@ -66,9 +66,9 @@ struct bubbles_picker : nodes::Stack {
                                             }},
                          part);
   }
-  [[nodiscard]] static bool usable(const config::look_part_t& part) {
+  [[nodiscard]] static bool usable(const look_level& level, const config::look_part_t& part) {
     return splice::visit(splice::overloaded{[](config::look_part::bubbles) { return true; },
-                                            [](config::look_part::panels) { return window_look().behind; }},
+                                            [&](config::look_part::panels) { return level.looks->window.behind; }},
                          part);
   }
   struct inherit_it {
@@ -76,7 +76,7 @@ struct bubbles_picker : nodes::Stack {
     look_level level;
     config::look_part_t part;
     void operator()() const {
-      if (usable(part))
+      if (usable(level, part))
         actions->set_bubbles(level.level, std::nullopt, part);
     }
   };
@@ -86,7 +86,7 @@ struct bubbles_picker : nodes::Stack {
     config::look_part_t part;
     config::bubbles_t kind;
     void operator()() const {
-      if (usable(part))
+      if (usable(level, part))
         actions->set_bubbles(level.level, config::bubble_look{kind, current(level, part).opacity}, part);
     }
   };
@@ -97,7 +97,7 @@ struct bubbles_picker : nodes::Stack {
     look_level level;
     config::look_part_t part;
     void operator()(float fraction) const {
-      if (!usable(part) || !own_here(level, part))
+      if (!usable(level, part) || !own_here(level, part))
         return;
       config::bubble_look look = current(level, part);
       look.kind = splice::visit(splice::overloaded{[](config::bubbles::solid) { return config::bubbles_t{config::bubbles::translucent{}}; },
@@ -193,7 +193,7 @@ struct bubbles_picker : nodes::Stack {
     config::look_part_t part;
     bool inherit;
     void operator()(std::size_t index) const {
-      if (!usable(part))
+      if (!usable(level, part))
         return;
       if (inherit && index == 0) {
         actions->set_bubbles(level.level, std::nullopt, part);
@@ -216,7 +216,7 @@ struct bubbles_picker : nodes::Stack {
     look_level level;
     config::look_part_t part;
     void operator()(float fraction) const {
-      if (!usable(part) || !own_here(level, part))
+      if (!usable(level, part) || !own_here(level, part))
         return;
       config::bubble_look look = current(level, part);
       look.blur = static_cast<double>(std::clamp(fraction, 0.0f, 1.0f)) * 100.0;
@@ -261,14 +261,14 @@ struct bubbles_picker : nodes::Stack {
     } parts;
     element_blur_row(Actions* a, const look_level& level, std::string_view name, element_blur_t which)
         : parts{.head = head_t(std::format("{} blur: {:.1f}%{}", name,
-                                           element_blur_of(current(level, config::look_part::bubbles{}), which) * 100.0f,
+                                           element_blur_of(current(level, config::look_part::bubbles{}), which, level.looks->window) * 100.0f,
                                            (current(level, config::look_part::bubbles{}).blurs.*which) ? "" : " (as bubbles)"),
                                element_blur_reset{a, level, which},
                                (current(level, config::look_part::bubbles{}).blurs.*which).has_value()),
                 .bar = widgets::SliderBar<scene::NoAction, element_blur_done>(legacy_palette().widgets, {}, element_blur_done{a, level, which})} {
       this->setGap(4.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-      parts.bar.setFraction(element_blur_of(current(level, config::look_part::bubbles{}), which));
+      parts.bar.setFraction(element_blur_of(current(level, config::look_part::bubbles{}), which, level.looks->window));
       parts.bar.apply({.margin = {4.0f, 8.0f, 6.0f, 8.0f}});
     }
   };
@@ -286,7 +286,7 @@ struct bubbles_picker : nodes::Stack {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
       const config::bubbles_t now = current(level, part).kind;
       for (widgets::Button<pick_kind>* each : {&parts.solid, &parts.translucent, &parts.frosted, &parts.glass})
-        each->apply({.height = 32.0f, .grow = scene::axes::kX, .disabled = !usable(part)});
+        each->apply({.height = 32.0f, .grow = scene::axes::kX, .disabled = !usable(level, part)});
       parts.solid.setPrimary(now == config::bubbles_t{config::bubbles::solid{}});
       parts.translucent.setPrimary(now == config::bubbles_t{config::bubbles::translucent{}});
       parts.frosted.setPrimary(now == config::bubbles_t{config::bubbles::frosted{}});
@@ -320,7 +320,7 @@ struct bubbles_picker : nodes::Stack {
                                                  pick_kind_at{a, level, part, has_level_above(level.level)}),
               .opacity_label = nodes::Text("Opacity", 13.0f, text_colour),
               .opacity = widgets::SliderBar<scene::NoAction, opacity_done>(legacy_palette().widgets, {}, opacity_done{a, level, part}),
-              .blur_label = nodes::Text(std::format("Blur: {:.1f}%", blur_of(current(level, part)) * 100.0f), 13.0f, text_colour),
+              .blur_label = nodes::Text(std::format("Blur: {:.1f}%", blur_of(current(level, part), level.looks->window) * 100.0f), 13.0f, text_colour),
               .blur = widgets::SliderBar<scene::NoAction, blur_done>(legacy_palette().widgets, {}, blur_done{a, level, part})} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 10.0f, 0.0f, 10.0f}});
@@ -337,7 +337,7 @@ struct bubbles_picker : nodes::Stack {
                                        current(level, part).kind);
     parts.blur_label.setVisible(frosted);
     parts.blur.setVisible(frosted);
-    parts.blur.setFraction(blur_of(current(level, part)));
+    parts.blur.setFraction(blur_of(current(level, part), level.looks->window));
     parts.blur.apply({.margin = {4.0f, 8.0f, 8.0f, 8.0f}});
     const bool bubbles = splice::visit(splice::overloaded{[](config::look_part::bubbles) { return true; },
                                                           [](const auto&) { return false; }},
@@ -358,9 +358,9 @@ struct bubbles_picker : nodes::Stack {
     }
     // Greyed where it does nothing: all of it where the panels have nothing
     // behind them; under the kind, where the level is as above.
-    if (!usable(part))
+    if (!usable(level, part))
       parts.kinds.apply({.alpha = 0.4f});
-    if (!usable(part) || !own_here(level, part)) {
+    if (!usable(level, part) || !own_here(level, part)) {
       for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.opacity_label, &parts.opacity, &parts.elements_title})
         each->apply({.alpha = 0.4f, .disabled = true});
       for (element_row& each : parts.elements)
@@ -419,15 +419,15 @@ struct look_choices : nodes::Stack {
     bubbles_picker<Actions> bubbles;
     bubbles_picker<Actions> panels;
   } parts;
-  [[nodiscard]] static std::string note_of(const choice_level_t& level) {
-    const std::string where = window_look().behind ? "Behind the whole window" : "Behind the messages";
+  [[nodiscard]] static std::string note_of(const looks_shown& looks, const choice_level_t& level) {
+    const std::string where = looks.window.behind ? "Behind the whole window" : "Behind the messages";
     return splice::visit(splice::overloaded{[&](choice_level::everywhere) { return where + ", in every chat."; },
                                             [&](choice_level::account) { return where + ", in this account's chats."; },
                                             [&](choice_level::chat) { return where + ", in this chat."; }},
                          level);
   }
   look_choices(Actions* a, const looks_shown& looks, choice_level_t level)
-      : parts{.note = nodes::Text(note_of(level), 13.0f, dim_colour),
+      : parts{.note = nodes::Text(note_of(looks, level), 13.0f, dim_colour),
               .background = choice_menu<pick_wallpaper_at>("", background_names(looks, level), background_index(looks, level),
                                                            pick_wallpaper_at{a, level, has_level_above(level)}),
               .bubbles = bubbles_picker<Actions>(a, look_level{level, &looks}, config::look_part::bubbles{}),

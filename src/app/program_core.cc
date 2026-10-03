@@ -380,16 +380,16 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
     this->root().main().wanted = mux::account_id{mux::ui::protocol_of(*saved.last_account), *saved.last_account};
   shared.looks.bubbles_everywhere = this->bubbles.value_or(mux::config::bubble_look{});
   shared.looks.panels_everywhere = this->panels.value_or(mux::config::bubble_look{});
-  this->wallpaper_behind = mux::ui::window_look().behind;
-  mux::ui::window_look().live_blur = saved.live_blur.value_or(false);
-  this->live_blur = mux::ui::window_look().live_blur;
-  this->frost_blur = mux::ui::window_look().frost;
-  mux::ui::window_look().home_hides = this->home_hides_spaced;
-  mux::ui::window_look().home_direct = this->home_hides_direct;
-  mux::ui::window_look().spaces = this->spaces;
-  mux::ui::window_look().top_bar = this->top_bar;
+  this->wallpaper_behind = shared.looks.window.behind;
+  shared.looks.window.live_blur = saved.live_blur.value_or(false);
+  this->live_blur = shared.looks.window.live_blur;
+  this->frost_blur = shared.looks.window.frost;
+  shared.looks.window.home_hides = this->home_hides_spaced;
+  shared.looks.window.home_direct = this->home_hides_direct;
+  shared.looks.window.spaces = this->spaces;
+  shared.looks.window.top_bar = this->top_bar;
   this->interface_scale = std::clamp(this->interface_scale, mux::ui::kScaleLeast, mux::ui::kScaleMost);
-  mux::ui::window_look().interface_scale = this->interface_scale;
+  shared.looks.window.interface_scale = this->interface_scale;
   if (!demo)
     this->drafts.load();
   this->model->show_deleted = this->history.show_deleted;

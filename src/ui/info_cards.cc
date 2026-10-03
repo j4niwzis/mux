@@ -102,6 +102,8 @@ struct person_card : nodes::Stack {
       actions->close_person_info();
     }
   };
+  // The colours it is made in.
+  const palette* colours_ = nullptr;
   struct parts_t {
     top_bar top;
     cover face;
@@ -116,21 +118,23 @@ struct person_card : nodes::Stack {
     action_tile<to_them> ban;
     // Their sessions, as Element lists them on a person: each with its
     // name or id, and verified or not.
-    nodes::Text sessions_title{"", 13.0f, dim_colour, true};
+    nodes::Text sessions_title;
     std::vector<nodes::Text> sessions;
     // Its protocol's own buttons for them (proto::person_actions).
     std::vector<action_tile<ask_protocol>> theirs;
   } parts;
 
-  person_card(Actions* a, const account_id& account, const std::string& key, const person_facts& facts)
-      : parts{.top = top_bar("User info", {}, {a}, false, true),
+  person_card(Actions* a, const palette& colours, const account_id& account, const std::string& key, const person_facts& facts)
+      : colours_(&colours),
+        parts{.top = top_bar("User info", {}, {a}, false, true),
               .face = cover(a, key, facts),
               .id = id_line(key, ""),
               .message = action_tile<message_them>("Message", icon::send{}, {a, conversation_id{account, key}}),
               .verify = action_tile<verify_them>("Verify with emoji", icon::check{}, {a, conversation_id{account, key}}),
               .accept = action_tile<accept_them>("Withdraw verification", icon::close{}, {a, conversation_id{account, key}}),
               .remove = action_tile<to_them>("Remove from room", icon::leave{}, {a, room_action::kick{key}}),
-              .ban = action_tile<to_them>("Ban from room", icon::close{}, {a, room_action::ban{key}})} {
+              .ban = action_tile<to_them>("Ban from room", icon::close{}, {a, room_action::ban{key}}),
+              .sessions_title = nodes::Text("", 13.0f, colours.dim, true)} {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}});
     for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.message, &parts.verify, &parts.accept, &parts.remove, &parts.ban})
       each->apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
@@ -150,7 +154,7 @@ struct person_card : nodes::Stack {
       auto& line = parts.sessions.emplace_back(
           std::format("{} {}{}", one.verified ? "\u2713" : "\u26A0", one.name.empty() ? one.id : one.name,
                       one.verified ? std::string(" \u00b7 Verified") : std::string(" \u00b7 Not verified")),
-          13.0f, one.verified ? text_colour : dim_colour);
+          13.0f, one.verified ? colours.text : colours.dim);
       line.setElided(true);
       line.apply({.fillX = true, .margin = {2.0f, 22.0f, 0.0f, 22.0f}});
     }

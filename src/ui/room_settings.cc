@@ -99,7 +99,7 @@ namespace manage_defaults {
 constexpr manage_tab_list<> manage_tabs(const auto&) { return {}; }
 // And what a protocol keeps while its pages are made again: none by default.
 struct no_part {};
-constexpr std::type_identity<no_part> manage_part_type(const auto&) { return {}; }
+constexpr type_tag<no_part> manage_part_type(const auto&) { return {}; }
 }  // namespace manage_defaults
 // Asked of a state type the caller names: dependent on it, so found where
 // the dialog is made, not here.
@@ -114,9 +114,9 @@ constexpr auto manage_part_of(const State& state) {
   return manage_part_type(state);
 }
 template <class... Tabs, class Tab>
-[[nodiscard]] constexpr bool lists(manage_tab_list<Tabs...>, std::type_identity<Tab>) {
-  struct all : std::type_identity<Tabs>... {};
-  return std::derived_from<all, std::type_identity<Tab>>;
+[[nodiscard]] constexpr bool lists(manage_tab_list<Tabs...>, type_tag<Tab>) {
+  struct all : type_tag<Tabs>... {};
+  return std::derived_from<all, type_tag<Tab>>;
 }
 
 // The client's tabs, every room's.
@@ -257,7 +257,7 @@ struct room_settings : nodes::Stack {
   template <class Tag>
   using tabs_of_t = decltype(manage_tabs_of(state_of<Tag>{}));
   template <class Tab>
-  using page_of_t = typename decltype(page_type(Tab{}, std::type_identity<room_settings>{}))::type;
+  using page_of_t = typename decltype(page_type(Tab{}, type_tag<room_settings>{}))::type;
   template <class List>
   struct pages_of;
   template <class... Tabs>

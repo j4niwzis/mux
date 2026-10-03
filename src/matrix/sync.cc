@@ -1188,7 +1188,7 @@ bool account<Sink>::verification_in_room(const conversation_id& in, const loom::
     return true;
   // The step, read as its type's content, its reference made its transaction
   // -- for the room it came in only.
-  const auto take = [&]<class Content>(std::type_identity<Content>) {
+  const auto take = [&]<class Content>(type_tag<Content>) {
     auto content = knot::try_read<Content>(raw.text);
     if (!content)
       return;
@@ -1203,12 +1203,12 @@ bool account<Sink>::verification_in_room(const conversation_id& in, const loom::
     this->verification_in(one.sender, *content);
   };
   splice::visit(splice::overloaded{[](verification_kind::none) {},
-                                   [&](verification_kind::ready) { take(std::type_identity<loom::ev::m_key_verification_ready_content_t>{}); },
-                                   [&](verification_kind::start) { take(std::type_identity<loom::ev::m_key_verification_start_content_t>{}); },
-                                   [&](verification_kind::accept) { take(std::type_identity<loom::ev::m_key_verification_accept_content_t>{}); },
-                                   [&](verification_kind::key) { take(std::type_identity<loom::ev::m_key_verification_key_content_t>{}); },
-                                   [&](verification_kind::mac) { take(std::type_identity<loom::ev::m_key_verification_mac_content_t>{}); },
-                                   [&](verification_kind::cancel) { take(std::type_identity<loom::ev::m_key_verification_cancel_content_t>{}); },
+                                   [&](verification_kind::ready) { take(type_tag<loom::ev::m_key_verification_ready_content_t>{}); },
+                                   [&](verification_kind::start) { take(type_tag<loom::ev::m_key_verification_start_content_t>{}); },
+                                   [&](verification_kind::accept) { take(type_tag<loom::ev::m_key_verification_accept_content_t>{}); },
+                                   [&](verification_kind::key) { take(type_tag<loom::ev::m_key_verification_key_content_t>{}); },
+                                   [&](verification_kind::mac) { take(type_tag<loom::ev::m_key_verification_mac_content_t>{}); },
+                                   [&](verification_kind::cancel) { take(type_tag<loom::ev::m_key_verification_cancel_content_t>{}); },
                                    [](verification_kind::done) {}},
                 kind);
   return true;

@@ -360,7 +360,7 @@ struct event_missing {
 // <p>.changes), none where it gives none -- all one variant.
 using core_changes = splice::variant<change::protocol_state_changed, change::own_session, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::account_removed, change::conversation_updated, change::conversation_removed, change::presence_changed, change::message_added, change::message_edited, change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed, change::typing_changed, change::history_position, change::event_missing, change::members_changed, change::session_given, change::avatar_loaded, change::receipts_changed, change::window_opened, change::window_extended, change::media_progress, change::room_created, change::preview_loaded, change::room_previewed, change::mentioned, change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine, change::directory_listed, change::people_found, change::profile_found, change::threads_listed>;
 namespace changes_defaults {
-constexpr std::type_identity<change_list<>> changes_type(const auto&) { return {}; }
+constexpr type_tag<change_list<>> changes_type(const auto&) { return {}; }
 }  // namespace changes_defaults
 template <class Tag>
 constexpr auto changes_type_of() {
@@ -387,8 +387,8 @@ using change_t = all_changes<protocols>::type;
 // Whether a change is a protocol's own: one of its list's.
 template <class Change, class... Cs>
 constexpr bool lists_change(change_list<Cs...>) {
-  struct all : std::type_identity<Cs>... {};
-  return std::derived_from<all, std::type_identity<Change>>;
+  struct all : type_tag<Cs>... {};
+  return std::derived_from<all, type_tag<Change>>;
 }
 template <class Change, class... Tags>
 constexpr bool protocols_change(protocol_list<Tags...>) {

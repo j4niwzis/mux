@@ -87,7 +87,7 @@ struct sessions_refused {
 };
 
 using changes = change_list<verification_changed, security_state, devtools_text, state_listed, packs_listed, pack_saved, pack_picture_uploaded, sessions_listed, sessions_refused>;
-constexpr std::type_identity<changes> changes_type(const state&) { return {}; }
+constexpr type_tag<changes> changes_type(const state&) { return {}; }
 
 // As the command line says them.
 inline std::string describe(const devtools_text& one) { return one.title + "\n" + one.text; }

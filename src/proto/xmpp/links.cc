@@ -17,7 +17,7 @@ struct address {  // a JID
 };
 }  // namespace link
 using any_link = splice::variant<link::address>;
-constexpr std::type_identity<logic::link_list<link::address>> links_type(const state&) { return {}; }
+constexpr type_tag<logic::link_list<link::address>> links_type(const state&) { return {}; }
 
 // xmpp:<jid>[?...]
 [[nodiscard]] inline std::optional<any_link> read_link(const state&, std::string_view url) {

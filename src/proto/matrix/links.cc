@@ -25,7 +25,7 @@ struct room {  // !room:server or #alias:server, and a message in it
 };
 }  // namespace link
 using any_link = splice::variant<link::person, link::room>;
-constexpr std::type_identity<logic::link_list<link::person, link::room>> links_type(const state&) { return {}; }
+constexpr type_tag<logic::link_list<link::person, link::room>> links_type(const state&) { return {}; }
 
 // A Matrix ID read by its sigil into what it names; none for another.
 [[nodiscard]] inline std::optional<any_link> matrix_id_of(std::string id, std::optional<std::string> event = std::nullopt,

@@ -96,11 +96,11 @@ export namespace mux::proto::matrix {
 template <class Actions>
 using form = form_detail::matrix_form<Actions>;
 template <class Actions>
-constexpr std::type_identity<form<Actions>> form_type(const state&, std::type_identity<Actions>) {
+constexpr type_tag<form<Actions>> form_type(const state&, type_tag<Actions>) {
   return {};
 }
 template <class Actions>
-constexpr std::type_identity<form<Actions>> form_type_for(const kept&, std::type_identity<Actions>) {
+constexpr type_tag<form<Actions>> form_type_for(const kept&, type_tag<Actions>) {
   return {};
 }
 
@@ -648,7 +648,7 @@ struct advanced {};
 constexpr ui::manage_tab_list<manage::room, manage::security, manage::roles, manage::advanced> manage_tabs(const state&) {
   return {};
 }
-constexpr std::type_identity<manage_detail::part> manage_part_type(const state&) { return {}; }
+constexpr type_tag<manage_detail::part> manage_part_type(const state&) { return {}; }
 
 }  // namespace mux::proto::matrix
 
@@ -663,19 +663,19 @@ inline ui::icon_t tab_icon(security) { return ui::icon::eye{}; }
 inline ui::icon_t tab_icon(roles) { return ui::icon::people{}; }
 inline ui::icon_t tab_icon(advanced) { return ui::icon::sliders{}; }
 template <class Box>
-constexpr std::type_identity<manage_detail::room_page<Box>> page_type(room, std::type_identity<Box>) {
+constexpr type_tag<manage_detail::room_page<Box>> page_type(room, type_tag<Box>) {
   return {};
 }
 template <class Box>
-constexpr std::type_identity<manage_detail::security_page<Box>> page_type(security, std::type_identity<Box>) {
+constexpr type_tag<manage_detail::security_page<Box>> page_type(security, type_tag<Box>) {
   return {};
 }
 template <class Box>
-constexpr std::type_identity<manage_detail::roles_page<Box>> page_type(roles, std::type_identity<Box>) {
+constexpr type_tag<manage_detail::roles_page<Box>> page_type(roles, type_tag<Box>) {
   return {};
 }
 template <class Box>
-constexpr std::type_identity<manage_detail::advanced_page<Box>> page_type(advanced, std::type_identity<Box>) {
+constexpr type_tag<manage_detail::advanced_page<Box>> page_type(advanced, type_tag<Box>) {
   return {};
 }
 
@@ -988,13 +988,13 @@ export namespace mux::proto::matrix::settings {
 constexpr std::string_view page_title(encryption) { return "Encryption"; }
 inline ui::icon_t page_icon(encryption) { return ui::icon::check{}; }
 template <class Actions>
-constexpr std::type_identity<settings_detail::encryption_page<Actions>> page_type(encryption, std::type_identity<Actions>) {
+constexpr type_tag<settings_detail::encryption_page<Actions>> page_type(encryption, type_tag<Actions>) {
   return {};
 }
 constexpr std::string_view page_title(sessions) { return "Sessions"; }
 inline ui::icon_t page_icon(sessions) { return ui::icon::info{}; }
 template <class Actions>
-constexpr std::type_identity<settings_detail::account_sessions<Actions>> page_type(sessions, std::type_identity<Actions>) {
+constexpr type_tag<settings_detail::account_sessions<Actions>> page_type(sessions, type_tag<Actions>) {
   return {};
 }
 }  // namespace mux::proto::matrix::settings

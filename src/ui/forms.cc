@@ -232,7 +232,7 @@ struct form_end : nodes::Stack {
 // mux.ui.proto -- and any of them, as the panels hold them, made from the
 // list of protocols.
 template <class Tag, class Actions>
-using form_of_t = typename decltype(form_type(state_of<Tag>{}, std::type_identity<Actions>{}))::type;
+using form_of_t = typename decltype(form_type(state_of<Tag>{}, type_tag<Actions>{}))::type;
 template <class Actions, class>
 struct form_list;
 template <class Actions, class... Tags>
@@ -246,7 +246,7 @@ using account_form = typename form_list<Actions, protocols>::type;
 template <class Actions>
 [[nodiscard]] account_form<Actions> form_of(Actions* a, const config::account_t& saved) {
   return splice::visit([a](const auto& kept) {
-    using form = typename decltype(form_type_for(kept, std::type_identity<Actions>{}))::type;
+    using form = typename decltype(form_type_for(kept, type_tag<Actions>{}))::type;
     return account_form<Actions>(std::in_place_type<form>, a, std::optional(kept));
   }, saved.own);
 }

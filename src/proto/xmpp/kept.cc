@@ -23,7 +23,7 @@ struct kept {
 consteval auto json_schema(knot::type<kept>) { return knot::schema<kept>().tag("xmpp"); }
 
 // Its type, for the list of what accounts keep; the word the file says.
-constexpr std::type_identity<kept> kept_type(const state&) { return {}; }
+constexpr type_tag<kept> kept_type(const state&) { return {}; }
 constexpr std::string_view protocol_word(const kept&) { return "xmpp"; }
 constexpr std::string_view protocol_name(const kept&) { return "XMPP"; }
 // A JID: anything a Matrix user ID is not (those begin with '@').

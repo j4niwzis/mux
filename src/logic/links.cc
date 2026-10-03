@@ -14,7 +14,7 @@ export import mux.proto.links;
 export namespace mux::logic {
 
 namespace links_defaults {
-constexpr std::type_identity<link_list<>> links_type(const auto&) { return {}; }
+constexpr type_tag<link_list<>> links_type(const auto&) { return {}; }
 inline std::optional<std::monostate> read_link(const auto&, std::string_view) { return std::nullopt; }
 inline std::optional<std::monostate> read_id(const auto&, std::string_view) { return std::nullopt; }
 inline std::optional<conversation_id> chat_for(const auto&, const model&) { return std::nullopt; }

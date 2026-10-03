@@ -21,3 +21,14 @@ struct id {
 };
 
 }  // namespace mux::proto
+
+export namespace mux {
+// A type, carried as a value: what an extension point returns to name a
+// type (its form, its page, what it keeps), and what is passed to name one.
+// The program's own, not type_tag -- a transformation trait the
+// standard never promises can be made.
+template <class T>
+struct type_tag {
+  using type = T;
+};
+}  // namespace mux

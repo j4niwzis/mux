@@ -409,7 +409,7 @@ struct accounts_panel : closes_on_escape<Actions> {
   struct page_nodes;
   template <class... Pages>
   struct page_nodes<type_list<Pages...>> {
-    using type = type_list<typename decltype(page_type(Pages{}, std::type_identity<Actions>{}))::type...>;
+    using type = type_list<typename decltype(page_type(Pages{}, type_tag<Actions>{}))::type...>;
   };
   // Its ← goes back from an account's pages to the list, and from the list
   // to the chats.
@@ -609,7 +609,7 @@ struct accounts_panel : closes_on_escape<Actions> {
             [&](account_page::proxy) { detail.template emplace<4>(this->actions, proxies, config::proxy_of(one)); },
             // A protocol's own: its node, made for the program's actions.
             [&]<class Page>(Page) {
-              detail.template emplace<typename decltype(page_type(Page{}, std::type_identity<Actions>{}))::type>(this->actions, one,
+              detail.template emplace<typename decltype(page_type(Page{}, type_tag<Actions>{}))::type>(this->actions, one,
                                                                                                                  now);
             }},
         page);

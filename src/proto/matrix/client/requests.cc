@@ -3,6 +3,7 @@
 export module mux.proto.matrix.client:requests;
 
 import std;
+import loom.media;
 import mux.bytes;
 import chevron.escape;
 import splice;
@@ -481,7 +482,7 @@ void account<Sink>::fetch_preview(std::string url) {
     link_preview made{.site = facts->site.value_or(""),
                       .title = facts->title.value_or(""),
                       .description = facts->description.value_or("")};
-    if (facts->image && facts->image->starts_with("mxc://"))
+    if (facts->image && loom::media::mxc_of(*facts->image))
       made.image = std::move(facts->image);
     if (made.title.empty() && made.description.empty())
       return;

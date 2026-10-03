@@ -3,6 +3,7 @@
 export module mux.proto.matrix.client:requests_send;
 
 import std;
+import loom.media;
 import chevron.escape;
 import splice;
 import knot;
@@ -113,7 +114,7 @@ void account<Sink>::react(std::string room, std::string target, std::string key,
       return;
     if (on) {
       auto content = loom::client::reaction(target, key);
-      if (key.starts_with("mxc://")) {
+      if (loom::media::mxc_of(key)) {
         const auto emotes = emotes_in(room);
         if (const auto found = std::ranges::find(emotes, key, &mux::emote::url); found != emotes.end())
           content.rest = as_body(reaction_shortcode{std::format(":{}:", found->shortcode)});

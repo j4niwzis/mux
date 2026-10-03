@@ -3,6 +3,7 @@
 export module mux.proto.matrix.client:events;
 
 import std;
+import loom.media;
 import chevron.escape;
 import mux.proto.matrix.crypto;
 import splice;
@@ -297,7 +298,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       const std::string& key = *content.m_relates_to->key;
       // A custom emoji's key is its picture: shown as the picture, in HTML,
       // as a message carries one -- not said to be "a custom emoji".
-      const bool pictured = key.starts_with("mxc://");
+      const bool pictured = loom::media::mxc_of(key).has_value();
       const std::string emote = std::format(R"(<img data-mx-emoticon src="{}" alt=":emoji:" height="32">)", chevron::escaped(key));
       splice::visit(splice::overloaded{[&](placement::aside) {
                               message made{.in = in,
@@ -660,7 +661,7 @@ void account<Sink>::redaction(const conversation_id& in, const loom::ev::timelin
     // (a moderator) for them. Not for one fetched on its own, for a quote.
     const std::string& key = reaction->second.key;
     const std::string& who = reaction->second.who;
-    const bool pictured = key.starts_with("mxc://");
+    const bool pictured = loom::media::mxc_of(key).has_value();
     const std::string by = name_in(in.id, one.sender);
     const std::string said = one.sender == who ? by + " took back" : by + " took back " + name_in(in.id, who) + "'s";
     message made{.in = in,

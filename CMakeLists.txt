@@ -368,7 +368,7 @@ if(MUX_UI)
   target_link_libraries(mux PRIVATE mux_modules)
 endif()
 
-add_executable(mux-cli src/cli.cc)
+add_executable(mux-cli src/proto/cli.cc)
 target_link_libraries(mux-cli PRIVATE mux_modules)
 
 if(MUX_TESTS)

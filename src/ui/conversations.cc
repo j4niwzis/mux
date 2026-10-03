@@ -149,6 +149,21 @@ struct folder_tab : scene::Node {
   }
 };
 
+namespace head_view_defaults {
+template <class Actions>
+constexpr proto::sticker_view_list<> head_views(const auto&, type_tag<Actions>) {
+  return {};
+}
+template <class Actions>
+constexpr std::nullopt_t make_head_view(const auto&, const conversation&, type_tag<Actions>) {
+  return std::nullopt;
+}
+}  // namespace head_view_defaults
+template <class State, class Actions>
+constexpr auto head_views_for(const State& state, type_tag<Actions> tag) {
+  using head_view_defaults::head_views;
+  return head_views(state, tag);
+}
 namespace composer_view_defaults {
 template <class Actions>
 constexpr proto::sticker_view_list<> composer_views(const auto&, type_tag<Actions>) {
@@ -1313,6 +1328,27 @@ struct conversations_screen : nodes::Stack {
   };
   using composer_view_t = typename variant_of_types<
       typename joined<type_list<nodes::Text>, typename protocol_composer_nodes<protocols>::type>::type>::type;
+  // And under the chat's header, over its messages (an IRC channel's topic
+  // and modes, a Telegram channel's join button): head_views(state,
+  // type_tag<Actions>), made by make_head_view.
+  template <class>
+  struct protocol_head_nodes;
+  template <class... Tags>
+  struct protocol_head_nodes<protocol_list<Tags...>> {
+    using type = typename joined<
+        type_list<>, typename view_nodes<decltype(head_views_for(::mux::state_of<Tags>{}, type_tag<Actions>{}))>::type...>::type;
+  };
+  using head_view_t = typename variant_of_types<
+      typename joined<type_list<nodes::Text>, typename protocol_head_nodes<protocols>::type>::type>::type;
+  struct head_view_holder : nodes::Stack {
+    struct parts_t {
+      head_view_t shown;
+    } parts;
+    template <class View>
+    explicit head_view_holder(View made) : parts{.shown = head_view_t(std::move(made))} {
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    }
+  };
   struct composer_view_holder : nodes::Stack {
     struct parts_t {
       composer_view_t shown;
@@ -1367,6 +1403,8 @@ struct conversations_screen : nodes::Stack {
       search_bar<Actions> search;
       // The pinned message, under the head, where the chat has any.
       pinned_t pinned;
+      // Its protocol's own node under the head (make_head_view).
+      std::optional<head_view_holder> their_head;
       timeline_area<Actions> area;
       mention_list mentions;
       // Over the composer: what the chat's protocol says there -- Matrix's
@@ -2906,6 +2944,12 @@ struct conversations_screen : nodes::Stack {
   // What the chat's protocol says over the composer (proto::composer_banners):
   // Matrix's warning where the other is not verified, for one. Its banners
   // one under the other, the bar in the first's tone.
+  void place_head_view(std::nullopt_t) {}
+  template <class View>
+  void place_head_view(std::optional<View> made) {
+    if (made)
+      chat.parts.their_head.emplace(std::move(*made));
+  }
   void place_composer_view(std::nullopt_t) {}
   template <class View>
   void place_composer_view(std::optional<View> made) {
@@ -2932,6 +2976,15 @@ struct conversations_screen : nodes::Stack {
       chat.invalidateLayout();
     } else if (button)
       button->setLabel(label);
+    // The protocol's own node under the head, made again for the chat.
+    chat.parts.their_head.reset();
+    if (one)
+      splice::visit(
+          [&](const auto& now) {
+            using head_view_defaults::make_head_view;
+            this->place_head_view(make_head_view(now, *one, type_tag<Actions>{}));
+          },
+          protocol_state_of(one->id.account));
     // The protocol's own node over the composer, made again for the chat.
     chat.parts.their_view.reset();
     if (one)

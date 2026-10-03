@@ -237,7 +237,7 @@ struct conversations_screen : nodes::Stack {
     auto& people = std::get<0>(shown.parts.people.fChildren);
     people.clear();
     for (const found_person& one : people_elsewhere | std::views::take(30))
-      people.emplace_back(actions, one);
+      people.emplace_back(actions, *needs_.colours, one);
     shown.parts.rooms_title.setVisible(!rooms.empty());
     shown.parts.people_title.setVisible(!people.empty());
     const bool waiting = !rooms_came || !people_came;

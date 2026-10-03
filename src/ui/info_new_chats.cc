@@ -52,6 +52,8 @@ struct forward_box : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{400.0f, 520.0f}}; }
   Actions* actions = nullptr;
+  // The colours it is made in, for the rows it makes later.
+  const palette* colours_ = nullptr;
   std::vector<forward_target> all;
   struct close_it {
     Actions* actions;
@@ -68,13 +70,13 @@ struct forward_box : nodes::Stack {
       avatar_mark face;
       nodes::Text name;
     } parts;
-    row(Actions* a, const forward_target& one)
+    row(Actions* a, const palette& colours, const forward_target& one)
         : actions(a), id(one.id), parts{.face = avatar_mark(one.id.id, one.name, 36.0f),
-                                        .name = nodes::Text(one.name, 15.0f, text_colour)} {
+                                        .name = nodes::Text(one.name, 15.0f, colours.text)} {
       this->setHorizontal();
       this->setGap(12.0f);
       fState.apply({.fillX = true, .height = 50.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f},
-                    .hoverBackground = chosen_colour});
+                    .hoverBackground = colours.chosen});
       fState.setCursor(scene::cursor::hand{});
       parts.name.setElided(true);
       parts.name.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
@@ -94,9 +96,10 @@ struct forward_box : nodes::Stack {
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
   } parts;
 
-  forward_box(Actions* a, const std::vector<forward_target>& chats)
-      : actions(a), all(chats),
-        parts{.header = header_t("Forward to…", {}, {a}, false, true), .field = widgets::TextBox<typed>(legacy_palette().widgets, "Search", {this})} {
+  forward_box(Actions* a, const palette& colours, const std::vector<forward_target>& chats)
+      : actions(a), colours_(&colours), all(chats),
+        parts{.header = header_t(colours, "Forward to…", {}, {a}, false, true),
+              .field = widgets::TextBox<typed>(colours.widgets, "Search", {this})} {
     fState.apply({.fillX = true, .height = 520.0f});
     parts.field.setSearchIcon(true);
     parts.field.apply({.fillX = true, .height = 34.0f, .margin = {0.0f, 16.0f, 8.0f, 16.0f}});
@@ -112,7 +115,7 @@ struct forward_box : nodes::Stack {
     rows.clear();
     for (const forward_target& one : all)
       if (wanted.empty() || lower(one.name).contains(wanted))
-        rows.emplace_back(actions, one);
+        rows.emplace_back(actions, *colours_, one);
     parts.list.invalidateLayout();
     parts.list.scrollTo(0.0f);
   }
@@ -131,13 +134,13 @@ struct found_person_row : nodes::Stack {
     avatar_mark face;
     lines_t lines;
   } parts;
-  found_person_row(Actions* a, const found_person& one)
+  found_person_row(Actions* a, const palette& colours, const found_person& one)
       : actions(a), id(one.id),
         parts{.face = avatar_mark(one.id, one.name.empty() ? one.id : one.name, 36.0f), .lines = lines_t(one)} {
     this->setHorizontal();
     this->setGap(12.0f);
     fState.apply({.fillX = true, .height = 52.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f}, .cornerRadius = 8.0f,
-                  .hoverBackground = chosen_colour});
+                  .hoverBackground = colours.chosen});
     parts.face.apply({.alignSelf = scene::align::kMiddle});
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
@@ -158,6 +161,8 @@ struct start_chat_box : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{480.0f, 560.0f}}; }
   Actions* actions = nullptr;
+  // The colours it is made in, for its parts and the rows it makes later.
+  const palette* colours_ = nullptr;
   // Those one has direct chats with, and what the directory found for what
   // is typed now; one's own link.
   std::vector<found_person> known;
@@ -189,7 +194,8 @@ struct start_chat_box : nodes::Stack {
       widgets::Button<go_press> go;
     } parts;
     explicit search_row(start_chat_box* box)
-        : parts{.field = widgets::TextBox<typed>(legacy_palette().widgets, "Search", {box}), .go = widgets::Button<go_press>(legacy_palette().widgets, "Go", {box})} {
+        : parts{.field = widgets::TextBox<typed>(box->colours_->widgets, "Search", {box}),
+                .go = widgets::Button<go_press>(box->colours_->widgets, "Go", {box})} {
       this->setHorizontal();
       this->setGap(8.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 10.0f, 0.0f, 10.0f}});
@@ -206,7 +212,8 @@ struct start_chat_box : nodes::Stack {
       widgets::Button<copy_press> copy;
     } parts;
     link_row(start_chat_box* box, const std::string& link)
-        : parts{.link = nodes::Text(link, 13.0f, accent_colour), .copy = widgets::Button<copy_press>(legacy_palette().widgets, "Copy", {box})} {
+        : parts{.link = nodes::Text(link, 13.0f, box->colours_->accent),
+                .copy = widgets::Button<copy_press>(box->colours_->widgets, "Copy", {box})} {
       this->setHorizontal();
       this->setGap(8.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {2.0f, 10.0f, 0.0f, 10.0f}});
@@ -224,15 +231,15 @@ struct start_chat_box : nodes::Stack {
     nodes::Text note;
     link_row share;
   } parts;
-  start_chat_box(Actions* a, std::vector<found_person> people, std::string own_link)
-      : actions(a), known(std::move(people)), link(std::move(own_link)),
-        parts{.header = header_t("Start chat", {}, {a}, false, true),
+  start_chat_box(Actions* a, const palette& colours, std::vector<found_person> people, std::string own_link)
+      : actions(a), colours_(&colours), known(std::move(people)), link(std::move(own_link)),
+        parts{.header = header_t(colours, "Start chat", {}, {a}, false, true),
               .intro = nodes::Text("Start a conversation with someone using their name or username (like @user:server).",
-                                   14.0f, text_colour),
+                                   14.0f, colours.text),
               .search = search_row(this),
-              .status = nodes::Text("Suggestions", 12.0f, dim_colour, true),
+              .status = nodes::Text("Suggestions", 12.0f, colours.dim, true),
               .note = nodes::Text("If you can't see who you're looking for, send them your invite link below.", 13.0f,
-                                  dim_colour),
+                                  colours.dim),
               .share = link_row(this, link)} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .height = 560.0f, .padding = {0.0f, 12.0f, 16.0f, 12.0f}});
@@ -278,7 +285,7 @@ struct start_chat_box : nodes::Stack {
     std::set<std::string> listed;
     const auto add = [&](const found_person& one) {
       if (rows.size() < 60 && listed.insert(one.id).second)
-        rows.emplace_back(actions, one);
+        rows.emplace_back(actions, *colours_, one);
     };
     if (whole_id(query))
       add(found_person{.id = query});
@@ -311,6 +318,8 @@ struct create_room_box : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{480.0f}}; }
   Actions* actions = nullptr;
+  // The colours it is made in, for its parts.
+  const palette* colours_ = nullptr;
   std::string server;
   bool open_room = false;
   bool federate = true;
@@ -384,15 +393,18 @@ struct create_room_box : nodes::Stack {
   struct choice_button : nodes::Stack {
     flip_list press;
     struct parts_t {
-      nodes::Text value{"", 14.0f, text_colour};
+      nodes::Text value;
       nodes::Icon chevron;
-    } parts{.chevron = nodes::Icon(shape_of(icon::down{}), dim_colour)};
-    explicit choice_button(create_room_box* box) : press{box} {
+    } parts;
+    explicit choice_button(create_room_box* box)
+        : press{box},
+          parts{.value = nodes::Text("", 14.0f, box->colours_->text),
+                .chevron = nodes::Icon(shape_of(icon::down{}), box->colours_->dim)} {
       this->setHorizontal();
       this->setGap(8.0f);
       fState.apply({.fillX = true, .height = 38.0f, .margin = {0.0f, 10.0f, 0.0f, 10.0f}, .padding = {0.0f, 12.0f, 0.0f, 12.0f},
-                    .cornerRadius = 6.0f, .background = tile_colour, .hoverBackground = chosen_colour,
-                    .border = scene::Border{band_colour, 1.0f}});
+                    .cornerRadius = 6.0f, .background = box->colours_->tile, .hoverBackground = box->colours_->chosen,
+                    .border = scene::Border{box->colours_->band, 1.0f}});
       parts.value.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
       parts.chevron.apply({.width = 16.0f, .height = 16.0f, .alignSelf = scene::align::kMiddle});
     }
@@ -412,11 +424,11 @@ struct create_room_box : nodes::Stack {
       nodes::Text meaning;
     } parts;
     option_row(create_room_box* box, std::string name, std::string meaning)
-        : choose{box}, parts{.name = nodes::Text(std::move(name), 14.0f, text_colour, true),
-                             .meaning = nodes::Text(std::move(meaning), 12.0f, dim_colour)} {
+        : choose{box}, parts{.name = nodes::Text(std::move(name), 14.0f, box->colours_->text, true),
+                             .meaning = nodes::Text(std::move(meaning), 12.0f, box->colours_->dim)} {
       this->setGap(2.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {0.0f, 10.0f, 0.0f, 10.0f},
-                    .padding = {8.0f, 12.0f, 8.0f, 12.0f}, .cornerRadius = 6.0f, .hoverBackground = chosen_colour});
+                    .padding = {8.0f, 12.0f, 8.0f, 12.0f}, .cornerRadius = 6.0f, .hoverBackground = box->colours_->chosen});
       parts.meaning.setWrapped(true);
       parts.meaning.apply({.fillX = true});
     }
@@ -435,7 +447,8 @@ struct create_room_box : nodes::Stack {
       widgets::Toggle<Flip> toggle;
     } parts;
     switch_row(create_room_box* box, std::string label)
-        : parts{.label = nodes::Text(std::move(label), 13.0f, text_colour), .toggle = widgets::Toggle<Flip>(legacy_palette().widgets, {box})} {
+        : parts{.label = nodes::Text(std::move(label), 13.0f, box->colours_->text),
+                .toggle = widgets::Toggle<Flip>(box->colours_->widgets, {box})} {
       this->setHorizontal();
       this->setGap(12.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 10.0f, 4.0f, 10.0f}});
@@ -450,36 +463,40 @@ struct create_room_box : nodes::Stack {
     header_t header;
     field name;
     field topic;
-    nodes::Text rule_caption{"Who can join", 13.0f, dim_colour};
+    nodes::Text rule_caption;
     choice_button rule;
     option_row<choose_private> private_option;
     option_row<choose_public> public_option;
-    nodes::Text rule_note{"", 13.0f, dim_colour};
+    nodes::Text rule_note;
     field address;
     switch_row<flip_encrypted> encryption;
-    nodes::Text encryption_note{"", 12.0f, dim_colour};
+    nodes::Text encryption_note;
     widgets::Button<flip_advanced> show_advanced;
     switch_row<flip_federate> block;
-    nodes::Text block_note{"You might enable this if the room will only be used for collaborating with internal teams "
-                           "on your server. This cannot be changed later.",
-                           12.0f, dim_colour};
+    nodes::Text block_note;
     buttons_row buttons;
   } parts;
-  create_room_box(Actions* a, std::string own_server)
-      : actions(a), server(std::move(own_server)),
-        parts{.header = header_t("Create a room", {}, {a}, false, true),
+  create_room_box(Actions* a, const palette& colours, std::string own_server)
+      : actions(a), colours_(&colours), server(std::move(own_server)),
+        parts{.header = header_t(colours, "Create a room", {}, {a}, false, true),
               .name = field("Name", ""),
               .topic = field("Topic (optional)", ""),
+              .rule_caption = nodes::Text("Who can join", 13.0f, colours.dim),
               .rule = choice_button(this),
               .private_option = option_row<choose_private>(this, "Private room (invite only)",
                                                            "Only people invited will be able to find and join this room."),
               .public_option = option_row<choose_public>(this, "Public room", "Anyone will be able to find and join this room."),
+              .rule_note = nodes::Text("", 13.0f, colours.dim),
               .address = field("Address", std::format("#room-name:{}", server)),
               .encryption = switch_row<flip_encrypted>(this, "Enable end-to-end encryption"),
-              .show_advanced = widgets::Button<flip_advanced>(legacy_palette().widgets, "Show advanced", {this}),
+              .encryption_note = nodes::Text("", 12.0f, colours.dim),
+              .show_advanced = widgets::Button<flip_advanced>(colours.widgets, "Show advanced", {this}),
               .block = switch_row<flip_federate>(
                   this, std::format("Block anyone not part of {} from ever joining this room.", server)),
-              .buttons = buttons_row(legacy_palette(), "Create room", {a}, {this}, 120.0f)} {
+              .block_note = nodes::Text("You might enable this if the room will only be used for collaborating with internal "
+                                        "teams on your server. This cannot be changed later.",
+                                        12.0f, colours.dim),
+              .buttons = buttons_row(colours, "Create room", {a}, {this}, 120.0f)} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 18.0f, 12.0f}});
     parts.rule_caption.apply({.margin = {4.0f, 10.0f, 0.0f, 10.0f}});

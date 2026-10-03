@@ -489,11 +489,11 @@ struct window : scene::Node {
   [[nodiscard]] bool marks_up() { return layer().marks.shown() != nullptr; }
   void open_manage(const room_settings_facts& facts) { layer().manage.open(needs_, facts); }
   void close_manage() { layer().manage.close(); }
-  void open_forward(const std::vector<forward_target>& chats) { layer().forwarding.open(actions, chats); }
+  void open_forward(const std::vector<forward_target>& chats) { layer().forwarding.open(actions, *needs_.colours, chats); }
   void close_forward() { layer().forwarding.close(); }
   void open_new_chat(std::vector<found_person> known, std::string own_link) {
     close_drawer();
-    layer().new_chat.open(actions, std::move(known), std::move(own_link));
+    layer().new_chat.open(actions, *needs_.colours, std::move(known), std::move(own_link));
   }
   void close_new_chat() { layer().new_chat.close(); }
   void show_found_people(const std::vector<found_person>& people, const std::string& query) {
@@ -502,7 +502,7 @@ struct window : scene::Node {
   }
   void open_new_room(const std::string& own_server) {
     close_drawer();
-    layer().new_room.open(actions, own_server);
+    layer().new_room.open(actions, *needs_.colours, own_server);
   }
   void close_new_room() { layer().new_room.close(); }
   void open_packs(std::optional<std::string> room, bool editable) { layer().packs.open(actions, std::move(room), editable); }

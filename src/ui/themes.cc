@@ -413,28 +413,31 @@ inline skia::SkColor sent_time_colour = skia::colorSetARGB(255, 170, 200, 230);
 // The themes, as Telegram Desktop's: their colours are its palettes' own,
 // key for key (tools: tdesktop's Resources and lib_ui's colors.palette).
 // Classic: tdesktop's base palette.
-inline void use_theme(config::theme::classic) {
-  background = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
-  sidebar_colour = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
-  chosen_colour = skia::colorSetARGB(255, 241, 241, 241);  // #f1f1f1
-  text_colour = skia::colorSetARGB(255, 0, 0, 0);  // #000000
-  dim_colour = skia::colorSetARGB(255, 153, 153, 153);  // #999999
-  accent_colour = skia::colorSetARGB(255, 64, 167, 227);  // #40a7e3
-  error_colour = skia::colorSetARGB(255, 209, 78, 78);  // #d14e4e
-  selected_colour = skia::colorSetARGB(255, 65, 159, 217);  // #419fd9
-  selected_text_colour = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
-  band_colour = skia::colorSetARGB(255, 231, 231, 231);  // #e7e7e7
-  section_colour = skia::colorSetARGB(255, 241, 241, 241);  // #f1f1f1
-  tile_colour = skia::colorSetARGB(255, 241, 241, 241);  // #f1f1f1
-  bubble_colour = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
-  out_bubble_colour = skia::colorSetARGB(255, 239, 253, 222);  // #effdde
-  sent_time_colour = skia::colorSetARGB(255, 109, 181, 102);  // #6db566
-  chat_colour = skia::colorSetARGB(255, 136, 184, 132);      // #88b884, Telegram's default wallpaper
-  chat_top_colour = skia::colorSetARGB(255, 213, 216, 141);  // #d5d88d, down to it
-  pattern_colour = skia::colorSetARGB(36, 0, 0, 0);
-  on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
-  auto& widget = widgets::theme();
-  widget = widgets::Theme{};
+inline palette palette_of(config::theme::classic) {
+  palette out;
+  out.background = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
+  out.sidebar = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
+  out.chosen = skia::colorSetARGB(255, 241, 241, 241);  // #f1f1f1
+  out.text = skia::colorSetARGB(255, 0, 0, 0);  // #000000
+  out.dim = skia::colorSetARGB(255, 153, 153, 153);  // #999999
+  out.accent = skia::colorSetARGB(255, 64, 167, 227);  // #40a7e3
+  out.error = skia::colorSetARGB(255, 209, 78, 78);  // #d14e4e
+  out.selected = skia::colorSetARGB(255, 65, 159, 217);  // #419fd9
+  out.selected_text = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
+  out.band = skia::colorSetARGB(255, 231, 231, 231);  // #e7e7e7
+  out.section = skia::colorSetARGB(255, 241, 241, 241);  // #f1f1f1
+  out.tile = skia::colorSetARGB(255, 241, 241, 241);  // #f1f1f1
+  out.bubble = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
+  out.out_bubble = skia::colorSetARGB(255, 239, 253, 222);  // #effdde
+  out.sent_time = skia::colorSetARGB(255, 109, 181, 102);  // #6db566
+  out.chat = skia::colorSetARGB(255, 136, 184, 132);      // #88b884, Telegram's default wallpaper
+  out.chat_top = skia::colorSetARGB(255, 213, 216, 141);  // #d5d88d, down to it
+  out.pattern = skia::colorSetARGB(36, 0, 0, 0);
+  out.on_accent = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
+  return out;
+}
+inline widgets::Theme widget_theme_of(config::theme::classic) {
+  widgets::Theme widget{};
   widget.fSurface = skia::colorSetARGB(255, 241, 241, 241);
   widget.fSurfaceHover = skia::colorSetARGB(255, 241, 241, 241);
   widget.fSurfaceActive = skia::colorSetARGB(255, 229, 229, 229);
@@ -444,30 +447,34 @@ inline void use_theme(config::theme::classic) {
   widget.fTextFaint = skia::colorSetARGB(255, 153, 153, 153);
   widget.fAccent = skia::colorSetARGB(255, 64, 167, 227);
   widget.fOnAccent = skia::colorSetARGB(255, 255, 255, 255);
+  return widget;
 }
 // Day: tdesktop's day-blue.tdesktop-theme.
-inline void use_theme(config::theme::day) {
-  background = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
-  sidebar_colour = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
-  chosen_colour = skia::colorSetARGB(255, 241, 241, 241);  // #f1f1f1
-  text_colour = skia::colorSetARGB(255, 0, 0, 0);  // #000000
-  dim_colour = skia::colorSetARGB(255, 153, 153, 153);  // #999999
-  accent_colour = skia::colorSetARGB(255, 64, 167, 227);  // #40a7e3
-  error_colour = skia::colorSetARGB(255, 209, 78, 78);  // #d14e4e
-  selected_colour = skia::colorSetARGB(255, 65, 159, 217);  // #419fd9
-  selected_text_colour = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
-  band_colour = skia::colorSetARGB(255, 231, 231, 231);  // #e7e7e7
-  section_colour = skia::colorSetARGB(255, 241, 241, 241);  // #f1f1f1
-  tile_colour = skia::colorSetARGB(255, 241, 241, 241);  // #f1f1f1
-  bubble_colour = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
-  out_bubble_colour = skia::colorSetARGB(255, 222, 241, 253);  // #def1fd
-  sent_time_colour = skia::colorSetARGB(255, 134, 168, 194);  // #86a8c2
-  chat_colour = skia::colorSetARGB(255, 92, 159, 214);       // #5c9fd6
-  chat_top_colour = skia::colorSetARGB(255, 166, 211, 240);  // #a6d3f0, down to it
-  pattern_colour = skia::colorSetARGB(36, 0, 0, 0);
-  on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
-  auto& widget = widgets::theme();
-  widget = widgets::Theme{};
+inline palette palette_of(config::theme::day) {
+  palette out;
+  out.background = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
+  out.sidebar = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
+  out.chosen = skia::colorSetARGB(255, 241, 241, 241);  // #f1f1f1
+  out.text = skia::colorSetARGB(255, 0, 0, 0);  // #000000
+  out.dim = skia::colorSetARGB(255, 153, 153, 153);  // #999999
+  out.accent = skia::colorSetARGB(255, 64, 167, 227);  // #40a7e3
+  out.error = skia::colorSetARGB(255, 209, 78, 78);  // #d14e4e
+  out.selected = skia::colorSetARGB(255, 65, 159, 217);  // #419fd9
+  out.selected_text = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
+  out.band = skia::colorSetARGB(255, 231, 231, 231);  // #e7e7e7
+  out.section = skia::colorSetARGB(255, 241, 241, 241);  // #f1f1f1
+  out.tile = skia::colorSetARGB(255, 241, 241, 241);  // #f1f1f1
+  out.bubble = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
+  out.out_bubble = skia::colorSetARGB(255, 222, 241, 253);  // #def1fd
+  out.sent_time = skia::colorSetARGB(255, 134, 168, 194);  // #86a8c2
+  out.chat = skia::colorSetARGB(255, 92, 159, 214);       // #5c9fd6
+  out.chat_top = skia::colorSetARGB(255, 166, 211, 240);  // #a6d3f0, down to it
+  out.pattern = skia::colorSetARGB(36, 0, 0, 0);
+  out.on_accent = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
+  return out;
+}
+inline widgets::Theme widget_theme_of(config::theme::day) {
+  widgets::Theme widget{};
   widget.fSurface = skia::colorSetARGB(255, 241, 241, 241);
   widget.fSurfaceHover = skia::colorSetARGB(255, 241, 241, 241);
   widget.fSurfaceActive = skia::colorSetARGB(255, 229, 229, 229);
@@ -477,30 +484,34 @@ inline void use_theme(config::theme::day) {
   widget.fTextFaint = skia::colorSetARGB(255, 153, 153, 153);
   widget.fAccent = skia::colorSetARGB(255, 64, 167, 227);
   widget.fOnAccent = skia::colorSetARGB(255, 255, 255, 255);
+  return widget;
 }
 // Tinted: tdesktop's night.tdesktop-theme.
-inline void use_theme(config::theme::tinted) {
-  background = skia::colorSetARGB(255, 23, 33, 43);  // #17212b
-  sidebar_colour = skia::colorSetARGB(255, 23, 33, 43);  // #17212b
-  chosen_colour = skia::colorSetARGB(255, 32, 43, 54);  // #202b36
-  text_colour = skia::colorSetARGB(255, 245, 245, 245);  // #f5f5f5
-  dim_colour = skia::colorSetARGB(255, 112, 132, 153);  // #708499
-  accent_colour = skia::colorSetARGB(255, 82, 136, 193);  // #5288c1
-  error_colour = skia::colorSetARGB(255, 236, 57, 66);  // #ec3942
-  selected_colour = skia::colorSetARGB(255, 43, 82, 120);  // #2b5278
-  selected_text_colour = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
-  band_colour = skia::colorSetARGB(255, 36, 48, 61);  // #24303d
-  section_colour = skia::colorSetARGB(255, 35, 46, 60);  // #232e3c
-  tile_colour = skia::colorSetARGB(255, 36, 47, 61);  // #242f3d
-  bubble_colour = skia::colorSetARGB(255, 24, 37, 51);  // #182533
-  out_bubble_colour = skia::colorSetARGB(255, 43, 82, 120);  // #2b5278
-  sent_time_colour = skia::colorSetARGB(255, 125, 168, 211);  // #7da8d3
-  chat_colour = skia::colorSetARGB(255, 14, 22, 33);      // #0e1621
-  chat_top_colour = skia::colorSetARGB(255, 25, 44, 66);  // #192c42, down to it
-  pattern_colour = skia::colorSetARGB(20, 255, 255, 255);
-  on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
-  auto& widget = widgets::theme();
-  widget = widgets::Theme{};
+inline palette palette_of(config::theme::tinted) {
+  palette out;
+  out.background = skia::colorSetARGB(255, 23, 33, 43);  // #17212b
+  out.sidebar = skia::colorSetARGB(255, 23, 33, 43);  // #17212b
+  out.chosen = skia::colorSetARGB(255, 32, 43, 54);  // #202b36
+  out.text = skia::colorSetARGB(255, 245, 245, 245);  // #f5f5f5
+  out.dim = skia::colorSetARGB(255, 112, 132, 153);  // #708499
+  out.accent = skia::colorSetARGB(255, 82, 136, 193);  // #5288c1
+  out.error = skia::colorSetARGB(255, 236, 57, 66);  // #ec3942
+  out.selected = skia::colorSetARGB(255, 43, 82, 120);  // #2b5278
+  out.selected_text = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
+  out.band = skia::colorSetARGB(255, 36, 48, 61);  // #24303d
+  out.section = skia::colorSetARGB(255, 35, 46, 60);  // #232e3c
+  out.tile = skia::colorSetARGB(255, 36, 47, 61);  // #242f3d
+  out.bubble = skia::colorSetARGB(255, 24, 37, 51);  // #182533
+  out.out_bubble = skia::colorSetARGB(255, 43, 82, 120);  // #2b5278
+  out.sent_time = skia::colorSetARGB(255, 125, 168, 211);  // #7da8d3
+  out.chat = skia::colorSetARGB(255, 14, 22, 33);      // #0e1621
+  out.chat_top = skia::colorSetARGB(255, 25, 44, 66);  // #192c42, down to it
+  out.pattern = skia::colorSetARGB(20, 255, 255, 255);
+  out.on_accent = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
+  return out;
+}
+inline widgets::Theme widget_theme_of(config::theme::tinted) {
+  widgets::Theme widget{};
   widget.fSurface = skia::colorSetARGB(255, 36, 47, 61);
   widget.fSurfaceHover = skia::colorSetARGB(255, 35, 46, 60);
   widget.fSurfaceActive = skia::colorSetARGB(255, 36, 48, 61);
@@ -510,30 +521,34 @@ inline void use_theme(config::theme::tinted) {
   widget.fTextFaint = skia::colorSetARGB(255, 112, 132, 153);
   widget.fAccent = skia::colorSetARGB(255, 82, 136, 193);
   widget.fOnAccent = skia::colorSetARGB(255, 255, 255, 255);
+  return widget;
 }
 // Night: tdesktop's night-green.tdesktop-theme.
-inline void use_theme(config::theme::night) {
-  background = skia::colorSetARGB(255, 40, 46, 51);  // #282e33
-  sidebar_colour = skia::colorSetARGB(255, 40, 46, 51);  // #282e33
-  chosen_colour = skia::colorSetARGB(255, 53, 60, 67);  // #353c43
-  text_colour = skia::colorSetARGB(255, 245, 245, 245);  // #f5f5f5
-  dim_colour = skia::colorSetARGB(255, 130, 134, 138);  // #82868a
-  accent_colour = skia::colorSetARGB(255, 63, 193, 176);  // #3fc1b0
-  error_colour = skia::colorSetARGB(255, 245, 116, 116);  // #f57474
-  selected_colour = skia::colorSetARGB(255, 0, 150, 135);  // #009687
-  selected_text_colour = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
-  band_colour = skia::colorSetARGB(255, 63, 72, 80);  // #3f4850
-  section_colour = skia::colorSetARGB(255, 49, 59, 67);  // #313b43
-  tile_colour = skia::colorSetARGB(255, 61, 68, 75);  // #3d444b
-  bubble_colour = skia::colorSetARGB(255, 51, 57, 63);  // #33393f
-  out_bubble_colour = skia::colorSetARGB(255, 42, 47, 51);  // #2a2f33
-  sent_time_colour = skia::colorSetARGB(255, 115, 127, 135);  // #737f87
-  chat_colour = skia::colorSetARGB(255, 24, 25, 29);      // #18191d
-  chat_top_colour = skia::colorSetARGB(255, 32, 46, 40);  // #202e28, down to it
-  pattern_colour = skia::colorSetARGB(20, 255, 255, 255);
-  on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
-  auto& widget = widgets::theme();
-  widget = widgets::Theme{};
+inline palette palette_of(config::theme::night) {
+  palette out;
+  out.background = skia::colorSetARGB(255, 40, 46, 51);  // #282e33
+  out.sidebar = skia::colorSetARGB(255, 40, 46, 51);  // #282e33
+  out.chosen = skia::colorSetARGB(255, 53, 60, 67);  // #353c43
+  out.text = skia::colorSetARGB(255, 245, 245, 245);  // #f5f5f5
+  out.dim = skia::colorSetARGB(255, 130, 134, 138);  // #82868a
+  out.accent = skia::colorSetARGB(255, 63, 193, 176);  // #3fc1b0
+  out.error = skia::colorSetARGB(255, 245, 116, 116);  // #f57474
+  out.selected = skia::colorSetARGB(255, 0, 150, 135);  // #009687
+  out.selected_text = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
+  out.band = skia::colorSetARGB(255, 63, 72, 80);  // #3f4850
+  out.section = skia::colorSetARGB(255, 49, 59, 67);  // #313b43
+  out.tile = skia::colorSetARGB(255, 61, 68, 75);  // #3d444b
+  out.bubble = skia::colorSetARGB(255, 51, 57, 63);  // #33393f
+  out.out_bubble = skia::colorSetARGB(255, 42, 47, 51);  // #2a2f33
+  out.sent_time = skia::colorSetARGB(255, 115, 127, 135);  // #737f87
+  out.chat = skia::colorSetARGB(255, 24, 25, 29);      // #18191d
+  out.chat_top = skia::colorSetARGB(255, 32, 46, 40);  // #202e28, down to it
+  out.pattern = skia::colorSetARGB(20, 255, 255, 255);
+  out.on_accent = skia::colorSetARGB(255, 255, 255, 255);  // #ffffff
+  return out;
+}
+inline widgets::Theme widget_theme_of(config::theme::night) {
+  widgets::Theme widget{};
   widget.fSurface = skia::colorSetARGB(255, 61, 68, 75);
   widget.fSurfaceHover = skia::colorSetARGB(255, 49, 59, 67);
   widget.fSurfaceActive = skia::colorSetARGB(255, 63, 72, 80);
@@ -543,17 +558,8 @@ inline void use_theme(config::theme::night) {
   widget.fTextFaint = skia::colorSetARGB(255, 130, 134, 138);
   widget.fAccent = skia::colorSetARGB(255, 63, 193, 176);
   widget.fOnAccent = skia::colorSetARGB(255, 255, 255, 255);
+  return widget;
 }
-inline void use_theme(const config::theme_t& chosen) {
-  splice::visit([](auto one) { use_theme(one); }, chosen);
-  // The scroll bars, as tdesktop's scrollBarBg and scrollBarBgOver: dark on
-  // the light themes, light on the dark.
-  const bool light = splice::visit([](auto one) { return one.light; }, chosen);
-  nodes::scrollBarColours() = light ? nodes::ScrollBarColours{skia::colorSetARGB(0x53, 0, 0, 0), skia::colorSetARGB(0x7a, 0, 0, 0)}
-                                    : nodes::ScrollBarColours{skia::colorSetARGB(0x53, 255, 255, 255),
-                                                              skia::colorSetARGB(0x7a, 255, 255, 255)};
-}
-
 // An accent's colour in a theme: Telegram's circles, a shade of their own
 // in each (window_themes_embedded.cpp); the theme's own where none is chosen.
 [[nodiscard]] inline skia::SkColor colour_of(const config::accent_t& one, const config::theme_t& in) {
@@ -566,19 +572,54 @@ inline void use_theme(const config::theme_t& chosen) {
   }};
   return shades[theme][one.index()];
 }
-// A theme, and the accent over it.
-inline void use_theme(const config::theme_t& chosen, const config::accent_t& accent) {
-  use_theme(chosen);
-  accent_colour = colour_of(accent, chosen);
-  widgets::theme().fAccent = accent_colour;
-  // A see-through window: its panels at its opacity, and under them
-  // nothing -- the desktop, or the background behind all of it. Their
-  // colours taken once here, not blended at each frame.
-  if (const int opacity = window_look().opacity; opacity < 100) {
-    background = at_opacity(background, 0);
-    for (skia::SkColor* each : {&sidebar_colour, &chosen_colour, &chat_colour, &chat_top_colour})
+// A theme, and the accent over it: its palette. In a see-through window
+// (`opacity` under 100), its panels at that opacity, and under them nothing
+// -- the desktop, or the background behind all of it: their colours taken
+// once here, not blended at each frame.
+[[nodiscard]] inline palette palette_of(const config::theme_t& chosen, const config::accent_t& accent, int opacity) {
+  palette out = splice::visit([](auto one) { return palette_of(one); }, chosen);
+  out.accent = colour_of(accent, chosen);
+  if (opacity < 100) {
+    out.background = at_opacity(out.background, 0);
+    for (skia::SkColor* each : {&out.sidebar, &out.chosen, &out.chat, &out.chat_top})
       *each = at_opacity(*each, opacity);
   }
+  return out;
+}
+// skiff-widgets' theme and scroll bars, as the theme and the accent have
+// them: the library's own, put in place in it.
+inline void use_widget_theme(const config::theme_t& chosen, const config::accent_t& accent) {
+  widgets::theme() = splice::visit([](auto one) { return widget_theme_of(one); }, chosen);
+  widgets::theme().fAccent = colour_of(accent, chosen);
+  const bool light = splice::visit([](auto one) { return one.light; }, chosen);
+  nodes::scrollBarColours() = light ? nodes::ScrollBarColours{skia::colorSetARGB(0x53, 0, 0, 0), skia::colorSetARGB(0x7a, 0, 0, 0)}
+                                    : nodes::ScrollBarColours{skia::colorSetARGB(0x53, 255, 255, 255),
+                                                              skia::colorSetARGB(0x7a, 255, 255, 255)};
+}
+// For the code not handed its palette yet: the palette put in the colours
+// read by name. Goes with them.
+inline void use_theme(const config::theme_t& chosen, const config::accent_t& accent) {
+  const palette now = palette_of(chosen, accent, window_look().opacity);
+  background = now.background;
+  sidebar_colour = now.sidebar;
+  chosen_colour = now.chosen;
+  text_colour = now.text;
+  dim_colour = now.dim;
+  accent_colour = now.accent;
+  error_colour = now.error;
+  selected_colour = now.selected;
+  selected_text_colour = now.selected_text;
+  band_colour = now.band;
+  section_colour = now.section;
+  tile_colour = now.tile;
+  bubble_colour = now.bubble;
+  out_bubble_colour = now.out_bubble;
+  sent_time_colour = now.sent_time;
+  chat_colour = now.chat;
+  chat_top_colour = now.chat_top;
+  pattern_colour = now.pattern;
+  on_accent_colour = now.on_accent;
+  use_widget_theme(chosen, accent);
 }
 
 // The panels' look put in place, for skiff to paint them in: only over the

@@ -29,6 +29,7 @@ void app::rebuild_in_theme() {
   const bool info_open = before.info_open;
   const float settings_at = root().settings_up() ? root().settings_up()->offset() : 0.0f;
   mux::ui::use_theme(theme, accent);
+  colours = mux::ui::palette_of(theme, accent, mux::ui::window_look().opacity);
   pending_login.reset();
   drawer_waits = false;
   root().rebuild();

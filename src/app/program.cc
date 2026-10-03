@@ -51,6 +51,8 @@ export namespace mux::app {
 // What the program does to the window between events -- on what the
 // accounts file keeps, its base.
 struct app : kept_settings {
+  // Made in the theme's colours, which are in place before the window is.
+  explicit app(const mux::ui::palette& theme_colours) : colours(theme_colours) {}
   // Whether it is used by a finger -- a phone's screen -- as the host saw
   // last: a touch, or a mouse's press. Where it is, the input is not given
   // the keys' focus on its own: that started the text input, and with it a
@@ -144,8 +146,12 @@ struct app : kept_settings {
   std::optional<std::string> pending_login;
   // What plays voice messages: handed to the window and to the parts.
   mux::platform::audio::speaker speaker;
+  // The theme's colours: handed to the window, which is made in them --
+  // made again in new ones when the theme changes (rebuild_in_theme).
+  mux::ui::palette colours;
   actions ask;
-  skiff::scene::Scene<window_type> scene{std::in_place, mux::ui::ui_needs<actions>{.actions = &ask, .sound = &speaker}};
+  skiff::scene::Scene<window_type> scene{std::in_place,
+                                         mux::ui::ui_needs<actions>{.actions = &ask, .sound = &speaker, .colours = &colours}};
 
   // -- what the host asks
   skiff::scene::Scene<window_type>& window();

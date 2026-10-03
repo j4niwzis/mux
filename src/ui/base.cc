@@ -22,6 +22,34 @@ namespace scene = skiff::scene;
 namespace nodes = skiff::nodes;
 namespace widgets = skiff::widgets;
 
+// The theme's colours: made by palette_of (themes.cc) from the theme and
+// the accent chosen, the program's, and handed down to what is drawn in
+// them. As it is here: the dark one the window starts in.
+struct palette {
+  skia::SkColor background = skia::colorSetARGB(255, 24, 27, 30);
+  skia::SkColor sidebar = skia::colorSetARGB(255, 32, 36, 40);
+  skia::SkColor chosen = skia::colorSetARGB(255, 52, 60, 66);
+  skia::SkColor text = skia::colorSetARGB(255, 235, 240, 243);
+  skia::SkColor dim = skia::colorSetARGB(255, 150, 162, 170);
+  skia::SkColor accent = skia::colorSetARGB(255, 102, 204, 255);
+  skia::SkColor error = skia::colorSetARGB(255, 255, 120, 110);
+  skia::SkColor selected = skia::colorSetARGB(255, 43, 82, 120);
+  skia::SkColor selected_text = skia::colorSetARGB(255, 255, 255, 255);
+  skia::SkColor band = skia::colorSetARGB(255, 18, 20, 23);
+  skia::SkColor section = skia::colorSetARGB(255, 26, 29, 33);
+  skia::SkColor tile = skia::colorSetARGB(255, 40, 45, 50);
+  skia::SkColor bubble = skia::colorSetARGB(255, 33, 41, 52);
+  skia::SkColor out_bubble = skia::colorSetARGB(255, 43, 82, 120);
+  skia::SkColor sent_time = skia::colorSetARGB(255, 170, 200, 230);
+  skia::SkColor chat = skia::colorSetARGB(255, 14, 22, 33);
+  skia::SkColor chat_top = skia::colorSetARGB(255, 22, 38, 58);
+  skia::SkColor pattern = skia::colorSetARGB(20, 255, 255, 255);
+  skia::SkColor on_accent = skia::colorSetARGB(255, 255, 255, 255);
+  // A menu's plate: the side's colour, all but opaque -- never taken for a
+  // panel's fill, so a see-through panel look leaves menus readable over it.
+  [[nodiscard]] skia::SkColor popup() const { return (sidebar & 0x00FFFFFFu) | (0xFEu << 24); }
+  friend bool operator==(const palette&, const palette&) = default;
+};
 inline skia::SkColor background = skia::colorSetARGB(255, 24, 27, 30);
 inline skia::SkColor sidebar_colour = skia::colorSetARGB(255, 32, 36, 40);
 inline skia::SkColor chosen_colour = skia::colorSetARGB(255, 52, 60, 66);
@@ -253,6 +281,8 @@ struct ui_needs {
   Actions* actions = nullptr;
   // What plays voice messages: the program's.
   platform::audio::speaker* sound = nullptr;
+  // The theme's colours: the program's.
+  const palette* colours = nullptr;
 };
 // Each account's protocol state, as its client last said it: what the
 // extension points are asked with. One not said yet: its protocol's default.

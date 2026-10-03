@@ -33,13 +33,14 @@ class toasts {
   toasts& operator=(const toasts&) = delete;
   ~toasts() { shown_.clear(); }
 
-  void show(const typename App::toast_due& due) {
+  // In the program's colours, as the window is.
+  void show(const typename App::toast_due& due, const auto& colours) {
     sdl::SDL_Window* made = sdl::SDL_CreateWindow("mux", kWidth, kHeight,
                                         sdl::kWindowBorderless | sdl::kWindowAlwaysOnTop | sdl::kWindowUtility |
                                             sdl::kWindowNotFocusable | sdl::kWindowHidden);
     if (!made)
       return;
-    shown_.push_back(std::make_unique<one>(made, due));
+    shown_.push_back(std::make_unique<one>(made, due, colours));
     // Three at most, as tdesktop keeps: the oldest goes.
     while (shown_.size() > 3)
       shown_.pop_front();
@@ -78,8 +79,8 @@ class toasts {
     skiff::scene::Scene<typename App::toast_card> scene;
     chat_type chat;
     std::chrono::steady_clock::time_point until;
-    one(sdl::SDL_Window* made, const typename App::toast_due& due)
-        : window(made), target(made, true), scene(std::in_place, due.key, due.title, due.text), chat(due.chat),
+    one(sdl::SDL_Window* made, const typename App::toast_due& due, const auto& colours)
+        : window(made), target(made, true), scene(std::in_place, colours, due.key, due.title, due.text), chat(due.chat),
           until(std::chrono::steady_clock::now() + std::chrono::seconds(5)) {}
     one(const one&) = delete;
     one& operator=(const one&) = delete;

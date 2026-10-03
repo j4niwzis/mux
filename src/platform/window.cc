@@ -463,7 +463,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
       // at once, where many came together, was the whole of a frame.
       auto due_now = app.take_toasts();
       for (std::size_t i = due_now.size() > 3 ? due_now.size() - 3 : 0; i < due_now.size(); ++i)
-        shown_toasts.show(due_now[i]);
+        shown_toasts.show(due_now[i], app.colours);
       shown_toasts.frame(app.painting());
       // Off screen: no frame -- not the program's either, which marks what
       // is in view as read. Woken only by events and the network.

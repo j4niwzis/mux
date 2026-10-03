@@ -360,101 +360,6 @@ consteval auto json_schema(knot::type<saved_account>) { return knot::schema<save
 using xmpp_account = proto::xmpp::kept;
 using matrix_account = proto::matrix::kept;
 
-// The accounts as files had them before, one list a protocol and every
-// setting flat in each: read, and never written.
-namespace legacy {
-struct xmpp_account {
-  std::string address;  // user@domain
-  std::string password;
-  bool enabled = true;
-  std::string resource = "mux";
-  // Where to connect, instead of what the domain's SRV records say.
-  std::optional<std::string> host;
-  std::optional<std::int64_t> port;
-  // PLAIN over a stream TLS has not secured: only for a server on this
-  // machine, under test. Never over a network.
-  bool plain_without_tls = false;
-  // Whether the people one talks to are told a message was read. Nothing
-  // said is yes.
-  std::optional<bool> read_receipts;
-  std::optional<bool> send_typing;  // others' typing is always shown
-  std::optional<bool> room_events;  // as matrix_account's
-  std::optional<room_event_kinds> room_event_kinds;
-  std::optional<bool> show_receipts;  // as matrix_account's
-  std::optional<bool> link_previews;  // as matrix_account's
-  std::optional<bool> previews_direct;  // link previews fetched from the site itself
-  std::optional<std::string> wallpaper;  // its chats' background, as matrix_account's
-  std::optional<std::string> bubbles;    // its chats' bubbles, as matrix_account's
-  std::optional<std::string> panels;  // its panels' look, as word_of(bubble_look) says it
-  std::optional<bool> home_hides_spaced;  // Home without what spaces hold, but direct messages
-  std::optional<bool> home_hides_direct;  // and without direct messages too, where it is so
-  std::optional<std::int64_t> jump_search;  // as matrix_account's
-  // Its notifications, on the desktop and heard: as every account's, until
-  // chosen.
-  std::optional<bool> notify;
-  std::optional<bool> notify_sound;
-  // The name of the proxy profile it connects through, where it has one.
-  std::optional<std::string> proxy;
-  // Its colour, as word_of(accent_t) says it -- none, one given it by its
-  // address -- and whether its chats listed in another account's list carry
-  // a strip of it. Nothing said is a strip.
-  std::optional<std::string> colour;
-  std::optional<bool> strip;
-  friend bool operator==(const xmpp_account&, const xmpp_account&) = default;
-};
-
-// A Matrix account: a user ID and its homeserver.
-struct matrix_account {
-  std::string user_id;  // @user:server
-  std::string password;
-  bool enabled = true;
-  // The client-server API's base URL, instead of what .well-known says.
-  std::optional<std::string> homeserver;
-  // What the server shows for this login among the account's devices.
-  std::string device_name = "mux";
-  std::optional<bool> read_receipts;
-  std::optional<bool> send_typing;  // others' typing is always shown
-  // Element's "Never send encrypted messages to unverified sessions": room
-  // keys only to sessions cross-signed by their owner or verified here.
-  std::optional<bool> only_verified;
-  // Whether its chats show what is done in them (joins, renames, ...);
-  // nothing said is as the settings say for every account.
-  std::optional<bool> room_events;
-  std::optional<room_event_kinds> room_event_kinds;
-  // Whether its chats show who has read up to where, as Element's faces
-  // under a message: its own choice, else every account's.
-  // Its chats' background, as word_of(wallpaper_t) says it: its own choice,
-  // else every chat's.
-  std::optional<std::string> wallpaper;
-  // Its chats' bubbles, as word_of(bubble_look) says them.
-  std::optional<std::string> bubbles;
-  std::optional<std::string> panels;  // its panels' look, as word_of(bubble_look) says it
-  std::optional<bool> home_hides_spaced;  // Home without what spaces hold, but direct messages
-  std::optional<bool> home_hides_direct;  // and without direct messages too, where it is so
-  std::optional<bool> show_receipts;
-  // Whether its chats show a card for a message's first link: its own
-  // choice, else every account's.
-  std::optional<bool> link_previews;
-  std::optional<bool> previews_direct;  // link previews fetched from the site itself
-  // How many events a search for a message jumped to pages back before it
-  // gives up; 0 for no limit. Its own choice, else every account's.
-  std::optional<std::int64_t> jump_search;
-  // Its notifications, on the desktop and heard: as every account's, until
-  // chosen.
-  std::optional<bool> notify;
-  std::optional<bool> notify_sound;
-  std::optional<std::string> proxy;
-  // The session the server gave, kept so the next start goes on with it.
-  std::optional<std::string> access_token;
-  std::optional<std::string> device_id;
-  std::optional<std::string> colour;  // as xmpp_account's
-  std::optional<bool> strip;          // as xmpp_account's
-  friend bool operator==(const matrix_account&, const matrix_account&) = default;
-};
-
-// One saved account, of either protocol.
-
-}  // namespace legacy
 
 // What a chat's background is: the theme's own -- its gradient and
 // Telegram's pattern -- a plain colour, or a picture of the user's (kept in
@@ -874,9 +779,6 @@ consteval auto json_schema(knot::type<history_settings>) { return knot::schema<h
 struct file {
   // The accounts, of every protocol, in order.
   std::optional<std::vector<saved_account>> accounts;
-  // As files had them before, one list a protocol: read, never written.
-  std::optional<std::vector<legacy::xmpp_account>> xmpp;
-  std::optional<std::vector<legacy::matrix_account>> matrix;
   // How much the window moves: "none", "reduced" (sections unfold, panels
   // just appear) or "full". Nothing said is full.
   std::optional<std::string> motion;
@@ -943,10 +845,6 @@ struct file {
 };
 
 consteval auto json_schema(knot::type<proxy_settings>) { return knot::schema<proxy_settings>(); }
-namespace legacy {
-consteval auto json_schema(knot::type<xmpp_account>) { return knot::schema<xmpp_account>(); }
-consteval auto json_schema(knot::type<matrix_account>) { return knot::schema<matrix_account>(); }
-}  // namespace legacy
 consteval auto json_schema(knot::type<muted_chat>) { return knot::schema<muted_chat>(); }
 consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
 
@@ -1192,34 +1090,10 @@ template <class... Tags>
   }, one.own);
 }
 // What an old file kept flat in each account, as every account keeps it now.
-[[nodiscard]] inline account_shared shared_of(const auto& old) {
-  return {.enabled = old.enabled, .read_receipts = old.read_receipts, .send_typing = old.send_typing,
-          .room_events = old.room_events, .room_event_kinds = old.room_event_kinds, .show_receipts = old.show_receipts,
-          .link_previews = old.link_previews, .previews_direct = old.previews_direct, .wallpaper = old.wallpaper,
-          .bubbles = old.bubbles, .panels = old.panels, .home_hides_spaced = old.home_hides_spaced,
-          .home_hides_direct = old.home_hides_direct, .jump_search = old.jump_search, .notify = old.notify,
-          .notify_sound = old.notify_sound, .proxy = old.proxy, .colour = old.colour, .strip = old.strip};
-}
-[[nodiscard]] inline account_t account_of(const legacy::xmpp_account& old) {
-  return {.own = kept_t{proto::xmpp::kept{.address = old.address, .password = old.password, .resource = old.resource,
-                                          .host = old.host, .port = old.port, .plain_without_tls = old.plain_without_tls}},
-          .shared = shared_of(old)};
-}
-[[nodiscard]] inline account_t account_of(const legacy::matrix_account& old) {
-  return {.own = kept_t{proto::matrix::kept{.user_id = old.user_id, .password = old.password, .homeserver = old.homeserver,
-                                            .device_name = old.device_name, .only_verified = old.only_verified,
-                                            .access_token = old.access_token, .device_id = old.device_id}},
-          .shared = shared_of(old)};
-}
-
-// All the accounts of a file: an old file's lists first, then its accounts
-// of a protocol this build has.
+// All the accounts of a file of a protocol this build has (an old file's
+// lists among them, read into accounts as load() reads it).
 [[nodiscard]] inline std::vector<account_t> accounts_of(const file& from) {
   std::vector<account_t> out;
-  for (const auto& old : from.xmpp.value_or(std::vector<legacy::xmpp_account>{}))
-    out.push_back(account_of(old));
-  for (const auto& old : from.matrix.value_or(std::vector<legacy::matrix_account>{}))
-    out.push_back(account_of(old));
   for (const auto& one : from.accounts.value_or(std::vector<saved_account>{}))
     if (auto held = account_of(one))
       out.push_back(std::move(*held));
@@ -1314,6 +1188,51 @@ std::filesystem::path default_path() {
 
 // The accounts kept at `where`: none when there is no file yet, and what is
 // wrong with it when there is one that cannot be read.
+// A protocol with no old list of its own: a list no file has.
+namespace legacy_defaults {
+template <class Entry>
+struct none {
+  std::optional<std::vector<Entry>> no_legacy_accounts;
+};
+template <class Entry>
+consteval auto json_schema(knot::type<none<Entry>>) {
+  return knot::schema<none<Entry>>();
+}
+template <class Entry>
+constexpr type_tag<none<Entry>> legacy_accounts_type(const auto&, type_tag<Entry>) {
+  return {};
+}
+template <class Entry>
+const std::optional<std::vector<Entry>>& legacy_entries(const none<Entry>& all) {
+  return all.no_legacy_accounts;
+}
+}  // namespace legacy_defaults
+// An old file's lists, each its protocol's (legacy_accounts_type): its
+// entries read once as the protocol's own and once as every account's, the
+// two zipped into accounts as files have them now.
+template <class... Tags>
+[[nodiscard]] std::vector<saved_account> legacy_accounts_in(protocol_list<Tags...>, std::string_view text) {
+  std::vector<saved_account> out;
+  (
+      [&] {
+        using kept = kept_of<Tags>;
+        using legacy_defaults::legacy_accounts_type;
+        using legacy_defaults::legacy_entries;
+        using own_list = typename decltype(legacy_accounts_type(kept{}, type_tag<kept>{}))::type;
+        using shared_list = typename decltype(legacy_accounts_type(kept{}, type_tag<account_shared>{}))::type;
+        const auto own = knot::try_read<own_list>(text);
+        const auto shared = knot::try_read<shared_list>(text);
+        if (!own || !shared || !legacy_entries(*own) || !legacy_entries(*shared))
+          return;
+        std::ranges::for_each(std::views::zip(*legacy_entries(*own), *legacy_entries(*shared)), [&](const auto& both) {
+          const auto& [mine, every] = both;
+          out.push_back(saved_account{std::string(protocol_word(mine)), kept_saved_t{mine}, every});
+        });
+      }(),
+      ...);
+  return out;
+}
+
 std::expected<file, std::string> load(const std::filesystem::path& where) {
   std::error_code failed;
   if (!std::filesystem::exists(where, failed))
@@ -1329,6 +1248,13 @@ std::expected<file, std::string> load(const std::filesystem::path& where) {
   if (!read)
     return std::unexpected(
         std::format("{} is not an accounts file: {} at {}", where.string(), read.error().message, read.error().offset));
+  // An old file's lists, each its protocol's, read into accounts as they are
+  // now, before the file's own.
+  std::vector<saved_account> old = legacy_accounts_in(protocols{}, text);
+  if (!old.empty()) {
+    std::ranges::move(read->accounts.value_or(std::vector<saved_account>{}), std::back_inserter(old));
+    read->accounts = std::move(old);
+  }
   return std::move(*read);
 }
 

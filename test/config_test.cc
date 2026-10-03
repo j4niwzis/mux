@@ -89,10 +89,14 @@ TEST(Config, AnOldFileIsNotReadAsEmpty) {
 // A file of before -- one list a protocol, every setting flat in each --
 // read as it is now: the account's own, and its settings kept.
 TEST(Config, AnOldFilesAccountsAreReadAsTheyAreNow) {
-  const mux::config::file old{.xmpp = std::vector<mux::config::legacy::xmpp_account>{{.address = "a@b.c", .password = "x", .colour = "red"}},
-                              .matrix = std::vector<mux::config::legacy::matrix_account>{
-                                  {.user_id = "@d:e.f", .password = "y", .enabled = false, .access_token = "t"}}};
-  const auto all = mux::config::accounts_of(old);
+  scratch here;
+  fs::create_directories(here.dir);
+  const fs::path where = here.dir / "accounts.json";
+  std::ofstream(where) << R"({"xmpp": [{"address": "a@b.c", "password": "x", "resource": "mux", "plain_without_tls": false, "enabled": true, "colour": "red"}],
+                              "matrix": [{"user_id": "@d:e.f", "password": "y", "device_name": "mux", "enabled": false, "access_token": "t"}]})";
+  const auto got = mux::config::load(where);
+  ASSERT_TRUE(got.has_value()) << got.error();
+  const auto all = mux::config::accounts_of(*got);
   ASSERT_EQ(all.size(), 2u);
   EXPECT_EQ(mux::config::address_of(all[0]), "a@b.c");
   EXPECT_EQ(mux::config::protocol_name(all[0]), "XMPP");
@@ -101,10 +105,10 @@ TEST(Config, AnOldFilesAccountsAreReadAsTheyAreNow) {
   EXPECT_EQ(mux::config::protocol_name(all[1]), "Matrix");
   EXPECT_FALSE(mux::config::enabled_of(all[1]));
   // Written as it is now, and read back the same.
-  const mux::config::file now = mux::config::file_of(all);
-  EXPECT_FALSE(now.xmpp.has_value());
-  EXPECT_FALSE(now.matrix.has_value());
-  EXPECT_EQ(mux::config::accounts_of(now), all);
+  ASSERT_TRUE(mux::config::save(where, mux::config::file_of(all)).has_value());
+  const auto again = mux::config::load(where);
+  ASSERT_TRUE(again.has_value()) << again.error();
+  EXPECT_EQ(mux::config::accounts_of(*again), all);
 }
 
 // An account of a protocol this build does not have -- a newer mux's -- is

@@ -21,6 +21,26 @@ struct kept {
   friend bool operator==(const kept&, const kept&) = default;
 };
 consteval auto json_schema(knot::type<kept>) { return knot::schema<kept>().tag("xmpp"); }
+// Accounts as files had them before: one list a protocol, under its name,
+// every setting flat in each -- read twice by the client's config, once as
+// what the account keeps (its own fields) and once as what every account
+// keeps (the rest): an Entry of either.
+template <class Entry>
+struct legacy_accounts {
+  std::optional<std::vector<Entry>> xmpp;
+};
+template <class Entry>
+consteval auto json_schema(knot::type<legacy_accounts<Entry>>) {
+  return knot::schema<legacy_accounts<Entry>>();
+}
+template <class Entry>
+constexpr type_tag<legacy_accounts<Entry>> legacy_accounts_type(const kept&, type_tag<Entry>) {
+  return {};
+}
+template <class Entry>
+const std::optional<std::vector<Entry>>& legacy_entries(const legacy_accounts<Entry>& all) {
+  return all.xmpp;
+}
 // A server named by hand -- on the command line -- and its port: where it
 // connects, in place of what DNS says.
 inline void server_given(kept& one, std::string server, std::optional<std::int64_t> port) {

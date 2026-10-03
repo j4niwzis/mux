@@ -55,7 +55,7 @@ class outbox_part {
   // caption -- not a file, a video or a sound.
   // As the chat's protocol's rule for edits allows: any of one's own, or
   // only the last (XMPP's).
-  [[nodiscard]] static bool editable(const conversation& chat, const message& one) {
+  [[nodiscard]] bool editable(const conversation& chat, const message& one) const {
     return proto::may_edit(mux::ui::protocol_state_of(s_->ui, chat.id.account), chat, one) && !one.id.empty() &&
            (one.attachment ? captioned(one) : !one.body.plain.empty());
   }

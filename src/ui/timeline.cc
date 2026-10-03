@@ -194,7 +194,8 @@ template <class Actions>
   }
   // The reply's header: to the message it answers, as it is -- a part
   // marked there only by a click on the quoted stretch itself.
-  if (one.parts.body.parts.quote && one.said.replies_to && one.parts.body.parts.quote->bounds().contains(press.x, press.y)) {
+  // Where it is shown: beside a sticker it is moved there from its layout.
+  if (one.parts.body.parts.quote && one.said.replies_to && one.parts.body.parts.quote->shownBounds().contains(press.x, press.y)) {
     // Where the header shows the quote itself, the quoted part marked.
     if (one.header_quote)
       actions->jump_to_message(*one.said.replies_to, one.header_quote, one.message_id);
@@ -205,9 +206,11 @@ template <class Actions>
   // A forward's line: its sender's pill, their page; its words, the
   // original, where its link is.
   if (one.parts.body.parts.forwarded && one.said.forwarded &&
-      one.parts.body.parts.forwarded->bounds().contains(press.x, press.y)) {
+      one.parts.body.parts.forwarded->shownBounds().contains(press.x, press.y)) {
     if (one.said.forwarded->from.starts_with('@') &&
-        one.parts.body.parts.forwarded->parts.who.bounds().contains(press.x, press.y)) {
+        one.parts.body.parts.forwarded->parts.who.bounds()
+            .makeOffset(one.parts.body.parts.forwarded->fState.fShiftX, one.parts.body.parts.forwarded->fState.fShiftY)
+            .contains(press.x, press.y)) {
       actions->open_member_info(one.said.forwarded->from);
       return true;
     }

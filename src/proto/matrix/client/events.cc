@@ -476,10 +476,30 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
     if (const auto why = withheld_.find(*session); why != withheld_.end())
       waiting.body = {why->second, std::nullopt};
     auto& kept = undecrypted_[*session];
-    if (kept.size() < 200)
-      kept.push_back(waiting);
+    if (kept.size() < 200 && std::ranges::none_of(kept, [&](const undecrypted_event& each) { return each.event.event_id == one.event_id; }))
+      kept.push_back({in, one, where});
   }
   sink_(change::message_added{std::move(waiting), where});
+}
+
+template <class Sink>
+void account<Sink>::decrypt_waiting(const std::string& session) {
+  const auto found = undecrypted_.find(session);
+  if (found == undecrypted_.end())
+    return;
+  const auto waiting = std::move(found->second);
+  undecrypted_.erase(found);
+  for (const undecrypted_event& one : waiting)
+    this->event(one.in, one.event,
+                splice::visit(splice::overloaded{[](placement::aside aside) -> placement_t { return aside; },
+                                                 [](const auto&) -> placement_t { return placement::in_window{}; }},
+                              one.where));
+}
+template <class Sink>
+void account<Sink>::decrypt_all_waiting() {
+  const auto sessions = undecrypted_ | std::views::keys | std::ranges::to<std::vector<std::string>>();
+  for (const std::string& session : sessions)
+    this->decrypt_waiting(session);
 }
 
 template <class Sink>

@@ -167,15 +167,29 @@ class account {
   // others cannot be sure what it sends is the user's; and other sessions of
   // the user's that are not ("New login. Was this you?").
   void check_own_sessions();
-  // Messages not read for want of their session's key, by that session; and
-  // why a sender withheld a session's key (m.room_key.withheld), in
-  // Element's words -- the messages said so, those that come later too.
-  std::map<std::string, std::vector<message>> undecrypted_;
+  // Events not read for want of their session's key, by that session --
+  // each as it came, and where it went -- to be read again once the key is
+  // here; and why a sender withheld a session's key (m.room_key.withheld),
+  // in Element's words -- the messages said so, those that come later too.
+  struct undecrypted_event {
+    conversation_id in;
+    loom::ev::timeline_event event;
+    placement_t where;
+  };
+  std::map<std::string, std::vector<undecrypted_event>> undecrypted_;
   std::map<std::string, std::string> withheld_;
   void withheld_in(const loom::ev::m_room_key_withheld_content_t& content);
-  // A room's gap since the last run, from where the sync left it back to
-  // the event it had last: read for mentions of the user and reactions to
-  // theirs, and nothing else -- no message kept, nothing fetched.
+  // The events waiting for a session's key read again, now that it is here
+  // -- or, a key file or the backup having brought many, every one waiting.
+  // Each in place of what was said of it: in its window (a live one is not
+  // live again), or aside where it was fetched aside.
+  void decrypt_waiting(const std::string& session);
+  void decrypt_all_waiting();
+  // A room's gap since the last sync, from where the sync left it back to
+  // the event it had last: its events put in the timeline by their time --
+  // between what was there and what the sync brought, where nothing pages
+  // back to them -- and read for mentions of the user and reactions to
+  // theirs. At most ten pages; past that, the gap is the history's.
   void catch_up(std::string room, std::string from, std::string until);
   // A room not joined, as its server tells of it, before it is joined.
   void preview_room(std::string room, std::vector<std::string> via);

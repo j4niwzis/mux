@@ -1397,6 +1397,7 @@ void account<Sink>::import_room_keys(std::string path, std::string passphrase) {
       return;
     }
     const std::size_t taken = crypto_->import_sessions(*sessions);
+    this->decrypt_all_waiting();
     sink_(change::notice{id_, "Room keys imported",
                          std::format("{} of {} room keys taken (the rest were held already). Messages read with them are "
                                      "marked as from an unverified device: the file is only as good as where it came from.",
@@ -1543,6 +1544,8 @@ void account<Sink>::vet_room_key(const crypto::room_key_offer& offer) {
     return;
   }
   log(id_, "room key from {} ({}){}", user, device->device_id, device->cross_signed ? "" : ", unverified device");
+  // What came before it, read now.
+  this->decrypt_waiting(offer.key.session_id);
 }
 
 // Encrypted, once known so: by its state now, or by what was known before --
@@ -1859,10 +1862,15 @@ void account<Sink>::withheld_in(const loom::ev::m_room_key_withheld_content_t& c
       content.code);
   withheld_.insert_or_assign(*content.session_id, said);
   if (const auto kept = undecrypted_.find(*content.session_id); kept != undecrypted_.end())
-    for (message one : kept->second) {
-      one.body = {said, std::nullopt};
-      sink_(change::message_added{std::move(one), placement::aside{}});
-    }
+    for (const undecrypted_event& one : kept->second)
+      sink_(change::message_added{message{.in = one.in,
+                                          .id = one.event.event_id,
+                                          .sender = one.event.sender,
+                                          .at = std::chrono::sys_time<std::chrono::milliseconds>(
+                                              std::chrono::milliseconds(one.event.origin_server_ts)),
+                                          .body = {said, std::nullopt},
+                                          .outgoing = one.event.sender == id_.address},
+                                  placement::aside{}});
 }
 }  // namespace mux::proto::matrix::client
 

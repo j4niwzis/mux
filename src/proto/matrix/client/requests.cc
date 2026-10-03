@@ -777,6 +777,8 @@ void account<Sink>::catch_up(std::string room, std::string from, std::string unt
     std::vector<reaction_found> reactions;
     std::optional<std::string> token = from;
     std::size_t read = 0, mentions = 0;
+    // The gap's events, newest first as the pages bring them.
+    std::vector<loom::ev::timeline_event> gap;
     // At most ten pages of a hundred: a gap longer than that is the
     // history's, paged back to when read.
     for (int page = 0; page < 10 && api_ && token; ++page) {
@@ -794,6 +796,7 @@ void account<Sink>::catch_up(std::string room, std::string from, std::string unt
         }
         ++read;
         sender_of.emplace(one.event_id, one.sender);
+        gap.push_back(one);
         if (one.sender == id_.address)
           continue;
         const auto at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(one.origin_server_ts));
@@ -829,6 +832,10 @@ void account<Sink>::catch_up(std::string room, std::string from, std::string unt
         break;
       token = got->end;
     }
+    // Into the timeline, oldest first, by their time: between what was there
+    // and what the sync brought.
+    for (const auto& one : gap | std::views::reverse)
+      this->event(in, one, placement::in_window{});
     // The reactions to what the user sent: known by who sent it, where the
     // pages or the room's last events held it.
     const auto kept = state_.joined.find(room);
@@ -847,7 +854,7 @@ void account<Sink>::catch_up(std::string room, std::string from, std::string unt
         ++to_mine;
         sink_(change::reacted_to_mine{in, one.event, one.target, one.at});
       }
-    log(id_, "caught up on {}: {} event{}, {} mention{}, {} reaction{} to yours", room, read, read == 1 ? "" : "s",
+    log(id_, "caught up on {}: {} event{} put in, {} mention{}, {} reaction{} to yours", room, read, read == 1 ? "" : "s",
         mentions, mentions == 1 ? "" : "s", to_mine, to_mine == 1 ? "" : "s");
   });
 }
@@ -1246,6 +1253,7 @@ std::size_t account<Sink>::restore_backup(const std::string& secret) {
     }
   const std::size_t taken = crypto_->import_sessions(sessions);
   crypto_->keep_backup(current->version, secret);
+  this->decrypt_all_waiting();
   return taken;
 }
 

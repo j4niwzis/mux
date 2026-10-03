@@ -7,11 +7,19 @@
 // one that fits better is the protocol's. So a protocol says only what it
 // has; what it leaves out is the default, and nothing is written for it.
 //
-//   offers(speaks, feature::room_directory{})   what it has, by type
-//   owns_address(tag, address)                  whether an address is its
+// What may be done is asked of the account's state -- its protocol's state
+// type, mux::proto::<protocol>::state: its stream, its server's facts --
+// which every overload of the protocol is given, and available(state) first:
+// false, nothing at all may be done.
+//
+//   available(state)                             anything at all
+//   offers(state, feature::room_directory{})     what it has, by type
+//   can_pin(state, message id), may_delete(state, chat, outgoing)
+//   may_edit(state, chat, message) -- through the rule edit_rule(state) gives
+//   can_page_back(state)                         older history asked of the server
+// And by the protocol alone, its tag:
+//   owns_address(tag, address)                   whether an address is its
 //   share_link / room_link / message_link / person_link
-//   can_pin(speaks, message id), may_delete(speaks, chat, outgoing)
-//   may_edit(speaks, chat, message) -- through the rule edit_rule(tag) gives
 //
 // What a protocol gives may itself be a type with overloads of its own: an
 // edit rule is a type of the protocol's, in mux::proto::<protocol>, with an
@@ -47,6 +55,8 @@ struct own_messages {};
 
 // The defaults: what a protocol that says nothing of a thing comes to.
 namespace mux::proto::defaults {
+constexpr bool available(const auto&) { return true; }
+constexpr bool can_page_back(const auto&) { return true; }
 constexpr bool offers(const auto&, const auto&) { return false; }
 constexpr bool owns_address(const auto&, std::string_view) { return false; }
 inline std::optional<std::string> share_link(const auto&, std::string_view) { return std::nullopt; }
@@ -68,15 +78,37 @@ export namespace mux::proto {
 // that is not one is compiled here, where no protocol's overloads can be
 // seen, and every protocol got the default -- a template is instantiated
 // where it is used, which imports mux.protocols and sees them all.
+// Whether anything at all may be done, in the state an account is in.
+inline constexpr struct available_t {
+  bool operator()(const protocol_state_t& state) const {
+    return splice::visit([](const auto& now) {
+      using defaults::available;
+      return available(now);
+    }, state);
+  }
+} available{};
+
 inline constexpr struct offers_t {
-  template <class Speaks, class Feature>
-  bool operator()(const Speaks& speaks, Feature wanted) const {
-    return splice::visit([&](const auto& tag) {
+  template <class Feature>
+  bool operator()(const protocol_state_t& state, Feature wanted) const {
+    return splice::visit([&](const auto& now) {
+      using defaults::available;
       using defaults::offers;
-      return offers(tag, wanted);
-    }, speaks);
+      return available(now) && offers(now, wanted);
+    }, state);
   }
 } offers{};
+
+inline constexpr struct can_page_back_t {
+  template <class State>
+  bool operator()(const State& state) const {
+    return splice::visit([](const auto& now) {
+      using defaults::available;
+      using defaults::can_page_back;
+      return available(now) && can_page_back(now);
+    }, state);
+  }
+} can_page_back{};
 
 inline constexpr struct share_link_t {
   template <class Speaks>
@@ -119,33 +151,36 @@ inline constexpr struct person_link_t {
 } person_link{};
 
 inline constexpr struct can_pin_t {
-  template <class Speaks>
-  bool operator()(const Speaks& speaks, std::string_view id) const {
-    return splice::visit([&](const auto& tag) {
+  template <class State>
+  bool operator()(const State& state, std::string_view id) const {
+    return splice::visit([&](const auto& now) {
+      using defaults::available;
       using defaults::can_pin;
-      return can_pin(tag, id);
-    }, speaks);
+      return available(now) && can_pin(now, id);
+    }, state);
   }
 } can_pin{};
 
 inline constexpr struct may_delete_t {
-  template <class Speaks>
-  bool operator()(const Speaks& speaks, const conversation& chat, bool outgoing) const {
-    return splice::visit([&](const auto& tag) {
+  template <class State>
+  bool operator()(const State& state, const conversation& chat, bool outgoing) const {
+    return splice::visit([&](const auto& now) {
+      using defaults::available;
       using defaults::may_delete;
-      return may_delete(tag, chat, outgoing);
-    }, speaks);
+      return available(now) && may_delete(now, chat, outgoing);
+    }, state);
   }
 } may_delete{};
 
 // Whether a message may be edited: asked of the rule the protocol gives.
 inline constexpr struct may_edit_t {
-  template <class Speaks>
-  bool operator()(const Speaks& speaks, const conversation& chat, const message& one) const {
-    return splice::visit([&](const auto& tag) {
+  template <class State>
+  bool operator()(const State& state, const conversation& chat, const message& one) const {
+    return splice::visit([&](const auto& now) {
+      using defaults::available;
       using defaults::edit_rule;
-      return allows(edit_rule(tag), chat, one);
-    }, speaks);
+      return available(now) && allows(edit_rule(now), chat, one);
+    }, state);
   }
 } may_edit{};
 

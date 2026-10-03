@@ -17,7 +17,10 @@ struct last_correction {};
   const auto last = std::ranges::find_if(chat.timeline.rbegin(), chat.timeline.rend(), own_text);
   return last != chat.timeline.rend() && last->id == one.id && own_text(one);
 }
-inline last_correction edit_rule(tag) { return {}; }
+inline last_correction edit_rule(const state&) { return {}; }
+// Older history asked of the server where it keeps an archive (XEP-0313);
+// before it is known, asked -- as it was.
+constexpr bool can_page_back(const state& now) { return now.archive.value_or(true); }
 
 // An xmpp: URI (RFC 5122).
 inline std::optional<std::string> share_link(tag, std::string_view address) { return "xmpp:" + std::string(address); }

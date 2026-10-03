@@ -252,11 +252,12 @@ template <class Actions>
   }
   if (chat) {
     facts.pinned = std::ranges::contains(chat->pinned, one.message_id);
-    facts.pinnable = proto::can_pin(chat->id.account.speaks, one.message_id);
+    const protocol_state_t now = protocol_state_of(chat->id.account);
+    facts.pinnable = proto::can_pin(now, one.message_id);
     // Edited as its protocol's rule allows: any of one's own, or the last.
-    facts.editable = proto::may_edit(chat->id.account.speaks, *chat, one.said);
+    facts.editable = proto::may_edit(now, *chat, one.said);
     // Delete as the protocol allows it -- Matrix: as the room's power levels do.
-    facts.deletable = proto::may_delete(chat->id.account.speaks, *chat, one.outgoing);
+    facts.deletable = proto::may_delete(now, *chat, one.outgoing);
     facts.reaction_events = !one.said.reaction_events.empty();
     for (const auto& [key, who] : one.said.reactions)
       facts.reaction_count += who.size();

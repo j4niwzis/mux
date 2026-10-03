@@ -10,11 +10,11 @@ import mux.logic.links;
 
 export namespace mux::proto::matrix {
 
-constexpr bool offers(tag, feature::people_directory) { return true; }
-constexpr bool offers(tag, feature::room_directory) { return true; }
-constexpr bool offers(tag, feature::room_creation) { return true; }
-constexpr bool offers(tag, feature::sticker_packs) { return true; }
-constexpr bool offers(tag, feature::history_context) { return true; }
+constexpr bool offers(const state&, feature::people_directory) { return true; }
+constexpr bool offers(const state&, feature::room_directory) { return true; }
+constexpr bool offers(const state&, feature::room_creation) { return true; }
+constexpr bool offers(const state&, feature::sticker_packs) { return true; }
+constexpr bool offers(const state&, feature::history_context) { return true; }
 
 // matrix.to, for a person, a room and a message in it.
 inline std::optional<std::string> share_link(tag, std::string_view address) {
@@ -28,11 +28,11 @@ inline std::optional<std::string> message_link(tag, const conversation& chat, st
     return std::nullopt;
   return logic::message_link(chat, event);
 }
-constexpr bool can_pin(tag, std::string_view event) { return event.starts_with('$'); }
+constexpr bool can_pin(const state&, std::string_view event) { return event.starts_with('$'); }
 
 // As the room's power levels allow it: one's own where one may send a
 // redaction; another's where one may also redact.
-inline bool may_delete(tag, const conversation& chat, bool outgoing) {
+inline bool may_delete(const state&, const conversation& chat, bool outgoing) {
   const auto mine = chat.powers.find(chat.id.account.address);
   const std::int64_t level = mine != chat.powers.end() ? mine->second : chat.power_default;
   const auto redaction = chat.needs.events.find("m.room.redaction");

@@ -165,6 +165,11 @@ void app::woken() {
                                  mux::ui::download_progress().insert_or_assign(how.source, how.done);
                                  scene.state().markDamaged();
                                },
+                               // What an account's protocol is now: what is offered of it.
+                               [&](const mux::change::protocol_state_changed& now) {
+                                 mux::ui::protocol_states().insert_or_assign(now.account, now.now);
+                                 this->refresh();
+                               },
                                [](const auto&) {}},
                one);
     // A message deleted: marked where it is kept, and kept whole apart --

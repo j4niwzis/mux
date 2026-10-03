@@ -55,7 +55,7 @@ class outbox_part {
   // As the chat's protocol's rule for edits allows: any of one's own, or
   // only the last (XMPP's).
   [[nodiscard]] static bool editable(const conversation& chat, const message& one) {
-    return proto::may_edit(chat.id.account.speaks, chat, one) && !one.id.empty() &&
+    return proto::may_edit(mux::ui::protocol_state_of(chat.id.account), chat, one) && !one.id.empty() &&
            (one.attachment ? captioned(one) : !one.body.plain.empty());
   }
   // What the field is given to edit: the text; a picture's caption, nothing

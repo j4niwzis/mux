@@ -434,6 +434,15 @@ class account {
     // Opened before anything is asked, so that nothing that arrives while
     // the roster is fetched is missed.
     auto inbox = session.open_inbox();
+    // What the server has (its disco#info, XEP-0030), read once, here, into
+    // XMPP's state -- what its extension points decide by.
+    {
+      const std::string own = bare(how_.address);
+      mux::proto::xmpp::state now{.online = true};
+      if (auto info = session.template try_request<tern::query::disco_info>({.to = own.substr(own.find('@') + 1)}))
+        now.archive = std::ranges::contains(info->features, std::string_view("urn:xmpp:mam:2"), &tern::disco::feature::var);
+      sink_(change::protocol_state_changed{id_, protocol_state_t{now}});
+    }
     if (session.try_sync(roster_)) {
       log(id_, "the roster: {} contact{}", roster_.items.size(), roster_.items.size() == 1 ? "" : "s");
       for (const auto& [jid, item] : roster_.items)
@@ -469,6 +478,7 @@ class account {
     wire_ = nullptr;
     if (stopping_ || !wire.failed()) {
       log(id_, "disconnected");
+      sink_(change::protocol_state_changed{id_, protocol_state_t{mux::proto::xmpp::state{}}});
       say(connection::offline{});
     }
   }

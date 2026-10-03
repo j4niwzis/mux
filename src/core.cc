@@ -10,8 +10,10 @@ export module mux.core;
 
 import std;
 import splice;
-// The protocols, as tags in their own namespaces, and protocol_t: one list.
+// The protocols, as tags in their own namespaces, and protocol_t: one list;
+// and each one's account state, protocol_state_t.
 export import mux.proto.tags;
+export import mux.proto.state;
 
 export namespace mux {
 
@@ -1039,6 +1041,13 @@ struct receipts_changed {
 
 
 // A picture or a file as its protocol fetched it: the bytes, what they
+// What an account's protocol says it is now -- its stream up, what its server
+// has -- for its extension points to decide by.
+struct protocol_state_changed {
+  account_id account;
+  protocol_state_t now;
+};
+
 // were fetched for, and the source they were fetched by.
 struct avatar_loaded {
   media_use_t use;
@@ -1324,7 +1333,7 @@ struct event_missing {
 
 }  // namespace change
 
-using change_t = splice::variant<change::security_state, change::own_session, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::verification_changed, change::account_removed, change::conversation_updated,
+using change_t = splice::variant<change::protocol_state_changed, change::security_state, change::own_session, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::verification_changed, change::account_removed, change::conversation_updated,
                               change::conversation_removed,
                               change::presence_changed, change::message_added, change::message_edited,
                               change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed,
@@ -1892,6 +1901,7 @@ class model {
   }
   void on(const change::session_given&) {}  // the program's to keep, not the model's
   void on(const change::avatar_loaded&) {}  // the window's to show, not the model's
+  void on(const change::protocol_state_changed&) {}  // the window's: what it offers
   void on(const change::media_progress&) {}  // the window's too
   void on(const change::room_created&) {}    // the program's: it shows it
   void on(const change::devtools_text&) {}   // the window's

@@ -14,6 +14,7 @@ import mux.matrix;
 import mux.media;
 import mux.host;
 import mux.ui;
+import mux.protocols;
 import skiff.paint;
 import skiff.scene;
 import mux.app.network;
@@ -308,6 +309,10 @@ void app::apply(const request::load_older& one) {
           from = *gap->second.token;
       }
     }
+    // Where its protocol pages back at all: an XMPP server with no
+    // archive is not asked, to time out.
+    if (!mux::proto::can_page_back(mux::ui::protocol_state_of(in.account)))
+      return;
     net->load_older(in, std::move(from));
   };
   // A window of the history, where gaps were not kept for this chat: the

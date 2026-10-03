@@ -306,7 +306,7 @@ void app::apply(const request::open_packs&) {
 void app::apply(const request::open_room_packs&) {
   const auto chosen = this->managed();
   const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
-  if (!chat || !mux::proto::offers(chat->id.account.speaks, mux::proto::feature::sticker_packs{}))
+  if (!chat || !mux::proto::offers(mux::ui::protocol_state_of(chat->id.account), mux::proto::feature::sticker_packs{}))
     return;
   packs_account = chat->id.account;
   const auto mine = chat->powers.find(chat->id.account.address);

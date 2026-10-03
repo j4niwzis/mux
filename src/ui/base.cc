@@ -198,6 +198,16 @@ inline std::vector<std::pair<std::string, std::string>>& listed_avatars() {
   static std::vector<std::pair<std::string, std::string>> listed;
   return listed;
 }
+// Each account's protocol state, as its client last said it: what the
+// extension points are asked with. One not said yet: its protocol's default.
+inline std::map<account_id, protocol_state_t>& protocol_states() {
+  static std::map<account_id, protocol_state_t> kept;
+  return kept;
+}
+[[nodiscard]] inline protocol_state_t protocol_state_of(const account_id& of) {
+  const auto found = protocol_states().find(of);
+  return found != protocol_states().end() ? found->second : state_before(of.speaks);
+}
 // The images of the pack being edited: fetched as avatars are, keyed by
 // their mxc://, while its dialog shows them.
 inline std::vector<std::string>& pack_pictures_shown() {

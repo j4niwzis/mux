@@ -330,10 +330,10 @@ struct app : kept_settings {
   // it does, else the first.
   template <class Feature>
   [[nodiscard]] std::optional<mux::account_id> account_offering(Feature wanted) {
-    if (const auto& current = root().main().current; current && mux::proto::offers(current->speaks, wanted))
+    if (const auto& current = root().main().current; current && mux::proto::offers(mux::ui::protocol_state_of(*current), wanted))
       return current;
     for (const auto& [id, account] : model->accounts())
-      if (mux::proto::offers(id.speaks, wanted))
+      if (mux::proto::offers(mux::ui::protocol_state_of(id), wanted))
         return id;
     return std::nullopt;
   }

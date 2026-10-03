@@ -359,7 +359,7 @@ struct window : scene::Node {
   // The background behind the whole window, where it is so.
   void show_behind(const config::wallpaper_t& chosen) {
     if (window_look().behind)
-      show_wallpaper_on(layer().behind, chosen);
+      show_wallpaper_on(layer().behind, chosen, *needs_.colours);
   }
   // The panel that is up, not on its way out.
   [[nodiscard]] panel_type* open_panel() { return layer().frame.shown(); }
@@ -373,7 +373,7 @@ struct window : scene::Node {
       if (Panel* same = up->visit(splice::overloaded{[](Panel& one) -> Panel* { return &one; },
                                              [](auto&) -> Panel* { return nullptr; }}))
         return *same;
-    return splice::get<Panel>(layer().frame.open(std::in_place_type<Panel>, actions));
+    return splice::get<Panel>(layer().frame.open(std::in_place_type<Panel>, needs_));
   }
   // The top panel goes, and the one under it is up again.
   void back_panel() { layer().frame.back(); }

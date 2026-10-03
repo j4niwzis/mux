@@ -69,7 +69,7 @@ struct menu_facts {
 
 // A chat's background shown on a wallpaper: the theme's gradient and
 // Telegram's pattern, a plain colour (what is behind showing), or a picture.
-inline void show_wallpaper_on(wallpaper_t& wall, const config::wallpaper_t& chosen) {
+inline void show_wallpaper_on(wallpaper_t& wall, const config::wallpaper_t& chosen, const palette& colours) {
   // Frosted's blur, as chosen: 0 to 100 for none to about five pixels.
   wall.setBlur(static_cast<float>(window_look().frost) / 100.0f);
   // And each look's and element's own, where it frosts: made once for a size.
@@ -83,8 +83,8 @@ inline void show_wallpaper_on(wallpaper_t& wall, const config::wallpaper_t& chos
   wall.setBlurs(std::move(blurs));
   splice::visit(splice::overloaded{[&](config::wallpaper::theme) {
                                      wall.setPicture(nullptr);
-                                     wall.setGradient(scene::Gradient{chat_top_colour, chat_colour});
-                                     wall.setPattern(telegram_pattern(), pattern_colour);
+                                     wall.setGradient(scene::Gradient{colours.chat_top, colours.chat});
+                                     wall.setPattern(telegram_pattern(), colours.pattern);
                                    },
                                    [&](config::wallpaper::plain) {
                                      wall.setPicture(nullptr);
@@ -360,7 +360,7 @@ struct timeline_area : scene::Node {
   void show_wallpaper(const config::wallpaper_t& chosen) {
     parts.wall.setVisible(!window_look().behind);
     parts.wall.setOpacity(static_cast<float>(window_look().opacity) / 100.0f);
-    show_wallpaper_on(parts.wall, chosen);
+    show_wallpaper_on(parts.wall, chosen, *needs_.colours);
   }
   // The bubbles in the list, as they are made.
   [[nodiscard]] std::vector<message_bubble<Actions>>& bubbles() {

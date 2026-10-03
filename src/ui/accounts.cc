@@ -550,8 +550,11 @@ struct accounts_panel : closes_on_escape<Actions> {
       this->slide_side();
   }
 
-  explicit accounts_panel(Actions* a)
-      : closes_on_escape<Actions>(a), parts{.header = header_t("Accounts", {a}, {a}, true, false), .body = body_row(a)} {
+  // What it was handed, for the panes it makes.
+  ui_needs<Actions> needs_;
+  explicit accounts_panel(const ui_needs<Actions>& n) : accounts_panel(n, n.actions) {}
+  accounts_panel(const ui_needs<Actions>& n, Actions* a)
+      : closes_on_escape<Actions>(a), parts{.header = header_t("Accounts", {a}, {a}, true, false), .body = body_row(a)}, needs_(n) {
     this->fState.apply({.fill = true});
   }
 
@@ -711,7 +714,7 @@ struct accounts_panel : closes_on_escape<Actions> {
     selected.reset();
     add.set_lit(true);
     this->show_detail(true);
-    detail.template emplace<2>(this->actions, proxies);
+    detail.template emplace<2>(needs_, proxies);
     this->fit_detail();
     this->begin_swap();
     this->invalidateLayout();

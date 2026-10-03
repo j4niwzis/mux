@@ -36,6 +36,12 @@ struct services {
   // made again, in a theme or an accent chosen.
   bool refresh_due = false;
   bool rebuild_due = false;
+  // Whether it is used by a finger -- a phone's screen -- as the host saw
+  // last: a touch, or a mouse's press. Where it is, the input is not given
+  // the keys' focus on its own: that started the text input, and with it a
+  // phone's on-screen keyboard, over half the screen whenever a chat was
+  // open. The keyboard comes up as the field is tapped, as on Telegram's.
+  bool by_touch = false;
   // A chat to open, a link to follow -- its card, or its room -- once a part
   // is done; and a room joined, from a link or the directory, opened once
   // the model has it.

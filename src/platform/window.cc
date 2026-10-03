@@ -551,7 +551,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
   {
     int touch_screens = 0;
     sdl::SDL_free(sdl::SDL_GetTouchDevices(&touch_screens));  // the list SDL made, given back: only its count is read
-    app.by_touch = touch_screens > 0 && !sdl::SDL_HasMouse();
+    app.shared.by_touch = touch_screens > 0 && !sdl::SDL_HasMouse();
   }
   int result = 0;
   {
@@ -714,7 +714,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
             }
             break;
           case sdl::SDL_EVENT_MOUSE_BUTTON_DOWN:
-            app.by_touch = event.button.which == sdl::kTouchMouseid;
+            app.shared.by_touch = event.button.which == sdl::kTouchMouseid;
             // Where it may be a long press, the press is held back until it
             // is known not to be: given on a move or a lift, never where it
             // becomes the right press -- given at once, it began a selection
@@ -743,7 +743,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
                 skiff::scene::pointer::up{event.button.x * to_scene, event.button.y * to_scene, event.button.button});
             break;
           case sdl::SDL_EVENT_FINGER_DOWN:
-            app.by_touch = true;
+            app.shared.by_touch = true;
             fingers[event.tfinger.fingerID] = {event.tfinger.x * last_width, event.tfinger.y * last_height};
             if (fingers.size() == 2) {
               pinch_from = pinch_distance();

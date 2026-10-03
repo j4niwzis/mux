@@ -45,79 +45,6 @@ void app::apply(const request::close_person_info&) {
   root().close_person();
 }
 
-// The input's emoji panel: opened over the chat above its button, or closed.
-void app::apply(const request::toggle_emoji&) {
-  if (root().emoji_open()) {
-    root().close_emoji();
-    return;
-  }
-  emoji_into_ = request::writing::chat{};
-  const auto at = root().main().line.parts.input.parts.emoji.bounds();
-  this->open_emoji_at(at.fRight, at.fTop);
-}
-// The thread's: the same panel, over its button, writing in its field.
-void app::apply(const request::toggle_thread_emoji&) {
-  if (root().emoji_open()) {
-    root().close_emoji();
-    return;
-  }
-  emoji_into_ = request::writing::thread{};
-  const auto at = root().main().parts.threads.parts.line.parts.input.parts.emoji.bounds();
-  this->open_emoji_at(at.fRight, at.fTop);
-}
-void app::open_emoji_at(float right, float top) {
-  const auto chosen = shared.managed();
-  const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
-  mux::ui::chat_emotes() = chat ? chat->emotes : std::vector<mux::emote>{};
-  mux::ui::chat_stickers() = chat ? chat->stickers : std::vector<mux::emote>{};
-  // Under a finger, in place of the on-screen keyboard, as Telegram's: the
-  // field let go of, the keyboard goes down; tapping the field again closes
-  // the panel and brings the keyboard back.
-  if (by_touch)
-    scene.clearFocus();
-  root().open_emoji(right, top - 6.0f);
-}
-void app::apply(const request::close_emoji&) { root().close_emoji(); }
-
-// Threads, as Element's panel: opened in place of the chat's info, the
-// room's listed by the server as it opens; one opened, its answers fetched
-// (and its root, where it is not held); an answer sent in the one open --
-// falling back, for clients without threads, to its latest event.
-void app::apply(const request::toggle_threads&) {
-  auto& screen = root().main();
-  if (screen.toggle_threads() && screen.chosen && !shared.demo())
-    net->list_threads(*screen.chosen);
-  this->refresh();
-}
-void app::apply(const request::open_thread& one) {
-  auto& screen = root().main();
-  if (!screen.chosen)
-    return;
-  screen.open_thread(one.root);
-  if (!shared.demo()) {
-    net->load_thread(*screen.chosen, one.root);
-    if (const mux::conversation* chat = model->find(*screen.chosen);
-        chat && !chat->quoted.contains(one.root) &&
-        std::ranges::find(chat->timeline, one.root, &mux::message::id) == chat->timeline.end())
-      net->fetch_quoted(*screen.chosen, one.root);
-  }
-  this->refresh();
-}
-void app::apply(const request::close_thread&) {
-  root().main().close_thread();
-  this->refresh();
-}
-void app::apply(const request::send_in_thread& one) {
-  const auto chosen = shared.managed();
-  const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
-  if (!chat || shared.demo())
-    return;
-  std::string latest = one.root;
-  if (const auto found = chat->threads.find(one.root); found != chat->threads.end() && !found->second.empty())
-    latest = found->second.back().id;
-  net->send_in_thread(*chosen, one.text, one.root, latest, one.reply_to);
-}
-
 void app::apply(const request::copy_text& one) {
   skiff::scene::setClipboardText(one.text);
   root().close_text_menu();
@@ -125,26 +52,6 @@ void app::apply(const request::copy_text& one) {
 
 // The developer tools, for the chat being read.
 void app::apply(const request::close_dialog&) { root().close_dialog(); }
-// An emoji picked: into what is written, where the caret is; the input keeps
-// the keys.
-void app::apply(const request::insert_emoji& one) {
-  auto& screen = root().main();
-  // A custom emoji: its picture in the line, as the message will show it,
-  // sent as its shortcode.
-  const auto put = [&](auto& field) {
-    if (one.picture.empty())
-      field.insertText(one.text);
-    else
-      field.insertAtom("\u2003", one.picture, one.text, true);
-    // Under a finger the panel stands where the keyboard would: focused,
-    // the field brought the keyboard up over the panel at each emoji.
-    if (!by_touch)
-      scene.focus(field);
-  };
-  splice::visit(splice::overloaded{[&](request::writing::chat) { put(screen.line.field); },
-                                   [&](request::writing::thread) { put(screen.parts.threads.parts.line.parts.input.parts.field); }},
-                emoji_into_);
-}
 
 void app::apply(const request::not_implemented& one) { root().show_notice(one.what); }
 

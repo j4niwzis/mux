@@ -388,12 +388,6 @@ if(MUX_UI)
   target_link_libraries(mux_modules PUBLIC SDL3::SDL3 skiff::skiff skiff::widgets Opus::opus Vorbis::vorbisfile
     ${mux_video_libraries})
   add_executable(mux src/main.cc)
-  # The program's own units -- its many partitions, each importing all of
-  # the UI and the accounts -- one at a time: four at once ran a
-  # 16 GB runner out of memory near the end of the build, and the runner
-  # was shut down ("received a shutdown signal") with nothing said.
-  set_property(GLOBAL APPEND PROPERTY JOB_POOLS mux_heavy=1)
-  set_property(TARGET mux PROPERTY JOB_POOL_COMPILE mux_heavy)
   # Outside a release build, with walks erased: the big subtrees' tables and
   # walks each in a unit of its own, not all in scene.cc.
   set(mux_erased $<AND:$<BOOL:${SKIFF_ERASE_WALKS}>,$<NOT:$<CONFIG:Release>>>)
@@ -438,9 +432,7 @@ if(MUX_UI)
   # The program's parts and what they share -- its network, its demo, what it
   # keeps on disk, the requests of its window, the names it reads, each part
   # of what it does, the protocols' glue: module units that import the UI and
-  # the accounts and instantiate little, a target of their own built side by
-  # side -- four at once at most -- before the program's own heavy units
-  # below, which go one at a time.
+  # the accounts and instantiate little -- a target of their own.
   add_library(mux_app OBJECT)
   target_sources(mux_app PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
     FILES src/app/sink.cc src/proto/accounts.cc src/proto/xmpp/demo.cc src/proto/matrix/demo.cc src/proto/demo.cc src/app/network.cc src/app/workers.cc src/app/demo.cc
@@ -450,8 +442,6 @@ if(MUX_UI)
           src/app/local_data.cc src/app/marks.cc src/app/history.cc src/proto/matrix/app.cc src/proto/app.cc)
   target_compile_definitions(mux_app PUBLIC $<${mux_split}:MUX_SPLIT_ACCOUNTS>)
   target_link_libraries(mux_app PUBLIC mux_modules)
-  set_property(GLOBAL APPEND PROPERTY JOB_POOLS mux_parts=4)
-  set_property(TARGET mux_app PROPERTY JOB_POOL_COMPILE mux_parts)
   # The program itself: its module, beside its implementation units.
   target_sources(mux PRIVATE FILE_SET CXX_MODULES BASE_DIRS src FILES src/app/program.cc)
   # What the program does, a part each: the module's implementation units.
@@ -461,6 +451,16 @@ if(MUX_UI)
     src/app/program_settings.cc src/app/program_sending.cc
     src/app/scene.cc)
   target_link_libraries(mux PRIVATE mux_app mux_modules)
+  # How many of the program's units -- its parts and its own, each importing
+  # all of the UI and the accounts -- compile at once: as many as the build
+  # runs, by default. CI sets 1: four at once ran its 16 GB runner out of
+  # memory near the end of the build, and it was shut down ("received a
+  # shutdown signal") with nothing said.
+  set(MUX_PROGRAM_JOBS 0 CACHE STRING "How many of the program's units compile at once; 0: as many as the build runs")
+  if(MUX_PROGRAM_JOBS GREATER 0)
+    set_property(GLOBAL APPEND PROPERTY JOB_POOLS mux_program=${MUX_PROGRAM_JOBS})
+    set_property(TARGET mux mux_app PROPERTY JOB_POOL_COMPILE mux_program)
+  endif()
 endif()
 
 add_executable(mux-cli src/proto/cli.cc)

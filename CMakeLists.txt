@@ -435,19 +435,32 @@ if(MUX_UI)
     src/app/walks_composer.cc src/app/walks_info.cc src/app/walks_accounts.cc src/app/walks_drawer.cc
     src/app/walks_settings.cc src/app/walks_manage.cc src/app/walks_boxes.cc src/app/walks_popups.cc src/app/walks_emoji.cc
     PROPERTIES COMPILE_OPTIONS "${MUX_WALKS_OPTIMIZE}")
-  # The program's own parts: its network, its demo, what it keeps on disk,
-  # the requests of its window, the names it reads, and the program itself.
-  target_sources(mux PRIVATE FILE_SET CXX_MODULES BASE_DIRS src
-    FILES src/app/sink.cc src/proto/accounts.cc src/proto/xmpp/demo.cc src/proto/matrix/demo.cc src/proto/demo.cc src/app/network.cc src/app/workers.cc src/app/demo.cc src/app/store.cc src/app/requests.cc src/app/words.cc
-          src/app/kept.cc src/app/services.cc src/app/search.cc src/app/pictures.cc src/app/drafts.cc src/app/reading.cc src/app/outbox.cc src/app/settings.cc src/app/menu.cc src/app/notices.cc src/app/verification.cc src/app/proxies.cc src/app/packs.cc src/app/rooms.cc src/app/room_card.cc src/app/preferences.cc src/app/manage.cc src/app/looks.cc src/app/threads.cc src/app/emoji.cc src/app/accounts.cc src/app/local_data.cc src/app/marks.cc src/app/history.cc
-          src/proto/matrix/app.cc src/proto/app.cc src/app/program.cc)
+  # The program's parts and what they share -- its network, its demo, what it
+  # keeps on disk, the requests of its window, the names it reads, each part
+  # of what it does, the protocols' glue: module units that import the UI and
+  # the accounts and instantiate little, a target of their own built side by
+  # side -- four at once at most -- before the program's own heavy units
+  # below, which go one at a time.
+  add_library(mux_app OBJECT)
+  target_sources(mux_app PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
+    FILES src/app/sink.cc src/proto/accounts.cc src/proto/xmpp/demo.cc src/proto/matrix/demo.cc src/proto/demo.cc src/app/network.cc src/app/workers.cc src/app/demo.cc
+          src/app/store.cc src/app/requests.cc src/app/words.cc src/app/kept.cc src/app/services.cc src/app/search.cc src/app/pictures.cc src/app/drafts.cc
+          src/app/reading.cc src/app/outbox.cc src/app/settings.cc src/app/menu.cc src/app/notices.cc src/app/verification.cc src/app/proxies.cc src/app/packs.cc
+          src/app/rooms.cc src/app/room_card.cc src/app/preferences.cc src/app/manage.cc src/app/looks.cc src/app/threads.cc src/app/emoji.cc src/app/accounts.cc
+          src/app/local_data.cc src/app/marks.cc src/app/history.cc src/proto/matrix/app.cc src/proto/app.cc)
+  target_compile_definitions(mux_app PUBLIC $<${mux_split}:MUX_SPLIT_ACCOUNTS>)
+  target_link_libraries(mux_app PUBLIC mux_modules)
+  set_property(GLOBAL APPEND PROPERTY JOB_POOLS mux_parts=4)
+  set_property(TARGET mux_app PROPERTY JOB_POOL_COMPILE mux_parts)
+  # The program itself: its module, beside its implementation units.
+  target_sources(mux PRIVATE FILE_SET CXX_MODULES BASE_DIRS src FILES src/app/program.cc)
   # What the program does, a part each: the module's implementation units.
   target_sources(mux PRIVATE
     src/app/program_core.cc src/app/program_media.cc
     src/app/program_chats.cc src/app/program_links.cc src/app/program_accounts.cc
     src/app/program_settings.cc src/app/program_sending.cc
     src/app/scene.cc)
-  target_link_libraries(mux PRIVATE mux_modules)
+  target_link_libraries(mux PRIVATE mux_app mux_modules)
 endif()
 
 add_executable(mux-cli src/proto/cli.cc)

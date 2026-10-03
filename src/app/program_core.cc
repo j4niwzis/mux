@@ -210,9 +210,14 @@ void app::woken() {
   // A room joined from a link: opened once it is here.
   if (joining)
     if (const auto found = mux::logic::chat_of(*model, *joining)) {
-      const auto room = std::exchange(joining, std::nullopt);
-      if (room->event)
-        this->go_to_linked(*found, *room->event);
+      const auto link = *std::exchange(joining, std::nullopt);
+      // A message in it, where the link is to one.
+      const auto event = splice::visit(
+          splice::overloaded{[](const mux::logic::mention::place& one) { return one.event; },
+                             [](const auto&) { return std::optional<std::string>(); }},
+          mux::logic::mention_in(link));
+      if (event)
+        this->go_to_linked(*found, *event);
       else
         this->open_chat(*found, std::nullopt);
     }

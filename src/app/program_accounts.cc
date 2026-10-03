@@ -426,7 +426,7 @@ void app::apply(const request::join_directory_room& one) {
   std::vector<std::string> via;
   if (!one.server.empty())
     via.push_back(one.server);
-  joining = mux::proto::matrix::link::room{one.room, std::nullopt, via};
+  joining = mux::logic::link_of_id(one.room);
   net->join(*by, one.room, via);
   root().close_explore();
 }

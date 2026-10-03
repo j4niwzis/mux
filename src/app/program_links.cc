@@ -85,11 +85,7 @@ void app::follow(const mux::logic::link_t& where) {
                                // Its card first, as a person's: filled when
                                // its server answers, in woken(), and joined
                                // from there.
-                               previewing = room_looked_up{
-                                   step, splice::visit(splice::overloaded{
-                                                        [](const mux::proto::matrix::link::room& room) { return std::optional(room); },
-                                                        [](const auto&) { return std::optional<mux::proto::matrix::link::room>(); }},
-                                                    where)};
+                               previewing = room_looked_up{step, where};
                                root().open_room_card(step.room, mux::room_preview{.note = "Looking it up…"});
                                net->preview_room(step.by, step.room, step.via);
                              }},

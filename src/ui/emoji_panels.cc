@@ -3,6 +3,7 @@
 export module mux.ui:emoji_panels;
 
 import std;
+import mux.logic.text;
 import splice;
 import skia;
 import skiff.paint;
@@ -202,10 +203,7 @@ struct sticker_grid : nodes::Stack {
       this->show_all();
       return;
     }
-    const auto lower = [](std::string_view text) {
-      return text | std::views::transform([](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); }) |
-             std::ranges::to<std::string>();
-    };
+    constexpr auto lower = mux::logic::folded;
     const std::string wanted = lower(query);
     const std::vector<emote> found = kept_->chat_stickers | std::views::filter([&](const emote& one) {
                                        return lower(one.shortcode).contains(wanted) || lower(one.body).contains(wanted) ||

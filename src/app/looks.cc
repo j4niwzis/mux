@@ -7,6 +7,7 @@
 export module mux.app.looks;
 
 import std;
+import mux.bytes;
 import splice;
 import skia;
 import mux.core;
@@ -103,10 +104,10 @@ class looks_part {
   // The picture chosen for a background: copied into mux's data, by a name
   // its bytes give, and set at the level it was chosen for.
   void picture_chosen(const mux::choice_level_t& level, const std::string& path) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in)
+    auto bytes_read = mux::bytes::file_text(path);
+    if (!bytes_read)
       return;
-    std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    std::string bytes = std::move(*bytes_read);
     const auto type = mux::media::picture_of(bytes);
     if (!type || !skia::decodeImage(bytes.data(), bytes.size())) {
       s_->root().show_message("Chat background", "That file is not a picture mux can show.");

@@ -8,6 +8,8 @@
 export module mux.preview;
 
 import std;
+import alef.utf;
+import mux.bytes;
 import mux.core;
 import mux.net;
 import mux.http;
@@ -66,24 +68,11 @@ struct page {
 [[nodiscard]] inline std::string unescaped(std::string_view text) {
   constexpr std::array<std::pair<std::string_view, std::string_view>, 6> named{
       {{"amp;", "&"}, {"lt;", "<"}, {"gt;", ">"}, {"quot;", "\""}, {"apos;", "'"}, {"nbsp;", " "}}};
+  // A code point as UTF-8 (alef): none where it is past Unicode's.
   const auto utf8 = [](std::uint32_t c) {
-    std::string out;
-    if (c < 0x80) {
-      out += static_cast<char>(c);
-    } else if (c < 0x800) {
-      out += static_cast<char>(0xC0 | (c >> 6));
-      out += static_cast<char>(0x80 | (c & 0x3F));
-    } else if (c < 0x10000) {
-      out += static_cast<char>(0xE0 | (c >> 12));
-      out += static_cast<char>(0x80 | ((c >> 6) & 0x3F));
-      out += static_cast<char>(0x80 | (c & 0x3F));
-    } else if (c < 0x110000) {
-      out += static_cast<char>(0xF0 | (c >> 18));
-      out += static_cast<char>(0x80 | ((c >> 12) & 0x3F));
-      out += static_cast<char>(0x80 | ((c >> 6) & 0x3F));
-      out += static_cast<char>(0x80 | (c & 0x3F));
-    }
-    return out;
+    const std::u32string point = c < 0x110000 ? std::u32string(1, static_cast<char32_t>(c)) : std::u32string();
+    return point | alef::as_utf8 | std::views::transform([](char8_t unit) { return std::bit_cast<char>(unit); }) |
+           std::ranges::to<std::string>();
   };
   std::string out;
   out.reserve(text.size());
@@ -163,10 +152,7 @@ inline constexpr std::array<std::pair<std::string_view, std::string facts::*>, 6
 
 // The page's head read for its preview: none where it says nothing.
 [[nodiscard]] inline std::optional<link_preview> read_page(std::string_view html, std::string_view at) {
-  const std::string lowered = html | std::views::transform([](char c) {
-                                return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-                              }) |
-                              std::ranges::to<std::string>();
+  const std::string lowered = mux::bytes::lower_text(html);
   const std::string_view lower = lowered;
   const std::size_t head_end = std::min(lower.find("</head"), lower.size());
   facts read;
@@ -184,10 +170,7 @@ inline constexpr std::array<std::pair<std::string_view, std::string facts::*>, 6
     const auto content = attribute(tag, tag_lower, "content");
     if (!name || !content)
       continue;
-    const std::string key = *name | std::views::transform([](char c) {
-                              return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-                            }) |
-                            std::ranges::to<std::string>();
+    const std::string key = mux::bytes::lower_text(*name);
     if (const auto field = std::ranges::find(kTags, key, [](const auto& one) { return one.first; });
         field != kTags.end() && (read.*(field->second)).empty())
       read.*(field->second) = *content;

@@ -420,23 +420,21 @@ class model {
     return made;
   }
 
-  const conversation* find(const conversation_id& id) const {
-    const auto found = accounts_.find(id.account);
-    if (found == accounts_.end())
-      return nullptr;
+  // A chat, where the model has it: as const as the model it is asked of.
+  template <class Self>
+  [[nodiscard]] auto* chat_in(this Self& self, const conversation_id& id) {
+    using found_t = std::conditional_t<std::is_const_v<Self>, const conversation, conversation>;
+    const auto found = self.accounts_.find(id.account);
+    if (found == self.accounts_.end())
+      return static_cast<found_t*>(nullptr);
     const auto in = found->second.conversations.find(id.id);
-    return in == found->second.conversations.end() ? nullptr : &in->second;
+    return in == found->second.conversations.end() ? static_cast<found_t*>(nullptr) : &in->second;
   }
+  const conversation* find(const conversation_id& id) const { return this->chat_in(id); }
   // For a protocol's own change (changed_in): a chat it changes, where the
   // model has it, and a message in it -- a room's part, a poll's counts in a
   // message's part.
-  [[nodiscard]] conversation* chat_to_change(const conversation_id& id) {
-    const auto found = accounts_.find(id.account);
-    if (found == accounts_.end())
-      return nullptr;
-    const auto in = found->second.conversations.find(id.id);
-    return in == found->second.conversations.end() ? nullptr : &in->second;
-  }
+  [[nodiscard]] conversation* chat_to_change(const conversation_id& id) { return this->chat_in(id); }
   [[nodiscard]] message* message_to_change(const conversation_id& in, std::string_view id) {
     conversation* chat = this->chat_to_change(in);
     if (chat == nullptr)

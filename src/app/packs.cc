@@ -7,6 +7,7 @@
 export module mux.app.packs;
 
 import std;
+import mux.bytes;
 import splice;
 import skia;
 import mux.core;
@@ -73,10 +74,10 @@ class packs_part {
     if (!account_ || s_->demo())
       return true;
     for (const std::string& path : paths) {
-      std::ifstream in(path, std::ios::binary);
-      if (!in)
+      auto bytes_read = mux::bytes::file_text(path);
+      if (!bytes_read)
         continue;
-      std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+      std::string bytes = std::move(*bytes_read);
       const auto type = mux::media::picture_of(bytes);
       if (!type)
         continue;

@@ -329,8 +329,7 @@ class vault {
     return how;
   }
   [[nodiscard]] std::optional<header> header_read() const {
-    std::ifstream in(header_file_, std::ios::binary);
-    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    const std::string text = mux::bytes::file_text(header_file_).value_or(std::string());
     auto how = knot::try_read<header>(text);
     if (!how)
       return std::nullopt;
@@ -360,10 +359,10 @@ class vault {
   }
   [[nodiscard]] std::optional<std::string> read_whole(const std::filesystem::path& path, bool plain_too) const {
     const std::scoped_lock held(lock_);
-    std::ifstream in(path, std::ios::binary);
-    if (!in)
+    auto text_read = mux::bytes::file_text(path);
+    if (!text_read)
       return std::nullopt;
-    std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    std::string text = std::move(*text_read);
     if (!text.starts_with(detail::kMagic)) {
       if (key_ && !plain_too && !resealing_ && !text.empty())
         return std::nullopt;
@@ -493,10 +492,10 @@ class vault {
       out.whole.emplace_back(path, std::move(*text));
     }
     for (const auto& path : files.lines) {
-      std::ifstream in(path, std::ios::binary);
-      if (!in)
+      auto text_read = mux::bytes::file_text(path);
+      if (!text_read)
         continue;
-      const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+      const std::string text = std::move(*text_read);
       auto opened = text | std::views::split('\n') |
                     std::views::transform([](auto&& line) { return std::string_view(line.begin(), line.end()); }) |
                     std::views::filter([](std::string_view line) { return !line.empty(); }) |
@@ -552,9 +551,7 @@ class vault {
   bool going_off_ = false;
   // The key a passphrase makes, where it is this vault's.
   [[nodiscard]] std::optional<key_t> key_for(std::string_view passphrase) const {
-    std::ifstream in(header_file_, std::ios::binary);
-    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    auto how = knot::try_read<header>(text);
+    const std::optional<header> how = this->header_read();
     if (!how || !detail::sane(*how))
       return std::nullopt;
     const auto salt = detail::from_base64(how->salt);

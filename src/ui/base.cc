@@ -3,6 +3,7 @@
 export module mux.ui:base;
 
 import std;
+import mux.bytes;
 import splice;
 import skia;
 import skiff.paint;
@@ -206,8 +207,7 @@ inline skia::Sp<skia::SkImage> wallpaper_picture(const std::string& path) {
   static std::map<std::string, skia::Sp<skia::SkImage>> read;
   if (const auto found = read.find(path); found != read.end())
     return found->second;
-  std::ifstream in(path, std::ios::binary);
-  std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  std::string bytes = mux::bytes::file_text(path).value_or(std::string());
   auto image = bytes.empty() ? skia::Sp<skia::SkImage>() : skia::decodeImage(bytes.data(), bytes.size());
   read.insert_or_assign(path, image);
   return image;

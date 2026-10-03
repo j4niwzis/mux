@@ -3,6 +3,7 @@
 export module mux.ui:info_explore;
 
 import std;
+import mux.logic.text;
 import splice;
 import skia;
 import skiff.paint;
@@ -207,10 +208,7 @@ struct explore_box : nodes::Stack {
   }
   // What it listed, whose name, topic or address has what is typed.
   void filter(const std::string& typed) {
-    const auto lower = [](std::string_view text) {
-      return text | std::views::transform([](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); }) |
-             std::ranges::to<std::string>();
-    };
+    constexpr auto lower = mux::logic::folded;
     const std::string wanted = lower(typed);
     const std::vector<directory_room> found =
         listed | std::views::filter([&](const directory_room& one) {

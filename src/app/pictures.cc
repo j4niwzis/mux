@@ -6,6 +6,7 @@
 export module mux.app.pictures;
 
 import std;
+import mux.bytes;
 import mux.vault;
 import splice;
 import skia;
@@ -476,14 +477,12 @@ class pictures_part {
   // one; touched, so it comes first.
   void save_gif(const std::string& source) {
     const auto kept = kept_file(media_use::whole{}, source);
-    std::ifstream file;
-    if (kept)
-      file.open(*kept, std::ios::binary);
-    if (!file.is_open()) {
+    auto bytes_read = kept ? mux::bytes::file_text(*kept) : std::nullopt;
+    if (!bytes_read) {
       s_->root().show_message("GIFs", "The GIF has not loaded yet. Save it once it plays.");
       return;
     }
-    std::string bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    std::string bytes = std::move(*bytes_read);
     std::error_code failed;
     std::filesystem::create_directories(gifs(), failed);
     std::ofstream(gifs() / mux::config::file_name_of(source), std::ios::binary) << bytes;
@@ -506,8 +505,7 @@ class pictures_part {
       if (mux::ui::animations().has(key) || mux::ui::whole_pictures().has(key) || !gifs_decoding_.insert(key).second)
         continue;
       s_->work->run([path, key, scene]() -> workers::done_t {
-        std::ifstream in(path, std::ios::binary);
-        std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        std::string bytes = mux::bytes::file_text(path).value_or(std::string());
         auto frames = skia::decodeFrames(bytes.data(), bytes.size());
         return [frames = std::move(frames), key, scene]() mutable {
           if (frames.size() > 1)
@@ -582,10 +580,7 @@ class pictures_part {
     const auto kept = kept_file(media_use::whole{}, source);
     if (!kept)
       return std::nullopt;
-    std::ifstream file{*kept, std::ios::binary};
-    if (!file.is_open())
-      return std::nullopt;
-    return std::string((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    return mux::bytes::file_text(*kept);
   }
   // Bytes written where the dialog said, and said.
   void write_chosen(const std::string& bytes, const std::string& path) {
@@ -661,10 +656,10 @@ class pictures_part {
     const auto where = kept_file(use, source);
     if (!where)
       return false;
-    std::ifstream file{*where, std::ios::binary};
-    if (!file)
+    auto bytes_read = mux::bytes::file_text(*where);
+    if (!bytes_read)
       return false;
-    std::string bytes((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    std::string bytes = std::move(*bytes_read);
     std::error_code failed;
     std::filesystem::last_write_time(*where, std::filesystem::file_time_type::clock::now(), failed);  // used now
     this->take(change::avatar_loaded{use, source, std::move(bytes)}, false);
@@ -753,10 +748,7 @@ class pictures_part {
         ".exe", ".com", ".bat", ".cmd", ".scr", ".pif", ".msi", ".msp", ".lnk", ".url", ".js",   ".jse",
         ".vbs", ".vbe", ".wsf", ".wsh", ".ps1", ".psm1", ".hta", ".cpl", ".reg", ".jar", ".desktop", ".sh",
         ".run", ".appimage", ".command", ".app", ".pkg", ".dmg", ".apk", ".py", ".pl", ".deb"};
-    const std::string extension = name.extension().string() | std::views::transform([](char c) {
-                                    return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-                                  }) |
-                                  std::ranges::to<std::string>();
+    const std::string extension = mux::bytes::lower_text(name.extension().string());
     return std::ranges::contains(kinds, std::string_view(extension));
   }
   void save_download(const std::string& bytes, std::string name, bool open) {

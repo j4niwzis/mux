@@ -5,6 +5,7 @@
 export module mux.app.outbox;
 
 import std;
+import mux.bytes;
 import splice;
 import skia;
 import mux.core;
@@ -260,10 +261,10 @@ class outbox_part {
     const auto& chosen = s_->root().main().chosen;
     if (!chosen)
       return;
-    std::ifstream in(one.path, std::ios::binary);
-    if (!in)
+    auto bytes_read = mux::bytes::file_text(one.path);
+    if (!bytes_read)
       return;
-    std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    std::string bytes = std::move(*bytes_read);
     std::string name = std::filesystem::path(one.path).filename().string();
     if (!name.contains('.'))
       name += ".gif";
@@ -319,10 +320,10 @@ class outbox_part {
     if (dropped && to_send_.empty())
       files_thread_ = s_->root().main().writing_in_thread() ? s_->root().main().thread_open() : std::nullopt;
     for (const std::string& path : paths) {
-      std::ifstream in(path, std::ios::binary);
-      if (!in)
+      auto bytes_read = mux::bytes::file_text(path);
+      if (!bytes_read)
         continue;
-      std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+      std::string bytes = std::move(*bytes_read);
       file one{logic::prepared_of(std::move(bytes), std::filesystem::path(path).filename().string(), dropped, *settings_),
                std::format("mux-file-{}-{}", std::chrono::system_clock::now().time_since_epoch().count(), ++made_)};
       if (one.as.picture)

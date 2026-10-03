@@ -5,6 +5,7 @@
 export module mux.app.search;
 
 import std;
+import mux.logic.text;
 import mux.core;
 import mux.ui;
 import mux.app.store;
@@ -95,10 +96,7 @@ class search_part {
   // their words around what was asked.
   void list() {
     const conversation* chat = s_->model->find(searching_->in);
-    const auto lower = [](std::string_view text) {
-      return text | std::views::transform([](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); }) |
-             std::ranges::to<std::string>();
-    };
+    constexpr auto lower = mux::logic::folded;
     const std::string asked = lower(searching_->query);
     std::vector<ui::search_result> rows;
     rows.reserve(searching_->messages.size());

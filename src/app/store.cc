@@ -3,6 +3,7 @@
 export module mux.app.store;
 
 import std;
+import mux.bytes;
 import knot;
 import mux.vault;
 import mux.core;
@@ -171,10 +172,10 @@ class message_store {
   // Nothing where no file was kept: the history before gaps were kept is
   // not known to be whole.
   std::optional<gaps_t> gaps(const mux::conversation_id& in) const {
-    std::ifstream file(gaps_file_of(in), std::ios::binary);
-    if (!file)
+    auto text_read = mux::bytes::file_text(gaps_file_of(in));
+    if (!text_read)
       return std::nullopt;
-    const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    const std::string text = std::move(*text_read);
     auto read = knot::try_read<gaps_t>(std::string_view(text));
     return read ? std::optional<gaps_t>(std::move(*read)) : std::optional<gaps_t>(gaps_t{});
   }

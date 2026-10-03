@@ -3,6 +3,7 @@
 export module mux.ui:conversations_screen;
 
 import std;
+import mux.logic.text;
 import splice;
 import skia;
 import skiff.paint;
@@ -370,12 +371,7 @@ struct conversations_screen : nodes::Stack {
     if (*query == mention_query && chat.parts.mentions.visible())
       return;
     mention_query = *query;
-    const auto lower = [](std::string_view in) {
-      std::string out(in);
-      for (char& c : out)
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-      return out;
-    };
+    constexpr auto lower = mux::logic::folded;
     const std::string wanted = lower(*query);
     mention_matches.clear();
     for (const member& one : in->members) {

@@ -10,6 +10,29 @@ import std;
 
 export namespace mux::bytes {
 
+// What a file holds, whole: none where it cannot be opened. Whole, as its
+// readers keep it or hand a pointer to it on (a decoder, a parser).
+[[nodiscard]] inline std::optional<std::string> file_text(const std::filesystem::path& path) {
+  std::ifstream in(path, std::ios::binary);
+  if (!in)
+    return std::nullopt;
+  return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+
+// Text in lower case, as ASCII has it -- what a case-blind match folds:
+// lazily, nothing copied; and as a string, where one is kept.
+inline constexpr auto lower_of = [](char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c; };
+[[nodiscard]] constexpr auto lowered(std::string_view text) { return text | std::views::transform(lower_of); }
+inline constexpr auto lower_text = [](std::string_view text) { return lowered(text) | std::ranges::to<std::string>(); };
+// And made a key: a letter or digit in lower case, anything else '_'.
+inline constexpr auto key_text = [](std::string_view text) {
+  const auto key_of = [](char c) {
+    const char low = lower_of(c);
+    return (low >= 'a' && low <= 'z') || (low >= '0' && low <= '9') ? low : '_';
+  };
+  return text | std::views::transform(key_of) | std::ranges::to<std::string>();
+};
+
 inline constexpr auto to_byte = [](char c) { return std::bit_cast<std::uint8_t>(c); };
 inline constexpr auto to_char = [](std::uint8_t b) { return std::bit_cast<char>(b); };
 

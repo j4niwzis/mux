@@ -3,6 +3,7 @@
 export module mux.ui:names;
 
 import std;
+import mux.logic.text;
 import splice;
 import skia;
 import skiff.paint;
@@ -109,10 +110,7 @@ export namespace mux::ui {
 // someone else looked like Alice's (as Element tells them apart).
 [[nodiscard]] inline std::string sender_name(const conversation& in, std::string_view sender) {
   const std::string name = called(in, sender);
-  const auto folded = [](std::string_view text) {
-    return text | std::views::transform([](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); }) |
-           std::ranges::to<std::string>();
-  };
+  constexpr auto folded = mux::logic::folded;
   const std::string mine = folded(name);
   const bool shared = std::ranges::any_of(in.members, [&](const member& one) {
     return one.id != sender && folded(called(one)) == mine;

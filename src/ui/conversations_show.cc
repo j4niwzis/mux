@@ -3,6 +3,7 @@
 export module mux.ui:conversations_show;
 
 import std;
+import mux.logic.text;
 import splice;
 import skia;
 import skiff.paint;
@@ -645,11 +646,7 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
   auto& rows = std::get<0>(std::get<0>(list.fChildren).fChildren);
   std::vector<const conversation*> chats;
   // What is searched for, in any case: in a name or an address.
-  const auto lower = [](std::string text) {
-    for (char& c : text)
-      c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    return text;
-  };
+  constexpr auto lower = mux::logic::folded;
   const std::string wanted = lower(side.search.field.text());
   // The folders the account has: its spaces, then its groups.
   std::vector<std::pair<std::string, folder_t>> folders{{"All", folder::all{}}};

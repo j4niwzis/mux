@@ -4,6 +4,7 @@ export module mux.proto.matrix.client:sync_keys;
 
 import mux.vault;
 import std;
+import mux.bytes;
 import mux.proto.matrix.crypto;
 import splice;
 import knot;
@@ -135,13 +136,12 @@ void account<Sink>::import_room_keys(std::string path, std::string passphrase) {
       sink_(change::refused{id_, "Not imported: encryption is not running for this account."});
       return;
     }
-    std::ifstream in(path, std::ios::binary);
-    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    if (!in && text.empty()) {
+    const std::optional<std::string> read = mux::bytes::file_text(path);
+    if (!read) {
       sink_(change::refused{id_, std::format("Not imported: {} could not be read.", path)});
       return;
     }
-    const auto sessions = crypto::import_file(text, passphrase);
+    const auto sessions = crypto::import_file(*read, passphrase);
     if (!sessions) {
       sink_(change::refused{id_, "Not imported: not a key file, the passphrase is another, or the file was changed."});
       return;

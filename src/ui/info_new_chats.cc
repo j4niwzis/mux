@@ -3,6 +3,7 @@
 export module mux.ui:info_new_chats;
 
 import std;
+import mux.logic.text;
 import splice;
 import skia;
 import skiff.paint;
@@ -105,12 +106,7 @@ struct forward_box : nodes::Stack {
   }
   // The chats whose names have what is typed, in any case.
   void find(std::string_view text) {
-    const auto lower = [](std::string_view s) {
-      std::string out(s);
-      for (char& c : out)
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-      return out;
-    };
+    constexpr auto lower = mux::logic::folded;
     const std::string wanted = lower(text);
     auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
     rows.clear();
@@ -257,12 +253,7 @@ struct start_chat_box : nodes::Stack {
                                                     [](const auto&) { return false; }},
                                  logic::mention_in(*link));
   }
-  [[nodiscard]] static std::string lower(std::string_view text) {
-    std::string out(text);
-    for (char& c : out)
-      c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    return out;
-  }
+  static constexpr auto lower = mux::logic::folded;
   void search(std::string_view text) {
     query = std::string(text);
     found.clear();

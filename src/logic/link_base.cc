@@ -7,6 +7,7 @@
 export module mux.logic.link_base;
 
 import std;
+import mux.bytes;
 import splice;
 import mux.core;
 
@@ -47,10 +48,7 @@ struct link_list {};
   const auto colon = url.find(':');
   if (colon == std::string_view::npos)
     return false;
-  const std::string scheme = url.substr(0, colon + 1) | std::views::transform([](char c) {
-                               return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-                             }) |
-                             std::ranges::to<std::string>();
+  const std::string scheme = mux::bytes::lower_text(url.substr(0, colon + 1));
   return std::ranges::contains(allowed, std::string_view(scheme));
 }
 

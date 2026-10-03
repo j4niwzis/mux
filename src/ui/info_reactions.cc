@@ -52,6 +52,17 @@ struct reaction_entry {
 // a row for each -- the person's avatar and name over what they reacted
 // with and when. A press on one answers it: the reaction is an event, and a
 // message can reply to it.
+// A list dialog's rows, under its top bar: the box as high as it is, the
+// list scrolling in what is left of it, its rows one under another.
+template <class List>
+[[nodiscard]] auto& listed_rows(nodes::Stack& box, List& list, float height) {
+  box.fState.apply({.fillX = true, .height = height, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
+  list.apply({.fillX = true, .grow = scene::axes::kY});
+  auto& flow = std::get<0>(list.fChildren);
+  flow.apply({.fillX = true, .autoSize = scene::axes::kY});
+  return std::get<0>(flow.fChildren);
+}
+
 template <class Actions>
 struct reactions_box : nodes::Stack {
   // On the chat's colour: its bubbles, as in the chat.
@@ -139,11 +150,7 @@ struct reactions_box : nodes::Stack {
 
   reactions_box(const ui_needs<Actions>& n, const conversation& in, const std::vector<reaction_entry>& entries, const model* now)
       : parts{.top = top_bar("Reactions", {}, {n.actions}, false, true)} {
-    fState.apply({.fillX = true, .height = 420.0f, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
-    parts.list.apply({.fillX = true, .grow = scene::axes::kY});
-    auto& flow = std::get<0>(parts.list.fChildren);
-    flow.apply({.fillX = true, .autoSize = scene::axes::kY});
-    auto& rows = std::get<0>(flow.fChildren);
+    auto& rows = listed_rows(*this, parts.list, 420.0f);
     rows.reserve(entries.size());
     for (std::size_t i = 0; i < entries.size(); ++i)
       rows.emplace_back(n, in, entries[i], i == 0 || entries[i - 1].who != entries[i].who,
@@ -220,11 +227,7 @@ struct marks_box : nodes::Stack {
                                                    [](mark_kind::reaction) { return std::string("Reactions"); }},
                                 kind),
                              {}, {n.actions}, false, true)} {
-    fState.apply({.fillX = true, .height = 520.0f, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
-    parts.list.apply({.fillX = true, .grow = scene::axes::kY});
-    auto& flow = std::get<0>(parts.list.fChildren);
-    flow.apply({.fillX = true, .autoSize = scene::axes::kY});
-    auto& rows = std::get<0>(flow.fChildren);
+    auto& rows = listed_rows(*this, parts.list, 520.0f);
     rows.reserve(entries.size());
     for (const mark_entry& one : entries)
       rows.emplace_back(n, kind, in, one, now);

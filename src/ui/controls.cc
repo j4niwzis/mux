@@ -523,6 +523,16 @@ inline room_events_held& room_events_at(const choice_level_t& level) {
 // what is in effect however the level is set; they are chosen only where
 // it is Custom, and greyed where not: nothing under a choice that overrides
 // it looks as if it did something. Custom starts from what was in effect.
+// A setting's row at a level: its label at the left, cut short where the
+// room runs out, and its choices at the right.
+inline void lay_out_setting_row(nodes::Stack& row, nodes::Text& label) {
+  row.setHorizontal();
+  row.setGap(4.0f);
+  row.fState.apply({.fillX = true, .height = 36.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
+  label.setElided(true);
+  label.apply({.grow = scene::axes::kX, .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+}
+
 template <class Actions>
 struct event_kind_list : nodes::Stack {
   struct row;
@@ -545,11 +555,7 @@ struct event_kind_list : nodes::Stack {
           parts{.label = nodes::Text(std::string(text), 14.0f, text_colour),
                 .show = segment<choose>("Show", {this, true}),
                 .hide = segment<choose>("Hide", {this, false})} {
-      this->setHorizontal();
-      this->setGap(4.0f);
-      fState.apply({.fillX = true, .height = 36.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
-      parts.label.setElided(true);
-      parts.label.apply({.grow = scene::axes::kX, .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      lay_out_setting_row(*this, parts.label);
       for (segment<choose>* each : {&parts.show, &parts.hide})
         each->apply({.width = 70.0f, .alignSelf = scene::align::kMiddle});
     }
@@ -570,9 +576,6 @@ struct event_kind_list : nodes::Stack {
   };
   // The ways a level can be, in the dropdown's order, from As above.
   static constexpr std::size_t kAbove = 0, kAll = 1, kMessages = 2, kCustom = 3;
-  [[nodiscard]] static bool inherits(const choice_level_t& level) {
-    return splice::visit(splice::overloaded{[](choice_level::everywhere) { return false; }, [](const auto&) { return true; }}, level);
-  }
   [[nodiscard]] static std::size_t way_of(const choice_level_t& level, std::optional<bool> all,
                                           const std::optional<config::room_event_kinds>& kinds) {
     const bool custom = kinds && std::ranges::any_of(all_room_events, [&](const room_event_t& kind) {
@@ -581,7 +584,7 @@ struct event_kind_list : nodes::Stack {
     if (custom)
       return kCustom;
     if (!all)
-      return inherits(level) ? kAbove : kAll;
+      return has_level_above(level) ? kAbove : kAll;
     return *all ? kAll : kMessages;
   }
   // A way chosen: the rows shown so and let be chosen or not, and the
@@ -592,7 +595,7 @@ struct event_kind_list : nodes::Stack {
     row* first;
     std::size_t count;
     void operator()(std::size_t index) const {
-      const std::size_t way = index + (inherits(level) ? 0 : 1);
+      const std::size_t way = index + (has_level_above(level) ? 0 : 1);
       const room_event_filter now = events_in_effect(level);
       std::optional<bool> all;
       std::optional<config::room_event_kinds> kinds;
@@ -642,11 +645,11 @@ struct event_kind_list : nodes::Stack {
       parts.rows.back().set_live(way == kCustom);
     }
     std::vector<std::string> names;
-    if (inherits(level))
+    if (has_level_above(level))
       names.emplace_back("As above");
     for (const char* name : {"All events", "Messages only", "Custom"})
       names.emplace_back(name);
-    parts.way.emplace("Room events", names, way - (inherits(level) ? 0 : 1),
+    parts.way.emplace("Room events", names, way - (has_level_above(level) ? 0 : 1),
                       pick_way{a, level, parts.rows.data(), parts.rows.size()});
     parts.way->apply({.margin = {0.0f, 20.0f, 4.0f, 20.0f}});
   }
@@ -680,12 +683,8 @@ struct jump_search_choice : nodes::Stack {
           parts{.label = nodes::Text("Look back for a message", 14.0f, text_colour),
                 .fallback = segment<choose>("Default", {this, std::nullopt})} {
       const bool everywhere =
-          splice::visit(splice::overloaded{[](choice_level::everywhere) { return true; }, [](const auto&) { return false; }}, level);
-      this->setHorizontal();
-      this->setGap(4.0f);
-      fState.apply({.fillX = true, .height = 36.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
-      parts.label.setElided(true);
-      parts.label.apply({.grow = scene::axes::kX, .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+          !has_level_above(level);
+      lay_out_setting_row(*this, parts.label);
       parts.fallback.apply({.width = 64.0f, .alignSelf = scene::align::kMiddle});
       parts.fallback.setVisible(!everywhere);
       parts.choices.reserve(kChoices.size());
@@ -744,12 +743,8 @@ struct show_hide_choice : nodes::Stack {
                 .show = segment<choose>(std::string(Setting::yes), {this, true}),
                 .hide = segment<choose>(std::string(Setting::no), {this, false})} {
       const bool everywhere =
-          splice::visit(splice::overloaded{[](choice_level::everywhere) { return true; }, [](const auto&) { return false; }}, level);
-      this->setHorizontal();
-      this->setGap(4.0f);
-      fState.apply({.fillX = true, .height = 36.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
-      parts.label.setElided(true);
-      parts.label.apply({.grow = scene::axes::kX, .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+          !has_level_above(level);
+      lay_out_setting_row(*this, parts.label);
       for (segment<choose>* each : {&parts.fallback, &parts.show, &parts.hide})
         each->apply({.width = 70.0f, .alignSelf = scene::align::kMiddle});
       parts.fallback.setVisible(!everywhere);

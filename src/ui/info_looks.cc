@@ -57,9 +57,7 @@ struct bubbles_picker : nodes::Stack {
   // The look at the level, as the UI knows it: every chat's, or the chat's
   // shown.
   [[nodiscard]] static config::bubble_look current(const look_level& level, const config::look_part_t& part) {
-    const bool everywhere = splice::visit(splice::overloaded{[](choice_level::everywhere) { return true; },
-                                                             [](const auto&) { return false; }},
-                                          level.level);
+    const bool everywhere = !has_level_above(level.level);
     return splice::visit(splice::overloaded{[&](config::look_part::bubbles) {
                                               return everywhere ? level.looks->bubbles_everywhere : level.looks->bubbles;
                                             },
@@ -157,13 +155,9 @@ struct bubbles_picker : nodes::Stack {
       parts.bar.apply({.margin = {4.0f, 8.0f, 6.0f, 8.0f}});
     }
   };
-  // Whether the level has one over it to be as.
-  [[nodiscard]] static bool inherits(const look_level& level) {
-    return splice::visit(splice::overloaded{[](choice_level::everywhere) { return false; }, [](const auto&) { return true; }}, level.level);
-  }
   [[nodiscard]] static std::vector<std::string> kind_names(const look_level& level) {
     std::vector<std::string> out;
-    if (inherits(level))
+    if (has_level_above(level.level))
       out.emplace_back(splice::visit(splice::overloaded{[](choice_level::chat) { return "As above"; },
                                                         [](const auto&) { return "As above"; }},
                                      level.level));
@@ -178,7 +172,7 @@ struct bubbles_picker : nodes::Stack {
         splice::visit(splice::overloaded{[&](config::look_part::bubbles) -> const std::optional<config::bubble_look>& { return held.bubbles; },
                                          [&](config::look_part::panels) -> const std::optional<config::bubble_look>& { return held.panels; }},
                       part);
-    const std::size_t shift = inherits(level) ? 1 : 0;
+    const std::size_t shift = has_level_above(level.level) ? 1 : 0;
     if (!own)
       return 0;
     return shift + own->kind.index();
@@ -186,7 +180,7 @@ struct bubbles_picker : nodes::Stack {
   // Whether the level holds a look of its own: as above, what is under the
   // choice of kind is the level over it's -- shown greyed, and left alone.
   [[nodiscard]] static bool own_here(const look_level& level, const config::look_part_t& part) {
-    if (!inherits(level))
+    if (!has_level_above(level.level))
       return true;
     const looks_held& held = level.looks->at(level.level);
     return splice::visit(splice::overloaded{[&](config::look_part::bubbles) { return held.bubbles.has_value(); },
@@ -323,7 +317,7 @@ struct bubbles_picker : nodes::Stack {
                                  "window (Appearance \u2192 Chat background \u2192 Behind the whole window).",
                                  12.0f, dim_colour),
               .kinds = choice_menu<pick_kind_at>("", kind_names(level), kind_index(level, part),
-                                                 pick_kind_at{a, level, part, inherits(level)}),
+                                                 pick_kind_at{a, level, part, has_level_above(level.level)}),
               .opacity_label = nodes::Text("Opacity", 13.0f, text_colour),
               .opacity = widgets::SliderBar<scene::NoAction, opacity_done>(legacy_palette().widgets, {}, opacity_done{a, level, part}),
               .blur_label = nodes::Text(std::format("Blur: {:.1f}%", blur_of(current(level, part)) * 100.0f), 13.0f, text_colour),
@@ -380,9 +374,6 @@ struct bubbles_picker : nodes::Stack {
 // room's Manage (its own).
 template <class Actions>
 struct look_choices : nodes::Stack {
-  [[nodiscard]] static bool inherits(const choice_level_t& level) {
-    return splice::visit(splice::overloaded{[](choice_level::everywhere) { return false; }, [](const auto&) { return true; }}, level);
-  }
   struct pick_wallpaper_at {
     Actions* actions;
     choice_level_t level;
@@ -400,7 +391,7 @@ struct look_choices : nodes::Stack {
   };
   [[nodiscard]] static std::vector<std::string> background_names(const looks_shown& looks, const choice_level_t& level) {
     std::vector<std::string> out;
-    if (inherits(level))
+    if (has_level_above(level))
       out.emplace_back(splice::visit(splice::overloaded{[](choice_level::chat) { return "As above"; },
                                                         [](const auto&) { return "As above"; }},
                                      level));
@@ -419,7 +410,7 @@ struct look_choices : nodes::Stack {
     const auto& own = looks.at(level).wallpaper;
     if (!own)
       return 0;
-    return (inherits(level) ? 1 : 0) + own->index();
+    return (has_level_above(level) ? 1 : 0) + own->index();
   }
   struct parts_t {
     nodes::Text background_title{"BACKGROUND", 13.0f, dim_colour, true};
@@ -438,7 +429,7 @@ struct look_choices : nodes::Stack {
   look_choices(Actions* a, const looks_shown& looks, choice_level_t level)
       : parts{.note = nodes::Text(note_of(level), 13.0f, dim_colour),
               .background = choice_menu<pick_wallpaper_at>("", background_names(looks, level), background_index(looks, level),
-                                                           pick_wallpaper_at{a, level, inherits(level)}),
+                                                           pick_wallpaper_at{a, level, has_level_above(level)}),
               .bubbles = bubbles_picker<Actions>(a, look_level{level, &looks}, config::look_part::bubbles{}),
               .panels = bubbles_picker<Actions>(a, look_level{level, &looks}, config::look_part::panels{})} {
     this->setGap(8.0f);

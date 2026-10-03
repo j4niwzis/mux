@@ -258,6 +258,10 @@ struct account {};
 struct chat {};
 }  // namespace choice_level
 using choice_level_t = splice::variant<choice_level::everywhere, choice_level::account, choice_level::chat>;
+// Whether a level has one over it to be as: every level but everywhere.
+[[nodiscard]] inline bool has_level_above(const choice_level_t& level) {
+  return splice::visit(splice::overloaded{[](choice_level::everywhere) { return false; }, [](const auto&) { return true; }}, level);
+}
 
 // A thread's summary, on its root (m.relations' m.thread, or counted
 // here): how many answers, the latest -- who, what, when -- and whether the

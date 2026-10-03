@@ -354,22 +354,11 @@ using html_tag_t = splice::variant<html_tag::line_break, html_tag::block_end, ht
   return out;
 }
 
-// The links of a plain text: what starts with http:// or https://, up to a
-// space.
+// The links of a plain text, each with its words: where link_spans_in finds
+// them, the URL its own words.
 [[nodiscard]] inline std::vector<std::pair<std::string, std::string>> links_in(std::string_view text) {
-  std::vector<std::pair<std::string, std::string>> out;
-  for (std::size_t at = 0; at < text.size();) {
-    const auto found = std::min(text.find("https://", at), text.find("http://", at));
-    if (found == std::string_view::npos)
-      break;
-    auto end = text.find_first_of(" \n\t", found);
-    if (end == std::string_view::npos)
-      end = text.size();
-    const std::string url(text.substr(found, end - found));
-    out.emplace_back(url, url);
-    at = end;
-  }
-  return out;
+  return link_spans_in(text) | std::views::transform([](const nodes::Text::Link& one) { return std::pair{one.target, one.target}; }) |
+         std::ranges::to<std::vector>();
 }
 
 }  // namespace mux::ui

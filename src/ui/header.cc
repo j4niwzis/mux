@@ -23,6 +23,18 @@ import :names;
 export namespace mux::ui {
 
 // Something not there yet, said in a box over the window.
+// A notice's box: as high as what it says, its heading and text wrapped,
+// and selectable, to be copied.
+inline void lay_out_notice(nodes::Stack& box, nodes::Text& title, nodes::Text& note) {
+  box.fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
+  box.setGap(10.0f);
+  for (nodes::Text* each : {&title, &note}) {
+    each->setWrapped(true);
+    each->setSelectable(true);
+    each->apply({.fillX = true});
+  }
+}
+
 template <class Actions>
 struct notice_box : nodes::Stack {
   // The dialog it is shown in.
@@ -41,14 +53,7 @@ struct notice_box : nodes::Stack {
               .note = nodes::Text(std::move(text), 14.0f, colours.dim),
               .ok = ok_button(colours.widgets, "OK", {a})} {
     // As high as what it says: no room left empty under its button.
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
-    this->setGap(10.0f);
-    // What it says can be selected and copied.
-    for (nodes::Text* each : {&parts.title, &parts.note}) {
-      each->setWrapped(true);
-      each->setSelectable(true);
-      each->apply({.fillX = true});
-    }
+    lay_out_notice(*this, parts.title, parts.note);
     parts.ok.setPrimary(true);
     parts.ok.apply({.width = 90.0f, .height = 34.0f, .alignSelf = scene::align::kEnd});
   }
@@ -128,13 +133,7 @@ struct verification_box : nodes::Stack {
               .match = match_button(colours.widgets, "They match", {a}),
               .mismatch = mismatch_button(colours.widgets, "They don't match", {a}),
               .close = close_button(colours.widgets, "OK", {a})} {
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
-    this->setGap(10.0f);
-    for (nodes::Text* each : {&parts.title, &parts.note}) {
-      each->setWrapped(true);
-      each->setSelectable(true);
-      each->apply({.fillX = true});
-    }
+    lay_out_notice(*this, parts.title, parts.note);
     splice::visit(splice::overloaded{[&](const verification_step::compare& shown) { parts.emoji.emplace(colours, shown.emoji); },
                                      [](const auto&) {}},
                   view.step);

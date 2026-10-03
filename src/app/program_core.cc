@@ -616,7 +616,9 @@ void app::before_frame() {
   // The input has the keyboard's focus whenever nothing else does -- at the
   // start, after a panel or a search closes -- so typing always goes to it,
   // as in tdesktop.
-  if (scene.focusedId() == 0 && root().main().chosen && !root().open_panel() && !root().settings_up())
+  // Not under a finger: there the keys' focus is the text input started,
+  // and a phone's keyboard up over the chat until it is put away.
+  if (scene.focusedId() == 0 && !by_touch && root().main().chosen && !root().open_panel() && !root().settings_up())
     scene.focus(root().main().line.field);
   // The emoji panel's stickers in view, asked for as they change -- as it
   // opens, as it scrolls, as its tab or its search changes -- and not only

@@ -42,6 +42,12 @@ export namespace mux::app {
 // What the program does to the window between events -- on what the
 // accounts file keeps, its base.
 struct app : kept_settings {
+  // Whether it is used by a finger -- a phone's screen -- as the host saw
+  // last: a touch, or a mouse's press. Where it is, the input is not given
+  // the keys' focus on its own: that started the text input, and with it a
+  // phone's on-screen keyboard, over half the screen whenever a chat was
+  // open. The keyboard comes up as the field is tapped, as on Telegram's.
+  bool by_touch = false;
   // -- the parts: each owns its state, and reaches the rest through what
   // they share
   services shared;

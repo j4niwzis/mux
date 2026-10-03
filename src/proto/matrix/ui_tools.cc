@@ -31,6 +31,8 @@ using namespace ::mux::ui;
 template <class Actions>
 struct devtools_box : nodes::Stack {
   Actions* actions = nullptr;
+  // The colours it is made in, for its parts and the rows it makes later.
+  const palette* colours_ = nullptr;
   struct close_it {
     Actions* actions;
     void operator()() const { actions->close_dialog(); }
@@ -61,20 +63,21 @@ struct devtools_box : nodes::Stack {
     struct parts_t {
       field type;
       field key;
-      nodes::Text body_caption{"Content (a JSON object)", 13.0f, dim_colour};
+      nodes::Text body_caption;
       widgets::TextArea<> body;
       widgets::Button<send_press> send;
     } parts;
     explicit form(devtools_box* box)
         : parts{.type = field("Event type", "m.room.message"),
                 .key = field("State key (for a state event; empty for a timeline one)", ""),
-                .body = widgets::TextArea<>(legacy_palette().widgets, "{}"),
-                .send = widgets::Button<send_press>(legacy_palette().widgets, "Send", {box})} {
+                .body_caption = nodes::Text("Content (a JSON object)", 13.0f, box->colours_->dim),
+                .body = widgets::TextArea<>(box->colours_->widgets, "{}"),
+                .send = widgets::Button<send_press>(box->colours_->widgets, "Send", {box})} {
       this->setGap(8.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 12.0f, 12.0f}});
       parts.body_caption.apply({.margin = {0.0f, 10.0f, 0.0f, 10.0f}});
       parts.body.apply({.fillX = true, .height = 180.0f, .margin = {0.0f, 10.0f, 0.0f, 10.0f}, .cornerRadius = 6.0f,
-                        .background = tile_colour, .border = scene::Border{band_colour, 1.0f}});
+                        .background = box->colours_->tile, .border = scene::Border{box->colours_->band, 1.0f}});
       parts.body.setText("{\n  \n}");
       parts.send.setPrimary(true);
       parts.send.apply({.width = 120.0f, .height = 34.0f, .margin = {0.0f, 10.0f, 0.0f, 10.0f}});
@@ -82,7 +85,7 @@ struct devtools_box : nodes::Stack {
   };
   struct parts_t {
     header_t header;
-    nodes::ScrollContainer<nodes::Text> reading{nodes::Text("", 13.0f, text_colour)};
+    nodes::ScrollContainer<nodes::Text> reading;
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
     std::optional<form> sending;
   } parts;
@@ -92,18 +95,30 @@ struct devtools_box : nodes::Stack {
   bool showing_state = false;
   std::optional<pick> pending;
 
-  devtools_box(Actions* a, std::string title, std::string text)
-      : actions(a), parts{.header = header_t(std::move(title), {this}, {a}, false, true)} {
+  devtools_box(Actions* a, const palette& colours, std::string title, std::string text)
+      : actions(a),
+        colours_(&colours),
+        parts{.header = header_t(colours, std::move(title), {this}, {a}, false, true), .reading = reading_of(colours)} {
     this->lay_out();
     this->show_text(std::move(text));
   }
-  devtools_box(Actions* a, std::vector<proto::matrix::state_entry> entries)
-      : actions(a), parts{.header = header_t("Room state", {this}, {a}, false, true)}, state(std::move(entries)) {
+  devtools_box(Actions* a, const palette& colours, std::vector<proto::matrix::state_entry> entries)
+      : actions(a),
+        colours_(&colours),
+        parts{.header = header_t(colours, "Room state", {this}, {a}, false, true), .reading = reading_of(colours)},
+        state(std::move(entries)) {
     this->lay_out();
     this->show_types();
   }
   struct send_form_t {};
-  devtools_box(Actions* a, send_form_t) : actions(a), parts{.header = header_t("Send custom event", {this}, {a}, false, true)} {
+  // Where a text is read, in the colours it is made in.
+  [[nodiscard]] static nodes::ScrollContainer<nodes::Text> reading_of(const palette& colours) {
+    return nodes::ScrollContainer<nodes::Text>(nodes::Text("", 13.0f, colours.text));
+  }
+  devtools_box(Actions* a, const palette& colours, send_form_t)
+      : actions(a),
+        colours_(&colours),
+        parts{.header = header_t(colours, "Send custom event", {this}, {a}, false, true), .reading = reading_of(colours)} {
     this->lay_out();
     parts.sending.emplace(this);
     parts.reading.setVisible(false);
@@ -131,7 +146,7 @@ struct devtools_box : nodes::Stack {
     auto& all = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
     all.clear();
     for (auto& [label, what] : rows)
-      all.emplace_back(std::move(label), std::move(what));
+      all.emplace_back(*colours_, std::move(label), std::move(what));
     parts.reading.setVisible(false);
     parts.list.setVisible(true);
     parts.list.scrollTo(0.0f);

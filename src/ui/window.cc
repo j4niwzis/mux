@@ -565,7 +565,7 @@ struct window : scene::Node {
   // A protocol's own dialog up (Node, one of its dialogs), made from args.
   template <class Node, class... Args>
   void open_dialog(Args&&... args) {
-    layer().tools.open(std::in_place_type<Node>, actions, std::forward<Args>(args)...);
+    layer().tools.open(std::in_place_type<Node>, actions, *needs_.colours, std::forward<Args>(args)...);
   }
   void close_dialog() { layer().tools.close(); }
 

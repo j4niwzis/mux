@@ -39,6 +39,8 @@ struct services {
   // Work off the UI's thread.
   workers* work = nullptr;
   mux::platform::dialogs::dialogs* system_dialogs = nullptr;
+  // What wakes the window from another thread.
+  wake_window* wake = nullptr;
 
   [[nodiscard]] window_type& root() const { return scene->root(); }
   // A chat that is a window of its history away from its newest: back to

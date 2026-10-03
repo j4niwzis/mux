@@ -40,6 +40,7 @@ import mux.app.reading;
 import mux.app.outbox;
 import mux.app.settings;
 import mux.app.menu;
+import mux.app.notices;
 import mux.logic.links;
 
 export namespace mux::app {
@@ -64,6 +65,7 @@ struct app : kept_settings {
   outbox_part outbox{shared, drafts, sending};
   menu_part menu{shared, outbox, pictures};
   settings_part settings{shared, *this, pictures};
+  notices_part notices{shared};
   // Work off the UI's thread: decoding pictures, reading the disk.
   workers work;
   // Files chosen in the dialog, or dropped on the window: to the outbox.
@@ -108,10 +110,10 @@ struct app : kept_settings {
   }
   template <class Request>
   void route(const Request& one) {
-    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> ||
+    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> ||
                       takes<app, Request>, "a request no part of the program takes");
     if (!offer(search, one) && !offer(pictures, one) && !offer(reading, one) && !offer(outbox, one) &&
-        !offer(settings, one) && !offer(menu, one))
+        !offer(settings, one) && !offer(menu, one) && !offer(notices, one))
       offer(*this, one);
   }
 
@@ -123,8 +125,6 @@ struct app : kept_settings {
   wake_window wake;
   // The system's dialogs, put over the window as it is made.
   mux::platform::dialogs::dialogs system_dialogs;
-  // The chime a message comes with.
-  mux::platform::audio::chime chimes;
   mux::model* model = nullptr;
   network* net = nullptr;
   // The proxy chosen for the account being added, as it is added.
@@ -348,29 +348,16 @@ struct app : kept_settings {
         return id;
     return std::nullopt;
   }
-  void apply(const request::settings_notifications&);
-  void apply(const request::flip_notify& one);
-  void apply(const request::set_notify_backend& one);
   void apply(const request::flip_account_notify&);
   void apply(const request::flip_account_notify_sound&);
   void apply(const request::set_chat_notify& one);
-  // Whether the window has the keyboard's focus: a message to the chat
-  // being read then notifies nothing.
-  bool window_focused = true;
-  // The notifications mux shows itself, for the host to put up.
-  struct toast_due {
-    mux::conversation_id chat;
-    std::string key;
-    std::string title;
-    std::string text;
-  };
+  // The notifications mux shows itself, for the host to put up; one pressed;
+  // the window's focus -- the notices part's.
+  using toast_due = notices_part::toast_due;
   using toast_card = mux::ui::toast_card;
-  std::vector<toast_due> toasts_due;
-  // When mux started: what was said before it is caught up on, not notified.
-  std::chrono::sys_time<std::chrono::milliseconds> started_at =
-      std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
+  [[nodiscard]] std::vector<toast_due> take_toasts() { return notices.take_toasts(); }
   void open_notified(const mux::conversation_id& chat) { this->open_chat(chat, std::nullopt); }
-  void focus_changed(bool on) { window_focused = on; }
+  void focus_changed(bool on) { notices.focus_changed(on); }
   // Whether the window is on screen: not hidden, minimised, covered or
   // suspended -- a phone's screen off, another app over it. Off it, only
   // the connections go on: the model kept up and notifications given, and
@@ -378,31 +365,6 @@ struct app : kept_settings {
   // for, nothing marked read, no frames. Brought up to date as it comes back.
   bool on_screen = true;
   bool refresh_waiting_ = false;
-  // UnifiedPush, where chosen (Settings, Notifications): its connector on a
-  // thread of its own, and what it says put in a box drained by woken() --
-  // data the program reads, the window woken for it.
-  struct push_inbox {
-    std::mutex lock;
-    std::vector<mux::platform::push::event> pending;
-  };
-  struct push_sink {
-    std::shared_ptr<push_inbox> inbox;
-    wake_window wake;
-    void operator()(mux::platform::push::event one) const {
-      {
-        std::lock_guard held(inbox->lock);
-        inbox->pending.push_back(std::move(one));
-      }
-      wake();
-    }
-  };
-  std::shared_ptr<push_inbox> push_box = std::make_shared<push_inbox>();
-  std::shared_ptr<std::atomic<bool>> push_forget;
-  std::jthread push_thread;
-  void start_push();
-  void stop_push();
-  void take_push();
-  void apply(const request::flip_unified_push&);
   void shown_changed(bool now) {
     if (now == on_screen)
       return;
@@ -410,8 +372,6 @@ struct app : kept_settings {
     if (now && std::exchange(refresh_waiting_, false))
       this->refresh();
   }
-  // A message come as it happened, notified as the settings say.
-  void notify_of(const mux::message& said, bool mentions_me);
   void apply(const request::set_room_event_kind& one);
   void apply(const request::set_room_events& one);
   void apply(const request::manage_space& one);
@@ -433,9 +393,6 @@ struct app : kept_settings {
   void apply(const request::join_room_card&);
   void apply(const request::knock_room_card&);
   void apply(const request::decline_room_card&);
-  // An invite come: said, as a message is -- once a run.
-  void notify_invite(const mux::conversation_id& in, const mux::invite_info& invite, const std::string& name);
-  std::set<mux::conversation_id> invites_told;
   void apply(const request::toggle_emoji&);
   void apply(const request::toggle_thread_emoji&);
   void open_emoji_at(float right, float top);

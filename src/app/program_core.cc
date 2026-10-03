@@ -30,7 +30,7 @@ auto app::window() -> skiff::scene::Scene<window_type>& { return scene; }
 
 void app::woken() {
   // What UnifiedPush's connector said, first: a push is a sync now.
-  this->take_push();
+  notices.take_push();
   // What the workers made, put where it goes: on this, the UI's thread.
   work.finish();
   auto changes = box->take();
@@ -63,8 +63,8 @@ void app::woken() {
                                },
                                // An invite come: said once a run.
                                [&](const mux::change::conversation_updated& updated) {
-                                 if (updated.invite && invites_told.insert(updated.id).second)
-                                   this->notify_invite(updated.id, *updated.invite, updated.name);
+                                 if (updated.invite)
+                                   notices.invite_came(updated.id, *updated.invite, updated.name);
                                },
                                [&](const mux::change::devices_listed& listed) {
                                  if (person_open_ && person_open_->first.account == listed.by && person_open_->second == listed.user) {
@@ -178,13 +178,9 @@ void app::woken() {
                                        splice::overloaded{[](mux::placement::at_end) { return true; },
                                                        [](const auto&) { return false; }},
                                        added.where);
-                                   // New: said since mux started (a minute's grace for
-                                   // clocks) -- not a chat's last messages, which the
-                                   // first sync puts at its end too, as tdesktop
-                                   // notifies nothing of what it catches up on.
-                                   const bool fresh = added.message.at >= started_at - std::chrono::minutes(1);
-                                   if (live && fresh && !added.message.outgoing && !added.message.service)
-                                     this->notify_of(added.message, mentioning.contains(added.message.id));
+                                   if (live)
+                                     notices.message_came(added.message, mentioning.contains(added.message.id),
+                                                          on_screen && root().main().chosen == added.message.in);
                                  },
                                  [](const auto&) {}},
                  one);
@@ -280,71 +276,7 @@ void app::woken() {
   }
 }
 
-// A message as it came, notified as the settings say: nothing where it is
-// in the chat being read with the window focused; else a notification --
-// the chat and sender, and the text, as chosen -- and the chime.
-void app::notify_of(const mux::message& said, bool mentions_me) {
-  if (on_screen && window_focused && root().main().chosen == said.in)
-    return;
-  const auto decision = this->notify_for(said.in, mentions_me);
-  if (decision.sound)
-    chimes.play();
-  if (!decision.popup)
-    return;
-  const mux::conversation* chat = model->find(said.in);
-  std::string title = "mux";
-  if (notifications.show_name && chat) {
-    const std::string who = mux::ui::sender_name(*chat, said.sender);
-    title = mux::ui::is_group(*chat) ? std::format("{} ({})", who, mux::ui::display_name(*chat)) : who;
-  }
-  std::string text = "New message";
-  if (notifications.show_text) {
-    text = said.body.plain.empty() && said.attachment ? std::string("Picture or file") : said.body.plain;
-    if (text.size() > 300) {
-      // Cut where a character starts: half of one is not UTF-8, and the bus
-      // drops a connection that sends it.
-      std::size_t cut = 300;
-      while (cut > 0 && (static_cast<unsigned char>(text[cut]) & 0xC0) == 0x80)
-        --cut;
-      text = text.substr(0, cut) + "\u2026";
-    }
-  }
-  // Shown by the backend chosen: the desktop's service, asked off the UI's
-  // thread; or mux's own window, which comes next -- until then, the log.
-  splice::visit(splice::overloaded{[&](mux::config::notify_backend::native) {
-                               std::thread([title, text] {
-                                 if (!mux::platform::notifications::notify(title, text))
-                                   std::println(std::cerr, "[notify] no desktop notification service; {}: {}", title, text);
-                               }).detach();
-                             },
-                             [&](mux::config::notify_backend::built_in) {
-                               toasts_due.push_back({said.in, said.in.id, title, text});
-                             }},
-             mux::config::notify_backend_of(notifications.backend));
-}
 
-// An invite, as a notification: who asked, and to what -- by the backend
-// chosen, with the chime, as the settings say for its account.
-void app::notify_invite(const mux::conversation_id& in, const mux::invite_info& invite, const std::string& name) {
-  const auto decision = this->notify_for(in, true);
-  if (decision.sound)
-    chimes.play();
-  if (!decision.popup)
-    return;
-  const std::string who = invite.from_name.empty() ? invite.from : invite.from_name;
-  const std::string title = invite.direct ? std::format("{} invites you to chat", who) : std::format("Invite to {}", name);
-  const std::string text = invite.direct ? std::string("A direct chat") : std::format("from {}", who);
-  splice::visit(splice::overloaded{[&](mux::config::notify_backend::native) {
-                                     std::thread([title, text] {
-                                       if (!mux::platform::notifications::notify(title, text))
-                                         std::println(std::cerr, "[notify] no desktop notification service; {}: {}", title, text);
-                                     }).detach();
-                                   },
-                                   [&](mux::config::notify_backend::built_in) {
-                                     toasts_due.push_back({in, in.id, title, text});
-                                   }},
-                mux::config::notify_backend_of(notifications.backend));
-}
 
 void app::keep_marked(const mux::conversation_id& in, const std::string& id) {
   if (!marked_kept_.insert(id).second)
@@ -548,7 +480,8 @@ void app::wire() {
                     .kept = this,
                     .vault = vault,
                     .work = &work,
-                    .system_dialogs = &system_dialogs};
+                    .system_dialogs = &system_dialogs,
+                    .wake = &wake};
   store.vault = vault;
 }
 
@@ -934,7 +867,7 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
   this->notifications = saved.notifications.value_or(mux::config::notification_settings{});
   // UnifiedPush only where chosen; off by default.
   if (notifications.unified_push.value_or(false) && !demo)
-    this->start_push();
+    notices.start_push();
   for (const auto& one : saved.chat_notify.value_or(std::vector<mux::config::chat_notify>{}))
     this->notify_modes.insert_or_assign(
         mux::conversation_id{{mux::ui::protocol_of(one.account), one.account}, one.conversation},

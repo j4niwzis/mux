@@ -476,7 +476,7 @@ inline double now_ms() {
 //   save_path_chosen(path)  where to save a file, chosen in the dialog
 //   open_link(url)  a link pressed in a text
 //   focus_changed(on)  the window given the keyboard's focus, or losing it
-//   toasts_due      the notifications to show in windows of their own
+//   take_toasts()   the notifications to show in windows of their own
 //                   (toast_due: chat, key, title, text; toast_card, the node)
 //   open_notified(chat)  one of them pressed
 //   before_frame()  between events: what the screens asked for, applied
@@ -878,7 +878,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
       // The notifications mux shows itself, put up; the old ones gone.
       // The newest three at most: a window made for each only to be closed
       // at once, where many came together, was the whole of a frame.
-      auto due_now = std::exchange(app.toasts_due, {});
+      auto due_now = app.take_toasts();
       for (std::size_t i = due_now.size() > 3 ? due_now.size() - 3 : 0; i < due_now.size(); ++i)
         shown_toasts.show(due_now[i]);
       shown_toasts.frame();

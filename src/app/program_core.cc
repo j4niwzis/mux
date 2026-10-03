@@ -92,7 +92,7 @@ void app::woken() {
                                  if (pictures.pill_rooms.contains(shown.asked) &&
                                      !room_card.looking_at(shown.asked)) {
                                    if (!shown.preview.id.empty()) {
-                                     mux::ui::rooms_found().insert_or_assign(shown.asked, shown.preview.name);
+                                     model->rooms_found.insert_or_assign(shown.asked, shown.preview.name);
                                      if (shown.preview.avatar)
                                        net->fetch_avatar(shown.by, *shown.preview.avatar, shown.asked);
                                    }

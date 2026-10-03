@@ -1020,9 +1020,9 @@ struct message_bubble : nodes::Stack {
   // A picture waited on has come, or a room not known was found: each is
   // waited on for that alone -- a found room without a picture is not
   // "come" again at every frame.
-  [[nodiscard]] bool rooms_came() const {
+  [[nodiscard]] bool rooms_came(const model& now) const {
     return std::ranges::any_of(rooms_waiting, [](const std::string& key) { return avatar_images().has(key); }) ||
-           std::ranges::any_of(rooms_unknown, [](const std::string& key) { return rooms_found().contains(key); });
+           std::ranges::any_of(rooms_unknown, [&](const std::string& key) { return now.rooms_found.contains(key); });
   }
   skiff::paint::Tween swipe{0.0f, 180.0f, skiff::paint::movement::subtle{}};
   static constexpr float kSwipeToReply = 70.0f;

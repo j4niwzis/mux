@@ -365,7 +365,7 @@ void conversations_screen<Actions>::update(double now_ms) {
   // there: the bubbles made again.
   if (last_model &&
       (std::ranges::any_of(rooms_waiting, [](const std::string& key) { return avatar_images().has(key); }) ||
-       std::ranges::any_of(rooms_unfound, [](const std::string& key) { return rooms_found().contains(key); })))
+       std::ranges::any_of(rooms_unfound, [&](const std::string& key) { return last_model->rooms_found.contains(key); })))
     this->show_conversation(*last_model);
   // The pin the bar shows, as the view moves: the one above it. Not while
   // a jump goes on -- where it lands decides.

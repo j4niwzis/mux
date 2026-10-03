@@ -392,6 +392,10 @@ class model {
   bool show_deleted = false;
   // The links' previews, by their URLs: as fetched this session.
   std::map<std::string, link_preview> previews;
+  // Rooms not joined here whose server said they are there, by the address
+  // a message names them by, and each one's name as its server gave it: as
+  // asked this session.
+  std::map<std::string, std::string, std::less<>> rooms_found;
 
   const std::map<account_id, account>& accounts() const noexcept { return accounts_; }
   // What an account knows of a person's encryption identity, where it said.

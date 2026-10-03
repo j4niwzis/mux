@@ -36,13 +36,8 @@ export namespace mux::ui {
 // drawn as a pill with a small avatar and the name it goes by here (a
 // room's name, a member's), a link to it. The text is given back with the
 // names in place of the IDs, and its links with it.
-// Rooms not joined here whose server said they are there, by the address a
-// message names them by: shown as pills; one not said to be is plain text.
-// And each one's name, as its server gave it.
-inline std::map<std::string, std::string, std::less<>>& rooms_found() {
-  static std::map<std::string, std::string, std::less<>> kept;
-  return kept;
-}
+// Rooms not joined here whose server said they are there (model::
+// rooms_found) are shown as pills; one not said to be is plain text.
 struct mentioned;
 [[nodiscard]] inline std::optional<std::string> take_opening_quote(mentioned& shown);
 // A room event said before its people were pills -- kept so, read back
@@ -86,9 +81,10 @@ struct mentioned {
                                        if (const conversation* found = now->find(*chat))
                                          return std::pair(display_name(*found), found->id.id);
                                    // Not joined, but its server named it.
-                                   if (const auto named = rooms_found().find(one.id);
-                                       named != rooms_found().end() && !named->second.empty())
-                                     return std::pair(named->second, one.id);
+                                   if (now)
+                                     if (const auto named = now->rooms_found.find(one.id);
+                                         named != now->rooms_found.end() && !named->second.empty())
+                                       return std::pair(named->second, one.id);
                                    return std::pair(one.id, one.id);
                                  },
                                  [](logic::mention::kept) { return std::pair(std::string(), std::string()); }},
@@ -178,7 +174,7 @@ struct mentioned {
       // link, by its name.
       const bool known = now && logic::chat_of(*now, *span.pill).has_value();
       const auto [name, target] = name_of(*span.pill);
-      const bool found = known || rooms_found().contains(target);
+      const bool found = known || (now && now->rooms_found.contains(target));
       const bool pictured = avatar_images().has(target);
       const std::string words = span.as_written ? *span.as_written
                                                 : std::string(text.substr(span.first, span.last - span.first));

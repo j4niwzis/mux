@@ -458,7 +458,7 @@ struct timeline_area : scene::Node {
                      row.last == last_of_run(i) &&
                      row.quote_known == quote_known && row.events_shown == shows(all[i]) && row.unread_start == (how.unread_from && all[i].id == *how.unread_from) &&
                      row.preview_known == preview_known && row.readers_shown == readers_of(i) &&
-                     row.previews_shown == how.previews && !row.rooms_came();
+                     row.previews_shown == how.previews && !row.rooms_came(now);
             }))
       // Laid out again; painted where rows came, went or moved -- a hidden
       // one coming moves nothing, and paints nothing.

@@ -199,6 +199,21 @@ struct app : kept_settings {
   // `from`: who asked -- said on stderr where MUX_TRACE_FRAMES is set, to
   // find what rebuilds the window when nothing should.
   void refresh(std::source_location from = std::source_location::current());
+  // Each thing the window shows of the settings, brought up to date.
+  void note_spaces();
+  void show_placements();
+  void show_event_filters();
+  void show_looks_now();
+  void show_space_bars();
+  void show_levels();
+  void show_backgrounds();
+  void show_chat_choices();
+  // Every chat of every account.
+  [[nodiscard]] auto all_chats() const {
+    return model->accounts() | std::views::values |
+           std::views::transform([](const auto& account) -> const auto& { return account.conversations; }) | std::views::join |
+           std::views::values;
+  }
   // What is kept, applied: the settings read at the start -- or, where local
   // data is encrypted, once it is unlocked -- and the accounts started.
   void begin(const mux::config::file& saved, std::vector<mux::config::account_t> extra, bool demo,

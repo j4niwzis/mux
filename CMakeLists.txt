@@ -439,7 +439,7 @@ if(MUX_UI)
   target_sources(mux PRIVATE
     src/app/program_core.cc src/app/program_media.cc
     src/app/program_chats.cc src/app/program_links.cc src/app/program_accounts.cc
-    src/app/program_settings.cc src/app/program_sending.cc
+    src/app/program_settings.cc src/app/program_sending.cc src/app/program_refresh.cc
     src/app/scene.cc)
   target_link_libraries(mux PRIVATE mux_app mux_modules)
   # How many of the program's units -- its parts and its own, each importing

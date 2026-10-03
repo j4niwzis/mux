@@ -372,46 +372,12 @@ struct room_settings : nodes::Stack {
         actions->flip_forum(room);
     }
   };
-  struct forum_row : nodes::Stack {
-    struct parts_t {
-      nodes::Text label;
-      widgets::Toggle<flip_forum_act> toggle;
-    } parts;
-    forum_row(const palette& colours, Actions* a, const room_settings_facts& facts)
-        : parts{.label = nodes::Text("One chat, its rooms as topics", 14.0f, colours.text),
-                .toggle = widgets::Toggle<flip_forum_act>(colours.widgets, {a, facts.id, !facts.holds_spaces})} {
-      this->setHorizontal();
-      this->setGap(12.0f);
-      fState.apply({.fillX = true, .height = 36.0f});
-      parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      parts.toggle.apply({.alignSelf = scene::align::kMiddle});
-      parts.toggle.setOnNow(facts.forum);
-      if (facts.holds_spaces)
-        fState.apply({.alpha = 0.4f, .disabled = true});
-    }
-  };
   // A space's rooms out of Home, or in it: a switch, for a space that is
   // not shown as one chat.
   struct flip_home_hide_act {
     Actions* actions;
     std::string room;
     void operator()() const { actions->flip_home_hide(room); }
-  };
-  struct home_hide_row : nodes::Stack {
-    struct parts_t {
-      nodes::Text label;
-      widgets::Toggle<flip_home_hide_act> toggle;
-    } parts;
-    home_hide_row(const palette& colours, Actions* a, const room_settings_facts& facts)
-        : parts{.label = nodes::Text("Its rooms not in Home", 14.0f, colours.text),
-                .toggle = widgets::Toggle<flip_home_hide_act>(colours.widgets, {a, facts.id})} {
-      this->setHorizontal();
-      this->setGap(12.0f);
-      fState.apply({.fillX = true, .height = 36.0f});
-      parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      parts.toggle.apply({.alignSelf = scene::align::kMiddle});
-      parts.toggle.setOnNow(facts.hidden_from_home);
-    }
   };
   struct general_page : nodes::Stack {
     struct parts_t {
@@ -420,9 +386,9 @@ struct room_settings : nodes::Stack {
       chat_choices<Actions> chats;
       typing_choice<Actions> typing;
       nodes::Text forum_heading;
-      forum_row forum;
+      toggle_line<flip_forum_act> forum;
       nodes::Text forum_about;
-      home_hide_row home_hide;
+      toggle_line<flip_home_hide_act> home_hide;
       nodes::Text leave_heading;
       widgets::Button<ask<Actions, &Actions::leave_chat>> leave;
     } parts;
@@ -439,11 +405,12 @@ struct room_settings : nodes::Stack {
                                                6.0f),
                 .typing = typing_choice<Actions>(a, choice_level::chat{}, facts.typing),
                 .forum_heading = part_heading(*box->colours_, "Shown as"),
-                .forum = forum_row(*box->colours_, a, facts),
+                .forum = toggle_line<flip_forum_act>(*box->colours_, "One chat, its rooms as topics", {a, facts.id, !facts.holds_spaces},
+                                                     facts.forum, !facts.holds_spaces),
                 .forum_about = explained(*box->colours_, facts.holds_spaces
                                              ? "A space that holds spaces is shown as a space."
                                              : "On: in the chat list as one chat; its rooms open inside it, as Telegram's topics."),
-                .home_hide = home_hide_row(*box->colours_, a, facts),
+                .home_hide = toggle_line<flip_home_hide_act>(*box->colours_, "Its rooms not in Home", {a, facts.id}, facts.hidden_from_home, true),
                 .leave_heading = part_heading(*box->colours_, "Leave room"),
                 .leave = widgets::Button<ask<Actions, &Actions::leave_chat>>(box->colours_->widgets, "Leave room", {a})} {
       for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.forum_heading, &parts.forum, &parts.forum_about})

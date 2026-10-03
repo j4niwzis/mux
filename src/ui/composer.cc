@@ -457,6 +457,42 @@ struct in_chat {
 // Desktop: a line over it, a paperclip on the left, the text growing with
 // what is written, and the send arrow on the right. The chat's, and a
 // thread's: one composer, told where it writes.
+// A bar over the field that says something and offers two ways on: the
+// line, cut short where the room runs out, then the two buttons -- the
+// second the one to take (Retry all, Approve).
+// A round button in the stack over the list's corner: up or not, at its
+// place in the stack.
+inline void place_in_corner(auto& button, bool up, int slot) {
+  if (up != button.visible())
+    button.setVisible(up);
+  const float y = -12.0f - 52.0f * static_cast<float>(slot);
+  if (button.fState.fY != y) {
+    button.fState.apply({.y = y});
+    button.invalidateLayout();
+  }
+}
+
+template <class First, class Second>
+struct two_choice_bar : nodes::Stack {
+  struct parts_t {
+    nodes::Text said;
+    widgets::Button<First> first;
+    widgets::Button<Second> second;
+  } parts;
+  two_choice_bar(const palette& colours, std::string said, skia::SkColor said_colour, std::string first_name, First first,
+                 std::string second_name, Second second)
+      : parts{.said = nodes::Text(std::move(said), 13.0f, said_colour),
+              .first = widgets::Button<First>(colours.widgets, std::move(first_name), std::move(first)),
+              .second = widgets::Button<Second>(colours.widgets, std::move(second_name), std::move(second))} {
+    this->setHorizontal();
+    this->setGap(8.0f);
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 12.0f, 6.0f, 12.0f}});
+    parts.said.setElided(true);
+    parts.said.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+    parts.second.setPrimary(true);
+  }
+};
+
 template <class Actions, class Where = in_chat<Actions>>
 struct composer_bar : nodes::Stack {
   // What is written answers or edits: the reply bar, its ✕ going back to
@@ -465,26 +501,7 @@ struct composer_bar : nodes::Stack {
   using input_row = message_input<typename Where::submit, typename Where::attach, typename Where::emoji, typename Where::send>;
   // Element's bar over the field while messages here were not sent
   // (RoomStatusBar's): a warning, and "Delete all" and "Retry all".
-  struct unsent_row : nodes::Stack {
-    using delete_button = widgets::Button<ask<Actions, &Actions::discard_unsent>>;
-    using retry_button = widgets::Button<ask<Actions, &Actions::retry_unsent>>;
-    struct parts_t {
-      nodes::Text said;
-      delete_button remove;
-      retry_button retry;
-    } parts;
-    unsent_row(const palette& colours, Actions* a)
-        : parts{.said = nodes::Text("Some of your messages have not been sent", 13.0f, colours.error),
-                .remove = delete_button(colours.widgets, "Delete all", {a}),
-                .retry = retry_button(colours.widgets, "Retry all", {a})} {
-      this->setHorizontal();
-      this->setGap(8.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 12.0f, 6.0f, 12.0f}});
-      parts.said.setElided(true);
-      parts.said.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      parts.retry.setPrimary(true);
-    }
-  };
+  using unsent_row = two_choice_bar<ask<Actions, &Actions::discard_unsent>, ask<Actions, &Actions::retry_unsent>>;
   // Where the reader may not post: a row as high as the input's, its line
   // in the middle -- padded inside it, not by a margin the bar's height
   // leaves out.
@@ -534,26 +551,11 @@ struct composer_bar : nodes::Stack {
     std::string user;
     void operator()() const { actions->room_act(room_action::kick{user}); }
   };
-  struct knock_row : nodes::Stack {
-    struct parts_t {
-      nodes::Text said;
-      widgets::Button<deny_it> deny;
-      widgets::Button<approve_it> approve;
-    } parts;
-    knock_row(const palette& colours, Actions* a, const knock_request& one, std::size_t more)
-        : parts{.said = nodes::Text(std::format("{} asks to join{}{}", one.name, one.reason.empty() ? std::string() : ": " + one.reason,
-                                                more ? std::format(" (and {} more)", more) : std::string()),
-                                    13.0f, colours.text),
-                .deny = widgets::Button<deny_it>(colours.widgets, "Deny", {a, one.id}),
-                .approve = widgets::Button<approve_it>(colours.widgets, "Approve", {a, one.id})} {
-      this->setHorizontal();
-      this->setGap(8.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 12.0f, 6.0f, 12.0f}});
-      parts.said.setElided(true);
-      parts.said.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      parts.approve.setPrimary(true);
-    }
-  };
+  using knock_row = two_choice_bar<deny_it, approve_it>;
+  [[nodiscard]] static std::string knock_said(const knock_request& one, std::size_t more) {
+    return std::format("{} asks to join{}{}", one.name, one.reason.empty() ? std::string() : ": " + one.reason,
+                       more ? std::format(" (and {} more)", more) : std::string());
+  }
   // The colours it is made in, for the rows it makes later.
   const palette* colours_ = nullptr;
   struct parts_t {
@@ -578,7 +580,8 @@ struct composer_bar : nodes::Stack {
                typename Where::emoji emoji, typename Where::send send)
       : colours_(n.colours),
         parts{.divider = nodes::Box<>(n.colours->band),
-              .unsent = unsent_row(*n.colours, n.actions),
+              .unsent = unsent_row(*n.colours, "Some of your messages have not been sent", n.colours->error, "Delete all", {n.actions},
+                                  "Retry all", {n.actions}),
               .context_line = context_row(*n.colours, std::move(cancel)),
               .input = input_row(*n.colours, std::string(Where::placeholder), std::move(submit), std::move(attach), std::move(emoji),
                                  std::move(send)),
@@ -643,7 +646,8 @@ struct composer_bar : nodes::Stack {
     if (key == knocks_shown)
       return;
     knocks_shown = key;
-    parts.knocks.emplace(*colours_, a, knocking.front(), knocking.size() - 1);
+    parts.knocks.emplace(*colours_, knock_said(knocking.front(), knocking.size() - 1), colours_->text, "Deny",
+                         deny_it{a, knocking.front().id}, "Approve", approve_it{a, knocking.front().id});
     this->invalidateLayout();
   }
   std::string knocks_shown;
@@ -703,16 +707,10 @@ struct mark_button : scene::Node {
   // How many, and which place up the stack it takes: 0 at the bottom.
   void show(std::size_t count, int slot) {
     const bool up = count > 0;
-    if (up != this->visible())
-      this->setVisible(up);
     const std::string said = std::to_string(count);
     if (parts.badge.parts.count.text() != said)
       parts.badge.parts.count.setText(said);
-    const float y = -12.0f - 52.0f * static_cast<float>(slot);
-    if (fState.fY != y) {
-      fState.apply({.y = y});
-      this->invalidateLayout();
-    }
+    place_in_corner(*this, up, slot);
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
@@ -805,15 +803,7 @@ struct back_button : scene::Node {
     this->setVisible(false);
   }
   // Up or not, at a place in the stack of buttons over the list's corner.
-  void show(bool up, int slot) {
-    if (up != this->visible())
-      this->setVisible(up);
-    const float y = -12.0f - 52.0f * static_cast<float>(slot);
-    if (fState.fY != y) {
-      fState.apply({.y = y});
-      this->invalidateLayout();
-    }
-  }
+  void show(bool up, int slot) { place_in_corner(*this, up, slot); }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   [[nodiscard]] bool onClick(float, float) {

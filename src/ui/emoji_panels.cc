@@ -33,6 +33,21 @@ export namespace mux::ui {
 // under another in one list that scrolls -- Recent first -- each its name
 // over a grid of its stickers; and a footer of the packs' pictures that
 // brings each into view, lit for the one in view. A press sends one.
+// A picker's layout, as tdesktop's emoji and sticker panels share it: the
+// search field at the top, the list scrolling under it, the tabs' footer at
+// the bottom.
+inline void lay_out_picker(nodes::Stack& panel, auto& field, auto& list, auto& footer) {
+  panel.setGap(4.0f);
+  panel.fState.apply({.padding = {7.0f, 0.0f, 4.0f, 7.0f}});
+  field.setSearchIcon(true);
+  field.apply({.fillX = true, .height = 32.0f, .margin = {0.0f, 7.0f, 0.0f, 0.0f}});
+  list.apply({.fillX = true, .grow = scene::axes::kY});
+  std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
+  footer.setHorizontal();
+  footer.setGap(4.0f);
+  footer.apply({.fillX = true, .height = 36.0f});
+}
+
 template <class Actions>
 struct sticker_grid : nodes::Stack {
   static constexpr float kCell = 78.0f;
@@ -132,18 +147,10 @@ struct sticker_grid : nodes::Stack {
               .empty = nodes::Text("No stickers here. A room's sticker packs, and yours, show here.", 13.0f, colours.dim)},
         actions(a) {
     auto& [field, empty, list, footer, preview] = parts;
-    this->setGap(4.0f);
-    fState.apply({.padding = {7.0f, 0.0f, 4.0f, 7.0f}});
-    field.setSearchIcon(true);
-    field.apply({.fillX = true, .height = 32.0f, .margin = {0.0f, 7.0f, 0.0f, 0.0f}});
+    lay_out_picker(*this, field, list, footer);
     // Wrapped at the panel's width, not one line running past its edges.
     empty.setWrapped(true);
     empty.apply({.fillX = true, .margin = {12.0f, 12.0f, 0.0f, 12.0f}});
-    list.apply({.fillX = true, .grow = scene::axes::kY});
-    std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
-    footer.setHorizontal();
-    footer.setGap(4.0f);
-    footer.apply({.fillX = true, .height = 36.0f});
     this->show_all();
   }
   [[nodiscard]] std::vector<section>& sections() { return std::get<0>(std::get<0>(parts.list.fChildren).fChildren); }
@@ -467,15 +474,7 @@ struct emoji_panel : nodes::Stack {
   emoji_panel(const palette& colours, emoji_kept& kept, Pick what)
       : pick(std::move(what)), colours_(&colours), kept_(&kept), parts{.field = field_t(colours.widgets, "Search emoji", {this}), .text_option = text_chip(this)} {
     auto& [field, text_option, list, footer, tones, preview] = parts;
-    this->setGap(4.0f);
-    fState.apply({.padding = {7.0f, 0.0f, 4.0f, 7.0f}});
-    field.setSearchIcon(true);
-    field.apply({.fillX = true, .height = 32.0f, .margin = {0.0f, 7.0f, 0.0f, 0.0f}});
-    list.apply({.fillX = true, .grow = scene::axes::kY});
-    std::get<0>(list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
-    footer.setHorizontal();
-    footer.setGap(4.0f);
-    footer.apply({.fillX = true, .height = 36.0f});
+    lay_out_picker(*this, field, list, footer);
     for (std::size_t g = 0; g < logic::emoji_group_count(); ++g)
       footer.parts.each.emplace_back(this, g);
     this->show_all();

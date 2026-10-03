@@ -77,7 +77,7 @@ struct xmpp_form : nodes::Stack {
     form_end<Actions> end;
   } parts;
 
-  xmpp_form(Actions* a, const std::optional<config::xmpp_account>& from)
+  xmpp_form(Actions* a, const std::optional<::mux::proto::xmpp::kept>& from)
       : actions(a),
         parts{.advanced_button = advanced_button_t("Advanced", {a}),
               .more = widgets::Collapsible<xmpp_advanced<Actions>>(a),
@@ -113,9 +113,9 @@ struct xmpp_form : nodes::Stack {
 
   // The account as typed, or what is wrong with it. What is folded away is
   // kept as it is: folding is not clearing.
-  [[nodiscard]] std::expected<config::xmpp_account, std::string> account() const {
+  [[nodiscard]] std::expected<::mux::proto::xmpp::kept, std::string> account() const {
     const auto& folded = parts.more.child().parts;
-    config::xmpp_account out{.address = parts.address.text(),
+    ::mux::proto::xmpp::kept out{.address = parts.address.text(),
                              .password = parts.password.text(),
                              .resource = folded.resource.text(),
                              .host = typed_or_nothing(folded.host.text()),

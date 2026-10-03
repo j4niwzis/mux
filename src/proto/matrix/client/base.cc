@@ -38,6 +38,27 @@ namespace join_rule = proto::matrix::join_rule;
 namespace history_rule = proto::matrix::history_rule;
 namespace power_need = proto::matrix::power_need;
 
+// What an upload's name is in its URL: what is not unreserved, as %XX --
+// each character a view, of itself where it is in `text` or of its escape
+// in a table made once at compile time; nothing allocated until the caller
+// appends it.
+inline constexpr auto kPercentEscapes = [] {
+  std::array<std::array<char, 3>, 256> out{};
+  constexpr std::string_view digits = "0123456789ABCDEF";
+  for (std::size_t byte = 0; byte < out.size(); ++byte)
+    out[byte] = {'%', digits[byte >> 4], digits[byte & 0xF]};
+  return out;
+}();
+[[nodiscard]] inline auto percent_encoded(std::string_view text) {
+  return text | std::views::transform([](const char& c) -> std::string_view {
+           if (std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_')
+             return std::string_view(&c, 1);
+           const auto& escape = kPercentEscapes[static_cast<unsigned char>(c)];
+           return std::string_view(escape.data(), escape.size());
+         }) |
+         std::views::join;
+}
+
 struct settings {
   std::string user_id;  // @user:example.org
   std::string password;

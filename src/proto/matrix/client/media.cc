@@ -116,10 +116,7 @@ void account<Sink>::upload_pack_picture(pack_picture picture, std::string bytes)
     std::optional<std::string> uri;
     if (api_) {
       std::string target = "/_matrix/media/v3/upload?filename=";
-      for (const char c : picture.body)
-        target += std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_'
-                      ? std::string(1, c)
-                      : std::format("%{:02X}", static_cast<unsigned>(static_cast<unsigned char>(c)));
+      target.append_range(percent_encoded(picture.body));
       try {
         const auto got = api_->request("POST", target, bytes, token_ ? std::optional<std::string_view>(*token_) : std::nullopt,
                                        std::chrono::seconds(120),
@@ -212,10 +209,7 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
     }
     std::string target = sealed ? "/_matrix/media/v3/upload" : "/_matrix/media/v3/upload?filename=";
     if (!sealed)
-      for (const char c : name)
-        target += std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_'
-                      ? std::string(1, c)
-                      : std::format("%{:02X}", static_cast<unsigned>(static_cast<unsigned char>(c)));
+      target.append_range(percent_encoded(name));
     std::optional<std::string> uri;
     try {
       const auto got = api_->request("POST", target, uploaded, token_ ? std::optional<std::string_view>(*token_) : std::nullopt,

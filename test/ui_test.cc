@@ -454,7 +454,7 @@ TEST(Timeline, ScrollsALongChatAtSixtyFrames) {
   // The same message where it was: what is read does not move, whatever
   // the list does above it -- the oldest bubble made goes as the newest
   // comes, and the offset follows what is shown.
-  const auto again = std::ranges::find(bubbles, reading_id, &mux::ui::message_bubble::message_id);
+  const auto again = std::ranges::find(bubbles, reading_id, &mux::ui::message_bubble<stub>::message_id);
   ASSERT_NE(again, bubbles.end());
   EXPECT_NEAR(again->bounds().fTop, reading, 1.0f) << "what was read moved when a message came below it";
   skiff::paint::defaultFont() = nullptr;
@@ -512,7 +512,7 @@ TEST(Timeline, AShortReplyToALongMessageIsNarrow) {
   const skia::SkRect text = body.parts.text.bounds();
   EXPECT_LT(bubble.width(), 360.0f) << "the bubble: " << bubble.width() << " wide, the quote " << quote.width()
                                     << ", the text " << text.width();
-  EXPECT_NEAR(quote.width(), bubble.width() - 2.0f * mux::ui::message_bubble::kPadX, 1.0f) << "the quote spans it";
+  EXPECT_NEAR(quote.width(), bubble.width() - 2.0f * mux::ui::message_bubble<stub>::kPadX, 1.0f) << "the quote spans it";
   EXPECT_LT(text.height(), 24.0f) << "the answer is one line: " << text.height() << " high";
   EXPECT_TRUE(body.parts.inline_time.visible()) << "the time beside the answer";
   skiff::paint::defaultFont() = nullptr;

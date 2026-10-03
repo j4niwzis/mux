@@ -50,7 +50,7 @@ struct matrix_form : nodes::Stack {
     form_end<Actions> end;
   } parts;
 
-  matrix_form(Actions* a, const std::optional<config::matrix_account>& from)
+  matrix_form(Actions* a, const std::optional<::mux::proto::matrix::kept>& from)
       : actions(a), parts{.end = form_end<Actions>(a, from.has_value())} {
     auto& [user_id, password, homeserver, device_name, end] = parts;
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -66,8 +66,8 @@ struct matrix_form : nodes::Stack {
     }
   }
 
-  [[nodiscard]] std::expected<config::matrix_account, std::string> account() const {
-    config::matrix_account out{.user_id = parts.user_id.text(),
+  [[nodiscard]] std::expected<::mux::proto::matrix::kept, std::string> account() const {
+    ::mux::proto::matrix::kept out{.user_id = parts.user_id.text(),
                                .password = parts.password.text(),
                                .homeserver = typed_or_nothing(parts.homeserver.text()),
                                .device_name = parts.device_name.text()};

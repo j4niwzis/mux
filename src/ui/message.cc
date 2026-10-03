@@ -636,9 +636,16 @@ struct mentioned;
   if (name.empty() || !said.body.plain.starts_with(name))
     return said;
   const auto escaped = [](std::string_view text) {
-    return text | std::views::transform([](char c) {
-             return c == '&' ? std::string("&amp;") : c == '<' ? std::string("&lt;") : c == '>' ? std::string("&gt;")
-                                                     : c == '"' ? std::string("&quot;") : std::string(1, c);
+    // Each character a view: an entity's, or the character itself, where it
+    // is in `text` -- one string made, at the end.
+    return text | std::views::transform([](const char& c) -> std::string_view {
+             switch (c) {
+               case '&': return "&amp;";
+               case '<': return "&lt;";
+               case '>': return "&gt;";
+               case '"': return "&quot;";
+               default: return std::string_view(&c, 1);
+             }
            }) |
            std::views::join | std::ranges::to<std::string>();
   };

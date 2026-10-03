@@ -113,14 +113,14 @@ cme_find_package(OpenSSL REQUIRED)
 set(SPLICE_ERASE ${MUX_ERASE_HANDLERS} CACHE BOOL "splice::variant through tables outside a release build, as mux's handlers")
 cme_declare_port(NAME splice PROVIDES splice
   GITHUB_REPOSITORY j4niwzis/splice
-  GIT_TAG c45833699c8788b540f7140f4a84b6a3e0d522e8
-  # What the pin is: a copy installed on the machine from before it (0.1,
-  # before splice::remapped and chevron.escape) is passed over.
-  VERSION 0.2
+  GIT_TAG 3ebe0635251a5ffd9ed2ad0a027eeff957d340a7
+  # What the pin is: a copy installed on the machine from before it (0.2,
+  # before splice.erased_call) is passed over.
+  VERSION 0.3
   LICENSE GPL-3.0-only
   TARGETS splice)
 cme_options(splice "SPLICE_TESTS OFF")
-cme_find_package(splice 0.2 REQUIRED)
+cme_find_package(splice 0.3 REQUIRED)
 
 # alef, which tern reads addresses with and skiff lays text out with, asked
 # for once with all that both of them need, before either asks: a later ask
@@ -236,10 +236,10 @@ if(MUX_UI)
   # skiff and skiff-widgets say the rest of what they are in their own trees.
   cme_declare_port(NAME skiff PROVIDES skiff
     GITHUB_REPOSITORY j4niwzis/skiff
-    GIT_TAG 0a1788d8eb0556459a9ffb0c382676058552be6e)
+    GIT_TAG 834be9a5f72e8641cc9cecbe80aea2e7f59d6403)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
-    GIT_TAG f59d2965928e552572ccb453edb16fa5b0720d68)
+    GIT_TAG 3b154fb804f7c02cb94da8b8195a62984b1bea7a)
   # Skia's features, each an option asking for its component: GL to draw on
   # the GPU (the software renderer is there either way), and the pictures
   # decoded. A system Skia without one is taken where its option is off.

@@ -72,7 +72,10 @@ struct maker {
 // none by default.
 namespace demo_defaults {
 inline std::optional<mux::config::account_t> demo_account(const auto&) { return std::nullopt; }
-inline void demo(const auto&, maker&) {}
+// Generic in the maker too: a protocol's own, on its state, is then the
+// better match -- not an equal one, as with a maker named here.
+template <class State, class Maker>
+void demo(const State&, Maker&) {}
 }  // namespace demo_defaults
 template <class... Tags>
 [[nodiscard]] std::vector<mux::config::account_t> accounts_of(mux::protocol_list<Tags...>) {

@@ -1429,7 +1429,7 @@ struct conversations_screen : nodes::Stack {
     chat_column(const ui_needs<Actions>& n, Actions* a)
         : parts{.search = search_bar<Actions>(n),
                 .area = timeline_area<Actions>(n),
-                .line = composer_bar<Actions>(a),
+                .line = composer_bar<Actions>(n),
                 .empty = empty_state(a)} {
       header.apply({.fillX = true, .height = chat_header<Actions>::kHeight});
       parts.pinned.apply({.fillX = true, .height = pinned_bar<pinned_press>::kHeight});

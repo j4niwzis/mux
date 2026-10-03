@@ -34,9 +34,11 @@ struct drag_edge : scene::Node {
   // The thin line down its middle, where it has one.
   struct parts_t {
     nodes::Box<> line;
-  } parts{.line = nodes::Box<>(band_colour)};
+  } parts;
 
-  explicit drag_edge(OnDrag what, bool line = true) : on_drag(std::move(what)), with_line(line) {
+  explicit drag_edge(OnDrag what, bool line = true) : drag_edge(legacy_palette(), std::move(what), line) {}
+  drag_edge(const palette& colours, OnDrag what, bool line = true)
+      : on_drag(std::move(what)), with_line(line), parts{.line = nodes::Box<>(colours.band)} {
     fState.setCursor(scene::cursor::resize_horizontal{});
     parts.line.apply({.place = scene::anchor::kTopCentre, .fillY = true, .width = 1.0f});
     parts.line.setVisible(line);
@@ -419,11 +421,11 @@ struct message_input : nodes::Stack {
     emoji_button emoji;
     send_button send;
   } parts;
-  message_input(std::string placeholder, Submit submit, Attach attach_it, Emoji emoji_it, Send send_it)
-      : parts{.attach = attach_button(icon::clip{}, std::move(attach_it)),
+  message_input(const palette& colours, std::string placeholder, Submit submit, Attach attach_it, Emoji emoji_it, Send send_it)
+      : parts{.attach = attach_button(colours, icon::clip{}, std::move(attach_it)),
               .field = field_t(std::move(placeholder), std::move(submit)),
-              .emoji = emoji_button(icon::smile{}, std::move(emoji_it)),
-              .send = send_button(icon::send{}, std::move(send_it))} {
+              .emoji = emoji_button(colours, icon::smile{}, std::move(emoji_it)),
+              .send = send_button(colours, icon::send{}, std::move(send_it))} {
     auto& [attach, field, emoji, send] = parts;
     emoji.apply({.alignSelf = scene::align::kEnd});
     this->setHorizontal();
@@ -435,7 +437,7 @@ struct message_input : nodes::Stack {
     // What is typed looks as it will be sent: the messages' size, as in
     // tdesktop, whose field takes the message font.
     field.setFontSize(13.0f);
-    send.set_colour(accent_colour);
+    send.set_colour(colours.accent);
   }
 };
 
@@ -471,8 +473,8 @@ struct composer_bar : nodes::Stack {
       delete_button remove;
       retry_button retry;
     } parts;
-    explicit unsent_row(Actions* a)
-        : parts{.said = nodes::Text("Some of your messages have not been sent", 13.0f, error_colour),
+    unsent_row(const palette& colours, Actions* a)
+        : parts{.said = nodes::Text("Some of your messages have not been sent", 13.0f, colours.error),
                 .remove = delete_button("Delete all", {a}),
                 .retry = retry_button("Retry all", {a})} {
       this->setHorizontal();
@@ -488,9 +490,10 @@ struct composer_bar : nodes::Stack {
   // leaves out.
   struct no_post_row : nodes::Stack {
     struct parts_t {
-      nodes::Text line{"You don't have permission to post in this chat", 13.0f, dim_colour};
+      nodes::Text line;
     } parts;
-    no_post_row() {
+    explicit no_post_row(const palette& colours)
+        : parts{.line = nodes::Text("You don't have permission to post in this chat", 13.0f, colours.dim)} {
       this->setHorizontal();
       fStack.justify = nodes::justify::middle{};
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .minHeight = 54.0f, .padding = {18.0f, 12.0f, 18.0f, 12.0f}});
@@ -503,10 +506,12 @@ struct composer_bar : nodes::Stack {
   using go_on = ask<Actions, &Actions::open_replacement>;
   struct replaced_row : nodes::Stack {
     struct parts_t {
-      nodes::Text line{"This room has been replaced and is no longer active.", 13.0f, dim_colour};
+      nodes::Text line;
       widgets::Button<go_on> go;
     } parts;
-    explicit replaced_row(Actions* a) : parts{.go = widgets::Button<go_on>("The conversation continues here", {a})} {
+    replaced_row(const palette& colours, Actions* a)
+        : parts{.line = nodes::Text("This room has been replaced and is no longer active.", 13.0f, colours.dim),
+                .go = widgets::Button<go_on>("The conversation continues here", {a})} {
       this->setHorizontal();
       this->setGap(10.0f);
       fStack.justify = nodes::justify::middle{};
@@ -535,10 +540,10 @@ struct composer_bar : nodes::Stack {
       widgets::Button<deny_it> deny;
       widgets::Button<approve_it> approve;
     } parts;
-    knock_row(Actions* a, const knock_request& one, std::size_t more)
+    knock_row(const palette& colours, Actions* a, const knock_request& one, std::size_t more)
         : parts{.said = nodes::Text(std::format("{} asks to join{}{}", one.name, one.reason.empty() ? std::string() : ": " + one.reason,
                                                 more ? std::format(" (and {} more)", more) : std::string()),
-                                    13.0f, text_colour),
+                                    13.0f, colours.text),
                 .deny = widgets::Button<deny_it>("Deny", {a, one.id}),
                 .approve = widgets::Button<approve_it>("Approve", {a, one.id})} {
       this->setHorizontal();
@@ -549,8 +554,10 @@ struct composer_bar : nodes::Stack {
       parts.approve.setPrimary(true);
     }
   };
+  // The colours it is made in, for the rows it makes later.
+  const palette* colours_ = nullptr;
   struct parts_t {
-    nodes::Box<> divider{band_colour};
+    nodes::Box<> divider;
     std::optional<knock_row> knocks;
     unsent_row unsent;
     context_row context_line;
@@ -566,18 +573,22 @@ struct composer_bar : nodes::Stack {
 
   // Declared: the divider, the unsent bar, the answer's line where there is
   // one, the row -- or, where the reader may not post, the line saying so.
-  explicit composer_bar(Actions* a) : composer_bar(a, {a}, {a}, {a}, {a}, {a}) {}
-  composer_bar(Actions* a, typename Where::cancel cancel, typename Where::submit submit, typename Where::attach attach,
+  explicit composer_bar(const ui_needs<Actions>& n) : composer_bar(n, {n.actions}, {n.actions}, {n.actions}, {n.actions}, {n.actions}) {}
+  composer_bar(const ui_needs<Actions>& n, typename Where::cancel cancel, typename Where::submit submit, typename Where::attach attach,
                typename Where::emoji emoji, typename Where::send send)
-      : parts{.unsent = unsent_row(a),
-              .context_line = context_row(std::move(cancel)),
-              .input = input_row(std::string(Where::placeholder), std::move(submit), std::move(attach), std::move(emoji), std::move(send)),
-              .replaced = replaced_row(a)} {
+      : colours_(n.colours),
+        parts{.divider = nodes::Box<>(n.colours->band),
+              .unsent = unsent_row(*n.colours, n.actions),
+              .context_line = context_row(*n.colours, std::move(cancel)),
+              .input = input_row(*n.colours, std::string(Where::placeholder), std::move(submit), std::move(attach), std::move(emoji),
+                                 std::move(send)),
+              .no_post = no_post_row(*n.colours),
+              .replaced = replaced_row(*n.colours, n.actions)} {
     parts.unsent.setVisible(false);
     parts.no_post.setVisible(false);
     parts.replaced.setVisible(false);
     parts.context_line.setVisible(false);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .background = sidebar_colour});
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .background = n.colours->sidebar});
     parts.divider.apply({.fillX = true, .height = 1.0f});
   }
 
@@ -632,7 +643,7 @@ struct composer_bar : nodes::Stack {
     if (key == knocks_shown)
       return;
     knocks_shown = key;
-    parts.knocks.emplace(a, knocking.front(), knocking.size() - 1);
+    parts.knocks.emplace(*colours_, a, knocking.front(), knocking.size() - 1);
     this->invalidateLayout();
   }
   std::string knocks_shown;
@@ -675,17 +686,17 @@ struct mark_button : scene::Node {
     nodes::Text glyph;
     badge_t badge;
   } parts;
-  mark_button(Actions* a, mark_kind_t which, std::string glyph)
-      : actions(a), kind(which), parts{.glyph = nodes::Text(std::move(glyph), 18.0f, text_colour, true)} {
+  mark_button(const palette& colours, Actions* a, mark_kind_t which, std::string glyph)
+      : actions(a), kind(which), parts{.glyph = nodes::Text(std::move(glyph), 18.0f, colours.text, true), .badge = badge_t(colours)} {
     fState.apply({.place = scene::anchor::kBottomRight,
                   .x = -18.0f,
                   .y = -12.0f,
                   .width = 42.0f,
                   .height = 42.0f,
                   .cornerRadius = 21.0f,
-                  .background = sidebar_colour,
-                  .hoverBackground = chosen_colour,
-                  .border = scene::Border{band_colour, 1.0f}});
+                  .background = colours.sidebar,
+                  .hoverBackground = colours.chosen,
+                  .border = scene::Border{colours.band, 1.0f}});
     parts.glyph.apply({.place = scene::anchor::kCentre});
     this->setVisible(false);
   }
@@ -743,8 +754,9 @@ struct jump_button : scene::Node {
   struct parts_t {
     nodes::Icon chevron;
     badge_t badge;
-  } parts{.chevron = nodes::Icon(shape_of(icon::down{}), text_colour)};
-  explicit jump_button(Actions* a) : actions(a) {
+  } parts;
+  jump_button(const palette& colours, Actions* a)
+      : actions(a), parts{.chevron = nodes::Icon(shape_of(icon::down{}), colours.text), .badge = badge_t(colours)} {
     parts.badge.setVisible(false);
     fState.apply({.place = scene::anchor::kBottomRight,
                   .x = -18.0f,
@@ -752,9 +764,9 @@ struct jump_button : scene::Node {
                   .width = 42.0f,
                   .height = 42.0f,
                   .cornerRadius = 21.0f,
-                  .background = sidebar_colour,
-                  .hoverBackground = chosen_colour,
-                  .border = scene::Border{band_colour, 1.0f}});
+                  .background = colours.sidebar,
+                  .hoverBackground = colours.chosen,
+                  .border = scene::Border{colours.band, 1.0f}});
     parts.chevron.apply({.fill = true});
   }
   void set_unseen(int count) {
@@ -778,17 +790,17 @@ struct back_button : scene::Node {
   Actions* actions = nullptr;
   struct parts_t {
     nodes::Icon mark;
-  } parts{.mark = nodes::Icon(shape_of(icon::back{}), text_colour)};
-  explicit back_button(Actions* a) : actions(a) {
+  } parts;
+  back_button(const palette& colours, Actions* a) : actions(a), parts{.mark = nodes::Icon(shape_of(icon::back{}), colours.text)} {
     fState.apply({.place = scene::anchor::kBottomRight,
                   .x = -18.0f,
                   .y = -12.0f,
                   .width = 42.0f,
                   .height = 42.0f,
                   .cornerRadius = 21.0f,
-                  .background = sidebar_colour,
-                  .hoverBackground = chosen_colour,
-                  .border = scene::Border{band_colour, 1.0f}});
+                  .background = colours.sidebar,
+                  .hoverBackground = colours.chosen,
+                  .border = scene::Border{colours.band, 1.0f}});
     parts.mark.apply({.fill = true});
     this->setVisible(false);
   }

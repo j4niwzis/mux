@@ -1636,7 +1636,7 @@ struct threads_panel : nodes::Stack {
     composer_bar<Actions, in_thread> line;
   } parts;
   explicit threads_panel(const ui_needs<Actions>& n) : threads_panel(n, n.actions) {}
-  threads_panel(const ui_needs<Actions>& n, Actions* a) : actions(a), parts{.head = head_t("Threads", {a}, {a}, false, true), .answers = timeline_area<Actions>(n), .line = composer_bar<Actions, in_thread>(a, {this}, {this}, {a}, {a}, {this})} {
+  threads_panel(const ui_needs<Actions>& n, Actions* a) : actions(a), parts{.head = head_t("Threads", {a}, {a}, false, true), .answers = timeline_area<Actions>(n), .line = composer_bar<Actions, in_thread>(n, {this}, {this}, {a}, {a}, {this})} {
     fState.apply({.fillY = true, .background = sidebar_colour});
     parts.divider.apply({.fillX = true, .height = 1.0f});
     parts.empty.apply({.margin = {16.0f, 16.0f, 0.0f, 16.0f}});

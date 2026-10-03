@@ -420,15 +420,17 @@ if(MUX_UI)
     $<${mux_erased}:src/app/walks_boxes.cc>
     $<${mux_erased}:src/app/walks_popups.cc>
     $<${mux_erased}:src/app/walks_emoji.cc>)
-  # The walks' units at -O1 outside a release build: tens of thousands of
-  # small walks each, and -Os spent most of their minutes inlining and
-  # optimizing them (walks_chats.cc: 4.4 of its 6.5 minutes in the
-  # backend). A release build has none of these units.
-  set(MUX_WALKS_OPTIMIZE "-O1" CACHE STRING "Optimization for the erased walks' units, outside a release build")
+  # The walks' units no higher than -O1 in an optimised build that is not a
+  # release one (RelWithDebInfo, MinSizeRel): tens of thousands of small
+  # walks each, and -Os spent most of their minutes inlining and optimizing
+  # them (walks_chats.cc: 4.4 of its 6.5 minutes in the backend). A Debug
+  # build keeps its own -O0 -- raised to -O1 it only took longer -- and a
+  # release build has none of these units.
+  set(MUX_WALKS_OPTIMIZE "-O1" CACHE STRING "Optimization for the erased walks' units in an optimised build that is not a release one")
   set_source_files_properties(src/app/walks_window.cc src/app/walks_chats.cc src/app/walks_side.cc src/app/walks_column.cc src/app/walks_bubbles.cc
     src/app/walks_composer.cc src/app/walks_info.cc src/app/walks_accounts.cc src/app/walks_drawer.cc
     src/app/walks_settings.cc src/app/walks_manage.cc src/app/walks_boxes.cc src/app/walks_popups.cc src/app/walks_emoji.cc
-    PROPERTIES COMPILE_OPTIONS "${MUX_WALKS_OPTIMIZE}")
+    PROPERTIES COMPILE_OPTIONS "$<$<CONFIG:RelWithDebInfo,MinSizeRel>:${MUX_WALKS_OPTIMIZE}>")
   # The program's parts and what they share -- its network, its demo, what it
   # keeps on disk, the requests of its window, the names it reads, each part
   # of what it does, the protocols' glue: module units that import the UI and

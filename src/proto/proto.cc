@@ -141,6 +141,9 @@ constexpr request_list<> requests_of(const auto&) { return {}; }
 inline std::vector<part::line> message_lines(const auto&, const conversation&, const message&) { return {}; }
 inline std::vector<part::badge> header_badges(const auto&, const conversation&, const auto&) { return {}; }
 inline std::vector<part::badge> row_badges(const auto&, const conversation&) { return {}; }
+// An address's local part, what someone is called before their name is
+// known: the whole of it, unless the protocol says.
+inline std::string local_part(const auto&, std::string_view address) { return std::string(address); }
 // No role said beside a sender's name.
 inline std::string sender_role(const auto&, const conversation&, std::string_view) { return {}; }
 // Any chat may be left.
@@ -290,6 +293,16 @@ inline constexpr struct header_badges_t {
     }, state);
   }
 } header_badges{};
+// An address's local part (alice of alice@example.com, of @alice:x.org).
+inline constexpr struct local_part_t {
+  template <class State>
+  std::string operator()(const State& state, std::string_view address) const {
+    return splice::visit([&](const auto& now) {
+      using defaults::local_part;
+      return local_part(now, address);
+    }, state);
+  }
+} local_part_of{};
 // A sender's role in the chat, beside their name over their messages, as
 // Telegram's "admin": its protocol's word for it, or none.
 inline constexpr struct sender_role_t {

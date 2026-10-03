@@ -210,7 +210,7 @@ template <class Actions>
   // original, where its link is.
   if (one.parts.body.parts.forwarded && one.said.forwarded &&
       one.parts.body.parts.forwarded->shownBounds().contains(press.x, press.y)) {
-    if (one.said.forwarded->from.starts_with('@') &&
+    if (proto::person_link(state_before(protocol_of(one.said.forwarded->from)), one.said.forwarded->from) &&
         one.parts.body.parts.forwarded->parts.who.bounds()
             .makeOffset(one.parts.body.parts.forwarded->fState.fShiftX, one.parts.body.parts.forwarded->fState.fShiftY)
             .contains(press.x, press.y)) {

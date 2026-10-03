@@ -78,9 +78,7 @@ export namespace mux::ui {
 // What someone is called in a chat, before telling them apart: their name
 // there, shown plainly, or their ID's local part.
 [[nodiscard]] inline std::string local_part(std::string_view who) {
-  if (who.starts_with('@'))
-    who.remove_prefix(1);
-  return std::string(who.substr(0, who.find_first_of("@:")));
+  return proto::local_part_of(state_before(protocol_of(who)), who);
 }
 [[nodiscard]] inline std::string called(const member& one) {
   std::string name = shown_plainly(one.name);

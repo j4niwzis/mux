@@ -43,6 +43,12 @@ inline std::string direct_contact(const state&, const conversation& one) {
   const auto other = std::ranges::find_if(one.members, [&](const member& each) { return each.id != one.id.account.address; });
   return other == one.members.end() ? std::string() : other->id;
 }
+// An ID's local part: after its sigil (@, #, !), before its server.
+inline std::string local_part(const state&, std::string_view address) {
+  if (address.starts_with('@') || address.starts_with('#') || address.starts_with('!'))
+    address.remove_prefix(1);
+  return std::string(address.substr(0, address.find(':')));
+}
 // A sender's role, as the room's power levels give it: 100 and 50.
 inline std::string sender_role(const state&, const conversation& in, std::string_view who) {
   const auto level = in.powers.find(std::string(who));

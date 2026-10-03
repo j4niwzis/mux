@@ -31,10 +31,10 @@ export namespace mux::ui {
 // Up to two letters for an avatar: the first character of each of the first
 // two words of a name, or of an address's local part -- in any script, whole
 // (a Cyrillic name has Cyrillic initials, not a question mark).
-[[nodiscard]] inline std::string initials_of(std::string_view name) {
-  if (name.starts_with('@'))
-    name.remove_prefix(1);
-  name = name.substr(0, name.find_first_of("@:"));
+[[nodiscard]] inline std::string initials_of(std::string_view whole) {
+  // An address: its local part, as its protocol has it.
+  const std::string local = proto::local_part_of(state_before(protocol_of(whole)), whole);
+  std::string_view name = local;
   std::string out;
   int taken = 0;
   bool start = true;

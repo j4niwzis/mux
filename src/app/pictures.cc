@@ -10,6 +10,7 @@ import mux.vault;
 import splice;
 import skia;
 import mux.core;
+import mux.protocols;
 import mux.config;
 import mux.media;
 import mux.host;
@@ -181,7 +182,7 @@ class pictures_part {
           // anyone else's profile asked of their server, once, and its
           // picture then.
           for (std::size_t i = first; i < last && i < one.timeline.size(); ++i)
-            if (const auto& forwarded = one.timeline[i].forwarded; forwarded && forwarded->from.starts_with('@')) {
+            if (const auto& forwarded = one.timeline[i].forwarded; forwarded && mux::proto::person_link(mux::state_before(mux::proto::protocol_of(forwarded->from)), forwarded->from)) {
               const std::string& from = forwarded->from;
               if (const auto in_room = std::ranges::find(one.members, from, &member::id); in_room != one.members.end() && in_room->avatar)
                 want(id, in_room->avatar, from);

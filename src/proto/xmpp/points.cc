@@ -33,6 +33,11 @@ inline bool can_leave(const state&, const conversation& chat) {
                        chat.kind);
 }
 
+// A JID's local part: before its @.
+inline std::string local_part(const state&, std::string_view address) {
+  return std::string(address.substr(0, address.find('@')));
+}
+
 // An xmpp: URI (RFC 5122).
 inline std::optional<std::string> share_link(const state&, std::string_view address) { return "xmpp:" + std::string(address); }
 

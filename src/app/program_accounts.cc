@@ -436,9 +436,8 @@ void app::apply(const request::create_room& one) {
   if (!by || shared.demo())
     return;
   root().close_new_room();
-  std::string alias = one.alias;
-  if (alias.starts_with('#'))
-    alias = alias.substr(1, alias.find(':') == std::string::npos ? std::string::npos : alias.find(':') - 1);
+  // Its alias's local part, as the protocol has it (#name:server, name).
+  const std::string alias = mux::proto::local_part_of(mux::ui::protocol_state_of(*by), one.alias);
   net->create_room(*by, one.name, one.topic, one.open, one.open ? alias : std::string(), one.federate, one.encrypted);
   root().show_message("New room", "Making " + one.name + "\u2026");
 }

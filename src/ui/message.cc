@@ -924,8 +924,12 @@ struct message_pictures {
   static std::optional<skiff::scene::PillPicture> pill(std::string_view target) {
     const auto at = target.find("#/");
     const std::string_view id = at == std::string_view::npos ? target : target.substr(at + 2);
-    // A room's: its real picture only.
-    if (id.starts_with('#') || id.starts_with('!')) {
+    // A room's -- a place, as its protocol reads the ID: its real picture only.
+    const auto link = logic::link_of_id(id);
+    const bool place = link && splice::visit(splice::overloaded{[](const logic::mention::place&) { return true; },
+                                                                [](const auto&) { return false; }},
+                                             logic::mention_in(*link));
+    if (place) {
       const skia::Sp<skia::SkImage>* real = avatar_images().find(id);
       if (!real || !*real)
         return std::nullopt;
@@ -1706,12 +1710,13 @@ struct message_bubble : nodes::Stack {
     if (said.forwarded) {
       const std::string& who = said.forwarded->name.empty() ? said.forwarded->from : said.forwarded->name;
       std::vector<nodes::Text::Link> spans;
-      if (const auto link = proto::person_link(state_before(protocol_of(said.forwarded->from)), said.forwarded->from);
-          link && !who.empty())
+      // A person their protocol links to: their pill, and their picture.
+      const auto link = proto::person_link(state_before(protocol_of(said.forwarded->from)), said.forwarded->from);
+      if (link && !who.empty())
         spans.push_back(nodes::Text::Link{0, who.size(), *link});
       mentioned shown = with_mentions(who, std::move(spans), in, now);
       body.parts.forwarded.emplace(std::move(shown.text), std::move(shown.links), outgoing ? sent_time_colour : accent_colour,
-                                   said.forwarded->from.starts_with('@') ? said.forwarded->from : std::string());
+                                   link ? said.forwarded->from : std::string());
     }
     // Something done, not said: a line in the middle, on a plate of its own,
     // with no avatar and no name -- as tdesktop's service messages.

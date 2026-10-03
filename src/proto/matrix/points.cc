@@ -43,6 +43,8 @@ inline std::string direct_contact(const state&, const conversation& one) {
   const auto other = std::ranges::find_if(one.members, [&](const member& each) { return each.id != one.id.account.address; });
   return other == one.members.end() ? std::string() : other->id;
 }
+// A room's !id is no name for anyone; an alias and a user ID are.
+constexpr bool id_reads_as_name(const state&, std::string_view id) { return !id.starts_with('!'); }
 // An ID's local part: after its sigil (@, #, !), before its server.
 inline std::string local_part(const state&, std::string_view address) {
   if (address.starts_with('@') || address.starts_with('#') || address.starts_with('!'))

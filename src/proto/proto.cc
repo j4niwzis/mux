@@ -102,7 +102,8 @@ struct line {
 struct badge {
   std::string text;
   tone_t tone = tone::plain{};
-  friend bool operator==(const badge&, const badge&) = default;
+  // By hand: splice's variant has no ==, and a tone is only which it is.
+  friend bool operator==(const badge& a, const badge& b) { return a.text == b.text && a.tone.index() == b.tone.index(); }
 };
 // A banner, and its button where it has one: what it asks is one of the
 // protocol's own requests (Asks), done by the protocol's program glue.
@@ -155,6 +156,8 @@ inline std::vector<part::badge> row_badges(const auto&, const conversation&) { r
 inline std::string local_part(const auto&, std::string_view address) { return std::string(address); }
 // Bubbles.
 inline part::style_t message_style(const auto&) { return part::style::bubbles{}; }
+// Any ID reads as a name, written in a message.
+constexpr bool id_reads_as_name(const auto&, std::string_view) { return true; }
 // No role said beside a sender's name.
 inline std::string sender_role(const auto&, const conversation&, std::string_view) { return {}; }
 // Any chat may be left.
@@ -304,6 +307,17 @@ inline constexpr struct header_badges_t {
     }, state);
   }
 } header_badges{};
+// Whether an ID written in a message is shown as written, or by the name
+// of what it names: a Matrix room's !id is no name for anyone.
+inline constexpr struct id_reads_as_name_t {
+  template <class State>
+  bool operator()(const State& state, std::string_view id) const {
+    return splice::visit([&](const auto& now) {
+      using defaults::id_reads_as_name;
+      return id_reads_as_name(now, id);
+    }, state);
+  }
+} id_reads_as_name{};
 // The layout a protocol's chats show their messages in.
 inline constexpr struct message_style_t {
   template <class State>

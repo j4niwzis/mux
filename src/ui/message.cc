@@ -772,9 +772,10 @@ struct mentioned {
       } else {
         if (!pictured)
           out.waiting.push_back(target);
-        // An address written in the text stays as written -- but a room's
-        // id (!…) is no name for anyone: shown by the room's name.
-        const bool by_address = span.as_written && !span.as_written->starts_with('!');
+        // An address written in the text stays as written -- but an ID
+        // its protocol says is no name (a Matrix room's !id): by the name.
+        const bool by_address =
+            span.as_written && proto::id_reads_as_name(state_before(protocol_of(*span.as_written)), *span.as_written);
         shown = (pictured ? std::string("\u2002\u2002") : std::string()) + (by_address ? words : name);
         pill = nodes::Text::Link{span.first, span.first + shown.size(), opens, true};
       }

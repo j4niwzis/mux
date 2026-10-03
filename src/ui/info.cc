@@ -375,7 +375,7 @@ struct room_card : nodes::Stack {
       out.clear();
     if (known.members)
       out += std::format("{}{} {}", out.empty() ? "" : " · ", *known.members, *known.members == 1 ? "member" : "members");
-    return out.empty() ? std::string("Matrix room") : out;
+    return out.empty() ? std::string("Room") : out;
   }
   struct parts_t {
     top_bar top;
@@ -998,9 +998,13 @@ struct start_chat_box : nodes::Stack {
     parts.note.apply({.fillX = true, .margin = {6.0f, 10.0f, 0.0f, 10.0f}});
     this->show_rows();
   }
-  // Someone's whole Matrix ID, as typed: offered as it is, first.
+  // Someone's whole address, as typed -- a person, as some protocol reads
+  // it: offered as it is, first.
   [[nodiscard]] static bool whole_id(std::string_view text) {
-    return text.size() > 3 && text.starts_with('@') && text.find(':') != std::string_view::npos;
+    const auto link = logic::link_of_id(text);
+    return link && splice::visit(splice::overloaded{[](const logic::mention::person&) { return true; },
+                                                    [](const auto&) { return false; }},
+                                 logic::mention_in(*link));
   }
   [[nodiscard]] static std::string lower(std::string_view text) {
     std::string out(text);

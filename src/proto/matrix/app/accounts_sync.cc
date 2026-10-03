@@ -13,11 +13,11 @@ import mux.core;
 import mux.config;
 import mux.http;
 import mux.net;
-import mux.matrix;
+import mux.proto.matrix.client;
 import loom.cs.sliding_sync;
-import mux.matrix.crypto;
+import mux.proto.matrix.crypto;
 
-namespace mux::matrix {
+namespace mux::proto::matrix::client {
 // Defined in the class, but a member of a module's class is not inline: the
 // extern template in network.cc leaves them to be made here, as the rest.
 template account<mux::app::post_change>::account(mux::net::loop& loop, mux::net::tls& tls, settings how, mux::app::post_change sink);
@@ -88,4 +88,4 @@ template void account<mux::app::post_change>::withheld_in(const loom::ev::m_room
 template void account<mux::app::post_change>::request_secrets(const std::string& device);
 template void account<mux::app::post_change>::secret_in(const crypto::secret_got& got);
 template void account<mux::app::post_change>::secret_request_in(const std::string& sender, const loom::ev::m_secret_request_content_t& content);
-}  // namespace mux::matrix
+}  // namespace mux::proto::matrix::client

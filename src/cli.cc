@@ -13,8 +13,8 @@ import std;
 import splice;
 import mux.core;
 import mux.net;
-import mux.xmpp;
-import mux.matrix;
+import mux.proto.xmpp.client;
+import mux.proto.matrix.client;
 import mux.config;
 import mux.proto.clients;
 
@@ -192,8 +192,8 @@ void keyboard(mux::net::loop& loop, Account& account) {
 // Each protocol's account, made at namespace scope: clang 23 crashed on
 // format strings first made deep inside one's instantiation (see
 // app/network.cc).
-template class mux::xmpp::account<print_change>;
-template class mux::matrix::account<print_change>;
+template class mux::proto::xmpp::client::account<print_change>;
+template class mux::proto::matrix::client::account<print_change>;
 
 int main(int argc, char** argv) {
   if (argc < 2 || argc > 4) {

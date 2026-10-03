@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.matrix:requests -- What the window asks of an account: messages sent, edited, removed, reactions, reads, history, typing, joining, members.
-export module mux.matrix:requests;
+// mux.proto.matrix.client:requests -- What the window asks of an account: messages sent, edited, removed, reactions, reads, history, typing, joining, members.
+export module mux.proto.matrix.client:requests;
 
 import std;
 import splice;
@@ -23,7 +23,7 @@ import loom.cs.list_public_rooms;
 import loom.cs.space_hierarchy;
 import loom.cs.room_send;
 import loom.cs.rooms;
-import mux.matrix.crypto;
+import mux.proto.matrix.crypto;
 import loom.cs.keys;
 import loom.cs.cross_signing;
 import loom.cs.room_state;
@@ -49,7 +49,7 @@ import mux.logic.markdown;
 import :account;
 
 // The members defined here are declared in :account, and exported there.
-namespace mux::matrix {
+namespace mux::proto::matrix::client {
 
 // What a push server says of its Matrix gateway (UnifiedPush's gateway
 // discovery): {"unifiedpush":{"gateway":"matrix"}} where it has one.
@@ -1816,9 +1816,9 @@ void account<Sink>::fetch_members(std::string room) {
   });
 }
 
-}  // namespace mux::matrix
+}  // namespace mux::proto::matrix::client
 
-namespace mux::matrix {
+namespace mux::proto::matrix::client {
 template <class Sink>
 void account<Sink>::reset_backup() {
   this->spawn_guarded([this] {
@@ -1895,4 +1895,4 @@ void account<Sink>::sign_out_unverified(std::string password) {
     this->sign_out_sessions(std::move(unverified), password);
   });
 }
-}  // namespace mux::matrix
+}  // namespace mux::proto::matrix::client

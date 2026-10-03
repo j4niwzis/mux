@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.matrix:base -- Settings, and reading values out of events.
-export module mux.matrix:base;
+// mux.proto.matrix.client:base -- Settings, and reading values out of events.
+export module mux.proto.matrix.client:base;
 
 import std;
 import knot;
@@ -23,7 +23,7 @@ import mux.core;
 import mux.http;
 import mux.net;
 
-export namespace mux::matrix {
+export namespace mux::proto::matrix::client {
 
 // Matrix's room rules and levels, as its protocol's state module has them
 // (mux.proto.matrix.state): named here as before.
@@ -65,4 +65,4 @@ struct settings {
 inline knot::raw as_body(const auto& content) { return knot::raw{knot::to_json_string(content)}; }
 
 
-}  // namespace mux::matrix
+}  // namespace mux::proto::matrix::client

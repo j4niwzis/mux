@@ -371,7 +371,7 @@ class pool {
 
 // One exchange, made once, here: what a program calls instead of the
 // request templates where it would rather not have them inlined into each
-// of its callers (outside a release build, mux::matrix's endpoints).
+// of its callers (outside a release build, mux::proto::matrix::client's endpoints).
 response exchange(pool& over, std::string_view method, std::string_view target, std::string_view body,
                   std::optional<std::string_view> bearer, std::chrono::seconds timeout) {
   return over.request(method, target, body, bearer, timeout);

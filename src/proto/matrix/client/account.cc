@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.matrix:account -- A Matrix account: the class, its state and what it does, declared.
-export module mux.matrix:account;
+// mux.proto.matrix.client:account -- A Matrix account: the class, its state and what it does, declared.
+export module mux.proto.matrix.client:account;
 
 import std;
 import splice;
@@ -12,7 +12,7 @@ import loom.cs.joining;
 import loom.cs.keys;
 import loom.cs.to_device;
 import loom.cs.sliding_sync;
-import mux.matrix.crypto;
+import mux.proto.matrix.crypto;
 import mux.vault;
 import loom.cs.leaving;
 import loom.cs.login;
@@ -35,7 +35,7 @@ import mux.http;
 import mux.net;
 export import :names;
 
-export namespace mux::matrix {
+export namespace mux::proto::matrix::client {
 
 struct failure {
   std::optional<loom::error> server;
@@ -661,4 +661,4 @@ class account {
   bool stopping_ = false;
 };
 
-}  // namespace mux::matrix
+}  // namespace mux::proto::matrix::client

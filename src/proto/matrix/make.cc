@@ -1,23 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.proto.matrix.client -- A Matrix account's client, made from what the
+// mux.proto.matrix.make -- A Matrix account's client, made from what the
 // account keeps: make_account(kept, ...), found by ADL where the program
 // starts accounts. Its type is what the program holds it as.
-export module mux.proto.matrix.client;
+export module mux.proto.matrix.make;
 
 import std;
 import mux.core;
 import mux.config;
 import mux.net;
-import mux.matrix;
+import mux.proto.matrix.client;
 import mux.proto.kept;
 
 export namespace mux::proto::matrix {
 
 template <class Sink>
-[[nodiscard]] std::unique_ptr<::mux::matrix::account<Sink>> make_account(const kept& saved, ::mux::net::loop& loop,
+[[nodiscard]] std::unique_ptr<::mux::proto::matrix::client::account<Sink>> make_account(const kept& saved, ::mux::net::loop& loop,
                                                                          ::mux::net::tls& tls,
                                                                          std::optional<::mux::net::proxy> via, Sink sink) {
-  ::mux::matrix::settings how{.user_id = saved.user_id,
+  ::mux::proto::matrix::client::settings how{.user_id = saved.user_id,
                               .password = saved.password,
                               .homeserver = saved.homeserver,
                               .device_name = saved.device_name,
@@ -31,7 +31,7 @@ template <class Sink>
                                                   return std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_' ? c : '_';
                                                 }) | std::ranges::to<std::string>()) + ".json"),
                               .only_verified = saved.only_verified.value_or(false)};
-  return std::make_unique<::mux::matrix::account<Sink>>(loop, tls, std::move(how), std::move(sink));
+  return std::make_unique<::mux::proto::matrix::client::account<Sink>>(loop, tls, std::move(how), std::move(sink));
 }
 
 }  // namespace mux::proto::matrix

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.matrix:sync -- The sync: logging in, /sync long-polled, kept on disk, and what it brought told as changes.
-export module mux.matrix:sync;
+// mux.proto.matrix.client:sync -- The sync: logging in, /sync long-polled, kept on disk, and what it brought told as changes.
+export module mux.proto.matrix.client:sync;
 
 import mux.vault;
 import std;
-import mux.matrix.crypto;
+import mux.proto.matrix.crypto;
 import splice;
 import knot;
 import loom.cs.sliding_sync;
@@ -30,7 +30,7 @@ import mux.net;
 import :account;
 
 // The members defined here are declared in :account, and exported there.
-namespace mux::matrix {
+namespace mux::proto::matrix::client {
 
 // What the password login says of who: the user's local part.
 struct user_field {
@@ -1625,9 +1625,9 @@ void account<Sink>::load_encrypted() {
   }
 }
 
-}  // namespace mux::matrix
+}  // namespace mux::proto::matrix::client
 
-namespace mux::matrix {
+namespace mux::proto::matrix::client {
 // A changed identity first -- whatever was verified was the old one; then
 // verified, by emoji (a device of theirs) or their master key; else not.
 template <class Sink>
@@ -1641,9 +1641,9 @@ void account<Sink>::tell_trust(std::string user) {
     now = trust::verified{};
   sink_(change::trust_changed{id_, std::move(user), std::move(now)});
 }
-}  // namespace mux::matrix
+}  // namespace mux::proto::matrix::client
 
-namespace mux::matrix {
+namespace mux::proto::matrix::client {
 
 template <class Sink>
 void account<Sink>::request_secrets(const std::string& device) {
@@ -1768,9 +1768,9 @@ void account<Sink>::secret_request_in(const std::string& sender, const loom::ev:
                                               .body = {.messages = std::move(messages)}}))
     log(id_, "{} given to your session {}", *content.name, device->device_id);
 }
-}  // namespace mux::matrix
+}  // namespace mux::proto::matrix::client
 
-namespace mux::matrix {
+namespace mux::proto::matrix::client {
 template <class Sink>
 void account<Sink>::tell_devices(std::string user) {
   if (!api_ || !crypto_)
@@ -1795,9 +1795,9 @@ void account<Sink>::tell_devices(std::string user) {
   }
   sink_(change::devices_listed{id_, std::move(user), std::move(devices)});
 }
-}  // namespace mux::matrix
+}  // namespace mux::proto::matrix::client
 
-namespace mux::matrix {
+namespace mux::proto::matrix::client {
 template <class Sink>
 void account<Sink>::check_own_sessions() {
   if (!api_ || !crypto_)
@@ -1839,9 +1839,9 @@ void account<Sink>::check_own_sessions() {
                          std::format("Not verified: {}. Verify each from Sessions -- or sign it out, if it was not you.", listed)});
   }
 }
-}  // namespace mux::matrix
+}  // namespace mux::proto::matrix::client
 
-namespace mux::matrix {
+namespace mux::proto::matrix::client {
 template <class Sink>
 void account<Sink>::withheld_in(const loom::ev::m_room_key_withheld_content_t& content) {
   if (!content.session_id)
@@ -1864,16 +1864,16 @@ void account<Sink>::withheld_in(const loom::ev::m_room_key_withheld_content_t& c
       sink_(change::message_added{std::move(one), placement::aside{}});
     }
 }
-}  // namespace mux::matrix
+}  // namespace mux::proto::matrix::client
 
-namespace mux::matrix {
+namespace mux::proto::matrix::client {
 template <class Sink>
 void account<Sink>::set_only_verified(bool on) {
   how_.only_verified = on;
 }
-}  // namespace mux::matrix
+}  // namespace mux::proto::matrix::client
 
-namespace mux::matrix {
+namespace mux::proto::matrix::client {
 template <class Sink>
 void account<Sink>::accept_identity(std::string user) {
   if (!api_ || !crypto_)
@@ -1888,4 +1888,4 @@ void account<Sink>::accept_identity(std::string user) {
   identity_changed_.erase(user);
   this->tell_trust(std::move(user));
 }
-}  // namespace mux::matrix
+}  // namespace mux::proto::matrix::client

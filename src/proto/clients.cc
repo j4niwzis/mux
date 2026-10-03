@@ -4,5 +4,5 @@
 // beside its tag.
 export module mux.proto.clients;
 
-export import mux.proto.xmpp.client;
-export import mux.proto.matrix.client;
+export import mux.proto.xmpp.make;
+export import mux.proto.matrix.make;

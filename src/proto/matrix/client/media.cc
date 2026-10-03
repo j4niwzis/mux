@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.matrix:media -- Pictures and files: thumbnails and downloads fetched, files uploaded and sent.
-export module mux.matrix:media;
+// mux.proto.matrix.client:media -- Pictures and files: thumbnails and downloads fetched, files uploaded and sent.
+export module mux.proto.matrix.client:media;
 
 import std;
 import mux.bytes;
-import mux.matrix.crypto;
+import mux.proto.matrix.crypto;
 import knot;
 import loom.api;
 import loom.ev;
@@ -27,7 +27,7 @@ import mux.net;
 import :account;
 
 // The members defined here are declared in :account, and exported there.
-namespace mux::matrix {
+namespace mux::proto::matrix::client {
 
 // What an upload answers: where the file is kept now.
 struct upload_answer {
@@ -293,4 +293,4 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
   });
 }
 
-}  // namespace mux::matrix
+}  // namespace mux::proto::matrix::client

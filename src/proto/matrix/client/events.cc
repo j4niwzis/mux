@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.matrix:events -- A room's timeline events read into messages, edits, reactions and redactions.
-export module mux.matrix:events;
+// mux.proto.matrix.client:events -- A room's timeline events read into messages, edits, reactions and redactions.
+export module mux.proto.matrix.client:events;
 
 import std;
-import mux.matrix.crypto;
+import mux.proto.matrix.crypto;
 import splice;
 import knot;
 import loom.api;
@@ -27,7 +27,7 @@ import mux.net;
 import :account;
 
 // The members defined here are declared in :account, and exported there.
-namespace mux::matrix {
+namespace mux::proto::matrix::client {
 
 // A picture's or a file's facts, as an attachment keeps them.
 // Of a message's own info or a gallery item's: loom reads both alike.
@@ -752,4 +752,4 @@ auto account<Sink>::body_of(std::string plain, const std::optional<std::string>&
   return made;
 }
 
-}  // namespace mux::matrix
+}  // namespace mux::proto::matrix::client

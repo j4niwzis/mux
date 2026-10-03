@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.xmpp against a scripted server on the loopback: connected, the roster
+// mux.proto.xmpp.client against a scripted server on the loopback: connected, the roster
 // read into conversations, a chat message with its delay, presence, a
 // roster push, and the end of the stream -- all as mux.core's changes.
 import std;
 import splice;
 import mux.core;
 import mux.net;
-import mux.xmpp;
+import mux.proto.xmpp.client;
 import gtest;
 
 #include "gtest/gtest-macros.h"
@@ -68,7 +68,7 @@ TEST(Xmpp, AScriptedSession) {
     model.apply(one);
     said.push_back(std::move(one));
   };
-  mux::xmpp::account account(running, tls,
+  mux::proto::xmpp::client::account account(running, tls,
                              {.address = "user@example.com",
                               .password = "pencil",
                               .resource = "mux",

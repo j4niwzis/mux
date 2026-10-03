@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.matrix:names -- The names Matrix gives things, read into variants.
-export module mux.matrix:names;
+// mux.proto.matrix.client:names -- The names Matrix gives things, read into variants.
+export module mux.proto.matrix.client:names;
 
 import std;
 import splice;
@@ -25,7 +25,7 @@ import mux.http;
 import mux.net;
 export import :base;
 
-export namespace mux::matrix {
+export namespace mux::proto::matrix::client {
 
 // What a request failed with: the server's error, or the network's.
 // The names Matrix gives things, read into types where they come in: a
@@ -282,4 +282,4 @@ using errcode_t = splice::variant<errcode::session_gone, errcode::other>;
   return named<errcode_t, errcode::other>(known, name);
 }
 
-}  // namespace mux::matrix
+}  // namespace mux::proto::matrix::client

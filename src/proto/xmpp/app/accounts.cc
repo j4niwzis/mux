@@ -5,6 +5,6 @@
 module mux.app.network;
 import std;
 import mux.core;
-import mux.xmpp;
+import mux.proto.xmpp.client;
 
-template class mux::xmpp::account<mux::app::post_change>;
+template class mux::proto::xmpp::client::account<mux::app::post_change>;

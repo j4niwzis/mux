@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.proto.xmpp.client -- An XMPP account's client, made from what the
+// mux.proto.xmpp.make -- An XMPP account's client, made from what the
 // account keeps: make_account(kept, ...), found by ADL where the program
 // starts accounts. Its type is what the program holds it as.
-export module mux.proto.xmpp.client;
+export module mux.proto.xmpp.make;
 
 import std;
 import mux.core;
 import mux.net;
-import mux.xmpp;
+import mux.proto.xmpp.client;
 import mux.proto.kept;
 
 export namespace mux::proto::xmpp {
 
 template <class Sink>
-[[nodiscard]] std::unique_ptr<::mux::xmpp::account<Sink>> make_account(const kept& saved, ::mux::net::loop& loop,
+[[nodiscard]] std::unique_ptr<::mux::proto::xmpp::client::account<Sink>> make_account(const kept& saved, ::mux::net::loop& loop,
                                                                        ::mux::net::tls& tls,
                                                                        std::optional<::mux::net::proxy> via, Sink sink) {
-  ::mux::xmpp::settings how{.address = saved.address,
+  ::mux::proto::xmpp::client::settings how{.address = saved.address,
                             .password = saved.password,
                             .resource = saved.resource,
                             .host = saved.host,
@@ -24,7 +24,7 @@ template <class Sink>
                             .proxy = std::move(via)};
   if (saved.port)
     how.port = static_cast<std::uint16_t>(*saved.port);
-  return std::make_unique<::mux::xmpp::account<Sink>>(loop, tls, std::move(how), std::move(sink));
+  return std::make_unique<::mux::proto::xmpp::client::account<Sink>>(loop, tls, std::move(how), std::move(sink));
 }
 
 }  // namespace mux::proto::xmpp

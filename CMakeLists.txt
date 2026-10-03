@@ -5,9 +5,9 @@ cmake_minimum_required(VERSION 4.3.4 FATAL_ERROR)
 #   mux.net     all I/O, on one io_context, run by fibers: TCP, TLS, DNS
 #   mux.core    the model every protocol fills: accounts, conversations,
 #               messages, presence -- and the changes to it
-#   mux.xmpp    an XMPP account, through tern
+#   mux.proto.xmpp.client    an XMPP account, through tern
 #   mux.http    HTTPS requests from a fiber, with Beast
-#   mux.matrix  a Matrix account, through loom
+#   mux.proto.matrix.client  a Matrix account, through loom
 #   mux-cli     the network half on a terminal, until the window is there
 #
 # Every dependency comes through cmake-everywhere: the machine's copy where
@@ -152,7 +152,7 @@ target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
         src/core.cc src/net.cc src/proto/xmpp/client/xmpp.cc src/http.cc src/preview.cc src/proto/matrix/client/matrix.cc src/media.cc
         src/proto/matrix/client/base.cc src/proto/matrix/client/names.cc src/proto/matrix/client/account.cc src/proto/matrix/client/requests.cc src/proto/matrix/client/sync.cc
         src/proto/matrix/client/events.cc src/proto/matrix/client/media.cc src/proto/matrix/client/crypto.cc
-        src/proto/xmpp/client.cc src/proto/matrix/client.cc src/proto/clients.cc
+        src/proto/xmpp/make.cc src/proto/matrix/make.cc src/proto/clients.cc
         src/logic/text.cc src/logic/search.cc src/logic/reading.cc src/logic/drafts.cc
         src/logic/link_base.cc src/proto/xmpp/links.cc src/proto/matrix/links.cc src/proto/links.cc
         src/logic/links.cc src/logic/sending.cc src/logic/messages.cc
@@ -328,7 +328,7 @@ if(MUX_UI)
     $<${mux_split}:src/proto/matrix/app/accounts_requests.cc>
     $<${mux_split}:src/proto/matrix/app/accounts_events.cc>
     $<${mux_split}:src/proto/matrix/app/accounts_media.cc>
-    $<${mux_split}:src/app/accounts_xmpp.cc>)
+    $<${mux_split}:src/proto/xmpp/app/accounts.cc>)
   target_sources(mux PRIVATE
     $<${mux_erased}:src/app/walks_window.cc>
     $<${mux_erased}:src/app/walks_chats.cc>

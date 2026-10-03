@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.matrix against a homeserver played by a fiber of the same loop, over
+// mux.proto.matrix.client against a homeserver played by a fiber of the same loop, over
 // real TLS on the loopback: a certificate made for the test, trusted by the
 // client and nothing else. Login, a first sync with a named room, members,
 // a formatted message, a reply, an edit, a reaction and typing; a message
@@ -8,7 +8,7 @@ import std;
 import splice;
 import mux.core;
 import mux.net;
-import mux.matrix;
+import mux.proto.matrix.client;
 import mux.test.certificate;
 import gtest;
 
@@ -80,7 +80,7 @@ struct recorder {
   mux::model model;
   std::vector<mux::connection_t> states;
   bool sent = false;
-  std::optional<mux::matrix::account<sink>> account;
+  std::optional<mux::proto::matrix::client::account<sink>> account;
 };
 
 void sink::operator()(mux::change_t one) const {
@@ -151,7 +151,7 @@ TEST(Matrix, AgainstAHomeserverOverTls) {
     }
   });
 
-  mux::matrix::settings how{.user_id = "@a:x.org",
+  mux::proto::matrix::client::settings how{.user_id = "@a:x.org",
                             .password = "pw",
                             .homeserver = "https://127.0.0.1:" + std::to_string(listening.port()),
                             .sync_timeout = std::chrono::milliseconds(0)};

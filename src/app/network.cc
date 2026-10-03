@@ -8,8 +8,8 @@ import mux.core;
 import mux.config;
 import mux.net;
 import mux.preview;
-import mux.xmpp;
-import mux.matrix;
+import mux.proto.xmpp.client;
+import mux.proto.matrix.client;
 import mux.proto.clients;
 import mux.protocols;
 import mux.host;
@@ -48,8 +48,8 @@ struct post_change {
   }
 };
 
-using xmpp_account = mux::xmpp::account<post_change>;
-using matrix_account = mux::matrix::account<post_change>;
+using xmpp_account = mux::proto::xmpp::client::account<post_change>;
+using matrix_account = mux::proto::matrix::client::account<post_change>;
 }  // namespace mux::app
 // The accounts themselves -- their requests, sync, media, and the HTTP and
 // TLS under them -- instantiated in units of their own (accounts_*.cc), in
@@ -63,11 +63,11 @@ using matrix_account = mux::matrix::account<post_change>;
 // in that chain -- splice's visit, the account's start, its sync, its
 // crypto -- and on none made first in a plain context.
 #if defined(MUX_SPLIT_ACCOUNTS)
-extern template class mux::xmpp::account<mux::app::post_change>;
-extern template class mux::matrix::account<mux::app::post_change>;
+extern template class mux::proto::xmpp::client::account<mux::app::post_change>;
+extern template class mux::proto::matrix::client::account<mux::app::post_change>;
 #else
-template class mux::xmpp::account<mux::app::post_change>;
-template class mux::matrix::account<mux::app::post_change>;
+template class mux::proto::xmpp::client::account<mux::app::post_change>;
+template class mux::proto::matrix::client::account<mux::app::post_change>;
 #endif
 export namespace mux::app {
 // Each protocol's account, as its make_account (found by ADL on what it

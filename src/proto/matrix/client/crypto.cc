@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.matrix.crypto -- End-to-end encryption, as Matrix does it: Olm between
+// mux.proto.matrix.crypto -- End-to-end encryption, as Matrix does it: Olm between
 // devices, Megolm in rooms, by vodozemac (the kazv project's C++ bindings).
 //
 // One olm_machine per account and device. It holds this device's Olm account
@@ -18,7 +18,7 @@ module;
 #include <openssl/params.h>
 #include <rust/cxx.h>
 #include <vodozemac/src/lib.rs.h>
-export module mux.matrix.crypto;
+export module mux.proto.matrix.crypto;
 
 import std;
 import splice;
@@ -28,7 +28,7 @@ import loom.cs.keys;
 import mux.vault;
 import mux.bytes;
 
-export namespace mux::matrix::crypto {
+export namespace mux::proto::matrix::client::crypto {
 
 // What is kept on disk: every pickle under the store's own key.
 struct kept_file {
@@ -2023,4 +2023,4 @@ class olm_machine {
   std::optional<rust::Box<vodozemac::olm::Account>> account_;
 };
 
-}  // namespace mux::matrix::crypto
+}  // namespace mux::proto::matrix::client::crypto

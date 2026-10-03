@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.xmpp: an XMPP account, run by a fiber on mux.net's loop through tern,
+// mux.proto.xmpp.client: an XMPP account, run by a fiber on mux.net's loop through tern,
 // saying what happens as mux.core's changes.
 //
 // Connecting: the domain's SRV records tried in order, STARTTLS with the
@@ -7,7 +7,7 @@
 // binding) through tern; then the roster -- from the version kept, where
 // the server versions rosters -- presence, and the stanzas as they come,
 // through a tern inbox of the account's own.
-export module mux.xmpp;
+export module mux.proto.xmpp.client;
 
 import std;
 import splice;
@@ -15,7 +15,7 @@ import tern;
 import mux.core;
 import mux.net;
 
-export namespace mux::xmpp {
+export namespace mux::proto::xmpp::client {
 
 // A MUC occupant's affiliation or role (XEP-0045), where it is one shown
 // beside their name: read into a type once, where it comes in.
@@ -656,4 +656,4 @@ class account {
   bool stopping_ = false;
 };
 
-}  // namespace mux::xmpp
+}  // namespace mux::proto::xmpp::client

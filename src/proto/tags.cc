@@ -2,7 +2,7 @@
 // mux.proto.tags -- The protocols mux speaks: each a tag type in a namespace
 // of its own, mux::proto::<protocol> -- where all it specifies is -- and the
 // one list of them. A protocol is added here, as its
-// tag in the list, and by its overloads -- src/proto/<name>.cc, found by ADL
+// tag in the list, and by its overloads -- src/proto/<name>/, found by ADL
 // through mux.protocols. Nothing else in mux names a protocol to decide
 // what it does: it asks the protocol (mux.proto's extension points).
 export module mux.proto.tags;

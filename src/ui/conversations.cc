@@ -2548,9 +2548,13 @@ struct conversations_screen : nodes::Stack {
   // the list alone: the chat's messages were reconciled again for nothing.
   void show(const model& now, bool with_chat = true) {
     last_model = &now;
-    // Files attached where the chat's account sends them.
-    if (chosen)
-      line.parts.input.parts.attach.setVisible(ops_of(chosen->account).send_file);
+    // Files attached where the chat's account sends them, and its protocol
+    // allows it now: no paperclip otherwise, in the chat or its thread.
+    if (chosen) {
+      const bool files = may_send_files(chosen->account);
+      line.parts.input.parts.attach.setVisible(files);
+      parts.threads.parts.line.parts.input.parts.attach.setVisible(files);
+    }
     if (wanted && now.accounts().contains(*wanted)) {
       current = std::exchange(wanted, std::nullopt);
     } else if (!current || !now.accounts().contains(*current)) {

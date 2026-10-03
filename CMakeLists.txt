@@ -148,11 +148,11 @@ cme_find_package(vodozemac REQUIRED)
 # built.
 add_library(mux_modules)
 target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
-  FILES src/proto/proto.cc src/proto/xmpp.cc src/proto/matrix.cc src/proto/protocols.cc
+  FILES src/proto/proto.cc src/proto/xmpp/points.cc src/proto/matrix/points.cc src/proto/protocols.cc
         src/core.cc src/net.cc src/xmpp.cc src/http.cc src/preview.cc src/matrix.cc src/media.cc
         src/matrix/base.cc src/matrix/names.cc src/matrix/account.cc src/matrix/requests.cc src/matrix/sync.cc
         src/matrix/events.cc src/matrix/media.cc src/matrix/crypto.cc
-        src/proto/xmpp_client.cc src/proto/matrix_client.cc src/proto/clients.cc
+        src/proto/xmpp/client.cc src/proto/matrix/client.cc src/proto/clients.cc
         src/logic/text.cc src/logic/search.cc src/logic/reading.cc src/logic/drafts.cc
         src/logic/links.cc src/logic/sending.cc src/logic/messages.cc
         src/logic/blurhash.cc src/logic/emoji.cc src/logic/markdown.cc src/logic/room_events.cc)
@@ -211,8 +211,8 @@ add_library(mux_config)
 # With the protocols' tags and what each keeps in the accounts file: the
 # settings read them, and everything above reads the settings.
 target_sources(mux_config PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
-  FILES src/proto/tags.cc src/proto/xmpp_kept.cc src/proto/matrix_kept.cc src/proto/kept.cc
-        src/proto/xmpp_state.cc src/proto/matrix_state.cc src/proto/state.cc src/config.cc)
+  FILES src/proto/tags.cc src/proto/xmpp/kept.cc src/proto/matrix/kept.cc src/proto/kept.cc
+        src/proto/xmpp/state.cc src/proto/matrix/state.cc src/proto/state.cc src/config.cc)
 target_compile_features(mux_config PUBLIC cxx_std_26)
 target_compile_options(mux_config PUBLIC ${mux_std_flags})
 target_link_libraries(mux_config PUBLIC knot splice mux_vault mux_bytes)
@@ -301,7 +301,7 @@ if(MUX_UI)
   target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
     FILES src/host.cc src/audio.cc ${mux_video_source} src/dbus.cc src/ui.cc
           src/ui/base.cc src/ui/icons.cc src/ui/avatars.cc src/ui/controls.cc src/ui/themes.cc src/ui/names.cc src/ui/html.cc src/ui/chat_list.cc src/ui/message.cc src/ui/header.cc src/ui/info.cc src/ui/room_settings.cc src/ui/composer.cc src/ui/timeline.cc src/ui/conversations.cc src/ui/forms.cc src/ui/add_account.cc src/ui/accounts.cc src/ui/drawer.cc src/ui/proxies.cc src/ui/appearance.cc src/ui/storage.cc src/ui/settings.cc src/ui/context_menu.cc src/ui/sending.cc src/ui/viewer.cc src/ui/window.cc
-          src/ui_proto/xmpp.cc src/ui_proto/matrix.cc src/ui_proto/protocols.cc)
+          src/proto/xmpp/ui.cc src/proto/matrix/ui.cc src/proto/ui.cc)
   target_link_libraries(mux_modules PUBLIC SDL3::SDL3 skiff::skiff skiff::widgets Opus::opus Vorbis::vorbisfile
     ${mux_video_libraries})
   add_executable(mux src/main.cc)

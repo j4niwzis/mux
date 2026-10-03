@@ -210,6 +210,9 @@ inline std::map<protocol_t, proto::account_ops>& protocol_ops() {
   const auto found = protocol_ops().find(of.speaks);
   return found != protocol_ops().end() ? found->second : proto::account_ops{};
 }
+// Whether files may be sent into an account's chats: where its account
+// sends them, and its protocol allows it now.
+[[nodiscard]] inline bool may_send_files(const account_id& of);
 // Each account's protocol state, as its client last said it: what the
 // extension points are asked with. One not said yet: its protocol's default.
 inline std::map<account_id, protocol_state_t>& protocol_states() {
@@ -219,6 +222,9 @@ inline std::map<account_id, protocol_state_t>& protocol_states() {
 [[nodiscard]] inline protocol_state_t protocol_state_of(const account_id& of) {
   const auto found = protocol_states().find(of);
   return found != protocol_states().end() ? found->second : state_before(of.speaks);
+}
+[[nodiscard]] inline bool may_send_files(const account_id& of) {
+  return ops_of(of).send_file && proto::can_upload(protocol_state_of(of));
 }
 // The images of the pack being edited: fetched as avatars are, keyed by
 // their mxc://, while its dialog shows them.

@@ -17,6 +17,7 @@
 //   can_pin(state, message id), may_delete(state, chat, outgoing)
 //   may_edit(state, chat, message) -- through the rule edit_rule(state) gives
 //   can_page_back(state)                         older history asked of the server
+//   can_upload(state)                            files sent: the paperclip, a drop, a paste
 // And by the protocol alone, its tag:
 //   owns_address(tag, address)                   whether an address is its
 //   share_link / room_link / message_link / person_link
@@ -72,6 +73,7 @@ struct own_messages {};
 namespace mux::proto::defaults {
 constexpr bool available(const auto&) { return true; }
 constexpr bool can_page_back(const auto&) { return true; }
+constexpr bool can_upload(const auto&) { return true; }
 constexpr bool offers(const auto&, const auto&) { return false; }
 constexpr bool owns_address(const auto&, std::string_view) { return false; }
 inline std::optional<std::string> share_link(const auto&, std::string_view) { return std::nullopt; }
@@ -124,6 +126,20 @@ inline constexpr struct can_page_back_t {
     }, state);
   }
 } can_page_back{};
+
+// Whether files may be sent now: a protocol forbids it by its state -- a
+// server with no upload service, uploads turned off -- where its account
+// sends them at all (account_ops::send_file).
+inline constexpr struct can_upload_t {
+  template <class State>
+  bool operator()(const State& state) const {
+    return splice::visit([](const auto& now) {
+      using defaults::available;
+      using defaults::can_upload;
+      return available(now) && can_upload(now);
+    }, state);
+  }
+} can_upload{};
 
 inline constexpr struct share_link_t {
   template <class Speaks>

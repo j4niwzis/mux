@@ -194,7 +194,7 @@ class outbox_part {
   // Files: chosen with the paperclip, or dropped; the send box closed, or
   // what is in it sent -- the caption with the first.
   void apply(const request::attach_files&) {
-    if (!s_->root().main().chosen)
+    if (!s_->root().main().chosen || !mux::ui::may_send_files(s_->root().main().chosen->account))
       return;
     if (to_send_.empty())
       files_thread_.reset();
@@ -202,7 +202,7 @@ class outbox_part {
   }
   // The thread panel's paperclip: what is chosen goes into the thread open.
   void apply(const request::attach_in_thread&) {
-    if (!s_->root().main().chosen)
+    if (!s_->root().main().chosen || !mux::ui::may_send_files(s_->root().main().chosen->account))
       return;
     if (to_send_.empty())
       files_thread_ = s_->root().main().thread_open();
@@ -307,6 +307,11 @@ class outbox_part {
   void files_given(std::vector<std::string> paths, bool dropped) {
     if (!s_->root().main().chosen)
       return;
+    // Dropped or pasted where files are not sent: said, not lost silently.
+    if (!mux::ui::may_send_files(s_->root().main().chosen->account)) {
+      s_->root().show_message("Files", "Files cannot be sent in this chat.");
+      return;
+    }
     // Dropped while the thread's field has the keys: into the thread, as
     // its paperclip sends.
     if (dropped && to_send_.empty())

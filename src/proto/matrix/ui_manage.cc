@@ -180,26 +180,29 @@ struct room_page : nodes::Stack {
   };
   using buttons_row = dialog_buttons<cancel, save>;
   struct parts_t {
-    nodes::Text heading = tab_heading("Room");
+    nodes::Text heading;
     avatar_mark photo;
     field name;
     field topic;
     buttons_row buttons;
-    nodes::Text addresses = part_heading("Room Addresses");
-    nodes::Text published = part_heading("Published Addresses");
-    nodes::Text published_about = explained(
-        "Published addresses can be used by anyone on any server to join your room. To publish an address, it "
-        "needs to be set as a local address first.");
+    nodes::Text addresses;
+    nodes::Text published;
+    nodes::Text published_about;
     nodes::Text main_address;
-    nodes::Text others_title{"Other published addresses:", 14.0f, text_colour};
+    nodes::Text others_title;
     std::vector<nodes::Text> others;
   } parts;
   room_page(Actions*, Box* box, const room_settings_facts& facts)
-      : parts{.photo = avatar_mark(facts.id, facts.name, 88.0f),
+      : parts{.heading = tab_heading((*box->colours_), "Room"),
+              .photo = avatar_mark(facts.id, facts.name, 88.0f),
               .name = field("Room Name", "", facts.name),
               .topic = field("Room Topic", "", facts.topic),
-              .buttons = buttons_row(legacy_palette(), "Save", {box}, {box, this}),
-              .main_address = nodes::Text("Main address: " + facts.alias.value_or("none"), 14.0f, text_colour)} {
+              .buttons = buttons_row((*box->colours_), "Save", {box}, {box, this}),
+              .addresses = part_heading((*box->colours_), "Room Addresses"),
+              .published = part_heading((*box->colours_), "Published Addresses"),
+              .published_about = explained((*box->colours_),  "Published addresses can be used by anyone on any server to join your room. To publish an address, it " "needs to be set as a local address first."),
+              .main_address = nodes::Text("Main address: " + facts.alias.value_or("none"), 14.0f, box->colours_->text),
+              .others_title = nodes::Text("Other published addresses:", 14.0f, (*box->colours_).text)} {
     this->setGap(6.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
     parts.photo.apply({.alignSelf = scene::align::kStart});
@@ -211,9 +214,9 @@ struct room_page : nodes::Stack {
     parts.main_address.setWrapped(true);
     parts.main_address.apply({.fillX = true});
     for (const std::string& one : facts.other_aliases)
-      parts.others.emplace_back(one, 14.0f, text_colour);
+      parts.others.emplace_back(one, 14.0f, box->colours_->text);
     if (facts.other_aliases.empty())
-      parts.others.emplace_back("No other published addresses yet.", 13.0f, dim_colour);
+      parts.others.emplace_back("No other published addresses yet.", 13.0f, box->colours_->dim);
   }
 };
 
@@ -224,44 +227,48 @@ struct security_page : nodes::Stack {
   using join_choice = radio_choice<choose_join<Box>>;
   using history_choice = radio_choice<choose_history<Box>>;
   struct parts_t {
-    nodes::Text heading = tab_heading("Security & Privacy");
-    nodes::Text encryption = part_heading("Encryption");
-    nodes::Text encryption_about = explained("Once enabled, encryption cannot be disabled.");
+    nodes::Text heading;
+    nodes::Text encryption;
+    nodes::Text encryption_about;
     toggle_line<turn_encryption_on<Box>> encrypted;
     nodes::Text encryption_warning;
-    nodes::Text access = part_heading("Access");
+    nodes::Text access;
     nodes::Text access_about;
     join_choice invite, knock, open;
-    nodes::Text history = part_heading("Who can read history?");
-    nodes::Text history_about = explained(
-        "Changes to who can read history will only apply to future messages in this room. The visibility of "
-        "existing history will be unchanged.");
+    nodes::Text history;
+    nodes::Text history_about;
     history_choice anyone, shared, invited, joined;
   } parts;
   security_page(Actions*, Box* box, const room_settings_facts& facts)
-      : parts{.encrypted = toggle_line<turn_encryption_on<Box>>("Encrypted", {box}, facts.encrypted,
+      : parts{.heading = tab_heading((*box->colours_), "Security & Privacy"),
+              .encryption = part_heading((*box->colours_), "Encryption"),
+              .encryption_about = explained((*box->colours_), "Once enabled, encryption cannot be disabled."),
+              .encrypted = toggle_line<turn_encryption_on<Box>>((*box->colours_), "Encrypted", {box}, facts.encrypted,
                                                                 !facts.encrypted && may(facts, power_need::encrypt{})),
               .encryption_warning = nodes::Text(box->template part<state>().confirming_encryption
                                                     ? "Press again to enable encryption. mux cannot read encrypted "
                                                       "rooms yet: what is sent after this will not show here."
                                                     : "",
-                                                13.0f, error_colour),
+                                                13.0f, box->colours_->error),
+              .access = part_heading((*box->colours_), "Access"),
               .access_about = explained("Decide who can join " + facts.name + "."),
-              .invite = join_choice("Private (invite only)", "Only invited people can join.", {box, join_rule::invite{}},
+              .invite = join_choice((*box->colours_), "Private (invite only)", "Only invited people can join.", {box, join_rule::invite{}},
                                     is_rule<join_rule::invite>(rules_of(facts.theirs).join_rule), may(facts, power_need::change_access{})),
-              .knock = join_choice("Ask to join", "People cannot join unless access is granted.", {box, join_rule::knock{}},
+              .knock = join_choice((*box->colours_), "Ask to join", "People cannot join unless access is granted.", {box, join_rule::knock{}},
                                    is_rule<join_rule::knock>(rules_of(facts.theirs).join_rule), may(facts, power_need::change_access{})),
-              .open = join_choice("Public", "Anyone can find and join.", {box, join_rule::open{}},
+              .open = join_choice((*box->colours_), "Public", "Anyone can find and join.", {box, join_rule::open{}},
                                   is_rule<join_rule::open>(rules_of(facts.theirs).join_rule), may(facts, power_need::change_access{})),
-              .anyone = history_choice("Anyone", "", {box, history_rule::world_readable{}},
+              .history = part_heading((*box->colours_), "Who can read history?"),
+              .history_about = explained((*box->colours_),  "Changes to who can read history will only apply to future messages in this room. The visibility of " "existing history will be unchanged."),
+              .anyone = history_choice((*box->colours_), "Anyone", "", {box, history_rule::world_readable{}},
                                        is_rule<history_rule::world_readable>(rules_of(facts.theirs).history),
                                        may(facts, power_need::change_history{})),
-              .shared = history_choice("Members only (since the point in time of selecting this option)", "",
+              .shared = history_choice((*box->colours_), "Members only (since the point in time of selecting this option)", "",
                                        {box, history_rule::shared{}}, is_rule<history_rule::shared>(rules_of(facts.theirs).history),
                                        may(facts, power_need::change_history{})),
-              .invited = history_choice("Members only (since they were invited)", "", {box, history_rule::invited{}},
+              .invited = history_choice((*box->colours_), "Members only (since they were invited)", "", {box, history_rule::invited{}},
                                         is_rule<history_rule::invited>(rules_of(facts.theirs).history), may(facts, power_need::change_history{})),
-              .joined = history_choice("Members only (since they joined)", "", {box, history_rule::joined{}},
+              .joined = history_choice((*box->colours_), "Members only (since they joined)", "", {box, history_rule::joined{}},
                                        is_rule<history_rule::joined>(rules_of(facts.theirs).history), may(facts, power_need::change_history{}))} {
     this->setGap(4.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
@@ -279,11 +286,11 @@ struct level_choice : nodes::Stack {
     segment<Act> fallback, moderator, admin;
     nodes::Text custom;
   } parts;
-  level_choice(Make make, std::int64_t now, std::int64_t fallback, bool allowed)
-      : parts{.fallback = segment<Act>("Default", make(fallback)),
-              .moderator = segment<Act>("Moderator", make(50)),
-              .admin = segment<Act>("Admin", make(100)),
-              .custom = nodes::Text("", 12.0f, dim_colour)} {
+  level_choice(const palette& colours, Make make, std::int64_t now, std::int64_t fallback, bool allowed)
+      : parts{.fallback = segment<Act>(colours, "Default", make(fallback)),
+              .moderator = segment<Act>(colours, "Moderator", make(50)),
+              .admin = segment<Act>(colours, "Admin", make(100)),
+              .custom = nodes::Text("", 12.0f, colours.dim)} {
     this->setHorizontal();
     this->setGap(4.0f);
     fState.apply({.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle, .disabled = !allowed});
@@ -344,9 +351,9 @@ struct roles_page : nodes::Stack {
       level_choice<set_event_level<Box>, event_maker> levels;
     } parts;
     event_row(Box* box, const std::string& event, std::int64_t level, const room_settings_facts& facts)
-        : parts{.label = nodes::Text(event, 14.0f, text_colour),
+        : parts{.label = nodes::Text(event, 14.0f, box->colours_->text),
                 .levels = level_choice<set_event_level<Box>, event_maker>(
-                    event_maker{box, event}, level, rules_of(facts.theirs).needs.state_default,
+                    (*box->colours_), event_maker{box, event}, level, rules_of(facts.theirs).needs.state_default,
                     may(facts, power_need::change_permissions{}) && level <= facts.mine)} {
       this->setHorizontal();
       this->setGap(10.0f);
@@ -364,9 +371,9 @@ struct roles_page : nodes::Stack {
     } parts;
     new_event_row(Box* box, roles_page* page)
         : parts{.event = field("", "Event type, as m.room.server_acl"),
-                .moderator = segment<pick_new_level<Box>>("Moderator", {box, 50}),
-                .admin = segment<pick_new_level<Box>>("Admin", {box, 100}),
-                .apply = widgets::Button<add_event_need>(legacy_palette().widgets, "Apply", {box, page})} {
+                .moderator = segment<pick_new_level<Box>>((*box->colours_), "Moderator", {box, 50}),
+                .admin = segment<pick_new_level<Box>>((*box->colours_), "Admin", {box, 100}),
+                .apply = widgets::Button<add_event_need>((*box->colours_).widgets, "Apply", {box, page})} {
       this->setHorizontal();
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -383,9 +390,9 @@ struct roles_page : nodes::Stack {
       level_choice<set_need<Box>, need_maker> levels;
     } parts;
     permission_row(Box* box, std::string text, power_need_t need, const room_settings_facts& facts)
-        : parts{.label = nodes::Text(std::move(text), 14.0f, text_colour),
+        : parts{.label = nodes::Text(std::move(text), 14.0f, box->colours_->text),
                 .levels = level_choice<set_need<Box>, need_maker>(
-                    need_maker{box, need}, rules_of(facts.theirs).needs.of(need), rules_of(facts.theirs).needs.users_default,
+                    (*box->colours_), need_maker{box, need}, rules_of(facts.theirs).needs.of(need), rules_of(facts.theirs).needs.users_default,
                     may(facts, power_need::change_permissions{}) && rules_of(facts.theirs).needs.of(need) <= facts.mine)} {
       this->setHorizontal();
       this->setGap(10.0f);
@@ -404,7 +411,7 @@ struct roles_page : nodes::Stack {
         : parts{.face = avatar_mark(one.id, one.name, 32.0f),
                 .texts = two_lines(one.name, one.id, 14.0f, 2.0f),
                 .levels = level_choice<set_level<Box>, user_maker>(
-                    user_maker{box, one.id}, one.level, rules_of(facts.theirs).needs.users_default,
+                    (*box->colours_), user_maker{box, one.id}, one.level, rules_of(facts.theirs).needs.users_default,
                     may(facts, power_need::change_permissions{}) && (one.level < facts.mine))} {
       this->setHorizontal();
       this->setGap(10.0f);
@@ -419,9 +426,9 @@ struct roles_page : nodes::Stack {
     } parts;
     new_level_row(Box* box, roles_page* page)
         : parts{.user = field("", "User ID, as @someone:server"),
-                .moderator = segment<pick_new_level<Box>>("Moderator", {box, 50}),
-                .admin = segment<pick_new_level<Box>>("Admin", {box, 100}),
-                .apply = widgets::Button<add_privileged>(legacy_palette().widgets, "Apply", {box, page})} {
+                .moderator = segment<pick_new_level<Box>>((*box->colours_), "Moderator", {box, 50}),
+                .admin = segment<pick_new_level<Box>>((*box->colours_), "Admin", {box, 100}),
+                .apply = widgets::Button<add_privileged>((*box->colours_).widgets, "Apply", {box, page})} {
       this->setHorizontal();
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -433,23 +440,32 @@ struct roles_page : nodes::Stack {
     }
   };
   struct parts_t {
-    nodes::Text heading = tab_heading("Roles & Permissions");
-    nodes::Text privileged = part_heading("Privileged Users");
+    nodes::Text heading;
+    nodes::Text privileged;
     std::vector<privileged_row> users;
-    nodes::Text none_privileged = explained("No users have specific privileges in this room.");
-    nodes::Text add = part_heading("Add privileged users");
-    nodes::Text add_about = explained("Give one or multiple users in this room more privileges.");
+    nodes::Text none_privileged;
+    nodes::Text add;
+    nodes::Text add_about;
     new_level_row adding;
-    nodes::Text permissions = part_heading("Permissions");
-    nodes::Text permissions_about = explained("Select the roles required to change various parts of the room.");
+    nodes::Text permissions;
+    nodes::Text permissions_about;
     std::vector<permission_row> rows;
     // Every other kind of event the power levels set, and any kind added.
     std::vector<event_row> others;
-    nodes::Text add_event = part_heading("Any other event");
+    nodes::Text add_event;
     new_event_row adding_event;
   } parts;
   roles_page(Actions*, Box* box, const room_settings_facts& facts)
-      : parts{.adding = new_level_row(box, this), .adding_event = new_event_row(box, this)} {
+      : parts{.heading = tab_heading((*box->colours_), "Roles & Permissions"),
+              .privileged = part_heading((*box->colours_), "Privileged Users"),
+              .none_privileged = explained((*box->colours_), "No users have specific privileges in this room."),
+              .add = part_heading((*box->colours_), "Add privileged users"),
+              .add_about = explained((*box->colours_), "Give one or multiple users in this room more privileges."),
+              .adding = new_level_row(box, this),
+              .permissions = part_heading((*box->colours_), "Permissions"),
+              .permissions_about = explained((*box->colours_), "Select the roles required to change various parts of the room."),
+              .add_event = part_heading((*box->colours_), "Any other event"),
+              .adding_event = new_event_row(box, this)} {
     this->setGap(4.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
     parts.users.reserve(facts.privileged.size());
@@ -518,28 +534,32 @@ struct advanced_page : nodes::Stack {
     }
   };
   struct parts_t {
-    nodes::Text heading = tab_heading("Advanced");
-    nodes::Text information = part_heading("Room information");
+    nodes::Text heading;
+    nodes::Text information;
     copy_line id;
     nodes::Text version;
     // Upgraded, as Element's: the version to go to, and the button. The
     // server makes the new room and tombstones this one.
     field upgrade_to;
     widgets::Button<upgrade_press> upgrade;
-    nodes::Text tools = part_heading("Developer tools");
+    nodes::Text tools;
     widgets::Button<asks<Actions, request::explore_state>> explore;
     widgets::Button<asks<Actions, request::open_send_custom>> send_custom;
-    nodes::Text packs_heading = part_heading("Emojis & Stickers");
+    nodes::Text packs_heading;
     widgets::Button<ask<Actions, &Actions::open_room_packs>> packs;
   } parts;
   advanced_page(Actions* a, Box* box, const room_settings_facts& facts)
-      : parts{.id = copy_line("Internal room ID", facts.id),
-              .version = nodes::Text("Room version: " + rules_of(facts.theirs).version, 14.0f, text_colour),
+      : parts{.heading = tab_heading((*box->colours_), "Advanced"),
+              .information = part_heading((*box->colours_), "Room information"),
+              .id = copy_line((*box->colours_), "Internal room ID", facts.id),
+              .version = nodes::Text("Room version: " + rules_of(facts.theirs).version, 14.0f, box->colours_->text),
               .upgrade_to = field("Upgrade to room version", "12", "12"),
-              .upgrade = widgets::Button<upgrade_press>(legacy_palette().widgets, "Upgrade this room", {box, this}),
-              .explore = widgets::Button<asks<Actions, request::explore_state>>(legacy_palette().widgets, "Explore room state", {a}),
-              .send_custom = widgets::Button<asks<Actions, request::open_send_custom>>(legacy_palette().widgets, "Send custom event", {a}),
-              .packs = widgets::Button<ask<Actions, &Actions::open_room_packs>>(legacy_palette().widgets, "Edit room packs", {a})} {
+              .upgrade = widgets::Button<upgrade_press>((*box->colours_).widgets, "Upgrade this room", {box, this}),
+              .tools = part_heading((*box->colours_), "Developer tools"),
+              .explore = widgets::Button<asks<Actions, request::explore_state>>((*box->colours_).widgets, "Explore room state", {a}),
+              .send_custom = widgets::Button<asks<Actions, request::open_send_custom>>((*box->colours_).widgets, "Send custom event", {a}),
+              .packs_heading = part_heading((*box->colours_), "Emojis & Stickers"),
+              .packs = widgets::Button<ask<Actions, &Actions::open_room_packs>>((*box->colours_).widgets, "Edit room packs", {a})} {
     this->setGap(6.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
     for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.explore, &parts.send_custom, &parts.packs, &parts.upgrade})

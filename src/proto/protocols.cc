@@ -131,4 +131,22 @@ inline constexpr struct command_of_t {
   }
 } command_of{};
 
+// Someone's card's buttons of a protocol's own: none by default.
+using any_action = part::action_of<any_request_t>;
+namespace action_defaults {
+inline std::vector<part::action> person_actions(const auto&, const account_id&, std::string_view) { return {}; }
+}  // namespace action_defaults
+inline constexpr struct person_actions_t {
+  template <class State>
+  std::vector<any_action> operator()(const State& state, const account_id& by, std::string_view who) const {
+    return splice::visit([&](const auto& now) {
+      using action_defaults::person_actions;
+      return person_actions(now, by, who) | std::views::transform([](auto one) {
+               return any_action{std::move(one.label), as_any(one.asks)};
+             }) |
+             std::ranges::to<std::vector>();
+    }, state);
+  }
+} person_actions{};
+
 }  // namespace mux::proto

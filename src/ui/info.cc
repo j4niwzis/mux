@@ -261,6 +261,14 @@ struct person_card : nodes::Stack {
     conversation_id who;
     void operator()() const { actions->accept_identity(who); }
   };
+  // A button of its protocol's own: its request asked.
+  struct ask_protocol {
+    Actions* actions = nullptr;
+    proto::any_request_t asks;
+    void operator()() const {
+      splice::visit(splice::overloaded{[](proto::part::no_request) {}, [&](const auto& one) { actions->ask_for(one); }}, asks);
+    }
+  };
   struct verify_them {
     Actions* actions = nullptr;
     conversation_id who;
@@ -285,6 +293,8 @@ struct person_card : nodes::Stack {
     // name or id, and verified or not.
     nodes::Text sessions_title{"", 13.0f, dim_colour, true};
     std::vector<nodes::Text> sessions;
+    // Its protocol's own buttons for them (proto::person_actions).
+    std::vector<action_tile<ask_protocol>> theirs;
   } parts;
 
   person_card(Actions* a, const account_id& account, const std::string& key, const person_facts& facts)
@@ -302,6 +312,11 @@ struct person_card : nodes::Stack {
     // Offered only where the user may: no button for what they cannot do.
     parts.remove.setVisible(facts.may_kick);
     parts.ban.setVisible(facts.may_ban);
+    std::ranges::for_each(proto::person_actions(protocol_state_of(account), account, key), [&](proto::any_action& one) {
+      if (one.asks)
+        parts.theirs.emplace_back(one.label, icon::check{}, ask_protocol{a, std::move(*one.asks)})
+            .apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
+    });
     parts.sessions_title.setText(facts.devices.empty() ? std::string()
                                                        : std::format("SESSIONS ({})", facts.devices.size()));
     parts.sessions_title.setVisible(!facts.devices.empty());

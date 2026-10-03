@@ -139,6 +139,14 @@ struct banner_of {
   std::optional<Asks> asks;
 };
 using banner = banner_of<>;
+// A button of a protocol's own -- on someone's card: XMPP's "Ask to see
+// their status", Telegram's "Block" -- and the request it asks.
+template <class Asks = no_request>
+struct action_of {
+  std::string label;
+  std::optional<Asks> asks;
+};
+using action = action_of<>;
 // What one may do in a chat, as its protocol says: write in it, let in
 // those who knock.
 struct chat_rights {

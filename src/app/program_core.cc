@@ -219,18 +219,21 @@ void app::woken() {
 
 
 void app::wire() {
-  shared = services{.model = model,
-                    .net = net,
-                    .store = &store,
-                    .box = box,
-                    .ask = &ask,
-                    .scene = &scene,
-                    .kept = this,
-                    .vault = vault,
-                    .work = &work,
-                    .system_dialogs = &system_dialogs,
-                    .wake = &wake,
-                    .speaker = &speaker};
+  // What the parts reach, set in place: services holds the program's own
+  // state too (the looks, the paint, what the window's parts share), which
+  // the window was made pointing at -- made anew, it was all lost.
+  shared.model = model;
+  shared.net = net;
+  shared.store = &store;
+  shared.box = box;
+  shared.ask = &ask;
+  shared.scene = &scene;
+  shared.kept = this;
+  shared.vault = vault;
+  shared.work = &work;
+  shared.system_dialogs = &system_dialogs;
+  shared.wake = &wake;
+  shared.speaker = &speaker;
   store.vault = vault;
 }
 

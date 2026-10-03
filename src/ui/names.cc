@@ -60,20 +60,35 @@ export namespace mux::ui {
 // hyphen, controls. "Alice\u202Eecila" or "Ali\u200Bce" otherwise passed for
 // someone else.
 [[nodiscard]] inline std::string shown_plainly(std::string_view name) {
-  const auto hidden = [](std::string_view character) {
+  const auto code_of = [](std::string_view character) {
     const auto at = [&](std::size_t i) { return static_cast<std::uint32_t>(static_cast<unsigned char>(character[i])); };
-    const std::uint32_t code =
-        character.size() == 1   ? at(0)
-        : character.size() == 2 ? ((at(0) & 0x1F) << 6) | (at(1) & 0x3F)
-        : character.size() == 3 ? ((at(0) & 0x0F) << 12) | ((at(1) & 0x3F) << 6) | (at(2) & 0x3F)
-                                : ((at(0) & 0x07) << 18) | ((at(1) & 0x3F) << 12) | ((at(2) & 0x3F) << 6) | (at(3) & 0x3F);
+    return character.size() == 1   ? at(0)
+           : character.size() == 2 ? ((at(0) & 0x1F) << 6) | (at(1) & 0x3F)
+           : character.size() == 3 ? ((at(0) & 0x0F) << 12) | ((at(1) & 0x3F) << 6) | (at(2) & 0x3F)
+                                   : ((at(0) & 0x07) << 18) | ((at(1) & 0x3F) << 12) | ((at(2) & 0x3F) << 6) | (at(3) & 0x3F);
+  };
+  const auto hidden = [](std::uint32_t code) {
     return code < 0x20 || code == 0x7F || (code >= 0x80 && code < 0xA0) || code == 0xAD || (code >= 0x200B && code <= 0x200F) ||
            (code >= 0x202A && code <= 0x202E) || (code >= 0x2060 && code <= 0x2069) || code == 0xFEFF;
   };
-  return name | std::views::chunk_by([](char, char next) { return (static_cast<unsigned char>(next) & 0xC0) == 0x80; }) |
-         std::views::transform([](auto&& each) { return std::string_view(each.begin(), each.end()); }) |
-         std::views::filter([&](std::string_view each) { return !hidden(each); }) | std::views::join |
-         std::ranges::to<std::string>();
+  // Part of an emoji: a pictograph (skin tones among them), or the
+  // variation selector that makes one of a symbol.
+  const auto pictured = [](std::uint32_t code) {
+    return code >= 0x1F000 || (code >= 0x2600 && code <= 0x27BF) || code == 0xFE0F;
+  };
+  const auto characters = name | std::views::chunk_by([](char, char next) { return (static_cast<unsigned char>(next) & 0xC0) == 0x80; }) |
+                          std::views::transform([](auto&& each) { return std::string_view(each.begin(), each.end()); }) |
+                          std::ranges::to<std::vector>();
+  const auto codes = characters | std::views::transform(code_of) | std::ranges::to<std::vector>();
+  // A zero-width joiner between two emoji makes them one (a family, a
+  // rainbow flag): kept there, and stripped anywhere else, as before.
+  const auto kept = [&](std::size_t i) {
+    if (codes[i] == 0x200D)
+      return i > 0 && i + 1 < codes.size() && pictured(codes[i - 1]) && pictured(codes[i + 1]);
+    return !hidden(codes[i]);
+  };
+  return std::views::iota(std::size_t{0}, characters.size()) | std::views::filter(kept) |
+         std::views::transform([&](std::size_t i) { return characters[i]; }) | std::views::join | std::ranges::to<std::string>();
 }
 // What someone is called in a chat, before telling them apart: their name
 // there, shown plainly, or their ID's local part.

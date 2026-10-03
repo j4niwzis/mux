@@ -1129,7 +1129,9 @@ struct devtools_box : nodes::Stack {
       ++counts[one.type];
     std::vector<std::pair<std::string, pick>> rows;
     for (const auto& [type, count] : counts)
-      rows.emplace_back(std::format("{}  ({})", type, count), pick{this, type, std::nullopt});
+      // Joined, not formatted: clang 23 crashed on this format string made
+      // first in this module (see app/network.cc).
+      rows.emplace_back(type + "  (" + std::to_string(count) + ")", pick{this, type, std::nullopt});
     this->show_rows(std::move(rows));
   }
   // A type's keys.

@@ -435,10 +435,10 @@ struct reactions_box : nodes::Stack {
     Actions* actions;
     reaction_entry entry;
     struct parts_t {
-      message_bubble bubble;
+      message_bubble<Actions> bubble;
     } parts;
     row(Actions* a, const conversation& in, reaction_entry one, bool first, bool last, const model* now)
-        : actions(a), entry(one), parts{.bubble = message_bubble(in, message_of(in, one), first, last, now)} {
+        : actions(a), entry(one), parts{.bubble = message_bubble<Actions>(in, message_of(in, one), first, last, now)} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 0.0f, 12.0f},
                     .hoverBackground = chosen_colour});
       fState.setCursor(scene::cursor::hand{});
@@ -461,7 +461,7 @@ struct reactions_box : nodes::Stack {
     void onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
       if (press.button != 3)
         return;
-      const message_bubble& one = parts.bubble;
+      const message_bubble<Actions>& one = parts.bubble;
       menu_facts facts;
       facts.id = entry.event;
       facts.own = entry.mine;
@@ -482,7 +482,7 @@ struct reactions_box : nodes::Stack {
     }
     [[nodiscard]] bool onClick(float x, float y) {
       // A link's preview or card in it: followed, as in the chat.
-      const message_bubble& one = parts.bubble;
+      const message_bubble<Actions>& one = parts.bubble;
       if (const auto& preview = one.parts.body.parts.preview; preview && preview->bounds().contains(x, y)) {
         actions->open_url(preview->url);
         return true;
@@ -556,11 +556,11 @@ struct marks_box : nodes::Stack {
     mark_kind_t kind;
     std::string event;
     struct parts_t {
-      message_bubble bubble;
+      message_bubble<Actions> bubble;
       std::optional<badge> reacted;
     } parts;
     row(Actions* a, mark_kind_t which, const conversation& in, const mark_entry& one, const model* now)
-        : actions(a), kind(which), event(one.event), parts{.bubble = message_bubble(in, one.said, true, true, now)} {
+        : actions(a), kind(which), event(one.event), parts{.bubble = message_bubble<Actions>(in, one.said, true, true, now)} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 8.0f, 12.0f},
                     .hoverBackground = chosen_colour});
       fState.setCursor(scene::cursor::hand{});
@@ -1692,7 +1692,7 @@ struct threads_panel : nodes::Stack {
   // pressed. False where it is not one of its.
   bool scroll_to(const std::string& id) {
     auto& bubbles = parts.answers.bubbles();
-    const auto found = std::ranges::find(bubbles, id, &message_bubble::message_id);
+    const auto found = std::ranges::find(bubbles, id, &message_bubble<Actions>::message_id);
     if (found == bubbles.end())
       return false;
     parts.answers.parts.timeline.scrollTo(found->bounds().fTop - 8.0f);

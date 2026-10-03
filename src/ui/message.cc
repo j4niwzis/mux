@@ -1137,7 +1137,56 @@ struct readers_row : nodes::Stack {
   }
 };
 
+// A protocol's own sticker nodes, and its making of one for a message:
+// none by default -- the picture.
+namespace sticker_defaults {
+template <class Actions>
+constexpr proto::sticker_view_list<> sticker_views(const auto&, type_tag<Actions>) {
+  return {};
+}
+template <class Actions>
+constexpr std::nullopt_t make_sticker(const auto&, const message&, type_tag<Actions>) {
+  return std::nullopt;
+}
+}  // namespace sticker_defaults
+template <class State, class Actions>
+constexpr auto sticker_views_for(const State& state, type_tag<Actions> tag) {
+  using sticker_defaults::sticker_views;
+  return sticker_views(state, tag);
+}
+
+// A message as the chat shows it. A template on the program's Actions, made
+// where every protocol's UI module is seen: its sticker part is the basic
+// picture or one of a protocol's own sticker nodes (sticker_views).
+template <class Actions>
 struct message_bubble : nodes::Stack {
+  // ---- the protocols' own sticker nodes -------------------------------------
+  template <class List>
+  struct sticker_nodes;
+  template <class... Vs>
+  struct sticker_nodes<proto::sticker_view_list<Vs...>> {
+    using type = type_list<Vs...>;
+  };
+  template <class>
+  struct protocol_sticker_nodes;
+  template <class... Tags>
+  struct protocol_sticker_nodes<protocol_list<Tags...>> {
+    using type = typename joined<
+        type_list<>, typename sticker_nodes<decltype(sticker_views_for(::mux::state_of<Tags>{}, type_tag<Actions>{}))>::type...>::type;
+  };
+  // Never empty: a text, where no protocol draws its own.
+  using their_sticker_t = typename variant_of_types<
+      typename joined<type_list<nodes::Text>, typename protocol_sticker_nodes<protocols>::type>::type>::type;
+  // As a node: the protocol's sticker in it.
+  struct sticker_holder : nodes::Stack {
+    struct parts_t {
+      their_sticker_t shown;
+    } parts;
+    template <class View>
+    explicit sticker_holder(View made) : parts{.shown = their_sticker_t(std::move(made))} {
+      fState.apply({.autoSize = scene::axes::kBoth});
+    }
+  };
   // The message as it was shown, and where in its sender's run: while
   // these are the same, the bubble is kept.
   message said;
@@ -1267,6 +1316,8 @@ struct message_bubble : nodes::Stack {
       std::optional<forward_line> forwarded;
       std::optional<quote_row> quote;
       std::optional<picture_view> picture;
+      // A sticker its protocol draws itself, in the picture's place.
+      std::optional<sticker_holder> their_sticker;
       std::optional<album_view> album;
       std::optional<file_view> file;
       nodes::BasicText<message_pictures> text;
@@ -1289,6 +1340,15 @@ struct message_bubble : nodes::Stack {
       std::optional<nodes::Icon> tail;
     } parts;
     skia::SkColor plate = bubble_colour;
+    // A protocol's sticker placed, where it made one.
+    bool place_sticker(std::nullopt_t) { return false; }
+    template <class View>
+    bool place_sticker(std::optional<View> made) {
+      if (!made)
+        return false;
+      parts.their_sticker.emplace(std::move(*made));
+      return true;
+    }
     // A sticker's name, forward and quote beside it, as tdesktop's unwrapped
     // media (history_view_media_unwrapped.cpp, drawSurrounding): to its right
     // where it came in, to its left where it was sent, from its top down;
@@ -1390,7 +1450,7 @@ struct message_bubble : nodes::Stack {
     // where it is narrower; on a line of its own only where they do not.
     // Decided from the last layout; a change is laid out at the next.
     void update(double now_ms) {
-      auto& [frost, name, forwarded, quote, picture, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, time, inline_time, tail] = parts;
+      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, time, inline_time, tail] = parts;
       // A sticker's time is over it, and nowhere else: placed beside its
       // reactions too, it was shown twice.
       if (picture && picture->sticker) {
@@ -1514,7 +1574,7 @@ struct message_bubble : nodes::Stack {
     // checks the guess, above.
     bool guessed = false;
     void guess_time(skia::SkFont& font) {
-      auto& [frost, name, forwarded, quote, picture, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, time, inline_time, tail] = parts;
+      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, time, inline_time, tail] = parts;
       if (std::exchange(guessed, true) || text.text().empty())
         return;
       const skiff::paint::Painter p(nullptr, font);
@@ -1566,7 +1626,7 @@ struct message_bubble : nodes::Stack {
                 .time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour),
                 .inline_time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour)},
           plate(plate_of(mine)) {
-      auto& [frost, name, forwarded, quote, picture, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, time, inline_time, tail] = parts;
+      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, time, inline_time, tail] = parts;
       this->setGap(2.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
                     .padding = {kPadY, kPadX, kPadY, kPadX}, .cornerRadius = 12.0f, .background = plate});
@@ -1771,8 +1831,16 @@ struct message_bubble : nodes::Stack {
     // fits: made with the bare time, it never said "not encrypted", nor
     // "sending" -- a short message, the most of them, hid both.
     body.parts.inline_time.setText(when);
+    // A sticker its protocol draws itself (a Telegram TGS or WebM): its node,
+    // not the picture.
+    const bool theirs = said.sticker && splice::visit(
+                                            [&](const auto& now) {
+                                              using sticker_defaults::make_sticker;
+                                              return body.place_sticker(make_sticker(now, said, type_tag<Actions>{}));
+                                            },
+                                            protocol_state_of(in.id.account));
     // What it carries: a picture, sized as tdesktop's; or a file's row.
-    if (said.attachment) {
+    if (said.attachment && !theirs) {
       const mux::attachment& carried = *said.attachment;
       splice::visit(splice::overloaded{[&](attachment_kind::image) {
                               body.parts.picture.emplace(carried.source, carried.width, carried.height);

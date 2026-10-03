@@ -1421,7 +1421,7 @@ struct conversations_screen : nodes::Stack {
       actions->edit_last();
     } else if (press.key == keys::kC && control) {
       auto& bubbles = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
-      const auto selected = std::ranges::find_if(bubbles, [](message_bubble& one) { return one.parts.body.parts.text.hasSelection(); });
+      const auto selected = std::ranges::find_if(bubbles, [](message_bubble<Actions>& one) { return one.parts.body.parts.text.hasSelection(); });
       // Not in a message: what any text shows selected -- View source's.
       if (selected == bubbles.end()) {
         if (!scene::selectedText().empty())
@@ -1477,7 +1477,7 @@ struct conversations_screen : nodes::Stack {
     }
     this->invalidateLayout();
   }
-  nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble>>>& timeline = chat.area.parts.timeline;
+  nodes::ScrollContainer<nodes::Flow<std::vector<message_bubble<Actions>>>>& timeline = chat.area.parts.timeline;
   // The chat whose messages are shown, how many, and how many came while
   // the view was above the newest.
   std::optional<conversation_id> shown_chat;
@@ -2115,7 +2115,7 @@ struct conversations_screen : nodes::Stack {
     if (jumping_to)
       return out;
     const skia::SkRect view = timeline.bounds();
-    for (const message_bubble& row : std::get<0>(std::get<0>(timeline.fChildren).fChildren)) {
+    for (const message_bubble<Actions>& row : std::get<0>(std::get<0>(timeline.fChildren).fChildren)) {
       // Laid out as if unscrolled: where it is in the view.
       const skia::SkRect box = timeline.toView(row.bounds());
       if (!row.message_id.empty() && !box.isEmpty() && row.visible() && box.fBottom > view.fTop + 8.0f &&
@@ -2206,7 +2206,7 @@ struct conversations_screen : nodes::Stack {
   [[nodiscard]] std::size_t pin_above(const conversation& one) {
     const skia::SkRect view = timeline.bounds();
     const auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
-    const auto first = std::ranges::find_if(entries, [&](const message_bubble& row) {
+    const auto first = std::ranges::find_if(entries, [&](const message_bubble<Actions>& row) {
       const skia::SkRect box = timeline.toView(row.bounds());
       return !row.message_id.empty() && row.visible() && !box.isEmpty() && box.fBottom > view.fTop + 8.0f;
     });
@@ -2315,7 +2315,7 @@ struct conversations_screen : nodes::Stack {
     // and once it is laid out, brought into view and flashed.
     if (jumping_to && chosen && last_model) {
       auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
-      auto it = std::ranges::find(entries, *jumping_to, &message_bubble::message_id);
+      auto it = std::ranges::find(entries, *jumping_to, &message_bubble<Actions>::message_id);
       const conversation* one = last_model->find(*chosen);
       // Begun, or more of the chat come: the jump got somewhere.
       if (jump_since_ms < 0.0 || (one && one->timeline.size() != jump_held)) {
@@ -2326,10 +2326,10 @@ struct conversations_screen : nodes::Stack {
       // line is hidden, as the chat's settings say: landed on the nearest
       // shown after it, else before it, as its place.
       if (it != entries.end() && !it->visible()) {
-        auto shown = std::find_if(it, entries.end(), [](const message_bubble& row) { return row.visible(); });
+        auto shown = std::find_if(it, entries.end(), [](const message_bubble<Actions>& row) { return row.visible(); });
         if (shown == entries.end()) {
           const auto back = std::find_if(std::make_reverse_iterator(it), entries.rend(),
-                                         [](const message_bubble& row) { return row.visible(); });
+                                         [](const message_bubble<Actions>& row) { return row.visible(); });
           shown = back == entries.rend() ? entries.end() : std::prev(back.base());
         }
         if (shown != entries.end()) {
@@ -2359,7 +2359,7 @@ struct conversations_screen : nodes::Stack {
           // Made, but not laid out: more than a screen from the view, where
           // the list lays nothing out. The view stepped a screen toward it,
           // until it is laid out and aimed at.
-          const auto laid = std::ranges::find_if(entries, [](const message_bubble& row) { return !row.bounds().isEmpty(); });
+          const auto laid = std::ranges::find_if(entries, [](const message_bubble<Actions>& row) { return !row.bounds().isEmpty(); });
           if (laid != entries.end()) {
             const bool above = it < laid;
             const float page = timeline.bounds().height();
@@ -2409,7 +2409,7 @@ struct conversations_screen : nodes::Stack {
     // once the list is still, where the flash is seen.
     if (aiming) {
       auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
-      const auto it = std::ranges::find(entries, *aiming, &message_bubble::message_id);
+      const auto it = std::ranges::find(entries, *aiming, &message_bubble<Actions>::message_id);
       if (it == entries.end() || it->bounds().isEmpty() || ++aim_frames > 180) {
         aiming.reset();
       } else {
@@ -2486,9 +2486,9 @@ struct conversations_screen : nodes::Stack {
         const skia::SkRect view = timeline.bounds();
         const conversation* one = last_model ? last_model->find(*chosen) : nullptr;
         const auto newest = std::ranges::find_if(entries.rbegin(), entries.rend(),
-                                                 [](const message_bubble& row) { return !row.message_id.empty(); });
+                                                 [](const message_bubble<Actions>& row) { return !row.message_id.empty(); });
         while (!stack.empty()) {
-          const auto it = std::ranges::find(entries, stack.back(), &message_bubble::message_id);
+          const auto it = std::ranges::find(entries, stack.back(), &message_bubble<Actions>::message_id);
           bool passed = false;
           if (it != entries.end() && !it->bounds().isEmpty()) {
             passed = timeline.atEnd(0.5f) || timeline.toView(it->bounds()).fTop < view.centerY();
@@ -2981,7 +2981,7 @@ struct conversations_screen : nodes::Stack {
                             arrives, rooms_wanted);
     rooms_waiting.clear();
     rooms_unfound.clear();
-    for (const message_bubble& row : entries) {
+    for (const message_bubble<Actions>& row : entries) {
       rooms_waiting.insert(row.rooms_waiting.begin(), row.rooms_waiting.end());
       rooms_unfound.insert(row.rooms_unknown.begin(), row.rooms_unknown.end());
     }

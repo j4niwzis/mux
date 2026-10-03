@@ -86,6 +86,12 @@ struct request_list {};
 // protocol's UI module and opened by the protocol's program glue.
 template <class... Dialogs>
 struct dialog_list {};
+// The sticker nodes a protocol draws its own stickers with (a Telegram TGS
+// as a Lottie animation, a WebM as a video), as sticker_views(state,
+// type_tag<Actions>) lists them in its UI module; each made, for a message,
+// by its make_sticker(state, message, type_tag<Actions>). None: the picture.
+template <class... Views>
+struct sticker_view_list {};
 // What a protocol asks a passphrase (or a password) for, of its own: their
 // types, as passphrases(state) lists them; each says its words in the
 // passphrase dialog by passphrase_text(purpose), and is done by

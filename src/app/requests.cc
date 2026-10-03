@@ -947,8 +947,8 @@ template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::conversat
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::conversations_screen<mux::app::actions>::side_column>() noexcept;
 template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::conversations_screen<mux::app::actions>::chat_column> = true;
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::conversations_screen<mux::app::actions>::chat_column>() noexcept;
-template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::message_bubble> = true;
-template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::message_bubble>() noexcept;
+template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::message_bubble<mux::app::actions>> = true;
+template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::message_bubble<mux::app::actions>>() noexcept;
 template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::composer_bar<mux::app::actions>> = true;
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::composer_bar<mux::app::actions>>() noexcept;
 template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::info_panel<mux::app::actions>> = true;

@@ -691,14 +691,14 @@ using namespace ::mux::ui;
 // rename or sign out, and all the others at once. Where the server asks for
 // the password to sign one out, a field for it.
 // A session's ID, when it was last seen, from where: as Element says them.
-// Not a member of the page, a template: clang 23 crashed on this format
-// string made first inside one (see app/network.cc).
+// Its time told by mux.ui's seen_at: clang 23 crashed on that format
+// string made first in this module (see app/network.cc).
 [[nodiscard]] inline std::string facts_of(const proto::matrix::session_info& one, bool current) {
   std::string out = one.id;
   if (current)
     out += " · this session";
   if (one.last_seen)
-    out += std::format(" · last seen {:%d.%m.%Y %H:%M}", std::chrono::floor<std::chrono::minutes>(*one.last_seen));
+    out += " · last seen " + seen_at(*one.last_seen);
   if (one.ip)
     out += " · " + *one.ip;
   return out;

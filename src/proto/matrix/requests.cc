@@ -6,6 +6,7 @@ export module mux.proto.matrix.requests;
 
 import std;
 import mux.proto.tags;
+import mux.core.ids;
 import mux.proto;
 
 export namespace mux::proto::matrix {
@@ -37,12 +38,18 @@ struct rename_session {
   std::string name;
 };
 struct refresh_sessions {};
+// The other person of a direct chat verified by emoji, from the banner
+// that says they are not.
+struct verify_them {
+  account_id by;
+  std::string user;
+};
 }  // namespace request
 
 constexpr request_list<request::setup_cross_signing, request::restore_cross_signing, request::reset_identity,
                        request::sign_out_unverified, request::reset_backup, request::delete_backup, request::export_room_keys,
                        request::import_room_keys, request::verify_session, request::sign_out_sessions, request::rename_session,
-                       request::refresh_sessions>
+                       request::refresh_sessions, request::verify_them>
 requests_of(const state&) {
   return {};
 }

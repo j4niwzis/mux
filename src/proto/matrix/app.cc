@@ -144,6 +144,10 @@ void program_asked(App& app, const rename_session& one) {
   });
 }
 template <class App>
+void program_asked(App& app, const verify_them& one) {
+  app.net->verify_start(one.by, one.user, std::nullopt);
+}
+template <class App>
 void program_asked(App& app, const refresh_sessions&) {
   app.with_chosen_account([&](auto&, config::account_t& account) { app.net->list_sessions(App::id_of(account)); });
 }

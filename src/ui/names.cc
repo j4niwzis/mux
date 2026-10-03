@@ -14,6 +14,11 @@ import :base;
 
 export namespace mux::ui {
 
+// When something was last seen, as a date and a minute: 03.10.2026 14:05.
+[[nodiscard]] inline std::string seen_at(std::chrono::sys_time<std::chrono::milliseconds> at) {
+  return std::format("{:%d.%m.%Y %H:%M}", std::chrono::floor<std::chrono::minutes>(at));
+}
+
 // What a presence says, in a word or two.
 [[nodiscard]] inline std::string presence_text(const availability_t& state) {
   return splice::visit(splice::overloaded{[](const availability::online&) { return std::string("online"); },

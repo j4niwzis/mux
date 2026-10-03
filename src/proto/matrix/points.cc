@@ -8,6 +8,7 @@ import splice;
 import mux.core;
 import mux.proto;
 import mux.proto.matrix.links;
+import mux.proto.matrix.requests;
 
 export namespace mux::proto::matrix {
 
@@ -66,24 +67,27 @@ inline std::vector<part::badge> header_badges(const state& now, const conversati
 // Element's warning over the composer, in a direct encrypted chat: the
 // other not verified -- messages are still encrypted to them -- or their
 // identity reset, to be verified again or withdrawn on their card.
-inline std::vector<part::banner> composer_banners(const state& now, const conversation& one, const model& known) {
+using banner = part::banner_of<request::verify_them>;
+inline std::vector<banner> composer_banners(const state& now, const conversation& one, const model& known) {
   const auto trust = other_trust(now, one, known);
   if (!trust)
     return {};
   const std::string& name = one.name.empty() ? one.id.id : one.name;
+  const request::verify_them them{one.id.account, direct_contact(now, one)};
   return splice::visit(
       splice::overloaded{
-          [](trust::verified) { return std::vector<part::banner>{}; },
+          [](trust::verified) { return std::vector<banner>{}; },
           [&](trust::unverified) {
-            return std::vector<part::banner>{{std::format("\u26A0 {} is not verified. Messages are encrypted to them, but "
-                                                          "verify them (their card) to be sure who reads them.",
-                                                          name)}};
+            return std::vector<banner>{{std::format("\u26A0 {} is not verified. Messages are encrypted to them, but verify "
+                                                    "them to be sure who reads them.",
+                                                    name),
+                                        part::tone::accent{}, "Verify", them}};
           },
           [&](trust::changed) {
-            return std::vector<part::banner>{{std::format("\u26A0 {}'s identity was reset. Verify them again, or withdraw "
-                                                          "the verification, on their card.",
-                                                          name),
-                                              part::tone::danger{}}};
+            return std::vector<banner>{{std::format("\u26A0 {}'s identity was reset. Verify them again, or withdraw the "
+                                                    "verification on their card.",
+                                                    name),
+                                        part::tone::danger{}, "Verify again", them}};
           }},
       *trust);
 }

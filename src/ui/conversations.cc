@@ -1265,7 +1265,18 @@ struct conversations_screen : nodes::Stack {
       screen->actions->jump_to_message(id);
     }
   };
+  // A banner's button pressed: its protocol's request, asked.
+  struct banner_press {
+    Actions* actions;
+    const std::optional<proto::any_request_t>* asks;
+    void operator()() const {
+      if (*asks)
+        splice::visit(splice::overloaded{[](proto::part::no_request) {}, [&](const auto& one) { actions->ask_for(one); }}, **asks);
+    }
+  };
   struct chat_column : nodes::Stack {
+    // What the banner's button asks, while it is shown.
+    std::optional<proto::any_request_t> banner_asks;
     using header_t = nodes::Memo<typename chat_header<Actions>::view, chat_header<Actions>>;
     using pinned_t = nodes::Memo<pinned_view, pinned_bar<pinned_press>>;
     struct empty_state : nodes::Stack {
@@ -1313,6 +1324,7 @@ struct conversations_screen : nodes::Stack {
       // Over the composer: what the chat's protocol says there -- Matrix's
       // warning that the other is not verified, or was reset.
       nodes::Text trust_warning{"", 13.0f, text_colour};
+      std::optional<widgets::Button<banner_press>> banner_button;
       composer_bar<Actions> line;
       empty_state empty;
       select_hint hint;
@@ -2847,9 +2859,24 @@ struct conversations_screen : nodes::Stack {
   // one under the other, the bar in the first's tone.
   void show_banners(const conversation* one, const model& now) {
     const auto banners = one ? proto::composer_banners(protocol_state_of(one->id.account), *one, now)
-                             : std::vector<proto::part::banner>{};
-    const std::string said = banners | std::views::transform(&proto::part::banner::text) | std::views::join_with('\n') |
+                             : std::vector<proto::any_banner>{};
+    const std::string said = banners | std::views::transform(&proto::any_banner::text) | std::views::join_with('\n') |
                              std::ranges::to<std::string>();
+    // The first's button, where it has one.
+    const std::string label = banners.empty() ? std::string() : banners.front().button;
+    chat.banner_asks = banners.empty() ? std::nullopt : banners.front().asks;
+    auto& button = chat.parts.banner_button;
+    if (label.empty() == button.has_value()) {
+      if (label.empty())
+        button.reset();
+      else {
+        button.emplace(label, banner_press{actions, &chat.banner_asks});
+        button->apply({.width = 120.0f, .height = 30.0f, .alignSelf = scene::align::kEnd,
+                       .margin = {4.0f, 14.0f, 6.0f, 14.0f}});
+      }
+      chat.invalidateLayout();
+    } else if (button)
+      button->setLabel(label);
     auto& bar = chat.parts.trust_warning;
     if (!banners.empty())
       bar.apply({.background = (tone_colour(banners.front().tone) & 0x00FFFFFFu) | (0x22u << 24)});

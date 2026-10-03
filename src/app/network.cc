@@ -8,12 +8,14 @@ import mux.core;
 import mux.config;
 import mux.net;
 import mux.preview;
-import mux.proto.xmpp.client;
-import mux.proto.matrix.client;
 import mux.proto.clients;
 import mux.protocols;
 import mux.host;
 import mux.ui;
+// The program's sink for what accounts say; and each protocol's account made
+// for it (src/proto/accounts.cc, the protocols' registry).
+export import :sink;
+import :accounts;
 
 export namespace mux::app {
 
@@ -30,45 +32,7 @@ void ask_if_able(Ask ask, Account& account) {
 template <class Ask, class Account>
 void ask_if_able(Ask, Account&) {}
 
-// The window's side of the mailbox: wake it.
-struct wake_window {
-  void operator()() const { mux::host::wake(); }
-};
-using mailbox_type = mux::mailbox<wake_window>;
-
-// What an account says, put in the mailbox -- while the account is still one
-// the program has. An account taken away keeps running a little while its
-// fibers wind down; nothing it says after that reaches the window.
-struct post_change {
-  mailbox_type* box = nullptr;
-  std::shared_ptr<std::atomic<bool>> live;
-  void operator()(mux::change_t one) const {
-    if (live->load())
-      box->push(std::move(one));
-  }
-};
-
-using xmpp_account = mux::proto::xmpp::client::account<post_change>;
-using matrix_account = mux::proto::matrix::client::account<post_change>;
 }  // namespace mux::app
-// The accounts themselves -- their requests, sync, media, and the HTTP and
-// TLS under them -- instantiated in units of their own (accounts_*.cc), in
-// parallel: they were most of this one's four and a half minutes. Outside a
-// release build only: a release build makes them here, where they are used,
-// so that the optimiser sees all of them in one unit.
-//
-// Made here at namespace scope, not where run() first starts one: clang 23
-// crashed (TemplateArgument::isPackExpansion, under libc++'s
-// basic_format_string::__handles_) on every format string first made deep
-// in that chain -- splice's visit, the account's start, its sync, its
-// crypto -- and on none made first in a plain context.
-#if defined(MUX_SPLIT_ACCOUNTS)
-extern template class mux::proto::xmpp::client::account<mux::app::post_change>;
-extern template class mux::proto::matrix::client::account<mux::app::post_change>;
-#else
-template class mux::proto::xmpp::client::account<mux::app::post_change>;
-template class mux::proto::matrix::client::account<mux::app::post_change>;
-#endif
 export namespace mux::app {
 // Each protocol's account, as its make_account (found by ADL on what it
 // keeps) makes it for the program's sink; and any of them, from the list.

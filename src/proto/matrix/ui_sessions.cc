@@ -47,6 +47,8 @@ using namespace ::mux::ui;
 template <class Actions>
 struct account_sessions : nodes::Stack {
   Actions* actions = nullptr;
+  // The colours it is made in, for the rows it makes later.
+  const palette* colours_ = nullptr;
   struct sign_out_one {
     account_sessions* page;
     std::string device;
@@ -94,13 +96,13 @@ struct account_sessions : nodes::Stack {
     session_row(account_sessions* page, std::size_t index, const proto::matrix::session_info& one, bool current)
         : device(one.id), name(one.name),
           parts{.lines = lines_t(one.name.empty() ? std::string("Unnamed session") : one.name, facts_of(one, current)),
-                .field = widgets::TextBox<>(legacy_palette().widgets, "Session name"),
-                .save = widgets::Button<save_rename>(legacy_palette().widgets, "Save", {page, index}),
-                .rename = widgets::Button<start_rename>(legacy_palette().widgets, "Rename", {page, index})} {
+                .field = widgets::TextBox<>((*page->colours_).widgets, "Session name"),
+                .save = widgets::Button<save_rename>((*page->colours_).widgets, "Save", {page, index}),
+                .rename = widgets::Button<start_rename>((*page->colours_).widgets, "Rename", {page, index})} {
       this->setHorizontal();
       this->setGap(8.0f);
       fState.apply({.fillX = true, .height = 60.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 8.0f,
-                    .background = tile_colour});
+                    .background = page->colours_->tile});
       parts.field.setText(one.name);
       parts.field.apply({.height = 32.0f, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
       parts.field.setVisible(false);
@@ -108,9 +110,9 @@ struct account_sessions : nodes::Stack {
       parts.save.setVisible(false);
       parts.rename.apply({.width = 80.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle});
       if (!current) {
-        parts.verify.emplace(legacy_palette().widgets, "Verify", verify_one{page, one.id});
+        parts.verify.emplace((*page->colours_).widgets, "Verify", verify_one{page, one.id});
         parts.verify->apply({.width = 70.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle});
-        parts.sign_out.emplace(legacy_palette().widgets, "Sign out", sign_out_one{page, one.id});
+        parts.sign_out.emplace((*page->colours_).widgets, "Sign out", sign_out_one{page, one.id});
         parts.sign_out->apply({.width = 86.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle});
       }
     }
@@ -124,10 +126,12 @@ struct account_sessions : nodes::Stack {
   };
   struct password_row : nodes::Stack {
     struct parts_t {
-      nodes::Text label{"Your password, to sign sessions out:", 13.0f, dim_colour};
-      widgets::TextBox<> field{legacy_palette().widgets, "Password"};
+      nodes::Text label;
+      widgets::TextBox<> field;
     } parts;
-    password_row() {
+    explicit password_row(const palette& colours)
+        : parts{.label = nodes::Text("Your password, to sign sessions out:", 13.0f, colours.dim),
+                .field = widgets::TextBox<>(colours.widgets, "Password")} {
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
       parts.field.setMasked(true);
@@ -145,11 +149,8 @@ struct account_sessions : nodes::Stack {
   using delete_backup_row = row_item<asks<Actions, request::delete_backup>>;
   using sign_out_unverified_row = row_item<asks<Actions, request::sign_out_unverified>>;
   struct parts_t {
-    nodes::Text verification_title = section_title("DEVICE VERIFICATION");
-    nodes::Text verification_note{"To verify device identity and grant access to encrypted messages: cross-signing. "
-                                  "Set it up here, or, where another session of yours has it, bring it back with "
-                                  "your recovery key.",
-                                  13.0f, dim_colour};
+    nodes::Text verification_title;
+    nodes::Text verification_note;
     set_up_row set_up;
     restore_row restore;
     // Element's last resort: new cross-signing keys, the dialog saying what
@@ -158,11 +159,11 @@ struct account_sessions : nodes::Stack {
     // Element's Secure Backup: made anew, or deleted.
     reset_backup_row reset_backup;
     delete_backup_row delete_backup;
-    nodes::Text title = section_title("SESSIONS");
-    nodes::Text note{"Loading the sessions…", 13.0f, dim_colour};
-    nodes::Text current_title = section_title("CURRENT SESSION");
+    nodes::Text title;
+    nodes::Text note;
+    nodes::Text current_title;
     std::vector<session_row> current;
-    nodes::Text others_title = section_title("OTHER SESSIONS");
+    nodes::Text others_title;
     std::vector<session_row> rows;
     // Element's: every session of one's own not verified, signed out.
     sign_out_unverified_row sign_out_unverified;
@@ -173,15 +174,22 @@ struct account_sessions : nodes::Stack {
   std::vector<std::string> others;
 
   // Its sessions asked of the server as it opens.
-  account_sessions(Actions* a, const config::account_t&, const model&)
-      : actions(a), parts{.set_up = set_up_row("Set up cross-signing\u2026", {a}),
-                          .restore = restore_row("Restore with the recovery key\u2026", {a}),
-                          .reset = reset_row("Reset your identity\u2026", {a}),
-                          .reset_backup = reset_backup_row("Reset the key backup", {a}),
-                          .delete_backup = delete_backup_row("Delete the key backup", {a}),
-                          .sign_out_unverified = sign_out_unverified_row("Sign out unverified sessions\u2026", {a}),
-                          .rest = widgets::Button<sign_out_rest>(legacy_palette().widgets, "Sign out of all other sessions", {this}),
-                          .refresh = widgets::Button<reload>(legacy_palette().widgets, "Refresh", {a})} {
+  account_sessions(Actions* a, const palette& colours, const config::account_t&, const model&)
+      : actions(a), colours_(&colours), parts{.verification_title = section_title(colours, "DEVICE VERIFICATION"),
+              .verification_note = nodes::Text("To verify device identity and grant access to encrypted messages: cross-signing. " "Set it up here, or, where another session of yours has it, bring it back with " "your recovery key.", 13.0f, colours.dim),
+              .set_up = set_up_row(colours, \"Set up cross-signing\u2026", {a}),
+              .restore = restore_row(colours, \"Restore with the recovery key\u2026", {a}),
+              .reset = reset_row(colours, \"Reset your identity\u2026", {a}),
+              .reset_backup = reset_backup_row(colours, \"Reset the key backup", {a}),
+              .delete_backup = delete_backup_row(colours, \"Delete the key backup", {a}),
+              .title = section_title(colours, "SESSIONS"),
+              .note = nodes::Text("Loading the sessions…", 13.0f, colours.dim),
+              .current_title = section_title(colours, "CURRENT SESSION"),
+              .others_title = section_title(colours, "OTHER SESSIONS"),
+              .sign_out_unverified = sign_out_unverified_row(colours, \"Sign out unverified sessions\u2026", {a}),
+              .password = password_row(colours),
+              .rest = widgets::Button<sign_out_rest>(colours.widgets, "Sign out of all other sessions", {this}),
+              .refresh = widgets::Button<reload>(colours.widgets, "Refresh", {a})} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     parts.verification_note.setWrapped(true);
@@ -239,7 +247,7 @@ struct account_sessions : nodes::Stack {
   // The server said no: why; and the password field, where that is it.
   void refused(const std::string& why, bool needs_password) {
     parts.note.setText(why);
-    parts.note.setColour(error_colour);
+    parts.note.setColour(colours_->error);
     parts.note.setVisible(true);
     if (needs_password)
       parts.password.setVisible(true);
@@ -249,7 +257,7 @@ struct account_sessions : nodes::Stack {
     if (devices.empty())
       return;
     parts.note.setText("Signing out…");
-    parts.note.setColour(dim_colour);
+    parts.note.setColour(colours_->dim);
     parts.note.setVisible(true);
     actions->ask_for(request::sign_out_sessions{std::move(devices), parts.password.parts.field.text()});
     this->invalidateLayout();
@@ -284,21 +292,23 @@ struct encryption_page : nodes::Stack {
   using cross_signing_row = row_item<asks<Actions, request::setup_cross_signing>>;
   using recovery_row = row_item<asks<Actions, request::restore_cross_signing>>;
   struct parts_t {
-    nodes::Text title = section_title("ENCRYPTION");
+    nodes::Text title;
     only_verified_row only_verified;
-    nodes::Text session_line{"", 13.0f, dim_colour};
+    nodes::Text session_line;
     export_row export_keys;
     import_row import_keys;
     cross_signing_row cross_signing;
     recovery_row recovery;
   } parts;
 
-  encryption_page(Actions* a, const config::account_t& one, const model& now)
-      : parts{.only_verified = only_verified_row("Never send encrypted messages to unverified sessions", {a}),
-              .export_keys = export_row("Export room keys\u2026", {a}),
-              .import_keys = import_row("Import room keys\u2026", {a}),
-              .cross_signing = cross_signing_row("Set up cross-signing\u2026", {a}),
-              .recovery = recovery_row("Restore with the recovery key\u2026", {a})} {
+  encryption_page(Actions* a, const palette& colours, const config::account_t& one, const model& now)
+      : parts{.title = section_title(colours, "ENCRYPTION"),
+              .only_verified = only_verified_row(colours, \"Never send encrypted messages to unverified sessions", {a}),
+              .session_line = nodes::Text("", 13.0f, colours.dim),
+              .export_keys = export_row(colours, \"Export room keys\u2026", {a}),
+              .import_keys = import_row(colours, \"Import room keys\u2026", {a}),
+              .cross_signing = cross_signing_row(colours, \"Set up cross-signing\u2026", {a}),
+              .recovery = recovery_row(colours, \"Restore with the recovery key\u2026", {a})} {
     this->setGap(8.0f);
     fState.apply({.fill = true});
     parts.only_verified.parts.toggle.setOnNow(config::only_verified_of(one));

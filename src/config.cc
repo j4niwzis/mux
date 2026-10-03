@@ -356,9 +356,6 @@ struct saved_account {
 };
 consteval auto json_schema(knot::type<saved_account>) { return knot::schema<saved_account>(); }
 
-// The names used so far for what each protocol keeps of its own.
-using xmpp_account = proto::xmpp::kept;
-using matrix_account = proto::matrix::kept;
 
 
 // What a chat's background is: the theme's own -- its gradient and

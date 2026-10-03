@@ -2,6 +2,7 @@
 // mux.config: what is kept, where, and who can read it.
 import std;
 import mux.config;
+import mux.proto.kept;
 import gtest;
 
 #include "gtest/gtest-macros.h"
@@ -9,8 +10,9 @@ import gtest;
 namespace {
 
 namespace fs = std::filesystem;
-using mux::config::matrix_account;
-using mux::config::xmpp_account;
+// What each protocol keeps of its own.
+using matrix_account = mux::proto::matrix::kept;
+using xmpp_account = mux::proto::xmpp::kept;
 
 // A directory of the test's own, removed after it.
 struct scratch {

@@ -265,6 +265,8 @@ struct sticker_grid : nodes::Stack {
   Actions* actions = nullptr;
   std::optional<previewed> preview_of;
   bool searching = false;
+  // The pictures of the packs' tabs, as show_all made them.
+  std::vector<std::string> tab_pictures;
   [[nodiscard]] bool settling() const { return previewed_emote() != preview_of; }
 
   explicit sticker_grid(Actions* a)
@@ -306,6 +308,7 @@ struct sticker_grid : nodes::Stack {
     all.clear();
     auto& tabs = parts.footer.parts.each;
     tabs.clear();
+    tab_pictures.clear();
     // Recent: those sent lately that the chat still has.
     std::vector<emote> recent = recent_stickers() | std::views::filter([](const emote& one) {
                                   return std::ranges::contains(chat_stickers(), one.url, &emote::url);
@@ -326,6 +329,8 @@ struct sticker_grid : nodes::Stack {
                                                                               : std::optional<std::string>(stickers.front().url);
       all.emplace_back(actions, name, stickers);
       tabs.emplace_back(this, all.size() - 1, picture);
+      if (picture)
+        tab_pictures.push_back(*picture);
     }
     searching = false;
     parts.empty.setVisible(chat_stickers().empty() && favourite_stickers().empty());
@@ -356,6 +361,21 @@ struct sticker_grid : nodes::Stack {
     searching = true;
     parts.list.invalidateLayout();
     parts.list.scrollTo(0.0f);
+  }
+  // The pictures it shows -- the cells in view and a row either side, and
+  // the packs' tabs -- for the program to ask for. Pictures were asked for
+  // only as the window refreshed, which neither opening the panel nor
+  // scrolling it does: a sticker not loaded already stayed empty.
+  [[nodiscard]] std::vector<std::string> pictures_shown() {
+    if (!fState.visible())
+      return {};
+    const skia::SkRect view = parts.list.bounds().makeOutset(0.0f, kCell);
+    std::vector<std::string> out =
+        this->sections() | std::views::transform([](section& one) -> std::vector<cell>& { return one.each(); }) | std::views::join |
+        std::views::filter([&](cell& one) { return !one.bounds().isEmpty() && parts.list.toView(one.bounds()).intersects(view); }) |
+        std::views::transform([](cell& one) { return one.sticker.url; }) | std::ranges::to<std::vector>();
+    out.append_range(tab_pictures);
+    return out;
   }
   // A pack brought to the top of the list, as its tab does.
   void bring(std::size_t at) {

@@ -204,6 +204,12 @@ inline std::vector<std::string>& pack_pictures_shown() {
   static std::vector<std::string> shown;
   return shown;
 }
+// The stickers the emoji panel shows -- in view, and its packs' tabs --
+// fetched as avatars are, while it shows them.
+inline std::vector<std::string>& panel_pictures_shown() {
+  static std::vector<std::string> shown;
+  return shown;
+}
 // And Telegram's pattern over it: dark and faint on a light theme, light and
 // fainter on a dark one.
 inline skia::SkColor pattern_colour = skia::colorSetARGB(20, 255, 255, 255);

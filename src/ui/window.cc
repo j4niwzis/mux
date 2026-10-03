@@ -439,6 +439,10 @@ struct window : scene::Node {
       layer().emoji->parts.card.parts.gifs.show(paths);
   }
   [[nodiscard]] bool emoji_open() { return layer().emoji.has_value(); }
+  // The sticker pictures the panel shows, for the program to ask for.
+  [[nodiscard]] std::vector<std::string> emoji_pictures_shown() {
+    return layer().emoji ? layer().emoji->parts.card.parts.stickers.pictures_shown() : std::vector<std::string>{};
+  }
   // The menu's card, where one is up: what takes the keys while it is.
   [[nodiscard]] scene::Node* menu_card() { return layer().menu ? &layer().menu->parts.menu : nullptr; }
 

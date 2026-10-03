@@ -144,6 +144,8 @@ class pictures_part {
     if (screen.current) {
       for (const std::string& url : mux::ui::pack_pictures_shown())
         want(*screen.current, url, url);
+      for (const std::string& url : mux::ui::panel_pictures_shown())
+        want(*screen.current, url, url);
       // Those a dialog lists -- Explore's rooms, people found -- by their keys.
       for (const auto& [key, url] : mux::ui::listed_avatars())
         want(*screen.current, url, key);
@@ -214,18 +216,9 @@ class pictures_part {
           // The chat's own custom emoji and stickers, for its panels.
           for (const emote& custom : one.emotes)
             want(id, custom.url, custom.url);
-          for (const emote& sticker : one.stickers) {
-            want(id, sticker.url, sticker.url);
-            // Its pack picture, for the panel tab of its pack.
-            if (sticker.pack_avatar)
-              want(id, sticker.pack_avatar, *sticker.pack_avatar);
-          }
-          // And the panel's Recent and favourites, which come from any chat:
-          // never asked for, they showed only what happened to be loaded.
-          for (const emote& sticker : mux::ui::recent_stickers())
-            want(id, sticker.url, sticker.url);
-          for (const emote& sticker : mux::ui::favourite_stickers())
-            want(id, sticker.url, sticker.url);
+          // Its stickers: those the panel shows, asked for above as it shows
+          // them. Every one of them at every refresh, at 256 px each, pushed
+          // each other -- and the chats' avatars -- out of the pictures kept.
           // Those on screen and near it, at twice the size they are drawn
           // at -- not every picture in its history, which pushed the rest out.
           // While a message is being jumped to, only those right around it:

@@ -618,6 +618,13 @@ void app::before_frame() {
   // as in tdesktop.
   if (scene.focusedId() == 0 && root().main().chosen && !root().open_panel() && !root().settings_up())
     scene.focus(root().main().line.field);
+  // The emoji panel's stickers in view, asked for as they change -- as it
+  // opens, as it scrolls, as its tab or its search changes -- and not only
+  // when something else refreshed the window.
+  if (auto shown = root().emoji_pictures_shown(); shown != mux::ui::panel_pictures_shown()) {
+    mux::ui::panel_pictures_shown() = std::move(shown);
+    pictures.ask();
+  }
   auto pending = std::exchange(ask.requests, {});
   for (const request_t& one : pending)
     splice::visit([this](const auto& each) { this->route(each); }, one);

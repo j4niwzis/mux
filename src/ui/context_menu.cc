@@ -862,11 +862,7 @@ struct emoji_popup : scene::Node {
       if (on == docked)
         return;
       docked = on;
-      // The padding set, not applied: all zeros in a spec read as "not
-      // mentioned", and undocked -- the window grown out of a phone's -- the
-      // card kept the room for the tabs under it.
-      fState.setPadding({0.0f, 0.0f, on ? kTabsHigh : 0.0f, 0.0f});
-      fState.apply({.cornerRadius = on ? 0.0f : 8.0f});
+      fState.apply({.padding = {0.0f, 0.0f, on ? kTabsHigh : 0.0f, 0.0f}, .cornerRadius = on ? 0.0f : 8.0f});
       parts.tabs.fState.setOutOfFlow(on);
       // In the room kept for them under the panel's own (its padding): a
       // node placed by its anchor goes by the box its parent lays out in,

@@ -135,22 +135,25 @@ template <class Rule, class Variant>
 }
 
 // A heading over a tab, and over a part of one, as Element's.
-inline nodes::Text tab_heading(std::string text) {
-  nodes::Text out(std::move(text), 20.0f, text_colour, true);
+inline nodes::Text tab_heading(const palette& colours, std::string text) {
+  nodes::Text out(std::move(text), 20.0f, colours.text, true);
   out.apply({.margin = {0.0f, 0.0f, 12.0f, 0.0f}});
   return out;
 }
-inline nodes::Text part_heading(std::string text) {
-  nodes::Text out(std::move(text), 15.0f, text_colour, true);
+inline nodes::Text part_heading(const palette& colours, std::string text) {
+  nodes::Text out(std::move(text), 15.0f, colours.text, true);
   out.apply({.margin = {18.0f, 0.0f, 4.0f, 0.0f}});
   return out;
 }
-inline nodes::Text explained(std::string text) {
-  nodes::Text out(std::move(text), 13.0f, dim_colour);
+inline nodes::Text part_heading(std::string text) { return part_heading(legacy_palette(), std::move(text)); }
+inline nodes::Text tab_heading(std::string text) { return tab_heading(legacy_palette(), std::move(text)); }
+inline nodes::Text explained(const palette& colours, std::string text) {
+  nodes::Text out(std::move(text), 13.0f, colours.dim);
   out.setWrapped(true);
   out.apply({.fillX = true, .margin = {2.0f, 0.0f, 6.0f, 0.0f}});
   return out;
 }
+inline nodes::Text explained(std::string text) { return explained(legacy_palette(), std::move(text)); }
 
 // One of a choice, as Element's radio buttons: a ring, and a title over
 // what it means.
@@ -162,9 +165,9 @@ struct radio_choice : nodes::Stack {
       nodes::Text title;
       nodes::Text about;
     } parts;
-    texts(std::string title, std::string about)
-        : parts{.title = nodes::Text(std::move(title), 14.0f, text_colour),
-                .about = nodes::Text(std::move(about), 12.0f, dim_colour)} {
+    texts(const palette& colours, std::string title, std::string about)
+        : parts{.title = nodes::Text(std::move(title), 14.0f, colours.text),
+                .about = nodes::Text(std::move(about), 12.0f, colours.dim)} {
       this->setGap(2.0f);
       fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
       parts.title.setWrapped(true);
@@ -179,11 +182,13 @@ struct radio_choice : nodes::Stack {
     texts words;
   } parts;
   radio_choice(std::string title, std::string about, Act what, bool on, bool allowed)
-      : act(std::move(what)), parts{.words = texts(std::move(title), std::move(about))} {
+      : radio_choice(legacy_palette(), std::move(title), std::move(about), std::move(what), on, allowed) {}
+  radio_choice(const palette& colours, std::string title, std::string about, Act what, bool on, bool allowed)
+      : act(std::move(what)), parts{.ring = radio_mark(colours), .words = texts(colours, std::move(title), std::move(about))} {
     this->setHorizontal();
     this->setGap(10.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 6.0f, 6.0f, 6.0f},
-                  .cornerRadius = 6.0f, .hoverBackground = chosen_colour, .disabled = !allowed});
+                  .cornerRadius = 6.0f, .hoverBackground = colours.chosen, .disabled = !allowed});
     if (allowed)
       fState.setCursor(scene::cursor::hand{});
     parts.ring.set_on(on);
@@ -206,7 +211,9 @@ struct toggle_line : nodes::Stack {
     widgets::Toggle<Act> toggle;
   } parts;
   toggle_line(std::string text, Act what, bool on, bool allowed)
-      : parts{.label = nodes::Text(std::move(text), 14.0f, text_colour), .toggle = widgets::Toggle<Act>(std::move(what))} {
+      : toggle_line(legacy_palette(), std::move(text), std::move(what), on, allowed) {}
+  toggle_line(const palette& colours, std::string text, Act what, bool on, bool allowed)
+      : parts{.label = nodes::Text(std::move(text), 14.0f, colours.text), .toggle = widgets::Toggle<Act>(std::move(what))} {
     this->setHorizontal();
     this->setGap(12.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .disabled = !allowed});
@@ -230,9 +237,10 @@ struct copy_line : nodes::Stack {
     nodes::Text value;
     widgets::Button<copy_it> copy;
   } parts;
-  copy_line(std::string label, std::string value)
-      : parts{.label = nodes::Text(std::move(label), 14.0f, dim_colour),
-              .value = nodes::Text(value, 14.0f, text_colour),
+  copy_line(std::string label, std::string value) : copy_line(legacy_palette(), std::move(label), std::move(value)) {}
+  copy_line(const palette& colours, std::string label, std::string value)
+      : parts{.label = nodes::Text(std::move(label), 14.0f, colours.dim),
+              .value = nodes::Text(value, 14.0f, colours.text),
               .copy = widgets::Button<copy_it>("Copy", {value})} {
     this->setHorizontal();
     this->setGap(10.0f);
@@ -248,6 +256,8 @@ template <class Actions>
 struct room_settings : nodes::Stack {
   using actions_type = Actions;
   Actions* actions = nullptr;
+  // The colours it and its pages are made in: what it was handed.
+  const palette* colours_ = nullptr;
   room_settings_facts facts;
 
   // ---- the tabs and pages: the client's, then each protocol's -----------------
@@ -295,12 +305,13 @@ struct room_settings : nodes::Stack {
       icon_mark mark;
       nodes::Text label;
     } parts;
-    tab_row(std::string text, icon_t icon, pick_tab what)
-        : act(std::move(what)), parts{.mark = icon_mark(icon), .label = nodes::Text(std::move(text), 14.0f, text_colour)} {
+    tab_row(const palette& colours, std::string text, icon_t icon, pick_tab what)
+        : act(std::move(what)),
+          parts{.mark = icon_mark(colours, icon), .label = nodes::Text(std::move(text), 14.0f, colours.text)} {
       this->setHorizontal();
       this->setGap(10.0f);
       fState.apply({.fillX = true, .height = 36.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 8.0f,
-                    .hoverBackground = chosen_colour, .selectedBackground = chosen_colour});
+                    .hoverBackground = colours.chosen, .selectedBackground = colours.chosen});
       parts.mark.apply({.alignSelf = scene::align::kMiddle});
       parts.label.setElided(true);
       parts.label.apply({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle});
@@ -321,12 +332,12 @@ struct room_settings : nodes::Stack {
     } parts;
     template <class... Tabs>
     void add(room_settings* box, manage_tab_list<Tabs...>) {
-      (parts.protocol.emplace_back(std::string(tab_title(Tabs{})), tab_icon(Tabs{}), pick_tab{box, settings_tab_t{Tabs{}}}), ...);
+      (parts.protocol.emplace_back(*box->colours_, std::string(tab_title(Tabs{})), tab_icon(Tabs{}), pick_tab{box, settings_tab_t{Tabs{}}}), ...);
     }
     explicit tab_list(room_settings* box)
-        : parts{.general = tab_row("General", icon::gear{}, {box, settings_tab::general{}}),
-                .notifications = tab_row("Notifications", icon::bell{}, {box, settings_tab::notifications{}}),
-                .looks = tab_row("Appearance", icon::eye{}, {box, settings_tab::looks{}})} {
+        : parts{.general = tab_row(*box->colours_, "General", icon::gear{}, {box, settings_tab::general{}}),
+                .notifications = tab_row(*box->colours_, "Notifications", icon::bell{}, {box, settings_tab::notifications{}}),
+                .looks = tab_row(*box->colours_, "Appearance", icon::eye{}, {box, settings_tab::looks{}})} {
       splice::visit([&](auto of) { this->add(box, tabs_of_t<decltype(of)>{}); }, box->facts.speaks);
       this->setGap(2.0f);
       fState.apply({.fillY = true, .width = 220.0f, .padding = {4.0f, 12.0f, 12.0f, 12.0f}});
@@ -359,11 +370,12 @@ struct room_settings : nodes::Stack {
   };
   struct forum_row : nodes::Stack {
     struct parts_t {
-      nodes::Text label{"One chat, its rooms as topics", 14.0f, text_colour};
+      nodes::Text label;
       widgets::Toggle<flip_forum_act> toggle;
     } parts;
-    forum_row(Actions* a, const room_settings_facts& facts)
-        : parts{.toggle = widgets::Toggle<flip_forum_act>({a, facts.id, !facts.holds_spaces})} {
+    forum_row(const palette& colours, Actions* a, const room_settings_facts& facts)
+        : parts{.label = nodes::Text("One chat, its rooms as topics", 14.0f, colours.text),
+                .toggle = widgets::Toggle<flip_forum_act>({a, facts.id, !facts.holds_spaces})} {
       this->setHorizontal();
       this->setGap(12.0f);
       fState.apply({.fillX = true, .height = 36.0f});
@@ -383,11 +395,12 @@ struct room_settings : nodes::Stack {
   };
   struct home_hide_row : nodes::Stack {
     struct parts_t {
-      nodes::Text label{"Its rooms not in Home", 14.0f, text_colour};
+      nodes::Text label;
       widgets::Toggle<flip_home_hide_act> toggle;
     } parts;
-    home_hide_row(Actions* a, const room_settings_facts& facts)
-        : parts{.toggle = widgets::Toggle<flip_home_hide_act>({a, facts.id})} {
+    home_hide_row(const palette& colours, Actions* a, const room_settings_facts& facts)
+        : parts{.label = nodes::Text("Its rooms not in Home", 14.0f, colours.text),
+                .toggle = widgets::Toggle<flip_home_hide_act>({a, facts.id})} {
       this->setHorizontal();
       this->setGap(12.0f);
       fState.apply({.fillX = true, .height = 36.0f});
@@ -398,33 +411,37 @@ struct room_settings : nodes::Stack {
   };
   struct general_page : nodes::Stack {
     struct parts_t {
-      nodes::Text heading = tab_heading("General");
-      nodes::Text events_about = explained("Room events shown in this room, for you: Default is as your account's.");
+      nodes::Text heading;
+      nodes::Text events_about;
       event_kind_list<Actions> events;
       receipts_choice<Actions> receipts;
       previews_choice<Actions> previews;
       previews_direct_choice<Actions> previews_direct;
       typing_choice<Actions> typing;
       jump_search_choice<Actions> jump_search;
-      nodes::Text forum_heading = part_heading("Shown as");
+      nodes::Text forum_heading;
       forum_row forum;
       nodes::Text forum_about;
       home_hide_row home_hide;
-      nodes::Text leave_heading = part_heading("Leave room");
+      nodes::Text leave_heading;
       widgets::Button<ask<Actions, &Actions::leave_chat>> leave;
     } parts;
-    general_page(Actions* a, room_settings*, const room_settings_facts& facts)
-        : parts{.events = event_kind_list<Actions>(a, choice_level::chat{}, facts.events_all, facts.event_kinds),
+    general_page(Actions* a, room_settings* box, const room_settings_facts& facts)
+        : parts{.heading = tab_heading(*box->colours_, "General"),
+                .events_about = explained(*box->colours_, "Room events shown in this room, for you: Default is as your account's."),
+                .events = event_kind_list<Actions>(a, choice_level::chat{}, facts.events_all, facts.event_kinds),
                 .receipts = receipts_choice<Actions>(a, choice_level::chat{}, facts.receipts),
                 .previews = previews_choice<Actions>(a, choice_level::chat{}, facts.previews),
                 .previews_direct = previews_direct_choice<Actions>(a, choice_level::chat{}, facts.previews_direct),
                 .typing = typing_choice<Actions>(a, choice_level::chat{}, facts.typing),
                 .jump_search = jump_search_choice<Actions>(a, choice_level::chat{}, facts.jump_search),
-                .forum = forum_row(a, facts),
-                .forum_about = explained(facts.holds_spaces
+                .forum_heading = part_heading(*box->colours_, "Shown as"),
+                .forum = forum_row(*box->colours_, a, facts),
+                .forum_about = explained(*box->colours_, facts.holds_spaces
                                              ? "A space that holds spaces is shown as a space."
                                              : "On: in the chat list as one chat; its rooms open inside it, as Telegram's topics."),
-                .home_hide = home_hide_row(a, facts),
+                .home_hide = home_hide_row(*box->colours_, a, facts),
+                .leave_heading = part_heading(*box->colours_, "Leave room"),
                 .leave = widgets::Button<ask<Actions, &Actions::leave_chat>>("Leave room", {a})} {
       for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.forum_heading, &parts.forum, &parts.forum_about})
         each->setVisible(facts.space);
@@ -441,19 +458,20 @@ struct room_settings : nodes::Stack {
   struct notifications_page : nodes::Stack {
     using choice = radio_choice<notify_as>;
     struct parts_t {
-      nodes::Text heading = tab_heading("Notifications");
+      nodes::Text heading;
       choice by_default, all, mentions, off;
     } parts;
     notifications_page(Actions*, room_settings* box, const room_settings_facts& facts)
-        : parts{.by_default = choice("Default", "As your account's notifications are set up",
+        : parts{.heading = tab_heading(*box->colours_, "Notifications"),
+                .by_default = choice(*box->colours_, "Default", "As your account's notifications are set up",
                                      {box, config::notify_mode::by_default{}},
                                      is_rule<config::notify_mode::by_default>(facts.notify_mode), true),
-                .all = choice("All messages", "Get notified of every message", {box, config::notify_mode::all{}},
+                .all = choice(*box->colours_, "All messages", "Get notified of every message", {box, config::notify_mode::all{}},
                               is_rule<config::notify_mode::all>(facts.notify_mode), true),
-                .mentions = choice("@mentions & keywords", "Get notified only with mentions and keywords",
+                .mentions = choice(*box->colours_, "@mentions & keywords", "Get notified only with mentions and keywords",
                                    {box, config::notify_mode::mentions{}},
                                    is_rule<config::notify_mode::mentions>(facts.notify_mode), true),
-                .off = choice("Off", "You won't get any notifications", {box, config::notify_mode::off{}},
+                .off = choice(*box->colours_, "Off", "You won't get any notifications", {box, config::notify_mode::off{}},
                               is_rule<config::notify_mode::off>(facts.notify_mode), true)} {
       this->setGap(4.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
@@ -463,10 +481,11 @@ struct room_settings : nodes::Stack {
   // ---- Appearance: the room's background, bubbles and panels --------------------
   struct looks_page : nodes::Stack {
     struct parts_t {
-      nodes::Text heading = tab_heading("Appearance");
+      nodes::Text heading;
       look_choices<Actions> choices;
     } parts;
-    looks_page(Actions* a, room_settings*, const room_settings_facts&) : parts{.choices = look_choices<Actions>(a, choice_level::chat{})} {
+    looks_page(Actions* a, room_settings* box, const room_settings_facts&)
+        : parts{.heading = tab_heading(*box->colours_, "Appearance"), .choices = look_choices<Actions>(a, choice_level::chat{})} {
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
     }
@@ -537,9 +556,10 @@ struct room_settings : nodes::Stack {
   bool rebuild_due = false;
   bool to_top = false;  // another tab: shown from its top
 
-  room_settings(Actions* a, const room_settings_facts& shown)
-      : actions(a), facts(shown),
-        parts{.header = header_t("Room Settings - " + shown.name, {}, {a}, false, true),
+  room_settings(const ui_needs<Actions>& n, const room_settings_facts& shown) : room_settings(n.colours, n.actions, shown) {}
+  room_settings(const palette* colours, Actions* a, const room_settings_facts& shown)
+      : actions(a), colours_(colours), facts(shown),
+        parts{.header = header_t(*colours, "Room Settings - " + shown.name, {}, {a}, false, true),
               .body = body_row(this, page_t(std::in_place_index<0>, a, this, shown))} {
     fState.apply({.fill = true});
     parts.body.parts.tabs.show(tab);

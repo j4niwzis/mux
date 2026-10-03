@@ -56,9 +56,18 @@ using matrix_account = mux::matrix::account<post_change>;
 // parallel: they were most of this one's four and a half minutes. Outside a
 // release build only: a release build makes them here, where they are used,
 // so that the optimiser sees all of them in one unit.
+//
+// Made here at namespace scope, not where run() first starts one: clang 23
+// crashed (TemplateArgument::isPackExpansion, under libc++'s
+// basic_format_string::__handles_) on every format string first made deep
+// in that chain -- splice's visit, the account's start, its sync, its
+// crypto -- and on none made first in a plain context.
 #if defined(MUX_SPLIT_ACCOUNTS)
 extern template class mux::xmpp::account<mux::app::post_change>;
 extern template class mux::matrix::account<mux::app::post_change>;
+#else
+template class mux::xmpp::account<mux::app::post_change>;
+template class mux::matrix::account<mux::app::post_change>;
 #endif
 export namespace mux::app {
 // Each protocol's account, as its make_account (found by ADL on what it

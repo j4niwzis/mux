@@ -690,6 +690,20 @@ using namespace ::mux::ui;
 // others -- each its name, its ID, where and when it was last seen -- each to
 // rename or sign out, and all the others at once. Where the server asks for
 // the password to sign one out, a field for it.
+// A session's ID, when it was last seen, from where: as Element says them.
+// Not a member of the page, a template: clang 23 crashed on this format
+// string made first inside one (see app/network.cc).
+[[nodiscard]] inline std::string facts_of(const proto::matrix::session_info& one, bool current) {
+  std::string out = one.id;
+  if (current)
+    out += " · this session";
+  if (one.last_seen)
+    out += std::format(" · last seen {:%d.%m.%Y %H:%M}", std::chrono::floor<std::chrono::minutes>(*one.last_seen));
+  if (one.ip)
+    out += " · " + *one.ip;
+  return out;
+}
+
 template <class Actions>
 struct account_sessions : nodes::Stack {
   Actions* actions = nullptr;
@@ -759,17 +773,6 @@ struct account_sessions : nodes::Stack {
         parts.sign_out.emplace("Sign out", sign_out_one{page, one.id});
         parts.sign_out->apply({.width = 86.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle});
       }
-    }
-    // Its ID, when it was last seen, from where: as Element says them.
-    [[nodiscard]] static std::string facts_of(const proto::matrix::session_info& one, bool current) {
-      std::string out = one.id;
-      if (current)
-        out += " · this session";
-      if (one.last_seen)
-        out += std::format(" · last seen {:%d.%m.%Y %H:%M}", std::chrono::floor<std::chrono::minutes>(*one.last_seen));
-      if (one.ip)
-        out += " · " + *one.ip;
-      return out;
     }
     void show_field(bool on) {
       parts.lines.setVisible(!on);

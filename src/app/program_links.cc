@@ -141,7 +141,7 @@ void app::apply(const request::message_person& one) {
   // No chat with them yet: one started, as Start chat starts it -- their
   // card closed, the chat opened once it is made.
   this->apply(request::close_person_info{});
-  this->apply(request::start_direct{one.who.id});
+  rooms.apply(request::start_direct{one.who.id});
 }
 
 // A quote pressed: to what it quotes -- or, a reaction's, to the message it

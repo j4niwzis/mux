@@ -342,7 +342,7 @@ struct account_chats : nodes::Stack {
                 std::optional<bool> home_direct, const config::accent_t& colour, bool strip_on, const config::theme_t& theme)
       : parts{.colour_title = section_title(colours, "COLOUR"),
               .colours = accent_circles<set_colour>({a}, theme, false),
-              .strip = switch_row<ask<Actions, &Actions::flip_account_strip>>("A strip on its chats in other lists", {a}),
+              .strip = switch_row<ask<Actions, &Actions::flip_account_strip>>(colours, "A strip on its chats in other lists", {a}),
               .title = section_title(colours, "CHATS"),
               .chats = chat_choices<Actions>(a, colours, choice_level::account{}, chats, 8.0f),
               .looks_title = section_title(colours, "LOOKS"),

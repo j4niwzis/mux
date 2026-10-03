@@ -623,134 +623,22 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
   this->refresh();
 }
 
-void app::lock(std::vector<mux::config::account_t> extra, bool demo) {
-  waiting_extra = std::move(extra);
-  waiting_demo = demo;
-  root().ask_passphrase(mux::config::passphrase_for::unlock{});
-}
+void app::lock(std::vector<mux::config::account_t> extra, bool demo) { local_data.lock(std::move(extra), demo); }
 
-// The files sealed: the settings, and every file in the state directory
-// that is read through the vault -- a chat's messages and its deleted ones
-// a line at a time, the rest whole. Not the wallpapers, read as pictures.
-mux::vault::vault::kept_files app::sealed_files() const {
-  mux::vault::vault::kept_files out;
-  out.whole.push_back(config_path);
-  const auto root = mux::config::state_path("").parent_path();
-  std::error_code failed;
-  if (!std::filesystem::exists(root, failed))
-    return out;
-  for (auto walk = std::filesystem::recursive_directory_iterator(root, failed);
-       !failed && walk != std::filesystem::recursive_directory_iterator(); walk.increment(failed)) {
-    const auto& path = walk->path();
-    if (walk->is_directory() && path.filename() == "wallpapers") {
-      walk.disable_recursion_pending();
-      continue;
-    }
-    if (!walk->is_regular_file())
-      continue;
-    const auto name = path.filename().string();
-    if (name.ends_with(".new") || name.ends_with(".unreadable"))
-      continue;
-    (path.extension() == ".jsonl" ? out.lines : out.whole).push_back(path);
-  }
-  return out;
-}
-
-// Read first, as the vault is; then its journal begun (turn), everything
-// written again, and the journal ended. Cut short after the turn -- an
-// error, a crash -- the journal stays: every file is still opened, by
-// either key or plain, and the re-seal is finished at the next start.
-template <class Turn>
-bool app::reseal(Turn turn) {
-  auto& vault = *this->vault;
-  // All of it with every other read and write of the vault waiting: the
-  // network's saves and the store's lines come after, under the new key.
-  return vault.exclusive([&] {
-    const auto all = vault.read_all(this->sealed_files());
-    if (!all)
-      return false;
-    turn(vault);
-    if (!vault.write_all(*all))
-      return false;
-    vault.finish();
-    return true;
-  });
-}
-
-// Why a re-seal did not happen, or was not all done.
-inline constexpr std::string_view kUnread = "Something kept could not be read, so nothing was changed.";
-inline constexpr std::string_view kCutShort =
-    "Not everything could be written. Everything stays readable, and it is finished at the next start.";
-
-// A passphrase given, by what it was asked for.
+// A passphrase given, by what it was asked for: local data's, to its part
+// -- opened, what was kept begun -- and a protocol's own, to its program
+// glue.
 void app::apply(const request::give_passphrase& one) {
-  auto& vault = *this->vault;
-  // A new one: not empty, and the same twice.
-  const auto fresh_refused = [&] { return mux::config::new_passphrase_refused(one.fresh, one.again); };
-  const auto done = [&] {
-    root().close_passphrase();
-    if (auto* up = root().settings_up())
-      if (auto* page = up->storage())
-        page->show_sealed(vault.on());
-  };
-  splice::visit(
-      splice::overloaded{
-          [&](mux::config::passphrase_for::unlock) {
-            if (!vault.unlock(one.current))
-              return root().passphrase_refused("That is not the passphrase.");
-            // A re-seal cut short last time: finished first.
-            if (vault.resealing() && !this->reseal([](mux::vault::vault&) {}))
-              root().show_message("Local data", "Re-sealing what is kept, begun before, could not be finished. It is "
-                                                "tried again at the next start; everything stays readable.");
-            root().close_passphrase();
-            mux::config::file saved;
-            std::optional<std::string> error;
-            if (auto loaded = mux::config::load(config_path, vault))
-              saved = std::move(*loaded);
-            else
-              error = loaded.error();
-            this->begin(saved, std::move(waiting_extra), waiting_demo, std::move(error));
-          },
-          [&](mux::config::passphrase_for::encrypt) {
-            if (vault.on())
-              return done();
-            if (auto refused = fresh_refused())
-              return root().passphrase_refused(*refused);
-            if (!this->reseal([&](mux::vault::vault& v) { v.begin_encrypt(one.fresh); }))
-              return root().passphrase_refused(std::string(vault.resealing() ? kCutShort : kUnread));
-            // Pictures are not kept on disk while it is on: those there go.
-            std::error_code ignored;
-            std::filesystem::remove_all(mux::config::cache_path("").parent_path(), ignored);
-            done();
-          },
-          [&](mux::config::passphrase_for::change) {
-            if (!vault.matches(one.current))
-              return root().passphrase_refused("That is not the passphrase now.");
-            if (auto refused = fresh_refused())
-              return root().passphrase_refused(*refused);
-            if (!this->reseal([&](mux::vault::vault& v) { v.begin_change(one.fresh); }))
-              return root().passphrase_refused(std::string(vault.resealing() ? kCutShort : kUnread));
-            done();
-          },
-          // A protocol's own: done by its program glue.
-          [&](const auto& theirs) { passphrase_given(*this, theirs, one); },
-          [&](mux::config::passphrase_for::decrypt) {
-            if (!vault.matches(one.current))
-              return root().passphrase_refused("That is not the passphrase.");
-            if (!this->reseal([](mux::vault::vault& v) { v.begin_decrypt(); }))
-              return root().passphrase_refused(std::string(vault.resealing() ? kCutShort : kUnread));
-            done();
-          }},
-      one.why);
+  splice::visit(splice::overloaded{[&](mux::config::passphrase_for::unlock) {
+                                     if (auto opened = local_data.unlock(one))
+                                       this->begin(opened->saved, std::move(opened->extra), opened->demo, std::move(opened->error));
+                                   },
+                                   [&](mux::config::passphrase_for::encrypt) { local_data.encrypt(one); },
+                                   [&](mux::config::passphrase_for::change) { local_data.change(one); },
+                                   [&](mux::config::passphrase_for::decrypt) { local_data.decrypt(one); },
+                                   [&](const auto& theirs) { passphrase_given(*this, theirs, one); }},
+                one.why);
 }
-// From Storage: on asks for a new passphrase, off for the one now.
-void app::apply(const request::flip_local_encryption&) {
-  if (vault->on())
-    root().ask_passphrase(mux::config::passphrase_for::decrypt{});
-  else
-    root().ask_passphrase(mux::config::passphrase_for::encrypt{});
-}
-void app::apply(const request::change_passphrase&) { root().ask_passphrase(mux::config::passphrase_for::change{}); }
 
 // From an account's Privacy page: its room keys, to a file or from one.
 

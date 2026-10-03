@@ -439,7 +439,7 @@ if(MUX_UI)
   # the requests of its window, the names it reads, and the program itself.
   target_sources(mux PRIVATE FILE_SET CXX_MODULES BASE_DIRS src
     FILES src/app/sink.cc src/proto/accounts.cc src/proto/xmpp/demo.cc src/proto/matrix/demo.cc src/proto/demo.cc src/app/network.cc src/app/workers.cc src/app/demo.cc src/app/store.cc src/app/requests.cc src/app/words.cc
-          src/app/kept.cc src/app/services.cc src/app/search.cc src/app/pictures.cc src/app/drafts.cc src/app/reading.cc src/app/outbox.cc src/app/settings.cc src/app/menu.cc src/app/notices.cc src/app/verification.cc src/app/proxies.cc src/app/packs.cc src/app/rooms.cc src/app/room_card.cc src/app/preferences.cc src/app/manage.cc src/app/looks.cc src/app/threads.cc src/app/emoji.cc src/app/accounts.cc src/app/marks.cc src/app/history.cc
+          src/app/kept.cc src/app/services.cc src/app/search.cc src/app/pictures.cc src/app/drafts.cc src/app/reading.cc src/app/outbox.cc src/app/settings.cc src/app/menu.cc src/app/notices.cc src/app/verification.cc src/app/proxies.cc src/app/packs.cc src/app/rooms.cc src/app/room_card.cc src/app/preferences.cc src/app/manage.cc src/app/looks.cc src/app/threads.cc src/app/emoji.cc src/app/accounts.cc src/app/local_data.cc src/app/marks.cc src/app/history.cc
           src/proto/matrix/app.cc src/proto/app.cc src/app/program.cc)
   # What the program does, a part each: the module's implementation units.
   target_sources(mux PRIVATE

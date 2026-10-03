@@ -820,6 +820,8 @@ int run(App& app, const options& how) {
     };
     // Where the field typed into was last told to the system.
     std::optional<skia::SkRect> typing_told;
+    // Whether the window can be seen: off screen, no frames are made.
+    bool on_screen = true;
     while (running) {
       SDL_Event event;
       const double hold_in = held && !held->fired ? held->since + kHoldMs - detail::now_ms()
@@ -872,9 +874,29 @@ int run(App& app, const options& how) {
           case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
             running = false;
             break;
+          // Off screen -- hidden, minimised, covered, suspended (a phone's
+          // screen off): no frames, nothing but the connections.
+          case SDL_EVENT_WINDOW_HIDDEN:
+          case SDL_EVENT_WINDOW_MINIMIZED:
+          case SDL_EVENT_WINDOW_OCCLUDED:
+            on_screen = false;
+            app.shown_changed(false);
+            break;
+          case SDL_EVENT_WINDOW_SHOWN:
+          case SDL_EVENT_WINDOW_RESTORED:
+            on_screen = true;
+            app.shown_changed(true);
+            scene.state().invalidateLayout();
+            redraw = true;
+            break;
+          case SDL_EVENT_WINDOW_EXPOSED:
+            on_screen = true;
+            app.shown_changed(true);
+            scene.state().invalidateLayout();
+            redraw = true;
+            break;
           case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
           case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:
-          case SDL_EVENT_WINDOW_EXPOSED:
             scene.state().invalidateLayout();
             redraw = true;
             break;
@@ -1059,6 +1081,13 @@ int run(App& app, const options& how) {
       for (std::size_t i = due_now.size() > 3 ? due_now.size() - 3 : 0; i < due_now.size(); ++i)
         shown_toasts.show(due_now[i]);
       shown_toasts.frame();
+      // Off screen: no frame -- not the program's either, which marks what
+      // is in view as read. Woken only by events and the network.
+      if (!on_screen) {
+        animating = !shown_toasts.empty();
+        wake_at = std::numeric_limits<double>::infinity();
+        continue;
+      }
       const double events_done = detail::now_ms();
       app.before_frame();
       const double app_done = detail::now_ms();

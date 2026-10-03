@@ -314,7 +314,7 @@ void app::woken() {
 // in the chat being read with the window focused; else a notification --
 // the chat and sender, and the text, as chosen -- and the chime.
 void app::notify_of(const mux::message& said, bool mentions_me) {
-  if (window_focused && root().main().chosen == said.in)
+  if (on_screen && window_focused && root().main().chosen == said.in)
     return;
   const auto decision = this->notify_for(said.in, mentions_me);
   if (decision.sound)
@@ -712,6 +712,11 @@ void app::refresh(std::source_location from) {
   if (traced)
     std::println(std::cerr, "[frame] refresh from {}:{} ({})", std::filesystem::path(from.file_name()).filename().string(),
                  from.line(), from.function_name());
+  // Off screen: done once, as the window comes back.
+  if (!on_screen) {
+    refresh_waiting_ = true;
+    return;
+  }
   pictures.ask();
   // The space each chat is in: its choices, where the chat has none.
   space_above.clear();

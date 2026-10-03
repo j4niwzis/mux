@@ -347,6 +347,20 @@ struct app : kept_settings {
       std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
   void open_notified(const mux::conversation_id& chat) { this->open_chat(chat, std::nullopt); }
   void focus_changed(bool on) { window_focused = on; }
+  // Whether the window is on screen: not hidden, minimised, covered or
+  // suspended -- a phone's screen off, another app over it. Off it, only
+  // the connections go on: the model kept up and notifications given, and
+  // nothing else -- the window not brought up to date, no pictures asked
+  // for, nothing marked read, no frames. Brought up to date as it comes back.
+  bool on_screen = true;
+  bool refresh_waiting_ = false;
+  void shown_changed(bool now) {
+    if (now == on_screen)
+      return;
+    on_screen = now;
+    if (now && std::exchange(refresh_waiting_, false))
+      this->refresh();
+  }
   // A message come as it happened, notified as the settings say.
   void notify_of(const mux::message& said, bool mentions_me);
   void apply(const request::set_room_event_kind& one);

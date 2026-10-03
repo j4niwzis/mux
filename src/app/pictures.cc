@@ -26,6 +26,48 @@ import mux.logic.blurhash;
 
 export namespace mux::app {
 
+// What was asked of a server and has not come: asked again only after a
+// while, longer each time it does not come -- 5 s, then 10, 20, ... up to
+// five minutes. A fetch that failed says nothing, and was never asked again:
+// a picture whose fetch failed once stayed empty for the run.
+class retries {
+ public:
+  // Whether it may be asked now: never asked, or asked long enough ago.
+  [[nodiscard]] bool due(std::string_view key) const {
+    const auto found = asked_.find(key);
+    return found == asked_.end() || clock::now() - found->second.at >= wait_after(found->second.times);
+  }
+  // Asked now.
+  void asked(const std::string& key) {
+    attempt& one = asked_[key];
+    one.at = clock::now();
+    ++one.times;
+  }
+  // Whether it was asked and has not come.
+  [[nodiscard]] bool waiting(std::string_view key) const { return asked_.contains(key); }
+  // Come, or let go: asked again at once where it is wanted again. Whether it
+  // was being waited for.
+  bool forget(std::string_view key) {
+    const auto found = asked_.find(key);
+    if (found == asked_.end())
+      return false;
+    asked_.erase(found);
+    return true;
+  }
+  void clear() { asked_.clear(); }
+
+ private:
+  using clock = std::chrono::steady_clock;
+  struct attempt {
+    clock::time_point at;
+    int times = 0;
+  };
+  [[nodiscard]] static clock::duration wait_after(int times) {
+    return std::min<clock::duration>(std::chrono::seconds(5) * (1 << std::min(times - 1, 6)), std::chrono::minutes(5));
+  }
+  std::map<std::string, attempt, std::less<>> asked_;
+};
+
 class pictures_part {
  public:
   explicit pictures_part(services& shared) : s_(&shared) {}
@@ -48,45 +90,45 @@ class pictures_part {
     // known: `most` pixels on its longer side -- and put in its cache on the
     // UI's thread. What waits for it is woken by the cache; the window was
     // repainted whole for each picture that came.
+    // What it decoded to decides the rest (decoded): shown, kept on disk
+    // and its fetch let go; or, where it does not decode, not kept -- what
+    // the disk had of it thrown away -- and fetched again.
     const auto shown = [&](mux::ui::image_cache& cache, const std::string& key, int most) {
       auto bytes = std::make_shared<const std::string>(picture.bytes);
-      s_->work->run([bytes, target = &cache, key, most]() -> workers::done_t {
+      decoding_.insert(picture.source);
+      s_->work->run([this, bytes, target = &cache, key, most, use = picture.use, source = picture.source,
+                     fresh]() -> workers::done_t {
         auto image = skia::decodeImageAtMost(bytes->data(), bytes->size(), most);
-        return [image = std::move(image), target, key]() mutable {
-          if (image)
+        return [this, image = std::move(image), bytes, target, key, use, source, fresh]() mutable {
+          const bool made = static_cast<bool>(image);
+          if (made)
             target->put(key, std::move(image));
+          this->decoded(use, source, *bytes, made, fresh);
         };
       });
     };
     // A whole picture: its frames, where it moves; else it, still.
     const auto shown_whole = [&](const std::string& key) {
       auto bytes = std::make_shared<const std::string>(picture.bytes);
-      s_->work->run([bytes, key]() -> workers::done_t {
+      decoding_.insert(picture.source);
+      s_->work->run([this, bytes, key, use = picture.use, source = picture.source, fresh]() -> workers::done_t {
         auto frames = skia::decodeFrames(bytes->data(), bytes->size());
-        return [frames = std::move(frames), key]() mutable {
+        return [this, frames = std::move(frames), bytes, key, use, source, fresh]() mutable {
+          const bool made = !frames.empty();
           if (frames.size() > 1)
             mux::ui::animations().put(key, std::move(frames));
-          else if (!frames.empty())
+          else if (made)
             mux::ui::whole_pictures().put(key, std::move(frames.front().image));
+          this->decoded(use, source, *bytes, made, fresh);
         };
       });
     };
     splice::visit(splice::overloaded{[&](const media_use::avatar& one) {
                             // An avatar is shown at 120 px at most -- twice that on a dense screen.
                             shown(mux::ui::avatar_images(), one.of, 256);
-                            if (fresh)
-                              avatars_fetched_.erase(picture.source);
                           },
-                          [&](const media_use::thumbnail&) {
-                            shown(mux::ui::thumbnails(), picture.source, 0);
-                            if (fresh)
-                              thumbnails_fetched_.erase(picture.source);
-                          },
-                          [&](const media_use::whole&) {
-                            shown_whole(picture.source);
-                            if (fresh)
-                              wholes_fetched_.erase(picture.source);
-                          },
+                          [&](const media_use::thumbnail&) { shown(mux::ui::thumbnails(), picture.source, 0); },
+                          [&](const media_use::whole&) { shown_whole(picture.source); },
                           // A file fetched to be saved: into Downloads, a number
                           // added where the name is taken, and opened; or only saved.
                           [&](const media_use::to_open& one) { this->save_download(picture.bytes, one.name, true); },
@@ -111,13 +153,10 @@ class pictures_part {
                picture.use);
     if (!fresh)
       return;
-    if (const auto where = kept_file(picture.use, picture.source)) {
-      std::error_code failed;
-      std::filesystem::create_directories(where->parent_path(), failed);
-      std::ofstream(*where, std::ios::binary) << picture.bytes;
-      if (++written_ % 50 == 1)
-        this->prune();
-    }
+    splice::visit(splice::overloaded{[](const media_use::avatar&) {}, [](const media_use::thumbnail&) {},
+                                     [](const media_use::whole&) {},
+                                     [&](const auto&) { this->keep(picture.use, picture.source, picture.bytes); }},
+                  picture.use);
   }
 
   // What the model has pictures of and the window has not: from the disk
@@ -128,18 +167,18 @@ class pictures_part {
     if (s_->demo())
       return;
     const auto want = [&](const account_id& of, const std::optional<std::string>& source, const std::string& key) {
-      // Shown already: nothing to do.
-      if (!source || source->empty() || mux::ui::avatar_images().has(key))
+      // Shown already, or being decoded: nothing to do.
+      if (!source || source->empty() || mux::ui::avatar_images().has(key) || decoding_.contains(*source))
         return;
       // Kept on the disk: read back -- also where it was fetched before and
       // has since been pushed out of the window's pictures, which once was
       // never asked for again: a sticker that had been shown stayed empty.
       if (this->read_back(media_use::avatar{key}, *source))
         return;
-      // On its way.
-      if (avatars_fetched_.contains(*source))
+      // On its way, or asked again only after a while where it did not come.
+      if (!fetches_.due(*source))
         return;
-      avatars_fetched_.insert(*source);
+      fetches_.asked(*source);
       s_->net->fetch_avatar(of, *source, key);
     };
     auto& screen = s_->root().main();
@@ -275,9 +314,9 @@ class pictures_part {
                 // From the site: only where this chat fetches previews so.
                 else if (const std::string& image = found->second.image.value_or(std::string());
                          found->second.image && s_->kept->previews_direct(one.id) &&
-                         !mux::ui::avatar_images().has(image) && !avatars_fetched_.contains(image) &&
-                         !this->read_back(media_use::avatar{image}, image)) {
-                  avatars_fetched_.insert(image);
+                         !mux::ui::avatar_images().has(image) && !decoding_.contains(image) &&
+                         !this->read_back(media_use::avatar{image}, image) && fetches_.due(image)) {
+                  fetches_.asked(image);
                   s_->net->fetch_preview_picture(id, image);
                 }
               } else if (links_asked_.insert(*link).second) {
@@ -318,9 +357,7 @@ class pictures_part {
     mux::ui::avatar_images().clear();
     mux::ui::thumbnails().clear();
     mux::ui::whole_pictures().clear();
-    avatars_fetched_.clear();
-    thumbnails_fetched_.clear();
-    wholes_fetched_.clear();
+    fetches_.clear();
   }
 
   // The viewer: over the window, with the thumbnail at once and the whole
@@ -328,9 +365,8 @@ class pictures_part {
   void apply(const request::open_picture& one) {
     s_->root().open_picture(one.source, one.sender, one.name, one.when);
     const auto& chosen = s_->root().main().chosen;
-    if (chosen && !mux::ui::whole_pictures().has(one.source) && !this->read_back(media_use::whole{}, one.source) &&
-        wholes_fetched_.insert(one.source).second)
-      s_->net->fetch_media(chosen->account, one.source, media_use::whole{}, 0);
+    if (chosen)
+      this->want_whole(chosen->account, one.source);
   }
   void apply(const request::close_picture&) { s_->root().close_picture(); }
   // A video: the viewer on its thumbnail at once; the video from its file
@@ -371,7 +407,7 @@ class pictures_part {
       }
       return;
     }
-    if (wholes_fetched_.erase(one.source)) {
+    if (fetches_.forget(one.source)) {
       s_->net->cancel_media(chosen->account, one.source);
       mux::ui::download_progress().erase(one.source);
       mux::ui::stopped_downloads().insert(one.source);
@@ -585,6 +621,41 @@ class pictures_part {
                       use);
   }
 
+  // A picture decoded, or not: what it came from decides the rest. Decoded:
+  // its fetch let go, and kept on disk where it was fetched. Not decoded:
+  // fetched, it is not kept, and asked again after a while (fetches_); read
+  // from the disk, what is there is thrown away, and it is fetched at once.
+  void decoded(const media_use_t& use, const std::string& source, const std::string& bytes, bool made, bool fresh) {
+    decoding_.erase(source);
+    if (made) {
+      fetches_.forget(source);
+      if (fresh)
+        this->keep(use, source, bytes);
+      return;
+    }
+    if (!fresh)
+      this->forget_kept(use, source);
+    s_->scene->state().markDamaged();
+  }
+  // Bytes fetched, kept on disk where their kind is kept: the cache held to
+  // its budget now and then.
+  void keep(const media_use_t& use, std::string_view source, const std::string& bytes) {
+    if (const auto where = kept_file(use, source)) {
+      std::error_code failed;
+      std::filesystem::create_directories(where->parent_path(), failed);
+      std::ofstream(*where, std::ios::binary) << bytes;
+      if (++written_ % 50 == 1)
+        this->prune();
+    }
+  }
+  // What the disk had of a picture, thrown away: it did not decode.
+  void forget_kept(const media_use_t& use, std::string_view source) {
+    if (const auto where = kept_file(use, source)) {
+      std::error_code failed;
+      std::filesystem::remove(*where, failed);
+    }
+  }
+
   // A picture read back from the disk, where it was kept: shown again.
   bool read_back(const media_use_t& use, const std::string& source) {
     const auto where = kept_file(use, source);
@@ -629,22 +700,22 @@ class pictures_part {
   // it was fetched before, from the account where not.
   void want_whole(const account_id& of, const std::string& source) {
     if (source.empty() || mux::ui::animations().has(source) || mux::ui::whole_pictures().has(source) ||
-        wholes_fetched_.contains(source))
+        decoding_.contains(source))
       return;
-    if (this->read_back(media_use::whole{}, source))
+    if (this->read_back(media_use::whole{}, source) || !fetches_.due(source))
       return;
-    wholes_fetched_.insert(source);
+    fetches_.asked(source);
     s_->net->fetch_media(of, source, media_use::whole{}, 0);
   }
 
   // A message's picture's thumbnail: from the disk where it was fetched
   // before, from the account where not.
   void want_thumbnail(const account_id& of, const std::string& source) {
-    if (source.empty() || mux::ui::thumbnails().has(source) || thumbnails_fetched_.contains(source))
+    if (source.empty() || mux::ui::thumbnails().has(source) || decoding_.contains(source))
       return;
-    if (this->read_back(media_use::thumbnail{}, source))
+    if (this->read_back(media_use::thumbnail{}, source) || !fetches_.due(source))
       return;
-    thumbnails_fetched_.insert(source);
+    fetches_.asked(source);
     s_->net->fetch_media(of, source, media_use::thumbnail{}, 860);
   }
 
@@ -719,23 +790,21 @@ class pictures_part {
   }
 
   services* s_;
-  // What is being fetched from a server, not to be asked for twice: avatars
-  // by their source, thumbnails and whole pictures by theirs.
-  std::set<std::string> avatars_fetched_, thumbnails_fetched_, wholes_fetched_;
+  // What is being fetched from a server, by its source -- avatars,
+  // thumbnails, whole pictures: asked again only after a while.
+  retries fetches_;
+  // What is being decoded, by its source: not read from the disk again
+  // meanwhile.
+  std::set<std::string, std::less<>> decoding_;
   // The saved GIFs being decoded, not to be decoded twice.
   std::set<std::string> gifs_decoding_;
-  // The quoted messages asked for, not to be asked twice.
-  // The quotes asked for, and when: asked again where one has not come
-  // in a while -- a fetch that failed, or one dropped since.
-  std::map<std::string, std::chrono::steady_clock::time_point> quotes_asked_;
+  // The quotes asked for: asked again where one has not come in a while --
+  // a fetch that failed, or one dropped since.
+  retries quotes_;
   [[nodiscard]] bool quote_due(const std::string& id) {
-    const auto now = std::chrono::steady_clock::now();
-    const auto [at, fresh] = quotes_asked_.try_emplace(id, now);
-    if (fresh)
-      return true;
-    if (now - at->second < std::chrono::seconds(30))
+    if (!quotes_.due(id))
       return false;
-    at->second = now;
+    quotes_.asked(id);
     return true;
   }
   // The links whose previews were asked for, not to be asked twice.

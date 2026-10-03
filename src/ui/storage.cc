@@ -39,14 +39,15 @@ struct storage_page : nodes::Stack {
     using step_button = icon_button<step_limit<Actions>>;
     struct parts_t {
       nodes::Text label;
-      nodes::Text value{"", 14.0f, accent_colour, true};
+      nodes::Text value;
       step_button less;
       step_button more;
     } parts;
-    stepper(Actions* a, std::string what, config::limit_t which)
-        : parts{.label = nodes::Text(std::move(what), 15.0f, text_colour),
-                .less = step_button(icon::minus{}, {a, which, false}),
-                .more = step_button(icon::plus{}, {a, which, true})} {
+    stepper(const palette& colours, Actions* a, std::string what, config::limit_t which)
+        : parts{.label = nodes::Text(std::move(what), 15.0f, colours.text),
+                .value = nodes::Text("", 14.0f, colours.accent, true),
+                .less = step_button(colours, icon::minus{}, {a, which, false}),
+                .more = step_button(colours, icon::plus{}, {a, which, true})} {
       this->setHorizontal();
       this->setGap(6.0f);
       fState.apply({.fillX = true, .height = 50.0f, .padding = {0.0f, 12.0f, 0.0f, 20.0f}});
@@ -63,55 +64,60 @@ struct storage_page : nodes::Stack {
   // What is under the header: it scrolls where the dialog is too low for it.
   struct body : nodes::Stack {
     struct parts_t {
-      nodes::Text seal_title = section_title("ENCRYPTION");
+      nodes::Text seal_title;
       seal_row seal;
       change_row change;
-      nodes::Text seal_note{"Off by default. On, everything mux keeps on disk is sealed under a passphrase asked for at "
-                            "every start: settings with passwords and tokens, chats, drafts, encryption keys. Pictures "
-                            "are not kept on disk then.",
-                            13.0f, dim_colour};
-      nodes::Text memory_title = section_title("IN MEMORY");
+      nodes::Text seal_note;
+      nodes::Text memory_title;
       stepper messages_in_memory;
       stepper pictures_in_memory;
-      nodes::Text disk_title = section_title("ON DISK");
+      nodes::Text disk_title;
       stepper messages_on_disk;
       stepper pictures_on_disk;
       clear_row clear;
-      nodes::Text note{"Memory holds the newest of the chats read lately; the disk holds the rest, and what is scrolled "
-                       "back to comes from there before the server. Past a limit, what was used longest ago goes first.",
-                       13.0f, dim_colour};
-      nodes::Text history_title = section_title("DELETED MESSAGES");
+      nodes::Text note;
+      nodes::Text history_title;
       keep_row show_deleted;
       stepper deleted_on_disk;
-      nodes::Text events_title = section_title("ROOM EVENTS");
+      nodes::Text events_title;
       event_kind_list<Actions> events;
       receipts_choice<Actions> receipts;
       previews_choice<Actions> previews;
       previews_direct_choice<Actions> previews_direct;
       typing_choice<Actions> typing;
       jump_search_choice<Actions> jump_search;
-      nodes::Text history_note{"Deleted messages are kept on disk, apart from the rest and up to their own size, the "
-                               "oldest going first past it. Shown, one stays where it was, with all it said and its "
-                               "time, marked removed.",
-                               13.0f, dim_colour};
+      nodes::Text history_note;
     } parts;
-    body(Actions* a, const config::history_settings& history, bool sealed)
-        : parts{.seal = seal_row("Encrypt local data", {a}),
-                .change = change_row("Change the passphrase", {a}),
-                .messages_in_memory = stepper(a, "Messages", config::limit::messages_in_memory{}),
-                .pictures_in_memory = stepper(a, "Pictures", config::limit::pictures_in_memory{}),
-                .messages_on_disk = stepper(a, "Messages", config::limit::messages_on_disk{}),
-                .pictures_on_disk = stepper(a, "Pictures", config::limit::pictures_on_disk{}),
-                .clear = clear_row("Clear stored messages and pictures", {a}, icon::close{}),
-                .show_deleted = keep_row("Show deleted messages", {a}),
-                .deleted_on_disk = stepper(a, "On disk", config::limit::deleted_on_disk{}),
+    body(const palette& colours, Actions* a, const config::history_settings& history, bool sealed)
+        : parts{.seal_title = section_title(colours, "ENCRYPTION"),
+                .seal = seal_row(colours, "Encrypt local data", {a}),
+                .change = change_row(colours, "Change the passphrase", {a}),
+                .seal_note = note_text(colours, "Off by default. On, everything mux keeps on disk is sealed under a passphrase asked for at "
+                            "every start: settings with passwords and tokens, chats, drafts, encryption keys. Pictures "
+                            "are not kept on disk then."),
+                .memory_title = section_title(colours, "IN MEMORY"),
+                .messages_in_memory = stepper(colours, a, "Messages", config::limit::messages_in_memory{}),
+                .pictures_in_memory = stepper(colours, a, "Pictures", config::limit::pictures_in_memory{}),
+                .disk_title = section_title(colours, "ON DISK"),
+                .messages_on_disk = stepper(colours, a, "Messages", config::limit::messages_on_disk{}),
+                .pictures_on_disk = stepper(colours, a, "Pictures", config::limit::pictures_on_disk{}),
+                .clear = clear_row(colours, "Clear stored messages and pictures", {a}, icon::close{}),
+                .note = note_text(colours, "Memory holds the newest of the chats read lately; the disk holds the rest, and what is scrolled "
+                       "back to comes from there before the server. Past a limit, what was used longest ago goes first."),
+                .history_title = section_title(colours, "DELETED MESSAGES"),
+                .show_deleted = keep_row(colours, "Show deleted messages", {a}),
+                .deleted_on_disk = stepper(colours, a, "On disk", config::limit::deleted_on_disk{}),
+                .events_title = section_title(colours, "ROOM EVENTS"),
                 .events = event_kind_list<Actions>(a, choice_level::everywhere{}, history.show_room_events,
                                                    history.room_event_kinds),
                 .receipts = receipts_choice<Actions>(a, choice_level::everywhere{}, history.show_receipts),
                 .previews = previews_choice<Actions>(a, choice_level::everywhere{}, history.link_previews),
                 .previews_direct = previews_direct_choice<Actions>(a, choice_level::everywhere{}, history.previews_direct.value_or(false)),
                 .typing = typing_choice<Actions>(a, choice_level::everywhere{}, history.send_typing.value_or(true)),
-                .jump_search = jump_search_choice<Actions>(a, choice_level::everywhere{}, history.jump_search)} {
+                .jump_search = jump_search_choice<Actions>(a, choice_level::everywhere{}, history.jump_search),
+                .history_note = note_text(colours, "Deleted messages are kept on disk, apart from the rest and up to their own size, the "
+                               "oldest going first past it. Shown, one stays where it was, with all it said and its "
+                               "time, marked removed.")} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
       parts.memory_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
       parts.disk_title.apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
@@ -142,9 +148,12 @@ struct storage_page : nodes::Stack {
     body list;  // in the settings' own scroll view
   } parts;
 
-  storage_page(Actions* a, const config::cache_limits& limits, const config::history_settings& history, bool sealed)
-      : parts{.header = header_t("Storage", {a}, {a}, true, true),
-              .list = body(a, history, sealed)} {
+  storage_page(const ui_needs<Actions>& n, const config::cache_limits& limits, const config::history_settings& history, bool sealed)
+      : storage_page(*n.colours, n.actions, limits, history, sealed) {}
+  storage_page(const palette& colours, Actions* a, const config::cache_limits& limits, const config::history_settings& history,
+               bool sealed)
+      : parts{.header = header_t(colours, "Storage", {a}, {a}, true, true),
+              .list = body(colours, a, history, sealed)} {
     fState.apply({.fill = true});
     parts.list.apply({.fillX = true});
     this->show(limits);
@@ -188,9 +197,9 @@ struct notifications_page : nodes::Stack {
     struct parts_t {
       backend_segment native, built_in;
     } parts;
-    explicit backend_row(Actions* a)
-        : parts{.native = backend_segment("System", {a, config::notify_backend::native{}}),
-                .built_in = backend_segment("Built in", {a, config::notify_backend::built_in{}})} {
+    backend_row(const palette& colours, Actions* a)
+        : parts{.native = backend_segment(colours, "System", {a, config::notify_backend::native{}}),
+                .built_in = backend_segment(colours, "Built in", {a, config::notify_backend::built_in{}})} {
       this->setHorizontal();
       this->setGap(4.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 20.0f, 4.0f, 20.0f}});
@@ -198,32 +207,38 @@ struct notifications_page : nodes::Stack {
   };
   struct parts_t {
     header_t header;
-    nodes::Text title = section_title("DESKTOP NOTIFICATIONS");
+    nodes::Text title;
     flag_row desktop;
     flag_row name;
     flag_row text;
-    nodes::Text sound_title = section_title("SOUND");
+    nodes::Text sound_title;
     flag_row sound;
-    nodes::Text backend_title = section_title("SHOWN BY");
+    nodes::Text backend_title;
     backend_row backend;
-    nodes::Text note{"System asks the desktop's own notification service (org.freedesktop.Notifications); Built in "
-                     "shows mux's own, in a corner of the screen, as Telegram Desktop does.",
-                     13.0f, dim_colour};
-    nodes::Text push_title = section_title("WAKE");
+    nodes::Text note;
+    nodes::Text push_title;
     push_row push;
-    nodes::Text push_note{"Your Matrix servers push to the UnifiedPush distributor on this device (ntfy, NextPush, "
-                          "KDE's), which wakes mux at once. Off, nothing is given to the servers, and mux only learns "
-                          "of messages while it runs.",
-                          13.0f, dim_colour};
+    nodes::Text push_note;
   } parts;
-  notifications_page(Actions* a, const config::notification_settings& now)
-      : parts{.header = header_t("Notifications", {a}, {a}, true, true),
-              .desktop = flag_row("Desktop notifications", {a, config::notify_flag::desktop{}}),
-              .name = flag_row("Show the sender's name", {a, config::notify_flag::show_name{}}),
-              .text = flag_row("Show the message's text", {a, config::notify_flag::show_text{}}),
-              .sound = flag_row("Play a sound", {a, config::notify_flag::sound{}}),
-              .backend = backend_row(a),
-              .push = push_row("Wake by UnifiedPush", {a})} {
+  notifications_page(const ui_needs<Actions>& n, const config::notification_settings& now)
+      : notifications_page(*n.colours, n.actions, now) {}
+  notifications_page(const palette& colours, Actions* a, const config::notification_settings& now)
+      : parts{.header = header_t(colours, "Notifications", {a}, {a}, true, true),
+              .title = section_title(colours, "DESKTOP NOTIFICATIONS"),
+              .desktop = flag_row(colours, "Desktop notifications", {a, config::notify_flag::desktop{}}),
+              .name = flag_row(colours, "Show the sender's name", {a, config::notify_flag::show_name{}}),
+              .text = flag_row(colours, "Show the message's text", {a, config::notify_flag::show_text{}}),
+              .sound_title = section_title(colours, "SOUND"),
+              .sound = flag_row(colours, "Play a sound", {a, config::notify_flag::sound{}}),
+              .backend_title = section_title(colours, "SHOWN BY"),
+              .backend = backend_row(colours, a),
+              .note = note_text(colours, "System asks the desktop's own notification service (org.freedesktop.Notifications); Built in "
+                     "shows mux's own, in a corner of the screen, as Telegram Desktop does."),
+              .push_title = section_title(colours, "WAKE"),
+              .push = push_row(colours, "Wake by UnifiedPush", {a}),
+              .push_note = note_text(colours, "Your Matrix servers push to the UnifiedPush distributor on this device (ntfy, NextPush, "
+                          "KDE's), which wakes mux at once. Off, nothing is given to the servers, and mux only learns "
+                          "of messages while it runs.")} {
     fState.apply({.fill = true});
     for (nodes::Text* title : {&parts.title, &parts.sound_title, &parts.backend_title, &parts.push_title})
       title->apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
@@ -258,17 +273,19 @@ struct files_page : nodes::Stack {
   using rename_row = switch_row<ask<Actions, &Actions::flip_rename_pictures>>;
   struct parts_t {
     header_t header;
-    nodes::Text title = section_title("PICTURES DROPPED ON THE WINDOW");
+    nodes::Text title;
     strip_row strip;
     rename_row rename;
-    nodes::Text note{"Metadata is where and when a picture was taken, with what, by whom: EXIF, XMP and the like. "
-                     "It is cut out of the file; the picture itself is sent as it is, not compressed again.",
-                     13.0f, dim_colour};
+    nodes::Text note;
   } parts;
-  files_page(Actions* a, const config::sending_settings& now)
-      : parts{.header = header_t("Files", {a}, {a}, true, true),
-              .strip = strip_row("Remove metadata", {a}),
-              .rename = rename_row("Name them image.<type>", {a})} {
+  files_page(const ui_needs<Actions>& n, const config::sending_settings& now) : files_page(*n.colours, n.actions, now) {}
+  files_page(const palette& colours, Actions* a, const config::sending_settings& now)
+      : parts{.header = header_t(colours, "Files", {a}, {a}, true, true),
+              .title = section_title(colours, "PICTURES DROPPED ON THE WINDOW"),
+              .strip = strip_row(colours, "Remove metadata", {a}),
+              .rename = rename_row(colours, "Name them image.<type>", {a}),
+              .note = note_text(colours, "Metadata is where and when a picture was taken, with what, by whom: EXIF, XMP and the like. "
+                     "It is cut out of the file; the picture itself is sent as it is, not compressed again.")} {
     fState.apply({.fill = true});
     parts.title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
     parts.note.setWrapped(true);

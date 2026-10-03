@@ -29,6 +29,8 @@ export namespace mux::ui {
 template <class Actions>
 struct picture_viewer : nodes::Stack {
   Actions* actions = nullptr;
+  // The colours its menu is made in.
+  const palette* colours_ = nullptr;
   std::string source;
   // A video's: its file's source, and it playing once its file is here --
   // its picture shown in place of the thumbnail, a bar under it.
@@ -294,8 +296,8 @@ struct picture_viewer : nodes::Stack {
       nodes::Text label;
     } parts;
     menu_row(picture_viewer* v, std::string label)
-        : viewer(v), act{v}, parts{.label = nodes::Text(std::move(label), 13.0f, text_colour)} {
-      fState.apply({.fillX = true, .height = 33.0f, .padding = {0.0f, 17.0f, 0.0f, 17.0f}, .hoverBackground = chosen_colour});
+        : viewer(v), act{v}, parts{.label = nodes::Text(std::move(label), 13.0f, v->colours_->text)} {
+      fState.apply({.fillX = true, .height = 33.0f, .padding = {0.0f, 17.0f, 0.0f, 17.0f}, .hoverBackground = v->colours_->chosen});
       parts.label.apply({.alignSelf = scene::align::kMiddle});
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
@@ -314,8 +316,8 @@ struct picture_viewer : nodes::Stack {
     picture_menu(picture_viewer* v, float x, float y)
         : parts{.copy = menu_row<copy_it>(v, "Copy Image"), .save = menu_row<save_this>(v, "Save As…")} {
       fState.apply({.place = scene::anchor::kTopLeft, .x = x, .y = y, .width = 200.0f, .autoSize = scene::axes::kY,
-                    .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .cornerRadius = 10.0f, .background = sidebar_colour,
-                    .border = scene::Border{band_colour, 1.0f},
+                    .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .cornerRadius = 10.0f, .background = v->colours_->sidebar,
+                    .border = scene::Border{v->colours_->band, 1.0f},
                     .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
@@ -349,8 +351,10 @@ struct picture_viewer : nodes::Stack {
     parts.view.invalidateLayout();
   }
 
-  picture_viewer(Actions* a, std::string where, std::string sender, std::string name, std::string when)
-      : actions(a), source(std::move(where)),
+  picture_viewer(const ui_needs<Actions>& n, std::string where, std::string sender, std::string name, std::string when)
+      : picture_viewer(n.colours, n.actions, std::move(where), std::move(sender), std::move(name), std::move(when)) {}
+  picture_viewer(const palette* colours, Actions* a, std::string where, std::string sender, std::string name, std::string when)
+      : actions(a), colours_(colours), source(std::move(where)),
         parts{.top = top_bar(a, this, source, sender, name, when), .view = stage(this), .bar = video_bar(this)} {
     fState.apply({.fill = true, .background = skia::colorSetARGB(0xe6, 0, 0, 0)});
   }

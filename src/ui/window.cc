@@ -398,9 +398,9 @@ struct window : scene::Node {
     layer().sending.dropClosed();
   }
 
-  void open_settings(std::string motion) { layer().settings.open(actions, std::move(motion)); }
+  void open_settings(std::string motion) { layer().settings.open(needs_, std::move(motion)); }
   void open_picture(std::string source, std::string sender, std::string name, std::string when) {
-    layer().viewer.emplace(actions, std::move(source), std::move(sender), std::move(name), std::move(when));
+    layer().viewer.emplace(needs_, std::move(source), std::move(sender), std::move(name), std::move(when));
   }
   void open_send_box(const std::vector<pending_file>& files) {
     layer().sending.setWidthFittingContent(440.0f);
@@ -412,7 +412,7 @@ struct window : scene::Node {
   // A video: the viewer on its thumbnail, waiting for it; played once its
   // file is there, where the viewer is still up for it.
   void open_video(std::string thumbnail, std::string video, std::string sender, std::string name, std::string when) {
-    layer().viewer.emplace(actions, std::move(thumbnail), std::move(sender), std::move(name), std::move(when));
+    layer().viewer.emplace(needs_, std::move(thumbnail), std::move(sender), std::move(name), std::move(when));
     layer().viewer->video = std::move(video);
   }
   void play_video(const std::string& video, const std::filesystem::path& file) {

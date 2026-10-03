@@ -155,8 +155,9 @@ struct switch_row : nodes::Stack {
   } parts;
 
   // Declared: the text taking the room, the switch at the end.
-  switch_row(std::string text, Act what)
-      : parts{.label = nodes::Text(std::move(text), 15.0f, text_colour), .toggle = widgets::Toggle<Act>(std::move(what))} {
+  switch_row(std::string text, Act what) : switch_row(legacy_palette(), std::move(text), std::move(what)) {}
+  switch_row(const palette& colours, std::string text, Act what)
+      : parts{.label = nodes::Text(std::move(text), 15.0f, colours.text), .toggle = widgets::Toggle<Act>(std::move(what))} {
     this->setHorizontal();
     this->setGap(16.0f);
     fState.apply({.fillX = true, .height = row_item<nothing>::kHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
@@ -244,7 +245,12 @@ struct account_pages : nodes::Stack {
 };
 
 // A section's title on a settings page, as Gajim sets them: small, bold, dim.
-inline nodes::Text section_title(std::string text) { return nodes::Text(std::move(text), 13.0f, dim_colour, true); }
+inline nodes::Text section_title(const palette& colours, std::string text) {
+  return nodes::Text(std::move(text), 13.0f, colours.dim, true);
+}
+inline nodes::Text section_title(std::string text) { return section_title(legacy_palette(), std::move(text)); }
+// A note under a section, as the settings' pages have them.
+inline nodes::Text note_text(const palette& colours, std::string text) { return nodes::Text(std::move(text), 13.0f, colours.dim); }
 
 // An account's Privacy page: whether it sends read receipts; whether it
 // tells others one is typing, as every account's until chosen here, and a

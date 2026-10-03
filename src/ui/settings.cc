@@ -20,6 +20,8 @@ export namespace mux::ui {
 template <class Actions>
 struct settings_dialog : scene::Node {
   Actions* actions = nullptr;
+  // What it was handed, for the pages it makes.
+  ui_needs<Actions> needs_;
   std::string motion;
   using page_t = splice::variant<settings_home<Actions>, animations_page<Actions>, proxies_page<Actions>, proxy_editor<Actions>,
                               appearance_page<Actions>, rendering_page<Actions>, storage_page<Actions>, files_page<Actions>,
@@ -84,8 +86,9 @@ struct settings_dialog : scene::Node {
       this->invalidateLayout();
   }
 
-  settings_dialog(Actions* a, std::string level)
-      : actions(a), motion(std::move(level)),
+  settings_dialog(const ui_needs<Actions>& n, std::string level) : settings_dialog(n, n.actions, std::move(level)) {}
+  settings_dialog(const ui_needs<Actions>& n, Actions* a, std::string level)
+      : actions(a), needs_(n), motion(std::move(level)),
         parts{.scroll = nodes::ScrollContainer<page_t>(page_t(std::in_place_index<0>, a))} {
     fState.apply({.fill = true});
     parts.scroll.apply({.fill = true});
@@ -122,7 +125,7 @@ struct settings_dialog : scene::Node {
     this->begin_swap(1.0f);
   }
   void show_notifications(const config::notification_settings& now) {
-    this->page().template emplace<8>(actions, now);
+    this->page().template emplace<8>(needs_, now);
     this->begin_swap(1.0f);
   }
   [[nodiscard]] notifications_page<Actions>* notifications() {
@@ -131,11 +134,11 @@ struct settings_dialog : scene::Node {
                       this->page());
   }
   void show_files(const config::sending_settings& now) {
-    this->page().template emplace<7>(actions, now);
+    this->page().template emplace<7>(needs_, now);
     this->begin_swap(1.0f);
   }
   void show_storage(const config::cache_limits& limits, const config::history_settings& history, bool sealed) {
-    this->page().template emplace<6>(actions, limits, history, sealed);
+    this->page().template emplace<6>(needs_, limits, history, sealed);
     this->begin_swap(1.0f);
   }
   [[nodiscard]] storage_page<Actions>* storage() {

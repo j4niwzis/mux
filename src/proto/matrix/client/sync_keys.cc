@@ -164,9 +164,7 @@ bool account<Sink>::owns_key(const std::string& user, const std::string& curve25
   // shown -- asked once there is a server to ask.
   if (!api_)
     return false;
-  loom::cs::query_keys ask;
-  ask.body.device_keys.emplace(user, std::vector<std::string>{});
-  auto got = perform(*api_, ask);
+  auto got = this->keys_of(user);
   if (!got)
     return false;  // not known now: asked again next time
   const bool owns = crypto::device_of(*got, user, curve25519, crypto_ ? crypto_->pinned_master(user) : std::nullopt).has_value();
@@ -444,9 +442,7 @@ void account<Sink>::secret_in(const crypto::secret_got& got) {
     return;
   const crypto::cross_signing_secrets secrets{.master = *secrets_got_.master, .self_signing = *secrets_got_.self_signing,
                                               .user_signing = *secrets_got_.user_signing};
-  loom::cs::query_keys ask;
-  ask.body.device_keys.emplace(id_.address, std::vector<std::string>{});
-  auto listed = perform(*api_, ask);
+  auto listed = this->keys_of(id_.address);
   const auto server_master = listed ? crypto::master_of(*listed, id_.address) : std::nullopt;
   if (!server_master || crypto::detail::ed25519_public(secrets.master) != server_master) {
     sink_(change::refused{id_, "The cross-signing keys your other session gave are not the ones your account has."});
@@ -488,9 +484,7 @@ void account<Sink>::secret_request_in(const std::string& sender, const loom::ev:
                     *which);
   if (!secret)
     return;
-  loom::cs::query_keys ask;
-  ask.body.device_keys.emplace(id_.address, std::vector<std::string>{});
-  auto got = perform(*api_, ask);
+  auto got = this->keys_of(id_.address);
   if (!got)
     return;
   const auto mine = crypto::recipients_of(*got, id_.address, crypto_->pinned_master(id_.address), std::string_view(),
@@ -528,9 +522,7 @@ template <class Sink>
 void account<Sink>::tell_devices(std::string user) {
   if (!api_ || !crypto_)
     return;
-  loom::cs::query_keys ask;
-  ask.body.device_keys.emplace(user, std::vector<std::string>{});
-  auto got = perform(*api_, ask);
+  auto got = this->keys_of(user);
   if (!got || !got->device_keys)
     return;
   const auto theirs = got->device_keys->find(user);
@@ -552,17 +544,13 @@ void account<Sink>::tell_devices(std::string user) {
 
 namespace mux::proto::matrix::client {
 template <class Sink>
-void account<Sink>::check_own_sessions() {
-  if (!api_ || !crypto_)
-    return;
-  loom::cs::query_keys ask;
-  ask.body.device_keys.emplace(id_.address, std::vector<std::string>{});
-  auto got = perform(*api_, ask);
+auto account<Sink>::own_sessions_now() -> std::optional<std::vector<own_session>> {
+  auto got = this->keys_of(id_.address);
   if (!got || !got->device_keys)
-    return;
+    return std::nullopt;
   const auto mine = got->device_keys->find(id_.address);
   if (mine == got->device_keys->end())
-    return;
+    return std::nullopt;
   const auto verified_here = crypto_->verified_keys(id_.address);
   const auto trusted = [&](const std::string& id, const auto& info) {
     const auto curve = info.keys.find("curve25519:" + id);
@@ -571,26 +559,35 @@ void account<Sink>::check_own_sessions() {
                               : crypto::device_of(*got, id_.address, curve->second, crypto_->pinned_master(id_.address));
     return identity && (identity->cross_signed || std::ranges::contains(verified_here, identity->ed25519));
   };
-  std::vector<std::string> others;
-  bool this_one = false;
-  for (const auto& [id, info] : mine->second) {
-    if (id == crypto_->device_id())
-      this_one = trusted(id, info);
-    else if (!trusted(id, info))
-      others.push_back(info.unsigned_ && info.unsigned_->device_display_name ? *info.unsigned_->device_display_name : id);
-  }
+  return mine->second | std::views::transform([&](const auto& each) {
+           const auto& [id, info] = each;
+           return own_session{.id = id,
+                              .name = info.unsigned_ && info.unsigned_->device_display_name ? *info.unsigned_->device_display_name : id,
+                              .trusted = trusted(id, info)};
+         }) |
+         std::ranges::to<std::vector>();
+}
+
+template <class Sink>
+void account<Sink>::check_own_sessions() {
+  if (!api_ || !crypto_)
+    return;
+  const auto all = this->own_sessions_now();
+  if (!all)
+    return;
+  const auto here = std::ranges::find(*all, crypto_->device_id(), &own_session::id);
+  const bool this_one = here != all->end() && here->trusted;
+  const auto others = *all | std::views::filter([&](const own_session& one) { return one.id != crypto_->device_id() && !one.trusted; }) |
+                      std::views::transform(&own_session::name) | std::ranges::to<std::vector>();
   if (!this_one)
     sink_(change::notice{id_, "Verify this session",
                          "Verify this session to allow it to read your message history, and so that others can trust "
                          "what it sends: verify it with emoji from another session of yours (Sessions), or restore "
                          "with your recovery key (Sessions, Device verification)."});
-  if (!others.empty()) {
-    std::string listed;
-    for (const std::string& one : others)
-      listed += (listed.empty() ? "" : ", ") + one;
+  if (!others.empty())
     sink_(change::notice{id_, "New login. Was this you?",
-                         std::format("Not verified: {}. Verify each from Sessions -- or sign it out, if it was not you.", listed)});
-  }
+                         std::format("Not verified: {}. Verify each from Sessions -- or sign it out, if it was not you.",
+                                     others | std::views::join_with(std::string_view(", ")) | std::ranges::to<std::string>())});
 }
 }  // namespace mux::proto::matrix::client
 
@@ -636,9 +633,7 @@ template <class Sink>
 void account<Sink>::accept_identity(std::string user) {
   if (!api_ || !crypto_)
     return;
-  loom::cs::query_keys ask;
-  ask.body.device_keys.emplace(user, std::vector<std::string>{});
-  auto got = perform(*api_, ask);
+  auto got = this->keys_of(user);
   const auto master = got ? crypto::master_of(*got, user) : std::nullopt;
   if (!master)
     return;

@@ -325,9 +325,7 @@ void account<Sink>::sas_check_mac(crypto::sas_state& state) {
     return this->cancel_verification(txn, "m.key_mismatch", "The keys they listed are not the ones they sent.");
   if (!api_)
     return this->cancel_verification(txn, "m.key_mismatch", "Not connected.");
-  loom::cs::query_keys ask;
-  ask.body.device_keys.emplace(state.their_user, std::vector<std::string>{});
-  auto got = perform(*api_, ask);
+  auto got = this->keys_of(state.their_user);
   if (!got || !got->device_keys)
     return this->cancel_verification(txn, "m.key_mismatch", "Their keys could not be fetched.");
   const auto user = got->device_keys->find(state.their_user);
@@ -441,9 +439,7 @@ void account<Sink>::mend_session(const std::string& user, const std::string& cur
   if (const auto last = mended_at_.find(curve25519); last != mended_at_.end() && now - last->second < std::chrono::hours(1))
     return;
   mended_at_.insert_or_assign(curve25519, now);
-  loom::cs::query_keys ask;
-  ask.body.device_keys.emplace(user, std::vector<std::string>{});
-  auto got = perform(*api_, ask);
+  auto got = this->keys_of(user);
   if (!got)
     return;
   const auto theirs = crypto::recipients_of(*got, user, crypto_->pinned_master(user), std::string_view(), crypto_->verified_keys(user));

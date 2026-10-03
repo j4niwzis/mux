@@ -368,9 +368,7 @@ void account<Sink>::setup_cross_signing(std::string password, bool reset) {
     // from here. A new identity would undo every verification of it, and
     // whoever had verified the account would see it change.
     {
-      loom::cs::query_keys ask;
-      ask.body.device_keys.emplace(id_.address, std::vector<std::string>{});
-      auto got = perform(*api_, ask);
+      auto got = this->keys_of(id_.address);
       if (!got) {
         sink_(change::refused{id_, "Not set up: this account's keys could not be fetched: " + got.error().said()});
         return;
@@ -599,9 +597,7 @@ void account<Sink>::restore_cross_signing(std::string recovery) {
       return refused("the keys kept there could not be opened.");
     const crypto::cross_signing_secrets secrets{.master = *master, .self_signing = *self, .user_signing = *users};
     // Taken only where they are the keys the server lists for this user.
-    loom::cs::query_keys ask;
-    ask.body.device_keys.emplace(id_.address, std::vector<std::string>{});
-    auto got = perform(*api_, ask);
+    auto got = this->keys_of(id_.address);
     const auto listed = got ? crypto::master_of(*got, id_.address) : std::nullopt;
     if (!listed || crypto::detail::ed25519_public(secrets.master) != listed)
       return refused("the keys kept there are not the ones your account has.");

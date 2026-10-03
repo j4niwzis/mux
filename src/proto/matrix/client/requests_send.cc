@@ -282,16 +282,21 @@ void account<Sink>::send(std::string room, std::string body, std::optional<std::
     for (const mention& one : mentions)
       said.mentions.push_back(one.user);
     const auto content = loom::client::text_message(said);
-    auto sent = this->send_room_event(loom::cs::send_message{.room_id = room,
-                                                      .event_type = "m.room.message",
-                                                      .txn_id = txn,
-                                                      .body = as_body(content)});
-    if (!sent) {
-      sink_(change::delivery_changed{in, txn, delivery::failed{}});
-      return;
-    }
-    sink_(change::message_acknowledged{in, txn, sent->event_id});
+    this->send_text(in, room, txn, as_body(content));
   });
+}
+
+// A text message sent under its transaction ID: acknowledged with the
+// event ID the server gave it, or marked failed.
+template <class Sink>
+void account<Sink>::send_text(const conversation_id& in, const std::string& room, const std::string& txn, knot::raw body) {
+  auto sent = this->send_room_event(
+      loom::cs::send_message{.room_id = room, .event_type = "m.room.message", .txn_id = txn, .body = std::move(body)});
+  if (!sent) {
+    sink_(change::delivery_changed{in, txn, delivery::failed{}});
+    return;
+  }
+  sink_(change::message_acknowledged{in, txn, sent->event_id});
 }
 
 template <class Sink>
@@ -364,15 +369,7 @@ void account<Sink>::send_in_thread(std::string room, std::string body, std::stri
     }
     const auto content = loom::client::text_message(
         loom::client::text_said{.body = body, .html = html, .reply_to = reply_to, .thread = root, .thread_latest = latest});
-    auto sent = this->send_room_event(loom::cs::send_message{.room_id = room,
-                                                      .event_type = "m.room.message",
-                                                      .txn_id = txn,
-                                                      .body = as_body(content)});
-    if (!sent) {
-      sink_(change::delivery_changed{in, txn, delivery::failed{}});
-      return;
-    }
-    sink_(change::message_acknowledged{in, txn, sent->event_id});
+    this->send_text(in, room, txn, as_body(content));
   });
 }
 
@@ -472,26 +469,12 @@ void account<Sink>::sign_out_unverified(std::string password) {
   this->spawn_guarded([this, password = std::move(password)] {
     if (!crypto_ || !api_)
       return;
-    loom::cs::query_keys ask;
-    ask.body.device_keys.emplace(id_.address, std::vector<std::string>{});
-    auto got = perform(*api_, ask);
-    if (!got || !got->device_keys)
+    const auto all = this->own_sessions_now();
+    if (!all)
       return;
-    const auto mine = got->device_keys->find(id_.address);
-    if (mine == got->device_keys->end())
-      return;
-    const auto verified_here = crypto_->verified_keys(id_.address);
-    std::vector<std::string> unverified;
-    for (const auto& [id, info] : mine->second) {
-      if (id == crypto_->device_id())
-        continue;
-      const auto curve = info.keys.find("curve25519:" + id);
-      const auto identity = curve == info.keys.end()
-                                ? std::nullopt
-                                : crypto::device_of(*got, id_.address, curve->second, crypto_->pinned_master(id_.address));
-      if (!identity || !(identity->cross_signed || std::ranges::contains(verified_here, identity->ed25519)))
-        unverified.push_back(id);
-    }
+    std::vector<std::string> unverified =
+        *all | std::views::filter([&](const own_session& one) { return one.id != crypto_->device_id() && !one.trusted; }) |
+        std::views::transform(&own_session::id) | std::ranges::to<std::vector>();
     if (unverified.empty()) {
       sink_(change::notice{id_, "Sign out unverified sessions", "Every other session of yours is verified."});
       return;

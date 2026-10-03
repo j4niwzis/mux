@@ -298,6 +298,18 @@ class olm_machine {
                                       .keys = {this->ed25519()}};
     return this->seal_olm(to, knot::to_json_string(payload), one_time_key);
   }
+  // A new Olm session to a device, from its one-time key.
+  [[nodiscard]] auto outbound_to(const std::string& curve25519, const std::string& one_time_key) {
+    auto config = vodozemac::olm::new_session_config_version_1();
+    auto identity = vodozemac::types::curve_key_from_base64(curve25519);
+    auto otk = vodozemac::types::curve_key_from_base64(one_time_key);
+    return (*account_)->create_outbound_session(*config, *identity, *otk);
+  }
+  // An Olm message as the ciphertext m.room.encrypted carries for a device.
+  [[nodiscard]] static olm_ciphertext ciphertext_of(const auto& message) {
+    const auto parts = message.to_parts();
+    return olm_ciphertext{.type = static_cast<std::int64_t>(parts.message_type), .body = mux::bytes::base64_text(parts.ciphertext)};
+  }
   // A payload, for a device, over Olm: through its newest session, or one
   // made from its one-time key.
   [[nodiscard]] std::optional<olm_ciphertext> seal_olm(const recipient& to, const std::string& plaintext,
@@ -307,19 +319,14 @@ class olm_machine {
       if (sessions.empty()) {
         if (!one_time_key)
           return std::nullopt;
-        auto config = vodozemac::olm::new_session_config_version_1();
-        auto identity = vodozemac::types::curve_key_from_base64(to.curve25519);
-        auto otk = vodozemac::types::curve_key_from_base64(*one_time_key);
-        auto made = (*account_)->create_outbound_session(*config, *identity, *otk);
+        auto made = this->outbound_to(to.curve25519, *one_time_key);
         sessions.push_back(std::string(made->pickle(key_)));
       }
       auto session = vodozemac::olm::session_from_pickle(sessions.back(), key_);
       auto message = session->encrypt(plaintext);
       sessions.back() = std::string(session->pickle(key_));
       this->save();
-      const auto parts = message->to_parts();
-      return olm_ciphertext{.type = static_cast<std::int64_t>(parts.message_type),
-                            .body = mux::bytes::base64_text(parts.ciphertext)};
+      return ciphertext_of(*message);
     } catch (const rust::Error&) {
       return std::nullopt;
     }
@@ -363,16 +370,11 @@ class olm_machine {
   [[nodiscard]] std::optional<olm_ciphertext> mend(const recipient& to, const std::string& one_time_key) {
     const dummy_payload payload{.sender = user_id_, .recipient = to.user, .recipient_keys = {to.ed25519}, .keys = {this->ed25519()}};
     try {
-      auto config = vodozemac::olm::new_session_config_version_1();
-      auto identity = vodozemac::types::curve_key_from_base64(to.curve25519);
-      auto otk = vodozemac::types::curve_key_from_base64(one_time_key);
-      auto made = (*account_)->create_outbound_session(*config, *identity, *otk);
+      auto made = this->outbound_to(to.curve25519, one_time_key);
       auto message = made->encrypt(knot::to_json_string(payload));
       kept_.olm[to.curve25519].push_back(std::string(made->pickle(key_)));
       this->save();
-      const auto parts = message->to_parts();
-      return olm_ciphertext{.type = static_cast<std::int64_t>(parts.message_type),
-                            .body = mux::bytes::base64_text(parts.ciphertext)};
+      return ciphertext_of(*message);
     } catch (const rust::Error&) {
       return std::nullopt;
     }

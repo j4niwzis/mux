@@ -116,6 +116,24 @@ inline std::optional<std::string> thread_of(const loom::ev::m_room_message_conte
 
 template <class Sink>
 void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where, bool sealed) {
+  // A thread's root: its summary, as the server counts it, where it has one.
+  const auto summary_of = [&]() -> std::optional<thread_summary> {
+    if (!one.unsigned_ || !one.unsigned_->m_relations || !one.unsigned_->m_relations->m_thread)
+      return std::nullopt;
+    const auto& thread = *one.unsigned_->m_relations->m_thread;
+    thread_summary summary{.count = thread.count, .participated = thread.current_user_participated};
+    if (thread.latest_event) {
+      summary.last_id = thread.latest_event->event_id;
+      summary.last_sender = thread.latest_event->sender;
+      // In an encrypted room the server's summary is no one's word: its
+      // text is not shown (the thread's own messages are, decrypted).
+      if (!this->encrypted_room(in.id))
+        summary.last_text = thread.latest_event->content.body.value_or("");
+      summary.last_at = std::chrono::sys_time<std::chrono::milliseconds>(
+          std::chrono::milliseconds(thread.latest_event->origin_server_ts));
+    }
+    return summary;
+  };
   const auto at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(one.origin_server_ts));
   // A verification step in the room: taken by the verification, not shown.
   const bool verification = splice::visit(
@@ -284,21 +302,8 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       if ((made.thread = thread_of(*relates)) && relates->is_falling_back.value_or(false))
         made.replies_to.reset();
     // A thread's root: its summary, as the server counts it.
-    if (one.unsigned_ && one.unsigned_->m_relations && one.unsigned_->m_relations->m_thread) {
-      const auto& thread = *one.unsigned_->m_relations->m_thread;
-      thread_summary summary{.count = thread.count, .participated = thread.current_user_participated};
-      if (thread.latest_event) {
-        summary.last_id = thread.latest_event->event_id;
-        summary.last_sender = thread.latest_event->sender;
-        // In an encrypted room the server's summary is no one's word: its
-        // text is not shown (the thread's own messages are, decrypted).
-        if (!this->encrypted_room(in.id))
-          summary.last_text = thread.latest_event->content.body.value_or("");
-        summary.last_at = std::chrono::sys_time<std::chrono::milliseconds>(
-            std::chrono::milliseconds(thread.latest_event->origin_server_ts));
-      }
-      made.threaded = summary;
-    }
+    if (auto summary = summary_of())
+      made.threaded = std::move(*summary);
     // A message for the user, come as it happened: listed, as Telegram's @.
     // Who it mentions, as m.mentions says; before that, the user's ID in it.
     const bool live = splice::visit(splice::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
@@ -373,21 +378,8 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     const auto deleted = [&] {
       message made{.in = in, .id = one.event_id, .sender = one.sender, .at = at, .body = {},
                    .outgoing = one.sender == id_.address};
-      if (one.unsigned_->m_relations && one.unsigned_->m_relations->m_thread) {
-        const auto& thread = *one.unsigned_->m_relations->m_thread;
-        thread_summary summary{.count = thread.count, .participated = thread.current_user_participated};
-        if (thread.latest_event) {
-          summary.last_id = thread.latest_event->event_id;
-          summary.last_sender = thread.latest_event->sender;
-          // In an encrypted room the server's summary is no one's word: its
-          // text is not shown (the thread's own messages are, decrypted).
-          if (!this->encrypted_room(in.id))
-            summary.last_text = thread.latest_event->content.body.value_or("");
-          summary.last_at = std::chrono::sys_time<std::chrono::milliseconds>(
-              std::chrono::milliseconds(thread.latest_event->origin_server_ts));
-        }
-        made.threaded = summary;
-      }
+      if (auto summary = summary_of())
+        made.threaded = std::move(*summary);
       this->added(std::move(made), where, sealed);
       sink_(change::message_redacted{in, one.event_id});
     };

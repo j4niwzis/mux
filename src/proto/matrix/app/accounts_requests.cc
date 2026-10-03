@@ -74,6 +74,7 @@ template void account<mux::app::post_change>::setup_cross_signing(std::string pa
 template void account<mux::app::post_change>::reset_backup();
 template void account<mux::app::post_change>::delete_backup();
 template void account<mux::app::post_change>::sign_out_unverified(std::string password);
+template void account<mux::app::post_change>::send_text(const conversation_id& in, const std::string& room, const std::string& txn, knot::raw body);
 template void account<mux::app::post_change>::restore_cross_signing(std::string recovery);
 // What the members above call, defined in the same partition: made here
 // too, for nothing instantiates them elsewhere.

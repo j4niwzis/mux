@@ -167,6 +167,15 @@ class account {
   // others cannot be sure what it sends is the user's; and other sessions of
   // the user's that are not ("New login. Was this you?").
   void check_own_sessions();
+  // Each session of the user's own, as the server lists them now: its ID,
+  // its name, and whether it is trusted -- cross-signed, or verified here.
+  // None where they could not be asked.
+  struct own_session {
+    std::string id;
+    std::string name;
+    bool trusted = false;
+  };
+  [[nodiscard]] std::optional<std::vector<own_session>> own_sessions_now();
   // Events not read for want of their session's key, by that session --
   // each as it came, and where it went -- to be read again once the key is
   // here; and why a sender withheld a session's key (m.room_key.withheld),
@@ -292,6 +301,21 @@ class account {
  private:
   void say(connection_t state);
 
+  // What the server has of a user's keys: their devices, and their
+  // cross-signing keys.
+  [[nodiscard]] std::expected<loom::cs::query_keys::response, failure> keys_of(const std::string& user) {
+    loom::cs::query_keys ask;
+    ask.body.device_keys.emplace(user, std::vector<std::string>{});
+    return this->perform(*api_, ask);
+  }
+  // A state event of a room set, its content given; and what was asked of a
+  // room, logged where it failed.
+  void set_room_state(const std::string& room, std::string type, const auto& content);
+  void send_text(const conversation_id& in, const std::string& room, const std::string& txn, knot::raw body);
+  void told_failing(const std::string& room, const char* what, const auto& done) {
+    if (!done)
+      log(id_, "could not {} in {}: {}", what, room, done.error().said());
+  }
   // A request made and its answer read into its type.
   template <class Endpoint>
   std::expected<typename Endpoint::response, failure> perform(auto& over, const Endpoint& endpoint,

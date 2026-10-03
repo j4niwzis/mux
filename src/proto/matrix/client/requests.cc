@@ -211,21 +211,19 @@ struct link_facts {
 using power_levels_content = loom::ev::m_room_power_levels_content_t;
 
 template <class Sink>
+void account<Sink>::set_room_state(const std::string& room, std::string type, const auto& content) {
+  auto done = this->perform(*api_, loom::cs::set_room_state_with_key{.room_id = room, .event_type = type, .state_key = "", .body = as_body(content)});
+  if (!done)
+    log(id_, "could not set {} in {}: {}", type, room, done.error().said());
+}
+
+template <class Sink>
 void account<Sink>::manage(std::string room, room_action_t action) {
   this->spawn_guarded([this, room = std::move(room), action = std::move(action)] {
     if (!api_)
       return;
-    // A state event of the room set, its content given.
-    const auto set = [&](std::string type, const auto& content) {
-      auto done = perform(*api_, loom::cs::set_room_state_with_key{
-                                     .room_id = room, .event_type = type, .state_key = "", .body = as_body(content)});
-      if (!done)
-        log(id_, "could not set {} in {}: {}", type, room, done.error().said());
-    };
-    const auto told = [&](const char* what, auto done) {
-      if (!done)
-        log(id_, "could not {} in {}: {}", what, room, done.error().said());
-    };
+    const auto set = [&](std::string type, const auto& content) { this->set_room_state(room, std::move(type), content); };
+    const auto told = [&](const char* what, auto done) { this->told_failing(room, what, done); };
     splice::visit(
         splice::overloaded{
             [&](const room_action::rename& one) {
@@ -260,13 +258,7 @@ void account<Sink>::change_room(std::string room, proto::matrix::room_change_t c
   this->spawn_guarded([this, room = std::move(room), change = std::move(change)] {
     if (!api_)
       return;
-    // A state event of the room set, its content given.
-    const auto set = [&](std::string type, const auto& content) {
-      auto done = perform(*api_, loom::cs::set_room_state_with_key{
-                                     .room_id = room, .event_type = type, .state_key = "", .body = as_body(content)});
-      if (!done)
-        log(id_, "could not set {} in {}: {}", type, room, done.error().said());
-    };
+    const auto set = [&](std::string type, const auto& content) { this->set_room_state(room, std::move(type), content); };
     // The room's power levels as they are now: what a change is made on.
     const auto power_levels = [&] {
       if (const auto kept = state_.joined.find(room); kept != state_.joined.end())
@@ -274,10 +266,7 @@ void account<Sink>::change_room(std::string room, proto::matrix::room_change_t c
           return *now;
       return power_levels_content{};
     };
-    const auto told = [&](const char* what, auto done) {
-      if (!done)
-        log(id_, "could not {} in {}: {}", what, room, done.error().said());
-    };
+    const auto told = [&](const char* what, auto done) { this->told_failing(room, what, done); };
     splice::visit(
         splice::overloaded{
             [&](const proto::matrix::room_change::set_join_rule& one) {

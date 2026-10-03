@@ -17,6 +17,7 @@ import mux.matrix;
 import mux.media;
 import mux.host;
 import mux.dbus;
+import mux.protocols;
 import mux.ui;
 import skiff.paint;
 import skiff.scene;
@@ -324,7 +325,17 @@ struct app : kept_settings {
   void apply(const request::create_room& one);
   // The Matrix account rooms are found and made by: the one in view, else
   // the first.
-  [[nodiscard]] std::optional<mux::account_id> matrix_account();
+  // An account whose protocol offers what is asked: the one in view where
+  // it does, else the first.
+  template <class Feature>
+  [[nodiscard]] std::optional<mux::account_id> account_offering(Feature wanted) {
+    if (const auto& current = root().main().current; current && mux::proto::offers(current->speaks, wanted))
+      return current;
+    for (const auto& [id, account] : model->accounts())
+      if (mux::proto::offers(id.speaks, wanted))
+        return id;
+    return std::nullopt;
+  }
   void apply(const request::settings_notifications&);
   void apply(const request::flip_notify& one);
   void apply(const request::set_notify_backend& one);

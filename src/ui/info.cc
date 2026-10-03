@@ -21,6 +21,7 @@ import skiff.widgets.textarea;
 import mux.core;
 import mux.config;
 import mux.logic.links;
+import mux.protocols;
 import :base;
 import :icons;
 import :avatars;
@@ -2728,8 +2729,9 @@ struct info_panel : nodes::Stack {
                   group,
                   muted,
                   false};
-    if (group && is_matrix(one.id.account.speaks))
-      group_view.copied = logic::room_link(one);
+    if (group)
+      if (auto link = proto::room_link(one.id.account.speaks, one))
+        group_view.copied = std::move(*link);
     group_view.topic = one.topic.value_or("");
     if (one.alias)
       group_view.addresses.push_back(*one.alias);

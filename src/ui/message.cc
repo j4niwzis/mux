@@ -18,6 +18,7 @@ import mux.audio;
 import mux.core;
 import mux.config;
 import mux.logic.links;
+import mux.protocols;
 import :base;
 import :icons;
 import :avatars;
@@ -623,7 +624,11 @@ struct mentioned;
 // from the disk -- with who did it as a person: its line starts with their
 // name in the chat. A Matrix one's: a person's link is a matrix.to one.
 [[nodiscard]] inline message with_actor(const conversation& in, const message& said) {
-  if (!said.service || said.body.html || !is_matrix(protocol_of(said.sender)))
+  if (!said.service || said.body.html)
+    return said;
+  // The person's link, where their protocol has one.
+  const auto link = proto::person_link(protocol_of(said.sender), said.sender);
+  if (!link)
     return said;
   const std::string name = sender_name(in, said.sender);
   if (name.empty() || !said.body.plain.starts_with(name))
@@ -636,7 +641,7 @@ struct mentioned;
            std::views::join | std::ranges::to<std::string>();
   };
   message out = said;
-  out.body.html = std::format(R"(<a href="https://matrix.to/#/{}">{}</a>)", escaped(said.sender), escaped(name)) +
+  out.body.html = std::format(R"(<a href="{}">{}</a>)", escaped(*link), escaped(name)) +
                   escaped(std::string_view(said.body.plain).substr(name.size()));
   return out;
 }

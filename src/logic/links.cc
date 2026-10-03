@@ -28,6 +28,11 @@ struct xmpp_address {  // a JID
 };
 }  // namespace link
 using link_t = splice::variant<link::person, link::room, link::xmpp_address>;
+// The protocol each kind of link is of. (The links are read here for now; a
+// protocol's own are to be its, with the rest of what it defines.)
+[[nodiscard]] inline protocol_t speaks_of(const link::person&) { return protocol::matrix{}; }
+[[nodiscard]] inline protocol_t speaks_of(const link::room&) { return protocol::matrix{}; }
+[[nodiscard]] inline protocol_t speaks_of(const link::xmpp_address&) { return protocol::xmpp{}; }
 
 // %xx decoded.
 [[nodiscard]] inline std::string percent_decoded(std::string_view text) {
@@ -234,18 +239,18 @@ using link_step_t = splice::variant<link_step::open_chat, link_step::member_page
 // The chat a link names, where the model has it: a room by its id or alias,
 // an XMPP address by its JID -- in an account of the protocol it is of.
 [[nodiscard]] inline std::optional<conversation_id> chat_of(const model& now, const link_t& where) {
-  const auto named = [&](bool matrix, std::string_view id) -> std::optional<conversation_id> {
+  const auto named = [&](const protocol_t& speaks, std::string_view id) -> std::optional<conversation_id> {
     for (const auto& [account, one] : now.accounts())
       for (const auto& [key, chat] : one.conversations)
         // By its id, its main address, or any other it publishes.
-        if (is_matrix(account.speaks) == matrix &&
+        if (account.speaks == speaks &&
             (chat.id.id == id || (chat.alias && *chat.alias == id) || std::ranges::contains(chat.other_aliases, id)))
           return chat.id;
     return std::nullopt;
   };
   return splice::visit(splice::overloaded{[](const link::person&) { return std::optional<conversation_id>(); },
-                               [&](const link::room& one) { return named(true, one.id); },
-                               [&](const link::xmpp_address& one) { return named(false, one.jid); }},
+                               [&](const link::room& one) { return named(speaks_of(one), one.id); },
+                               [&](const link::xmpp_address& one) { return named(speaks_of(one), one.jid); }},
                     where);
 }
 
@@ -263,11 +268,13 @@ using link_step_t = splice::variant<link_step::open_chat, link_step::member_page
           [&](const link::room& one) -> link_step_t {
             if (const auto found = chat_of(now, where))
               return link_step::open_chat{*found, one.event};
+            // An account of the link's protocol.
+            const protocol_t wanted = speaks_of(one);
             std::optional<account_id> by;
-            if (current && is_matrix(current->speaks))
+            if (current && current->speaks == wanted)
               by = current;
             for (const auto& [account, kept] : now.accounts())
-              if (!by && is_matrix(account.speaks))
+              if (!by && account.speaks == wanted)
                 by = account;
             if (!by)
               return link_step::say{"No Matrix account", "A Matrix account is needed to open that room."};

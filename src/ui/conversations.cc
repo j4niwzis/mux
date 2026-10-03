@@ -15,6 +15,7 @@ import skiff.widgets.button;
 import skiff.widgets.pill;
 import skiff.widgets.textarea;
 import mux.core;
+import mux.protocols;
 import mux.config;
 import :base;
 import :controls;
@@ -2360,7 +2361,7 @@ struct conversations_screen : nodes::Stack {
         // fetched to the beginning and it was not found. Its thread opened.
         actions->open_thread(*held->thread);
         this->stop_jump();
-      } else if (is_matrix(chosen->account.speaks) && !jump_paging) {
+      } else if (proto::offers(chosen->account.speaks, proto::feature::history_context{}) && !jump_paging) {
         // Not here: a window of the history around it, from the server --
         // not all of it from here to there. Where that does not bring it,
         // paged back to, as far as the chat's limit.

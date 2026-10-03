@@ -8,6 +8,7 @@ import knot;
 import skia;
 import mux.core;
 import mux.logic.links;
+import mux.protocols;
 import mux.logic.room_events;
 import mux.config;
 import mux.net;
@@ -93,26 +94,26 @@ void app::apply(const request::open_new_chat&) {
       for (const auto& [key, chat] : found->second.conversations)
         if (!mux::ui::is_group(chat))
           known.push_back({.id = mux::ui::contact_of(chat), .name = mux::ui::display_name(chat), .avatar = chat.avatar});
-    link = mux::is_matrix(current->speaks) ? "https://matrix.to/#/" + current->address : "xmpp:" + current->address;
+    link = mux::proto::share_link(current->speaks, current->address).value_or(std::string());
   }
   std::ranges::sort(known, {}, &mux::found_person::name);
   root().open_new_chat(std::move(known), std::move(link));
 }
 void app::apply(const request::find_people& one) {
-  const auto by = this->matrix_account();
+  const auto by = this->account_offering(mux::proto::feature::people_directory{});
   if (!by || shared.demo())
     return;
   net->search_people(*by, one.query);
 }
 void app::apply(const request::search_elsewhere& one) {
-  const auto by = this->matrix_account();
+  const auto by = this->account_offering(mux::proto::feature::people_directory{});
   if (!by || shared.demo())
     return;
   net->search_directory(*by, std::string(), one.query);
   net->search_people(*by, one.query);
 }
 void app::apply(const request::open_new_room&) {
-  const auto by = this->matrix_account();
+  const auto by = this->account_offering(mux::proto::feature::room_creation{});
   root().open_new_room(by ? by->address.substr(by->address.find(':') + 1) : std::string());
 }
 void app::apply(const request::close_new_room&) { root().close_new_room(); }
@@ -297,7 +298,7 @@ void app::apply(const request::send_in_thread& one) {
 // room's, from its settings -- editable where one's power there is what the
 // room's state asks.
 void app::apply(const request::open_packs&) {
-  packs_account = this->matrix_account();
+  packs_account = this->account_offering(mux::proto::feature::sticker_packs{});
   root().open_packs(std::nullopt, true);
   if (packs_account && !shared.demo())
     net->list_packs(*packs_account, std::nullopt);
@@ -305,7 +306,7 @@ void app::apply(const request::open_packs&) {
 void app::apply(const request::open_room_packs&) {
   const auto chosen = this->managed();
   const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
-  if (!chat || !mux::is_matrix(chat->id.account.speaks))
+  if (!chat || !mux::proto::offers(chat->id.account.speaks, mux::proto::feature::sticker_packs{}))
     return;
   packs_account = chat->id.account;
   const auto mine = chat->powers.find(chat->id.account.address);
@@ -374,17 +375,10 @@ void app::apply(const request::start_direct& one) {
   net->create_direct(*current, one.user);
   root().show_message("New chat", "Starting a chat with " + one.user + "…");
 }
-std::optional<mux::account_id> app::matrix_account() {
-  if (const auto& current = root().main().current; current && mux::is_matrix(current->speaks))
-    return current;
-  for (const auto& [id, account] : model->accounts())
-    if (mux::is_matrix(id.speaks))
-      return id;
-  return std::nullopt;
-}
+
 // Explore rooms: opened on the account's own server.
 void app::apply(const request::open_explore&) {
-  const auto by = this->matrix_account();
+  const auto by = this->account_offering(mux::proto::feature::room_directory{});
   const std::string own = by ? by->address.substr(by->address.find(':') + 1) : std::string();
   root().open_explore(own);
   // What the server lists, at once, as Cinny opens its explorer: its
@@ -418,7 +412,7 @@ void app::apply(const request::search_rooms& one) {
     this->follow(*link);
     return;
   }
-  const auto by = this->matrix_account();
+  const auto by = this->account_offering(mux::proto::feature::room_directory{});
   if (!by || shared.demo())
     return;
   net->search_directory(*by, one.server, one.query);
@@ -426,7 +420,7 @@ void app::apply(const request::search_rooms& one) {
 // A room of the directory joined, through the server it was listed by, and
 // opened when it comes.
 void app::apply(const request::join_directory_room& one) {
-  const auto by = this->matrix_account();
+  const auto by = this->account_offering(mux::proto::feature::room_directory{});
   if (!by || shared.demo())
     return;
   std::vector<std::string> via;
@@ -438,7 +432,7 @@ void app::apply(const request::join_directory_room& one) {
 }
 // A room made, and opened once the model has it.
 void app::apply(const request::create_room& one) {
-  const auto by = this->matrix_account();
+  const auto by = this->account_offering(mux::proto::feature::room_creation{});
   if (!by || shared.demo())
     return;
   root().close_new_room();

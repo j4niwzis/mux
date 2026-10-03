@@ -10,26 +10,14 @@ export module mux.core;
 
 import std;
 import splice;
+// The protocols, as tags in their own namespaces, and protocol_t: one list.
+export import mux.proto.tags;
 
 export namespace mux {
 
 // Which protocol an account speaks. A closed set: what differs between them
 // is in the account types, dispatched with std::visit, not behind a base
 // class.
-namespace protocol {
-struct xmpp {
-  static constexpr bool is_matrix = false;
-  friend auto operator<=>(const xmpp&, const xmpp&) = default;
-};
-struct matrix {
-  static constexpr bool is_matrix = true;
-  friend auto operator<=>(const matrix&, const matrix&) = default;
-};
-}  // namespace protocol
-using protocol_t = splice::variant<protocol::xmpp, protocol::matrix>;
-[[nodiscard]] inline bool is_matrix(const protocol_t& speaks) {
-  return splice::visit([](auto one) { return one.is_matrix; }, speaks);
-}
 
 // An account, as the user names it: user@example.com, or @user:example.org.
 struct account_id {

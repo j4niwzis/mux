@@ -6,6 +6,7 @@ export module mux.logic.text;
 import std;
 import mux.core;
 import mux.config;
+import mux.protocols;
 
 export namespace mux::logic {
 
@@ -58,11 +59,9 @@ export namespace mux::logic {
   return out;
 }
 
-// The protocol an address speaks: a Matrix user ID starts with '@', and a
-// JID cannot; and the account it names.
-[[nodiscard]] inline protocol_t protocol_of(std::string_view address) {
-  return config::is_matrix(address) ? protocol_t{protocol::matrix{}} : protocol_t{protocol::xmpp{}};
-}
+// The protocol an address speaks -- the one that owns it, asked of each --
+// and the account it names.
+[[nodiscard]] inline protocol_t protocol_of(std::string_view address) { return proto::protocol_of(address); }
 [[nodiscard]] inline account_id account_of(std::string_view address) {
   return account_id{protocol_of(address), std::string(address)};
 }

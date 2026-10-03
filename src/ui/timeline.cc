@@ -16,6 +16,7 @@ import mux.core;
 import mux.video;
 import mux.config;
 import mux.logic.links;
+import mux.protocols;
 import :base;
 import :names;
 import :message;
@@ -250,24 +251,17 @@ template <class Actions>
   }
   if (chat) {
     facts.pinned = std::ranges::contains(chat->pinned, one.message_id);
-    facts.pinnable = is_matrix(chat->id.account.speaks) && one.message_id.starts_with('$');
-    // Delete as the room's power levels allow it: one's own where one
-    // may send a redaction; another's where one may also redact.
-    facts.deletable = one.outgoing;
-    if (is_matrix(chat->id.account.speaks)) {
-      const auto mine = chat->powers.find(chat->id.account.address);
-      const std::int64_t level = mine != chat->powers.end() ? mine->second : chat->power_default;
-      const auto redaction = chat->needs.events.find("m.room.redaction");
-      const std::int64_t send = redaction != chat->needs.events.end() ? redaction->second : chat->needs.events_default;
-      facts.deletable = level >= send && (one.outgoing || level >= chat->needs.redact);
-    }
+    facts.pinnable = proto::can_pin(chat->id.account.speaks, one.message_id);
+    // Delete as the protocol allows it -- Matrix: as the room's power levels do.
+    facts.deletable = proto::may_delete(chat->id.account.speaks, *chat, one.outgoing);
     facts.reaction_events = !one.said.reaction_events.empty();
     for (const auto& [key, who] : one.said.reactions)
       facts.reaction_count += who.size();
   }
-  // A Matrix message's link: matrix.to, to it in its room.
-  if (chat && is_matrix(chat->id.account.speaks) && one.message_id.starts_with('$'))
-    facts.link = logic::message_link(*chat, one.message_id);
+  // The message's link, where its protocol has one.
+  if (chat)
+    if (auto link = proto::message_link(chat->id.account.speaks, *chat, one.message_id))
+      facts.link = std::move(*link);
   // The link the press was on: one in the text -- its text asked a menu
   // of its own with it, which this one is in place of -- or the
   // preview's.

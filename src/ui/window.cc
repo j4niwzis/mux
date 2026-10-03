@@ -53,14 +53,16 @@ struct window : scene::Node {
       widgets::Button<copy_it> copy;
       std::optional<widgets::Button<copy_it>> copy_link;
     } parts;
-    text_menu(Actions* a, std::string text, std::optional<std::string> link)
+    text_menu(const ui_needs<Actions>& n, std::string text, std::optional<std::string> link)
+        : text_menu(*n.colours, n.actions, std::move(text), std::move(link)) {}
+    text_menu(const palette& colours, Actions* a, std::string text, std::optional<std::string> link)
         : parts{.copy = widgets::Button<copy_it>("Copy", {a, std::move(text)})} {
       if (link) {
         parts.copy_link.emplace("Copy Link", copy_it{a, std::move(*link)});
         parts.copy_link->apply({.fillX = true, .height = 30.0f});
       }
       fState.apply({.width = 150.0f, .autoSize = scene::axes::kY, .padding = {6.0f, 6.0f, 6.0f, 6.0f}, .cornerRadius = 10.0f,
-                    .background = popup_colour(), .border = scene::Border{band_colour, 1.0f},
+                    .background = colours.popup(), .border = scene::Border{colours.band, 1.0f},
                     .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
       parts.copy.apply({.fillX = true, .height = 30.0f});
     }
@@ -97,7 +99,7 @@ struct window : scene::Node {
   struct layers : scene::Node {
     using frame_t = widgets::SlideOver<with_drawer, panel_type>;
     struct parts_t {
-      nodes::Box<> backdrop{background};
+      nodes::Box<> backdrop;
       // The chat's background behind all of the window, where it is so:
       // drawn at its own opacity -- the desktop through it only where the
       // picture itself lets it be seen.
@@ -281,7 +283,8 @@ struct window : scene::Node {
 
     explicit layers(const ui_needs<Actions>& n) : layers(n, n.actions) {}
     layers(const ui_needs<Actions>& n, Actions* a)
-        : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(n), std::forward_as_tuple(n))},
+        : parts{.backdrop = nodes::Box<>(n.colours->background),
+                .frame = frame_t(std::piecewise_construct, std::forward_as_tuple(n), std::forward_as_tuple(n))},
           actions_of(a) {
       auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying,
              emoji, menu, viewer, text_menu_up] = parts;
@@ -291,45 +294,45 @@ struct window : scene::Node {
       behind.setVisible(window_look().behind);
       // The pages over the chats (Accounts) on the panels' colour: as
       // see-through as the panels are.
-      frame.setSheetColour(sidebar_colour);
-      frame.base().setSheetColour(sidebar_colour);
-      settings.setSheetColour(sidebar_colour);
-      sending.setSheetColour(sidebar_colour);
-      passphrase.setSheetColour(sidebar_colour);
+      frame.setSheetColour(n.colours->sidebar);
+      frame.base().setSheetColour(n.colours->sidebar);
+      settings.setSheetColour(n.colours->sidebar);
+      sending.setSheetColour(n.colours->sidebar);
+      passphrase.setSheetColour(n.colours->sidebar);
       passphrase.setWidthFittingContent(420.0f);
-      verifying.setSheetColour(sidebar_colour);
+      verifying.setSheetColour(n.colours->sidebar);
       verifying.setWidthFittingContent(440.0f);
       verifying.setDismissable(false);
       settings.setSize(440.0f, 520.0f);
-      notice.setSheetColour(sidebar_colour);
+      notice.setSheetColour(n.colours->sidebar);
       notice.setWidthFittingContent(440.0f);
-      person.setSheetColour(sidebar_colour);
+      person.setSheetColour(n.colours->sidebar);
       // tdesktop's profile layer: 392 wide (infoDesiredWidth), as high as
       // what it shows, a 24th of the window down within 20 and 40.
       person.setWidthFittingContent(392.0f);
       person.setPlace(widgets::dialog_place::near_top{});
-      room.setSheetColour(sidebar_colour);
+      room.setSheetColour(n.colours->sidebar);
       room.setWidthFittingContent(392.0f);
       room.setPlace(widgets::dialog_place::near_top{});
-      reactions.setSheetColour(chat_colour);  // its bubbles, as in the chat
-      marks.setSheetColour(chat_colour);
+      reactions.setSheetColour(n.colours->chat);  // its bubbles, as in the chat
+      marks.setSheetColour(n.colours->chat);
       marks.setSize(460.0f, 520.0f);
       reactions.setSize(392.0f, 420.0f);
-      manage.setSheetColour(sidebar_colour);
+      manage.setSheetColour(n.colours->sidebar);
       manage.setSize(860.0f, 620.0f);
-      forwarding.setSheetColour(sidebar_colour);
+      forwarding.setSheetColour(n.colours->sidebar);
       forwarding.setSize(400.0f, 520.0f);
-      new_chat.setSheetColour(sidebar_colour);
+      new_chat.setSheetColour(n.colours->sidebar);
       new_chat.setSize(480.0f, 560.0f);
-      new_room.setSheetColour(sidebar_colour);
+      new_room.setSheetColour(n.colours->sidebar);
       new_room.setWidthFittingContent(480.0f);
-      packs.setSheetColour(sidebar_colour);
+      packs.setSheetColour(n.colours->sidebar);
       packs.setSize(620.0f, 600.0f);
-      wallpaper.setSheetColour(sidebar_colour);
+      wallpaper.setSheetColour(n.colours->sidebar);
       wallpaper.setWidthFittingContent(380.0f);
-      explore.setSheetColour(sidebar_colour);
+      explore.setSheetColour(n.colours->sidebar);
       explore.setSize(640.0f, 560.0f);
-      tools.setSheetColour(sidebar_colour);
+      tools.setSheetColour(n.colours->sidebar);
       tools.setSize(560.0f, 560.0f);
     }
   };
@@ -427,7 +430,7 @@ struct window : scene::Node {
     auto& now = *parts.now;
     const skia::SkRect box = fState.fBounds;
     const float tall = link ? 80.0f : 44.0f;
-    now.parts.text_menu_up.emplace(actions, std::move(text), std::move(link));
+    now.parts.text_menu_up.emplace(needs_, std::move(text), std::move(link));
     now.parts.text_menu_up->apply({.place = scene::anchor::kTopLeft,
                                     .x = std::clamp(now.last_press.x() - box.fLeft, 0.0f, std::max(0.0f, box.width() - 150.0f)),
                                     .y = std::clamp(now.last_press.y() - box.fTop, 0.0f, std::max(0.0f, box.height() - tall))});

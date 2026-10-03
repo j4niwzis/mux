@@ -47,8 +47,52 @@ export namespace mux::ui {
   return std::format("\U0001F4CE {}", carried.name.empty() ? std::string("File") : carried.name);
 }
 
+// A node of a chat's protocol's own in its row of the list, after what was
+// said last (a Telegram channel's views, an IRC channel's modes): listed by
+// row_views(state, type_tag<Actions>), made for a chat by make_row_view,
+// found by ADL; none by default.
+namespace row_view_defaults {
+template <class Actions>
+constexpr proto::sticker_view_list<> row_views(const auto&, type_tag<Actions>) {
+  return {};
+}
+template <class Actions>
+constexpr std::nullopt_t make_row_view(const auto&, const conversation&, type_tag<Actions>) {
+  return std::nullopt;
+}
+}  // namespace row_view_defaults
+template <class State, class Actions>
+constexpr auto row_views_for(const State& state, type_tag<Actions> tag) {
+  using row_view_defaults::row_views;
+  return row_views(state, tag);
+}
+
 template <class Actions>
 struct conversation_row : nodes::Stack {
+  template <class List>
+  struct view_nodes;
+  template <class... Vs>
+  struct view_nodes<proto::sticker_view_list<Vs...>> {
+    using type = type_list<Vs...>;
+  };
+  template <class>
+  struct protocol_row_nodes;
+  template <class... Tags>
+  struct protocol_row_nodes<protocol_list<Tags...>> {
+    using type = typename joined<
+        type_list<>, typename view_nodes<decltype(row_views_for(::mux::state_of<Tags>{}, type_tag<Actions>{}))>::type...>::type;
+  };
+  using row_view_t = typename variant_of_types<
+      typename joined<type_list<nodes::Text>, typename protocol_row_nodes<protocols>::type>::type>::type;
+  struct row_view_holder : nodes::Stack {
+    struct parts_t {
+      row_view_t shown;
+    } parts;
+    template <class View>
+    explicit row_view_holder(View made) : parts{.shown = row_view_t(std::move(made))} {
+      fState.apply({.autoSize = scene::axes::kBoth});
+    }
+  };
   Actions* actions = nullptr;
   conversation_id id;
   bool chosen = false;
@@ -86,6 +130,8 @@ struct conversation_row : nodes::Stack {
         nodes::Text sender;
         nodes::BasicText<message_pictures> preview;
         std::vector<mark> marks;
+        // Its protocol's own node (make_row_view).
+        std::optional<row_view_holder> theirs;
         badge unread;
       } parts;
       bottom_line(std::int64_t count, bool chosen, bool muted)
@@ -135,6 +181,12 @@ struct conversation_row : nodes::Stack {
   } parts;
 
   static constexpr float kHeight = 62.0f;
+  void place_view(std::nullopt_t) {}
+  template <class View>
+  void place_view(std::optional<View> made) {
+    if (made)
+      parts.lines.parts.bottom.parts.theirs.emplace(std::move(*made));
+  }
 
   // Declared: the avatar, then the name and time over the last message and
   // how many are unread.
@@ -170,6 +222,12 @@ struct conversation_row : nodes::Stack {
     std::ranges::for_each(shown.badges, [&](const proto::part::badge& one) {
       parts.lines.parts.bottom.parts.marks.emplace_back(one).apply({.alignSelf = scene::align::kMiddle});
     });
+    splice::visit(
+        [&](const auto& now) {
+          using row_view_defaults::make_row_view;
+          this->place_view(make_row_view(now, one, type_tag<Actions>{}));
+        },
+        protocol_state_of(one.id.account));
     auto& time = parts.lines.parts.top.parts.time;
     auto& preview = parts.lines.parts.bottom.parts.preview;
     auto& sender = parts.lines.parts.bottom.parts.sender;

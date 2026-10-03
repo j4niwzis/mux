@@ -52,6 +52,8 @@ struct packs_box : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{620.0f, 600.0f}}; }
   Actions* actions = nullptr;
+  // The colours it is made in, for its parts and the rows it makes later.
+  const palette* colours_ = nullptr;
   std::optional<std::string> room;  // the room's packs, or one's own
   bool may_edit = true;
   std::vector<emote_pack> packs;  // as last listed
@@ -122,9 +124,9 @@ struct packs_box : nodes::Stack {
       this->setHorizontal();
       this->setGap(12.0f);
       fState.apply({.fillX = true, .height = 56.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f}, .cornerRadius = 8.0f,
-                    .hoverBackground = chosen_colour});
+                    .hoverBackground = b->colours_->chosen});
       parts.face.apply({.width = 40.0f, .height = 40.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 8.0f,
-                        .background = tile_colour});
+                        .background = b->colours_->tile});
       parts.face.keepBox();
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
@@ -163,23 +165,25 @@ struct packs_box : nodes::Stack {
     struct parts_t {
       nodes::Image<from_avatars> face;
       widgets::TextBox<renamed> shortcode;
-      nodes::Text emoji_label{"Emoji", 12.0f, dim_colour};
+      nodes::Text emoji_label;
       widgets::Toggle<flip_its_emoji> emoji;
-      nodes::Text sticker_label{"Sticker", 12.0f, dim_colour};
+      nodes::Text sticker_label;
       widgets::Toggle<flip_its_sticker> sticker;
       icon_button<remove_it> remove;
     } parts;
     picture_row(packs_box* box, std::size_t index, const pack_picture& one)
         : parts{.face = nodes::Image<from_avatars>({one.url}),
-                .shortcode = widgets::TextBox<renamed>(legacy_palette().widgets, "shortcode", {box, index}),
-                .emoji = widgets::Toggle<flip_its_emoji>(legacy_palette().widgets, {box, index}),
-                .sticker = widgets::Toggle<flip_its_sticker>(legacy_palette().widgets, {box, index}),
-                .remove = icon_button<remove_it>(icon::close{}, {box, index})} {
+                .shortcode = widgets::TextBox<renamed>(box->colours_->widgets, "shortcode", {box, index}),
+                .emoji_label = nodes::Text("Emoji", 12.0f, box->colours_->dim),
+                .emoji = widgets::Toggle<flip_its_emoji>(box->colours_->widgets, {box, index}),
+                .sticker_label = nodes::Text("Sticker", 12.0f, box->colours_->dim),
+                .sticker = widgets::Toggle<flip_its_sticker>(box->colours_->widgets, {box, index}),
+                .remove = icon_button<remove_it>(*box->colours_, icon::close{}, {box, index})} {
       this->setHorizontal();
       this->setGap(8.0f);
       fState.apply({.fillX = true, .height = 52.0f, .padding = {6.0f, 10.0f, 6.0f, 10.0f}});
       parts.face.apply({.width = 40.0f, .height = 40.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 6.0f,
-                        .background = tile_colour});
+                        .background = box->colours_->tile});
       parts.face.keepBox();
       parts.shortcode.setText(one.shortcode);
       parts.shortcode.apply({.height = 32.0f, .relativeSize = scene::axes::kNone, .grow = scene::axes::kX,
@@ -193,13 +197,16 @@ struct packs_box : nodes::Stack {
   };
   struct use_row : nodes::Stack {
     struct parts_t {
-      nodes::Text emoji_label{"Use as emoji", 13.0f, text_colour};
+      nodes::Text emoji_label;
       widgets::Toggle<flip_emoji> emoji;
-      nodes::Text sticker_label{"Use as stickers", 13.0f, text_colour};
+      nodes::Text sticker_label;
       widgets::Toggle<flip_sticker> sticker;
     } parts;
     explicit use_row(packs_box* box)
-        : parts{.emoji = widgets::Toggle<flip_emoji>(legacy_palette().widgets, {box}), .sticker = widgets::Toggle<flip_sticker>(legacy_palette().widgets, {box})} {
+        : parts{.emoji_label = nodes::Text("Use as emoji", 13.0f, box->colours_->text),
+                .emoji = widgets::Toggle<flip_emoji>(box->colours_->widgets, {box}),
+                .sticker_label = nodes::Text("Use as stickers", 13.0f, box->colours_->text),
+                .sticker = widgets::Toggle<flip_sticker>(box->colours_->widgets, {box})} {
       this->setHorizontal();
       this->setGap(10.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 10.0f, 4.0f, 10.0f}});
@@ -213,7 +220,7 @@ struct packs_box : nodes::Stack {
     struct parts_t {
       widgets::Button<create_press> create;
     } parts;
-    explicit list_buttons(packs_box* box) : parts{.create = widgets::Button<create_press>(legacy_palette().widgets, "Create pack", {box})} {
+    explicit list_buttons(packs_box* box) : parts{.create = widgets::Button<create_press>(box->colours_->widgets, "Create pack", {box})} {
       this->setHorizontal();
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 10.0f, 0.0f, 10.0f}});
       parts.create.setPrimary(true);
@@ -229,10 +236,10 @@ struct packs_box : nodes::Stack {
       widgets::Button<save_press> save;
     } parts;
     edit_buttons(Actions* a, packs_box* box)
-        : parts{.add = widgets::Button<add_press>(legacy_palette().widgets, "Add images", {a}),
-                .remove = widgets::Button<delete_press>(legacy_palette().widgets, "Delete pack", {box}),
-                .back = widgets::Button<back_press>(legacy_palette().widgets, "Back", {box}),
-                .save = widgets::Button<save_press>(legacy_palette().widgets, "Save", {box})} {
+        : parts{.add = widgets::Button<add_press>(box->colours_->widgets, "Add images", {a}),
+                .remove = widgets::Button<delete_press>(box->colours_->widgets, "Delete pack", {box}),
+                .back = widgets::Button<back_press>(box->colours_->widgets, "Back", {box}),
+                .save = widgets::Button<save_press>(box->colours_->widgets, "Save", {box})} {
       this->setHorizontal();
       this->setGap(8.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 10.0f, 0.0f, 10.0f}});
@@ -247,7 +254,7 @@ struct packs_box : nodes::Stack {
   using pictures_t = nodes::Flow<std::vector<picture_row>>;
   struct parts_t {
     header_t header;
-    nodes::Text note{"", 13.0f, dim_colour};
+    nodes::Text note;
     // The list.
     nodes::ScrollContainer<packs_t> list{packs_t({.spacingY = 0.0f, .wrap = false}, {})};
     list_buttons list_actions;
@@ -255,17 +262,19 @@ struct packs_box : nodes::Stack {
     field name;
     field attribution;
     use_row use;
-    nodes::Text images_heading{"Images", 13.0f, dim_colour, true};
+    nodes::Text images_heading;
     nodes::ScrollContainer<pictures_t> pictures{pictures_t({.spacingY = 0.0f, .wrap = false}, {})};
     edit_buttons edit_actions;
   } parts;
-  packs_box(Actions* a, std::optional<std::string> in, bool editable)
-      : actions(a), room(std::move(in)), may_edit(editable),
-        parts{.header = header_t("Emojis & Stickers", {}, {a}, false, true),
+  packs_box(Actions* a, const palette& colours, std::optional<std::string> in, bool editable)
+      : actions(a), colours_(&colours), room(std::move(in)), may_edit(editable),
+        parts{.header = header_t(colours, "Emojis & Stickers", {}, {a}, false, true),
+              .note = nodes::Text("", 13.0f, colours.dim),
               .list_actions = list_buttons(this),
               .name = field("Name", "Pack name"),
               .attribution = field("Attribution (optional)", "Where its images are from"),
               .use = use_row(this),
+              .images_heading = nodes::Text("Images", 13.0f, colours.dim, true),
               .edit_actions = edit_buttons(a, this)} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .height = 600.0f, .padding = {0.0f, 12.0f, 16.0f, 12.0f}});

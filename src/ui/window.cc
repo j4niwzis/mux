@@ -505,7 +505,7 @@ struct window : scene::Node {
     layer().new_room.open(actions, *needs_.colours, own_server);
   }
   void close_new_room() { layer().new_room.close(); }
-  void open_packs(std::optional<std::string> room, bool editable) { layer().packs.open(actions, std::move(room), editable); }
+  void open_packs(std::optional<std::string> room, bool editable) { layer().packs.open(actions, *needs_.colours, std::move(room), editable); }
   void close_packs() { layer().packs.close(); }
   void open_wallpaper(choice_level_t level) { layer().wallpaper.open(actions, *needs_.colours, *needs_.looks, level); }
   void close_wallpaper() { layer().wallpaper.close(); }

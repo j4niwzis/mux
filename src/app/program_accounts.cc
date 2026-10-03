@@ -1051,12 +1051,6 @@ void app::apply(const request::flip_chat_room_events&) {
   this->refresh();
 }
 
-void app::apply(const request::proxy_kind& one) {
-  if (auto* up = root().settings_up())
-    if (auto* editor = up->editor())
-      editor->set_kind(one.kind);
-}
-
 void app::apply(const request::choose_account_proxy& one) {
   this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
     auto& kept = mux::config::proxy_in(account);
@@ -1065,22 +1059,9 @@ void app::apply(const request::choose_account_proxy& one) {
     else
       kept = proxies[static_cast<std::size_t>(one.index)].name;
     (void)this->write();
-    this->reconnect(account);
+    proxying.reconnect(account);
     panel.show_page(mux::ui::account_page::proxy{}, account, *model, proxies, theme);
   });
-}
-
-void app::reconnect(const mux::config::account_t& account) {
-  if (!mux::config::enabled_of(account) || ask.demo)
-    return;
-  net->remove(mux::config::address_of(account));
-  net->add(account, proxies);
-}
-
-void app::reconnect_through(const std::string& name) {
-  for (const auto& one : saved)
-    if (mux::config::proxy_of(one) == name)
-      this->reconnect(one);
 }
 
 }  // namespace mux::app

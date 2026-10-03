@@ -44,6 +44,7 @@ import mux.app.notices;
 import mux.app.marks;
 import mux.app.history;
 import mux.app.verification;
+import mux.app.proxies;
 import mux.logic.links;
 
 export namespace mux::app {
@@ -74,6 +75,7 @@ struct app : kept_settings {
   marks_part marks{shared};
   history_part paging{shared};
   verification_part verification{shared};
+  proxies_part proxying{shared, *this};
   // Work off the UI's thread: decoding pictures, reading the disk.
   workers work;
   // Files chosen in the dialog, or dropped on the window: to the outbox.
@@ -118,11 +120,11 @@ struct app : kept_settings {
   }
   template <class Request>
   void route(const Request& one) {
-    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> || takes<marks_part, Request> || takes<history_part, Request> || takes<verification_part, Request> ||
+    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> || takes<marks_part, Request> || takes<history_part, Request> || takes<verification_part, Request> || takes<proxies_part, Request> ||
                       takes<app, Request>, "a request no part of the program takes");
     if (!offer(search, one) && !offer(pictures, one) && !offer(reading, one) && !offer(outbox, one) &&
         !offer(settings, one) && !offer(menu, one) && !offer(notices, one) && !offer(marks, one) && !offer(paging, one) &&
-        !offer(verification, one))
+        !offer(verification, one) && !offer(proxying, one))
       offer(*this, one);
   }
 
@@ -472,12 +474,8 @@ struct app : kept_settings {
   void apply(const request::set_chat_strip_colour& one);
   // A chat's placement in a list, where it has one.
   mux::config::chat_placement* placement_of(const mux::conversation_id& chat, const mux::account_id& in);
-  void apply(const request::proxy_kind& one);
   // The chosen account through a profile, or none: kept, and connected again.
   void apply(const request::choose_account_proxy& one);
-  void reconnect(const mux::config::account_t& account);
-  // The accounts going through a profile, connected again.
-  void reconnect_through(const std::string& name);
   // A limit halved or doubled, within its bounds: kept, and in force at once.
   // What is kept on disk, gone: the stored messages and the pictures, and
   // the pictures in memory, to be fetched again as they are wanted.
@@ -489,15 +487,6 @@ struct app : kept_settings {
   // The theme and accent now chosen put in place, and the window made again
   // in them, as it was, with Settings open on Appearance.
   void rebuild_in_theme();
-  void apply(const request::manage_proxies&);
-  void apply(const request::settings_proxies&);
-  void apply(const request::add_proxy&);
-  void apply(const request::edit_proxy& one);
-  // A profile saved: a new one added, or one changed -- and renamed in the
-  // accounts that use it.
-  void apply(const request::save_proxy_profile&);
-  // A profile deleted: the accounts that used it connect directly.
-  void apply(const request::delete_proxy_profile&);
 
 
   // What is in the message field, to the chosen chat -- a new message, an

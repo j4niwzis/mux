@@ -456,10 +456,10 @@ struct window : scene::Node {
   // Whether the pages are still moving.
   [[nodiscard]] bool pages_moving() { return layer().frame.settling(); }
 
-  void open_menu(const menu_facts& facts) { layer().menu.emplace(actions, facts); }
+  void open_menu(const menu_facts& facts) { layer().menu.emplace(needs_, facts); }
   void close_menu() { layer().menu.reset(); }
   // The input's emoji panel, over the chat above its button.
-  void open_emoji(float right, float bottom) { layer().emoji.emplace(actions, right, bottom); }
+  void open_emoji(float right, float bottom) { layer().emoji.emplace(needs_, right, bottom); }
   void close_emoji() {
     layer().emoji.reset();
     set_docked_panel_height(0.0f);  // the field back at the bottom

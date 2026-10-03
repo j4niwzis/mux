@@ -108,14 +108,14 @@ struct emote_preview : nodes::Stack {
     nodes::Text glyph;
     nodes::Text label;
   } parts;
-  explicit emote_preview(const previewed& shown)
-      : parts{.glyph = nodes::Text(shown.picture ? std::string() : shown.key, 120.0f, text_colour),
-              .label = nodes::Text(shown.label, 14.0f, text_colour)} {
+  emote_preview(const palette& colours, const previewed& shown)
+      : parts{.glyph = nodes::Text(shown.picture ? std::string() : shown.key, 120.0f, colours.text),
+              .label = nodes::Text(shown.label, 14.0f, colours.text)} {
     this->setGap(8.0f);
     fStack.justify = nodes::justify::middle{};
     fState.apply({.place = scene::anchor::kCentre, .autoSize = scene::axes::kBoth,
                   .padding = {16.0f, 16.0f, 16.0f, 16.0f}, .cornerRadius = 14.0f,
-                  .background = (sidebar_colour & 0x00FFFFFFu) | (0xF0u << 24)});
+                  .background = (colours.sidebar & 0x00FFFFFFu) | (0xF0u << 24)});
     if (shown.picture) {
       parts.picture.emplace(from_avatars{shown.key});
       parts.picture->apply({.width = kSide, .height = kSide, .alignSelf = scene::align::kMiddle});
@@ -127,13 +127,13 @@ struct emote_preview : nodes::Stack {
   }
 };
 // A panel's preview kept to what the cells say: made anew as it changes.
-inline bool follow_preview(std::optional<emote_preview>& shown, std::optional<previewed>& of) {
+inline bool follow_preview(std::optional<emote_preview>& shown, std::optional<previewed>& of, const palette& colours) {
   if (of == previewed_emote())
     return false;
   of = previewed_emote();
   shown.reset();
   if (of)
-    shown.emplace(*of);
+    shown.emplace(colours, *of);
   return true;
 }
 
@@ -189,10 +189,10 @@ struct sticker_grid : nodes::Stack {
     struct parts_t {
       nodes::Image<from_avatars> picture;
     } parts;
-    cell(Actions* a, emote one)
+    cell(const palette& colours, Actions* a, emote one)
         : actions(a), sticker(one), parts{.picture = nodes::Image<from_avatars>({one.url})} {
       fState.apply({.width = kCell, .height = kCell, .margin = {2.0f, 2.0f, 2.0f, 2.0f}, .padding = {4.0f, 4.0f, 4.0f, 4.0f},
-                    .cornerRadius = 6.0f, .hoverBackground = chosen_colour});
+                    .cornerRadius = 6.0f, .hoverBackground = colours.chosen});
       parts.picture.apply({.fill = true});
       parts.picture.keepBox();  // the cell's size, whatever the sticker
     }
@@ -209,12 +209,12 @@ struct sticker_grid : nodes::Stack {
   };
   // A pack: its name over its stickers.
   struct section : cell_section<cell> {
-    section(Actions* a, std::string name, const std::vector<emote>& stickers)
-        : cell_section<cell>(std::move(name)) {
+    section(const palette& colours, Actions* a, std::string name, const std::vector<emote>& stickers)
+        : cell_section<cell>(colours, std::move(name)) {
       auto& cells = this->each();
       cells.reserve(stickers.size());
       for (const emote& one : stickers)
-        cells.emplace_back(a, one);
+        cells.emplace_back(colours, a, one);
     }
   };
   // A pack's tab in the footer: its picture -- the pack's own, else its
@@ -231,13 +231,13 @@ struct sticker_grid : nodes::Stack {
       this->setHorizontal();
       fStack.justify = nodes::justify::middle{};
       fState.apply({.width = 30.0f, .height = 30.0f, .shrink = scene::axes::kX, .minWidth = 16.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 6.0f,
-                    .hoverBackground = chosen_colour, .selectedBackground = tile_colour});
+                    .hoverBackground = g->colours_->chosen, .selectedBackground = g->colours_->tile});
       if (picture) {
         parts.picture.emplace(from_avatars{*picture});
         parts.picture->apply({.width = 24.0f, .height = 24.0f, .alignSelf = scene::align::kMiddle});
         parts.picture->keepBox();
       } else {
-        parts.mark.emplace(std::move(mark), 16.0f, text_colour);
+        parts.mark.emplace(std::move(mark), 16.0f, g->colours_->text);
         parts.mark->apply({.alignSelf = scene::align::kMiddle});
       }
     }
@@ -254,6 +254,8 @@ struct sticker_grid : nodes::Stack {
   using footer_row = tab_strip<tab>;
   using field_t = widgets::TextBox<searched>;
   using list_t = nodes::ScrollContainer<nodes::Flow<std::vector<section>>>;
+  // The colours it is made in, for what it makes later.
+  const palette* colours_ = nullptr;
   struct parts_t {
     field_t field;
     nodes::Text empty;
@@ -269,9 +271,10 @@ struct sticker_grid : nodes::Stack {
   std::vector<std::string> tab_pictures;
   [[nodiscard]] bool settling() const { return previewed_emote() != preview_of; }
 
-  explicit sticker_grid(Actions* a)
-      : parts{.field = field_t("Search stickers", {this}),
-              .empty = nodes::Text("No stickers here. A room's sticker packs, and yours, show here.", 13.0f, dim_colour)},
+  sticker_grid(const palette& colours, Actions* a)
+      : colours_(&colours),
+        parts{.field = field_t("Search stickers", {this}),
+              .empty = nodes::Text("No stickers here. A room's sticker packs, and yours, show here.", 13.0f, colours.dim)},
         actions(a) {
     auto& [field, empty, list, footer, preview] = parts;
     this->setGap(4.0f);
@@ -315,19 +318,19 @@ struct sticker_grid : nodes::Stack {
                                 }) |
                                 std::ranges::to<std::vector>();
     if (!recent.empty()) {
-      all.emplace_back(actions, "Recently used", recent);
+      all.emplace_back(*colours_, actions, "Recently used", recent);
       tabs.emplace_back(this, all.size() - 1, std::nullopt, "\u23F2");
     }
     // The favourites: whichever chat they came from -- a sticker is its
     // picture's URL, sent anywhere.
     if (!favourite_stickers().empty()) {
-      all.emplace_back(actions, "Favourites", favourite_stickers());
+      all.emplace_back(*colours_, actions, "Favourites", favourite_stickers());
       tabs.emplace_back(this, all.size() - 1, std::nullopt, "\u2605");
     }
     for (auto& [name, stickers] : packs()) {
       const std::optional<std::string> picture = stickers.front().pack_avatar ? stickers.front().pack_avatar
                                                                               : std::optional<std::string>(stickers.front().url);
-      all.emplace_back(actions, name, stickers);
+      all.emplace_back(*colours_, actions, name, stickers);
       tabs.emplace_back(this, all.size() - 1, picture);
       if (picture)
         tab_pictures.push_back(*picture);
@@ -357,7 +360,7 @@ struct sticker_grid : nodes::Stack {
                                      std::ranges::to<std::vector>();
     auto& all = this->sections();
     all.clear();
-    all.emplace_back(actions, found.empty() ? std::string("Nothing found") : std::string("Search results"), found);
+    all.emplace_back(*colours_, actions, found.empty() ? std::string("Nothing found") : std::string("Search results"), found);
     searching = true;
     parts.list.invalidateLayout();
     parts.list.scrollTo(0.0f);
@@ -390,7 +393,7 @@ struct sticker_grid : nodes::Stack {
   // The tab of the pack at the top of the list lit; the preview kept to what
   // the cells say.
   void update(double) {
-    if (follow_preview(parts.preview, preview_of))
+    if (follow_preview(parts.preview, preview_of, *colours_))
       this->invalidateLayout();
     auto& all = this->sections();
     std::size_t lit = 0;
@@ -430,12 +433,12 @@ struct emoji_panel : nodes::Stack {
     emoji_panel* panel;
     std::string text;
     struct parts_t {
-      nodes::Text label{"", 13.0f, text_colour};
+      nodes::Text label;
     } parts;
-    explicit text_chip(emoji_panel* p) : panel(p) {
+    explicit text_chip(emoji_panel* p) : panel(p), parts{.label = nodes::Text("", 13.0f, p->colours_->text)} {
       this->setHorizontal();
       fState.apply({.fillX = true, .height = 34.0f, .margin = {4.0f, 7.0f, 2.0f, 0.0f}, .padding = {0.0f, 12.0f, 0.0f, 12.0f},
-                    .cornerRadius = 17.0f, .background = tile_colour, .hoverBackground = chosen_colour});
+                    .cornerRadius = 17.0f, .background = p->colours_->tile, .hoverBackground = p->colours_->chosen});
       parts.label.setElided(true);
       parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
       this->setVisible(false);
@@ -483,10 +486,10 @@ struct emoji_panel : nodes::Stack {
                    picture_url.empty() ? previewed{glyph, std::string(), false} : previewed{picture_url, glyph, true});
     }
     cell(emoji_panel* p, std::string g, const alef::emoji* from = nullptr)
-        : panel(p), glyph(g), source(from), parts{.face = nodes::Text(std::move(g), 22.0f, text_colour)} {
+        : panel(p), glyph(g), source(from), parts{.face = nodes::Text(std::move(g), 22.0f, p->colours_->text)} {
       this->setHorizontal();
       fStack.justify = nodes::justify::middle{};
-      fState.apply({.width = kCell, .height = kCell, .cornerRadius = 6.0f, .hoverBackground = chosen_colour});
+      fState.apply({.width = kCell, .height = kCell, .cornerRadius = 6.0f, .hoverBackground = p->colours_->chosen});
       parts.face.apply({.alignSelf = scene::align::kMiddle});
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
@@ -520,7 +523,7 @@ struct emoji_panel : nodes::Stack {
   // A group: its name over its emoji (headerTop 10, headerLeft 14).
   struct section : cell_section<cell> {
     section(emoji_panel* p, std::string_view name, const std::vector<const alef::emoji*>& all)
-        : cell_section<cell>(std::string(name)) {
+        : cell_section<cell>(*p->colours_, std::string(name)) {
       auto& cells = this->each();
       cells.reserve(all.size());
       for (const alef::emoji* one : all)
@@ -528,7 +531,7 @@ struct emoji_panel : nodes::Stack {
     }
     // The chat's custom emoji, as pictures.
     section(emoji_panel* p, std::string_view name, const std::vector<emote>& custom)
-        : cell_section<cell>(std::string(name)) {
+        : cell_section<cell>(*p->colours_, std::string(name)) {
       auto& cells = this->each();
       cells.reserve(custom.size());
       for (const emote& one : custom)
@@ -536,7 +539,7 @@ struct emoji_panel : nodes::Stack {
     }
     // The recently used: emoji as they were picked, text already.
     section(emoji_panel* p, std::string_view name, const std::vector<std::string>& glyphs)
-        : cell_section<cell>(std::string(name)) {
+        : cell_section<cell>(*p->colours_, std::string(name)) {
       auto& cells = this->each();
       cells.reserve(glyphs.size());
       for (const std::string& one : glyphs)
@@ -552,11 +555,11 @@ struct emoji_panel : nodes::Stack {
     } parts;
     tab(emoji_panel* p, std::size_t g)
         : panel(p), group(g),
-          parts{.face = nodes::Text(logic::emoji_text(logic::emoji_group_face(g)), 16.0f, text_colour)} {
+          parts{.face = nodes::Text(logic::emoji_text(logic::emoji_group_face(g)), 16.0f, p->colours_->text)} {
       this->setHorizontal();
       fStack.justify = nodes::justify::middle{};
       fState.apply({.width = 28.0f, .height = 28.0f, .shrink = scene::axes::kX, .minWidth = 16.0f, .alignSelf = scene::align::kMiddle, .cornerRadius = 6.0f,
-                    .hoverBackground = chosen_colour, .selectedBackground = tile_colour});
+                    .hoverBackground = p->colours_->chosen, .selectedBackground = p->colours_->tile});
       parts.face.apply({.alignSelf = scene::align::kMiddle});
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
@@ -576,8 +579,8 @@ struct emoji_panel : nodes::Stack {
       this->setHorizontal();
       const float wide = kCell * static_cast<float>(tones.size() + 1) + 8.0f;
       fState.apply({.place = scene::anchor::kTopLeft, .x = x, .y = y, .width = wide, .height = kCell + 8.0f,
-                    .padding = {4.0f, 4.0f, 4.0f, 4.0f}, .cornerRadius = 8.0f, .background = sidebar_colour,
-                    .border = scene::Border{band_colour, 1.0f},
+                    .padding = {4.0f, 4.0f, 4.0f, 4.0f}, .cornerRadius = 8.0f, .background = p->colours_->sidebar,
+                    .border = scene::Border{p->colours_->band, 1.0f},
                     .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
       parts.each.reserve(tones.size() + 1);
       parts.each.emplace_back(p, logic::emoji_text(base));
@@ -593,6 +596,9 @@ struct emoji_panel : nodes::Stack {
   using footer_row = tab_strip<tab>;
   using field_t = widgets::TextBox<searched>;
   using list_t = nodes::ScrollContainer<nodes::Flow<std::vector<section>>>;
+  // The colours it is made in, for what it makes later: its cells, its
+  // sections, its tones.
+  const palette* colours_ = nullptr;
   struct parts_t {
     field_t field;
     text_chip text_option;
@@ -613,8 +619,8 @@ struct emoji_panel : nodes::Stack {
   std::size_t first_group = 0;
 
   // Sized by where it is shown.
-  explicit emoji_panel(Pick what)
-      : pick(std::move(what)), parts{.field = field_t("Search emoji", {this}), .text_option = text_chip(this)} {
+  emoji_panel(const palette& colours, Pick what)
+      : pick(std::move(what)), colours_(&colours), parts{.field = field_t("Search emoji", {this}), .text_option = text_chip(this)} {
     auto& [field, text_option, list, footer, tones, preview] = parts;
     this->setGap(4.0f);
     fState.apply({.padding = {7.0f, 0.0f, 4.0f, 7.0f}});
@@ -707,7 +713,7 @@ struct emoji_panel : nodes::Stack {
   // The tab of the group at the top of the list lit; the preview kept to
   // what the cells say.
   void update(double) {
-    if (follow_preview(parts.preview, preview_of))
+    if (follow_preview(parts.preview, preview_of, *colours_))
       this->invalidateLayout();
     if (tones_done) {
       tones_done = false;
@@ -759,11 +765,11 @@ struct gif_grid : nodes::Stack {
     struct parts_t {
       nodes::Image<from_moving_whole> picture;
     } parts;
-    gif_cell(Actions* a, std::string p)
+    gif_cell(const palette& colours, Actions* a, std::string p)
         : actions(a), path(p), key("gif:" + p),
           parts{.picture = nodes::Image<from_moving_whole>({"gif:" + p})} {
       fState.apply({.width = 104.0f, .height = 104.0f, .margin = {2.0f, 2.0f, 2.0f, 2.0f}, .cornerRadius = 6.0f,
-                    .background = tile_colour, .masking = true});
+                    .background = colours.tile, .masking = true});
       parts.picture.apply({.fill = true, .cornerRadius = 6.0f});
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
@@ -785,9 +791,11 @@ struct gif_grid : nodes::Stack {
         cells_t({.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, {})};
   } parts;
   Actions* actions = nullptr;
+  // The colours its cells are made in, as they change.
+  const palette* colours_ = nullptr;
 
-  explicit gif_grid(Actions* a)
-      : parts{.empty = nodes::Text("No saved GIFs yet. Save one from a GIF's menu.", 13.0f, dim_colour)}, actions(a) {
+  gif_grid(const palette& colours, Actions* a)
+      : parts{.empty = nodes::Text("No saved GIFs yet. Save one from a GIF's menu.", 13.0f, colours.dim)}, actions(a), colours_(&colours) {
     auto& [empty, list] = parts;
     fState.apply({.padding = {4.0f, 4.0f, 4.0f, 4.0f}});
     empty.setWrapped(true);
@@ -801,7 +809,7 @@ struct gif_grid : nodes::Stack {
     cells.clear();
     cells.reserve(paths.size());
     for (const std::string& one : paths)
-      cells.emplace_back(actions, one);
+      cells.emplace_back(*colours_, actions, one);
     parts.empty.setVisible(paths.empty());
     parts.list.invalidateLayout();
     parts.list.scrollTo(0.0f);
@@ -824,11 +832,11 @@ struct emoji_popup : scene::Node {
         nodes::Text label;
       } parts;
       tab(card_t* c, popup_page_t p, std::string name)
-          : card(c), page(p), parts{.label = nodes::Text(std::move(name), 13.0f, text_colour, true)} {
+          : card(c), page(p), parts{.label = nodes::Text(std::move(name), 13.0f, c->colours_->text, true)} {
         this->setHorizontal();
         fStack.justify = nodes::justify::middle{};
-        fState.apply({.width = 80.0f, .height = 28.0f, .cornerRadius = 6.0f, .hoverBackground = chosen_colour,
-                      .selectedBackground = tile_colour});
+        fState.apply({.width = 80.0f, .height = 28.0f, .cornerRadius = 6.0f, .hoverBackground = c->colours_->chosen,
+                      .selectedBackground = c->colours_->tile});
         parts.label.apply({.alignSelf = scene::align::kMiddle});
       }
       [[nodiscard]] bool acceptsInput() const { return true; }
@@ -852,6 +860,8 @@ struct emoji_popup : scene::Node {
         fState.apply({.fillX = true, .height = 36.0f, .padding = {4.0f, 8.0f, 4.0f, 8.0f}});
       }
     };
+    // The colours it is made in: its tabs read them from it.
+    const palette* colours_ = nullptr;
     struct parts_t {
       tabs_row tabs;
       panel_t panel;
@@ -859,14 +869,15 @@ struct emoji_popup : scene::Node {
       gif_grid<Actions> gifs;
     } parts;
     Actions* actions = nullptr;
-    explicit card_t(Actions* a)
-        : parts{.tabs = tabs_row(this),
-                .panel = panel_t(insert_emoji_into<Actions>{a}),
-                .stickers = sticker_grid<Actions>(a),
-                .gifs = gif_grid<Actions>(a)},
+    card_t(const palette& colours, Actions* a)
+        : colours_(&colours),
+          parts{.tabs = tabs_row(this),
+                .panel = panel_t(colours, insert_emoji_into<Actions>{a}),
+                .stickers = sticker_grid<Actions>(colours, a),
+                .gifs = gif_grid<Actions>(colours, a)},
           actions(a) {
-      fState.apply({.width = 345.0f, .height = 360.0f, .cornerRadius = 8.0f, .background = sidebar_colour,
-                    .border = scene::Border{band_colour, 1.0f},
+      fState.apply({.width = 345.0f, .height = 360.0f, .cornerRadius = 8.0f, .background = colours.sidebar,
+                    .border = scene::Border{colours.band, 1.0f},
                     .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
       parts.panel.apply({.fillX = true, .grow = scene::axes::kY});
       parts.stickers.apply({.fillX = true, .grow = scene::axes::kY});
@@ -949,8 +960,8 @@ struct emoji_popup : scene::Node {
   float placed_x = -1.0f, placed_y = -1.0f, placed_h = -1.0f;
   float placed_w = 0.0f;
 
-  emoji_popup(Actions* a, float at_right, float at_bottom)
-      : parts{.card = card_t(a)}, actions(a), right(at_right), bottom(at_bottom) {
+  emoji_popup(const ui_needs<Actions>& n, float at_right, float at_bottom)
+      : parts{.card = card_t(*n.colours, n.actions)}, actions(n.actions), right(at_right), bottom(at_bottom) {
     fState.apply({.fill = true});
   }
   void layoutChildren() {
@@ -1016,9 +1027,9 @@ struct seen_row : nodes::Stack {
         nodes::Text name;
         nodes::Text when;
       } parts;
-      explicit lines_t(const seen_reader& one)
-          : parts{.name = nodes::Text(one.name, 13.0f, text_colour),
-                  .when = nodes::Text(one.at ? clock_of(*one.at) : std::string("seen"), 12.0f, dim_colour)} {
+      lines_t(const palette& colours, const seen_reader& one)
+          : parts{.name = nodes::Text(one.name, 13.0f, colours.text),
+                  .when = nodes::Text(one.at ? clock_of(*one.at) : std::string("seen"), 12.0f, colours.dim)} {
         fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
         parts.name.setElided(true);
         parts.when.setElided(true);
@@ -1028,13 +1039,13 @@ struct seen_row : nodes::Stack {
       avatar_mark face;
       lines_t lines;
     } parts;
-    reader_row(Actions* a, const seen_reader& one)
-        : actions(a), id(one.id), parts{.face = avatar_mark(one.id, one.name, 30.0f), .lines = lines_t(one)} {
+    reader_row(const palette& colours, Actions* a, const seen_reader& one)
+        : actions(a), id(one.id), parts{.face = avatar_mark(one.id, one.name, 30.0f), .lines = lines_t(colours, one)} {
       this->setHorizontal();
       this->setGap(14.0f);  // the name at 13 + 30 + 14 = 57
       // 6 over and under: the name at 13 and the time at 12 are 31.25 high,
       // and 7 left them 30 -- 1.25 out of the row.
-      fState.apply({.fillX = true, .height = 44.0f, .padding = {6.0f, 17.0f, 6.0f, 13.0f}, .hoverBackground = chosen_colour});
+      fState.apply({.fillX = true, .height = 44.0f, .padding = {6.0f, 17.0f, 6.0f, 13.0f}, .hoverBackground = colours.chosen});
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
@@ -1055,20 +1066,22 @@ struct seen_row : nodes::Stack {
     struct parts_t {
       nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
     } parts;
-    submenu_t(Actions* a, const std::vector<seen_reader>& readers) {
+    submenu_t(const palette& colours, Actions* a, const std::vector<seen_reader>& readers) {
       auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
       rows.reserve(readers.size());
       for (const seen_reader& one : readers)
-        rows.emplace_back(a, one);
+        rows.emplace_back(colours, a, one);
       std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
       parts.list.apply({.fill = true});
       const float tall = height_for(readers.size());
       fState.apply({.width = kWidth, .height = tall, .padding = {6.0f, 0.0f, 4.0f, 0.0f},
-                    .cornerRadius = 10.0f, .background = popup_colour(), .border = scene::Border{band_colour, 1.0f},
+                    .cornerRadius = 10.0f, .background = colours.popup(), .border = scene::Border{colours.band, 1.0f},
                     .masking = true});
     }
   };
   Actions* actions = nullptr;
+  // The colours it is made in, for the readers' list it opens.
+  const palette* colours_ = nullptr;
   std::vector<seen_reader> readers;
   // The window, as the menu fills it: the submenu kept inside it.
   const skia::SkRect* window = nullptr;
@@ -1083,13 +1096,13 @@ struct seen_row : nodes::Stack {
     nodes::Text label;
     std::vector<avatar_mark> faces;
   } parts;
-  seen_row(Actions* a, std::vector<seen_reader> who)
-      : actions(a), readers(std::move(who)),
-        parts{.mark = icon_mark(icon::check{}),
+  seen_row(const palette& colours, Actions* a, std::vector<seen_reader> who)
+      : actions(a), colours_(&colours), readers(std::move(who)),
+        parts{.mark = icon_mark(colours, icon::check{}),
               .label = nodes::Text(readers.empty()       ? std::string("Nobody Viewed")
                                    : readers.size() == 1 ? readers.front().name
                                                          : std::to_string(readers.size()) + " Seen",
-                                   13.0f, text_colour)} {
+                                   13.0f, colours.text)} {
     auto& [mark, label, faces] = parts;
     this->setHorizontal();
     const std::size_t shown = std::min(kMostFaces, readers.size());
@@ -1098,7 +1111,7 @@ struct seen_row : nodes::Stack {
     fState.apply({.fillX = true,
                   .height = kHeight,
                   .padding = {9.0f, kRight + (shown ? faces_width + 8.0f : 0.0f), 7.0f, 44.0f},
-                  .hoverBackground = chosen_colour});
+                  .hoverBackground = colours.chosen});
     // The ticks 15 in, in the middle of the row's height: out of the flow,
     // back over the padding.
     mark.apply({.place = scene::anchor::kCentreLeft, .x = 15.0f - 44.0f});
@@ -1110,7 +1123,7 @@ struct seen_row : nodes::Stack {
       faces.emplace_back(readers[i].id, readers[i].name, kFace);
       faces.back().apply({.place = scene::anchor::kCentreRight,
                           .x = faces_width + 8.0f - static_cast<float>(i) * (kFace - kOverlap),
-                          .border = scene::Border{sidebar_colour, 2.0f}});
+                          .border = scene::Border{colours.sidebar, 2.0f}});
     }
   }
   // The submenu while the row or the submenu is hovered, as tdesktop's opens
@@ -1124,7 +1137,7 @@ struct seen_row : nodes::Stack {
     if (open == submenu->has_value())
       return;
     if (open) {
-      submenu->emplace(actions, readers);
+      submenu->emplace(*colours_, actions, readers);
       // Beside the menu, over its edge -- left of it where the window has
       // no room on the right. Its top at the row's, or higher where it would
       // pass the window's bottom -- as Telegram's, kept on the screen -- but
@@ -1155,13 +1168,13 @@ struct context_menu : scene::Node {
       struct parts_t {
         nodes::Text face;
       } parts;
-      quick_reaction(Actions* a, std::string k)
-          : actions(a), key(k), parts{.face = nodes::Text(std::move(k), 22.0f, text_colour)} {
+      quick_reaction(const palette& colours, Actions* a, std::string k)
+          : actions(a), key(k), parts{.face = nodes::Text(std::move(k), 22.0f, colours.text)} {
         auto& face = parts.face;
         this->setHorizontal();
         fStack.justify = nodes::justify::middle{};
         // tdesktop's reactionCornerSize (36 by 32) and reactionCornerImage (22).
-        fState.apply({.width = 36.0f, .height = 32.0f, .cornerRadius = 16.0f, .hoverBackground = chosen_colour});
+        fState.apply({.width = 36.0f, .height = 32.0f, .cornerRadius = 16.0f, .hoverBackground = colours.chosen});
         face.apply({.alignSelf = scene::align::kMiddle});
       }
       [[nodiscard]] bool acceptsInput() const { return true; }
@@ -1181,18 +1194,20 @@ struct context_menu : scene::Node {
         std::vector<quick_reaction> each;
         icon_button<expand_emoji> more;
       } parts;
-      quick_row(Actions* a, card* of) : parts{.more = icon_button<expand_emoji>(icon::down{}, {of})} {
+      quick_row(const palette& colours, Actions* a, card* of) : parts{.more = icon_button<expand_emoji>(colours, icon::down{}, {of})} {
         auto& [each, more] = parts;
         // As wide as what is in it: the menu is sized by it, not it by the
         // menu -- a menu of a set width had the arrow run out past its edge.
         this->setHorizontal();
         fState.apply({.autoSize = scene::axes::kBoth, .padding = {2.0f, 6.0f, 4.0f, 6.0f}});
         for (const char* key : {"👍", "❤️", "😂", "😮", "😢", "🙏"})
-          each.emplace_back(a, key);
+          each.emplace_back(colours, a, key);
         more.apply({.width = 28.0f, .height = 32.0f, .cornerRadius = 14.0f});
       }
     };
     Actions* actions_of = nullptr;
+    // The colours it is made in, for the emoji it unrolls.
+    const palette* colours_ = nullptr;
     using reply_row = row_item<ask<Actions, &Actions::menu_reply>>;
     using thread_row = row_item<ask<Actions, &Actions::menu_thread>>;
     using quote_reply_row = row_item<ask<Actions, &Actions::menu_quote_reply>>;
@@ -1216,7 +1231,7 @@ struct context_menu : scene::Node {
     // many, and their names under it -- at the foot.
     struct parts_t {
       quick_row quick;
-      nodes::Box<> quick_band{band_colour};
+      nodes::Box<> quick_band;
       reply_row reply;
       // Reply in thread, as Element's menu has it: a Matrix room's.
       thread_row thread_reply;
@@ -1237,7 +1252,7 @@ struct context_menu : scene::Node {
       forward_row forward;
       source_row source;
       delete_row remove;
-      nodes::Box<> seen_band{band_colour};
+      nodes::Box<> seen_band;
       seen_row<Actions> seen;
       // Every emoji, once asked for: over the items, out of their flow, and
       // after them, so drawn on top of them and pressed first.
@@ -1256,12 +1271,12 @@ struct context_menu : scene::Node {
       const float under = box.fBottom - quick_band.bounds().fBottom;
       rolled = std::max(under, kEmojiLeast);
       fState.apply({.minHeight = this->bounds().height() + (rolled - under)});
-      emoji.emplace(react_with<Actions>{actions_of});
+      emoji.emplace(*colours_, react_with<Actions>{actions_of});
       emoji->apply({.place = scene::anchor::kTopLeft,
                      .y = quick_band.bounds().fBottom - box.fTop,
                      .fillX = true,
                      .height = 0.0f,
-                     .background = sidebar_colour,
+                     .background = colours_->sidebar,
                      .masking = true});
       unroll.jump(0.0f);
       unroll.setTarget(rolled);
@@ -1305,29 +1320,32 @@ struct context_menu : scene::Node {
       }
     }
     // What does not apply to the message left out.
-    card(Actions* a, const menu_facts& facts)
+    card(const palette& colours, Actions* a, const menu_facts& facts)
         : actions_of(a),
-          parts{.quick = quick_row(a, this),
-                .reply = reply_row("Reply", {a}, icon::back{}),
-                .thread_reply = thread_row("Reply in thread", {a}, icon::threads{}),
-                .quote_reply = quote_reply_row("Quote & Reply", {a}, icon::back{}),
-                .edit = edit_row("Edit", {a}, icon::sliders{}),
-                .pin = pin_row(facts.pinned ? "Unpin" : "Pin", {a}, icon::check{}),
-                .copy = copy_row(facts.selection ? "Copy Selected Text" : "Copy Text", {a}, icon::clip{}),
-                .copy_link = link_row("Copy Message Link", {a}, icon::info{}),
-                .copy_url = url_row("Copy Link", {a}, icon::clip{}),
-                .fave = fave_row(facts.sticker && is_favourite(facts.sticker->url) ? "Remove from Favourites" : "Add to Favourites",
+          colours_(&colours),
+          parts{.quick = quick_row(colours, a, this),
+                .quick_band = nodes::Box<>(colours.band),
+                .reply = reply_row(colours, "Reply", {a}, icon::back{}),
+                .thread_reply = thread_row(colours, "Reply in thread", {a}, icon::threads{}),
+                .quote_reply = quote_reply_row(colours, "Quote & Reply", {a}, icon::back{}),
+                .edit = edit_row(colours, "Edit", {a}, icon::sliders{}),
+                .pin = pin_row(colours, facts.pinned ? "Unpin" : "Pin", {a}, icon::check{}),
+                .copy = copy_row(colours, facts.selection ? "Copy Selected Text" : "Copy Text", {a}, icon::clip{}),
+                .copy_link = link_row(colours, "Copy Message Link", {a}, icon::info{}),
+                .copy_url = url_row(colours, "Copy Link", {a}, icon::clip{}),
+                .fave = fave_row(colours, facts.sticker && is_favourite(facts.sticker->url) ? "Remove from Favourites" : "Add to Favourites",
                                  {a}, icon::check{}),
-                .copy_image = copy_image_row("Copy Image", {a}, icon::clip{}),
-                .save = save_row("Save As…", {a}, icon::send{}),
-                .save_gif = gif_row("Save GIF", {a}, icon::check{}),
-                .reactions = reactions_row(facts.reaction_count == 1 ? std::string("1 reaction")
+                .copy_image = copy_image_row(colours, "Copy Image", {a}, icon::clip{}),
+                .save = save_row(colours, "Save As…", {a}, icon::send{}),
+                .save_gif = gif_row(colours, "Save GIF", {a}, icon::check{}),
+                .reactions = reactions_row(colours, facts.reaction_count == 1 ? std::string("1 reaction")
                                                                      : std::format("{} reactions", facts.reaction_count),
                                            {a}, icon::people{}),
-                .forward = forward_row("Forward", {a}, icon::send{}),
-                .source = source_row("View Source", {a}, icon::info{}),
-                .remove = delete_row("Delete", {a}, icon::close{}),
-                .seen = seen_row<Actions>(a, facts.seen)} {
+                .forward = forward_row(colours, "Forward", {a}, icon::send{}),
+                .source = source_row(colours, "View Source", {a}, icon::info{}),
+                .remove = delete_row(colours, "Delete", {a}, icon::close{}),
+                .seen_band = nodes::Box<>(colours.band),
+                .seen = seen_row<Actions>(colours, a, facts.seen)} {
       fState.setFloats(true);  // over the chat: frosted live, where asked
       auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, copy_image, save, save_gif, reactions, forward, source,
              remove, seen_band, seen, emoji] = parts;
@@ -1382,7 +1400,7 @@ struct context_menu : scene::Node {
       seen_band.apply({.fillX = true, .height = 1.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f}});
       // As wide as its widest -- the quick reactions -- and no narrower than a
       // menu reads well at; the items fill that width.
-      fState.apply({.autoSize = scene::axes::kBoth, .minWidth = 220.0f, .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .cornerRadius = 10.0f, .background = popup_colour(), .border = scene::Border{band_colour, 1.0f},
+      fState.apply({.autoSize = scene::axes::kBoth, .minWidth = 220.0f, .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .cornerRadius = 10.0f, .background = colours.popup(), .border = scene::Border{colours.band, 1.0f},
                     .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
     }
   };
@@ -1396,8 +1414,8 @@ struct context_menu : scene::Node {
 
   // Where it was asked for: the pointer.
   float at_x = 0.0f, at_y = 0.0f;
-  explicit context_menu(Actions* a, const menu_facts& facts)
-      : parts{.menu = card(a, facts)}, actions(a), at_x(facts.x), at_y(facts.y) {
+  context_menu(const ui_needs<Actions>& n, const menu_facts& facts)
+      : parts{.menu = card(*n.colours, n.actions, facts)}, actions(n.actions), at_x(facts.x), at_y(facts.y) {
     fState.apply({.fill = true});
     parts.menu.parts.seen.window = &fState.fBounds;
     parts.menu.parts.seen.submenu = &parts.seen_list;

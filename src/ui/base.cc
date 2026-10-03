@@ -260,22 +260,9 @@ template <class... Ts>
 struct variant_of_types<type_list<Ts...>> {
   using type = splice::variant<Ts...>;
 };
-// What a node needs, handed down from what its parent was given: each field
-// of `To` taken from the field of `from` of its type. Overload resolution
-// matches them, one overload for each of the parent's fields -- a type the
-// parent has not, or has twice, does not compile.
-template <class To, class From>
-[[nodiscard]] constexpr To given(const From& from) {
-  const auto& [... had] = from;
-  const auto pick = splice::overloaded{[&had](mux::type_tag<std::remove_cvref_t<decltype(had)>>) { return had; }...};
-  To out{};
-  auto& [... wanted] = out;
-  ((wanted = pick(mux::type_tag<std::remove_cvref_t<decltype(wanted)>>{})), ...);
-  return out;
-}
 // What the window's nodes are handed down, from the root -- the program's
 // own objects, each a pointer of a type of its own: what a node reads, it is
-// given by its parent, and takes what it needs of it with given<>.
+// given by its parent, and takes what it needs of it with splice::remapped<>.
 template <class Actions>
 struct ui_needs {
   Actions* actions = nullptr;

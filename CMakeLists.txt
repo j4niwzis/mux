@@ -118,7 +118,7 @@ cme_find_package(alef COMPONENTS precis idna grapheme line bidi emoji REQUIRED)
 set(SPLICE_ERASE ${MUX_ERASE_HANDLERS} CACHE BOOL "splice::variant through tables outside a release build, as mux's handlers")
 cme_declare_port(NAME splice PROVIDES splice
   GITHUB_REPOSITORY j4niwzis/splice
-  GIT_TAG fa71da23eafeff53087b9e0facb2a525e2b4d542
+  GIT_TAG 6345152905317e80ec870389cd64416b677190cd
   LICENSE GPL-3.0-only
   TARGETS splice)
 cme_options(splice "SPLICE_TESTS OFF")

@@ -287,7 +287,7 @@ struct account_privacy : nodes::Stack {
                   std::optional<std::int64_t> jump_most = std::nullopt, std::optional<bool> previews_on = std::nullopt)
       : parts{.title = section_title(colours, "PRIVACY"),
               .receipts = receipts_row(colours, "Send read receipts", {a}),
-              .typing = typing_choice<Actions>(a, choice_level::account{}, typing_on),
+              .typing = typing_choice<Actions>(a, colours, choice_level::account{}, typing_on),
               .notify = notify_row(colours, "Desktop notifications from it", {a}),
               .notify_sound = notify_sound_row(colours, "Their sound", {a}),
               .note = note_text(colours, "Off, the people you talk to through this account are not told when you have read "
@@ -344,7 +344,7 @@ struct account_chats : nodes::Stack {
                 std::optional<bool> home_direct, const config::accent_t& colour, bool strip_on, const config::theme_t& theme)
       : parts{.colours = accent_circles<set_colour>({a}, theme, false),
               .strip = switch_row<ask<Actions, &Actions::flip_account_strip>>("A strip on its chats in other lists", {a}),
-              .chats = chat_choices<Actions>(a, choice_level::account{}, chats, 8.0f),
+              .chats = chat_choices<Actions>(a, colours, choice_level::account{}, chats, 8.0f),
               .looks = look_choices<Actions>(a, colours, looks, choice_level::account{}),
               .home = choice_menu<pick_home>("Home",
                                              {"As above", "Every chat", "Without chats spaces hold",

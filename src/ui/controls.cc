@@ -538,11 +538,11 @@ struct event_kind_list : nodes::Stack {
       nodes::Text label;
       segment<choose> show, hide;
     } parts;
-    row(Actions* a, choice_level_t at, room_event_t which, std::string_view text)
+    row(Actions* a, const palette& colours, choice_level_t at, room_event_t which, std::string_view text)
         : actions(a), level(at), kind(which),
-          parts{.label = nodes::Text(std::string(text), 14.0f, text_colour),
-                .show = segment<choose>("Show", {this, true}),
-                .hide = segment<choose>("Hide", {this, false})} {
+          parts{.label = nodes::Text(std::string(text), 14.0f, colours.text),
+                .show = segment<choose>(colours, "Show", {this, true}),
+                .hide = segment<choose>(colours, "Hide", {this, false})} {
       lay_out_setting_row(*this, parts.label);
       for (segment<choose>* each : {&parts.show, &parts.hide})
         each->apply({.width = 70.0f, .alignSelf = scene::align::kMiddle});
@@ -612,7 +612,7 @@ struct event_kind_list : nodes::Stack {
     std::optional<choice_menu<pick_way>> way;
     std::vector<row> rows;
   } parts;
-  event_kind_list(Actions* a, choice_level_t level, std::optional<bool> all,
+  event_kind_list(Actions* a, const palette& colours, choice_level_t level, std::optional<bool> all,
                   const std::optional<config::room_event_kinds>& kinds) {
     this->setGap(4.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -628,7 +628,7 @@ struct event_kind_list : nodes::Stack {
                                                          return one;
                                                        }();
     for (const room_event_t& kind : all_room_events) {
-      parts.rows.emplace_back(a, level, kind, splice::visit([](auto one) { return label_of(one); }, kind));
+      parts.rows.emplace_back(a, colours, level, kind, splice::visit([](auto one) { return label_of(one); }, kind));
       parts.rows.back().show_value(shown.shows(kind));
       parts.rows.back().set_live(way == kCustom);
     }
@@ -637,7 +637,7 @@ struct event_kind_list : nodes::Stack {
       names.emplace_back("As above");
     for (const char* name : {"All events", "Messages only", "Custom"})
       names.emplace_back(name);
-    parts.way.emplace("Room events", names, way - (has_level_above(level) ? 0 : 1),
+    parts.way.emplace(colours, "Room events", names, way - (has_level_above(level) ? 0 : 1),
                       pick_way{a, level, parts.rows.data(), parts.rows.size()});
     parts.way->apply({.margin = {0.0f, 20.0f, 4.0f, 20.0f}});
   }
@@ -666,18 +666,17 @@ struct jump_search_choice : nodes::Stack {
     [[nodiscard]] static std::string label_of(std::int64_t most) {
       return most == 0 ? std::string("No limit") : std::format("{}", most);
     }
-    row(Actions* a, choice_level_t at, std::optional<std::int64_t> now)
+    row(Actions* a, const palette& colours, choice_level_t at, std::optional<std::int64_t> now)
         : actions(a), level(at),
-          parts{.label = nodes::Text("Look back for a message", 14.0f, text_colour),
-                .fallback = segment<choose>("Default", {this, std::nullopt})} {
-      const bool everywhere =
-          !has_level_above(level);
+          parts{.label = nodes::Text("Look back for a message", 14.0f, colours.text),
+                .fallback = segment<choose>(colours, "Default", {this, std::nullopt})} {
+      const bool everywhere = !has_level_above(level);
       lay_out_setting_row(*this, parts.label);
       parts.fallback.apply({.width = 64.0f, .alignSelf = scene::align::kMiddle});
       parts.fallback.setVisible(!everywhere);
       parts.choices.reserve(kChoices.size());
       for (const std::int64_t most : kChoices) {
-        parts.choices.emplace_back(label_of(most), choose{this, most});
+        parts.choices.emplace_back(colours, label_of(most), choose{this, most});
         parts.choices.back().apply({.width = 64.0f, .alignSelf = scene::align::kMiddle});
       }
       this->show_choice(everywhere ? std::optional<std::int64_t>(now.value_or(5000)) : now);
@@ -697,10 +696,10 @@ struct jump_search_choice : nodes::Stack {
   struct parts_t {
     std::vector<row> rows;
   } parts;
-  jump_search_choice(Actions* a, choice_level_t at, std::optional<std::int64_t> now) {
+  jump_search_choice(Actions* a, const palette& colours, choice_level_t at, std::optional<std::int64_t> now) {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     parts.rows.reserve(1);
-    parts.rows.emplace_back(a, at, now);
+    parts.rows.emplace_back(a, colours, at, now);
   }
 };
 
@@ -724,14 +723,13 @@ struct show_hide_choice : nodes::Stack {
       nodes::Text label;
       segment<choose> fallback, show, hide;
     } parts;
-    row(Actions* a, choice_level_t at, std::optional<bool> now)
+    row(Actions* a, const palette& colours, choice_level_t at, std::optional<bool> now)
         : actions(a), level(at),
-          parts{.label = nodes::Text(std::string(Setting::label), 14.0f, text_colour),
-                .fallback = segment<choose>("Default", {this, std::nullopt}),
-                .show = segment<choose>(std::string(Setting::yes), {this, true}),
-                .hide = segment<choose>(std::string(Setting::no), {this, false})} {
-      const bool everywhere =
-          !has_level_above(level);
+          parts{.label = nodes::Text(std::string(Setting::label), 14.0f, colours.text),
+                .fallback = segment<choose>(colours, "Default", {this, std::nullopt}),
+                .show = segment<choose>(colours, std::string(Setting::yes), {this, true}),
+                .hide = segment<choose>(colours, std::string(Setting::no), {this, false})} {
+      const bool everywhere = !has_level_above(level);
       lay_out_setting_row(*this, parts.label);
       for (segment<choose>* each : {&parts.fallback, &parts.show, &parts.hide})
         each->apply({.width = 70.0f, .alignSelf = scene::align::kMiddle});
@@ -753,10 +751,10 @@ struct show_hide_choice : nodes::Stack {
   struct parts_t {
     std::vector<row> rows;
   } parts;
-  show_hide_choice(Actions* a, choice_level_t at, std::optional<bool> now) {
+  show_hide_choice(Actions* a, const palette& colours, choice_level_t at, std::optional<bool> now) {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     parts.rows.reserve(1);
-    parts.rows.emplace_back(a, at, now);
+    parts.rows.emplace_back(a, colours, at, now);
   }
 };
 
@@ -834,12 +832,12 @@ struct chat_choices : nodes::Stack {
     jump_search_choice<Actions> jump_search;
   } parts;
   // Spaced as the page it is in spaces its rows.
-  chat_choices(Actions* a, choice_level_t level, const chat_choice_values& now, float gap)
-      : parts{.events = event_kind_list<Actions>(a, level, now.events_all, now.event_kinds),
-              .receipts = receipts_choice<Actions>(a, level, now.receipts),
-              .previews = previews_choice<Actions>(a, level, now.previews),
-              .previews_direct = previews_direct_choice<Actions>(a, level, now.previews_direct),
-              .jump_search = jump_search_choice<Actions>(a, level, now.jump_search)} {
+  chat_choices(Actions* a, const palette& colours, choice_level_t level, const chat_choice_values& now, float gap)
+      : parts{.events = event_kind_list<Actions>(a, colours, level, now.events_all, now.event_kinds),
+              .receipts = receipts_choice<Actions>(a, colours, level, now.receipts),
+              .previews = previews_choice<Actions>(a, colours, level, now.previews),
+              .previews_direct = previews_direct_choice<Actions>(a, colours, level, now.previews_direct),
+              .jump_search = jump_search_choice<Actions>(a, colours, level, now.jump_search)} {
     this->setGap(gap);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
   }

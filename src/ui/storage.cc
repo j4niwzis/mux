@@ -104,7 +104,7 @@ struct storage_page : nodes::Stack {
                 .show_deleted = keep_row(colours, "Show deleted messages", {a}),
                 .deleted_on_disk = stepper(colours, a, "On disk", config::limit::deleted_on_disk{}),
                 .events_title = section_title(colours, "ROOM EVENTS"),
-                .chats = chat_choices<Actions>(a, choice_level::everywhere{},
+                .chats = chat_choices<Actions>(a, colours, choice_level::everywhere{},
                                                {.events_all = history.show_room_events,
                                                 .event_kinds = history.room_event_kinds,
                                                 .receipts = history.show_receipts,
@@ -112,7 +112,7 @@ struct storage_page : nodes::Stack {
                                                 .previews_direct = history.previews_direct.value_or(false),
                                                 .jump_search = history.jump_search},
                                                0.0f),
-                .typing = typing_choice<Actions>(a, choice_level::everywhere{}, history.send_typing.value_or(true)),
+                .typing = typing_choice<Actions>(a, colours, choice_level::everywhere{}, history.send_typing.value_or(true)),
                 .history_note = note_text(colours, "Deleted messages are kept on disk, apart from the rest and up to their own size, the "
                                "oldest going first past it. Shown, one stays where it was, with all it said and its "
                                "time, marked removed.")} {

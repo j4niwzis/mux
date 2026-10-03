@@ -383,7 +383,7 @@ struct room_settings : nodes::Stack {
     general_page(Actions* a, room_settings* box, const room_settings_facts& facts)
         : parts{.heading = tab_heading(*box->colours_, "General"),
                 .events_about = explained(*box->colours_, "Room events shown in this room, for you: Default is as your account's."),
-                .chats = chat_choices<Actions>(a, choice_level::chat{},
+                .chats = chat_choices<Actions>(a, *box->colours_, choice_level::chat{},
                                                {.events_all = facts.events_all,
                                                 .event_kinds = facts.event_kinds,
                                                 .receipts = facts.receipts,
@@ -391,7 +391,7 @@ struct room_settings : nodes::Stack {
                                                 .previews_direct = facts.previews_direct,
                                                 .jump_search = facts.jump_search},
                                                6.0f),
-                .typing = typing_choice<Actions>(a, choice_level::chat{}, facts.typing),
+                .typing = typing_choice<Actions>(a, *box->colours_, choice_level::chat{}, facts.typing),
                 .forum_heading = part_heading(*box->colours_, "Shown as"),
                 .forum = toggle_line<flip_forum_act>(*box->colours_, "One chat, its rooms as topics", {a, facts.id, !facts.holds_spaces},
                                                      facts.forum, !facts.holds_spaces),

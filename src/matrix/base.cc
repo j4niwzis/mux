@@ -25,6 +25,18 @@ import mux.net;
 
 export namespace mux::matrix {
 
+// Matrix's room rules and levels, as its protocol's state module has them
+// (mux.proto.matrix.state): named here as before.
+using proto::matrix::history_rule_t;
+using proto::matrix::join_rule_t;
+using proto::matrix::kCreatorPower;
+using proto::matrix::power_need_t;
+using proto::matrix::power_needs;
+using proto::matrix::sends_state;
+namespace join_rule = proto::matrix::join_rule;
+namespace history_rule = proto::matrix::history_rule;
+namespace power_need = proto::matrix::power_need;
+
 struct settings {
   std::string user_id;  // @user:example.org
   std::string password;

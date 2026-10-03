@@ -515,8 +515,8 @@ void app::manage_chat(const mux::conversation_id& id) {
   if (!chat)
     return;
   const auto level_of = [&](const std::string& user) {
-    const auto found = chat->powers.find(user);
-    return found == chat->powers.end() ? chat->power_default : found->second;
+    const auto found = chat->rules.powers.find(user);
+    return found == chat->rules.powers.end() ? chat->rules.power_default : found->second;
   };
   mux::ui::room_settings_facts facts{.id = chat->id.id,
                                      .name = chat->name,
@@ -524,9 +524,7 @@ void app::manage_chat(const mux::conversation_id& id) {
                                      .alias = chat->alias,
                                      .other_aliases = chat->other_aliases,
                                      .encrypted = chat->encrypted,
-                                     .join_rule = chat->join_rule,
-                                     .history = chat->history,
-                                     .version = chat->version,
+                                     .rules = chat->rules,
                                      .notify_mode = this->notify_mode_of(chat->id),
                                      .events_all = room_events.contains(chat->id)
                                                        ? std::optional<bool>(room_events.at(chat->id))
@@ -549,7 +547,6 @@ void app::manage_chat(const mux::conversation_id& id) {
                                                         ? std::optional<mux::config::room_event_kinds>(room_event_kinds.at(chat->id))
                                                         : std::nullopt,
                                      .mine = level_of(chat->id.account.address),
-                                     .needs = chat->needs,
                                      .space = chat->space,
                                      .holds_spaces = std::ranges::any_of(chat->children, [&](const std::string& child) {
                                        const mux::conversation* in = model->find(mux::conversation_id{chat->id.account, child});

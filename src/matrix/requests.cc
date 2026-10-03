@@ -859,7 +859,7 @@ void account<Sink>::preview_room(std::string room, std::vector<std::string> via)
                                   .topic = got->topic.value_or(""),
                                   .avatar = got->avatar_url,
                                   .members = got->num_joined_members,
-                                  .knock = splice::visit(splice::overloaded{[](mux::join_rule::knock) { return true; },
+                                  .knock = splice::visit(splice::overloaded{[](mux::proto::matrix::join_rule::knock) { return true; },
                                                                             [](const auto&) { return false; }},
                                                          join_rule_of(got->join_rule))}});
   });

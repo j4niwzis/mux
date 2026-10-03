@@ -62,19 +62,19 @@ inline std::string local_part(const state&, std::string_view address) {
 // What the account may do in a room, as its power levels allow: write
 // in it, let in those who knock; and to someone in it, only above them.
 [[nodiscard]] inline std::int64_t level_of(const conversation& in, std::string_view who) {
-  const auto level = in.powers.find(std::string(who));
-  return level == in.powers.end() ? in.power_default : level->second;
+  const auto level = in.rules.powers.find(std::string(who));
+  return level == in.rules.powers.end() ? in.rules.power_default : level->second;
 }
 inline part::chat_rights chat_rights(const state&, const conversation& in) {
   const std::int64_t mine = level_of(in, in.id.account.address);
-  const auto asked = in.needs.events.find("m.room.message");
-  const std::int64_t needs = asked != in.needs.events.end() ? asked->second : in.needs.events_default;
-  return {mine >= needs, mine >= in.needs.invite};
+  const auto asked = in.rules.needs.events.find("m.room.message");
+  const std::int64_t needs = asked != in.rules.needs.events.end() ? asked->second : in.rules.needs.events_default;
+  return {mine >= needs, mine >= in.rules.needs.invite};
 }
 inline part::person_rights person_rights(const state&, const conversation& in, std::string_view who) {
   const std::int64_t mine = level_of(in, in.id.account.address), theirs = level_of(in, who);
   const bool above = who != in.id.account.address && mine > theirs;
-  return {above && mine >= in.needs.of(power_need::kick{}), above && mine >= in.needs.of(power_need::ban{})};
+  return {above && mine >= in.rules.needs.of(power_need::kick{}), above && mine >= in.rules.needs.of(power_need::ban{})};
 }
 // What is known of someone's identity: on their card, and beside them in an
 // encrypted room's members.
@@ -148,11 +148,11 @@ constexpr bool can_pin(const state&, std::string_view event) { return event.star
 // As the room's power levels allow it: one's own where one may send a
 // redaction; another's where one may also redact.
 inline bool may_delete(const state&, const conversation& chat, bool outgoing) {
-  const auto mine = chat.powers.find(chat.id.account.address);
-  const std::int64_t level = mine != chat.powers.end() ? mine->second : chat.power_default;
-  const auto redaction = chat.needs.events.find("m.room.redaction");
-  const std::int64_t send = redaction != chat.needs.events.end() ? redaction->second : chat.needs.events_default;
-  return level >= send && (outgoing || level >= chat.needs.redact);
+  const auto mine = chat.rules.powers.find(chat.id.account.address);
+  const std::int64_t level = mine != chat.rules.powers.end() ? mine->second : chat.rules.power_default;
+  const auto redaction = chat.rules.needs.events.find("m.room.redaction");
+  const std::int64_t send = redaction != chat.rules.needs.events.end() ? redaction->second : chat.rules.needs.events_default;
+  return level >= send && (outgoing || level >= chat.rules.needs.redact);
 }
 
 }  // namespace mux::proto::matrix

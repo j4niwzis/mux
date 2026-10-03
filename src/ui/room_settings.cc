@@ -39,9 +39,8 @@ struct room_settings_facts {
   std::optional<std::string> alias;
   std::vector<std::string> other_aliases;
   bool encrypted = false;
-  join_rule_t join_rule = join_rule::invite{};
-  history_rule_t history = history_rule::shared{};
-  std::string version;
+  // A Matrix room's rules and levels, for its pages.
+  proto::matrix::room_rules rules;
   config::notify_mode_t notify_mode = config::notify_mode::by_default{};
   // Which of its room events it shows, as chosen for it: none chosen is as
   // its account's.
@@ -57,7 +56,6 @@ struct room_settings_facts {
   std::optional<config::room_event_kinds> event_kinds;
   // The user's own level, and what each thing done asks.
   std::int64_t mine = 0;
-  power_needs needs;
   // A space: whether it holds spaces, and whether it is shown as a forum.
   bool space = false;
   bool holds_spaces = false;
@@ -72,7 +70,7 @@ struct room_settings_facts {
     std::int64_t level = 0;
   };
   std::vector<person> privileged;
-  [[nodiscard]] bool may(const power_need_t& need) const { return mine >= needs.of(need); }
+  [[nodiscard]] bool may(const proto::matrix::power_need_t& need) const { return mine >= rules.needs.of(need); }
 };
 
 // Element's names for levels: 100 Admin, 50 Moderator, the default Default.

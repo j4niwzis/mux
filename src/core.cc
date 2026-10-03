@@ -93,12 +93,7 @@ struct conversation_updated {
   std::vector<std::string> pinned;
   std::vector<emote> emotes;
   std::vector<emote> stickers;
-  join_rule_t join_rule = join_rule::invite{};
-  history_rule_t history = history_rule::shared{};
-  std::map<std::string, std::int64_t> powers;
-  std::int64_t power_default = 0;
-  power_needs needs;
-  std::string version;
+  proto::matrix::room_rules rules;
   // Upgraded away: the room it continues in (m.room.tombstone), and what
   // its tombstone said; and the room this one continues, where it does.
   std::optional<std::string> replaced_by;
@@ -568,12 +563,7 @@ class model {
     kept.pinned = one.pinned;
     kept.emotes = one.emotes;
     kept.stickers = one.stickers;
-    kept.join_rule = one.join_rule;
-    kept.history = one.history;
-    kept.powers = one.powers;
-    kept.power_default = one.power_default;
-    kept.needs = one.needs;
-    kept.version = one.version;
+    kept.rules = one.rules;
     kept.replaced_by = one.replaced_by;
     kept.replaced_why = one.replaced_why;
     kept.predecessor = one.predecessor;

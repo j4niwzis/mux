@@ -245,25 +245,25 @@ using state_type_t = splice::variant<state_type::space_child, state_type::room_e
 // words, as a room's state is written.
 [[nodiscard]] inline join_rule_t join_rule_of(std::optional<std::string_view> name) {
   static const std::unordered_map<std::string_view, join_rule_t> known = {
-      {"public", mux::join_rule::open{}}, {"invite", mux::join_rule::invite{}}, {"knock", mux::join_rule::knock{}}};
-  return named<join_rule_t, mux::join_rule::other>(known, name);
+      {"public", mux::proto::matrix::join_rule::open{}}, {"invite", mux::proto::matrix::join_rule::invite{}}, {"knock", mux::proto::matrix::join_rule::knock{}}};
+  return named<join_rule_t, mux::proto::matrix::join_rule::other>(known, name);
 }
 [[nodiscard]] inline history_rule_t history_rule_of(std::optional<std::string_view> name) {
   static const std::unordered_map<std::string_view, history_rule_t> known = {
-      {"shared", mux::history_rule::shared{}},
-      {"invited", mux::history_rule::invited{}},
-      {"joined", mux::history_rule::joined{}},
-      {"world_readable", mux::history_rule::world_readable{}}};
-  return named<history_rule_t, mux::history_rule::shared>(known, name);
+      {"shared", mux::proto::matrix::history_rule::shared{}},
+      {"invited", mux::proto::matrix::history_rule::invited{}},
+      {"joined", mux::proto::matrix::history_rule::joined{}},
+      {"world_readable", mux::proto::matrix::history_rule::world_readable{}}};
+  return named<history_rule_t, mux::proto::matrix::history_rule::shared>(known, name);
 }
-[[nodiscard]] constexpr std::string_view word_of(mux::join_rule::open) { return "public"; }
-[[nodiscard]] constexpr std::string_view word_of(mux::join_rule::invite) { return "invite"; }
-[[nodiscard]] constexpr std::string_view word_of(mux::join_rule::knock) { return "knock"; }
-[[nodiscard]] constexpr std::string_view word_of(mux::join_rule::other) { return "invite"; }
-[[nodiscard]] constexpr std::string_view word_of(mux::history_rule::shared) { return "shared"; }
-[[nodiscard]] constexpr std::string_view word_of(mux::history_rule::invited) { return "invited"; }
-[[nodiscard]] constexpr std::string_view word_of(mux::history_rule::joined) { return "joined"; }
-[[nodiscard]] constexpr std::string_view word_of(mux::history_rule::world_readable) { return "world_readable"; }
+[[nodiscard]] constexpr std::string_view word_of(mux::proto::matrix::join_rule::open) { return "public"; }
+[[nodiscard]] constexpr std::string_view word_of(mux::proto::matrix::join_rule::invite) { return "invite"; }
+[[nodiscard]] constexpr std::string_view word_of(mux::proto::matrix::join_rule::knock) { return "knock"; }
+[[nodiscard]] constexpr std::string_view word_of(mux::proto::matrix::join_rule::other) { return "invite"; }
+[[nodiscard]] constexpr std::string_view word_of(mux::proto::matrix::history_rule::shared) { return "shared"; }
+[[nodiscard]] constexpr std::string_view word_of(mux::proto::matrix::history_rule::invited) { return "invited"; }
+[[nodiscard]] constexpr std::string_view word_of(mux::proto::matrix::history_rule::joined) { return "joined"; }
+[[nodiscard]] constexpr std::string_view word_of(mux::proto::matrix::history_rule::world_readable) { return "world_readable"; }
 
 // What an image of a pack may be used as (MSC2545's "usage").
 // A server's errcode: the ones that say the session is gone, and the rest.

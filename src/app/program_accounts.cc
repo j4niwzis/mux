@@ -309,10 +309,10 @@ void app::apply(const request::open_room_packs&) {
   if (!chat || !mux::proto::offers(mux::ui::protocol_state_of(chat->id.account), mux::proto::feature::sticker_packs{}))
     return;
   packs_account = chat->id.account;
-  const auto mine = chat->powers.find(chat->id.account.address);
-  const std::int64_t level = mine != chat->powers.end() ? mine->second : chat->power_default;
-  const auto asked = chat->needs.events.find("im.ponies.room_emotes");
-  const std::int64_t needs = asked != chat->needs.events.end() ? asked->second : chat->needs.state_default;
+  const auto mine = chat->rules.powers.find(chat->id.account.address);
+  const std::int64_t level = mine != chat->rules.powers.end() ? mine->second : chat->rules.power_default;
+  const auto asked = chat->rules.needs.events.find("im.ponies.room_emotes");
+  const std::int64_t needs = asked != chat->rules.needs.events.end() ? asked->second : chat->rules.needs.state_default;
   root().open_packs(chat->id.id, level >= needs);
   if (!shared.demo())
     net->list_packs(*packs_account, chat->id.id);
@@ -557,8 +557,8 @@ void app::manage_chat(const mux::conversation_id& id) {
                                      .speaks = chat->id.account.speaks};
   // Element's privileged users: those the power levels name with a level of
   // their own, the highest first.
-  for (const auto& [user, level] : chat->powers) {
-    if (level == chat->needs.users_default)
+  for (const auto& [user, level] : chat->rules.powers) {
+    if (level == chat->rules.needs.users_default)
       continue;
     const auto member = std::ranges::find(chat->members, user, &mux::member::id);
     facts.privileged.push_back(

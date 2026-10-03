@@ -1,0 +1,529 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// mux.ui:info_new_chats -- Where a message is forwarded to; Start chat; Create a room.
+export module mux.ui:info_new_chats;
+
+import std;
+import splice;
+import skia;
+import skiff.paint;
+import skiff.scene;
+import skiff.nodes.box;
+import skiff.nodes.flow;
+import skiff.nodes.icon;
+import skiff.nodes.image;
+import skiff.nodes.scroll;
+import skiff.nodes.text;
+import skiff.widgets.pill;
+import skiff.widgets.button;
+import skiff.widgets.sliderbar;
+import skiff.widgets.textbox;
+import skiff.widgets.textarea;
+import mux.core;
+import mux.config;
+import mux.logic.links;
+import mux.protocols;
+import :base;
+import :icons;
+import :avatars;
+import :controls;
+import :themes;
+import :names;
+import :forms;
+import :composer;
+import :message;
+import :html;
+import :timeline;  // a message's menu, for the reactions list's bubbles
+import :info_common;
+import :info_cards;
+import :info_reactions;
+
+export namespace mux::ui {
+// A chat to forward to: its id and name.
+struct forward_target {
+  conversation_id id;
+  std::string name;
+};
+
+// Where to forward a message, as tdesktop's box: the account's chats, with
+// a field to find one by its name; a press sends it there.
+template <class Actions>
+struct forward_box : nodes::Stack {
+  // The dialog it is shown in.
+  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{400.0f, 520.0f}}; }
+  Actions* actions = nullptr;
+  std::vector<forward_target> all;
+  struct close_it {
+    Actions* actions;
+    void operator()() const { actions->close_forward(); }
+  };
+  struct typed {
+    forward_box* box;
+    void operator()(std::string_view text) const { box->find(text); }
+  };
+  struct row : nodes::Stack {
+    Actions* actions;
+    conversation_id id;
+    struct parts_t {
+      avatar_mark face;
+      nodes::Text name;
+    } parts;
+    row(Actions* a, const forward_target& one)
+        : actions(a), id(one.id), parts{.face = avatar_mark(one.id.id, one.name, 36.0f),
+                                        .name = nodes::Text(one.name, 15.0f, text_colour)} {
+      this->setHorizontal();
+      this->setGap(12.0f);
+      fState.apply({.fillX = true, .height = 50.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f},
+                    .hoverBackground = chosen_colour});
+      fState.setCursor(scene::cursor::hand{});
+      parts.name.setElided(true);
+      parts.name.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+    [[nodiscard]] bool onClick(float, float) {
+      actions->forward_to(id);
+      return true;
+    }
+  };
+  using rows_t = nodes::Flow<std::vector<row>>;
+  using header_t = page_header<no_back, close_it>;
+  struct parts_t {
+    header_t header;
+    widgets::TextBox<typed> field;
+    nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
+  } parts;
+
+  forward_box(Actions* a, const std::vector<forward_target>& chats)
+      : actions(a), all(chats),
+        parts{.header = header_t("Forward to…", {}, {a}, false, true), .field = widgets::TextBox<typed>(legacy_palette().widgets, "Search", {this})} {
+    fState.apply({.fillX = true, .height = 520.0f});
+    parts.field.setSearchIcon(true);
+    parts.field.apply({.fillX = true, .height = 34.0f, .margin = {0.0f, 16.0f, 8.0f, 16.0f}});
+    parts.list.apply({.fillX = true, .grow = scene::axes::kY});
+    std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
+    this->find({});
+  }
+  // The chats whose names have what is typed, in any case.
+  void find(std::string_view text) {
+    const auto lower = [](std::string_view s) {
+      std::string out(s);
+      for (char& c : out)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+      return out;
+    };
+    const std::string wanted = lower(text);
+    auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
+    rows.clear();
+    for (const forward_target& one : all)
+      if (wanted.empty() || lower(one.name).contains(wanted))
+        rows.emplace_back(actions, one);
+    parts.list.invalidateLayout();
+    parts.list.scrollTo(0.0f);
+  }
+};
+
+// Someone found: their picture, name and ID; pressed, the chat with them --
+// in Start chat, and in the chat list where nothing joined matches.
+template <class Actions>
+struct found_person_row : nodes::Stack {
+  Actions* actions;
+  std::string id;
+  struct lines_t : two_lines {
+    explicit lines_t(const found_person& one) : two_lines(one.name.empty() ? one.id : one.name, one.id, 14.0f, 2.0f) {}
+  };
+  struct parts_t {
+    avatar_mark face;
+    lines_t lines;
+  } parts;
+  found_person_row(Actions* a, const found_person& one)
+      : actions(a), id(one.id),
+        parts{.face = avatar_mark(one.id, one.name.empty() ? one.id : one.name, 36.0f), .lines = lines_t(one)} {
+    this->setHorizontal();
+    this->setGap(12.0f);
+    fState.apply({.fillX = true, .height = 52.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f}, .cornerRadius = 8.0f,
+                  .hoverBackground = chosen_colour});
+    parts.face.apply({.alignSelf = scene::align::kMiddle});
+  }
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+  [[nodiscard]] bool onClick(float, float) {
+    actions->start_direct(id);
+    return true;
+  }
+};
+
+// Element's Start chat (its InviteDialog, for a direct chat): who to talk
+// to, found as it is typed -- among those one already has chats with, and
+// in the server's user directory -- each with their picture, name and ID,
+// a press on one starting the chat; and one's own link, to send to someone
+// not found.
+template <class Actions>
+struct start_chat_box : nodes::Stack {
+  // The dialog it is shown in.
+  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{480.0f, 560.0f}}; }
+  Actions* actions = nullptr;
+  // Those one has direct chats with, and what the directory found for what
+  // is typed now; one's own link.
+  std::vector<found_person> known;
+  std::vector<found_person> found;
+  std::string query;
+  std::string link;
+  struct close_it {
+    Actions* actions;
+    void operator()() const { actions->close_new_chat(); }
+  };
+  struct typed {
+    start_chat_box* box;
+    void operator()(std::string_view text) const { box->search(text); }
+  };
+  struct go_press {
+    start_chat_box* box;
+    void operator()() const { box->go(); }
+  };
+  struct copy_press {
+    start_chat_box* box;
+    void operator()() const { box->actions->copy_text(box->link); }
+  };
+  using person_row = found_person_row<Actions>;
+  using header_t = page_header<no_back, close_it>;
+  using rows_t = nodes::Flow<std::vector<person_row>>;
+  struct search_row : nodes::Stack {
+    struct parts_t {
+      widgets::TextBox<typed> field;
+      widgets::Button<go_press> go;
+    } parts;
+    explicit search_row(start_chat_box* box)
+        : parts{.field = widgets::TextBox<typed>(legacy_palette().widgets, "Search", {box}), .go = widgets::Button<go_press>(legacy_palette().widgets, "Go", {box})} {
+      this->setHorizontal();
+      this->setGap(8.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 10.0f, 0.0f, 10.0f}});
+      parts.field.setSearchIcon(true);
+      parts.field.apply({.height = 36.0f, .relativeSize = scene::axes::kNone, .grow = scene::axes::kX,
+                         .alignSelf = scene::align::kMiddle});
+      parts.go.setPrimary(true);
+      parts.go.apply({.width = 64.0f, .height = 34.0f, .alignSelf = scene::align::kMiddle});
+    }
+  };
+  struct link_row : nodes::Stack {
+    struct parts_t {
+      nodes::Text link;
+      widgets::Button<copy_press> copy;
+    } parts;
+    link_row(start_chat_box* box, const std::string& link)
+        : parts{.link = nodes::Text(link, 13.0f, accent_colour), .copy = widgets::Button<copy_press>(legacy_palette().widgets, "Copy", {box})} {
+      this->setHorizontal();
+      this->setGap(8.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {2.0f, 10.0f, 0.0f, 10.0f}});
+      parts.link.setElided(true);
+      parts.link.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      parts.copy.apply({.width = 70.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle});
+    }
+  };
+  struct parts_t {
+    header_t header;
+    nodes::Text intro;
+    search_row search;
+    nodes::Text status;
+    nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
+    nodes::Text note;
+    link_row share;
+  } parts;
+  start_chat_box(Actions* a, std::vector<found_person> people, std::string own_link)
+      : actions(a), known(std::move(people)), link(std::move(own_link)),
+        parts{.header = header_t("Start chat", {}, {a}, false, true),
+              .intro = nodes::Text("Start a conversation with someone using their name or username (like @user:server).",
+                                   14.0f, text_colour),
+              .search = search_row(this),
+              .status = nodes::Text("Suggestions", 12.0f, dim_colour, true),
+              .note = nodes::Text("If you can't see who you're looking for, send them your invite link below.", 13.0f,
+                                  dim_colour),
+              .share = link_row(this, link)} {
+    this->setGap(8.0f);
+    fState.apply({.fillX = true, .height = 560.0f, .padding = {0.0f, 12.0f, 16.0f, 12.0f}});
+    parts.intro.setWrapped(true);
+    parts.intro.apply({.fillX = true, .margin = {0.0f, 10.0f, 4.0f, 10.0f}});
+    parts.status.apply({.margin = {6.0f, 10.0f, 0.0f, 10.0f}});
+    parts.list.apply({.fillX = true, .grow = scene::axes::kY});
+    std::get<0>(parts.list.fChildren).apply({.fillX = true, .autoSize = scene::axes::kY});
+    parts.note.setWrapped(true);
+    parts.note.apply({.fillX = true, .margin = {6.0f, 10.0f, 0.0f, 10.0f}});
+    this->show_rows();
+  }
+  // Someone's whole address, as typed -- a person, as some protocol reads
+  // it: offered as it is, first.
+  [[nodiscard]] static bool whole_id(std::string_view text) {
+    const auto link = logic::link_of_id(text);
+    return link && splice::visit(splice::overloaded{[](const logic::mention::person&) { return true; },
+                                                    [](const auto&) { return false; }},
+                                 logic::mention_in(*link));
+  }
+  [[nodiscard]] static std::string lower(std::string_view text) {
+    std::string out(text);
+    for (char& c : out)
+      c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return out;
+  }
+  void search(std::string_view text) {
+    query = std::string(text);
+    found.clear();
+    this->show_rows();
+    if (query.size() >= 2)
+      actions->find_people(query);
+  }
+  // The directory's answer, where it is for what is typed now.
+  void show_found(const std::vector<found_person>& people, const std::string& asked) {
+    if (asked != query)
+      return;
+    found = people;
+    for (const found_person& one : people)
+      if (one.avatar && !one.avatar->empty())
+        listed_avatars().emplace_back(one.id, *one.avatar);
+    this->show_rows();
+  }
+  void show_rows() {
+    auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
+    rows.clear();
+    const std::string wanted = lower(query);
+    std::set<std::string> listed;
+    const auto add = [&](const found_person& one) {
+      if (rows.size() < 60 && listed.insert(one.id).second)
+        rows.emplace_back(actions, one);
+    };
+    if (whole_id(query))
+      add(found_person{.id = query});
+    for (const found_person& one : known)
+      if (wanted.empty() || lower(one.name).contains(wanted) || lower(one.id).contains(wanted))
+        add(one);
+    for (const found_person& one : found)
+      add(one);
+    parts.status.setText(query.empty() ? "Suggestions" : rows.empty() ? "No results" : "Results");
+    parts.list.invalidateLayout();
+    parts.list.scrollTo(0.0f);
+  }
+  // Go: the ID typed, or the first found.
+  void go() {
+    if (whole_id(query)) {
+      actions->start_direct(query);
+      return;
+    }
+    const auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
+    if (!rows.empty())
+      actions->start_direct(rows.front().id);
+  }
+};
+
+// Element's Create a room (its CreateRoomDialog): a name, a topic, who can
+// join -- by invitation, or anyone, with the address it is found by -- and,
+// among the advanced, whether those of other servers may ever join.
+template <class Actions>
+struct create_room_box : nodes::Stack {
+  // The dialog it is shown in.
+  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{480.0f}}; }
+  Actions* actions = nullptr;
+  std::string server;
+  bool open_room = false;
+  bool federate = true;
+  bool encrypted = true;  // as Element: on for a private room, off for a public one
+  bool advanced = false;
+  bool choosing = false;  // the list of who can join, open
+  struct close_it {
+    Actions* actions;
+    void operator()() const { actions->close_new_room(); }
+  };
+  struct create_press {
+    create_room_box* box;
+    void operator()() const {
+      const std::string& name = box->parts.name.text();
+      if (!name.empty())
+        box->actions->create_room(name, box->parts.topic.text(), box->open_room, box->parts.address.text(), box->federate,
+                                  box->encrypted);
+    }
+  };
+  struct cancel_press {
+    Actions* actions;
+    void operator()() const { actions->close_new_room(); }
+  };
+  struct flip_list {
+    create_room_box* box;
+    void operator()() const {
+      box->choosing = !box->choosing;
+      box->show_choice();
+    }
+  };
+  struct choose_private {
+    create_room_box* box;
+    void operator()() const {
+      box->open_room = false;
+      box->encrypted = true;
+      box->choosing = false;
+      box->show_choice();
+    }
+  };
+  struct choose_public {
+    create_room_box* box;
+    void operator()() const {
+      box->open_room = true;
+      box->encrypted = false;
+      box->choosing = false;
+      box->show_choice();
+    }
+  };
+  struct flip_advanced {
+    create_room_box* box;
+    void operator()() const {
+      box->advanced = !box->advanced;
+      box->show_choice();
+    }
+  };
+  struct flip_federate {
+    create_room_box* box;
+    void operator()() const {
+      box->federate = !box->federate;
+      box->parts.block.parts.toggle.setOn(!box->federate);  // on: blocked
+    }
+  };
+  struct flip_encrypted {
+    create_room_box* box;
+    void operator()() const {
+      box->encrypted = !box->encrypted;
+      box->show_choice();
+    }
+  };
+  // Who can join, as Element's dropdown shows it: the choice and a chevron.
+  struct choice_button : nodes::Stack {
+    flip_list press;
+    struct parts_t {
+      nodes::Text value{"", 14.0f, text_colour};
+      nodes::Icon chevron;
+    } parts{.chevron = nodes::Icon(shape_of(icon::down{}), dim_colour)};
+    explicit choice_button(create_room_box* box) : press{box} {
+      this->setHorizontal();
+      this->setGap(8.0f);
+      fState.apply({.fillX = true, .height = 38.0f, .margin = {0.0f, 10.0f, 0.0f, 10.0f}, .padding = {0.0f, 12.0f, 0.0f, 12.0f},
+                    .cornerRadius = 6.0f, .background = tile_colour, .hoverBackground = chosen_colour,
+                    .border = scene::Border{band_colour, 1.0f}});
+      parts.value.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      parts.chevron.apply({.width = 16.0f, .height = 16.0f, .alignSelf = scene::align::kMiddle});
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+    [[nodiscard]] bool onClick(float, float) {
+      press();
+      return true;
+    }
+  };
+  // One of the choices, in the open list: its name and what it means.
+  template <class Choose>
+  struct option_row : nodes::Stack {
+    Choose choose;
+    struct parts_t {
+      nodes::Text name;
+      nodes::Text meaning;
+    } parts;
+    option_row(create_room_box* box, std::string name, std::string meaning)
+        : choose{box}, parts{.name = nodes::Text(std::move(name), 14.0f, text_colour, true),
+                             .meaning = nodes::Text(std::move(meaning), 12.0f, dim_colour)} {
+      this->setGap(2.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {0.0f, 10.0f, 0.0f, 10.0f},
+                    .padding = {8.0f, 12.0f, 8.0f, 12.0f}, .cornerRadius = 6.0f, .hoverBackground = chosen_colour});
+      parts.meaning.setWrapped(true);
+      parts.meaning.apply({.fillX = true});
+    }
+    [[nodiscard]] bool acceptsInput() const { return true; }
+    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+    [[nodiscard]] bool onClick(float, float) {
+      choose();
+      return true;
+    }
+  };
+  // A switch with what it does: blocking other servers, encrypting.
+  template <class Flip>
+  struct switch_row : nodes::Stack {
+    struct parts_t {
+      nodes::Text label;
+      widgets::Toggle<Flip> toggle;
+    } parts;
+    switch_row(create_room_box* box, std::string label)
+        : parts{.label = nodes::Text(std::move(label), 13.0f, text_colour), .toggle = widgets::Toggle<Flip>(legacy_palette().widgets, {box})} {
+      this->setHorizontal();
+      this->setGap(12.0f);
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 10.0f, 4.0f, 10.0f}});
+      parts.label.setWrapped(true);
+      parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+      parts.toggle.apply({.alignSelf = scene::align::kMiddle});
+    }
+  };
+  using buttons_row = dialog_buttons<cancel_press, create_press>;
+  using header_t = page_header<no_back, close_it>;
+  struct parts_t {
+    header_t header;
+    field name;
+    field topic;
+    nodes::Text rule_caption{"Who can join", 13.0f, dim_colour};
+    choice_button rule;
+    option_row<choose_private> private_option;
+    option_row<choose_public> public_option;
+    nodes::Text rule_note{"", 13.0f, dim_colour};
+    field address;
+    switch_row<flip_encrypted> encryption;
+    nodes::Text encryption_note{"", 12.0f, dim_colour};
+    widgets::Button<flip_advanced> show_advanced;
+    switch_row<flip_federate> block;
+    nodes::Text block_note{"You might enable this if the room will only be used for collaborating with internal teams "
+                           "on your server. This cannot be changed later.",
+                           12.0f, dim_colour};
+    buttons_row buttons;
+  } parts;
+  create_room_box(Actions* a, std::string own_server)
+      : actions(a), server(std::move(own_server)),
+        parts{.header = header_t("Create a room", {}, {a}, false, true),
+              .name = field("Name", ""),
+              .topic = field("Topic (optional)", ""),
+              .rule = choice_button(this),
+              .private_option = option_row<choose_private>(this, "Private room (invite only)",
+                                                           "Only people invited will be able to find and join this room."),
+              .public_option = option_row<choose_public>(this, "Public room", "Anyone will be able to find and join this room."),
+              .address = field("Address", std::format("#room-name:{}", server)),
+              .encryption = switch_row<flip_encrypted>(this, "Enable end-to-end encryption"),
+              .show_advanced = widgets::Button<flip_advanced>(legacy_palette().widgets, "Show advanced", {this}),
+              .block = switch_row<flip_federate>(
+                  this, std::format("Block anyone not part of {} from ever joining this room.", server)),
+              .buttons = buttons_row(legacy_palette(), "Create room", {a}, {this}, 120.0f)} {
+    this->setGap(8.0f);
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 18.0f, 12.0f}});
+    parts.rule_caption.apply({.margin = {4.0f, 10.0f, 0.0f, 10.0f}});
+    parts.rule_note.setWrapped(true);
+    parts.rule_note.apply({.fillX = true, .margin = {0.0f, 10.0f, 0.0f, 10.0f}});
+    parts.show_advanced.apply({.width = 150.0f, .height = 30.0f, .margin = {4.0f, 10.0f, 0.0f, 10.0f}});
+    parts.block_note.setWrapped(true);
+    parts.block_note.apply({.fillX = true, .margin = {0.0f, 10.0f, 0.0f, 10.0f}});
+    parts.encryption_note.setWrapped(true);
+    parts.encryption_note.apply({.fillX = true, .margin = {0.0f, 10.0f, 0.0f, 10.0f}});
+    this->show_choice();
+  }
+  // What is shown for the choices made: the list open or not, the address
+  // for a public room, the advanced part.
+  void show_choice() {
+    parts.header.parts.title.setText(open_room ? "Create a public room" : "Create a room");
+    parts.rule.parts.value.setText(open_room ? "Public room" : "Private room (invite only)");
+    parts.private_option.setVisible(choosing);
+    parts.public_option.setVisible(choosing);
+    parts.rule_note.setText(open_room ? "Anyone will be able to find and join this room."
+                                      : "Only people invited will be able to find and join this room. You can change "
+                                        "this at any time from room settings.");
+    parts.address.setVisible(open_room);
+    parts.encryption.parts.toggle.setOn(encrypted);
+    parts.encryption_note.setText(
+        encrypted ? "Only those in the room will read its messages -- not the server. You can't turn this off later."
+        : open_room
+            ? "Not encrypted: a public room is for anyone to read. You can turn encryption on later, not off."
+            : "Not encrypted: the server and anyone with access to it can read the messages. You can turn "
+              "encryption on later, not off.");
+    parts.show_advanced.setLabel(advanced ? "Hide advanced" : "Show advanced");
+    parts.block.setVisible(advanced);
+    parts.block_note.setVisible(advanced);
+    this->invalidateLayout();
+  }
+};
+
+}  // namespace mux::ui

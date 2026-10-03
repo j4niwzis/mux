@@ -264,6 +264,8 @@ template <class... Ts>
 struct variant_of_types<type_list<Ts...>> {
   using type = splice::variant<Ts...>;
 };
+// The emoji and stickers kept (emoji_kept).
+struct emoji_kept;
 // What the window's nodes are handed down, from the root -- the program's
 // own objects, each a pointer of a type of its own: what a node reads, it is
 // given by its parent, and takes what it needs of it with splice::remapped<>.
@@ -274,6 +276,8 @@ struct ui_needs {
   platform::audio::speaker* sound = nullptr;
   // The theme's colours: the program's.
   const palette* colours = nullptr;
+  // The emoji and stickers kept: the program's.
+  emoji_kept* emoji = nullptr;
 };
 // A dialog as what it shows wants it: which of the palette's colours its
 // sheet is; its size -- fixed, as wide as fits what it shows up to a

@@ -54,7 +54,6 @@ struct sticker_grid : nodes::Stack {
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
-      remember_sticker(sticker);
       actions->send_sticker(sticker);
       return true;
     }
@@ -108,6 +107,8 @@ struct sticker_grid : nodes::Stack {
   using list_t = nodes::ScrollContainer<nodes::Flow<std::vector<section>>>;
   // The colours it is made in, for what it makes later.
   const palette* colours_ = nullptr;
+  // The stickers kept: the program's.
+  emoji_kept* kept_ = nullptr;
   struct parts_t {
     field_t field;
     nodes::Text empty;
@@ -123,8 +124,9 @@ struct sticker_grid : nodes::Stack {
   std::vector<std::string> tab_pictures;
   [[nodiscard]] bool settling() const { return previewed_emote() != preview_of; }
 
-  sticker_grid(const palette& colours, Actions* a)
+  sticker_grid(const palette& colours, emoji_kept& kept, Actions* a)
       : colours_(&colours),
+        kept_(&kept),
         parts{.field = field_t(colours.widgets, "Search stickers", {this}),
               .empty = nodes::Text("No stickers here. A room's sticker packs, and yours, show here.", 13.0f, colours.dim)},
         actions(a) {
@@ -147,12 +149,12 @@ struct sticker_grid : nodes::Stack {
   // The packs as the chat has them, in the order they first come; the
   // unnamed together, as "Stickers".
   [[nodiscard]] static std::string pack_of(const emote& one) { return one.pack.empty() ? std::string("Stickers") : one.pack; }
-  [[nodiscard]] static std::vector<std::pair<std::string, std::vector<emote>>> packs() {
-    const std::vector<std::string> names = chat_stickers() | std::views::transform(pack_of) | std::ranges::to<std::vector>();
+  [[nodiscard]] std::vector<std::pair<std::string, std::vector<emote>>> packs() const {
+    const std::vector<std::string> names = kept_->chat_stickers | std::views::transform(pack_of) | std::ranges::to<std::vector>();
     return std::views::iota(std::size_t{0}, names.size()) |
            std::views::filter([&](std::size_t i) { return std::ranges::find(names, names[i]) == names.begin() + static_cast<std::ptrdiff_t>(i); }) |
            std::views::transform([&](std::size_t i) {
-             return std::pair{names[i], chat_stickers() | std::views::filter([&](const emote& one) { return pack_of(one) == names[i]; }) |
+             return std::pair{names[i], kept_->chat_stickers | std::views::filter([&](const emote& one) { return pack_of(one) == names[i]; }) |
                                             std::ranges::to<std::vector>()};
            }) |
            std::ranges::to<std::vector>();
@@ -165,8 +167,8 @@ struct sticker_grid : nodes::Stack {
     tabs.clear();
     tab_pictures.clear();
     // Recent: those sent lately that the chat still has.
-    std::vector<emote> recent = recent_stickers() | std::views::filter([](const emote& one) {
-                                  return std::ranges::contains(chat_stickers(), one.url, &emote::url);
+    std::vector<emote> recent = kept_->recent_stickers | std::views::filter([this](const emote& one) {
+                                  return std::ranges::contains(kept_->chat_stickers, one.url, &emote::url);
                                 }) |
                                 std::ranges::to<std::vector>();
     if (!recent.empty()) {
@@ -175,8 +177,8 @@ struct sticker_grid : nodes::Stack {
     }
     // The favourites: whichever chat they came from -- a sticker is its
     // picture's URL, sent anywhere.
-    if (!favourite_stickers().empty()) {
-      all.emplace_back(*colours_, actions, "Favourites", favourite_stickers());
+    if (!kept_->favourite_stickers.empty()) {
+      all.emplace_back(*colours_, actions, "Favourites", kept_->favourite_stickers);
       tabs.emplace_back(this, all.size() - 1, std::nullopt, "\u2605");
     }
     for (auto& [name, stickers] : packs()) {
@@ -188,7 +190,7 @@ struct sticker_grid : nodes::Stack {
         tab_pictures.push_back(*picture);
     }
     searching = false;
-    parts.empty.setVisible(chat_stickers().empty() && favourite_stickers().empty());
+    parts.empty.setVisible(kept_->chat_stickers.empty() && kept_->favourite_stickers.empty());
     parts.footer.setVisible(tabs.size() > 1);
     parts.list.invalidateLayout();
     parts.footer.invalidateLayout();
@@ -205,7 +207,7 @@ struct sticker_grid : nodes::Stack {
              std::ranges::to<std::string>();
     };
     const std::string wanted = lower(query);
-    const std::vector<emote> found = chat_stickers() | std::views::filter([&](const emote& one) {
+    const std::vector<emote> found = kept_->chat_stickers | std::views::filter([&](const emote& one) {
                                        return lower(one.shortcode).contains(wanted) || lower(one.body).contains(wanted) ||
                                               lower(one.pack).contains(wanted);
                                      }) |
@@ -258,15 +260,6 @@ struct sticker_grid : nodes::Stack {
         each.fState.apply({.selected = on});
   }
 };
-inline void remember_emoji(const std::string& glyph) {
-  constexpr std::size_t kKept = 42;
-  auto& all = recent_emoji();
-  std::erase(all, glyph);
-  all.insert(all.begin(), glyph);
-  if (all.size() > kKept)
-    all.resize(kKept);
-  recent_emoji_changed() = true;
-}
 
 // Every emoji, as tdesktop's panel lists them (chat_helpers.style): a search
 // at its top; the groups one under another in one list that scrolls, each a
@@ -358,7 +351,7 @@ struct emoji_panel : nodes::Stack {
       const std::string chosen = glyph;
       const std::string key = picture_url.empty() ? glyph : picture_url;
       if (picture_url.empty())
-        remember_emoji(chosen);
+        panel->kept_->remember_emoji(chosen);
       panel->tones_done = true;
       panel->pick(chosen, key);
       return true;
@@ -451,6 +444,8 @@ struct emoji_panel : nodes::Stack {
   // The colours it is made in, for what it makes later: its cells, its
   // sections, its tones.
   const palette* colours_ = nullptr;
+  // The emoji kept: the program's.
+  emoji_kept* kept_ = nullptr;
   struct parts_t {
     field_t field;
     text_chip text_option;
@@ -471,8 +466,8 @@ struct emoji_panel : nodes::Stack {
   std::size_t first_group = 0;
 
   // Sized by where it is shown.
-  emoji_panel(const palette& colours, Pick what)
-      : pick(std::move(what)), colours_(&colours), parts{.field = field_t(colours.widgets, "Search emoji", {this}), .text_option = text_chip(this)} {
+  emoji_panel(const palette& colours, emoji_kept& kept, Pick what)
+      : pick(std::move(what)), colours_(&colours), kept_(&kept), parts{.field = field_t(colours.widgets, "Search emoji", {this}), .text_option = text_chip(this)} {
     auto& [field, text_option, list, footer, tones, preview] = parts;
     this->setGap(4.0f);
     fState.apply({.padding = {7.0f, 0.0f, 4.0f, 7.0f}});
@@ -498,7 +493,7 @@ struct emoji_panel : nodes::Stack {
       // tdesktop's: what was picked lately first, then its default list
       // (lib_ui's GetDefaultRecent), up to the section's number -- so the
       // section is full from the first run, as Telegram's.
-      std::vector<std::string> shown = recent_emoji();
+      std::vector<std::string> shown = kept_->recent_emoji;
       for (const char* one : {"😂", "😘", "❤️", "😍", "😊", "😁", "👍", "☺️", "😔", "😄", "😭", "💋",
                               "😒", "😳", "😜", "🙈", "😉", "😃", "😢", "😝", "😱", "😡", "😏", "😞",
                               "😅", "😚", "🙊", "😌", "😀", "😋", "😆", "👌", "😐", "😕"})
@@ -507,8 +502,8 @@ struct emoji_panel : nodes::Stack {
       all.emplace_back(this, "Recently used", shown);
       ++first_group;
     }
-    if (!chat_emotes().empty()) {
-      all.emplace_back(this, "Custom", chat_emotes());
+    if (!kept_->chat_emotes.empty()) {
+      all.emplace_back(this, "Custom", kept_->chat_emotes);
       ++first_group;
     }
     for (std::size_t g = 0; g < logic::emoji_group_count(); ++g)

@@ -164,11 +164,11 @@ struct emoji_popup : scene::Node {
       gif_grid<Actions> gifs;
     } parts;
     Actions* actions = nullptr;
-    card_t(const palette& colours, Actions* a)
+    card_t(const palette& colours, emoji_kept& kept, Actions* a)
         : colours_(&colours),
           parts{.tabs = tabs_row(this),
-                .panel = panel_t(colours, insert_emoji_into<Actions>{a}),
-                .stickers = sticker_grid<Actions>(colours, a),
+                .panel = panel_t(colours, kept, insert_emoji_into<Actions>{a}),
+                .stickers = sticker_grid<Actions>(colours, kept, a),
                 .gifs = gif_grid<Actions>(colours, a)},
           actions(a) {
       fState.apply({.width = 345.0f, .height = 360.0f, .cornerRadius = 8.0f, .background = colours.sidebar,
@@ -256,7 +256,7 @@ struct emoji_popup : scene::Node {
   float placed_w = 0.0f;
 
   emoji_popup(const ui_needs<Actions>& n, float at_right, float at_bottom)
-      : parts{.card = card_t(*n.colours, n.actions)}, actions(n.actions), right(at_right), bottom(at_bottom) {
+      : parts{.card = card_t(*n.colours, *n.emoji, n.actions)}, actions(n.actions), right(at_right), bottom(at_bottom) {
     fState.apply({.fill = true});
   }
   void layoutChildren() {

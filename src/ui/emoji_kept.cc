@@ -28,29 +28,45 @@ import :names;
 
 export namespace mux::ui {
 
-// The emoji picked lately, newest first, as tdesktop keeps them (at most
-// 42); and what is told when one is picked, so that the program keeps the
-// list in its file.
-inline std::vector<std::string>& recent_emoji() {
-  static std::vector<std::string> kept;
-  return kept;
-}
-// Whether the list changed since the program last kept it: the program
-// reads it, and keeps the list.
-inline bool& recent_emoji_changed() {
-  static bool changed = false;
-  return changed;
-}
-// The custom emoji of the chat the panel is opened over, as the program says.
-inline std::vector<emote>& chat_emotes() {
-  static std::vector<emote> kept;
-  return kept;
-}
-// And its stickers.
-inline std::vector<emote>& chat_stickers() {
-  static std::vector<emote> kept;
-  return kept;
-}
+// The emoji and stickers kept, as the program holds them: handed to the
+// window with its colours (ui_needs), and from it to the panels.
+struct emoji_kept {
+  // The emoji picked lately, newest first, as tdesktop keeps them (at most 42).
+  std::vector<std::string> recent_emoji;
+  // The custom emoji and stickers of the chat the panel is opened over.
+  std::vector<emote> chat_emotes, chat_stickers;
+  // The stickers sent lately, newest first, as tdesktop's Recent (at most
+  // 20); and the favourites, from a sticker's menu, in any chat.
+  std::vector<emote> recent_stickers, favourite_stickers;
+  // Whether the lists changed since the program last kept them.
+  bool emoji_changed = false, stickers_changed = false;
+
+  void remember_emoji(const std::string& glyph) {
+    constexpr std::size_t kKept = 42;
+    std::erase(recent_emoji, glyph);
+    recent_emoji.insert(recent_emoji.begin(), glyph);
+    if (recent_emoji.size() > kKept)
+      recent_emoji.resize(kKept);
+    emoji_changed = true;
+  }
+  void remember_sticker(const emote& one) {
+    constexpr std::size_t kKept = 20;
+    std::erase_if(recent_stickers, [&](const emote& each) { return each.url == one.url; });
+    recent_stickers.insert(recent_stickers.begin(), one);
+    if (recent_stickers.size() > kKept)
+      recent_stickers.resize(kKept);
+    stickers_changed = true;
+  }
+  [[nodiscard]] bool is_favourite(std::string_view url) const { return std::ranges::contains(favourite_stickers, url, &emote::url); }
+  // Made a favourite, or no longer one.
+  void flip_favourite(const emote& one) {
+    if (is_favourite(one.url))
+      std::erase_if(favourite_stickers, [&](const emote& each) { return each.url == one.url; });
+    else
+      favourite_stickers.insert(favourite_stickers.begin(), one);
+    stickers_changed = true;
+  }
+};
 
 // The input's popup's pages.
 namespace popup_page {
@@ -135,45 +151,6 @@ inline bool follow_preview(std::optional<emote_preview>& shown, std::optional<pr
   if (of)
     shown.emplace(colours, *of);
   return true;
-}
-
-// The stickers sent lately, newest first, as tdesktop's Recent (at most 20):
-// kept while the program runs.
-inline std::vector<emote>& recent_stickers() {
-  static std::vector<emote> kept;
-  return kept;
-}
-// The favourites, as tdesktop's Favorite stickers: from a sticker's menu,
-// in any chat; newest first.
-inline std::vector<emote>& favourite_stickers() {
-  static std::vector<emote> kept;
-  return kept;
-}
-// Whether either list changed since the program last kept them.
-inline bool& stickers_changed() {
-  static bool changed = false;
-  return changed;
-}
-inline void remember_sticker(const emote& one) {
-  constexpr std::size_t kKept = 20;
-  auto& all = recent_stickers();
-  std::erase_if(all, [&](const emote& each) { return each.url == one.url; });
-  all.insert(all.begin(), one);
-  if (all.size() > kKept)
-    all.resize(kKept);
-  stickers_changed() = true;
-}
-[[nodiscard]] inline bool is_favourite(std::string_view url) {
-  return std::ranges::contains(favourite_stickers(), url, &emote::url);
-}
-// Made a favourite, or no longer one.
-inline void flip_favourite(const emote& one) {
-  auto& all = favourite_stickers();
-  if (is_favourite(one.url))
-    std::erase_if(all, [&](const emote& each) { return each.url == one.url; });
-  else
-    all.insert(all.begin(), one);
-  stickers_changed() = true;
 }
 
 }  // namespace mux::ui

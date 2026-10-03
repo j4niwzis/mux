@@ -27,6 +27,8 @@ export namespace mux::app {
 
 struct services {
   mux::model* model = nullptr;
+  // The emoji and stickers kept, as the window's panels show them.
+  mux::ui::emoji_kept emoji;
   network* net = nullptr;
   message_store* store = nullptr;
   mailbox_type* box = nullptr;

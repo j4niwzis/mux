@@ -287,13 +287,13 @@ void app::before_frame() {
     this->rebuild_in_theme();
   if (std::exchange(shared.refresh_due, false))
     this->refresh();
-  if (std::exchange(mux::ui::recent_emoji_changed(), false)) {
-    recent_emoji = mux::ui::recent_emoji();
+  if (std::exchange(shared.emoji.emoji_changed, false)) {
+    recent_emoji = shared.emoji.recent_emoji;
     (void)this->write();
   }
-  if (std::exchange(mux::ui::stickers_changed(), false)) {
-    recent_stickers = mux::ui::recent_stickers();
-    favourite_stickers = mux::ui::favourite_stickers();
+  if (std::exchange(shared.emoji.stickers_changed, false)) {
+    recent_stickers = shared.emoji.recent_stickers;
+    favourite_stickers = shared.emoji.favourite_stickers;
     (void)this->write();
   }
   if (shared.drawer_waits && !root().pages_moving()) {
@@ -373,9 +373,9 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
   // The settings, as kept.
   this->take(saved);
   // And what of them the window holds, put in place there.
-  mux::ui::recent_emoji() = this->recent_emoji;
-  mux::ui::recent_stickers() = this->recent_stickers;
-  mux::ui::favourite_stickers() = this->favourite_stickers;
+  shared.emoji.recent_emoji = this->recent_emoji;
+  shared.emoji.recent_stickers = this->recent_stickers;
+  shared.emoji.favourite_stickers = this->favourite_stickers;
   if (saved.last_account)
     this->root().main().wanted = mux::account_id{mux::ui::protocol_of(*saved.last_account), *saved.last_account};
   mux::ui::bubble_look_everywhere() = this->bubbles.value_or(mux::config::bubble_look{});

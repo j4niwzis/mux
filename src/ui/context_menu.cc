@@ -234,8 +234,10 @@ struct context_menu : scene::Node {
       }
     };
     Actions* actions_of = nullptr;
-    // The colours it is made in, for the emoji it unrolls.
+    // The colours it is made in, for the emoji it unrolls; and the emoji
+    // kept, the program's.
     const palette* colours_ = nullptr;
+    emoji_kept* kept_ = nullptr;
     using reply_row = row_item<ask<Actions, &Actions::menu_reply>>;
     using thread_row = row_item<ask<Actions, &Actions::menu_thread>>;
     using quote_reply_row = row_item<ask<Actions, &Actions::menu_quote_reply>>;
@@ -299,7 +301,7 @@ struct context_menu : scene::Node {
       const float under = box.fBottom - quick_band.bounds().fBottom;
       rolled = std::max(under, kEmojiLeast);
       fState.apply({.minHeight = this->bounds().height() + (rolled - under)});
-      emoji.emplace(*colours_, react_with<Actions>{actions_of});
+      emoji.emplace(*colours_, *kept_, react_with<Actions>{actions_of});
       emoji->apply({.place = scene::anchor::kTopLeft,
                      .y = quick_band.bounds().fBottom - box.fTop,
                      .fillX = true,
@@ -348,9 +350,10 @@ struct context_menu : scene::Node {
       }
     }
     // What does not apply to the message left out.
-    card(const palette& colours, Actions* a, const menu_facts& facts)
+    card(const palette& colours, emoji_kept& kept, Actions* a, const menu_facts& facts)
         : actions_of(a),
           colours_(&colours),
+          kept_(&kept),
           parts{.quick = quick_row(colours, a, this),
                 .quick_band = nodes::Box<>(colours.band),
                 .reply = reply_row(colours, "Reply", {a}, icon::back{}),
@@ -361,7 +364,7 @@ struct context_menu : scene::Node {
                 .copy = copy_row(colours, facts.selection ? "Copy Selected Text" : "Copy Text", {a}, icon::clip{}),
                 .copy_link = link_row(colours, "Copy Message Link", {a}, icon::info{}),
                 .copy_url = url_row(colours, "Copy Link", {a}, icon::clip{}),
-                .fave = fave_row(colours, facts.sticker && is_favourite(facts.sticker->url) ? "Remove from Favourites" : "Add to Favourites",
+                .fave = fave_row(colours, facts.sticker && kept.is_favourite(facts.sticker->url) ? "Remove from Favourites" : "Add to Favourites",
                                  {a}, icon::check{}),
                 .copy_image = copy_image_row(colours, "Copy Image", {a}, icon::clip{}),
                 .save = save_row(colours, "Save As…", {a}, icon::send{}),
@@ -443,7 +446,7 @@ struct context_menu : scene::Node {
   // Where it was asked for: the pointer.
   float at_x = 0.0f, at_y = 0.0f;
   context_menu(const ui_needs<Actions>& n, const menu_facts& facts)
-      : parts{.menu = card(*n.colours, n.actions, facts)}, actions(n.actions), at_x(facts.x), at_y(facts.y) {
+      : parts{.menu = card(*n.colours, *n.emoji, n.actions, facts)}, actions(n.actions), at_x(facts.x), at_y(facts.y) {
     fState.apply({.fill = true});
     parts.menu.parts.seen.window = &fState.fBounds;
     parts.menu.parts.seen.submenu = &parts.seen_list;

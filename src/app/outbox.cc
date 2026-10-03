@@ -283,6 +283,8 @@ class outbox_part {
 
   // A sticker, sent into the chat being read; the popup closed.
   void apply(const request::send_sticker& one) {
+    // Kept among the recent, as tdesktop's.
+    s_->emoji.remember_sticker(one.sticker);
     const auto& chosen = s_->root().main().chosen;
     if (!chosen || s_->demo())
       return;

@@ -26,7 +26,7 @@ class menu_part {
     target_ = one;
     const auto& chosen = s_->root().main().chosen;
     const conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
-    mux::ui::chat_emotes() = chat ? chat->emotes : std::vector<emote>{};
+    s_->emoji.chat_emotes = chat ? chat->emotes : std::vector<emote>{};
     s_->root().open_menu(one);
     // The menu takes the keys, as tdesktop's: the arrows go through it,
     // Enter does what is lit, Esc closes it. Nothing lit until an arrow.
@@ -111,7 +111,7 @@ class menu_part {
   void apply(const request::menu_fave_sticker&) {
     s_->root().close_menu();
     if (target_.sticker)
-      mux::ui::flip_favourite(*target_.sticker);
+      s_->emoji.flip_favourite(*target_.sticker);
   }
   // The link pressed on, in the text or the preview.
   void apply(const request::menu_copy_url&) {

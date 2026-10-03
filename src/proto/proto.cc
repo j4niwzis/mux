@@ -42,6 +42,21 @@ struct sticker_packs {};     // packs of stickers and emoji, a room's and an acc
 struct history_context {};   // a window of history around a message, asked of the server
 }  // namespace feature
 
+// What a protocol's account does beyond what every account does: a flag
+// each, found by the program from the account type itself -- whether it has
+// the call -- so that a thing is offered exactly where it is done, and
+// nothing is listed by hand. All off: an account that does none of them.
+struct account_ops {
+  bool react = false;        // reactions sent
+  bool forward = false;      // a message sent on, as it is
+  bool threads = false;      // threads listed, read and answered in
+  bool view_source = false;  // a message's source, and a room's state
+  bool send_file = false;    // files and pictures
+  bool send_sticker = false;
+  bool typing = false;       // others told one is typing
+  friend bool operator==(const account_ops&, const account_ops&) = default;
+};
+
 // One's own, said rather than done (no room event), and still there: what
 // an edit rule starts from.
 [[nodiscard]] inline bool own_text(const message& one) { return one.outgoing && !one.service && !one.redacted; }

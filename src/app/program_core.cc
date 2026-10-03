@@ -907,6 +907,8 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
   });
 
   this->keeps_nothing = demo;
+  // What each protocol's account does, for the window to offer.
+  mux::app::tell_protocol_ops(mux::protocols{});
   this->saved = mux::config::accounts_of(saved);
   this->foreign_accounts = mux::config::foreign_of(saved);
   this->motion = saved.motion;

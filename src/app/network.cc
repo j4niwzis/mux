@@ -75,6 +75,26 @@ struct account_list<mux::protocol_list<Tags...>> {
 };
 using any_account = account_list<mux::protocols>::type;
 
+// What an account type does beyond what every account does: whether it has
+// each call -- the account's own members, so that what is offered is what
+// is done.
+template <class Account>
+[[nodiscard]] constexpr mux::proto::account_ops ops_of_type() {
+  return {.react = requires { &Account::react; },
+          .forward = requires { &Account::forward; },
+          .threads = requires { &Account::list_threads; },
+          .view_source = requires { &Account::view_source; },
+          .send_file = requires { &Account::send_file; },
+          .send_sticker = requires { &Account::send_sticker; },
+          .typing = requires { &Account::typing; }};
+}
+// Each protocol's, for the window: found once, as the program starts.
+template <class... Tags>
+void tell_protocol_ops(mux::protocol_list<Tags...>) {
+  (mux::ui::protocol_ops().insert_or_assign(mux::protocol_t{Tags{}}, ops_of_type<account_type_of<mux::config::kept_of<Tags>>>()),
+   ...);
+}
+
 struct running_account {
   std::string address;
   any_account account;

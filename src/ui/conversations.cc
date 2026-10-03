@@ -2548,6 +2548,9 @@ struct conversations_screen : nodes::Stack {
   // the list alone: the chat's messages were reconciled again for nothing.
   void show(const model& now, bool with_chat = true) {
     last_model = &now;
+    // Files attached where the chat's account sends them.
+    if (chosen)
+      line.parts.input.parts.attach.setVisible(ops_of(chosen->account).send_file);
     if (wanted && now.accounts().contains(*wanted)) {
       current = std::exchange(wanted, std::nullopt);
     } else if (!current || !now.accounts().contains(*current)) {

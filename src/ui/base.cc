@@ -11,6 +11,7 @@ import skiff.nodes.box;
 import skiff.widgets.theme;
 import skiff.widgets.wallpaper;
 import mux.core;
+import mux.protocols;
 import mux.config;
 import mux.logic.text;
 
@@ -197,6 +198,17 @@ inline skia::Sp<skia::SkImage> wallpaper_picture(const std::string& path) {
 inline std::vector<std::pair<std::string, std::string>>& listed_avatars() {
   static std::vector<std::pair<std::string, std::string>> listed;
   return listed;
+}
+// What each protocol's account does beyond what every one does, as the
+// program found it from the account types; and an account's, by its
+// protocol. None found: nothing beyond.
+inline std::map<protocol_t, proto::account_ops>& protocol_ops() {
+  static std::map<protocol_t, proto::account_ops> kept;
+  return kept;
+}
+[[nodiscard]] inline proto::account_ops ops_of(const account_id& of) {
+  const auto found = protocol_ops().find(of.speaks);
+  return found != protocol_ops().end() ? found->second : proto::account_ops{};
 }
 // Each account's protocol state, as its client last said it: what the
 // extension points are asked with. One not said yet: its protocol's default.

@@ -1359,8 +1359,10 @@ struct context_menu : scene::Node {
       // One's own text, or one's own picture's caption, as Element edits it.
       // A reaction is neither edited nor reacted to: Matrix changes none.
       edit.setVisible(facts.editable && !facts.reaction && ((!facts.text.empty() && !facts.media) || facts.captioned));
-      quick.setVisible(!facts.reaction);
-      quick_band.setVisible(!facts.reaction);
+      // Reactions where the account sends them.
+      quick.setVisible(!facts.reaction && facts.can.react);
+      quick_band.setVisible(!facts.reaction && facts.can.react);
+      forward.setVisible(facts.can.forward);
       quote_reply.setVisible(facts.selection && !facts.own && !facts.copied.empty());
       copy.setVisible(!facts.copied.empty());
       copy_link.setVisible(!facts.link.empty());
@@ -1371,8 +1373,10 @@ struct context_menu : scene::Node {
       save_gif.setVisible(facts.media.has_value() && facts.moving);
       remove.setVisible(facts.deletable);
       pin.setVisible(facts.pinnable);
-      thread_reply.setVisible(facts.pinnable);
-      source.setVisible(facts.pinnable);
+      // A message the server named, where the account has threads, and its
+      // source: what was offered by being pinnable, a Matrix room's.
+      thread_reply.setVisible(facts.can.threads && !facts.link.empty());
+      source.setVisible(facts.can.view_source && !facts.link.empty());
       // Who reacted, as Telegram's menu lists them: wherever there are any.
       reactions.setVisible(facts.reaction_count > 0);
       seen_band.apply({.fillX = true, .height = 1.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f}});

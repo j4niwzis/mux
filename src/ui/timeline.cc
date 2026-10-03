@@ -50,6 +50,7 @@ struct menu_facts {
   bool pinned = false;  // pinned in its chat: the menu offers Unpin
   bool pinnable = false;  // in a chat where pins are kept: a Matrix room
   bool editable = false;  // one's own, as its protocol's rule for edits allows
+  proto::account_ops can;  // what its account does: React, Forward, threads...
   bool deletable = false;  // one may take it away: one's own, or another's with the power to
   bool reaction_events = false;  // reacted to, the reactions being events
   std::size_t reaction_count = 0;  // how many reactions it has, of anyone
@@ -253,6 +254,9 @@ template <class Actions>
   if (chat) {
     facts.pinned = std::ranges::contains(chat->pinned, one.message_id);
     const protocol_state_t now = protocol_state_of(chat->id.account);
+    // What its account does, offered only where anything may be done now.
+    if (proto::available(now))
+      facts.can = ops_of(chat->id.account);
     facts.pinnable = proto::can_pin(now, one.message_id);
     // Edited as its protocol's rule allows: any of one's own, or the last.
     facts.editable = proto::may_edit(now, *chat, one.said);

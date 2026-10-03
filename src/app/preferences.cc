@@ -217,8 +217,8 @@ class preferences_part {
   // Home without what spaces hold, at a level.
   void apply(const request::set_home_hides& one) {
     splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) {
-                                       home_hides_spaced = one.on.value_or(false);
-                                       mux::ui::window_look().home_hides = home_hides_spaced;
+                                       k_->home_hides_spaced = one.on.value_or(false);
+                                       mux::ui::window_look().home_hides = k_->home_hides_spaced;
                                      },
                                      [&](mux::choice_level::account) {
                                        s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
@@ -234,8 +234,8 @@ class preferences_part {
   }
   void apply(const request::set_home_direct& one) {
     splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) {
-                                       home_hides_direct = one.on.value_or(false);
-                                       mux::ui::window_look().home_direct = home_hides_direct;
+                                       k_->home_hides_direct = one.on.value_or(false);
+                                       mux::ui::window_look().home_direct = k_->home_hides_direct;
                                      },
                                      [&](mux::choice_level::account) {
                                        s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
@@ -306,9 +306,9 @@ class preferences_part {
                                  if (!chosen)
                                    return;
                                  if (one.most)
-                                   jump_search_in.insert_or_assign(*chosen, *one.most);
+                                   k_->jump_search_in.insert_or_assign(*chosen, *one.most);
                                  else
-                                   jump_search_in.erase(*chosen);
+                                   k_->jump_search_in.erase(*chosen);
                                }},
                one.level);
     (void)k_->write();
@@ -327,9 +327,9 @@ class preferences_part {
                                  if (!chosen)
                                    return;
                                  if (one.show)
-                                   previews_shown_in.insert_or_assign(*chosen, *one.show);
+                                   k_->previews_shown_in.insert_or_assign(*chosen, *one.show);
                                  else
-                                   previews_shown_in.erase(*chosen);
+                                   k_->previews_shown_in.erase(*chosen);
                                }},
                one.level);
     (void)k_->write();
@@ -348,9 +348,9 @@ class preferences_part {
                                        if (!chosen)
                                          return;
                                        if (one.direct)
-                                         previews_direct_in.insert_or_assign(*chosen, *one.direct);
+                                         k_->previews_direct_in.insert_or_assign(*chosen, *one.direct);
                                        else
-                                         previews_direct_in.erase(*chosen);
+                                         k_->previews_direct_in.erase(*chosen);
                                      }},
                   one.level);
     (void)k_->write();
@@ -369,9 +369,9 @@ class preferences_part {
                                        if (!chosen)
                                          return;
                                        if (one.send)
-                                         typing_sent_in.insert_or_assign(*chosen, *one.send);
+                                         k_->typing_sent_in.insert_or_assign(*chosen, *one.send);
                                        else
-                                         typing_sent_in.erase(*chosen);
+                                         k_->typing_sent_in.erase(*chosen);
                                      }},
                   one.level);
     (void)k_->write();
@@ -390,9 +390,9 @@ class preferences_part {
                                  if (!chosen)
                                    return;
                                  if (one.show)
-                                   receipts_shown_in.insert_or_assign(*chosen, *one.show);
+                                   k_->receipts_shown_in.insert_or_assign(*chosen, *one.show);
                                  else
-                                   receipts_shown_in.erase(*chosen);
+                                   k_->receipts_shown_in.erase(*chosen);
                                }},
                one.level);
     (void)k_->write();

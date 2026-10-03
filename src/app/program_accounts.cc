@@ -708,13 +708,9 @@ void app::apply(const request::flip_only_verified&) {
     *kept = !kept->value_or(false);
     if (auto* page = panel.privacy())
       page->show_only_verified(**kept);
-    // Told to that account, running: its sessions' keys go so from now.
-    splice::visit(splice::overloaded{[&](const mux::config::matrix_account& matrix) {
-                                       net->set_only_verified(
-                                           mux::account_id{mux::ui::protocol_of(matrix.user_id), matrix.user_id}, **kept);
-                                     },
-                                     [](const auto&) {}},
-                  account.own);
+    // Told to that account, running, where its client can: its sessions'
+    // keys go so from now.
+    net->set_only_verified(id_of(account), **kept);
     (void)this->write();
   });
 }
@@ -750,12 +746,13 @@ void app::apply(const request::flip_account_strip&) {
   this->refresh();
 }
 
-// A tombstoned room's way on: the room it was upgraded to, as a matrix.to
-// link to it opens -- the chat where it is joined, its card where not.
+// A tombstoned room's way on: the room it was upgraded to, as its
+// protocol's link to it opens -- the chat where it is joined, its card where not.
 void app::apply(const request::open_replacement&) {
   const auto& chosen = root().main().chosen;
   if (const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr; chat && chat->replaced_by)
-    this->apply(request::open_url{"https://matrix.to/#/" + *chat->replaced_by});
+    if (auto link = mux::proto::share_link(mux::ui::protocol_state_of(chosen->account), *chat->replaced_by))
+      this->apply(request::open_url{std::move(*link)});
 }
 
 // Chats in other accounts' lists: placed, taken out, their strips.

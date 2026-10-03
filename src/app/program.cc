@@ -636,18 +636,13 @@ struct app : kept_settings {
     // -- on or off, the proxy, receipts, its colour and look. (Only four of
     // them were, and an edit dropped the rest.)
     account.shared = old->shared;
-    // And a Matrix session: the same user on the same homeserver goes on
-    // with the device it has, rather than logging in as a new one at every
-    // Save.
-    splice::visit(splice::overloaded{[](mux::config::matrix_account& now, const mux::config::matrix_account& before) {
-                                 if (before.user_id == now.user_id && before.homeserver == now.homeserver &&
-                                     before.password == now.password) {
-                                   now.access_token = before.access_token;
-                                   now.device_id = before.device_id;
-                                 }
-                               },
-                               [](auto&, const auto&) {}},
-               account.own, std::as_const(old->own));
+    // And what its protocol keeps through an edit (a Matrix session: the
+    // device it has, not a new one at every Save).
+    splice::visit([](auto& now, const auto& before) {
+                    using mux::proto::kept_defaults::carry_over;
+                    carry_over(now, before);
+                  },
+                  account.own, std::as_const(old->own));
     // Nothing changed: saved as it is, and the connection left alone.
     const bool same = account == *old;
     *old = account;

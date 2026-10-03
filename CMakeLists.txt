@@ -358,7 +358,7 @@ if(MUX_UI)
   target_sources(mux PRIVATE FILE_SET CXX_MODULES BASE_DIRS src
     FILES src/app/network.cc src/app/workers.cc src/app/demo.cc src/app/store.cc src/app/requests.cc src/app/words.cc
           src/app/kept.cc src/app/services.cc src/app/search.cc src/app/pictures.cc src/app/drafts.cc src/app/reading.cc src/app/outbox.cc src/app/settings.cc src/app/menu.cc
-          src/app/program.cc)
+          src/proto/matrix/app.cc src/proto/app.cc src/app/program.cc)
   # What the program does, a part each: the module's implementation units.
   target_sources(mux PRIVATE
     src/app/program_core.cc src/app/program_media.cc

@@ -53,4 +53,19 @@ inline std::optional<std::string> check(const kept& one) {
   return std::nullopt;
 }
 
+// An account edited: the same user on the same homeserver, with the same
+// password, goes on with the device it has, rather than logging in as a
+// new one at every Save.
+inline void carry_over(kept& now, const kept& before) {
+  if (before.user_id == now.user_id && before.homeserver == now.homeserver && before.password == now.password) {
+    now.access_token = before.access_token;
+    now.device_id = before.device_id;
+  }
+}
+// The session the server gave at login, kept.
+inline void take_session(kept& one, const auto& given) {
+  one.access_token = given.access_token;
+  one.device_id = given.device_id;
+}
+
 }  // namespace mux::proto::matrix

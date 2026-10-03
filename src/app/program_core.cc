@@ -540,12 +540,12 @@ void app::keep_session(const mux::change::session_given& given) {
   const auto found = this->find(given.account.address);
   if (found == saved.end())
     return;
-  splice::visit(splice::overloaded{[&](mux::config::matrix_account& one) {
-                               one.access_token = given.access_token;
-                               one.device_id = given.device_id;
-                             },
-                             [](auto&) {}},
-             found->own);
+  // Kept as its protocol keeps one.
+  splice::visit([&](auto& one) {
+                  using mux::proto::kept_defaults::take_session;
+                  take_session(one, given);
+                },
+                found->own);
   (void)this->write();
 }
 

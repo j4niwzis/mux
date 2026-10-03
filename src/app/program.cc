@@ -41,6 +41,7 @@ import mux.app.outbox;
 import mux.app.settings;
 import mux.app.menu;
 import mux.app.notices;
+import mux.app.marks;
 import mux.logic.links;
 
 export namespace mux::app {
@@ -66,6 +67,7 @@ struct app : kept_settings {
   menu_part menu{shared, outbox, pictures};
   settings_part settings{shared, *this, pictures};
   notices_part notices{shared};
+  marks_part marks{shared};
   // Work off the UI's thread: decoding pictures, reading the disk.
   workers work;
   // Files chosen in the dialog, or dropped on the window: to the outbox.
@@ -110,10 +112,10 @@ struct app : kept_settings {
   }
   template <class Request>
   void route(const Request& one) {
-    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> ||
+    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> || takes<marks_part, Request> ||
                       takes<app, Request>, "a request no part of the program takes");
     if (!offer(search, one) && !offer(pictures, one) && !offer(reading, one) && !offer(outbox, one) &&
-        !offer(settings, one) && !offer(menu, one) && !offer(notices, one))
+        !offer(settings, one) && !offer(menu, one) && !offer(notices, one) && !offer(marks, one))
       offer(*this, one);
   }
 
@@ -303,32 +305,9 @@ struct app : kept_settings {
   void apply(const request::close_notice&);
   void apply(const request::close_person_info&);
   void apply(const request::close_room_card&);
-  void apply(const request::jump_to_mark& one);
-  void go_to_marked(const mux::conversation& chat, mux::mark_kind_t kind, const std::string& event, const std::string& target);
-  // The mentions and reactions not yet seen, written as they change and read
-  // back at the start -- each put in once its chat is there.
-  void save_marks();
   // The person whose card is open, in which chat: shown again as what is
   // known of their keys comes.
   std::optional<std::pair<mux::conversation_id, std::string>> person_open_;
-  // The list of marks open, by its kind: shown again as what it waits for
-  // comes; and each message it fetched, fetched once.
-  std::optional<mux::mark_kind_t> marks_listed_;
-  std::set<std::string> marks_fetched_;
-  // Marked messages kept whole as their marks are made; those not here yet,
-  // fetched and kept when they come.
-  void keep_marked(const mux::conversation_id& in, const std::string& id);
-  std::set<std::string> marked_kept_;
-  std::map<mux::conversation_id, std::set<std::string>> marked_on_disk_;
-  std::map<std::string, mux::conversation_id> marked_wanted_;
-  void load_marks();
-  std::vector<std::pair<mux::conversation_id, mux::change_t>> pending_marks;
-  // The marks read back of chats not here yet, as the file had them: written
-  // again as they were until their chats come, not dropped by a save before.
-  std::map<mux::conversation_id, mux::config::chat_marks> marks_not_here;
-  void apply(const request::list_marks& one);
-  void apply(const request::go_to_mark& one);
-  void apply(const request::close_marks&);
   void apply(const request::open_explore&);
   void apply(const request::close_explore&);
   void apply(const request::search_rooms& one);

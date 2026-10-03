@@ -146,24 +146,9 @@ void app::woken() {
     model->apply(one);
     this->keep_on_disk(one);
   }
-  // Marks read back from the disk, put in once their chats are here; and
-  // the marks written again where they changed.
-  std::erase_if(pending_marks, [&](const auto& waiting) {
-    if (model->find(waiting.first) == nullptr)
-      return false;
-    model->apply(waiting.second);
-    marks_not_here.erase(waiting.first);
-    return true;
-  });
-  const bool marks_changed = std::ranges::any_of(changes, [](const mux::change_t& one) {
-    return splice::visit(splice::overloaded{[](const mux::change::mentioned&) { return true; },
-                                      [](const mux::change::reacted_to_mine&) { return true; },
-                                      [](const mux::change::reaction_changed& c) { return c.live; },
-                                      [](const auto&) { return false; }},
-                      one);
-  });
-  if (marks_changed)
-    this->save_marks();
+  // The marks: those read back put in, written where they changed, and a
+  // mark made kept with its message.
+  marks.took(changes);
   // What came as it happened, notified: mentions known by the marks the same
   // changes made.
   if (!ask.demo) {
@@ -185,14 +170,6 @@ void app::woken() {
                                  [](const auto&) {}},
                  one);
   }
-  // A mark made: its message kept with it, whole, as it is now -- the list of
-  // marks shows it from there, never "Loading…".
-  if (!ask.demo)
-    for (const mux::change_t& one : changes)
-      splice::visit(splice::overloaded{[&](const mux::change::mentioned& m) { this->keep_marked(m.in, m.event); },
-                                       [&](const mux::change::reacted_to_mine& r) { this->keep_marked(r.in, r.target); },
-                                       [](const auto&) {}},
-                    one);
   // Messages held to a number in all, least recently read out first.
   model->trim(static_cast<std::size_t>(limits.messages_in_memory), root().main().chosen);
   this->refresh();
@@ -213,18 +190,8 @@ void app::woken() {
       else
         this->open_chat(*found, std::nullopt);
     }
-  // Marked messages fetched: kept with their marks now.
-  for (auto it = marked_wanted_.begin(); it != marked_wanted_.end();) {
-    const mux::conversation* chat = model->find(it->second);
-    const mux::message* said = chat ? mux::ui::held_message(*chat, it->first) : nullptr;
-    if (said == nullptr) {
-      ++it;
-      continue;
-    }
-    marked_kept_.insert(it->first);
-    store.keep_marked(it->second, *said);
-    it = marked_wanted_.erase(it);
-  }
+  // What was fetched for the marks: kept with them, the list shown again.
+  marks.fetched(changes);
   // A message jumped to that the server says is not there: the jump
   // stopped, and said why -- it paged the whole history back for it.
   for (const mux::change_t& one : changes)
@@ -242,25 +209,6 @@ void app::woken() {
                                      },
                                      [](const auto&) {}},
                   one);
-  // The list of marks open, shown again where what it waited for came -- a
-  // message fetched for it, or the word that it is not there (its mark
-  // then gone): it said "Loading…" until it was opened again.
-  if (marks_listed_ && root().marks_up()) {
-    const bool waited = std::ranges::any_of(changes, [](const mux::change_t& one) {
-      return splice::visit(splice::overloaded{[](const mux::change::message_added& c) {
-                                                return splice::visit(splice::overloaded{[](mux::placement::aside) { return true; },
-                                                                                        [](const auto&) { return false; }},
-                                                                     c.where);
-                                              },
-                                              [](const mux::change::event_missing&) { return true; },
-                                              [](const auto&) { return false; }},
-                           one);
-    });
-    if (waited)
-      this->apply(request::list_marks{*marks_listed_});
-  } else {
-    marks_listed_.reset();
-  }
   // A link's message fetched: in its thread, where it is in one.
   if (linked_)
     if (const mux::conversation* chat = model->find(linked_->first); chat && mux::ui::held_message(*chat, linked_->second)) {
@@ -278,76 +226,8 @@ void app::woken() {
 
 
 
-void app::keep_marked(const mux::conversation_id& in, const std::string& id) {
-  if (!marked_kept_.insert(id).second)
-    return;
-  if (const mux::conversation* chat = model->find(in))
-    if (const mux::message* said = mux::ui::held_message(*chat, id)) {
-      store.keep_marked(in, *said);
-      return;
-    }
-  // Kept already, in an earlier run: the marks read back at the start are
-  // not fetched again.
-  auto on_disk = marked_on_disk_.find(in);
-  if (on_disk == marked_on_disk_.end())
-    on_disk = marked_on_disk_
-                  .emplace(in, store.marked(in) | std::views::keys | std::ranges::to<std::set<std::string>>())
-                  .first;
-  if (on_disk->second.contains(id))
-    return;
-  // Not here yet: kept once it comes (quoted, in woken), fetched now.
-  marked_kept_.erase(id);
-  marked_wanted_.insert_or_assign(id, in);
-  net->fetch_quoted(in, id);
-}
 
-void app::save_marks() {
-  if (ask.demo)
-    return;
-  mux::config::marks_file out;
-  const auto kept = [](const mux::unread_mark& mark) {
-    return mux::config::kept_mark{mark.event, mark.target, static_cast<std::int64_t>(mark.at.time_since_epoch().count())};
-  };
-  for (const auto& [id, account] : model->accounts())
-    for (const auto& [key, one] : account.conversations) {
-      if (one.unread_mentions.empty() && one.unread_reactions.empty() && one.seen_marks.empty())
-        continue;
-      mux::config::chat_marks chat{.account = id.address, .conversation = one.id.id};
-      if (!one.seen_marks.empty())
-        chat.seen = one.seen_marks;
-      std::ranges::transform(one.unread_mentions, std::back_inserter(chat.mentions), kept);
-      std::ranges::transform(one.unread_reactions, std::back_inserter(chat.reactions), kept);
-      out.chats.push_back(std::move(chat));
-    }
-  // And those of chats not here yet, as they were read.
-  for (const auto& [id, chat] : marks_not_here)
-    out.chats.push_back(chat);
-  (void)vault->write_file(mux::config::state_path("marks.json"), knot::to_json_string(out));
-}
 
-void app::load_marks() {
-  const auto opened = vault->read_file(mux::config::state_path("marks.json"));
-  if (!opened)
-    return;
-  const std::string& text = *opened;
-  const auto read = knot::try_read<mux::config::marks_file>(std::string_view(text));
-  if (!read)
-    return;
-  for (const mux::config::chat_marks& chat : read->chats) {
-    const mux::conversation_id id{{mux::ui::protocol_of(chat.account), chat.account}, chat.conversation};
-    const auto at = [](std::int64_t ms) {
-      return std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(ms));
-    };
-    marks_not_here.insert_or_assign(id, chat);
-    // What was seen first, so that nothing seen comes back as unread.
-    if (chat.seen)
-      pending_marks.emplace_back(id, mux::change_t{mux::change::marks_seen{id, *chat.seen}});
-    for (const auto& mark : chat.mentions)
-      pending_marks.emplace_back(id, mux::change_t{mux::change::mentioned{id, mark.event, at(mark.at)}});
-    for (const auto& mark : chat.reactions)
-      pending_marks.emplace_back(id, mux::change_t{mux::change::reacted_to_mine{id, mark.event, mark.target, at(mark.at)}});
-  }
-}
 
 message_store::gaps_t& app::gaps_of(const mux::conversation_id& in) {
   auto found = gaps_.find(in);
@@ -503,7 +383,7 @@ void app::before_frame() {
       const auto marked = [&](const mux::unread_mark& mark) { return std::ranges::contains(shown, mark.target); };
       if (std::ranges::any_of(chat->unread_mentions, marked) || std::ranges::any_of(chat->unread_reactions, marked)) {
         model->apply(mux::change_t{mux::change::marks_shown{*chosen, std::move(shown)}});
-        this->save_marks();
+        marks.save();
         this->refresh();
       }
     }
@@ -863,7 +743,7 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
   this->model->show_deleted = this->history.show_deleted;
   this->settings.apply_limits();
   this->proxies = proxies;
-  this->load_marks();
+  marks.load();
   this->notifications = saved.notifications.value_or(mux::config::notification_settings{});
   // UnifiedPush only where chosen; off by default.
   if (notifications.unified_push.value_or(false) && !demo)

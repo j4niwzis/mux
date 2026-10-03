@@ -15,6 +15,19 @@ import mux.ui;
 
 export namespace mux::app {
 
+// What is asked of an account, where its protocol's account can do it: the
+// call made where it compiles for the account's type -- the ask says what
+// it calls in its return type -- and nothing where it does not. Chosen by
+// overload resolution, the constrained one where it applies: a protocol's
+// account has only what it does, with nothing written for the rest.
+template <class Ask, class Account>
+  requires std::invocable<Ask&, Account&>
+void ask_if_able(Ask ask, Account& account) {
+  ask(account);
+}
+template <class Ask, class Account>
+void ask_if_able(Ask, Account&) {}
+
 // The window's side of the mailbox: wake it.
 struct wake_window {
   void operator()() const { mux::host::wake(); }
@@ -141,7 +154,9 @@ struct network {
     splice::visit([](auto& one) { one->start(); }, entry.account);
     // Started after the endpoint came: given it too.
     if (push_endpoint)
-      splice::visit([&](auto& one) { one->set_pusher(push_endpoint); }, entry.account);
+      splice::visit([&](auto& one) {
+        ask_if_able([&](auto& a) -> decltype(void(a.set_pusher(push_endpoint))) { a.set_pusher(push_endpoint); }, *one);
+      }, entry.account);
     accounts.push_back(std::move(entry));
   }
 
@@ -195,7 +210,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == in.account)
-                account->edit_caption(in.id, id, caption, picture);
+                ask_if_able([&](auto& a) -> decltype(void(a.edit_caption(in.id, id, caption, picture))) { a.edit_caption(in.id, id, caption, picture); }, *account);
             },
             one.account);
     });
@@ -235,7 +250,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == in.account)
-                account->send_file(in.id, local, bytes, name, mimetype, image, width, height, caption, reply_to, thread, video);
+                ask_if_able([&](auto& a) -> decltype(void(a.send_file(in.id, local, bytes, name, mimetype, image, width, height, caption, reply_to, thread, video))) { a.send_file(in.id, local, bytes, name, mimetype, image, width, height, caption, reply_to, thread, video); }, *account);
             },
             one.account);
     });
@@ -247,7 +262,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == in.account)
-                account->react(in.id, target, key, on);
+                ask_if_able([&](auto& a) -> decltype(void(a.react(in.id, target, key, on))) { a.react(in.id, target, key, on); }, *account);
             },
             one.account);
     });
@@ -260,19 +275,21 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == in.account)
-                ask(*account);
+                ask_if_able(ask, *account);
             },
             one.account);
     });
   }
   void view_source(const mux::conversation_id& in, std::string event) {
-    on_account_of(in, [room = in.id, event = std::move(event)](auto& account) { account.view_source(room, event); });
+    on_account_of(in, [room = in.id, event = std::move(event)](auto& account) -> decltype(void(account.view_source(room, event))) {
+      account.view_source(room, event);
+    });
   }
   void list_state(const mux::conversation_id& in) {
-    on_account_of(in, [room = in.id](auto& account) { account.list_state(room); });
+    on_account_of(in, [room = in.id](auto& account) -> decltype(void(account.list_state(room))) { account.list_state(room); });
   }
   void send_custom(const mux::conversation_id& in, std::string type, std::optional<std::string> key, std::string json) {
-    on_account_of(in, [room = in.id, type = std::move(type), key = std::move(key), json = std::move(json)](auto& account) {
+    on_account_of(in, [room = in.id, type = std::move(type), key = std::move(key), json = std::move(json)](auto& account) -> decltype(void(account.send_custom(room, type, key, json))) {
       account.send_custom(room, type, key, json);
     });
   }
@@ -283,7 +300,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == to.account)
-                account->send_sticker(to.id, sticker, reply_to);
+                ask_if_able([&](auto& a) -> decltype(void(a.send_sticker(to.id, sticker, reply_to))) { a.send_sticker(to.id, sticker, reply_to); }, *account);
             },
             one.account);
     });
@@ -322,7 +339,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == by)
-                account->fetch_preview(url);
+                ask_if_able([&](auto& a) -> decltype(void(a.fetch_preview(url))) { a.fetch_preview(url); }, *account);
             },
             one.account);
     });
@@ -334,7 +351,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == by)
-                account->create_direct(user);
+                ask_if_able([&](auto& a) -> decltype(void(a.create_direct(user))) { a.create_direct(user); }, *account);
             },
             one.account);
     });
@@ -345,7 +362,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == by)
-                account->create_group(name);
+                ask_if_able([&](auto& a) -> decltype(void(a.create_group(name))) { a.create_group(name); }, *account);
             },
             one.account);
     });
@@ -357,7 +374,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == from.account)
-                account->forward(from.id, event, to.id);
+                ask_if_able([&](auto& a) -> decltype(void(a.forward(from.id, event, to.id))) { a.forward(from.id, event, to.id); }, *account);
             },
             one.account);
     });
@@ -369,7 +386,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == in.account)
-                account->manage(in.id, action);
+                ask_if_able([&](auto& a) -> decltype(void(a.manage(in.id, action))) { a.manage(in.id, action); }, *account);
             },
             one.account);
     });
@@ -381,7 +398,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == in.account)
-                account->fetch_quoted(in.id, target);
+                ask_if_able([&](auto& a) -> decltype(void(a.fetch_quoted(in.id, target))) { a.fetch_quoted(in.id, target); }, *account);
             },
             one.account);
     });
@@ -393,7 +410,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == in.account)
-                account->pin(in.id, target, on);
+                ask_if_able([&](auto& a) -> decltype(void(a.pin(in.id, target, on))) { a.pin(in.id, target, on); }, *account);
             },
             one.account);
     });
@@ -405,7 +422,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == in.account)
-                account->typing(in.id, on);
+                ask_if_able([&](auto& a) -> decltype(void(a.typing(in.id, on))) { a.typing(in.id, on); }, *account);
             },
             one.account);
     });
@@ -417,7 +434,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == by)
-                account->search_directory(server, query);
+                ask_if_able([&](auto& a) -> decltype(void(a.search_directory(server, query))) { a.search_directory(server, query); }, *account);
             },
             one.account);
     });
@@ -429,7 +446,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == by)
-                account->follow(room);
+                ask_if_able([&](auto& a) -> decltype(void(a.follow(room))) { a.follow(room); }, *account);
             },
             one.account);
     });
@@ -441,7 +458,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == by)
-                account->explore_space(room);
+                ask_if_able([&](auto& a) -> decltype(void(a.explore_space(room))) { a.explore_space(room); }, *account);
             },
             one.account);
     });
@@ -455,7 +472,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == by)
-                account->create_room(name, topic, open, alias, federate, encrypted);
+                ask_if_able([&](auto& a) -> decltype(void(a.create_room(name, topic, open, alias, federate, encrypted))) { a.create_room(name, topic, open, alias, federate, encrypted); }, *account);
             },
             one.account);
     });
@@ -467,7 +484,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == in.account)
-                account->list_threads(in.id);
+                ask_if_able([&](auto& a) -> decltype(void(a.list_threads(in.id))) { a.list_threads(in.id); }, *account);
             },
             one.account);
     });
@@ -478,7 +495,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == in.account)
-                account->load_thread(in.id, root);
+                ask_if_able([&](auto& a) -> decltype(void(a.load_thread(in.id, root))) { a.load_thread(in.id, root); }, *account);
             },
             one.account);
     });
@@ -491,7 +508,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == in.account)
-                account->send_in_thread(in.id, body, root, latest, reply_to);
+                ask_if_able([&](auto& a) -> decltype(void(a.send_in_thread(in.id, body, root, latest, reply_to))) { a.send_in_thread(in.id, body, root, latest, reply_to); }, *account);
             },
             one.account);
     });
@@ -503,7 +520,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == by)
-                account->list_packs(room);
+                ask_if_able([&](auto& a) -> decltype(void(a.list_packs(room))) { a.list_packs(room); }, *account);
             },
             one.account);
     });
@@ -514,7 +531,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == by)
-                account->save_pack(pack);
+                ask_if_able([&](auto& a) -> decltype(void(a.save_pack(pack))) { a.save_pack(pack); }, *account);
             },
             one.account);
     });
@@ -525,7 +542,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == by)
-                account->delete_pack(room, state_key);
+                ask_if_able([&](auto& a) -> decltype(void(a.delete_pack(room, state_key))) { a.delete_pack(room, state_key); }, *account);
             },
             one.account);
     });
@@ -536,7 +553,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == by)
-                account->upload_pack_picture(picture, bytes);
+                ask_if_able([&](auto& a) -> decltype(void(a.upload_pack_picture(picture, bytes))) { a.upload_pack_picture(picture, bytes); }, *account);
             },
             one.account);
     });
@@ -549,7 +566,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == by)
-                account->tell_trust(user);
+                ask_if_able([&](auto& a) -> decltype(void(a.tell_trust(user))) { a.tell_trust(user); }, *account);
             },
             one.account);
     });
@@ -561,7 +578,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == by)
-                account->accept_identity(user);
+                ask_if_able([&](auto& a) -> decltype(void(a.accept_identity(user))) { a.accept_identity(user); }, *account);
             },
             one.account);
     });
@@ -573,7 +590,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == by)
-                account->set_only_verified(on);
+                ask_if_able([&](auto& a) -> decltype(void(a.set_only_verified(on))) { a.set_only_verified(on); }, *account);
             },
             one.account);
     });
@@ -585,7 +602,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == by)
-                account->tell_devices(user);
+                ask_if_able([&](auto& a) -> decltype(void(a.tell_devices(user))) { a.tell_devices(user); }, *account);
             },
             one.account);
     });
@@ -596,7 +613,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == by)
-                account->search_people(term);
+                ask_if_able([&](auto& a) -> decltype(void(a.search_people(term))) { a.search_people(term); }, *account);
             },
             one.account);
     });
@@ -608,7 +625,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == by)
-                account->preview_room(room, via);
+                ask_if_able([&](auto& a) -> decltype(void(a.preview_room(room, via))) { a.preview_room(room, via); }, *account);
             },
             one.account);
     });
@@ -698,7 +715,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == by)
-                account->join(room, via);
+                ask_if_able([&](auto& a) -> decltype(void(a.join(room, via))) { a.join(room, via); }, *account);
             },
             one.account);
     });
@@ -710,7 +727,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == by)
-                account->knock(room, via, reason);
+                ask_if_able([&](auto& a) -> decltype(void(a.knock(room, via, reason))) { a.knock(room, via, reason); }, *account);
             },
             one.account);
     });
@@ -722,7 +739,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == in.account)
-                account->fetch_members(in.id);
+                ask_if_able([&](auto& a) -> decltype(void(a.fetch_members(in.id))) { a.fetch_members(in.id); }, *account);
             },
             one.account);
     });
@@ -735,7 +752,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == of)
-                account->fetch_media(source, use, size);
+                ask_if_able([&](auto& a) -> decltype(void(a.fetch_media(source, use, size))) { a.fetch_media(source, use, size); }, *account);
             },
             one.account);
     });
@@ -747,7 +764,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == of)
-                account->cancel_media(source);
+                ask_if_able([&](auto& a) -> decltype(void(a.cancel_media(source))) { a.cancel_media(source); }, *account);
             },
             one.account);
     });
@@ -759,14 +776,18 @@ struct network {
     loop.post([this, url = std::move(url)] {
       push_endpoint = url;
       for (auto& one : accounts)
-        splice::visit([&](auto& account) { account->set_pusher(url); }, one.account);
+        splice::visit([&](auto& account) {
+          ask_if_able([&](auto& a) -> decltype(void(a.set_pusher(url))) { a.set_pusher(url); }, *account);
+        }, one.account);
     });
   }
   // A push come: every account syncs now.
   void sync_now() {
     loop.post([this] {
       for (auto& one : accounts)
-        splice::visit([](auto& account) { account->sync_now(); }, one.account);
+        splice::visit([](auto& account) {
+          ask_if_able([](auto& a) -> decltype(void(a.sync_now())) { a.sync_now(); }, *account);
+        }, one.account);
     });
   }
   // An avatar's picture, fetched by the account it is of, for `key`.
@@ -776,7 +797,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == of)
-                account->fetch_avatar(source, key);
+                ask_if_able([&](auto& a) -> decltype(void(a.fetch_avatar(source, key))) { a.fetch_avatar(source, key); }, *account);
             },
             one.account);
     });
@@ -788,7 +809,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == in.account)
-                account->load_context(in.id, target);
+                ask_if_able([&](auto& a) -> decltype(void(a.load_context(in.id, target))) { a.load_context(in.id, target); }, *account);
             },
             one.account);
     });
@@ -799,7 +820,7 @@ struct network {
         splice::visit(
             [&](auto& account) {
               if (account->id() == in.account)
-                account->load_newer(in.id, from);
+                ask_if_able([&](auto& a) -> decltype(void(a.load_newer(in.id, from))) { a.load_newer(in.id, from); }, *account);
             },
             one.account);
     });

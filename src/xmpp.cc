@@ -188,72 +188,18 @@ class account {
     this->spawn_guarded([this] { run(); });
   }
 
+  // What an account of another protocol does and this does not -- avatars
+  // (XEP-0084), reactions (XEP-0444), chat states (XEP-0085), files (HTTP
+  // upload, XEP-0363), stickers, threads, pins, link previews, directories,
+  // new rooms, forwarding, push -- is not here at all: what is asked of an
+  // account is done where its type has it (mux.app.network's ask_if_able),
+  // and nothing is written for what it has not.
+
   // A chat message sent: from any fiber, or posted to the loop from another
   // thread. What was sent is said as a change at once, and marked sent once
   // it has gone out.
   // A displayed marker (XEP-0333) for a message: its sender, or the room,
   // sees it was read.
-  // Avatars of XMPP contacts (XEP-0084) are not fetched yet.
-  void fetch_avatar(std::string, std::string) {}
-  // UnifiedPush is Matrix's here: an XMPP server pushes by XEP-0357, not yet.
-  void set_pusher(const std::optional<std::string>&) {}
-  void sync_now() {}
-  void fetch_media(std::string, media_use_t, int, bool = false) {}
-  void cancel_media(std::string) {}
-  // A room's occupants come with its presence; nothing to ask for.
-  void fetch_members(std::string) {}
-  // Reactions (XEP-0444) are not sent yet.
-  void react(std::string, std::string, std::string, bool) {}
-  // The developer tools are Matrix's.
-  void view_source(std::string, std::string) {}
-  void list_state(std::string) {}
-  void send_custom(std::string, std::string, std::optional<std::string>, std::string) {}
-  // Stickers are Matrix's.
-  void send_sticker(std::string, mux::emote, std::optional<std::string> = std::nullopt) {}
-  // Link previews come from a Matrix homeserver alone.
-  void fetch_preview(std::string) {}
-  void preview_room(std::string, std::vector<std::string>) {}
-  void search_directory(std::string, std::string) {}
-  void follow(std::optional<std::string>) {}
-  void explore_space(std::string) {}
-  void create_room(std::string, std::string, bool, std::string, bool = true, bool = false) {}
-  void search_people(std::string) {}
-  void tell_trust(std::string) {}
-  void set_only_verified(bool) {}
-  void accept_identity(std::string) {}
-  void reset_backup() {}
-  void delete_backup() {}
-  void sign_out_unverified(std::string) {}
-  void tell_devices(std::string) {}
-  void list_packs(std::optional<std::string>) {}
-  void list_threads(std::string) {}
-  void load_thread(std::string, std::string) {}
-  void send_in_thread(std::string, std::string, std::string, std::string, std::optional<std::string>) {}
-  void save_pack(emote_pack) {}
-  void delete_pack(std::string, std::string) {}
-  void upload_pack_picture(pack_picture, std::string) {}
-  void edit_caption(std::string, std::string, std::string, mux::attachment) {}
-  // New chats and groups are made over Matrix alone for now.
-  void create_direct(std::string) {}
-  void create_group(std::string) {}
-  // Forwarding is over Matrix alone for now.
-  void forward(std::string, std::string, std::string) {}
-  // Rooms are managed over Matrix alone for now.
-  void manage(std::string, room_action_t) {}
-  // A quoted message is fetched by Matrix alone for now.
-  void fetch_quoted(std::string, std::string) {}
-  // Pinning is Matrix's: nothing to do over XMPP.
-  void pin(std::string, std::string, bool) {}
-  // Chat states (XEP-0085) are not sent yet.
-  void typing(std::string, bool) {}
-  // Rooms are joined through their bookmarks; not from a link yet.
-  void join(std::string, std::vector<std::string>) {}
-  void knock(std::string, std::vector<std::string>, std::string) {}
-  // Files over XMPP (HTTP upload, XEP-0363) are not sent yet.
-  void send_file(std::string, std::string, std::string, std::string, std::string, bool, int, int, std::string,
-                 std::optional<std::string> = std::nullopt, std::optional<thread_place> = std::nullopt,
-                 std::optional<video_look> = std::nullopt) {}
-
   void mark_read(std::string to, std::string id) {
     this->spawn_guarded([this, to = std::move(to), id = std::move(id)] {
       if (!session_)
@@ -273,9 +219,8 @@ class account {
   // Older messages of a conversation, from the server's archive (XEP-0313):
   // one's own archive with a contact, a room's own for a room. `before` is
   // the archive id to page back from, or empty for the latest page.
-  // No window around a message here: a jump pages back instead.
-  void load_context(std::string, std::string) {}
-  void load_newer(std::string, std::string) {}
+  // No window around a message here, and so nothing newer to page to: a
+  // jump pages back instead.
   void load_older(std::string with, std::string before) {
     this->spawn_guarded([this, with = std::move(with), before = std::move(before)] {
       if (!session_)

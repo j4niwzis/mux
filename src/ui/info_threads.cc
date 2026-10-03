@@ -75,6 +75,8 @@ struct threads_panel : nodes::Stack {
   };
   // A thread in the list: its root's author and words, how many answers and
   // the latest's time; pressed, opened.
+  // The colours it is made in, for the rows it makes later.
+  const palette* colours_ = nullptr;
   struct thread_row : nodes::Stack {
     Actions* actions;
     std::string root;
@@ -84,10 +86,10 @@ struct threads_panel : nodes::Stack {
         nodes::Text said;
         nodes::Text meta;
       } parts;
-      lines_t(std::string who, std::string words, std::string meta)
-          : parts{.name = nodes::Text(std::move(who), 13.0f, accent_colour, true),
-                  .said = nodes::Text(std::move(words), 13.0f, text_colour),
-                  .meta = nodes::Text(std::move(meta), 12.0f, dim_colour)} {
+      lines_t(const palette& colours, std::string who, std::string words, std::string meta)
+          : parts{.name = nodes::Text(std::move(who), 13.0f, colours.accent, true),
+                  .said = nodes::Text(std::move(words), 13.0f, colours.text),
+                  .meta = nodes::Text(std::move(meta), 12.0f, colours.dim)} {
         this->setGap(2.0f);
         fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
         for (nodes::Text* each : {&parts.name, &parts.said, &parts.meta}) {
@@ -100,14 +102,14 @@ struct threads_panel : nodes::Stack {
       avatar_mark face;
       lines_t lines;
     } parts;
-    thread_row(Actions* a, const conversation& chat, const message& said)
+    thread_row(Actions* a, const palette& colours, const conversation& chat, const message& said)
         : actions(a), root(said.id),
           parts{.face = avatar_mark(said.sender, sender_name(chat, said.sender), 36.0f),
-                .lines = lines_t(sender_name(chat, said.sender), flat(said.body.plain), meta_of(chat, said))} {
+                .lines = lines_t(colours, sender_name(chat, said.sender), flat(said.body.plain), meta_of(chat, said))} {
       this->setHorizontal();
       this->setGap(10.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 12.0f, 8.0f, 12.0f}, .cornerRadius = 8.0f,
-                    .hoverBackground = chosen_colour});
+                    .hoverBackground = colours.chosen});
       parts.face.apply({.alignSelf = scene::align::kStart});
     }
     [[nodiscard]] static std::string flat(std::string text) {
@@ -144,8 +146,8 @@ struct threads_panel : nodes::Stack {
   using rows_t = nodes::Flow<std::vector<thread_row>>;
   struct parts_t {
     head_t head;
-    nodes::Box<> divider{band_colour};
-    nodes::Text empty{"No threads here yet.", 13.0f, dim_colour};
+    nodes::Box<> divider;
+    nodes::Text empty;
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 2.0f, .wrap = false}, {})};
     // The thread open: the chat's own timeline, its root and answers in it
     // -- one renderer for both: runs, readers, quotes, presses,
@@ -154,8 +156,15 @@ struct threads_panel : nodes::Stack {
     composer_bar<Actions, in_thread> line;
   } parts;
   explicit threads_panel(const ui_needs<Actions>& n) : threads_panel(n, n.actions) {}
-  threads_panel(const ui_needs<Actions>& n, Actions* a) : actions(a), parts{.head = head_t("Threads", {a}, {a}, false, true), .answers = timeline_area<Actions>(n), .line = composer_bar<Actions, in_thread>(n, {this}, {this}, {a}, {a}, {this})} {
-    fState.apply({.fillY = true, .background = sidebar_colour});
+  threads_panel(const ui_needs<Actions>& n, Actions* a)
+      : actions(a),
+        colours_(n.colours),
+        parts{.head = head_t(*n.colours, "Threads", {a}, {a}, false, true),
+              .divider = nodes::Box<>(n.colours->band),
+              .empty = nodes::Text("No threads here yet.", 13.0f, n.colours->dim),
+              .answers = timeline_area<Actions>(n),
+              .line = composer_bar<Actions, in_thread>(n, {this}, {this}, {a}, {a}, {this})} {
+    fState.apply({.fillY = true, .background = n.colours->sidebar});
     parts.divider.apply({.fillX = true, .height = 1.0f});
     parts.empty.apply({.margin = {16.0f, 16.0f, 0.0f, 16.0f}});
     for (auto* list : std::initializer_list<scene::Node*>{&parts.list, &parts.answers})
@@ -199,7 +208,7 @@ struct threads_panel : nodes::Stack {
       auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
       rows.clear();
       for (const message* one : roots)
-        rows.emplace_back(actions, chat, *one);
+        rows.emplace_back(actions, *colours_, chat, *one);
       parts.empty.setVisible(roots.empty());
       parts.list.invalidateLayout();
       shown.clear();

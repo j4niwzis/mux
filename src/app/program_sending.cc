@@ -32,7 +32,7 @@ void app::apply(const request::switch_account& one) {
 }
 
 void app::apply(const request::pop_panel&) {
-  pending_login.reset();
+  accounts_screen.forget_login();
   root().back_panel();
   this->refresh();
 }

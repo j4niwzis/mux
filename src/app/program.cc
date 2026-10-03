@@ -53,6 +53,7 @@ import mux.app.manage;
 import mux.app.looks;
 import mux.app.threads;
 import mux.app.emoji;
+import mux.app.accounts;
 import mux.logic.links;
 
 export namespace mux::app {
@@ -86,6 +87,7 @@ struct app : kept_settings {
   looks_part looks{shared, *this};
   threads_part threads{shared};
   emoji_part emoji{shared};
+  accounts_part accounts_screen{shared, *this};
   // Work off the UI's thread: decoding pictures, reading the disk.
   workers work;
   // Files chosen in the dialog, or dropped on the window: to the outbox.
@@ -124,14 +126,15 @@ struct app : kept_settings {
   }
   template <class Request>
   void route(const Request& one) {
-    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> || takes<marks_part, Request> || takes<history_part, Request> || takes<verification_part, Request> || takes<proxies_part, Request> || takes<packs_part, Request> || takes<rooms_part, Request> || takes<room_card_part, Request> || takes<preferences_part, Request> || takes<manage_part, Request> || takes<looks_part, Request> || takes<threads_part, Request> || takes<emoji_part, Request> ||
+    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> || takes<marks_part, Request> || takes<history_part, Request> || takes<verification_part, Request> || takes<proxies_part, Request> || takes<packs_part, Request> || takes<rooms_part, Request> || takes<room_card_part, Request> || takes<preferences_part, Request> || takes<manage_part, Request> || takes<looks_part, Request> || takes<threads_part, Request> || takes<emoji_part, Request> || takes<accounts_part, Request> ||
                       takes<app, Request>, "a request no part of the program takes");
     if (!offer(search, one) && !offer(pictures, one) && !offer(reading, one) && !offer(outbox, one) &&
         !offer(settings, one) && !offer(menu, one) && !offer(notices, one) && !offer(marks, one) && !offer(paging, one) &&
         !offer(verification, one) && !offer(proxying, one) && !offer(packs, one) &&
         !offer(rooms, one) && !offer(room_card, one) &&
         !offer(preferences, one) && !offer(manage, one) &&
-        !offer(looks, one) && !offer(threads, one) && !offer(emoji, one))
+        !offer(looks, one) && !offer(threads, one) && !offer(emoji, one) &&
+        !offer(accounts_screen, one))
       offer(*this, one);
   }
 
@@ -145,17 +148,8 @@ struct app : kept_settings {
   mux::platform::dialogs::dialogs system_dialogs;
   mux::model* model = nullptr;
   network* net = nullptr;
-  // The proxy chosen for the account being added, as it is added.
-  std::optional<std::string> new_proxy;
-  // What the message field's text is: a new message, an answer to one, or
-  // one edited; and the message whose menu is up.
-  // The drawer, left open under a page coming in over it, to go when the
-  // page is in.
-  bool drawer_waits = false;
   // A room the user made, to be shown as soon as the model has it.
   std::optional<mux::conversation_id> made_room_;
-  // The account being added that a login is waiting to hear about.
-  std::optional<std::string> pending_login;
   // What plays voice messages: handed to the window and to the parts.
   mux::platform::audio::speaker speaker;
   // The theme's colours: handed to the window, which is made in them --
@@ -195,15 +189,8 @@ struct app : kept_settings {
   window_type& root();
 
   void show_conversations();
-  accounts& show_accounts();
-  // The accounts, with this one's settings up beside them.
-  accounts& show_account(const std::string& address);
-  // Adding an account: beside the list, on the accounts page.
-  void show_adding();
 
 
-  // The panel that is up, if one is, and the XMPP form in it, if there is one.
-  [[nodiscard]] mux::ui::account_form<actions>* form_up();
 
   // Everything brought up to date with the model: each panel by its own
   // overload.
@@ -219,24 +206,6 @@ struct app : kept_settings {
   void lock(std::vector<mux::config::account_t> extra, bool demo);
   std::vector<mux::config::account_t> waiting_extra;
   bool waiting_demo = false;
-  void bring_up_to_date(accounts& panel);
-
-  // A new account waiting to log in: online is done, failed is said.
-  template <class Form>
-  void watch_login(Form& form) {
-    if (!pending_login)
-      return;
-    const auto found = model->accounts().find(mux::account_id{mux::ui::protocol_of(*pending_login), *pending_login});
-    if (found == model->accounts().end())
-      return;
-    splice::visit(splice::overloaded{[&](const mux::connection::online&) { this->show_conversations(); },
-                               [&](const mux::connection::failed& why) {
-                                 form.say(why.error.empty() ? "The server said no." : why.error, true);
-                                 pending_login.reset();
-                               },
-                               [&](const auto&) { form.say("Connecting…", false); }},
-               found->second.state);
-  }
 
   void apply(const request::choose& one);
 
@@ -250,17 +219,7 @@ struct app : kept_settings {
   // Out of the chat open, back to the chats: what was written kept as its draft.
   void apply(const request::close_chat&);
   void apply(const request::back&);
-  void apply(const request::open_accounts&);
-  void apply(const request::open_new_account&);
-  void apply(const request::add_account_of&);
-  void apply(const request::select_account& one);
-  void apply(const request::toggle_advanced&);
-  void apply(const request::toggle_plain&);
-  void apply(const request::submit_login&);
-  void apply(const request::flip_enabled& one);
-  void apply(const request::remove_account& one);
   void apply(const request::open_drawer&);
-  void apply(const request::show_account& one);
   void apply(const request::quit&);
   void apply(const request::toggle_info&);
   void apply(const request::jump_to_end&);
@@ -342,12 +301,9 @@ struct app : kept_settings {
   template <class Turn>
   [[nodiscard]] bool reseal(Turn turn);
   void apply(const request::resize_info& one);
-  void apply(const request::choose_new_proxy& one);
-  void apply(const request::close_account_pages&);
   // ← on the accounts page: from an account's pages to the list, from the
   // list to the chats.
   void apply(const request::accounts_back&);
-  void apply(const request::account_page& one);
   void apply(const request::open_replacement&);
   // A limit halved or doubled, within its bounds: kept, and in force at once.
   // What is kept on disk, gone: the stored messages and the pictures, and
@@ -371,84 +327,7 @@ struct app : kept_settings {
 
   // How much moves, from now on and in the file.
 
-  void switch_form(const mux::protocol_t& speaks);
 
-  // A new account: saved, and started; the panel waits to hear how it went.
-  template <class Form>
-  void add(Form& form) {
-    auto typed = form.account();
-    if (!typed) {
-      form.say(typed.error(), true);
-      return;
-    }
-    mux::config::account_t account{.own = mux::config::kept_t{std::move(*typed)}};
-    mux::config::proxy_in(account) = std::exchange(new_proxy, std::nullopt);
-    const std::string address = mux::config::address_of(account);
-    if (this->find(address) != saved.end()) {
-      form.say("That account is already here.", true);
-      return;
-    }
-    saved.push_back(account);
-    if (auto failed = this->write()) {
-      form.say(*failed, true);
-      return;
-    }
-    net->add(account, proxies);
-    pending_login = address;
-    form.say("Connecting…", false);
-  }
-
-  // An account's settings changed: the old one stops, and the new one, on
-  // or off as the old one was, takes its place in the list.
-  template <class Form>
-  void edit(Form& form) {
-    auto typed = form.account();
-    if (!typed) {
-      form.say(typed.error(), true);
-      return;
-    }
-    mux::config::account_t account{.own = mux::config::kept_t{std::move(*typed)}};
-    const std::string address = mux::config::address_of(account);
-    const std::string was = form.editing.value_or(address);
-    const auto old = this->find(was);
-    if (old == saved.end())
-      return;
-    if (address != was && this->find(address) != saved.end()) {
-      form.say("That account is already here.", true);
-      return;
-    }
-    // What the form does not show is kept: every setting every account has
-    // -- on or off, the proxy, receipts, its colour and look. (Only four of
-    // them were, and an edit dropped the rest.)
-    account.shared = old->shared;
-    // And what its protocol keeps through an edit (a Matrix session: the
-    // device it has, not a new one at every Save).
-    splice::visit([](auto& now, const auto& before) {
-                    using mux::proto::kept_defaults::carry_over;
-                    carry_over(now, before);
-                  },
-                  account.own, std::as_const(old->own));
-    // Nothing changed: saved as it is, and the connection left alone.
-    const bool same = account == *old;
-    *old = account;
-    const auto failed = this->write();
-    if (!same) {
-      net->remove(was);
-      if (mux::config::enabled_of(account))
-        net->add(account, proxies);
-    }
-    // The form is rebuilt from what was saved: `form` is gone after this.
-    auto& panel = this->show_account(address);
-    if (auto* editor = panel.editor())
-      editor->say(failed ? *failed : std::string("Saved."), failed.has_value());
-  }
-
-  void flip_enabled(const std::string& address);
-
-  void remove(const std::string& address);
-
-  // Written, and what went wrong said on the accounts page.
-  void save_from_accounts();
 };
 
 }  // namespace mux::app

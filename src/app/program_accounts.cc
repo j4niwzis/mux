@@ -59,21 +59,6 @@ void app::apply(const request::close_notice&) { root().close_notice(); }
 
 void app::apply(const request::resize_info& one) { root().main().resize_info(one.x); }
 
-void app::apply(const request::choose_new_proxy& one) {
-  if (auto* up = root().open_panel())
-    splice::visit(
-        [&](accounts& panel) {
-          if (auto* pane = panel.adding())
-            pane->set_proxy(one.index);
-        },
-        *up);
-}
-
-void app::apply(const request::close_account_pages&) {
-  if (auto* up = root().open_panel())
-    splice::visit([](accounts& panel) { panel.close_pages(); }, *up);
-}
-
 void app::apply(const request::accounts_back&) {
   auto* up = root().open_panel();
   if (!up)
@@ -88,13 +73,6 @@ void app::apply(const request::accounts_back&) {
           this->apply(request::pop_panel{});
       },
       *up);
-}
-
-void app::apply(const request::account_page& one) {
-  shared.with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
-    // A page that wants something of the server asks for it as it opens.
-    panel.show_page(one.page, account, *model, proxies, theme);
-  });
 }
 
 // A tombstoned room's way on: the room it was upgraded to, as its

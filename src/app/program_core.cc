@@ -296,9 +296,9 @@ void app::before_frame() {
     favourite_stickers = mux::ui::favourite_stickers();
     (void)this->write();
   }
-  if (drawer_waits && !root().pages_moving()) {
+  if (shared.drawer_waits && !root().pages_moving()) {
     root().close_drawer_now();
-    drawer_waits = false;
+    shared.drawer_waits = false;
   }
 }
 
@@ -312,47 +312,14 @@ auto app::root() -> window_type& { return scene.root(); }
 
 void app::show_conversations() {
   root().close_drawer();
-  pending_login.reset();
+  accounts_screen.forget_login();
   root().close();
   this->refresh();
 }
 
-auto app::show_accounts() -> accounts& {
-  // From the drawer, the page comes in over it, and the drawer goes once
-  // the page is in: not two things moving at once.
-  if (root().drawer_open())
-    drawer_waits = true;
-  root().close_settings();
-  pending_login.reset();
-  auto& panel = root().open<accounts>();
-  if (config_error)
-    panel.say(*config_error);
-  this->refresh();
-  return panel;
-}
 
-auto app::show_account(const std::string& address) -> accounts& {
-  auto& panel = this->show_accounts();
-  if (const auto found = this->find(address); found != saved.end()) {
-    panel.select(*found, *model);
-    panel.show(saved, *model);
-  }
-  return panel;
-}
 
-void app::show_adding() {
-  auto& panel = this->show_accounts();
-  panel.proxies = proxies;
-  panel.show_adding();
-  this->refresh();
-}
 
-auto app::form_up() -> mux::ui::account_form<actions>* {
-  auto* up = root().open_panel();
-  if (!up)
-    return nullptr;
-  return splice::visit([](auto& panel) { return panel.form(); }, *up);
-}
 
 void app::refresh(std::source_location from) {
   static const bool traced = std::getenv("MUX_TRACE_FRAMES") != nullptr;
@@ -516,18 +483,13 @@ void app::refresh(std::source_location from) {
       limits.emplace(one.id, this->jump_search_of(one.id));
   root().show(saved, *model);
   root().main().show(*model);
+  // The accounts page, where it is up: the account being added shown in,
+  // and the chats then.
   if (auto* up = root().open_panel())
-    splice::visit([this](auto& panel) { this->bring_up_to_date(panel); }, *up);
+    if (splice::visit([this](auto& panel) { return accounts_screen.bring_up_to_date(panel); }, *up))
+      this->show_conversations();
 }
 
-void app::bring_up_to_date(accounts& panel) {
-  panel.proxies = proxies;
-  panel.show(saved, *model);
-  if (auto* pane = panel.adding()) {
-    pane->set_proxies(proxies);
-    splice::visit([this](auto& form) { this->watch_login(form); }, pane->parts.form);
-  }
-}
 
 // What is kept, applied: once at the start, or once the vault is opened.
 void app::begin(const mux::config::file& saved, std::vector<mux::config::account_t> extra, bool demo,

@@ -111,66 +111,7 @@ void app::apply(const request::leave_chat&) {
 
 void app::apply(const request::back&) { this->show_conversations(); }
 
-void app::apply(const request::open_accounts&) { (void)this->show_accounts(); }
-
-void app::apply(const request::open_new_account&) { this->show_adding(); }
-
-void app::apply(const request::add_account_of& one) { this->switch_form(one.speaks); }
-
-void app::apply(const request::select_account& one) {
-  auto* up = root().open_panel();
-  if (!up)
-    return;
-  splice::visit(
-      [&](accounts& panel) {
-        if (const auto found = this->find(one.address); found != saved.end()) {
-          pending_login.reset();
-          panel.select(*found, *model);
-          panel.show(saved, *model);
-        }
-      },
-      *up);
-}
-
-// A form's own buttons -- XMPP's Advanced, its PLAIN switch -- asked of the
-// form up, where it has them.
-void app::apply(const request::toggle_advanced&) {
-  if (auto* up = this->form_up())
-    splice::visit([](auto& form) {
-      mux::app::ask_if_able([](auto& f) -> decltype(void(f.show_advanced(!f.advanced))) { f.show_advanced(!f.advanced); }, form);
-    }, *up);
-}
-
-void app::apply(const request::toggle_plain&) {
-  if (auto* up = this->form_up())
-    splice::visit([](auto& form) {
-      mux::app::ask_if_able([](auto& f) -> decltype(void(f.flip_plain())) { f.flip_plain(); }, form);
-    }, *up);
-}
-
-void app::apply(const request::submit_login&) {
-  auto* up = root().open_panel();
-  if (!up)
-    return;
-  splice::visit(
-      [this](accounts& panel) {
-        if (auto* editor = panel.editor())
-          splice::visit([this](auto& form) { this->edit(form); }, editor->parts.form);
-        else if (auto* pane = panel.adding()) {
-          new_proxy = pane->proxy;
-          splice::visit([this](auto& form) { this->add(form); }, pane->parts.form);
-        }
-      },
-      *up);
-}
-
-void app::apply(const request::flip_enabled& one) { this->flip_enabled(one.address); }
-
-void app::apply(const request::remove_account& one) { this->remove(one.address); }
-
 void app::apply(const request::open_drawer&) { root().open_drawer(); }
-
-void app::apply(const request::show_account& one) { (void)this->show_account(one.address); }
 
 void app::apply(const request::quit&) { mux::platform::events::request_quit(); }
 

@@ -42,6 +42,12 @@ struct services {
   // phone's on-screen keyboard, over half the screen whenever a chat was
   // open. The keyboard comes up as the field is tapped, as on Telegram's.
   bool by_touch = false;
+  // The proxy chosen for the account being added, as it is added.
+  // What the message field's text is: a new message, an answer to one, or
+  // one edited; and the message whose menu is up.
+  // The drawer, left open under a page coming in over it, to go when the
+  // page is in.
+  bool drawer_waits = false;
   // A chat to open, a link to follow -- its card, or its room -- once a part
   // is done; and a room joined, from a link or the directory, opened once
   // the model has it.

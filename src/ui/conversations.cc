@@ -69,20 +69,23 @@ struct space_icon : nodes::Stack {
   std::string name;
   std::string key;  // its picture's
   float diameter = 0.0f;
+  // The colours it is made and ringed in.
+  const palette* colours_ = nullptr;
   struct parts_t {
     std::optional<avatar_mark> face;
     std::optional<nodes::Text> mark;
   } parts;
-  space_icon(config::space_item_t what, folder_t shows, config::space_bar_t in, std::string id, std::string shown, bool chosen,
-             float size, Pick act)
-      : pick(std::move(act)), which(std::move(shows)), item(std::move(what)), bar(in), name(shown), key(id), diameter(size) {
+  space_icon(const palette& colours, config::space_item_t what, folder_t shows, config::space_bar_t in, std::string id,
+             std::string shown, bool chosen, float size, Pick act)
+      : pick(std::move(act)), which(std::move(shows)), item(std::move(what)), bar(in), name(shown), key(id), diameter(size),
+        colours_(&colours) {
     this->setHorizontal();
     fStack.justify = nodes::justify::middle{};
-    fState.apply({.width = size, .height = size, .cornerRadius = size * 0.5f, .background = tile_colour,
-                  .hoverBackground = chosen_colour,
-                  .border = scene::Border{chosen ? accent_colour : skia::SkColor{0}, chosen ? 2.0f : 0.0f}});
-    splice::visit(splice::overloaded{[&](config::space_item::home) { parts.mark.emplace("\u2302", size * 0.5f, text_colour); },
-                                     [&](config::space_item::direct) { parts.mark.emplace("@", size * 0.45f, text_colour, true); },
+    fState.apply({.width = size, .height = size, .cornerRadius = size * 0.5f, .background = colours.tile,
+                  .hoverBackground = colours.chosen,
+                  .border = scene::Border{chosen ? colours.accent : skia::SkColor{0}, chosen ? 2.0f : 0.0f}});
+    splice::visit(splice::overloaded{[&](config::space_item::home) { parts.mark.emplace("\u2302", size * 0.5f, colours.text); },
+                                     [&](config::space_item::direct) { parts.mark.emplace("@", size * 0.45f, colours.text, true); },
                                      [&](const config::space_item::space&) { parts.face.emplace(id, shown, size - 6.0f); }},
                   item);
     if (parts.mark)
@@ -99,7 +102,7 @@ struct space_icon : nodes::Stack {
   // Ringed or not, as it is chosen or not: restyled where it is, not made
   // again -- every icon of both bars was, at every space chosen.
   void set_chosen(bool on) {
-    fState.apply({.border = scene::Border{on ? accent_colour : skia::SkColor{0}, on ? 2.0f : 0.0f}});
+    fState.apply({.border = scene::Border{on ? colours_->accent : skia::SkColor{0}, on ? 2.0f : 0.0f}});
   }
 };
 
@@ -110,21 +113,24 @@ struct folder_tab : scene::Node {
   Pick pick;
   folder_t which;
   bool chosen = false;
+  // The colours it is made and lit in.
+  const palette* colours_ = nullptr;
   struct parts_t {
     nodes::Text label;
     // The line under the one chosen, in the accent.
-    nodes::Box<> underline{accent_colour};
+    nodes::Box<> underline;
   } parts;
-  folder_tab(std::string name, folder_t what, bool is_chosen, Pick act)
-      : pick(std::move(act)), which(std::move(what)), chosen(is_chosen),
-        parts{.label = nodes::Text(std::move(name), 13.0f, is_chosen ? accent_colour : dim_colour, true)} {
+  folder_tab(const palette& colours, std::string name, folder_t what, bool is_chosen, Pick act)
+      : pick(std::move(act)), which(std::move(what)), chosen(is_chosen), colours_(&colours),
+        parts{.label = nodes::Text(std::move(name), 13.0f, is_chosen ? colours.accent : colours.dim, true),
+              .underline = nodes::Box<>(colours.accent)} {
     auto& [label, underline] = parts;
     fState.apply({.height = 32.0f,
                   .autoSize = scene::axes::kX,
                   .padding = {0.0f, 10.0f, 0.0f, 10.0f},
                   .cornerRadius = 6.0f,
-                  .hoverBackground = chosen_colour,
-                  .focusBackground = chosen_colour});
+                  .hoverBackground = colours.chosen,
+                  .focusBackground = colours.chosen});
     underline.apply({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 3.0f, .cornerRadius = 1.5f});
     underline.setVisible(is_chosen);
     label.setMaxWidth(160.0f);
@@ -136,7 +142,7 @@ struct folder_tab : scene::Node {
     if (on == chosen)
       return;
     chosen = on;
-    parts.label.setColour(on ? accent_colour : dim_colour);
+    parts.label.setColour(on ? colours_->accent : colours_->dim);
     parts.underline.setVisible(on);
     this->markDamaged();
   }
@@ -247,13 +253,13 @@ struct conversations_screen : nodes::Stack {
       avatar_mark face;
       two_lines texts;
     } parts;
-    mention_row(pick_mention what, const member& one)
+    mention_row(const palette& colours, pick_mention what, const member& one)
         : act(what), parts{.face = avatar_mark(one.id, one.name.empty() ? one.id : one.name, 28.0f),
-                           .texts = two_lines(one.name.empty() ? one.id : one.name, one.id, 14.0f, 1.0f)} {
+                           .texts = two_lines(colours, one.name.empty() ? one.id : one.name, one.id, 14.0f, 1.0f)} {
       this->setHorizontal();
       this->setGap(10.0f);
       fState.apply({.fillX = true, .height = 44.0f, .padding = {0.0f, 14.0f, 0.0f, 14.0f},
-                    .hoverBackground = chosen_colour, .selectedBackground = chosen_colour});
+                    .hoverBackground = colours.chosen, .selectedBackground = colours.chosen});
     }
     void set_lit(bool on) { fState.apply({.selected = on}); }
     [[nodiscard]] bool acceptsInput() const { return true; }
@@ -267,7 +273,9 @@ struct conversations_screen : nodes::Stack {
     struct parts_t {
       std::vector<mention_row> rows;
     } parts;
-    mention_list() { fState.apply({.fillX = true, .autoSize = scene::axes::kY, .background = sidebar_colour}); }
+    explicit mention_list(const palette& colours) {
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .background = colours.sidebar});
+    }
   };
   // The account to list once the model has it: the one shown last, kept.
   // Taken the first time it is there; dropped when an account is chosen.
@@ -318,7 +326,7 @@ struct conversations_screen : nodes::Stack {
     rows.clear();
     rows.reserve(results.size());
     for (const search_result& one : results)
-      rows.emplace_back(actions, one);
+      rows.emplace_back(*needs_.colours, actions, one);
     const bool on = count.has_value();
     side.found_title.setText(!count ? std::string() : *count == 0 ? std::string("No messages found")
                                     : *count == 1                ? std::string("1 message found")
@@ -505,7 +513,7 @@ struct conversations_screen : nodes::Stack {
     auto& rows = chat.parts.mentions.parts.rows;
     rows.clear();
     for (std::size_t i = 0; i < mention_matches.size(); ++i)
-      rows.emplace_back(pick_mention{this, i}, mention_matches[i]);
+      rows.emplace_back(*needs_.colours, pick_mention{this, i}, mention_matches[i]);
     mention_lit = 0;
     if (!rows.empty())
       rows.front().set_lit(true);
@@ -615,6 +623,9 @@ struct conversations_screen : nodes::Stack {
     [[nodiscard]] bool acceptsInput() const { return true; }
   };
   struct side_column : nodes::Stack {
+    // The colours it is made in, for what it makes later: its menus, the
+    // icon dragged.
+    const palette* colours_ = nullptr;
     float wanted = 300.0f;
     // All of the window across: one thing at a time (single, below).
     bool whole = false;
@@ -622,7 +633,7 @@ struct conversations_screen : nodes::Stack {
       using explore_button = icon_button<ask<Actions, &Actions::open_explore>>;
       struct parts_t {
         menu_button<Actions> menu;
-        nodes::Text name{"mux", 17.0f, text_colour, true};
+        nodes::Text name;
         // The top bar of spaces, after the name: there, empty or not, unless
         // the settings say otherwise -- something can always be put in it.
         // Longer than its room, it scrolls sideways.
@@ -631,7 +642,10 @@ struct conversations_screen : nodes::Stack {
         // Element's compass is.
         explore_button explore;
       } parts;
-      explicit head_row(Actions* a) : parts{.menu = menu_button<Actions>(a), .explore = explore_button(icon::compass{}, {a})} {
+      head_row(const palette& colours, Actions* a)
+          : parts{.menu = menu_button<Actions>(colours, a),
+                  .name = nodes::Text("mux", 17.0f, colours.text, true),
+                  .explore = explore_button(colours, icon::compass{}, {a})} {
         this->setHorizontal();
         this->setGap(10.0f);
         fState.apply({.fillX = true, .height = 52.0f, .padding = {8.0f, 8.0f, 8.0f, 8.0f}});
@@ -648,8 +662,8 @@ struct conversations_screen : nodes::Stack {
         widgets::TextArea<> field{"Search"};
       } parts;
       widgets::TextArea<>& field = parts.field;
-      search_box() {
-        fState.apply({.fillX = true, .height = 36.0f, .margin = {0.0f, 10.0f, 8.0f, 10.0f}, .cornerRadius = 18.0f, .background = tile_colour, .selectedBackground = chosen_colour});
+      explicit search_box(const palette& colours) {
+        fState.apply({.fillX = true, .height = 36.0f, .margin = {0.0f, 10.0f, 8.0f, 10.0f}, .cornerRadius = 18.0f, .background = colours.tile, .selectedBackground = colours.chosen});
         field.setSingleLine(true);
         field.setFontSize(14.0f);
         field.apply({.fillX = true, .margin = {2.0f, 14.0f, 0.0f, 14.0f}});
@@ -668,13 +682,14 @@ struct conversations_screen : nodes::Stack {
     struct forum_head_t : nodes::Stack {
       struct parts_t {
         icon_button<ask<Actions, &Actions::close_forum>> back;
-        nodes::Text name{"", 15.0f, text_colour, true};
+        nodes::Text name;
         // Its settings: it is in no bar, to be right-pressed.
         icon_button<ask<Actions, &Actions::manage_forum>> settings;
       } parts;
-      explicit forum_head_t(Actions* a)
-          : parts{.back = icon_button<ask<Actions, &Actions::close_forum>>(icon::back{}, {a}),
-                  .settings = icon_button<ask<Actions, &Actions::manage_forum>>(icon::gear{}, {a})} {
+      forum_head_t(const palette& colours, Actions* a)
+          : parts{.back = icon_button<ask<Actions, &Actions::close_forum>>(colours, icon::back{}, {a}),
+                  .name = nodes::Text("", 15.0f, colours.text, true),
+                  .settings = icon_button<ask<Actions, &Actions::manage_forum>>(colours, icon::gear{}, {a})} {
         this->setHorizontal();
         this->setGap(8.0f);
         fState.apply({.fillX = true, .height = 40.0f, .padding = {0.0f, 8.0f, 0.0f, 8.0f}});
@@ -694,16 +709,16 @@ struct conversations_screen : nodes::Stack {
       pick_found pick;
       struct lines_t : nodes::Stack {
         struct top_t : name_time_line {
-          top_t(std::string name, std::string when)
-              : name_time_line(std::move(name), std::move(when), text_colour, dim_colour, 12.0f) {}
+          top_t(const palette& colours, std::string name, std::string when)
+              : name_time_line(std::move(name), std::move(when), colours.text, colours.dim, 12.0f) {}
         };
         struct parts_t {
           top_t top;
           nodes::Text text;
         } parts;
-        lines_t(const search_result& one)
-            : parts{.top = top_t(one.name, std::format("{:%d.%m.%y}", std::chrono::floor<std::chrono::days>(one.at))),
-                    .text = nodes::Text(one.snippet, 13.0f, dim_colour)} {
+        lines_t(const palette& colours, const search_result& one)
+            : parts{.top = top_t(colours, one.name, std::format("{:%d.%m.%y}", std::chrono::floor<std::chrono::days>(one.at))),
+                    .text = nodes::Text(one.snippet, 13.0f, colours.dim)} {
           this->setGap(4.0f);
           fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
           parts.text.setElided(true);
@@ -714,11 +729,11 @@ struct conversations_screen : nodes::Stack {
         avatar_mark face;
         lines_t lines;
       } parts;
-      found_row(Actions* a, const search_result& one)
-          : pick{a, one.index}, parts{.face = avatar_mark(one.sender, one.name, 40.0f), .lines = lines_t(one)} {
+      found_row(const palette& colours, Actions* a, const search_result& one)
+          : pick{a, one.index}, parts{.face = avatar_mark(one.sender, one.name, 40.0f), .lines = lines_t(colours, one)} {
         this->setHorizontal();
         this->setGap(10.0f);
-        fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = chosen_colour});
+        fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = colours.chosen});
         parts.face.apply({.alignSelf = scene::align::kMiddle});
       }
       [[nodiscard]] bool acceptsInput() const { return true; }
@@ -736,13 +751,16 @@ struct conversations_screen : nodes::Stack {
     using people_rows_t = nodes::Flow<std::vector<found_person_row<Actions>>>;
     struct elsewhere_list : nodes::Stack {
       struct parts_t {
-        nodes::Text rooms_title{"Rooms", 13.0f, dim_colour, true};
+        nodes::Text rooms_title;
         room_rows_t rooms{room_rows_t({.spacingY = 0.0f, .wrap = false}, {})};
-        nodes::Text people_title{"People", 13.0f, dim_colour, true};
+        nodes::Text people_title;
         people_rows_t people{people_rows_t({.spacingY = 0.0f, .wrap = false}, {})};
-        nodes::Text status{"", 13.0f, dim_colour};
+        nodes::Text status;
       } parts;
-      elsewhere_list() {
+      explicit elsewhere_list(const palette& colours)
+          : parts{.rooms_title = nodes::Text("Rooms", 13.0f, colours.dim, true),
+                  .people_title = nodes::Text("People", 13.0f, colours.dim, true),
+                  .status = nodes::Text("", 13.0f, colours.dim)} {
         this->setGap(4.0f);
         fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 0.0f, 8.0f, 0.0f}});
         for (nodes::Text* each : {&parts.rooms_title, &parts.people_title, &parts.status})
@@ -761,14 +779,19 @@ struct conversations_screen : nodes::Stack {
         // bars: a line of tabs.
         nodes::Flow<std::vector<folder_tab<pick_folder>>> folders{
             {.direction = nodes::direction::horizontal{}, .spacingX = 2.0f, .spacingY = 2.0f}, {}};
-        nodes::Text no_chats{"No chats yet.", 13.0f, dim_colour};
+        nodes::Text no_chats;
         list_t list{nodes::Flow<std::vector<conversation_row<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
         // While a chat is searched: what was found, in the chats' place.
-        nodes::Text found_title{"", 13.0f, dim_colour, true};
+        nodes::Text found_title;
         found_list_t found{nodes::Flow<std::vector<found_row>>({.spacingY = 0.0f, .wrap = false}, {})};
-        elsewhere_t elsewhere{elsewhere_list()};
+        elsewhere_t elsewhere;
       } parts;
-      explicit rest_t(Actions* a) : parts{.forum_head = forum_head_t(a)} {
+      rest_t(const palette& colours, Actions* a)
+          : parts{.forum_head = forum_head_t(colours, a),
+                  .search = search_box(colours),
+                  .no_chats = nodes::Text("No chats yet.", 13.0f, colours.dim),
+                  .found_title = nodes::Text("", 13.0f, colours.dim, true),
+                  .elsewhere = elsewhere_t(elsewhere_list(colours))} {
         parts.found_title.apply({.margin = {4.0f, 16.0f, 6.0f, 16.0f}});
         parts.found_title.setVisible(false);
         parts.found.apply({.fillX = true, .grow = scene::axes::kY});
@@ -795,7 +818,7 @@ struct conversations_screen : nodes::Stack {
         nodes::ScrollContainer<icons_t> side{icons_t({.spacingY = 8.0f, .wrap = false, .crossAlign = scene::align::kMiddle}, {})};
         rest_t rest;
       } parts;
-      explicit body_t(Actions* a) : parts{.rest = rest_t(a)} {
+      body_t(const palette& colours, Actions* a) : parts{.rest = rest_t(colours, a)} {
         this->setHorizontal();
         fState.apply({.fillX = true, .grow = scene::axes::kY});
         parts.side.apply({.fillY = true, .width = 56.0f});
@@ -821,10 +844,10 @@ struct conversations_screen : nodes::Stack {
       void operator()() const { actions->manage_space(room); }
     };
     // The column's menus' look: a card over the rest, 190 wide.
-    static void as_popup(nodes::Stack& menu) {
+    static void as_popup(nodes::Stack& menu, const palette& colours) {
       menu.setGap(4.0f);
       menu.fState.apply({.width = 190.0f, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 8.0f, 8.0f}, .cornerRadius = 10.0f,
-                         .background = popup_colour(), .border = scene::Border{band_colour, 1.0f},
+                         .background = colours.popup(), .border = scene::Border{colours.band, 1.0f},
                          .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
     }
     // A chat's: its settings.
@@ -875,11 +898,11 @@ struct conversations_screen : nodes::Stack {
       } parts;
       // Its places: Copy to and Move to each other account. Listed here from
       // another, its way out of this list, and its strip.
-      chat_menu(Actions* a, conversation_id id, std::string name, const account_id& listing,
+      chat_menu(const palette& colours, Actions* a, conversation_id id, std::string name, const account_id& listing,
                 const std::vector<account_id>& accounts, const config::theme_t& theme)
-          : parts{.title = nodes::Text(std::move(name), 13.0f, dim_colour, true),
+          : parts{.title = nodes::Text(std::move(name), 13.0f, colours.dim, true),
                   .settings = widgets::Button<chat_settings_act>("Chat settings\u2026", {a, id})} {
-        as_popup(*this);
+        as_popup(*this, colours);
         fState.apply({.width = 320.0f});
         parts.title.setElided(true);
         parts.title.apply({.fillX = true});
@@ -916,15 +939,15 @@ struct conversations_screen : nodes::Stack {
                                                 [](const auto&) { return std::string(); }},
                              item);
       }
-      space_menu(Actions* a, const std::string& account, const config::space_item_t& item, std::string name)
-          : parts{.title = nodes::Text(std::move(name), 13.0f, dim_colour, true),
+      space_menu(const palette& colours, Actions* a, const std::string& account, const config::space_item_t& item, std::string name)
+          : parts{.title = nodes::Text(std::move(name), 13.0f, colours.dim, true),
                   .explore = widgets::Button<explore_act>("Explore its rooms\u2026", {a, room_of(item)}),
                   .manage = widgets::Button<manage_act>("Space settings\u2026", {a, room_of(item)}),
                   .side = widgets::Button<set_bars_act>("Side bar only", {a, account, item, true, false}),
                   .top = widgets::Button<set_bars_act>("Top bar only", {a, account, item, false, true}),
                   .both = widgets::Button<set_bars_act>("Both bars", {a, account, item, true, true}),
                   .hide = widgets::Button<set_bars_act>("Hide", {a, account, item, false, false})} {
-        as_popup(*this);
+        as_popup(*this, colours);
         parts.title.setElided(true);
         parts.title.apply({.fillX = true});
         for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.explore, &parts.manage, &parts.side, &parts.top, &parts.both, &parts.hide})
@@ -962,8 +985,9 @@ struct conversations_screen : nodes::Stack {
     Actions* actions = nullptr;
     // Whose spaces the bars hold, as the screen says as it shows them.
     std::string account;
-    explicit side_column(Actions* a) : parts{.head = head_row(a), .body = body_t(a)}, actions(a) {
-      fState.apply({.fillY = true, .background = sidebar_colour});
+    side_column(const palette& colours, Actions* a)
+        : colours_(&colours), parts{.head = head_row(colours, a), .body = body_t(colours, a)}, actions(a) {
+      fState.apply({.fillY = true, .background = colours.sidebar});
     }
 
     // ---- an item dragged from a bar to the other, or along one ------------
@@ -1008,7 +1032,7 @@ struct conversations_screen : nodes::Stack {
       space_icon<pick_folder>* one = this->icon_of(from.item, from.from);
       if (!one)
         return;
-      parts.ghost.emplace(one->item, one->which, one->bar, one->key, one->name, false, one->diameter, one->pick);
+      parts.ghost.emplace(*colours_, one->item, one->which, one->bar, one->key, one->name, false, one->diameter, one->pick);
       parts.ghost->apply({.place = scene::anchor::kTopLeft, .x = 0.0f, .y = 0.0f, .alpha = 0.9f});
       // Off its place: the others close up.
       one->setVisible(false);
@@ -1090,8 +1114,8 @@ struct conversations_screen : nodes::Stack {
     void light(const std::optional<config::space_bar_t>& over) {
       const bool top = over && *over == config::space_bar_t{config::space_bar::top{}};
       const bool side = over && *over == config::space_bar_t{config::space_bar::side{}};
-      top_bar.apply({.background = top ? chosen_colour : skia::SkColor{0}});
-      side_bar.apply({.background = side ? chosen_colour : skia::SkColor{0}});
+      top_bar.apply({.background = top ? colours_->chosen : skia::SkColor{0}});
+      side_bar.apply({.background = side ? colours_->chosen : skia::SkColor{0}});
     }
     void close_menu() {
       if (!parts.menu && !parts.row_menu)
@@ -1117,7 +1141,7 @@ struct conversations_screen : nodes::Stack {
         for (const auto& row : std::get<0>(std::get<0>(list.fChildren).fChildren))
           if (list.toView(row.bounds()).contains(press.x, press.y)) {
             const skia::SkRect box = fState.fBounds;
-            parts.row_menu.emplace(actions, row.id, row.parts.lines.parts.top.parts.name.text(),
+            parts.row_menu.emplace(*colours_, actions, row.id, row.parts.lines.parts.top.parts.name.text(),
                                    current_account ? *current_account : row.id.account, accounts_known, theme_now);
             parts.row_menu->apply({.place = scene::anchor::kTopLeft,
                                    .x = std::clamp(press.x - box.fLeft, 0.0f, std::max(0.0f, box.width() - 320.0f)),
@@ -1132,7 +1156,7 @@ struct conversations_screen : nodes::Stack {
       // A right press: its menu, where it was pressed, kept in the column.
       if (press.button == 3) {
         const skia::SkRect box = fState.fBounds;
-        parts.menu.emplace(actions, account, one->item, one->name);
+        parts.menu.emplace(*colours_, actions, account, one->item, one->name);
         parts.menu->apply({.place = scene::anchor::kTopLeft,
                            .x = std::clamp(press.x - box.fLeft, 0.0f, std::max(0.0f, box.width() - 190.0f)),
                            .y = std::clamp(press.y - box.fTop, 0.0f, std::max(0.0f, box.height() - 180.0f))});
@@ -1368,11 +1392,14 @@ struct conversations_screen : nodes::Stack {
     struct empty_state : nodes::Stack {
       using add_button = widgets::Button<ask<Actions, &Actions::open_new_account>>;
       struct parts_t {
-        nodes::Text title{"No accounts yet", 22.0f, text_colour, true};
-        nodes::Text note{"Add an XMPP or a Matrix account, and its chats will be here.", 14.0f, dim_colour};
+        nodes::Text title;
+        nodes::Text note;
         add_button add;
       } parts;
-      explicit empty_state(Actions* a) : parts{.add = add_button("Add account", {a})} {
+      empty_state(const palette& colours, Actions* a)
+          : parts{.title = nodes::Text("No accounts yet", 22.0f, colours.text, true),
+                  .note = nodes::Text("Add an XMPP or a Matrix account, and its chats will be here.", 14.0f, colours.dim),
+                  .add = add_button("Add account", {a})} {
         this->setGap(12.0f);
         fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {120.0f, 48.0f, 0.0f, 48.0f}});
         parts.note.setWrapped(true);
@@ -1411,7 +1438,7 @@ struct conversations_screen : nodes::Stack {
       mention_list mentions;
       // Over the composer: what the chat's protocol says there -- Matrix's
       // warning that the other is not verified, or was reset.
-      nodes::Text trust_warning{"", 13.0f, text_colour};
+      nodes::Text trust_warning;
       std::optional<widgets::Button<banner_press>> banner_button;
       std::optional<composer_view_holder> their_view;
       composer_bar<Actions> line;
@@ -1429,8 +1456,10 @@ struct conversations_screen : nodes::Stack {
     chat_column(const ui_needs<Actions>& n, Actions* a)
         : parts{.search = search_bar<Actions>(n),
                 .area = timeline_area<Actions>(n),
+                .mentions = mention_list(*n.colours),
+                .trust_warning = nodes::Text("", 13.0f, n.colours->text),
                 .line = composer_bar<Actions>(n),
-                .empty = empty_state(a)} {
+                .empty = empty_state(*n.colours, a)} {
       header.apply({.fillX = true, .height = chat_header<Actions>::kHeight});
       parts.pinned.apply({.fillX = true, .height = pinned_bar<pinned_press>::kHeight});
       parts.pinned.setVisible(false);
@@ -1439,12 +1468,12 @@ struct conversations_screen : nodes::Stack {
       // Wallpaper -- not behind Select a chat, where Telegram has none.
       // Nothing, where the background is behind the whole window.
       fState.apply({.fillY = true, .grow = scene::axes::kX,
-                    .background = window_look().behind ? skia::SkColor{0} : chat_colour});
+                    .background = window_look().behind ? skia::SkColor{0} : n.colours->chat});
       area.apply({.fillX = true, .grow = scene::axes::kY});
       parts.mentions.setVisible(false);
       parts.trust_warning.setWrapped(true);
       parts.trust_warning.apply({.fillX = true, .padding = {6.0f, 14.0f, 6.0f, 14.0f},
-                                 .background = (accent_colour & 0x00FFFFFFu) | (0x22u << 24)});
+                                 .background = (n.colours->accent & 0x00FFFFFFu) | (0x22u << 24)});
       parts.trust_warning.setVisible(false);
     }
   };
@@ -1584,7 +1613,7 @@ struct conversations_screen : nodes::Stack {
   conversations_screen(const ui_needs<Actions>& n, Actions* a)
       : actions(a),
         needs_(n),
-        parts{.side = side_column(a),
+        parts{.side = side_column(*n.colours, a),
               .edge = side_edge(resize_sidebar_to<Actions>{a}),
               .chat = chat_column(n),
               .info_edge = info_edge_t(resize_info_to<Actions>{a}, false),
@@ -1735,12 +1764,12 @@ struct conversations_screen : nodes::Stack {
       const auto emit = [&](auto& icons, const std::vector<shown_icon>& shown, const config::space_bar_t& bar, float size) {
         for (const shown_icon& one : shown) {
           if (one.top) {
-            icons.emplace_back(one.top->item, one.top->shows, bar, one.top->id, one.top->name, one.top->shows == folder, size,
+            icons.emplace_back(*needs_.colours, one.top->item, one.top->shows, bar, one.top->id, one.top->name, one.top->shows == folder, size,
                                pick_folder{this});
             continue;
           }
           const folder_t shows = folder::space{one.sub->id.id};
-          icons.emplace_back(config::space_item::space{one.sub->id.id}, shows, bar, one.sub->id.id, display_name(*one.sub),
+          icons.emplace_back(*needs_.colours, config::space_item::space{one.sub->id.id}, shows, bar, one.sub->id.id, display_name(*one.sub),
                              shows == folder, std::max(20.0f, size - 6.0f * static_cast<float>(one.depth)), pick_folder{this});
         }
       };
@@ -2706,7 +2735,7 @@ struct conversations_screen : nodes::Stack {
     if (folders != shown_folders) {
       tabs.clear();
       for (auto& [name, which] : folders)
-        tabs.emplace_back(name, which, which == folder, pick_folder{this});
+        tabs.emplace_back(*needs_.colours, name, which, which == folder, pick_folder{this});
       shown_folders = folders;
     }
     for (auto& tab : tabs)
@@ -3001,7 +3030,7 @@ struct conversations_screen : nodes::Stack {
           protocol_state_of(one->id.account));
     auto& bar = chat.parts.trust_warning;
     if (!banners.empty())
-      bar.apply({.background = (tone_colour(banners.front().tone) & 0x00FFFFFFu) | (0x22u << 24)});
+      bar.apply({.background = (tone_colour(*needs_.colours, banners.front().tone) & 0x00FFFFFFu) | (0x22u << 24)});
     if (bar.text() != said)
       bar.setText(said);
     if (bar.visible() != !said.empty()) {

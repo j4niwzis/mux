@@ -652,7 +652,7 @@ struct mentioned {
   std::vector<std::string> unknown;
   std::string text;
   std::vector<nodes::Text::Link> links;
-  std::vector<std::pair<std::string, logic::link::room>> cards;  // the link, and the room it is of
+  std::vector<std::pair<std::string, proto::matrix::link::room>> cards;  // the link, and the room it is of
   std::vector<nodes::Text::Styled> styles;
 };
 [[nodiscard]] inline mentioned with_mentions(std::string text, std::vector<nodes::Text::Link> links,
@@ -661,8 +661,8 @@ struct mentioned {
   // What a mention is called here, and what it links to: a person by their
   // name in the chat, a room by its name where it is known.
   const auto name_of = [&](const logic::link_t& what) -> std::pair<std::string, std::string> {
-    return splice::visit(splice::overloaded{[&](const logic::link::person& one) { return std::pair(sender_name(in, one.id), one.id); },
-                                 [&](const logic::link::room& one) {
+    return splice::visit(splice::overloaded{[&](const proto::matrix::link::person& one) { return std::pair(sender_name(in, one.id), one.id); },
+                                 [&](const proto::matrix::link::room& one) {
                                    if (now)
                                      if (const auto chat = logic::chat_of(*now, what))
                                        if (const conversation* found = now->find(*chat))
@@ -673,15 +673,12 @@ struct mentioned {
                                      return std::pair(named->second, one.id);
                                    return std::pair(one.id, one.id);
                                  },
-                                 [](const logic::link::xmpp_address& one) { return std::pair(one.jid, one.jid); }},
+                                 [](const proto::xmpp::link::address& one) { return std::pair(one.jid, one.jid); }},
                       what);
   };
-  // A word shaped as a Matrix ID: a sigil, a name, a colon, a server.
-  const auto id_in = [](std::string_view word) -> std::optional<logic::link_t> {
-    if (!logic::id_shaped(word))
-      return std::nullopt;
-    return logic::matrix_id_of(std::string(word));
-  };
+  // A word that is an ID, as some protocol writes one (a Matrix ID: a sigil,
+  // a name, a colon, a server).
+  const auto id_in = [](std::string_view word) -> std::optional<logic::link_t> { return logic::link_of_id(word); };
   // What in the text is replaced: by a pill, or by nothing where it is
   // shown as a card instead.
   struct replaced {
@@ -705,8 +702,8 @@ struct mentioned {
     // A person: a pill. A room named by words over it: a pill; given as
     // its URL, or a message in it: a card, the URL out of the text. An
     // XMPP address: a link as it is.
-    splice::visit(splice::overloaded{[&](const logic::link::person&) { spans.push_back({link.first, link.last, what}); },
-                          [&](const logic::link::room& one) {
+    splice::visit(splice::overloaded{[&](const proto::matrix::link::person&) { spans.push_back({link.first, link.last, what}); },
+                          [&](const proto::matrix::link::room& one) {
                             if (bare || one.event) {
                               spans.push_back({link.first, link.last, std::nullopt});
                               out.cards.emplace_back(link.target, one);
@@ -714,7 +711,7 @@ struct mentioned {
                               spans.push_back({link.first, link.last, what});
                             }
                           },
-                          [&](const logic::link::xmpp_address&) { kept.push_back(link); }},
+                          [&](const proto::xmpp::link::address&) { kept.push_back(link); }},
                *what);
   }
   for (std::size_t at = 0; at < text.size();) {
@@ -743,7 +740,7 @@ struct mentioned {
   for (const replaced& span : spans) {
     std::string shown;
     std::optional<nodes::Text::Link> pill;
-    const bool person = span.pill && splice::visit(splice::overloaded{[](const logic::link::person&) { return true; },
+    const bool person = span.pill && splice::visit(splice::overloaded{[](const proto::matrix::link::person&) { return true; },
                                                            [](const auto&) { return false; }},
                                                 *span.pill);
     if (span.pill && !person) {
@@ -885,7 +882,7 @@ struct mentioned {
 
 // A card for a link to a room, or to a message in one: as the chat it is of
 // is known here, or as a room not joined.
-[[nodiscard]] inline link_card card_of(const std::string& url, const logic::link::room& room, const model* now) {
+[[nodiscard]] inline link_card card_of(const std::string& url, const proto::matrix::link::room& room, const model* now) {
   const conversation* chat = nullptr;
   if (now)
     if (const auto found = logic::chat_of(*now, room))

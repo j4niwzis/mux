@@ -87,8 +87,8 @@ void app::follow(const mux::logic::link_t& where) {
                                // from there.
                                previewing = room_looked_up{
                                    step, splice::visit(splice::overloaded{
-                                                        [](const mux::logic::link::room& room) { return std::optional(room); },
-                                                        [](const auto&) { return std::optional<mux::logic::link::room>(); }},
+                                                        [](const mux::proto::matrix::link::room& room) { return std::optional(room); },
+                                                        [](const auto&) { return std::optional<mux::proto::matrix::link::room>(); }},
                                                     where)};
                                root().open_room_card(step.room, mux::room_preview{.note = "Looking it up…"});
                                net->preview_room(step.by, step.room, step.via);

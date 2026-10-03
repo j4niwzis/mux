@@ -407,7 +407,7 @@ void app::apply(const request::explore_space& one) {
 // A search: an address typed in is gone to, as a link to it would be --
 // its card, or the room where joined; else the directory asked.
 void app::apply(const request::search_rooms& one) {
-  if (auto link = mux::logic::matrix_id_of(one.query)) {
+  if (auto link = mux::logic::link_of_id(one.query)) {
     root().close_explore();
     this->follow(*link);
     return;
@@ -426,7 +426,7 @@ void app::apply(const request::join_directory_room& one) {
   std::vector<std::string> via;
   if (!one.server.empty())
     via.push_back(one.server);
-  joining = mux::logic::link::room{one.room, std::nullopt, via};
+  joining = mux::proto::matrix::link::room{one.room, std::nullopt, via};
   net->join(*by, one.room, via);
   root().close_explore();
 }

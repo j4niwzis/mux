@@ -6,7 +6,7 @@ export module mux.proto.matrix;
 import std;
 import mux.core;
 import mux.proto;
-import mux.logic.links;
+import mux.proto.matrix.links;
 
 export namespace mux::proto::matrix {
 
@@ -21,12 +21,12 @@ inline std::optional<std::string> share_link(const state&, std::string_view addr
   return "https://matrix.to/#/" + std::string(address);
 }
 inline std::optional<std::string> person_link(const state&, std::string_view user) { return "https://matrix.to/#/" + std::string(user); }
-inline std::optional<std::string> room_link(const state&, const conversation& chat) { return logic::room_link(chat); }
+inline std::optional<std::string> room_link(const state&, const conversation& chat) { return room_link_to(chat); }
 // Only an event the server named ($...): one still being sent has no link.
 inline std::optional<std::string> message_link(const state&, const conversation& chat, std::string_view event) {
   if (!event.starts_with('$'))
     return std::nullopt;
-  return logic::message_link(chat, event);
+  return message_link_to(chat, event);
 }
 constexpr bool can_pin(const state&, std::string_view event) { return event.starts_with('$'); }
 

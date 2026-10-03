@@ -233,7 +233,7 @@ void account<Sink>::run() {
     token_ = logged->access_token;
     how_.device_id = logged->device_id;
     log(id_, "logged in, as the device {}", how_.device_id.value_or("?"));
-    sink_(change::session_given{id_, logged->access_token, logged->device_id});
+    sink_(proto::matrix::session_given{id_, logged->access_token, logged->device_id});
     return true;
   };
   bool kept = false;

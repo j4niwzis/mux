@@ -163,7 +163,6 @@ struct app : kept_settings {
   std::set<mux::conversation_id> members_fetched;
 
   // A Matrix session given: kept with its account, for the next start.
-  void keep_session(const mux::change::session_given& given);
 
   // A link pressed in a message's text: routed as a link is.
   void open_link(std::string url) { ask.open_url(std::move(url)); }

@@ -42,8 +42,7 @@ void app::woken() {
   for (const auto& one : changes) {
     // What the program itself does with a change, besides the model: a
     // session kept, a picture shown.
-    splice::visit(splice::overloaded{[&](const mux::change::session_given& given) { this->keep_session(given); },
-                               [&](const mux::change::avatar_loaded& picture) {
+    splice::visit(splice::overloaded{[&](const mux::change::avatar_loaded& picture) {
                                  pictures.take(picture, true);
                                  mux::ui::download_progress().erase(picture.source);
                                },
@@ -541,18 +540,6 @@ void app::keep_on_disk(const mux::change_t& one) {
              one);
 }
 
-void app::keep_session(const mux::change::session_given& given) {
-  const auto found = this->find(given.account.address);
-  if (found == saved.end())
-    return;
-  // Kept as its protocol keeps one.
-  splice::visit([&](auto& one) {
-                  using mux::proto::kept_defaults::take_session;
-                  take_session(one, given);
-                },
-                found->own);
-  (void)this->write();
-}
 
 void app::wire() {
   shared = services{.model = model,

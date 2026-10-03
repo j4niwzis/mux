@@ -9,6 +9,7 @@ import std;
 import splice;
 import mux.core;
 import mux.config;
+import mux.proto.kept;
 import mux.proto.matrix.changes;
 import mux.proto.matrix.requests;
 import mux.ui;
@@ -84,6 +85,20 @@ void send_custom(Net& net, const conversation_id& in, std::string type, std::opt
 
 export namespace mux::proto::matrix {
 
+// A session the server gave at login: kept with the account, as its kept
+// type keeps one (take_session).
+template <class App>
+void program_told(App& app, const session_given& given) {
+  const auto found = app.find(given.account.address);
+  if (found == app.saved.end())
+    return;
+  splice::visit([&](auto& one) {
+                  using kept_defaults::take_session;
+                  take_session(one, given);
+                },
+                found->own);
+  (void)app.write();
+}
 // What the developer tools asked, shown.
 template <class App>
 void program_told(App& app, const devtools_text& shown) {

@@ -180,8 +180,8 @@ struct appearance_page : nodes::Stack {
   } parts;
 
   appearance_page(const ui_needs<Actions>& n, const config::theme_t& theme, const config::accent_t& accent)
-      : appearance_page(*n.colours, *n.looks, n.actions, theme, accent) {}
-  appearance_page(const palette& colours, const looks_shown& looks, Actions* a, const config::theme_t& theme, const config::accent_t& accent)
+      : appearance_page(*n.colours, *n.looks, *n.shared, n.actions, theme, accent) {}
+  appearance_page(const palette& colours, const looks_shown& looks, const ui_shared& shared, Actions* a, const config::theme_t& theme, const config::accent_t& accent)
       : parts{.header = header_t(colours, "Appearance", {a}, {a}, true, true),
               .theme_title = section_title(colours, "THEME"),
               .cards = cards_row(colours, a),
@@ -193,7 +193,7 @@ struct appearance_page : nodes::Stack {
               .top_bar = switch_row<ask<Actions, &Actions::flip_top_bar>>(colours, "The bar after \"mux\"", {a}),
               .home_hides = switch_row<flip_home_hides<Actions>>(colours, "Home without chats spaces hold (not direct messages)", {a, &looks}),
               .home_direct = switch_row<flip_home_direct<Actions>>(colours, "And without direct messages", {a, &looks}),
-              .places = spaces_choices<Actions>(a),
+              .places = spaces_choices<Actions>(a, colours, shared),
               .behind = switch_row<ask<Actions, &Actions::flip_wallpaper_behind>>(colours, "Background behind the whole window", {a}),
               .live_blur = switch_row<ask<Actions, &Actions::flip_live_blur>>(colours, "Frosted menus blur what is under them (live)", {a}),
               .scale_title = section_title(colours, std::format("INTERFACE SCALE: {}%", looks.window.interface_scale)),

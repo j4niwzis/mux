@@ -82,16 +82,23 @@ inline void show_wallpaper_on(wallpaper_t& wall, const config::wallpaper_t& chos
     }
   wall.setBlurs(std::move(blurs));
   splice::visit(splice::overloaded{[&](config::wallpaper::theme) {
+                                     wall.setFreeform({});
                                      wall.setPicture(nullptr);
                                      wall.setGradient(scene::Gradient{colours.chat_top, colours.chat});
                                      wall.setPattern(telegram_pattern(), colours.pattern);
                                    },
+                                   // As tdesktop's default background without its
+                                   // pattern: its four colours, in Telegram's
+                                   // freeform gradient (Data::DefaultWallPaper).
                                    [&](config::wallpaper::plain) {
                                      wall.setPicture(nullptr);
                                      wall.setGradient(std::nullopt);
                                      wall.setPattern(nullptr, 0);
+                                     wall.setFreeform({skia::colorSetARGB(255, 219, 221, 187), skia::colorSetARGB(255, 107, 165, 135),
+                                                       skia::colorSetARGB(255, 213, 216, 141), skia::colorSetARGB(255, 136, 184, 132)});
                                    },
                                    [&](const config::wallpaper::picture& at) {
+                                     wall.setFreeform({});
                                      wall.setGradient(std::nullopt);
                                      wall.setPattern(nullptr, 0);
                                      wall.setPicture(wallpaper_picture(at.path));

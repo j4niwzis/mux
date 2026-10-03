@@ -86,42 +86,74 @@ struct room_settings_facts {
   return std::format("Custom level ({})", level);
 }
 
-// Which tabs a room's protocol has: a list of their types. The client's
-// own -- Notifications, Appearance -- every room has; the rest are the
-// protocol's, as manage_tabs(state) lists them: an overload found by ADL in
-// its tag's namespace (mux.ui.proto.<protocol>), seen where the dialog is
-// made -- it is a template on Actions, made in the program, which imports
-// every protocol's. A protocol with none: the default, no tabs of its own.
+// Which tabs a room's protocol has: a list of their types, its own -- the
+// client's (General, Notifications, Appearance) every room has. A protocol's
+// are what manage_tabs(state) lists, found by ADL in its folder (mux.ui.
+// proto.<protocol>); each tab type has its title, its icon and its page by
+// overloads of its own (tab_title, tab_icon, page_type). Asked where the
+// dialog is made -- a template on Actions, made in the program, which
+// imports every protocol's. A protocol with none: the default, no tabs.
 template <class... Tabs>
 struct manage_tab_list {};
 namespace manage_defaults {
 constexpr manage_tab_list<> manage_tabs(const auto&) { return {}; }
+// And what a protocol keeps while its pages are made again: none by default.
+struct no_part {};
+constexpr std::type_identity<no_part> manage_part_type(const auto&) { return {}; }
 }  // namespace manage_defaults
+// Asked of a state type the caller names: dependent on it, so found where
+// the dialog is made, not here.
+template <class State>
+constexpr auto manage_tabs_of(const State& state) {
+  using manage_defaults::manage_tabs;
+  return manage_tabs(state);
+}
+template <class State>
+constexpr auto manage_part_of(const State& state) {
+  using manage_defaults::manage_part_type;
+  return manage_part_type(state);
+}
 template <class... Tabs, class Tab>
 [[nodiscard]] constexpr bool lists(manage_tab_list<Tabs...>, std::type_identity<Tab>) {
   struct all : std::type_identity<Tabs>... {};
   return std::derived_from<all, std::type_identity<Tab>>;
 }
-// Whether the protocol a room speaks has a tab.
-template <class Tab>
-[[nodiscard]] bool protocol_has_tab(const protocol_t& speaks, Tab) {
-  return splice::visit([](auto of) {
-    using manage_defaults::manage_tabs;
-    return lists(manage_tabs(state_of<decltype(of)>{}), std::type_identity<Tab>{});
-  }, speaks);
-}
 
-// The tabs, as Element lists them.
+// The client's tabs, every room's.
 namespace settings_tab {
-struct general {};
-struct security {};
-struct roles {};
+struct general {};        // the room's events, receipts, previews, typing, Home, leaving
 struct notifications {};
-struct advanced {};
 struct looks {};
 }  // namespace settings_tab
-using settings_tab_t = splice::variant<settings_tab::general, settings_tab::security, settings_tab::roles,
-                                    settings_tab::notifications, settings_tab::advanced, settings_tab::looks>;
+
+// Lists of types, put together: the dialog's tabs and pages, the client's
+// and every protocol's.
+template <class... Ts>
+struct type_list {};
+template <class... Lists>
+struct joined;
+template <class... Ts>
+struct joined<type_list<Ts...>> {
+  using type = type_list<Ts...>;
+};
+template <class... As, class... Bs, class... Rest>
+struct joined<type_list<As...>, type_list<Bs...>, Rest...> : joined<type_list<As..., Bs...>, Rest...> {};
+template <class List>
+struct variant_of_types;
+template <class... Ts>
+struct variant_of_types<type_list<Ts...>> {
+  using type = splice::variant<Ts...>;
+};
+template <class Tabs>
+struct tab_types;
+template <class... Tabs>
+struct tab_types<manage_tab_list<Tabs...>> {
+  using type = type_list<Tabs...>;
+};
+template <class Rule, class Variant>
+[[nodiscard]] bool is_rule(const Variant& now) {
+  return splice::visit(splice::overloaded{[](const Rule&) { return true; }, [](const auto&) { return false; }}, now);
+}
 
 // A heading over a tab, and over a part of one, as Element's.
 inline nodes::Text tab_heading(std::string text) {
@@ -235,15 +267,34 @@ struct copy_line : nodes::Stack {
 
 template <class Actions>
 struct room_settings : nodes::Stack {
+  using actions_type = Actions;
   Actions* actions = nullptr;
   room_settings_facts facts;
 
-  // ---- what is asked ---------------------------------------------------------
-  struct act_on_room {
-    Actions* actions;
-    room_action_t action;
-    void operator()() const { actions->room_act(action); }
+  // ---- the tabs and pages: the client's, then each protocol's -----------------
+  template <class Tag>
+  using tabs_of_t = decltype(manage_tabs_of(state_of<Tag>{}));
+  template <class Tab>
+  using page_of_t = typename decltype(page_type(Tab{}, std::type_identity<room_settings>{}))::type;
+  template <class List>
+  struct pages_of;
+  template <class... Tabs>
+  struct pages_of<type_list<Tabs...>> {
+    using type = type_list<page_of_t<Tabs>...>;
   };
+  template <class>
+  struct protocol_lists;
+  template <class... Tags>
+  struct protocol_lists<protocol_list<Tags...>> {
+    using tabs = typename joined<type_list<>, typename tab_types<tabs_of_t<Tags>>::type...>::type;
+    using parts = std::tuple<typename decltype(manage_part_of(state_of<Tags>{}))::type...>;
+  };
+  using protocol_tabs = typename protocol_lists<protocols>::tabs;
+  using protocol_pages = typename pages_of<protocol_tabs>::type;
+  using settings_tab_t = typename variant_of_types<typename joined<
+      type_list<settings_tab::general, settings_tab::notifications, settings_tab::looks>, protocol_tabs>::type>::type;
+
+  // ---- what is asked ---------------------------------------------------------
   struct pick_tab {
     room_settings* box;
     settings_tab_t tab;
@@ -251,63 +302,6 @@ struct room_settings : nodes::Stack {
       box->to_top = true;
       box->show_tab(tab);
     }
-  };
-  struct save_general {
-    room_settings* box;
-    void operator()() const { box->store_general(); }
-  };
-  struct cancel_general {
-    room_settings* box;
-    void operator()() const { box->show_tab(settings_tab::general{}); }
-  };
-  struct choose_join {
-    room_settings* box;
-    join_rule_t rule;
-    void operator()() const { box->chose(rule); }
-  };
-  struct choose_history {
-    room_settings* box;
-    history_rule_t rule;
-    void operator()() const { box->chose(rule); }
-  };
-  struct turn_encryption_on {
-    room_settings* box;
-    void operator()() const { box->encrypt(); }
-  };
-  struct set_need {
-    room_settings* box;
-    power_need_t need;
-    std::int64_t level;
-    void operator()() const { box->needs_level(need, level); }
-  };
-  struct set_level {
-    room_settings* box;
-    std::string user;
-    std::int64_t level;
-    void operator()() const { box->user_level(user, level); }
-  };
-  struct pick_new_level {
-    room_settings* box;
-    std::int64_t level;
-    void operator()() const { box->new_level = level; box->show_new_level(); }
-  };
-  struct add_privileged {
-    room_settings* box;
-    void operator()() const { box->apply_new_level(); }
-  };
-  struct set_event_level {
-    room_settings* box;
-    std::string event;
-    std::int64_t level;
-    void operator()() const { box->event_level(event, level); }
-  };
-  struct add_event_need {
-    room_settings* box;
-    void operator()() const { box->apply_event_level(); }
-  };
-  struct upgrade_press {
-    room_settings* box;
-    void operator()() const { box->upgrade(); }
   };
   struct notify_as {
     room_settings* box;
@@ -342,38 +336,37 @@ struct room_settings : nodes::Stack {
   };
   struct tab_list : nodes::Stack {
     struct parts_t {
-      tab_row general, security, roles, notifications, looks, advanced;
+      tab_row general;
+      std::vector<tab_row> protocol;  // the room's protocol's tabs, as it lists them
+      tab_row notifications, looks;
     } parts;
+    template <class... Tabs>
+    void add(room_settings* box, manage_tab_list<Tabs...>) {
+      (parts.protocol.emplace_back(std::string(tab_title(Tabs{})), tab_icon(Tabs{}), pick_tab{box, settings_tab_t{Tabs{}}}), ...);
+    }
     explicit tab_list(room_settings* box)
         : parts{.general = tab_row("General", icon::gear{}, {box, settings_tab::general{}}),
-                .security = tab_row("Security & Privacy", icon::eye{}, {box, settings_tab::security{}}),
-                .roles = tab_row("Roles & Permissions", icon::people{}, {box, settings_tab::roles{}}),
                 .notifications = tab_row("Notifications", icon::bell{}, {box, settings_tab::notifications{}}),
-                .looks = tab_row("Appearance", icon::eye{}, {box, settings_tab::looks{}}),
-                .advanced = tab_row("Advanced", icon::sliders{}, {box, settings_tab::advanced{}})} {
+                .looks = tab_row("Appearance", icon::eye{}, {box, settings_tab::looks{}})} {
+      splice::visit([&](auto of) { this->add(box, tabs_of_t<decltype(of)>{}); }, box->facts.speaks);
       this->setGap(2.0f);
       fState.apply({.fillY = true, .width = 220.0f, .padding = {4.0f, 12.0f, 12.0f, 12.0f}});
-      // The protocol's own, where it has them; the client's always.
-      const protocol_t& speaks = box->facts.speaks;
-      parts.general.setVisible(protocol_has_tab(speaks, settings_tab::general{}));
-      parts.security.setVisible(protocol_has_tab(speaks, settings_tab::security{}));
-      parts.roles.setVisible(protocol_has_tab(speaks, settings_tab::roles{}));
-      parts.advanced.setVisible(protocol_has_tab(speaks, settings_tab::advanced{}));
+    }
+    [[nodiscard]] std::vector<tab_row*> rows() {
+      std::vector<tab_row*> out{&parts.general};
+      for (tab_row& one : parts.protocol)
+        out.push_back(&one);
+      out.push_back(&parts.notifications);
+      out.push_back(&parts.looks);
+      return out;
     }
     void show(const settings_tab_t& tab) {
-      const auto is = [&](auto kind) {
-        return splice::visit(splice::overloaded{[](decltype(kind)) { return true; }, [](const auto&) { return false; }}, tab);
-      };
-      parts.general.set_chosen(is(settings_tab::general{}));
-      parts.security.set_chosen(is(settings_tab::security{}));
-      parts.roles.set_chosen(is(settings_tab::roles{}));
-      parts.notifications.set_chosen(is(settings_tab::notifications{}));
-      parts.advanced.set_chosen(is(settings_tab::advanced{}));
-      parts.looks.set_chosen(is(settings_tab::looks{}));
+      for (tab_row* one : this->rows())
+        one->set_chosen(one->act.tab.index() == tab.index());
     }
   };
 
-  // ---- General -------------------------------------------------------------------
+  // ---- General: the room as the client shows it -------------------------------------
   // A space as one chat, its rooms as topics: a switch, off for a space
   // that holds spaces.
   struct flip_forum_act {
@@ -425,22 +418,8 @@ struct room_settings : nodes::Stack {
     }
   };
   struct general_page : nodes::Stack {
-    using buttons_row = dialog_buttons<cancel_general, save_general>;
     struct parts_t {
       nodes::Text heading = tab_heading("General");
-      avatar_mark photo;
-      field name;
-      field topic;
-      buttons_row buttons;
-      nodes::Text addresses = part_heading("Room Addresses");
-      nodes::Text published = part_heading("Published Addresses");
-      nodes::Text published_about = explained(
-          "Published addresses can be used by anyone on any server to join your room. To publish an address, it "
-          "needs to be set as a local address first.");
-      nodes::Text main_address;
-      nodes::Text others_title{"Other published addresses:", 14.0f, text_colour};
-      std::vector<nodes::Text> others;
-      nodes::Text other = part_heading("Other");
       nodes::Text events_about = explained("Room events shown in this room, for you: Default is as your account's.");
       event_kind_list<Actions> events;
       receipts_choice<Actions> receipts;
@@ -455,15 +434,8 @@ struct room_settings : nodes::Stack {
       nodes::Text leave_heading = part_heading("Leave room");
       widgets::Button<ask<Actions, &Actions::leave_chat>> leave;
     } parts;
-    general_page(Actions* a, room_settings* box, const room_settings_facts& facts)
-        : parts{.photo = avatar_mark(facts.id, facts.name, 88.0f),
-                .name = field("Room Name", "", facts.name),
-                .topic = field("Room Topic", "", facts.topic),
-                .buttons = buttons_row("Save", {box}, {box}),
-                .main_address = nodes::Text(
-                    "Main address: " + facts.alias.value_or("none"), 14.0f,
-                    text_colour),
-                .events = event_kind_list<Actions>(a, choice_level::chat{}, facts.events_all, facts.event_kinds),
+    general_page(Actions* a, room_settings*, const room_settings_facts& facts)
+        : parts{.events = event_kind_list<Actions>(a, choice_level::chat{}, facts.events_all, facts.event_kinds),
                 .receipts = receipts_choice<Actions>(a, choice_level::chat{}, facts.receipts),
                 .previews = previews_choice<Actions>(a, choice_level::chat{}, facts.previews),
                 .previews_direct = previews_direct_choice<Actions>(a, choice_level::chat{}, facts.previews_direct),
@@ -482,279 +454,7 @@ struct room_settings : nodes::Stack {
       parts.home_hide.setVisible(facts.space && !facts.forum);
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
-      parts.photo.apply({.alignSelf = scene::align::kStart});
-      const bool rename = facts.may(power_need::rename{});
-      const bool retopic = facts.may(power_need::retopic{});
-      parts.name.apply({.disabled = !rename});
-      parts.topic.apply({.disabled = !retopic});
-      parts.buttons.setVisible(rename || retopic);
-      parts.main_address.setWrapped(true);
-      parts.main_address.apply({.fillX = true});
-      for (const std::string& one : facts.other_aliases)
-        parts.others.emplace_back(one, 14.0f, text_colour);
-      if (facts.other_aliases.empty())
-        parts.others.emplace_back("No other published addresses yet.", 13.0f, dim_colour);
       parts.leave.apply({.width = 130.0f, .height = 32.0f});
-    }
-  };
-
-  // ---- Security & Privacy ------------------------------------------------------
-  struct security_page : nodes::Stack {
-    using join_choice = radio_choice<choose_join>;
-    using history_choice = radio_choice<choose_history>;
-    struct parts_t {
-      nodes::Text heading = tab_heading("Security & Privacy");
-      nodes::Text encryption = part_heading("Encryption");
-      nodes::Text encryption_about = explained("Once enabled, encryption cannot be disabled.");
-      toggle_line<turn_encryption_on> encrypted;
-      nodes::Text encryption_warning;
-      nodes::Text access = part_heading("Access");
-      nodes::Text access_about;
-      join_choice invite, knock, open;
-      nodes::Text history = part_heading("Who can read history?");
-      nodes::Text history_about = explained(
-          "Changes to who can read history will only apply to future messages in this room. The visibility of "
-          "existing history will be unchanged.");
-      history_choice anyone, shared, invited, joined;
-    } parts;
-    security_page(Actions*, room_settings* box, const room_settings_facts& facts)
-        : parts{.encrypted = toggle_line<turn_encryption_on>("Encrypted", {box}, facts.encrypted,
-                                                             !facts.encrypted && facts.may(power_need::encrypt{})),
-                .encryption_warning = nodes::Text(box->confirming_encryption
-                                                      ? "Press again to enable encryption. mux cannot read encrypted "
-                                                        "rooms yet: what is sent after this will not show here."
-                                                      : "",
-                                                  13.0f, error_colour),
-                .access_about = explained("Decide who can join " + facts.name + "."),
-                .invite = join_choice("Private (invite only)", "Only invited people can join.",
-                                      {box, join_rule::invite{}}, is<join_rule::invite>(facts.join_rule),
-                                      facts.may(power_need::change_access{})),
-                .knock = join_choice("Ask to join", "People cannot join unless access is granted.",
-                                     {box, join_rule::knock{}}, is<join_rule::knock>(facts.join_rule),
-                                     facts.may(power_need::change_access{})),
-                .open = join_choice("Public", "Anyone can find and join.", {box, join_rule::open{}},
-                                    is<join_rule::open>(facts.join_rule), facts.may(power_need::change_access{})),
-                .anyone = history_choice("Anyone", "", {box, history_rule::world_readable{}},
-                                         is<history_rule::world_readable>(facts.history),
-                                         facts.may(power_need::change_history{})),
-                .shared = history_choice("Members only (since the point in time of selecting this option)", "",
-                                         {box, history_rule::shared{}}, is<history_rule::shared>(facts.history),
-                                         facts.may(power_need::change_history{})),
-                .invited = history_choice("Members only (since they were invited)", "", {box, history_rule::invited{}},
-                                          is<history_rule::invited>(facts.history),
-                                          facts.may(power_need::change_history{})),
-                .joined = history_choice("Members only (since they joined)", "", {box, history_rule::joined{}},
-                                         is<history_rule::joined>(facts.history),
-                                         facts.may(power_need::change_history{}))} {
-      this->setGap(4.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
-      parts.encryption_warning.setWrapped(true);
-      parts.encryption_warning.apply({.fillX = true});
-      parts.encryption_warning.setVisible(box->confirming_encryption);
-    }
-  };
-
-  // ---- Roles & Permissions ------------------------------------------------------
-  // A level chosen of three, as Element's selects: Default, Moderator, Admin.
-  template <class Act, class Make>
-  struct level_choice : nodes::Stack {
-    struct parts_t {
-      segment<Act> fallback, moderator, admin;
-      nodes::Text custom;
-    } parts;
-    level_choice(Make make, std::int64_t now, std::int64_t fallback, bool allowed)
-        : parts{.fallback = segment<Act>("Default", make(fallback)),
-                .moderator = segment<Act>("Moderator", make(50)),
-                .admin = segment<Act>("Admin", make(100)),
-                .custom = nodes::Text("", 12.0f, dim_colour)} {
-      this->setHorizontal();
-      this->setGap(4.0f);
-      fState.apply({.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle, .disabled = !allowed});
-      parts.fallback.set_active(now == fallback);
-      parts.moderator.set_active(now == 50 && fallback != 50);
-      parts.admin.set_active(now == 100 && fallback != 100);
-      const bool custom = now != fallback && now != 50 && now != 100;
-      parts.custom.setText(!custom ? std::string() : now == kCreatorPower ? std::string("Creator") : std::format("Custom ({})", now));
-      parts.custom.setVisible(custom);
-      parts.custom.apply({.alignSelf = scene::align::kMiddle});
-      if (!allowed)
-        fState.setAlpha(0.55f);
-    }
-  };
-  struct need_maker {
-    room_settings* box;
-    power_need_t need;
-    set_need operator()(std::int64_t level) const { return {box, need, level}; }
-  };
-  struct user_maker {
-    room_settings* box;
-    std::string user;
-    set_level operator()(std::int64_t level) const { return {box, user, level}; }
-  };
-  struct event_maker {
-    room_settings* box;
-    std::string event;
-    set_event_level operator()(std::int64_t level) const { return {box, event, level}; }
-  };
-  // A kind of event the list does not name, as the power levels set it.
-  struct event_row : nodes::Stack {
-    struct parts_t {
-      nodes::Text label;
-      level_choice<set_event_level, event_maker> levels;
-    } parts;
-    event_row(room_settings* box, const std::string& event, std::int64_t level, const room_settings_facts& facts)
-        : parts{.label = nodes::Text(event, 14.0f, text_colour),
-                .levels = level_choice<set_event_level, event_maker>(
-                    event_maker{box, event}, level, facts.needs.state_default,
-                    facts.may(power_need::change_permissions{}) && level <= facts.mine)} {
-      this->setHorizontal();
-      this->setGap(10.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 0.0f, 4.0f, 0.0f}});
-      parts.label.setElided(true);
-      parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-    }
-  };
-  // Any kind of event, by its type: the level it asks, set.
-  struct new_event_row : nodes::Stack {
-    struct parts_t {
-      field event;
-      segment<pick_new_level> moderator, admin;
-      widgets::Button<add_event_need> apply;
-    } parts;
-    explicit new_event_row(room_settings* box)
-        : parts{.event = field("", "Event type, as m.room.server_acl"),
-                .moderator = segment<pick_new_level>("Moderator", {box, 50}),
-                .admin = segment<pick_new_level>("Admin", {box, 100}),
-                .apply = widgets::Button<add_event_need>("Apply", {box})} {
-      this->setHorizontal();
-      this->setGap(6.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-      parts.event.apply({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX, .alignSelf = scene::align::kEnd});
-      parts.moderator.apply({.alignSelf = scene::align::kEnd, .margin = {0.0f, 0.0f, 4.0f, 0.0f}});
-      parts.admin.apply({.alignSelf = scene::align::kEnd, .margin = {0.0f, 0.0f, 4.0f, 0.0f}});
-      parts.apply.setPrimary(true);
-      parts.apply.apply({.width = 80.0f, .height = 30.0f, .alignSelf = scene::align::kEnd,
-                         .margin = {0.0f, 0.0f, 3.0f, 0.0f}});
-    }
-  };
-  struct permission_row : nodes::Stack {
-    struct parts_t {
-      nodes::Text label;
-      level_choice<set_need, need_maker> levels;
-    } parts;
-    permission_row(room_settings* box, std::string text, power_need_t need, const room_settings_facts& facts)
-        : parts{.label = nodes::Text(std::move(text), 14.0f, text_colour),
-                .levels = level_choice<set_need, need_maker>(
-                    need_maker{box, need}, facts.needs.of(need), facts.needs.users_default,
-                    facts.may(power_need::change_permissions{}) && facts.needs.of(need) <= facts.mine)} {
-      this->setHorizontal();
-      this->setGap(10.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 0.0f, 4.0f, 0.0f}});
-      parts.label.setWrapped(true);
-      parts.label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-    }
-  };
-  struct privileged_row : nodes::Stack {
-    struct parts_t {
-      avatar_mark face;
-      two_lines texts;
-      level_choice<set_level, user_maker> levels;
-    } parts;
-    privileged_row(room_settings* box, const room_settings_facts::person& one, const room_settings_facts& facts)
-        : parts{.face = avatar_mark(one.id, one.name, 32.0f),
-                .texts = two_lines(one.name, one.id, 14.0f, 2.0f),
-                .levels = level_choice<set_level, user_maker>(
-                    user_maker{box, one.id}, one.level, facts.needs.users_default,
-                    facts.may(power_need::change_permissions{}) && (one.level < facts.mine))} {
-      this->setHorizontal();
-      this->setGap(10.0f);
-      fState.apply({.fillX = true, .height = 48.0f});
-    }
-  };
-  struct new_level_row : nodes::Stack {
-    struct parts_t {
-      field user;
-      segment<pick_new_level> moderator, admin;
-      widgets::Button<add_privileged> apply;
-    } parts;
-    explicit new_level_row(room_settings* box)
-        : parts{.user = field("", "User ID, as @someone:server"),
-                .moderator = segment<pick_new_level>("Moderator", {box, 50}),
-                .admin = segment<pick_new_level>("Admin", {box, 100}),
-                .apply = widgets::Button<add_privileged>("Apply", {box})} {
-      this->setHorizontal();
-      this->setGap(6.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-      parts.user.apply({.relativeSize = scene::axes::kNone, .grow = scene::axes::kX, .alignSelf = scene::align::kEnd});
-      parts.moderator.apply({.alignSelf = scene::align::kEnd, .margin = {0.0f, 0.0f, 4.0f, 0.0f}});
-      parts.admin.apply({.alignSelf = scene::align::kEnd, .margin = {0.0f, 0.0f, 4.0f, 0.0f}});
-      parts.apply.setPrimary(true);
-      parts.apply.apply({.width = 80.0f, .height = 30.0f, .alignSelf = scene::align::kEnd,
-                         .margin = {0.0f, 0.0f, 3.0f, 0.0f}});
-    }
-  };
-  struct roles_page : nodes::Stack {
-    struct parts_t {
-      nodes::Text heading = tab_heading("Roles & Permissions");
-      nodes::Text privileged = part_heading("Privileged Users");
-      std::vector<privileged_row> users;
-      nodes::Text none_privileged = explained("No users have specific privileges in this room.");
-      nodes::Text add = part_heading("Add privileged users");
-      nodes::Text add_about = explained("Give one or multiple users in this room more privileges.");
-      new_level_row adding;
-      nodes::Text permissions = part_heading("Permissions");
-      nodes::Text permissions_about = explained("Select the roles required to change various parts of the room.");
-      std::vector<permission_row> rows;
-      // Every other kind of event the power levels set, and any kind added.
-      std::vector<event_row> others;
-      nodes::Text add_event = part_heading("Any other event");
-      new_event_row adding_event;
-    } parts;
-    roles_page(Actions*, room_settings* box, const room_settings_facts& facts)
-        : parts{.adding = new_level_row(box), .adding_event = new_event_row(box)} {
-      this->setGap(4.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
-      parts.users.reserve(facts.privileged.size());
-      for (const auto& one : facts.privileged)
-        parts.users.emplace_back(box, one, facts);
-      parts.none_privileged.setVisible(facts.privileged.empty());
-      const bool may_add = facts.may(power_need::change_permissions{});
-      for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.add, &parts.add_about, &parts.adding})
-        each->setVisible(may_add);
-      // Element's list, in its order and words.
-      const std::pair<const char*, power_need_t> all[] = {
-          {"Default role", power_need::default_role{}},
-          {"Send messages", power_need::send_messages{}},
-          {"Invite users", power_need::invite{}},
-          {"Change settings", power_need::change_settings{}},
-          {"Remove users", power_need::kick{}},
-          {"Ban users", power_need::ban{}},
-          {"Remove messages sent by others", power_need::redact{}},
-          {"Notify everyone", power_need::notify_everyone{}},
-          {"Change avatar", power_need::change_avatar{}},
-          {"Change room name", power_need::rename{}},
-          {"Change main address for the room", power_need::change_address{}},
-          {"Change history visibility", power_need::change_history{}},
-          {"Change who can join", power_need::change_access{}},
-          {"Change permissions", power_need::change_permissions{}},
-          {"Change topic", power_need::retopic{}},
-          {"Upgrade the room", power_need::upgrade{}},
-          {"Enable room encryption", power_need::encrypt{}},
-          {"Change server ACLs", power_need::change_acl{}},
-          {"Manage pinned events", power_need::pin{}},
-      };
-      parts.rows.reserve(std::size(all));
-      for (const auto& [text, need] : all)
-        parts.rows.emplace_back(box, text, need, facts);
-      // Those the list has by their own row are not again.
-      std::set<std::string_view> listed;
-      for (const auto& [text, need] : all)
-        splice::visit(splice::overloaded{[&]<sends_state Need>(const Need&) { listed.insert(Need::event); }, [](const auto&) {}}, need);
-      for (const auto& [event, level] : facts.needs.events)
-        if (!listed.contains(event))
-          parts.others.emplace_back(box, event, level, facts);
-      for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.add_event, &parts.adding_event})
-        each->setVisible(may_add);
     }
   };
 
@@ -768,51 +468,16 @@ struct room_settings : nodes::Stack {
     notifications_page(Actions*, room_settings* box, const room_settings_facts& facts)
         : parts{.by_default = choice("Default", "As your account's notifications are set up",
                                      {box, config::notify_mode::by_default{}},
-                                     is<config::notify_mode::by_default>(facts.notify_mode), true),
+                                     is_rule<config::notify_mode::by_default>(facts.notify_mode), true),
                 .all = choice("All messages", "Get notified of every message", {box, config::notify_mode::all{}},
-                              is<config::notify_mode::all>(facts.notify_mode), true),
+                              is_rule<config::notify_mode::all>(facts.notify_mode), true),
                 .mentions = choice("@mentions & keywords", "Get notified only with mentions and keywords",
                                    {box, config::notify_mode::mentions{}},
-                                   is<config::notify_mode::mentions>(facts.notify_mode), true),
+                                   is_rule<config::notify_mode::mentions>(facts.notify_mode), true),
                 .off = choice("Off", "You won't get any notifications", {box, config::notify_mode::off{}},
-                              is<config::notify_mode::off>(facts.notify_mode), true)} {
+                              is_rule<config::notify_mode::off>(facts.notify_mode), true)} {
       this->setGap(4.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
-    }
-  };
-
-  // ---- Advanced -------------------------------------------------------------------
-  struct advanced_page : nodes::Stack {
-    struct parts_t {
-      nodes::Text heading = tab_heading("Advanced");
-      nodes::Text information = part_heading("Room information");
-      copy_line id;
-      nodes::Text version;
-      // Upgraded, as Element's: the version to go to, and the button. The
-      // server makes the new room and tombstones this one.
-      field upgrade_to;
-      widgets::Button<upgrade_press> upgrade;
-      nodes::Text tools = part_heading("Developer tools");
-      widgets::Button<ask<Actions, &Actions::explore_state>> explore;
-      widgets::Button<ask<Actions, &Actions::open_send_custom>> send_custom;
-      nodes::Text packs_heading = part_heading("Emojis & Stickers");
-      widgets::Button<ask<Actions, &Actions::open_room_packs>> packs;
-    } parts;
-    advanced_page(Actions* a, room_settings* box, const room_settings_facts& facts)
-        : parts{.id = copy_line("Internal room ID", facts.id),
-                .version = nodes::Text("Room version: " + facts.version, 14.0f, text_colour),
-                .upgrade_to = field("Upgrade to room version", "12", "12"),
-                .upgrade = widgets::Button<upgrade_press>("Upgrade this room", {box}),
-                .explore = widgets::Button<ask<Actions, &Actions::explore_state>>("Explore room state", {a}),
-                .send_custom = widgets::Button<ask<Actions, &Actions::open_send_custom>>("Send custom event", {a}),
-                .packs = widgets::Button<ask<Actions, &Actions::open_room_packs>>("Edit room packs", {a})} {
-      this->setGap(6.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
-      for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.explore, &parts.send_custom, &parts.packs, &parts.upgrade})
-        each->apply({.width = 180.0f, .height = 32.0f});
-      const bool may = facts.may(power_need::upgrade{});
-      parts.upgrade_to.setVisible(may);
-      parts.upgrade.setVisible(may);
     }
   };
 
@@ -828,7 +493,8 @@ struct room_settings : nodes::Stack {
     }
   };
 
-  using page_t = splice::variant<general_page, security_page, roles_page, notifications_page, advanced_page, looks_page>;
+  using page_t = typename variant_of_types<
+      typename joined<type_list<general_page, notifications_page, looks_page>, protocol_pages>::type>::type;
   struct page_holder : nodes::Stack {
     struct parts_t {
       page_t page;
@@ -866,9 +532,8 @@ struct room_settings : nodes::Stack {
         auto& [tabs, content] = parts;
         tabs.apply({.width = narrow ? 60.0f : 220.0f,
                     .padding = narrow ? scene::Margin{4.0f, 6.0f, 12.0f, 6.0f} : scene::Margin{4.0f, 12.0f, 12.0f, 12.0f}});
-        auto& [general, security, roles, notifications, looks, advanced] = tabs.parts;
         // Narrow, the rows' sides 4, not 12: their icon (28) had 24 of 48.
-        for (tab_row* one : {&general, &security, &roles, &notifications, &looks, &advanced}) {
+        for (tab_row* one : tabs.rows()) {
           one->parts.label.setVisible(!narrow);
           one->apply({.padding = narrow ? scene::Margin{0.0f, 4.0f, 0.0f, 4.0f} : scene::Margin{0.0f, 12.0f, 0.0f, 12.0f}});
         }
@@ -885,40 +550,41 @@ struct room_settings : nodes::Stack {
   } parts;
 
   settings_tab_t tab = settings_tab::general{};
-  bool confirming_encryption = false;
-  std::int64_t new_level = 50;
+  // What each protocol keeps while its pages are made again -- Matrix's: an
+  // encryption being confirmed, the level being picked -- in the list's order.
+  typename protocol_lists<protocols>::parts protocol_parts;
   // A tab to be made again, at the next frame: not from inside a press on
   // what it replaces.
   bool rebuild_due = false;
   bool to_top = false;  // another tab: shown from its top
 
-  // The first tab: General where the protocol has it, else Notifications.
-  [[nodiscard]] static settings_tab_t first_tab(const room_settings_facts& shown) {
-    return protocol_has_tab(shown.speaks, settings_tab::general{}) ? settings_tab_t{settings_tab::general{}}
-                                                                   : settings_tab_t{settings_tab::notifications{}};
-  }
-  [[nodiscard]] page_t first_page(Actions* a, const room_settings_facts& shown) {
-    return protocol_has_tab(shown.speaks, settings_tab::general{}) ? page_t(std::in_place_index<0>, a, this, shown)
-                                                                   : page_t(std::in_place_index<3>, a, this, shown);
-  }
-
   room_settings(Actions* a, const room_settings_facts& shown)
       : actions(a), facts(shown),
         parts{.header = header_t("Room Settings - " + shown.name, {}, {a}, false, true),
-              .body = body_row(this, first_page(a, shown))},
-        tab(first_tab(shown)) {
+              .body = body_row(this, page_t(std::in_place_index<0>, a, this, shown))} {
     fState.apply({.fill = true});
     parts.body.parts.tabs.show(tab);
-    this->show_new_level();
   }
 
   [[nodiscard]] page_holder& holder() { return std::get<0>(parts.body.parts.content.fChildren); }
+  // What a protocol keeps here: by its state type.
+  template <class State>
+  [[nodiscard]] auto& part() {
+    return std::get<index_in<proto::id<State>>(protocols{})>(protocol_parts);
+  }
+  template <class Tag, class... Tags>
+  static constexpr std::size_t index_in(protocol_list<Tags...>) {
+    constexpr std::array<bool, sizeof...(Tags)> is{std::derived_from<Tag, Tags>...};
+    return static_cast<std::size_t>(std::ranges::find(is, true) - is.begin());
+  }
   // A tab shown, made from the facts as they now are -- at the next frame.
   void show_tab(const settings_tab_t& to) {
     tab = to;
     rebuild_due = true;
     this->markDamaged();
   }
+  // The tab up, made again: what a page's act asks, once it changed the facts.
+  void show_again() { this->show_tab(tab); }
   [[nodiscard]] bool settling() const { return rebuild_due; }
   void update(double) {
     if (std::exchange(rebuild_due, false))
@@ -926,144 +592,23 @@ struct room_settings : nodes::Stack {
   }
   void rebuild() {
     const settings_tab_t to = tab;
+    auto& page = holder().parts.page;
     splice::visit(splice::overloaded{
-                   [&](settings_tab::general) { holder().parts.page.template emplace<0>(actions, this, facts); },
-                   [&](settings_tab::security) { holder().parts.page.template emplace<1>(actions, this, facts); },
-                   [&](settings_tab::roles) { holder().parts.page.template emplace<2>(actions, this, facts); },
-                   [&](settings_tab::notifications) { holder().parts.page.template emplace<3>(actions, this, facts); },
-                   [&](settings_tab::advanced) { holder().parts.page.template emplace<4>(actions, this, facts); },
-                   [&](settings_tab::looks) { holder().parts.page.template emplace<5>(actions, this, facts); }},
-               to);
+                      [&](settings_tab::general) { page.template emplace<general_page>(actions, this, facts); },
+                      [&](settings_tab::notifications) { page.template emplace<notifications_page>(actions, this, facts); },
+                      [&](settings_tab::looks) { page.template emplace<looks_page>(actions, this, facts); },
+                      // A protocol's tab: the page its page_type() gives.
+                      [&](auto theirs) { page.template emplace<page_of_t<decltype(theirs)>>(actions, this, facts); }},
+                  to);
     parts.body.parts.tabs.show(tab);
     if (std::exchange(to_top, false))
       parts.body.parts.content.scrollTo(0.0f);
-    this->show_new_level();
     this->invalidateLayout();
-  }
-
-  // What is done: asked of the program, and the facts kept as they will be.
-  void store_general() {
-    splice::visit(splice::overloaded{[&](general_page& page) {
-                            const std::string& name = page.parts.name.text();
-                            const std::string& topic = page.parts.topic.text();
-                            if (name != facts.name && facts.may(power_need::rename{})) {
-                              actions->room_act(room_action::rename{name});
-                              facts.name = name;
-                            }
-                            if (topic != facts.topic && facts.may(power_need::retopic{})) {
-                              actions->room_act(room_action::retopic{topic});
-                              facts.topic = topic;
-                            }
-                          },
-                          [](auto&) {}},
-               holder().parts.page);
-  }
-  void chose(const join_rule_t& rule) {
-    if (!facts.may(power_need::change_access{}))
-      return;
-    facts.join_rule = rule;
-    actions->room_act(room_action::set_join_rule{rule});
-    this->show_tab(tab);
-  }
-  void chose(const history_rule_t& rule) {
-    if (!facts.may(power_need::change_history{}))
-      return;
-    facts.history = rule;
-    actions->room_act(room_action::set_history{rule});
-    this->show_tab(tab);
-  }
-  // Encryption: asked twice, as Element asks before it -- once on, it
-  // cannot be turned off.
-  void encrypt() {
-    if (facts.encrypted || !facts.may(power_need::encrypt{}))
-      return;
-    if (!confirming_encryption) {
-      confirming_encryption = true;
-    } else {
-      confirming_encryption = false;
-      facts.encrypted = true;
-      actions->room_act(room_action::encrypt{});
-    }
-    this->show_tab(tab);
-  }
-  void needs_level(const power_need_t& need, std::int64_t level) {
-    if (!facts.may(power_need::change_permissions{}) || level > facts.mine)
-      return;
-    actions->room_act(room_action::set_need{need, level});
-    splice::visit(splice::overloaded{[&](power_need::default_role) { facts.needs.users_default = level; },
-                          [&](power_need::send_messages) { facts.needs.events_default = level; },
-                          [&](power_need::change_settings) { facts.needs.state_default = level; },
-                          [&](power_need::invite) { facts.needs.invite = level; },
-                          [&](power_need::kick) { facts.needs.kick = level; },
-                          [&](power_need::ban) { facts.needs.ban = level; },
-                          [&](power_need::redact) { facts.needs.redact = level; },
-                          [&](power_need::notify_everyone) { facts.needs.notify_room = level; },
-                          [&]<sends_state Need>(Need) { facts.needs.events.insert_or_assign(std::string(Need::event), level); }},
-               need);
-    this->show_tab(tab);
-  }
-  void user_level(const std::string& user, std::int64_t level) {
-    if (!facts.may(power_need::change_permissions{}) || level > facts.mine)
-      return;
-    actions->room_act(room_action::set_power{user, level});
-    const auto found = std::ranges::find(facts.privileged, user, &room_settings_facts::person::id);
-    if (found != facts.privileged.end())
-      found->level = level;
-    this->show_tab(tab);
-  }
-  void show_new_level() {
-    splice::visit(splice::overloaded{[&](roles_page& page) {
-                            page.parts.adding.parts.moderator.set_active(new_level == 50);
-                            page.parts.adding_event.parts.moderator.set_active(new_level == 50);
-                            page.parts.adding_event.parts.admin.set_active(new_level == 100);
-                            page.parts.adding.parts.admin.set_active(new_level == 100);
-                          },
-                          [](auto&) {}},
-               holder().parts.page);
-  }
-  // Upgraded to the version written: asked of the server.
-  void upgrade() {
-    if (!facts.may(power_need::upgrade{}))
-      return;
-    std::string version;
-    splice::visit(splice::overloaded{[&](advanced_page& page) { version = page.parts.upgrade_to.text(); }, [](auto&) {}},
-                  holder().parts.page);
-    if (!version.empty())
-      actions->room_act(room_action::upgrade{version});
-  }
-  // Any kind of event's level: asked, and shown so at once.
-  void event_level(const std::string& event, std::int64_t level) {
-    if (!facts.may(power_need::change_permissions{}) || level > facts.mine || event.empty())
-      return;
-    actions->room_act(room_action::set_event_need{event, level});
-    facts.needs.events.insert_or_assign(event, level);
-    this->show_tab(tab);
-  }
-  void apply_event_level() {
-    std::string event;
-    splice::visit(splice::overloaded{[&](roles_page& page) { event = page.parts.adding_event.parts.event.text(); }, [](auto&) {}},
-                  holder().parts.page);
-    this->event_level(event, new_level);
-  }
-  void apply_new_level() {
-    std::string user;
-    splice::visit(splice::overloaded{[&](roles_page& page) { user = page.parts.adding.parts.user.text(); }, [](auto&) {}},
-               holder().parts.page);
-    if (user.empty())
-      return;
-    if (std::ranges::find(facts.privileged, user, &room_settings_facts::person::id) == facts.privileged.end())
-      facts.privileged.push_back({user, user, facts.needs.users_default});
-    this->user_level(user, new_level);
   }
   void notify(const config::notify_mode_t& mode) {
     facts.notify_mode = mode;
     actions->set_chat_notify(mode);
     this->show_tab(tab);
-  }
-
-  template <class Rule, class Variant>
-  [[nodiscard]] static bool is(const Variant& now) {
-    return splice::visit(splice::overloaded{[](const Rule&) { return true; }, [](const auto&) { return false; }}, now);
   }
 };
 

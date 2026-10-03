@@ -49,6 +49,7 @@ struct menu_facts {
   bool moving = false;  // a GIF or a moving WebP: one that can be saved to the GIFs
   bool pinned = false;  // pinned in its chat: the menu offers Unpin
   bool pinnable = false;  // in a chat where pins are kept: a Matrix room
+  bool editable = false;  // one's own, as its protocol's rule for edits allows
   bool deletable = false;  // one may take it away: one's own, or another's with the power to
   bool reaction_events = false;  // reacted to, the reactions being events
   std::size_t reaction_count = 0;  // how many reactions it has, of anyone
@@ -252,6 +253,8 @@ template <class Actions>
   if (chat) {
     facts.pinned = std::ranges::contains(chat->pinned, one.message_id);
     facts.pinnable = proto::can_pin(chat->id.account.speaks, one.message_id);
+    // Edited as its protocol's rule allows: any of one's own, or the last.
+    facts.editable = proto::may_edit(chat->id.account.speaks, *chat, one.said);
     // Delete as the protocol allows it -- Matrix: as the room's power levels do.
     facts.deletable = proto::may_delete(chat->id.account.speaks, *chat, one.outgoing);
     facts.reaction_events = !one.said.reaction_events.empty();

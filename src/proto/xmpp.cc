@@ -13,6 +13,10 @@ export namespace mux::xmpp {
 // A JID: anything a Matrix user ID is not (those begin with '@').
 constexpr bool owns_address(tag, std::string_view address) { return !address.empty() && !address.starts_with('@'); }
 
+// One's own last message corrected, and no other (Last Message Correction,
+// XEP-0308).
+inline proto::edits::last_own edit_rule(tag) { return {}; }
+
 // An xmpp: URI (RFC 5122).
 inline std::optional<std::string> share_link(tag, std::string_view address) { return "xmpp:" + std::string(address); }
 

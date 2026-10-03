@@ -18,6 +18,7 @@ import mux.app.drafts;
 import mux.video;
 import mux.logic.sending;
 import mux.logic.messages;
+import mux.protocols;
 
 export namespace mux::app {
 
@@ -51,8 +52,10 @@ class outbox_part {
   }
   // What of one's own messages may be edited: its text, or its picture's
   // caption -- not a file, a video or a sound.
-  [[nodiscard]] static bool editable(const message& one) {
-    return one.outgoing && !one.redacted && !one.id.empty() && !one.service &&
+  // As the chat's protocol's rule for edits allows: any of one's own, or
+  // only the last (XMPP's).
+  [[nodiscard]] static bool editable(const conversation& chat, const message& one) {
+    return proto::may_edit(chat.id.account.speaks, chat, one) && !one.id.empty() &&
            (one.attachment ? captioned(one) : !one.body.plain.empty());
   }
   // What the field is given to edit: the text; a picture's caption, nothing
@@ -73,7 +76,7 @@ class outbox_part {
     if (!chat)
       return;
     const auto last = std::ranges::find_if(chat->timeline.rbegin(), chat->timeline.rend(),
-                                           [](const message& one) { return editable(one); });
+                                           [&](const message& one) { return editable(*chat, one); });
     if (last != chat->timeline.rend())
       this->edit(last->id, edited_text(*last));
   }
@@ -95,7 +98,7 @@ class outbox_part {
     if (editing) {
       std::vector<const message*> own;
       for (const message& each : chat->timeline)
-        if (editable(each))
+        if (editable(*chat, each))
           own.push_back(&each);
       const auto at = std::ranges::find(own, *editing, &message::id);
       const message* next = nullptr;

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.video -- A video played, as Telegram Desktop plays one, through
+// mux.platform.video -- A video played, as Telegram Desktop plays one, through
 // FFmpeg: its file read by libavformat, its pictures decoded by libavcodec
 // and made RGBA by libswscale for Skia to draw, its sound decoded and made
 // interleaved float stereo by libswresample for SDL to play.
@@ -19,12 +19,12 @@ extern "C" {
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
 }
-export module mux.video;
+export module mux.platform.video;
 
 import std;
 import skia;
 
-namespace mux::video {
+namespace mux::platform::video {
 
 // FFmpeg's things, let go as its API says each is.
 struct format_closer {
@@ -66,9 +66,9 @@ struct stream_closer {
   return {index, std::move(context)};
 }
 
-}  // namespace mux::video
+}  // namespace mux::platform::video
 
-export namespace mux::video {
+export namespace mux::platform::video {
 
 // Whether videos play in the window, in this build.
 inline constexpr bool kPlays = true;
@@ -291,4 +291,4 @@ class player {
   double base_ = 0.0, started_ms_ = 0.0, now_ms_ = 0.0;
 };
 
-}  // namespace mux::video
+}  // namespace mux::platform::video

@@ -9,13 +9,13 @@ import splice;
 import skia;
 import mux.core;
 import mux.config;
-import mux.host;
+import mux.platform.dialogs;
+import mux.platform.video;
 import mux.ui;
 import mux.app.network;
 import mux.app.requests;
 import mux.app.services;
 import mux.app.drafts;
-import mux.video;
 import mux.logic.sending;
 import mux.logic.messages;
 import mux.protocols;
@@ -198,7 +198,7 @@ class outbox_part {
       return;
     if (to_send_.empty())
       files_thread_.reset();
-    mux::host::choose_files();
+    mux::platform::dialogs::choose_files();
   }
   // The thread panel's paperclip: what is chosen goes into the thread open.
   void apply(const request::attach_in_thread&) {
@@ -206,7 +206,7 @@ class outbox_part {
       return;
     if (to_send_.empty())
       files_thread_ = s_->root().main().thread_open();
-    mux::host::choose_files();
+    mux::platform::dialogs::choose_files();
   }
   void apply(const request::close_send_box&) {
     to_send_.clear();
@@ -332,7 +332,7 @@ class outbox_part {
       // A video: its size, length and first picture, sent with it as m.video
       // says them; the picture shown under its local id while it goes.
       if (!one.as.picture && one.as.mimetype.starts_with("video/"))
-        if (auto seen = mux::video::player::look(path)) {
+        if (auto seen = mux::platform::video::player::look(path)) {
           one.width = seen->width;
           one.height = seen->height;
           one.video = mux::video_look{.duration_ms = static_cast<std::int64_t>(seen->seconds * 1000.0),

@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.audio -- Sound: a voice message or an audio file decoded -- Opus in
+// mux.platform.audio -- Sound: a voice message or an audio file decoded -- Opus in
 // Ogg, as Matrix's voice messages are, or Vorbis -- and played through the
 // window's own SDL, one at a time, as Telegram plays them.
 module;
 #include <SDL3/SDL.h>
 #include <opus.h>
 #include <vorbis/vorbisfile.h>
-export module mux.audio;
+export module mux.platform.audio;
 
 import std;
 import mux.bytes;
 
-export namespace mux::audio {
+export namespace mux::platform::audio {
 
 // Sound decoded: its samples, interleaved, as floats; how many channels and
 // how many samples a second.
@@ -251,4 +251,4 @@ inline void play_chime(const pcm& sound) {
   SDL_ResumeAudioStreamDevice(stream);
 }
 
-}  // namespace mux::audio
+}  // namespace mux::platform::audio

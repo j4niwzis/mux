@@ -9,7 +9,7 @@ import mux.core;
 import mux.config;
 import mux.net;
 import mux.media;
-import mux.host;
+import mux.platform.system;
 import mux.ui;
 import skiff.paint;
 import skiff.scene;
@@ -34,7 +34,7 @@ void app::apply(const request::open_url& one) {
     root().show_message("Not opened", std::format("mux opens only http, https and mailto links, not:\n{}", one.url));
     return;
   }
-  mux::host::open_url(one.url);
+  mux::platform::system::open_url(one.url);
 }
 
 }  // namespace mux::app

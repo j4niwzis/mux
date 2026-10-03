@@ -13,7 +13,7 @@ import skiff.nodes.text;
 import skiff.widgets.loader;
 import skiff.widgets.wallpaper;
 import mux.core;
-import mux.video;
+import mux.platform.video;
 import mux.config;
 import mux.logic.links;
 import mux.protocols;
@@ -111,7 +111,7 @@ template <class Actions>
   // A video, shown by its thumbnail: played in the viewer -- or, built
   // without video, by the system's player, as a file is opened.
   if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y) &&
-      one.said.attachment && one.said.attachment->video && !mux::video::kPlays) {
+      one.said.attachment && one.said.attachment->video && !mux::platform::video::kPlays) {
     actions->open_file(*one.said.attachment->video, one.said.attachment->name);
     return true;
   }

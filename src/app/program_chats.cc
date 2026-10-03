@@ -10,7 +10,7 @@ import mux.core;
 import mux.config;
 import mux.net;
 import mux.media;
-import mux.host;
+import mux.platform.events;
 import mux.ui;
 import mux.protocols;
 import skiff.paint;
@@ -180,7 +180,7 @@ void app::apply(const request::open_drawer&) { root().open_drawer(); }
 
 void app::apply(const request::show_account& one) { (void)this->show_account(one.address); }
 
-void app::apply(const request::quit&) { mux::host::request_quit(); }
+void app::apply(const request::quit&) { mux::platform::events::request_quit(); }
 
 void app::apply(const request::toggle_info&) {
   root().main().toggle_info();

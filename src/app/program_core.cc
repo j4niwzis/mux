@@ -8,12 +8,11 @@ import splice;
 import knot;
 import skia;
 import mux.core;
-import mux.audio;
-import mux.dbus;
+import mux.platform.audio;
+import mux.platform.notifications;
 import mux.config;
 import mux.net;
 import mux.media;
-import mux.host;
 import mux.ui;
 import skiff.paint;
 import skiff.scene;
@@ -289,7 +288,7 @@ void app::notify_of(const mux::message& said, bool mentions_me) {
     return;
   const auto decision = this->notify_for(said.in, mentions_me);
   if (decision.sound)
-    mux::audio::play_chime(mux::audio::chime());
+    mux::platform::audio::play_chime(mux::platform::audio::chime());
   if (!decision.popup)
     return;
   const mux::conversation* chat = model->find(said.in);
@@ -314,7 +313,7 @@ void app::notify_of(const mux::message& said, bool mentions_me) {
   // thread; or mux's own window, which comes next -- until then, the log.
   splice::visit(splice::overloaded{[&](mux::config::notify_backend::native) {
                                std::thread([title, text] {
-                                 if (!mux::dbus::notify(title, text))
+                                 if (!mux::platform::notifications::notify(title, text))
                                    std::println(std::cerr, "[notify] no desktop notification service; {}: {}", title, text);
                                }).detach();
                              },
@@ -329,7 +328,7 @@ void app::notify_of(const mux::message& said, bool mentions_me) {
 void app::notify_invite(const mux::conversation_id& in, const mux::invite_info& invite, const std::string& name) {
   const auto decision = this->notify_for(in, true);
   if (decision.sound)
-    mux::audio::play_chime(mux::audio::chime());
+    mux::platform::audio::play_chime(mux::platform::audio::chime());
   if (!decision.popup)
     return;
   const std::string who = invite.from_name.empty() ? invite.from : invite.from_name;
@@ -337,7 +336,7 @@ void app::notify_invite(const mux::conversation_id& in, const mux::invite_info& 
   const std::string text = invite.direct ? std::string("A direct chat") : std::format("from {}", who);
   splice::visit(splice::overloaded{[&](mux::config::notify_backend::native) {
                                      std::thread([title, text] {
-                                       if (!mux::dbus::notify(title, text))
+                                       if (!mux::platform::notifications::notify(title, text))
                                          std::println(std::cerr, "[notify] no desktop notification service; {}: {}", title, text);
                                      }).detach();
                                    },

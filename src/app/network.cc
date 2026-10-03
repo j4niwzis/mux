@@ -10,7 +10,6 @@ import mux.net;
 import mux.preview;
 import mux.proto.clients;
 import mux.protocols;
-import mux.host;
 import mux.ui;
 // The program's sink for what accounts say; and each protocol's account made
 // for it (src/proto/accounts.cc, the protocols' registry).

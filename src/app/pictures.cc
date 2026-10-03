@@ -13,14 +13,16 @@ import mux.core;
 import mux.protocols;
 import mux.config;
 import mux.media;
-import mux.host;
+import mux.platform.audio;
+import mux.platform.clipboard;
+import mux.platform.dialogs;
+import mux.platform.system;
 import mux.ui;
 import mux.app.network;
 import mux.app.requests;
 import mux.app.services;
 import mux.app.workers;
 import mux.logic.blurhash;
-import mux.audio;
 
 export namespace mux::app {
 
@@ -396,7 +398,7 @@ class pictures_part {
     if (!image)
       return;
     if (std::string png = skia::encodeImage(*image, false); !png.empty())
-      mux::host::copy_picture(std::move(png));
+      mux::platform::clipboard::copy_picture(std::move(png));
   }
   // A file in a message, pressed: fetched, saved to Downloads, and opened.
   void apply(const request::open_file& one) {
@@ -408,7 +410,7 @@ class pictures_part {
   // from the disk where it was fetched before, from the account where not
   // -- on a worker, and played.
   void apply(const request::play_audio& one) {
-    auto& speaker = mux::audio::the_speaker();
+    auto& speaker = mux::platform::audio::the_speaker();
     if (speaker.holds(one.source)) {
       speaker.toggle();
       return;
@@ -424,10 +426,10 @@ class pictures_part {
     auto kept = std::make_shared<const std::string>(bytes);
     auto* scene = s_->scene;
     s_->work->run([kept, source, scene]() -> workers::done_t {
-      auto sound = mux::audio::decode(*kept);
+      auto sound = mux::platform::audio::decode(*kept);
       return [sound = std::move(sound), source, scene]() {
         if (sound)
-          mux::audio::the_speaker().play(source, *sound);
+          mux::platform::audio::the_speaker().play(source, *sound);
         scene->state().markDamaged();
       };
     });
@@ -496,7 +498,7 @@ class pictures_part {
       if (const auto type = mux::media::picture_of(*bytes); type && !offered.contains('.'))
         offered += std::format(".{}", mux::media::extension_of(*type));
     pending_save_ = std::pair{source, name};
-    mux::host::choose_save_path((downloads() / std::filesystem::path(offered).filename()).string());
+    mux::platform::dialogs::choose_save_path((downloads() / std::filesystem::path(offered).filename()).string());
   }
   // The path chosen: what was asked to be saved, written there.
   void save_to(std::string path) {
@@ -706,7 +708,7 @@ class pictures_part {
       s_->root().show_message("Saved, not opened",
                               std::format("Saved to {}. It was not opened: a file like it runs as a program.", where.string()));
     else if (open)
-      mux::host::open_url("file://" + where.string());
+      mux::platform::system::open_url("file://" + where.string());
     else
       s_->root().show_message("Saved", std::format("Saved to {}", where.string()));
   }

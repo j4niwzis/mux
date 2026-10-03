@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.host: the window. SDL3 makes it and brings its input; Skia draws
+// mux.platform.window: the window. SDL3 makes it and brings its input; Skia draws
 // skiff's scene into it -- on the GPU through GL where there is a GL, and in
 // software into SDL's own window surface where there is not. A frame is
 // drawn when the scene says something changed or is still moving, and the
@@ -10,7 +10,7 @@ module;
 #include <SDL3/SDL.h>
 #include <cxxabi.h>  // names of the nodes a frame trace says
 
-export module mux.host;
+export module mux.platform.window;
 
 import std;
 import mux.bytes;
@@ -18,45 +18,20 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import mux.platform.events;
+import mux.platform.fonts;
+import mux.platform.clipboard;
 
-// And emoji, as tdesktop has its own rather than the system's: Google's
-// Noto Color Emoji (SIL Open Font License, fonts/OFL-NotoColorEmoji.txt),
-// fetched at a pinned commit by the build, so they are the same on every
-// machine and never boxes. Its 25 MB are in a translation unit of their
-// own (emoji_font.cc), not in this module's interface, which every
-// importer reads.
-extern "C++" {
-extern const unsigned char mux_noto_color_emoji[];
-extern const decltype(sizeof 0) mux_noto_color_emoji_size;
-}
+namespace mux::platform::window {
+using clipboard::pasted_picture;
+using events::files_event;
+using events::save_event;
+using events::the_window;
+using events::wake_event;
+using fonts::load_fonts;
+}  // namespace mux::platform::window
 
-namespace mux::host::shipped {
-// Telegram Desktop's own faces, in the binary: Open Sans, regular and
-// semibold, as it draws its text with (SIL Open Font License, fonts/OFL.txt).
-constexpr unsigned char open_sans_regular[] = {
-#embed "../fonts/OpenSans-Regular.ttf"
-};
-constexpr unsigned char open_sans_semibold[] = {
-#embed "../fonts/OpenSans-SemiBold.ttf"
-};
-
-}  // namespace mux::host::shipped
-
-export namespace mux::host {
-
-// The event another thread pushes to wake the window: SDL's queue is the one
-// thing that thread may touch.
-inline std::uint32_t wake_event() {
-  static const std::uint32_t registered = SDL_RegisterEvents(1);
-  return registered;
-}
-
-// Callable from any thread.
-inline void wake() {
-  SDL_Event event{};
-  event.type = wake_event();
-  SDL_PushEvent(&event);
-}
+export namespace mux::platform::window {
 
 struct options {
   std::string title = "mux";
@@ -68,180 +43,6 @@ struct options {
   bool transparent = false;
   std::string fonts = "/usr/share/fonts";
 };
-
-// Open Sans, shipped, as Telegram Desktop's text is: regular, and semibold
-// for what is bold -- two faces, not one thickened. The system's fonts are
-// behind them for what they do not cover -- CJK, emoji.
-inline void load_fonts(const std::string& directory) {
-  auto manager = skia::SkFontMgr_New_Custom_Directory(directory.c_str());
-  if (!manager) {
-    // No fonts found: the default face, rather than no text at all.
-    static skia::SkFont font;
-    skiff::paint::defaultFont() = &font;
-    return;
-  }
-  skia::Sp<skia::SkTypeface> primary;
-  for (const char* family : {"Inter", "Noto Sans", "DejaVu Sans", "Liberation Sans", "Cantarell"}) {
-    primary = manager->matchFamilyStyle(family, skia::SkFontStyle());
-    if (primary)
-      break;
-  }
-  if (!primary && manager->countFamilies() > 0)
-    primary = manager->createStyleSet(0)->createTypeface(0);
-  const auto shipped_face = [&](const unsigned char* bytes, std::size_t size) {
-    return manager->makeFromData(skia::SkData::MakeWithoutCopy(bytes, size));
-  };
-  auto regular = shipped_face(shipped::open_sans_regular, sizeof shipped::open_sans_regular);
-  auto semibold = shipped_face(shipped::open_sans_semibold, sizeof shipped::open_sans_semibold);
-  if (regular && semibold) {
-    primary = regular;
-    skiff::paint::fonts().setPrimary(std::move(regular), std::move(semibold));
-  } else if (primary) {
-    skiff::paint::fonts().setPrimary(primary);
-  }
-  // Emoji from the face shipped for them, before anything of the system's.
-  if (auto emoji = shipped_face(mux_noto_color_emoji, mux_noto_color_emoji_size))
-    skiff::paint::fonts().addFallback(std::move(emoji));
-  // Where a character no face loaded here has is looked for: the system's.
-  skiff::paint::fonts().setFontManager(manager);
-  // Code in a monospace face of the system's, as Telegram draws it: the
-  // first of the usual ones that is there.
-  for (const char* family : {"DejaVu Sans Mono", "Noto Sans Mono", "Liberation Mono", "Ubuntu Mono", "JetBrains Mono",
-                             "Fira Mono", "Source Code Pro", "Cascadia Mono", "Consolas", "Menlo", "Courier New"})
-    if (auto face = manager->matchFamilyStyle(family, skia::SkFontStyle())) {
-      skiff::paint::fonts().setMonospace(std::move(face));
-      break;
-    }
-  // What every Text and widget draws with. Without it they draw nothing:
-  // the window was its boxes and no words.
-  static skia::SkFont font(primary);
-  // Smoothed, and fitted to the pixels only lightly, as Qt draws on Linux:
-  // full hinting is what made the text look heavier than Telegram's.
-  font.setEdging(skia::SkFont::Edging::kAntiAlias);
-  font.setHinting(skia::SkFontHinting::kSlight);
-  font.setSubpixel(true);
-  skiff::paint::defaultFont() = &font;
-  for (const std::int32_t sample : {0x3042, 0xAC00, 0x4E00, 0x0627, 0x05D0, 0x0915, 0x1F600}) {
-    if (auto face = manager->matchFamilyStyleCharacter(nullptr, skia::SkFontStyle(), nullptr, 0, sample))
-      skiff::paint::fonts().addFallback(std::move(face));
-  }
-}
-
-// A link opened in what the system opens links with.
-inline void open_url(const std::string& url) { SDL_OpenURL(url.c_str()); }
-
-// A picture put on the system's clipboard: its PNG, offered as image/png --
-// what every program that pastes a picture takes -- held until the
-// clipboard lets it go. SDL asks for it through the two functions it is
-// given, as its C interface has it.
-inline void copy_picture(std::string png) {
-  auto* held = new std::string(std::move(png));
-  const char* types[] = {"image/png"};
-  SDL_SetClipboardData(
-      +[](void* data, const char*, std::size_t* size) -> const void* {
-        const auto* bytes = static_cast<const std::string*>(data);
-        *size = bytes->size();
-        return bytes->data();
-      },
-      +[](void* data) { delete static_cast<std::string*>(data); }, held, types, 1);
-}
-
-// Files the user picked or dropped, handed to the window's thread as an
-// event of its own: the dialog answers on a thread of its choosing.
-inline std::uint32_t files_event() {
-  static const std::uint32_t registered = SDL_RegisterEvents(1);
-  return registered;
-}
-inline SDL_Window*& the_window() {
-  static SDL_Window* window = nullptr;
-  return window;
-}
-// The system's dialog for opening files, several at once.
-inline void choose_files() {
-  SDL_ShowOpenFileDialog(
-      +[](void*, const char* const* list, int) {
-        if (!list)
-          return;
-        auto* chosen = new std::vector<std::string>();
-        for (const char* const* one = list; *one; ++one)
-          chosen->emplace_back(*one);
-        if (chosen->empty()) {
-          delete chosen;
-          return;
-        }
-        SDL_Event event{};
-        event.type = files_event();
-        event.user.data1 = chosen;
-        event.user.code = 0;  // chosen, not dropped
-        SDL_PushEvent(&event);
-      },
-      nullptr, the_window(), nullptr, 0, nullptr, true);
-}
-
-// A picture on the clipboard, for Ctrl+V: its bytes put in a file of its
-// own, to go where a picture dropped on the window goes. The first of the
-// kinds a picture comes as that the clipboard has.
-struct picture_kind {
-  const char* mime;
-  const char* extension;
-};
-inline constexpr std::array kPictureKinds{
-    picture_kind{"image/png", "png"},   picture_kind{"image/jpeg", "jpg"}, picture_kind{"image/gif", "gif"},
-    picture_kind{"image/webp", "webp"}, picture_kind{"image/bmp", "bmp"},
-};
-[[nodiscard]] inline std::optional<std::string> pasted_picture() {
-  static unsigned counter = 0;
-  for (const picture_kind& kind : kPictureKinds) {
-    if (!SDL_HasClipboardData(kind.mime))
-      continue;
-    std::size_t size = 0;
-    void* data = SDL_GetClipboardData(kind.mime, &size);
-    if (!data)
-      continue;
-    std::error_code failed;
-    const std::filesystem::path folder = std::filesystem::temp_directory_path(failed) / "mux-pasted";
-    std::filesystem::create_directories(folder, failed);
-    const std::filesystem::path path = folder / std::format("pasted-{}.{}", ++counter, kind.extension);
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    out.write(static_cast<const char*>(data), static_cast<std::streamsize>(size));
-    SDL_free(data);
-    if (!out)
-      return std::nullopt;
-    return path.string();
-  }
-  return std::nullopt;
-}
-
-// A path chosen to save a file to, handed to the window's thread as an event
-// of its own, as the files opened are.
-inline std::uint32_t save_event() {
-  static const std::uint32_t registered = SDL_RegisterEvents(1);
-  return registered;
-}
-// The system's dialog for saving a file, the name offered filled in (a path
-// or a name). What is offered is kept until the dialog has read it.
-inline void choose_save_path(std::string offered) {
-  static std::string kept;
-  kept = std::move(offered);
-  SDL_ShowSaveFileDialog(
-      +[](void*, const char* const* list, int) {
-        if (!list || !*list)
-          return;
-        SDL_Event event{};
-        event.type = save_event();
-        event.user.data1 = new std::string(*list);
-        SDL_PushEvent(&event);
-      },
-      nullptr, the_window(), nullptr, 0, kept.empty() ? nullptr : kept.c_str());
-}
-
-// The window asked to close, as its close button would: from the window's
-// thread, between events or in a handler.
-inline void request_quit() {
-  SDL_Event quit{};
-  quit.type = SDL_EVENT_QUIT;
-  SDL_PushEvent(&quit);
-}
 
 namespace detail {
 
@@ -1533,4 +1334,4 @@ int run(App& app, const options& how) {
   return result;
 }
 
-}  // namespace mux::host
+}  // namespace mux::platform::window

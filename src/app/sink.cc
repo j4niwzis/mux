@@ -4,13 +4,13 @@ export module mux.app.network:sink;
 
 import std;
 import mux.core;
-import mux.host;
+import mux.platform.events;
 
 export namespace mux::app {
 
 // The window's side of the mailbox: wake it.
 struct wake_window {
-  void operator()() const { mux::host::wake(); }
+  void operator()() const { mux::platform::events::wake(); }
 };
 using mailbox_type = mux::mailbox<wake_window>;
 

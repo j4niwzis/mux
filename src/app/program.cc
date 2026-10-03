@@ -13,8 +13,12 @@ import mux.core;
 import mux.config;
 import mux.net;
 import mux.media;
-import mux.host;
-import mux.dbus;
+import mux.platform.audio;
+import mux.platform.dialogs;
+import mux.platform.events;
+import mux.platform.notifications;
+import mux.platform.push;
+import mux.platform.system;
 import mux.protocols;
 import mux.ui;
 import mux.ui.proto;
@@ -373,16 +377,16 @@ struct app : kept_settings {
   // data the program reads, the window woken for it.
   struct push_inbox {
     std::mutex lock;
-    std::vector<mux::dbus::push_event> pending;
+    std::vector<mux::platform::push::event> pending;
   };
   struct push_sink {
     std::shared_ptr<push_inbox> inbox;
-    void operator()(mux::dbus::push_event one) const {
+    void operator()(mux::platform::push::event one) const {
       {
         std::lock_guard held(inbox->lock);
         inbox->pending.push_back(std::move(one));
       }
-      mux::host::wake();
+      mux::platform::events::wake();
     }
   };
   std::shared_ptr<push_inbox> push_box = std::make_shared<push_inbox>();

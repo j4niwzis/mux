@@ -14,7 +14,7 @@ import skiff.nodes.image;
 import skiff.nodes.text;
 import skiff.widgets.loader;
 import skiff.widgets.pill;
-import mux.audio;
+import mux.platform.audio;
 import mux.core;
 import mux.config;
 import mux.logic.links;
@@ -478,13 +478,13 @@ struct file_view : nodes::Stack {
   bool shown_playing = false;
   std::string shown_time;
   std::string size_line;
-  [[nodiscard]] bool settling() const { return sound && mux::audio::the_speaker().holds(source); }
+  [[nodiscard]] bool settling() const { return sound && mux::platform::audio::the_speaker().holds(source); }
   // A voice message's is ticked, for its button and its time; a file's not.
   [[nodiscard]] bool wantsTick() const { return sound; }
   void update(double) {
     if (!sound)
       return;
-    auto& speaker = mux::audio::the_speaker();
+    auto& speaker = mux::platform::audio::the_speaker();
     speaker.tick();
     const bool playing = speaker.playing(source);
     if (playing != shown_playing) {
@@ -492,8 +492,8 @@ struct file_view : nodes::Stack {
       parts.icon.setShape(shape_of(playing ? icon_t{icon::pause{}} : icon_t{icon::play{}}));
     }
     const std::string time = speaker.holds(source)
-                                 ? std::format("{} / {}", mux::audio::clock(speaker.position()),
-                                               mux::audio::clock(speaker.length()))
+                                 ? std::format("{} / {}", mux::platform::audio::clock(speaker.position()),
+                                               mux::platform::audio::clock(speaker.length()))
                                  : size_line;
     if (time != shown_time) {
       shown_time = time;

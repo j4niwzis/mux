@@ -258,19 +258,91 @@ if(MUX_UI)
   # else built with only what a chat's videos are in and made of. Off, the
   # client has no FFmpeg, and a video is played by the system's player.
   option(MUX_VIDEO "Videos played in the window, through FFmpeg" ON)
-  set(mux_video_source src/video_off.cc)
   set(mux_video_libraries)
   if(MUX_VIDEO)
     cme_find_package(FFmpeg COMPONENTS mp4 matroska h264 hevc vp9 aac opus mp3 REQUIRED)
-    set(mux_video_source src/video.cc)
     set(mux_video_libraries FFmpeg::avformat FFmpeg::avcodec FFmpeg::swscale FFmpeg::swresample FFmpeg::avutil)
   endif()
+
+  # What the platform gives the window -- its events, dialogs, clipboard,
+  # notifications, pushes, sound and video -- in src/platform/, as osu-cpp's
+  # client has it: source overlays. For foo.cc, a matching foo_android.cc,
+  # foo_web.cc, foo_wasi.cc, foo_freedesktop.cc, foo_windows.cc or
+  # foo_macos.cc replaces the common file on that platform; a suffixed file
+  # with no common one stands alone, and one may name several platforms
+  # (foo_freedesktop_windows_macos.cc). Pieces of an implementation live
+  # below platform/<platform>/, and only the chosen platform's enter the
+  # build. The choice is made here, and no source says #if about a platform.
+  set(MUX_PLATFORM_VARIANT_PATTERN "android|web|wasi|freedesktop|windows|macos")
+  if(ANDROID)
+    set(MUX_PLATFORM_SUFFIX android)
+  elseif(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
+    set(MUX_PLATFORM_SUFFIX web)
+  elseif(CMAKE_SYSTEM_NAME STREQUAL "WASI")
+    set(MUX_PLATFORM_SUFFIX wasi)
+  elseif(UNIX AND NOT APPLE)
+    # The Wayland/X11, D-Bus and xdg desktops: glibc's and musl's, Flatpak,
+    # postmarketOS -- not Android.
+    set(MUX_PLATFORM_SUFFIX freedesktop)
+  elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set(MUX_PLATFORM_SUFFIX windows)
+  elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    set(MUX_PLATFORM_SUFFIX macos)
+  else()
+    # The unsuffixed sources are the generic implementation.
+    set(MUX_PLATFORM_SUFFIX "")
+  endif()
+  set(mux_overlay_regex "_(${MUX_PLATFORM_VARIANT_PATTERN})(_(${MUX_PLATFORM_VARIANT_PATTERN}))*\\.cc$")
+  file(GLOB mux_platform_all CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/*.cc")
+  set(mux_platform_common ${mux_platform_all})
+  list(FILTER mux_platform_common EXCLUDE REGEX "${mux_overlay_regex}")
+  set(mux_platform_sources)
+  foreach(source IN LISTS mux_platform_common)
+    get_filename_component(source_dir "${source}" DIRECTORY)
+    get_filename_component(source_name "${source}" NAME_WE)
+    set(overlay "${source_dir}/${source_name}_${MUX_PLATFORM_SUFFIX}.cc")
+    if(MUX_PLATFORM_SUFFIX AND EXISTS "${overlay}")
+      list(APPEND mux_platform_sources "${overlay}")
+    else()
+      list(APPEND mux_platform_sources "${source}")
+    endif()
+  endforeach()
+  # The suffixed files that name this platform among several, or stand alone.
+  foreach(source IN LISTS mux_platform_all)
+    get_filename_component(source_name "${source}" NAME)
+    if(MUX_PLATFORM_SUFFIX AND source_name MATCHES "${mux_overlay_regex}" AND
+       source_name MATCHES "_${MUX_PLATFORM_SUFFIX}(_|\\.cc$)")
+      list(APPEND mux_platform_sources "${source}")
+    endif()
+  endforeach()
+  if(MUX_PLATFORM_SUFFIX)
+    file(GLOB_RECURSE mux_platform_pieces CONFIGURE_DEPENDS
+      "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/${MUX_PLATFORM_SUFFIX}/*.cc")
+    list(APPEND mux_platform_sources ${mux_platform_pieces})
+  endif()
+  # A video player is an overlay like any other, and it names FFmpeg: a build
+  # without video has none to name, and takes the unsuffixed file -- the same
+  # calls, saying there is no player -- as osu-cpp does its Vulkan presenter.
+  if(NOT MUX_VIDEO)
+    list(FILTER mux_platform_sources EXCLUDE REGEX "/platform/video_[^/]*\\.cc$")
+    list(APPEND mux_platform_sources "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/video.cc")
+  endif()
+  list(REMOVE_DUPLICATES mux_platform_sources)
+  # Overlays naming this platform replace their common file, also where they
+  # name others besides it.
+  foreach(source IN LISTS mux_platform_sources)
+    get_filename_component(source_name "${source}" NAME)
+    if(source_name MATCHES "${mux_overlay_regex}")
+      string(REGEX REPLACE "(_(${MUX_PLATFORM_VARIANT_PATTERN}))+\\.cc$" ".cc" common_name "${source_name}")
+      list(REMOVE_ITEM mux_platform_sources "${CMAKE_CURRENT_SOURCE_DIR}/src/platform/${common_name}")
+    endif()
+  endforeach()
   cme_find_package(skiff COMPONENTS ${mux_skiff_components} REQUIRED)
   cme_find_package(skiff-widgets REQUIRED)
 
   # The emoji face the window draws emoji with, as tdesktop has its own:
   # Noto Color Emoji, fetched once at a pinned commit and checked, and put
-  # in the binary by host.cc's #embed.
+  # in the binary by emoji_font.cc's #embed.
   set(mux_emoji_dir ${CMAKE_BINARY_DIR}/fonts)
   set(mux_emoji_font ${mux_emoji_dir}/NotoColorEmoji-Regular.ttf)
   if(NOT EXISTS ${mux_emoji_font})
@@ -300,7 +372,7 @@ if(MUX_UI)
   set_property(SOURCE src/telegram_pattern.cc APPEND PROPERTY COMPILE_OPTIONS --embed-dir=${mux_art_dir})
   set_property(SOURCE src/telegram_pattern.cc APPEND PROPERTY OBJECT_DEPENDS ${mux_pattern})
   target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
-    FILES src/host.cc src/audio.cc ${mux_video_source} src/dbus.cc src/ui.cc
+    FILES ${mux_platform_sources} src/ui.cc
           src/ui/base.cc src/ui/icons.cc src/ui/avatars.cc src/ui/controls.cc src/ui/themes.cc src/ui/names.cc src/ui/html.cc src/ui/chat_list.cc src/ui/message.cc src/ui/header.cc src/ui/info.cc src/ui/room_settings.cc src/ui/composer.cc src/ui/timeline.cc src/ui/conversations.cc src/ui/forms.cc src/ui/add_account.cc src/ui/accounts.cc src/ui/drawer.cc src/ui/proxies.cc src/ui/appearance.cc src/ui/storage.cc src/ui/settings.cc src/ui/context_menu.cc src/ui/sending.cc src/ui/viewer.cc src/ui/window.cc
           src/proto/xmpp/ui.cc src/proto/matrix/ui.cc src/proto/ui.cc)
   target_link_libraries(mux_modules PUBLIC SDL3::SDL3 skiff::skiff skiff::widgets Opus::opus Vorbis::vorbisfile

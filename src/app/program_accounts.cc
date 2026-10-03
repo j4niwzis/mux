@@ -13,7 +13,8 @@ import mux.logic.room_events;
 import mux.config;
 import mux.net;
 import mux.media;
-import mux.host;
+import mux.platform.dialogs;
+import mux.platform.push;
 import mux.ui;
 import skiff.paint;
 import skiff.scene;
@@ -154,7 +155,7 @@ void app::apply(const request::set_wallpaper& one) {
                                    [&](mux::config::wallpaper_pick::plain) { set(mux::config::wallpaper::plain{}); },
                                    [&](mux::config::wallpaper_pick::picture) {
                                      picking_wallpaper = one.level;
-                                     mux::host::choose_files();
+                                     mux::platform::dialogs::choose_files();
                                    }},
                 one.pick);
 }
@@ -326,7 +327,7 @@ void app::apply(const request::delete_pack& one) {
 }
 void app::apply(const request::pick_pack_images&) {
   picking_pack_images = true;
-  mux::host::choose_files();
+  mux::platform::dialogs::choose_files();
 }
 // Images chosen for the pack open: each a picture, uploaded -- its name
 // its shortcode to begin with, its size and type said in the pack.
@@ -789,12 +790,12 @@ void app::start_push() {
   if (push_thread.joinable() || keeps_nothing)
     return;
   if (!notifications.push_token) {
-    notifications.push_token = mux::dbus::new_push_token();
+    notifications.push_token = mux::platform::push::new_token();
     (void)this->write();
   }
   push_forget = std::make_shared<std::atomic<bool>>(false);
   push_thread = std::jthread([box = push_box, forget = push_forget, token = *notifications.push_token](std::stop_token stop) {
-    mux::dbus::run_unified_push(stop, std::string(mux::dbus::kAppId), token, "Messages from your accounts", forget,
+    mux::platform::push::run(stop, std::string(mux::platform::push::kAppId), token, "Messages from your accounts", forget,
                                 push_sink{box});
   });
   if (notifications.push_endpoint)
@@ -814,13 +815,13 @@ void app::stop_push() {
 // What the connector said since: the endpoint given to the accounts, a push
 // a sync now, the rest said in the log.
 void app::take_push() {
-  std::vector<mux::dbus::push_event> said;
+  std::vector<mux::platform::push::event> said;
   {
     std::lock_guard held(push_box->lock);
     said = std::exchange(push_box->pending, {});
   }
   for (const auto& one : said)
-    splice::visit(splice::overloaded{[&](const mux::dbus::push::endpoint& given) {
+    splice::visit(splice::overloaded{[&](const mux::platform::push::endpoint& given) {
                                        std::println(std::cerr, "[push] endpoint {}", given.url);
                                        if (notifications.push_endpoint != given.url) {
                                          notifications.push_endpoint = given.url;
@@ -828,23 +829,23 @@ void app::take_push() {
                                        }
                                        net->set_push_endpoint(given.url);
                                      },
-                                     [&](const mux::dbus::push::message&) { net->sync_now(); },
-                                     [&](const mux::dbus::push::unregistered&) {
+                                     [&](const mux::platform::push::message&) { net->sync_now(); },
+                                     [&](const mux::platform::push::unregistered&) {
                                        std::println(std::cerr, "[push] the distributor dropped the registration");
                                        notifications.push_endpoint.reset();
                                        net->set_push_endpoint(std::nullopt);
                                        (void)this->write();
                                      },
-                                     [&](const mux::dbus::push::registered& with) {
+                                     [&](const mux::platform::push::registered& with) {
                                        std::println(std::cerr, "[push] registered with {}", with.distributor);
                                      },
-                                     [&](const mux::dbus::push::refused& why) {
+                                     [&](const mux::platform::push::refused& why) {
                                        std::println(std::cerr, "[push] the distributor refused: {}", why.reason);
                                      },
-                                     [&](const mux::dbus::push::no_distributor&) {
+                                     [&](const mux::platform::push::no_distributor&) {
                                        std::println(std::cerr, "[push] no UnifiedPush distributor on the session bus");
                                      },
-                                     [&](const mux::dbus::push::no_bus&) {
+                                     [&](const mux::platform::push::no_bus&) {
                                        std::println(std::cerr, "[push] no session bus");
                                      }},
                   one);

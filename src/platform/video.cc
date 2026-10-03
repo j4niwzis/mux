@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.video, built without FFmpeg (MUX_VIDEO off): the same player, which
+// mux.platform.video, built without FFmpeg (MUX_VIDEO off): the same player, which
 // opens nothing -- a video is then played by the system's player, as a file
 // is opened.
-export module mux.video;
+export module mux.platform.video;
 
 import std;
 import skia;
 
-export namespace mux::video {
+export namespace mux::platform::video {
 
 // Whether videos play in the window, in this build.
 inline constexpr bool kPlays = false;
@@ -36,4 +36,4 @@ class player {
   skia::Sp<skia::SkImage> picture_;
 };
 
-}  // namespace mux::video
+}  // namespace mux::platform::video

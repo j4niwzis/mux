@@ -9,7 +9,6 @@ import mux.core;
 import mux.config;
 import mux.net;
 import mux.media;
-import mux.host;
 import mux.ui;
 import skiff.paint;
 import skiff.scene;

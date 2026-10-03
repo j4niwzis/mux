@@ -20,7 +20,7 @@ import mux.core;
 import mux.config;
 import mux.net;
 import mux.media;
-import mux.host;
+import mux.platform.window;
 import mux.ui;
 import skiff.paint;
 import skiff.scene;
@@ -127,7 +127,7 @@ int main(int argc, char** argv) {
 
   if (config_note)
     program.root().show_message("The accounts file could not be read", *config_note);
-  const int code = mux::host::run(
+  const int code = mux::platform::window::run(
       program, {.software = program.renderer == mux::config::renderer_t{mux::config::renderer::software{}},
                 .transparent = opacity < 100});
   // Started only once what is kept was read: never, where the vault stayed locked.

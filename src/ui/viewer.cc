@@ -10,7 +10,7 @@ import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.image;
 import skiff.widgets.loader;
-import mux.video;
+import mux.platform.video;
 import mux.core;
 import mux.config;
 import :base;
@@ -33,9 +33,9 @@ struct picture_viewer : nodes::Stack {
   // A video's: its file's source, and it playing once its file is here --
   // its picture shown in place of the thumbnail, a bar under it.
   std::optional<std::string> video;
-  std::unique_ptr<mux::video::player> playing;
+  std::unique_ptr<mux::platform::video::player> playing;
   void start(const std::filesystem::path& file) {
-    playing = mux::video::player::open(file);
+    playing = mux::platform::video::player::open(file);
     parts.bar.setVisible(playing != nullptr);
     this->invalidateLayout();
   }
@@ -253,7 +253,7 @@ struct picture_viewer : nodes::Stack {
       const auto whole = static_cast<std::int64_t>(seconds);
       return std::format("{}:{:02}", whole / 60, whole % 60);
     }
-    void show(const mux::video::player& one) {
+    void show(const mux::platform::video::player& one) {
       const double length = one.length();
       const float share = length > 0.0 ? static_cast<float>(one.position() / length) : 0.0f;
       const float width = std::floor(parts.track.bounds().width() * share);

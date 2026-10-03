@@ -7,6 +7,7 @@ export module mux.protocols;
 import std;
 import splice;
 import mux.core;
+import mux.config;
 export import mux.proto.tags;
 export import mux.proto.kept;
 export import mux.proto;
@@ -89,5 +90,24 @@ template <class... Tags>
   return (owns_media(state_of<Tags>{}, uri) || ...);
 }
 [[nodiscard]] inline bool is_media(std::string_view uri) { return is_media(protocols{}, uri); }
+
+// What a passphrase is asked for: the client's own, then every protocol's.
+template <class... Lists>
+struct passphrase_union;
+template <class... Ps>
+struct passphrase_union<passphrase_list<Ps...>> {
+  using type = splice::variant<config::passphrase_for::unlock, config::passphrase_for::encrypt, config::passphrase_for::change,
+                               config::passphrase_for::decrypt, Ps...>;
+};
+template <class... As, class... Bs, class... Rest>
+struct passphrase_union<passphrase_list<As...>, passphrase_list<Bs...>, Rest...>
+    : passphrase_union<passphrase_list<As..., Bs...>, Rest...> {};
+template <class>
+struct protocols_passphrases;
+template <class... Tags>
+struct protocols_passphrases<protocol_list<Tags...>> {
+  using type = typename passphrase_union<passphrase_list<>, decltype(passphrases_of(state_of<Tags>{}))...>::type;
+};
+using passphrase_for_t = typename protocols_passphrases<protocols>::type;
 
 }  // namespace mux::proto

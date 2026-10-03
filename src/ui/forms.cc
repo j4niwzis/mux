@@ -75,40 +75,11 @@ struct passphrase_box : nodes::Stack {
   static constexpr words words_of(config::passphrase_for::change) {
     return {"Change the passphrase", "Everything kept is sealed again under the new one.", "Change", true, true};
   }
-  static constexpr words words_of(config::passphrase_for::export_keys) {
-    return {"Export room keys",
-            "This account's room keys are written to your Downloads folder, sealed under a new passphrase: with "
-            "them and it, any client reads every encrypted message they open. Keep both safe.",
-            "Export", false, true};
-  }
-  static constexpr words words_of(config::passphrase_for::import_keys) {
-    return {"Import room keys", "Room keys from a key file Element or mux wrote, under its passphrase.", "Import", true, false,
-            true};
-  }
-  static constexpr words words_of(config::passphrase_for::cross_signing) {
-    return {"Set up cross-signing",
-            "Three keys are made for your account and kept on this device: with them it signs your devices and "
-            "the people you verify. Your server asks for your account's password to take them.",
-            "Set up", true, false};
-  }
-  static constexpr words words_of(config::passphrase_for::reset_identity) {
-    return {"Reset your identity",
-            "New cross-signing keys replace your account's: everyone who verified you, and every session of yours, "
-            "must verify again, and messages only your old keys could read stay unreadable here. Only if you have "
-            "lost every verified session and the recovery key. Your server asks for your account's password.",
-            "Reset", true, false};
-  }
-  static constexpr words words_of(config::passphrase_for::sign_out_unverified) {
-    return {"Sign out unverified sessions",
-            "Every session of yours that is not verified -- not cross-signed, nor verified by emoji here -- is "
-            "signed out. Your server asks for your account's password.",
-            "Sign out", true, false};
-  }
-  static constexpr words words_of(config::passphrase_for::recovery) {
-    return {"Restore with the recovery key",
-            "The recovery key written down when cross-signing was set up: with it, this device takes your "
-            "cross-signing keys back from your server.",
-            "Restore", true, false};
+  // A protocol's own: as it words it (passphrase_text, by ADL).
+  template <class Purpose>
+  static constexpr words words_of(Purpose why) {
+    const proto::passphrase_words said = passphrase_text(why);
+    return {said.title, said.note, said.button, said.current, said.fresh, said.file};
   }
   static constexpr words words_of(config::passphrase_for::decrypt) {
     return {"Stop encrypting local data", "Everything kept is written in the clear again, readable by whoever can read "
@@ -123,7 +94,7 @@ struct passphrase_box : nodes::Stack {
     }
   };
   Actions* actions = nullptr;
-  config::passphrase_for_t purpose;
+  proto::passphrase_for_t purpose;
   struct parts_t {
     nodes::Text title;
     nodes::Text note;
@@ -135,7 +106,7 @@ struct passphrase_box : nodes::Stack {
     widgets::Button<submit> go;
   } parts;
 
-  passphrase_box(Actions* a, config::passphrase_for_t why)
+  passphrase_box(Actions* a, proto::passphrase_for_t why)
       : actions(a), purpose(why),
         parts{.title = nodes::Text(std::string(said().title), 17.0f, text_colour, true),
               .note = nodes::Text(std::string(said().note), 14.0f, dim_colour),

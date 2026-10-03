@@ -86,6 +86,17 @@ struct request_list {};
 // protocol's UI module and opened by the protocol's program glue.
 template <class... Dialogs>
 struct dialog_list {};
+// What a protocol asks a passphrase (or a password) for, of its own: their
+// types, as passphrases(state) lists them; each says its words in the
+// passphrase dialog by passphrase_text(purpose), and is done by
+// passphrase_given in the protocol's program glue.
+template <class... Purposes>
+struct passphrase_list {};
+struct passphrase_words {
+  std::string_view title, note, button;
+  bool current, fresh;  // the passphrase now asked; a new one, twice
+  bool file = false;    // a file's path asked too
+};
 
 // What a protocol shows of its own beside the client's, made of the
 // client's basic components: each said as data, drawn by the client's own
@@ -166,6 +177,8 @@ constexpr account_page_list<> account_pages(const auto&) { return {}; }
 constexpr request_list<> requests_of(const auto&) { return {}; }
 // No dialogs of its own.
 constexpr dialog_list<> dialogs(const auto&) { return {}; }
+// No passphrases of its own.
+constexpr passphrase_list<> passphrases(const auto&) { return {}; }
 // Nothing shown of its own.
 inline std::vector<part::line> message_lines(const auto&, const conversation&, const message&) { return {}; }
 inline std::vector<part::badge> header_badges(const auto&, const conversation&, const auto&) { return {}; }
@@ -419,6 +432,12 @@ inline constexpr struct row_badges_t {
   }
 } row_badges{};
 
+// A protocol's own passphrase purposes, asked of its state type.
+template <class State>
+constexpr auto passphrases_of(const State& state) {
+  using defaults::passphrases;
+  return passphrases(state);
+}
 // A protocol's own dialogs, asked of its state type.
 template <class State>
 constexpr auto dialogs_of(const State& state) {

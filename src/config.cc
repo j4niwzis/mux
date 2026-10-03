@@ -1023,9 +1023,10 @@ template <class Kept>
   return one.shared.strip;
 }
 // Whether the account tells whom it talks to that the user is typing.
-// What a passphrase is asked for: local data opened at the
-// start; encrypted, a new one twice; another one, the one now first; or
-// encryption turned off, the one now.
+// What a passphrase is asked for, of the client's own: local data opened at
+// the start; encrypted, a new one twice; another one, the one now first; or
+// encryption turned off, the one now. A protocol's own purposes are its
+// (passphrases(state)); proto::passphrase_for_t is them all.
 namespace passphrase_for {
 struct unlock {
   friend bool operator==(unlock, unlock) = default;
@@ -1039,38 +1040,19 @@ struct change {
 struct decrypt {
   friend bool operator==(decrypt, decrypt) = default;
 };
-// An account's room keys: written to a file under a new passphrase, or read
-// from one under its own.
-struct export_keys {
-  friend bool operator==(export_keys, export_keys) = default;
-};
-struct import_keys {
-  friend bool operator==(import_keys, import_keys) = default;
-};
-// Cross-signing set up: the account's password, which the server asks for.
-struct cross_signing {
-  friend bool operator==(cross_signing, cross_signing) = default;
-};
-// The account's identity reset (Element's "Reset identity"): new
-// cross-signing keys in place of the old, the password asked as for a
-// setting up.
-struct reset_identity {
-  friend bool operator==(reset_identity, reset_identity) = default;
-};
-// One's own sessions not verified, signed out: the password, as the server
-// asks for it.
-struct sign_out_unverified {
-  friend bool operator==(sign_out_unverified, sign_out_unverified) = default;
-};
-// Cross-signing taken back with the recovery key.
-struct recovery {
-  friend bool operator==(recovery, recovery) = default;
-};
 }  // namespace passphrase_for
-using passphrase_for_t = splice::variant<passphrase_for::unlock, passphrase_for::encrypt, passphrase_for::change,
-                                         passphrase_for::decrypt, passphrase_for::export_keys, passphrase_for::import_keys,
-                                         passphrase_for::cross_signing, passphrase_for::recovery,
-                                         passphrase_for::reset_identity, passphrase_for::sign_out_unverified>;
+// A new passphrase: not empty, long enough, the same twice -- or why not.
+// Its key is made slowly (Argon2id, 64 MiB), but a short passphrase is still
+// few guesses away for whoever has the files.
+[[nodiscard]] inline std::optional<std::string> new_passphrase_refused(const std::string& fresh, const std::string& again) {
+  if (fresh.empty())
+    return "Type a passphrase.";
+  if (std::ranges::distance(fresh | std::views::filter([](char c) { return (c & 0xC0) != 0x80; })) < 10)
+    return "A passphrase of at least 10 characters.";
+  if (fresh != again)
+    return "The new passphrase is not the same twice.";
+  return std::nullopt;
+}
 
 // Its own choice, if it made one; else as every account's.
 [[nodiscard]] inline const std::optional<bool>& send_typing_of(const account_t& one) {

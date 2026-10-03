@@ -437,7 +437,7 @@ struct set_jump_search {
 // the level over it says.
 // A passphrase given, for what it was asked: the one now, a new one twice.
 struct give_passphrase {
-  mux::config::passphrase_for_t why;
+  mux::proto::passphrase_for_t why;
   std::string current, fresh, again;
   std::string file;  // a key file's path, where one was asked
 };
@@ -825,7 +825,7 @@ struct actions {
   void set_link_previews(mux::choice_level_t level, std::optional<bool> show) {
     requests.emplace_back(request::set_link_previews{level, show});
   }
-  void give_passphrase(mux::config::passphrase_for_t why, std::string current, std::string fresh, std::string again,
+  void give_passphrase(mux::proto::passphrase_for_t why, std::string current, std::string fresh, std::string again,
                        std::string file) {
     requests.emplace_back(request::give_passphrase{why, std::move(current), std::move(fresh), std::move(again), std::move(file)});
   }

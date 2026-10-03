@@ -166,7 +166,7 @@ struct stub {
   void set_link_previews(mux::choice_level_t, std::optional<bool>) {}
   void set_typing_sent(mux::choice_level_t, std::optional<bool>) {}
   void set_previews_direct(mux::choice_level_t, std::optional<bool>) {}
-  void give_passphrase(mux::config::passphrase_for_t, std::string, std::string, std::string, std::string) {}
+  void give_passphrase(mux::proto::passphrase_for_t, std::string, std::string, std::string, std::string) {}
   void verify_person(mux::conversation_id) {}
   void verify_accept_now() {}
   void verify_cancel_now() {}

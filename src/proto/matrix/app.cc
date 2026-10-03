@@ -87,27 +87,27 @@ void with_passphrase(App& app, Purpose purpose) {
 }
 template <class App>
 void program_asked(App& app, const setup_cross_signing&) {
-  with_passphrase(app, config::passphrase_for::cross_signing{});
+  with_passphrase(app, passphrase::cross_signing{});
 }
 template <class App>
 void program_asked(App& app, const restore_cross_signing&) {
-  with_passphrase(app, config::passphrase_for::recovery{});
+  with_passphrase(app, passphrase::recovery{});
 }
 template <class App>
 void program_asked(App& app, const reset_identity&) {
-  with_passphrase(app, config::passphrase_for::reset_identity{});
+  with_passphrase(app, passphrase::reset_identity{});
 }
 template <class App>
 void program_asked(App& app, const sign_out_unverified&) {
-  with_passphrase(app, config::passphrase_for::sign_out_unverified{});
+  with_passphrase(app, passphrase::sign_out_unverified{});
 }
 template <class App>
 void program_asked(App& app, const export_room_keys&) {
-  with_passphrase(app, config::passphrase_for::export_keys{});
+  with_passphrase(app, passphrase::export_keys{});
 }
 template <class App>
 void program_asked(App& app, const import_room_keys&) {
-  with_passphrase(app, config::passphrase_for::import_keys{});
+  with_passphrase(app, passphrase::import_keys{});
 }
 // Element's Secure Backup: made anew, or deleted.
 template <class App>
@@ -175,3 +175,57 @@ void program_asked(App& app, const refresh_sessions&) {
 }
 
 }  // namespace mux::proto::matrix::request
+
+// A passphrase or a password given, for what Matrix asked it for: for the
+// account whose keys were asked of (keys_of).
+export namespace mux::proto::matrix::passphrase {
+
+template <class App, class Given>
+void passphrase_given(App& app, const export_keys&, const Given& one) {
+  if (auto refused = config::new_passphrase_refused(one.fresh, one.again))
+    return app.root().passphrase_refused(*refused);
+  if (!app.keys_of)
+    return app.root().close_passphrase();
+  const char* home = std::getenv("HOME");
+  const auto folder = home && *home ? std::filesystem::path(home) / "Downloads" : std::filesystem::current_path();
+  // Joined, not formatted: clang 23 crashed on format strings first made in
+  // these modules (see app/network.cc).
+  const std::string file = "mux-room-keys-" + std::string(config::file_name_of(app.keys_of->address)) + ".txt";
+  app.net->export_room_keys(*app.keys_of, (folder / file).string(), one.fresh);
+  app.root().close_passphrase();
+}
+template <class App, class Given>
+void passphrase_given(App& app, const import_keys&, const Given& one) {
+  if (one.file.empty())
+    return app.root().passphrase_refused("Type the key file's path.");
+  if (!app.keys_of)
+    return app.root().close_passphrase();
+  app.net->import_room_keys(*app.keys_of, one.file, one.current);
+  app.root().close_passphrase();
+}
+template <class App, class Given>
+void passphrase_given(App& app, const cross_signing&, const Given& one) {
+  if (app.keys_of)
+    app.net->setup_cross_signing(*app.keys_of, one.current);
+  app.root().close_passphrase();
+}
+template <class App, class Given>
+void passphrase_given(App& app, const sign_out_unverified&, const Given& one) {
+  if (app.keys_of)
+    app.net->sign_out_unverified(*app.keys_of, one.current);
+  app.root().close_passphrase();
+}
+template <class App, class Given>
+void passphrase_given(App& app, const reset_identity&, const Given& one) {
+  if (app.keys_of)
+    app.net->setup_cross_signing(*app.keys_of, one.current, true);
+  app.root().close_passphrase();
+}
+template <class App, class Given>
+void passphrase_given(App& app, const recovery&, const Given& one) {
+  if (app.keys_of)
+    app.net->restore_cross_signing(*app.keys_of, one.current);
+  app.root().close_passphrase();
+}
+
+}  // namespace mux::proto::matrix::passphrase

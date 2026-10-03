@@ -472,7 +472,7 @@ struct window : scene::Node {
   }
   void close_notice() { layer().notice.close(); }
   // A passphrase asked for: the one at the start is not dismissed.
-  void ask_passphrase(config::passphrase_for_t why) {
+  void ask_passphrase(proto::passphrase_for_t why) {
     auto& dialog = layer().passphrase;
     dialog.setDismissable(splice::visit(
         splice::overloaded{[](config::passphrase_for::unlock) { return false; }, [](const auto&) { return true; }}, why));

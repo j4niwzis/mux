@@ -1051,17 +1051,7 @@ inline constexpr std::string_view kCutShort =
 void app::apply(const request::give_passphrase& one) {
   auto& vault = mux::vault::the();
   // A new one: not empty, and the same twice.
-  const auto fresh_refused = [&]() -> std::optional<std::string> {
-    if (one.fresh.empty())
-      return "Type a passphrase.";
-    // Its key is made slowly (Argon2id, 64 MiB), but a short passphrase is
-    // still few guesses away for whoever has the files.
-    if (std::ranges::distance(one.fresh | std::views::filter([](char c) { return (c & 0xC0) != 0x80; })) < 10)
-      return "A passphrase of at least 10 characters.";
-    if (one.fresh != one.again)
-      return "The new passphrase is not the same twice.";
-    return std::nullopt;
-  };
+  const auto fresh_refused = [&] { return mux::config::new_passphrase_refused(one.fresh, one.again); };
   const auto done = [&] {
     root().close_passphrase();
     if (auto* up = root().settings_up())
@@ -1107,45 +1097,8 @@ void app::apply(const request::give_passphrase& one) {
               return root().passphrase_refused(std::string(vault.resealing() ? kCutShort : kUnread));
             done();
           },
-          [&](mux::config::passphrase_for::export_keys) {
-            if (auto refused = fresh_refused())
-              return root().passphrase_refused(*refused);
-            if (!keys_of)
-              return root().close_passphrase();
-            const char* home = std::getenv("HOME");
-            const auto folder = home && *home ? std::filesystem::path(home) / "Downloads" : std::filesystem::current_path();
-            net->export_room_keys(*keys_of, (folder / std::format("mux-room-keys-{}.txt", mux::config::file_name_of(keys_of->address))).string(),
-                                  one.fresh);
-            root().close_passphrase();
-          },
-          [&](mux::config::passphrase_for::import_keys) {
-            if (one.file.empty())
-              return root().passphrase_refused("Type the key file's path.");
-            if (!keys_of)
-              return root().close_passphrase();
-            net->import_room_keys(*keys_of, one.file, one.current);
-            root().close_passphrase();
-          },
-          [&](mux::config::passphrase_for::cross_signing) {
-            if (keys_of)
-              net->setup_cross_signing(*keys_of, one.current);
-            root().close_passphrase();
-          },
-          [&](mux::config::passphrase_for::sign_out_unverified) {
-            if (keys_of)
-              net->sign_out_unverified(*keys_of, one.current);
-            root().close_passphrase();
-          },
-          [&](mux::config::passphrase_for::reset_identity) {
-            if (keys_of)
-              net->setup_cross_signing(*keys_of, one.current, true);
-            root().close_passphrase();
-          },
-          [&](mux::config::passphrase_for::recovery) {
-            if (keys_of)
-              net->restore_cross_signing(*keys_of, one.current);
-            root().close_passphrase();
-          },
+          // A protocol's own: done by its program glue.
+          [&](const auto& theirs) { passphrase_given(*this, theirs, one); },
           [&](mux::config::passphrase_for::decrypt) {
             if (!vault.matches(one.current))
               return root().passphrase_refused("That is not the passphrase.");

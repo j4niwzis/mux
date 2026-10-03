@@ -22,12 +22,12 @@ struct kept {
 };
 consteval auto json_schema(knot::type<kept>) { return knot::schema<kept>().tag("matrix"); }
 
-constexpr std::type_identity<kept> kept_type(tag) { return {}; }
+constexpr std::type_identity<kept> kept_type(const state&) { return {}; }
 constexpr std::string_view protocol_word(const kept&) { return "matrix"; }
 constexpr std::string_view protocol_name(const kept&) { return "Matrix"; }
 // A user ID: @localpart:server.
-constexpr bool owns_address(tag, std::string_view address) { return address.starts_with('@'); }
-inline kept kept_from(tag, std::string address, std::string password) {
+constexpr bool owns_address(const state&, std::string_view address) { return address.starts_with('@'); }
+inline kept kept_from(const state&, std::string address, std::string password) {
   return {.user_id = std::move(address), .password = std::move(password)};
 }
 [[nodiscard]] inline const std::string& address_of(const kept& one) noexcept { return one.user_id; }

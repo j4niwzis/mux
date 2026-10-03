@@ -154,7 +154,7 @@ export namespace mux::proto::xmpp {
 template <class Actions>
 using form = form_detail::xmpp_form<Actions>;
 template <class Actions>
-constexpr std::type_identity<form<Actions>> form_type(tag, std::type_identity<Actions>) {
+constexpr std::type_identity<form<Actions>> form_type(const state&, std::type_identity<Actions>) {
   return {};
 }
 template <class Actions>

@@ -922,7 +922,7 @@ struct changed {
 }  // namespace trust
 using trust_t = splice::variant<trust::unverified, trust::verified, trust::changed>;
 
-// A list of a protocol's own changes (its changes_type(tag)), made into the
+// A list of a protocol's own changes (its changes_type(state)), made into the
 // one variant of all changes in mux.core.
 template <class... Changes>
 struct change_list {};

@@ -12,7 +12,7 @@ struct state {
   bool online = false;  // syncing
   friend bool operator==(const state&, const state&) = default;
 };
-// What the protocol is known by: its state type, as an identity.
-using tag = id<state>;
+// The protocol is known by its state type itself (id<state>, in protocol_t);
+// every overload of it takes its state.
 
 }  // namespace mux::proto::matrix

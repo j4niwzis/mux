@@ -88,7 +88,7 @@ struct room_settings_facts {
 
 // Which tabs a room's protocol has: a list of their types. The client's
 // own -- Notifications, Appearance -- every room has; the rest are the
-// protocol's, as manage_tabs(tag) lists them: an overload found by ADL in
+// protocol's, as manage_tabs(state) lists them: an overload found by ADL in
 // its tag's namespace (mux.ui.proto.<protocol>), seen where the dialog is
 // made -- it is a template on Actions, made in the program, which imports
 // every protocol's. A protocol with none: the default, no tabs of its own.
@@ -105,9 +105,9 @@ template <class... Tabs, class Tab>
 // Whether the protocol a room speaks has a tab.
 template <class Tab>
 [[nodiscard]] bool protocol_has_tab(const protocol_t& speaks, Tab) {
-  return splice::visit([](const auto& tag) {
+  return splice::visit([](auto of) {
     using manage_defaults::manage_tabs;
-    return lists(manage_tabs(tag), std::type_identity<Tab>{});
+    return lists(manage_tabs(state_of<decltype(of)>{}), std::type_identity<Tab>{});
   }, speaks);
 }
 

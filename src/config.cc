@@ -323,9 +323,9 @@ struct account_shared {
 consteval auto json_schema(knot::type<account_shared>) { return knot::schema<account_shared>(); }
 
 // What each protocol keeps of its own: its kept type, found by ADL on its tag
-// -- kept_type(tag) -- for every protocol of the list.
+// -- kept_type(state) -- for every protocol of the list.
 template <class Tag>
-using kept_of = typename decltype(kept_type(Tag{}))::type;
+using kept_of = typename decltype(kept_type(state_of<Tag>{}))::type;
 template <class>
 struct kept_list;
 template <class... Tags>
@@ -1184,11 +1184,11 @@ using passphrase_for_t = splice::variant<passphrase_for::unlock, passphrase_for:
 constexpr bool is_matrix(std::string_view address) noexcept { return address.starts_with('@'); }
 
 // An account from an address alone, as on the command line: the first
-// protocol of the list that owns the address -- its owns_address(tag, ...).
+// protocol of the list that owns the address -- its owns_address(state, ...).
 template <class... Tags>
 [[nodiscard]] account_t account_from(protocol_list<Tags...>, std::string address, std::string password) {
   std::optional<account_t> made;
-  (void)((owns_address(Tags{}, address) ? (made = account_t{.own = kept_t{kept_from(Tags{}, address, password)}}, true) : false) ||
+  (void)((owns_address(state_of<Tags>{}, address) ? (made = account_t{.own = kept_t{kept_from(state_of<Tags>{}, address, password)}}, true) : false) ||
          ...);
   return made.value_or(account_t{});
 }

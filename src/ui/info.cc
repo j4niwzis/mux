@@ -2730,7 +2730,7 @@ struct info_panel : nodes::Stack {
                   muted,
                   false};
     if (group)
-      if (auto link = proto::room_link(one.id.account.speaks, one))
+      if (auto link = proto::room_link(protocol_state_of(one.id.account), one))
         group_view.copied = std::move(*link);
     group_view.topic = one.topic.value_or("");
     if (one.alias)

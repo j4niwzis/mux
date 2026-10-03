@@ -17,13 +17,13 @@ constexpr bool offers(const state&, feature::sticker_packs) { return true; }
 constexpr bool offers(const state&, feature::history_context) { return true; }
 
 // matrix.to, for a person, a room and a message in it.
-inline std::optional<std::string> share_link(tag, std::string_view address) {
+inline std::optional<std::string> share_link(const state&, std::string_view address) {
   return "https://matrix.to/#/" + std::string(address);
 }
-inline std::optional<std::string> person_link(tag, std::string_view user) { return "https://matrix.to/#/" + std::string(user); }
-inline std::optional<std::string> room_link(tag, const conversation& chat) { return logic::room_link(chat); }
+inline std::optional<std::string> person_link(const state&, std::string_view user) { return "https://matrix.to/#/" + std::string(user); }
+inline std::optional<std::string> room_link(const state&, const conversation& chat) { return logic::room_link(chat); }
 // Only an event the server named ($...): one still being sent has no link.
-inline std::optional<std::string> message_link(tag, const conversation& chat, std::string_view event) {
+inline std::optional<std::string> message_link(const state&, const conversation& chat, std::string_view event) {
   if (!event.starts_with('$'))
     return std::nullopt;
   return logic::message_link(chat, event);

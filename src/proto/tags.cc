@@ -20,7 +20,17 @@ export namespace mux {
 // protocol has to be found -- an address's, a link's.
 template <class... Tags>
 struct protocol_list {};
-using protocols = protocol_list<proto::xmpp::tag, proto::matrix::tag>;
+using protocols = protocol_list<proto::id<proto::xmpp::state>, proto::id<proto::matrix::state>>;
+
+// A protocol's state type, from what it is known by.
+template <class Tag>
+struct state_of_t;
+template <class State>
+struct state_of_t<proto::id<State>> {
+  using type = State;
+};
+template <class Tag>
+using state_of = typename state_of_t<Tag>::type;
 
 template <class>
 struct variant_of_list;
@@ -32,8 +42,8 @@ using protocol_t = variant_of_list<protocols>::type;
 
 // The names the code has known them by.
 namespace protocol {
-using xmpp = mux::proto::xmpp::tag;
-using matrix = mux::proto::matrix::tag;
+using xmpp = mux::proto::id<mux::proto::xmpp::state>;
+using matrix = mux::proto::id<mux::proto::matrix::state>;
 }  // namespace protocol
 
 }  // namespace mux

@@ -97,8 +97,8 @@ struct add_account_pane : nodes::Stack {
 
   // A protocol's form, blank, in place of the one up.
   void show(const protocol_t& speaks) {
-    splice::visit([this](auto tag) {
-      parts.form.template emplace<form_of_t<decltype(tag), Actions>>(this->actions, std::nullopt);
+    splice::visit([this](auto of) {
+      parts.form.template emplace<form_of_t<decltype(of), Actions>>(this->actions, std::nullopt);
     }, speaks);
     this->begin_swap();
     this->light();

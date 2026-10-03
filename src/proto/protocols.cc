@@ -19,7 +19,7 @@ export namespace mux::proto {
 template <class... Tags>
 [[nodiscard]] protocol_t protocol_of(protocol_list<Tags...>, std::string_view address) {
   std::optional<protocol_t> found;
-  (void)((owns_address(Tags{}, address) ? (found = protocol_t{Tags{}}, true) : false) || ...);
+  (void)((owns_address(state_of<Tags>{}, address) ? (found = protocol_t{Tags{}}, true) : false) || ...);
   return found.value_or(protocol_t{});
 }
 [[nodiscard]] inline protocol_t protocol_of(std::string_view address) { return protocol_of(protocols{}, address); }

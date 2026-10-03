@@ -26,7 +26,7 @@ export namespace mux::proto::matrix {
 
 constexpr ui::manage_tab_list<ui::settings_tab::general, ui::settings_tab::security, ui::settings_tab::roles,
                               ui::settings_tab::advanced>
-manage_tabs(tag) {
+manage_tabs(const state&) {
   return {};
 }
 
@@ -101,7 +101,7 @@ export namespace mux::proto::matrix {
 template <class Actions>
 using form = form_detail::matrix_form<Actions>;
 template <class Actions>
-constexpr std::type_identity<form<Actions>> form_type(tag, std::type_identity<Actions>) {
+constexpr std::type_identity<form<Actions>> form_type(const state&, std::type_identity<Actions>) {
   return {};
 }
 template <class Actions>

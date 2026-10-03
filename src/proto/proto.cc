@@ -18,8 +18,9 @@
 //   may_edit(state, chat, message) -- through the rule edit_rule(state) gives
 //   can_page_back(state)                         older history asked of the server
 //   can_upload(state)                            files sent: the paperclip, a drop, a paste
-// And by the protocol alone, its tag:
-//   owns_address(tag, address)                   whether an address is its
+// And with the state too, where no account is there to have one -- an
+// address alone -- the protocol's default state (state_before, state_of<P>{}):
+//   owns_address(state, address)                 whether an address is its
 //   share_link / room_link / message_link / person_link
 //
 // What a protocol gives may itself be a type with overloads of its own: an
@@ -62,7 +63,7 @@ struct account_ops {
 // an edit rule starts from.
 [[nodiscard]] inline bool own_text(const message& one) { return one.outgoing && !one.service && !one.redacted; }
 // The client's rule for edits, where a protocol gives none of its own (its
-// edit_rule(tag) and its rule type, with an allows() of its own): any of
+// edit_rule(state) and its rule type, with an allows() of its own): any of
 // one's own messages.
 struct own_messages {};
 [[nodiscard]] inline bool allows(own_messages, const conversation&, const message& one) { return own_text(one); }
@@ -144,9 +145,9 @@ inline constexpr struct can_upload_t {
 inline constexpr struct share_link_t {
   template <class Speaks>
   std::optional<std::string> operator()(const Speaks& speaks, std::string_view address) const {
-    return splice::visit([&](const auto& tag) {
+    return splice::visit([&](const auto& now) {
       using defaults::share_link;
-      return share_link(tag, address);
+      return share_link(now, address);
     }, speaks);
   }
 } share_link{};
@@ -154,9 +155,9 @@ inline constexpr struct share_link_t {
 inline constexpr struct room_link_t {
   template <class Speaks>
   std::optional<std::string> operator()(const Speaks& speaks, const conversation& chat) const {
-    return splice::visit([&](const auto& tag) {
+    return splice::visit([&](const auto& now) {
       using defaults::room_link;
-      return room_link(tag, chat);
+      return room_link(now, chat);
     }, speaks);
   }
 } room_link{};
@@ -164,9 +165,9 @@ inline constexpr struct room_link_t {
 inline constexpr struct message_link_t {
   template <class Speaks>
   std::optional<std::string> operator()(const Speaks& speaks, const conversation& chat, std::string_view id) const {
-    return splice::visit([&](const auto& tag) {
+    return splice::visit([&](const auto& now) {
       using defaults::message_link;
-      return message_link(tag, chat, id);
+      return message_link(now, chat, id);
     }, speaks);
   }
 } message_link{};
@@ -174,9 +175,9 @@ inline constexpr struct message_link_t {
 inline constexpr struct person_link_t {
   template <class Speaks>
   std::optional<std::string> operator()(const Speaks& speaks, std::string_view who) const {
-    return splice::visit([&](const auto& tag) {
+    return splice::visit([&](const auto& now) {
       using defaults::person_link;
-      return person_link(tag, who);
+      return person_link(now, who);
     }, speaks);
   }
 } person_link{};
@@ -215,13 +216,13 @@ inline constexpr struct may_edit_t {
   }
 } may_edit{};
 
-// Whether an address is a protocol's: asked of the tag itself, as the
-// protocol has to be found from it.
+// Whether an address is a protocol's: asked of its state -- a default one,
+// as the protocol has to be found from the address.
 inline constexpr struct owns_address_t {
-  template <class Tag>
-  bool operator()(Tag tag, std::string_view address) const {
+  template <class State>
+  bool operator()(const State& state, std::string_view address) const {
     using defaults::owns_address;
-    return owns_address(tag, address);
+    return owns_address(state, address);
   }
 } owns_address{};
 

@@ -23,12 +23,12 @@ struct kept {
 consteval auto json_schema(knot::type<kept>) { return knot::schema<kept>().tag("xmpp"); }
 
 // Its type, for the list of what accounts keep; the word the file says.
-constexpr std::type_identity<kept> kept_type(tag) { return {}; }
+constexpr std::type_identity<kept> kept_type(const state&) { return {}; }
 constexpr std::string_view protocol_word(const kept&) { return "xmpp"; }
 constexpr std::string_view protocol_name(const kept&) { return "XMPP"; }
 // A JID: anything a Matrix user ID is not (those begin with '@').
-constexpr bool owns_address(tag, std::string_view address) { return !address.empty() && !address.starts_with('@'); }
-inline kept kept_from(tag, std::string address, std::string password) {
+constexpr bool owns_address(const state&, std::string_view address) { return !address.empty() && !address.starts_with('@'); }
+inline kept kept_from(const state&, std::string address, std::string password) {
   return {.address = std::move(address), .password = std::move(password)};
 }
 [[nodiscard]] inline const std::string& address_of(const kept& one) noexcept { return one.address; }

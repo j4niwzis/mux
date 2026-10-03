@@ -227,12 +227,12 @@ struct form_end : nodes::Stack {
   return text;
 }
 
-// Each protocol's account form -- its form_type(tag), found by ADL where the
+// Each protocol's account form -- its form_type(state), found by ADL where the
 // panels are made: a template on Actions, made in the program, which imports
 // mux.ui.proto -- and any of them, as the panels hold them, made from the
 // list of protocols.
 template <class Tag, class Actions>
-using form_of_t = typename decltype(form_type(Tag{}, std::type_identity<Actions>{}))::type;
+using form_of_t = typename decltype(form_type(state_of<Tag>{}, std::type_identity<Actions>{}))::type;
 template <class Actions, class>
 struct form_list;
 template <class Actions, class... Tags>

@@ -627,7 +627,7 @@ struct mentioned;
   if (!said.service || said.body.html)
     return said;
   // The person's link, where their protocol has one.
-  const auto link = proto::person_link(protocol_of(said.sender), said.sender);
+  const auto link = proto::person_link(state_before(protocol_of(said.sender)), said.sender);
   if (!link)
     return said;
   const std::string name = sender_name(in, said.sender);

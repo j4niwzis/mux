@@ -23,6 +23,6 @@ inline last_correction edit_rule(const state&) { return {}; }
 constexpr bool can_page_back(const state& now) { return now.archive.value_or(true); }
 
 // An xmpp: URI (RFC 5122).
-inline std::optional<std::string> share_link(tag, std::string_view address) { return "xmpp:" + std::string(address); }
+inline std::optional<std::string> share_link(const state&, std::string_view address) { return "xmpp:" + std::string(address); }
 
 }  // namespace mux::proto::xmpp

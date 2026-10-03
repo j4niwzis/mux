@@ -12,15 +12,6 @@ export import mux.proto.tags;
 
 export namespace mux {
 
-// A protocol's state type, from what it is known by.
-template <class Tag>
-struct state_of_t;
-template <class State>
-struct state_of_t<proto::id<State>> {
-  using type = State;
-};
-template <class Tag>
-using state_of = typename state_of_t<Tag>::type;
 template <class>
 struct state_list;
 template <class... Tags>
@@ -31,7 +22,7 @@ using protocol_state_t = state_list<protocols>::type;
 
 // A protocol's state before its account says anything: its type's default.
 [[nodiscard]] inline protocol_state_t state_before(const protocol_t& speaks) {
-  return splice::visit([](auto tag) { return protocol_state_t{state_of<decltype(tag)>{}}; }, speaks);
+  return splice::visit([](auto of) { return protocol_state_t{state_of<decltype(of)>{}}; }, speaks);
 }
 
 }  // namespace mux

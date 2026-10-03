@@ -268,7 +268,7 @@ template <class Actions>
   }
   // The message's link, where its protocol has one.
   if (chat)
-    if (auto link = proto::message_link(chat->id.account.speaks, *chat, one.message_id))
+    if (auto link = proto::message_link(protocol_state_of(chat->id.account), *chat, one.message_id))
       facts.link = std::move(*link);
   // The link the press was on: one in the text -- its text asked a menu
   // of its own with it, which this one is in place of -- or the

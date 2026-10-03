@@ -2,7 +2,7 @@
 // mux.proto.matrix.changes -- What a Matrix account says that no other
 // protocol does: an emoji verification as it goes, cross-signing and the key
 // backup, its sessions, the developer tools, sticker packs. Its change list
-// (changes_type(tag), by ADL) is made part of mux.core's change_t; each is
+// (changes_type(const state&), by ADL) is made part of mux.core's change_t; each is
 // the window's, and said on the command line by describe().
 export module mux.proto.matrix.changes;
 
@@ -87,7 +87,7 @@ struct sessions_refused {
 };
 
 using changes = change_list<verification_changed, security_state, devtools_text, state_listed, packs_listed, pack_saved, pack_picture_uploaded, sessions_listed, sessions_refused>;
-constexpr std::type_identity<changes> changes_type(tag) { return {}; }
+constexpr std::type_identity<changes> changes_type(const state&) { return {}; }
 
 // As the command line says them.
 inline std::string describe(const devtools_text& one) { return one.title + "\n" + one.text; }

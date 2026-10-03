@@ -546,13 +546,13 @@ struct network {
             one.account);
     });
   }
-  void delete_pack(const mux::account_id& by, std::string room, std::string state_key) {
-    loop.post([this, by, room = std::move(room), state_key = std::move(state_key)] {
+  void delete_pack(const mux::account_id& by, emote_pack pack) {
+    loop.post([this, by, pack = std::move(pack)] {
       for (auto& one : accounts)
         splice::visit(
             [&](auto& account) {
               if (account->id() == by)
-                ask_if_able([&](auto& a) -> decltype(void(a.delete_pack(room, state_key))) { a.delete_pack(room, state_key); }, *account);
+                ask_if_able([&](auto& a) -> decltype(void(a.delete_pack(pack))) { a.delete_pack(pack); }, *account);
             },
             one.account);
     });

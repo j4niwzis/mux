@@ -149,7 +149,7 @@ struct stub {
   void open_room_packs() {}
   void close_packs() {}
   void save_pack(mux::emote_pack) {}
-  void delete_pack(std::string, std::string) {}
+  void delete_pack(mux::emote_pack) {}
   void pick_pack_images() {}
   void open_new_room() {}
   void close_new_room() {}

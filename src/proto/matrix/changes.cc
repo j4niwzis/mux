@@ -105,7 +105,7 @@ inline std::string describe(const state_listed& one) {
 }
 inline std::string describe(const packs_listed& one) { return std::format("{} packs", one.packs.size()); }
 inline std::string describe(const pack_saved& one) {
-  return std::format("pack {} {}", one.pack.state_key, one.done ? (one.removed ? "taken away" : "saved") : "not saved");
+  return std::format("pack {} {}", one.pack.key, one.done ? (one.removed ? "taken away" : "saved") : "not saved");
 }
 inline std::string describe(const pack_picture_uploaded& one) { return std::format("uploaded {}", one.picture.url); }
 inline std::string describe(const security_state& one) {

@@ -324,7 +324,7 @@ void app::apply(const request::save_pack& one) {
 }
 void app::apply(const request::delete_pack& one) {
   if (packs_account && !shared.demo())
-    net->delete_pack(*packs_account, one.room, one.state_key);
+    net->delete_pack(*packs_account, one.pack);
 }
 void app::apply(const request::pick_pack_images&) {
   picking_pack_images = true;

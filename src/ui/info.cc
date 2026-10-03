@@ -1986,7 +1986,7 @@ struct packs_box : nodes::Stack {
   // A pack opened -- a new one where none is named -- to edit.
   void open_pack(std::optional<std::size_t> index) {
     new_pack = !index;
-    draft = index && *index < packs.size() ? packs[*index] : emote_pack{.room = room, .emoji = true, .sticker = true};
+    draft = index && *index < packs.size() ? packs[*index] : emote_pack{.chat = room, .emoji = true, .sticker = true};
     open = true;
     parts.header.parts.title.setText(new_pack ? "New pack" : draft.name.empty() ? "Pack" : draft.name);
     parts.name.parts.box.setText(draft.name);
@@ -2078,23 +2078,17 @@ struct packs_box : nodes::Stack {
   void save() {
     draft.name = parts.name.text();
     draft.attribution = parts.attribution.text();
-    if (draft.state_key.empty() && room) {
-      std::string key;
-      for (const char c : draft.name)
-        key += std::isalnum(static_cast<unsigned char>(c)) ? static_cast<char>(std::tolower(static_cast<unsigned char>(c)))
-                                                           : '_';
-      draft.state_key = key.empty() ? std::string("pack") : key;
-    }
     if (!draft.avatar && !draft.pictures.empty())
       draft.avatar = draft.pictures.front().url;
     std::erase_if(draft.pictures, [](const pack_picture& one) { return one.shortcode.empty() || one.url.empty(); });
     actions->save_pack(draft);
     parts.note.setText("Saving…");
   }
+  // As its protocol takes a pack away; a new one, not saved yet, is nothing.
   void remove_pack() {
-    if (!room)
+    if (draft.key.empty())
       return;
-    actions->delete_pack(*room, draft.state_key);
+    actions->delete_pack(draft);
     parts.note.setText("Deleting…");
   }
 };

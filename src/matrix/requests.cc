@@ -576,7 +576,7 @@ template <class Item, class Values>
 // A pack read from its content -- a room's or one's own, the same shape.
 template <class Content>
 [[nodiscard]] emote_pack pack_of(const Content& content, std::optional<std::string> room, std::string key) {
-  emote_pack pack{.room = std::move(room), .state_key = std::move(key)};
+  emote_pack pack{.chat = std::move(room), .key = std::move(key)};
   if (content.pack) {
     pack.name = content.pack->display_name.value_or("");
     pack.avatar = content.pack->avatar_url;
@@ -668,15 +668,25 @@ void account<Sink>::list_packs(std::optional<std::string> room) {
 
 template <class Sink>
 void account<Sink>::save_pack(emote_pack pack) {
-  this->spawn_guarded([this, pack = std::move(pack)] {
+  this->spawn_guarded([this, pack = std::move(pack)]() mutable {
+    // A new room pack: its state key made of its name.
+    if (pack.chat && pack.key.empty()) {
+      pack.key = pack.name | std::views::transform([](char c) {
+                   return std::isalnum(static_cast<unsigned char>(c)) ? static_cast<char>(std::tolower(static_cast<unsigned char>(c)))
+                                                                       : '_';
+                 }) |
+                 std::ranges::to<std::string>();
+      if (pack.key.empty())
+        pack.key = "pack";
+    }
     bool done = false;
     if (api_) {
-      if (pack.room)
+      if (pack.chat)
         done = static_cast<bool>(perform(
             *api_, loom::cs::set_room_state_with_key{
-                       .room_id = *pack.room,
+                       .room_id = *pack.chat,
                        .event_type = "im.ponies.room_emotes",
-                       .state_key = pack.state_key,
+                       .state_key = pack.key,
                        .body = as_body(packs::content_of<loom::ev::im_ponies_room_emotes_content_t>(pack))}));
       else
         done = static_cast<bool>(perform(
@@ -692,15 +702,16 @@ void account<Sink>::save_pack(emote_pack pack) {
 }
 
 template <class Sink>
-void account<Sink>::delete_pack(std::string room, std::string state_key) {
-  this->spawn_guarded([this, room = std::move(room), state_key = std::move(state_key)] {
-    // Taken away as the MSC has it: its state emptied.
-    const bool done = api_ && static_cast<bool>(perform(
-                                  *api_, loom::cs::set_room_state_with_key{.room_id = room,
-                                                                           .event_type = "im.ponies.room_emotes",
-                                                                           .state_key = state_key,
-                                                                           .body = knot::raw{"{}"}}));
-    sink_(proto::matrix::pack_saved{.by = id_, .pack = emote_pack{.room = room, .state_key = state_key}, .removed = true, .done = done});
+void account<Sink>::delete_pack(emote_pack pack) {
+  this->spawn_guarded([this, pack = std::move(pack)] {
+    // A room's taken away as the MSC has it: its state emptied. One's own is
+    // one pack, emptied by saving it so, not deleted.
+    const bool done = api_ && pack.chat &&
+                      static_cast<bool>(perform(*api_, loom::cs::set_room_state_with_key{.room_id = *pack.chat,
+                                                                                         .event_type = "im.ponies.room_emotes",
+                                                                                         .state_key = pack.key,
+                                                                                         .body = knot::raw{"{}"}}));
+    sink_(proto::matrix::pack_saved{.by = id_, .pack = pack, .removed = true, .done = done});
   });
 }
 

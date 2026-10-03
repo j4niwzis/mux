@@ -137,7 +137,7 @@ class account {
   // an image uploaded for one.
   void list_packs(std::optional<std::string> room);
   void save_pack(emote_pack pack);
-  void delete_pack(std::string room, std::string state_key);
+  void delete_pack(emote_pack pack);
   void upload_pack_picture(pack_picture picture, std::string bytes);
   // Threads (m.thread): a room's roots listed; a thread's answers loaded,
   // each as a message in it; an answer sent in one.

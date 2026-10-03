@@ -330,8 +330,7 @@ struct save_pack {
   mux::emote_pack pack;
 };
 struct delete_pack {
-  std::string room;
-  std::string state_key;
+  mux::emote_pack pack;
 };
 struct pick_pack_images {};
 struct close_new_room {};
@@ -762,8 +761,8 @@ struct actions {
   void open_room_packs() { requests.emplace_back(request::open_room_packs{}); }
   void close_packs() { requests.emplace_back(request::close_packs{}); }
   void save_pack(mux::emote_pack pack) { requests.emplace_back(request::save_pack{std::move(pack)}); }
-  void delete_pack(std::string room, std::string state_key) {
-    requests.emplace_back(request::delete_pack{std::move(room), std::move(state_key)});
+  void delete_pack(mux::emote_pack pack) {
+    requests.emplace_back(request::delete_pack{std::move(pack)});
   }
   void pick_pack_images() { requests.emplace_back(request::pick_pack_images{}); }
   void close_new_room() { requests.emplace_back(request::close_new_room{}); }

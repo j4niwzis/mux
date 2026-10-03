@@ -455,9 +455,13 @@ struct pack_picture {
   std::int64_t width = 0, height = 0, size = 0;
   friend bool operator==(const pack_picture&, const pack_picture&) = default;
 };
+// A pack of custom emoji and stickers, as its protocol keeps it: a chat's
+// (a Matrix room's packs, a Telegram group's set) or the account's own (a
+// Matrix user's pack, Telegram's installed sets), by the key its protocol
+// names it with -- made by the protocol for a new one.
 struct emote_pack {
-  std::optional<std::string> room;  // none: one's own
-  std::string state_key;
+  std::optional<std::string> chat;  // none: the account's own
+  std::string key;
   std::string name;
   std::optional<std::string> avatar;
   std::string attribution;

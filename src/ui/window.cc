@@ -552,7 +552,7 @@ struct window : scene::Node {
       up->parts.note.setText(removed ? "The pack was not deleted." : "The pack was not saved.");
       return;
     }
-    const auto same = [&](const emote_pack& one) { return one.room == pack.room && one.state_key == pack.state_key; };
+    const auto same = [&](const emote_pack& one) { return one.chat == pack.chat && one.key == pack.key; };
     std::erase_if(up->packs, same);
     if (!removed)
       up->packs.push_back(pack);

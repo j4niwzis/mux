@@ -152,6 +152,7 @@ target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
         src/core.cc src/net.cc src/xmpp.cc src/http.cc src/preview.cc src/matrix.cc src/media.cc
         src/matrix/base.cc src/matrix/names.cc src/matrix/account.cc src/matrix/requests.cc src/matrix/sync.cc
         src/matrix/events.cc src/matrix/media.cc src/matrix/crypto.cc
+        src/proto/xmpp_client.cc src/proto/matrix_client.cc src/proto/clients.cc
         src/logic/text.cc src/logic/search.cc src/logic/reading.cc src/logic/drafts.cc
         src/logic/links.cc src/logic/sending.cc src/logic/messages.cc
         src/logic/blurhash.cc src/logic/emoji.cc src/logic/markdown.cc src/logic/room_events.cc)

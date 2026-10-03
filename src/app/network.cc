@@ -10,6 +10,7 @@ import mux.net;
 import mux.preview;
 import mux.xmpp;
 import mux.matrix;
+import mux.proto.clients;
 import mux.host;
 import mux.ui;
 
@@ -59,7 +60,20 @@ extern template class mux::xmpp::account<mux::app::post_change>;
 extern template class mux::matrix::account<mux::app::post_change>;
 #endif
 export namespace mux::app {
-using any_account = splice::variant<std::unique_ptr<xmpp_account>, std::unique_ptr<matrix_account>>;
+// Each protocol's account, as its make_account (found by ADL on what it
+// keeps) makes it for the program's sink; and any of them, from the list.
+template <class Kept>
+using account_type_of = typename decltype(make_account(std::declval<const Kept&>(), std::declval<mux::net::loop&>(),
+                                                       std::declval<mux::net::tls&>(),
+                                                       std::declval<std::optional<mux::net::proxy>>(),
+                                                       std::declval<post_change>()))::element_type;
+template <class>
+struct account_list;
+template <class... Tags>
+struct account_list<mux::protocol_list<Tags...>> {
+  using type = splice::variant<std::unique_ptr<account_type_of<mux::config::kept_of<Tags>>>...>;
+};
+using any_account = account_list<mux::protocols>::type;
 
 struct running_account {
   std::string address;
@@ -96,7 +110,13 @@ struct network {
                                               *named)}}});
       return;
     }
-    splice::visit([this, via](const auto& each) { this->start_one(each, proxy_of(via)); }, saved.own);
+    // Made by its protocol, from what it keeps.
+    splice::visit([&](const auto& each) {
+      auto live = std::make_shared<std::atomic<bool>>(true);
+      std::optional<mux::net::proxy> through = proxy_of(via);
+      this->run(std::string(address_of(each)), make_account(each, loop, tls, through, post_change{box, live}), live,
+                std::move(through));
+    }, saved.own);
   }
   // The proxy a profile names, as mux.net takes it.
   static std::optional<mux::net::proxy> proxy_of(const mux::config::proxy_settings* kept) {
@@ -116,38 +136,6 @@ struct network {
                            .srv = mux::net::srv_lookup_of(kept->srv_resolver)};
   }
 
-  void start_one(const mux::config::xmpp_account& saved, std::optional<mux::net::proxy> via) {
-    auto live = std::make_shared<std::atomic<bool>>(true);
-    mux::xmpp::settings how{.address = saved.address,
-                            .password = saved.password,
-                            .resource = saved.resource,
-                            .host = saved.host,
-                            .plain_without_tls = saved.plain_without_tls,
-                            .proxy = via};
-    if (saved.port)
-      how.port = static_cast<std::uint16_t>(*saved.port);
-    this->run(saved.address, std::make_unique<xmpp_account>(loop, tls, std::move(how), post_change{box, live}), live,
-              std::move(via));
-  }
-  void start_one(const mux::config::matrix_account& saved, std::optional<mux::net::proxy> via) {
-    auto live = std::make_shared<std::atomic<bool>>(true);
-    mux::matrix::settings how{.user_id = saved.user_id,
-                              .password = saved.password,
-                              .homeserver = saved.homeserver,
-                              .device_name = saved.device_name,
-                              .proxy = via,
-                              .access_token = saved.access_token,
-                              .device_id = saved.device_id,
-                              // Named by the user ID with what a file name cannot hold put
-                              // aside: ':' is not one on Windows.
-                              .crypto_store = mux::config::state_path("crypto") /
-                                              ((saved.user_id | std::views::transform([](char c) {
-                                                  return std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_' ? c : '_';
-                                                }) | std::ranges::to<std::string>()) + ".json"),
-                              .only_verified = saved.only_verified.value_or(false)};
-    this->run(saved.user_id, std::make_unique<matrix_account>(loop, tls, std::move(how), post_change{box, live}),
-              live, std::move(via));
-  }
   void run(const std::string& address, any_account account, std::shared_ptr<std::atomic<bool>> live,
            std::optional<mux::net::proxy> via) {
     running_account entry{address, std::move(account), std::move(live), std::move(via)};
@@ -630,82 +618,73 @@ struct network {
             one.account);
     });
   }
-  // The sessions of the Matrix account named: listed, one renamed, some
-  // signed out.
-  template <class F>
-  void with_matrix(const mux::account_id& by, F f) {
-    loop.post([this, by, f = std::move(f)] {
+  // What is asked of the account named, where its protocol's account can do
+  // it: its keys, its sessions, its identity -- Matrix's today, any
+  // protocol's that has them.
+  template <class Ask>
+  void on_account(const mux::account_id& by, Ask ask) {
+    loop.post([this, by, ask = std::move(ask)] {
       for (auto& one : accounts)
-        splice::visit(splice::overloaded{[&](std::unique_ptr<matrix_account>& account) {
-                                           if (account->id() == by)
-                                             f(*account);
-                                         },
-                                         [](auto&) {}},
-                      one.account);
+        splice::visit(
+            [&](auto& account) {
+              if (account->id() == by)
+                ask_if_able(ask, *account);
+            },
+            one.account);
     });
   }
   void export_room_keys(const mux::account_id& by, std::string path, std::string passphrase) {
-    this->with_matrix(by, [path = std::move(path), passphrase = std::move(passphrase)](matrix_account& account) {
-      account.export_room_keys(path, passphrase);
-    });
+    this->on_account(by, [path = std::move(path), passphrase = std::move(passphrase)](auto& account) -> decltype(void(account.export_room_keys(path, passphrase))) { account.export_room_keys(path, passphrase); });
   }
   void import_room_keys(const mux::account_id& by, std::string path, std::string passphrase) {
-    this->with_matrix(by, [path = std::move(path), passphrase = std::move(passphrase)](matrix_account& account) {
-      account.import_room_keys(path, passphrase);
-    });
+    this->on_account(by, [path = std::move(path), passphrase = std::move(passphrase)](auto& account) -> decltype(void(account.import_room_keys(path, passphrase))) { account.import_room_keys(path, passphrase); });
   }
   void restore_cross_signing(const mux::account_id& by, std::string recovery) {
-    this->with_matrix(by, [recovery = std::move(recovery)](matrix_account& account) { account.restore_cross_signing(recovery); });
+    this->on_account(by, [recovery = std::move(recovery)](auto& account) -> decltype(void(account.restore_cross_signing(recovery))) { account.restore_cross_signing(recovery); });
   }
   void reset_backup(const mux::account_id& by) {
-    this->with_matrix(by, [](matrix_account& account) { account.reset_backup(); });
+    this->on_account(by, [](auto& account) -> decltype(void(account.reset_backup())) { account.reset_backup(); });
   }
   void delete_backup(const mux::account_id& by) {
-    this->with_matrix(by, [](matrix_account& account) { account.delete_backup(); });
+    this->on_account(by, [](auto& account) -> decltype(void(account.delete_backup())) { account.delete_backup(); });
   }
   void sign_out_unverified(const mux::account_id& by, std::string password) {
-    this->with_matrix(by, [password = std::move(password)](matrix_account& account) { account.sign_out_unverified(password); });
+    this->on_account(by, [password = std::move(password)](auto& account) -> decltype(void(account.sign_out_unverified(password))) { account.sign_out_unverified(password); });
   }
   void setup_cross_signing(const mux::account_id& by, std::string password, bool reset = false) {
-    this->with_matrix(by, [password = std::move(password), reset](matrix_account& account) { account.setup_cross_signing(password, reset); });
+    this->on_account(by, [password = std::move(password), reset](auto& account) -> decltype(void(account.setup_cross_signing(password, reset))) { account.setup_cross_signing(password, reset); });
   }
   void verify_start(const mux::account_id& by, std::string user, std::optional<std::string> device) {
-    this->with_matrix(by, [user = std::move(user), device = std::move(device)](matrix_account& account) {
-      account.verify_start(user, device);
-    });
+    this->on_account(by, [user = std::move(user), device = std::move(device)](auto& account) -> decltype(void(account.verify_start(user, device))) { account.verify_start(user, device); });
   }
   void verify_accept(const mux::account_id& by, std::string txn) {
-    this->with_matrix(by, [txn = std::move(txn)](matrix_account& account) { account.verify_accept(txn); });
+    this->on_account(by, [txn = std::move(txn)](auto& account) -> decltype(void(account.verify_accept(txn))) { account.verify_accept(txn); });
   }
   void verify_confirm(const mux::account_id& by, std::string txn, bool match) {
-    this->with_matrix(by, [txn = std::move(txn), match](matrix_account& account) { account.verify_confirm(txn, match); });
+    this->on_account(by, [txn = std::move(txn), match](auto& account) -> decltype(void(account.verify_confirm(txn, match))) { account.verify_confirm(txn, match); });
   }
   void verify_cancel(const mux::account_id& by, std::string txn) {
-    this->with_matrix(by, [txn = std::move(txn)](matrix_account& account) { account.verify_cancel(txn); });
+    this->on_account(by, [txn = std::move(txn)](auto& account) -> decltype(void(account.verify_cancel(txn))) { account.verify_cancel(txn); });
   }
   void list_sessions(const mux::account_id& by) {
-    this->with_matrix(by, [](matrix_account& account) { account.list_sessions(); });
+    this->on_account(by, [](auto& account) -> decltype(void(account.list_sessions())) { account.list_sessions(); });
   }
   void rename_session(const mux::account_id& by, std::string device, std::string name) {
-    this->with_matrix(by, [device = std::move(device), name = std::move(name)](matrix_account& account) {
-      account.rename_session(device, name);
-    });
+    this->on_account(by, [device = std::move(device), name = std::move(name)](auto& account) -> decltype(void(account.rename_session(device, name))) { account.rename_session(device, name); });
   }
   void sign_out_sessions(const mux::account_id& by, std::vector<std::string> devices, std::string password) {
-    this->with_matrix(by, [devices = std::move(devices), password = std::move(password)](matrix_account& account) {
-      account.sign_out_sessions(devices, password);
-    });
+    this->on_account(by, [devices = std::move(devices), password = std::move(password)](auto& account) -> decltype(void(account.sign_out_sessions(devices, password))) { account.sign_out_sessions(devices, password); });
   }
   // A person's profile, asked of the Matrix account named.
   void fetch_profile(const mux::account_id& by, std::string user) {
     loop.post([this, by, user = std::move(user)] {
       for (auto& one : accounts)
-        splice::visit(splice::overloaded{[&](std::unique_ptr<matrix_account>& account) {
-                                           if (account->id() == by)
-                                             account->fetch_profile(user);
-                                         },
-                                         [](auto&) {}},
-                      one.account);
+        splice::visit(
+            [&](auto& account) {
+              if (account->id() == by)
+                ask_if_able([&](auto& a) -> decltype(void(a.fetch_profile(user))) { a.fetch_profile(user); }, *account);
+            },
+            one.account);
     });
   }
   // A room joined by the account named, through the servers named.

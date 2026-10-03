@@ -380,6 +380,12 @@ template <class Change>
 concept protocol_change = protocols_change<Change>(protocols{});
 
 // The model: every account, and every change applied to it.
+// What a protocol's own change does to the model: nothing, unless the
+// protocol says (changed_in, by ADL on its change).
+namespace model_defaults {
+inline void changed_in(auto&, const auto&) {}
+}  // namespace model_defaults
+
 class model {
  public:
   // A message deleted is shown where it was, marked -- or taken out.
@@ -416,6 +422,23 @@ class model {
       return nullptr;
     const auto in = found->second.conversations.find(id.id);
     return in == found->second.conversations.end() ? nullptr : &in->second;
+  }
+  // For a protocol's own change (changed_in): a chat it changes, where the
+  // model has it, and a message in it -- a room's part, a poll's counts in a
+  // message's part.
+  [[nodiscard]] conversation* chat_to_change(const conversation_id& id) {
+    const auto found = accounts_.find(id.account);
+    if (found == accounts_.end())
+      return nullptr;
+    const auto in = found->second.conversations.find(id.id);
+    return in == found->second.conversations.end() ? nullptr : &in->second;
+  }
+  [[nodiscard]] message* message_to_change(const conversation_id& in, std::string_view id) {
+    conversation* chat = this->chat_to_change(in);
+    if (chat == nullptr)
+      return nullptr;
+    const auto found = std::ranges::find(chat->timeline, id, &message::id);
+    return found == chat->timeline.end() ? nullptr : &*found;
   }
 
   void apply(const change_t& what) {
@@ -913,9 +936,13 @@ class model {
   }
   void on(const change::avatar_loaded&) {}  // the window's to show, not the model's
   void on(const change::protocol_state_changed&) {}  // the window's: what it offers
-  // A protocol's own change: the window's, as each of them is now.
+  // A protocol's own change: what its changed_in(model, change) makes of the
+  // model, found by ADL -- nothing by default (the window's, then).
   template <protocol_change Change>
-  void on(const Change&) {}
+  void on(const Change& one) {
+    using model_defaults::changed_in;
+    changed_in(*this, one);
+  }
   void on(const change::media_progress&) {}  // the window's too
   void on(const change::room_created&) {}    // the program's: it shows it
   void on(const change::room_previewed&) {}  // the window's: the room's card

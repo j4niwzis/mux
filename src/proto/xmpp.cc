@@ -8,16 +8,21 @@ import std;
 import mux.core;
 import mux.proto;
 
-export namespace mux::xmpp {
+export namespace mux::proto::xmpp {
 
 // A JID: anything a Matrix user ID is not (those begin with '@').
 constexpr bool owns_address(tag, std::string_view address) { return !address.empty() && !address.starts_with('@'); }
 
-// One's own last message corrected, and no other (Last Message Correction,
-// XEP-0308).
-inline proto::edits::last_own edit_rule(tag) { return {}; }
+// Edits as XMPP has them: one's own last message corrected, and no other
+// (Last Message Correction, XEP-0308).
+struct last_correction {};
+[[nodiscard]] inline bool allows(last_correction, const conversation& chat, const message& one) {
+  const auto last = std::ranges::find_if(chat.timeline.rbegin(), chat.timeline.rend(), own_text);
+  return last != chat.timeline.rend() && last->id == one.id && own_text(one);
+}
+inline last_correction edit_rule(tag) { return {}; }
 
 // An xmpp: URI (RFC 5122).
 inline std::optional<std::string> share_link(tag, std::string_view address) { return "xmpp:" + std::string(address); }
 
-}  // namespace mux::xmpp
+}  // namespace mux::proto::xmpp

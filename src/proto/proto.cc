@@ -14,8 +14,9 @@
 //   may_edit(speaks, chat, message) -- through the rule edit_rule(tag) gives
 //
 // What a protocol gives may itself be a type with overloads of its own: an
-// edit rule is one of mux::proto::edits' -- or a protocol's own type, with
-// its own allows() -- and what may be edited is asked of the rule.
+// edit rule is a type of the protocol's, in mux::proto::<protocol>, with an
+// allows() of its own -- the client's default where it gives none -- and
+// what may be edited is asked of the rule.
 export module mux.proto;
 
 import std;
@@ -33,22 +34,14 @@ struct sticker_packs {};     // packs of stickers and emoji, a room's and an acc
 struct history_context {};   // a window of history around a message, asked of the server
 }  // namespace feature
 
-// Which of a chat's messages may be edited: a rule, each a type, asked by
-// allows(rule, chat, message). A protocol picks one by edit_rule(tag), or
-// makes its own -- a type in its namespace with an allows() of its own.
-namespace edits {
-struct any_own {};   // any of one's own messages
-struct last_own {};  // one's own last message alone (XMPP's Last Message Correction, XEP-0308)
-struct none {};      // none
-// One's own, said rather than done (no room event), and still there.
+// One's own, said rather than done (no room event), and still there: what
+// an edit rule starts from.
 [[nodiscard]] inline bool own_text(const message& one) { return one.outgoing && !one.service && !one.redacted; }
-[[nodiscard]] inline bool allows(any_own, const conversation&, const message& one) { return own_text(one); }
-[[nodiscard]] inline bool allows(last_own, const conversation& chat, const message& one) {
-  const auto last = std::ranges::find_if(chat.timeline.rbegin(), chat.timeline.rend(), own_text);
-  return last != chat.timeline.rend() && last->id == one.id && own_text(one);
-}
-[[nodiscard]] inline bool allows(none, const conversation&, const message&) { return false; }
-}  // namespace edits
+// The client's rule for edits, where a protocol gives none of its own (its
+// edit_rule(tag) and its rule type, with an allows() of its own): any of
+// one's own messages.
+struct own_messages {};
+[[nodiscard]] inline bool allows(own_messages, const conversation&, const message& one) { return own_text(one); }
 
 }  // namespace mux::proto
 
@@ -64,7 +57,7 @@ constexpr bool can_pin(const auto&, std::string_view) { return false; }
 // One's own messages, and no one else's: what every protocol allows.
 inline bool may_delete(const auto&, const conversation&, bool outgoing) { return outgoing; }
 // Any of one's own messages edited.
-inline edits::any_own edit_rule(const auto&) { return {}; }
+inline own_messages edit_rule(const auto&) { return {}; }
 }  // namespace mux::proto::defaults
 
 export namespace mux::proto {

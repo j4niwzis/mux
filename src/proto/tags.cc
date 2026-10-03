@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.proto.tags -- The protocols mux speaks: each a tag type in a namespace
-// of its own, and the one list of them. A protocol is added here, as its
+// of its own, mux::proto::<protocol> -- where all it specifies is -- and the
+// one list of them. A protocol is added here, as its
 // tag in the list, and by its overloads -- src/proto/<name>.cc, found by ADL
 // through mux.protocols. Nothing else in mux names a protocol to decide
 // what it does: it asks the protocol (mux.proto's extension points).
@@ -9,17 +10,17 @@ export module mux.proto.tags;
 import std;
 import splice;
 
-export namespace mux::xmpp {
+export namespace mux::proto::xmpp {
 struct tag {
   friend auto operator<=>(const tag&, const tag&) = default;
 };
-}  // namespace mux::xmpp
+}  // namespace mux::proto::xmpp
 
-export namespace mux::matrix {
+export namespace mux::proto::matrix {
 struct tag {
   friend auto operator<=>(const tag&, const tag&) = default;
 };
-}  // namespace mux::matrix
+}  // namespace mux::proto::matrix
 
 export namespace mux {
 
@@ -27,7 +28,7 @@ export namespace mux {
 // protocol has to be found -- an address's, a link's.
 template <class... Tags>
 struct protocol_list {};
-using protocols = protocol_list<xmpp::tag, matrix::tag>;
+using protocols = protocol_list<proto::xmpp::tag, proto::matrix::tag>;
 
 template <class>
 struct variant_of_list;
@@ -39,8 +40,8 @@ using protocol_t = variant_of_list<protocols>::type;
 
 // The names the code has known them by.
 namespace protocol {
-using xmpp = mux::xmpp::tag;
-using matrix = mux::matrix::tag;
+using xmpp = mux::proto::xmpp::tag;
+using matrix = mux::proto::matrix::tag;
 }  // namespace protocol
 
 }  // namespace mux

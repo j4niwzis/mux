@@ -10,7 +10,7 @@ import std;
 import mux.core;
 import mux.ui;
 
-export namespace mux::matrix {
+export namespace mux::proto::matrix {
 
 constexpr ui::manage_tab_list<ui::settings_tab::general, ui::settings_tab::security, ui::settings_tab::roles,
                               ui::settings_tab::advanced>
@@ -18,4 +18,4 @@ manage_tabs(tag) {
   return {};
 }
 
-}  // namespace mux::matrix
+}  // namespace mux::proto::matrix

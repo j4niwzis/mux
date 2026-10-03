@@ -8,16 +8,16 @@ import mux.core;
 import mux.proto;
 import mux.logic.links;
 
-export namespace mux::matrix {
+export namespace mux::proto::matrix {
 
 // A user ID: @localpart:server.
 constexpr bool owns_address(tag, std::string_view address) { return address.starts_with('@'); }
 
-constexpr bool offers(tag, proto::feature::people_directory) { return true; }
-constexpr bool offers(tag, proto::feature::room_directory) { return true; }
-constexpr bool offers(tag, proto::feature::room_creation) { return true; }
-constexpr bool offers(tag, proto::feature::sticker_packs) { return true; }
-constexpr bool offers(tag, proto::feature::history_context) { return true; }
+constexpr bool offers(tag, feature::people_directory) { return true; }
+constexpr bool offers(tag, feature::room_directory) { return true; }
+constexpr bool offers(tag, feature::room_creation) { return true; }
+constexpr bool offers(tag, feature::sticker_packs) { return true; }
+constexpr bool offers(tag, feature::history_context) { return true; }
 
 // matrix.to, for a person, a room and a message in it.
 inline std::optional<std::string> share_link(tag, std::string_view address) {
@@ -43,4 +43,4 @@ inline bool may_delete(tag, const conversation& chat, bool outgoing) {
   return level >= send && (outgoing || level >= chat.needs.redact);
 }
 
-}  // namespace mux::matrix
+}  // namespace mux::proto::matrix

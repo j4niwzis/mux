@@ -834,8 +834,11 @@ struct room_settings : nodes::Stack {
         tabs.apply({.width = narrow ? 60.0f : 220.0f,
                     .padding = narrow ? scene::Margin{4.0f, 6.0f, 12.0f, 6.0f} : scene::Margin{4.0f, 12.0f, 12.0f, 12.0f}});
         auto& [general, security, roles, notifications, looks, advanced] = tabs.parts;
-        for (tab_row* one : {&general, &security, &roles, &notifications, &looks, &advanced})
+        // Narrow, the rows' sides 4, not 12: their icon (28) had 24 of 48.
+        for (tab_row* one : {&general, &security, &roles, &notifications, &looks, &advanced}) {
           one->parts.label.setVisible(!narrow);
+          one->apply({.padding = narrow ? scene::Margin{0.0f, 4.0f, 0.0f, 4.0f} : scene::Margin{0.0f, 12.0f, 0.0f, 12.0f}});
+        }
         tabs.invalidateLayout();
         content.invalidateLayout();
         this->invalidateLayout();

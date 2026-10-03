@@ -864,8 +864,12 @@ struct emoji_popup : scene::Node {
       docked = on;
       fState.apply({.padding = {0.0f, 0.0f, on ? kTabsHigh : 0.0f, 0.0f}, .cornerRadius = on ? 0.0f : 8.0f});
       parts.tabs.fState.setOutOfFlow(on);
+      // In the room kept for them under the panel's own (its padding): a
+      // node placed by its anchor goes by the box its parent lays out in,
+      // which the padding has already taken off -- at its bottom left alone,
+      // the tabs stood over the emoji groups' row.
       if (on)
-        parts.tabs.apply({.place = scene::anchor::kBottomLeft});
+        parts.tabs.apply({.place = scene::anchor::kBottomLeft, .y = kTabsHigh});
       parts.tabs.fStack.justify = on ? nodes::Justify{nodes::justify::middle{}} : nodes::Justify{nodes::justify::start{}};
       this->invalidateLayout();
       this->markDamaged();
@@ -1008,7 +1012,9 @@ struct seen_row : nodes::Stack {
         : actions(a), id(one.id), parts{.face = avatar_mark(one.id, one.name, 30.0f), .lines = lines_t(one)} {
       this->setHorizontal();
       this->setGap(14.0f);  // the name at 13 + 30 + 14 = 57
-      fState.apply({.fillX = true, .height = 44.0f, .padding = {7.0f, 17.0f, 7.0f, 13.0f}, .hoverBackground = chosen_colour});
+      // 6 over and under: the name at 13 and the time at 12 are 31.25 high,
+      // and 7 left them 30 -- 1.25 out of the row.
+      fState.apply({.fillX = true, .height = 44.0f, .padding = {6.0f, 17.0f, 6.0f, 13.0f}, .hoverBackground = chosen_colour});
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }

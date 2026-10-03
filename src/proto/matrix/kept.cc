@@ -21,6 +21,8 @@ struct kept {
   friend bool operator==(const kept&, const kept&) = default;
 };
 consteval auto json_schema(knot::type<kept>) { return knot::schema<kept>().tag("matrix"); }
+// A server named by hand: the homeserver, in place of what .well-known says.
+inline void server_given(kept& one, std::string server, std::optional<std::int64_t>) { one.homeserver = std::move(server); }
 
 constexpr type_tag<kept> kept_type(const state&) { return {}; }
 constexpr std::string_view protocol_word(const kept&) { return "matrix"; }

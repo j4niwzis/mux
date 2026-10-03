@@ -21,6 +21,13 @@ struct kept {
   friend bool operator==(const kept&, const kept&) = default;
 };
 consteval auto json_schema(knot::type<kept>) { return knot::schema<kept>().tag("xmpp"); }
+// A server named by hand -- on the command line -- and its port: where it
+// connects, in place of what DNS says.
+inline void server_given(kept& one, std::string server, std::optional<std::int64_t> port) {
+  one.host = std::move(server);
+  if (port)
+    one.port = port;
+}
 
 // Its type, for the list of what accounts keep; the word the file says.
 constexpr type_tag<kept> kept_type(const state&) { return {}; }

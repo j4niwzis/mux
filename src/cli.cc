@@ -15,6 +15,8 @@ import mux.core;
 import mux.net;
 import mux.xmpp;
 import mux.matrix;
+import mux.config;
+import mux.proto.clients;
 
 namespace {
 
@@ -145,6 +147,17 @@ std::string describe(const mux::change_t& what) {
   return splice::visit([](const auto& one) { return said::of(one); }, what);
 }
 
+// What the account says: told, and kept in the model. A type of its own,
+// not a lambda: the accounts are made for it at namespace scope, below.
+struct print_change {
+  mux::model* model;
+  void operator()(mux::change_t one) const {
+    if (const std::string said = describe(one); !said.empty())
+      std::println("{}", said);
+    model->apply(one);
+  }
+};
+
 // What is typed, read by a fiber of its own and handed to the account.
 template <class Account>
 void keyboard(mux::net::loop& loop, Account& account) {
@@ -178,6 +191,12 @@ void keyboard(mux::net::loop& loop, Account& account) {
 
 }  // namespace
 
+// Each protocol's account, made at namespace scope: clang 23 crashed on
+// format strings first made deep inside one's instantiation (see
+// app/network.cc).
+template class mux::xmpp::account<print_change>;
+template class mux::matrix::account<print_change>;
+
 int main(int argc, char** argv) {
   if (argc < 2 || argc > 4) {
     std::println(std::cerr, "usage: {} <user@domain> [host [port]] | <@user:server> [homeserver URL]", argv[0]);
@@ -194,32 +213,23 @@ int main(int argc, char** argv) {
   mux::net::loop loop;
   auto tls = mux::net::client_tls();
   mux::model model;
-  auto sink = [&model](mux::change_t one) {
-    if (const std::string said = describe(one); !said.empty())
-      std::println("{}", said);
-    model.apply(one);
-  };
+  const print_change sink{&model};
 
   try {
-    if (address.starts_with('@')) {
-      mux::matrix::settings how{.user_id = address, .password = password};
-      if (argc >= 3)
-        how.homeserver = argv[2];
-      mux::matrix::account account(loop, tls, std::move(how), sink);
-      account.start();
-      keyboard(loop, account);
-      loop.run();
-    } else {
-      mux::xmpp::settings how{.address = address, .password = password};
-      if (argc >= 3)
-        how.host = argv[2];
-      if (argc == 4)
-        how.port = static_cast<std::uint16_t>(std::stoi(argv[3]));
-      mux::xmpp::account account(loop, tls, std::move(how), sink);
-      account.start();
-      keyboard(loop, account);
-      loop.run();
-    }
+    // The account its address names, made by its protocol: what it keeps
+    // (config::account_from, by the protocol that owns the address), then
+    // its client (make_account, by ADL on what it keeps).
+    mux::config::account_t saved = mux::config::account_from(address, password);
+    splice::visit(
+        [&](auto& kept) {
+          if (argc >= 3)
+            server_given(kept, argv[2], argc == 4 ? std::optional<std::int64_t>(std::stoi(argv[3])) : std::nullopt);
+          auto account = make_account(kept, loop, tls, std::nullopt, sink);
+          account->start();
+          keyboard(loop, *account);
+          loop.run();
+        },
+        saved.own);
   } catch (const std::exception& failed) {
     std::println(std::cerr, "stopped: {}", failed.what());
     return 1;

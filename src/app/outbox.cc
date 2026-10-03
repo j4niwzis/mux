@@ -366,6 +366,13 @@ class outbox_part {
     if (!screen.chosen || !logic::sendable(text))
       return;
     const conversation_id to = *screen.chosen;
+    // A command of its protocol's own: asked, not sent.
+    if (const auto asked = mux::proto::command_of(mux::ui::protocol_state_of(to.account), to, text)) {
+      splice::visit(splice::overloaded{[](mux::proto::part::no_request) {}, [&](const auto& one) { s_->ask->ask_for(one); }},
+                    *asked);
+      screen.line.set_text({});
+      return;
+    }
     // What is sent goes at the chat's end: the chat back to its newest
     // first, where it is a window elsewhere, or it would not be shown.
     s_->go_live(to);

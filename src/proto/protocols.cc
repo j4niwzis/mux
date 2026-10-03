@@ -110,4 +110,25 @@ struct protocols_passphrases<protocol_list<Tags...>> {
 };
 using passphrase_for_t = typename protocols_passphrases<protocols>::type;
 
+// What a line typed in a chat is, as its protocol reads it before it is
+// sent: one of its own requests (an IRC /join, a Telegram bot's /command),
+// or nothing -- the text, sent as it is.
+namespace command_defaults {
+inline std::nullopt_t command_of(const auto&, const conversation_id&, std::string_view) { return std::nullopt; }
+}  // namespace command_defaults
+inline constexpr struct command_of_t {
+  template <class State>
+  std::optional<any_request_t> operator()(const State& state, const conversation_id& in, std::string_view typed) const {
+    return splice::visit([&](const auto& now) {
+      using command_defaults::command_of;
+      return as_command(command_of(now, in, typed));
+    }, state);
+  }
+  static std::optional<any_request_t> as_command(std::nullopt_t) { return std::nullopt; }
+  template <class R>
+  static std::optional<any_request_t> as_command(const std::optional<R>& asked) {
+    return as_any(asked);
+  }
+} command_of{};
+
 }  // namespace mux::proto

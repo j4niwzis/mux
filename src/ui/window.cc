@@ -474,7 +474,7 @@ struct window : scene::Node {
   void close_person() { layer().person.close(); }
   // Opened again while up, it takes what is known now in place.
   void open_room_card(const std::string& asked, const room_preview& known) {
-    layer().room.open(actions, asked, known);
+    layer().room.open(actions, *needs_.colours, asked, known);
   }
   void close_room_card() { layer().room.close(); }
   [[nodiscard]] bool room_card_up() { return layer().room.shown() != nullptr; }

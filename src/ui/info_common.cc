@@ -46,12 +46,12 @@ struct action_tile : pressable<nodes::Stack> {
   } parts;
 
   // Declared: the icon at the top, the name at the bottom.
-  action_tile(std::string text, icon_t icon, Act what = {})
-      : act(std::move(what)), parts{.mark = icon_mark(icon), .label = nodes::Text(std::move(text), 12.0f, text_colour)} {
+  action_tile(const palette& colours, std::string text, icon_t icon, Act what = {})
+      : act(std::move(what)), parts{.mark = icon_mark(colours, icon), .label = nodes::Text(std::move(text), 12.0f, colours.text)} {
     auto& [mark, label] = parts;
-    fState.apply({.height = 58.0f, .padding = {6.0f, 0.0f, 8.0f, 0.0f}, .cornerRadius = 8.0f, .background = tile_colour, .hoverBackground = chosen_colour, .focusBackground = chosen_colour});
+    fState.apply({.height = 58.0f, .padding = {6.0f, 0.0f, 8.0f, 0.0f}, .cornerRadius = 8.0f, .background = colours.tile, .hoverBackground = colours.chosen, .focusBackground = colours.chosen});
     fStack.justify = nodes::justify::space_between{};
-    mark.setColour(text_colour);
+    mark.setColour(colours.text);
     mark.apply({.height = 24.0f});
     label.apply({.alignSelf = scene::align::kMiddle});
   }
@@ -98,14 +98,14 @@ struct member_row : nodes::Stack {
   } parts;
 
   // Declared: the avatar, the name over how they are, the role at the end.
-  member_row(const member& one, std::string how, Open what)
+  member_row(const palette& colours, const member& one, std::string how, Open what)
       : who(one), how_shown(how), open(std::move(what)), id(one.id), role(one.role),
         parts{.face = avatar_mark(one.id, one.name.empty() ? one.id : one.name, 40.0f),
               .texts = texts_column(one.name.empty() ? one.id : one.name, std::move(how)),
               .pill = role_pill(one.role.value_or(""))} {
     this->setHorizontal();
     this->setGap(12.0f);
-    fState.apply({.fillX = true, .height = 54.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}, .hoverBackground = chosen_colour});
+    fState.apply({.fillX = true, .height = 54.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}, .hoverBackground = colours.chosen});
     fState.setRecorded(true);  // played back as the list repaints around it
     parts.pill.setVisible(one.role.has_value());
   }
@@ -123,11 +123,11 @@ struct big_avatar : avatar_mark {
 };
 // An icon on its own, not to be pressed.
 struct icon_view : nodes::Icon {
-  explicit icon_view(icon_t mark) : nodes::Icon(shape_of(mark), dim_colour) { fState.apply({.width = 28.0f, .height = 36.0f}); }
+  icon_view(const palette& colours, icon_t mark) : nodes::Icon(shape_of(mark), colours.dim) { fState.apply({.width = 28.0f, .height = 36.0f}); }
 };
 // A band between sections: just darker than the panel.
-inline nodes::Box<> section_band() {
-  nodes::Box<> out{section_colour};
+inline nodes::Box<> section_band(const palette& colours) {
+  nodes::Box<> out{colours.section};
   out.apply({.fillX = true, .height = 6.0f, .margin = {6.0f, 0.0f, 6.0f, 0.0f}});
   return out;
 }
@@ -140,16 +140,16 @@ inline nodes::Box<> section_band() {
 struct id_line : nodes::Stack {
   struct parts_t {
     nodes::Text id;
-    nodes::Text label{"ID", 12.0f, dim_colour};
+    nodes::Text label;
   } parts;
   std::string copied;
   bool a_link = false;  // what is copied is a link to it, not the ID
   std::string named;    // what it is: ID, Address
-  id_line(std::string text, std::string link, std::string label = "ID")
-      : parts{.id = nodes::Text(text, 14.0f, accent_colour), .label = nodes::Text(label, 12.0f, dim_colour)},
+  id_line(const palette& colours, std::string text, std::string link, std::string label = "ID")
+      : parts{.id = nodes::Text(text, 14.0f, colours.accent), .label = nodes::Text(label, 12.0f, colours.dim)},
         copied(link.empty() ? text : link), a_link(!link.empty()), named(std::move(label)) {
     this->setGap(2.0f);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 20.0f, 8.0f, 20.0f}, .hoverBackground = chosen_colour, .focusBackground = chosen_colour});
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 20.0f, 8.0f, 20.0f}, .hoverBackground = colours.chosen, .focusBackground = colours.chosen});
     fState.setCursor(scene::cursor::hand{});
     parts.id.setWrapped(true);
     parts.id.apply({.fillX = true});

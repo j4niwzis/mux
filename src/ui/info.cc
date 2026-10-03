@@ -137,10 +137,10 @@ struct info_panel : nodes::Stack {
         manage_tile manage;
         leave_tile leave;
       } parts;
-      tiles_row(Actions* a, bool muted, bool leavable)
-          : parts{.mute = mute_tile(muted ? "Unmute" : "Mute", icon::bell{}, {a}),
-                  .manage = manage_tile("Manage", icon::sliders{}, {a}),
-                  .leave = leave_tile("Leave", icon::leave{}, {a})} {
+      tiles_row(Actions* a, const palette& colours, bool muted, bool leavable)
+          : parts{.mute = mute_tile(colours, muted ? "Unmute" : "Mute", icon::bell{}, {a}),
+                  .manage = manage_tile(colours, "Manage", icon::sliders{}, {a}),
+                  .leave = leave_tile(colours, "Leave", icon::leave{}, {a})} {
         this->setHorizontal();
         this->setGap(8.0f);
         fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}});
@@ -156,7 +156,7 @@ struct info_panel : nodes::Stack {
         action_tile<message_them> message;
       } parts;
       person_row(Actions* a, info_panel* panel)
-          : parts{.message = action_tile<message_them>("Message", icon::send{}, {a, panel})} {
+          : parts{.message = action_tile<message_them>(*panel->colours_, "Message", icon::send{}, {a, panel})} {
         this->setHorizontal();
         fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}});
         parts.message.apply({.grow = scene::axes::kX});
@@ -186,7 +186,7 @@ struct info_panel : nodes::Stack {
       nodes::Text status;
       std::optional<tiles_row> tiles;
       std::optional<person_row> person_tiles;
-      nodes::Box<> band_1 = section_band();
+      nodes::Box<> band_1;
       about_block about;
       std::vector<id_line> addresses;
       id_line id_text;
@@ -197,18 +197,19 @@ struct info_panel : nodes::Stack {
                 .avatar = avatar_button<Actions>(a, shown.key, shown.name, 96.0f),
                 .name = nodes::Text(shown.name, 17.0f, panel->colours_->text, true),
                 .status = nodes::Text(shown.status, 13.0f, panel->colours_->dim),
+                .band_1 = section_band(*panel->colours_),
                 .about = about_block(*panel->colours_, shown.topic),
-                .id_text = id_line(shown.key, shown.copied)} {
+                .id_text = id_line(*panel->colours_, shown.key, shown.copied)} {
       auto& [top, avatar, name, status, tiles, person_tiles, band_1, about, addresses, id_text] = parts;
       about.setVisible(!shown.topic.empty());
       for (const std::string& address : shown.addresses)
-        addresses.emplace_back(address, "", "Address");
+        addresses.emplace_back(*panel->colours_, address, "", "Address");
       this->setGap(2.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
       if (shown.of_person)
         person_tiles.emplace(a, panel);
       else
-        tiles.emplace(a, shown.muted, shown.leavable);
+        tiles.emplace(a, *panel->colours_, shown.muted, shown.leavable);
       for (nodes::Text* centred : {&name, &status}) {
         centred->setElided(true);
         centred->apply({.alignSelf = scene::align::kMiddle, .margin = {4.0f, 20.0f, 0.0f, 20.0f}});
@@ -219,12 +220,13 @@ struct info_panel : nodes::Stack {
   struct members_head : nodes::Stack {
     using add_button = icon_button<not_yet<Actions>>;
     struct parts_t {
-      icon_view people{icon::people{}};
+      icon_view people;
       nodes::Text title;
       add_button add_member;
     } parts;
     members_head(Actions* a, const palette& colours, std::size_t count)
-        : parts{.title = nodes::Text(std::format("{} MEMBER{}", count, count == 1 ? "" : "S"), 13.0f, colours.dim, true),
+        : parts{.people = icon_view(colours, icon::people{}),
+                .title = nodes::Text(std::format("{} MEMBER{}", count, count == 1 ? "" : "S"), 13.0f, colours.dim, true),
                 .add_member = add_button(icon::add_person{}, {a, "Adding members"})} {
       this->setHorizontal();
       this->setGap(10.0f);
@@ -238,19 +240,19 @@ struct info_panel : nodes::Stack {
   struct column : nodes::Stack {
     struct parts_t {
       nodes::Memo<view, head> upper;
-      nodes::Box<> band_2 = section_band();
+      nodes::Box<> band_2;
       // The members' head, as a function of how many there are.
       nodes::Memo<std::size_t, members_head> members_header;
       // The members, reconciled: the rows kept while they show the same.
       member_rows members{{.spacingY = 0.0f, .wrap = false}, {}};
     } parts;
-    column() {
+    explicit column(const palette& colours) : parts{.band_2 = section_band(colours)} {
       this->setGap(2.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     }
   };
   struct parts_t {
-    nodes::ScrollContainer<column> scroll{column()};
+    nodes::ScrollContainer<column> scroll;
     nodes::Box<> edge;  // its left edge
   } parts;
   column& content = std::get<0>(parts.scroll.fChildren);
@@ -263,7 +265,7 @@ struct info_panel : nodes::Stack {
 
   static constexpr float kWidth = 340.0f;
 
-  info_panel(Actions* a, const palette& colours) : actions(a), colours_(&colours), parts{.edge = nodes::Box<>(colours.band)} {
+  info_panel(Actions* a, const palette& colours) : actions(a), colours_(&colours), parts{.scroll = nodes::ScrollContainer<column>(column(colours)), .edge = nodes::Box<>(colours.band)} {
     fState.apply({.background = colours.sidebar, .masking = true});
     parts.edge.apply({.place = scene::anchor::kTopLeft, .fillY = true, .width = 1.0f});
     parts.scroll.apply({.fillX = true, .grow = scene::axes::kY});
@@ -325,7 +327,7 @@ struct info_panel : nodes::Stack {
     if (!same_members && nodes::reconcile(
             rows, shown_members, [](const auto& each) { return each.first.id; },
             [](const member_row<open_person>& row) { return row.id; },
-            [&](const auto& each) { return member_row<open_person>(each.first, each.second, open_person{this}); },
+            [&](const auto& each) { return member_row<open_person>(*colours_, each.first, each.second, open_person{this}); },
             [](const member_row<open_person>& row, const auto& each) {
               return row.who == each.first && row.how_shown == each.second;
             }))

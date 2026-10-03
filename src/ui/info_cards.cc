@@ -107,7 +107,7 @@ struct person_card : nodes::Stack {
   struct parts_t {
     top_bar top;
     cover face;
-    nodes::Box<> band = section_band();
+    nodes::Box<> band;
     id_line id;
     action_tile<message_them> message;
     action_tile<verify_them> verify;
@@ -128,12 +128,13 @@ struct person_card : nodes::Stack {
       : colours_(&colours),
         parts{.top = top_bar("User info", {}, {a}, false, true),
               .face = cover(a, key, facts),
-              .id = id_line(key, ""),
-              .message = action_tile<message_them>("Message", icon::send{}, {a, conversation_id{account, key}}),
-              .verify = action_tile<verify_them>("Verify with emoji", icon::check{}, {a, conversation_id{account, key}}),
-              .accept = action_tile<accept_them>("Withdraw verification", icon::close{}, {a, conversation_id{account, key}}),
-              .remove = action_tile<to_them>("Remove from room", icon::leave{}, {a, room_action::kick{key}}),
-              .ban = action_tile<to_them>("Ban from room", icon::close{}, {a, room_action::ban{key}}),
+              .band = section_band(colours),
+              .id = id_line(colours, key, ""),
+              .message = action_tile<message_them>(colours, "Message", icon::send{}, {a, conversation_id{account, key}}),
+              .verify = action_tile<verify_them>(colours, "Verify with emoji", icon::check{}, {a, conversation_id{account, key}}),
+              .accept = action_tile<accept_them>(colours, "Withdraw verification", icon::close{}, {a, conversation_id{account, key}}),
+              .remove = action_tile<to_them>(colours, "Remove from room", icon::leave{}, {a, room_action::kick{key}}),
+              .ban = action_tile<to_them>(colours, "Ban from room", icon::close{}, {a, room_action::ban{key}}),
               .sessions_title = nodes::Text("", 13.0f, colours.dim, true)} {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}});
     for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.message, &parts.verify, &parts.accept, &parts.remove, &parts.ban})
@@ -143,7 +144,7 @@ struct person_card : nodes::Stack {
     parts.ban.setVisible(facts.may_ban);
     std::ranges::for_each(proto::person_actions(protocol_state_of(account), account, key), [&](proto::any_action& one) {
       if (one.asks)
-        parts.theirs.emplace_back(one.label, icon::check{}, ask_protocol{a, std::move(*one.asks)})
+        parts.theirs.emplace_back(colours, one.label, icon::check{}, ask_protocol{a, std::move(*one.asks)})
             .apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
     });
     parts.sessions_title.setText(facts.devices.empty() ? std::string()
@@ -223,7 +224,7 @@ struct room_card : nodes::Stack {
   struct parts_t {
     top_bar top;
     cover face;
-    nodes::Box<> band = section_band();
+    nodes::Box<> band;
     nodes::Text about;
     id_line id;
     action_tile<join_it> join;
@@ -231,18 +232,19 @@ struct room_card : nodes::Stack {
     std::optional<action_tile<decline_it>> decline;
   } parts;
 
-  room_card(Actions* a, const std::string& asked, const room_preview& known)
-      : parts{.top = top_bar("Room info", {}, {a}, false, true),
+  room_card(Actions* a, const palette& colours, const std::string& asked, const room_preview& known)
+      : parts{.top = top_bar(colours, "Room info", {}, {a}, false, true),
               .face = cover(known.id.empty() ? asked : known.id, name_of(asked, known), line_of(asked, known)),
+              .band = section_band(colours),
               .about = nodes::Text(!known.topic.empty() ? known.topic : !known.note.empty() ? known.note : std::string("No description"), 14.0f,
-                                   known.topic.empty() ? dim_colour : text_colour),
-              .id = id_line(known.id.empty() ? asked : known.id, ""),
-              .join = action_tile<join_it>(known.invite ? "Accept" : known.knock ? "Ask to join" : "Join", icon::plus{},
+                                   known.topic.empty() ? colours.dim : colours.text),
+              .id = id_line(colours, known.id.empty() ? asked : known.id, ""),
+              .join = action_tile<join_it>(colours, known.invite ? "Accept" : known.knock ? "Ask to join" : "Join", icon::plus{},
                                            {a, known.knock && !known.invite})} {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}});
     if (known.invite) {
       parts.top.parts.title.setText("Invite");
-      parts.decline.emplace("Decline", icon::close{}, decline_it{a});
+      parts.decline.emplace(colours, "Decline", icon::close{}, decline_it{a});
       parts.decline->apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
     }
     parts.about.setWrapped(true);

@@ -188,8 +188,11 @@ struct chat_header : nodes::Stack {
     if (one == nullptr)
       return {};
     const auto count = std::max<std::int64_t>(static_cast<std::int64_t>(one->members.size()), one->member_count);
-    std::string about = is_group(*one) ? std::format("{} member{}", count, count == 1 ? "" : "s")
-                                       : presence_of(now, one->id.account, contact_of(*one));
+    // As its protocol says it, where it does (a channel's subscribers);
+    // else its members, or how the other is.
+    std::string about = proto::chat_status(protocol_state_of(one->id.account), *one, now)
+                            .value_or(is_group(*one) ? std::format("{} member{}", count, count == 1 ? "" : "s")
+                                                     : presence_of(now, one->id.account, contact_of(*one)));
     // Who is typing, by their names, as Telegram says it: one, two ("A and
     // B"), three ("A, B and C"); past three, the first two and how many more.
     if (!one->typing.empty()) {

@@ -195,6 +195,10 @@ inline std::vector<part::badge> row_badges(const auto&, const conversation&) { r
 inline std::string local_part(const auto&, std::string_view address) { return std::string(address); }
 // Bubbles.
 inline part::style_t message_style(const auto&) { return part::style::bubbles{}; }
+// The header's line under a chat's name, as the client says it (members,
+// presence), unless the protocol says another: a Telegram channel's
+// subscribers, an IRC server buffer's network.
+inline std::optional<std::string> chat_status(const auto&, const conversation&, const auto&) { return std::nullopt; }
 // No chat a forum of its own: only where the user shows a space as one.
 constexpr bool native_forum(const auto&, const conversation&) { return false; }
 // No chat continued in another, nor continuing one.
@@ -404,6 +408,17 @@ inline constexpr struct person_badges_t {
     }, state);
   }
 } person_badges{};
+// What the header says under a chat's name, where its protocol says it: a
+// kind of chat of its own (its room part) told as itself.
+inline constexpr struct chat_status_t {
+  template <class State, class Model>
+  std::optional<std::string> operator()(const State& state, const conversation& chat, const Model& known) const {
+    return splice::visit([&](const auto& now) {
+      using defaults::chat_status;
+      return chat_status(now, chat, known);
+    }, state);
+  }
+} chat_status{};
 // Whether a chat is a forum of itself, as its protocol has one (a Telegram
 // forum supergroup): its topics, its children, listed in it as a space the
 // user shows as a forum is.

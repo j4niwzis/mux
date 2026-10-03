@@ -36,6 +36,10 @@ export import :names;
 
 export namespace mux::matrix {
 
+// Probe (CI only): format_string<const std::string&, std::string> made here
+// first, outside any template.
+inline std::string probe_two(const std::string& a, std::string b) { return std::format("{} {}", a, std::move(b)); }
+
 struct failure {
   std::optional<loom::error> server;
   std::string network;

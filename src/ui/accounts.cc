@@ -28,6 +28,11 @@ export namespace mux::ui {
 
 // ---- the accounts -------------------------------------------------------------------
 
+// Probe (CI only): the session row's format made here first, outside any template.
+inline std::string probe_seen(std::chrono::sys_time<std::chrono::milliseconds> at) {
+  return std::format(" · last seen {:%d.%m.%Y %H:%M}", std::chrono::floor<std::chrono::minutes>(at));
+}
+
 // What the model says of a saved account, in a few words, and whether that
 // is a failure.
 [[nodiscard]] inline std::pair<std::string, bool> state_of(const config::account_t& one, const model& now) {

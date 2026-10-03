@@ -26,6 +26,13 @@ struct id {
 template <class... Parts>
 struct room_part_list {};
 struct no_room_part {};
+// And of a message, beyond what every message has (Telegram's inline
+// buttons, a poll), as message_parts(state) lists them.
+template <class... Parts>
+struct message_part_list {};
+struct no_message_part {
+  friend bool operator==(no_message_part, no_message_part) = default;
+};
 
 }  // namespace mux::proto
 

@@ -1154,6 +1154,25 @@ constexpr auto sticker_views_for(const State& state, type_tag<Actions> tag) {
   using sticker_defaults::sticker_views;
   return sticker_views(state, tag);
 }
+// And the nodes a protocol shows of a message of its own, under its text
+// (Telegram's inline buttons, a poll): listed by message_views(state,
+// type_tag<Actions>), made for a message by make_message_view -- by its
+// part (message::theirs), say. None by default.
+namespace view_defaults {
+template <class Actions>
+constexpr proto::sticker_view_list<> message_views(const auto&, type_tag<Actions>) {
+  return {};
+}
+template <class Actions>
+constexpr std::nullopt_t make_message_view(const auto&, const message&, type_tag<Actions>) {
+  return std::nullopt;
+}
+}  // namespace view_defaults
+template <class State, class Actions>
+constexpr auto message_views_for(const State& state, type_tag<Actions> tag) {
+  using view_defaults::message_views;
+  return message_views(state, tag);
+}
 
 // A message as the chat shows it. A template on the program's Actions, made
 // where every protocol's UI module is seen: its sticker part is the basic
@@ -1177,6 +1196,24 @@ struct message_bubble : nodes::Stack {
   // Never empty: a text, where no protocol draws its own.
   using their_sticker_t = typename variant_of_types<
       typename joined<type_list<nodes::Text>, typename protocol_sticker_nodes<protocols>::type>::type>::type;
+  template <class>
+  struct protocol_message_nodes;
+  template <class... Tags>
+  struct protocol_message_nodes<protocol_list<Tags...>> {
+    using type = typename joined<
+        type_list<>, typename sticker_nodes<decltype(message_views_for(::mux::state_of<Tags>{}, type_tag<Actions>{}))>::type...>::type;
+  };
+  using their_view_t = typename variant_of_types<
+      typename joined<type_list<nodes::Text>, typename protocol_message_nodes<protocols>::type>::type>::type;
+  struct view_holder : nodes::Stack {
+    struct parts_t {
+      their_view_t shown;
+    } parts;
+    template <class View>
+    explicit view_holder(View made) : parts{.shown = their_view_t(std::move(made))} {
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    }
+  };
   // As a node: the protocol's sticker in it.
   struct sticker_holder : nodes::Stack {
     struct parts_t {
@@ -1331,6 +1368,8 @@ struct message_bubble : nodes::Stack {
       std::optional<nodes::Text> thread;
       // What its protocol says under it (proto::message_lines).
       std::vector<nodes::Text> lines;
+      // A node of its protocol's own under it (make_message_view).
+      std::optional<view_holder> their_view;
       nodes::Text time;
       // The time inside the last line of the text, where that line leaves
       // room for it, as Telegram's: out of the column's flow, at its end.
@@ -1342,6 +1381,12 @@ struct message_bubble : nodes::Stack {
     skia::SkColor plate = bubble_colour;
     // A protocol's sticker placed, where it made one.
     bool place_sticker(std::nullopt_t) { return false; }
+    void place_view(std::nullopt_t) {}
+    template <class View>
+    void place_view(std::optional<View> made) {
+      if (made)
+        parts.their_view.emplace(std::move(*made));
+    }
     template <class View>
     bool place_sticker(std::optional<View> made) {
       if (!made)
@@ -1450,7 +1495,7 @@ struct message_bubble : nodes::Stack {
     // where it is narrower; on a line of its own only where they do not.
     // Decided from the last layout; a change is laid out at the next.
     void update(double now_ms) {
-      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, time, inline_time, tail] = parts;
+      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, their_view, time, inline_time, tail] = parts;
       // A sticker's time is over it, and nowhere else: placed beside its
       // reactions too, it was shown twice.
       if (picture && picture->sticker) {
@@ -1574,7 +1619,7 @@ struct message_bubble : nodes::Stack {
     // checks the guess, above.
     bool guessed = false;
     void guess_time(skia::SkFont& font) {
-      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, time, inline_time, tail] = parts;
+      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, their_view, time, inline_time, tail] = parts;
       if (std::exchange(guessed, true) || text.text().empty())
         return;
       const skiff::paint::Painter p(nullptr, font);
@@ -1626,7 +1671,7 @@ struct message_bubble : nodes::Stack {
                 .time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour),
                 .inline_time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour)},
           plate(plate_of(mine)) {
-      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, time, inline_time, tail] = parts;
+      auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, their_view, time, inline_time, tail] = parts;
       this->setGap(2.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
                     .padding = {kPadY, kPadX, kPadY, kPadX}, .cornerRadius = 12.0f, .background = plate});
@@ -2027,6 +2072,12 @@ struct message_bubble : nodes::Stack {
       shown.setWrapped(true);
       shown.apply({.fillX = true, .margin = {4.0f, 0.0f, 0.0f, 0.0f}});
     });
+    splice::visit(
+        [&](const auto& now) {
+          using view_defaults::make_message_view;
+          body.place_view(make_message_view(now, said, type_tag<Actions>{}));
+        },
+        protocol_state_of(in.id.account));
     if (!said.reactions.empty()) {
       body.parts.reactions.emplace();
       for (const auto& [key, who] : said.reactions)

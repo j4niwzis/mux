@@ -355,6 +355,8 @@ struct message {
   // A reaction's key, where it is one -- shown as a line, or fetched aside:
   // what its menu changes it from.
   std::string reaction_key;
+  // What its protocol has of it beyond this (message_parts), or none.
+  message_part theirs;
   friend bool operator==(const message&, const message&) = default;
 };
 

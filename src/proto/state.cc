@@ -46,6 +46,44 @@ struct room_part_list_of<protocol_list<Tags...>> {
 };
 using room_part_t = typename room_part_list_of<protocols>::type;
 
+// A message's protocol part: none, or one of a protocol's (message_parts).
+namespace message_part_defaults {
+constexpr proto::message_part_list<> message_parts(const auto&) { return {}; }
+}  // namespace message_part_defaults
+template <class State>
+constexpr auto message_parts_of(const State& state) {
+  using message_part_defaults::message_parts;
+  return message_parts(state);
+}
+template <class... Lists>
+struct message_part_union;
+template <class... Ps>
+struct message_part_union<proto::message_part_list<Ps...>> {
+  using type = splice::variant<proto::no_message_part, Ps...>;
+};
+template <class... As, class... Bs, class... Rest>
+struct message_part_union<proto::message_part_list<As...>, proto::message_part_list<Bs...>, Rest...>
+    : message_part_union<proto::message_part_list<As..., Bs...>, Rest...> {};
+template <class>
+struct message_part_list_of;
+template <class... Tags>
+struct message_part_list_of<protocol_list<Tags...>> {
+  using type = typename message_part_union<proto::message_part_list<>, decltype(message_parts_of(state_of<Tags>{}))...>::type;
+};
+// Compared as messages are: the same part, the same within it.
+struct message_part {
+  typename message_part_list_of<protocols>::type is;
+  friend bool operator==(const message_part& a, const message_part& b) {
+    return splice::visit(
+        [&](const auto& mine) {
+          return splice::visit(splice::overloaded{[&](const std::remove_cvref_t<decltype(mine)>& theirs) { return mine == theirs; },
+                                                  [](const auto&) { return false; }},
+                               b.is);
+        },
+        a.is);
+  }
+};
+
 // A protocol's state before its account says anything: its type's default.
 [[nodiscard]] inline protocol_state_t state_before(const protocol_t& speaks) {
   return splice::visit([](auto of) { return protocol_state_t{state_of<decltype(of)>{}}; }, speaks);

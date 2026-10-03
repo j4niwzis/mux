@@ -24,15 +24,15 @@ import mux.app.words;
 
 namespace mux::app {
 
-void app::switch_form(void (adding::*to)()) {
+void app::switch_form(const mux::protocol_t& speaks) {
   auto* up = root().open_panel();
   if (!up)
     return;
   pending_login.reset();
   splice::visit(
-      [to](accounts& panel) {
+      [&](accounts& panel) {
         if (auto* pane = panel.adding())
-          (pane->*to)();
+          pane->show(speaks);
       },
       *up);
 }

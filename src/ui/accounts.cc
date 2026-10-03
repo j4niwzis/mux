@@ -938,10 +938,11 @@ struct accounts_panel : closes_on_escape<Actions> {
                                  [](auto&) -> add_account_pane<Actions>* { return nullptr; }},
                       detail);
   }
-  [[nodiscard]] xmpp_form<Actions>* xmpp() {
-    return splice::visit(splice::overloaded{[](account_editor<Actions>& one) { return xmpp_form_in(one.parts.form); },
-                                 [](add_account_pane<Actions>& one) { return one.xmpp(); },
-                                 [](auto&) -> xmpp_form<Actions>* { return nullptr; }},
+  // The account form up -- an editor's, or the pane's that adds one.
+  [[nodiscard]] account_form<Actions>* form() {
+    return splice::visit(splice::overloaded{[](account_editor<Actions>& one) { return &one.parts.form; },
+                                 [](add_account_pane<Actions>& one) { return &one.parts.form; },
+                                 [](auto&) -> account_form<Actions>* { return nullptr; }},
                       detail);
   }
 

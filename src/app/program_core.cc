@@ -707,11 +707,11 @@ void app::show_adding() {
   this->refresh();
 }
 
-auto app::xmpp_form_up() -> mux::ui::xmpp_form<actions>* {
+auto app::form_up() -> mux::ui::account_form<actions>* {
   auto* up = root().open_panel();
   if (!up)
     return nullptr;
-  return splice::visit([](auto& panel) { return panel.xmpp(); }, *up);
+  return splice::visit([](auto& panel) { return panel.form(); }, *up);
 }
 
 void app::refresh(std::source_location from) {

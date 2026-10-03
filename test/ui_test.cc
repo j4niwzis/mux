@@ -7,6 +7,7 @@ import skiff.scene;
 import mux.core;
 import mux.config;
 import mux.ui;
+import mux.ui.proto;
 import gtest;
 
 #include "gtest/gtest-macros.h"
@@ -23,8 +24,7 @@ struct stub {
   void back() {}
   void open_accounts() {}
   void open_new_account() {}
-  void add_xmpp() {}
-  void add_matrix() {}
+  void add_account_of(mux::protocol_t) {}
   void select_account(std::string) {}
   void toggle_advanced() {}
   void toggle_plain() {}

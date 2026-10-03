@@ -251,8 +251,7 @@ inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 //   void back()                      -- to the conversations
 //   void open_accounts()
 //   void open_new_account()
-//   void add_xmpp()                  -- the XMPP form, when adding
-//   void add_matrix()                -- the Matrix form, when adding
+//   void add_account_of(protocol_t)  -- a protocol's form, when adding
 //   void select_account(std::string address)
 //   void toggle_advanced()
 //   void toggle_plain()

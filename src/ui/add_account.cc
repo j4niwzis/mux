@@ -11,6 +11,7 @@ import skiff.nodes.flow;
 import skiff.nodes.text;
 import mux.core;
 import mux.config;
+import mux.protocols;
 import :base;
 import :controls;
 import :forms;
@@ -32,16 +33,23 @@ struct choose_new_proxy {
 template <class Actions>
 struct add_account_pane : nodes::Stack {
   Actions* actions = nullptr;
-  // XMPP | Matrix: two segments in a thin frame.
+  // A segment a protocol, in a thin frame -- from the list, each named as
+  // its protocol names itself.
+  struct pick_protocol {
+    Actions* actions = nullptr;
+    protocol_t speaks;
+    void operator()() const { actions->add_account_of(speaks); }
+  };
   struct protocol_switch : nodes::Stack {
-    using xmpp_segment = segment<ask<Actions, &Actions::add_xmpp>>;
-    using matrix_segment = segment<ask<Actions, &Actions::add_matrix>>;
     struct parts_t {
-      xmpp_segment xmpp_tab;
-      matrix_segment matrix_tab;
+      std::vector<segment<pick_protocol>> each;
     } parts;
-    explicit protocol_switch(Actions* a)
-        : parts{.xmpp_tab = xmpp_segment("XMPP", {a}), .matrix_tab = matrix_segment("Matrix", {a})} {
+    template <class... Tags>
+    void make(Actions* a, protocol_list<Tags...>) {
+      (parts.each.emplace_back(std::string(protocol_name(config::kept_of<Tags>{})), pick_protocol{a, protocol_t{Tags{}}}), ...);
+    }
+    explicit protocol_switch(Actions* a) {
+      this->make(a, protocols{});
       this->setHorizontal();
       this->setGap(1.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .padding = {1.0f, 1.0f, 1.0f, 1.0f}, .background = chosen_colour});
@@ -87,13 +95,11 @@ struct add_account_pane : nodes::Stack {
     this->light();
   }
 
-  void show_xmpp() {
-    parts.form.template emplace<0>(this->actions, std::nullopt);
-    this->begin_swap();
-    this->light();
-  }
-  void show_matrix() {
-    parts.form.template emplace<1>(this->actions, std::nullopt);
+  // A protocol's form, blank, in place of the one up.
+  void show(const protocol_t& speaks) {
+    splice::visit([this](auto tag) {
+      parts.form.template emplace<form_of_t<decltype(tag), Actions>>(this->actions, std::nullopt);
+    }, speaks);
     this->begin_swap();
     this->light();
   }
@@ -140,21 +146,13 @@ struct add_account_pane : nodes::Stack {
       this->fade();
   }
 
-  [[nodiscard]] xmpp_form<Actions>* xmpp() { return xmpp_form_in(parts.form); }
-
-  // The tab of the form that is up, lit, and what that protocol is.
+  // The tab of the form that is up, lit, and what that protocol is: its form
+  // says.
   void light() {
-    splice::visit(splice::overloaded{[this](const xmpp_form<Actions>&) {
-                            parts.tabs.parts.xmpp_tab.set_active(true);
-                            parts.tabs.parts.matrix_tab.set_active(false);
-                            parts.note.setText("An address like user@example.com, on a server such as Prosody or ejabberd.");
-                          },
-                          [this](const matrix_form<Actions>&) {
-                            parts.tabs.parts.xmpp_tab.set_active(false);
-                            parts.tabs.parts.matrix_tab.set_active(true);
-                            parts.note.setText("A user ID like @user:example.org, on a homeserver such as Synapse.");
-                          }},
-               parts.form);
+    auto& each = parts.tabs.parts.each;
+    for (std::size_t i = 0; i < each.size(); ++i)
+      each[i].set_active(i == parts.form.index());
+    parts.note.setText(std::string(splice::visit([](const auto& one) { return one.note; }, parts.form)));
   }
 };
 

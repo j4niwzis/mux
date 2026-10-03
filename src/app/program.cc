@@ -108,8 +108,6 @@ struct app : kept_settings {
 
   using adding = mux::ui::add_account_pane<actions>;
   using accounts = mux::ui::accounts_panel<actions>;
-  using xmpp_form = mux::ui::xmpp_form<actions>;
-  using matrix_form = mux::ui::matrix_form<actions>;
 
   mailbox_type* box = nullptr;
   mux::model* model = nullptr;
@@ -180,7 +178,7 @@ struct app : kept_settings {
 
 
   // The panel that is up, if one is, and the XMPP form in it, if there is one.
-  [[nodiscard]] mux::ui::xmpp_form<actions>* xmpp_form_up();
+  [[nodiscard]] mux::ui::account_form<actions>* form_up();
 
   // Everything brought up to date with the model: each panel by its own
   // overload.
@@ -229,8 +227,7 @@ struct app : kept_settings {
   void apply(const request::back&);
   void apply(const request::open_accounts&);
   void apply(const request::open_new_account&);
-  void apply(const request::add_xmpp&);
-  void apply(const request::add_matrix&);
+  void apply(const request::add_account_of&);
   void apply(const request::select_account& one);
   void apply(const request::toggle_advanced&);
   void apply(const request::toggle_plain&);
@@ -588,7 +585,7 @@ struct app : kept_settings {
 
   // How much moves, from now on and in the file.
 
-  void switch_form(void (adding::*to)());
+  void switch_form(const mux::protocol_t& speaks);
 
   // A new account: saved, and started; the panel waits to hear how it went.
   template <class Form>

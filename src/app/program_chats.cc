@@ -132,9 +132,7 @@ void app::apply(const request::open_accounts&) { (void)this->show_accounts(); }
 
 void app::apply(const request::open_new_account&) { this->show_adding(); }
 
-void app::apply(const request::add_xmpp&) { this->switch_form(&adding::show_xmpp); }
-
-void app::apply(const request::add_matrix&) { this->switch_form(&adding::show_matrix); }
+void app::apply(const request::add_account_of& one) { this->switch_form(one.speaks); }
 
 void app::apply(const request::select_account& one) {
   auto* up = root().open_panel();
@@ -151,14 +149,20 @@ void app::apply(const request::select_account& one) {
       *up);
 }
 
+// A form's own buttons -- XMPP's Advanced, its PLAIN switch -- asked of the
+// form up, where it has them.
 void app::apply(const request::toggle_advanced&) {
-  if (auto* form = this->xmpp_form_up())
-    form->show_advanced(!form->advanced);
+  if (auto* up = this->form_up())
+    splice::visit([](auto& form) {
+      mux::app::ask_if_able([](auto& f) -> decltype(void(f.show_advanced(!f.advanced))) { f.show_advanced(!f.advanced); }, form);
+    }, *up);
 }
 
 void app::apply(const request::toggle_plain&) {
-  if (auto* form = this->xmpp_form_up())
-    form->flip_plain();
+  if (auto* up = this->form_up())
+    splice::visit([](auto& form) {
+      mux::app::ask_if_able([](auto& f) -> decltype(void(f.flip_plain())) { f.flip_plain(); }, form);
+    }, *up);
 }
 
 void app::apply(const request::submit_login&) {

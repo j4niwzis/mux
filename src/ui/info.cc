@@ -1022,7 +1022,7 @@ struct create_room_box : nodes::Stack {
     widgets::Button<flip_advanced> show_advanced;
     switch_row<flip_federate> block;
     nodes::Text block_note{"You might enable this if the room will only be used for collaborating with internal teams "
-                           "on your homeserver. This cannot be changed later.",
+                           "on your server. This cannot be changed later.",
                            12.0f, dim_colour};
     buttons_row buttons;
   } parts;

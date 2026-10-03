@@ -814,7 +814,7 @@ void app::start_push() {
   }
   push_forget = std::make_shared<std::atomic<bool>>(false);
   push_thread = std::jthread([box = push_box, forget = push_forget, token = *notifications.push_token](std::stop_token stop) {
-    mux::dbus::run_unified_push(stop, std::string(mux::dbus::kAppId), token, "Messages from your Matrix accounts", forget,
+    mux::dbus::run_unified_push(stop, std::string(mux::dbus::kAppId), token, "Messages from your accounts", forget,
                                 push_sink{box});
   });
   if (notifications.push_endpoint)

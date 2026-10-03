@@ -260,6 +260,8 @@ struct room_settings : nodes::Stack {
   Actions* actions = nullptr;
   // The colours it and its pages are made in: what it was handed.
   const palette* colours_ = nullptr;
+  // The looks shown: the program's.
+  const looks_shown* looks_ = nullptr;
   room_settings_facts facts;
 
   // ---- the tabs and pages: the client's, then each protocol's -----------------
@@ -487,7 +489,7 @@ struct room_settings : nodes::Stack {
       look_choices<Actions> choices;
     } parts;
     looks_page(Actions* a, room_settings* box, const room_settings_facts&)
-        : parts{.heading = tab_heading(*box->colours_, "Appearance"), .choices = look_choices<Actions>(a, choice_level::chat{})} {
+        : parts{.heading = tab_heading(*box->colours_, "Appearance"), .choices = look_choices<Actions>(a, *box->looks_, choice_level::chat{})} {
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
     }
@@ -558,9 +560,9 @@ struct room_settings : nodes::Stack {
   bool rebuild_due = false;
   bool to_top = false;  // another tab: shown from its top
 
-  room_settings(const ui_needs<Actions>& n, const room_settings_facts& shown) : room_settings(n.colours, n.actions, shown) {}
-  room_settings(const palette* colours, Actions* a, const room_settings_facts& shown)
-      : actions(a), colours_(colours), facts(shown),
+  room_settings(const ui_needs<Actions>& n, const room_settings_facts& shown) : room_settings(n.colours, n.looks, n.actions, shown) {}
+  room_settings(const palette* colours, const looks_shown* looks, Actions* a, const room_settings_facts& shown)
+      : actions(a), colours_(colours), looks_(looks), facts(shown),
         parts{.header = header_t(*colours, "Room Settings - " + shown.name, {}, {a}, false, true),
               .body = body_row(this, page_t(std::in_place_index<0>, a, this, shown))} {
     fState.apply({.fill = true});

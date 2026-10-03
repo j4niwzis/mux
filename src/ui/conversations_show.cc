@@ -998,8 +998,8 @@ void conversations_screen<Actions>::show_conversation(const model& now) {
     entries.clear();
     return;
   }
-  if (bubbles != bubble_look_now()) {
-    bubble_look_now() = bubbles;
+  if (bubbles != needs_.looks->bubbles) {
+    needs_.looks->bubbles = bubbles;
     entries.clear();
   }
   info.show(*one, now, muted.contains(one->id));

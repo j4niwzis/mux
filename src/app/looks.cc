@@ -60,8 +60,8 @@ class looks_part {
                                                         [&](mux::config::look_part::panels) -> look_t& { return k_->panels; }},
                                      one.part);
     auto& known = splice::visit(
-        splice::overloaded{[](mux::config::look_part::bubbles) -> mux::config::bubble_look& { return mux::ui::bubble_look_everywhere(); },
-                           [](mux::config::look_part::panels) -> mux::config::bubble_look& { return mux::ui::panel_look_everywhere(); }},
+        splice::overloaded{[this](mux::config::look_part::bubbles) -> mux::config::bubble_look& { return s_->looks.bubbles_everywhere; },
+                           [this](mux::config::look_part::panels) -> mux::config::bubble_look& { return s_->looks.panels_everywhere; }},
         one.part);
     auto& per_chat = splice::visit(
         splice::overloaded{[&](mux::config::look_part::bubbles) -> std::map<mux::conversation_id, mux::config::bubble_look>& { return k_->bubbles_in; },

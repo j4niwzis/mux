@@ -369,7 +369,7 @@ struct reaction_chip : nodes::Stack {
   }
   static constexpr float kLabelMost = 240.0f;
   // `people`: who reacted, by id and name.
-  reaction_chip(const palette& colours, std::string k, std::size_t n, bool own,
+  reaction_chip(const palette& colours, const config::bubble_look& look, std::string k, std::size_t n, bool own,
                 const std::vector<std::pair<std::string, std::string>>& people = {})
       : key(std::move(k)), count(n), mine(own),
         parts{.label = nodes::Text(label_of(key, n), 13.0f, own ? colours.on_accent : colours.text)} {
@@ -379,10 +379,10 @@ struct reaction_chip : nodes::Stack {
     fState.apply({.height = 26.0f, .autoSize = scene::axes::kX, .minWidth = 26.0f, .padding = {0.0f, 9.0f, 0.0f, 9.0f},
                   .cornerRadius = 13.0f,
                   .background = at_opacity(own ? colours.accent : colours.tile,
-                                           element_opacity_of(bubble_look_now(), &config::element_opacity::reactions))});
+                                           element_opacity_of(look, &config::element_opacity::reactions))});
     // Frosted, where the bubbles are, as its own blur says.
-    if (frosts(bubble_look_now())) {
-      parts.frost.emplace(frost_source{}, element_blur_of(bubble_look_now(), &config::element_blur::reactions));
+    if (frosts(look)) {
+      parts.frost.emplace(frost_source{}, element_blur_of(look, &config::element_blur::reactions));
       parts.frost->apply({.place = scene::anchor::kTopLeft, .fill = true, .margin = {0.0f, -9.0f, 0.0f, -9.0f}, .cornerRadius = 13.0f});
       // Its colour over the frost: the pane's tint, its own none.
       parts.frost->setTint(fState.fBackground);

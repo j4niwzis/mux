@@ -533,9 +533,8 @@ struct message_bubble : nodes::Stack {
     }
     // The bubble's colour as its chat's look has it: solid, or at its
     // opacity -- over what is behind it, frosted where it is so.
-    [[nodiscard]] static skia::SkColor plate_of(const palette& colours, bool mine) {
+    [[nodiscard]] static skia::SkColor plate_of(const palette& colours, const config::bubble_look& look, bool mine) {
       const skia::SkColor solid = mine ? colours.out_bubble : colours.bubble;
-      const config::bubble_look& look = bubble_look_now();
       return splice::visit(splice::overloaded{[&](config::bubbles::solid) { return solid; },
                                               [&](const auto&) { return at_opacity(solid, look.opacity); }},
                            look.kind);
@@ -562,23 +561,23 @@ struct message_bubble : nodes::Stack {
       parts.frost->apply({.margin = {-pad.fTop, -pad.fRight, -pad.fBottom, -pad.fLeft}, .cornerRadius = fState.fCornerRadius,
                           .corners = fState.fCorners});
     }
-    body_column(const palette& colours, bool mine, std::string said, std::string when)
+    body_column(const palette& colours, const config::bubble_look& look, bool mine, std::string said, std::string when)
         : outgoing(mine),
           parts{.text = nodes::BasicText<message_pictures>(std::move(said), 13.0f, colours.text),
                 .time = nodes::Text(when, 11.0f, mine ? colours.sent_time : colours.dim),
                 .inline_time = nodes::Text(when, 11.0f, mine ? colours.sent_time : colours.dim)},
-          plate(plate_of(colours, mine)) {
+          plate(plate_of(colours, look, mine)) {
       auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, their_view, time, inline_time, tail] = parts;
       this->setGap(2.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
                     .padding = {kPadY, kPadX, kPadY, kPadX}, .cornerRadius = 12.0f, .background = plate});
       // Frosted: what is behind blurred under the tint; glass: a light edge.
-      splice::visit(splice::overloaded{[&](config::bubbles::frosted) { this->frosted(blur_of(bubble_look_now())); },
+      splice::visit(splice::overloaded{[&](config::bubbles::frosted) { this->frosted(blur_of(look)); },
                                        [&](config::bubbles::glass) {
                                          fState.apply({.border = scene::Border{skia::colorSetARGB(70, 255, 255, 255), 1.0f}});
                                        },
                                        [](const auto&) {}},
-                    bubble_look_now().kind);
+                    look.kind);
       text.setWrapped(true);
       text.setShrinksToLines(true);
       // Wrapped at the bubble's width however wide the room it is first
@@ -608,6 +607,8 @@ struct message_bubble : nodes::Stack {
   };
   // The colours it is made in: handed down, kept for what it makes later.
   const palette* colours_ = nullptr;
+  // The looks shown: the program's.
+  const looks_shown* looks_ = nullptr;
   struct parts_t {
     // The sender's avatar, beside the last of their run in a group; the
     // same room, empty, beside the rest.
@@ -658,6 +659,7 @@ struct message_bubble : nodes::Stack {
   struct needs {
     platform::audio::speaker* sound = nullptr;
     const palette* colours = nullptr;
+    looks_shown* looks = nullptr;
   };
   message_bubble(const needs& n, const conversation& in, const message& given, bool first_of_run, bool last_of_run,
                  const model* now = nullptr, bool show_events = true, bool show_preview = true)
@@ -667,9 +669,9 @@ struct message_bubble : nodes::Stack {
   message_bubble(const needs& n, const conversation& in, const message& said, bool first_of_run, bool last_of_run, const model* now,
                  bool show_events, bool show_preview, made_t)
       : said(said), first(first_of_run), last(last_of_run), message_id(said.id), plain(said.body.plain),
-        outgoing(said.outgoing), sender(said.sender), colours_(n.colours),
+        outgoing(said.outgoing), sender(said.sender), colours_(n.colours), looks_(n.looks),
         parts{.face = avatar_mark(said.sender, sender_name(in, said.sender), kAvatar),
-              .body = body_column(*n.colours, said.outgoing, said.body.plain, mark_of(said) + clock_of(said.at)),
+              .body = body_column(*n.colours, n.looks->bubbles, said.outgoing, said.body.plain, mark_of(said) + clock_of(said.at)),
               .swipe_mark = nodes::Icon(shape_of(icon::back{}), n.colours->dim)} {
     // Drawn once and played back until something in it changes: a strip of
     // the list repainted went through every part of every message in it.
@@ -680,7 +682,7 @@ struct message_bubble : nodes::Stack {
     // not played back from where it was recorded.
     const bool frosted = splice::visit(splice::overloaded{[](config::bubbles::frosted) { return true; },
                                                           [](const auto&) { return false; }},
-                                       bubble_look_now().kind);
+                                       looks_->bubbles.kind);
     fState.setRecorded(!said.attachment && said.album.empty() && !frosted);
     auto& [face, body, swipe_mark, unread_bar, readers] = parts;
     swipe_mark.apply({.place = scene::anchor::kCentreRight,
@@ -717,7 +719,7 @@ struct message_bubble : nodes::Stack {
     if (!(group && !outgoing && last_of_run))
       face.fState.setAlpha(0.0f);  // its room kept, so the run's bubbles line up
     else
-      face.fState.setAlpha(static_cast<float>(element_opacity_of(bubble_look_now(), &config::element_opacity::avatars)) / 100.0f);
+      face.fState.setAlpha(static_cast<float>(element_opacity_of(looks_->bubbles, &config::element_opacity::avatars)) / 100.0f);
     if (((group && !outgoing) || as_lines) && first_of_run && !said.service) {
       // Their role, as the chat's protocol says it (Matrix: its power levels).
       body.parts.name.emplace(*colours_, sender_name(in, said.sender), avatar_colour(said.sender),
@@ -742,10 +744,10 @@ struct message_bubble : nodes::Stack {
       fStack.justify = nodes::justify::middle{};
       face.setVisible(false);
       body.apply({.cornerRadius = 12.0f,
-                  .background = at_opacity(colours_->tile, element_opacity_of(bubble_look_now(), &config::element_opacity::service))});
+                  .background = at_opacity(colours_->tile, element_opacity_of(looks_->bubbles, &config::element_opacity::service))});
       // Frosted as its own blur says.
-      if (frosts(bubble_look_now()))
-        body.frosted(element_blur_of(bubble_look_now(), &config::element_blur::service));
+      if (frosts(looks_->bubbles))
+        body.frosted(element_blur_of(looks_->bubbles, &config::element_blur::service));
       // Not shown where the chat's settings say so: kept, and out of the
       // flow, taking no room.
       events_shown = show_events;
@@ -837,7 +839,7 @@ struct message_bubble : nodes::Stack {
     if (!said.album.empty())
       body.parts.album.emplace(*colours_, said.album);
     // Pictures at the chat's look's opacity for them.
-    if (const float images = static_cast<float>(element_opacity_of(bubble_look_now(), &config::element_opacity::images)) / 100.0f;
+    if (const float images = static_cast<float>(element_opacity_of(looks_->bubbles, &config::element_opacity::images)) / 100.0f;
         images < 1.0f) {
       if (body.parts.picture)
         body.parts.picture->apply({.alpha = images});
@@ -987,7 +989,7 @@ struct message_bubble : nodes::Stack {
       body.parts.reactions.emplace();
       for (const auto& [key, who] : said.reactions)
         if (!who.empty())
-          body.parts.reactions->chips().emplace_back(*colours_, key, who.size(), who.contains(said.in.account.address), [&] {
+          body.parts.reactions->chips().emplace_back(*colours_, looks_->bubbles, key, who.size(), who.contains(said.in.account.address), [&] {
             std::vector<std::pair<std::string, std::string>> people;
             for (const std::string& one : who)
               people.emplace_back(one, sender_name(in, one));

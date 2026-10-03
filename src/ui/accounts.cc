@@ -344,7 +344,7 @@ struct account_chats : nodes::Stack {
     choice_menu<pick_home> home;
     spaces_choices<Actions> places;
   } parts;
-  account_chats(Actions* a, std::optional<bool> events_all, const std::optional<config::room_event_kinds>& kinds,
+  account_chats(Actions* a, const looks_shown& looks, std::optional<bool> events_all, const std::optional<config::room_event_kinds>& kinds,
                 std::optional<bool> faces_on, std::optional<std::int64_t> jump_most, std::optional<bool> previews_on,
                 std::optional<bool> home_hides, std::optional<bool> home_direct, const config::accent_t& colour,
                 bool strip_on, const config::theme_t& theme, std::optional<bool> direct_on = std::nullopt)
@@ -355,7 +355,7 @@ struct account_chats : nodes::Stack {
               .previews = previews_choice<Actions>(a, choice_level::account{}, previews_on),
               .previews_direct = previews_direct_choice<Actions>(a, choice_level::account{}, direct_on),
               .jump_search = jump_search_choice<Actions>(a, choice_level::account{}, jump_most),
-              .looks = look_choices<Actions>(a, choice_level::account{}),
+              .looks = look_choices<Actions>(a, looks, choice_level::account{}),
               .home = choice_menu<pick_home>("Home",
                                              {"As above", "Every chat", "Without chats spaces hold",
                                               "Without those and direct messages"},
@@ -628,7 +628,7 @@ struct accounts_panel : closes_on_escape<Actions> {
                                            config::link_previews_of(one));
             },
             [&](account_page::chats) {
-              detail.template emplace<5>(this->actions, config::room_events_of(one), config::room_event_kinds_of(one),
+              detail.template emplace<5>(this->actions, *needs_.looks, config::room_events_of(one), config::room_event_kinds_of(one),
                                            config::show_receipts_of(one), config::jump_search_of(one),
                                            config::link_previews_of(one), config::home_hides_of(one),
                                            config::home_direct_of(one), config::colour_of(one), config::strip_of(one), theme,

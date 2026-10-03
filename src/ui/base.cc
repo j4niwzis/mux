@@ -69,11 +69,6 @@ inline skia::SkColor chat_colour = skia::colorSetARGB(255, 14, 22, 33);
 // The chat's wallpaper, as Telegram's are: a gradient from the top down to
 // chat_colour at the bottom.
 inline skia::SkColor chat_top_colour = skia::colorSetARGB(255, 22, 38, 58);
-// How the bubbles of the chat shown look: set before its bubbles are made.
-inline config::bubble_look& bubble_look_now() {
-  static config::bubble_look now;
-  return now;
-}
 // An element's opacity in a look, in percent: its own, else the bubbles'
 // -- all of it where they are solid.
 [[nodiscard]] inline int element_opacity_of(const config::bubble_look& look, std::optional<int> config::element_opacity::* which) {
@@ -144,11 +139,6 @@ inline void set_docked_panel_height(float high) {
   if (docked_panel_watcher() != 0)
     scene::work::mark(docked_panel_watcher());
 }
-// Every chat's bubbles, as chosen for the client.
-inline config::bubble_look& bubble_look_everywhere() {
-  static config::bubble_look look;
-  return look;
-}
 // The items of the space bars of the account shown, and where each is: for
 // the settings to list them. Said by the chat list as it shows them.
 struct space_item_shown {
@@ -181,22 +171,23 @@ struct looks_held {
   std::optional<config::bubble_look> bubbles;
   std::optional<config::bubble_look> panels;
 };
-inline looks_held& looks_at(const choice_level_t& level) {
-  static looks_held everywhere, account, chat;
-  return splice::visit(splice::overloaded{[](choice_level::everywhere) -> looks_held& { return everywhere; },
-                                          [](choice_level::account) -> looks_held& { return account; },
-                                          [](choice_level::chat) -> looks_held& { return chat; }},
-                       level);
-}
-// And the panels': every chat's, and the chosen chat's.
-inline config::bubble_look& panel_look_everywhere() {
-  static config::bubble_look look;
-  return look;
-}
-inline config::bubble_look& panel_look_now() {
-  static config::bubble_look look;
-  return look;
-}
+// The looks the window shows, as the program holds them: handed down with
+// the colours (ui_needs).
+struct looks_shown {
+  // How the bubbles of the chat shown look -- set before its bubbles are
+  // made -- and the panels; and every chat's of each.
+  config::bubble_look bubbles, panels;
+  config::bubble_look bubbles_everywhere, panels_everywhere;
+  // What each level holds.
+  looks_held everywhere, account, chat;
+  template <class Self>
+  [[nodiscard]] auto& at(this Self& self, const choice_level_t& level) {
+    return splice::visit(splice::overloaded{[&](choice_level::everywhere) -> auto& { return self.everywhere; },
+                                            [&](choice_level::account) -> auto& { return self.account; },
+                                            [&](choice_level::chat) -> auto& { return self.chat; }},
+                         level);
+  }
+};
 // The panels' opacity going from one chat's to another's: eased, the look
 // otherwise as it is.
 struct panel_ease_t {
@@ -278,6 +269,8 @@ struct ui_needs {
   const palette* colours = nullptr;
   // The emoji and stickers kept: the program's.
   emoji_kept* emoji = nullptr;
+  // The looks shown: the program's.
+  looks_shown* looks = nullptr;
 };
 // A dialog as what it shows wants it: which of the palette's colours its
 // sheet is; its size -- fixed, as wide as fits what it shows up to a

@@ -29,6 +29,8 @@ struct services {
   mux::model* model = nullptr;
   // The emoji and stickers kept, as the window's panels show them.
   mux::ui::emoji_kept emoji;
+  // The looks the window shows.
+  mux::ui::looks_shown looks;
   network* net = nullptr;
   message_store* store = nullptr;
   mailbox_type* box = nullptr;

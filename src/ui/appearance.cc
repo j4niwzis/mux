@@ -178,14 +178,14 @@ struct appearance_page : nodes::Stack {
   } parts;
 
   appearance_page(const ui_needs<Actions>& n, const config::theme_t& theme, const config::accent_t& accent)
-      : appearance_page(*n.colours, n.actions, theme, accent) {}
-  appearance_page(const palette& colours, Actions* a, const config::theme_t& theme, const config::accent_t& accent)
+      : appearance_page(*n.colours, *n.looks, n.actions, theme, accent) {}
+  appearance_page(const palette& colours, const looks_shown& looks, Actions* a, const config::theme_t& theme, const config::accent_t& accent)
       : parts{.header = header_t(colours, "Appearance", {a}, {a}, true, true),
               .theme_title = section_title(colours, "THEME"),
               .cards = cards_row(colours, a),
               .accent_title = section_title(colours, "ACCENT"),
               .circles = circles_row({a}, theme, true),
-              .looks = look_choices<Actions>(a, choice_level::everywhere{}),
+              .looks = look_choices<Actions>(a, looks, choice_level::everywhere{}),
               .spaces_title = section_title(colours, "SPACES"),
               .spaces = switch_row<ask<Actions, &Actions::flip_spaces>>(colours, "Space bars", {a}),
               .top_bar = switch_row<ask<Actions, &Actions::flip_top_bar>>(colours, "The bar after \"mux\"", {a}),

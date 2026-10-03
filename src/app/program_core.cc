@@ -378,8 +378,8 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
   shared.emoji.favourite_stickers = this->favourite_stickers;
   if (saved.last_account)
     this->root().main().wanted = mux::account_id{mux::ui::protocol_of(*saved.last_account), *saved.last_account};
-  mux::ui::bubble_look_everywhere() = this->bubbles.value_or(mux::config::bubble_look{});
-  mux::ui::panel_look_everywhere() = this->panels.value_or(mux::config::bubble_look{});
+  shared.looks.bubbles_everywhere = this->bubbles.value_or(mux::config::bubble_look{});
+  shared.looks.panels_everywhere = this->panels.value_or(mux::config::bubble_look{});
   this->wallpaper_behind = mux::ui::window_look().behind;
   mux::ui::window_look().live_blur = saved.live_blur.value_or(false);
   this->live_blur = mux::ui::window_look().live_blur;

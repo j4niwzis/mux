@@ -87,9 +87,9 @@ void app::show_looks_now() {
   root().main().bubbles = root().main().chosen ? this->bubbles_of(*root().main().chosen) : mux::config::bubble_look{};
   // The panels' look, as the chosen chat's levels say, else every chat's:
   // the whole window repainted where it changes -- nothing made again.
-  mux::ui::panel_look_now() = root().main().chosen ? this->panels_of(*root().main().chosen)
+  shared.looks.panels = root().main().chosen ? this->panels_of(*root().main().chosen)
                                                    : panels.value_or(mux::config::bubble_look{});
-  if (mux::ui::show_panels(mux::ui::panel_look_now())) {
+  if (mux::ui::show_panels(shared.looks.panels)) {
     root().markDamaged();
     skiff::scene::work::mark(root().main().fState.fId);  // an ease ticked by the screen
   }
@@ -123,7 +123,7 @@ void app::show_space_bars() {
 // account's.
 void app::show_levels() {
   {
-    mux::ui::looks_at(mux::choice_level::everywhere{}) = {wallpaper, bubbles, panels};
+    shared.looks.at(mux::choice_level::everywhere{}) = {wallpaper, bubbles, panels};
     mux::ui::looks_held account_held, chat_held;
     if (const auto& chosen = root().main().chosen) {
       if (const auto own = wallpaper_in.find(*chosen); own != wallpaper_in.end())
@@ -141,8 +141,8 @@ void app::show_levels() {
           account_held.panels = mux::config::bubble_look_of(*word);
       }
     }
-    mux::ui::looks_at(mux::choice_level::account{}) = std::move(account_held);
-    mux::ui::looks_at(mux::choice_level::chat{}) = std::move(chat_held);
+    shared.looks.at(mux::choice_level::account{}) = std::move(account_held);
+    shared.looks.at(mux::choice_level::chat{}) = std::move(chat_held);
   }
   // And of room events, for their lists to show what is in effect.
   {

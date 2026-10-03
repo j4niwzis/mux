@@ -46,6 +46,7 @@ import mux.app.history;
 import mux.app.verification;
 import mux.app.proxies;
 import mux.app.packs;
+import mux.app.rooms;
 import mux.logic.links;
 
 export namespace mux::app {
@@ -78,6 +79,7 @@ struct app : kept_settings {
   verification_part verification{shared};
   proxies_part proxying{shared, *this};
   packs_part packs{shared};
+  rooms_part rooms{shared};
   // Work off the UI's thread: decoding pictures, reading the disk.
   workers work;
   // Files chosen in the dialog, or dropped on the window: to the outbox.
@@ -120,11 +122,12 @@ struct app : kept_settings {
   }
   template <class Request>
   void route(const Request& one) {
-    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> || takes<marks_part, Request> || takes<history_part, Request> || takes<verification_part, Request> || takes<proxies_part, Request> || takes<packs_part, Request> ||
+    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> || takes<marks_part, Request> || takes<history_part, Request> || takes<verification_part, Request> || takes<proxies_part, Request> || takes<packs_part, Request> || takes<rooms_part, Request> ||
                       takes<app, Request>, "a request no part of the program takes");
     if (!offer(search, one) && !offer(pictures, one) && !offer(reading, one) && !offer(outbox, one) &&
         !offer(settings, one) && !offer(menu, one) && !offer(notices, one) && !offer(marks, one) && !offer(paging, one) &&
-        !offer(verification, one) && !offer(proxying, one) && !offer(packs, one))
+        !offer(verification, one) && !offer(proxying, one) && !offer(packs, one) &&
+        !offer(rooms, one))
       offer(*this, one);
   }
 
@@ -279,7 +282,6 @@ struct app : kept_settings {
   // A link followed, as where it leads says: a chat opened -- and a message
   // in it jumped to -- a person's page, a word said, or a room joined, and
   // opened when it comes.
-  std::optional<mux::logic::link_t> joining;
   // A room not joined, looked up from a link: its card up, until it is
   // joined from there or closed.
   struct room_looked_up {
@@ -307,12 +309,6 @@ struct app : kept_settings {
   // The person whose card is open, in which chat: shown again as what is
   // known of their keys comes.
   std::optional<std::pair<mux::conversation_id, std::string>> person_open_;
-  void apply(const request::open_explore&);
-  void apply(const request::close_explore&);
-  void apply(const request::search_rooms& one);
-  void apply(const request::explore_space& one);
-  void apply(const request::join_directory_room& one);
-  void apply(const request::create_room& one);
   // The Matrix account rooms are found and made by: the one in view, else
   // the first.
   void apply(const request::flip_account_notify&);
@@ -363,10 +359,6 @@ struct app : kept_settings {
   void apply(const request::insert_emoji& one);
   void apply(const request::open_manage&);
   void apply(const request::close_dialog&);
-  void apply(const request::open_new_chat&);
-  void apply(const request::find_people& one);
-  void apply(const request::search_elsewhere& one);
-  void apply(const request::open_new_room&);
   void apply(const request::open_wallpaper& one);
   void apply(const request::close_wallpaper&);
   void apply(const request::set_wallpaper& one);
@@ -378,11 +370,7 @@ struct app : kept_settings {
   void apply(const request::open_thread& one);
   void apply(const request::close_thread&);
   void apply(const request::send_in_thread& one);
-  void apply(const request::close_new_room&);
   void apply(const request::copy_text& one);
-  void apply(const request::close_new_chat&);
-  void apply(const request::start_direct& one);
-  void apply(const request::start_group& one);
   void apply(const request::flip_account_room_events&);
   void apply(const request::set_receipts_shown&);
   void apply(const request::set_link_previews&);

@@ -146,7 +146,7 @@ void app::apply(const request::join_room_card&) {
   if (!previewing)
     return;
   const auto looked = *std::exchange(previewing, std::nullopt);
-  joining = looked.link;
+  shared.joining = looked.link;
   net->join(looked.step.by, looked.step.room, looked.step.via);
   root().close_room_card();
 }

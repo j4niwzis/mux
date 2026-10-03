@@ -79,43 +79,6 @@ void app::open_emoji_at(float right, float top) {
 }
 void app::apply(const request::close_emoji&) { root().close_emoji(); }
 
-// A new chat: its box; a direct chat or a group asked of the account whose
-// chats are listed -- or, for a direct chat with someone it already has
-// one with, that chat shown.
-// Element's Start chat: those one has direct chats with to begin with, and
-// one's own link to send.
-void app::apply(const request::open_new_chat&) {
-  const auto& current = root().main().current;
-  std::vector<mux::found_person> known;
-  std::string link;
-  if (current) {
-    if (const auto found = model->accounts().find(*current); found != model->accounts().end())
-      for (const auto& [key, chat] : found->second.conversations)
-        if (!mux::ui::is_group(chat))
-          known.push_back({.id = mux::ui::contact_of(chat), .name = mux::ui::display_name(chat), .avatar = chat.avatar});
-    link = mux::proto::share_link(mux::ui::protocol_state_of(*current), current->address).value_or(std::string());
-  }
-  std::ranges::sort(known, {}, &mux::found_person::name);
-  root().open_new_chat(std::move(known), std::move(link));
-}
-void app::apply(const request::find_people& one) {
-  const auto by = shared.account_offering(mux::proto::feature::people_directory{});
-  if (!by || shared.demo())
-    return;
-  net->search_people(*by, one.query);
-}
-void app::apply(const request::search_elsewhere& one) {
-  const auto by = shared.account_offering(mux::proto::feature::people_directory{});
-  if (!by || shared.demo())
-    return;
-  net->search_directory(*by, std::string(), one.query);
-  net->search_people(*by, one.query);
-}
-void app::apply(const request::open_new_room&) {
-  const auto by = shared.account_offering(mux::proto::feature::room_creation{});
-  root().open_new_room(by ? by->address.substr(by->address.find(':') + 1) : std::string());
-}
-void app::apply(const request::close_new_room&) { root().close_new_room(); }
 
 // A chat's background, at a level: every chat's, the chosen account's (on
 // its page), or the chat's own -- as the level over it says, the theme's,
@@ -297,94 +260,7 @@ void app::apply(const request::copy_text& one) {
   skiff::scene::setClipboardText(one.text);
   root().close_text_menu();
 }
-void app::apply(const request::close_new_chat&) { root().close_new_chat(); }
-void app::apply(const request::start_direct& one) {
-  const auto& current = root().main().current;
-  if (!current || shared.demo())
-    return;
-  root().close_new_chat();
-  for (const auto& [key, chat] : model->accounts().at(*current).conversations)
-    if (!mux::ui::is_group(chat) && mux::ui::contact_of(chat) == one.user) {
-      this->open_chat(chat.id, std::nullopt);
-      return;
-    }
-  net->create_direct(*current, one.user);
-  root().show_message("New chat", "Starting a chat with " + one.user + "…");
-}
 
-// Explore rooms: opened on the account's own server.
-void app::apply(const request::open_explore&) {
-  const auto by = shared.account_offering(mux::proto::feature::room_directory{});
-  const std::string own = by ? by->address.substr(by->address.find(':') + 1) : std::string();
-  root().open_explore(own);
-  // What the server lists, at once, as Cinny opens its explorer: its
-  // directory with nothing searched.
-  if (by && !shared.demo()) {
-    root().explore_loading();
-    net->search_directory(*by, own, std::string());
-  }
-}
-void app::apply(const request::close_explore&) { root().close_explore(); }
-// A space's rooms and spaces, in Explore: asked of its account.
-void app::apply(const request::explore_space& one) {
-  (void)root().main().close_space_menu();
-  const auto by = root().main().current;
-  if (!by || shared.demo())
-    return;
-  root().open_explore(by->address.substr(by->address.find(':') + 1));
-  // Said as the space's: its name and picture over what it holds.
-  std::string name = one.name;
-  if (const auto& chats = model->accounts().at(*by).conversations; chats.contains(one.room))
-    name = mux::ui::display_name(chats.at(one.room));
-  root().explore_as_space(one.room, name.empty() ? one.room : name);
-  root().explore_loading();
-  net->explore_space(*by, one.room);
-}
-// A search: an address typed in is gone to, as a link to it would be --
-// its card, or the room where joined; else the directory asked.
-void app::apply(const request::search_rooms& one) {
-  if (auto link = mux::logic::link_of_id(one.query)) {
-    root().close_explore();
-    this->follow(*link);
-    return;
-  }
-  const auto by = shared.account_offering(mux::proto::feature::room_directory{});
-  if (!by || shared.demo())
-    return;
-  net->search_directory(*by, one.server, one.query);
-}
-// A room of the directory joined, through the server it was listed by, and
-// opened when it comes.
-void app::apply(const request::join_directory_room& one) {
-  const auto by = shared.account_offering(mux::proto::feature::room_directory{});
-  if (!by || shared.demo())
-    return;
-  std::vector<std::string> via;
-  if (!one.server.empty())
-    via.push_back(one.server);
-  joining = mux::logic::link_of_id(one.room);
-  net->join(*by, one.room, via);
-  root().close_explore();
-}
-// A room made, and opened once the model has it.
-void app::apply(const request::create_room& one) {
-  const auto by = shared.account_offering(mux::proto::feature::room_creation{});
-  if (!by || shared.demo())
-    return;
-  root().close_new_room();
-  // Its alias's local part, as the protocol has it (#name:server, name).
-  const std::string alias = mux::proto::local_part_of(mux::ui::protocol_state_of(*by), one.alias);
-  net->create_room(*by, one.name, one.topic, one.open, one.open ? alias : std::string(), one.federate, one.encrypted);
-  root().show_message("New room", "Making " + one.name + "\u2026");
-}
-void app::apply(const request::start_group& one) {
-  const auto& current = root().main().current;
-  if (!current || shared.demo())
-    return;
-  root().close_new_chat();
-  net->create_group(*current, one.name);
-  root().show_message("New group", "Making " + one.name + "…");
-}
 
 // The room's management: made from what the model knows of it now.
 void app::apply(const request::open_manage&) {

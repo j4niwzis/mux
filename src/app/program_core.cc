@@ -177,9 +177,9 @@ void app::woken() {
   if (made_room_ && model->find(*made_room_))
     this->open_chat(*std::exchange(made_room_, std::nullopt), std::nullopt);
   // A room joined from a link: opened once it is here.
-  if (joining)
-    if (const auto found = mux::logic::chat_of(*model, *joining)) {
-      const auto link = *std::exchange(joining, std::nullopt);
+  if (shared.joining)
+    if (const auto found = mux::logic::chat_of(*model, *shared.joining)) {
+      const auto link = *std::exchange(shared.joining, std::nullopt);
       // A message in it, where the link is to one.
       const auto event = splice::visit(
           splice::overloaded{[](const mux::logic::mention::place& one) { return one.event; },
@@ -291,8 +291,12 @@ void app::before_frame() {
   // asked for.
   if (auto asked = std::exchange(skiff::nodes::textMenusAsked(), {}); !asked.empty() && !root().context_menu_up())
     root().show_text_menu(std::move(asked.back().text), std::move(asked.back().link));
-  // What the parts left to do: the window made again, brought up to date;
-  // the emoji picked lately kept.
+  // What the parts left to do: a chat opened, a link followed; the window
+  // made again, brought up to date; the emoji picked lately kept.
+  if (auto chat = std::exchange(shared.chat_due, std::nullopt))
+    this->open_chat(*chat, std::nullopt);
+  if (auto link = std::exchange(shared.link_due, std::nullopt))
+    this->follow(*link);
   if (std::exchange(shared.rebuild_due, false))
     this->rebuild_in_theme();
   if (std::exchange(shared.refresh_due, false))

@@ -14,6 +14,7 @@ import mux.core;
 import mux.config;
 import mux.ui;
 import mux.protocols;
+import mux.logic.links;
 import mux.app.network;
 import mux.app.workers;
 import mux.app.store;
@@ -34,6 +35,12 @@ struct services {
   // made again, in a theme or an accent chosen.
   bool refresh_due = false;
   bool rebuild_due = false;
+  // A chat to open, a link to follow -- its card, or its room -- once a part
+  // is done; and a room joined, from a link or the directory, opened once
+  // the model has it.
+  std::optional<mux::conversation_id> chat_due;
+  std::optional<mux::logic::link_t> link_due;
+  std::optional<mux::logic::link_t> joining;
   // The settings as saved -- an account's privacy, its proxy, by its
   // address -- the program's.
   kept_settings* kept = nullptr;

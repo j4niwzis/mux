@@ -45,6 +45,7 @@ import mux.app.marks;
 import mux.app.history;
 import mux.app.verification;
 import mux.app.proxies;
+import mux.app.packs;
 import mux.logic.links;
 
 export namespace mux::app {
@@ -76,14 +77,13 @@ struct app : kept_settings {
   history_part paging{shared};
   verification_part verification{shared};
   proxies_part proxying{shared, *this};
+  packs_part packs{shared};
   // Work off the UI's thread: decoding pictures, reading the disk.
   workers work;
   // Files chosen in the dialog, or dropped on the window: to the outbox.
   void files_given(std::vector<std::string> paths, bool dropped) {
-    if (std::exchange(picking_pack_images, false) && !dropped) {
-      this->pack_files(paths);
+    if (packs.took_files(paths, dropped))
       return;
-    }
     if (picking_wallpaper && !dropped) {
       if (!paths.empty())
         this->wallpaper_file(paths.front());
@@ -120,11 +120,11 @@ struct app : kept_settings {
   }
   template <class Request>
   void route(const Request& one) {
-    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> || takes<marks_part, Request> || takes<history_part, Request> || takes<verification_part, Request> || takes<proxies_part, Request> ||
+    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> || takes<marks_part, Request> || takes<history_part, Request> || takes<verification_part, Request> || takes<proxies_part, Request> || takes<packs_part, Request> ||
                       takes<app, Request>, "a request no part of the program takes");
     if (!offer(search, one) && !offer(pictures, one) && !offer(reading, one) && !offer(outbox, one) &&
         !offer(settings, one) && !offer(menu, one) && !offer(notices, one) && !offer(marks, one) && !offer(paging, one) &&
-        !offer(verification, one) && !offer(proxying, one))
+        !offer(verification, one) && !offer(proxying, one) && !offer(packs, one))
       offer(*this, one);
   }
 
@@ -315,17 +315,6 @@ struct app : kept_settings {
   void apply(const request::create_room& one);
   // The Matrix account rooms are found and made by: the one in view, else
   // the first.
-  // An account whose protocol offers what is asked: the one in view where
-  // it does, else the first.
-  template <class Feature>
-  [[nodiscard]] std::optional<mux::account_id> account_offering(Feature wanted) {
-    if (const auto& current = root().main().current; current && mux::proto::offers(mux::ui::protocol_state_of(*current), wanted))
-      return current;
-    for (const auto& [id, account] : model->accounts())
-      if (mux::proto::offers(mux::ui::protocol_state_of(id), wanted))
-        return id;
-    return std::nullopt;
-  }
   void apply(const request::flip_account_notify&);
   void apply(const request::flip_account_notify_sound&);
   void apply(const request::set_chat_notify& one);
@@ -357,12 +346,6 @@ struct app : kept_settings {
   void apply(const request::flip_home_hide& one);
   void apply(const request::close_forum&);
   void apply(const request::manage_forum&);
-  // The chat Manage is for: a space, where its settings are open -- what is
-  // chosen there goes to it -- else the chat chosen.
-  std::optional<mux::conversation_id> manage_target;
-  [[nodiscard]] std::optional<mux::conversation_id> managed() {
-    return manage_target && root().manage_up() ? manage_target : root().main().chosen;
-  }
   void manage_chat(const mux::conversation_id& id);
   void apply(const request::place_spaces& one);
   void apply(const request::set_space_bars& one);
@@ -395,17 +378,6 @@ struct app : kept_settings {
   void apply(const request::open_thread& one);
   void apply(const request::close_thread&);
   void apply(const request::send_in_thread& one);
-  void apply(const request::open_packs&);
-  void apply(const request::open_room_packs&);
-  void apply(const request::close_packs&);
-  void apply(const request::save_pack& one);
-  void apply(const request::delete_pack& one);
-  void apply(const request::pick_pack_images&);
-  // The packs' dialog: the account whose packs it shows, and whether the
-  // files chosen next are its images.
-  std::optional<mux::account_id> packs_account;
-  bool picking_pack_images = false;
-  void pack_files(const std::vector<std::string>& paths);
   void apply(const request::close_new_room&);
   void apply(const request::copy_text& one);
   void apply(const request::close_new_chat&);

@@ -13,6 +13,7 @@ import skiff.scene;
 import mux.core;
 import mux.config;
 import mux.ui;
+import mux.protocols;
 import mux.app.network;
 import mux.app.workers;
 import mux.app.store;
@@ -65,6 +66,24 @@ struct services {
   }
   // The demo: no network, and nothing kept.
   [[nodiscard]] bool demo() const { return ask->demo; }
+
+  // The chat Manage is for: a space, where its settings are open -- what is
+  // chosen there goes to it -- else the chat chosen.
+  std::optional<mux::conversation_id> manage_target;
+  [[nodiscard]] std::optional<mux::conversation_id> managed() const {
+    return manage_target && root().manage_up() ? manage_target : root().main().chosen;
+  }
+  // An account whose protocol offers what is asked: the one in view where
+  // it does, else the first.
+  template <class Feature>
+  [[nodiscard]] std::optional<mux::account_id> account_offering(Feature wanted) const {
+    if (const auto& current = root().main().current; current && mux::proto::offers(mux::ui::protocol_state_of(*current), wanted))
+      return current;
+    for (const auto& [id, account] : model->accounts())
+      if (mux::proto::offers(mux::ui::protocol_state_of(id), wanted))
+        return id;
+    return std::nullopt;
+  }
 };
 
 }  // namespace mux::app

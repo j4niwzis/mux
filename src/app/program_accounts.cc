@@ -28,7 +28,7 @@ namespace mux::app {
 
 // A person's info: a box in the middle of the window, as tdesktop's.
 void app::apply(const request::open_member_info& one) {
-  const auto chosen = this->managed();
+  const auto chosen = shared.managed();
   if (!chosen)
     return;
   const mux::conversation* in = model->find(*chosen);
@@ -66,7 +66,7 @@ void app::apply(const request::toggle_thread_emoji&) {
   this->open_emoji_at(at.fRight, at.fTop);
 }
 void app::open_emoji_at(float right, float top) {
-  const auto chosen = this->managed();
+  const auto chosen = shared.managed();
   const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
   mux::ui::chat_emotes() = chat ? chat->emotes : std::vector<mux::emote>{};
   mux::ui::chat_stickers() = chat ? chat->stickers : std::vector<mux::emote>{};
@@ -99,20 +99,20 @@ void app::apply(const request::open_new_chat&) {
   root().open_new_chat(std::move(known), std::move(link));
 }
 void app::apply(const request::find_people& one) {
-  const auto by = this->account_offering(mux::proto::feature::people_directory{});
+  const auto by = shared.account_offering(mux::proto::feature::people_directory{});
   if (!by || shared.demo())
     return;
   net->search_people(*by, one.query);
 }
 void app::apply(const request::search_elsewhere& one) {
-  const auto by = this->account_offering(mux::proto::feature::people_directory{});
+  const auto by = shared.account_offering(mux::proto::feature::people_directory{});
   if (!by || shared.demo())
     return;
   net->search_directory(*by, std::string(), one.query);
   net->search_people(*by, one.query);
 }
 void app::apply(const request::open_new_room&) {
-  const auto by = this->account_offering(mux::proto::feature::room_creation{});
+  const auto by = shared.account_offering(mux::proto::feature::room_creation{});
   root().open_new_room(by ? by->address.substr(by->address.find(':') + 1) : std::string());
 }
 void app::apply(const request::close_new_room&) { root().close_new_room(); }
@@ -132,7 +132,7 @@ void app::apply(const request::set_wallpaper& one) {
                                        });
                                      },
                                      [&](mux::choice_level::chat) {
-                                       const auto chosen_chat = this->managed();
+                                       const auto chosen_chat = shared.managed();
                                        if (!chosen_chat)
                                          return;
                                        if (chosen)
@@ -188,7 +188,7 @@ void app::apply(const request::set_bubbles& one) {
                                      });
                                    },
                                    [&](mux::choice_level::chat) {
-                                     const auto chosen = this->managed();
+                                     const auto chosen = shared.managed();
                                      if (!chosen)
                                        return;
                                      if (one.look)
@@ -235,7 +235,7 @@ void app::wallpaper_file(const std::string& path) {
                                    },
                                    [&](mux::choice_level::chat) {
                                      // The chat Manage is for: a space, where its settings are open.
-                                     if (const auto chat = this->managed())
+                                     if (const auto chat = shared.managed())
                                        wallpaper_in.insert_or_assign(*chat, chosen);
                                    }},
                 level);
@@ -283,7 +283,7 @@ void app::apply(const request::close_thread&) {
   this->refresh();
 }
 void app::apply(const request::send_in_thread& one) {
-  const auto chosen = this->managed();
+  const auto chosen = shared.managed();
   const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
   if (!chat || shared.demo())
     return;
@@ -293,66 +293,6 @@ void app::apply(const request::send_in_thread& one) {
   net->send_in_thread(*chosen, one.text, one.root, latest, one.reply_to);
 }
 
-// Emojis & Stickers, as Cinny has them: one's own pack, from Settings; the
-// room's, from its settings -- editable where one's power there is what the
-// room's state asks.
-void app::apply(const request::open_packs&) {
-  packs_account = this->account_offering(mux::proto::feature::sticker_packs{});
-  root().open_packs(std::nullopt, true);
-  if (packs_account && !shared.demo())
-    net->list_packs(*packs_account, std::nullopt);
-}
-void app::apply(const request::open_room_packs&) {
-  const auto chosen = this->managed();
-  const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
-  if (!chat || !mux::proto::offers(mux::ui::protocol_state_of(chat->id.account), mux::proto::feature::sticker_packs{}))
-    return;
-  packs_account = chat->id.account;
-  // Whether its packs may be changed, as its protocol says.
-  root().open_packs(chat->id.id, mux::proto::chat_rights(mux::ui::protocol_state_of(chat->id.account), *chat).edit_packs);
-  if (!shared.demo())
-    net->list_packs(*packs_account, chat->id.id);
-}
-void app::apply(const request::close_packs&) {
-  root().close_packs();
-  mux::ui::pack_pictures_shown().clear();
-}
-void app::apply(const request::save_pack& one) {
-  if (packs_account && !shared.demo())
-    net->save_pack(*packs_account, one.pack);
-}
-void app::apply(const request::delete_pack& one) {
-  if (packs_account && !shared.demo())
-    net->delete_pack(*packs_account, one.pack);
-}
-void app::apply(const request::pick_pack_images&) {
-  picking_pack_images = true;
-  system_dialogs.choose_files();
-}
-// Images chosen for the pack open: each a picture, uploaded -- its name
-// its shortcode to begin with, its size and type said in the pack.
-void app::pack_files(const std::vector<std::string>& paths) {
-  if (!packs_account || shared.demo())
-    return;
-  for (const std::string& path : paths) {
-    std::ifstream in(path, std::ios::binary);
-    if (!in)
-      continue;
-    std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    const auto type = mux::media::picture_of(bytes);
-    if (!type)
-      continue;
-    mux::pack_picture one{.shortcode = std::filesystem::path(path).stem().string(),
-                          .body = std::filesystem::path(path).filename().string(),
-                          .mimetype = std::string(splice::visit([](auto kind) { return mux::media::mimetype_of(kind); }, *type)),
-                          .size = static_cast<std::int64_t>(bytes.size())};
-    if (auto image = skia::decodeImage(bytes.data(), bytes.size())) {
-      one.width = image->width();
-      one.height = image->height();
-    }
-    net->upload_pack_picture(*packs_account, std::move(one), std::move(bytes));
-  }
-}
 void app::apply(const request::copy_text& one) {
   skiff::scene::setClipboardText(one.text);
   root().close_text_menu();
@@ -374,7 +314,7 @@ void app::apply(const request::start_direct& one) {
 
 // Explore rooms: opened on the account's own server.
 void app::apply(const request::open_explore&) {
-  const auto by = this->account_offering(mux::proto::feature::room_directory{});
+  const auto by = shared.account_offering(mux::proto::feature::room_directory{});
   const std::string own = by ? by->address.substr(by->address.find(':') + 1) : std::string();
   root().open_explore(own);
   // What the server lists, at once, as Cinny opens its explorer: its
@@ -408,7 +348,7 @@ void app::apply(const request::search_rooms& one) {
     this->follow(*link);
     return;
   }
-  const auto by = this->account_offering(mux::proto::feature::room_directory{});
+  const auto by = shared.account_offering(mux::proto::feature::room_directory{});
   if (!by || shared.demo())
     return;
   net->search_directory(*by, one.server, one.query);
@@ -416,7 +356,7 @@ void app::apply(const request::search_rooms& one) {
 // A room of the directory joined, through the server it was listed by, and
 // opened when it comes.
 void app::apply(const request::join_directory_room& one) {
-  const auto by = this->account_offering(mux::proto::feature::room_directory{});
+  const auto by = shared.account_offering(mux::proto::feature::room_directory{});
   if (!by || shared.demo())
     return;
   std::vector<std::string> via;
@@ -428,7 +368,7 @@ void app::apply(const request::join_directory_room& one) {
 }
 // A room made, and opened once the model has it.
 void app::apply(const request::create_room& one) {
-  const auto by = this->account_offering(mux::proto::feature::room_creation{});
+  const auto by = shared.account_offering(mux::proto::feature::room_creation{});
   if (!by || shared.demo())
     return;
   root().close_new_room();
@@ -449,7 +389,7 @@ void app::apply(const request::start_group& one) {
 // The room's management: made from what the model knows of it now.
 void app::apply(const request::open_manage&) {
   (void)root().main().close_space_menu();  // the chat menu its Settings came from
-  manage_target.reset();
+  shared.manage_target.reset();
   if (const auto chosen = root().main().chosen)
     this->manage_chat(*chosen);
 }
@@ -459,8 +399,8 @@ void app::apply(const request::manage_space& one) {
   const auto by = root().main().current;
   if (!by)
     return;
-  manage_target = mux::conversation_id{*by, one.room};
-  this->manage_chat(*manage_target);
+  shared.manage_target = mux::conversation_id{*by, one.room};
+  this->manage_chat(*shared.manage_target);
 }
 // A space shown as one chat, its rooms as topics -- or as a space. Not one
 // that holds spaces: it is a space.
@@ -551,14 +491,14 @@ void app::manage_chat(const mux::conversation_id& id) {
   root().open_manage(facts);
 }
 void app::apply(const request::close_manage&) {
-  manage_target.reset();
+  shared.manage_target.reset();
   root().close_manage();
 }
 // The developer tools, for the chat being read.
 void app::apply(const request::close_dialog&) { root().close_dialog(); }
 // Done to the room being read, by its account.
 void app::apply(const request::room_act& one) {
-  const auto chosen = this->managed();
+  const auto chosen = shared.managed();
   if (!chosen || shared.demo())
     return;
   net->manage(*chosen, one.action);
@@ -768,7 +708,7 @@ void app::apply(const request::flip_account_notify_sound&) {
   });
 }
 void app::apply(const request::set_chat_notify& one) {
-  const auto chosen = this->managed();
+  const auto chosen = shared.managed();
   if (!chosen)
     return;
   notify_modes.erase(*chosen);
@@ -804,7 +744,7 @@ void app::apply(const request::set_room_event_kind& one) {
                                });
                              },
                              [&](mux::choice_level::chat) {
-                               const auto chosen = this->managed();
+                               const auto chosen = shared.managed();
                                if (!chosen)
                                  return;
                                if (one.kind)
@@ -900,7 +840,7 @@ void app::apply(const request::set_room_events& one) {
                                      });
                                    },
                                    [&](mux::choice_level::chat) {
-                                     const auto chosen = this->managed();
+                                     const auto chosen = shared.managed();
                                      if (!chosen)
                                        return;
                                      if (one.all)
@@ -926,7 +866,7 @@ void app::apply(const request::set_jump_search& one) {
                                });
                              },
                              [&](mux::choice_level::chat) {
-                               const auto chosen = this->managed();
+                               const auto chosen = shared.managed();
                                if (!chosen)
                                  return;
                                if (one.most)
@@ -948,7 +888,7 @@ void app::apply(const request::set_link_previews& one) {
                                });
                              },
                              [&](mux::choice_level::chat) {
-                               const auto chosen = this->managed();
+                               const auto chosen = shared.managed();
                                if (!chosen)
                                  return;
                                if (one.show)
@@ -970,7 +910,7 @@ void app::apply(const request::set_previews_direct& one) {
                                      });
                                    },
                                    [&](mux::choice_level::chat) {
-                                     const auto chosen = this->managed();
+                                     const auto chosen = shared.managed();
                                      if (!chosen)
                                        return;
                                      if (one.direct)
@@ -992,7 +932,7 @@ void app::apply(const request::set_typing_sent& one) {
                                      });
                                    },
                                    [&](mux::choice_level::chat) {
-                                     const auto chosen = this->managed();
+                                     const auto chosen = shared.managed();
                                      if (!chosen)
                                        return;
                                      if (one.send)
@@ -1014,7 +954,7 @@ void app::apply(const request::set_receipts_shown& one) {
                                });
                              },
                              [&](mux::choice_level::chat) {
-                               const auto chosen = this->managed();
+                               const auto chosen = shared.managed();
                                if (!chosen)
                                  return;
                                if (one.show)
@@ -1040,7 +980,7 @@ void app::apply(const request::flip_account_room_events&) {
 }
 // Room events, for the chat being read, whatever its account's are.
 void app::apply(const request::flip_chat_room_events&) {
-  const auto chosen = this->managed();
+  const auto chosen = shared.managed();
   if (!chosen)
     return;
   const bool now = this->room_events_shown(*chosen);

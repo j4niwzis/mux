@@ -229,7 +229,7 @@ void program_asked(App& app, const rename_session& one) {
 // A room changed as Matrix changes one: the room being managed, by its account.
 template <class App>
 void program_asked(App& app, const change_room& one) {
-  const auto chosen = app.managed();
+  const auto chosen = app.shared.managed();
   if (!chosen || app.shared.demo())
     return;
   app.net->on_account_of(*chosen, [room = chosen->id, change = one.change](auto& account)
@@ -238,7 +238,7 @@ void program_asked(App& app, const change_room& one) {
 // The developer tools: for the room being managed, by its account.
 template <class App>
 void program_asked(App& app, const explore_state&) {
-  const auto chosen = app.managed();
+  const auto chosen = app.shared.managed();
   if (!chosen || app.shared.demo())
     return;
   app.root().close_manage();
@@ -252,7 +252,7 @@ void program_asked(App& app, const open_send_custom&) {
 }
 template <class App>
 void program_asked(App& app, const send_custom& one) {
-  const auto chosen = app.managed();
+  const auto chosen = app.shared.managed();
   if (!chosen || app.shared.demo())
     return;
   ops::send_custom(*app.net, *chosen, one.type, one.state_key, one.json);

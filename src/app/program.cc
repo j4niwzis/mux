@@ -50,6 +50,7 @@ import mux.app.rooms;
 import mux.app.room_card;
 import mux.app.preferences;
 import mux.app.manage;
+import mux.app.looks;
 import mux.logic.links;
 
 export namespace mux::app {
@@ -86,18 +87,15 @@ struct app : kept_settings {
   room_card_part room_card{shared};
   preferences_part preferences{shared, *this, proxying};
   manage_part manage{shared, *this};
+  looks_part looks{shared, *this};
   // Work off the UI's thread: decoding pictures, reading the disk.
   workers work;
   // Files chosen in the dialog, or dropped on the window: to the outbox.
   void files_given(std::vector<std::string> paths, bool dropped) {
     if (packs.took_files(paths, dropped))
       return;
-    if (picking_wallpaper && !dropped) {
-      if (!paths.empty())
-        this->wallpaper_file(paths.front());
-      picking_wallpaper.reset();
+    if (looks.took_files(paths, dropped))
       return;
-    }
     outbox.files_given(std::move(paths), dropped);
   }
   // Where Save As… was asked to put what it saves: to the pictures part.
@@ -128,13 +126,14 @@ struct app : kept_settings {
   }
   template <class Request>
   void route(const Request& one) {
-    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> || takes<marks_part, Request> || takes<history_part, Request> || takes<verification_part, Request> || takes<proxies_part, Request> || takes<packs_part, Request> || takes<rooms_part, Request> || takes<room_card_part, Request> || takes<preferences_part, Request> || takes<manage_part, Request> ||
+    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> || takes<marks_part, Request> || takes<history_part, Request> || takes<verification_part, Request> || takes<proxies_part, Request> || takes<packs_part, Request> || takes<rooms_part, Request> || takes<room_card_part, Request> || takes<preferences_part, Request> || takes<manage_part, Request> || takes<looks_part, Request> ||
                       takes<app, Request>, "a request no part of the program takes");
     if (!offer(search, one) && !offer(pictures, one) && !offer(reading, one) && !offer(outbox, one) &&
         !offer(settings, one) && !offer(menu, one) && !offer(notices, one) && !offer(marks, one) && !offer(paging, one) &&
         !offer(verification, one) && !offer(proxying, one) && !offer(packs, one) &&
         !offer(rooms, one) && !offer(room_card, one) &&
-        !offer(preferences, one) && !offer(manage, one))
+        !offer(preferences, one) && !offer(manage, one) &&
+        !offer(looks, one))
       offer(*this, one);
   }
 
@@ -337,13 +336,6 @@ struct app : kept_settings {
   void apply(const request::close_emoji&);
   void apply(const request::insert_emoji& one);
   void apply(const request::close_dialog&);
-  void apply(const request::open_wallpaper& one);
-  void apply(const request::close_wallpaper&);
-  void apply(const request::set_wallpaper& one);
-  void apply(const request::set_bubbles& one);
-  // A picture being chosen for a background: at which level.
-  std::optional<mux::choice_level_t> picking_wallpaper;
-  void wallpaper_file(const std::string& path);
   void apply(const request::toggle_threads&);
   void apply(const request::open_thread& one);
   void apply(const request::close_thread&);

@@ -219,6 +219,9 @@ struct person_facts {
 // their name and how they are, their ID to copy, and a message to them.
 template <class Actions>
 struct person_card : nodes::Stack {
+  // tdesktop's profile layer: 392 wide (infoDesiredWidth), as high as what
+  // it shows, a 24th of the window down within 20 and 40.
+  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{392.0f}, .place = widgets::dialog_place::near_top{}}; }
   struct message_them {
     Actions* actions = nullptr;
     conversation_id who;
@@ -347,6 +350,8 @@ struct person_card : nodes::Stack {
 // it when it comes; till then, or where it says nothing, the address alone.
 template <class Actions>
 struct room_card : nodes::Stack {
+  // The dialog it is shown in.
+  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{392.0f}, .place = widgets::dialog_place::near_top{}}; }
   struct join_it {
     Actions* actions = nullptr;
     bool knock = false;  // asked to be let in, where it lets people knock
@@ -440,6 +445,8 @@ struct reaction_entry {
 // message can reply to it.
 template <class Actions>
 struct reactions_box : nodes::Stack {
+  // On the chat's colour: its bubbles, as in the chat.
+  [[nodiscard]] static dialog_look look_of_dialog() { return {.sheet = sheet::chat{}, .size = dialog_size::fixed{392.0f, 420.0f}}; }
   using close_act = ask<Actions, &Actions::close_reactions>;
   using close_button = icon_button<close_act>;
   using top_bar = page_header<no_back, close_act>;
@@ -549,6 +556,8 @@ struct mark_entry {
 // reacted and with what on a badge at its bottom right. Pressed, gone to.
 template <class Actions>
 struct marks_box : nodes::Stack {
+  // On the chat's colour: its bubbles, as in the chat.
+  [[nodiscard]] static dialog_look look_of_dialog() { return {.sheet = sheet::chat{}, .size = dialog_size::fixed{460.0f, 520.0f}}; }
   using close_act = ask<Actions, &Actions::close_marks>;
   using close_button = icon_button<close_act>;
   using top_bar = page_header<no_back, close_act>;
@@ -623,6 +632,8 @@ struct forward_target {
 // a field to find one by its name; a press sends it there.
 template <class Actions>
 struct forward_box : nodes::Stack {
+  // The dialog it is shown in.
+  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{400.0f, 520.0f}}; }
   Actions* actions = nullptr;
   std::vector<forward_target> all;
   struct close_it {
@@ -732,6 +743,8 @@ struct found_person_row : nodes::Stack {
 // not found.
 template <class Actions>
 struct start_chat_box : nodes::Stack {
+  // The dialog it is shown in.
+  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{480.0f, 560.0f}}; }
   Actions* actions = nullptr;
   // Those one has direct chats with, and what the directory found for what
   // is typed now; one's own link.
@@ -888,6 +901,8 @@ struct start_chat_box : nodes::Stack {
 // among the advanced, whether those of other servers may ever join.
 template <class Actions>
 struct create_room_box : nodes::Stack {
+  // The dialog it is shown in.
+  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{480.0f}}; }
   Actions* actions = nullptr;
   std::string server;
   bool open_room = false;
@@ -1506,6 +1521,8 @@ struct look_choices : nodes::Stack {
 // A chat background and its looks chosen, at a level, in a dialog.
 template <class Actions>
 struct wallpaper_box : nodes::Stack {
+  // The dialog it is shown in.
+  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{380.0f}}; }
   struct close_it {
     Actions* actions;
     void operator()() const { actions->close_wallpaper(); }
@@ -1750,6 +1767,8 @@ struct threads_panel : nodes::Stack {
 // the room's state, or one's account data.
 template <class Actions>
 struct packs_box : nodes::Stack {
+  // The dialog it is shown in.
+  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{620.0f, 600.0f}}; }
   Actions* actions = nullptr;
   std::optional<std::string> room;  // the room's packs, or one's own
   bool may_edit = true;
@@ -2180,6 +2199,8 @@ struct directory_row : nodes::Stack {
 // gone to at once.
 template <class Actions>
 struct explore_box : nodes::Stack {
+  // The dialog it is shown in.
+  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{640.0f, 560.0f}}; }
   Actions* actions = nullptr;
   struct close_it {
     Actions* actions;

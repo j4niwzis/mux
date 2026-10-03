@@ -10,6 +10,7 @@ import skiff.scene;
 import skiff.nodes.box;
 import skiff.widgets.theme;
 import skiff.widgets.wallpaper;
+import skiff.widgets.motion;
 import mux.core;
 import mux.protocols;
 import mux.config;
@@ -274,6 +275,47 @@ struct ui_needs {
   // The theme's colours: the program's.
   const palette* colours = nullptr;
 };
+// A dialog as what it shows wants it: which of the palette's colours its
+// sheet is; its size -- fixed, as wide as fits what it shows up to a
+// width, or said as it is opened; where it sits; whether a click outside
+// closes it. Each dialog's content declares its own (look_of_dialog), and
+// the window's layers are walked to put them in place.
+namespace sheet {
+struct side {};
+struct chat {};
+}  // namespace sheet
+namespace dialog_size {
+struct fixed {
+  float width, height;
+};
+struct fitting {
+  float width;
+};
+struct as_opened {};
+}  // namespace dialog_size
+struct dialog_look {
+  splice::variant<sheet::side, sheet::chat> sheet = sheet::side{};
+  splice::variant<dialog_size::as_opened, dialog_size::fixed, dialog_size::fitting> size = dialog_size::as_opened{};
+  widgets::DialogPlace place = widgets::dialog_place::centred{};
+  bool dismissable = true;
+};
+[[nodiscard]] inline skia::SkColor colour_of(sheet::side, const palette& colours) { return colours.sidebar; }
+[[nodiscard]] inline skia::SkColor colour_of(sheet::chat, const palette& colours) { return colours.chat; }
+// A dialog put as its content says, in the palette's colours.
+template <class Content>
+void look_as_its_content(widgets::Dialog<Content>& dialog, const palette& colours) {
+  const dialog_look look = Content::look_of_dialog();
+  dialog.setSheetColour(splice::visit([&](auto one) { return colour_of(one, colours); }, look.sheet));
+  splice::visit(splice::overloaded{[](dialog_size::as_opened) {},
+                                   [&](dialog_size::fixed size) { dialog.setSize(size.width, size.height); },
+                                   [&](dialog_size::fitting size) { dialog.setWidthFittingContent(size.width); }},
+                look.size);
+  dialog.setPlace(look.place);
+  dialog.setDismissable(look.dismissable);
+}
+// Anything else a window holds: no dialog, nothing to put.
+inline void look_as_its_content(const auto&, const palette&) {}
+
 // Each account's protocol state, as its client last said it: what the
 // extension points are asked with. One not said yet: its protocol's default.
 inline std::map<account_id, protocol_state_t>& protocol_states() {

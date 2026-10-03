@@ -88,6 +88,8 @@ struct window : scene::Node {
   // The dialog's content, a node: the protocol's dialog in it, as the room
   // settings hold their page.
   struct tool_holder : nodes::Stack {
+    // The dialog it is shown in.
+    [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{560.0f, 560.0f}}; }
     struct parts_t {
       tool_t shown;
     } parts;
@@ -286,8 +288,7 @@ struct window : scene::Node {
         : parts{.backdrop = nodes::Box<>(n.colours->background),
                 .frame = frame_t(std::piecewise_construct, std::forward_as_tuple(n), std::forward_as_tuple(n))},
           actions_of(a) {
-      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying,
-             emoji, menu, viewer, text_menu_up] = parts;
+      auto& [backdrop, behind, frame, ...over] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
       behind.apply({.fill = true});
@@ -296,44 +297,8 @@ struct window : scene::Node {
       // see-through as the panels are.
       frame.setSheetColour(n.colours->sidebar);
       frame.base().setSheetColour(n.colours->sidebar);
-      settings.setSheetColour(n.colours->sidebar);
-      sending.setSheetColour(n.colours->sidebar);
-      passphrase.setSheetColour(n.colours->sidebar);
-      passphrase.setWidthFittingContent(420.0f);
-      verifying.setSheetColour(n.colours->sidebar);
-      verifying.setWidthFittingContent(440.0f);
-      verifying.setDismissable(false);
-      settings.setSize(440.0f, 520.0f);
-      notice.setSheetColour(n.colours->sidebar);
-      notice.setWidthFittingContent(440.0f);
-      person.setSheetColour(n.colours->sidebar);
-      // tdesktop's profile layer: 392 wide (infoDesiredWidth), as high as
-      // what it shows, a 24th of the window down within 20 and 40.
-      person.setWidthFittingContent(392.0f);
-      person.setPlace(widgets::dialog_place::near_top{});
-      room.setSheetColour(n.colours->sidebar);
-      room.setWidthFittingContent(392.0f);
-      room.setPlace(widgets::dialog_place::near_top{});
-      reactions.setSheetColour(n.colours->chat);  // its bubbles, as in the chat
-      marks.setSheetColour(n.colours->chat);
-      marks.setSize(460.0f, 520.0f);
-      reactions.setSize(392.0f, 420.0f);
-      manage.setSheetColour(n.colours->sidebar);
-      manage.setSize(860.0f, 620.0f);
-      forwarding.setSheetColour(n.colours->sidebar);
-      forwarding.setSize(400.0f, 520.0f);
-      new_chat.setSheetColour(n.colours->sidebar);
-      new_chat.setSize(480.0f, 560.0f);
-      new_room.setSheetColour(n.colours->sidebar);
-      new_room.setWidthFittingContent(480.0f);
-      packs.setSheetColour(n.colours->sidebar);
-      packs.setSize(620.0f, 600.0f);
-      wallpaper.setSheetColour(n.colours->sidebar);
-      wallpaper.setWidthFittingContent(380.0f);
-      explore.setSheetColour(n.colours->sidebar);
-      explore.setSize(640.0f, 560.0f);
-      tools.setSheetColour(n.colours->sidebar);
-      tools.setSize(560.0f, 560.0f);
+      // Each dialog as what it shows declares it.
+      (look_as_its_content(over, *n.colours), ...);
     }
   };
 

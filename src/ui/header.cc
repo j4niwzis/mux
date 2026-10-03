@@ -25,6 +25,8 @@ export namespace mux::ui {
 // Something not there yet, said in a box over the window.
 template <class Actions>
 struct notice_box : nodes::Stack {
+  // The dialog it is shown in.
+  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{440.0f}}; }
   using ok_button = widgets::Button<ask<Actions, &Actions::close_notice>>;
   struct parts_t {
     nodes::Text title;
@@ -64,6 +66,8 @@ struct verification_view {
 };
 template <class Actions>
 struct verification_box : nodes::Stack {
+  // The dialog it is shown in.
+  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{440.0f}, .dismissable = false}; }
   template <auto Member>
   struct press {
     Actions* actions;

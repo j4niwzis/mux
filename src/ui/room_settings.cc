@@ -254,6 +254,8 @@ struct copy_line : nodes::Stack {
 
 template <class Actions>
 struct room_settings : nodes::Stack {
+  // The dialog it is shown in.
+  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{860.0f, 620.0f}}; }
   using actions_type = Actions;
   Actions* actions = nullptr;
   // The colours it and its pages are made in: what it was handed.

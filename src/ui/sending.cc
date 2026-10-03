@@ -33,6 +33,8 @@ struct pending_file {
 };
 template <class Actions>
 struct send_box : nodes::Stack {
+  // Sized as it is opened, by the files it is opened with.
+  [[nodiscard]] static dialog_look look_of_dialog() { return {}; }
   struct previews_column : nodes::Stack {
     // A picture to be sent, as it will look: rounded, its thumbnail by its
     // local id.

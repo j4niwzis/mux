@@ -63,6 +63,8 @@ struct field : nodes::Stack {
 // purpose shows and says, by its type.
 template <class Actions>
 struct passphrase_box : nodes::Stack {
+  // The dialog it is shown in.
+  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{420.0f}}; }
   struct words {
     std::string_view title, note, button;
     bool current, fresh;  // the passphrase now asked; a new one, twice

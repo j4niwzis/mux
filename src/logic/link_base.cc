@@ -54,6 +54,24 @@ struct link_list {};
   return std::ranges::contains(allowed, std::string_view(scheme));
 }
 
+// What a link is in a message, whatever its protocol: a person -- a pill by
+// their name in the chat; a place -- a room: a pill where it is known, a card
+// where the link is given as its URL or to a message in it -- with the link
+// its pill opens; or kept as the link it is. Each kind says its own
+// (mention_of(kind), by ADL); one that says none is kept.
+namespace mention {
+struct person {
+  std::string id;
+};
+struct place {
+  std::string id;
+  std::optional<std::string> event;  // a message in it
+  std::string link;                  // what a pill to it opens
+};
+struct kept {};
+}  // namespace mention
+using mention_t = splice::variant<mention::person, mention::place, mention::kept>;
+
 // What following a link comes to.
 namespace link_step {
 struct open_chat {  // a chat opened, and a message in it jumped to

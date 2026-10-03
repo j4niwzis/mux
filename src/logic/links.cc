@@ -18,6 +18,7 @@ constexpr std::type_identity<link_list<>> links_type(const auto&) { return {}; }
 inline std::optional<std::monostate> read_link(const auto&, std::string_view) { return std::nullopt; }
 inline std::optional<std::monostate> read_id(const auto&, std::string_view) { return std::nullopt; }
 inline std::optional<conversation_id> chat_for(const auto&, const model&) { return std::nullopt; }
+inline mention_t mention_of(const auto&) { return mention::kept{}; }
 }  // namespace links_defaults
 template <class Tag>
 constexpr auto links_type_of() {
@@ -91,6 +92,13 @@ std::optional<link_t> first_id(protocol_list<Tags...>, std::string_view word) {
   return splice::visit([&](const auto& kind) {
     using links_defaults::chat_for;
     return chat_for(kind, now);
+  }, where);
+}
+// What a link is in a message: as its kind says.
+[[nodiscard]] inline mention_t mention_in(const link_t& where) {
+  return splice::visit([](const auto& kind) {
+    using links_defaults::mention_of;
+    return mention_of(kind);
   }, where);
 }
 // Where a link leads, from the chat being read and the account in view: as

@@ -86,7 +86,7 @@ struct link_card : nodes::Stack {
   const auto spans = said.body.html ? read_html(*said.body.html).spans : link_spans_in(said.body.plain);
   for (const auto& span : spans)
     if (!span.picture && (span.target.starts_with("https://") || span.target.starts_with("http://")) &&
-        !span.target.starts_with("https://matrix.to/"))
+        !logic::link_of(span.target))  // a link some protocol reads is a mention's, not a page
       return span.target;
   return std::nullopt;
 }
@@ -652,7 +652,7 @@ struct mentioned {
   std::vector<std::string> unknown;
   std::string text;
   std::vector<nodes::Text::Link> links;
-  std::vector<std::pair<std::string, proto::matrix::link::room>> cards;  // the link, and the room it is of
+  std::vector<std::pair<std::string, logic::link_t>> cards;  // the link, and the place it is to
   std::vector<nodes::Text::Styled> styles;
 };
 [[nodiscard]] inline mentioned with_mentions(std::string text, std::vector<nodes::Text::Link> links,
@@ -661,8 +661,8 @@ struct mentioned {
   // What a mention is called here, and what it links to: a person by their
   // name in the chat, a room by its name where it is known.
   const auto name_of = [&](const logic::link_t& what) -> std::pair<std::string, std::string> {
-    return splice::visit(splice::overloaded{[&](const proto::matrix::link::person& one) { return std::pair(sender_name(in, one.id), one.id); },
-                                 [&](const proto::matrix::link::room& one) {
+    return splice::visit(splice::overloaded{[&](const logic::mention::person& one) { return std::pair(sender_name(in, one.id), one.id); },
+                                 [&](const logic::mention::place& one) {
                                    if (now)
                                      if (const auto chat = logic::chat_of(*now, what))
                                        if (const conversation* found = now->find(*chat))
@@ -673,8 +673,8 @@ struct mentioned {
                                      return std::pair(named->second, one.id);
                                    return std::pair(one.id, one.id);
                                  },
-                                 [](const proto::xmpp::link::address& one) { return std::pair(one.jid, one.jid); }},
-                      what);
+                                 [](logic::mention::kept) { return std::pair(std::string(), std::string()); }},
+                      logic::mention_in(what));
   };
   // A word that is an ID, as some protocol writes one (a Matrix ID: a sigil,
   // a name, a colon, a server).
@@ -699,20 +699,20 @@ struct mentioned {
       kept.push_back(std::move(link));
       continue;
     }
-    // A person: a pill. A room named by words over it: a pill; given as
-    // its URL, or a message in it: a card, the URL out of the text. An
-    // XMPP address: a link as it is.
-    splice::visit(splice::overloaded{[&](const proto::matrix::link::person&) { spans.push_back({link.first, link.last, what}); },
-                          [&](const proto::matrix::link::room& one) {
+    // A person: a pill. A place named by words over it: a pill; given as
+    // its URL, or a message in it: a card, the URL out of the text. One
+    // kept: a link as it is.
+    splice::visit(splice::overloaded{[&](const logic::mention::person&) { spans.push_back({link.first, link.last, what}); },
+                          [&](const logic::mention::place& one) {
                             if (bare || one.event) {
                               spans.push_back({link.first, link.last, std::nullopt});
-                              out.cards.emplace_back(link.target, one);
+                              out.cards.emplace_back(link.target, *what);
                             } else {
                               spans.push_back({link.first, link.last, what});
                             }
                           },
-                          [&](const proto::xmpp::link::address&) { kept.push_back(link); }},
-               *what);
+                          [&](logic::mention::kept) { kept.push_back(link); }},
+               logic::mention_in(*what));
   }
   for (std::size_t at = 0; at < text.size();) {
     const bool starts = at == 0 || std::string_view(" \n\t(").contains(text[at - 1]);
@@ -740,9 +740,18 @@ struct mentioned {
   for (const replaced& span : spans) {
     std::string shown;
     std::optional<nodes::Text::Link> pill;
-    const bool person = span.pill && splice::visit(splice::overloaded{[](const proto::matrix::link::person&) { return true; },
+    const bool person = span.pill && splice::visit(splice::overloaded{[](const logic::mention::person&) { return true; },
                                                            [](const auto&) { return false; }},
-                                                *span.pill);
+                                                logic::mention_in(*span.pill));
+    // What a pill to a place opens: as its protocol says.
+    const std::string opens = !span.pill ? std::string()
+                                         : splice::visit(splice::overloaded{[](const logic::mention::place& one) { return one.link; },
+                                                                            [](const logic::mention::person& one) {
+                                                                              return proto::person_link(state_before(protocol_of(one.id)), one.id)
+                                                                                  .value_or(std::string());
+                                                                            },
+                                                                            [](logic::mention::kept) { return std::string(); }},
+                                                         logic::mention_in(*span.pill));
     if (span.pill && !person) {
       // A room: a pill where it is joined here, or its server said it is
       // there -- its picture in it only where it has a real one; a room
@@ -759,7 +768,7 @@ struct mentioned {
         out.unknown.push_back(target);
         shown = words;
         if (!span.as_written)
-          out.links.push_back(nodes::Text::Link{span.first, span.first + shown.size(), "https://matrix.to/#/" + target});
+          out.links.push_back(nodes::Text::Link{span.first, span.first + shown.size(), opens});
       } else {
         if (!pictured)
           out.waiting.push_back(target);
@@ -767,12 +776,12 @@ struct mentioned {
         // id (!…) is no name for anyone: shown by the room's name.
         const bool by_address = span.as_written && !span.as_written->starts_with('!');
         shown = (pictured ? std::string("\u2002\u2002") : std::string()) + (by_address ? words : name);
-        pill = nodes::Text::Link{span.first, span.first + shown.size(), "https://matrix.to/#/" + target, true};
+        pill = nodes::Text::Link{span.first, span.first + shown.size(), opens, true};
       }
     } else if (span.pill) {
       const auto [name, target] = name_of(*span.pill);
       shown = "\u2002\u2002" + name;  // room for its avatar
-      pill = nodes::Text::Link{span.first, span.first + shown.size(), "https://matrix.to/#/" + target, true};
+      pill = nodes::Text::Link{span.first, span.first + shown.size(), opens, true};
     }
     const std::ptrdiff_t grew =
         static_cast<std::ptrdiff_t>(shown.size()) - static_cast<std::ptrdiff_t>(span.last - span.first);
@@ -882,10 +891,13 @@ struct mentioned {
 
 // A card for a link to a room, or to a message in one: as the chat it is of
 // is known here, or as a room not joined.
-[[nodiscard]] inline link_card card_of(const std::string& url, const proto::matrix::link::room& room, const model* now) {
+[[nodiscard]] inline link_card card_of(const std::string& url, const logic::link_t& where, const model* now) {
+  const logic::mention::place room = splice::visit(
+      splice::overloaded{[](const logic::mention::place& one) { return one; }, [](const auto&) { return logic::mention::place{}; }},
+      logic::mention_in(where));
   const conversation* chat = nullptr;
   if (now)
-    if (const auto found = logic::chat_of(*now, room))
+    if (const auto found = logic::chat_of(*now, where))
       chat = now->find(*found);
   const std::string name = chat ? display_name(*chat) : room.id;
   const std::string id = chat ? chat->id.id : room.id;
@@ -1694,8 +1706,9 @@ struct message_bubble : nodes::Stack {
     if (said.forwarded) {
       const std::string& who = said.forwarded->name.empty() ? said.forwarded->from : said.forwarded->name;
       std::vector<nodes::Text::Link> spans;
-      if (said.forwarded->from.starts_with('@') && !who.empty())
-        spans.push_back(nodes::Text::Link{0, who.size(), "https://matrix.to/#/" + said.forwarded->from});
+      if (const auto link = proto::person_link(state_before(protocol_of(said.forwarded->from)), said.forwarded->from);
+          link && !who.empty())
+        spans.push_back(nodes::Text::Link{0, who.size(), *link});
       mentioned shown = with_mentions(who, std::move(spans), in, now);
       body.parts.forwarded.emplace(std::move(shown.text), std::move(shown.links), outgoing ? sent_time_colour : accent_colour,
                                    said.forwarded->from.starts_with('@') ? said.forwarded->from : std::string());

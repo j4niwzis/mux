@@ -164,6 +164,12 @@ namespace link {
 [[nodiscard]] inline std::optional<conversation_id> chat_for(const link::room& one, const model& now) {
   return logic::chat_named(now, protocol::matrix{}, one.id);
 }
+// In a message: a person, by their name; a room, a place -- its pill
+// opening matrix.to.
+[[nodiscard]] inline logic::mention_t mention_of(const person& one) { return logic::mention::person{one.id}; }
+[[nodiscard]] inline logic::mention_t mention_of(const room& one) {
+  return logic::mention::place{one.id, one.event, "https://matrix.to/#/" + one.id};
+}
 // A person: their card, as Telegram opens a mention's profile -- a member of
 // the chat being read or not; a message to them is one press from there.
 [[nodiscard]] inline logic::link_step_t step_for(const link::person& one, const model&, const std::optional<account_id>&) {

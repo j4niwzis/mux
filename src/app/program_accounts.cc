@@ -155,7 +155,7 @@ void app::apply(const request::set_wallpaper& one) {
                                    [&](mux::config::wallpaper_pick::plain) { set(mux::config::wallpaper::plain{}); },
                                    [&](mux::config::wallpaper_pick::picture) {
                                      picking_wallpaper = one.level;
-                                     mux::platform::dialogs::choose_files();
+                                     system_dialogs.choose_files();
                                    }},
                 one.pick);
 }
@@ -327,7 +327,7 @@ void app::apply(const request::delete_pack& one) {
 }
 void app::apply(const request::pick_pack_images&) {
   picking_pack_images = true;
-  mux::platform::dialogs::choose_files();
+  system_dialogs.choose_files();
 }
 // Images chosen for the pack open: each a picture, uploaded -- its name
 // its shortcode to begin with, its size and type said in the pack.
@@ -794,9 +794,9 @@ void app::start_push() {
     (void)this->write();
   }
   push_forget = std::make_shared<std::atomic<bool>>(false);
-  push_thread = std::jthread([box = push_box, forget = push_forget, token = *notifications.push_token](std::stop_token stop) {
+  push_thread = std::jthread([box = push_box, wake = wake, forget = push_forget, token = *notifications.push_token](std::stop_token stop) {
     mux::platform::push::run(stop, std::string(mux::platform::push::kAppId), token, "Messages from your accounts", forget,
-                                push_sink{box});
+                                push_sink{box, wake});
   });
   if (notifications.push_endpoint)
     net->set_push_endpoint(notifications.push_endpoint);

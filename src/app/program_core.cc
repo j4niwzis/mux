@@ -288,7 +288,7 @@ void app::notify_of(const mux::message& said, bool mentions_me) {
     return;
   const auto decision = this->notify_for(said.in, mentions_me);
   if (decision.sound)
-    mux::platform::audio::play_chime(mux::platform::audio::chime());
+    chimes.play();
   if (!decision.popup)
     return;
   const mux::conversation* chat = model->find(said.in);
@@ -328,7 +328,7 @@ void app::notify_of(const mux::message& said, bool mentions_me) {
 void app::notify_invite(const mux::conversation_id& in, const mux::invite_info& invite, const std::string& name) {
   const auto decision = this->notify_for(in, true);
   if (decision.sound)
-    mux::platform::audio::play_chime(mux::platform::audio::chime());
+    chimes.play();
   if (!decision.popup)
     return;
   const std::string who = invite.from_name.empty() ? invite.from : invite.from_name;
@@ -547,7 +547,8 @@ void app::wire() {
                     .scene = &scene,
                     .kept = this,
                     .vault = vault,
-                    .work = &work};
+                    .work = &work,
+                    .system_dialogs = &system_dialogs};
   store.vault = vault;
 }
 

@@ -216,39 +216,50 @@ inline speaker& the_speaker() {
 // The chime a message comes with: two soft notes, a fifth apart, fading --
 // made once, not a file. Played on a stream of its own, so a voice message
 // playing goes on.
-[[nodiscard]] inline const pcm& chime() {
-  static const pcm made = [] {
-    pcm out{.channels = 1, .rate = 48000};
-    const auto note = [&](double hz, double from, double length) {
-      const auto first = static_cast<std::size_t>(from * out.rate);
-      const auto count = static_cast<std::size_t>(length * out.rate);
-      if (out.samples.size() < first + count)
-        out.samples.resize(first + count, 0.0f);
-      for (std::size_t i = 0; i < count; ++i) {
-        const double t = static_cast<double>(i) / out.rate;
-        const double fade = std::exp(-t * 9.0) * std::min(1.0, t * 400.0);
-        out.samples[first + i] += static_cast<float>(0.25 * fade * std::sin(2.0 * std::numbers::pi * hz * t));
-      }
-    };
-    note(880.0, 0.0, 0.35);
-    note(1318.5, 0.09, 0.4);
-    return out;
-  }();
-  return made;
+[[nodiscard]] inline pcm chime_sound() {
+  pcm out{.channels = 1, .rate = 48000};
+  const auto note = [&](double hz, double from, double length) {
+    const auto first = static_cast<std::size_t>(from * out.rate);
+    const auto count = static_cast<std::size_t>(length * out.rate);
+    if (out.samples.size() < first + count)
+      out.samples.resize(first + count, 0.0f);
+    for (std::size_t i = 0; i < count; ++i) {
+      const double t = static_cast<double>(i) / out.rate;
+      const double fade = std::exp(-t * 9.0) * std::min(1.0, t * 400.0);
+      out.samples[first + i] += static_cast<float>(0.25 * fade * std::sin(2.0 * std::numbers::pi * hz * t));
+    }
+  };
+  note(880.0, 0.0, 0.35);
+  note(1318.5, 0.09, 0.4);
+  return out;
 }
-inline void play_chime(const pcm& sound) {
-  static sdl::SDL_AudioStream* stream = nullptr;
-  if (!sdl::SDL_WasInit(sdl::kInitAudio) && !sdl::SDL_InitSubSystem(sdl::kInitAudio))
-    return;
-  if (stream)
-    sdl::SDL_DestroyAudioStream(stream);
-  const sdl::SDL_AudioSpec spec{sdl::SDL_AUDIO_F32, sound.channels, sound.rate};
-  stream = sdl::SDL_OpenAudioDeviceStream(sdl::kAudioDeviceDefaultPlayback, &spec, nullptr, nullptr);
-  if (!stream)
-    return;
-  sdl::SDL_PutAudioStreamData(stream, sound.samples.data(), static_cast<int>(sound.samples.size() * sizeof(float)));
-  sdl::SDL_FlushAudioStream(stream);
-  sdl::SDL_ResumeAudioStreamDevice(stream);
-}
+// What plays it: on a stream of its own, so a voice message playing goes on.
+class chime {
+ public:
+  chime() = default;
+  chime(const chime&) = delete;
+  chime& operator=(const chime&) = delete;
+  ~chime() {
+    if (stream_)
+      sdl::SDL_DestroyAudioStream(stream_);
+  }
+  void play() {
+    if (!sdl::SDL_WasInit(sdl::kInitAudio) && !sdl::SDL_InitSubSystem(sdl::kInitAudio))
+      return;
+    if (stream_)
+      sdl::SDL_DestroyAudioStream(stream_);
+    const sdl::SDL_AudioSpec spec{sdl::SDL_AUDIO_F32, sound_.channels, sound_.rate};
+    stream_ = sdl::SDL_OpenAudioDeviceStream(sdl::kAudioDeviceDefaultPlayback, &spec, nullptr, nullptr);
+    if (!stream_)
+      return;
+    sdl::SDL_PutAudioStreamData(stream_, sound_.samples.data(), static_cast<int>(sound_.samples.size() * sizeof(float)));
+    sdl::SDL_FlushAudioStream(stream_);
+    sdl::SDL_ResumeAudioStreamDevice(stream_);
+  }
+
+ private:
+  pcm sound_ = chime_sound();
+  sdl::SDL_AudioStream* stream_ = nullptr;
+};
 
 }  // namespace mux::platform::audio

@@ -198,7 +198,7 @@ class outbox_part {
       return;
     if (to_send_.empty())
       files_thread_.reset();
-    mux::platform::dialogs::choose_files();
+    s_->system_dialogs->choose_files();
   }
   // The thread panel's paperclip: what is chosen goes into the thread open.
   void apply(const request::attach_in_thread&) {
@@ -206,7 +206,7 @@ class outbox_part {
       return;
     if (to_send_.empty())
       files_thread_ = s_->root().main().thread_open();
-    mux::platform::dialogs::choose_files();
+    s_->system_dialogs->choose_files();
   }
   void apply(const request::close_send_box&) {
     to_send_.clear();

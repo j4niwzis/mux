@@ -119,6 +119,12 @@ struct app : kept_settings {
   using accounts = mux::ui::accounts_panel<actions>;
 
   mailbox_type* box = nullptr;
+  // What wakes the window: as main made it, for the mailbox.
+  wake_window wake;
+  // The system's dialogs, put over the window as it is made.
+  mux::platform::dialogs::dialogs system_dialogs;
+  // The chime a message comes with.
+  mux::platform::audio::chime chimes;
   mux::model* model = nullptr;
   network* net = nullptr;
   // The proxy chosen for the account being added, as it is added.
@@ -381,12 +387,13 @@ struct app : kept_settings {
   };
   struct push_sink {
     std::shared_ptr<push_inbox> inbox;
+    wake_window wake;
     void operator()(mux::platform::push::event one) const {
       {
         std::lock_guard held(inbox->lock);
         inbox->pending.push_back(std::move(one));
       }
-      mux::platform::events::wake();
+      wake();
     }
   };
   std::shared_ptr<push_inbox> push_box = std::make_shared<push_inbox>();

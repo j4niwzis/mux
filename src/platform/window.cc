@@ -21,13 +21,9 @@ import skiff.scene;
 import mux.platform.events;
 import mux.platform.fonts;
 import mux.platform.clipboard;
+import mux.platform.dialogs;
 
 namespace mux::platform::window {
-using clipboard::pasted_picture;
-using events::files_event;
-using events::save_event;
-using events::the_window;
-using events::wake_event;
 using fonts::load_fonts;
 }  // namespace mux::platform::window
 
@@ -486,6 +482,8 @@ inline double now_ms() {
 //   before_frame()  between events: what the screens asked for, applied
 //                   where no handler is running
 //   closing()       the window is going away
+//   system_dialogs  the system's dialogs (mux.platform.dialogs), put over
+//                   the window once it is made
 // What shows the windows, as SDL names it: read once, here.
 namespace video_driver {
 struct x11 {};
@@ -503,7 +501,7 @@ inline video_driver_t video_driver_of(const char* name) {
 }
 
 template <class App>
-int run(App& app, const options& how) {
+int run(App& app, const options& how, const events::kinds& kinds) {
   if (!sdl::SDL_Init(sdl::kInitVideo | sdl::kInitEvents)) {
     std::println(std::cerr, "[mux] no window: {}", sdl::SDL_GetError());
     return 1;
@@ -517,10 +515,9 @@ int run(App& app, const options& how) {
     splice::visit(splice::overloaded{[](video_driver::x11) { sdl::SDL_SetHint(sdl::kHintFramebufferAcceleration, "0"); },
                                      [](const auto&) {}},
                   video_driver_of(sdl::SDL_GetCurrentVideoDriver()));
-  (void)wake_event();
-  (void)files_event();
-  (void)save_event();
-  load_fonts(how.fonts);
+  // What every Text draws with: this run's.
+  skia::SkFont font;
+  load_fonts(how.fonts, font);
   sdl::SDL_GL_SetAttribute(sdl::SDL_GL_STENCIL_SIZE, 8);
   sdl::SDL_GL_SetAttribute(sdl::SDL_GL_DOUBLEBUFFER, 1);
   if (how.transparent)
@@ -542,7 +539,12 @@ int run(App& app, const options& how) {
     sdl::SDL_Quit();
     return 1;
   }
-  the_window() = window;
+  app.system_dialogs.over(window, kinds);
+  // Pictures pasted, each in a file of its own.
+  clipboard::paster paste;
+  // The scale and what was settling at the frame before.
+  float scale_before = 0.0f;
+  std::string settling_before;
   // A phone's from the start: a touch screen and no mouse. Not known until
   // the first press otherwise, and the field given the focus meanwhile put
   // the on-screen keyboard up as the program opened.
@@ -784,7 +786,7 @@ int run(App& app, const options& how) {
             // dropped on the window -- not the text a field would paste.
             if (event.type == sdl::SDL_EVENT_KEY_DOWN && event.key.key == sdl::kKeyV && (event.key.mod & sdl::kKmodCtrl) != 0 &&
                 !event.key.repeat) {
-              if (std::optional<std::string> picture = pasted_picture()) {
+              if (std::optional<std::string> picture = paste.picture()) {
                 app.files_given(std::vector<std::string>{std::move(*picture)}, true);
                 break;
               }
@@ -807,15 +809,14 @@ int run(App& app, const options& how) {
                                                     event.edit.length});
             break;
           default:
-            if (event.type == wake_event())
+            if (event.type == kinds.wake)
               app.woken();
-            else if (event.type == files_event()) {
-              std::unique_ptr<std::vector<std::string>> chosen(static_cast<std::vector<std::string>*>(event.user.data1));
-              app.files_given(std::move(*chosen), false);
-            } else if (event.type == save_event()) {
-              std::unique_ptr<std::string> chosen(static_cast<std::string*>(event.user.data1));
-              app.save_path_chosen(std::move(*chosen));
-            }
+            else if (event.type == kinds.files)
+              std::ranges::for_each(app.system_dialogs.take_files(),
+                                    [&](std::vector<std::string>& paths) { app.files_given(std::move(paths), false); });
+            else if (event.type == kinds.save)
+              std::ranges::for_each(app.system_dialogs.take_save_paths(),
+                                    [&](std::string& path) { app.save_path_chosen(std::move(path)); });
             break;
         }
         got = sdl::SDL_PollEvent(&event);
@@ -834,7 +835,6 @@ int run(App& app, const options& how) {
       // The display's scale, times the interface's (Settings, Appearance).
       const float scale = sdl::SDL_GetWindowDisplayScale(window) * static_cast<float>(app.interface_scale) / 100.0f;
       // Another: all of it laid out and painted again at it.
-      static float scale_before = scale;
       if (scale != std::exchange(scale_before, scale)) {
         scene.state().invalidateLayout();
         redraw = true;
@@ -956,7 +956,6 @@ int run(App& app, const options& how) {
                       (one.transform ? " (transform)" : " (settling)");
           std::free(name);
         }
-        static std::string settling_before;
         if (settling != settling_before)
           std::println(std::cerr, "[frame] settling:{}", settling.empty() ? std::string(" nothing") : settling);
         settling_before = std::move(settling);

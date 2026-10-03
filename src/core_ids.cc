@@ -641,10 +641,11 @@ struct account {
 // Lines from the protocols' threads do not run into each other.
 
 inline void log_line(std::string_view who, std::string_view what) {
-  static std::mutex writing;
   const auto now = std::chrono::floor<std::chrono::milliseconds>(std::chrono::system_clock::now());
-  const std::scoped_lock held(writing);
-  std::println(std::cerr, "{:%H:%M:%S} [{}] {}", now, who, what);
+  // Made whole, then written in one call to the unbuffered stream: lines
+  // from several threads do not run into each other.
+  const std::string line = std::format("{:%H:%M:%S} [{}] {}\n", now, who, what);
+  std::cerr.write(line.data(), static_cast<std::streamsize>(line.size()));
 }
 template <class... Args>
 void log(const account_id& who, std::format_string<Args...> what, Args&&... args) {

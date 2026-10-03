@@ -1149,13 +1149,9 @@ std::filesystem::path state_path(std::string_view name) {
          std::ranges::to<std::string>();
 }
 // Where something is kept: what was kept where it was before moved there,
-// the first time it is asked for in a run -- looked for once, not at each
-// line written.
+// where it is still there and nothing is where it goes now.
 inline std::filesystem::path moved_from(std::filesystem::path now, const std::filesystem::path& before) {
-  static std::mutex held;
-  static std::set<std::filesystem::path> looked;
-  const std::scoped_lock lock(held);
-  if (!looked.insert(now).second || now == before)
+  if (now == before)
     return now;
   std::error_code failed;
   if (!std::filesystem::exists(now, failed) && std::filesystem::exists(before, failed)) {

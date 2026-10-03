@@ -498,7 +498,7 @@ class pictures_part {
       if (const auto type = mux::media::picture_of(*bytes); type && !offered.contains('.'))
         offered += std::format(".{}", mux::media::extension_of(*type));
     pending_save_ = std::pair{source, name};
-    mux::platform::dialogs::choose_save_path((downloads() / std::filesystem::path(offered).filename()).string());
+    s_->system_dialogs->choose_save_path((downloads() / std::filesystem::path(offered).filename()).string());
   }
   // The path chosen: what was asked to be saved, written there.
   void save_to(std::string path) {

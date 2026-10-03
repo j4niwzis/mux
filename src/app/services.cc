@@ -6,6 +6,7 @@
 export module mux.app.services;
 
 import std;
+import mux.platform.dialogs;
 import mux.vault;
 import skiff.scene;
 import mux.core;
@@ -37,6 +38,7 @@ struct services {
   mux::vault::vault* vault = nullptr;
   // Work off the UI's thread.
   workers* work = nullptr;
+  mux::platform::dialogs::dialogs* system_dialogs = nullptr;
 
   [[nodiscard]] window_type& root() const { return scene->root(); }
   // A chat that is a window of its history away from its newest: back to

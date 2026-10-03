@@ -35,11 +35,13 @@ export namespace mux::platform::fonts {
 // Open Sans, shipped, as Telegram Desktop's text is: regular, and semibold
 // for what is bold -- two faces, not one thickened. The system's fonts are
 // behind them for what they do not cover -- CJK, emoji.
-inline void load_fonts(const std::string& directory) {
+// `font`: what every Text draws with, kept by the caller as long as the
+// window draws.
+inline void load_fonts(const std::string& directory, skia::SkFont& font) {
   auto manager = skia::SkFontMgr_New_Custom_Directory(directory.c_str());
   if (!manager) {
     // No fonts found: the default face, rather than no text at all.
-    static skia::SkFont font;
+    font = skia::SkFont();
     skiff::paint::defaultFont() = &font;
     return;
   }
@@ -77,7 +79,7 @@ inline void load_fonts(const std::string& directory) {
     }
   // What every Text and widget draws with. Without it they draw nothing:
   // the window was its boxes and no words.
-  static skia::SkFont font(primary);
+  font = skia::SkFont(primary);
   // Smoothed, and fitted to the pixels only lightly, as Qt draws on Linux:
   // full hinting is what made the text look heavier than Telegram's.
   font.setEdging(skia::SkFont::Edging::kAntiAlias);

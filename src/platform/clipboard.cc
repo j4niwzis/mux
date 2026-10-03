@@ -35,27 +35,33 @@ inline constexpr std::array kPictureKinds{
     picture_kind{"image/png", "png"},   picture_kind{"image/jpeg", "jpg"}, picture_kind{"image/gif", "gif"},
     picture_kind{"image/webp", "webp"}, picture_kind{"image/bmp", "bmp"},
 };
-[[nodiscard]] inline std::optional<std::string> pasted_picture() {
-  static unsigned counter = 0;
-  for (const picture_kind& kind : kPictureKinds) {
-    if (!sdl::SDL_HasClipboardData(kind.mime))
-      continue;
-    std::size_t size = 0;
-    void* data = sdl::SDL_GetClipboardData(kind.mime, &size);
-    if (!data)
-      continue;
-    std::error_code failed;
-    const std::filesystem::path folder = std::filesystem::temp_directory_path(failed) / "mux-pasted";
-    std::filesystem::create_directories(folder, failed);
-    const std::filesystem::path path = folder / std::format("pasted-{}.{}", ++counter, kind.extension);
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    out.write(static_cast<const char*>(data), static_cast<std::streamsize>(size));
-    sdl::SDL_free(data);
-    if (!out)
-      return std::nullopt;
-    return path.string();
+// What pastes pictures: each in a file of its own, numbered.
+class paster {
+ public:
+  [[nodiscard]] std::optional<std::string> picture() {
+    for (const picture_kind& kind : kPictureKinds) {
+      if (!sdl::SDL_HasClipboardData(kind.mime))
+        continue;
+      std::size_t size = 0;
+      void* data = sdl::SDL_GetClipboardData(kind.mime, &size);
+      if (!data)
+        continue;
+      std::error_code failed;
+      const std::filesystem::path folder = std::filesystem::temp_directory_path(failed) / "mux-pasted";
+      std::filesystem::create_directories(folder, failed);
+      const std::filesystem::path path = folder / std::format("pasted-{}.{}", ++counter_, kind.extension);
+      std::ofstream out(path, std::ios::binary | std::ios::trunc);
+      out.write(static_cast<const char*>(data), static_cast<std::streamsize>(size));
+      sdl::SDL_free(data);
+      if (!out)
+        return std::nullopt;
+      return path.string();
+    }
+    return std::nullopt;
   }
-  return std::nullopt;
-}
+
+ private:
+  unsigned counter_ = 0;
+};
 
 }  // namespace mux::platform::clipboard

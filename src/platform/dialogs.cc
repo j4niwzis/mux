@@ -1,58 +1,89 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.platform.dialogs -- The system's dialogs for opening files and for
-// saving one: what is chosen comes back to the window as an event of its own
-// (mux.platform.events).
+// saving one.
 export module mux.platform.dialogs;
 
 import std;
 import sdl;
 import mux.platform.events;
 
-namespace mux::platform::dialogs {
-using events::files_event;
-using events::save_event;
-using events::the_window;
-}  // namespace mux::platform::dialogs
-
 export namespace mux::platform::dialogs {
 
-// The system's dialog for opening files, several at once.
-inline void choose_files() {
-  sdl::SDL_ShowOpenFileDialog(
-      +[](void*, const char* const* list, int) {
-        if (!list)
-          return;
-        auto* chosen = new std::vector<std::string>();
-        for (const char* const* one = list; *one; ++one)
-          chosen->emplace_back(*one);
-        if (chosen->empty()) {
-          delete chosen;
-          return;
-        }
-        sdl::SDL_Event event{};
-        event.type = files_event();
-        event.user.data1 = chosen;
-        event.user.code = 0;  // chosen, not dropped
-        sdl::SDL_PushEvent(&event);
-      },
-      nullptr, the_window(), nullptr, 0, nullptr, true);
-}
+// The dialogs of a window: the program's, put over the window as it is made.
+// What they answer -- on a thread of SDL's choosing -- is kept here, and the
+// window told with an event of its own; it takes the answers on its thread.
+class dialogs {
+ public:
+  dialogs() = default;
+  dialogs(const dialogs&) = delete;
+  dialogs& operator=(const dialogs&) = delete;
 
-// The system's dialog for saving a file, the name offered filled in (a path
-// or a name). What is offered is kept until the dialog has read it.
-inline void choose_save_path(std::string offered) {
-  static std::string kept;
-  kept = std::move(offered);
-  sdl::SDL_ShowSaveFileDialog(
-      +[](void*, const char* const* list, int) {
-        if (!list || !*list)
-          return;
-        sdl::SDL_Event event{};
-        event.type = save_event();
-        event.user.data1 = new std::string(*list);
-        sdl::SDL_PushEvent(&event);
-      },
-      nullptr, the_window(), nullptr, 0, kept.empty() ? nullptr : kept.c_str());
-}
+  // The window they are put over, and the kinds of event they answer with.
+  void over(sdl::SDL_Window* window, const events::kinds& kinds) {
+    parent_ = window;
+    kinds_ = kinds;
+  }
+
+  // Files to open, several at once.
+  void choose_files() {
+    sdl::SDL_ShowOpenFileDialog(
+        // SDL's C interface gives back what it was given as a void*: this.
+        +[](void* self, const char* const* list, int) {
+          if (list)
+            static_cast<dialogs*>(self)->chose(list);
+        },
+        this, parent_, nullptr, 0, nullptr, true);
+  }
+  // A path to save a file to, the name offered filled in (a path or a
+  // name): kept here until the dialog has read it.
+  void choose_save_path(std::string offered) {
+    offered_ = std::move(offered);
+    sdl::SDL_ShowSaveFileDialog(
+        +[](void* self, const char* const* list, int) {
+          if (list && *list)
+            static_cast<dialogs*>(self)->saved(*list);
+        },
+        this, parent_, nullptr, 0, offered_.empty() ? nullptr : offered_.c_str());
+  }
+
+  // What was chosen since, taken: on the window's thread, at its event.
+  [[nodiscard]] std::vector<std::vector<std::string>> take_files() {
+    const std::lock_guard held(lock_);
+    return std::exchange(files_, {});
+  }
+  [[nodiscard]] std::vector<std::string> take_save_paths() {
+    const std::lock_guard held(lock_);
+    return std::exchange(save_paths_, {});
+  }
+
+ private:
+  void chose(const char* const* list) {
+    auto paths = std::views::iota(std::size_t{0}) |
+                 std::views::take_while([list](std::size_t at) { return list[at] != nullptr; }) |
+                 std::views::transform([list](std::size_t at) { return std::string(list[at]); }) |
+                 std::ranges::to<std::vector>();
+    if (paths.empty())
+      return;
+    {
+      const std::lock_guard held(lock_);
+      files_.push_back(std::move(paths));
+    }
+    events::push(kinds_.files);
+  }
+  void saved(const char* path) {
+    {
+      const std::lock_guard held(lock_);
+      save_paths_.emplace_back(path);
+    }
+    events::push(kinds_.save);
+  }
+
+  sdl::SDL_Window* parent_ = nullptr;
+  events::kinds kinds_{0, 0, 0};
+  std::string offered_;
+  std::mutex lock_;
+  std::vector<std::vector<std::string>> files_;
+  std::vector<std::string> save_paths_;
+};
 
 }  // namespace mux::platform::dialogs

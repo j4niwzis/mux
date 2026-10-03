@@ -8,9 +8,11 @@ import mux.platform.events;
 
 export namespace mux::app {
 
-// The window's side of the mailbox: wake it.
+// The window's side of the mailbox: wake it, with the kind of event main
+// registered for it.
 struct wake_window {
-  void operator()() const { mux::platform::events::wake(); }
+  std::uint32_t kind = 0;
+  void operator()() const { mux::platform::events::push(kind); }
 };
 using mailbox_type = mux::mailbox<wake_window>;
 

@@ -5,6 +5,7 @@
 export module mux.proto.xmpp;
 
 import std;
+import splice;
 import mux.core;
 import mux.proto;
 
@@ -24,6 +25,13 @@ constexpr bool can_page_back(const state& now) { return now.archive.value_or(tru
 
 // The roster says who is there: one never heard of is offline.
 inline std::string unheard_presence(const state&) { return "offline"; }
+
+// A group chat is left; a direct chat, a contact's, is not: there is
+// nothing to leave.
+inline bool can_leave(const state&, const conversation& chat) {
+  return splice::visit(splice::overloaded{[](const conversation_kind::direct&) { return false; }, [](const auto&) { return true; }},
+                       chat.kind);
+}
 
 // An xmpp: URI (RFC 5122).
 inline std::optional<std::string> share_link(const state&, std::string_view address) { return "xmpp:" + std::string(address); }

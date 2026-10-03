@@ -84,6 +84,8 @@ inline std::optional<std::string> person_link(const auto&, std::string_view) { r
 // What a contact never heard of is said to be: nothing -- where nothing
 // says who is there, "offline" would be said of everyone.
 inline std::string unheard_presence(const auto&) { return {}; }
+// Any chat may be left.
+inline bool can_leave(const auto&, const conversation&) { return true; }
 // Whom a direct chat is with: the chat's own address.
 inline std::string direct_contact(const auto&, const conversation& one) { return one.id.id; }
 constexpr bool can_pin(const auto&, std::string_view) { return false; }
@@ -196,6 +198,18 @@ inline constexpr struct unheard_presence_t {
     }, state);
   }
 } unheard_presence{};
+
+// Whether a chat may be left: where it may not, its Leave is not shown.
+inline constexpr struct can_leave_t {
+  template <class State>
+  bool operator()(const State& state, const conversation& chat) const {
+    return splice::visit([&](const auto& now) {
+      using defaults::available;
+      using defaults::can_leave;
+      return available(now) && can_leave(now, chat);
+    }, state);
+  }
+} can_leave{};
 
 inline constexpr struct direct_contact_t {
   template <class State>

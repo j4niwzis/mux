@@ -14,6 +14,7 @@ import mux.matrix;
 import mux.media;
 import mux.host;
 import mux.ui;
+import mux.protocols;
 import skiff.paint;
 import skiff.scene;
 import mux.app.network;
@@ -108,22 +109,14 @@ void app::apply(const request::leave_chat&) {
   if (!chosen)
     return;
   const mux::conversation* one = model->find(*chosen);
-  const bool room = one && mux::ui::is_group(*one);
-  splice::visit(splice::overloaded{[&](mux::protocol::xmpp) {
-                               if (!room) {
-                                 root().show_notice("Leaving a direct XMPP chat");
-                                 return;
-                               }
-                               if (!ask.demo)
-                                 net->leave(*chosen);
-                               root().main().info_open = false;
-                             },
-                             [&](mux::protocol::matrix) {
-                               if (!ask.demo)
-                                 net->leave(*chosen);
-                               root().main().info_open = false;
-                             }},
-             chosen->account.speaks);
+  // As its protocol says: where it may not be left, there is no Leave.
+  if (!one || !mux::proto::can_leave(mux::ui::protocol_state_of(chosen->account), *one)) {
+    root().show_notice("This chat cannot be left");
+    return;
+  }
+  if (!ask.demo)
+    net->leave(*chosen);
+  root().main().info_open = false;
 }
 
 void app::apply(const request::back&) { this->show_conversations(); }

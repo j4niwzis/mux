@@ -2551,6 +2551,8 @@ struct info_panel : nodes::Stack {
     // Telegram shows a group's description and its link.
     std::string topic;
     std::vector<std::string> addresses;
+    // Whether its protocol lets it be left: its Leave tile only then.
+    bool leavable = true;
     friend bool operator==(const view&, const view&) = default;
   };
 
@@ -2581,7 +2583,7 @@ struct info_panel : nodes::Stack {
         manage_tile manage;
         leave_tile leave;
       } parts;
-      tiles_row(Actions* a, bool muted)
+      tiles_row(Actions* a, bool muted, bool leavable)
           : parts{.mute = mute_tile(muted ? "Unmute" : "Mute", icon::bell{}, {a}),
                   .manage = manage_tile("Manage", icon::sliders{}, {a}),
                   .leave = leave_tile("Leave", icon::leave{}, {a})} {
@@ -2591,6 +2593,7 @@ struct info_panel : nodes::Stack {
         parts.mute.apply({.grow = scene::axes::kX});
         parts.manage.apply({.grow = scene::axes::kX});
         parts.leave.apply({.grow = scene::axes::kX});
+        parts.leave.setVisible(leavable);
       }
     };
     // A member's own: a message to them.
@@ -2650,7 +2653,7 @@ struct info_panel : nodes::Stack {
       if (shown.of_person)
         person_tiles.emplace(a, panel);
       else
-        tiles.emplace(a, shown.muted);
+        tiles.emplace(a, shown.muted, shown.leavable);
       for (nodes::Text* centred : {&name, &status}) {
         centred->setElided(true);
         centred->apply({.alignSelf = scene::align::kMiddle, .margin = {4.0f, 20.0f, 0.0f, 20.0f}});
@@ -2733,6 +2736,7 @@ struct info_panel : nodes::Stack {
       if (auto link = proto::room_link(protocol_state_of(one.id.account), one))
         group_view.copied = std::move(*link);
     group_view.topic = one.topic.value_or("");
+    group_view.leavable = proto::can_leave(protocol_state_of(one.id.account), one);
     if (one.alias)
       group_view.addresses.push_back(*one.alias);
     std::ranges::copy(one.other_aliases, std::back_inserter(group_view.addresses));

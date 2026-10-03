@@ -8,7 +8,9 @@ export module mux.app.proto.matrix;
 import std;
 import splice;
 import mux.core;
+import mux.config;
 import mux.proto.matrix.changes;
+import mux.proto.matrix.requests;
 import mux.ui;
 import mux.ui.proto.matrix;
 
@@ -70,3 +72,80 @@ void program_told(App& app, const sessions_refused& said) {
 }
 
 }  // namespace mux::proto::matrix
+
+// What Matrix's UI asks, done: each for the account whose pages are open.
+export namespace mux::proto::matrix::request {
+
+// Asked with a passphrase (or the account's password) first: its dialog up,
+// for that account.
+template <class App, class Purpose>
+void with_passphrase(App& app, Purpose purpose) {
+  app.with_chosen_account([&](auto&, config::account_t& account) {
+    app.keys_of = App::id_of(account);
+    app.root().ask_passphrase(purpose);
+  });
+}
+template <class App>
+void program_asked(App& app, const setup_cross_signing&) {
+  with_passphrase(app, config::passphrase_for::cross_signing{});
+}
+template <class App>
+void program_asked(App& app, const restore_cross_signing&) {
+  with_passphrase(app, config::passphrase_for::recovery{});
+}
+template <class App>
+void program_asked(App& app, const reset_identity&) {
+  with_passphrase(app, config::passphrase_for::reset_identity{});
+}
+template <class App>
+void program_asked(App& app, const sign_out_unverified&) {
+  with_passphrase(app, config::passphrase_for::sign_out_unverified{});
+}
+template <class App>
+void program_asked(App& app, const export_room_keys&) {
+  with_passphrase(app, config::passphrase_for::export_keys{});
+}
+template <class App>
+void program_asked(App& app, const import_room_keys&) {
+  with_passphrase(app, config::passphrase_for::import_keys{});
+}
+// Element's Secure Backup: made anew, or deleted.
+template <class App>
+void program_asked(App& app, const reset_backup&) {
+  app.with_chosen_account([&](auto&, config::account_t& account) {
+    if (!app.shared.demo())
+      app.net->reset_backup(App::id_of(account));
+  });
+}
+template <class App>
+void program_asked(App& app, const delete_backup&) {
+  app.with_chosen_account([&](auto&, config::account_t& account) {
+    if (!app.shared.demo())
+      app.net->delete_backup(App::id_of(account));
+  });
+}
+// The sessions: one verified by emoji, some signed out, one renamed, listed.
+template <class App>
+void program_asked(App& app, const verify_session& one) {
+  app.with_chosen_account([&](auto&, config::account_t& account) {
+    app.net->verify_start(App::id_of(account), config::address_of(account), one.device);
+  });
+}
+template <class App>
+void program_asked(App& app, const sign_out_sessions& one) {
+  app.with_chosen_account([&](auto&, config::account_t& account) {
+    app.net->sign_out_sessions(App::id_of(account), one.devices, one.password);
+  });
+}
+template <class App>
+void program_asked(App& app, const rename_session& one) {
+  app.with_chosen_account([&](auto&, config::account_t& account) {
+    app.net->rename_session(App::id_of(account), one.device, one.name);
+  });
+}
+template <class App>
+void program_asked(App& app, const refresh_sessions&) {
+  app.with_chosen_account([&](auto&, config::account_t& account) { app.net->list_sessions(App::id_of(account)); });
+}
+
+}  // namespace mux::proto::matrix::request

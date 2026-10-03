@@ -74,6 +74,12 @@ struct own_messages {};
 // own, in the protocol's UI module (page_title, page_icon, page_type).
 template <class... Pages>
 struct account_page_list {};
+// What a protocol's own UI asks of the program, beside what every
+// protocol's does: its request types, as requests_of(state) lists them --
+// the program's requests made of them all, each done by its overload of
+// program_asked(app, request) in the protocol's program glue.
+template <class... Requests>
+struct request_list {};
 
 }  // namespace mux::proto
 
@@ -93,6 +99,8 @@ inline std::optional<std::string> person_link(const auto&, std::string_view) { r
 inline std::string unheard_presence(const auto&) { return {}; }
 // No pages of its own.
 constexpr account_page_list<> account_pages(const auto&) { return {}; }
+// No requests of its own.
+constexpr request_list<> requests_of(const auto&) { return {}; }
 // Any chat may be left.
 inline bool can_leave(const auto&, const conversation&) { return true; }
 // Whom a direct chat is with: the chat's own address.
@@ -220,6 +228,12 @@ inline constexpr struct can_leave_t {
   }
 } can_leave{};
 
+// A protocol's own requests, asked of its state type.
+template <class State>
+constexpr auto protocol_requests_of(const State& state) {
+  using defaults::requests_of;
+  return requests_of(state);
+}
 // A protocol's own account pages, asked of its state type.
 template <class State>
 constexpr auto account_pages_of(const State& state) {

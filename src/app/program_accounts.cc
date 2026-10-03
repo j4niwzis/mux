@@ -682,19 +682,6 @@ void app::apply(const request::account_page& one) {
     panel.show_page(one.page, account, *model, proxies, theme);
   });
 }
-void app::apply(const request::sign_out_sessions& one) {
-  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-    net->sign_out_sessions(id_of(account), one.devices, one.password);
-  });
-}
-void app::apply(const request::rename_session& one) {
-  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-    net->rename_session(id_of(account), one.device, one.name);
-  });
-}
-void app::apply(const request::refresh_sessions&) {
-  this->with_chosen_account([&](accounts&, mux::config::account_t& account) { net->list_sessions(id_of(account)); });
-}
 
 void app::apply(const request::accept_identity& one) {
   if (!shared.demo())
@@ -706,8 +693,8 @@ void app::apply(const request::flip_only_verified&) {
     if (kept == nullptr)
       return;
     *kept = !kept->value_or(false);
-    if (auto* page = panel.privacy())
-      page->show_only_verified(**kept);
+    // Shown on its page, where the page shown is one that shows it.
+    panel.tell_shown([&](auto& page) -> decltype(void(page.show_only_verified(true))) { page.show_only_verified(**kept); });
     // Told to that account, running, where its client can: its sessions'
     // keys go so from now.
     net->set_only_verified(id_of(account), **kept);

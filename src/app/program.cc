@@ -98,6 +98,12 @@ struct app : kept_settings {
   }
   template <class Part, class Request>
   static constexpr bool takes = requires(Part& part, const Request& one) { part.apply(one); };
+  // A protocol's own request: done as its program glue says (mux.app.proto).
+  template <class Request>
+    requires requires(app& self, const Request& one) { program_asked(self, one); }
+  void route(const Request& one) {
+    program_asked(*this, one);
+  }
   template <class Request>
   void route(const Request& one) {
     static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> ||
@@ -471,11 +477,7 @@ struct app : kept_settings {
   void apply(const request::set_typing_sent&);
   void apply(const request::set_previews_direct&);
   void apply(const request::give_passphrase&);
-  void apply(const request::export_room_keys&);
-  void apply(const request::setup_cross_signing&);
-  void apply(const request::restore_cross_signing&);
   void apply(const request::verify_person&);
-  void apply(const request::verify_session&);
   void apply(const request::verify_accept_now&);
   void apply(const request::verify_cancel_now&);
   void apply(const request::verify_match&);
@@ -483,7 +485,6 @@ struct app : kept_settings {
   void apply(const request::close_verification&);
   // The verification its dialog shows: its account, and its transaction.
   std::optional<std::pair<mux::account_id, std::string>> verifying;
-  void apply(const request::import_room_keys&);
   // The account whose room keys a passphrase was asked for.
   std::optional<mux::account_id> keys_of;
   void apply(const request::flip_local_encryption&);
@@ -525,9 +526,6 @@ struct app : kept_settings {
         *up);
   }
   void apply(const request::account_page& one);
-  void apply(const request::sign_out_sessions& one);
-  void apply(const request::rename_session& one);
-  void apply(const request::refresh_sessions&);
   // The account's id, as the model knows it, of a saved one.
   [[nodiscard]] static mux::account_id id_of(const mux::config::account_t& account) {
     const std::string address = mux::config::address_of(account);
@@ -535,10 +533,6 @@ struct app : kept_settings {
   }
   void apply(const request::flip_account_receipts&);
   void apply(const request::flip_only_verified&);
-  void apply(const request::reset_identity&);
-  void apply(const request::reset_backup&);
-  void apply(const request::delete_backup&);
-  void apply(const request::sign_out_unverified&);
   void apply(const request::accept_identity& one);
   void apply(const request::set_account_colour& one);
   void apply(const request::flip_account_strip&);

@@ -1165,51 +1165,10 @@ void app::apply(const request::flip_local_encryption&) {
 void app::apply(const request::change_passphrase&) { root().ask_passphrase(mux::config::passphrase_for::change{}); }
 // Emoji verification: begun from a person's card or a session's row; its
 // dialog's answers, to the verification it shows.
-void app::apply(const request::setup_cross_signing&) {
-  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-    keys_of = id_of(account);
-    root().ask_passphrase(mux::config::passphrase_for::cross_signing{});
-  });
-}
 // Element's Secure Backup and Sessions: the backup made anew or deleted,
 // for the account whose page is open; one's unverified sessions signed out,
 // the password asked first.
-void app::apply(const request::reset_backup&) {
-  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-    if (!shared.demo())
-      net->reset_backup(id_of(account));
-  });
-}
-void app::apply(const request::delete_backup&) {
-  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-    if (!shared.demo())
-      net->delete_backup(id_of(account));
-  });
-}
-void app::apply(const request::sign_out_unverified&) {
-  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-    keys_of = id_of(account);
-    root().ask_passphrase(mux::config::passphrase_for::sign_out_unverified{});
-  });
-}
-void app::apply(const request::reset_identity&) {
-  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-    keys_of = id_of(account);
-    root().ask_passphrase(mux::config::passphrase_for::reset_identity{});
-  });
-}
-void app::apply(const request::restore_cross_signing&) {
-  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-    keys_of = id_of(account);
-    root().ask_passphrase(mux::config::passphrase_for::recovery{});
-  });
-}
 void app::apply(const request::verify_person& one) { net->verify_start(one.who.account, one.who.id, std::nullopt); }
-void app::apply(const request::verify_session& one) {
-  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-    net->verify_start(id_of(account), mux::config::address_of(account), one.device);
-  });
-}
 void app::apply(const request::verify_accept_now&) {
   if (verifying)
     net->verify_accept(verifying->first, verifying->second);
@@ -1233,17 +1192,5 @@ void app::apply(const request::close_verification&) {
 }
 
 // From an account's Privacy page: its room keys, to a file or from one.
-void app::apply(const request::export_room_keys&) {
-  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-    keys_of = id_of(account);
-    root().ask_passphrase(mux::config::passphrase_for::export_keys{});
-  });
-}
-void app::apply(const request::import_room_keys&) {
-  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-    keys_of = id_of(account);
-    root().ask_passphrase(mux::config::passphrase_for::import_keys{});
-  });
-}
 
 }  // namespace mux::app

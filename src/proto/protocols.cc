@@ -11,6 +11,7 @@ export import mux.proto.kept;
 export import mux.proto;
 export import mux.proto.xmpp;
 export import mux.proto.matrix;
+export import mux.proto.matrix.requests;
 
 export namespace mux::proto {
 

@@ -22,6 +22,7 @@ import skiff.widgets.textbox;
 import mux.core;
 import mux.config;
 import mux.proto.kept;
+import mux.proto.matrix.requests;
 import mux.ui;
 
 
@@ -703,7 +704,7 @@ struct account_sessions : nodes::Stack {
   struct verify_one {
     account_sessions* page;
     std::string device;
-    void operator()() const { page->actions->verify_session(device); }
+    void operator()() const { page->actions->ask_for(request::verify_session{device}); }
   };
   struct start_rename {
     account_sessions* page;
@@ -717,7 +718,7 @@ struct account_sessions : nodes::Stack {
   };
   struct reload {
     Actions* actions;
-    void operator()() const { actions->refresh_sessions(); }
+    void operator()() const { actions->ask_for(request::refresh_sessions{}); }
   };
   // One session: its name over its ID, when and where it was last seen;
   // Rename, and Sign out where it is not this one.
@@ -793,12 +794,12 @@ struct account_sessions : nodes::Stack {
   // set up here, or brought back with the recovery key -- the Privacy page's
   // own rows, the same buttons. Without it, a session verified by emoji is
   // trusted only by the client that verified it, and nothing is signed.
-  using set_up_row = row_item<ask<Actions, &Actions::setup_cross_signing>>;
-  using restore_row = row_item<ask<Actions, &Actions::restore_cross_signing>>;
-  using reset_row = row_item<ask<Actions, &Actions::reset_identity>>;
-  using reset_backup_row = row_item<ask<Actions, &Actions::reset_backup>>;
-  using delete_backup_row = row_item<ask<Actions, &Actions::delete_backup>>;
-  using sign_out_unverified_row = row_item<ask<Actions, &Actions::sign_out_unverified>>;
+  using set_up_row = row_item<asks<Actions, request::setup_cross_signing>>;
+  using restore_row = row_item<asks<Actions, request::restore_cross_signing>>;
+  using reset_row = row_item<asks<Actions, request::reset_identity>>;
+  using reset_backup_row = row_item<asks<Actions, request::reset_backup>>;
+  using delete_backup_row = row_item<asks<Actions, request::delete_backup>>;
+  using sign_out_unverified_row = row_item<asks<Actions, request::sign_out_unverified>>;
   struct parts_t {
     nodes::Text verification_title = section_title("DEVICE VERIFICATION");
     nodes::Text verification_note{"To verify device identity and grant access to encrypted messages: cross-signing. "
@@ -828,7 +829,7 @@ struct account_sessions : nodes::Stack {
   std::vector<std::string> others;
 
   // Its sessions asked of the server as it opens.
-  explicit account_sessions(Actions* a)
+  account_sessions(Actions* a, const config::account_t&, const model&)
       : actions(a), parts{.set_up = set_up_row("Set up cross-signing\u2026", {a}),
                           .restore = restore_row("Restore with the recovery key\u2026", {a}),
                           .reset = reset_row("Reset your identity\u2026", {a}),
@@ -852,7 +853,7 @@ struct account_sessions : nodes::Stack {
     parts.refresh.apply({.width = 100.0f, .height = 30.0f});
     for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.current_title, &parts.others_title})
       each->setVisible(false);
-    a->refresh_sessions();
+    a->ask_for(request::refresh_sessions{});
   }
   // Element's Security, under Device verification: whether this session has
   // the cross-signing keys, and whether room keys are backed up.
@@ -906,7 +907,7 @@ struct account_sessions : nodes::Stack {
     parts.note.setText("Signing out…");
     parts.note.setColour(dim_colour);
     parts.note.setVisible(true);
-    actions->sign_out_sessions(std::move(devices), parts.password.parts.field.text());
+    actions->ask_for(request::sign_out_sessions{std::move(devices), parts.password.parts.field.text()});
     this->invalidateLayout();
   }
   [[nodiscard]] session_row* row_at(std::size_t index) {
@@ -921,8 +922,56 @@ struct account_sessions : nodes::Stack {
   void rename(std::size_t index) {
     if (session_row* row = this->row_at(index)) {
       row->show_field(false);
-      actions->rename_session(row->device, row->parts.field.text());
+      actions->ask_for(request::rename_session{row->device, row->parts.field.text()});
     }
+  }
+  void say(std::string, bool) {}
+};
+
+// The account's Encryption page, as Element's Cryptography: room keys to
+// verified sessions only; this session, its ID and its key in fours, to be
+// compared with what another session shows; its room keys exported or
+// imported, as Element does them; cross-signing set up, or restored.
+template <class Actions>
+struct encryption_page : nodes::Stack {
+  using only_verified_row = switch_row<ask<Actions, &Actions::flip_only_verified>>;
+  using export_row = row_item<asks<Actions, request::export_room_keys>>;
+  using import_row = row_item<asks<Actions, request::import_room_keys>>;
+  using cross_signing_row = row_item<asks<Actions, request::setup_cross_signing>>;
+  using recovery_row = row_item<asks<Actions, request::restore_cross_signing>>;
+  struct parts_t {
+    nodes::Text title = section_title("ENCRYPTION");
+    only_verified_row only_verified;
+    nodes::Text session_line{"", 13.0f, dim_colour};
+    export_row export_keys;
+    import_row import_keys;
+    cross_signing_row cross_signing;
+    recovery_row recovery;
+  } parts;
+
+  encryption_page(Actions* a, const config::account_t& one, const model& now)
+      : parts{.only_verified = only_verified_row("Never send encrypted messages to unverified sessions", {a}),
+              .export_keys = export_row("Export room keys\u2026", {a}),
+              .import_keys = import_row("Import room keys\u2026", {a}),
+              .cross_signing = cross_signing_row("Set up cross-signing\u2026", {a}),
+              .recovery = recovery_row("Restore with the recovery key\u2026", {a})} {
+    this->setGap(8.0f);
+    fState.apply({.fill = true});
+    parts.only_verified.parts.toggle.setOnNow(config::only_verified_of(one));
+    const std::string& address = config::address_of(one);
+    this->show_session(now.own_session_of(account_id{protocol_of(address), address}));
+  }
+  void show_only_verified(bool on) { parts.only_verified.parts.toggle.setOn(on); }
+  void show_session(const std::pair<std::string, std::string>* own) {
+    parts.session_line.setVisible(own != nullptr);
+    if (own == nullptr)
+      return;
+    const std::string grouped = own->second | std::views::enumerate | std::views::transform([](const auto& at) {
+                                  const auto [index, letter] = at;
+                                  return index > 0 && index % 4 == 0 ? std::string{' ', letter} : std::string(1, letter);
+                                }) |
+                                std::views::join | std::ranges::to<std::string>();
+    parts.session_line.setText(std::format("Session ID: {}\nSession key: {}", own->first, grouped));
   }
   void say(std::string, bool) {}
 };
@@ -936,6 +985,12 @@ using sessions_page = settings_detail::account_sessions<Actions>;
 }  // namespace mux::proto::matrix
 
 export namespace mux::proto::matrix::settings {
+constexpr std::string_view page_title(encryption) { return "Encryption"; }
+inline ui::icon_t page_icon(encryption) { return ui::icon::check{}; }
+template <class Actions>
+constexpr std::type_identity<settings_detail::encryption_page<Actions>> page_type(encryption, std::type_identity<Actions>) {
+  return {};
+}
 constexpr std::string_view page_title(sessions) { return "Sessions"; }
 inline ui::icon_t page_icon(sessions) { return ui::icon::info{}; }
 template <class Actions>

@@ -292,7 +292,8 @@ inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 //   void choose_new_proxy(int)       -- the proxy of an account being added
 //   void accounts_back()              -- ← on the accounts page
 //   void account_page(account_page_t) -- a page of the chosen account
-//   void flip_account_receipts(), flip_only_verified(), accept_identity(who), reset_identity(), reset_backup(), delete_backup(), sign_out_unverified(), flip_account_typing(), choose_account_proxy(int), manage_proxies()
+//   void flip_account_receipts(), flip_only_verified(), accept_identity(who), flip_account_typing(), choose_account_proxy(int), manage_proxies()
+//   template <class Request> void ask_for(Request) -- a protocol's own request (asks<Actions, Request>)
 //   void typing(bool)                -- the composer has text in it, or not
 //   void settings_proxies(), add_proxy(), edit_proxy(int), proxy_kind(int),
 //        save_proxy_profile(), delete_proxy_profile()
@@ -342,6 +343,14 @@ template <class Actions, auto Method>
 struct ask {
   Actions* actions = nullptr;
   void operator()() const { (actions->*Method)(); }
+};
+// A protocol's own request with nothing to say but itself, as its UI asks
+// it: `asks<Actions, request::refresh_sessions>`, through the program's
+// ask_for.
+template <class Actions, class Request>
+struct asks {
+  Actions* actions = nullptr;
+  void operator()() const { actions->ask_for(Request{}); }
 };
 // The requests about one saved account.
 template <class Actions>

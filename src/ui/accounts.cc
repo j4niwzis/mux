@@ -252,29 +252,14 @@ inline nodes::Text section_title(std::string text) { return nodes::Text(std::mov
 template <class Actions>
 struct account_privacy : nodes::Stack {
   using receipts_row = switch_row<ask<Actions, &Actions::flip_account_receipts>>;
-  using only_verified_row = switch_row<ask<Actions, &Actions::flip_only_verified>>;
   using notify_row = switch_row<ask<Actions, &Actions::flip_account_notify>>;
   using notify_sound_row = switch_row<ask<Actions, &Actions::flip_account_notify_sound>>;
-  using export_row = row_item<ask<Actions, &Actions::export_room_keys>>;
-  using import_row = row_item<ask<Actions, &Actions::import_room_keys>>;
-  using cross_signing_row = row_item<ask<Actions, &Actions::setup_cross_signing>>;
-  using recovery_row = row_item<ask<Actions, &Actions::restore_cross_signing>>;
   struct parts_t {
     nodes::Text title = section_title("PRIVACY");
     receipts_row receipts;
-    // Element's: room keys to verified sessions only.
-    only_verified_row only_verified;
-    // This session, as Element's Cryptography names it: its ID and its key,
-    // in fours, to be compared with what another session shows.
-    nodes::Text session_line{"", 13.0f, dim_colour};
     typing_choice<Actions> typing;
     notify_row notify;
     notify_sound_row notify_sound;
-    // Its room keys (Matrix's end-to-end encryption), as Element exports them.
-    export_row export_keys;
-    import_row import_keys;
-    cross_signing_row cross_signing;
-    recovery_row recovery;
     nodes::Text note{"Off, the people you talk to through this account are not told when you have read their "
                      "messages, or that you are typing. Theirs are still shown, and receipts are still kept here.",
                      13.0f, dim_colour};
@@ -285,14 +270,9 @@ struct account_privacy : nodes::Stack {
                   bool notify_sound_on = true, std::optional<bool> faces_on = std::nullopt,
                   std::optional<std::int64_t> jump_most = std::nullopt, std::optional<bool> previews_on = std::nullopt)
       : parts{.receipts = receipts_row("Send read receipts", {a}),
-              .only_verified = only_verified_row("Never send encrypted messages to unverified sessions", {a}),
               .typing = typing_choice<Actions>(a, choice_level::account{}, typing_on),
               .notify = notify_row("Desktop notifications from it", {a}),
-              .notify_sound = notify_sound_row("Their sound", {a}),
-              .export_keys = export_row("Export room keys\u2026", {a}),
-              .import_keys = import_row("Import room keys\u2026", {a}),
-              .cross_signing = cross_signing_row("Set up cross-signing\u2026", {a}),
-              .recovery = recovery_row("Restore with the recovery key\u2026", {a})} {
+              .notify_sound = notify_sound_row("Their sound", {a})} {
     (void)events_all, (void)kinds, (void)faces_on, (void)jump_most, (void)previews_on;
     this->setGap(8.0f);
     parts.note.apply({.fillX = true});
@@ -303,18 +283,6 @@ struct account_privacy : nodes::Stack {
     parts.notify_sound.parts.toggle.setOnNow(notify_sound_on);
   }
   void show(bool receipts_on) { parts.receipts.parts.toggle.setOn(receipts_on); }
-  void show_only_verified(bool on) { parts.only_verified.parts.toggle.setOn(on); }
-  void show_session(const std::pair<std::string, std::string>* own) {
-    parts.session_line.setVisible(own != nullptr);
-    if (own == nullptr)
-      return;
-    const std::string grouped = own->second | std::views::enumerate | std::views::transform([](const auto& at) {
-                                  const auto [index, letter] = at;
-                                  return index > 0 && index % 4 == 0 ? std::string{' ', letter} : std::string(1, letter);
-                                }) |
-                                std::views::join | std::ranges::to<std::string>();
-    parts.session_line.setText(std::format("Session ID: {}\nSession key: {}", own->first, grouped));
-  }
   void say(std::string, bool) {}
 };
 
@@ -630,12 +598,6 @@ struct accounts_panel : closes_on_escape<Actions> {
                                            config::notify_of(one).value_or(true), config::notify_sound_of(one).value_or(true),
                                            config::show_receipts_of(one), config::jump_search_of(one),
                                            config::link_previews_of(one));
-              if (auto* privacy = this->privacy()) {
-                privacy->show_only_verified(config::only_verified_of(one));
-                // Its own session, where its protocol keeps one (none: nothing shown).
-                const std::string address = config::address_of(one);
-                privacy->show_session(now.own_session_of(account_id{protocol_of(address), address}));
-              }
             },
             [&](account_page::chats) {
               detail.template emplace<5>(this->actions, config::room_events_of(one), config::room_event_kinds_of(one),
@@ -647,7 +609,8 @@ struct accounts_panel : closes_on_escape<Actions> {
             [&](account_page::proxy) { detail.template emplace<4>(this->actions, proxies, config::proxy_of(one)); },
             // A protocol's own: its node, made for the program's actions.
             [&]<class Page>(Page) {
-              detail.template emplace<typename decltype(page_type(Page{}, std::type_identity<Actions>{}))::type>(this->actions);
+              detail.template emplace<typename decltype(page_type(Page{}, std::type_identity<Actions>{}))::type>(this->actions, one,
+                                                                                                                 now);
             }},
         page);
     this->fit_detail();
@@ -666,6 +629,19 @@ struct accounts_panel : closes_on_escape<Actions> {
   }
   // The page shown, where it is one of this type: a protocol's own, as the
   // program tells it what its protocol's client says.
+  // Something told to the page shown, where it takes it: f(page), where
+  // that is a call.
+  template <class F, class Page>
+    requires std::invocable<F&, Page&>
+  static void tell(F& f, Page& page) {
+    f(page);
+  }
+  template <class F, class Page>
+  static void tell(F&, Page&) {}
+  template <class F>
+  void tell_shown(F f) {
+    splice::visit([&](auto& page) { tell(f, page); }, detail);
+  }
   template <class Node>
   [[nodiscard]] Node* shown_page() {
     return splice::visit(splice::overloaded{[](Node& one) { return &one; }, [](auto&) -> Node* { return nullptr; }}, detail);

@@ -8,6 +8,7 @@ import skiff.scene;
 import mux.core;
 import mux.config;
 import mux.ui;
+import mux.protocols;
 import mux.app.network;
 
 export namespace mux::app {
@@ -441,14 +442,8 @@ struct give_passphrase {
 };
 // Emoji verification: with a person (all their devices), with one of this
 // account's sessions; and the answers in its dialog.
-// Cross-signing set up for the chosen account.
-struct setup_cross_signing {};
-struct restore_cross_signing {};
 struct verify_person {
   mux::conversation_id who;  // the account, and the person's ID
-};
-struct verify_session {
-  std::string device;
 };
 struct verify_accept_now {};
 struct verify_cancel_now {};
@@ -456,8 +451,6 @@ struct verify_match {};
 struct verify_mismatch {};
 struct close_verification {};
 // The chosen account's room keys, to a file or from one.
-struct export_room_keys {};
-struct import_room_keys {};
 // Local data's encryption flipped from Storage: a passphrase asked for.
 struct flip_local_encryption {};
 struct change_passphrase {};
@@ -535,26 +528,11 @@ struct toggle_mute_of {
 };
 struct close_account_pages {};
 struct accounts_back {};
-// The chosen account's sessions: some signed out (with the password typed,
-// where one is), one renamed, the list asked again.
-struct sign_out_sessions {
-  std::vector<std::string> devices;
-  std::string password;
-};
-struct rename_session {
-  std::string device;
-  std::string name;
-};
-struct refresh_sessions {};
 struct account_page {
   mux::ui::account_page_t page = mux::ui::account_page::connection{};
 };
 struct flip_account_receipts {};
 struct flip_only_verified {};
-struct reset_identity {};
-struct reset_backup {};
-struct delete_backup {};
-struct sign_out_unverified {};
 // A person's reset identity accepted, as Element's "Withdraw verification".
 struct accept_identity {
   mux::conversation_id who;
@@ -610,7 +588,22 @@ struct settings_animations {};
 
 // Every request, one of them: a splice::variant, built in time linear in how
 // many there are (std::variant's nested union made it quadratic).
-using request_t = splice::variant<request::choose, request::back, request::open_accounts, request::open_new_account, request::add_account_of, request::select_account, request::toggle_advanced, request::toggle_plain, request::submit_login, request::flip_enabled, request::remove_account, request::open_drawer, request::show_account, request::set_motion, request::quit, request::open_settings, request::close_settings, request::settings_home, request::settings_animations, request::pop_panel, request::toggle_info, request::load_older, request::load_context, request::load_newer, request::jump_to_end, request::return_to_chat, request::menu_copy_image, request::copy_picture, request::message_menu, request::menu_copy_link, request::menu_copy_url, request::menu_fave_sticker, request::menu_save, request::react, request::menu_react, request::close_menu, request::menu_reply, request::menu_quote_reply, request::menu_edit, request::menu_copy, request::menu_delete, request::cancel_compose, request::retry_unsent, request::discard_unsent, request::open_url, request::switch_account, request::submit_message, request::send_typed, request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_search, request::edit_last, request::reply_step, request::close_search, request::search_typed, request::search_step, request::search_pick, request::open_member_info, request::reply_to, request::open_picture, request::open_avatar, request::close_picture, request::save_picture, request::open_video, request::stop_jump, request::press_loader, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::flip_strip_metadata, request::flip_show_deleted, request::flip_rename_pictures, request::close_notice, request::close_person_info, request::close_room_card, request::join_room_card, request::knock_room_card, request::decline_room_card, request::jump_to_mark, request::list_marks, request::go_to_mark, request::close_marks, request::open_explore, request::close_explore, request::search_rooms, request::explore_space, request::manage_space, request::flip_forum, request::flip_home_hide, request::close_forum, request::manage_forum, request::join_directory_room, request::create_room, request::settings_notifications, request::flip_notify, request::flip_unified_push, request::set_notify_backend, request::flip_account_notify, request::flip_account_notify_sound, request::set_chat_notify, request::set_room_event_kind, request::set_room_events, request::set_receipts_shown, request::set_link_previews, request::set_typing_sent, request::set_previews_direct, request::give_passphrase, request::export_room_keys, request::import_room_keys, request::setup_cross_signing, request::restore_cross_signing, request::verify_person, request::verify_session, request::verify_accept_now, request::verify_cancel_now, request::verify_match, request::verify_mismatch, request::close_verification, request::flip_local_encryption, request::change_passphrase, request::set_jump_search, request::toggle_emoji, request::set_account_colour, request::flip_account_strip, request::open_replacement, request::place_chat, request::unplace_chat, request::flip_chat_strip, request::set_chat_strip_colour, request::attach_in_thread, request::toggle_thread_emoji, request::close_emoji, request::insert_emoji, request::menu_save_gif, request::menu_pin, request::menu_reactions, request::close_reactions, request::open_manage, request::close_manage, request::room_act, request::menu_forward, request::close_forward, request::forward_to, request::menu_view_source, request::explore_state, request::open_send_custom, request::close_devtools, request::send_custom, request::open_new_chat, request::close_new_chat, request::find_people, request::search_elsewhere, request::open_new_room, request::close_new_room, request::open_wallpaper, request::close_wallpaper, request::set_wallpaper, request::set_bubbles, request::toggle_threads, request::open_thread, request::close_thread, request::send_in_thread, request::menu_thread, request::open_packs, request::open_room_packs, request::close_packs, request::save_pack, request::delete_pack, request::pick_pack_images, request::copy_text, request::start_direct, request::start_group, request::flip_room_events, request::flip_account_room_events, request::flip_chat_room_events, request::show_gifs, request::send_gif, request::send_sticker, request::play_audio, request::resize_info, request::choose_new_proxy, request::toggle_mute, request::toggle_mute_of, request::close_account_pages, request::accounts_back, request::account_page, request::sign_out_sessions, request::rename_session, request::refresh_sessions, request::flip_account_receipts, request::flip_only_verified, request::reset_identity, request::reset_backup, request::delete_backup, request::sign_out_unverified, request::accept_identity, request::typing, request::proxy_kind, request::choose_account_proxy, request::manage_proxies, request::settings_proxies, request::add_proxy, request::edit_proxy, request::save_proxy_profile, request::delete_proxy_profile, request::settings_appearance, request::settings_rendering, request::settings_storage, request::change_limit, request::clear_stored, request::set_theme, request::set_renderer, request::flip_partial_redraw, request::flip_flash_redraws, request::flip_vsync, request::flip_show_fps, request::set_window_opacity, request::set_interface_scale, request::flip_wallpaper_behind, request::flip_live_blur, request::set_frost_blur, request::place_spaces, request::set_space_bars, request::flip_spaces, request::flip_top_bar, request::set_home_hides, request::set_home_direct, request::set_accent, request::leave_chat, request::close_chat>;
+// Every protocol's own requests, as each lists them.
+template <class List>
+struct request_types;
+template <class... Requests>
+struct request_types<mux::proto::request_list<Requests...>> {
+  using type = mux::ui::type_list<Requests...>;
+};
+template <class>
+struct protocol_requests;
+template <class... Tags>
+struct protocol_requests<mux::protocol_list<Tags...>> {
+  using type = typename mux::ui::joined<
+      mux::ui::type_list<>, typename request_types<decltype(mux::proto::protocol_requests_of(::mux::state_of<Tags>{}))>::type...>::type;
+};
+// What the window asks: the client's requests, then each protocol's own.
+using request_t = typename mux::ui::variant_of_types<typename mux::ui::joined<mux::ui::type_list<request::choose, request::back, request::open_accounts, request::open_new_account, request::add_account_of, request::select_account, request::toggle_advanced, request::toggle_plain, request::submit_login, request::flip_enabled, request::remove_account, request::open_drawer, request::show_account, request::set_motion, request::quit, request::open_settings, request::close_settings, request::settings_home, request::settings_animations, request::pop_panel, request::toggle_info, request::load_older, request::load_context, request::load_newer, request::jump_to_end, request::return_to_chat, request::menu_copy_image, request::copy_picture, request::message_menu, request::menu_copy_link, request::menu_copy_url, request::menu_fave_sticker, request::menu_save, request::react, request::menu_react, request::close_menu, request::menu_reply, request::menu_quote_reply, request::menu_edit, request::menu_copy, request::menu_delete, request::cancel_compose, request::retry_unsent, request::discard_unsent, request::open_url, request::switch_account, request::submit_message, request::send_typed, request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_search, request::edit_last, request::reply_step, request::close_search, request::search_typed, request::search_step, request::search_pick, request::open_member_info, request::reply_to, request::open_picture, request::open_avatar, request::close_picture, request::save_picture, request::open_video, request::stop_jump, request::press_loader, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::flip_strip_metadata, request::flip_show_deleted, request::flip_rename_pictures, request::close_notice, request::close_person_info, request::close_room_card, request::join_room_card, request::knock_room_card, request::decline_room_card, request::jump_to_mark, request::list_marks, request::go_to_mark, request::close_marks, request::open_explore, request::close_explore, request::search_rooms, request::explore_space, request::manage_space, request::flip_forum, request::flip_home_hide, request::close_forum, request::manage_forum, request::join_directory_room, request::create_room, request::settings_notifications, request::flip_notify, request::flip_unified_push, request::set_notify_backend, request::flip_account_notify, request::flip_account_notify_sound, request::set_chat_notify, request::set_room_event_kind, request::set_room_events, request::set_receipts_shown, request::set_link_previews, request::set_typing_sent, request::set_previews_direct, request::give_passphrase, request::verify_person, request::verify_accept_now, request::verify_cancel_now, request::verify_match, request::verify_mismatch, request::close_verification, request::flip_local_encryption, request::change_passphrase, request::set_jump_search, request::toggle_emoji, request::set_account_colour, request::flip_account_strip, request::open_replacement, request::place_chat, request::unplace_chat, request::flip_chat_strip, request::set_chat_strip_colour, request::attach_in_thread, request::toggle_thread_emoji, request::close_emoji, request::insert_emoji, request::menu_save_gif, request::menu_pin, request::menu_reactions, request::close_reactions, request::open_manage, request::close_manage, request::room_act, request::menu_forward, request::close_forward, request::forward_to, request::menu_view_source, request::explore_state, request::open_send_custom, request::close_devtools, request::send_custom, request::open_new_chat, request::close_new_chat, request::find_people, request::search_elsewhere, request::open_new_room, request::close_new_room, request::open_wallpaper, request::close_wallpaper, request::set_wallpaper, request::set_bubbles, request::toggle_threads, request::open_thread, request::close_thread, request::send_in_thread, request::menu_thread, request::open_packs, request::open_room_packs, request::close_packs, request::save_pack, request::delete_pack, request::pick_pack_images, request::copy_text, request::start_direct, request::start_group, request::flip_room_events, request::flip_account_room_events, request::flip_chat_room_events, request::show_gifs, request::send_gif, request::send_sticker, request::play_audio, request::resize_info, request::choose_new_proxy, request::toggle_mute, request::toggle_mute_of, request::close_account_pages, request::accounts_back, request::account_page, request::flip_account_receipts, request::flip_only_verified, request::accept_identity, request::typing, request::proxy_kind, request::choose_account_proxy, request::manage_proxies, request::settings_proxies, request::add_proxy, request::edit_proxy, request::save_proxy_profile, request::delete_proxy_profile, request::settings_appearance, request::settings_rendering, request::settings_storage, request::change_limit, request::clear_stored, request::set_theme, request::set_renderer, request::flip_partial_redraw, request::flip_flash_redraws, request::flip_vsync, request::flip_show_fps, request::set_window_opacity, request::set_interface_scale, request::flip_wallpaper_behind, request::flip_live_blur, request::set_frost_blur, request::place_spaces, request::set_space_bars, request::flip_spaces, request::flip_top_bar, request::set_home_hides, request::set_home_direct, request::set_accent, request::leave_chat, request::close_chat>, typename protocol_requests<mux::protocols>::type>::type>::type;
 
 // What the screens ask: each a request, kept until the program applies it
 // between events -- except a message, which goes to the network at once.
@@ -847,17 +840,12 @@ struct actions {
                        std::string file) {
     requests.emplace_back(request::give_passphrase{why, std::move(current), std::move(fresh), std::move(again), std::move(file)});
   }
-  void export_room_keys() { requests.emplace_back(request::export_room_keys{}); }
-  void setup_cross_signing() { requests.emplace_back(request::setup_cross_signing{}); }
-  void restore_cross_signing() { requests.emplace_back(request::restore_cross_signing{}); }
   void verify_person(mux::conversation_id who) { requests.emplace_back(request::verify_person{std::move(who)}); }
-  void verify_session(std::string device) { requests.emplace_back(request::verify_session{std::move(device)}); }
   void verify_accept_now() { requests.emplace_back(request::verify_accept_now{}); }
   void verify_cancel_now() { requests.emplace_back(request::verify_cancel_now{}); }
   void verify_match() { requests.emplace_back(request::verify_match{}); }
   void verify_mismatch() { requests.emplace_back(request::verify_mismatch{}); }
   void close_verification() { requests.emplace_back(request::close_verification{}); }
-  void import_room_keys() { requests.emplace_back(request::import_room_keys{}); }
   void flip_local_encryption() { requests.emplace_back(request::flip_local_encryption{}); }
   void change_passphrase() { requests.emplace_back(request::change_passphrase{}); }
   void set_previews_direct(mux::choice_level_t level, std::optional<bool> direct) {
@@ -888,20 +876,14 @@ struct actions {
   void close_account_pages() { requests.emplace_back(request::close_account_pages{}); }
   void accounts_back() { requests.emplace_back(request::accounts_back{}); }
   void account_page(mux::ui::account_page_t page) { requests.emplace_back(request::account_page{std::move(page)}); }
-  void sign_out_sessions(std::vector<std::string> devices, std::string password) {
-    requests.emplace_back(request::sign_out_sessions{std::move(devices), std::move(password)});
-  }
-  void rename_session(std::string device, std::string name) {
-    requests.emplace_back(request::rename_session{std::move(device), std::move(name)});
-  }
-  void refresh_sessions() { requests.emplace_back(request::refresh_sessions{}); }
   void flip_account_receipts() { requests.emplace_back(request::flip_account_receipts{}); }
   void flip_only_verified() { requests.emplace_back(request::flip_only_verified{}); }
-  void reset_identity() { requests.emplace_back(request::reset_identity{}); }
-  void reset_backup() { requests.emplace_back(request::reset_backup{}); }
-  void delete_backup() { requests.emplace_back(request::delete_backup{}); }
-  void sign_out_unverified() { requests.emplace_back(request::sign_out_unverified{}); }
   void accept_identity(mux::conversation_id who) { requests.emplace_back(request::accept_identity{std::move(who)}); }
+  // A protocol's own request, as its UI asks it (mux::ui::asks).
+  template <class Request>
+  void ask_for(Request one) {
+    requests.emplace_back(std::move(one));
+  }
   void typing(bool on) { requests.emplace_back(request::typing{on}); }
   void proxy_kind(mux::config::proxy_kind_t kind) { requests.emplace_back(request::proxy_kind{kind}); }
   void settings_rendering() { requests.emplace_back(request::settings_rendering{}); }

@@ -28,11 +28,13 @@ inline std::optional<std::string> message_link(const state&, const conversation&
     return std::nullopt;
   return message_link_to(chat, event);
 }
-// Its own account page: the sessions, under cross-signing and the key backup.
+// Its own account pages: its encryption, and its sessions under
+// cross-signing and the key backup.
 namespace settings {
+struct encryption {};
 struct sessions {};
 }  // namespace settings
-constexpr account_page_list<settings::sessions> account_pages(const state&) { return {}; }
+constexpr account_page_list<settings::encryption, settings::sessions> account_pages(const state&) { return {}; }
 
 // A direct chat is a room: whom it is with, the member who is not the account.
 inline std::string direct_contact(const state&, const conversation& one) {

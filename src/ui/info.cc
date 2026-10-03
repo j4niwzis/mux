@@ -660,7 +660,7 @@ struct devtools_box : nodes::Stack {
     std::optional<form> sending;
   } parts;
   // What it shows: some text, or the state -- all its events -- at a level.
-  std::vector<change::state_entry> state;
+  std::vector<proto::matrix::state_entry> state;
   std::optional<std::string> type_shown;
   bool showing_state = false;
   std::optional<pick> pending;
@@ -670,7 +670,7 @@ struct devtools_box : nodes::Stack {
     this->lay_out();
     this->show_text(std::move(text));
   }
-  devtools_box(Actions* a, std::vector<change::state_entry> entries)
+  devtools_box(Actions* a, std::vector<proto::matrix::state_entry> entries)
       : actions(a), parts{.header = header_t("Room state", {this}, {a}, false, true)}, state(std::move(entries)) {
     this->lay_out();
     this->show_types();
@@ -716,7 +716,7 @@ struct devtools_box : nodes::Stack {
     type_shown.reset();
     parts.header.parts.back.setVisible(false);
     std::map<std::string, std::size_t> counts;
-    for (const change::state_entry& one : state)
+    for (const proto::matrix::state_entry& one : state)
       ++counts[one.type];
     std::vector<std::pair<std::string, pick>> rows;
     for (const auto& [type, count] : counts)
@@ -728,7 +728,7 @@ struct devtools_box : nodes::Stack {
     type_shown = type;
     parts.header.parts.back.setVisible(true);
     std::vector<std::pair<std::string, pick>> rows;
-    for (const change::state_entry& one : state)
+    for (const proto::matrix::state_entry& one : state)
       if (one.type == type)
         rows.emplace_back(one.key.empty() ? std::string("(empty key)") : one.key, pick{this, type, one.key});
     this->show_rows(std::move(rows));
@@ -773,7 +773,7 @@ struct devtools_box : nodes::Stack {
       this->show_keys(what.type);
       return;
     }
-    for (const change::state_entry& one : state)
+    for (const proto::matrix::state_entry& one : state)
       if (one.type == what.type && one.key == *what.key) {
         parts.header.parts.back.setVisible(true);
         this->show_text(one.json);

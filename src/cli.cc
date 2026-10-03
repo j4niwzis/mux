@@ -92,19 +92,10 @@ std::string of(const change::media_progress& one) {
   return std::format("{}: {}%", one.source, static_cast<int>(one.done * 100.0f));
 }
 std::string of(const change::preview_loaded& one) { return std::format("a preview of {}", one.url); }
-std::string of(const change::devtools_text& one) { return one.title + "\n" + one.text; }
 std::string of(const change::mentioned& one) { return std::format("mentioned in {}", one.in.id); }
 std::string of(const change::marks_shown&) { return std::string(); }
 std::string of(const change::threads_listed& one) { return std::format("{} threads in {}", one.roots.size(), one.in.id); }
-std::string of(const change::packs_listed& one) { return std::format("{} packs", one.packs.size()); }
-std::string of(const change::pack_saved& one) {
-  return std::format("pack {} {}", one.pack.name, one.done ? (one.removed ? "deleted" : "saved") : "not saved");
-}
-std::string of(const change::pack_picture_uploaded& one) { return std::format("uploaded {}", one.picture.url); }
 std::string of(const change::refused& one) { return one.what; }
-std::string of(const change::security_state& one) {
-  return std::format("cross-signing {}, backup {}", one.cross_signing ? "ready" : "not here", one.backup ? "on" : "off");
-}
 std::string of(const change::own_session& one) { return std::format("this session: {} {}", one.device_id, one.ed25519); }
 std::string of(const change::devices_listed& one) { return std::format("{} has {} sessions", one.user, one.devices.size()); }
 std::string of(const change::trust_changed& one) {
@@ -117,11 +108,8 @@ std::string of(const change::notice& one) { return one.heading + ": " + one.what
 std::string of(const change::message_encrypted& one) {
   return std::format("{} {} came encrypted{}", one.in.id, one.id, one.verified ? ", from a verified device" : "");
 }
-std::string of(const change::verification_changed& one) { return std::format("verifying {} {}: {}", one.user, one.device, one.txn); }
 std::string of(const change::event_missing& one) { return std::format("{} has no {}", one.in.id, one.id); }
 std::string of(const change::profile_found& one) { return std::format("profile of {}", one.user); }
-std::string of(const change::sessions_listed& one) { return std::format("{} sessions", one.sessions.size()); }
-std::string of(const change::sessions_refused& one) { return one.why; }
 std::string of(const change::people_found& one) {
   return std::format("{} found for {}", one.people.size(), one.query);
 }
@@ -132,9 +120,6 @@ std::string of(const change::reacted_to_mine& one) { return std::format("a react
 std::string of(const change::mark_taken&) { return std::string(); }
 std::string of(const change::room_previewed& one) {
   return std::format("{}: {}", one.asked, one.preview.name.empty() ? one.preview.note : one.preview.name);
-}
-std::string of(const change::state_listed& one) {
-  return std::format("{} state events of {}", one.entries.size(), one.in.id);
 }
 std::string of(const change::room_created& one) { return std::format("{} was made", one.id.id); }
 std::string of(const change::window_opened& one) { return std::format("a window of {}'s history opened", one.in.id); }
@@ -148,6 +133,11 @@ std::string of(const change::marks_seen&) { return "marks read back as seen"; }
 std::string of(const change::protocol_state_changed& one) { return one.account.address + ": its protocol's state told"; }
 std::string of(const change::members_changed& one) {
   return std::format("{} has {} member{}", one.in.id, one.members.size(), one.members.size() == 1 ? "" : "s");
+}
+// A protocol's own change, as it says itself.
+template <mux::protocol_change Change>
+std::string of(const Change& one) {
+  return describe(one);
 }
 }  // namespace said
 

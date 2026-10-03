@@ -135,7 +135,7 @@ void account<Sink>::upload_pack_picture(pack_picture picture, std::string bytes)
       }
     }
     picture.url = uri.value_or("");
-    sink_(change::pack_picture_uploaded{.by = id_, .picture = std::move(picture), .done = uri.has_value()});
+    sink_(proto::matrix::pack_picture_uploaded{.by = id_, .picture = std::move(picture), .done = uri.has_value()});
   });
 }
 

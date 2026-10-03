@@ -565,7 +565,7 @@ struct window : scene::Node {
   void show_devtools_text(std::string title, std::string text) {
     layer().devtools.open(actions, std::move(title), std::move(text));
   }
-  void show_room_state(std::vector<change::state_entry> entries) { layer().devtools.open(actions, std::move(entries)); }
+  void show_room_state(std::vector<proto::matrix::state_entry> entries) { layer().devtools.open(actions, std::move(entries)); }
   void open_send_custom() { layer().devtools.open(actions, typename devtools_box<Actions>::send_form_t{}); }
   void close_devtools() { layer().devtools.close(); }
 

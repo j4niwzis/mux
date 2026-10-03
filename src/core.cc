@@ -14,8 +14,10 @@ import splice;
 // and each one's account state, protocol_state_t.
 export import mux.proto.tags;
 export import mux.proto.state;
-// What the model is made of; the changes and the model are here.
+// What the model is made of; the changes and the model are here -- each
+// protocol's own changes too (mux.proto.changes).
 export import mux.core.ids;
+export import mux.proto.changes;
 
 export namespace mux {
 
@@ -26,13 +28,6 @@ struct connection_changed {
   connection_t state;
 };
 
-struct verification_changed {
-  account_id by;
-  std::string txn;
-  std::string user;
-  std::string device;
-  verification_step_t step;
-};
 
 // Something done that is said to the user, as a notice: its heading, and
 // what it says.
@@ -51,15 +46,6 @@ struct device_view {
   std::string name;
   bool verified = false;
   friend bool operator==(const device_view&, const device_view&) = default;
-};
-// This session, as Element's Cryptography section names it: its ID, and
-// its key (ed25519), to be compared with what another session shows.
-// Element's Security section: whether this session has the cross-signing
-// keys, and whether the room keys are backed up.
-struct security_state {
-  account_id by;
-  bool cross_signing = false;
-  bool backup = false;
 };
 struct own_session {
   account_id by;
@@ -163,21 +149,6 @@ struct room_previewed {
   room_preview preview;
 };
 
-// What the developer tools show: a title over some JSON or an answer; and a
-// room's state, every event of it, by type and key.
-struct devtools_text {
-  std::string title;
-  std::string text;
-};
-struct state_entry {
-  std::string type;
-  std::string key;
-  std::string json;
-};
-struct state_listed {
-  conversation_id in;
-  std::vector<state_entry> entries;
-};
 
 // A room the user made, to be shown once it is: a direct chat or a group.
 struct room_created {
@@ -322,26 +293,6 @@ struct reacted_to_mine {
   std::string target;
   std::chrono::sys_time<std::chrono::milliseconds> at{};
 };
-// The packs of a room, or one's own, as asked for to edit.
-struct packs_listed {
-  account_id by;
-  std::optional<std::string> room;
-  std::vector<emote_pack> packs;
-};
-// A pack saved -- or taken away, where `removed` -- or not.
-struct pack_saved {
-  account_id by;
-  emote_pack pack;
-  bool removed = false;
-  bool done = false;
-};
-// An image uploaded for a pack being edited: its mxc://, none where it
-// failed.
-struct pack_picture_uploaded {
-  account_id by;
-  pack_picture picture;
-  bool done = false;
-};
 // A room's threads, as the server lists them: their roots, newest first
 // (each root's own message comes aside, with its summary).
 struct threads_listed {
@@ -353,28 +304,6 @@ struct people_found {
   account_id by;
   std::string query;
   std::vector<found_person> people;
-};
-// One of the account's sessions (Matrix's devices), as Element lists them:
-// its ID, its name, and where and when it was last seen.
-struct session_info {
-  std::string id;
-  std::string name;
-  std::optional<std::string> ip;
-  std::optional<std::chrono::sys_time<std::chrono::milliseconds>> last_seen;
-  friend bool operator==(const session_info&, const session_info&) = default;
-};
-// The account's sessions, this one's ID among them.
-struct sessions_listed {
-  account_id by;
-  std::string current;
-  std::vector<session_info> sessions;
-};
-// Sessions not signed out, or not renamed: why -- and whether the password
-// is what was missing.
-struct sessions_refused {
-  account_id by;
-  std::string why;
-  bool needs_password = false;
 };
 // A person's profile, as their server gives it: their name and their
 // picture -- one met outside the room, a forward's sender.
@@ -426,18 +355,47 @@ struct event_missing {
 
 }  // namespace change
 
-using change_t = splice::variant<change::protocol_state_changed, change::security_state, change::own_session, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::verification_changed, change::account_removed, change::conversation_updated,
-                              change::conversation_removed,
-                              change::presence_changed, change::message_added, change::message_edited,
-                              change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed,
-                              change::typing_changed, change::history_position, change::event_missing, change::members_changed,
-                              change::session_given, change::avatar_loaded, change::receipts_changed,
-                              change::window_opened, change::window_extended, change::media_progress,
-                              change::room_created, change::preview_loaded, change::devtools_text,
-                              change::state_listed, change::room_previewed, change::mentioned,
-                              change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine,
-                              change::directory_listed, change::people_found, change::profile_found, change::sessions_listed, change::sessions_refused, change::packs_listed, change::pack_saved, change::threads_listed,
-                              change::pack_picture_uploaded>;
+// The changes every protocol says, here; and each protocol's own, from its
+// change list -- changes_type(tag), found by ADL in its folder (mux.proto.
+// <p>.changes), none where it gives none -- all one variant.
+using core_changes = splice::variant<change::protocol_state_changed, change::own_session, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::account_removed, change::conversation_updated, change::conversation_removed, change::presence_changed, change::message_added, change::message_edited, change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed, change::typing_changed, change::history_position, change::event_missing, change::members_changed, change::session_given, change::avatar_loaded, change::receipts_changed, change::window_opened, change::window_extended, change::media_progress, change::room_created, change::preview_loaded, change::room_previewed, change::mentioned, change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine, change::directory_listed, change::people_found, change::profile_found, change::threads_listed>;
+namespace changes_defaults {
+constexpr std::type_identity<change_list<>> changes_type(const auto&) { return {}; }
+}  // namespace changes_defaults
+template <class Tag>
+constexpr auto changes_type_of() {
+  using changes_defaults::changes_type;
+  return changes_type(Tag{});
+}
+template <class Tag>
+using changes_of = typename decltype(changes_type_of<Tag>())::type;
+template <class Variant, class... Lists>
+struct with_changes {
+  using type = Variant;
+};
+template <class... Have, class... Theirs, class... Lists>
+struct with_changes<splice::variant<Have...>, change_list<Theirs...>, Lists...>
+    : with_changes<splice::variant<Have..., Theirs...>, Lists...> {};
+template <class>
+struct all_changes;
+template <class... Tags>
+struct all_changes<protocol_list<Tags...>> {
+  using type = typename with_changes<core_changes, changes_of<Tags>...>::type;
+};
+using change_t = all_changes<protocols>::type;
+
+// Whether a change is a protocol's own: one of its list's.
+template <class Change, class... Cs>
+constexpr bool lists_change(change_list<Cs...>) {
+  struct all : std::type_identity<Cs>... {};
+  return std::derived_from<all, std::type_identity<Change>>;
+}
+template <class Change, class... Tags>
+constexpr bool protocols_change(protocol_list<Tags...>) {
+  return (lists_change<Change>(changes_of<Tags>{}) || ...);
+}
+template <class Change>
+concept protocol_change = protocols_change<Change>(protocols{});
 
 // The model: every account, and every change applied to it.
 class model {
@@ -922,15 +880,12 @@ class model {
   void on(const change::directory_listed&) {}  // the window's: the Explore dialog
   void on(const change::people_found&) {}  // the window's: the Start chat dialog
   void on(const change::profile_found&) {}  // the window's: a pill's picture
-  void on(const change::sessions_listed&) {}  // the window's: the account's Sessions page
-  void on(const change::sessions_refused&) {}
   void on(const change::refused&) {}  // the window's: a notice
   void on(const change::trust_changed& one) {
     trust_.insert_or_assign({one.by, one.user}, one.now);
     ++trust_revision_;
   }
   std::uint64_t trust_revision_ = 0;
-  void on(const change::security_state&) {}  // the window's: the Sessions page
   void on(const change::own_session& one) { own_sessions_.insert_or_assign(one.by, std::pair{one.device_id, one.ed25519}); }
   std::map<account_id, std::pair<std::string, std::string>> own_sessions_;
   void on(const change::devices_listed& one) {
@@ -940,10 +895,6 @@ class model {
   std::map<std::pair<account_id, std::string>, std::vector<change::device_view>> devices_;
   std::map<std::pair<account_id, std::string>, trust_t> trust_;
   void on(const change::notice&) {}
-  void on(const change::verification_changed&) {}
-  void on(const change::packs_listed&) {}  // the window's: the packs' dialog
-  void on(const change::pack_saved&) {}
-  void on(const change::pack_picture_uploaded&) {}
   void on(const change::reacted_to_mine& one) {
     keep_mark(of(one.in), of(one.in).unread_reactions, {one.event, one.target, one.at});
   }
@@ -995,10 +946,11 @@ class model {
   void on(const change::session_given&) {}  // the program's to keep, not the model's
   void on(const change::avatar_loaded&) {}  // the window's to show, not the model's
   void on(const change::protocol_state_changed&) {}  // the window's: what it offers
+  // A protocol's own change: the window's, as each of them is now.
+  template <protocol_change Change>
+  void on(const Change&) {}
   void on(const change::media_progress&) {}  // the window's too
   void on(const change::room_created&) {}    // the program's: it shows it
-  void on(const change::devtools_text&) {}   // the window's
-  void on(const change::state_listed&) {}    // the window's
   void on(const change::room_previewed&) {}  // the window's: the room's card
   void on(const change::preview_loaded& one) { previews.insert_or_assign(one.url, one.preview); }
   void on(const change::receipts_changed& one) {

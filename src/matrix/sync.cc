@@ -907,7 +907,7 @@ bool account<Sink>::send_plain(std::string type, const std::string& user, const 
 }
 template <class Sink>
 void account<Sink>::verification_said(const crypto::sas_state& state, verification_step_t step) {
-  sink_(change::verification_changed{id_, state.txn, state.their_user, state.their_device, std::move(step)});
+  sink_(proto::matrix::verification_changed{id_, state.txn, state.their_user, state.their_device, std::move(step)});
 }
 template <class Sink>
 void account<Sink>::cancel_verification(const std::string& txn, std::string code, std::string reason) {

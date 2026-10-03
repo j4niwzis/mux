@@ -397,21 +397,21 @@ void account<Sink>::view_source(std::string room, std::string event) {
       return;
     auto got = perform(*api_, loom::cs::get_one_room_event{.room_id = room, .event_id = event});
     if (!got) {
-      sink_(change::devtools_text{"Source of " + event, "Not fetched: " + got.error().said()});
+      sink_(proto::matrix::devtools_text{"Source of " + event, "Not fetched: " + got.error().said()});
       return;
     }
-    sink_(change::devtools_text{"Source of " + event, knot::to_pretty_json_string(*got)});
+    sink_(proto::matrix::devtools_text{"Source of " + event, knot::to_pretty_json_string(*got)});
   });
 }
 
 template <class Sink>
 void account<Sink>::list_state(std::string room) {
   this->spawn_guarded([this, room = std::move(room)] {
-    std::vector<change::state_entry> entries;
+    std::vector<proto::matrix::state_entry> entries;
     if (const auto kept = state_.joined.find(room); kept != state_.joined.end())
       for (const auto& [key, one] : kept->second.state.events)
         entries.push_back({key.first, key.second, knot::to_pretty_json_string(one)});
-    sink_(change::state_listed{{id_, room}, std::move(entries)});
+    sink_(proto::matrix::state_listed{{id_, room}, std::move(entries)});
   });
 }
 
@@ -423,21 +423,21 @@ void account<Sink>::send_custom(std::string room, std::string type, std::optiona
     const std::string title = "Sent " + type;
     // Only an object is a content: read as one, its keys' values left as text.
     if (!knot::try_read<std::map<std::string, knot::raw>>(json)) {
-      sink_(change::devtools_text{title, "Not sent: the content is not a JSON object."});
+      sink_(proto::matrix::devtools_text{title, "Not sent: the content is not a JSON object."});
       return;
     }
     if (!api_) {
-      sink_(change::devtools_text{title, "Not sent: not connected."});
+      sink_(proto::matrix::devtools_text{title, "Not sent: not connected."});
       return;
     }
     if (state_key) {
       auto done = perform(*api_, loom::cs::set_room_state_with_key{
                                      .room_id = room, .event_type = type, .state_key = *state_key, .body = knot::raw{json}});
-      sink_(change::devtools_text{title, done ? "Sent: " + done->event_id : "Not sent: " + done.error().said()});
+      sink_(proto::matrix::devtools_text{title, done ? "Sent: " + done->event_id : "Not sent: " + done.error().said()});
     } else {
       auto done = this->send_room_event(loom::cs::send_message{
                                      .room_id = room, .event_type = type, .txn_id = this->transaction(), .body = knot::raw{json}});
-      sink_(change::devtools_text{title, done ? "Sent: " + done->event_id : "Not sent: " + done.error().said()});
+      sink_(proto::matrix::devtools_text{title, done ? "Sent: " + done->event_id : "Not sent: " + done.error().said()});
     }
   });
 }
@@ -639,7 +639,7 @@ void account<Sink>::list_packs(std::optional<std::string> room) {
                                          [](const auto&) {}},
                       one.content.data());
     }
-    sink_(change::packs_listed{id_, room, std::move(found)});
+    sink_(proto::matrix::packs_listed{id_, room, std::move(found)});
   });
 }
 
@@ -664,7 +664,7 @@ void account<Sink>::save_pack(emote_pack pack) {
     }
     if (!done)
       log(id_, "the pack {} was not saved", pack.name);
-    sink_(change::pack_saved{.by = id_, .pack = pack, .done = done});
+    sink_(proto::matrix::pack_saved{.by = id_, .pack = pack, .done = done});
   });
 }
 
@@ -677,7 +677,7 @@ void account<Sink>::delete_pack(std::string room, std::string state_key) {
                                                                            .event_type = "im.ponies.room_emotes",
                                                                            .state_key = state_key,
                                                                            .body = knot::raw{"{}"}}));
-    sink_(change::pack_saved{.by = id_, .pack = emote_pack{.room = room, .state_key = state_key}, .removed = true, .done = done});
+    sink_(proto::matrix::pack_saved{.by = id_, .pack = emote_pack{.room = room, .state_key = state_key}, .removed = true, .done = done});
   });
 }
 
@@ -961,12 +961,12 @@ void account<Sink>::list_sessions() {
       return;
     auto got = perform(*api_, loom::cs::get_devices{});
     if (!got) {
-      sink_(change::sessions_refused{id_, "Could not list the sessions: " + got.error().said()});
+      sink_(proto::matrix::sessions_refused{id_, "Could not list the sessions: " + got.error().said()});
       return;
     }
-    std::vector<mux::change::session_info> out =
+    std::vector<mux::proto::matrix::session_info> out =
         got->devices.value_or(std::vector<loom::cs::def::device_t>{}) | std::views::transform([](const loom::cs::def::device_t& one) {
-          return mux::change::session_info{
+          return mux::proto::matrix::session_info{
               .id = one.device_id,
               .name = one.display_name.value_or(""),
               .ip = one.last_seen_ip,
@@ -975,8 +975,8 @@ void account<Sink>::list_sessions() {
                                             : std::nullopt};
         }) |
         std::ranges::to<std::vector>();
-    sink_(change::sessions_listed{id_, how_.device_id.value_or(""), std::move(out)});
-    sink_(change::security_state{id_, crypto_ && crypto_->cross_signing_keys().has_value(), crypto_ && crypto_->backup().has_value()});
+    sink_(proto::matrix::sessions_listed{id_, how_.device_id.value_or(""), std::move(out)});
+    sink_(proto::matrix::security_state{id_, crypto_ && crypto_->cross_signing_keys().has_value(), crypto_ && crypto_->backup().has_value()});
   });
 }
 
@@ -987,7 +987,7 @@ void account<Sink>::rename_session(std::string device, std::string name) {
       return;
     auto done = perform(*api_, loom::cs::update_device{.device_id = device, .body = {.display_name = name}});
     if (!done)
-      sink_(change::sessions_refused{id_, "Could not rename the session: " + done.error().said()});
+      sink_(proto::matrix::sessions_refused{id_, "Could not rename the session: " + done.error().said()});
     this->list_sessions();
   });
 }
@@ -1006,12 +1006,12 @@ void account<Sink>::sign_out_sessions(std::vector<std::string> devices, std::str
     }
     const auto& said = first.error().server;
     if (!said || said->status != 401 || !said->session) {
-      sink_(change::sessions_refused{id_, "Could not sign out: " + first.error().said()});
+      sink_(proto::matrix::sessions_refused{id_, "Could not sign out: " + first.error().said()});
       return;
     }
     const std::string given = !password.empty() ? password : how_.password;
     if (given.empty()) {
-      sink_(change::sessions_refused{id_, "Your password is needed to sign sessions out.", true});
+      sink_(proto::matrix::sessions_refused{id_, "Your password is needed to sign sessions out.", true});
       return;
     }
     body_t::authentication_data_t auth{.type = "m.login.password", .session = *said->session};
@@ -1019,7 +1019,7 @@ void account<Sink>::sign_out_sessions(std::vector<std::string> devices, std::str
     auto done = perform(*api_, loom::cs::delete_devices{.body = body_t{.devices = devices, .auth = std::move(auth)}});
     if (!done) {
       const bool wrong = done.error().server && done.error().server->status == 401;
-      sink_(change::sessions_refused{id_, wrong ? std::string("The password was not accepted.") : "Could not sign out: " + done.error().said(),
+      sink_(proto::matrix::sessions_refused{id_, wrong ? std::string("The password was not accepted.") : "Could not sign out: " + done.error().said(),
                                      wrong});
       return;
     }

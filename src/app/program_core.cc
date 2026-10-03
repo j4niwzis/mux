@@ -50,7 +50,7 @@ void app::woken() {
                                // A room the user made: shown, once the model has it.
                                [&](const mux::change::room_created& made) { made_room_ = made.id; },
                                // What the developer tools asked, shown.
-                               [&](const mux::change::devtools_text& shown) {
+                               [&](const mux::proto::matrix::devtools_text& shown) {
                                  root().show_devtools_text(shown.title, shown.text);
                                },
                                // A directory searched: its rooms, in Explore.
@@ -61,16 +61,16 @@ void app::woken() {
                                    root().main().found_rooms_elsewhere(listed.query, listed.rooms);
                                },
                                // Packs: listed, saved, an image uploaded -- in their dialog.
-                               [&](const mux::change::packs_listed& listed) { root().show_packs(listed.packs); },
-                               [&](const mux::change::pack_saved& saved) { root().pack_saved(saved.pack, saved.removed, saved.done); },
-                               [&](const mux::change::pack_picture_uploaded& uploaded) {
+                               [&](const mux::proto::matrix::packs_listed& listed) { root().show_packs(listed.packs); },
+                               [&](const mux::proto::matrix::pack_saved& saved) { root().pack_saved(saved.pack, saved.removed, saved.done); },
+                               [&](const mux::proto::matrix::pack_picture_uploaded& uploaded) {
                                  root().pack_picture_uploaded(uploaded.picture, uploaded.done);
                                },
                                // Something the server refused: a notice saying why.
                                [&](const mux::change::refused& said) { root().show_message("Not done", said.what); },
                                [&](const mux::change::notice& said) { root().show_message(said.heading, said.what); },
                                // An emoji verification, as it goes: its dialog.
-                               [&](const mux::change::verification_changed& one) {
+                               [&](const mux::proto::matrix::verification_changed& one) {
                                  verifying = std::pair(one.by, one.txn);
                                  root().show_verification(mux::ui::verification_view{one.user, one.device, one.step});
                                },
@@ -86,7 +86,7 @@ void app::woken() {
                                    this->notify_invite(updated.id, *updated.invite, updated.name);
                                },
                                // The account's sessions, for its page where it is open.
-                               [&](const mux::change::sessions_listed& listed) {
+                               [&](const mux::proto::matrix::sessions_listed& listed) {
                                  if (auto* up = root().open_panel())
                                    splice::visit([&](accounts& panel) {
                                                    if (auto* page = panel.sessions(); page && panel.selected == listed.by.address)
@@ -94,7 +94,7 @@ void app::woken() {
                                                  },
                                                  *up);
                                },
-                               [&](const mux::change::security_state& state) {
+                               [&](const mux::proto::matrix::security_state& state) {
                                  if (auto* up = root().open_panel())
                                    splice::visit([&](accounts& panel) {
                                                    if (auto* page = panel.sessions(); page && panel.selected == state.by.address)
@@ -102,7 +102,7 @@ void app::woken() {
                                                  },
                                                  *up);
                                },
-                               [&](const mux::change::sessions_refused& said) {
+                               [&](const mux::proto::matrix::sessions_refused& said) {
                                  if (auto* up = root().open_panel())
                                    splice::visit([&](accounts& panel) {
                                                    if (auto* page = panel.sessions(); page && panel.selected == said.by.address)
@@ -128,7 +128,7 @@ void app::woken() {
                                  root().show_found_people(found.people, found.query);
                                  root().main().found_people_elsewhere(found.query, found.people);
                                },
-                               [&](const mux::change::state_listed& listed) {
+                               [&](const mux::proto::matrix::state_listed& listed) {
                                  root().show_room_state(listed.entries);
                                },
                                // A room looked up: its card filled, while it

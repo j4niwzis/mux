@@ -22,6 +22,7 @@ import skiff.widgets.textbox;
 import mux.core;
 import mux.config;
 import mux.proto.kept;
+import mux.proto.matrix;
 import mux.proto.matrix.requests;
 import mux.ui;
 

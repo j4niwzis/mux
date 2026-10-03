@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// mux.proto.tags -- The protocols mux speaks: each a tag type in a namespace
-// of its own, mux::proto::<protocol> -- where all it specifies is -- and the
-// one list of them. A protocol is added here, as its
+// mux.proto.tags -- The protocols mux speaks, and the one list of them. A
+// protocol is its state type, in a namespace of its own, mux::proto::<p> --
+// where all it specifies is -- and known by id<state> (its "tag"). A protocol is added here, as its
 // tag in the list, and by its overloads -- src/proto/<name>/, found by ADL
 // through mux.protocols. Nothing else in mux names a protocol to decide
 // what it does: it asks the protocol (mux.proto's extension points).
@@ -9,18 +9,10 @@ export module mux.proto.tags;
 
 import std;
 import splice;
+export import mux.proto.identity;
+export import mux.proto.xmpp.state;
+export import mux.proto.matrix.state;
 
-export namespace mux::proto::xmpp {
-struct tag {
-  friend auto operator<=>(const tag&, const tag&) = default;
-};
-}  // namespace mux::proto::xmpp
-
-export namespace mux::proto::matrix {
-struct tag {
-  friend auto operator<=>(const tag&, const tag&) = default;
-};
-}  // namespace mux::proto::matrix
 
 export namespace mux {
 

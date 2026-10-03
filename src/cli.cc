@@ -145,6 +145,7 @@ std::string of(const change::session_given& one) { return one.account.address + 
 std::string of(const change::receipts_changed& one) { return std::format("{}: {} receipts", one.in.id, one.read_by.size()); }
 std::string of(const change::avatar_loaded& one) { return std::format("a picture from {}, {} bytes", one.source, one.bytes.size()); }
 std::string of(const change::marks_seen&) { return "marks read back as seen"; }
+std::string of(const change::protocol_state_changed& one) { return one.account.address + ": its protocol's state told"; }
 std::string of(const change::members_changed& one) {
   return std::format("{} has {} member{}", one.in.id, one.members.size(), one.members.size() == 1 ? "" : "s");
 }

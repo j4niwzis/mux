@@ -5,7 +5,7 @@
 export module mux.proto.xmpp.state;
 
 import std;
-import mux.proto.tags;
+import mux.proto.identity;
 
 export namespace mux::proto::xmpp {
 
@@ -16,6 +16,7 @@ struct state {
   std::optional<bool> archive;
   friend bool operator==(const state&, const state&) = default;
 };
-constexpr std::type_identity<state> state_type(tag) { return {}; }
+// What the protocol is known by: its state type, as an identity.
+using tag = id<state>;
 
 }  // namespace mux::proto::xmpp

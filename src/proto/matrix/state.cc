@@ -4,7 +4,7 @@
 export module mux.proto.matrix.state;
 
 import std;
-import mux.proto.tags;
+import mux.proto.identity;
 
 export namespace mux::proto::matrix {
 
@@ -12,6 +12,7 @@ struct state {
   bool online = false;  // syncing
   friend bool operator==(const state&, const state&) = default;
 };
-constexpr std::type_identity<state> state_type(tag) { return {}; }
+// What the protocol is known by: its state type, as an identity.
+using tag = id<state>;
 
 }  // namespace mux::proto::matrix

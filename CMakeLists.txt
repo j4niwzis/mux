@@ -211,7 +211,7 @@ add_library(mux_config)
 # With the protocols' tags and what each keeps in the accounts file: the
 # settings read them, and everything above reads the settings.
 target_sources(mux_config PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
-  FILES src/proto/tags.cc src/proto/xmpp/kept.cc src/proto/matrix/kept.cc src/proto/kept.cc
+  FILES src/proto/identity.cc src/proto/tags.cc src/proto/xmpp/kept.cc src/proto/matrix/kept.cc src/proto/kept.cc
         src/proto/xmpp/state.cc src/proto/matrix/state.cc src/proto/state.cc src/config.cc)
 target_compile_features(mux_config PUBLIC cxx_std_26)
 target_compile_options(mux_config PUBLIC ${mux_std_flags})

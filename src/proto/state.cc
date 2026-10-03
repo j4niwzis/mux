@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.proto.state -- Each protocol's account state (mux::proto::<protocol>::
-// state, found by ADL as state_type(tag)), and protocol_state_t, one of them,
+// state, what the protocol is known by too), and protocol_state_t, one of them,
 // made from the list: what a protocol's extension points are asked with --
 // the state every overload of the protocol shares, its server's facts. A
 // protocol is added here beside its tag.
@@ -9,13 +9,18 @@ export module mux.proto.state;
 import std;
 import splice;
 export import mux.proto.tags;
-export import mux.proto.xmpp.state;
-export import mux.proto.matrix.state;
 
 export namespace mux {
 
+// A protocol's state type, from what it is known by.
 template <class Tag>
-using state_of = typename decltype(state_type(Tag{}))::type;
+struct state_of_t;
+template <class State>
+struct state_of_t<proto::id<State>> {
+  using type = State;
+};
+template <class Tag>
+using state_of = typename state_of_t<Tag>::type;
 template <class>
 struct state_list;
 template <class... Tags>

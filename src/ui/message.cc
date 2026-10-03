@@ -1697,11 +1697,9 @@ struct message_bubble : nodes::Stack {
     else
       face.fState.setAlpha(static_cast<float>(element_opacity_of(bubble_look_now(), &config::element_opacity::avatars)) / 100.0f);
     if (group && !outgoing && first_of_run && !said.service) {
-      // Their role, where the room gives them a say: Matrix's 100 and 50.
-      const auto level = in.powers.find(said.sender);
-      const std::int64_t power = level == in.powers.end() ? in.power_default : level->second;
+      // Their role, as the chat's protocol says it (Matrix: its power levels).
       body.parts.name.emplace(sender_name(in, said.sender), avatar_colour(said.sender),
-                              power >= 100 ? std::string("admin") : power >= 50 ? std::string("mod") : std::string());
+                              proto::sender_role(protocol_state_of(in.id.account), in, said.sender));
     }
     // Forwarded: "Forwarded from" its sender, at its top, as Telegram's.
     // The sender a person's pill, as a mention is, and pressed, opens them.

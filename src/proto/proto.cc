@@ -141,6 +141,8 @@ constexpr request_list<> requests_of(const auto&) { return {}; }
 inline std::vector<part::line> message_lines(const auto&, const conversation&, const message&) { return {}; }
 inline std::vector<part::badge> header_badges(const auto&, const conversation&, const auto&) { return {}; }
 inline std::vector<part::badge> row_badges(const auto&, const conversation&) { return {}; }
+// No role said beside a sender's name.
+inline std::string sender_role(const auto&, const conversation&, std::string_view) { return {}; }
 // Any chat may be left.
 inline bool can_leave(const auto&, const conversation&) { return true; }
 // Whom a direct chat is with: the chat's own address.
@@ -288,6 +290,17 @@ inline constexpr struct header_badges_t {
     }, state);
   }
 } header_badges{};
+// A sender's role in the chat, beside their name over their messages, as
+// Telegram's "admin": its protocol's word for it, or none.
+inline constexpr struct sender_role_t {
+  template <class State>
+  std::string operator()(const State& state, const conversation& chat, std::string_view who) const {
+    return splice::visit([&](const auto& now) {
+      using defaults::sender_role;
+      return sender_role(now, chat, who);
+    }, state);
+  }
+} sender_role{};
 // And in the chat's row in the list, after what was said last.
 inline constexpr struct row_badges_t {
   template <class State>

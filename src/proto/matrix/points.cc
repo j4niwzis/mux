@@ -43,6 +43,12 @@ inline std::string direct_contact(const state&, const conversation& one) {
   const auto other = std::ranges::find_if(one.members, [&](const member& each) { return each.id != one.id.account.address; });
   return other == one.members.end() ? std::string() : other->id;
 }
+// A sender's role, as the room's power levels give it: 100 and 50.
+inline std::string sender_role(const state&, const conversation& in, std::string_view who) {
+  const auto level = in.powers.find(std::string(who));
+  const std::int64_t power = level == in.powers.end() ? in.power_default : level->second;
+  return power >= 100 ? std::string("admin") : power >= 50 ? std::string("mod") : std::string();
+}
 // What is known of the other person's identity, in a direct encrypted chat.
 [[nodiscard]] inline std::optional<trust_t> other_trust(const state& now, const conversation& one, const model& known) {
   const bool direct = splice::visit(

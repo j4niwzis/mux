@@ -28,6 +28,11 @@ inline std::optional<std::string> message_link(const state&, const conversation&
     return std::nullopt;
   return message_link_to(chat, event);
 }
+// A direct chat is a room: whom it is with, the member who is not the account.
+inline std::string direct_contact(const state&, const conversation& one) {
+  const auto other = std::ranges::find_if(one.members, [&](const member& each) { return each.id != one.id.account.address; });
+  return other == one.members.end() ? std::string() : other->id;
+}
 constexpr bool can_pin(const state&, std::string_view event) { return event.starts_with('$'); }
 
 // As the room's power levels allow it: one's own where one may send a

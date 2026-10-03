@@ -22,6 +22,9 @@ inline last_correction edit_rule(const state&) { return {}; }
 // before it is known, asked -- as it was.
 constexpr bool can_page_back(const state& now) { return now.archive.value_or(true); }
 
+// The roster says who is there: one never heard of is offline.
+inline std::string unheard_presence(const state&) { return "offline"; }
+
 // An xmpp: URI (RFC 5122).
 inline std::optional<std::string> share_link(const state&, std::string_view address) { return "xmpp:" + std::string(address); }
 

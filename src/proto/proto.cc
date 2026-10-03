@@ -81,6 +81,11 @@ inline std::optional<std::string> share_link(const auto&, std::string_view) { re
 inline std::optional<std::string> room_link(const auto&, const conversation&) { return std::nullopt; }
 inline std::optional<std::string> message_link(const auto&, const conversation&, std::string_view) { return std::nullopt; }
 inline std::optional<std::string> person_link(const auto&, std::string_view) { return std::nullopt; }
+// What a contact never heard of is said to be: nothing -- where nothing
+// says who is there, "offline" would be said of everyone.
+inline std::string unheard_presence(const auto&) { return {}; }
+// Whom a direct chat is with: the chat's own address.
+inline std::string direct_contact(const auto&, const conversation& one) { return one.id.id; }
 constexpr bool can_pin(const auto&, std::string_view) { return false; }
 // One's own messages, and no one else's: what every protocol allows.
 inline bool may_delete(const auto&, const conversation&, bool outgoing) { return outgoing; }
@@ -181,6 +186,26 @@ inline constexpr struct person_link_t {
     }, speaks);
   }
 } person_link{};
+
+inline constexpr struct unheard_presence_t {
+  template <class State>
+  std::string operator()(const State& state) const {
+    return splice::visit([](const auto& now) {
+      using defaults::unheard_presence;
+      return unheard_presence(now);
+    }, state);
+  }
+} unheard_presence{};
+
+inline constexpr struct direct_contact_t {
+  template <class State>
+  std::string operator()(const State& state, const conversation& one) const {
+    return splice::visit([&](const auto& now) {
+      using defaults::direct_contact;
+      return direct_contact(now, one);
+    }, state);
+  }
+} direct_contact{};
 
 inline constexpr struct can_pin_t {
   template <class State>

@@ -9,6 +9,7 @@ import skiff.paint;
 import skiff.scene;
 import mux.core;
 import mux.config;
+import mux.protocols;
 import :base;
 
 export namespace mux::ui {
@@ -23,31 +24,19 @@ export namespace mux::ui {
                                [](const availability::offline&) { return std::string("offline"); }},
                     state);
 }
-// A contact's presence, in a word or two. One never heard of is offline on
-// XMPP, whose roster says who is there; on Matrix it is nothing, as servers
-// may keep presence off, and "offline" would then be said of everyone.
+// A contact's presence, in a word or two; one never heard of, as their
+// protocol says (proto::unheard_presence).
 [[nodiscard]] inline std::string presence_of(const model& now, const account_id& account, const std::string& contact) {
-  const auto unknown = [&] {
-    return splice::visit(splice::overloaded{[](const protocol::xmpp&) { return std::string("offline"); },
-                                 [](const protocol::matrix&) { return std::string(); }},
-                      account.speaks);
-  };
+  const auto unknown = [&] { return proto::unheard_presence(protocol_state_of(account)); };
   const auto found = now.accounts().find(account);
   if (found == now.accounts().end())
     return unknown();
   const auto kept = found->second.presences.find(contact);
   return kept == found->second.presences.end() ? unknown() : presence_text(kept->second.state);
 }
-// Whom a direct chat is with: on XMPP, its address; on Matrix it is a room,
-// so the member who is not the account itself.
+// Whom a direct chat is with, as its protocol says (proto::direct_contact).
 [[nodiscard]] inline std::string contact_of(const conversation& one) {
-  return splice::visit(splice::overloaded{[&](const protocol::xmpp&) { return one.id.id; },
-                               [&](const protocol::matrix&) {
-                                 const auto other = std::ranges::find_if(
-                                     one.members, [&](const member& each) { return each.id != one.id.account.address; });
-                                 return other == one.members.end() ? std::string() : other->id;
-                               }},
-                    one.id.account.speaks);
+  return proto::direct_contact(protocol_state_of(one.id.account), one);
 }
 
 [[nodiscard]] inline bool is_group(const conversation& one) {

@@ -73,7 +73,7 @@ struct send_box : nodes::Stack {
           const auto [w, h] = size_of(one, all.size());
           parts.pictures.emplace_back(one.key, w, h);
         } else {
-          parts.files.emplace_back(nullptr, std::string(), one.name, one.size);
+          parts.files.emplace_back(legacy_palette(), nullptr, std::string(), one.name, one.size);
         }
       }
     }

@@ -44,16 +44,18 @@ export namespace mux::ui {
 struct link_card : nodes::Stack {
   std::string url;
   struct bar : scene::Node {
-    bar() { fState.apply({.width = 3.0f, .height = 36.0f, .cornerRadius = 1.5f, .background = accent_colour}); }
+    explicit bar(const palette& colours) {
+      fState.apply({.width = 3.0f, .height = 36.0f, .cornerRadius = 1.5f, .background = colours.accent});
+    }
   };
   struct texts_column : nodes::Stack {
     struct parts_t {
       nodes::Text title;
       nodes::Text said;
     } parts;
-    texts_column(std::string t, std::string s)
-        : parts{.title = nodes::Text(std::move(t), 13.0f, accent_colour, true),
-                .said = nodes::Text(std::move(s), 13.0f, dim_colour)} {
+    texts_column(const palette& colours, std::string t, std::string s)
+        : parts{.title = nodes::Text(std::move(t), 13.0f, colours.accent, true),
+                .said = nodes::Text(std::move(s), 13.0f, colours.dim)} {
       this->setGap(1.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle});
       for (nodes::Text* each : {&parts.title, &parts.said}) {
@@ -67,10 +69,12 @@ struct link_card : nodes::Stack {
     avatar_mark face;
     texts_column texts;
   } parts;
-  link_card(std::string where, std::string avatar_id, std::string avatar_name, std::string title, std::string said)
+  link_card(const palette& colours, std::string where, std::string avatar_id, std::string avatar_name, std::string title,
+            std::string said)
       : url(std::move(where)),
-        parts{.face = avatar_mark(std::move(avatar_id), std::move(avatar_name), 32.0f),
-              .texts = texts_column(std::move(title), std::move(said))} {
+        parts{.line = bar(colours),
+              .face = avatar_mark(std::move(avatar_id), std::move(avatar_name), 32.0f),
+              .texts = texts_column(colours, std::move(title), std::move(said))} {
     this->setHorizontal();
     this->setGap(8.0f);
     fState.apply({.autoSize = scene::axes::kBoth, .margin = {4.0f, 0.0f, 2.0f, 0.0f}});
@@ -182,10 +186,10 @@ struct page_preview : nodes::Stack {
       nodes::Text title;
       nodes::Text about;
     } parts;
-    explicit column(const link_preview& shown)
-        : parts{.site = nodes::Text(shown.site, 13.0f, accent_colour, true),
-                .title = nodes::Text(shown.title, 13.0f, text_colour, true),
-                .about = nodes::Text(preview_line(shown.description), 13.0f, text_colour)} {
+    column(const palette& colours, const link_preview& shown)
+        : parts{.site = nodes::Text(shown.site, 13.0f, colours.accent, true),
+                .title = nodes::Text(shown.title, 13.0f, colours.text, true),
+                .about = nodes::Text(preview_line(shown.description), 13.0f, colours.text)} {
       this->setGap(1.0f);
       fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX});
       parts.site.setVisible(!shown.site.empty());
@@ -199,20 +203,21 @@ struct page_preview : nodes::Stack {
     }
   };
   struct parts_t {
-    nodes::Box<> stripe{accent_colour};
+    nodes::Box<> stripe;
     column texts;
     std::optional<nodes::Image<from_avatars>> picture;
   } parts;
   // The link it is the preview of: pressed, it is followed.
   std::string url;
-  page_preview(const link_preview& shown, std::string where) : parts{.texts = column(shown)}, url(std::move(where)) {
+  page_preview(const palette& colours, const link_preview& shown, std::string where)
+      : parts{.stripe = nodes::Box<>(colours.accent), .texts = column(colours, shown)}, url(std::move(where)) {
     this->setHorizontal();
     this->setGap(8.0f);
     // Lit under the pointer, as a link is: it is one.
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {6.0f, 0.0f, 2.0f, 0.0f},
                   .padding = {4.0f, 6.0f, 4.0f, 0.0f}, .cornerRadius = 4.0f,
-                  .background = (accent_colour & 0x00FFFFFFu) | (0x18u << 24),
-                  .hoverBackground = (accent_colour & 0x00FFFFFFu) | (0x34u << 24)});
+                  .background = (colours.accent & 0x00FFFFFFu) | (0x18u << 24),
+                  .hoverBackground = (colours.accent & 0x00FFFFFFu) | (0x34u << 24)});
     parts.stripe.apply({.fillY = true, .width = 3.0f, .cornerRadius = 1.5f});
     if (shown.image) {
       parts.picture.emplace(from_avatars{*shown.image});
@@ -298,11 +303,11 @@ struct picture_view : scene::Node {
 
   // Rounded; a plate until the thumbnail comes, then the thumbnail covering
   // it, cut at the middle where the proportions differ by a rounding.
-  picture_view(std::string where, int w, int h)
+  picture_view(const palette& colours, std::string where, int w, int h)
       : source(where), width(w), height(h),
         parts{.preview = nodes::Image<from_previews>({where}),
               .picture = nodes::Image<from_moving_thumbnail>({where})} {
-    fState.apply({.cornerRadius = 10.0f, .background = tile_colour, .masking = true});
+    fState.apply({.cornerRadius = 10.0f, .background = colours.tile, .masking = true});
     parts.preview.apply({.fill = true, .cornerRadius = 10.0f});
     parts.picture.apply({.fill = true, .cornerRadius = 10.0f});
     parts.loader.apply({.place = scene::anchor::kCentre});
@@ -390,7 +395,7 @@ struct album_view : nodes::Stack {
     std::vector<row> rows;
   } parts;
   static constexpr float kWidth = 360.0f, kGap = 2.0f;
-  explicit album_view(const std::vector<attachment>& items) {
+  album_view(const palette& colours, const std::vector<attachment>& items) {
     this->setGap(kGap);
     fState.apply({.autoSize = scene::axes::kBoth});
     std::vector<std::size_t> per_row;
@@ -412,7 +417,7 @@ struct album_view : nodes::Stack {
                                 ? static_cast<float>(item.height) / static_cast<float>(item.width)
                                 : 0.75f;
         const float h = count == 1 ? std::clamp(w * ratio, 120.0f, 300.0f) : std::clamp(w * 0.8f, 100.0f, 220.0f);
-        made.parts.cells.emplace_back(item.source, item.width, item.height);
+        made.parts.cells.emplace_back(colours, item.source, item.width, item.height);
         made.parts.cells.back().set_cell(std::floor(w), std::floor(h));
         sizes.emplace_back(w, h);
       }
@@ -445,9 +450,9 @@ struct file_view : nodes::Stack {
   // tdesktop's msgFileSize: the icon, and so the row, is this high.
   static constexpr float kIcon = 44.0f;
   struct disc : nodes::Icon {
-    disc() : nodes::Icon(shape_of(icon::clip{}), on_accent_colour) {
+    explicit disc(const palette& colours) : nodes::Icon(shape_of(icon::clip{}), colours.on_accent) {
       fState.apply({.width = kIcon, .height = kIcon, .alignSelf = scene::align::kMiddle, .cornerRadius = kIcon / 2.0f,
-                    .background = accent_colour});
+                    .background = colours.accent});
     }
   };
   // Its name over its size, each as wide as it reads, up to a limit: sized
@@ -458,9 +463,9 @@ struct file_view : nodes::Stack {
       nodes::Text name;
       nodes::Text size;
     } parts;
-    texts_column(std::string name, std::string size)
-        : parts{.name = nodes::Text(std::move(name), 14.0f, text_colour, true),
-                .size = nodes::Text(std::move(size), 12.0f, dim_colour)} {
+    texts_column(const palette& colours, std::string name, std::string size)
+        : parts{.name = nodes::Text(std::move(name), 14.0f, colours.text, true),
+                .size = nodes::Text(std::move(size), 12.0f, colours.dim)} {
       this->setGap(4.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle});
       for (nodes::Text* each : {&parts.name, &parts.size}) {
@@ -512,8 +517,9 @@ struct file_view : nodes::Stack {
       return std::format("{:.1f} KB", static_cast<double>(bytes) / 1024.0);
     return std::format("{:.1f} MB", static_cast<double>(bytes) / (1024.0 * 1024.0));
   }
-  file_view(platform::audio::speaker* speaker, std::string where, std::string name, std::int64_t bytes, bool is_sound = false)
-      : source(std::move(where)), parts{.texts = texts_column(name, size_text(bytes))}, sound(is_sound),
+  file_view(const palette& colours, platform::audio::speaker* speaker, std::string where, std::string name, std::int64_t bytes,
+            bool is_sound = false)
+      : source(std::move(where)), parts{.icon = disc(colours), .texts = texts_column(colours, name, size_text(bytes))}, sound(is_sound),
         size_line(size_text(bytes)), speaker_(speaker) {
     if (sound)
       parts.icon.setShape(shape_of(icon::play{}));
@@ -559,16 +565,16 @@ struct reaction_chip : nodes::Stack {
   }
   static constexpr float kLabelMost = 240.0f;
   // `people`: who reacted, by id and name.
-  reaction_chip(std::string k, std::size_t n, bool own,
+  reaction_chip(const palette& colours, std::string k, std::size_t n, bool own,
                 const std::vector<std::pair<std::string, std::string>>& people = {})
       : key(std::move(k)), count(n), mine(own),
-        parts{.label = nodes::Text(label_of(key, n), 13.0f, own ? on_accent_colour : text_colour)} {
+        parts{.label = nodes::Text(label_of(key, n), 13.0f, own ? colours.on_accent : colours.text)} {
     this->setHorizontal();
     this->setGap(4.0f);
     fStack.justify = nodes::justify::middle{};
     fState.apply({.height = 26.0f, .autoSize = scene::axes::kX, .minWidth = 26.0f, .padding = {0.0f, 9.0f, 0.0f, 9.0f},
                   .cornerRadius = 13.0f,
-                  .background = at_opacity(own ? accent_colour : tile_colour,
+                  .background = at_opacity(own ? colours.accent : colours.tile,
                                            element_opacity_of(bubble_look_now(), &config::element_opacity::reactions))});
     // Frosted, where the bubbles are, as its own blur says.
     if (frosts(bubble_look_now())) {
@@ -593,7 +599,7 @@ struct reaction_chip : nodes::Stack {
       for (const auto& [id, name] : people) {
         parts.who.emplace_back(id, name, 20.0f);
         parts.who.back().apply({.margin = {0.0f, 0.0f, 0.0f, parts.who.size() == 1 ? 2.0f : -6.0f},
-                                .border = scene::Border{own ? accent_colour : tile_colour, 1.5f}});
+                                .border = scene::Border{own ? colours.accent : colours.tile, 1.5f}});
       }
     }
   }
@@ -888,7 +894,7 @@ struct mentioned {
 
 // A card for a link to a room, or to a message in one: as the chat it is of
 // is known here, or as a room not joined.
-[[nodiscard]] inline link_card card_of(const std::string& url, const logic::link_t& where, const model* now) {
+[[nodiscard]] inline link_card card_of(const palette& colours, const std::string& url, const logic::link_t& where, const model* now) {
   const logic::mention::place room = splice::visit(
       splice::overloaded{[](const logic::mention::place& one) { return one; }, [](const auto&) { return logic::mention::place{}; }},
       logic::mention_in(where));
@@ -902,7 +908,7 @@ struct mentioned {
     const std::string what =
         chat ? (chat->member_count > 0 ? std::format("Room · {} members", chat->member_count) : std::string("Room"))
              : std::string("Room · not joined");
-    return link_card(url, id, name, name, what);
+    return link_card(colours, url, id, name, name, what);
   }
   std::string said = "A message";
   if (chat)
@@ -910,7 +916,7 @@ struct mentioned {
       said = (it->outgoing ? std::string("You") : sender_name(*chat, it->sender)) + ": " + it->body.plain;
       std::ranges::replace(said, '\n', ' ');
     }
-  return link_card(url, id, name, "Message from " + name, said);
+  return link_card(colours, url, id, name, "Message from " + name, said);
 }
 
 
@@ -976,7 +982,7 @@ struct code_block : nodes::Stack {
     head_row head;
     nodes::BasicText<message_pictures> code;
   } parts;
-  code_block(std::string code, std::string language, skia::SkColor colour, skia::SkColor text)
+  code_block(const palette& colours, std::string code, std::string language, skia::SkColor colour, skia::SkColor text)
       : parts{.bar = nodes::Box<>(colour),
               .head = head_row(std::move(language), code, colour),
               .code = nodes::BasicText<message_pictures>(code, 13.0f, text)} {
@@ -991,7 +997,7 @@ struct code_block : nodes::Stack {
     parts.code.setMonospace(true);
     parts.code.setWrapped(true);
     parts.code.setSelectable(true);
-    parts.code.setSelectionColour((accent_colour & 0x00FFFFFFu) | (110u << 24));
+    parts.code.setSelectionColour((colours.accent & 0x00FFFFFFu) | (110u << 24));
     parts.code.setShrinksToLines(true);
   }
 };
@@ -1051,15 +1057,16 @@ struct code_piece : nodes::Stack {
     code_block block;
     std::optional<nodes::BasicText<message_pictures>> after;
   } parts;
-  code_piece(const text_piece& code, const text_piece* words, skia::SkColor colour, skia::SkColor quote, skia::SkColor text)
-      : parts{.block = code_block(code.text, code.language, colour, text)} {
+  code_piece(const palette& colours, const text_piece& code, const text_piece* words, skia::SkColor colour, skia::SkColor quote,
+             skia::SkColor text)
+      : parts{.block = code_block(colours, code.text, code.language, colour, text)} {
     fState.apply({.autoSize = scene::axes::kBoth});
     if (words && !words->text.empty()) {
       parts.after.emplace(words->text, 13.0f, text);
       parts.after->setWrapped(true);
       parts.after->setSelectable(true);
-      parts.after->setSelectionColour((accent_colour & 0x00FFFFFFu) | (110u << 24));
-      parts.after->setLinks(words->links, accent_colour);
+      parts.after->setSelectionColour((colours.accent & 0x00FFFFFFu) | (110u << 24));
+      parts.after->setLinks(words->links, colours.accent);
       parts.after->setStyles(words->styles, quote);
       parts.after->setShrinksToLines(true);
     }
@@ -1079,7 +1086,8 @@ struct forward_line : nodes::Stack {
     nodes::Text label;
     nodes::BasicText<message_pictures> who;
   } parts;
-  forward_line(std::string who, std::vector<nodes::Text::Link> links, skia::SkColor colour, std::string sender = {})
+  forward_line(const palette& colours, std::string who, std::vector<nodes::Text::Link> links, skia::SkColor colour,
+               std::string sender = {})
       : from(std::move(sender)), parts{.label = nodes::Text("Forwarded from", 13.0f, colour, true),
               .who = nodes::BasicText<message_pictures>(std::move(who), 13.0f, colour)} {
     this->setHorizontal();
@@ -1091,7 +1099,7 @@ struct forward_line : nodes::Stack {
     // plain, its links and pills not at all -- no plate, no picture.
     parts.who.setWrapped(true);
     parts.who.setShrinksToLines(true);
-    parts.who.setLinks(std::move(links), accent_colour);
+    parts.who.setLinks(std::move(links), colours.accent);
     parts.who.apply({.alignSelf = scene::align::kMiddle});
     had = from.empty() || avatar_images().has(from);
     if (!had)
@@ -1119,9 +1127,9 @@ struct readers_row : nodes::Stack {
     std::vector<avatar_mark> faces;
     nodes::Text more;
   } parts;
-  readers_row(const conversation& in, const std::vector<std::string>& users)
+  readers_row(const palette& colours, const conversation& in, const std::vector<std::string>& users)
       : parts{.more = nodes::Text(users.size() > kMost ? std::format("+{}", users.size() - kMost) : std::string(),
-                                  10.0f, dim_colour)} {
+                                  10.0f, colours.dim)} {
     this->setHorizontal();
     this->setGap(2.0f);
     fState.apply({.autoSize = scene::axes::kBoth});
@@ -1258,7 +1266,7 @@ struct message_bubble : nodes::Stack {
         nodes::Text who;
         std::optional<nodes::Text> tag;
       } parts;
-      who_row(skia::SkColor colour, std::string name, bool quoted)
+      who_row(const palette& colours, skia::SkColor colour, std::string name, bool quoted)
           : parts{.who = nodes::Text(std::move(name), 13.0f, colour, true)} {
         auto& [who, tag] = parts;
         this->setHorizontal();
@@ -1267,7 +1275,7 @@ struct message_bubble : nodes::Stack {
         who.setElided(true);
         who.apply({.grow = scene::axes::kX});
         if (quoted) {
-          tag.emplace("quoted", 11.0f, dim_colour);
+          tag.emplace("quoted", 11.0f, colours.dim);
           tag->apply({.alignSelf = scene::align::kStart, .margin = {1.0f, 0.0f, 0.0f, 0.0f}});
         }
       }
@@ -1278,9 +1286,9 @@ struct message_bubble : nodes::Stack {
         who_row who;
         nodes::Text said;
       } parts;
-      said_column(skia::SkColor colour, std::string name, std::string line, bool quoted)
-          : parts{.who = who_row(colour, std::move(name), quoted),
-                  .said = nodes::Text(std::move(line), 13.0f, text_colour)} {
+      said_column(const palette& colours, skia::SkColor colour, std::string name, std::string line, bool quoted)
+          : parts{.who = who_row(colours, colour, std::move(name), quoted),
+                  .said = nodes::Text(std::move(line), 13.0f, colours.text)} {
         auto& [who, said] = parts;
         fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
         // As wide as the quote, cut where it ends: the quote is as wide as
@@ -1295,10 +1303,10 @@ struct message_bubble : nodes::Stack {
       std::optional<nodes::Image<from_thumbnails>> thumb;
       said_column texts;
     } parts;
-    quote_row(skia::SkColor colour, std::string who, std::string said, std::optional<std::string> picture = std::nullopt,
-              bool quoted = false)
+    quote_row(const palette& colours, skia::SkColor colour, std::string who, std::string said,
+              std::optional<std::string> picture = std::nullopt, bool quoted = false)
         : parts{.bar = nodes::Box<>(with_alpha(colour, 0.9f)),
-                .texts = said_column(colour, std::move(who), std::move(said), quoted)} {
+                .texts = said_column(colours, colour, std::move(who), std::move(said), quoted)} {
       auto& [bar, thumb, texts] = parts;
       this->setHorizontal();
       this->setGap(4.0f);
@@ -1313,7 +1321,7 @@ struct message_bubble : nodes::Stack {
       if (picture) {
         thumb.emplace(from_thumbnails{*picture});
         thumb->apply({.width = 32.0f, .height = 32.0f, .alignSelf = scene::align::kMiddle,
-                      .margin = {2.0f, 0.0f, 2.0f, 0.0f}, .cornerRadius = 3.0f, .background = tile_colour});
+                      .margin = {2.0f, 0.0f, 2.0f, 0.0f}, .cornerRadius = 3.0f, .background = colours.tile});
       }
     }
   };
@@ -1327,9 +1335,9 @@ struct message_bubble : nodes::Stack {
         nodes::Text name;
         nodes::Text role;
       } parts;
-      name_row(std::string who, skia::SkColor colour, std::string role)
+      name_row(const palette& colours, std::string who, skia::SkColor colour, std::string role)
           : parts{.name = nodes::Text(std::move(who), 13.0f, colour, true),
-                  .role = nodes::Text(std::move(role), 12.0f, dim_colour)} {
+                  .role = nodes::Text(std::move(role), 12.0f, colours.dim)} {
         this->setHorizontal();
         this->setGap(10.0f);
         fState.apply({.autoSize = scene::axes::kBoth});
@@ -1374,7 +1382,7 @@ struct message_bubble : nodes::Stack {
       // corner on the sender's side, in the bubble's colour.
       std::optional<nodes::Icon> tail;
     } parts;
-    skia::SkColor plate = bubble_colour;
+    skia::SkColor plate = 0;
     // A protocol's sticker placed, where it made one.
     bool place_sticker(std::nullopt_t) { return false; }
     void place_view(std::nullopt_t) {}
@@ -1632,8 +1640,8 @@ struct message_bubble : nodes::Stack {
     }
     // The bubble's colour as its chat's look has it: solid, or at its
     // opacity -- over what is behind it, frosted where it is so.
-    [[nodiscard]] static skia::SkColor plate_of(bool mine) {
-      const skia::SkColor solid = mine ? out_bubble_colour : bubble_colour;
+    [[nodiscard]] static skia::SkColor plate_of(const palette& colours, bool mine) {
+      const skia::SkColor solid = mine ? colours.out_bubble : colours.bubble;
       const config::bubble_look& look = bubble_look_now();
       return splice::visit(splice::overloaded{[&](config::bubbles::solid) { return solid; },
                                               [&](const auto&) { return at_opacity(solid, look.opacity); }},
@@ -1661,12 +1669,12 @@ struct message_bubble : nodes::Stack {
       parts.frost->apply({.margin = {-pad.fTop, -pad.fRight, -pad.fBottom, -pad.fLeft}, .cornerRadius = fState.fCornerRadius,
                           .corners = fState.fCorners});
     }
-    body_column(bool mine, std::string said, std::string when)
+    body_column(const palette& colours, bool mine, std::string said, std::string when)
         : outgoing(mine),
-          parts{.text = nodes::BasicText<message_pictures>(std::move(said), 13.0f, text_colour),
-                .time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour),
-                .inline_time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour)},
-          plate(plate_of(mine)) {
+          parts{.text = nodes::BasicText<message_pictures>(std::move(said), 13.0f, colours.text),
+                .time = nodes::Text(when, 11.0f, mine ? colours.sent_time : colours.dim),
+                .inline_time = nodes::Text(when, 11.0f, mine ? colours.sent_time : colours.dim)},
+          plate(plate_of(colours, mine)) {
       auto& [frost, name, forwarded, quote, picture, their_sticker, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, their_view, time, inline_time, tail] = parts;
       this->setGap(2.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
@@ -1696,22 +1704,24 @@ struct message_bubble : nodes::Stack {
   struct unread_bar_t : nodes::Stack {
     static constexpr float kHeight = 26.0f;
     struct parts_t {
-      nodes::Text label{"Unread messages", 13.0f, dim_colour, true};
+      nodes::Text label;
     } parts;
-    unread_bar_t() {
+    explicit unread_bar_t(const palette& colours) : parts{.label = nodes::Text("Unread messages", 13.0f, colours.dim, true)} {
       fStack.justify = nodes::justify::middle{};
       fState.apply({.place = scene::anchor::kTopLeft, .y = -(kHeight + 4.0f), .fillX = true, .height = kHeight,
-                    .background = sidebar_colour});
+                    .background = colours.sidebar});
       parts.label.apply({.alignSelf = scene::align::kMiddle});
     }
   };
+  // The colours it is made in: handed down, kept for what it makes later.
+  const palette* colours_ = nullptr;
   struct parts_t {
     // The sender's avatar, beside the last of their run in a group; the
     // same room, empty, beside the rest.
     avatar_mark face;
     body_column body;
     // The arrow a swipe shows, filling as it reaches its mark.
-    nodes::Icon swipe_mark{shape_of(icon::back{}), dim_colour};
+    nodes::Icon swipe_mark;
     // Over the first unread message of a chat opened: tdesktop's bar.
     std::optional<unread_bar_t> unread_bar;
     // Under it, where the chat shows them: who has read up to it.
@@ -1725,7 +1735,7 @@ struct message_bubble : nodes::Stack {
     readers_shown = std::move(users);
     if (readers_shown.empty())
       return;
-    parts.readers.emplace(in, readers_shown);
+    parts.readers.emplace(*colours_, in, readers_shown);
     parts.readers->apply({.place = scene::anchor::kBottomRight, .x = -4.0f, .y = kReaders + 1.0f});
     fState.apply({.padding = {fState.fPadding.fTop, fState.fPadding.fRight, fState.fPadding.fBottom + kReaders + 2.0f,
                               fState.fPadding.fLeft}});
@@ -1737,7 +1747,7 @@ struct message_bubble : nodes::Stack {
   // tdesktop's "Unread messages" bar, across the whole row, over it.
   void mark_unread_start() {
     unread_start = true;
-    parts.unread_bar.emplace();
+    parts.unread_bar.emplace(*colours_);
     // Across the whole list, not the row's content box: held out past the
     // row's own padding (a group's room for the avatar) and the list's sides,
     // which a relative width is measured inside of.
@@ -1754,6 +1764,7 @@ struct message_bubble : nodes::Stack {
   // What it is handed down: what plays a voice message in it.
   struct needs {
     platform::audio::speaker* sound = nullptr;
+    const palette* colours = nullptr;
   };
   message_bubble(const needs& n, const conversation& in, const message& given, bool first_of_run, bool last_of_run,
                  const model* now = nullptr, bool show_events = true, bool show_preview = true)
@@ -1763,9 +1774,10 @@ struct message_bubble : nodes::Stack {
   message_bubble(const needs& n, const conversation& in, const message& said, bool first_of_run, bool last_of_run, const model* now,
                  bool show_events, bool show_preview, made_t)
       : said(said), first(first_of_run), last(last_of_run), message_id(said.id), plain(said.body.plain),
-        outgoing(said.outgoing), sender(said.sender),
+        outgoing(said.outgoing), sender(said.sender), colours_(n.colours),
         parts{.face = avatar_mark(said.sender, sender_name(in, said.sender), kAvatar),
-              .body = body_column(said.outgoing, said.body.plain, mark_of(said) + clock_of(said.at))} {
+              .body = body_column(*n.colours, said.outgoing, said.body.plain, mark_of(said) + clock_of(said.at)),
+              .swipe_mark = nodes::Icon(shape_of(icon::back{}), n.colours->dim)} {
     // Drawn once and played back until something in it changes: a strip of
     // the list repainted went through every part of every message in it.
     // Not one with a picture or a file: a loader turns in it while it comes,
@@ -1783,7 +1795,7 @@ struct message_bubble : nodes::Stack {
                       .width = 28.0f,
                       .height = 28.0f,
                       .cornerRadius = 14.0f,
-                      .background = tile_colour,
+                      .background = colours_->tile,
                       .alpha = 0.0f});
     this->setHorizontal();
     this->setGap(8.0f);
@@ -1815,7 +1827,7 @@ struct message_bubble : nodes::Stack {
       face.fState.setAlpha(static_cast<float>(element_opacity_of(bubble_look_now(), &config::element_opacity::avatars)) / 100.0f);
     if (((group && !outgoing) || as_lines) && first_of_run && !said.service) {
       // Their role, as the chat's protocol says it (Matrix: its power levels).
-      body.parts.name.emplace(sender_name(in, said.sender), avatar_colour(said.sender),
+      body.parts.name.emplace(*colours_, sender_name(in, said.sender), avatar_colour(said.sender),
                               proto::sender_role(protocol_state_of(in.id.account), in, said.sender));
     }
     // Forwarded: "Forwarded from" its sender, at its top, as Telegram's.
@@ -1828,7 +1840,7 @@ struct message_bubble : nodes::Stack {
       if (link && !who.empty())
         spans.push_back(nodes::Text::Link{0, who.size(), *link});
       mentioned shown = with_mentions(who, std::move(spans), in, now);
-      body.parts.forwarded.emplace(std::move(shown.text), std::move(shown.links), outgoing ? sent_time_colour : accent_colour,
+      body.parts.forwarded.emplace(*colours_, std::move(shown.text), std::move(shown.links), outgoing ? colours_->sent_time : colours_->accent,
                                    link ? said.forwarded->from : std::string());
     }
     // Something done, not said: a line in the middle, on a plate of its own,
@@ -1837,7 +1849,7 @@ struct message_bubble : nodes::Stack {
       fStack.justify = nodes::justify::middle{};
       face.setVisible(false);
       body.apply({.cornerRadius = 12.0f,
-                  .background = at_opacity(tile_colour, element_opacity_of(bubble_look_now(), &config::element_opacity::service))});
+                  .background = at_opacity(colours_->tile, element_opacity_of(bubble_look_now(), &config::element_opacity::service))});
       // Frosted as its own blur says.
       if (frosts(bubble_look_now()))
         body.frosted(element_blur_of(bubble_look_now(), &config::element_blur::service));
@@ -1848,7 +1860,7 @@ struct message_bubble : nodes::Stack {
     }
     // Anyone's words can be selected and copied, as in Telegram.
     body.parts.text.setSelectable(true);
-    body.parts.text.setSelectionColour((accent_colour & 0x00FFFFFFu) | (110u << 24));  // the accent, see-through
+    body.parts.text.setSelectionColour((colours_->accent & 0x00FFFFFFu) | (110u << 24));  // the accent, see-through
     // In an encrypted room, a message that did not come encrypted says so,
     // as Element's "Not encrypted": it may have been put there by the server
     // or by anyone, in the clear.
@@ -1888,12 +1900,12 @@ struct message_bubble : nodes::Stack {
     if (said.attachment && !theirs) {
       const mux::attachment& carried = *said.attachment;
       splice::visit(splice::overloaded{[&](attachment_kind::image) {
-                              body.parts.picture.emplace(carried.source, carried.width, carried.height);
+                              body.parts.picture.emplace(*colours_, carried.source, carried.width, carried.height);
                               if (carried.video)
                                 body.parts.picture->show_video(carried.duration_ms);
                             },
                             [&](attachment_kind::file) {
-                              body.parts.file.emplace(n.sound, carried.source, carried.name, carried.size,
+                              body.parts.file.emplace(*colours_, n.sound, carried.source, carried.name, carried.size,
                                                       audio_type(carried.mimetype, carried.name));
                             }},
                  carried.kind);
@@ -1930,7 +1942,7 @@ struct message_bubble : nodes::Stack {
     }
     // A gallery: its pictures as an album, its body the caption under it.
     if (!said.album.empty())
-      body.parts.album.emplace(said.album);
+      body.parts.album.emplace(*colours_, said.album);
     // Pictures at the chat's look's opacity for them.
     if (const float images = static_cast<float>(element_opacity_of(bubble_look_now(), &config::element_opacity::images)) / 100.0f;
         images < 1.0f) {
@@ -1969,18 +1981,18 @@ struct message_bubble : nodes::Stack {
     {
       // The quote's colour: the accent on theirs; on one's own, the text's,
       // as tdesktop's outgoing blockquote -- not the accent on its accent.
-      const skia::SkColor quote_colour = outgoing ? text_colour : accent_colour;
+      const skia::SkColor quote_colour = outgoing ? colours_->text : colours_->accent;
       // Cut at its blocks of code: the first words here, each block with the
       // words after it below.
       const std::vector<text_piece> pieces = pieces_of(shown.text, shown.links, shown.styles);
       body.parts.text.setText(pieces.front().text);
-      body.parts.text.setLinks(pieces.front().links, accent_colour);
+      body.parts.text.setLinks(pieces.front().links, colours_->accent);
       body.parts.text.setStyles(pieces.front().styles, quote_colour);
       body.parts.text.setVisible(!pieces.front().text.empty());
       for (std::size_t i = 1; i + 1 < pieces.size(); i += 2)
-        body.parts.blocks.emplace_back(pieces[i], &pieces[i + 1], quote_colour, quote_colour, text_colour);
+        body.parts.blocks.emplace_back(*colours_, pieces[i], &pieces[i + 1], quote_colour, quote_colour, colours_->text);
       for (const auto& [url, room] : shown.cards)
-        body.parts.cards.push_back(card_of(url, room, now));
+        body.parts.cards.push_back(card_of(*colours_, url, room, now));
     }
     // The last of a run: its bottom corner on the sender's side squared and
     // a tail grown from it, as Telegram draws one -- not for a line of what
@@ -1992,7 +2004,7 @@ struct message_bubble : nodes::Stack {
     previews_shown = show_preview;
     if (const auto link = first_link_of(said); link && now && show_preview)
       if (const auto found = now->previews.find(*link); found != now->previews.end()) {
-        body.parts.preview.emplace(found->second, *link);
+        body.parts.preview.emplace(*colours_, found->second, *link);
         preview_known = true;
       }
     if (said.replies_to) {
@@ -2012,7 +2024,7 @@ struct message_bubble : nodes::Stack {
       }
       std::ranges::replace(line, '\n', ' ');
       const bool with_picture = picture.has_value();
-      body.parts.quote.emplace(known ? avatar_colour(found->sender) : accent_colour,
+      body.parts.quote.emplace(*colours_, known ? avatar_colour(found->sender) : colours_->accent,
                          known ? (found->outgoing ? std::string("You") : sender_name(in, found->sender))
                                : std::string("A message"),
                          std::move(line), header_quote ? std::nullopt : std::move(picture), header_quote.has_value());
@@ -2063,12 +2075,12 @@ struct message_bubble : nodes::Stack {
       if (!summary.last_text.empty())
         line += std::format(" \u00b7 {}: {}", sender_name(in, summary.last_sender), summary.last_text);
       std::ranges::replace(line, '\n', ' ');
-      body.parts.thread.emplace(std::move(line), 13.0f, accent_colour, true);
+      body.parts.thread.emplace(std::move(line), 13.0f, colours_->accent, true);
       body.parts.thread->setElided(true);
       body.parts.thread->apply({.fillX = true, .margin = {4.0f, 0.0f, 0.0f, 0.0f}});
     }
     std::ranges::for_each(proto::message_lines(protocol_state_of(in.id.account), in, said), [&](const proto::part::line& one) {
-      nodes::Text& shown = body.parts.lines.emplace_back(one.text, 12.0f, tone_colour(one.tone));
+      nodes::Text& shown = body.parts.lines.emplace_back(one.text, 12.0f, tone_colour(*colours_, one.tone));
       shown.setWrapped(true);
       shown.apply({.fillX = true, .margin = {4.0f, 0.0f, 0.0f, 0.0f}});
     });
@@ -2082,7 +2094,7 @@ struct message_bubble : nodes::Stack {
       body.parts.reactions.emplace();
       for (const auto& [key, who] : said.reactions)
         if (!who.empty())
-          body.parts.reactions->chips().emplace_back(key, who.size(), who.contains(said.in.account.address), [&] {
+          body.parts.reactions->chips().emplace_back(*colours_, key, who.size(), who.contains(said.in.account.address), [&] {
             std::vector<std::pair<std::string, std::string>> people;
             for (const std::string& one : who)
               people.emplace_back(one, sender_name(in, one));
@@ -2143,7 +2155,7 @@ struct message_bubble : nodes::Stack {
       return std::nullopt;
     auto styles = text.styles();
     styles.push_back({.first = at, .last = at + fragment.size(), .marked = true});
-    text.setStyles(std::move(styles), outgoing ? text_colour : accent_colour);
+    text.setStyles(std::move(styles), outgoing ? colours_->text : colours_->accent);
     marked = true;
     return at;
   }
@@ -2151,7 +2163,7 @@ struct message_bubble : nodes::Stack {
     auto& text = parts.body.parts.text;
     auto styles = text.styles();
     std::erase_if(styles, [](const auto& one) { return one.marked; });
-    text.setStyles(std::move(styles), outgoing ? text_colour : accent_colour);
+    text.setStyles(std::move(styles), outgoing ? colours_->text : colours_->accent);
     marked = false;
   }
   void appear() {
@@ -2170,7 +2182,7 @@ struct message_bubble : nodes::Stack {
   [[nodiscard]] bool wantsTick() const { return this->settling(); }
   void update(double now_ms) {
     if (flash.step(now_ms))
-      fState.apply({.background = (accent_colour & 0x00FFFFFFu) |
+      fState.apply({.background = (colours_->accent & 0x00FFFFFFu) |
                                   (static_cast<skia::SkColor>(std::lround(80.0f * flash.value())) << 24)});
     if (marked && !flash.moving())
       this->unmark();
@@ -2187,8 +2199,8 @@ struct message_bubble : nodes::Stack {
     const float reached = std::clamp(-shift / kSwipeToReply, 0.0f, 1.0f);
     face.apply({.shiftX = shift});
     body.apply({.shiftX = shift});
-    swipe_mark.apply({.background = reached >= 1.0f ? accent_colour : tile_colour, .alpha = reached});
-    swipe_mark.setColour(reached >= 1.0f ? on_accent_colour : dim_colour);
+    swipe_mark.apply({.background = reached >= 1.0f ? colours_->accent : colours_->tile, .alpha = reached});
+    swipe_mark.setColour(reached >= 1.0f ? colours_->on_accent : colours_->dim);
   }
 
   // Pressed with the right button, it asks for its menu.

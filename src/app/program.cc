@@ -69,6 +69,7 @@ struct app : kept_settings {
   app(const mux::ui::palette& theme_colours, const mux::ui::window_look_t& window)
       : shared{.looks = {.window = window}}, colours(theme_colours) {
     shared.paint.looks = &shared.looks;
+    shared.paint.colours = &colours;
   }
   // -- the parts: each owns its state, and reaches the rest through what
   // they share

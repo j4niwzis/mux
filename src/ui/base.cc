@@ -55,21 +55,6 @@ struct palette {
   [[nodiscard]] skia::SkColor popup() const { return (sidebar & 0x00FFFFFFu) | (0xFEu << 24); }
   friend bool operator==(const palette&, const palette&) = default;
 };
-inline skia::SkColor background = skia::colorSetARGB(255, 24, 27, 30);
-inline skia::SkColor sidebar_colour = skia::colorSetARGB(255, 32, 36, 40);
-inline skia::SkColor chosen_colour = skia::colorSetARGB(255, 52, 60, 66);
-inline skia::SkColor text_colour = skia::colorSetARGB(255, 235, 240, 243);
-inline skia::SkColor dim_colour = skia::colorSetARGB(255, 150, 162, 170);
-inline skia::SkColor accent_colour = skia::colorSetARGB(255, 102, 204, 255);
-inline skia::SkColor error_colour = skia::colorSetARGB(255, 255, 120, 110);
-// The chosen chat's text, on the chosen colour; one's own bubbles; the
-// chat's background, as the theme's wallpaper; text on the accent.
-inline skia::SkColor selected_text_colour = skia::colorSetARGB(255, 255, 255, 255);
-inline skia::SkColor out_bubble_colour = skia::colorSetARGB(255, 43, 82, 120);
-inline skia::SkColor chat_colour = skia::colorSetARGB(255, 14, 22, 33);
-// The chat's wallpaper, as Telegram's are: a gradient from the top down to
-// chat_colour at the bottom.
-inline skia::SkColor chat_top_colour = skia::colorSetARGB(255, 22, 38, 58);
 // An element's opacity in a look, in percent: its own, else the bubbles'
 // -- all of it where they are solid.
 [[nodiscard]] inline int element_opacity_of(const config::bubble_look& look, std::optional<int> config::element_opacity::* which) {
@@ -90,7 +75,6 @@ struct window_look_t;
 }
 // A menu's plate: the side's colour, all but opaque -- never taken for a
 // panel's fill, so a see-through panel look leaves menus readable over it.
-[[nodiscard]] inline skia::SkColor popup_colour() { return (sidebar_colour & 0x00FFFFFFu) | (0xFEu << 24); }
 // A colour at an opacity in percent.
 [[nodiscard]] inline skia::SkColor at_opacity(skia::SkColor colour, int percent) {
   const auto alpha = static_cast<unsigned>(std::lround(((colour >> 24) & 0xFF) * std::clamp(percent, 0, 100) / 100.0));
@@ -351,8 +335,6 @@ inline std::vector<std::string>& panel_pictures_shown() {
 }
 // And Telegram's pattern over it: dark and faint on a light theme, light and
 // fainter on a dark one.
-inline skia::SkColor pattern_colour = skia::colorSetARGB(20, 255, 255, 255);
-inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 
 // The protocol an address speaks: a Matrix user ID starts with '@', and a JID
 // cannot.
@@ -656,6 +638,8 @@ inline void live_backdrop(std::vector<std::pair<scene::NodeId, kept_blur>>& all,
 struct mux_paint : scene::Painting {
   // The looks it paints by: the program's.
   const looks_shown* looks = nullptr;
+  // And the theme's colours: a popup's plate told from a panel's.
+  const palette* colours = nullptr;
   // The panels' look, as the program put it (show_panels), and its opacity
   // eased from one chat's to another's.
   panel_look_t panel;
@@ -707,7 +691,7 @@ struct mux_paint : scene::Painting {
     // Seen's list over the message's menu: as it is, near opaque. At the
     // panels' opacity it let the plate under it through where they met --
     // darker there, lighter where it stood out of it.
-    if (*fill == popup_colour() && inside_float && !state.fFloats)
+    if (*fill == colours->popup() && inside_float && !state.fFloats)
       return fill;
     if (std::ranges::contains(look.tints, *fill))
       return scene::detail::atOpacity(*fill, look.opacity);

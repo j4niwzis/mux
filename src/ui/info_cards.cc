@@ -61,9 +61,9 @@ struct person_card : nodes::Stack {
       avatar_button<Actions> photo;
       two_lines texts;
     } parts;
-    cover(Actions* a, const std::string& key, const person_facts& facts)
+    cover(Actions* a, const palette& colours, const std::string& key, const person_facts& facts)
         : parts{.photo = avatar_button<Actions>(a, key, facts.name, 72.0f),
-                .texts = two_lines(facts.name, facts.status, 17.0f, 6.0f)} {
+                .texts = two_lines(colours, facts.name, facts.status, 17.0f, 6.0f)} {
       parts.texts.parts.name.setSelectable(true);
       parts.texts.parts.state.setSelectable(true);
       this->setHorizontal();
@@ -126,8 +126,8 @@ struct person_card : nodes::Stack {
 
   person_card(Actions* a, const palette& colours, const account_id& account, const std::string& key, const person_facts& facts)
       : colours_(&colours),
-        parts{.top = top_bar("User info", {}, {a}, false, true),
-              .face = cover(a, key, facts),
+        parts{.top = top_bar(colours, "User info", {}, {a}, false, true),
+              .face = cover(a, colours, key, facts),
               .band = section_band(colours),
               .id = id_line(colours, key, ""),
               .message = action_tile<message_them>(colours, "Message", icon::send{}, {a, conversation_id{account, key}}),
@@ -201,8 +201,8 @@ struct room_card : nodes::Stack {
       avatar_mark photo;
       two_lines texts;
     } parts;
-    cover(const std::string& key, const std::string& name, const std::string& line)
-        : parts{.photo = avatar_mark(key, name, 72.0f), .texts = two_lines(name, line, 17.0f, 6.0f)} {
+    cover(const palette& colours, const std::string& key, const std::string& name, const std::string& line)
+        : parts{.photo = avatar_mark(key, name, 72.0f), .texts = two_lines(colours, name, line, 17.0f, 6.0f)} {
       this->setHorizontal();
       this->setGap(16.0f);
       fState.apply({.fillX = true, .height = 108.0f, .padding = {0.0f, 22.0f, 0.0f, 22.0f}});
@@ -234,7 +234,7 @@ struct room_card : nodes::Stack {
 
   room_card(Actions* a, const palette& colours, const std::string& asked, const room_preview& known)
       : parts{.top = top_bar(colours, "Room info", {}, {a}, false, true),
-              .face = cover(known.id.empty() ? asked : known.id, name_of(asked, known), line_of(asked, known)),
+              .face = cover(colours, known.id.empty() ? asked : known.id, name_of(asked, known), line_of(asked, known)),
               .band = section_band(colours),
               .about = nodes::Text(!known.topic.empty() ? known.topic : !known.note.empty() ? known.note : std::string("No description"), 14.0f,
                                    known.topic.empty() ? colours.dim : colours.text),

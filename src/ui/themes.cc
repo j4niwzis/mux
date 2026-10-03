@@ -399,13 +399,7 @@ struct not_yet {
   void operator()() const { actions->not_implemented(std::string(what)); }
 };
 
-inline skia::SkColor selected_colour = skia::colorSetARGB(255, 43, 82, 120);
-inline skia::SkColor band_colour = skia::colorSetARGB(255, 18, 20, 23);
 // Between the sections of a panel: just darker than the panel.
-inline skia::SkColor section_colour = skia::colorSetARGB(255, 26, 29, 33);
-inline skia::SkColor tile_colour = skia::colorSetARGB(255, 40, 45, 50);
-inline skia::SkColor bubble_colour = skia::colorSetARGB(255, 33, 41, 52);
-inline skia::SkColor sent_time_colour = skia::colorSetARGB(255, 170, 200, 230);
 
 // The colours of a theme, "dark" or "light", put in place: mux.ui's and
 // skiff-widgets'. What is made takes its colours then: the window is made
@@ -595,45 +589,11 @@ inline void use_scroll_bars(const config::theme_t& chosen) {
                                     : nodes::ScrollBarColours{skia::colorSetARGB(0x53, 255, 255, 255),
                                                               skia::colorSetARGB(0x7a, 255, 255, 255)};
 }
-// For the code not handed its palette yet: a palette made of the colours
-// read by name, kept where what is made of it may point at it. Goes with
-// them, once everything is handed its palette.
-inline palette& legacy_palette_now() {
-  static palette now;
-  return now;
-}
-inline const palette& legacy_palette() { return legacy_palette_now(); }
-// For the code not handed its palette yet: the palette put in the colours
-// read by name. Goes with them.
-inline void use_theme(const config::theme_t& chosen, const config::accent_t& accent, int opacity) {
-  const palette now = palette_of(chosen, accent, opacity);
-  legacy_palette_now() = now;
-  background = now.background;
-  sidebar_colour = now.sidebar;
-  chosen_colour = now.chosen;
-  text_colour = now.text;
-  dim_colour = now.dim;
-  accent_colour = now.accent;
-  error_colour = now.error;
-  selected_colour = now.selected;
-  selected_text_colour = now.selected_text;
-  band_colour = now.band;
-  section_colour = now.section;
-  tile_colour = now.tile;
-  bubble_colour = now.bubble;
-  out_bubble_colour = now.out_bubble;
-  sent_time_colour = now.sent_time;
-  chat_colour = now.chat;
-  chat_top_colour = now.chat_top;
-  pattern_colour = now.pattern;
-  on_accent_colour = now.on_accent;
-  use_scroll_bars(chosen);
-}
 
 // The panels' look put in place, for skiff to paint them in: only over the
 // background behind the whole window. Whether it changed -- the window to
 // be repainted.
-inline bool show_panels(mux_paint& paint, const config::bubble_look& look, const window_look_t& window) {
+inline bool show_panels(mux_paint& paint, const config::bubble_look& look, const window_look_t& window, const palette& colours) {
   const bool kinded = window.behind && splice::visit(splice::overloaded{[](config::bubbles::solid) { return false; },
                                                                               [](const auto&) { return true; }},
                                                            look.kind);
@@ -643,10 +603,10 @@ inline bool show_panels(mux_paint& paint, const config::bubble_look& look, const
       .frosted = splice::visit(splice::overloaded{[](config::bubbles::frosted) { return true; }, [](const auto&) { return false; }}, look.kind),
       .blur = blur_of(look, window),
       .edge = splice::visit(splice::overloaded{[](config::bubbles::glass) { return true; }, [](const auto&) { return false; }}, look.kind),
-      .panels = {sidebar_colour},
+      .panels = {colours.sidebar},
       // Tinted at the opacity, never left out as a panel fill again: what is
       // chosen or hovered, a tab lit, a menu.
-      .tints = {chosen_colour, tile_colour, popup_colour()}};
+      .tints = {colours.chosen, colours.tile, colours.popup()}};
   if (!kinded)
     next = {};
   if (next == paint.panel)
@@ -676,14 +636,6 @@ inline bool show_panels(mux_paint& paint, const config::bubble_look& look, const
   return splice::visit(splice::overloaded{[&](proto::part::tone::plain) { return colours.dim; },
                                           [&](proto::part::tone::accent) { return colours.accent; },
                                           [&](proto::part::tone::danger) { return colours.error; }},
-                       tone);
-}
-// The same, in the colours read by name: for the code not handed its
-// palette yet.
-[[nodiscard]] inline skia::SkColor tone_colour(const proto::part::tone_t& tone) {
-  return splice::visit(splice::overloaded{[](proto::part::tone::plain) { return dim_colour; },
-                                          [](proto::part::tone::accent) { return accent_colour; },
-                                          [](proto::part::tone::danger) { return error_colour; }},
                        tone);
 }
 

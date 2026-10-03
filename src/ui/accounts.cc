@@ -162,7 +162,6 @@ struct switch_row : nodes::Stack {
   } parts;
 
   // Declared: the text taking the room, the switch at the end.
-  switch_row(std::string text, Act what) : switch_row(legacy_palette(), std::move(text), std::move(what)) {}
   switch_row(const palette& colours, std::string text, Act what)
       : parts{.label = nodes::Text(std::move(text), 15.0f, colours.text), .toggle = widgets::Toggle<Act>(colours.widgets, std::move(what))} {
     this->setHorizontal();
@@ -258,7 +257,6 @@ struct account_pages : nodes::Stack {
 inline nodes::Text section_title(const palette& colours, std::string text) {
   return nodes::Text(std::move(text), 13.0f, colours.dim, true);
 }
-inline nodes::Text section_title(std::string text) { return section_title(legacy_palette(), std::move(text)); }
 // A note under a section, as the settings' pages have them.
 inline nodes::Text note_text(const palette& colours, std::string text) { return nodes::Text(std::move(text), 13.0f, colours.dim); }
 
@@ -329,28 +327,32 @@ struct account_chats : nodes::Stack {
   struct parts_t {
     // Its colour, as only this page shows it: the strip of
     // its chats listed in other accounts' lists, unless they chose another.
-    nodes::Text colour_title = section_title("COLOUR");
+    nodes::Text colour_title;
     accent_circles<set_colour> colours;
     switch_row<ask<Actions, &Actions::flip_account_strip>> strip;
-    nodes::Text title = section_title("CHATS");
+    nodes::Text title;
     chat_choices<Actions> chats;
-    nodes::Text looks_title = section_title("LOOKS");
+    nodes::Text looks_title;
     look_choices<Actions> looks;
-    nodes::Text spaces_title = section_title("SPACES");
+    nodes::Text spaces_title;
     choice_menu<pick_home> home;
     spaces_choices<Actions> places;
   } parts;
   account_chats(Actions* a, const palette& colours, const looks_shown& looks, const chat_choice_values& chats, std::optional<bool> home_hides,
                 std::optional<bool> home_direct, const config::accent_t& colour, bool strip_on, const config::theme_t& theme)
-      : parts{.colours = accent_circles<set_colour>({a}, theme, false),
+      : parts{.colour_title = section_title(colours, "COLOUR"),
+              .colours = accent_circles<set_colour>({a}, theme, false),
               .strip = switch_row<ask<Actions, &Actions::flip_account_strip>>("A strip on its chats in other lists", {a}),
+              .title = section_title(colours, "CHATS"),
               .chats = chat_choices<Actions>(a, colours, choice_level::account{}, chats, 8.0f),
+              .looks_title = section_title(colours, "LOOKS"),
               .looks = look_choices<Actions>(a, colours, looks, choice_level::account{}),
-              .home = choice_menu<pick_home>("Home",
+              .spaces_title = section_title(colours, "SPACES"),
+              .home = choice_menu<pick_home>(colours, "Home",
                                              {"As above", "Every chat", "Without chats spaces hold",
                                               "Without those and direct messages"},
                                              !home_hides ? 0 : !*home_hides ? 1 : home_direct.value_or(false) ? 3 : 2, pick_home{a}),
-              .places = spaces_choices<Actions>(a)} {
+              .places = spaces_choices<Actions>(a, colours)} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     for (nodes::Text* each : {&parts.title, &parts.looks_title, &parts.spaces_title})
@@ -378,22 +380,23 @@ template <class Actions>
 struct account_proxy : nodes::Stack {
   using manage_row = row_item<ask<Actions, &Actions::manage_proxies>>;
   struct parts_t {
-    nodes::Text title = section_title("PROXY");
+    nodes::Text title;
     std::vector<row_item<choose_account_proxy<Actions>>> choices;
     manage_row manage;
   } parts;
 
-  account_proxy(Actions* a, const std::vector<config::proxy_settings>& all, const std::optional<std::string>& current)
-      : parts{.manage = manage_row("Manage proxies…", {a}, icon::gear{})} {
+  account_proxy(Actions* a, const palette& colours, const std::vector<config::proxy_settings>& all, const std::optional<std::string>& current)
+      : parts{.title = section_title(colours, "PROXY"),
+              .manage = manage_row(colours, "Manage proxies…", {a}, icon::gear{})} {
     auto& choices = parts.choices;
     parts.title.apply({.margin = {0.0f, 0.0f, 4.0f, 0.0f}});
     parts.manage.apply({.margin = {8.0f, 0.0f, 0.0f, 0.0f}});
     fState.apply({.fill = true});
     // An empty place where the dots are, so the names line up.
-    choices.emplace_back("No proxy", choose_account_proxy<Actions>{a, -1}, icon::dot{skia::colorSetARGB(0, 0, 0, 0)},
+    choices.emplace_back(colours, "No proxy", choose_account_proxy<Actions>{a, -1}, icon::dot{skia::colorSetARGB(0, 0, 0, 0)},
                          !current.has_value());
     for (std::size_t i = 0; i < all.size(); ++i)
-      choices.emplace_back(std::format("{} ({} {}:{})", all[i].name, config::label_of(config::proxy_kind_of(all[i].kind)),
+      choices.emplace_back(colours, std::format("{} ({} {}:{})", all[i].name, config::label_of(config::proxy_kind_of(all[i].kind)),
                                        all[i].host, all[i].port),
                            choose_account_proxy<Actions>{a, static_cast<int>(i)}, icon::dot{proxy_colour(all[i].name)},
                            current && *current == all[i].name);
@@ -628,7 +631,7 @@ struct accounts_panel : closes_on_escape<Actions> {
                                          config::home_hides_of(one), config::home_direct_of(one), config::colour_of(one),
                                          config::strip_of(one), theme);
             },
-            [&](account_page::proxy) { detail.template emplace<4>(this->actions, proxies, config::proxy_of(one)); },
+            [&](account_page::proxy) { detail.template emplace<4>(this->actions, *needs_.colours, proxies, config::proxy_of(one)); },
             // A protocol's own: its node, made for the program's actions.
             [&]<class Page>(Page) {
               detail.template emplace<typename decltype(page_type(Page{}, type_tag<Actions>{}))::type>(this->actions, *needs_.colours, one,

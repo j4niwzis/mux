@@ -36,15 +36,19 @@ struct matrix_form : nodes::Stack {
   std::optional<std::string> editing;
 
   struct parts_t {
-    field user_id{"User ID", "@user:example.org"};
-    field password{"Password", "Password"};
-    field homeserver{"Homeserver", "found through the server's .well-known"};
-    field device_name{"Device name", "mux", "mux"};
+    field user_id;
+    field password;
+    field homeserver;
+    field device_name;
     form_end<Actions> end;
   } parts;
 
   matrix_form(Actions* a, const palette& colours, const std::optional<::mux::proto::matrix::kept>& from)
-      : actions(a), parts{.end = form_end<Actions>(colours, a, from.has_value())} {
+      : actions(a), parts{.user_id = field(colours, "User ID", "@user:example.org"),
+              .password = field(colours, "Password", "Password"),
+              .homeserver = field(colours, "Homeserver", "found through the server's .well-known"),
+              .device_name = field(colours, "Device name", "mux", "mux"),
+              .end = form_end<Actions>(colours, a, from.has_value())} {
     auto& [user_id, password, homeserver, device_name, end] = parts;
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     this->setGap(12.0f);

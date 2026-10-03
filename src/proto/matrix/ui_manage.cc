@@ -195,8 +195,8 @@ struct room_page : nodes::Stack {
   room_page(Actions*, Box* box, const room_settings_facts& facts)
       : parts{.heading = tab_heading((*box->colours_), "Room"),
               .photo = avatar_mark(facts.id, facts.name, 88.0f),
-              .name = field("Room Name", "", facts.name),
-              .topic = field("Room Topic", "", facts.topic),
+              .name = field((*box->colours_), "Room Name", "", facts.name),
+              .topic = field((*box->colours_), "Room Topic", "", facts.topic),
               .buttons = buttons_row((*box->colours_), "Save", {box}, {box, this}),
               .addresses = part_heading((*box->colours_), "Room Addresses"),
               .published = part_heading((*box->colours_), "Published Addresses"),
@@ -251,7 +251,7 @@ struct security_page : nodes::Stack {
                                                     : "",
                                                 13.0f, box->colours_->error),
               .access = part_heading((*box->colours_), "Access"),
-              .access_about = explained("Decide who can join " + facts.name + "."),
+              .access_about = explained((*box->colours_), "Decide who can join " + facts.name + "."),
               .invite = join_choice((*box->colours_), "Private (invite only)", "Only invited people can join.", {box, join_rule::invite{}},
                                     is_rule<join_rule::invite>(rules_of(facts.theirs).join_rule), may(facts, power_need::change_access{})),
               .knock = join_choice((*box->colours_), "Ask to join", "People cannot join unless access is granted.", {box, join_rule::knock{}},
@@ -370,7 +370,7 @@ struct roles_page : nodes::Stack {
       widgets::Button<add_event_need> apply;
     } parts;
     new_event_row(Box* box, roles_page* page)
-        : parts{.event = field("", "Event type, as m.room.server_acl"),
+        : parts{.event = field((*box->colours_), "", "Event type, as m.room.server_acl"),
                 .moderator = segment<pick_new_level<Box>>((*box->colours_), "Moderator", {box, 50}),
                 .admin = segment<pick_new_level<Box>>((*box->colours_), "Admin", {box, 100}),
                 .apply = widgets::Button<add_event_need>((*box->colours_).widgets, "Apply", {box, page})} {
@@ -409,7 +409,7 @@ struct roles_page : nodes::Stack {
     } parts;
     privileged_row(Box* box, const room_settings_facts::person& one, const room_settings_facts& facts)
         : parts{.face = avatar_mark(one.id, one.name, 32.0f),
-                .texts = two_lines(one.name, one.id, 14.0f, 2.0f),
+                .texts = two_lines((*box->colours_), one.name, one.id, 14.0f, 2.0f),
                 .levels = level_choice<set_level<Box>, user_maker>(
                     (*box->colours_), user_maker{box, one.id}, one.level, rules_of(facts.theirs).needs.users_default,
                     may(facts, power_need::change_permissions{}) && (one.level < facts.mine))} {
@@ -425,7 +425,7 @@ struct roles_page : nodes::Stack {
       widgets::Button<add_privileged> apply;
     } parts;
     new_level_row(Box* box, roles_page* page)
-        : parts{.user = field("", "User ID, as @someone:server"),
+        : parts{.user = field((*box->colours_), "", "User ID, as @someone:server"),
                 .moderator = segment<pick_new_level<Box>>((*box->colours_), "Moderator", {box, 50}),
                 .admin = segment<pick_new_level<Box>>((*box->colours_), "Admin", {box, 100}),
                 .apply = widgets::Button<add_privileged>((*box->colours_).widgets, "Apply", {box, page})} {
@@ -553,7 +553,7 @@ struct advanced_page : nodes::Stack {
               .information = part_heading((*box->colours_), "Room information"),
               .id = copy_line((*box->colours_), "Internal room ID", facts.id),
               .version = nodes::Text("Room version: " + rules_of(facts.theirs).version, 14.0f, box->colours_->text),
-              .upgrade_to = field("Upgrade to room version", "12", "12"),
+              .upgrade_to = field((*box->colours_), "Upgrade to room version", "12", "12"),
               .upgrade = widgets::Button<upgrade_press>((*box->colours_).widgets, "Upgrade this room", {box, this}),
               .tools = part_heading((*box->colours_), "Developer tools"),
               .explore = widgets::Button<asks<Actions, request::explore_state>>((*box->colours_).widgets, "Explore room state", {a}),

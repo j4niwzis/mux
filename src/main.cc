@@ -114,7 +114,7 @@ int main(int argc, char** argv) {
   const mux::ui::window_look_t window{.opacity = opacity, .chosen = opacity, .behind = saved.wallpaper_behind.value_or(false),
                             .see_through = opacity < 100,
                             .frost = std::clamp(saved.frost ? *saved.frost : saved.frost_blur ? static_cast<double>(*saved.frost_blur) / 3.0 : 10.0, 0.0, 100.0)};
-  mux::ui::use_theme(mux::config::theme_of(saved.theme), mux::config::accent_of(saved.accent), opacity);
+  mux::ui::use_scroll_bars(mux::config::theme_of(saved.theme));
   app program{mux::ui::palette_of(mux::config::theme_of(saved.theme), mux::config::accent_of(saved.accent), opacity), window};
   program.box = &box;
   program.wake = wake_window{kinds.wake};

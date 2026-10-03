@@ -89,7 +89,7 @@ void app::show_looks_now() {
   // the whole window repainted where it changes -- nothing made again.
   shared.looks.panels = root().main().chosen ? this->panels_of(*root().main().chosen)
                                                    : panels.value_or(mux::config::bubble_look{});
-  if (mux::ui::show_panels(shared.paint, shared.looks.panels, shared.looks.window)) {
+  if (mux::ui::show_panels(shared.paint, shared.looks.panels, shared.looks.window, colours)) {
     root().markDamaged();
     skiff::scene::work::mark(root().main().fState.fId);  // an ease ticked by the screen
   }

@@ -149,7 +149,7 @@ struct reactions_box : nodes::Stack {
   } parts;
 
   reactions_box(const ui_needs<Actions>& n, const conversation& in, const std::vector<reaction_entry>& entries, const model* now)
-      : parts{.top = top_bar("Reactions", {}, {n.actions}, false, true)} {
+      : parts{.top = top_bar(*n.colours, "Reactions", {}, {n.actions}, false, true)} {
     auto& rows = listed_rows(*this, parts.list, 420.0f);
     rows.reserve(entries.size());
     for (std::size_t i = 0; i < entries.size(); ++i)

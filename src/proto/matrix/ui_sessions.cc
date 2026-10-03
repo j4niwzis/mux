@@ -83,7 +83,8 @@ struct account_sessions : nodes::Stack {
     std::string device;
     std::string name;
     struct lines_t : two_lines {
-      lines_t(std::string shown, std::string facts) : two_lines(std::move(shown), std::move(facts), 15.0f, 2.0f, 12.0f) {}
+      lines_t(const palette& colours, std::string shown, std::string facts)
+          : two_lines(colours, std::move(shown), std::move(facts), 15.0f, 2.0f, 12.0f) {}
     };
     struct parts_t {
       lines_t lines;
@@ -95,7 +96,7 @@ struct account_sessions : nodes::Stack {
     } parts;
     session_row(account_sessions* page, std::size_t index, const proto::matrix::session_info& one, bool current)
         : device(one.id), name(one.name),
-          parts{.lines = lines_t(one.name.empty() ? std::string("Unnamed session") : one.name, facts_of(one, current)),
+          parts{.lines = lines_t(*page->colours_, one.name.empty() ? std::string("Unnamed session") : one.name, facts_of(one, current)),
                 .field = widgets::TextBox<>((*page->colours_).widgets, "Session name"),
                 .save = widgets::Button<save_rename>((*page->colours_).widgets, "Save", {page, index}),
                 .rename = widgets::Button<start_rename>((*page->colours_).widgets, "Rename", {page, index})} {

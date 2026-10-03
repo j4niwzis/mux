@@ -39,10 +39,10 @@ struct settings_dialog : scene::Node {
   // A page fills the dialog across, and is as tall as what it holds.
   void fit_page() {
     splice::visit(
-        [](auto& one) {
+        [this](auto& one) {
           one.fState.apply({.relativeSize = scene::axes::kX});
           one.fState.apply({.autoSize = scene::axes::kY});
-          raise_header(one);
+          raise_header(one, *needs_.colours);
         },
         this->page());
     parts.scroll.scrollToStart();
@@ -53,10 +53,10 @@ struct settings_dialog : scene::Node {
   // carried along with what scrolls.
   template <class P>
     requires requires(P& page) { page.parts.header; }
-  static void raise_header(P& page) {
-    page.parts.header.apply({.depth = 1.0f, .background = sidebar_colour});
+  static void raise_header(P& page, const palette& colours) {
+    page.parts.header.apply({.depth = 1.0f, .background = colours.sidebar});
   }
-  static void raise_header(auto&) {}
+  static void raise_header(auto&, const palette&) {}
   template <class P>
     requires requires(P& page) { page.parts.header; }
   static void pin_header(P& page, float offset) {

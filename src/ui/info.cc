@@ -121,7 +121,8 @@ struct info_panel : nodes::Stack {
         close_button close;
       } parts;
       top_row(Actions* a, info_panel* panel, bool with_back)
-          : parts{.back = icon_button<back_to_group>(icon::back{}, {panel}), .close = close_button(icon::close{}, {a})} {
+          : parts{.back = icon_button<back_to_group>(*panel->colours_, icon::back{}, {panel}),
+                  .close = close_button(*panel->colours_, icon::close{}, {a})} {
         this->setHorizontal();
         fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 0.0f, 8.0f}});
         parts.gap.apply({.height = 1.0f, .grow = scene::axes::kX});
@@ -227,7 +228,7 @@ struct info_panel : nodes::Stack {
     members_head(Actions* a, const palette& colours, std::size_t count)
         : parts{.people = icon_view(colours, icon::people{}),
                 .title = nodes::Text(std::format("{} MEMBER{}", count, count == 1 ? "" : "S"), 13.0f, colours.dim, true),
-                .add_member = add_button(icon::add_person{}, {a, "Adding members"})} {
+                .add_member = add_button(colours, icon::add_person{}, {a, "Adding members"})} {
       this->setHorizontal();
       this->setGap(10.0f);
       fState.apply({.fill = true, .padding = {6.0f, 10.0f, 6.0f, 16.0f}});

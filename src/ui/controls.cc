@@ -30,7 +30,6 @@ struct icon_mark : nodes::Icon {
   explicit icon_mark(const palette& colours, icon_t mark = icon::none{}) : nodes::Icon(shape_of(mark), colours.dim) {
     fState.apply({.width = 28.0f, .height = 36.0f, .alignSelf = scene::align::kMiddle});
   }
-  explicit icon_mark(icon_t mark = icon::none{}) : icon_mark(legacy_palette(), mark) {}
 };
 // A radio's ring, with a dot in it while it is the one chosen.
 struct radio_mark : nodes::Icon {
@@ -40,7 +39,6 @@ struct radio_mark : nodes::Icon {
   explicit radio_mark(const palette& colours) : nodes::Icon(shape(false), colours.dim), colours_(&colours) {
     fState.apply({.width = 20.0f, .height = 20.0f, .alignSelf = scene::align::kMiddle});
   }
-  radio_mark() : radio_mark(legacy_palette()) {}
   // A ring, and a dot in it while chosen.
   static IconShape shape(bool chosen) {
     IconShape out{{{nodes::mark::circle{0.0f, 0.0f, 8.0f}, 2.0f}}};
@@ -93,10 +91,6 @@ struct two_lines : nodes::Stack {
   } parts;
   two_lines(const palette& colours, std::string first, std::string second, float size, float gap)
       : two_lines(colours, std::move(first), std::move(second), size, gap, size - 2.0f) {}
-  two_lines(std::string first, std::string second, float size, float gap)
-      : two_lines(legacy_palette(), std::move(first), std::move(second), size, gap) {}
-  two_lines(std::string first, std::string second, float size, float gap, float second_size)
-      : two_lines(legacy_palette(), std::move(first), std::move(second), size, gap, second_size) {}
   // The line under it its own size: an account's facts under its name.
   two_lines(const palette& colours, std::string first, std::string second, float size, float gap, float second_size)
       : parts{.name = nodes::Text(std::move(first), size, colours.text, true),
@@ -127,8 +121,6 @@ struct row_item : pressable<nodes::Stack> {
   static constexpr float kHeight = 46.0f;
 
   // Declared: its icon, its text taking the room, and a radio at the end.
-  row_item(std::string text, Act what, icon_t icon = icon::none{}, std::optional<bool> choice = std::nullopt)
-      : row_item(legacy_palette(), std::move(text), std::move(what), icon, choice) {}
   row_item(const palette& colours, std::string text, Act what, icon_t icon = icon::none{}, std::optional<bool> choice = std::nullopt)
       : act(std::move(what)), radio(choice),
         parts{.mark = icon_mark(colours, icon), .label = nodes::Text(std::move(text), 15.0f, colours.text), .dot = radio_mark(colours)} {
@@ -177,7 +169,6 @@ struct icon_button : scene::Node {
   } parts;
 
   // Round, lit under the pointer or the keyboard's focus.
-  icon_button(icon_t mark, Act what) : icon_button(legacy_palette(), mark, std::move(what)) {}
   icon_button(const palette& colours, icon_t mark, Act what)
       : act(std::move(what)), parts{.mark = nodes::Icon(shape_of(mark), colours.text)} {
     fState.apply({.width = 36.0f,
@@ -224,8 +215,6 @@ struct page_header : nodes::Stack {
 
   static constexpr float kHeight = 54.0f;
 
-  page_header(std::string name, Back to, Close shut, bool has_back, bool has_close)
-      : page_header(legacy_palette(), std::move(name), std::move(to), std::move(shut), has_back, has_close) {}
   page_header(const palette& colours, std::string name, Back to, Close shut, bool has_back, bool has_close)
       : parts{.back = icon_button<Back>(colours, icon::back{}, std::move(to)),
               .title = nodes::Text(std::move(name), 17.0f, colours.text, true),
@@ -256,7 +245,6 @@ struct segment : pressable<nodes::Stack> {
 
   // The colours its text turns as it is chosen.
   const palette* colours_ = nullptr;
-  segment(std::string text, Act what) : segment(legacy_palette(), std::move(text), std::move(what)) {}
   segment(const palette& colours, std::string text, Act what)
       : act(std::move(what)), parts{.label = nodes::Text(std::move(text), 13.0f, colours.text, true)}, colours_(&colours) {
     fState.apply({.width = 92.0f, .height = 28.0f, .hoverBackground = colours.chosen, .selectedBackground = colours.accent, .focusBackground = colours.chosen});
@@ -293,7 +281,6 @@ struct menu_button : scene::Node {
   } parts;
   Actions* actions = nullptr;
 
-  explicit menu_button(Actions* a) : menu_button(legacy_palette(), a) {}
   menu_button(const palette& colours, Actions* a)
       : parts{.bars = nodes::Icon(IconShape{{{nodes::mark::rect{-8.0f, -7.0f, 8.0f, -5.0f, 1.0f}, 0.0f, true},
                                              {nodes::mark::rect{-8.0f, -1.0f, 8.0f, 1.0f, 1.0f}, 0.0f, true},
@@ -390,8 +377,6 @@ struct choice_menu : nodes::Stack {
     head_t head;
     std::vector<option_t> options;
   } parts;
-  choice_menu(std::string label, const std::vector<std::string>& names, std::size_t current, Choose c)
-      : choice_menu(legacy_palette(), std::move(label), names, current, std::move(c)) {}
   choice_menu(const palette& colours, std::string label, const std::vector<std::string>& names, std::size_t current, Choose c)
       : choose(std::move(c)), parts{.head = head_t(colours, std::move(label), current < names.size() ? names[current] : std::string())} {
     this->setGap(2.0f);
@@ -444,9 +429,9 @@ struct spaces_choices : nodes::Stack {
       nodes::Text name;
       choice_menu<pick_bars> where;
     } parts;
-    row(Actions* a, const std::string& account, const space_item_shown& one)
-        : parts{.name = nodes::Text(one.name, 14.0f, text_colour),
-                .where = choice_menu<pick_bars>("", {"Side bar", "Top bar", "Both bars", "Hidden"},
+    row(Actions* a, const palette& colours, const std::string& account, const space_item_shown& one)
+        : parts{.name = nodes::Text(one.name, 14.0f, colours.text),
+                .where = choice_menu<pick_bars>(colours, "", {"Side bar", "Top bar", "Both bars", "Hidden"},
                                                 one.side && !one.top   ? 0
                                                 : one.top && !one.side ? 1
                                                 : one.side && one.top  ? 2
@@ -459,12 +444,12 @@ struct spaces_choices : nodes::Stack {
   struct parts_t {
     std::vector<row> rows;
   } parts;
-  explicit spaces_choices(Actions* a) {
+  spaces_choices(Actions* a, const palette& colours) {
     this->setGap(2.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     parts.rows.reserve(space_items_now().size());
     for (const space_item_shown& one : space_items_now())
-      parts.rows.emplace_back(a, space_account_now(), one);
+      parts.rows.emplace_back(a, colours, space_account_now(), one);
   }
 };
 
@@ -851,8 +836,6 @@ struct toast_card : nodes::Stack {
     avatar_mark face;
     two_lines texts;
   } parts;
-  toast_card(std::string key, std::string title, std::string text)
-      : toast_card(legacy_palette(), std::move(key), std::move(title), std::move(text)) {}
   toast_card(const palette& colours, std::string key, std::string title, std::string text)
       : parts{.face = avatar_mark(key, title, 44.0f), .texts = two_lines(colours, title, std::move(text), 14.0f, 4.0f)} {
     this->setHorizontal();
@@ -900,7 +883,6 @@ struct context_bar : nodes::Stack {
     lines_column lines;
     cancel_button cancel;
   } parts;
-  explicit context_bar(Cancel cancel) : context_bar(legacy_palette(), std::move(cancel)) {}
   context_bar(const palette& colours, Cancel cancel)
       : parts{.mark = nodes::Icon(IconShape{}, colours.accent),
               .lines = lines_column(colours),
@@ -930,7 +912,6 @@ struct count_badge : nodes::Stack {
   struct parts_t {
     nodes::Text count;
   } parts;
-  count_badge() : count_badge(legacy_palette()) {}
   explicit count_badge(const palette& colours) : parts{.count = nodes::Text("", 11.0f, colours.on_accent, true)} {
     fState.apply({.place = scene::anchor::kTopCentre,
                   .y = -10.0f,
@@ -953,8 +934,6 @@ struct label_button_row : nodes::Stack {
     nodes::Text label;
     widgets::Button<Act> reset;
   } parts;
-  label_button_row(std::string label, std::string button, Act act, bool shown)
-      : label_button_row(legacy_palette(), std::move(label), std::move(button), std::move(act), shown) {}
   label_button_row(const palette& colours, std::string label, std::string button, Act act, bool shown)
       : parts{.label = nodes::Text(std::move(label), 13.0f, colours.text), .reset = widgets::Button<Act>(colours.widgets, std::move(button), std::move(act))} {
     this->setHorizontal();
@@ -977,7 +956,6 @@ struct cell_section : nodes::Stack {
     nodes::Text title;
     cells_t cells{{.direction = nodes::direction::horizontal{}, .spacingX = 0.0f, .spacingY = 0.0f, .wrap = true}, {}};
   } parts;
-  explicit cell_section(std::string name) : cell_section(legacy_palette(), std::move(name)) {}
   cell_section(const palette& colours, std::string name) : parts{.title = nodes::Text(std::move(name), 13.0f, colours.dim, true)} {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     parts.title.apply({.margin = {10.0f, 0.0f, 6.0f, 7.0f}});

@@ -128,7 +128,7 @@ struct found_person_row : nodes::Stack {
   Actions* actions;
   std::string id;
   struct lines_t : two_lines {
-    explicit lines_t(const found_person& one) : two_lines(one.name.empty() ? one.id : one.name, one.id, 14.0f, 2.0f) {}
+    lines_t(const palette& colours, const found_person& one) : two_lines(colours, one.name.empty() ? one.id : one.name, one.id, 14.0f, 2.0f) {}
   };
   struct parts_t {
     avatar_mark face;
@@ -136,7 +136,7 @@ struct found_person_row : nodes::Stack {
   } parts;
   found_person_row(Actions* a, const palette& colours, const found_person& one)
       : actions(a), id(one.id),
-        parts{.face = avatar_mark(one.id, one.name.empty() ? one.id : one.name, 36.0f), .lines = lines_t(one)} {
+        parts{.face = avatar_mark(one.id, one.name.empty() ? one.id : one.name, 36.0f), .lines = lines_t(colours, one)} {
     this->setHorizontal();
     this->setGap(12.0f);
     fState.apply({.fillX = true, .height = 52.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f}, .cornerRadius = 8.0f,
@@ -479,15 +479,15 @@ struct create_room_box : nodes::Stack {
   create_room_box(Actions* a, const palette& colours, std::string own_server)
       : actions(a), colours_(&colours), server(std::move(own_server)),
         parts{.header = header_t(colours, "Create a room", {}, {a}, false, true),
-              .name = field("Name", ""),
-              .topic = field("Topic (optional)", ""),
+              .name = field(colours, "Name", ""),
+              .topic = field(colours, "Topic (optional)", ""),
               .rule_caption = nodes::Text("Who can join", 13.0f, colours.dim),
               .rule = choice_button(this),
               .private_option = option_row<choose_private>(this, "Private room (invite only)",
                                                            "Only people invited will be able to find and join this room."),
               .public_option = option_row<choose_public>(this, "Public room", "Anyone will be able to find and join this room."),
               .rule_note = nodes::Text("", 13.0f, colours.dim),
-              .address = field("Address", std::format("#room-name:{}", server)),
+              .address = field(colours, "Address", std::format("#room-name:{}", server)),
               .encryption = switch_row<flip_encrypted>(this, "Enable end-to-end encryption"),
               .encryption_note = nodes::Text("", 12.0f, colours.dim),
               .show_advanced = widgets::Button<flip_advanced>(colours.widgets, "Show advanced", {this}),

@@ -45,13 +45,16 @@ struct xmpp_advanced : nodes::Stack {
     }
   };
   struct parts_t {
-    field resource{"Device name (resource)", "mux", "mux"};
-    field host{"Host", "from the domain's SRV records"};
-    field port{"Port", "5222"};
+    field resource;
+    field host;
+    field port;
     plain_row row;
   } parts;
 
-  xmpp_advanced(Actions* a, const palette& colours) : parts{.row = plain_row(a, colours)} {
+  xmpp_advanced(Actions* a, const palette& colours) : parts{.resource = field(colours, "Device name (resource)", "mux", "mux"),
+              .host = field(colours, "Host", "from the domain's SRV records"),
+              .port = field(colours, "Port", "5222"),
+              .row = plain_row(a, colours)} {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
     this->setGap(8.0f);
   }
@@ -72,8 +75,8 @@ struct xmpp_form : nodes::Stack {
 
   using advanced_button_t = widgets::Button<ask<Actions, &Actions::toggle_advanced>>;
   struct parts_t {
-    field address{"Address (JID)", "user@example.com"};
-    field password{"Password", "Password"};
+    field address;
+    field password;
     advanced_button_t advanced_button;
     widgets::Collapsible<xmpp_advanced<Actions>> more;
     form_end<Actions> end;
@@ -81,7 +84,9 @@ struct xmpp_form : nodes::Stack {
 
   xmpp_form(Actions* a, const palette& colours, const std::optional<::mux::proto::xmpp::kept>& from)
       : actions(a),
-        parts{.advanced_button = advanced_button_t(colours.widgets, "Advanced", {a}),
+        parts{.address = field(colours, "Address (JID)", "user@example.com"),
+              .password = field(colours, "Password", "Password"),
+              .advanced_button = advanced_button_t(colours.widgets, "Advanced", {a}),
               .more = widgets::Collapsible<xmpp_advanced<Actions>>(a, colours),
               .end = form_end<Actions>(colours, a, from.has_value())} {
     auto& [address, password, advanced_button, more, end] = parts;

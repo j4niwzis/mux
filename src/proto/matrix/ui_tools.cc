@@ -68,8 +68,8 @@ struct devtools_box : nodes::Stack {
       widgets::Button<send_press> send;
     } parts;
     explicit form(devtools_box* box)
-        : parts{.type = field("Event type", "m.room.message"),
-                .key = field("State key (for a state event; empty for a timeline one)", ""),
+        : parts{.type = field(*box->colours_, "Event type", "m.room.message"),
+                .key = field(*box->colours_, "State key (for a state event; empty for a timeline one)", ""),
                 .body_caption = nodes::Text("Content (a JSON object)", 13.0f, box->colours_->dim),
                 .body = widgets::TextArea<>(box->colours_->widgets, "{}"),
                 .send = widgets::Button<send_press>(box->colours_->widgets, "Send", {box})} {

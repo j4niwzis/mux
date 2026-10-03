@@ -30,8 +30,6 @@ struct field : nodes::Stack {
 
   // The colours its border turns as it has the focus.
   const palette* colours_ = nullptr;
-  field(std::string label, std::string placeholder, std::string text = {})
-      : field(legacy_palette(), std::move(label), std::move(placeholder), std::move(text)) {}
   // Declared: the caption over the field, which sits on a plate.
   field(const palette& colours, std::string label, std::string placeholder, std::string text = {})
       : parts{.caption = nodes::Text(std::move(label), 13.0f, colours.dim), .box = widgets::TextArea<>(colours.widgets, std::move(placeholder))},
@@ -173,13 +171,16 @@ template <class Actions>
 struct form_end : nodes::Stack {
   using submit_button = widgets::Button<ask<Actions, &Actions::submit_login>>;
   using close_button = widgets::Button<ask<Actions, &Actions::pop_panel>>;
+  // The colours it is made in, for what it says later.
+  const palette* colours_ = nullptr;
   struct parts_t {
     nodes::Text message;
     button_row<submit_button, close_button> buttons;
   } parts;
 
   form_end(const palette& colours, Actions* a, bool editing)
-      : parts{.message = nodes::Text("", 13.0f, colours.error),
+      : colours_(&colours),
+        parts{.message = nodes::Text("", 13.0f, colours.error),
               .buttons = button_row<submit_button, close_button>(submit_button(colours.widgets, editing ? "Save" : "Log in", {a}),
                                                                  close_button(colours.widgets, "Close", {a}))} {
     auto& message = parts.message;
@@ -196,7 +197,7 @@ struct form_end : nodes::Stack {
 
   void say(std::string text, bool error) {
     parts.message.setText(std::move(text));
-    parts.message.setColour(error ? error_colour : dim_colour);
+    parts.message.setColour(error ? colours_->error : colours_->dim);
   }
 };
 

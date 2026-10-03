@@ -162,8 +162,8 @@ struct explore_box : nodes::Stack {
       widgets::Button<search_press> search;
     } parts;
     search_row(explore_box* box, const std::string& own)
-        : parts{.query = field("Find a room", "Name, topic, or #address:server"),
-                .server = field("Server", own, own),
+        : parts{.query = field(*box->colours_, "Find a room", "Name, topic, or #address:server"),
+                .server = field(*box->colours_, "Server", own, own),
                 .search = widgets::Button<search_press>(box->colours_->widgets, "Search", {box})} {
       this->setHorizontal();
       this->setGap(8.0f);

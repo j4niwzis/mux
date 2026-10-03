@@ -78,7 +78,7 @@ struct member_row : nodes::Stack {
   std::optional<std::string> role;
   // Their name, and how they are under it.
   struct texts_column : two_lines {
-    texts_column(std::string shown, std::string how) : two_lines(std::move(shown), std::move(how), 14.0f, 4.0f) {}
+    texts_column(const palette& colours, std::string shown, std::string how) : two_lines(colours, std::move(shown), std::move(how), 14.0f, 4.0f) {}
   };
   // Their role, in a pill beside their name.
   struct role_pill : widgets::Pill {
@@ -101,7 +101,7 @@ struct member_row : nodes::Stack {
   member_row(const palette& colours, const member& one, std::string how, Open what)
       : who(one), how_shown(how), open(std::move(what)), id(one.id), role(one.role),
         parts{.face = avatar_mark(one.id, one.name.empty() ? one.id : one.name, 40.0f),
-              .texts = texts_column(one.name.empty() ? one.id : one.name, std::move(how)),
+              .texts = texts_column(colours, one.name.empty() ? one.id : one.name, std::move(how)),
               .pill = role_pill(one.role.value_or(""))} {
     this->setHorizontal();
     this->setGap(12.0f);

@@ -68,14 +68,14 @@ struct picture_viewer : nodes::Stack {
       icon_button<save_it> save;
       close_button close;
     } parts;
-    top_bar(Actions* a, picture_viewer* viewer, const std::string& source, const std::string& sender,
+    top_bar(const palette& colours, Actions* a, picture_viewer* viewer, const std::string& source, const std::string& sender,
             const std::string& name, const std::string& when)
         : parts{.face = avatar_mark(sender, name, 36.0f),
-                .texts = two_lines(name, when, 14.0f, 2.0f),
-                .smaller = icon_button<zoom_by>(icon::minus{}, {viewer, 1.0f / 1.25f}),
-                .larger = icon_button<zoom_by>(icon::plus{}, {viewer, 1.25f}),
-                .save = icon_button<save_it>(icon::download{}, {a, source}),
-                .close = close_button(icon::close{}, {a})} {
+                .texts = two_lines(colours, name, when, 14.0f, 2.0f),
+                .smaller = icon_button<zoom_by>(colours, icon::minus{}, {viewer, 1.0f / 1.25f}),
+                .larger = icon_button<zoom_by>(colours, icon::plus{}, {viewer, 1.25f}),
+                .save = icon_button<save_it>(colours, icon::download{}, {a, source}),
+                .close = close_button(colours, icon::close{}, {a})} {
       this->setHorizontal();
       this->setGap(8.0f);
       fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 16.0f}});
@@ -355,7 +355,7 @@ struct picture_viewer : nodes::Stack {
       : picture_viewer(n.colours, n.actions, std::move(where), std::move(sender), std::move(name), std::move(when)) {}
   picture_viewer(const palette* colours, Actions* a, std::string where, std::string sender, std::string name, std::string when)
       : actions(a), colours_(colours), source(std::move(where)),
-        parts{.top = top_bar(a, this, source, sender, name, when), .view = stage(this), .bar = video_bar(this)} {
+        parts{.top = top_bar(*colours, a, this, source, sender, name, when), .view = stage(this), .bar = video_bar(this)} {
     fState.apply({.fill = true, .background = skia::colorSetARGB(0xe6, 0, 0, 0)});
   }
   [[nodiscard]] bool acceptsInput() const { return true; }

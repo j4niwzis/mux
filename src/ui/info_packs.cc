@@ -104,8 +104,8 @@ struct packs_box : nodes::Stack {
     packs_box* box;
     std::size_t index;
     struct lines_t : two_lines {
-      explicit lines_t(const emote_pack& one)
-          : two_lines(one.name.empty() ? std::string("Unnamed pack") : one.name,
+      lines_t(const palette& colours, const emote_pack& one)
+          : two_lines(colours, one.name.empty() ? std::string("Unnamed pack") : one.name,
                       std::format("{} image{} · {}", one.pictures.size(), one.pictures.size() == 1 ? "" : "s",
                                   one.emoji && one.sticker ? "Emoji and stickers"
                                   : one.emoji              ? "Emoji"
@@ -120,7 +120,7 @@ struct packs_box : nodes::Stack {
         : box(b), index(i),
           parts{.face = nodes::Image<from_avatars>(
                     {one.avatar.value_or(one.pictures.empty() ? std::string() : one.pictures.front().url)}),
-                .lines = lines_t(one)} {
+                .lines = lines_t(*b->colours_, one)} {
       this->setHorizontal();
       this->setGap(12.0f);
       fState.apply({.fillX = true, .height = 56.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f}, .cornerRadius = 8.0f,
@@ -271,8 +271,8 @@ struct packs_box : nodes::Stack {
         parts{.header = header_t(colours, "Emojis & Stickers", {}, {a}, false, true),
               .note = nodes::Text("", 13.0f, colours.dim),
               .list_actions = list_buttons(this),
-              .name = field("Name", "Pack name"),
-              .attribution = field("Attribution (optional)", "Where its images are from"),
+              .name = field(colours, "Name", "Pack name"),
+              .attribution = field(colours, "Attribution (optional)", "Where its images are from"),
               .use = use_row(this),
               .images_heading = nodes::Text("Images", 13.0f, colours.dim, true),
               .edit_actions = edit_buttons(a, this)} {

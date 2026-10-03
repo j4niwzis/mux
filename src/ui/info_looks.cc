@@ -138,15 +138,15 @@ struct bubbles_picker : nodes::Stack {
   };
   struct element_row : nodes::Stack {
     struct head_t : label_button_row<element_reset> {
-      head_t(std::string label, element_reset reset, bool own)
-          : label_button_row<element_reset>(std::move(label), "As bubbles", reset, own) {}
+      head_t(const palette& colours, std::string label, element_reset reset, bool own)
+          : label_button_row<element_reset>(colours, std::move(label), "As bubbles", reset, own) {}
     };
     struct parts_t {
       head_t head;
       widgets::SliderBar<scene::NoAction, element_done> bar;
     } parts;
     element_row(Actions* a, const look_level& level, std::string_view name, element_t which)
-        : parts{.head = head_t(std::format("{}: {}%{}", name, element_opacity_of(current(level, config::look_part::bubbles{}), which),
+        : parts{.head = head_t(*level.colours, std::format("{}: {}%{}", name, element_opacity_of(current(level, config::look_part::bubbles{}), which),
                                            (current(level, config::look_part::bubbles{}).elements.*which) ? "" : " (as bubbles)"),
                                element_reset{a, level, which},
                                (current(level, config::look_part::bubbles{}).elements.*which).has_value()),
@@ -254,15 +254,15 @@ struct bubbles_picker : nodes::Stack {
   // An element drawn frosted: its blur, and a way back to the bubbles'.
   struct element_blur_row : nodes::Stack {
     struct head_t : label_button_row<element_blur_reset> {
-      head_t(std::string label, element_blur_reset reset, bool own)
-          : label_button_row<element_blur_reset>(std::move(label), "As bubbles", reset, own) {}
+      head_t(const palette& colours, std::string label, element_blur_reset reset, bool own)
+          : label_button_row<element_blur_reset>(colours, std::move(label), "As bubbles", reset, own) {}
     };
     struct parts_t {
       head_t head;
       widgets::SliderBar<scene::NoAction, element_blur_done> bar;
     } parts;
     element_blur_row(Actions* a, const look_level& level, std::string_view name, element_blur_t which)
-        : parts{.head = head_t(std::format("{} blur: {:.1f}%{}", name,
+        : parts{.head = head_t(*level.colours, std::format("{} blur: {:.1f}%{}", name,
                                            element_blur_of(current(level, config::look_part::bubbles{}), which, level.looks->window) * 100.0f,
                                            (current(level, config::look_part::bubbles{}).blurs.*which) ? "" : " (as bubbles)"),
                                element_blur_reset{a, level, which},
@@ -318,7 +318,7 @@ struct bubbles_picker : nodes::Stack {
               .why = nodes::Text("The chat list, the bars and the side panels: only over a background behind the whole "
                                  "window (Appearance \u2192 Chat background \u2192 Behind the whole window).",
                                  12.0f, level.colours->dim),
-              .kinds = choice_menu<pick_kind_at>("", kind_names(level), kind_index(level, part),
+              .kinds = choice_menu<pick_kind_at>(*level.colours, "", kind_names(level), kind_index(level, part),
                                                  pick_kind_at{a, level, part, has_level_above(level.level)}),
               .opacity_label = nodes::Text("Opacity", 13.0f, level.colours->text),
               .opacity = widgets::SliderBar<scene::NoAction, opacity_done>(level.colours->widgets, {}, opacity_done{a, level, part}),
@@ -432,7 +432,7 @@ struct look_choices : nodes::Stack {
   look_choices(Actions* a, const palette& colours, const looks_shown& looks, choice_level_t level)
       : parts{.background_title = nodes::Text("BACKGROUND", 13.0f, colours.dim, true),
               .note = nodes::Text(note_of(looks, level), 13.0f, colours.dim),
-              .background = choice_menu<pick_wallpaper_at>("", background_names(looks, level), background_index(looks, level),
+              .background = choice_menu<pick_wallpaper_at>(colours, "", background_names(looks, level), background_index(looks, level),
                                                            pick_wallpaper_at{a, level, has_level_above(level)}),
               .bubbles = bubbles_picker<Actions>(a, look_level{level, &looks, &colours}, config::look_part::bubbles{}),
               .panels = bubbles_picker<Actions>(a, look_level{level, &looks, &colours}, config::look_part::panels{})} {

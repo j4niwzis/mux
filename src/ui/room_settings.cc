@@ -145,15 +145,12 @@ inline nodes::Text part_heading(const palette& colours, std::string text) {
   out.apply({.margin = {18.0f, 0.0f, 4.0f, 0.0f}});
   return out;
 }
-inline nodes::Text part_heading(std::string text) { return part_heading(legacy_palette(), std::move(text)); }
-inline nodes::Text tab_heading(std::string text) { return tab_heading(legacy_palette(), std::move(text)); }
 inline nodes::Text explained(const palette& colours, std::string text) {
   nodes::Text out(std::move(text), 13.0f, colours.dim);
   out.setWrapped(true);
   out.apply({.fillX = true, .margin = {2.0f, 0.0f, 6.0f, 0.0f}});
   return out;
 }
-inline nodes::Text explained(std::string text) { return explained(legacy_palette(), std::move(text)); }
 
 // One of a choice, as Element's radio buttons: a ring, and a title over
 // what it means.
@@ -181,8 +178,6 @@ struct radio_choice : pressable<nodes::Stack> {
     radio_mark ring;
     texts words;
   } parts;
-  radio_choice(std::string title, std::string about, Act what, bool on, bool allowed)
-      : radio_choice(legacy_palette(), std::move(title), std::move(about), std::move(what), on, allowed) {}
   radio_choice(const palette& colours, std::string title, std::string about, Act what, bool on, bool allowed)
       : act(std::move(what)), parts{.ring = radio_mark(colours), .words = texts(colours, std::move(title), std::move(about))} {
     this->setHorizontal();
@@ -204,8 +199,6 @@ struct toggle_line : nodes::Stack {
     nodes::Text label;
     widgets::Toggle<Act> toggle;
   } parts;
-  toggle_line(std::string text, Act what, bool on, bool allowed)
-      : toggle_line(legacy_palette(), std::move(text), std::move(what), on, allowed) {}
   toggle_line(const palette& colours, std::string text, Act what, bool on, bool allowed)
       : parts{.label = nodes::Text(std::move(text), 14.0f, colours.text), .toggle = widgets::Toggle<Act>(colours.widgets, std::move(what))} {
     this->setHorizontal();
@@ -231,7 +224,6 @@ struct copy_line : nodes::Stack {
     nodes::Text value;
     widgets::Button<copy_it> copy;
   } parts;
-  copy_line(std::string label, std::string value) : copy_line(legacy_palette(), std::move(label), std::move(value)) {}
   copy_line(const palette& colours, std::string label, std::string value)
       : parts{.label = nodes::Text(std::move(label), 14.0f, colours.dim),
               .value = nodes::Text(value, 14.0f, colours.text),

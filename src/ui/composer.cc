@@ -36,7 +36,6 @@ struct drag_edge : scene::Node {
     nodes::Box<> line;
   } parts;
 
-  explicit drag_edge(OnDrag what, bool line = true) : drag_edge(legacy_palette(), std::move(what), line) {}
   drag_edge(const palette& colours, OnDrag what, bool line = true)
       : on_drag(std::move(what)), with_line(line), parts{.line = nodes::Box<>(colours.band)} {
     fState.setCursor(scene::cursor::resize_horizontal{});

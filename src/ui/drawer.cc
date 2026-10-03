@@ -43,13 +43,14 @@ struct drawer_account : nodes::Stack {
     avatar_mark face;
     two_lines texts;
     // The account whose chats are shown: a tick at the end.
-    icon_mark tick{icon::check{}};
+    icon_mark tick;
   } parts;
 
   // Declared: the avatar, the address over its state, the tick.
   drawer_account(const ui_needs<Actions>& n, const config::account_t& saved, const model& now, bool is_current)
       : actions(n.actions), address(config::address_of(saved)), current(is_current),
-        parts{.face = avatar_mark(address, address, 38.0f), .texts = two_lines(address, "", 14.0f, 3.0f)} {
+        parts{.face = avatar_mark(address, address, 38.0f), .texts = two_lines(*n.colours, address, "", 14.0f, 3.0f),
+              .tick = icon_mark(*n.colours, icon::check{})} {
     const palette& colours = *n.colours;
     this->setHorizontal();
     this->setGap(14.0f);
@@ -103,12 +104,12 @@ struct drawer_panel : nodes::Stack {
   drawer_panel(const ui_needs<Actions>& n, Actions* a)
       : needs_(n),
         parts{.title = nodes::Text("mux", 20.0f, n.colours->text, true),
-              .manage = manage_row("Manage accounts", {a}, icon::person{}),
+              .manage = manage_row(*n.colours, "Manage accounts", {a}, icon::person{}),
               .rule_1 = nodes::Box<>(n.colours->chosen),
-              .new_chat = new_chat_row("Start new chat", {a}, icon::person{}),
-              .new_room = new_room_row("New room", {a}, icon::people{}),
-              .settings = settings_row("Settings", {a}, icon::gear{}),
-              .quit = quit_row("Quit", {a}, icon::power{})} {
+              .new_chat = new_chat_row(*n.colours, "Start new chat", {a}, icon::person{}),
+              .new_room = new_room_row(*n.colours, "New room", {a}, icon::people{}),
+              .settings = settings_row(*n.colours, "Settings", {a}, icon::gear{}),
+              .quit = quit_row(*n.colours, "Quit", {a}, icon::power{})} {
     parts.title.apply({.margin = {18.0f, 20.0f, 14.0f, 20.0f}});
     parts.manage.apply({.margin = {0.0f, 0.0f, 6.0f, 0.0f}});
     parts.rule_1.apply({.margin = {0.0f, 0.0f, 6.0f, 0.0f}});

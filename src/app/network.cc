@@ -303,14 +303,6 @@ struct network {
       account.view_source(room, event);
     });
   }
-  void list_state(const mux::conversation_id& in) {
-    on_account_of(in, [room = in.id](auto& account) -> decltype(void(account.list_state(room))) { account.list_state(room); });
-  }
-  void send_custom(const mux::conversation_id& in, std::string type, std::optional<std::string> key, std::string json) {
-    on_account_of(in, [room = in.id, type = std::move(type), key = std::move(key), json = std::move(json)](auto& account) -> decltype(void(account.send_custom(room, type, key, json))) {
-      account.send_custom(room, type, key, json);
-    });
-  }
   // A sticker sent into a chat by the account it is of.
   void send_sticker(const mux::conversation_id& to, mux::emote sticker, std::optional<std::string> reply_to = std::nullopt) {
     loop.post([this, to, sticker = std::move(sticker), reply_to = std::move(reply_to)] {
@@ -663,27 +655,6 @@ struct network {
             one.account);
     });
   }
-  void export_room_keys(const mux::account_id& by, std::string path, std::string passphrase) {
-    this->on_account(by, [path = std::move(path), passphrase = std::move(passphrase)](auto& account) -> decltype(void(account.export_room_keys(path, passphrase))) { account.export_room_keys(path, passphrase); });
-  }
-  void import_room_keys(const mux::account_id& by, std::string path, std::string passphrase) {
-    this->on_account(by, [path = std::move(path), passphrase = std::move(passphrase)](auto& account) -> decltype(void(account.import_room_keys(path, passphrase))) { account.import_room_keys(path, passphrase); });
-  }
-  void restore_cross_signing(const mux::account_id& by, std::string recovery) {
-    this->on_account(by, [recovery = std::move(recovery)](auto& account) -> decltype(void(account.restore_cross_signing(recovery))) { account.restore_cross_signing(recovery); });
-  }
-  void reset_backup(const mux::account_id& by) {
-    this->on_account(by, [](auto& account) -> decltype(void(account.reset_backup())) { account.reset_backup(); });
-  }
-  void delete_backup(const mux::account_id& by) {
-    this->on_account(by, [](auto& account) -> decltype(void(account.delete_backup())) { account.delete_backup(); });
-  }
-  void sign_out_unverified(const mux::account_id& by, std::string password) {
-    this->on_account(by, [password = std::move(password)](auto& account) -> decltype(void(account.sign_out_unverified(password))) { account.sign_out_unverified(password); });
-  }
-  void setup_cross_signing(const mux::account_id& by, std::string password, bool reset = false) {
-    this->on_account(by, [password = std::move(password), reset](auto& account) -> decltype(void(account.setup_cross_signing(password, reset))) { account.setup_cross_signing(password, reset); });
-  }
   void verify_start(const mux::account_id& by, std::string user, std::optional<std::string> device) {
     this->on_account(by, [user = std::move(user), device = std::move(device)](auto& account) -> decltype(void(account.verify_start(user, device))) { account.verify_start(user, device); });
   }
@@ -695,15 +666,6 @@ struct network {
   }
   void verify_cancel(const mux::account_id& by, std::string txn) {
     this->on_account(by, [txn = std::move(txn)](auto& account) -> decltype(void(account.verify_cancel(txn))) { account.verify_cancel(txn); });
-  }
-  void list_sessions(const mux::account_id& by) {
-    this->on_account(by, [](auto& account) -> decltype(void(account.list_sessions())) { account.list_sessions(); });
-  }
-  void rename_session(const mux::account_id& by, std::string device, std::string name) {
-    this->on_account(by, [device = std::move(device), name = std::move(name)](auto& account) -> decltype(void(account.rename_session(device, name))) { account.rename_session(device, name); });
-  }
-  void sign_out_sessions(const mux::account_id& by, std::vector<std::string> devices, std::string password) {
-    this->on_account(by, [devices = std::move(devices), password = std::move(password)](auto& account) -> decltype(void(account.sign_out_sessions(devices, password))) { account.sign_out_sessions(devices, password); });
   }
   // A person's profile, asked of the Matrix account named.
   void fetch_profile(const mux::account_id& by, std::string user) {

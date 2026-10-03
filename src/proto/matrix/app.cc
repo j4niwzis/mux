@@ -14,6 +14,74 @@ import mux.proto.matrix.requests;
 import mux.ui;
 import mux.ui.proto.matrix;
 
+// What Matrix's glue asks of an account, by the program's network: each
+// where the account's client has the call (ask_if_able, in on_account).
+namespace mux::proto::matrix::ops {
+
+template <class Net>
+void list_sessions(Net& net, const account_id& by) {
+  net.on_account(by, [](auto& account) -> decltype(void(account.list_sessions())) { account.list_sessions(); });
+}
+
+template <class Net>
+void sign_out_sessions(Net& net, const account_id& by, std::vector<std::string> devices, std::string password) {
+  net.on_account(by, [devices = std::move(devices), password = std::move(password)](auto& account) -> decltype(void(account.sign_out_sessions(devices, password))) { account.sign_out_sessions(devices, password); });
+}
+
+template <class Net>
+void rename_session(Net& net, const account_id& by, std::string device, std::string name) {
+  net.on_account(by, [device = std::move(device), name = std::move(name)](auto& account) -> decltype(void(account.rename_session(device, name))) { account.rename_session(device, name); });
+}
+
+template <class Net>
+void setup_cross_signing(Net& net, const account_id& by, std::string password, bool reset = false) {
+  net.on_account(by, [password = std::move(password), reset](auto& account) -> decltype(void(account.setup_cross_signing(password, reset))) { account.setup_cross_signing(password, reset); });
+}
+
+template <class Net>
+void restore_cross_signing(Net& net, const account_id& by, std::string recovery) {
+  net.on_account(by, [recovery = std::move(recovery)](auto& account) -> decltype(void(account.restore_cross_signing(recovery))) { account.restore_cross_signing(recovery); });
+}
+
+template <class Net>
+void reset_backup(Net& net, const account_id& by) {
+  net.on_account(by, [](auto& account) -> decltype(void(account.reset_backup())) { account.reset_backup(); });
+}
+
+template <class Net>
+void delete_backup(Net& net, const account_id& by) {
+  net.on_account(by, [](auto& account) -> decltype(void(account.delete_backup())) { account.delete_backup(); });
+}
+
+template <class Net>
+void sign_out_unverified(Net& net, const account_id& by, std::string password) {
+  net.on_account(by, [password = std::move(password)](auto& account) -> decltype(void(account.sign_out_unverified(password))) { account.sign_out_unverified(password); });
+}
+
+template <class Net>
+void export_room_keys(Net& net, const account_id& by, std::string path, std::string passphrase) {
+  net.on_account(by, [path = std::move(path), passphrase = std::move(passphrase)](auto& account) -> decltype(void(account.export_room_keys(path, passphrase))) { account.export_room_keys(path, passphrase); });
+}
+
+template <class Net>
+void import_room_keys(Net& net, const account_id& by, std::string path, std::string passphrase) {
+  net.on_account(by, [path = std::move(path), passphrase = std::move(passphrase)](auto& account) -> decltype(void(account.import_room_keys(path, passphrase))) { account.import_room_keys(path, passphrase); });
+}
+
+template <class Net>
+void list_state(Net& net, const conversation_id& in) {
+  net.on_account_of(in, [room = in.id](auto& account) -> decltype(void(account.list_state(room))) { account.list_state(room); });
+}
+
+template <class Net>
+void send_custom(Net& net, const conversation_id& in, std::string type, std::optional<std::string> key, std::string json) {
+  net.on_account_of(in, [room = in.id, type = std::move(type), key = std::move(key), json = std::move(json)](auto& account) -> decltype(void(account.send_custom(room, type, key, json))) {
+    account.send_custom(room, type, key, json);
+  });
+}
+
+}  // namespace mux::proto::matrix::ops
+
 export namespace mux::proto::matrix {
 
 // What the developer tools asked, shown.
@@ -114,14 +182,14 @@ template <class App>
 void program_asked(App& app, const reset_backup&) {
   app.with_chosen_account([&](auto&, config::account_t& account) {
     if (!app.shared.demo())
-      app.net->reset_backup(App::id_of(account));
+      ops::reset_backup(*app.net, App::id_of(account));
   });
 }
 template <class App>
 void program_asked(App& app, const delete_backup&) {
   app.with_chosen_account([&](auto&, config::account_t& account) {
     if (!app.shared.demo())
-      app.net->delete_backup(App::id_of(account));
+      ops::delete_backup(*app.net, App::id_of(account));
   });
 }
 // The sessions: one verified by emoji, some signed out, one renamed, listed.
@@ -134,13 +202,13 @@ void program_asked(App& app, const verify_session& one) {
 template <class App>
 void program_asked(App& app, const sign_out_sessions& one) {
   app.with_chosen_account([&](auto&, config::account_t& account) {
-    app.net->sign_out_sessions(App::id_of(account), one.devices, one.password);
+    ops::sign_out_sessions(*app.net, App::id_of(account), one.devices, one.password);
   });
 }
 template <class App>
 void program_asked(App& app, const rename_session& one) {
   app.with_chosen_account([&](auto&, config::account_t& account) {
-    app.net->rename_session(App::id_of(account), one.device, one.name);
+    ops::rename_session(*app.net, App::id_of(account), one.device, one.name);
   });
 }
 // A room changed as Matrix changes one: the room being managed, by its account.
@@ -159,7 +227,7 @@ void program_asked(App& app, const explore_state&) {
   if (!chosen || app.shared.demo())
     return;
   app.root().close_manage();
-  app.net->list_state(*chosen);
+  ops::list_state(*app.net, *chosen);
 }
 template <class App>
 void program_asked(App& app, const open_send_custom&) {
@@ -172,7 +240,7 @@ void program_asked(App& app, const send_custom& one) {
   const auto chosen = app.managed();
   if (!chosen || app.shared.demo())
     return;
-  app.net->send_custom(*chosen, one.type, one.state_key, one.json);
+  ops::send_custom(*app.net, *chosen, one.type, one.state_key, one.json);
 }
 template <class App>
 void program_asked(App& app, const verify_them& one) {
@@ -180,7 +248,7 @@ void program_asked(App& app, const verify_them& one) {
 }
 template <class App>
 void program_asked(App& app, const refresh_sessions&) {
-  app.with_chosen_account([&](auto&, config::account_t& account) { app.net->list_sessions(App::id_of(account)); });
+  app.with_chosen_account([&](auto&, config::account_t& account) { ops::list_sessions(*app.net, App::id_of(account)); });
 }
 
 }  // namespace mux::proto::matrix::request
@@ -200,7 +268,7 @@ void passphrase_given(App& app, const export_keys&, const Given& one) {
   // Joined, not formatted: clang 23 crashed on format strings first made in
   // these modules (see app/network.cc).
   const std::string file = "mux-room-keys-" + std::string(config::file_name_of(app.keys_of->address)) + ".txt";
-  app.net->export_room_keys(*app.keys_of, (folder / file).string(), one.fresh);
+  ops::export_room_keys(*app.net, *app.keys_of, (folder / file).string(), one.fresh);
   app.root().close_passphrase();
 }
 template <class App, class Given>
@@ -209,31 +277,31 @@ void passphrase_given(App& app, const import_keys&, const Given& one) {
     return app.root().passphrase_refused("Type the key file's path.");
   if (!app.keys_of)
     return app.root().close_passphrase();
-  app.net->import_room_keys(*app.keys_of, one.file, one.current);
+  ops::import_room_keys(*app.net, *app.keys_of, one.file, one.current);
   app.root().close_passphrase();
 }
 template <class App, class Given>
 void passphrase_given(App& app, const cross_signing&, const Given& one) {
   if (app.keys_of)
-    app.net->setup_cross_signing(*app.keys_of, one.current);
+    ops::setup_cross_signing(*app.net, *app.keys_of, one.current);
   app.root().close_passphrase();
 }
 template <class App, class Given>
 void passphrase_given(App& app, const sign_out_unverified&, const Given& one) {
   if (app.keys_of)
-    app.net->sign_out_unverified(*app.keys_of, one.current);
+    ops::sign_out_unverified(*app.net, *app.keys_of, one.current);
   app.root().close_passphrase();
 }
 template <class App, class Given>
 void passphrase_given(App& app, const reset_identity&, const Given& one) {
   if (app.keys_of)
-    app.net->setup_cross_signing(*app.keys_of, one.current, true);
+    ops::setup_cross_signing(*app.net, *app.keys_of, one.current, true);
   app.root().close_passphrase();
 }
 template <class App, class Given>
 void passphrase_given(App& app, const recovery&, const Given& one) {
   if (app.keys_of)
-    app.net->restore_cross_signing(*app.keys_of, one.current);
+    ops::restore_cross_signing(*app.net, *app.keys_of, one.current);
   app.root().close_passphrase();
 }
 

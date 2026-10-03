@@ -103,17 +103,9 @@ cme_find_package(OpenSSL REQUIRED)
 # target too, and mux's modules were matched to it rather than to the std
 # the family's modules were built against.
 
-# alef, which tern reads addresses with and skiff lays text out with, asked
-# for once with all that both of them need, before either asks: a later ask
-# for more of it finds it already built without that, and stops.
-cme_declare_port(NAME alef PROVIDES alef
-  GITHUB_REPOSITORY j4niwzis/alef
-  GIT_TAG 6dc139f9590dc0d3ac1cc0e9748e67d7a1485480
-  LICENSE AGPL-3.0-only
-  TARGETS alef)
-cme_options(alef "ALEF_TESTS OFF")
-cme_find_package(alef COMPONENTS precis idna grapheme line bidi emoji REQUIRED)
-
+# splice, declared and found before alef: alef declares its own pin of it,
+# and the first declaration is the one built -- found after alef, mux's pin
+# (with splice::remapped) was passed over for alef's.
 # splice: what the family shares -- splice::variant (a variant built in time
 # linear in its alternatives; outside a release build, reached through
 # tables) and splice::overloaded. Its tables as mux's handlers are: erased
@@ -129,6 +121,18 @@ cme_declare_port(NAME splice PROVIDES splice
   TARGETS splice)
 cme_options(splice "SPLICE_TESTS OFF")
 cme_find_package(splice 0.2 REQUIRED)
+
+# alef, which tern reads addresses with and skiff lays text out with, asked
+# for once with all that both of them need, before either asks: a later ask
+# for more of it finds it already built without that, and stops.
+cme_declare_port(NAME alef PROVIDES alef
+  GITHUB_REPOSITORY j4niwzis/alef
+  GIT_TAG 6dc139f9590dc0d3ac1cc0e9748e67d7a1485480
+  LICENSE AGPL-3.0-only
+  TARGETS alef)
+cme_options(alef "ALEF_TESTS OFF")
+cme_find_package(alef COMPONENTS precis idna grapheme line bidi emoji REQUIRED)
+
 
 # knot, at knot::raw as a rest member (4903935): what is not typed kept as
 # its JSON text, no tree -- loom asks for the same. The project's pin is the

@@ -213,6 +213,24 @@ inline std::map<protocol_t, proto::account_ops>& protocol_ops() {
 // Whether files may be sent into an account's chats: where its account
 // sends them, and its protocol allows it now.
 [[nodiscard]] inline bool may_send_files(const account_id& of);
+// Lists of types, put together: the client's and every protocol's -- the
+// Manage tabs and pages, the account pages.
+template <class... Ts>
+struct type_list {};
+template <class... Lists>
+struct joined;
+template <class... Ts>
+struct joined<type_list<Ts...>> {
+  using type = type_list<Ts...>;
+};
+template <class... As, class... Bs, class... Rest>
+struct joined<type_list<As...>, type_list<Bs...>, Rest...> : joined<type_list<As..., Bs...>, Rest...> {};
+template <class List>
+struct variant_of_types;
+template <class... Ts>
+struct variant_of_types<type_list<Ts...>> {
+  using type = splice::variant<Ts...>;
+};
 // Each account's protocol state, as its client last said it: what the
 // extension points are asked with. One not said yet: its protocol's default.
 inline std::map<account_id, protocol_state_t>& protocol_states() {
@@ -273,7 +291,7 @@ inline skia::SkColor on_accent_colour = skia::colorSetARGB(255, 255, 255, 255);
 //   void close_account_pages()       -- back to the list of accounts
 //   void choose_new_proxy(int)       -- the proxy of an account being added
 //   void accounts_back()              -- ← on the accounts page
-//   void account_page(int)           -- a page of the chosen account
+//   void account_page(account_page_t) -- a page of the chosen account
 //   void flip_account_receipts(), flip_only_verified(), accept_identity(who), reset_identity(), reset_backup(), delete_backup(), sign_out_unverified(), flip_account_typing(), choose_account_proxy(int), manage_proxies()
 //   void typing(bool)                -- the composer has text in it, or not
 //   void settings_proxies(), add_proxy(), edit_proxy(int), proxy_kind(int),

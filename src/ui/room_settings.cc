@@ -126,24 +126,6 @@ struct notifications {};
 struct looks {};
 }  // namespace settings_tab
 
-// Lists of types, put together: the dialog's tabs and pages, the client's
-// and every protocol's.
-template <class... Ts>
-struct type_list {};
-template <class... Lists>
-struct joined;
-template <class... Ts>
-struct joined<type_list<Ts...>> {
-  using type = type_list<Ts...>;
-};
-template <class... As, class... Bs, class... Rest>
-struct joined<type_list<As...>, type_list<Bs...>, Rest...> : joined<type_list<As..., Bs...>, Rest...> {};
-template <class List>
-struct variant_of_types;
-template <class... Ts>
-struct variant_of_types<type_list<Ts...>> {
-  using type = splice::variant<Ts...>;
-};
 template <class Tabs>
 struct tab_types;
 template <class... Tabs>

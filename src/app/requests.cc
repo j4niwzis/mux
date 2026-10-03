@@ -547,7 +547,7 @@ struct rename_session {
 };
 struct refresh_sessions {};
 struct account_page {
-  int page = 0;
+  mux::ui::account_page_t page = mux::ui::account_page::connection{};
 };
 struct flip_account_receipts {};
 struct flip_only_verified {};
@@ -887,7 +887,7 @@ struct actions {
   void toggle_mute_of(conversation_id which) { requests.emplace_back(request::toggle_mute_of{std::move(which)}); }
   void close_account_pages() { requests.emplace_back(request::close_account_pages{}); }
   void accounts_back() { requests.emplace_back(request::accounts_back{}); }
-  void account_page(int page) { requests.emplace_back(request::account_page{page}); }
+  void account_page(mux::ui::account_page_t page) { requests.emplace_back(request::account_page{std::move(page)}); }
   void sign_out_sessions(std::vector<std::string> devices, std::string password) {
     requests.emplace_back(request::sign_out_sessions{std::move(devices), std::move(password)});
   }

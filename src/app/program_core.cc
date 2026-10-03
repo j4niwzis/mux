@@ -89,7 +89,7 @@ void app::woken() {
                                [&](const mux::proto::matrix::sessions_listed& listed) {
                                  if (auto* up = root().open_panel())
                                    splice::visit([&](accounts& panel) {
-                                                   if (auto* page = panel.sessions(); page && panel.selected == listed.by.address)
+                                                   if (auto* page = panel.template shown_page<mux::proto::matrix::sessions_page<accounts::actions_type>>(); page && panel.selected == listed.by.address)
                                                      page->show(listed.current, listed.sessions);
                                                  },
                                                  *up);
@@ -97,7 +97,7 @@ void app::woken() {
                                [&](const mux::proto::matrix::security_state& state) {
                                  if (auto* up = root().open_panel())
                                    splice::visit([&](accounts& panel) {
-                                                   if (auto* page = panel.sessions(); page && panel.selected == state.by.address)
+                                                   if (auto* page = panel.template shown_page<mux::proto::matrix::sessions_page<accounts::actions_type>>(); page && panel.selected == state.by.address)
                                                      page->show_security(state.cross_signing, state.backup);
                                                  },
                                                  *up);
@@ -105,7 +105,7 @@ void app::woken() {
                                [&](const mux::proto::matrix::sessions_refused& said) {
                                  if (auto* up = root().open_panel())
                                    splice::visit([&](accounts& panel) {
-                                                   if (auto* page = panel.sessions(); page && panel.selected == said.by.address)
+                                                   if (auto* page = panel.template shown_page<mux::proto::matrix::sessions_page<accounts::actions_type>>(); page && panel.selected == said.by.address)
                                                      page->refused(said.why, said.needs_password);
                                                  },
                                                  *up);

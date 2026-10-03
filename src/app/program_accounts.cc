@@ -251,7 +251,7 @@ void app::wallpaper_file(const std::string& path) {
     managing->show_tab(managing->tab);
   this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
     if (panel.chats_page())
-      panel.show_page(3, account, *model, proxies, theme);
+      panel.show_page(mux::ui::account_page::chats{}, account, *model, proxies, theme);
   });
 }
 
@@ -678,10 +678,8 @@ void app::apply(const request::accounts_back&) {
 
 void app::apply(const request::account_page& one) {
   this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
+    // A page that wants something of the server asks for it as it opens.
     panel.show_page(one.page, account, *model, proxies, theme);
-    // Sessions: asked of the server as the page opens.
-    if (one.page == 4)
-      net->list_sessions(id_of(account));
   });
 }
 void app::apply(const request::sign_out_sessions& one) {
@@ -1225,7 +1223,7 @@ void app::apply(const request::choose_account_proxy& one) {
       kept = proxies[static_cast<std::size_t>(one.index)].name;
     (void)this->write();
     this->reconnect(account);
-    panel.show_page(2, account, *model, proxies, theme);
+    panel.show_page(mux::ui::account_page::proxy{}, account, *model, proxies, theme);
   });
 }
 

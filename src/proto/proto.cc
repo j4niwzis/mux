@@ -68,6 +68,13 @@ struct account_ops {
 struct own_messages {};
 [[nodiscard]] inline bool allows(own_messages, const conversation&, const message& one) { return own_text(one); }
 
+// An account's settings pages of its protocol's own, beside the client's
+// (Connection, Privacy, Chats, Proxy): their types, as account_pages(state)
+// lists them. Each has its title, its icon and its page by overloads of its
+// own, in the protocol's UI module (page_title, page_icon, page_type).
+template <class... Pages>
+struct account_page_list {};
+
 }  // namespace mux::proto
 
 // The defaults: what a protocol that says nothing of a thing comes to.
@@ -84,6 +91,8 @@ inline std::optional<std::string> person_link(const auto&, std::string_view) { r
 // What a contact never heard of is said to be: nothing -- where nothing
 // says who is there, "offline" would be said of everyone.
 inline std::string unheard_presence(const auto&) { return {}; }
+// No pages of its own.
+constexpr account_page_list<> account_pages(const auto&) { return {}; }
 // Any chat may be left.
 inline bool can_leave(const auto&, const conversation&) { return true; }
 // Whom a direct chat is with: the chat's own address.
@@ -210,6 +219,13 @@ inline constexpr struct can_leave_t {
     }, state);
   }
 } can_leave{};
+
+// A protocol's own account pages, asked of its state type.
+template <class State>
+constexpr auto account_pages_of(const State& state) {
+  using defaults::account_pages;
+  return account_pages(state);
+}
 
 inline constexpr struct direct_contact_t {
   template <class State>

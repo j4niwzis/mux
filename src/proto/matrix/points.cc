@@ -28,6 +28,12 @@ inline std::optional<std::string> message_link(const state&, const conversation&
     return std::nullopt;
   return message_link_to(chat, event);
 }
+// Its own account page: the sessions, under cross-signing and the key backup.
+namespace settings {
+struct sessions {};
+}  // namespace settings
+constexpr account_page_list<settings::sessions> account_pages(const state&) { return {}; }
+
 // A direct chat is a room: whom it is with, the member who is not the account.
 inline std::string direct_contact(const state&, const conversation& one) {
   const auto other = std::ranges::find_if(one.members, [&](const member& each) { return each.id != one.id.account.address; });

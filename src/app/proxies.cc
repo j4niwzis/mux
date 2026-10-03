@@ -9,6 +9,7 @@ export module mux.app.proxies;
 import std;
 import mux.config;
 import mux.ui;
+import mux.ui.proto;
 import mux.app.network;
 import mux.app.kept;
 import mux.app.services;

@@ -13,6 +13,7 @@ import mux.vault;
 import mux.core;
 import mux.config;
 import mux.ui;
+import mux.ui.proto;
 import mux.app.kept;
 import mux.app.services;
 import mux.app.requests;

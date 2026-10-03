@@ -13,6 +13,7 @@ import mux.core;
 import mux.protocols;
 import mux.media;
 import mux.ui;
+import mux.ui.proto;
 import mux.platform.dialogs;
 import mux.app.network;
 import mux.app.services;

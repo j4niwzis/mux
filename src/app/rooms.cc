@@ -12,6 +12,7 @@ import splice;
 import mux.core;
 import mux.protocols;
 import mux.ui;
+import mux.ui.proto;
 import mux.logic.links;
 import mux.app.network;
 import mux.app.services;

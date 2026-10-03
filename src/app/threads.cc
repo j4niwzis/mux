@@ -9,6 +9,7 @@ export module mux.app.threads;
 import std;
 import mux.core;
 import mux.ui;
+import mux.ui.proto;
 import mux.app.network;
 import mux.app.services;
 import mux.app.requests;

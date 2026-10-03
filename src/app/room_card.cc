@@ -9,6 +9,7 @@ export module mux.app.room_card;
 import std;
 import mux.core;
 import mux.ui;
+import mux.ui.proto;
 import mux.logic.links;
 import mux.app.network;
 import mux.app.services;

@@ -14,6 +14,7 @@ import skiff.scene;
 import mux.core;
 import mux.config;
 import mux.ui;
+import mux.ui.proto;
 import mux.protocols;
 import mux.logic.links;
 import mux.app.network;

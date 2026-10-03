@@ -10,6 +10,7 @@ import std;
 import splice;
 import mux.core;
 import mux.ui;
+import mux.ui.proto;
 import mux.app.services;
 import mux.app.requests;
 

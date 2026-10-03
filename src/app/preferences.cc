@@ -14,6 +14,7 @@ import mux.config;
 import mux.protocols;
 import mux.logic.room_events;
 import mux.ui;
+import mux.ui.proto;
 import mux.app.network;
 import mux.app.kept;
 import mux.app.services;

@@ -8,6 +8,7 @@ export module mux.app.verification;
 import std;
 import mux.core;
 import mux.ui;
+import mux.ui.proto;
 import mux.app.network;
 import mux.app.services;
 import mux.app.requests;

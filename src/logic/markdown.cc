@@ -6,23 +6,10 @@
 export module mux.logic.markdown;
 
 import std;
+import mux.bytes;
 
 export namespace mux::logic {
 
-// Text made safe inside HTML.
-[[nodiscard]] inline std::string escaped(std::string_view text) {
-  std::string out;
-  for (const char c : text) {
-    switch (c) {
-      case '&': out += "&amp;"; break;
-      case '<': out += "&lt;"; break;
-      case '>': out += "&gt;"; break;
-      case '"': out += "&quot;"; break;
-      default: out += c;
-    }
-  }
-  return out;
-}
 
 // A line's inline Markdown: `code` first (nothing inside it is Markdown),
 // then [text](url), **strong**, ~~strike~~, *emphasis* and _emphasis_.
@@ -39,7 +26,7 @@ export namespace mux::logic {
     const std::string_view rest = line.substr(at);
     if (rest.starts_with("`")) {
       if (const auto end = closing(at + 1, "`"); end != std::string_view::npos) {
-        out += "<code>" + escaped(line.substr(at + 1, end - at - 1)) + "</code>";
+        out += "<code>" + mux::bytes::markup_text(line.substr(at + 1, end - at - 1)) + "</code>";
         at = end + 1;
         marked = true;
         continue;
@@ -50,7 +37,7 @@ export namespace mux::logic {
       const auto url_end = text_end == std::string_view::npos ? text_end : line.find(')', text_end + 2);
       if (text_end != std::string_view::npos && url_end != std::string_view::npos) {
         bool inner = false;
-        out += "<a href=\"" + escaped(line.substr(text_end + 2, url_end - text_end - 2)) + "\">" +
+        out += "<a href=\"" + mux::bytes::markup_text(line.substr(text_end + 2, url_end - text_end - 2)) + "\">" +
                inline_html(line.substr(at + 1, text_end - at - 1), inner) + "</a>";
         at = url_end + 1;
         marked = true;
@@ -81,7 +68,7 @@ export namespace mux::logic {
     }
     if (matched)
       continue;
-    out += escaped(line.substr(at, 1));
+    out += mux::bytes::markup_text(line.substr(at, 1));
     ++at;
   }
   return out;
@@ -137,11 +124,11 @@ export namespace mux::logic {
       std::string code;
       std::size_t j = i + 1;
       for (; j < lines.size() && !lines[j].starts_with("```"); ++j) {
-        code += escaped(lines[j]);
+        code += mux::bytes::markup_text(lines[j]);
         code += '\n';
       }
       const std::string_view language = line.substr(3);
-      html += language.empty() ? "<pre><code>" : "<pre><code class=\"language-" + escaped(language) + "\">";
+      html += language.empty() ? "<pre><code>" : "<pre><code class=\"language-" + mux::bytes::markup_text(language) + "\">";
       html += code + "</code></pre>";
       marked = true;
       first_line = true;

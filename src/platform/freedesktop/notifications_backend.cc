@@ -4,6 +4,7 @@
 export module mux.platform.freedesktop.notifications_backend;
 
 import std;
+import mux.bytes;
 import mux.platform.freedesktop.bus;
 
 export namespace mux::platform::notifications::backend {
@@ -22,18 +23,8 @@ inline bool notify(std::string_view title, std::string_view text) {
   // The body may be read as markup (the spec's body-markup): what a message
   // says is escaped, so that none of it is a tag -- an <a>, an <img> of a
   // file (review 5).
-  // Each character a view: an entity's, or the character itself, where it
-  // is in `text` -- nothing allocated until the one string the message is
-  // written from (the bus wants its length first).
-  const std::string escaped = text | std::views::transform([](const char& c) -> std::string_view {
-                                switch (c) {
-                                  case '&': return "&amp;";
-                                  case '<': return "&lt;";
-                                  case '>': return "&gt;";
-                                  default: return std::string_view(&c, 1);
-                                }
-                              }) |
-                              std::views::join | std::ranges::to<std::string>();
+  // What a message says is escaped, so that none of it is a tag.
+  const std::string escaped = mux::bytes::markup_text(text);
   body.string(title);     // summary
   body.string(escaped);   // body
   body.array(4, [&] {     // actions: key, label

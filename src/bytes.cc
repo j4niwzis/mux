@@ -166,6 +166,30 @@ template <std::ranges::viewable_range Bytes>
   return base64_padded(std::forward<Bytes>(bytes)) | std::ranges::to<std::string>();
 }
 
+// Text made safe inside markup -- HTML, and a notification's body markup:
+// each character a view, of its entity, or of itself where it is in the
+// text -- so the range must hand out references into it. Nothing is
+// allocated: what wants a string makes one, once (markup_text).
+[[nodiscard]] constexpr std::string_view markup_of(const char& c) {
+  switch (c) {
+    case '&': return "&amp;";
+    case '<': return "&lt;";
+    case '>': return "&gt;";
+    case '"': return "&quot;";
+    default: return std::string_view(&c, 1);
+  }
+}
+template <std::ranges::viewable_range Chars>
+  requires std::is_lvalue_reference_v<std::ranges::range_reference_t<Chars>>
+[[nodiscard]] constexpr auto markup_escaped(Chars&& chars) {
+  return std::views::all(std::forward<Chars>(chars)) | std::views::transform([](const char& c) { return markup_of(c); }) |
+         std::views::join;
+}
+// The same, as the string a caller keeps or formats into its markup.
+[[nodiscard]] constexpr std::string markup_text(std::string_view text) {
+  return markup_escaped(text) | std::ranges::to<std::string>();
+}
+
 // A C string of bytes -- as OpenGL gives its names -- up to its zero, as a
 // text; empty for none.
 [[nodiscard]] inline std::string text_of_terminated(const std::uint8_t* bytes) {

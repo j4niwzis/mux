@@ -3,6 +3,7 @@
 export module mux.ui:message;
 
 import std;
+import mux.bytes;
 import splice;
 import skia;
 import skiff.paint;
@@ -635,23 +636,9 @@ struct mentioned;
   const std::string name = sender_name(in, said.sender);
   if (name.empty() || !said.body.plain.starts_with(name))
     return said;
-  const auto escaped = [](std::string_view text) {
-    // Each character a view: an entity's, or the character itself, where it
-    // is in `text` -- one string made, at the end.
-    return text | std::views::transform([](const char& c) -> std::string_view {
-             switch (c) {
-               case '&': return "&amp;";
-               case '<': return "&lt;";
-               case '>': return "&gt;";
-               case '"': return "&quot;";
-               default: return std::string_view(&c, 1);
-             }
-           }) |
-           std::views::join | std::ranges::to<std::string>();
-  };
   message out = said;
-  out.body.html = std::format(R"(<a href="{}">{}</a>)", escaped(*link), escaped(name)) +
-                  escaped(std::string_view(said.body.plain).substr(name.size()));
+  out.body.html = std::format(R"(<a href="{}">{}</a>)", mux::bytes::markup_text(*link), mux::bytes::markup_text(name)) +
+                  mux::bytes::markup_text(std::string_view(said.body.plain).substr(name.size()));
   return out;
 }
 struct mentioned {

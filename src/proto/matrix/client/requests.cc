@@ -3,6 +3,7 @@
 export module mux.proto.matrix.client:requests;
 
 import std;
+import mux.bytes;
 import splice;
 import knot;
 import loom.api;
@@ -1563,16 +1564,6 @@ void account<Sink>::leave(std::string room) {
     return std::nullopt;
   std::string html;
   bool any = false;
-  const auto escaped = [&](char c) {
-    switch (c) {
-      case '&': html += "&amp;"; break;
-      case '<': html += "&lt;"; break;
-      case '>': html += "&gt;"; break;
-      case '"': html += "&quot;"; break;
-      case '\n': html += "<br>"; break;
-      default: html += c;
-    }
-  };
   for (std::size_t at = 0; at < body.size();) {
     if (body[at] == ':') {
       const auto end = body.find(':', at + 1);
@@ -1587,7 +1578,9 @@ void account<Sink>::leave(std::string room) {
         }
       }
     }
-    escaped(body[at]);
+    // Escaped as markup, and a line break a <br>.
+    const char& c = body[at];
+    html += c == '\n' ? std::string_view("<br>") : mux::bytes::markup_of(c);
     ++at;
   }
   if (!any)

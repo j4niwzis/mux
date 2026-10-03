@@ -120,31 +120,31 @@ TEST(Drafts, KeptAndReadBack) {
 
 TEST(Links, ReadIntoWhatTheyPointAt) {
   EXPECT_EQ(logic::link_of("https://matrix.to/#/%23ru4:ed25519.uk"),
-            std::optional<logic::link_t>(logic::link::room{"#ru4:ed25519.uk", std::nullopt, {}}));
+            std::optional<logic::link_t>(proto::matrix::link::room{"#ru4:ed25519.uk", std::nullopt, {}}));
   EXPECT_EQ(logic::link_of("https://matrix.to/#/!r:x.org/$e?via=x.org&via=y.org"),
-            std::optional<logic::link_t>(logic::link::room{"!r:x.org", "$e", {"x.org", "y.org"}}));
-  EXPECT_EQ(logic::link_of("https://matrix.to/#/@me:x.org"), std::optional<logic::link_t>(logic::link::person{"@me:x.org"}));
+            std::optional<logic::link_t>(proto::matrix::link::room{"!r:x.org", "$e", {"x.org", "y.org"}}));
+  EXPECT_EQ(logic::link_of("https://matrix.to/#/@me:x.org"), std::optional<logic::link_t>(proto::matrix::link::person{"@me:x.org"}));
   EXPECT_EQ(logic::link_of("matrix:r/room:x.org/e/abc"),
-            std::optional<logic::link_t>(logic::link::room{"#room:x.org", "$abc", {}}));
-  EXPECT_EQ(logic::link_of("matrix:u/me:x.org"), std::optional<logic::link_t>(logic::link::person{"@me:x.org"}));
+            std::optional<logic::link_t>(proto::matrix::link::room{"#room:x.org", "$abc", {}}));
+  EXPECT_EQ(logic::link_of("matrix:u/me:x.org"), std::optional<logic::link_t>(proto::matrix::link::person{"@me:x.org"}));
   EXPECT_EQ(logic::link_of("xmpp:juliet@example.com"),
-            std::optional<logic::link_t>(logic::link::xmpp_address{"juliet@example.com"}));
+            std::optional<logic::link_t>(proto::xmpp::link::address{"juliet@example.com"}));
   EXPECT_EQ(logic::link_of("https://example.com/"), std::nullopt);
   EXPECT_EQ(logic::link_of("matrix:x/whatever"), std::nullopt);
 }
 
 TEST(Links, IdsOfEveryRoomVersion) {
-  EXPECT_TRUE(logic::id_shaped("#ru4:ed25519.uk"));
-  EXPECT_TRUE(logic::id_shaped("!OgeJ1T_3F4fAL2o-vE2tfsEopmJ3qZm021t1pJ_J82w"));
-  EXPECT_FALSE(logic::id_shaped("!short"));
-  EXPECT_FALSE(logic::id_shaped("@x"));
+  EXPECT_TRUE(proto::matrix::id_shaped("#ru4:ed25519.uk"));
+  EXPECT_TRUE(proto::matrix::id_shaped("!OgeJ1T_3F4fAL2o-vE2tfsEopmJ3qZm021t1pJ_J82w"));
+  EXPECT_FALSE(proto::matrix::id_shaped("!short"));
+  EXPECT_FALSE(proto::matrix::id_shaped("@x"));
 }
 
 TEST(Links, ARoomNotJoinedIsJoinedThroughAMatrixAccount) {
   model now;
   const account_id me{protocol::matrix{}, "@me:x.org"};
   now.apply(change::connection_changed{me, connection::online{}});
-  const auto step = logic::where_to(now, logic::link::room{"#new:x.org", std::nullopt, {"x.org"}}, std::nullopt);
+  const auto step = logic::where_to(now, proto::matrix::link::room{"#new:x.org", std::nullopt, {"x.org"}}, std::nullopt);
   EXPECT_EQ(step, logic::link_step_t(logic::link_step::join{me, "#new:x.org", {"x.org"}}));
 }
 

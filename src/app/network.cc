@@ -11,6 +11,7 @@ import mux.preview;
 import mux.xmpp;
 import mux.matrix;
 import mux.proto.clients;
+import mux.protocols;
 import mux.host;
 import mux.ui;
 

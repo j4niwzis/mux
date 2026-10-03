@@ -19,7 +19,7 @@ export namespace mux {
 
 // An account, as the user names it: user@example.com, or @user:example.org.
 struct account_id {
-  protocol_t speaks = protocol::xmpp{};
+  protocol_t speaks{};  // the first of the protocols, until said
   std::string address;
   friend bool operator==(const account_id&, const account_id&) = default;
   friend auto operator<=>(const account_id&, const account_id&) = default;

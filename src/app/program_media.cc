@@ -8,8 +8,6 @@ import skia;
 import mux.core;
 import mux.config;
 import mux.net;
-import mux.proto.xmpp.client;
-import mux.proto.matrix.client;
 import mux.media;
 import mux.host;
 import mux.ui;

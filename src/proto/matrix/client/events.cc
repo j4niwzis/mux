@@ -3,7 +3,7 @@
 export module mux.proto.matrix.client:events;
 
 import std;
-import mux.bytes;
+import chevron.escape;
 import mux.proto.matrix.crypto;
 import splice;
 import knot;
@@ -325,7 +325,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       // A custom emoji's key is its picture: shown as the picture, in HTML,
       // as a message carries one -- not said to be "a custom emoji".
       const bool pictured = key.starts_with("mxc://");
-      const std::string emote = std::format(R"(<img data-mx-emoticon src="{}" alt=":emoji:" height="32">)", mux::bytes::markup_text(key));
+      const std::string emote = std::format(R"(<img data-mx-emoticon src="{}" alt=":emoji:" height="32">)", chevron::escaped(key));
       splice::visit(splice::overloaded{[&](placement::aside) {
                               message made{.in = in,
                                            .id = one.event_id,
@@ -351,8 +351,8 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
                                            .body = mux::body{pictured ? std::format("{} reacted :emoji:", name_in(in.id, one.sender))
                                                                       : std::format("{} reacted {}", name_in(in.id, one.sender), key),
                                                              std::format(R"(<a href="https://matrix.to/#/{}">{}</a> reacted )",
-                                                                         mux::bytes::markup_text(one.sender), mux::bytes::markup_text(name_in(in.id, one.sender))) +
-                                                                 (pictured ? emote : mux::bytes::markup_text(key))},
+                                                                         chevron::escaped(one.sender), chevron::escaped(name_in(in.id, one.sender))) +
+                                                                 (pictured ? emote : chevron::escaped(key))},
                                            .replies_to = content.m_relates_to->event_id,
                                            .outgoing = one.sender == id_.address,
                                            .service = true,
@@ -514,12 +514,12 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
   // The people in a line as people -- pills, as a mention in a message is
   // one -- in its HTML: links to them, their names as shown.
   const auto person = [&](const std::string& id, const std::string& name) {
-    return std::format(R"(<a href="https://matrix.to/#/{}">{}</a>)", mux::bytes::markup_text(id), mux::bytes::markup_text(name));
+    return std::format(R"(<a href="https://matrix.to/#/{}">{}</a>)", chevron::escaped(id), chevron::escaped(name));
   };
   const std::string who_link = person(one.sender, who);
   // A line of who did what: they, as a person, then what they did.
   const auto say = [&](room_event_t kind, std::string done_what) {
-    service(in, one, at, where, who + done_what, kind, who_link + mux::bytes::markup_text(done_what));
+    service(in, one, at, where, who + done_what, kind, who_link + chevron::escaped(done_what));
   };
   splice::visit(
       splice::overloaded{
@@ -554,7 +554,7 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
                                     const std::optional<std::string>& new_name = content.displayname;
                                     const auto named = [&](const std::string& shown, const std::string& line) {
                                       service(in, one, at, where, shown + line, room_event::names{},
-                                              person(target_id, shown) + mux::bytes::markup_text(line));
+                                              person(target_id, shown) + chevron::escaped(line));
                                     };
                                     if (old_name && new_name && *old_name != *new_name) {
                                       named(*old_name, " changed their display name to " + *new_name);
@@ -688,9 +688,9 @@ void account<Sink>::redaction(const conversation_id& in, const loom::ev::timelin
                  .sender = one.sender,
                  .at = at,
                  .body = pictured ? mux::body{said + " :emoji:",
-                                              mux::bytes::markup_text(said) + " " +
+                                              chevron::escaped(said) + " " +
                                                   std::format(R"(<img data-mx-emoticon src="{}" alt=":emoji:" height="32">)",
-                                                              mux::bytes::markup_text(key))}
+                                                              chevron::escaped(key))}
                                   : mux::body{said + " " + key, std::nullopt},
                  .replies_to = reaction->second.target,
                  .outgoing = one.sender == id_.address,

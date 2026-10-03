@@ -3,7 +3,7 @@
 export module mux.ui:message;
 
 import std;
-import mux.bytes;
+import chevron.escape;
 import splice;
 import skia;
 import skiff.paint;
@@ -637,8 +637,8 @@ struct mentioned;
   if (name.empty() || !said.body.plain.starts_with(name))
     return said;
   message out = said;
-  out.body.html = std::format(R"(<a href="{}">{}</a>)", mux::bytes::markup_text(*link), mux::bytes::markup_text(name)) +
-                  mux::bytes::markup_text(std::string_view(said.body.plain).substr(name.size()));
+  out.body.html = std::format(R"(<a href="{}">{}</a>)", chevron::escaped(*link), chevron::escaped(name)) +
+                  chevron::escaped(std::string_view(said.body.plain).substr(name.size()));
   return out;
 }
 struct mentioned {

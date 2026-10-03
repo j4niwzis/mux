@@ -4,7 +4,7 @@
 export module mux.platform.freedesktop.notifications_backend;
 
 import std;
-import mux.bytes;
+import chevron.escape;
 import mux.platform.freedesktop.bus;
 
 export namespace mux::platform::notifications::backend {
@@ -24,7 +24,7 @@ inline bool notify(std::string_view title, std::string_view text) {
   // says is escaped, so that none of it is a tag -- an <a>, an <img> of a
   // file (review 5).
   // What a message says is escaped, so that none of it is a tag.
-  const std::string escaped = mux::bytes::markup_text(text);
+  const std::string escaped = chevron::escaped(text);
   body.string(title);     // summary
   body.string(escaped);   // body
   body.array(4, [&] {     // actions: key, label

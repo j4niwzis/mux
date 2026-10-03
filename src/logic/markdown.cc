@@ -6,7 +6,7 @@
 export module mux.logic.markdown;
 
 import std;
-import mux.bytes;
+import chevron.escape;
 
 export namespace mux::logic {
 
@@ -26,7 +26,7 @@ export namespace mux::logic {
     const std::string_view rest = line.substr(at);
     if (rest.starts_with("`")) {
       if (const auto end = closing(at + 1, "`"); end != std::string_view::npos) {
-        out += "<code>" + mux::bytes::markup_text(line.substr(at + 1, end - at - 1)) + "</code>";
+        out += "<code>" + chevron::escaped(line.substr(at + 1, end - at - 1)) + "</code>";
         at = end + 1;
         marked = true;
         continue;
@@ -37,7 +37,7 @@ export namespace mux::logic {
       const auto url_end = text_end == std::string_view::npos ? text_end : line.find(')', text_end + 2);
       if (text_end != std::string_view::npos && url_end != std::string_view::npos) {
         bool inner = false;
-        out += "<a href=\"" + mux::bytes::markup_text(line.substr(text_end + 2, url_end - text_end - 2)) + "\">" +
+        out += "<a href=\"" + chevron::escaped(line.substr(text_end + 2, url_end - text_end - 2)) + "\">" +
                inline_html(line.substr(at + 1, text_end - at - 1), inner) + "</a>";
         at = url_end + 1;
         marked = true;
@@ -68,7 +68,7 @@ export namespace mux::logic {
     }
     if (matched)
       continue;
-    out += mux::bytes::markup_text(line.substr(at, 1));
+    out += chevron::escaped(line.substr(at, 1));
     ++at;
   }
   return out;
@@ -124,11 +124,11 @@ export namespace mux::logic {
       std::string code;
       std::size_t j = i + 1;
       for (; j < lines.size() && !lines[j].starts_with("```"); ++j) {
-        code += mux::bytes::markup_text(lines[j]);
+        code += chevron::escaped(lines[j]);
         code += '\n';
       }
       const std::string_view language = line.substr(3);
-      html += language.empty() ? "<pre><code>" : "<pre><code class=\"language-" + mux::bytes::markup_text(language) + "\">";
+      html += language.empty() ? "<pre><code>" : "<pre><code class=\"language-" + chevron::escaped(language) + "\">";
       html += code + "</code></pre>";
       marked = true;
       first_line = true;

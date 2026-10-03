@@ -3,7 +3,7 @@
 export module mux.proto.matrix.client:requests;
 
 import std;
-import mux.bytes;
+import chevron.escape;
 import splice;
 import knot;
 import loom.api;
@@ -1580,7 +1580,10 @@ void account<Sink>::leave(std::string room) {
     }
     // Escaped as markup, and a line break a <br>.
     const char& c = body[at];
-    html += c == '\n' ? std::string_view("<br>") : mux::bytes::markup_of(c);
+    if (c == '\n')
+      html += "<br>";
+    else
+      html.append_range(chevron::value_reference(c));
     ++at;
   }
   if (!any)

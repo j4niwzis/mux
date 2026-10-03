@@ -163,7 +163,7 @@ export namespace mux::proto::matrix::request {
 // for that account.
 template <class App, class Purpose>
 void with_passphrase(App& app, Purpose purpose) {
-  app.with_chosen_account([&](auto&, config::account_t& account) {
+  app.shared.with_chosen_account([&](auto&, config::account_t& account) {
     app.keys_of = App::id_of(account);
     app.root().ask_passphrase(purpose);
   });
@@ -195,14 +195,14 @@ void program_asked(App& app, const import_room_keys&) {
 // Element's Secure Backup: made anew, or deleted.
 template <class App>
 void program_asked(App& app, const reset_backup&) {
-  app.with_chosen_account([&](auto&, config::account_t& account) {
+  app.shared.with_chosen_account([&](auto&, config::account_t& account) {
     if (!app.shared.demo())
       ops::reset_backup(*app.net, App::id_of(account));
   });
 }
 template <class App>
 void program_asked(App& app, const delete_backup&) {
-  app.with_chosen_account([&](auto&, config::account_t& account) {
+  app.shared.with_chosen_account([&](auto&, config::account_t& account) {
     if (!app.shared.demo())
       ops::delete_backup(*app.net, App::id_of(account));
   });
@@ -210,19 +210,19 @@ void program_asked(App& app, const delete_backup&) {
 // The sessions: one verified by emoji, some signed out, one renamed, listed.
 template <class App>
 void program_asked(App& app, const verify_session& one) {
-  app.with_chosen_account([&](auto&, config::account_t& account) {
+  app.shared.with_chosen_account([&](auto&, config::account_t& account) {
     app.net->verify_start(App::id_of(account), config::address_of(account), one.device);
   });
 }
 template <class App>
 void program_asked(App& app, const sign_out_sessions& one) {
-  app.with_chosen_account([&](auto&, config::account_t& account) {
+  app.shared.with_chosen_account([&](auto&, config::account_t& account) {
     ops::sign_out_sessions(*app.net, App::id_of(account), one.devices, one.password);
   });
 }
 template <class App>
 void program_asked(App& app, const rename_session& one) {
-  app.with_chosen_account([&](auto&, config::account_t& account) {
+  app.shared.with_chosen_account([&](auto&, config::account_t& account) {
     ops::rename_session(*app.net, App::id_of(account), one.device, one.name);
   });
 }
@@ -263,7 +263,7 @@ void program_asked(App& app, const verify_them& one) {
 }
 template <class App>
 void program_asked(App& app, const refresh_sessions&) {
-  app.with_chosen_account([&](auto&, config::account_t& account) { ops::list_sessions(*app.net, App::id_of(account)); });
+  app.shared.with_chosen_account([&](auto&, config::account_t& account) { ops::list_sessions(*app.net, App::id_of(account)); });
 }
 
 }  // namespace mux::proto::matrix::request

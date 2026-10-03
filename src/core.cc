@@ -47,11 +47,6 @@ struct device_view {
   bool verified = false;
   friend bool operator==(const device_view&, const device_view&) = default;
 };
-struct own_session {
-  account_id by;
-  std::string device_id;
-  std::string ed25519;
-};
 struct devices_listed {
   account_id by;
   std::string user;
@@ -345,7 +340,7 @@ struct event_missing {
 // The changes every protocol says, here; and each protocol's own, from its
 // change list -- changes_type(state), found by ADL in its folder (mux.proto.
 // <p>.changes), none where it gives none -- all one variant.
-using core_changes = splice::variant<change::protocol_state_changed, change::own_session, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::account_removed, change::conversation_updated, change::conversation_removed, change::presence_changed, change::message_added, change::message_edited, change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed, change::typing_changed, change::history_position, change::event_missing, change::members_changed, change::avatar_loaded, change::receipts_changed, change::window_opened, change::window_extended, change::media_progress, change::room_created, change::preview_loaded, change::room_previewed, change::mentioned, change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine, change::directory_listed, change::people_found, change::profile_found, change::threads_listed>;
+using core_changes = splice::variant<change::protocol_state_changed, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::account_removed, change::conversation_updated, change::conversation_removed, change::presence_changed, change::message_added, change::message_edited, change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed, change::typing_changed, change::history_position, change::event_missing, change::members_changed, change::avatar_loaded, change::receipts_changed, change::window_opened, change::window_extended, change::media_progress, change::room_created, change::preview_loaded, change::room_previewed, change::mentioned, change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine, change::directory_listed, change::people_found, change::profile_found, change::threads_listed>;
 namespace changes_defaults {
 constexpr type_tag<change_list<>> changes_type(const auto&) { return {}; }
 }  // namespace changes_defaults
@@ -398,10 +393,6 @@ class model {
   // it is made again when it moves.
   [[nodiscard]] std::uint64_t trust_revision() const { return trust_revision_; }
   // This session of an account: its ID and key, where encryption runs.
-  [[nodiscard]] const std::pair<std::string, std::string>* own_session_of(const account_id& by) const {
-    const auto found = own_sessions_.find(by);
-    return found == own_sessions_.end() ? nullptr : &found->second;
-  }
   // A person's sessions, where their account listed them.
   [[nodiscard]] const std::vector<change::device_view>* devices_of(const account_id& by, const std::string& user) const {
     const auto found = devices_.find({by, user});
@@ -865,8 +856,6 @@ class model {
     ++trust_revision_;
   }
   std::uint64_t trust_revision_ = 0;
-  void on(const change::own_session& one) { own_sessions_.insert_or_assign(one.by, std::pair{one.device_id, one.ed25519}); }
-  std::map<account_id, std::pair<std::string, std::string>> own_sessions_;
   void on(const change::devices_listed& one) {
     devices_.insert_or_assign({one.by, one.user}, one.devices);
     ++trust_revision_;

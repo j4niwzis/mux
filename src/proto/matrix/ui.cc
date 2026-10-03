@@ -964,12 +964,20 @@ struct encryption_page : nodes::Stack {
     fState.apply({.fill = true});
     parts.only_verified.parts.toggle.setOnNow(config::only_verified_of(one));
     const std::string& address = config::address_of(one);
-    this->show_session(now.own_session_of(account_id{protocol_of(address), address}));
+    this->show_session(protocol_state_of(account_id{protocol_of(address), address}));
   }
   void show_only_verified(bool on) { parts.only_verified.parts.toggle.setOn(on); }
-  void show_session(const std::pair<std::string, std::string>* own) {
-    parts.session_line.setVisible(own != nullptr);
-    if (own == nullptr)
+  // This session, as its account's protocol state says it, once known.
+  void show_session(const protocol_state_t& known) {
+    const auto own = splice::visit(
+        splice::overloaded{[](const state& now) {
+                             return now.device_id.empty() ? std::optional<std::pair<std::string, std::string>>()
+                                                          : std::optional(std::pair{now.device_id, now.ed25519});
+                           },
+                           [](const auto&) { return std::optional<std::pair<std::string, std::string>>(); }},
+        known);
+    parts.session_line.setVisible(own.has_value());
+    if (!own)
       return;
     const std::string grouped = own->second | std::views::enumerate | std::views::transform([](const auto& at) {
                                   const auto [index, letter] = at;

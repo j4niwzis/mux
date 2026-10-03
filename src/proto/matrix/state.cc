@@ -11,6 +11,10 @@ export namespace mux::proto::matrix {
 
 struct state {
   bool online = false;  // syncing
+  // This session, once its encryption has started: its device ID and its
+  // ed25519 key, to be compared with what another session shows.
+  std::string device_id;
+  std::string ed25519;
   friend bool operator==(const state&, const state&) = default;
 };
 // The protocol is known by its state type itself (id<state>, in protocol_t);

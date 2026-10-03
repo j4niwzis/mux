@@ -6,7 +6,7 @@
 export module mux.app.pictures;
 
 import std;
-import mux.bytes;
+import splice.bytes;
 import mux.vault;
 import splice;
 import skia;
@@ -477,7 +477,7 @@ class pictures_part {
   // one; touched, so it comes first.
   void save_gif(const std::string& source) {
     const auto kept = kept_file(media_use::whole{}, source);
-    auto bytes_read = kept ? mux::bytes::file_text(*kept) : std::nullopt;
+    auto bytes_read = kept ? splice::bytes::file_text(*kept) : std::nullopt;
     if (!bytes_read) {
       s_->root().show_message("GIFs", "The GIF has not loaded yet. Save it once it plays.");
       return;
@@ -505,7 +505,7 @@ class pictures_part {
       if (mux::ui::animations().has(key) || mux::ui::whole_pictures().has(key) || !gifs_decoding_.insert(key).second)
         continue;
       s_->work->run([path, key, scene]() -> workers::done_t {
-        std::string bytes = mux::bytes::file_text(path).value_or(std::string());
+        std::string bytes = splice::bytes::file_text(path).value_or(std::string());
         auto frames = skia::decodeFrames(bytes.data(), bytes.size());
         return [frames = std::move(frames), key, scene]() mutable {
           if (frames.size() > 1)
@@ -580,7 +580,7 @@ class pictures_part {
     const auto kept = kept_file(media_use::whole{}, source);
     if (!kept)
       return std::nullopt;
-    return mux::bytes::file_text(*kept);
+    return splice::bytes::file_text(*kept);
   }
   // Bytes written where the dialog said, and said.
   void write_chosen(const std::string& bytes, const std::string& path) {
@@ -656,7 +656,7 @@ class pictures_part {
     const auto where = kept_file(use, source);
     if (!where)
       return false;
-    auto bytes_read = mux::bytes::file_text(*where);
+    auto bytes_read = splice::bytes::file_text(*where);
     if (!bytes_read)
       return false;
     std::string bytes = std::move(*bytes_read);
@@ -748,7 +748,7 @@ class pictures_part {
         ".exe", ".com", ".bat", ".cmd", ".scr", ".pif", ".msi", ".msp", ".lnk", ".url", ".js",   ".jse",
         ".vbs", ".vbe", ".wsf", ".wsh", ".ps1", ".psm1", ".hta", ".cpl", ".reg", ".jar", ".desktop", ".sh",
         ".run", ".appimage", ".command", ".app", ".pkg", ".dmg", ".apk", ".py", ".pl", ".deb"};
-    const std::string extension = mux::bytes::lower_text(name.extension().string());
+    const std::string extension = splice::bytes::lower_text(name.extension().string());
     return std::ranges::contains(kinds, std::string_view(extension));
   }
   void save_download(const std::string& bytes, std::string name, bool open) {

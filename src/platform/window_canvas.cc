@@ -4,7 +4,7 @@ export module mux.platform.window:canvas;
 
 import std;
 import sdl;
-import mux.bytes;
+import splice.bytes;
 import splice;
 import skia;
 import skiff.paint;
@@ -72,9 +72,9 @@ class canvas_target {
         using get_string_t = const unsigned char* (*)(unsigned int);
         // As above: the loader's one pointer type, made the function's.
         if (const auto get_string = reinterpret_cast<get_string_t>(sdl::SDL_GL_GetProcAddress("glGetString")))
-          say_gl_renderer(mux::bytes::text_of_terminated(get_string(0x1F01 /* GL_RENDERER */)));
+          say_gl_renderer(splice::bytes::text_of_terminated(get_string(0x1F01 /* GL_RENDERER */)));
         else if (interface && interface->fFunctions.fGetString)
-          say_gl_renderer(mux::bytes::text_of_terminated(interface->fFunctions.fGetString(0x1F01 /* GL_RENDERER */)));
+          say_gl_renderer(splice::bytes::text_of_terminated(interface->fFunctions.fGetString(0x1F01 /* GL_RENDERER */)));
         if (interface)
           context_ = skia::MakeGL(std::move(interface));
       }

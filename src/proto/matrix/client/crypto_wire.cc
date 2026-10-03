@@ -15,7 +15,7 @@ import knot;
 import loom.ev;
 import loom.cs.keys;
 import mux.vault;
-import mux.bytes;
+import splice.bytes;
 
 export namespace mux::proto::matrix::client::crypto {
 
@@ -218,7 +218,7 @@ using signatures_t = std::map<std::string, std::map<std::string, std::string>>;
   try {
     auto public_key = vodozemac::types::ed25519_key_from_base64(rust::Str(key.data(), key.size()));
     auto made = vodozemac::types::ed25519_signature_from_base64(rust::Str(signature.data(), signature.size()));
-    const auto bytes = mux::bytes::buffer_of(mux::bytes::of(canonical));  // the Slice is read whole
+    const auto bytes = splice::bytes::buffer_of(splice::bytes::of(canonical));  // the Slice is read whole
     public_key->verify(rust::Slice<const std::uint8_t>(bytes.data(), bytes.size()), *made);
     return true;
   } catch (const rust::Error&) {

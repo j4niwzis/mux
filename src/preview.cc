@@ -9,7 +9,7 @@ export module mux.preview;
 
 import std;
 import alef.utf;
-import mux.bytes;
+import splice.bytes;
 import mux.core;
 import mux.net;
 import mux.http;
@@ -152,7 +152,7 @@ inline constexpr std::array<std::pair<std::string_view, std::string facts::*>, 6
 
 // The page's head read for its preview: none where it says nothing.
 [[nodiscard]] inline std::optional<link_preview> read_page(std::string_view html, std::string_view at) {
-  const std::string lowered = mux::bytes::lower_text(html);
+  const std::string lowered = splice::bytes::lower_text(html);
   const std::string_view lower = lowered;
   const std::size_t head_end = std::min(lower.find("</head"), lower.size());
   facts read;
@@ -170,7 +170,7 @@ inline constexpr std::array<std::pair<std::string_view, std::string facts::*>, 6
     const auto content = attribute(tag, tag_lower, "content");
     if (!name || !content)
       continue;
-    const std::string key = mux::bytes::lower_text(*name);
+    const std::string key = splice::bytes::lower_text(*name);
     if (const auto field = std::ranges::find(kTags, key, [](const auto& one) { return one.first; });
         field != kTags.end() && (read.*(field->second)).empty())
       read.*(field->second) = *content;

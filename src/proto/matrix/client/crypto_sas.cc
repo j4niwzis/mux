@@ -15,7 +15,7 @@ import knot;
 import loom.ev;
 import loom.cs.keys;
 import mux.vault;
-import mux.bytes;
+import splice.bytes;
 import :wire;
 import :keys;
 
@@ -127,7 +127,7 @@ struct reference_part {
 // The commitment to a key and a start: unpadded base64 of SHA-256 of the
 // key's base64 then the start's canonical JSON.
 [[nodiscard]] inline std::string commitment_of(std::string_view key, std::string_view start_canonical) {
-  return mux::bytes::base64_text(detail::sha256(mux::bytes::of(key), mux::bytes::of(start_canonical)));
+  return splice::bytes::base64_text(detail::sha256(splice::bytes::of(key), splice::bytes::of(start_canonical)));
 }
 
 // A room's session as it is to be used now: its ID and key, and the

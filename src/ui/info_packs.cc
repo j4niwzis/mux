@@ -3,7 +3,7 @@
 export module mux.ui:info_packs;
 
 import std;
-import mux.bytes;
+import splice.bytes;
 import splice;
 import skia;
 import skiff.paint;
@@ -388,7 +388,7 @@ struct packs_box : nodes::Stack {
   void add_picture(pack_picture one) {
     if (!open)
       return;
-    std::string code = mux::bytes::key_text(one.shortcode);
+    std::string code = splice::bytes::key_text(one.shortcode);
     if (code.empty())
       code = "image";
     std::string unique = code;

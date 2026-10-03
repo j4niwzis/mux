@@ -4,7 +4,7 @@ export module mux.proto.matrix.client:requests;
 
 import std;
 import loom.media;
-import mux.bytes;
+import splice.bytes;
 import chevron.escape;
 import splice;
 import knot;
@@ -663,7 +663,7 @@ void account<Sink>::save_pack(emote_pack pack) {
   this->spawn_guarded([this, pack = std::move(pack)]() mutable {
     // A new room pack: its state key made of its name.
     if (pack.chat && pack.key.empty()) {
-      pack.key = mux::bytes::key_text(pack.name);
+      pack.key = splice::bytes::key_text(pack.name);
       if (pack.key.empty())
         pack.key = "pack";
     }

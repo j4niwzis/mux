@@ -15,7 +15,7 @@ import knot;
 import loom.ev;
 import loom.cs.keys;
 import mux.vault;
-import mux.bytes;
+import splice.bytes;
 import :wire;
 
 export namespace mux::proto::matrix::client::crypto {
@@ -27,8 +27,8 @@ concept byte_range = std::ranges::input_range<Bytes> && std::same_as<std::ranges
 template <byte_range Key, byte_range Iv, byte_range In>
 [[nodiscard]] inline std::optional<std::vector<std::uint8_t>> cipher(const EVP_CIPHER* kind, bool encrypt, Key&& key, Iv&& iv,
                                                                      In&& in) {
-  const auto k = mux::bytes::exactly<32>(std::forward<Key>(key));
-  const auto v = mux::bytes::exactly<16>(std::forward<Iv>(iv));
+  const auto k = splice::bytes::exactly<32>(std::forward<Key>(key));
+  const auto v = splice::bytes::exactly<16>(std::forward<Iv>(iv));
   if (!k || !v)
     return std::nullopt;
   std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)> ctx(EVP_CIPHER_CTX_new(), &EVP_CIPHER_CTX_free);
@@ -36,7 +36,7 @@ template <byte_range Key, byte_range Iv, byte_range In>
     return std::nullopt;
   std::vector<std::uint8_t> out;
   bool fine = true;
-  mux::bytes::in_pieces(std::forward<In>(in), [&](std::span<const std::uint8_t> piece) {
+  splice::bytes::in_pieces(std::forward<In>(in), [&](std::span<const std::uint8_t> piece) {
     const std::size_t at = out.size();
     out.resize(at + piece.size() + 32);
     int len = 0;
@@ -61,7 +61,7 @@ template <byte_range... Parts>
 [[nodiscard]] inline std::array<std::uint8_t, 32> sha256(Parts&&... parts) {
   std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> md(EVP_MD_CTX_new(), &EVP_MD_CTX_free);
   bool fine = md && EVP_DigestInit_ex(md.get(), EVP_sha256(), nullptr) == 1;
-  (mux::bytes::in_pieces(std::forward<Parts>(parts), [&](std::span<const std::uint8_t> piece) {
+  (splice::bytes::in_pieces(std::forward<Parts>(parts), [&](std::span<const std::uint8_t> piece) {
      fine = fine && EVP_DigestUpdate(md.get(), piece.data(), piece.size()) == 1;
    }),
    ...);
@@ -94,9 +94,9 @@ template <detail::byte_range Plain>
     throw std::runtime_error("the file could not be encrypted");
   const auto hash = detail::sha256(*ciphertext);
   return sealed_file{.bytes = std::move(*ciphertext),
-                     .info = encrypted_file{.key = jwk{.k = detail::url_safe(mux::bytes::base64_text(key))},
-                                            .iv = mux::bytes::base64_text(iv),
-                                            .hashes = {{"sha256", mux::bytes::base64_text(hash)}}}};
+                     .info = encrypted_file{.key = jwk{.k = detail::url_safe(splice::bytes::base64_text(key))},
+                                            .iv = splice::bytes::base64_text(iv),
+                                            .hashes = {{"sha256", splice::bytes::base64_text(hash)}}}};
 }
 // A file opened: none where it is not what its event says -- its hash
 // another, its key or counter not AES-256-CTR's.
@@ -143,7 +143,7 @@ template <byte_range Salt>
                                                                               std::uint32_t rounds) {
   std::array<std::uint8_t, 64> out{};
   const std::string secret(passphrase);
-  const auto salt = mux::bytes::buffer_of(std::forward<Salt>(salted));  // PBKDF2 reads it whole
+  const auto salt = splice::bytes::buffer_of(std::forward<Salt>(salted));  // PBKDF2 reads it whole
   if (PKCS5_PBKDF2_HMAC(secret.data(), static_cast<int>(secret.size()), salt.data(), static_cast<int>(salt.size()),
                         static_cast<int>(rounds), EVP_sha512(), static_cast<int>(out.size()), out.data()) != 1)
     return std::nullopt;
@@ -152,13 +152,13 @@ template <byte_range Salt>
 // HMAC-SHA-256 of any ranges of bytes, one after another, under a key.
 template <byte_range Key, byte_range... Parts>
 [[nodiscard]] inline std::array<std::uint8_t, 32> hmac_sha256(Key&& key, Parts&&... parts) {
-  const auto secret = mux::bytes::buffer_of(std::forward<Key>(key));  // OpenSSL keeps the key whole
+  const auto secret = splice::bytes::buffer_of(std::forward<Key>(key));  // OpenSSL keeps the key whole
   std::unique_ptr<EVP_MAC, decltype(&EVP_MAC_free)> mac(EVP_MAC_fetch(nullptr, "HMAC", nullptr), &EVP_MAC_free);
   std::unique_ptr<EVP_MAC_CTX, decltype(&EVP_MAC_CTX_free)> ctx(mac ? EVP_MAC_CTX_new(mac.get()) : nullptr, &EVP_MAC_CTX_free);
   std::string digest = "SHA256";
   const OSSL_PARAM params[] = {OSSL_PARAM_construct_utf8_string("digest", digest.data(), 0), OSSL_PARAM_construct_end()};
   bool fine = ctx && EVP_MAC_init(ctx.get(), secret.data(), secret.size(), params) == 1;
-  (mux::bytes::in_pieces(std::forward<Parts>(parts), [&](std::span<const std::uint8_t> piece) {
+  (splice::bytes::in_pieces(std::forward<Parts>(parts), [&](std::span<const std::uint8_t> piece) {
      fine = fine && EVP_MAC_update(ctx.get(), piece.data(), piece.size()) == 1;
    }),
    ...);
@@ -180,7 +180,7 @@ template <byte_range Key, byte_range... Parts>
   const auto keys = detail::export_keys_of(passphrase, salt, detail::kExportRounds);
   if (!keys)
     throw std::runtime_error("the key could not be made from the passphrase");
-  const auto ciphertext = detail::aes_ctr(std::span(*keys).first(32), iv, mux::bytes::of(knot::to_json(sessions)));
+  const auto ciphertext = detail::aes_ctr(std::span(*keys).first(32), iv, splice::bytes::of(knot::to_json(sessions)));
   if (!ciphertext)
     throw std::runtime_error("the keys could not be encrypted");
   std::vector<std::uint8_t> body{1};
@@ -191,7 +191,7 @@ template <byte_range Key, byte_range... Parts>
   body.insert(body.end(), ciphertext->begin(), ciphertext->end());
   const auto mac = detail::hmac_sha256(std::span(*keys).last(32), body);
   body.insert(body.end(), mac.begin(), mac.end());
-  const std::string lines = mux::bytes::every(mux::bytes::base64_padded(body), 96, '\n') | std::ranges::to<std::string>();
+  const std::string lines = splice::bytes::every(splice::bytes::base64_padded(body), 96, '\n') | std::ranges::to<std::string>();
   return std::format("{}\n{}\n{}\n", detail::kExportHeader, lines, detail::kExportFooter);
 }
 // A key file opened: none where it is not one, its passphrase another, or
@@ -225,7 +225,7 @@ template <byte_range Key, byte_range... Parts>
   const auto plain = detail::aes_ctr(std::span(*keys).first(32), iv, all.subspan(37, all.size() - 37 - 32));
   if (!plain)
     return std::nullopt;
-  auto read = knot::try_read<std::vector<exported_session>>(mux::bytes::chars(*plain));
+  auto read = knot::try_read<std::vector<exported_session>>(splice::bytes::chars(*plain));
   if (!read)
     return std::nullopt;
   return std::move(*read);
@@ -245,7 +245,7 @@ struct pkey_free {
 // An Ed25519 key from its seed; its public half, and a signature made with it.
 template <byte_range Seed>
 [[nodiscard]] inline std::unique_ptr<EVP_PKEY, pkey_free> ed25519_of(Seed&& seed) {
-  const auto exact = mux::bytes::exactly<32>(std::forward<Seed>(seed));
+  const auto exact = splice::bytes::exactly<32>(std::forward<Seed>(seed));
   if (!exact)
     return nullptr;
   return std::unique_ptr<EVP_PKEY, pkey_free>(EVP_PKEY_new_raw_private_key(EVP_PKEY_ED25519, nullptr, exact->data(), exact->size()));
@@ -259,7 +259,7 @@ template <byte_range Seed>
   std::size_t size = out.size();
   if (!key || EVP_PKEY_get_raw_public_key(key.get(), out.data(), &size) != 1 || size != out.size())
     return std::nullopt;
-  return mux::bytes::base64_text(out);
+  return splice::bytes::base64_text(out);
 }
 [[nodiscard]] inline std::optional<std::string> ed25519_sign(std::string_view seed_b64, std::string_view message) {
   const auto seed = from_base64(seed_b64);
@@ -267,20 +267,20 @@ template <byte_range Seed>
     return std::nullopt;
   const auto key = ed25519_of(*seed);
   std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> md(EVP_MD_CTX_new(), &EVP_MD_CTX_free);
-  const auto bytes = mux::bytes::buffer_of(mux::bytes::of(message));  // Ed25519 signs the message whole
+  const auto bytes = splice::bytes::buffer_of(splice::bytes::of(message));  // Ed25519 signs the message whole
   std::array<std::uint8_t, 64> out{};
   std::size_t size = out.size();
   if (!key || !md || EVP_DigestSignInit(md.get(), nullptr, nullptr, nullptr, key.get()) != 1 ||
       EVP_DigestSign(md.get(), out.data(), &size, bytes.data(), bytes.size()) != 1 || size != out.size())
     return std::nullopt;
-  return mux::bytes::base64_text(out);
+  return splice::bytes::base64_text(out);
 }
 }  // namespace detail
 // Three new seeds: master, self-signing, user-signing.
 [[nodiscard]] inline cross_signing_secrets new_cross_signing() {
-  return {.master = mux::bytes::base64_text(mux::vault::vault::random(32)),
-          .self_signing = mux::bytes::base64_text(mux::vault::vault::random(32)),
-          .user_signing = mux::bytes::base64_text(mux::vault::vault::random(32))};
+  return {.master = splice::bytes::base64_text(mux::vault::vault::random(32)),
+          .self_signing = splice::bytes::base64_text(mux::vault::vault::random(32)),
+          .user_signing = splice::bytes::base64_text(mux::vault::vault::random(32))};
 }
 // A device's keys with signatures, as /keys/signatures/upload takes them.
 struct signed_device_part {
@@ -337,8 +337,8 @@ template <byte_range Key>
 [[nodiscard]] inline std::array<std::uint8_t, 64> hkdf64(Key&& key, std::string_view info) {
   const std::array<std::uint8_t, 32> salt{};
   const auto prk = hmac_sha256(salt, key);
-  const auto first = hmac_sha256(prk, mux::bytes::of(info), std::array<std::uint8_t, 1>{1});
-  const auto second = hmac_sha256(prk, first, mux::bytes::of(info), std::array<std::uint8_t, 1>{2});
+  const auto first = hmac_sha256(prk, splice::bytes::of(info), std::array<std::uint8_t, 1>{1});
+  const auto second = hmac_sha256(prk, first, splice::bytes::of(info), std::array<std::uint8_t, 1>{2});
   std::array<std::uint8_t, 64> out{};
   std::ranges::copy(first, out.begin());
   std::ranges::copy(second, out.begin() + 32);
@@ -389,11 +389,11 @@ template <byte_range Key>
   const auto keys = hkdf64(key, name);
   auto iv = mux::vault::vault::random(16);
   iv[8] &= 0x7F;
-  const auto ciphertext = aes_ctr(std::span(keys).first(32), iv, mux::bytes::of(secret));
+  const auto ciphertext = aes_ctr(std::span(keys).first(32), iv, splice::bytes::of(secret));
   if (!ciphertext)
     throw std::runtime_error("the secret could not be encrypted");
   const auto mac = hmac_sha256(std::span(keys).last(32), *ciphertext);
-  return sealed_secret{.iv = mux::bytes::base64_text(iv), .ciphertext = mux::bytes::base64_text(*ciphertext), .mac = mux::bytes::base64_text(mac)};
+  return sealed_secret{.iv = splice::bytes::base64_text(iv), .ciphertext = splice::bytes::base64_text(*ciphertext), .mac = splice::bytes::base64_text(mac)};
 }
 template <byte_range Key>
 [[nodiscard]] inline std::optional<std::string> open_secret(Key&& key, std::string_view name,
@@ -410,7 +410,7 @@ template <byte_range Key>
   const auto plain = aes_ctr(std::span(keys).first(32), *iv, *ciphertext);
   if (!plain)
     return std::nullopt;
-  return mux::bytes::text_of(*plain);  // the secret, kept as text
+  return splice::bytes::text_of(*plain);  // the secret, kept as text
 }
 }  // namespace detail
 // A new storage key: its 32 bytes, its ID, what account data says of it (an
@@ -428,7 +428,7 @@ template <detail::byte_range Key>
   bytes.insert(bytes.end(), key.begin(), key.end());
   bytes.push_back(std::ranges::fold_left(bytes, std::uint8_t{0}, [](std::uint8_t a, std::uint8_t b) { return static_cast<std::uint8_t>(a ^ b); }));
   const std::string plain = detail::base58(bytes);
-  return mux::bytes::every(plain, 4, ' ') | std::ranges::to<std::string>();
+  return splice::bytes::every(plain, 4, ' ') | std::ranges::to<std::string>();
 }
 [[nodiscard]] inline std::optional<std::vector<std::uint8_t>> key_of_recovery(std::string_view recovery) {
   const std::string plain = recovery | std::views::filter([](char c) { return std::isspace(static_cast<unsigned char>(c)) == 0; }) |
@@ -443,7 +443,7 @@ template <detail::byte_range Key>
 }
 [[nodiscard]] inline new_storage_key make_storage_key() {
   auto key = mux::vault::vault::random(32);
-  const std::string id = mux::bytes::base64_text(mux::vault::vault::random(24));
+  const std::string id = splice::bytes::base64_text(mux::vault::vault::random(24));
   const auto check = detail::seal_secret(key, "", std::string(32, '\0'));
   return new_storage_key{.key = key, .id = id, .info = {.iv = check.iv, .mac = check.mac}, .recovery = recovery_key_of(key)};
 }
@@ -492,7 +492,7 @@ struct backup_auth_signed_part {
 namespace detail {
 template <byte_range Secret>
 [[nodiscard]] inline std::optional<std::array<std::uint8_t, 32>> x25519_public(Secret&& secret_bytes) {
-  const auto secret = mux::bytes::exactly<32>(std::forward<Secret>(secret_bytes));
+  const auto secret = splice::bytes::exactly<32>(std::forward<Secret>(secret_bytes));
   if (!secret)
     return std::nullopt;
   const std::unique_ptr<EVP_PKEY, pkey_free> key(EVP_PKEY_new_raw_private_key(EVP_PKEY_X25519, nullptr, secret->data(), secret->size()));
@@ -504,8 +504,8 @@ template <byte_range Secret>
 }
 template <byte_range Secret, byte_range Theirs>
 [[nodiscard]] inline std::optional<std::array<std::uint8_t, 32>> x25519_shared(Secret&& secret_bytes, Theirs&& their_bytes) {
-  const auto secret = mux::bytes::exactly<32>(std::forward<Secret>(secret_bytes));
-  const auto theirs = mux::bytes::exactly<32>(std::forward<Theirs>(their_bytes));
+  const auto secret = splice::bytes::exactly<32>(std::forward<Secret>(secret_bytes));
+  const auto theirs = splice::bytes::exactly<32>(std::forward<Theirs>(their_bytes));
   if (!secret || !theirs)
     return std::nullopt;
   const std::unique_ptr<EVP_PKEY, pkey_free> ours(EVP_PKEY_new_raw_private_key(EVP_PKEY_X25519, nullptr, secret->data(), secret->size()));
@@ -546,14 +546,14 @@ template <byte_range Key, byte_range Iv, byte_range In>
   const auto public_key = detail::x25519_public(secret);
   if (!public_key)
     throw std::runtime_error("the backup key could not be made");
-  return {mux::bytes::base64_text(secret), mux::bytes::base64_text(*public_key)};
+  return {splice::bytes::base64_text(secret), splice::bytes::base64_text(*public_key)};
 }
 [[nodiscard]] inline std::optional<std::string> backup_public_of(std::string_view secret_b64) {
   const auto secret = from_base64(secret_b64);
   if (!secret || secret->size() != 32)
     return std::nullopt;
   const auto public_key = detail::x25519_public(*secret);
-  return public_key ? std::optional<std::string>(mux::bytes::base64_text(*public_key)) : std::nullopt;
+  return public_key ? std::optional<std::string>(splice::bytes::base64_text(*public_key)) : std::nullopt;
 }
 // A room key sealed to the backup's public key. Its MAC, as libolm made it
 // and every client checks it, is of nothing: the first 8 bytes of
@@ -569,13 +569,13 @@ template <byte_range Key, byte_range Iv, byte_range In>
     return std::nullopt;
   const auto keys = detail::hkdf80(*shared);
   const auto ciphertext =
-      detail::aes_cbc(true, std::span(keys).first(32), std::span(keys).subspan(64, 16), mux::bytes::of(knot::to_json(plain)));
+      detail::aes_cbc(true, std::span(keys).first(32), std::span(keys).subspan(64, 16), splice::bytes::of(knot::to_json(plain)));
   if (!ciphertext)
     return std::nullopt;
   const auto mac = detail::hmac_sha256(std::span(keys).subspan(32, 32));
-  return backup_session_data{.ephemeral = mux::bytes::base64_text(*ephemeral_public),
-                             .ciphertext = mux::bytes::base64_text(*ciphertext),
-                             .mac = mux::bytes::base64_text(std::span(mac).first(8))};
+  return backup_session_data{.ephemeral = splice::bytes::base64_text(*ephemeral_public),
+                             .ciphertext = splice::bytes::base64_text(*ciphertext),
+                             .mac = splice::bytes::base64_text(std::span(mac).first(8))};
 }
 [[nodiscard]] inline std::optional<backup_plaintext> open_backup(std::string_view secret_b64, const backup_session_data& sealed) {
   const auto secret = from_base64(secret_b64);
@@ -597,7 +597,7 @@ template <byte_range Key, byte_range Iv, byte_range In>
   const auto plain = detail::aes_cbc(false, std::span(keys).first(32), std::span(keys).subspan(64, 16), *ciphertext);
   if (!plain)
     return std::nullopt;
-  auto read = knot::try_read<backup_plaintext>(mux::bytes::chars(*plain));
+  auto read = knot::try_read<backup_plaintext>(splice::bytes::chars(*plain));
   if (!read)
     return std::nullopt;
   return std::move(*read);

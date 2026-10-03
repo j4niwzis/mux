@@ -28,7 +28,7 @@ module;
 export module mux.net;
 
 import std;
-import mux.bytes;
+import splice.bytes;
 import splice;
 import tern;
 
@@ -631,7 +631,7 @@ inline void http_connect(loop& owner, tcp::socket& socket, const proxy& via, std
 // there -- a router's page, a printer's -- from the user's machine. A name
 // that resolves to such an address is not caught here.
 [[nodiscard]] inline bool public_host(std::string_view host) {
-  const std::string lower = mux::bytes::lower_text(host);
+  const std::string lower = splice::bytes::lower_text(host);
   if (lower == "localhost" || lower.ends_with(".localhost") || lower.ends_with(".local") ||
       lower.ends_with(".internal") || lower.ends_with(".lan") || (!lower.contains('.') && !lower.contains(':')))
     return false;

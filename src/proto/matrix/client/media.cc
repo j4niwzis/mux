@@ -4,7 +4,7 @@ export module mux.proto.matrix.client:media;
 
 import std;
 import loom.media;
-import mux.bytes;
+import splice.bytes;
 import mux.proto.matrix.crypto;
 import knot;
 import loom.api;
@@ -77,12 +77,12 @@ void account<Sink>::fetch_media(std::string source, media_use_t use, int size, b
             sink_(change::avatar_loaded{use, source, got.body});
             return;
           }
-          const auto opened = crypto::open_file(mux::bytes::of(got.body), sealed->second);
+          const auto opened = crypto::open_file(splice::bytes::of(got.body), sealed->second);
           if (!opened) {
             log(id_, "{} is not what its event says: not shown", source);
             return;
           }
-          sink_(change::avatar_loaded{use, source, mux::bytes::text_of(*opened)});
+          sink_(change::avatar_loaded{use, source, splice::bytes::text_of(*opened)});
           return;
         }
       } catch (const net::failure&) {
@@ -160,9 +160,9 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
     if (this->encrypted_room(room)) {
       if (!crypto_)
         throw plaintext_refused(in, local, "Not sent: it could not be encrypted -- encryption is not running for this account.");
-      sealed = crypto::seal_file(mux::bytes::of(bytes));
+      sealed = crypto::seal_file(splice::bytes::of(bytes));
     }
-    const std::string ciphertext = sealed ? mux::bytes::text_of(sealed->bytes) : std::string();
+    const std::string ciphertext = sealed ? splice::bytes::text_of(sealed->bytes) : std::string();
     const std::string_view uploaded = sealed ? std::string_view(ciphertext) : std::string_view(bytes);
     if (!api_) {
       sink_(change::delivery_changed{in, local, delivery::failed{}});
@@ -175,8 +175,8 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
     std::optional<crypto::sealed_file> sealed_thumbnail;
     if (video && !video->thumbnail.empty()) {
       if (sealed)
-        sealed_thumbnail = crypto::seal_file(mux::bytes::of(video->thumbnail));
-      const std::string thumbnail_cipher = sealed_thumbnail ? mux::bytes::text_of(sealed_thumbnail->bytes) : std::string();
+        sealed_thumbnail = crypto::seal_file(splice::bytes::of(video->thumbnail));
+      const std::string thumbnail_cipher = sealed_thumbnail ? splice::bytes::text_of(sealed_thumbnail->bytes) : std::string();
       try {
         const auto got = api_->request(
             "POST", sealed_thumbnail ? "/_matrix/media/v3/upload" : "/_matrix/media/v3/upload?filename=thumbnail.png",

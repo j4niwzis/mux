@@ -113,7 +113,7 @@ cme_find_package(OpenSSL REQUIRED)
 set(SPLICE_ERASE ${MUX_ERASE_HANDLERS} CACHE BOOL "splice::variant through tables outside a release build, as mux's handlers")
 cme_declare_port(NAME splice PROVIDES splice
   GITHUB_REPOSITORY j4niwzis/splice
-  GIT_TAG 3ebe0635251a5ffd9ed2ad0a027eeff957d340a7
+  GIT_TAG 4bc078254fb74570559fe7039ac92c6a2c1a0434
   # What the pin is: a copy installed on the machine from before it (0.2,
   # before splice.erased_call) is passed over.
   VERSION 0.3
@@ -206,18 +206,13 @@ option(MUX_ERASE_HANDLERS "Outside a release build, erase Asio completion handle
 target_compile_definitions(mux_modules PUBLIC
   $<$<AND:$<BOOL:${MUX_ERASE_HANDLERS}>,$<NOT:$<CONFIG:Release>>>:MUX_ERASED_HANDLERS>)
 
-# Text and bytes, each made of the other a byte at a time: below everything.
-add_library(mux_bytes)
-target_sources(mux_bytes PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES src/bytes.cc)
-target_compile_features(mux_bytes PUBLIC cxx_std_26)
-target_compile_options(mux_bytes PUBLIC ${mux_std_flags})
 # What mux keeps on disk, sealed where asked: below the settings, which read
 # and write through it.
 add_library(mux_vault)
 target_sources(mux_vault PUBLIC FILE_SET CXX_MODULES BASE_DIRS src FILES src/vault.cc)
 target_compile_features(mux_vault PUBLIC cxx_std_26)
 target_compile_options(mux_vault PUBLIC ${mux_std_flags})
-target_link_libraries(mux_vault PUBLIC knot OpenSSL::Crypto mux_bytes)
+target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 add_library(mux_config)
 # With the protocols' tags and what each keeps in the accounts file: the
 # settings read them, and everything above reads the settings.
@@ -226,7 +221,7 @@ target_sources(mux_config PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
         src/proto/xmpp/state.cc src/proto/matrix/state.cc src/proto/state.cc src/config_choices.cc src/config_settings.cc src/config_looks.cc src/config_limits.cc src/config_accounts.cc src/config.cc)
 target_compile_features(mux_config PUBLIC cxx_std_26)
 target_compile_options(mux_config PUBLIC ${mux_std_flags})
-target_link_libraries(mux_config PUBLIC knot splice mux_vault mux_bytes)
+target_link_libraries(mux_config PUBLIC knot splice mux_vault)
 target_link_libraries(mux_modules PUBLIC mux_config splice)
 foreach(name IN ITEMS core net xmpp http matrix media logic)
   add_library(mux_${name} ALIAS mux_modules)

@@ -5,7 +5,7 @@
 export module mux.app.outbox;
 
 import std;
-import mux.bytes;
+import splice.bytes;
 import splice;
 import skia;
 import mux.core;
@@ -261,7 +261,7 @@ class outbox_part {
     const auto& chosen = s_->root().main().chosen;
     if (!chosen)
       return;
-    auto bytes_read = mux::bytes::file_text(one.path);
+    auto bytes_read = splice::bytes::file_text(one.path);
     if (!bytes_read)
       return;
     std::string bytes = std::move(*bytes_read);
@@ -320,7 +320,7 @@ class outbox_part {
     if (dropped && to_send_.empty())
       files_thread_ = s_->root().main().writing_in_thread() ? s_->root().main().thread_open() : std::nullopt;
     for (const std::string& path : paths) {
-      auto bytes_read = mux::bytes::file_text(path);
+      auto bytes_read = splice::bytes::file_text(path);
       if (!bytes_read)
         continue;
       std::string bytes = std::move(*bytes_read);

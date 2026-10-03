@@ -7,7 +7,7 @@
 export module mux.app.looks;
 
 import std;
-import mux.bytes;
+import splice.bytes;
 import splice;
 import skia;
 import mux.core;
@@ -104,7 +104,7 @@ class looks_part {
   // The picture chosen for a background: copied into mux's data, by a name
   // its bytes give, and set at the level it was chosen for.
   void picture_chosen(const mux::choice_level_t& level, const std::string& path) {
-    auto bytes_read = mux::bytes::file_text(path);
+    auto bytes_read = splice::bytes::file_text(path);
     if (!bytes_read)
       return;
     std::string bytes = std::move(*bytes_read);

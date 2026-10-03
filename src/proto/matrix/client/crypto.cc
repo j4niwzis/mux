@@ -26,7 +26,7 @@ import knot;
 import loom.ev;
 import loom.cs.keys;
 import mux.vault;
-import mux.bytes;
+import splice.bytes;
 
 export import :wire;
 export import :keys;
@@ -308,7 +308,7 @@ class olm_machine {
   // An Olm message as the ciphertext m.room.encrypted carries for a device.
   [[nodiscard]] static olm_ciphertext ciphertext_of(const auto& message) {
     const auto parts = message.to_parts();
-    return olm_ciphertext{.type = static_cast<std::int64_t>(parts.message_type), .body = mux::bytes::base64_text(parts.ciphertext)};
+    return olm_ciphertext{.type = static_cast<std::int64_t>(parts.message_type), .body = splice::bytes::base64_text(parts.ciphertext)};
   }
   // A payload, for a device, over Olm: through its newest session, or one
   // made from its one-time key.
@@ -456,8 +456,8 @@ class olm_machine {
   // This user's cross-signing private keys, kept sealed under the store's
   // key; and read back.
   void keep_cross_signing(const cross_signing_secrets& secrets) {
-    const auto sealed = mux::vault::detail::seal(key_, mux::bytes::of(knot::to_json(secrets)), "cross-signing");
-    kept_.cross_signing = mux::bytes::base64_text(sealed);
+    const auto sealed = mux::vault::detail::seal(key_, splice::bytes::of(knot::to_json(secrets)), "cross-signing");
+    kept_.cross_signing = splice::bytes::base64_text(sealed);
     this->save();
   }
   [[nodiscard]] std::optional<cross_signing_secrets> cross_signing_keys() const {
@@ -469,7 +469,7 @@ class olm_machine {
     const auto opened = mux::vault::detail::open(key_, *sealed, "cross-signing");
     if (!opened)
       return std::nullopt;
-    auto read = knot::try_read<cross_signing_secrets>(mux::bytes::chars(*opened));
+    auto read = knot::try_read<cross_signing_secrets>(splice::bytes::chars(*opened));
     if (!read)
       return std::nullopt;
     return std::move(*read);
@@ -485,7 +485,7 @@ class olm_machine {
   }
   void keep_backup(const std::string& version, const std::string& secret_b64) {
     kept_.backup_version = version;
-    kept_.backup_key = mux::bytes::base64_text(mux::vault::detail::seal(key_, mux::bytes::of(secret_b64), "key backup"));
+    kept_.backup_key = splice::bytes::base64_text(mux::vault::detail::seal(key_, splice::bytes::of(secret_b64), "key backup"));
     kept_.backed_up.reset();
     this->save();
   }
@@ -496,7 +496,7 @@ class olm_machine {
     const auto opened = sealed ? mux::vault::detail::open(key_, *sealed, "key backup") : std::nullopt;
     if (!opened)
       return std::nullopt;
-    return std::pair(*kept_.backup_version, mux::bytes::text_of(*opened));
+    return std::pair(*kept_.backup_version, splice::bytes::text_of(*opened));
   }
   [[nodiscard]] std::vector<backup_entry> not_backed_up(std::size_t most) {
     std::vector<backup_entry> out;
@@ -644,7 +644,7 @@ class olm_machine {
       const auto opened = vault_->read_file(path);
       if (!opened || opened->size() != key.size())
         throw std::runtime_error("the encryption store's key cannot be read: " + path.string());
-      std::ranges::copy(mux::bytes::of(*opened), key.begin());
+      std::ranges::copy(splice::bytes::of(*opened), key.begin());
       return key;
     }
     // Not there, and a store there: its key lost -- an error, not a new key.
@@ -653,7 +653,7 @@ class olm_machine {
     // The system's own randomness (RAND_bytes), not std::random_device.
     const auto random = mux::vault::vault::random(key.size());
     std::ranges::copy(random, key.begin());
-    if (!vault_->write_file(path, mux::bytes::text_of(key), true))
+    if (!vault_->write_file(path, splice::bytes::text_of(key), true))
       throw std::runtime_error("the encryption store's key cannot be written: " + path.string());
     return key;
   }
@@ -674,7 +674,7 @@ class olm_machine {
   }
 
   [[nodiscard]] std::string sign(std::string_view canonical) const {
-    const auto signed_bytes = mux::bytes::buffer_of(mux::bytes::of(canonical));  // the Slice is read whole
+    const auto signed_bytes = splice::bytes::buffer_of(splice::bytes::of(canonical));  // the Slice is read whole
     const rust::Slice<const std::uint8_t> bytes(signed_bytes.data(), signed_bytes.size());
     return std::string((*account_)->sign(bytes)->to_base64());
   }

@@ -13,7 +13,7 @@ export module mux.platform.window;
 
 import std;
 import sdl;
-import mux.bytes;
+import splice.bytes;
 import splice;
 import skia;
 import skiff.paint;

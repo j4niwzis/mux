@@ -4,7 +4,7 @@ export module mux.platform.window:input;
 
 import std;
 import sdl;
-import mux.bytes;
+import splice.bytes;
 import splice;
 import skia;
 import skiff.paint;

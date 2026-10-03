@@ -149,9 +149,9 @@ cme_find_package(vodozemac REQUIRED)
 add_library(mux_modules)
 target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
   FILES src/core_ids.cc src/proto/matrix/changes.cc src/proto/changes.cc src/proto/proto.cc src/proto/xmpp/points.cc src/proto/matrix/points.cc src/proto/matrix/requests.cc src/proto/protocols.cc
-        src/core.cc src/net.cc src/xmpp.cc src/http.cc src/preview.cc src/matrix.cc src/media.cc
-        src/matrix/base.cc src/matrix/names.cc src/matrix/account.cc src/matrix/requests.cc src/matrix/sync.cc
-        src/matrix/events.cc src/matrix/media.cc src/matrix/crypto.cc
+        src/core.cc src/net.cc src/xmpp.cc src/http.cc src/preview.cc src/proto/matrix/client/matrix.cc src/media.cc
+        src/proto/matrix/client/base.cc src/proto/matrix/client/names.cc src/proto/matrix/client/account.cc src/proto/matrix/client/requests.cc src/proto/matrix/client/sync.cc
+        src/proto/matrix/client/events.cc src/proto/matrix/client/media.cc src/proto/matrix/client/crypto.cc
         src/proto/xmpp/client.cc src/proto/matrix/client.cc src/proto/clients.cc
         src/logic/text.cc src/logic/search.cc src/logic/reading.cc src/logic/drafts.cc
         src/logic/link_base.cc src/proto/xmpp/links.cc src/proto/matrix/links.cc src/proto/links.cc
@@ -324,10 +324,10 @@ if(MUX_UI)
   set(mux_split $<NOT:$<CONFIG:Release>>)
   target_compile_definitions(mux PRIVATE $<${mux_split}:MUX_SPLIT_ACCOUNTS>)
   target_sources(mux PRIVATE
-    $<${mux_split}:src/app/accounts_matrix_sync.cc>
-    $<${mux_split}:src/app/accounts_matrix_requests.cc>
-    $<${mux_split}:src/app/accounts_matrix_events.cc>
-    $<${mux_split}:src/app/accounts_matrix_media.cc>
+    $<${mux_split}:src/proto/matrix/app/accounts_sync.cc>
+    $<${mux_split}:src/proto/matrix/app/accounts_requests.cc>
+    $<${mux_split}:src/proto/matrix/app/accounts_events.cc>
+    $<${mux_split}:src/proto/matrix/app/accounts_media.cc>
     $<${mux_split}:src/app/accounts_xmpp.cc>)
   target_sources(mux PRIVATE
     $<${mux_erased}:src/app/walks_window.cc>
@@ -380,7 +380,7 @@ endif()
 # of modules imported -- once more for each set of flags an importer is
 # compiled with; where those copies meet in one unit, clang 23 does not
 # refuse it but mixes their declarations up (std::forward found as
-# uintmax_t) and crashes, as accounts_matrix_events.cc, pictures.cc and
+# uintmax_t) and crashes, as proto/matrix/app/accounts_events.cc, pictures.cc and
 # ui_test.cc did in a release build. So every library of modules in the
 # build -- the family's, skiff's, googletest's, whatever is fetched -- gets
 # the same standard and flags as mux's own, LTO included in a release

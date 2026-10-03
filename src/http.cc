@@ -113,6 +113,9 @@ class connection {
                    std::chrono::seconds timeout = std::chrono::seconds(60), std::string_view type = {},
                    const Progress* progress = nullptr, std::string_view accept = "application/json") {
     const turn mine(*this);
+    // Cut short by abort(): opened afresh, not the stream it left.
+    if (std::exchange(aborted_, false))
+      stream_.reset();
     const bool reused = stream_.has_value();
     try {
       return once(method, target, body, bearer, timeout, type, progress, accept);
@@ -132,8 +135,19 @@ class connection {
       stream_.reset();
     }
   }
+  // The request on it now stopped where it is, from another fiber -- not
+  // waiting its turn, as close() does: a long poll on a socket that died
+  // while the machine slept is waited for until its timeout, minutes later.
+  // It fails at once; the next request opens the connection again.
+  void abort() {
+    if (!stream_)
+      return;
+    aborted_ = true;
+    beast::get_lowest_layer(*stream_).cancel();
+  }
 
  private:
+  bool aborted_ = false;
   using stream_type = beast::ssl_stream<beast::tcp_stream>;
 
   void open() {

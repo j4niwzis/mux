@@ -174,6 +174,45 @@ void account<Sink>::run() {
   http::connection syncing(*loop_, *tls_, *base, how_.proxy);  // the long poll has one of its own
   api_ = &api;
 
+  // The machine woken from sleep -- a phone's screen turned on again: the
+  // long poll it slept in is on a connection that is likely gone, and was
+  // waited for until its timeout, then the back-off; messages came minutes
+  // late. Seen as the wall clock gaining on the steady one, which stands
+  // still while the machine sleeps (a wall clock set by hand reads the
+  // same, and only syncs once more). The long poll is stopped then, and
+  // the sync goes again at once.
+  struct waking {
+    bool alive = true;  // while the sync and its connection are
+    bool woke = false;
+  };
+  const auto wake = std::make_shared<waking>();
+  const struct wake_ends {
+    std::shared_ptr<waking> of;
+    ~wake_ends() { of->alive = false; }
+  } wake_guard{wake};
+  this->spawn_guarded([this, wake, long_poll = &syncing] {
+    static constexpr auto kEvery = std::chrono::seconds(5);
+    static constexpr auto kSlept = std::chrono::seconds(10);
+    auto steady = std::chrono::steady_clock::now();
+    auto wall = std::chrono::system_clock::now();
+    while (wake->alive && !stopping_) {
+      loop_->sleep(kEvery);
+      if (!wake->alive || stopping_)
+        return;  // the sync gone, and the connection with it
+      const auto steady_now = std::chrono::steady_clock::now();
+      const auto wall_now = std::chrono::system_clock::now();
+      const auto gained = (wall_now - wall) - (steady_now - steady);
+      steady = steady_now;
+      wall = wall_now;
+      if (gained > kSlept) {
+        log(id_, "woken after {}s asleep: syncing again now",
+            std::chrono::duration_cast<std::chrono::seconds>(gained).count());
+        wake->woke = true;
+        long_poll->abort();
+      }
+    }
+  });
+
   // Logged in: as the device kept, where there is one, and the session
   // told, to be kept.
   const auto log_in = [&]() -> bool {
@@ -303,13 +342,26 @@ void account<Sink>::run() {
         sliding_pos_.reset();
         continue;
       }
+      // Stopped because the machine woke: straight on, from the first step
+      // of the back-off.
+      if (std::exchange(wake->woke, false)) {
+        backoff = std::chrono::seconds(1);
+        continue;
+      }
       log(id_, "{} failed: {}; trying again", state_.since ? "sync" : "the first sync", why.said());
       say(connection::connecting{why.said()});
       const auto wait = why.server && why.server->retry_after_ms
                             ? std::chrono::milliseconds(*why.server->retry_after_ms)
                             : std::chrono::duration_cast<std::chrono::milliseconds>(backoff);
-      loop_->sleep(wait);
-      backoff = std::min(backoff * 2, std::chrono::seconds(60));
+      // A second at a time, so that waking cuts it short: a minute of
+      // back-off slept through was a minute more once the screen came on.
+      for (auto left = wait; left > std::chrono::milliseconds(0) && !wake->woke && !stopping_;
+           left -= std::chrono::seconds(1))
+        loop_->sleep(std::min<std::chrono::milliseconds>(left, std::chrono::seconds(1)));
+      if (std::exchange(wake->woke, false))
+        backoff = std::chrono::seconds(1);
+      else
+        backoff = std::min(backoff * 2, std::chrono::seconds(60));
       continue;
     }
     if (backoff != std::chrono::seconds(1)) {

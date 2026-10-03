@@ -423,7 +423,7 @@ struct message_input : nodes::Stack {
   } parts;
   message_input(const palette& colours, std::string placeholder, Submit submit, Attach attach_it, Emoji emoji_it, Send send_it)
       : parts{.attach = attach_button(colours, icon::clip{}, std::move(attach_it)),
-              .field = field_t(std::move(placeholder), std::move(submit)),
+              .field = field_t(colours.widgets, std::move(placeholder), std::move(submit)),
               .emoji = emoji_button(colours, icon::smile{}, std::move(emoji_it)),
               .send = send_button(colours, icon::send{}, std::move(send_it))} {
     auto& [attach, field, emoji, send] = parts;
@@ -475,8 +475,8 @@ struct composer_bar : nodes::Stack {
     } parts;
     unsent_row(const palette& colours, Actions* a)
         : parts{.said = nodes::Text("Some of your messages have not been sent", 13.0f, colours.error),
-                .remove = delete_button("Delete all", {a}),
-                .retry = retry_button("Retry all", {a})} {
+                .remove = delete_button(colours.widgets, "Delete all", {a}),
+                .retry = retry_button(colours.widgets, "Retry all", {a})} {
       this->setHorizontal();
       this->setGap(8.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 12.0f, 6.0f, 12.0f}});
@@ -511,7 +511,7 @@ struct composer_bar : nodes::Stack {
     } parts;
     replaced_row(const palette& colours, Actions* a)
         : parts{.line = nodes::Text("This room has been replaced and is no longer active.", 13.0f, colours.dim),
-                .go = widgets::Button<go_on>("The conversation continues here", {a})} {
+                .go = widgets::Button<go_on>(colours.widgets, "The conversation continues here", {a})} {
       this->setHorizontal();
       this->setGap(10.0f);
       fStack.justify = nodes::justify::middle{};
@@ -544,8 +544,8 @@ struct composer_bar : nodes::Stack {
         : parts{.said = nodes::Text(std::format("{} asks to join{}{}", one.name, one.reason.empty() ? std::string() : ": " + one.reason,
                                                 more ? std::format(" (and {} more)", more) : std::string()),
                                     13.0f, colours.text),
-                .deny = widgets::Button<deny_it>("Deny", {a, one.id}),
-                .approve = widgets::Button<approve_it>("Approve", {a, one.id})} {
+                .deny = widgets::Button<deny_it>(colours.widgets, "Deny", {a, one.id}),
+                .approve = widgets::Button<approve_it>(colours.widgets, "Approve", {a, one.id})} {
       this->setHorizontal();
       this->setGap(8.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 12.0f, 6.0f, 12.0f}});

@@ -51,7 +51,7 @@ struct matrix_form : nodes::Stack {
   } parts;
 
   matrix_form(Actions* a, const std::optional<::mux::proto::matrix::kept>& from)
-      : actions(a), parts{.end = form_end<Actions>(a, from.has_value())} {
+      : actions(a), parts{.end = form_end<Actions>(legacy_palette(), a, from.has_value())} {
     auto& [user_id, password, homeserver, device_name, end] = parts;
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     this->setGap(12.0f);
@@ -284,7 +284,7 @@ struct room_page : nodes::Stack {
       : parts{.photo = avatar_mark(facts.id, facts.name, 88.0f),
               .name = field("Room Name", "", facts.name),
               .topic = field("Room Topic", "", facts.topic),
-              .buttons = buttons_row("Save", {box}, {box, this}),
+              .buttons = buttons_row(legacy_palette(), "Save", {box}, {box, this}),
               .main_address = nodes::Text("Main address: " + facts.alias.value_or("none"), 14.0f, text_colour)} {
     this->setGap(6.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
@@ -452,7 +452,7 @@ struct roles_page : nodes::Stack {
         : parts{.event = field("", "Event type, as m.room.server_acl"),
                 .moderator = segment<pick_new_level<Box>>("Moderator", {box, 50}),
                 .admin = segment<pick_new_level<Box>>("Admin", {box, 100}),
-                .apply = widgets::Button<add_event_need>("Apply", {box, page})} {
+                .apply = widgets::Button<add_event_need>(legacy_palette().widgets, "Apply", {box, page})} {
       this->setHorizontal();
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -507,7 +507,7 @@ struct roles_page : nodes::Stack {
         : parts{.user = field("", "User ID, as @someone:server"),
                 .moderator = segment<pick_new_level<Box>>("Moderator", {box, 50}),
                 .admin = segment<pick_new_level<Box>>("Admin", {box, 100}),
-                .apply = widgets::Button<add_privileged>("Apply", {box, page})} {
+                .apply = widgets::Button<add_privileged>(legacy_palette().widgets, "Apply", {box, page})} {
       this->setHorizontal();
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -622,10 +622,10 @@ struct advanced_page : nodes::Stack {
       : parts{.id = copy_line("Internal room ID", facts.id),
               .version = nodes::Text("Room version: " + rules_of(facts.theirs).version, 14.0f, text_colour),
               .upgrade_to = field("Upgrade to room version", "12", "12"),
-              .upgrade = widgets::Button<upgrade_press>("Upgrade this room", {box, this}),
-              .explore = widgets::Button<asks<Actions, request::explore_state>>("Explore room state", {a}),
-              .send_custom = widgets::Button<asks<Actions, request::open_send_custom>>("Send custom event", {a}),
-              .packs = widgets::Button<ask<Actions, &Actions::open_room_packs>>("Edit room packs", {a})} {
+              .upgrade = widgets::Button<upgrade_press>(legacy_palette().widgets, "Upgrade this room", {box, this}),
+              .explore = widgets::Button<asks<Actions, request::explore_state>>(legacy_palette().widgets, "Explore room state", {a}),
+              .send_custom = widgets::Button<asks<Actions, request::open_send_custom>>(legacy_palette().widgets, "Send custom event", {a}),
+              .packs = widgets::Button<ask<Actions, &Actions::open_room_packs>>(legacy_palette().widgets, "Edit room packs", {a})} {
     this->setGap(6.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
     for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.explore, &parts.send_custom, &parts.packs, &parts.upgrade})
@@ -755,9 +755,9 @@ struct account_sessions : nodes::Stack {
     session_row(account_sessions* page, std::size_t index, const proto::matrix::session_info& one, bool current)
         : device(one.id), name(one.name),
           parts{.lines = lines_t(one.name.empty() ? std::string("Unnamed session") : one.name, facts_of(one, current)),
-                .field = widgets::TextBox<>("Session name"),
-                .save = widgets::Button<save_rename>("Save", {page, index}),
-                .rename = widgets::Button<start_rename>("Rename", {page, index})} {
+                .field = widgets::TextBox<>(legacy_palette().widgets, "Session name"),
+                .save = widgets::Button<save_rename>(legacy_palette().widgets, "Save", {page, index}),
+                .rename = widgets::Button<start_rename>(legacy_palette().widgets, "Rename", {page, index})} {
       this->setHorizontal();
       this->setGap(8.0f);
       fState.apply({.fillX = true, .height = 60.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 8.0f,
@@ -769,9 +769,9 @@ struct account_sessions : nodes::Stack {
       parts.save.setVisible(false);
       parts.rename.apply({.width = 80.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle});
       if (!current) {
-        parts.verify.emplace("Verify", verify_one{page, one.id});
+        parts.verify.emplace(legacy_palette().widgets, "Verify", verify_one{page, one.id});
         parts.verify->apply({.width = 70.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle});
-        parts.sign_out.emplace("Sign out", sign_out_one{page, one.id});
+        parts.sign_out.emplace(legacy_palette().widgets, "Sign out", sign_out_one{page, one.id});
         parts.sign_out->apply({.width = 86.0f, .height = 30.0f, .alignSelf = scene::align::kMiddle});
       }
     }
@@ -786,7 +786,7 @@ struct account_sessions : nodes::Stack {
   struct password_row : nodes::Stack {
     struct parts_t {
       nodes::Text label{"Your password, to sign sessions out:", 13.0f, dim_colour};
-      widgets::TextBox<> field{"Password"};
+      widgets::TextBox<> field{legacy_palette().widgets, "Password"};
     } parts;
     password_row() {
       this->setGap(6.0f);
@@ -841,8 +841,8 @@ struct account_sessions : nodes::Stack {
                           .reset_backup = reset_backup_row("Reset the key backup", {a}),
                           .delete_backup = delete_backup_row("Delete the key backup", {a}),
                           .sign_out_unverified = sign_out_unverified_row("Sign out unverified sessions\u2026", {a}),
-                          .rest = widgets::Button<sign_out_rest>("Sign out of all other sessions", {this}),
-                          .refresh = widgets::Button<reload>("Refresh", {a})} {
+                          .rest = widgets::Button<sign_out_rest>(legacy_palette().widgets, "Sign out of all other sessions", {this}),
+                          .refresh = widgets::Button<reload>(legacy_palette().widgets, "Refresh", {a})} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     parts.verification_note.setWrapped(true);
@@ -1058,8 +1058,8 @@ struct devtools_box : nodes::Stack {
     explicit form(devtools_box* box)
         : parts{.type = field("Event type", "m.room.message"),
                 .key = field("State key (for a state event; empty for a timeline one)", ""),
-                .body = widgets::TextArea<>("{}"),
-                .send = widgets::Button<send_press>("Send", {box})} {
+                .body = widgets::TextArea<>(legacy_palette().widgets, "{}"),
+                .send = widgets::Button<send_press>(legacy_palette().widgets, "Send", {box})} {
       this->setGap(8.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 12.0f, 12.0f}});
       parts.body_caption.apply({.margin = {0.0f, 10.0f, 0.0f, 10.0f}});

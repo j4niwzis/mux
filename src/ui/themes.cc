@@ -579,6 +579,8 @@ inline widgets::Theme widget_theme_of(config::theme::night) {
 [[nodiscard]] inline palette palette_of(const config::theme_t& chosen, const config::accent_t& accent, int opacity) {
   palette out = splice::visit([](auto one) { return palette_of(one); }, chosen);
   out.accent = colour_of(accent, chosen);
+  out.widgets = splice::visit([](auto one) { return widget_theme_of(one); }, chosen);
+  out.widgets.fAccent = out.accent;
   if (opacity < 100) {
     out.background = at_opacity(out.background, 0);
     for (skia::SkColor* each : {&out.sidebar, &out.chosen, &out.chat, &out.chat_top})
@@ -586,11 +588,8 @@ inline widgets::Theme widget_theme_of(config::theme::night) {
   }
   return out;
 }
-// skiff-widgets' theme and scroll bars, as the theme and the accent have
-// them: the library's own, put in place in it.
-inline void use_widget_theme(const config::theme_t& chosen, const config::accent_t& accent) {
-  widgets::theme() = splice::visit([](auto one) { return widget_theme_of(one); }, chosen);
-  widgets::theme().fAccent = colour_of(accent, chosen);
+// skiff's scroll bars, as the theme has them.
+inline void use_scroll_bars(const config::theme_t& chosen) {
   const bool light = splice::visit([](auto one) { return one.light; }, chosen);
   nodes::scrollBarColours() = light ? nodes::ScrollBarColours{skia::colorSetARGB(0x53, 0, 0, 0), skia::colorSetARGB(0x7a, 0, 0, 0)}
                                     : nodes::ScrollBarColours{skia::colorSetARGB(0x53, 255, 255, 255),
@@ -599,15 +598,16 @@ inline void use_widget_theme(const config::theme_t& chosen, const config::accent
 // For the code not handed its palette yet: a palette made of the colours
 // read by name, kept where what is made of it may point at it. Goes with
 // them, once everything is handed its palette.
-inline const palette& legacy_palette() {
+inline palette& legacy_palette_now() {
   static palette now;
-  now = palette{.background = background, .sidebar = sidebar_colour, .chosen = chosen_colour, .text = text_colour, .dim = dim_colour, .accent = accent_colour, .error = error_colour, .selected = selected_colour, .selected_text = selected_text_colour, .band = band_colour, .section = section_colour, .tile = tile_colour, .bubble = bubble_colour, .out_bubble = out_bubble_colour, .sent_time = sent_time_colour, .chat = chat_colour, .chat_top = chat_top_colour, .pattern = pattern_colour, .on_accent = on_accent_colour};
   return now;
 }
+inline const palette& legacy_palette() { return legacy_palette_now(); }
 // For the code not handed its palette yet: the palette put in the colours
 // read by name. Goes with them.
 inline void use_theme(const config::theme_t& chosen, const config::accent_t& accent) {
   const palette now = palette_of(chosen, accent, window_look().opacity);
+  legacy_palette_now() = now;
   background = now.background;
   sidebar_colour = now.sidebar;
   chosen_colour = now.chosen;
@@ -627,7 +627,7 @@ inline void use_theme(const config::theme_t& chosen, const config::accent_t& acc
   chat_top_colour = now.chat_top;
   pattern_colour = now.pattern;
   on_accent_colour = now.on_accent;
-  use_widget_theme(chosen, accent);
+  use_scroll_bars(chosen);
 }
 
 // The panels' look put in place, for skiff to paint them in: only over the

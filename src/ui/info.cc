@@ -668,7 +668,7 @@ struct forward_box : nodes::Stack {
 
   forward_box(Actions* a, const std::vector<forward_target>& chats)
       : actions(a), all(chats),
-        parts{.header = header_t("Forward to…", {}, {a}, false, true), .field = widgets::TextBox<typed>("Search", {this})} {
+        parts{.header = header_t("Forward to…", {}, {a}, false, true), .field = widgets::TextBox<typed>(legacy_palette().widgets, "Search", {this})} {
     fState.apply({.fillX = true, .height = 520.0f});
     parts.field.setSearchIcon(true);
     parts.field.apply({.fillX = true, .height = 34.0f, .margin = {0.0f, 16.0f, 8.0f, 16.0f}});
@@ -764,7 +764,7 @@ struct start_chat_box : nodes::Stack {
       widgets::Button<go_press> go;
     } parts;
     explicit search_row(start_chat_box* box)
-        : parts{.field = widgets::TextBox<typed>("Search", {box}), .go = widgets::Button<go_press>("Go", {box})} {
+        : parts{.field = widgets::TextBox<typed>(legacy_palette().widgets, "Search", {box}), .go = widgets::Button<go_press>(legacy_palette().widgets, "Go", {box})} {
       this->setHorizontal();
       this->setGap(8.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 10.0f, 0.0f, 10.0f}});
@@ -781,7 +781,7 @@ struct start_chat_box : nodes::Stack {
       widgets::Button<copy_press> copy;
     } parts;
     link_row(start_chat_box* box, const std::string& link)
-        : parts{.link = nodes::Text(link, 13.0f, accent_colour), .copy = widgets::Button<copy_press>("Copy", {box})} {
+        : parts{.link = nodes::Text(link, 13.0f, accent_colour), .copy = widgets::Button<copy_press>(legacy_palette().widgets, "Copy", {box})} {
       this->setHorizontal();
       this->setGap(8.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {2.0f, 10.0f, 0.0f, 10.0f}});
@@ -1013,7 +1013,7 @@ struct create_room_box : nodes::Stack {
       widgets::Toggle<Flip> toggle;
     } parts;
     switch_row(create_room_box* box, std::string label)
-        : parts{.label = nodes::Text(std::move(label), 13.0f, text_colour), .toggle = widgets::Toggle<Flip>({box})} {
+        : parts{.label = nodes::Text(std::move(label), 13.0f, text_colour), .toggle = widgets::Toggle<Flip>(legacy_palette().widgets, {box})} {
       this->setHorizontal();
       this->setGap(12.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 10.0f, 4.0f, 10.0f}});
@@ -1054,10 +1054,10 @@ struct create_room_box : nodes::Stack {
               .public_option = option_row<choose_public>(this, "Public room", "Anyone will be able to find and join this room."),
               .address = field("Address", std::format("#room-name:{}", server)),
               .encryption = switch_row<flip_encrypted>(this, "Enable end-to-end encryption"),
-              .show_advanced = widgets::Button<flip_advanced>("Show advanced", {this}),
+              .show_advanced = widgets::Button<flip_advanced>(legacy_palette().widgets, "Show advanced", {this}),
               .block = switch_row<flip_federate>(
                   this, std::format("Block anyone not part of {} from ever joining this room.", server)),
-              .buttons = buttons_row("Create room", {a}, {this}, 120.0f)} {
+              .buttons = buttons_row(legacy_palette(), "Create room", {a}, {this}, 120.0f)} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 18.0f, 12.0f}});
     parts.rule_caption.apply({.margin = {4.0f, 10.0f, 0.0f, 10.0f}});
@@ -1201,7 +1201,7 @@ struct bubbles_picker : nodes::Stack {
                                            (current(level, config::look_part::bubbles{}).elements.*which) ? "" : " (as bubbles)"),
                                element_reset{a, level, which},
                                (current(level, config::look_part::bubbles{}).elements.*which).has_value()),
-                .bar = widgets::SliderBar<scene::NoAction, element_done>({}, element_done{a, level, which})} {
+                .bar = widgets::SliderBar<scene::NoAction, element_done>(legacy_palette().widgets, {}, element_done{a, level, which})} {
       this->setGap(4.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
       parts.bar.setFraction(static_cast<float>(element_opacity_of(current(level, config::look_part::bubbles{}), which)) / 100.0f);
@@ -1322,7 +1322,7 @@ struct bubbles_picker : nodes::Stack {
                                            (current(level, config::look_part::bubbles{}).blurs.*which) ? "" : " (as bubbles)"),
                                element_blur_reset{a, level, which},
                                (current(level, config::look_part::bubbles{}).blurs.*which).has_value()),
-                .bar = widgets::SliderBar<scene::NoAction, element_blur_done>({}, element_blur_done{a, level, which})} {
+                .bar = widgets::SliderBar<scene::NoAction, element_blur_done>(legacy_palette().widgets, {}, element_blur_done{a, level, which})} {
       this->setGap(4.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
       parts.bar.setFraction(element_blur_of(current(level, config::look_part::bubbles{}), which));
@@ -1334,10 +1334,10 @@ struct bubbles_picker : nodes::Stack {
       widgets::Button<pick_kind> solid, translucent, frosted, glass;
     } parts;
     kinds_row(Actions* a, const choice_level_t& level, const config::look_part_t& part)
-        : parts{.solid = widgets::Button<pick_kind>("Solid", {a, level, part, config::bubbles::solid{}}),
-                .translucent = widgets::Button<pick_kind>("Translucent", {a, level, part, config::bubbles::translucent{}}),
-                .frosted = widgets::Button<pick_kind>("Frosted", {a, level, part, config::bubbles::frosted{}}),
-                .glass = widgets::Button<pick_kind>("Glass", {a, level, part, config::bubbles::glass{}})} {
+        : parts{.solid = widgets::Button<pick_kind>(legacy_palette().widgets, "Solid", {a, level, part, config::bubbles::solid{}}),
+                .translucent = widgets::Button<pick_kind>(legacy_palette().widgets, "Translucent", {a, level, part, config::bubbles::translucent{}}),
+                .frosted = widgets::Button<pick_kind>(legacy_palette().widgets, "Frosted", {a, level, part, config::bubbles::frosted{}}),
+                .glass = widgets::Button<pick_kind>(legacy_palette().widgets, "Glass", {a, level, part, config::bubbles::glass{}})} {
       this->setHorizontal();
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -1376,9 +1376,9 @@ struct bubbles_picker : nodes::Stack {
               .kinds = choice_menu<pick_kind_at>("", kind_names(level), kind_index(level, part),
                                                  pick_kind_at{a, level, part, inherits(level)}),
               .opacity_label = nodes::Text("Opacity", 13.0f, text_colour),
-              .opacity = widgets::SliderBar<scene::NoAction, opacity_done>({}, opacity_done{a, level, part}),
+              .opacity = widgets::SliderBar<scene::NoAction, opacity_done>(legacy_palette().widgets, {}, opacity_done{a, level, part}),
               .blur_label = nodes::Text(std::format("Blur: {:.1f}%", blur_of(current(level, part)) * 100.0f), 13.0f, text_colour),
-              .blur = widgets::SliderBar<scene::NoAction, blur_done>({}, blur_done{a, level, part})} {
+              .blur = widgets::SliderBar<scene::NoAction, blur_done>(legacy_palette().widgets, {}, blur_done{a, level, part})} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 10.0f, 0.0f, 10.0f}});
     parts.why.setWrapped(true);
@@ -1870,9 +1870,9 @@ struct packs_box : nodes::Stack {
     } parts;
     picture_row(packs_box* box, std::size_t index, const pack_picture& one)
         : parts{.face = nodes::Image<from_avatars>({one.url}),
-                .shortcode = widgets::TextBox<renamed>("shortcode", {box, index}),
-                .emoji = widgets::Toggle<flip_its_emoji>({box, index}),
-                .sticker = widgets::Toggle<flip_its_sticker>({box, index}),
+                .shortcode = widgets::TextBox<renamed>(legacy_palette().widgets, "shortcode", {box, index}),
+                .emoji = widgets::Toggle<flip_its_emoji>(legacy_palette().widgets, {box, index}),
+                .sticker = widgets::Toggle<flip_its_sticker>(legacy_palette().widgets, {box, index}),
                 .remove = icon_button<remove_it>(icon::close{}, {box, index})} {
       this->setHorizontal();
       this->setGap(8.0f);
@@ -1898,7 +1898,7 @@ struct packs_box : nodes::Stack {
       widgets::Toggle<flip_sticker> sticker;
     } parts;
     explicit use_row(packs_box* box)
-        : parts{.emoji = widgets::Toggle<flip_emoji>({box}), .sticker = widgets::Toggle<flip_sticker>({box})} {
+        : parts{.emoji = widgets::Toggle<flip_emoji>(legacy_palette().widgets, {box}), .sticker = widgets::Toggle<flip_sticker>(legacy_palette().widgets, {box})} {
       this->setHorizontal();
       this->setGap(10.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 10.0f, 4.0f, 10.0f}});
@@ -1912,7 +1912,7 @@ struct packs_box : nodes::Stack {
     struct parts_t {
       widgets::Button<create_press> create;
     } parts;
-    explicit list_buttons(packs_box* box) : parts{.create = widgets::Button<create_press>("Create pack", {box})} {
+    explicit list_buttons(packs_box* box) : parts{.create = widgets::Button<create_press>(legacy_palette().widgets, "Create pack", {box})} {
       this->setHorizontal();
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 10.0f, 0.0f, 10.0f}});
       parts.create.setPrimary(true);
@@ -1928,10 +1928,10 @@ struct packs_box : nodes::Stack {
       widgets::Button<save_press> save;
     } parts;
     edit_buttons(Actions* a, packs_box* box)
-        : parts{.add = widgets::Button<add_press>("Add images", {a}),
-                .remove = widgets::Button<delete_press>("Delete pack", {box}),
-                .back = widgets::Button<back_press>("Back", {box}),
-                .save = widgets::Button<save_press>("Save", {box})} {
+        : parts{.add = widgets::Button<add_press>(legacy_palette().widgets, "Add images", {a}),
+                .remove = widgets::Button<delete_press>(legacy_palette().widgets, "Delete pack", {box}),
+                .back = widgets::Button<back_press>(legacy_palette().widgets, "Back", {box}),
+                .save = widgets::Button<save_press>(legacy_palette().widgets, "Save", {box})} {
       this->setHorizontal();
       this->setGap(8.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 10.0f, 0.0f, 10.0f}});
@@ -2163,7 +2163,7 @@ struct directory_row : nodes::Stack {
   directory_row(Actions* a, const directory_room& one, const std::string& server)
       : parts{.face = avatar_mark(one.id, one.name.empty() ? one.alias : one.name, 40.0f),
               .texts = texts_t(one),
-              .join = widgets::Button<directory_join<Actions>>(one.space ? "Open" : "Join",
+              .join = widgets::Button<directory_join<Actions>>(legacy_palette().widgets, one.space ? "Open" : "Join",
                                                   {a, one.space ? one.id : (one.alias.empty() ? one.id : one.alias), server, one.space,
                                                    one.name})} {
     this->setHorizontal();
@@ -2228,7 +2228,7 @@ struct explore_box : nodes::Stack {
     search_row(explore_box* box, const std::string& own)
         : parts{.query = field("Find a room", "Name, topic, or #address:server"),
                 .server = field("Server", own, own),
-                .search = widgets::Button<search_press>("Search", {box})} {
+                .search = widgets::Button<search_press>(legacy_palette().widgets, "Search", {box})} {
       this->setHorizontal();
       this->setGap(8.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 6.0f, 0.0f, 6.0f}});

@@ -942,7 +942,7 @@ struct label_button_row : nodes::Stack {
   label_button_row(std::string label, std::string button, Act act, bool shown)
       : label_button_row(legacy_palette(), std::move(label), std::move(button), std::move(act), shown) {}
   label_button_row(const palette& colours, std::string label, std::string button, Act act, bool shown)
-      : parts{.label = nodes::Text(std::move(label), 13.0f, colours.text), .reset = widgets::Button<Act>(std::move(button), std::move(act))} {
+      : parts{.label = nodes::Text(std::move(label), 13.0f, colours.text), .reset = widgets::Button<Act>(colours.widgets, std::move(button), std::move(act))} {
     this->setHorizontal();
     this->setGap(6.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -989,9 +989,9 @@ struct dialog_buttons : nodes::Stack {
     widgets::Button<Cancel> cancel;
     widgets::Button<Confirm> confirm;
   } parts;
-  dialog_buttons(std::string confirm, Cancel cancel_it, Confirm confirm_it, float width = 96.0f)
-      : parts{.cancel = widgets::Button<Cancel>("Cancel", std::move(cancel_it)),
-              .confirm = widgets::Button<Confirm>(std::move(confirm), std::move(confirm_it))} {
+  dialog_buttons(const palette& colours, std::string confirm, Cancel cancel_it, Confirm confirm_it, float width = 96.0f)
+      : parts{.cancel = widgets::Button<Cancel>(colours.widgets, "Cancel", std::move(cancel_it)),
+              .confirm = widgets::Button<Confirm>(colours.widgets, std::move(confirm), std::move(confirm_it))} {
     this->setHorizontal();
     this->setGap(8.0f);
     fStack.justify = nodes::justify::end{};

@@ -56,9 +56,9 @@ struct window : scene::Node {
     text_menu(const ui_needs<Actions>& n, std::string text, std::optional<std::string> link)
         : text_menu(*n.colours, n.actions, std::move(text), std::move(link)) {}
     text_menu(const palette& colours, Actions* a, std::string text, std::optional<std::string> link)
-        : parts{.copy = widgets::Button<copy_it>("Copy", {a, std::move(text)})} {
+        : parts{.copy = widgets::Button<copy_it>(colours.widgets, "Copy", {a, std::move(text)})} {
       if (link) {
-        parts.copy_link.emplace("Copy Link", copy_it{a, std::move(*link)});
+        parts.copy_link.emplace(colours.widgets, "Copy Link", copy_it{a, std::move(*link)});
         parts.copy_link->apply({.fillX = true, .height = 30.0f});
       }
       fState.apply({.width = 150.0f, .autoSize = scene::axes::kY, .padding = {6.0f, 6.0f, 6.0f, 6.0f}, .cornerRadius = 10.0f,
@@ -407,7 +407,7 @@ struct window : scene::Node {
   }
   void open_send_box(const std::vector<pending_file>& files) {
     layer().sending.setWidthFittingContent(440.0f);
-    layer().sending.open(actions, files);
+    layer().sending.open(needs_, files);
   }
   void close_send_box() { layer().sending.close(); }
   [[nodiscard]] send_box<Actions>* send_box_up() { return layer().sending.shown(); }
@@ -493,7 +493,7 @@ struct window : scene::Node {
     auto& dialog = layer().passphrase;
     dialog.setDismissable(splice::visit(
         splice::overloaded{[](config::passphrase_for::unlock) { return false; }, [](const auto&) { return true; }}, why));
-    dialog.open(actions, why);
+    dialog.open(needs_, why);
   }
   void passphrase_refused(std::string why) {
     if (auto* box = layer().passphrase.shown())

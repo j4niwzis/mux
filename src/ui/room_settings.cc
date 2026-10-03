@@ -213,7 +213,7 @@ struct toggle_line : nodes::Stack {
   toggle_line(std::string text, Act what, bool on, bool allowed)
       : toggle_line(legacy_palette(), std::move(text), std::move(what), on, allowed) {}
   toggle_line(const palette& colours, std::string text, Act what, bool on, bool allowed)
-      : parts{.label = nodes::Text(std::move(text), 14.0f, colours.text), .toggle = widgets::Toggle<Act>(std::move(what))} {
+      : parts{.label = nodes::Text(std::move(text), 14.0f, colours.text), .toggle = widgets::Toggle<Act>(colours.widgets, std::move(what))} {
     this->setHorizontal();
     this->setGap(12.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {6.0f, 0.0f, 6.0f, 0.0f}, .disabled = !allowed});
@@ -241,7 +241,7 @@ struct copy_line : nodes::Stack {
   copy_line(const palette& colours, std::string label, std::string value)
       : parts{.label = nodes::Text(std::move(label), 14.0f, colours.dim),
               .value = nodes::Text(value, 14.0f, colours.text),
-              .copy = widgets::Button<copy_it>("Copy", {value})} {
+              .copy = widgets::Button<copy_it>(colours.widgets, "Copy", {value})} {
     this->setHorizontal();
     this->setGap(10.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 0.0f, 4.0f, 0.0f}});
@@ -375,7 +375,7 @@ struct room_settings : nodes::Stack {
     } parts;
     forum_row(const palette& colours, Actions* a, const room_settings_facts& facts)
         : parts{.label = nodes::Text("One chat, its rooms as topics", 14.0f, colours.text),
-                .toggle = widgets::Toggle<flip_forum_act>({a, facts.id, !facts.holds_spaces})} {
+                .toggle = widgets::Toggle<flip_forum_act>(colours.widgets, {a, facts.id, !facts.holds_spaces})} {
       this->setHorizontal();
       this->setGap(12.0f);
       fState.apply({.fillX = true, .height = 36.0f});
@@ -400,7 +400,7 @@ struct room_settings : nodes::Stack {
     } parts;
     home_hide_row(const palette& colours, Actions* a, const room_settings_facts& facts)
         : parts{.label = nodes::Text("Its rooms not in Home", 14.0f, colours.text),
-                .toggle = widgets::Toggle<flip_home_hide_act>({a, facts.id})} {
+                .toggle = widgets::Toggle<flip_home_hide_act>(colours.widgets, {a, facts.id})} {
       this->setHorizontal();
       this->setGap(12.0f);
       fState.apply({.fillX = true, .height = 36.0f});
@@ -442,7 +442,7 @@ struct room_settings : nodes::Stack {
                                              : "On: in the chat list as one chat; its rooms open inside it, as Telegram's topics."),
                 .home_hide = home_hide_row(*box->colours_, a, facts),
                 .leave_heading = part_heading(*box->colours_, "Leave room"),
-                .leave = widgets::Button<ask<Actions, &Actions::leave_chat>>("Leave room", {a})} {
+                .leave = widgets::Button<ask<Actions, &Actions::leave_chat>>(box->colours_->widgets, "Leave room", {a})} {
       for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.forum_heading, &parts.forum, &parts.forum_about})
         each->setVisible(facts.space);
       // A space's own: its rooms out of Home -- not one shown as one chat,

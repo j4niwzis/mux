@@ -34,7 +34,7 @@ struct field : nodes::Stack {
       : field(legacy_palette(), std::move(label), std::move(placeholder), std::move(text)) {}
   // Declared: the caption over the field, which sits on a plate.
   field(const palette& colours, std::string label, std::string placeholder, std::string text = {})
-      : parts{.caption = nodes::Text(std::move(label), 13.0f, colours.dim), .box = widgets::TextArea<>(std::move(placeholder))},
+      : parts{.caption = nodes::Text(std::move(label), 13.0f, colours.dim), .box = widgets::TextArea<>(colours.widgets, std::move(placeholder))},
         colours_(&colours) {
     auto& box = parts.box;
     this->setGap(4.0f);
@@ -111,16 +111,17 @@ struct passphrase_box : nodes::Stack {
     widgets::Button<submit> go;
   } parts;
 
-  passphrase_box(Actions* a, proto::passphrase_for_t why)
+  passphrase_box(const ui_needs<Actions>& n, proto::passphrase_for_t why) : passphrase_box(*n.colours, n.actions, why) {}
+  passphrase_box(const palette& colours, Actions* a, proto::passphrase_for_t why)
       : actions(a), purpose(why),
-        parts{.title = nodes::Text(std::string(said().title), 17.0f, text_colour, true),
-              .note = nodes::Text(std::string(said().note), 14.0f, dim_colour),
-              .file = field("Key file", "/home/you/element-keys.txt"),
-              .current = field(said().fresh ? "Passphrase now" : "Passphrase", "Passphrase"),
-              .fresh = field("New passphrase", "New passphrase"),
-              .again = field("The new one again", "New passphrase"),
-              .error = nodes::Text("", 13.0f, error_colour),
-              .go = widgets::Button<submit>(std::string(said().button), {this})} {
+        parts{.title = nodes::Text(std::string(said().title), 17.0f, colours.text, true),
+              .note = nodes::Text(std::string(said().note), 14.0f, colours.dim),
+              .file = field(colours, "Key file", "/home/you/element-keys.txt"),
+              .current = field(colours, said().fresh ? "Passphrase now" : "Passphrase", "Passphrase"),
+              .fresh = field(colours, "New passphrase", "New passphrase"),
+              .again = field(colours, "The new one again", "New passphrase"),
+              .error = nodes::Text("", 13.0f, colours.error),
+              .go = widgets::Button<submit>(colours.widgets, std::string(said().button), {this})} {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
     this->setGap(10.0f);
     for (nodes::Text* each : {&parts.title, &parts.note, &parts.error}) {
@@ -171,13 +172,14 @@ struct form_end : nodes::Stack {
   using submit_button = widgets::Button<ask<Actions, &Actions::submit_login>>;
   using close_button = widgets::Button<ask<Actions, &Actions::pop_panel>>;
   struct parts_t {
-    nodes::Text message{"", 13.0f, error_colour};
+    nodes::Text message;
     button_row<submit_button, close_button> buttons;
   } parts;
 
-  form_end(Actions* a, bool editing)
-      : parts{.buttons = button_row<submit_button, close_button>(submit_button(editing ? "Save" : "Log in", {a}),
-                                                                 close_button("Close", {a}))} {
+  form_end(const palette& colours, Actions* a, bool editing)
+      : parts{.message = nodes::Text("", 13.0f, colours.error),
+              .buttons = button_row<submit_button, close_button>(submit_button(colours.widgets, editing ? "Save" : "Log in", {a}),
+                                                                 close_button(colours.widgets, "Close", {a}))} {
     auto& message = parts.message;
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     this->setGap(12.0f);

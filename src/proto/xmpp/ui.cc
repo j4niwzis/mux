@@ -34,7 +34,7 @@ struct xmpp_advanced : nodes::Stack {
       nodes::Text label{"Allow PLAIN without TLS. Only for a test server on this machine: never over a network.",
                         13.0f, error_colour};
     } parts;
-    explicit plain_row(Actions* a) : parts{.plain = plain_toggle({a})} {
+    explicit plain_row(Actions* a) : parts{.plain = plain_toggle(legacy_palette().widgets, {a})} {
       this->setHorizontal();
       this->setGap(10.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -79,9 +79,9 @@ struct xmpp_form : nodes::Stack {
 
   xmpp_form(Actions* a, const std::optional<::mux::proto::xmpp::kept>& from)
       : actions(a),
-        parts{.advanced_button = advanced_button_t("Advanced", {a}),
+        parts{.advanced_button = advanced_button_t(legacy_palette().widgets, "Advanced", {a}),
               .more = widgets::Collapsible<xmpp_advanced<Actions>>(a),
-              .end = form_end<Actions>(a, from.has_value())} {
+              .end = form_end<Actions>(legacy_palette(), a, from.has_value())} {
     auto& [address, password, advanced_button, more, end] = parts;
     auto& folded = more.child().parts;
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});

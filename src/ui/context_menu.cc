@@ -273,7 +273,7 @@ struct sticker_grid : nodes::Stack {
 
   sticker_grid(const palette& colours, Actions* a)
       : colours_(&colours),
-        parts{.field = field_t("Search stickers", {this}),
+        parts{.field = field_t(colours.widgets, "Search stickers", {this}),
               .empty = nodes::Text("No stickers here. A room's sticker packs, and yours, show here.", 13.0f, colours.dim)},
         actions(a) {
     auto& [field, empty, list, footer, preview] = parts;
@@ -620,7 +620,7 @@ struct emoji_panel : nodes::Stack {
 
   // Sized by where it is shown.
   emoji_panel(const palette& colours, Pick what)
-      : pick(std::move(what)), colours_(&colours), parts{.field = field_t("Search emoji", {this}), .text_option = text_chip(this)} {
+      : pick(std::move(what)), colours_(&colours), parts{.field = field_t(colours.widgets, "Search emoji", {this}), .text_option = text_chip(this)} {
     auto& [field, text_option, list, footer, tones, preview] = parts;
     this->setGap(4.0f);
     fState.apply({.padding = {7.0f, 0.0f, 4.0f, 7.0f}});

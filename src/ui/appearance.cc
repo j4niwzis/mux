@@ -195,9 +195,9 @@ struct appearance_page : nodes::Stack {
               .behind = switch_row<ask<Actions, &Actions::flip_wallpaper_behind>>(colours, "Background behind the whole window", {a}),
               .live_blur = switch_row<ask<Actions, &Actions::flip_live_blur>>(colours, "Frosted menus blur what is under them (live)", {a}),
               .scale_title = section_title(colours, std::format("INTERFACE SCALE: {}%", window_look().interface_scale)),
-              .scale = widgets::SliderBar<scene::NoAction, scale_done<Actions>>({}, {a}),
+              .scale = widgets::SliderBar<scene::NoAction, scale_done<Actions>>(colours.widgets, {}, {a}),
               .window_title = section_title(colours, std::format("WINDOW OPACITY: {}%", window_look().chosen)),
-              .opacity = widgets::SliderBar<scene::NoAction, opacity_done<Actions>>({}, {a}),
+              .opacity = widgets::SliderBar<scene::NoAction, opacity_done<Actions>>(colours.widgets, {}, {a}),
               .window_note = note_text(colours, window_look().see_through
                                 ? "The panels at this opacity, and what is under the window through them."
                                 : "Below 100% the window shows what is under it, where a compositor (picom, KWin, "

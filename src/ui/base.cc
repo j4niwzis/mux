@@ -45,6 +45,9 @@ struct palette {
   skia::SkColor chat_top = skia::colorSetARGB(255, 22, 38, 58);
   skia::SkColor pattern = skia::colorSetARGB(20, 255, 255, 255);
   skia::SkColor on_accent = skia::colorSetARGB(255, 255, 255, 255);
+  // skiff-widgets' colours for the theme, with its accent: handed to each
+  // control made.
+  skiff::widgets::Theme widgets{};
   // A menu's plate: the side's colour, all but opaque -- never taken for a
   // panel's fill, so a see-through panel look leaves menus readable over it.
   [[nodiscard]] skia::SkColor popup() const { return (sidebar & 0x00FFFFFFu) | (0xFEu << 24); }

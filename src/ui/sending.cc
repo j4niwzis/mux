@@ -65,7 +65,7 @@ struct send_box : nodes::Stack {
         total += one.image ? size_of(one, all.size()).second : file_view::kIcon;
       return total;
     }
-    explicit previews_column(const std::vector<pending_file>& all) {
+    previews_column(const palette& colours, const std::vector<pending_file>& all) {
       this->setGap(kGap);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
       for (const pending_file& one : all) {
@@ -73,7 +73,7 @@ struct send_box : nodes::Stack {
           const auto [w, h] = size_of(one, all.size());
           parts.pictures.emplace_back(one.key, w, h);
         } else {
-          parts.files.emplace_back(legacy_palette(), nullptr, std::string(), one.name, one.size);
+          parts.files.emplace_back(colours, nullptr, std::string(), one.name, one.size);
         }
       }
     }
@@ -92,14 +92,16 @@ struct send_box : nodes::Stack {
   struct parts_t {
     nodes::Text title;
     nodes::ScrollContainer<previews_column> previews;
-    widgets::TextArea<> caption{"Add a caption…"};
+    widgets::TextArea<> caption;
     buttons_row buttons;
   } parts;
 
-  send_box(Actions* a, const std::vector<pending_file>& all)
-      : parts{.title = nodes::Text(title_of(all), 17.0f, text_colour, true),
-              .previews = nodes::ScrollContainer<previews_column>(previews_column(all)),
-              .buttons = buttons_row("Send", {a}, {a})} {
+  send_box(const ui_needs<Actions>& n, const std::vector<pending_file>& all) : send_box(*n.colours, n.actions, all) {}
+  send_box(const palette& colours, Actions* a, const std::vector<pending_file>& all)
+      : parts{.title = nodes::Text(title_of(all), 17.0f, colours.text, true),
+              .previews = nodes::ScrollContainer<previews_column>(previews_column(colours, all)),
+              .caption = widgets::TextArea<>(colours.widgets, "Add a caption…"),
+              .buttons = buttons_row(colours, "Send", {a}, {a})} {
     this->setGap(12.0f);
     // Sized by what it holds, not by the window: the dialog fits it (up to
     // most of the window, the previews scrolling past what fits of them).

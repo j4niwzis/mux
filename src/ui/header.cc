@@ -37,7 +37,7 @@ struct notice_box : nodes::Stack {
   notice_box(const palette& colours, Actions* a, std::string heading, std::string text)
       : parts{.title = nodes::Text(std::move(heading), 17.0f, colours.text, true),
               .note = nodes::Text(std::move(text), 14.0f, colours.dim),
-              .ok = ok_button("OK", {a})} {
+              .ok = ok_button(colours.widgets, "OK", {a})} {
     // As high as what it says: no room left empty under its button.
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
     this->setGap(10.0f);
@@ -119,11 +119,11 @@ struct verification_box : nodes::Stack {
   verification_box(const palette& colours, Actions* a, const verification_view& view)
       : parts{.title = nodes::Text("Verify " + view.user, 17.0f, colours.text, true),
               .note = nodes::Text(note_of(view), 14.0f, colours.dim),
-              .accept = accept_button("Accept", {a}),
-              .decline = decline_button(declines(view.step) ? "Decline" : "Cancel", {a}),
-              .match = match_button("They match", {a}),
-              .mismatch = mismatch_button("They don't match", {a}),
-              .close = close_button("OK", {a})} {
+              .accept = accept_button(colours.widgets, "Accept", {a}),
+              .decline = decline_button(colours.widgets, declines(view.step) ? "Decline" : "Cancel", {a}),
+              .match = match_button(colours.widgets, "They match", {a}),
+              .mismatch = mismatch_button(colours.widgets, "They don't match", {a}),
+              .close = close_button(colours.widgets, "OK", {a})} {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
     this->setGap(10.0f);
     for (nodes::Text* each : {&parts.title, &parts.note}) {
@@ -356,7 +356,7 @@ struct search_bar : nodes::Stack {
 
   explicit search_bar(const ui_needs<Actions>& n) : search_bar(*n.colours, n.actions) {}
   search_bar(const palette& colours, Actions* a)
-      : actions(a), parts{.field = field_t("Search", {a}),
+      : actions(a), parts{.field = field_t(colours.widgets, "Search", {a}),
                           .found = nodes::Text("", 13.0f, colours.dim),
                           .newer = step_button(colours, icon::up{}, {a, false}),
                           .older = step_button(colours, icon::down{}, {a, true}),

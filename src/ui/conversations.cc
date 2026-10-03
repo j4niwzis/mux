@@ -659,10 +659,10 @@ struct conversations_screen : nodes::Stack {
     // typed here.
     struct search_box : scene::Node {
       struct parts_t {
-        widgets::TextArea<> field{"Search"};
+        widgets::TextArea<> field;
       } parts;
       widgets::TextArea<>& field = parts.field;
-      explicit search_box(const palette& colours) {
+      explicit search_box(const palette& colours) : parts{.field = widgets::TextArea<>(colours.widgets, "Search")} {
         fState.apply({.fillX = true, .height = 36.0f, .margin = {0.0f, 10.0f, 8.0f, 10.0f}, .cornerRadius = 18.0f, .background = colours.tile, .selectedBackground = colours.chosen});
         field.setSingleLine(true);
         field.setFontSize(14.0f);
@@ -901,7 +901,7 @@ struct conversations_screen : nodes::Stack {
       chat_menu(const palette& colours, Actions* a, conversation_id id, std::string name, const account_id& listing,
                 const std::vector<account_id>& accounts, const config::theme_t& theme)
           : parts{.title = nodes::Text(std::move(name), 13.0f, colours.dim, true),
-                  .settings = widgets::Button<chat_settings_act>("Chat settings\u2026", {a, id})} {
+                  .settings = widgets::Button<chat_settings_act>(colours.widgets, "Chat settings\u2026", {a, id})} {
         as_popup(*this, colours);
         fState.apply({.width = 320.0f});
         parts.title.setElided(true);
@@ -909,12 +909,12 @@ struct conversations_screen : nodes::Stack {
         parts.settings.apply({.fillX = true, .height = 30.0f});
         for (const account_id& to : accounts)
           if (to != id.account && to != listing) {
-            parts.places.emplace_back(std::format("Copy to {}", to.address), place_act{a, id, to, false});
-            parts.places.emplace_back(std::format("Move to {}", to.address), place_act{a, id, to, true});
+            parts.places.emplace_back(colours.widgets, std::format("Copy to {}", to.address), place_act{a, id, to, false});
+            parts.places.emplace_back(colours.widgets, std::format("Move to {}", to.address), place_act{a, id, to, true});
           }
         if (id.account != listing) {
-          parts.unplace.emplace("Remove from this list", unplace_act{a, id, listing});
-          parts.strip.emplace("Strip on or off", strip_act{a, id, listing});
+          parts.unplace.emplace(colours.widgets, "Remove from this list", unplace_act{a, id, listing});
+          parts.strip.emplace(colours.widgets, "Strip on or off", strip_act{a, id, listing});
           parts.strip_colours.emplace(strip_colour_act{a, id, listing}, theme, false);
         }
         for (auto& each : parts.places)
@@ -941,12 +941,12 @@ struct conversations_screen : nodes::Stack {
       }
       space_menu(const palette& colours, Actions* a, const std::string& account, const config::space_item_t& item, std::string name)
           : parts{.title = nodes::Text(std::move(name), 13.0f, colours.dim, true),
-                  .explore = widgets::Button<explore_act>("Explore its rooms\u2026", {a, room_of(item)}),
-                  .manage = widgets::Button<manage_act>("Space settings\u2026", {a, room_of(item)}),
-                  .side = widgets::Button<set_bars_act>("Side bar only", {a, account, item, true, false}),
-                  .top = widgets::Button<set_bars_act>("Top bar only", {a, account, item, false, true}),
-                  .both = widgets::Button<set_bars_act>("Both bars", {a, account, item, true, true}),
-                  .hide = widgets::Button<set_bars_act>("Hide", {a, account, item, false, false})} {
+                  .explore = widgets::Button<explore_act>(colours.widgets, "Explore its rooms\u2026", {a, room_of(item)}),
+                  .manage = widgets::Button<manage_act>(colours.widgets, "Space settings\u2026", {a, room_of(item)}),
+                  .side = widgets::Button<set_bars_act>(colours.widgets, "Side bar only", {a, account, item, true, false}),
+                  .top = widgets::Button<set_bars_act>(colours.widgets, "Top bar only", {a, account, item, false, true}),
+                  .both = widgets::Button<set_bars_act>(colours.widgets, "Both bars", {a, account, item, true, true}),
+                  .hide = widgets::Button<set_bars_act>(colours.widgets, "Hide", {a, account, item, false, false})} {
         as_popup(*this, colours);
         parts.title.setElided(true);
         parts.title.apply({.fillX = true});
@@ -1399,7 +1399,7 @@ struct conversations_screen : nodes::Stack {
       empty_state(const palette& colours, Actions* a)
           : parts{.title = nodes::Text("No accounts yet", 22.0f, colours.text, true),
                   .note = nodes::Text("Add an XMPP or a Matrix account, and its chats will be here.", 14.0f, colours.dim),
-                  .add = add_button("Add account", {a})} {
+                  .add = add_button(colours.widgets, "Add account", {a})} {
         this->setGap(12.0f);
         fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {120.0f, 48.0f, 0.0f, 48.0f}});
         parts.note.setWrapped(true);
@@ -3003,7 +3003,7 @@ struct conversations_screen : nodes::Stack {
       if (label.empty())
         button.reset();
       else {
-        button.emplace(label, banner_press{actions, &chat.banner_asks});
+        button.emplace(needs_.colours->widgets, label, banner_press{actions, &chat.banner_asks});
         button->apply({.width = 120.0f, .height = 30.0f, .alignSelf = scene::align::kEnd,
                        .margin = {4.0f, 14.0f, 6.0f, 14.0f}});
       }

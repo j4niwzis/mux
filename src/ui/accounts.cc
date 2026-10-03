@@ -107,8 +107,8 @@ struct account_editor : nodes::Stack {
     head_row(const palette& colours, Actions* a, const config::account_t& saved)
         : parts{.heading = nodes::Text(config::address_of(saved), 20.0f, colours.text, true),
                 .enabled_label = nodes::Text("On", 13.0f, colours.dim),
-                .enabled = widgets::Toggle<flip_account<Actions>>(flip_account<Actions>{a, config::address_of(saved)}),
-                .remove = widgets::Button<remove_account<Actions>>(
+                .enabled = widgets::Toggle<flip_account<Actions>>(colours.widgets, flip_account<Actions>{a, config::address_of(saved)}),
+                .remove = widgets::Button<remove_account<Actions>>(colours.widgets, 
                     "Remove", remove_account<Actions>{a, config::address_of(saved)})} {
       this->setHorizontal();
       this->setGap(10.0f);
@@ -164,7 +164,7 @@ struct switch_row : nodes::Stack {
   // Declared: the text taking the room, the switch at the end.
   switch_row(std::string text, Act what) : switch_row(legacy_palette(), std::move(text), std::move(what)) {}
   switch_row(const palette& colours, std::string text, Act what)
-      : parts{.label = nodes::Text(std::move(text), 15.0f, colours.text), .toggle = widgets::Toggle<Act>(std::move(what))} {
+      : parts{.label = nodes::Text(std::move(text), 15.0f, colours.text), .toggle = widgets::Toggle<Act>(colours.widgets, std::move(what))} {
     this->setHorizontal();
     this->setGap(16.0f);
     fState.apply({.fillX = true, .height = row_item<nothing>::kHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});

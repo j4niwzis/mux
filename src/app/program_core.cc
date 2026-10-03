@@ -799,33 +799,6 @@ void app::apply(const request::flip_local_encryption&) {
     root().ask_passphrase(mux::config::passphrase_for::encrypt{});
 }
 void app::apply(const request::change_passphrase&) { root().ask_passphrase(mux::config::passphrase_for::change{}); }
-// Emoji verification: begun from a person's card or a session's row; its
-// dialog's answers, to the verification it shows.
-// Element's Secure Backup and Sessions: the backup made anew or deleted,
-// for the account whose page is open; one's unverified sessions signed out,
-// the password asked first.
-void app::apply(const request::verify_person& one) { net->verify_start(one.who.account, one.who.id, std::nullopt); }
-void app::apply(const request::verify_accept_now&) {
-  if (verifying)
-    net->verify_accept(verifying->first, verifying->second);
-}
-void app::apply(const request::verify_cancel_now&) {
-  if (verifying)
-    net->verify_cancel(verifying->first, verifying->second);
-  root().close_verification();
-}
-void app::apply(const request::verify_match&) {
-  if (verifying)
-    net->verify_confirm(verifying->first, verifying->second, true);
-}
-void app::apply(const request::verify_mismatch&) {
-  if (verifying)
-    net->verify_confirm(verifying->first, verifying->second, false);
-}
-void app::apply(const request::close_verification&) {
-  verifying.reset();
-  root().close_verification();
-}
 
 // From an account's Privacy page: its room keys, to a file or from one.
 

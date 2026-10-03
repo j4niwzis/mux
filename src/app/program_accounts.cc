@@ -645,10 +645,6 @@ void app::apply(const request::account_page& one) {
   });
 }
 
-void app::apply(const request::accept_identity& one) {
-  if (!shared.demo())
-    net->accept_identity(one.who.account, one.who.id);
-}
 void app::apply(const request::flip_only_verified&) {
   this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
     auto* kept = mux::config::only_verified_in(account);

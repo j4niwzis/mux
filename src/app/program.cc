@@ -43,6 +43,7 @@ import mux.app.menu;
 import mux.app.notices;
 import mux.app.marks;
 import mux.app.history;
+import mux.app.verification;
 import mux.logic.links;
 
 export namespace mux::app {
@@ -72,6 +73,7 @@ struct app : kept_settings {
   notices_part notices{shared};
   marks_part marks{shared};
   history_part paging{shared};
+  verification_part verification{shared};
   // Work off the UI's thread: decoding pictures, reading the disk.
   workers work;
   // Files chosen in the dialog, or dropped on the window: to the outbox.
@@ -116,10 +118,11 @@ struct app : kept_settings {
   }
   template <class Request>
   void route(const Request& one) {
-    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> || takes<marks_part, Request> || takes<history_part, Request> ||
+    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> || takes<marks_part, Request> || takes<history_part, Request> || takes<verification_part, Request> ||
                       takes<app, Request>, "a request no part of the program takes");
     if (!offer(search, one) && !offer(pictures, one) && !offer(reading, one) && !offer(outbox, one) &&
-        !offer(settings, one) && !offer(menu, one) && !offer(notices, one) && !offer(marks, one) && !offer(paging, one))
+        !offer(settings, one) && !offer(menu, one) && !offer(notices, one) && !offer(marks, one) && !offer(paging, one) &&
+        !offer(verification, one))
       offer(*this, one);
   }
 
@@ -412,14 +415,6 @@ struct app : kept_settings {
   void apply(const request::set_typing_sent&);
   void apply(const request::set_previews_direct&);
   void apply(const request::give_passphrase&);
-  void apply(const request::verify_person&);
-  void apply(const request::verify_accept_now&);
-  void apply(const request::verify_cancel_now&);
-  void apply(const request::verify_match&);
-  void apply(const request::verify_mismatch&);
-  void apply(const request::close_verification&);
-  // The verification its dialog shows: its account, and its transaction.
-  std::optional<std::pair<mux::account_id, std::string>> verifying;
   // The account whose room keys a passphrase was asked for.
   std::optional<mux::account_id> keys_of;
   void apply(const request::flip_local_encryption&);
@@ -468,7 +463,6 @@ struct app : kept_settings {
   }
   void apply(const request::flip_account_receipts&);
   void apply(const request::flip_only_verified&);
-  void apply(const request::accept_identity& one);
   void apply(const request::set_account_colour& one);
   void apply(const request::flip_account_strip&);
   void apply(const request::open_replacement&);

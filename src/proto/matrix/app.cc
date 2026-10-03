@@ -125,7 +125,7 @@ void program_told(App& app, const pack_picture_uploaded& uploaded) {
 // An emoji verification, as it goes: its dialog.
 template <class App>
 void program_told(App& app, const verification_changed& one) {
-  app.verifying = std::pair(one.by, one.txn);
+  app.verification.showing(one.by, one.txn);
   app.root().show_verification(ui::verification_view{one.user, one.device, one.step});
 }
 

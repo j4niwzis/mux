@@ -125,10 +125,16 @@ class pictures_part {
     if (s_->demo())
       return;
     const auto want = [&](const account_id& of, const std::optional<std::string>& source, const std::string& key) {
-      // Shown already, or on its way: nothing to do.
-      if (!source || source->empty() || mux::ui::avatar_images().has(key) || avatars_fetched_.contains(*source))
+      // Shown already: nothing to do.
+      if (!source || source->empty() || mux::ui::avatar_images().has(key))
         return;
+      // Kept on the disk: read back -- also where it was fetched before and
+      // has since been pushed out of the window's pictures, which once was
+      // never asked for again: a sticker that had been shown stayed empty.
       if (this->read_back(media_use::avatar{key}, *source))
+        return;
+      // On its way.
+      if (avatars_fetched_.contains(*source))
         return;
       avatars_fetched_.insert(*source);
       s_->net->fetch_avatar(of, *source, key);
@@ -214,6 +220,12 @@ class pictures_part {
             if (sticker.pack_avatar)
               want(id, sticker.pack_avatar, *sticker.pack_avatar);
           }
+          // And the panel's Recent and favourites, which come from any chat:
+          // never asked for, they showed only what happened to be loaded.
+          for (const emote& sticker : mux::ui::recent_stickers())
+            want(id, sticker.url, sticker.url);
+          for (const emote& sticker : mux::ui::favourite_stickers())
+            want(id, sticker.url, sticker.url);
           // Those on screen and near it, at twice the size they are drawn
           // at -- not every picture in its history, which pushed the rest out.
           // While a message is being jumped to, only those right around it:

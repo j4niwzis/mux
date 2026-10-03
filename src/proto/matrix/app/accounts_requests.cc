@@ -74,6 +74,9 @@ template void account<mux::app::post_change>::setup_cross_signing(std::string pa
 template void account<mux::app::post_change>::reset_backup();
 template void account<mux::app::post_change>::delete_backup();
 template void account<mux::app::post_change>::sign_out_unverified(std::string password);
+// Defined in the class, but not inline there -- a named module's class body
+// makes nothing inline -- so made here, as the account is declared extern.
+template std::expected<loom::cs::query_keys::response, failure> account<mux::app::post_change>::keys_of(const std::string& user);
 template void account<mux::app::post_change>::send_text(const conversation_id& in, const std::string& room, const std::string& txn, knot::raw body);
 template void account<mux::app::post_change>::restore_cross_signing(std::string recovery);
 // What the members above call, defined in the same partition: made here

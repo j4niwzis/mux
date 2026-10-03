@@ -83,4 +83,8 @@ template std::size_t account<mux::app::post_change>::restore_backup(const std::s
 template std::optional<std::string> account<mux::app::post_change>::store_secrets(const crypto::cross_signing_secrets& secrets, const std::optional<std::string>& backup_secret);
 template void account<mux::app::post_change>::cross_sign_device(const loom::cs::query_keys::response_t::device_information_t& info);
 template void account<mux::app::post_change>::cross_sign_user(const std::string& user, const loom::cs::query_keys::response_t::cross_signing_key_t& master);
+template void account<mux::app::post_change>::cut_long_poll();
+template void account<mux::app::post_change>::sync_now();
+template void account<mux::app::post_change>::set_pusher(std::optional<std::string> endpoint);
+template void account<mux::app::post_change>::register_pusher();
 }  // namespace mux::matrix

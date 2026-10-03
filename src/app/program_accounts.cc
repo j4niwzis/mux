@@ -70,6 +70,11 @@ void app::open_emoji_at(float right, float top) {
   const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
   mux::ui::chat_emotes() = chat ? chat->emotes : std::vector<mux::emote>{};
   mux::ui::chat_stickers() = chat ? chat->stickers : std::vector<mux::emote>{};
+  // Under a finger, in place of the on-screen keyboard, as Telegram's: the
+  // field let go of, the keyboard goes down; tapping the field again closes
+  // the panel and brings the keyboard back.
+  if (by_touch)
+    scene.clearFocus();
   root().open_emoji(right, top - 6.0f);
 }
 void app::apply(const request::close_emoji&) { root().close_emoji(); }
@@ -612,7 +617,10 @@ void app::apply(const request::insert_emoji& one) {
       field.insertText(one.text);
     else
       field.insertAtom("\u2003", one.picture, one.text, true);
-    scene.focus(field);
+    // Under a finger the panel stands where the keyboard would: focused,
+    // the field brought the keyboard up over the panel at each emoji.
+    if (!by_touch)
+      scene.focus(field);
   };
   splice::visit(splice::overloaded{[&](request::writing::chat) { put(screen.line.field); },
                                    [&](request::writing::thread) { put(screen.parts.threads.parts.line.parts.input.parts.field); }},

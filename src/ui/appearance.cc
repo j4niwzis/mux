@@ -187,7 +187,7 @@ struct appearance_page : nodes::Stack {
               .cards = cards_row(colours, a),
               .accent_title = section_title(colours, "ACCENT"),
               .circles = circles_row({a}, theme, true),
-              .looks = look_choices<Actions>(a, looks, choice_level::everywhere{}),
+              .looks = look_choices<Actions>(a, colours, looks, choice_level::everywhere{}),
               .spaces_title = section_title(colours, "SPACES"),
               .spaces = switch_row<ask<Actions, &Actions::flip_spaces>>(colours, "Space bars", {a}),
               .top_bar = switch_row<ask<Actions, &Actions::flip_top_bar>>(colours, "The bar after \"mux\"", {a}),

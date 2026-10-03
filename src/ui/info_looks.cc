@@ -51,6 +51,8 @@ export namespace mux::ui {
 struct look_level {
   choice_level_t level;
   const looks_shown* looks = nullptr;
+  // And the colours the choices are made in.
+  const palette* colours = nullptr;
 };
 template <class Actions>
 struct bubbles_picker : nodes::Stack {
@@ -148,7 +150,7 @@ struct bubbles_picker : nodes::Stack {
                                            (current(level, config::look_part::bubbles{}).elements.*which) ? "" : " (as bubbles)"),
                                element_reset{a, level, which},
                                (current(level, config::look_part::bubbles{}).elements.*which).has_value()),
-                .bar = widgets::SliderBar<scene::NoAction, element_done>(legacy_palette().widgets, {}, element_done{a, level, which})} {
+                .bar = widgets::SliderBar<scene::NoAction, element_done>(level.colours->widgets, {}, element_done{a, level, which})} {
       this->setGap(4.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
       parts.bar.setFraction(static_cast<float>(element_opacity_of(current(level, config::look_part::bubbles{}), which)) / 100.0f);
@@ -265,7 +267,7 @@ struct bubbles_picker : nodes::Stack {
                                            (current(level, config::look_part::bubbles{}).blurs.*which) ? "" : " (as bubbles)"),
                                element_blur_reset{a, level, which},
                                (current(level, config::look_part::bubbles{}).blurs.*which).has_value()),
-                .bar = widgets::SliderBar<scene::NoAction, element_blur_done>(legacy_palette().widgets, {}, element_blur_done{a, level, which})} {
+                .bar = widgets::SliderBar<scene::NoAction, element_blur_done>(level.colours->widgets, {}, element_blur_done{a, level, which})} {
       this->setGap(4.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
       parts.bar.setFraction(element_blur_of(current(level, config::look_part::bubbles{}), which, level.looks->window));
@@ -277,10 +279,10 @@ struct bubbles_picker : nodes::Stack {
       widgets::Button<pick_kind> solid, translucent, frosted, glass;
     } parts;
     kinds_row(Actions* a, const look_level& level, const config::look_part_t& part)
-        : parts{.solid = widgets::Button<pick_kind>(legacy_palette().widgets, "Solid", {a, level, part, config::bubbles::solid{}}),
-                .translucent = widgets::Button<pick_kind>(legacy_palette().widgets, "Translucent", {a, level, part, config::bubbles::translucent{}}),
-                .frosted = widgets::Button<pick_kind>(legacy_palette().widgets, "Frosted", {a, level, part, config::bubbles::frosted{}}),
-                .glass = widgets::Button<pick_kind>(legacy_palette().widgets, "Glass", {a, level, part, config::bubbles::glass{}})} {
+        : parts{.solid = widgets::Button<pick_kind>(level.colours->widgets, "Solid", {a, level, part, config::bubbles::solid{}}),
+                .translucent = widgets::Button<pick_kind>(level.colours->widgets, "Translucent", {a, level, part, config::bubbles::translucent{}}),
+                .frosted = widgets::Button<pick_kind>(level.colours->widgets, "Frosted", {a, level, part, config::bubbles::frosted{}}),
+                .glass = widgets::Button<pick_kind>(level.colours->widgets, "Glass", {a, level, part, config::bubbles::glass{}})} {
       this->setHorizontal();
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -303,7 +305,7 @@ struct bubbles_picker : nodes::Stack {
     nodes::Text blur_label;
     widgets::SliderBar<scene::NoAction, blur_done> blur;
     // The bubbles' only: what else is in a chat, each apart where chosen.
-    nodes::Text elements_title{"EVERYTHING ELSE IN A CHAT", 12.0f, dim_colour, true};
+    nodes::Text elements_title;
     std::vector<element_row> elements;
     // Those drawn frosted, where the bubbles are: each its blur.
     std::vector<element_blur_row> element_blurs;
@@ -312,16 +314,17 @@ struct bubbles_picker : nodes::Stack {
       : parts{.title = nodes::Text(splice::visit(splice::overloaded{[](config::look_part::bubbles) { return "MESSAGE BUBBLES"; },
                                                                     [](config::look_part::panels) { return "PANELS"; }},
                                                  part),
-                                   13.0f, dim_colour, true),
+                                   13.0f, level.colours->dim, true),
               .why = nodes::Text("The chat list, the bars and the side panels: only over a background behind the whole "
                                  "window (Appearance \u2192 Chat background \u2192 Behind the whole window).",
-                                 12.0f, dim_colour),
+                                 12.0f, level.colours->dim),
               .kinds = choice_menu<pick_kind_at>("", kind_names(level), kind_index(level, part),
                                                  pick_kind_at{a, level, part, has_level_above(level.level)}),
-              .opacity_label = nodes::Text("Opacity", 13.0f, text_colour),
-              .opacity = widgets::SliderBar<scene::NoAction, opacity_done>(legacy_palette().widgets, {}, opacity_done{a, level, part}),
-              .blur_label = nodes::Text(std::format("Blur: {:.1f}%", blur_of(current(level, part), level.looks->window) * 100.0f), 13.0f, text_colour),
-              .blur = widgets::SliderBar<scene::NoAction, blur_done>(legacy_palette().widgets, {}, blur_done{a, level, part})} {
+              .opacity_label = nodes::Text("Opacity", 13.0f, level.colours->text),
+              .opacity = widgets::SliderBar<scene::NoAction, opacity_done>(level.colours->widgets, {}, opacity_done{a, level, part}),
+              .blur_label = nodes::Text(std::format("Blur: {:.1f}%", blur_of(current(level, part), level.looks->window) * 100.0f), 13.0f, level.colours->text),
+              .blur = widgets::SliderBar<scene::NoAction, blur_done>(level.colours->widgets, {}, blur_done{a, level, part}),
+              .elements_title = nodes::Text("EVERYTHING ELSE IN A CHAT", 12.0f, level.colours->dim, true)} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 10.0f, 0.0f, 10.0f}});
     parts.why.setWrapped(true);
@@ -413,7 +416,7 @@ struct look_choices : nodes::Stack {
     return (has_level_above(level) ? 1 : 0) + own->index();
   }
   struct parts_t {
-    nodes::Text background_title{"BACKGROUND", 13.0f, dim_colour, true};
+    nodes::Text background_title;
     nodes::Text note;
     choice_menu<pick_wallpaper_at> background;
     bubbles_picker<Actions> bubbles;
@@ -426,12 +429,13 @@ struct look_choices : nodes::Stack {
                                             [&](choice_level::chat) { return where + ", in this chat."; }},
                          level);
   }
-  look_choices(Actions* a, const looks_shown& looks, choice_level_t level)
-      : parts{.note = nodes::Text(note_of(looks, level), 13.0f, dim_colour),
+  look_choices(Actions* a, const palette& colours, const looks_shown& looks, choice_level_t level)
+      : parts{.background_title = nodes::Text("BACKGROUND", 13.0f, colours.dim, true),
+              .note = nodes::Text(note_of(looks, level), 13.0f, colours.dim),
               .background = choice_menu<pick_wallpaper_at>("", background_names(looks, level), background_index(looks, level),
                                                            pick_wallpaper_at{a, level, has_level_above(level)}),
-              .bubbles = bubbles_picker<Actions>(a, look_level{level, &looks}, config::look_part::bubbles{}),
-              .panels = bubbles_picker<Actions>(a, look_level{level, &looks}, config::look_part::panels{})} {
+              .bubbles = bubbles_picker<Actions>(a, look_level{level, &looks, &colours}, config::look_part::bubbles{}),
+              .panels = bubbles_picker<Actions>(a, look_level{level, &looks, &colours}, config::look_part::panels{})} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     parts.background_title.apply({.margin = {0.0f, 10.0f, 0.0f, 10.0f}});
@@ -457,8 +461,9 @@ struct wallpaper_box : nodes::Stack {
     header_t header;
     look_choices<Actions> choices;
   } parts;
-  wallpaper_box(Actions* a, const looks_shown& looks, choice_level_t level)
-      : parts{.header = header_t("Chat background and looks", {}, {a}, false, true), .choices = look_choices<Actions>(a, looks, level)} {
+  wallpaper_box(Actions* a, const palette& colours, const looks_shown& looks, choice_level_t level)
+      : parts{.header = header_t(colours, "Chat background and looks", {}, {a}, false, true),
+              .choices = look_choices<Actions>(a, colours, looks, level)} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 18.0f, 12.0f}});
   }

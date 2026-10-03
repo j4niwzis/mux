@@ -340,12 +340,12 @@ struct account_chats : nodes::Stack {
     choice_menu<pick_home> home;
     spaces_choices<Actions> places;
   } parts;
-  account_chats(Actions* a, const looks_shown& looks, const chat_choice_values& chats, std::optional<bool> home_hides,
+  account_chats(Actions* a, const palette& colours, const looks_shown& looks, const chat_choice_values& chats, std::optional<bool> home_hides,
                 std::optional<bool> home_direct, const config::accent_t& colour, bool strip_on, const config::theme_t& theme)
       : parts{.colours = accent_circles<set_colour>({a}, theme, false),
               .strip = switch_row<ask<Actions, &Actions::flip_account_strip>>("A strip on its chats in other lists", {a}),
               .chats = chat_choices<Actions>(a, choice_level::account{}, chats, 8.0f),
-              .looks = look_choices<Actions>(a, looks, choice_level::account{}),
+              .looks = look_choices<Actions>(a, colours, looks, choice_level::account{}),
               .home = choice_menu<pick_home>("Home",
                                              {"As above", "Every chat", "Without chats spaces hold",
                                               "Without those and direct messages"},
@@ -618,7 +618,7 @@ struct accounts_panel : closes_on_escape<Actions> {
                                            config::link_previews_of(one));
             },
             [&](account_page::chats) {
-              detail.template emplace<5>(this->actions, *needs_.looks,
+              detail.template emplace<5>(this->actions, *needs_.colours, *needs_.looks,
                                          chat_choice_values{.events_all = config::room_events_of(one),
                                                             .event_kinds = config::room_event_kinds_of(one),
                                                             .receipts = config::show_receipts_of(one),

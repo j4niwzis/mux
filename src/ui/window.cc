@@ -507,7 +507,7 @@ struct window : scene::Node {
   void close_new_room() { layer().new_room.close(); }
   void open_packs(std::optional<std::string> room, bool editable) { layer().packs.open(actions, std::move(room), editable); }
   void close_packs() { layer().packs.close(); }
-  void open_wallpaper(choice_level_t level) { layer().wallpaper.open(actions, *needs_.looks, level); }
+  void open_wallpaper(choice_level_t level) { layer().wallpaper.open(actions, *needs_.colours, *needs_.looks, level); }
   void close_wallpaper() { layer().wallpaper.close(); }
   void show_packs(std::vector<emote_pack> packs) {
     if (auto* up = layer().packs.shown())

@@ -443,7 +443,7 @@ struct room_settings : nodes::Stack {
       look_choices<Actions> choices;
     } parts;
     looks_page(Actions* a, room_settings* box, const room_settings_facts&)
-        : parts{.heading = tab_heading(*box->colours_, "Appearance"), .choices = look_choices<Actions>(a, *box->looks_, choice_level::chat{})} {
+        : parts{.heading = tab_heading(*box->colours_, "Appearance"), .choices = look_choices<Actions>(a, *box->colours_, *box->looks_, choice_level::chat{})} {
       this->setGap(6.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
     }

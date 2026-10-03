@@ -479,10 +479,10 @@ struct window : scene::Node {
   [[nodiscard]] scene::Node* menu_card() { return layer().menu ? &layer().menu->parts.menu : nullptr; }
 
   void show_notice(std::string what) {
-    layer().notice.open(actions, "Not implemented yet", std::format("{} isn't implemented yet.", what));
+    layer().notice.open(needs_, "Not implemented yet", std::format("{} isn't implemented yet.", what));
   }
   void show_message(std::string heading, std::string text) {
-    layer().notice.open(actions, std::move(heading), std::move(text));
+    layer().notice.open(needs_, std::move(heading), std::move(text));
   }
   void close_notice() { layer().notice.close(); }
   // A passphrase asked for: the one at the start is not dismissed.
@@ -497,7 +497,7 @@ struct window : scene::Node {
       box->say(std::move(why));
   }
   void close_passphrase() { layer().passphrase.close(); }
-  void show_verification(const verification_view& view) { layer().verifying.open(actions, view); }
+  void show_verification(const verification_view& view) { layer().verifying.open(needs_, view); }
   void close_verification() { layer().verifying.close(); }
 
   void open_person(const account_id& account, const std::string& key, const person_facts& facts) {

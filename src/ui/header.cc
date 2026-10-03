@@ -32,9 +32,11 @@ struct notice_box : nodes::Stack {
     ok_button ok;
   } parts;
 
-  notice_box(Actions* a, std::string heading, std::string text)
-      : parts{.title = nodes::Text(std::move(heading), 17.0f, text_colour, true),
-              .note = nodes::Text(std::move(text), 14.0f, dim_colour),
+  notice_box(const ui_needs<Actions>& n, std::string heading, std::string text)
+      : notice_box(*n.colours, n.actions, std::move(heading), std::move(text)) {}
+  notice_box(const palette& colours, Actions* a, std::string heading, std::string text)
+      : parts{.title = nodes::Text(std::move(heading), 17.0f, colours.text, true),
+              .note = nodes::Text(std::move(text), 14.0f, colours.dim),
               .ok = ok_button("OK", {a})} {
     // As high as what it says: no room left empty under its button.
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
@@ -78,9 +80,9 @@ struct verification_box : nodes::Stack {
       nodes::Text picture;
       nodes::Text name;
     } parts;
-    emoji_cell(std::string_view picture, std::string_view name)
-        : parts{.picture = nodes::Text(std::string(picture), 30.0f, text_colour),
-                .name = nodes::Text(std::string(name), 11.0f, dim_colour)} {
+    emoji_cell(const palette& colours, std::string_view picture, std::string_view name)
+        : parts{.picture = nodes::Text(std::string(picture), 30.0f, colours.text),
+                .name = nodes::Text(std::string(name), 11.0f, colours.dim)} {
       this->setGap(4.0f);
       fState.apply({.width = 52.0f, .autoSize = scene::axes::kY});
       for (nodes::Text* each : {&parts.picture, &parts.name})
@@ -91,13 +93,13 @@ struct verification_box : nodes::Stack {
     struct parts_t {
       std::vector<emoji_cell> cells;
     } parts;
-    explicit emoji_row(const std::array<int, 7>& indices) {
+    emoji_row(const palette& colours, const std::array<int, 7>& indices) {
       this->setHorizontal();
       this->setGap(4.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
       parts.cells.reserve(indices.size());
       for (const int index : indices)
-        parts.cells.emplace_back(sas_emoji[static_cast<std::size_t>(index & 63)].first,
+        parts.cells.emplace_back(colours, sas_emoji[static_cast<std::size_t>(index & 63)].first,
                                  sas_emoji[static_cast<std::size_t>(index & 63)].second);
     }
   };
@@ -112,9 +114,11 @@ struct verification_box : nodes::Stack {
     close_button close;
   } parts;
 
-  verification_box(Actions* a, const verification_view& view)
-      : parts{.title = nodes::Text("Verify " + view.user, 17.0f, text_colour, true),
-              .note = nodes::Text(note_of(view), 14.0f, dim_colour),
+  verification_box(const ui_needs<Actions>& n, const verification_view& view)
+      : verification_box(*n.colours, n.actions, view) {}
+  verification_box(const palette& colours, Actions* a, const verification_view& view)
+      : parts{.title = nodes::Text("Verify " + view.user, 17.0f, colours.text, true),
+              .note = nodes::Text(note_of(view), 14.0f, colours.dim),
               .accept = accept_button("Accept", {a}),
               .decline = decline_button(declines(view.step) ? "Decline" : "Cancel", {a}),
               .match = match_button("They match", {a}),
@@ -127,7 +131,7 @@ struct verification_box : nodes::Stack {
       each->setSelectable(true);
       each->apply({.fillX = true});
     }
-    splice::visit(splice::overloaded{[&](const verification_step::compare& shown) { parts.emoji.emplace(shown.emoji); },
+    splice::visit(splice::overloaded{[&](const verification_step::compare& shown) { parts.emoji.emplace(colours, shown.emoji); },
                                      [](const auto&) {}},
                   view.step);
     const auto shown_in = [&](auto in_step) { return splice::visit(in_step, view.step); };
@@ -235,14 +239,14 @@ struct chat_header : nodes::Stack {
       threads_button threads;
       info_button info;
     } parts;
-    head_row(Actions* a, const view& shown)
+    head_row(const palette& colours, Actions* a, const view& shown)
         : actions(a), taps_to_info(shown.back && shown.key.has_value()),
-          parts{.back = back_button(icon::back{}, {a}),
+          parts{.back = back_button(colours, icon::back{}, {a}),
                 .face = avatar_mark(shown.key.value_or(""), shown.title, 38.0f),
-                .texts = two_lines(shown.title, shown.status, 15.0f, 3.0f),
-                .find = find_button(icon::search{}, {a}),
-                .threads = threads_button(icon::threads{}, {a}),
-                .info = info_button(icon::info{}, {a})} {
+                .texts = two_lines(colours, shown.title, shown.status, 15.0f, 3.0f),
+                .find = find_button(colours, icon::search{}, {a}),
+                .threads = threads_button(colours, icon::threads{}, {a}),
+                .info = info_button(colours, icon::info{}, {a})} {
       this->setHorizontal();
       this->setGap(12.0f);
       fState.apply({.fillX = true, .grow = scene::axes::kY, .padding = {0.0f, 16.0f, 0.0f, 22.0f}});
@@ -267,14 +271,15 @@ struct chat_header : nodes::Stack {
   };
   struct parts_t {
     head_row row;
-    nodes::Box<> divider{band_colour};
+    nodes::Box<> divider;
   } parts;
 
   static constexpr float kHeight = 56.0f;
 
   // Declared: the row over a line dividing it from the messages.
-  chat_header(Actions* a, const view& shown) : parts{.row = head_row(a, shown)} {
-    fState.apply({.fill = true, .background = sidebar_colour});
+  chat_header(const ui_needs<Actions>& n, const view& shown)
+      : parts{.row = head_row(*n.colours, n.actions, shown), .divider = nodes::Box<>(n.colours->band)} {
+    fState.apply({.fill = true, .background = n.colours->sidebar});
     parts.divider.apply({.fillX = true, .height = 1.0f});
   }
 };
@@ -293,20 +298,23 @@ template <class Press>
 struct pinned_bar : nodes::Stack {
   Press press;
   struct parts_t {
-    nodes::Box<> stripe{accent_colour};
+    nodes::Box<> stripe;
     two_lines texts;
-    nodes::Box<> divider{band_colour};
+    nodes::Box<> divider;
   } parts;
   static constexpr float kHeight = 46.0f;
-  pinned_bar(Press what, const pinned_view& shown)
-      : press(std::move(what)), parts{.texts = two_lines(shown.title, shown.line, 13.0f, 2.0f)} {
+  pinned_bar(const palette& colours, Press what, const pinned_view& shown)
+      : press(std::move(what)),
+        parts{.stripe = nodes::Box<>(colours.accent),
+              .texts = two_lines(colours, shown.title, shown.line, 13.0f, 2.0f),
+              .divider = nodes::Box<>(colours.band)} {
     this->setHorizontal();
     this->setGap(10.0f);
-    fState.apply({.fill = true, .padding = {6.0f, 16.0f, 7.0f, 18.0f}, .background = sidebar_colour,
-                  .hoverBackground = chosen_colour});
+    fState.apply({.fill = true, .padding = {6.0f, 16.0f, 7.0f, 18.0f}, .background = colours.sidebar,
+                  .hoverBackground = colours.chosen});
     fState.setCursor(scene::cursor::hand{});
     parts.stripe.apply({.fillY = true, .width = 2.0f, .cornerRadius = 1.0f});
-    parts.texts.parts.name.setColour(accent_colour);
+    parts.texts.parts.name.setColour(colours.accent);
     parts.divider.apply({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f});
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
@@ -340,22 +348,25 @@ struct search_bar : nodes::Stack {
   using close_button = icon_button<ask<Actions, &Actions::close_search>>;
   struct parts_t {
     field_t field;
-    nodes::Text found{"", 13.0f, dim_colour};
+    nodes::Text found;
     step_button newer, older;
     close_button close;
-    nodes::Box<> bottom_line{band_colour};
+    nodes::Box<> bottom_line;
   } parts;
 
-  explicit search_bar(Actions* a)
+  explicit search_bar(const ui_needs<Actions>& n) : search_bar(*n.colours, n.actions) {}
+  search_bar(const palette& colours, Actions* a)
       : actions(a), parts{.field = field_t("Search", {a}),
-                          .newer = step_button(icon::up{}, {a, false}),
-                          .older = step_button(icon::down{}, {a, true}),
-                          .close = close_button(icon::close{}, {a})} {
+                          .found = nodes::Text("", 13.0f, colours.dim),
+                          .newer = step_button(colours, icon::up{}, {a, false}),
+                          .older = step_button(colours, icon::down{}, {a, true}),
+                          .close = close_button(colours, icon::close{}, {a}),
+                          .bottom_line = nodes::Box<>(colours.band)} {
     auto& [field, found, newer, older, close, bottom_line] = parts;
     this->setHorizontal();
     this->setGap(4.0f);
     fState.apply({.fillX = true, .height = chat_header<Actions>::kHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f},
-                  .background = sidebar_colour});
+                  .background = colours.sidebar});
     bottom_line.apply({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f});
     field.setSearchIcon(true);
     field.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});

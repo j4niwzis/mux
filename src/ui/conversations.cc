@@ -1427,14 +1427,14 @@ struct conversations_screen : nodes::Stack {
     select_hint& hint = parts.hint;
     explicit chat_column(const ui_needs<Actions>& n) : chat_column(n, n.actions) {}
     chat_column(const ui_needs<Actions>& n, Actions* a)
-        : parts{.search = search_bar<Actions>(a),
+        : parts{.search = search_bar<Actions>(n),
                 .area = timeline_area<Actions>(n),
                 .line = composer_bar<Actions>(a),
                 .empty = empty_state(a)} {
       header.apply({.fillX = true, .height = chat_header<Actions>::kHeight});
       parts.pinned.apply({.fillX = true, .height = pinned_bar<pinned_press>::kHeight});
       parts.pinned.setVisible(false);
-      header.show({}, [a](const auto& shown) { return chat_header<Actions>(a, shown); });
+      header.show({}, [&n](const auto& shown) { return chat_header<Actions>(n, shown); });
       // A plain colour: the wallpaper is the messages' own -- the timeline's
       // Wallpaper -- not behind Select a chat, where Telegram has none.
       // Nothing, where the background is behind the whole window.
@@ -1895,7 +1895,7 @@ struct conversations_screen : nodes::Stack {
     if (now != single || (now && box.width() != single_width)) {
       if (now != single) {
         head_shown.back = now;
-        header.show(head_shown, [this](const auto& shown) { return chat_header<Actions>(actions, shown); });
+        header.show(head_shown, [this](const auto& shown) { return chat_header<Actions>(needs_, shown); });
       }
       single = now;
       single_width = box.width();
@@ -2288,7 +2288,7 @@ struct conversations_screen : nodes::Stack {
           std::ranges::replace(shown.line, '\n', ' ');
         }
         bar.setVisible(true);
-        bar.show(shown, [this](const pinned_view& view) { return pinned_bar<pinned_press>({this, view.id}, view); });
+        bar.show(shown, [this](const pinned_view& view) { return pinned_bar<pinned_press>(*needs_.colours, {this, view.id}, view); });
       }
     }
   }
@@ -3018,7 +3018,7 @@ struct conversations_screen : nodes::Stack {
     const conversation* one = chosen ? now.find(*chosen) : nullptr;
     head_shown = chat_header<Actions>::view_of(one, now);
     head_shown.back = single;
-    header.show(head_shown, [this](const auto& shown) { return chat_header<Actions>(actions, shown); });
+    header.show(head_shown, [this](const auto& shown) { return chat_header<Actions>(needs_, shown); });
     this->show_banners(one, now);
     if (pinned_of != chosen) {
       pinned_of = chosen;

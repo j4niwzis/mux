@@ -160,7 +160,7 @@ add_library(mux_modules)
 target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
   FILES src/core_ids.cc src/proto/matrix/changes.cc src/proto/changes.cc src/proto/proto.cc src/proto/xmpp/points.cc src/proto/matrix/points.cc src/proto/matrix/requests.cc src/proto/protocols.cc
         src/core.cc src/net.cc src/proto/xmpp/client/xmpp.cc src/http.cc src/preview.cc src/proto/matrix/client/matrix.cc src/media.cc
-        src/proto/matrix/client/base.cc src/proto/matrix/client/names.cc src/proto/matrix/client/account.cc src/proto/matrix/client/requests.cc src/proto/matrix/client/sync.cc
+        src/proto/matrix/client/base.cc src/proto/matrix/client/names.cc src/proto/matrix/client/account.cc src/proto/matrix/client/requests.cc src/proto/matrix/client/requests_more.cc src/proto/matrix/client/requests_send.cc src/proto/matrix/client/sync.cc src/proto/matrix/client/sync_crypto.cc src/proto/matrix/client/sync_keys.cc
         src/proto/matrix/client/events.cc src/proto/matrix/client/media.cc src/proto/matrix/client/crypto.cc
         src/proto/xmpp/make.cc src/proto/matrix/make.cc src/proto/clients.cc
         src/logic/text.cc src/logic/search.cc src/logic/reading.cc src/logic/drafts.cc

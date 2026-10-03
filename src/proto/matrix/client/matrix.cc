@@ -10,4 +10,8 @@ export import :account;
 export import :events;
 export import :media;
 export import :requests;
+export import :requests_more;
+export import :requests_send;
 export import :sync;
+export import :sync_crypto;
+export import :sync_keys;

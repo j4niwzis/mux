@@ -183,6 +183,8 @@ constexpr auto composer_views_for(const State& state, type_tag<Actions> tag) {
 template <class Actions>
 struct conversations_screen : nodes::Stack {
   Actions* actions = nullptr;
+  // What it was handed, for the rows it makes.
+  ui_needs<Actions> needs_;
   std::optional<conversation_id> chosen;
   // The account whose chats are listed.
   std::optional<account_id> current;
@@ -1581,6 +1583,7 @@ struct conversations_screen : nodes::Stack {
   explicit conversations_screen(const ui_needs<Actions>& n) : conversations_screen(n, n.actions) {}
   conversations_screen(const ui_needs<Actions>& n, Actions* a)
       : actions(a),
+        needs_(n),
         parts{.side = side_column(a),
               .edge = side_edge(resize_sidebar_to<Actions>{a}),
               .chat = chat_column(n),
@@ -2891,7 +2894,7 @@ struct conversations_screen : nodes::Stack {
                 }
                 rows_kept.erase(kept);
               }
-              return conversation_row<Actions>(actions, *one, is_chosen(one), muted.contains(one->id), draft_of(one->id),
+              return conversation_row<Actions>(needs_, *one, is_chosen(one), muted.contains(one->id), draft_of(one->id),
                                                events_of(one), strip_for(one));
             },
             [&](const conversation_row<Actions>& row, const conversation* one) {

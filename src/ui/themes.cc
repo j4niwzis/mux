@@ -671,7 +671,15 @@ inline bool show_panels(const config::bubble_look& look) {
   return true;
 }
 
-// A protocol's part's tone, in the theme's colours.
+// A protocol's part's tone, in a palette's colours.
+[[nodiscard]] inline skia::SkColor tone_colour(const palette& colours, const proto::part::tone_t& tone) {
+  return splice::visit(splice::overloaded{[&](proto::part::tone::plain) { return colours.dim; },
+                                          [&](proto::part::tone::accent) { return colours.accent; },
+                                          [&](proto::part::tone::danger) { return colours.error; }},
+                       tone);
+}
+// The same, in the colours read by name: for the code not handed its
+// palette yet.
 [[nodiscard]] inline skia::SkColor tone_colour(const proto::part::tone_t& tone) {
   return splice::visit(splice::overloaded{[](proto::part::tone::plain) { return dim_colour; },
                                           [](proto::part::tone::accent) { return accent_colour; },

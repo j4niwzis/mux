@@ -100,17 +100,17 @@ struct conversation_row : nodes::Stack {
   // The name and the time over the last message and the unread count.
   struct lines_column : nodes::Stack {
     struct top_line : name_time_line {
-      top_line(std::string shown, bool chosen)
-          : name_time_line(std::move(shown), "", chosen ? selected_text_colour : text_colour,
-                           chosen ? selected_text_colour : dim_colour, 13.0f) {}
+      top_line(const palette& colours, std::string shown, bool chosen)
+          : name_time_line(std::move(shown), "", chosen ? colours.selected_text : colours.text,
+                           chosen ? colours.selected_text : colours.dim, 13.0f) {}
     };
     struct bottom_line : nodes::Stack {
       // The chats' unread count, in a pill.
       struct badge : widgets::Pill {
-        badge(std::int64_t n, bool is_chosen, bool is_muted)
+        badge(const palette& colours, std::int64_t n, bool is_chosen, bool is_muted)
             : widgets::Pill(std::to_string(n),
-                            {.plate = is_chosen ? selected_text_colour : is_muted ? dim_colour : accent_colour,
-                             .text = is_chosen ? selected_colour : on_accent_colour,
+                            {.plate = is_chosen ? colours.selected_text : is_muted ? colours.dim : colours.accent,
+                             .text = is_chosen ? colours.selected : colours.on_accent,
                              .size = 12.0f,
                              .height = 21.0f,
                              .padX = 7.0f,
@@ -122,8 +122,8 @@ struct conversation_row : nodes::Stack {
       // What the chat's protocol marks it with (proto::row_badges), each a
       // pill in its tone, as the count is.
       struct mark : widgets::Pill {
-        explicit mark(const proto::part::badge& one)
-            : widgets::Pill(one.text, {.plate = tone_colour(one.tone), .text = on_accent_colour, .size = 11.0f, .height = 19.0f,
+        mark(const palette& colours, const proto::part::badge& one)
+            : widgets::Pill(one.text, {.plate = tone_colour(colours, one.tone), .text = colours.on_accent, .size = 11.0f, .height = 19.0f,
                                        .padX = 6.0f, .bold = true}) {}
       };
       struct parts_t {
@@ -134,10 +134,10 @@ struct conversation_row : nodes::Stack {
         std::optional<row_view_holder> theirs;
         badge unread;
       } parts;
-      bottom_line(std::int64_t count, bool chosen, bool muted)
-          : parts{.sender = nodes::Text("", 13.0f, chosen ? selected_text_colour : accent_colour),
-                  .preview = nodes::BasicText<message_pictures>("", 13.0f, chosen ? selected_text_colour : dim_colour),
-                  .unread = badge(count, chosen, muted)} {
+      bottom_line(const palette& colours, std::int64_t count, bool chosen, bool muted)
+          : parts{.sender = nodes::Text("", 13.0f, chosen ? colours.selected_text : colours.accent),
+                  .preview = nodes::BasicText<message_pictures>("", 13.0f, chosen ? colours.selected_text : colours.dim),
+                  .unread = badge(colours, count, chosen, muted)} {
         this->setHorizontal();
         this->setGap(8.0f);
         fState.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -161,10 +161,10 @@ struct conversation_row : nodes::Stack {
       nodes::Text topic;
       bottom_line bottom;
     } parts;
-    lines_column(std::string shown, std::int64_t count, bool chosen, bool muted)
-        : parts{.top = top_line(std::move(shown), chosen),
-                .topic = nodes::Text("", 13.0f, chosen ? selected_text_colour : text_colour),
-                .bottom = bottom_line(count, chosen, muted)} {
+    lines_column(const palette& colours, std::string shown, std::int64_t count, bool chosen, bool muted)
+        : parts{.top = top_line(colours, std::move(shown), chosen),
+                .topic = nodes::Text("", 13.0f, chosen ? colours.selected_text : colours.text),
+                .bottom = bottom_line(colours, count, chosen, muted)} {
       parts.topic.setElided(true);
       parts.topic.apply({.fillX = true});
       parts.topic.setVisible(false);
@@ -212,15 +212,16 @@ struct conversation_row : nodes::Stack {
   }
   view shown;
 
-  conversation_row(Actions* a, const conversation& one, bool is_chosen, bool is_muted, std::string draft = {},
+  conversation_row(const ui_needs<Actions>& n, const conversation& one, bool is_chosen, bool is_muted, std::string draft = {},
                    const room_event_filter& events = {}, std::optional<skia::SkColor> strip = std::nullopt)
-      : actions(a), id(one.id), chosen(is_chosen), muted(is_muted), shown(view_of(one, is_chosen, is_muted, draft, events, strip)),
+      : actions(n.actions), id(one.id), chosen(is_chosen), muted(is_muted), shown(view_of(one, is_chosen, is_muted, draft, events, strip)),
         parts{.face = avatar_mark(one.id.id, display_name(one), 46.0f),
-              .lines = lines_column(display_name(one), one.unread_here(events), is_chosen, is_muted)} {
+              .lines = lines_column(*n.colours, display_name(one), one.unread_here(events), is_chosen, is_muted)} {
+    const palette& colours = *n.colours;
     // Drawn once, played back as the list repaints around it.
     fState.setRecorded(true);
     std::ranges::for_each(shown.badges, [&](const proto::part::badge& one) {
-      parts.lines.parts.bottom.parts.marks.emplace_back(one).apply({.alignSelf = scene::align::kMiddle});
+      parts.lines.parts.bottom.parts.marks.emplace_back(colours, one).apply({.alignSelf = scene::align::kMiddle});
     });
     splice::visit(
         [&](const auto& now) {
@@ -239,7 +240,7 @@ struct conversation_row : nodes::Stack {
     };
     this->setHorizontal();
     this->setGap(12.0f);
-    fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = chosen_colour, .selectedBackground = selected_colour, .focusBackground = chosen_colour, .selected = chosen});
+    fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 12.0f, 0.0f, 10.0f}, .hoverBackground = colours.chosen, .selectedBackground = colours.selected, .focusBackground = colours.chosen, .selected = chosen});
     parts.strip.setVisible(strip.has_value());
     if (strip)
       parts.strip.setColour(*strip);
@@ -265,33 +266,33 @@ struct conversation_row : nodes::Stack {
         topic.setText(*one.forum_topic);
         topic.setVisible(true);
         fState.apply({.height = kHeight + 20.0f});
-        said_by(last.outgoing ? std::string("You") : sender_name(one, last.sender), accent_colour);
+        said_by(last.outgoing ? std::string("You") : sender_name(one, last.sender), colours.accent);
       } else if (last.outgoing)
-        said_by("You", accent_colour);
+        said_by("You", colours.accent);
       else if (is_group(one))
-        said_by(sender_name(one, last.sender), accent_colour);
+        said_by(sender_name(one, last.sender), colours.accent);
       // Media: said as Telegram says it, not by the file's name its body is.
       if (auto carried = media_line(last)) {
         preview.setText(std::move(*carried));
-        preview.setLinks({}, accent_colour);
+        preview.setLinks({}, colours.accent);
       } else {
         preview.setText(std::move(shown.text));
-        preview.setLinks(std::move(shown.links), accent_colour);
+        preview.setLinks(std::move(shown.links), colours.accent);
       }
     }
     // An invite: who asked, in the accent, where a message would be.
     if (one.invite) {
-      said_by("Invite", accent_colour);
+      said_by("Invite", colours.accent);
       preview.setText(std::format("from {}", one.invite->from_name.empty() ? one.invite->from : one.invite->from_name));
-      preview.setLinks({}, accent_colour);
+      preview.setLinks({}, colours.accent);
     }
     // A draft left in it: said instead, as tdesktop says it, in red.
     if (!shown.draft.empty() && !is_chosen) {
       std::string text = shown.draft;
       std::ranges::replace(text, '\n', ' ');
-      said_by("Draft", error_colour);
+      said_by("Draft", colours.error);
       preview.setText(std::move(text));
-      preview.setLinks({}, accent_colour);
+      preview.setLinks({}, colours.accent);
     }
   }
 

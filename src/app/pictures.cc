@@ -196,7 +196,7 @@ class pictures_part {
           // message shown: fetched as avatars are, keyed by the URL.
           const auto emoji_of = [&](const message& said) {
             for (const auto& [reaction, who] : said.reactions)
-              if (reaction.starts_with("mxc://"))
+              if (mux::proto::is_media(reaction))
                 want(id, reaction, reaction);
             if (const auto& html = said.body.html)
               for (const auto& span : mux::ui::read_html(*html).spans)

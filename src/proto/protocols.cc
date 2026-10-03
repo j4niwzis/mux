@@ -75,4 +75,19 @@ inline constexpr struct composer_banners_t {
   }
 } composer_banners{};
 
+// Whether an address is media some protocol's server keeps -- a picture
+// fetched through an account, as an avatar is: a custom emoji's, in a
+// reaction or a message's HTML.
+// No media of its own, by default: what its server keeps, by an address the
+// client fetches through its account (Matrix's mxc://).
+namespace media_defaults {
+constexpr bool owns_media(const auto&, std::string_view) { return false; }
+}  // namespace media_defaults
+template <class... Tags>
+[[nodiscard]] bool is_media(protocol_list<Tags...>, std::string_view uri) {
+  using media_defaults::owns_media;
+  return (owns_media(state_of<Tags>{}, uri) || ...);
+}
+[[nodiscard]] inline bool is_media(std::string_view uri) { return is_media(protocols{}, uri); }
+
 }  // namespace mux::proto

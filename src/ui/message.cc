@@ -543,7 +543,7 @@ struct reaction_chip : nodes::Stack {
     // count, where they are three or fewer.
     std::vector<avatar_mark> who;
   } parts;
-  [[nodiscard]] static bool pictured(std::string_view k) { return k.starts_with("mxc://"); }
+  [[nodiscard]] static bool pictured(std::string_view k) { return proto::is_media(k); }
   static constexpr std::size_t kFacesShown = 3;
   // What the chip says: the count beside a picture; else the reaction and
   // the count -- cut where it is drawn, by its width (kLabelMost), not by

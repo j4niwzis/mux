@@ -446,7 +446,7 @@ struct reactions_box : nodes::Stack {
     [[nodiscard]] static message message_of(const conversation& in, const reaction_entry& one) {
       message out{.in = in.id, .id = one.event, .sender = one.who, .at = one.at, .body = {one.key, std::nullopt},
                   .outgoing = one.mine};
-      if (one.key.starts_with("mxc://"))
+      if (proto::is_media(one.key))
         out.body = {":emoji:", std::format("<img data-mx-emoticon src=\"{}\" alt=\":emoji:\" height=\"32\">", one.key)};
       return out;
     }
@@ -541,7 +541,7 @@ struct marks_box : nodes::Stack {
     } parts;
     badge(const std::string& who, const std::string& name, const std::string& key)
         : parts{.face = avatar_mark(who, name, 20.0f),
-                .key = nodes::Text(key.starts_with("mxc://") ? std::string(":emoji:") : key, 15.0f, text_colour)} {
+                .key = nodes::Text(proto::is_media(key) ? std::string(":emoji:") : key, 15.0f, text_colour)} {
       this->setHorizontal();
       this->setGap(4.0f);
       fState.apply({.place = scene::anchor::kBottomRight, .x = -14.0f, .y = -2.0f, .autoSize = scene::axes::kBoth,

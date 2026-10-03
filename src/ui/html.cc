@@ -256,7 +256,7 @@ using html_tag_t = splice::variant<html_tag::line_break, html_tag::block_end, ht
                             // line, in the room of an em space; anything else by
                             // what it says it is.
                             [&](html_tag::image& picture) {
-                              if (picture.src.starts_with("mxc://")) {
+                              if (proto::is_media(picture.src)) {
                                 const std::size_t first = out.text.size();
                                 out.text += "\u2003";
                                 out.spans.push_back({first, out.text.size(), std::move(picture.src), false, true});

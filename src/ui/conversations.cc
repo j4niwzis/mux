@@ -265,9 +265,14 @@ struct conversations_screen : nodes::Stack {
   // A forum gone to by Alt+Up or Alt+Down: lit as chosen, not yet opened --
   // Alt+Right opens it, as Alt+Left leaves one open.
   std::optional<conversation_id> pointed;
+  // A chat shown as a forum: a space the user shows so, or a forum of its
+  // protocol's own (proto::native_forum).
+  [[nodiscard]] bool shown_as_forum(const conversation& one) const {
+    return one.space && (forums.contains(one.id) || proto::native_forum(protocol_state_of(one.id.account), one));
+  }
   [[nodiscard]] bool is_forum(const conversation_id& id) const {
     const conversation* one = last_model ? last_model->find(id) : nullptr;
-    return one && one->space && forums.contains(id);
+    return one && this->shown_as_forum(*one);
   }
   // Home without what spaces hold, but direct messages -- and without those
   // too, where that is chosen as well.
@@ -1534,7 +1539,7 @@ struct conversations_screen : nodes::Stack {
         if (one.space)
           for (const std::string& child : one.children)
             if (const auto found = chats->find(child);
-                found != chats->end() && found->second.space && !forums.contains(found->second.id) && child != one.id.id &&
+                found != chats->end() && found->second.space && !this->shown_as_forum(found->second) && child != one.id.id &&
                 !parent_of.contains(child)) {
               parent_of.emplace(child, one.id.id);
               spaces_in[one.id.id].push_back(&found->second);
@@ -1550,7 +1555,7 @@ struct conversations_screen : nodes::Stack {
     if (chats)
       for (const auto& [key, one] : *chats)
         // A space shown as a forum is a chat in the list, not an item of a bar.
-        if (one.space && !parent_of.contains(one.id.id) && !forums.contains(one.id))
+        if (one.space && !parent_of.contains(one.id.id) && !this->shown_as_forum(one))
           all.push_back({config::space_item::space{one.id.id}, folder::space{one.id.id}, one.id.id, display_name(one)});
     // A bar's icons: its items, and under an open space its own spaces --
     // smaller, a level at a time.
@@ -2647,12 +2652,11 @@ struct conversations_screen : nodes::Stack {
     // Forums: each listed as one chat; their rooms in them, not beside them.
     std::set<std::string> in_forums;
     if (in)
-      for (const conversation_id& one : forums)
-        if (one.account == *current)
-          if (const auto found = in->conversations.find(one.id); found != in->conversations.end())
-            in_forums.insert(found->second.children.begin(), found->second.children.end());
+      std::ranges::for_each(in->conversations | std::views::values |
+                                std::views::filter([&](const conversation& one) { return this->shown_as_forum(one); }),
+                            [&](const conversation& one) { in_forums.insert(one.children.begin(), one.children.end()); });
     // The forum open: still one; its rooms, the list.
-    if (forum_open && (!current || !forums.contains(conversation_id{*current, *forum_open})))
+    if (forum_open && (!current || !this->is_forum(conversation_id{*current, *forum_open})))
       forum_open.reset();
     const conversation* forum = forum_open && in && in->conversations.contains(*forum_open) ? &in->conversations.at(*forum_open) : nullptr;
     side.forum_head.setVisible(forum != nullptr);
@@ -2678,7 +2682,7 @@ struct conversations_screen : nodes::Stack {
       if (forum)
         return !one.space && std::ranges::contains(forum->children, one.id.id);
       // A space is a folder, not a chat -- but a forum is one chat.
-      if (one.space && !forums.contains(one.id))
+      if (one.space && !this->shown_as_forum(one))
         return false;
       if (!one.space && in_forums.contains(one.id.id))
         return false;
@@ -2734,7 +2738,7 @@ struct conversations_screen : nodes::Stack {
     std::map<conversation_id, conversation> forum_shown;
     if (in)
       for (const conversation*& one : chats)
-        if (one->space && forums.contains(one->id)) {
+        if (this->shown_as_forum(*one)) {
           conversation made = *one;
           made.timeline.clear();
           made.read_up_to.reset();

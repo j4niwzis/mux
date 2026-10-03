@@ -195,6 +195,8 @@ inline std::vector<part::badge> row_badges(const auto&, const conversation&) { r
 inline std::string local_part(const auto&, std::string_view address) { return std::string(address); }
 // Bubbles.
 inline part::style_t message_style(const auto&) { return part::style::bubbles{}; }
+// No chat a forum of its own: only where the user shows a space as one.
+constexpr bool native_forum(const auto&, const conversation&) { return false; }
 // No chat continued in another, nor continuing one.
 inline std::optional<std::string> successor_of(const auto&, const conversation&) { return std::nullopt; }
 inline std::optional<std::string> predecessor_of(const auto&, const conversation&) { return std::nullopt; }
@@ -402,6 +404,18 @@ inline constexpr struct person_badges_t {
     }, state);
   }
 } person_badges{};
+// Whether a chat is a forum of itself, as its protocol has one (a Telegram
+// forum supergroup): its topics, its children, listed in it as a space the
+// user shows as a forum is.
+inline constexpr struct native_forum_t {
+  template <class State>
+  bool operator()(const State& state, const conversation& chat) const {
+    return splice::visit([&](const auto& now) {
+      using defaults::native_forum;
+      return native_forum(now, chat);
+    }, state);
+  }
+} native_forum{};
 // A chat that continues in another (a Matrix room upgraded: its tombstone's
 // room), and the one a chat continues: what the composer and the chat list
 // make of a chat moved.

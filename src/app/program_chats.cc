@@ -50,7 +50,7 @@ void app::apply(const request::choose& one) {
   root().main().pointed.reset();
   // A space shown as a forum: its rooms listed in it, as tdesktop opens a
   // forum's topics -- no chat opened.
-  if (const mux::conversation* chat = model->find(one.which); chat && chat->space && forums.contains(one.which)) {
+  if (root().main().is_forum(one.which)) {
     root().main().open_forum(one.which.id);
     return;
   }

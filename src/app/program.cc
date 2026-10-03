@@ -48,6 +48,7 @@ import mux.app.proxies;
 import mux.app.packs;
 import mux.app.rooms;
 import mux.app.room_card;
+import mux.app.preferences;
 import mux.logic.links;
 
 export namespace mux::app {
@@ -82,6 +83,7 @@ struct app : kept_settings {
   packs_part packs{shared};
   rooms_part rooms{shared};
   room_card_part room_card{shared};
+  preferences_part preferences{shared, *this, proxying};
   // Work off the UI's thread: decoding pictures, reading the disk.
   workers work;
   // Files chosen in the dialog, or dropped on the window: to the outbox.
@@ -124,12 +126,13 @@ struct app : kept_settings {
   }
   template <class Request>
   void route(const Request& one) {
-    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> || takes<marks_part, Request> || takes<history_part, Request> || takes<verification_part, Request> || takes<proxies_part, Request> || takes<packs_part, Request> || takes<rooms_part, Request> || takes<room_card_part, Request> ||
+    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> || takes<marks_part, Request> || takes<history_part, Request> || takes<verification_part, Request> || takes<proxies_part, Request> || takes<packs_part, Request> || takes<rooms_part, Request> || takes<room_card_part, Request> || takes<preferences_part, Request> ||
                       takes<app, Request>, "a request no part of the program takes");
     if (!offer(search, one) && !offer(pictures, one) && !offer(reading, one) && !offer(outbox, one) &&
         !offer(settings, one) && !offer(menu, one) && !offer(notices, one) && !offer(marks, one) && !offer(paging, one) &&
         !offer(verification, one) && !offer(proxying, one) && !offer(packs, one) &&
-        !offer(rooms, one) && !offer(room_card, one))
+        !offer(rooms, one) && !offer(room_card, one) &&
+        !offer(preferences, one))
       offer(*this, one);
   }
 
@@ -303,11 +306,6 @@ struct app : kept_settings {
   // The person whose card is open, in which chat: shown again as what is
   // known of their keys comes.
   std::optional<std::pair<mux::conversation_id, std::string>> person_open_;
-  // The Matrix account rooms are found and made by: the one in view, else
-  // the first.
-  void apply(const request::flip_account_notify&);
-  void apply(const request::flip_account_notify_sound&);
-  void apply(const request::set_chat_notify& one);
   // The notifications mux shows itself, for the host to put up; one pressed;
   // the window's focus -- the notices part's.
   using toast_due = notices_part::toast_due;
@@ -329,18 +327,12 @@ struct app : kept_settings {
     if (now && std::exchange(refresh_waiting_, false))
       this->refresh();
   }
-  void apply(const request::set_room_event_kind& one);
-  void apply(const request::set_room_events& one);
   void apply(const request::manage_space& one);
   void apply(const request::flip_forum& one);
   void apply(const request::flip_home_hide& one);
   void apply(const request::close_forum&);
   void apply(const request::manage_forum&);
   void manage_chat(const mux::conversation_id& id);
-  void apply(const request::place_spaces& one);
-  void apply(const request::set_space_bars& one);
-  void apply(const request::set_home_hides& one);
-  void apply(const request::set_home_direct& one);
   void apply(const request::toggle_emoji&);
   void apply(const request::toggle_thread_emoji&);
   void open_emoji_at(float right, float top);
@@ -362,11 +354,6 @@ struct app : kept_settings {
   void apply(const request::close_thread&);
   void apply(const request::send_in_thread& one);
   void apply(const request::copy_text& one);
-  void apply(const request::flip_account_room_events&);
-  void apply(const request::set_receipts_shown&);
-  void apply(const request::set_link_previews&);
-  void apply(const request::set_typing_sent&);
-  void apply(const request::set_previews_direct&);
   void apply(const request::give_passphrase&);
   // The account whose room keys a passphrase was asked for.
   std::optional<mux::account_id> keys_of;
@@ -380,53 +367,16 @@ struct app : kept_settings {
   // not all be read.
   template <class Turn>
   [[nodiscard]] bool reseal(Turn turn);
-  void apply(const request::set_jump_search&);
-  void apply(const request::flip_chat_room_events&);
   void apply(const request::close_manage&);
   void apply(const request::room_act& one);
   void apply(const request::resize_info& one);
   void apply(const request::choose_new_proxy& one);
-  // The chosen chat muted, or not: kept in the file.
-  void apply(const request::toggle_mute&);
-  void apply(const request::toggle_mute_of& one);
   void apply(const request::close_account_pages&);
   // ← on the accounts page: from an account's pages to the list, from the
   // list to the chats.
   void apply(const request::accounts_back&);
-  // The chosen account, and its accounts page, when they are up.
-  template <class F>
-  void with_chosen_account(F&& f) {
-    auto* up = root().open_panel();
-    if (!up)
-      return;
-    splice::visit(
-        [&](accounts& panel) {
-          if (!panel.selected)
-            return;
-          if (const auto found = this->find(*panel.selected); found != saved.end())
-            f(panel, *found);
-        },
-        *up);
-  }
   void apply(const request::account_page& one);
-  // The account's id, as the model knows it, of a saved one.
-  [[nodiscard]] static mux::account_id id_of(const mux::config::account_t& account) {
-    const std::string address = mux::config::address_of(account);
-    return mux::account_id{mux::ui::protocol_of(address), address};
-  }
-  void apply(const request::flip_account_receipts&);
-  void apply(const request::flip_only_verified&);
-  void apply(const request::set_account_colour& one);
-  void apply(const request::flip_account_strip&);
   void apply(const request::open_replacement&);
-  void apply(const request::place_chat& one);
-  void apply(const request::unplace_chat& one);
-  void apply(const request::flip_chat_strip& one);
-  void apply(const request::set_chat_strip_colour& one);
-  // A chat's placement in a list, where it has one.
-  mux::config::chat_placement* placement_of(const mux::conversation_id& chat, const mux::account_id& in);
-  // The chosen account through a profile, or none: kept, and connected again.
-  void apply(const request::choose_account_proxy& one);
   // A limit halved or doubled, within its bounds: kept, and in force at once.
   // What is kept on disk, gone: the stored messages and the pictures, and
   // the pictures in memory, to be fetched again as they are wanted.

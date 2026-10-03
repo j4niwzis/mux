@@ -79,7 +79,6 @@ void app::open_emoji_at(float right, float top) {
 }
 void app::apply(const request::close_emoji&) { root().close_emoji(); }
 
-
 // A chat's background, at a level: every chat's, the chosen account's (on
 // its page), or the chat's own -- as the level over it says, the theme's,
 // plain, or a picture chosen, copied into mux's data so that it stays.
@@ -89,7 +88,7 @@ void app::apply(const request::set_wallpaper& one) {
   const auto set = [&](std::optional<mux::config::wallpaper_t> chosen) {
     splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) { wallpaper = chosen; },
                                      [&](mux::choice_level::account) {
-                                       this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+                                       shared.with_chosen_account([&](accounts&, mux::config::account_t& account) {
                                          mux::config::wallpaper_in(account) =
                                              chosen ? std::optional<std::string>(mux::config::word_of(*chosen)) : std::nullopt;
                                        });
@@ -142,7 +141,7 @@ void app::apply(const request::set_bubbles& one) {
                                      known = one.look.value_or(mux::config::bubble_look{});
                                    },
                                    [&](mux::choice_level::account) {
-                                     this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+                                     shared.with_chosen_account([&](accounts&, mux::config::account_t& account) {
                                        auto& kept = splice::visit(
                                            splice::overloaded{[&](mux::config::look_part::bubbles) -> std::optional<std::string>& { return mux::config::bubbles_in(account); },
                                                               [&](mux::config::look_part::panels) -> std::optional<std::string>& { return mux::config::panels_in(account); }},
@@ -192,7 +191,7 @@ void app::wallpaper_file(const std::string& path) {
   const mux::config::wallpaper_t chosen = mux::config::wallpaper::picture{kept.string()};
   splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) { wallpaper = chosen; },
                                    [&](mux::choice_level::account) {
-                                     this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+                                     shared.with_chosen_account([&](accounts&, mux::config::account_t& account) {
                                        mux::config::wallpaper_in(account) = mux::config::word_of(chosen);
                                      });
                                    },
@@ -211,7 +210,7 @@ void app::wallpaper_file(const std::string& path) {
     up->show_appearance(theme, accent);
   if (auto* managing = root().manage_up())
     managing->show_tab(managing->tab);
-  this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
+  shared.with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
     if (panel.chats_page())
       panel.show_page(mux::ui::account_page::chats{}, account, *model, proxies, theme);
   });
@@ -260,7 +259,6 @@ void app::apply(const request::copy_text& one) {
   skiff::scene::setClipboardText(one.text);
   root().close_text_menu();
 }
-
 
 // The room's management: made from what the model knows of it now.
 void app::apply(const request::open_manage&) {
@@ -416,23 +414,6 @@ void app::apply(const request::choose_new_proxy& one) {
         *up);
 }
 
-void app::apply(const request::toggle_mute&) {
-  auto& screen = root().main();
-  if (!screen.chosen)
-    return;
-  if (!muted.erase(*screen.chosen))
-    muted.insert(*screen.chosen);
-  (void)this->write();
-  this->refresh();
-}
-
-void app::apply(const request::toggle_mute_of& one) {
-  if (!muted.erase(one.which))
-    muted.insert(one.which);
-  (void)this->write();
-  this->refresh();
-}
-
 void app::apply(const request::close_account_pages&) {
   if (auto* up = root().open_panel())
     splice::visit([](accounts& panel) { panel.close_pages(); }, *up);
@@ -455,56 +436,10 @@ void app::apply(const request::accounts_back&) {
 }
 
 void app::apply(const request::account_page& one) {
-  this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
+  shared.with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
     // A page that wants something of the server asks for it as it opens.
     panel.show_page(one.page, account, *model, proxies, theme);
   });
-}
-
-void app::apply(const request::flip_only_verified&) {
-  this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
-    auto* kept = mux::config::only_verified_in(account);
-    if (kept == nullptr)
-      return;
-    *kept = !kept->value_or(false);
-    // Shown on its page, where the page shown is one that shows it.
-    panel.tell_shown([&](auto& page) -> decltype(void(page.show_only_verified(true))) { page.show_only_verified(**kept); });
-    // Told to that account, running, where its client can: its sessions'
-    // keys go so from now.
-    net->set_only_verified(id_of(account), **kept);
-    (void)this->write();
-  });
-}
-void app::apply(const request::flip_account_receipts&) {
-  this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
-    auto& kept = mux::config::read_receipts_in(account);
-    kept = !kept.value_or(true);
-    if (auto* page = panel.privacy())
-      page->show(*kept);
-    (void)this->write();
-  });
-}
-
-// An account's colour chosen, and its strip on its chats in other lists:
-// kept, and the lists shown again.
-void app::apply(const request::set_account_colour& one) {
-  this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
-    mux::config::colour_in(account) = std::string(splice::visit([](const auto& each) { return mux::config::word_of(each); }, one.colour));
-    if (auto* page = panel.chats_page())
-      page->show_colour(mux::config::colour_of(account), mux::config::strip_of(account));
-    (void)this->write();
-  });
-  this->refresh();
-}
-void app::apply(const request::flip_account_strip&) {
-  this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
-    auto& kept = mux::config::strip_in(account);
-    kept = !kept.value_or(true);
-    if (auto* page = panel.chats_page())
-      page->show_colour(mux::config::colour_of(account), *kept);
-    (void)this->write();
-  });
-  this->refresh();
 }
 
 // A tombstoned room's way on: the room it was upgraded to, as its
@@ -515,369 +450,6 @@ void app::apply(const request::open_replacement&) {
   if (const auto successor = chat ? mux::proto::successor_of(mux::ui::protocol_state_of(chosen->account), *chat) : std::nullopt)
     if (auto link = mux::proto::share_link(mux::ui::protocol_state_of(chosen->account), *successor))
       this->apply(request::open_url{std::move(*link)});
-}
-
-// Chats in other accounts' lists: placed, taken out, their strips.
-mux::config::chat_placement* app::placement_of(const mux::conversation_id& chat, const mux::account_id& in) {
-  const auto found = std::ranges::find_if(placements, [&](const mux::config::chat_placement& one) {
-    return one.account == chat.account.address && one.conversation == chat.id && one.listed_in == in.address;
-  });
-  return found == placements.end() ? nullptr : &*found;
-}
-void app::apply(const request::place_chat& one) {
-  (void)root().main().close_space_menu();
-  if (one.to == one.chat.account)
-    return;
-  // Moved: out of every other list it was moved to, into this one.
-  if (one.moved)
-    std::erase_if(placements, [&](const mux::config::chat_placement& each) {
-      return each.account == one.chat.account.address && each.conversation == one.chat.id && each.moved;
-    });
-  if (auto* kept = this->placement_of(one.chat, one.to))
-    kept->moved = one.moved;
-  else
-    placements.push_back({.account = one.chat.account.address, .conversation = one.chat.id, .listed_in = one.to.address,
-                          .moved = one.moved});
-  (void)this->write();
-  this->refresh();
-}
-void app::apply(const request::unplace_chat& one) {
-  (void)root().main().close_space_menu();
-  std::erase_if(placements, [&](const mux::config::chat_placement& each) {
-    return each.account == one.chat.account.address && each.conversation == one.chat.id && each.listed_in == one.from.address;
-  });
-  (void)this->write();
-  this->refresh();
-}
-void app::apply(const request::flip_chat_strip& one) {
-  (void)root().main().close_space_menu();
-  if (auto* kept = this->placement_of(one.chat, one.in)) {
-    const auto own = this->find(one.chat.account.address);
-    const bool now = kept->strip.value_or(own == saved.end() || mux::config::strip_of(*own));
-    kept->strip = !now;
-    (void)this->write();
-  }
-  this->refresh();
-}
-void app::apply(const request::set_chat_strip_colour& one) {
-  (void)root().main().close_space_menu();
-  if (auto* kept = this->placement_of(one.chat, one.in)) {
-    kept->strip_colour = std::string(splice::visit([](const auto& each) { return mux::config::word_of(each); }, one.colour));
-    kept->strip = true;
-    (void)this->write();
-  }
-  this->refresh();
-}
-
-void app::apply(const request::flip_account_notify&) {
-  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-    auto& kept = mux::config::notify_in(account);
-    kept = !kept.value_or(notifications.desktop);
-    (void)this->write();
-  });
-}
-void app::apply(const request::flip_account_notify_sound&) {
-  this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-    auto& kept = mux::config::notify_sound_in(account);
-    kept = !kept.value_or(notifications.sound);
-    (void)this->write();
-  });
-}
-void app::apply(const request::set_chat_notify& one) {
-  const auto chosen = shared.managed();
-  if (!chosen)
-    return;
-  notify_modes.erase(*chosen);
-  muted.erase(*chosen);
-  splice::visit(splice::overloaded{[&](mux::config::notify_mode::off) { muted.insert(*chosen); },
-                             [&](mux::config::notify_mode::by_default) {},
-                             [&](const auto& own) { notify_modes.insert_or_assign(*chosen, own); }},
-             one.mode);
-  (void)this->write();
-  this->refresh();
-}
-
-// Which room events show, as chosen at a level: all of them, or one kind --
-// none said, as the level under says.
-void app::apply(const request::set_room_event_kind& one) {
-  const auto set_kind = [&](std::optional<mux::config::room_event_kinds>& kinds) {
-    if (!kinds)
-      kinds.emplace();
-    mux::logic::choice_in(*kinds, *one.kind) = one.show;
-  };
-  splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) {
-                               if (one.kind)
-                                 set_kind(history.room_event_kinds);
-                               else
-                                 history.show_room_events = one.show.value_or(true);
-                             },
-                             [&](mux::choice_level::account) {
-                               this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-                                 if (one.kind)
-                                   set_kind(mux::config::room_event_kinds_in(account));
-                                 else
-                                   mux::config::room_events_in(account) = one.show;
-                               });
-                             },
-                             [&](mux::choice_level::chat) {
-                               const auto chosen = shared.managed();
-                               if (!chosen)
-                                 return;
-                               if (one.kind)
-                                 mux::logic::choice_in(room_event_kinds[*chosen], *one.kind) = one.show;
-                               else if (one.show)
-                                 room_events.insert_or_assign(*chosen, *one.show);
-                               else
-                                 room_events.erase(*chosen);
-                             }},
-             one.level);
-  (void)this->write();
-  this->refresh();
-}
-
-// A bar's order, as a drag left it: its items put there in that order --
-// the one moved taken out of the bar it came from, and from hidden.
-void app::apply(const request::place_spaces& one) {
-  const auto mine = [&](const mux::config::space_placed& p) { return p.account == one.account; };
-  std::erase_if(space_places, [&](const mux::config::space_placed& p) {
-    return mine(p) && (p.bar == one.bar || (one.moved && p.item == *one.moved && (p.bar == mux::config::space_bar_t{mux::config::space_bar::hidden{}} ||
-                                                                              (one.from && p.bar == *one.from))));
-  });
-  // Where the item came from the side bar by default -- put nowhere -- the
-  // rest of the side bar is put too, so it stays as it was.
-  std::ranges::copy(one.order | std::views::transform([&](const mux::config::space_item_t& item) {
-                      return mux::config::space_placed{one.account, item, one.bar};
-                    }),
-                    std::back_inserter(space_places));
-  (void)this->write();
-  this->refresh();
-}
-// Home without what spaces hold, at a level.
-void app::apply(const request::set_home_hides& one) {
-  splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) {
-                                     home_hides_spaced = one.on.value_or(false);
-                                     mux::ui::window_look().home_hides = home_hides_spaced;
-                                   },
-                                   [&](mux::choice_level::account) {
-                                     this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-                                       mux::config::home_hides_in(account) = one.on;
-                                     });
-                                   },
-                                   [](mux::choice_level::chat) {}},
-                one.level);
-  (void)this->write();
-  this->refresh();
-  if (auto* up = root().settings_up(); up && up->appearance())
-    up->show_appearance(theme, accent);
-}
-void app::apply(const request::set_home_direct& one) {
-  splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) {
-                                     home_hides_direct = one.on.value_or(false);
-                                     mux::ui::window_look().home_direct = home_hides_direct;
-                                   },
-                                   [&](mux::choice_level::account) {
-                                     this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-                                       mux::config::home_direct_in(account) = one.on;
-                                     });
-                                   },
-                                   [](mux::choice_level::chat) {}},
-                one.level);
-  (void)this->write();
-  this->refresh();
-  if (auto* up = root().settings_up(); up && up->appearance())
-    up->show_appearance(theme, accent);
-}
-// An item's bars, as chosen: the side, the top, both, or none -- hidden.
-void app::apply(const request::set_space_bars& one) {
-  (void)root().main().close_space_menu();
-  std::erase_if(space_places, [&](const mux::config::space_placed& p) { return p.account == one.account && p.item == one.item; });
-  if (one.side)
-    space_places.push_back({one.account, one.item, mux::config::space_bar::side{}});
-  if (one.top)
-    space_places.push_back({one.account, one.item, mux::config::space_bar::top{}});
-  if (!one.side && !one.top)
-    space_places.push_back({one.account, one.item, mux::config::space_bar::hidden{}});
-  (void)this->write();
-  this->refresh();
-  if (auto* up = root().settings_up(); up && up->appearance())
-    up->show_appearance(theme, accent);
-}
-
-// How a level shows room events, as a whole: what it holds replaced.
-void app::apply(const request::set_room_events& one) {
-  splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) {
-                                     history.show_room_events = one.all.value_or(true);
-                                     history.room_event_kinds = one.kinds;
-                                   },
-                                   [&](mux::choice_level::account) {
-                                     this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-                                       mux::config::room_events_in(account) = one.all;
-                                       mux::config::room_event_kinds_in(account) = one.kinds;
-                                     });
-                                   },
-                                   [&](mux::choice_level::chat) {
-                                     const auto chosen = shared.managed();
-                                     if (!chosen)
-                                       return;
-                                     if (one.all)
-                                       room_events.insert_or_assign(*chosen, *one.all);
-                                     else
-                                       room_events.erase(*chosen);
-                                     if (one.kinds)
-                                       room_event_kinds.insert_or_assign(*chosen, *one.kinds);
-                                     else
-                                       room_event_kinds.erase(*chosen);
-                                   }},
-                one.level);
-  (void)this->write();
-  this->refresh();
-}
-
-// How far a jump's search pages back, at a level.
-void app::apply(const request::set_jump_search& one) {
-  splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) { history.jump_search = one.most.value_or(5000); },
-                             [&](mux::choice_level::account) {
-                               this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-                                 mux::config::jump_search_in(account) = one.most;
-                               });
-                             },
-                             [&](mux::choice_level::chat) {
-                               const auto chosen = shared.managed();
-                               if (!chosen)
-                                 return;
-                               if (one.most)
-                                 jump_search_in.insert_or_assign(*chosen, *one.most);
-                               else
-                                 jump_search_in.erase(*chosen);
-                             }},
-             one.level);
-  (void)this->write();
-  this->refresh();
-}
-
-// Link previews, at a level.
-void app::apply(const request::set_link_previews& one) {
-  splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) { history.link_previews = one.show.value_or(true); },
-                             [&](mux::choice_level::account) {
-                               this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-                                 mux::config::link_previews_in(account) = one.show;
-                               });
-                             },
-                             [&](mux::choice_level::chat) {
-                               const auto chosen = shared.managed();
-                               if (!chosen)
-                                 return;
-                               if (one.show)
-                                 previews_shown_in.insert_or_assign(*chosen, *one.show);
-                               else
-                                 previews_shown_in.erase(*chosen);
-                             }},
-             one.level);
-  (void)this->write();
-  this->refresh();
-}
-
-// Where link previews come from, at a level.
-void app::apply(const request::set_previews_direct& one) {
-  splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) { history.previews_direct = one.direct.value_or(false); },
-                                   [&](mux::choice_level::account) {
-                                     this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-                                       mux::config::previews_direct_in(account) = one.direct;
-                                     });
-                                   },
-                                   [&](mux::choice_level::chat) {
-                                     const auto chosen = shared.managed();
-                                     if (!chosen)
-                                       return;
-                                     if (one.direct)
-                                       previews_direct_in.insert_or_assign(*chosen, *one.direct);
-                                     else
-                                       previews_direct_in.erase(*chosen);
-                                   }},
-                one.level);
-  (void)this->write();
-  this->refresh();
-}
-
-// Whether others are told one is typing, at a level.
-void app::apply(const request::set_typing_sent& one) {
-  splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) { history.send_typing = one.send.value_or(true); },
-                                   [&](mux::choice_level::account) {
-                                     this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-                                       mux::config::send_typing_in(account) = one.send;
-                                     });
-                                   },
-                                   [&](mux::choice_level::chat) {
-                                     const auto chosen = shared.managed();
-                                     if (!chosen)
-                                       return;
-                                     if (one.send)
-                                       typing_sent_in.insert_or_assign(*chosen, *one.send);
-                                     else
-                                       typing_sent_in.erase(*chosen);
-                                   }},
-                one.level);
-  (void)this->write();
-  this->refresh();
-}
-
-// Who has read up to where, as faces, at a level.
-void app::apply(const request::set_receipts_shown& one) {
-  splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) { history.show_receipts = one.show.value_or(false); },
-                             [&](mux::choice_level::account) {
-                               this->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-                                 mux::config::show_receipts_in(account) = one.show;
-                               });
-                             },
-                             [&](mux::choice_level::chat) {
-                               const auto chosen = shared.managed();
-                               if (!chosen)
-                                 return;
-                               if (one.show)
-                                 receipts_shown_in.insert_or_assign(*chosen, *one.show);
-                               else
-                                 receipts_shown_in.erase(*chosen);
-                             }},
-             one.level);
-  (void)this->write();
-  this->refresh();
-}
-
-// Room events, for the chosen account's chats: shown or not from now on,
-// whatever every account's is.
-void app::apply(const request::flip_account_room_events&) {
-  this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
-    auto& kept = mux::config::room_events_in(account);
-    kept = !kept.value_or(history.show_room_events);
-
-    (void)this->write();
-    this->refresh();
-  });
-}
-// Room events, for the chat being read, whatever its account's are.
-void app::apply(const request::flip_chat_room_events&) {
-  const auto chosen = shared.managed();
-  if (!chosen)
-    return;
-  const bool now = this->room_events_shown(*chosen);
-  room_events.insert_or_assign(*chosen, !now);
-  (void)this->write();
-  root().show_message("Room events", !now ? "Joins, renames and other room events are shown in this chat."
-                                          : "Room events are hidden in this chat.");
-  this->refresh();
-}
-
-void app::apply(const request::choose_account_proxy& one) {
-  this->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
-    auto& kept = mux::config::proxy_in(account);
-    if (one.index < 0 || static_cast<std::size_t>(one.index) >= proxies.size())
-      kept.reset();
-    else
-      kept = proxies[static_cast<std::size_t>(one.index)].name;
-    (void)this->write();
-    proxying.reconnect(account);
-    panel.show_page(mux::ui::account_page::proxy{}, account, *model, proxies, theme);
-  });
 }
 
 }  // namespace mux::app

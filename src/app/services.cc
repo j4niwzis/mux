@@ -6,6 +6,7 @@
 export module mux.app.services;
 
 import std;
+import splice;
 import mux.platform.dialogs;
 import mux.platform.audio;
 import mux.vault;
@@ -74,6 +75,21 @@ struct services {
   // The demo: no network, and nothing kept.
   [[nodiscard]] bool demo() const { return ask->demo; }
 
+  // The chosen account, and its accounts page, when they are up.
+  template <class F>
+  void with_chosen_account(F&& f) {
+    auto* up = root().open_panel();
+    if (!up)
+      return;
+    splice::visit(
+        [&](mux::ui::accounts_panel<actions>& panel) {
+          if (!panel.selected)
+            return;
+          if (const auto found = kept->find(*panel.selected); found != kept->saved.end())
+            f(panel, *found);
+        },
+        *up);
+  }
   // The chat Manage is for: a space, where its settings are open -- what is
   // chosen there goes to it -- else the chat chosen.
   std::optional<mux::conversation_id> manage_target;

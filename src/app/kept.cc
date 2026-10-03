@@ -164,6 +164,11 @@ struct kept_settings {
   bool keeps_nothing = false;
 
   // An account saved, by its address.
+  // The account's id, as the model knows it, of a saved one.
+  [[nodiscard]] static mux::account_id id_of(const mux::config::account_t& account) {
+    const std::string address = mux::config::address_of(account);
+    return mux::account_id{mux::ui::protocol_of(address), address};
+  }
   [[nodiscard]] std::vector<mux::config::account_t>::iterator find(std::string_view address) {
     return std::ranges::find(saved, address,
                              [](const auto& one) -> std::string_view { return mux::config::address_of(one); });

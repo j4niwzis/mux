@@ -44,11 +44,96 @@ import mux.config;
 import mux.core;
 import mux.http;
 import mux.net;
+import loom.cs.pusher;
 import mux.logic.markdown;
 import :account;
 
 // The members defined here are declared in :account, and exported there.
 namespace mux::matrix {
+
+// What a push server says of its Matrix gateway (UnifiedPush's gateway
+// discovery): {"unifiedpush":{"gateway":"matrix"}} where it has one.
+struct gateway_said {
+  struct unifiedpush_t {
+    std::optional<std::string> gateway;
+    friend consteval auto json_schema(knot::type<unifiedpush_t>) { return knot::schema<unifiedpush_t>(); }
+  };
+  std::optional<unifiedpush_t> unifiedpush;
+  friend consteval auto json_schema(knot::type<gateway_said>) { return knot::schema<gateway_said>(); }
+};
+
+template <class Sink>
+void account<Sink>::cut_long_poll() {
+  if (!waking_ || !waking_->alive || !long_poll_)
+    return;
+  waking_->woke = true;
+  long_poll_->abort();
+}
+
+template <class Sink>
+void account<Sink>::sync_now() {
+  this->cut_long_poll();
+}
+
+template <class Sink>
+void account<Sink>::set_pusher(std::optional<std::string> endpoint) {
+  push_endpoint_ = std::move(endpoint);
+  if (!push_endpoint_) {
+    pushed_to_.reset();
+    return;
+  }
+  if (api_ && token_ && pushed_to_ != push_endpoint_)
+    this->register_pusher();
+}
+
+template <class Sink>
+void account<Sink>::register_pusher() {
+  if (!push_endpoint_ || !api_)
+    return;
+  pushed_to_ = push_endpoint_;
+  this->spawn_guarded([this, endpoint = *push_endpoint_] {
+    // The endpoint's own gateway, where its push server says it has one --
+    // ntfy's does; else UnifiedPush's public one.
+    static constexpr std::string_view kPath = "/_matrix/push/v1/notify";
+    std::string gateway = std::string("https://matrix.gateway.unifiedpush.org") + std::string(kPath);
+    if (const auto where = http::url::parse(endpoint)) {
+      try {
+        http::connection asking(*loop_, *tls_, http::url{.host = where->host, .port = where->port, .path = {}}, how_.proxy);
+        const auto got = asking.request("GET", kPath, {}, std::nullopt, std::chrono::seconds(20));
+        std::optional<gateway_said> said;
+        if (got.status == 200)
+          if (auto read = knot::try_read<gateway_said>(got.body))
+            said = std::move(*read);
+        // Read once, here: whether it is a Matrix gateway.
+        const bool own = said && said->unifiedpush && said->unifiedpush->gateway == std::optional<std::string>("matrix");
+        if (own)
+          gateway = "https://" + where->host + (where->port == 443 ? std::string() : std::format(":{}", where->port)) +
+                    std::string(kPath);
+      } catch (const net::failure& failed) {
+        log(id_, "push: the endpoint's server not asked for its gateway ({}); the public one used", failed.what());
+      }
+    }
+    using data_t = loom::cs::post_pusher::body_t::pusher_data_t;
+    const auto set = perform(*api_, loom::cs::post_pusher{
+                                        .body = {.pushkey = endpoint,
+                                                 .kind = "http",
+                                                 // The name mux owns on the session bus (mux.dbus's kAppId).
+                                                 .app_id = "io.github.j4niwzis.mux",
+                                                 .app_display_name = "mux",
+                                                 .device_display_name = "mux",
+                                                 .lang = "en",
+                                                 .data = data_t{.url = gateway,
+                                                                .format = data_t::format_t{data_t::format_values::event_id_only{}}},
+                                                 // Beside this account's others, and other accounts' on one endpoint.
+                                                 .append = true}});
+    if (!set) {
+      log(id_, "push: the server did not take the pusher: {}", set.error().said());
+      pushed_to_.reset();
+      return;
+    }
+    log(id_, "push: the server pushes through {}", gateway);
+  });
+}
 
 template <class Sink>
 auto account<Sink>::id() const noexcept -> const account_id& { return id_; }

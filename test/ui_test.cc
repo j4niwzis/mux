@@ -158,6 +158,7 @@ struct stub {
   void copy_text(std::string) {}
   void settings_notifications() {}
   void flip_notify(mux::config::notify_flag_t) {}
+  void flip_unified_push() {}
   void set_notify_backend(mux::config::notify_backend_t) {}
   void flip_account_notify() {}
   void flip_account_notify_sound() {}

@@ -86,6 +86,14 @@ class account {
   // account has read.
   void mark_read(std::string room, std::string event);
 
+  // UnifiedPush's endpoint, given to the server as an http pusher -- through
+  // the endpoint's own Matrix gateway where its push server has one -- once
+  // logged in; none: forgotten here (the distributor drops it, and the
+  // gateway refuses the server from then on).
+  void set_pusher(std::optional<std::string> endpoint);
+  // A push come: the long poll cut short, and the sync gone again at once.
+  void sync_now();
+
   // Older messages of a room, paged back from `from`: before the rest, and
   // where to page back from next -- nothing where the beginning is reached.
   void load_older(std::string room, std::string from);
@@ -590,6 +598,20 @@ class account {
   struct reaction {
     std::string target, key, who;
   };
+
+  // The sync's long poll, to be cut short -- the machine woken from sleep, a
+  // push come: whether the sync is still there, and whether it was cut.
+  struct waking {
+    bool alive = true;
+    bool woke = false;
+  };
+  std::shared_ptr<waking> waking_;
+  http::connection* long_poll_ = nullptr;
+  void cut_long_poll();
+  // UnifiedPush's endpoint, and the one the server was given.
+  std::optional<std::string> push_endpoint_;
+  std::optional<std::string> pushed_to_;
+  void register_pusher();
 
   net::loop* loop_;
   net::tls* tls_;

@@ -182,6 +182,7 @@ template <class Actions>
 struct notifications_page : nodes::Stack {
   using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
   using flag_row = switch_row<flip_notify_flag<Actions>>;
+  using push_row = switch_row<ask<Actions, &Actions::flip_unified_push>>;
   using backend_segment = segment<choose_notify_backend<Actions>>;
   struct backend_row : nodes::Stack {
     struct parts_t {
@@ -208,6 +209,12 @@ struct notifications_page : nodes::Stack {
     nodes::Text note{"System asks the desktop's own notification service (org.freedesktop.Notifications); Built in "
                      "shows mux's own, in a corner of the screen, as Telegram Desktop does.",
                      13.0f, dim_colour};
+    nodes::Text push_title = section_title("WAKE");
+    push_row push;
+    nodes::Text push_note{"Your Matrix servers push to the UnifiedPush distributor on this device (ntfy, NextPush, "
+                          "KDE's), which wakes mux at once. Off, nothing is given to the servers, and mux only learns "
+                          "of messages while it runs.",
+                          13.0f, dim_colour};
   } parts;
   notifications_page(Actions* a, const config::notification_settings& now)
       : parts{.header = header_t("Notifications", {a}, {a}, true, true),
@@ -215,12 +222,15 @@ struct notifications_page : nodes::Stack {
               .name = flag_row("Show the sender's name", {a, config::notify_flag::show_name{}}),
               .text = flag_row("Show the message's text", {a, config::notify_flag::show_text{}}),
               .sound = flag_row("Play a sound", {a, config::notify_flag::sound{}}),
-              .backend = backend_row(a)} {
+              .backend = backend_row(a),
+              .push = push_row("Wake by UnifiedPush", {a})} {
     fState.apply({.fill = true});
-    for (nodes::Text* title : {&parts.title, &parts.sound_title, &parts.backend_title})
+    for (nodes::Text* title : {&parts.title, &parts.sound_title, &parts.backend_title, &parts.push_title})
       title->apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
-    parts.note.setWrapped(true);
-    parts.note.apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
+    for (nodes::Text* note : {&parts.note, &parts.push_note}) {
+      note->setWrapped(true);
+      note->apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
+    }
     this->show(now);
   }
   void show(const config::notification_settings& now) {
@@ -228,6 +238,7 @@ struct notifications_page : nodes::Stack {
     parts.name.parts.toggle.setOnNow(now.show_name);
     parts.text.parts.toggle.setOnNow(now.show_text);
     parts.sound.parts.toggle.setOnNow(now.sound);
+    parts.push.parts.toggle.setOnNow(now.unified_push.value_or(false));
     const bool native = splice::visit(splice::overloaded{[](config::notify_backend::native) { return true; },
                                               [](const auto&) { return false; }},
                                    config::notify_backend_of(now.backend));

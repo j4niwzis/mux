@@ -195,6 +195,9 @@ class account {
   // sees it was read.
   // Avatars of XMPP contacts (XEP-0084) are not fetched yet.
   void fetch_avatar(std::string, std::string) {}
+  // UnifiedPush is Matrix's here: an XMPP server pushes by XEP-0357, not yet.
+  void set_pusher(const std::optional<std::string>&) {}
+  void sync_now() {}
   void fetch_media(std::string, media_use_t, int, bool = false) {}
   void cancel_media(std::string) {}
   // A room's occupants come with its presence; nothing to ask for.

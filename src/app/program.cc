@@ -16,6 +16,7 @@ import mux.xmpp;
 import mux.matrix;
 import mux.media;
 import mux.host;
+import mux.dbus;
 import mux.ui;
 import skiff.paint;
 import skiff.scene;
@@ -354,6 +355,30 @@ struct app : kept_settings {
   // for, nothing marked read, no frames. Brought up to date as it comes back.
   bool on_screen = true;
   bool refresh_waiting_ = false;
+  // UnifiedPush, where chosen (Settings, Notifications): its connector on a
+  // thread of its own, and what it says put in a box drained by woken() --
+  // data the program reads, the window woken for it.
+  struct push_inbox {
+    std::mutex lock;
+    std::vector<mux::dbus::push_event> pending;
+  };
+  struct push_sink {
+    std::shared_ptr<push_inbox> inbox;
+    void operator()(mux::dbus::push_event one) const {
+      {
+        std::lock_guard held(inbox->lock);
+        inbox->pending.push_back(std::move(one));
+      }
+      mux::host::wake();
+    }
+  };
+  std::shared_ptr<push_inbox> push_box = std::make_shared<push_inbox>();
+  std::shared_ptr<std::atomic<bool>> push_forget;
+  std::jthread push_thread;
+  void start_push();
+  void stop_push();
+  void take_push();
+  void apply(const request::flip_unified_push&);
   void shown_changed(bool now) {
     if (now == on_screen)
       return;

@@ -181,16 +181,18 @@ void account<Sink>::run() {
   // still while the machine sleeps (a wall clock set by hand reads the
   // same, and only syncs once more). The long poll is stopped then, and
   // the sync goes again at once.
-  struct waking {
-    bool alive = true;  // while the sync and its connection are
-    bool woke = false;
-  };
-  const auto wake = std::make_shared<waking>();
+  waking_ = std::make_shared<waking>();
+  long_poll_ = &syncing;
+  const auto wake = waking_;
   const struct wake_ends {
     std::shared_ptr<waking> of;
-    ~wake_ends() { of->alive = false; }
-  } wake_guard{wake};
-  this->spawn_guarded([this, wake, long_poll = &syncing] {
+    http::connection** long_poll;
+    ~wake_ends() {
+      of->alive = false;  // the sync gone, and its connection with it
+      *long_poll = nullptr;
+    }
+  } wake_guard{wake, &long_poll_};
+  this->spawn_guarded([this, wake] {
     static constexpr auto kEvery = std::chrono::seconds(5);
     static constexpr auto kSlept = std::chrono::seconds(10);
     auto steady = std::chrono::steady_clock::now();
@@ -207,8 +209,7 @@ void account<Sink>::run() {
       if (gained > kSlept) {
         log(id_, "woken after {}s asleep: syncing again now",
             std::chrono::duration_cast<std::chrono::seconds>(gained).count());
-        wake->woke = true;
-        long_poll->abort();
+        this->cut_long_poll();
       }
     }
   });
@@ -369,6 +370,10 @@ void account<Sink>::run() {
       log(id_, "syncing again");
       say(connection::online{});
     }
+    // Logged in and syncing: UnifiedPush's endpoint given to the server,
+    // where there is one it has not been given.
+    if (push_endpoint_ && pushed_to_ != push_endpoint_)
+      this->register_pusher();
     if (!state_.since) {
       const std::size_t joined = got->rooms && got->rooms->join ? got->rooms->join->size() : 0;
       log(id_, "first sync: {} room{}", joined, joined == 1 ? "" : "s");

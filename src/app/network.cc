@@ -139,6 +139,9 @@ struct network {
            std::optional<mux::net::proxy> via) {
     running_account entry{address, std::move(account), std::move(live), std::move(via)};
     splice::visit([](auto& one) { one->start(); }, entry.account);
+    // Started after the endpoint came: given it too.
+    if (push_endpoint)
+      splice::visit([&](auto& one) { one->set_pusher(push_endpoint); }, entry.account);
     accounts.push_back(std::move(entry));
   }
 
@@ -747,6 +750,23 @@ struct network {
                 account->cancel_media(source);
             },
             one.account);
+    });
+  }
+  // UnifiedPush's endpoint, for every Matrix account to give its server as
+  // a pusher -- those started later too; none: forgotten.
+  std::optional<std::string> push_endpoint;
+  void set_push_endpoint(std::optional<std::string> url) {
+    loop.post([this, url = std::move(url)] {
+      push_endpoint = url;
+      for (auto& one : accounts)
+        splice::visit([&](auto& account) { account->set_pusher(url); }, one.account);
+    });
+  }
+  // A push come: every account syncs now.
+  void sync_now() {
+    loop.post([this] {
+      for (auto& one : accounts)
+        splice::visit([](auto& account) { account->sync_now(); }, one.account);
     });
   }
   // An avatar's picture, fetched by the account it is of, for `key`.

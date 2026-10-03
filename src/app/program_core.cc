@@ -32,6 +32,8 @@ namespace mux::app {
 auto app::window() -> skiff::scene::Scene<window_type>& { return scene; }
 
 void app::woken() {
+  // What UnifiedPush's connector said, first: a push is a sync now.
+  this->take_push();
   // What the workers made, put where it goes: on this, the UI's thread.
   work.finish();
   auto changes = box->take();
@@ -968,6 +970,9 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
   this->proxies = proxies;
   this->load_marks();
   this->notifications = saved.notifications.value_or(mux::config::notification_settings{});
+  // UnifiedPush only where chosen; off by default.
+  if (notifications.unified_push.value_or(false) && !demo)
+    this->start_push();
   for (const auto& one : saved.chat_notify.value_or(std::vector<mux::config::chat_notify>{}))
     this->notify_modes.insert_or_assign(
         mux::conversation_id{{mux::ui::protocol_of(one.account), one.account}, one.conversation},

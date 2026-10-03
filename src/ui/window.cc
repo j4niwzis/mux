@@ -83,6 +83,17 @@ struct window : scene::Node {
   // Never empty: a text, where no protocol has a dialog.
   using tool_t = typename variant_of_types<
       typename joined<type_list<nodes::Text>, typename protocol_dialog_nodes<protocols>::type>::type>::type;
+  // The dialog's content, a node: the protocol's dialog in it, as the room
+  // settings hold their page.
+  struct tool_holder : nodes::Stack {
+    struct parts_t {
+      tool_t shown;
+    } parts;
+    template <class Node, class... Args>
+    explicit tool_holder(std::in_place_type_t<Node> which, Args&&... args) : parts{.shown = tool_t(which, std::forward<Args>(args)...)} {
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    }
+  };
   struct layers : scene::Node {
     using frame_t = widgets::SlideOver<with_drawer, panel_type>;
     struct parts_t {
@@ -117,7 +128,7 @@ struct window : scene::Node {
       // A server's public rooms, searched.
       widgets::Dialog<explore_box<Actions>> explore;
       // A protocol's own dialog: Matrix's developer tools, for one.
-      widgets::Dialog<tool_t> tools;
+      widgets::Dialog<tool_holder> tools;
       widgets::Dialog<send_box<Actions>> sending;
       // A passphrase asked for: at the start, where local data is encrypted;
       // or to turn that on or off, or change it. Over everything.

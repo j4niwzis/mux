@@ -43,8 +43,8 @@ struct matrix_form : nodes::Stack {
     form_end<Actions> end;
   } parts;
 
-  matrix_form(Actions* a, const std::optional<::mux::proto::matrix::kept>& from)
-      : actions(a), parts{.end = form_end<Actions>(legacy_palette(), a, from.has_value())} {
+  matrix_form(Actions* a, const palette& colours, const std::optional<::mux::proto::matrix::kept>& from)
+      : actions(a), parts{.end = form_end<Actions>(colours, a, from.has_value())} {
     auto& [user_id, password, homeserver, device_name, end] = parts;
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     this->setGap(12.0f);

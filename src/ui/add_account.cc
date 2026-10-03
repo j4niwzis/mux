@@ -93,7 +93,7 @@ struct add_account_pane : nodes::Stack {
         parts{.tabs = protocol_switch(*n.colours, a),
               .note = nodes::Text("", 13.0f, n.colours->dim),
               .proxies_row = proxy_row(*n.colours, a),
-              .form = account_form<Actions>(std::in_place_index<0>, a, std::nullopt)} {
+              .form = account_form<Actions>(std::in_place_index<0>, a, *n.colours, std::nullopt)} {
     fState.apply({.fill = true});
     this->setGap(12.0f);
     parts.note.setWrapped(true);
@@ -105,7 +105,7 @@ struct add_account_pane : nodes::Stack {
   // A protocol's form, blank, in place of the one up.
   void show(const protocol_t& speaks) {
     splice::visit([this](auto of) {
-      parts.form.template emplace<form_of_t<decltype(of), Actions>>(this->actions, std::nullopt);
+      parts.form.template emplace<form_of_t<decltype(of), Actions>>(this->actions, *colours_, std::nullopt);
     }, speaks);
     this->begin_swap();
     this->light();

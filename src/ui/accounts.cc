@@ -133,7 +133,7 @@ struct account_editor : nodes::Stack {
       : colours_(n.colours),
         parts{.head = head_row(*n.colours, n.actions, saved),
               .state = nodes::Text("", 13.0f, n.colours->dim),
-              .form = form_of(n.actions, saved)} {
+              .form = form_of(n.actions, *n.colours, saved)} {
     fState.apply({.fill = true});
     this->setGap(6.0f);
     parts.state.setElided(true);

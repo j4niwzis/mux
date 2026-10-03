@@ -31,10 +31,12 @@ struct xmpp_advanced : nodes::Stack {
   struct plain_row : nodes::Stack {
     struct parts_t {
       plain_toggle plain;
-      nodes::Text label{"Allow PLAIN without TLS. Only for a test server on this machine: never over a network.",
-                        13.0f, error_colour};
+      nodes::Text label;
     } parts;
-    explicit plain_row(Actions* a) : parts{.plain = plain_toggle(legacy_palette().widgets, {a})} {
+    plain_row(Actions* a, const palette& colours)
+        : parts{.plain = plain_toggle(colours.widgets, {a}),
+                .label = nodes::Text("Allow PLAIN without TLS. Only for a test server on this machine: never over a network.",
+                                     13.0f, colours.error)} {
       this->setHorizontal();
       this->setGap(10.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -49,7 +51,7 @@ struct xmpp_advanced : nodes::Stack {
     plain_row row;
   } parts;
 
-  explicit xmpp_advanced(Actions* a) : parts{.row = plain_row(a)} {
+  xmpp_advanced(Actions* a, const palette& colours) : parts{.row = plain_row(a, colours)} {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
     this->setGap(8.0f);
   }
@@ -77,11 +79,11 @@ struct xmpp_form : nodes::Stack {
     form_end<Actions> end;
   } parts;
 
-  xmpp_form(Actions* a, const std::optional<::mux::proto::xmpp::kept>& from)
+  xmpp_form(Actions* a, const palette& colours, const std::optional<::mux::proto::xmpp::kept>& from)
       : actions(a),
-        parts{.advanced_button = advanced_button_t(legacy_palette().widgets, "Advanced", {a}),
-              .more = widgets::Collapsible<xmpp_advanced<Actions>>(a),
-              .end = form_end<Actions>(legacy_palette(), a, from.has_value())} {
+        parts{.advanced_button = advanced_button_t(colours.widgets, "Advanced", {a}),
+              .more = widgets::Collapsible<xmpp_advanced<Actions>>(a, colours),
+              .end = form_end<Actions>(colours, a, from.has_value())} {
     auto& [address, password, advanced_button, more, end] = parts;
     auto& folded = more.child().parts;
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});

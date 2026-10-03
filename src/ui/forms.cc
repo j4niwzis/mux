@@ -224,10 +224,10 @@ using account_form = typename form_list<Actions, protocols>::type;
 
 // The form of an account's own protocol, filled in from what it keeps.
 template <class Actions>
-[[nodiscard]] account_form<Actions> form_of(Actions* a, const config::account_t& saved) {
-  return splice::visit([a](const auto& kept) {
+[[nodiscard]] account_form<Actions> form_of(Actions* a, const palette& colours, const config::account_t& saved) {
+  return splice::visit([&](const auto& kept) {
     using form = typename decltype(form_type_for(kept, type_tag<Actions>{}))::type;
-    return account_form<Actions>(std::in_place_type<form>, a, std::optional(kept));
+    return account_form<Actions>(std::in_place_type<form>, a, colours, std::optional(kept));
   }, saved.own);
 }
 // A form laid out in the column under `top`.

@@ -7,6 +7,7 @@ import skiff.scene;
 import mux.core;
 import mux.config;
 import mux.ui;
+import mux.protocols;
 import mux.ui.proto;
 import gtest;
 

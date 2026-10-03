@@ -1,0 +1,204 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// sdl -- SDL3, as a module: what mux's platform code calls of it, as skiff's
+// skia module is Skia. Its functions, types and enumerators are SDL's own,
+// under namespace sdl; what SDL says with a macro -- flags, keys, hints --
+// cannot cross a module, and is a constant here, named as skiff names
+// Skia's (SDL_WINDOW_RESIZABLE is sdl::kWindowResizable, SDLK_A
+// sdl::kKeyA). The platform modules import this instead of SDL's header.
+module;
+
+#include <SDL3/SDL.h>
+
+export module sdl;
+
+export namespace sdl {
+
+// Functions, types and enumerators.
+using ::SDL_AUDIO_F32;
+using ::SDL_AudioSpec;
+using ::SDL_AudioStream;
+using ::SDL_ClearAudioStream;
+using ::SDL_ConvertPixels;
+using ::SDL_CreateSystemCursor;
+using ::SDL_CreateWindow;
+using ::SDL_Cursor;
+using ::SDL_DestroyAudioStream;
+using ::SDL_DestroyCursor;
+using ::SDL_DestroyWindow;
+using ::SDL_EVENT_CLIPBOARD_UPDATE;
+using ::SDL_EVENT_DROP_FILE;
+using ::SDL_EVENT_FINGER_CANCELED;
+using ::SDL_EVENT_FINGER_DOWN;
+using ::SDL_EVENT_FINGER_MOTION;
+using ::SDL_EVENT_FINGER_UP;
+using ::SDL_EVENT_KEY_DOWN;
+using ::SDL_EVENT_KEY_UP;
+using ::SDL_EVENT_MOUSE_BUTTON_DOWN;
+using ::SDL_EVENT_MOUSE_BUTTON_UP;
+using ::SDL_EVENT_MOUSE_MOTION;
+using ::SDL_EVENT_MOUSE_WHEEL;
+using ::SDL_EVENT_QUIT;
+using ::SDL_EVENT_TEXT_EDITING;
+using ::SDL_EVENT_TEXT_INPUT;
+using ::SDL_EVENT_WINDOW_CLOSE_REQUESTED;
+using ::SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED;
+using ::SDL_EVENT_WINDOW_EXPOSED;
+using ::SDL_EVENT_WINDOW_FOCUS_GAINED;
+using ::SDL_EVENT_WINDOW_FOCUS_LOST;
+using ::SDL_EVENT_WINDOW_HIDDEN;
+using ::SDL_EVENT_WINDOW_MINIMIZED;
+using ::SDL_EVENT_WINDOW_OCCLUDED;
+using ::SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED;
+using ::SDL_EVENT_WINDOW_RESTORED;
+using ::SDL_EVENT_WINDOW_SHOWN;
+using ::SDL_Event;
+using ::SDL_FingerID;
+using ::SDL_FlushAudioStream;
+using ::SDL_GLContext;
+using ::SDL_GL_ALPHA_SIZE;
+using ::SDL_GL_CreateContext;
+using ::SDL_GL_DOUBLEBUFFER;
+using ::SDL_GL_DestroyContext;
+using ::SDL_GL_GetProcAddress;
+using ::SDL_GL_MakeCurrent;
+using ::SDL_GL_STENCIL_SIZE;
+using ::SDL_GL_SetAttribute;
+using ::SDL_GL_SetSwapInterval;
+using ::SDL_GL_SwapWindow;
+using ::SDL_GetAudioStreamQueued;
+using ::SDL_GetClipboardData;
+using ::SDL_GetClipboardText;
+using ::SDL_GetCurrentVideoDriver;
+using ::SDL_GetDisplayUsableBounds;
+using ::SDL_GetError;
+using ::SDL_GetPrimaryDisplay;
+using ::SDL_GetTicksNS;
+using ::SDL_GetTouchDevices;
+using ::SDL_GetWindowDisplayScale;
+using ::SDL_GetWindowFlags;
+using ::SDL_GetWindowFromEvent;
+using ::SDL_GetWindowSizeInPixels;
+using ::SDL_GetWindowSurface;
+using ::SDL_HasClipboardData;
+using ::SDL_HasMouse;
+using ::SDL_Init;
+using ::SDL_InitSubSystem;
+using ::SDL_Keycode;
+using ::SDL_Keymod;
+using ::SDL_OpenAudioDeviceStream;
+using ::SDL_OpenURL;
+using ::SDL_PIXELFORMAT_ARGB8888;
+using ::SDL_PIXELFORMAT_XRGB8888;
+using ::SDL_PauseAudioStreamDevice;
+using ::SDL_PollEvent;
+using ::SDL_PushEvent;
+using ::SDL_PutAudioStreamData;
+using ::SDL_Quit;
+using ::SDL_RaiseWindow;
+using ::SDL_Rect;
+using ::SDL_RegisterEvents;
+using ::SDL_ResumeAudioStreamDevice;
+using ::SDL_SYSTEM_CURSOR_COUNT;
+using ::SDL_SYSTEM_CURSOR_DEFAULT;
+using ::SDL_SYSTEM_CURSOR_EW_RESIZE;
+using ::SDL_SYSTEM_CURSOR_NS_RESIZE;
+using ::SDL_SYSTEM_CURSOR_POINTER;
+using ::SDL_SYSTEM_CURSOR_TEXT;
+using ::SDL_SetClipboardData;
+using ::SDL_SetClipboardText;
+using ::SDL_SetCursor;
+using ::SDL_SetHint;
+using ::SDL_SetTextInputArea;
+using ::SDL_SetWindowPosition;
+using ::SDL_ShowOpenFileDialog;
+using ::SDL_ShowSaveFileDialog;
+using ::SDL_ShowWindow;
+using ::SDL_StartTextInput;
+using ::SDL_StopTextInput;
+using ::SDL_Surface;
+using ::SDL_SystemCursor;
+using ::SDL_UpdateWindowSurface;
+using ::SDL_UpdateWindowSurfaceRects;
+using ::SDL_WaitEvent;
+using ::SDL_WaitEventTimeout;
+using ::SDL_WasInit;
+using ::SDL_Window;
+using ::SDL_WindowFlags;
+using ::SDL_free;
+
+// What SDL's headers say with a macro.
+inline constexpr auto kKey0 = SDLK_0;
+inline constexpr auto kKey1 = SDLK_1;
+inline constexpr auto kKey2 = SDLK_2;
+inline constexpr auto kKey3 = SDLK_3;
+inline constexpr auto kKey4 = SDLK_4;
+inline constexpr auto kKey5 = SDLK_5;
+inline constexpr auto kKey6 = SDLK_6;
+inline constexpr auto kKey7 = SDLK_7;
+inline constexpr auto kKey8 = SDLK_8;
+inline constexpr auto kKey9 = SDLK_9;
+inline constexpr auto kKeyA = SDLK_A;
+inline constexpr auto kKeyB = SDLK_B;
+inline constexpr auto kKeyBackspace = SDLK_BACKSPACE;
+inline constexpr auto kKeyC = SDLK_C;
+inline constexpr auto kKeyD = SDLK_D;
+inline constexpr auto kKeyDelete = SDLK_DELETE;
+inline constexpr auto kKeyDown = SDLK_DOWN;
+inline constexpr auto kKeyE = SDLK_E;
+inline constexpr auto kKeyEnd = SDLK_END;
+inline constexpr auto kKeyEscape = SDLK_ESCAPE;
+inline constexpr auto kKeyF = SDLK_F;
+inline constexpr auto kKeyG = SDLK_G;
+inline constexpr auto kKeyH = SDLK_H;
+inline constexpr auto kKeyHome = SDLK_HOME;
+inline constexpr auto kKeyI = SDLK_I;
+inline constexpr auto kKeyJ = SDLK_J;
+inline constexpr auto kKeyK = SDLK_K;
+inline constexpr auto kKeyKpEnter = SDLK_KP_ENTER;
+inline constexpr auto kKeyL = SDLK_L;
+inline constexpr auto kKeyLeft = SDLK_LEFT;
+inline constexpr auto kKeyM = SDLK_M;
+inline constexpr auto kKeyN = SDLK_N;
+inline constexpr auto kKeyO = SDLK_O;
+inline constexpr auto kKeyP = SDLK_P;
+inline constexpr auto kKeyPagedown = SDLK_PAGEDOWN;
+inline constexpr auto kKeyPageup = SDLK_PAGEUP;
+inline constexpr auto kKeyQ = SDLK_Q;
+inline constexpr auto kKeyR = SDLK_R;
+inline constexpr auto kKeyReturn = SDLK_RETURN;
+inline constexpr auto kKeyRight = SDLK_RIGHT;
+inline constexpr auto kKeyS = SDLK_S;
+inline constexpr auto kKeySpace = SDLK_SPACE;
+inline constexpr auto kKeyT = SDLK_T;
+inline constexpr auto kKeyTab = SDLK_TAB;
+inline constexpr auto kKeyU = SDLK_U;
+inline constexpr auto kKeyUp = SDLK_UP;
+inline constexpr auto kKeyV = SDLK_V;
+inline constexpr auto kKeyW = SDLK_W;
+inline constexpr auto kKeyX = SDLK_X;
+inline constexpr auto kKeyY = SDLK_Y;
+inline constexpr auto kKeyZ = SDLK_Z;
+inline constexpr auto kAudioDeviceDefaultPlayback = SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK;
+inline constexpr auto kButtonLeft = SDL_BUTTON_LEFT;
+inline constexpr auto kButtonRight = SDL_BUTTON_RIGHT;
+inline constexpr auto kHintFramebufferAcceleration = SDL_HINT_FRAMEBUFFER_ACCELERATION;
+inline constexpr auto kInitAudio = SDL_INIT_AUDIO;
+inline constexpr auto kInitEvents = SDL_INIT_EVENTS;
+inline constexpr auto kInitVideo = SDL_INIT_VIDEO;
+inline constexpr auto kKmodAlt = SDL_KMOD_ALT;
+inline constexpr auto kKmodCtrl = SDL_KMOD_CTRL;
+inline constexpr auto kKmodGui = SDL_KMOD_GUI;
+inline constexpr auto kKmodShift = SDL_KMOD_SHIFT;
+inline constexpr auto kTouchMouseid = SDL_TOUCH_MOUSEID;
+inline constexpr auto kWindowAlwaysOnTop = SDL_WINDOW_ALWAYS_ON_TOP;
+inline constexpr auto kWindowBorderless = SDL_WINDOW_BORDERLESS;
+inline constexpr auto kWindowHidden = SDL_WINDOW_HIDDEN;
+inline constexpr auto kWindowHighPixelDensity = SDL_WINDOW_HIGH_PIXEL_DENSITY;
+inline constexpr auto kWindowNotFocusable = SDL_WINDOW_NOT_FOCUSABLE;
+inline constexpr auto kWindowOpengl = SDL_WINDOW_OPENGL;
+inline constexpr auto kWindowResizable = SDL_WINDOW_RESIZABLE;
+inline constexpr auto kWindowTransparent = SDL_WINDOW_TRANSPARENT;
+inline constexpr auto kWindowUtility = SDL_WINDOW_UTILITY;
+
+
+}  // namespace sdl

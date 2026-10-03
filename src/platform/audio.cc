@@ -3,12 +3,12 @@
 // Ogg, as Matrix's voice messages are, or Vorbis -- and played through the
 // window's own SDL, one at a time, as Telegram plays them.
 module;
-#include <SDL3/SDL.h>
 #include <opus.h>
 #include <vorbis/vorbisfile.h>
 export module mux.platform.audio;
 
 import std;
+import sdl;
 import mux.bytes;
 
 export namespace mux::platform::audio {
@@ -151,16 +151,16 @@ class speaker {
  public:
   void play(std::string key, const pcm& sound) {
     this->stop();
-    if (!SDL_WasInit(SDL_INIT_AUDIO) && !SDL_InitSubSystem(SDL_INIT_AUDIO))
+    if (!sdl::SDL_WasInit(sdl::kInitAudio) && !sdl::SDL_InitSubSystem(sdl::kInitAudio))
       return;
-    const SDL_AudioSpec spec{SDL_AUDIO_F32, sound.channels, sound.rate};
-    stream_ = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
+    const sdl::SDL_AudioSpec spec{sdl::SDL_AUDIO_F32, sound.channels, sound.rate};
+    stream_ = sdl::SDL_OpenAudioDeviceStream(sdl::kAudioDeviceDefaultPlayback, &spec, nullptr, nullptr);
     if (!stream_)
       return;
     const auto bytes = static_cast<int>(sound.samples.size() * sizeof(float));
-    SDL_PutAudioStreamData(stream_, sound.samples.data(), bytes);
-    SDL_FlushAudioStream(stream_);
-    SDL_ResumeAudioStreamDevice(stream_);
+    sdl::SDL_PutAudioStreamData(stream_, sound.samples.data(), bytes);
+    sdl::SDL_FlushAudioStream(stream_);
+    sdl::SDL_ResumeAudioStreamDevice(stream_);
     key_ = std::move(key);
     total_ = bytes;
     per_second_ = static_cast<double>(sound.rate) * sound.channels * sizeof(float);
@@ -170,20 +170,20 @@ class speaker {
     if (!stream_)
       return;
     if (paused_)
-      SDL_ResumeAudioStreamDevice(stream_);
+      sdl::SDL_ResumeAudioStreamDevice(stream_);
     else
-      SDL_PauseAudioStreamDevice(stream_);
+      sdl::SDL_PauseAudioStreamDevice(stream_);
     paused_ = !paused_;
   }
   void stop() {
     if (stream_)
-      SDL_DestroyAudioStream(stream_);
+      sdl::SDL_DestroyAudioStream(stream_);
     stream_ = nullptr;
     key_.clear();
   }
   // Put away once all of it has been played.
   void tick() {
-    if (stream_ && !paused_ && SDL_GetAudioStreamQueued(stream_) == 0)
+    if (stream_ && !paused_ && sdl::SDL_GetAudioStreamQueued(stream_) == 0)
       this->stop();
   }
   [[nodiscard]] bool holds(std::string_view key) const { return stream_ && key_ == key; }
@@ -191,12 +191,12 @@ class speaker {
   [[nodiscard]] double position() const {
     if (!stream_ || per_second_ <= 0.0)
       return 0.0;
-    return (total_ - SDL_GetAudioStreamQueued(stream_)) / per_second_;
+    return (total_ - sdl::SDL_GetAudioStreamQueued(stream_)) / per_second_;
   }
   [[nodiscard]] double length() const { return per_second_ > 0.0 ? total_ / per_second_ : 0.0; }
 
  private:
-  SDL_AudioStream* stream_ = nullptr;
+  sdl::SDL_AudioStream* stream_ = nullptr;
   std::string key_;
   int total_ = 0;
   double per_second_ = 0.0;
@@ -237,18 +237,18 @@ inline speaker& the_speaker() {
   return made;
 }
 inline void play_chime(const pcm& sound) {
-  static SDL_AudioStream* stream = nullptr;
-  if (!SDL_WasInit(SDL_INIT_AUDIO) && !SDL_InitSubSystem(SDL_INIT_AUDIO))
+  static sdl::SDL_AudioStream* stream = nullptr;
+  if (!sdl::SDL_WasInit(sdl::kInitAudio) && !sdl::SDL_InitSubSystem(sdl::kInitAudio))
     return;
   if (stream)
-    SDL_DestroyAudioStream(stream);
-  const SDL_AudioSpec spec{SDL_AUDIO_F32, sound.channels, sound.rate};
-  stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
+    sdl::SDL_DestroyAudioStream(stream);
+  const sdl::SDL_AudioSpec spec{sdl::SDL_AUDIO_F32, sound.channels, sound.rate};
+  stream = sdl::SDL_OpenAudioDeviceStream(sdl::kAudioDeviceDefaultPlayback, &spec, nullptr, nullptr);
   if (!stream)
     return;
-  SDL_PutAudioStreamData(stream, sound.samples.data(), static_cast<int>(sound.samples.size() * sizeof(float)));
-  SDL_FlushAudioStream(stream);
-  SDL_ResumeAudioStreamDevice(stream);
+  sdl::SDL_PutAudioStreamData(stream, sound.samples.data(), static_cast<int>(sound.samples.size() * sizeof(float)));
+  sdl::SDL_FlushAudioStream(stream);
+  sdl::SDL_ResumeAudioStreamDevice(stream);
 }
 
 }  // namespace mux::platform::audio

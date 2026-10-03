@@ -7,12 +7,12 @@
 // event of its own.
 module;
 
-#include <SDL3/SDL.h>
 #include <cxxabi.h>  // names of the nodes a frame trace says
 
 export module mux.platform.window;
 
 import std;
+import sdl;
 import mux.bytes;
 import splice;
 import skia;
@@ -47,11 +47,11 @@ struct options {
 namespace detail {
 
 // SDL's shape for each of skiff's pointer shapes.
-inline SDL_SystemCursor system_cursor(skiff::scene::cursor::arrow) { return SDL_SYSTEM_CURSOR_DEFAULT; }
-inline SDL_SystemCursor system_cursor(skiff::scene::cursor::text) { return SDL_SYSTEM_CURSOR_TEXT; }
-inline SDL_SystemCursor system_cursor(skiff::scene::cursor::hand) { return SDL_SYSTEM_CURSOR_POINTER; }
-inline SDL_SystemCursor system_cursor(skiff::scene::cursor::resize_horizontal) { return SDL_SYSTEM_CURSOR_EW_RESIZE; }
-inline SDL_SystemCursor system_cursor(skiff::scene::cursor::resize_vertical) { return SDL_SYSTEM_CURSOR_NS_RESIZE; }
+inline sdl::SDL_SystemCursor system_cursor(skiff::scene::cursor::arrow) { return sdl::SDL_SYSTEM_CURSOR_DEFAULT; }
+inline sdl::SDL_SystemCursor system_cursor(skiff::scene::cursor::text) { return sdl::SDL_SYSTEM_CURSOR_TEXT; }
+inline sdl::SDL_SystemCursor system_cursor(skiff::scene::cursor::hand) { return sdl::SDL_SYSTEM_CURSOR_POINTER; }
+inline sdl::SDL_SystemCursor system_cursor(skiff::scene::cursor::resize_horizontal) { return sdl::SDL_SYSTEM_CURSOR_EW_RESIZE; }
+inline sdl::SDL_SystemCursor system_cursor(skiff::scene::cursor::resize_vertical) { return sdl::SDL_SYSTEM_CURSOR_NS_RESIZE; }
 
 // The pointer's shape, made once each and set when it changes.
 class pointer_shapes {
@@ -60,93 +60,93 @@ class pointer_shapes {
   pointer_shapes(const pointer_shapes&) = delete;
   pointer_shapes& operator=(const pointer_shapes&) = delete;
   ~pointer_shapes() {
-    for (SDL_Cursor* one : made_)
+    for (sdl::SDL_Cursor* one : made_)
       if (one)
-        SDL_DestroyCursor(one);
+        sdl::SDL_DestroyCursor(one);
   }
   void show(const skiff::scene::Cursor& shape) {
-    const SDL_SystemCursor which = splice::visit([](auto one) { return system_cursor(one); }, shape);
+    const sdl::SDL_SystemCursor which = splice::visit([](auto one) { return system_cursor(one); }, shape);
     if (which == shown_)
       return;
-    SDL_Cursor*& made = made_[static_cast<std::size_t>(which)];
+    sdl::SDL_Cursor*& made = made_[static_cast<std::size_t>(which)];
     if (!made)
-      made = SDL_CreateSystemCursor(which);
+      made = sdl::SDL_CreateSystemCursor(which);
     if (made)
-      SDL_SetCursor(made);
+      sdl::SDL_SetCursor(made);
     shown_ = which;
   }
 
  private:
-  std::array<SDL_Cursor*, SDL_SYSTEM_CURSOR_COUNT> made_{};
-  SDL_SystemCursor shown_ = SDL_SYSTEM_CURSOR_DEFAULT;
+  std::array<sdl::SDL_Cursor*, sdl::SDL_SYSTEM_CURSOR_COUNT> made_{};
+  sdl::SDL_SystemCursor shown_ = sdl::SDL_SYSTEM_CURSOR_DEFAULT;
 };
 
-inline skiff::scene::Key key_of(SDL_Keycode key) {
+inline skiff::scene::Key key_of(sdl::SDL_Keycode key) {
   namespace keys = skiff::scene::keys;
   switch (key) {
-    case SDLK_TAB: return keys::kTab;
-    case SDLK_RETURN:
-    case SDLK_KP_ENTER: return keys::kEnter;
-    case SDLK_SPACE: return keys::kSpace;
-    case SDLK_ESCAPE: return keys::kEscape;
-    case SDLK_LEFT: return keys::kLeft;
-    case SDLK_RIGHT: return keys::kRight;
-    case SDLK_UP: return keys::kUp;
-    case SDLK_DOWN: return keys::kDown;
-    case SDLK_HOME: return keys::kHome;
-    case SDLK_END: return keys::kEnd;
-    case SDLK_BACKSPACE: return keys::kBackspace;
-    case SDLK_DELETE: return keys::kDelete;
-    case SDLK_A: return keys::kA;
-    case SDLK_B: return keys::kB;
-    case SDLK_C: return keys::kC;
-    case SDLK_D: return keys::kD;
-    case SDLK_E: return keys::kE;
-    case SDLK_F: return keys::kF;
-    case SDLK_G: return keys::kG;
-    case SDLK_H: return keys::kH;
-    case SDLK_I: return keys::kI;
-    case SDLK_J: return keys::kJ;
-    case SDLK_K: return keys::kK;
-    case SDLK_L: return keys::kL;
-    case SDLK_M: return keys::kM;
-    case SDLK_N: return keys::kN;
-    case SDLK_O: return keys::kO;
-    case SDLK_P: return keys::kP;
-    case SDLK_Q: return keys::kQ;
-    case SDLK_R: return keys::kR;
-    case SDLK_S: return keys::kS;
-    case SDLK_T: return keys::kT;
-    case SDLK_U: return keys::kU;
-    case SDLK_V: return keys::kV;
-    case SDLK_W: return keys::kW;
-    case SDLK_X: return keys::kX;
-    case SDLK_Y: return keys::kY;
-    case SDLK_Z: return keys::kZ;
-    case SDLK_PAGEUP: return keys::kPageUp;
-    case SDLK_PAGEDOWN: return keys::kPageDown;
-    case SDLK_0: return keys::k0;
-    case SDLK_1: return keys::k1;
-    case SDLK_2: return keys::k2;
-    case SDLK_3: return keys::k3;
-    case SDLK_4: return keys::k4;
-    case SDLK_5: return keys::k5;
-    case SDLK_6: return keys::k6;
-    case SDLK_7: return keys::k7;
-    case SDLK_8: return keys::k8;
-    case SDLK_9: return keys::k9;
+    case sdl::kKeyTab: return keys::kTab;
+    case sdl::kKeyReturn:
+    case sdl::kKeyKpEnter: return keys::kEnter;
+    case sdl::kKeySpace: return keys::kSpace;
+    case sdl::kKeyEscape: return keys::kEscape;
+    case sdl::kKeyLeft: return keys::kLeft;
+    case sdl::kKeyRight: return keys::kRight;
+    case sdl::kKeyUp: return keys::kUp;
+    case sdl::kKeyDown: return keys::kDown;
+    case sdl::kKeyHome: return keys::kHome;
+    case sdl::kKeyEnd: return keys::kEnd;
+    case sdl::kKeyBackspace: return keys::kBackspace;
+    case sdl::kKeyDelete: return keys::kDelete;
+    case sdl::kKeyA: return keys::kA;
+    case sdl::kKeyB: return keys::kB;
+    case sdl::kKeyC: return keys::kC;
+    case sdl::kKeyD: return keys::kD;
+    case sdl::kKeyE: return keys::kE;
+    case sdl::kKeyF: return keys::kF;
+    case sdl::kKeyG: return keys::kG;
+    case sdl::kKeyH: return keys::kH;
+    case sdl::kKeyI: return keys::kI;
+    case sdl::kKeyJ: return keys::kJ;
+    case sdl::kKeyK: return keys::kK;
+    case sdl::kKeyL: return keys::kL;
+    case sdl::kKeyM: return keys::kM;
+    case sdl::kKeyN: return keys::kN;
+    case sdl::kKeyO: return keys::kO;
+    case sdl::kKeyP: return keys::kP;
+    case sdl::kKeyQ: return keys::kQ;
+    case sdl::kKeyR: return keys::kR;
+    case sdl::kKeyS: return keys::kS;
+    case sdl::kKeyT: return keys::kT;
+    case sdl::kKeyU: return keys::kU;
+    case sdl::kKeyV: return keys::kV;
+    case sdl::kKeyW: return keys::kW;
+    case sdl::kKeyX: return keys::kX;
+    case sdl::kKeyY: return keys::kY;
+    case sdl::kKeyZ: return keys::kZ;
+    case sdl::kKeyPageup: return keys::kPageUp;
+    case sdl::kKeyPagedown: return keys::kPageDown;
+    case sdl::kKey0: return keys::k0;
+    case sdl::kKey1: return keys::k1;
+    case sdl::kKey2: return keys::k2;
+    case sdl::kKey3: return keys::k3;
+    case sdl::kKey4: return keys::k4;
+    case sdl::kKey5: return keys::k5;
+    case sdl::kKey6: return keys::k6;
+    case sdl::kKey7: return keys::k7;
+    case sdl::kKey8: return keys::k8;
+    case sdl::kKey9: return keys::k9;
     default: return keys::kUnknown;
   }
 }
 
 // What SDL says of the modifier keys.
-inline skiff::scene::Modifiers modifiers_of(SDL_Keymod held) {
+inline skiff::scene::Modifiers modifiers_of(sdl::SDL_Keymod held) {
   namespace modifier = skiff::scene::modifier;
   return skiff::scene::Modifiers{}
-      .with<modifier::shift>((held & SDL_KMOD_SHIFT) != 0)
-      .with<modifier::control>((held & SDL_KMOD_CTRL) != 0)
-      .with<modifier::alt>((held & SDL_KMOD_ALT) != 0)
-      .with<modifier::super>((held & SDL_KMOD_GUI) != 0);
+      .with<modifier::shift>((held & sdl::kKmodShift) != 0)
+      .with<modifier::control>((held & sdl::kKmodCtrl) != 0)
+      .with<modifier::alt>((held & sdl::kKmodAlt) != 0)
+      .with<modifier::super>((held & sdl::kKmodGui) != 0);
 }
 
 // What draws: a GL context and Skia's context over it, or nothing of the
@@ -180,21 +180,21 @@ inline void say_gl_renderer(const std::string& name) {
 
 class canvas_target {
  public:
-  canvas_target(SDL_Window* window, bool software) : window_(window) {
+  canvas_target(sdl::SDL_Window* window, bool software) : window_(window) {
     // GL where the Skia has Ganesh -- its own define says -- and the window
     // was made for it.
 #if defined(SK_GANESH)
-    if (!software && (SDL_GetWindowFlags(window) & SDL_WINDOW_OPENGL)) {
-      gl_ = SDL_GL_CreateContext(window);
+    if (!software && (sdl::SDL_GetWindowFlags(window) & sdl::kWindowOpengl)) {
+      gl_ = sdl::SDL_GL_CreateContext(window);
       if (gl_) {
-        SDL_GL_MakeCurrent(window, gl_);
-        SDL_GL_SetSwapInterval(1);
+        sdl::SDL_GL_MakeCurrent(window, gl_);
+        sdl::SDL_GL_SetSwapInterval(1);
         auto interface = skia::GrGLMakeNativeInterface();
         if (!interface)
           interface = skia::GrGLMakeAssembledInterface(nullptr, [](void*, const char name[]) -> skia::GrGLFuncPtr {
             // The one cast a C API asks for: a loader gives
             // every GL function as one pointer type, Skia takes another.
-            return reinterpret_cast<skia::GrGLFuncPtr>(SDL_GL_GetProcAddress(name));
+            return reinterpret_cast<skia::GrGLFuncPtr>(sdl::SDL_GL_GetProcAddress(name));
           });
         // Asked of the context SDL made, through SDL's own loader: Skia's
         // native interface goes through GLX's, which answers nothing for a
@@ -202,7 +202,7 @@ class canvas_target {
         // "unknown" while drawing went on.
         using get_string_t = const unsigned char* (*)(unsigned int);
         // As above: the loader's one pointer type, made the function's.
-        if (const auto get_string = reinterpret_cast<get_string_t>(SDL_GL_GetProcAddress("glGetString")))
+        if (const auto get_string = reinterpret_cast<get_string_t>(sdl::SDL_GL_GetProcAddress("glGetString")))
           say_gl_renderer(mux::bytes::text_of_terminated(get_string(0x1F01 /* GL_RENDERER */)));
         else if (interface && interface->fFunctions.fGetString)
           say_gl_renderer(mux::bytes::text_of_terminated(interface->fFunctions.fGetString(0x1F01 /* GL_RENDERER */)));
@@ -210,7 +210,7 @@ class canvas_target {
           context_ = skia::MakeGL(std::move(interface));
       }
       if (!context_ && gl_) {
-        SDL_GL_DestroyContext(gl_);
+        sdl::SDL_GL_DestroyContext(gl_);
         gl_ = nullptr;
       }
     }
@@ -236,7 +236,7 @@ class canvas_target {
       context_->abandonContext();
     context_.reset();
     if (gl_)
-      SDL_GL_DestroyContext(gl_);
+      sdl::SDL_GL_DestroyContext(gl_);
 #endif
   }
 
@@ -248,15 +248,15 @@ class canvas_target {
   skia::SkSurface* surface() {
 #if defined(SK_GANESH)
     if (gl_)
-      SDL_GL_MakeCurrent(window_, gl_);
+      sdl::SDL_GL_MakeCurrent(window_, gl_);
 #endif
     // In software, Skia draws straight into the window's own pixels where
     // they are laid out as its own are: no copy of the frame at each present,
     // and they stay from one frame to the next -- the kept frame themselves.
     if (!this->on_gpu()) {
-      SDL_Surface* shown = SDL_GetWindowSurface(window_);
+      sdl::SDL_Surface* shown = sdl::SDL_GetWindowSurface(window_);
       if (shown && shown->pixels &&
-          (shown->format == SDL_PIXELFORMAT_XRGB8888 || shown->format == SDL_PIXELFORMAT_ARGB8888)) {
+          (shown->format == sdl::SDL_PIXELFORMAT_XRGB8888 || shown->format == sdl::SDL_PIXELFORMAT_ARGB8888)) {
         if (!direct_ || shown != shown_ || shown->pixels != shown_pixels_ || shown->w != width_ || shown->h != height_) {
           surface_ = skia::WrapPixels(skia::SkImageInfo::MakeN32Premul(shown->w, shown->h), shown->pixels,
                                       static_cast<std::size_t>(shown->pitch));
@@ -276,7 +276,7 @@ class canvas_target {
       }
     }
     int width = 0, height = 0;
-    SDL_GetWindowSizeInPixels(window_, &width, &height);
+    sdl::SDL_GetWindowSizeInPixels(window_, &width, &height);
     if (surface_ && width == width_ && height == height_)
       return surface_.get();
     width_ = width;
@@ -303,7 +303,7 @@ class canvas_target {
   void set_vsync(bool on) {
 #if defined(SK_GANESH)
     if (gl_)
-      SDL_GL_SetSwapInterval(on ? 1 : 0);
+      sdl::SDL_GL_SetSwapInterval(on ? 1 : 0);
 #else
     (void)on;
 #endif
@@ -321,27 +321,27 @@ class canvas_target {
       return;
     if (direct_) {
       if (parts.empty()) {
-        SDL_UpdateWindowSurface(window_);
+        sdl::SDL_UpdateWindowSurface(window_);
         return;
       }
-      std::vector<SDL_Rect> rects;
+      std::vector<sdl::SDL_Rect> rects;
       rects.reserve(parts.size());
       for (const skia::SkIRect& one : parts)
         if (!one.isEmpty())
-          rects.push_back(SDL_Rect{one.fLeft, one.fTop, one.width(), one.height()});
+          rects.push_back(sdl::SDL_Rect{one.fLeft, one.fTop, one.width(), one.height()});
       if (rects.empty())
         return;
-      SDL_UpdateWindowSurfaceRects(window_, rects.data(), static_cast<int>(rects.size()));
+      sdl::SDL_UpdateWindowSurfaceRects(window_, rects.data(), static_cast<int>(rects.size()));
       return;
     }
 #if defined(SK_GANESH)
     if (context_) {
       context_->flushAndSubmit(surface_.get());
-      SDL_GL_SwapWindow(window_);
+      sdl::SDL_GL_SwapWindow(window_);
       return;
     }
 #endif
-    SDL_Surface* shown = SDL_GetWindowSurface(window_);
+    sdl::SDL_Surface* shown = sdl::SDL_GetWindowSurface(window_);
     if (!shown)
       return;
     // Skia's N32 is SDL's ARGB8888 on a little-endian machine: the same
@@ -352,22 +352,22 @@ class canvas_target {
     const auto pixels = std::make_unique_for_overwrite<std::byte[]>(pitch * static_cast<std::size_t>(height_));
     if (!surface_->readPixels(info, pixels.get(), pitch, 0, 0))
       return;
-    SDL_ConvertPixels(width_, height_, SDL_PIXELFORMAT_ARGB8888, pixels.get(), static_cast<int>(pitch),
+    sdl::SDL_ConvertPixels(width_, height_, sdl::SDL_PIXELFORMAT_ARGB8888, pixels.get(), static_cast<int>(pitch),
                       shown->format, shown->pixels, shown->pitch);
-    SDL_UpdateWindowSurface(window_);
+    sdl::SDL_UpdateWindowSurface(window_);
   }
 
  private:
-  SDL_Window* window_;
+  sdl::SDL_Window* window_;
 #if defined(SK_GANESH)
-  SDL_GLContext gl_ = nullptr;
+  sdl::SDL_GLContext gl_ = nullptr;
   skia::Sp<skia::GrDirectContext> context_;
 #endif
   skia::Sp<skia::SkSurface> surface_;
   int width_ = 0, height_ = 0;
   // The window's own pixels drawn into, and which: a surface SDL makes
   // again, or moves, is wrapped again -- and painted whole.
-  SDL_Surface* shown_ = nullptr;
+  sdl::SDL_Surface* shown_ = nullptr;
   void* shown_pixels_ = nullptr;
   bool direct_ = false;
   bool fresh_ = true;
@@ -388,9 +388,9 @@ class toasts {
   ~toasts() { shown_.clear(); }
 
   void show(const typename App::toast_due& due) {
-    SDL_Window* made = SDL_CreateWindow("mux", kWidth, kHeight,
-                                        SDL_WINDOW_BORDERLESS | SDL_WINDOW_ALWAYS_ON_TOP | SDL_WINDOW_UTILITY |
-                                            SDL_WINDOW_NOT_FOCUSABLE | SDL_WINDOW_HIDDEN);
+    sdl::SDL_Window* made = sdl::SDL_CreateWindow("mux", kWidth, kHeight,
+                                        sdl::kWindowBorderless | sdl::kWindowAlwaysOnTop | sdl::kWindowUtility |
+                                            sdl::kWindowNotFocusable | sdl::kWindowHidden);
     if (!made)
       return;
     shown_.push_back(std::make_unique<one>(made, due));
@@ -398,14 +398,14 @@ class toasts {
     while (shown_.size() > 3)
       shown_.pop_front();
     this->place();
-    SDL_ShowWindow(made);
+    sdl::SDL_ShowWindow(made);
   }
   [[nodiscard]] bool empty() const { return shown_.empty(); }
   // Whether an event is one of theirs; a press on one, the chat it is of.
-  [[nodiscard]] bool owns(SDL_Window* window) const {
+  [[nodiscard]] bool owns(sdl::SDL_Window* window) const {
     return std::ranges::any_of(shown_, [&](const auto& each) { return each->window == window; });
   }
-  [[nodiscard]] std::optional<chat_type> pressed(SDL_Window* window) {
+  [[nodiscard]] std::optional<chat_type> pressed(sdl::SDL_Window* window) {
     const auto found = std::ranges::find_if(shown_, [&](const auto& each) { return each->window == window; });
     if (found == shown_.end())
       return std::nullopt;
@@ -427,19 +427,19 @@ class toasts {
 
  private:
   struct one {
-    SDL_Window* window;
+    sdl::SDL_Window* window;
     canvas_target target;
     skiff::scene::Scene<typename App::toast_card> scene;
     chat_type chat;
     std::chrono::steady_clock::time_point until;
-    one(SDL_Window* made, const typename App::toast_due& due)
+    one(sdl::SDL_Window* made, const typename App::toast_due& due)
         : window(made), target(made, true), scene(std::in_place, due.key, due.title, due.text), chat(due.chat),
           until(std::chrono::steady_clock::now() + std::chrono::seconds(5)) {}
     one(const one&) = delete;
     one& operator=(const one&) = delete;
-    ~one() { SDL_DestroyWindow(window); }
+    ~one() { sdl::SDL_DestroyWindow(window); }
     void draw() {
-      const float scale = SDL_GetWindowDisplayScale(window);
+      const float scale = sdl::SDL_GetWindowDisplayScale(window);
       scene.layoutIfNeeded(skia::SkRect::MakeWH(static_cast<float>(kWidth), static_cast<float>(kHeight)));
       skia::SkSurface* surface = target.surface();
       if (!surface)
@@ -456,19 +456,19 @@ class toasts {
   // Stacked from the bottom right of the screen's usable part, the newest
   // lowest, as tdesktop stacks them.
   void place() {
-    SDL_Rect area{};
-    if (!SDL_GetDisplayUsableBounds(SDL_GetPrimaryDisplay(), &area))
+    sdl::SDL_Rect area{};
+    if (!sdl::SDL_GetDisplayUsableBounds(sdl::SDL_GetPrimaryDisplay(), &area))
       return;
     int index = 0;
     for (auto it = shown_.rbegin(); it != shown_.rend(); ++it, ++index)
-      SDL_SetWindowPosition((*it)->window, area.x + area.w - kMargin - kWidth,
+      sdl::SDL_SetWindowPosition((*it)->window, area.x + area.w - kMargin - kWidth,
                             area.y + area.h - kMargin - kHeight - index * (kHeight + kGap));
   }
   std::list<std::unique_ptr<one>> shown_;
 };
 
 inline double now_ms() {
-  return static_cast<double>(SDL_GetTicksNS()) / 1'000'000.0;
+  return static_cast<double>(sdl::SDL_GetTicksNS()) / 1'000'000.0;
 }
 
 }  // namespace detail
@@ -504,8 +504,8 @@ inline video_driver_t video_driver_of(const char* name) {
 
 template <class App>
 int run(App& app, const options& how) {
-  if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
-    std::println(std::cerr, "[mux] no window: {}", SDL_GetError());
+  if (!sdl::SDL_Init(sdl::kInitVideo | sdl::kInitEvents)) {
+    std::println(std::cerr, "[mux] no window: {}", sdl::SDL_GetError());
     return 1;
   }
   // A window drawn in software shown as it is, where the system can: on X11
@@ -514,32 +514,32 @@ int run(App& app, const options& how) {
   // GPU, the whole window drawn again at each frame. Not on Wayland, which
   // has no such framebuffer in SDL: there the texture is the only way.
   if (how.software)
-    splice::visit(splice::overloaded{[](video_driver::x11) { SDL_SetHint(SDL_HINT_FRAMEBUFFER_ACCELERATION, "0"); },
+    splice::visit(splice::overloaded{[](video_driver::x11) { sdl::SDL_SetHint(sdl::kHintFramebufferAcceleration, "0"); },
                                      [](const auto&) {}},
-                  video_driver_of(SDL_GetCurrentVideoDriver()));
+                  video_driver_of(sdl::SDL_GetCurrentVideoDriver()));
   (void)wake_event();
   (void)files_event();
   (void)save_event();
   load_fonts(how.fonts);
-  SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
-  SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+  sdl::SDL_GL_SetAttribute(sdl::SDL_GL_STENCIL_SIZE, 8);
+  sdl::SDL_GL_SetAttribute(sdl::SDL_GL_DOUBLEBUFFER, 1);
   if (how.transparent)
-    SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
-  const SDL_WindowFlags base = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY |
-                               (how.transparent ? SDL_WINDOW_TRANSPARENT : SDL_WindowFlags{0});
+    sdl::SDL_GL_SetAttribute(sdl::SDL_GL_ALPHA_SIZE, 8);
+  const sdl::SDL_WindowFlags base = sdl::kWindowResizable | sdl::kWindowHighPixelDensity |
+                               (how.transparent ? sdl::kWindowTransparent : sdl::SDL_WindowFlags{0});
 #if defined(SK_GANESH)
   constexpr bool can_use_gl = true;
 #else
   constexpr bool can_use_gl = false;  // a Skia without Ganesh draws in software
 #endif
-  SDL_Window* window = how.software || !can_use_gl
+  sdl::SDL_Window* window = how.software || !can_use_gl
                            ? nullptr
-                           : SDL_CreateWindow(how.title.c_str(), how.width, how.height, base | SDL_WINDOW_OPENGL);
+                           : sdl::SDL_CreateWindow(how.title.c_str(), how.width, how.height, base | sdl::kWindowOpengl);
   if (!window)
-    window = SDL_CreateWindow(how.title.c_str(), how.width, how.height, base);
+    window = sdl::SDL_CreateWindow(how.title.c_str(), how.width, how.height, base);
   if (!window) {
-    std::println(std::cerr, "[mux] no window: {}", SDL_GetError());
-    SDL_Quit();
+    std::println(std::cerr, "[mux] no window: {}", sdl::SDL_GetError());
+    sdl::SDL_Quit();
     return 1;
   }
   the_window() = window;
@@ -548,8 +548,8 @@ int run(App& app, const options& how) {
   // the on-screen keyboard up as the program opened.
   {
     int touch_screens = 0;
-    SDL_free(SDL_GetTouchDevices(&touch_screens));  // the list SDL made, given back: only its count is read
-    app.by_touch = touch_screens > 0 && !SDL_HasMouse();
+    sdl::SDL_free(sdl::SDL_GetTouchDevices(&touch_screens));  // the list SDL made, given back: only its count is read
+    app.by_touch = touch_screens > 0 && !sdl::SDL_HasMouse();
   }
   int result = 0;
   {
@@ -566,9 +566,9 @@ int run(App& app, const options& how) {
     // The system's clipboard, for pasting: read now, and again whenever it
     // changes.
     const auto read_clipboard = [] {
-      char* text = SDL_GetClipboardText();
+      char* text = sdl::SDL_GetClipboardText();
       skiff::scene::clipboardContents() = text ? text : "";
-      SDL_free(text);
+      sdl::SDL_free(text);
     };
     read_clipboard();
     bool typing = false;  // the text input, as last started or stopped
@@ -612,7 +612,7 @@ int run(App& app, const options& how) {
     // them drawn apart or together zoom -- a pinch, given to what is under
     // its middle as the wheel's zoom (the picture viewer's), a step of it
     // for each quarter of a step the distance went.
-    std::map<SDL_FingerID, skia::SkPoint> fingers;
+    std::map<sdl::SDL_FingerID, skia::SkPoint> fingers;
     float pinch_from = 0.0f;
     const auto pinch_distance = [&] {
       const auto first = fingers.begin();
@@ -624,14 +624,14 @@ int run(App& app, const options& how) {
     // Whether the window can be seen: off screen, no frames are made.
     bool on_screen = true;
     while (running) {
-      SDL_Event event;
+      sdl::SDL_Event event;
       const double hold_in = held && !held->fired ? held->since + kHoldMs - detail::now_ms()
                                                   : std::numeric_limits<double>::infinity();
       const double wake_in = std::min(wake_at - detail::now_ms(), hold_in);
-      bool got = (redraw || animating)       ? SDL_WaitEventTimeout(&event, 16)
-                 : std::isfinite(wake_in) ? SDL_WaitEventTimeout(&event, static_cast<std::int32_t>(
+      bool got = (redraw || animating)       ? sdl::SDL_WaitEventTimeout(&event, 16)
+                 : std::isfinite(wake_in) ? sdl::SDL_WaitEventTimeout(&event, static_cast<std::int32_t>(
                                                                     std::clamp(wake_in, 1.0, 60000.0)))
-                                          : SDL_WaitEvent(&event);
+                                          : sdl::SDL_WaitEvent(&event);
       // When the frame's work began: the events that woke it, first.
       const double frame_began = detail::now_ms();
       // The pointer's moves, one a frame: only the last of them before the
@@ -649,77 +649,77 @@ int run(App& app, const options& how) {
         const float to_scene = 100.0f / static_cast<float>(std::max(1, app.interface_scale));
         // An event of a notification's window: a press opens its chat, in
         // the window brought up; nothing else of it reaches the scene.
-        if (SDL_Window* over = SDL_GetWindowFromEvent(&event); over && over != window && shown_toasts.owns(over)) {
-          if (event.type == SDL_EVENT_MOUSE_BUTTON_UP)
+        if (sdl::SDL_Window* over = sdl::SDL_GetWindowFromEvent(&event); over && over != window && shown_toasts.owns(over)) {
+          if (event.type == sdl::SDL_EVENT_MOUSE_BUTTON_UP)
             if (const auto chat = shown_toasts.pressed(over)) {
               app.open_notified(*chat);
-              SDL_RaiseWindow(window);
+              sdl::SDL_RaiseWindow(window);
               redraw = true;
             }
-          got = SDL_PollEvent(&event);
+          got = sdl::SDL_PollEvent(&event);
           continue;
         }
-        if (event.type != SDL_EVENT_MOUSE_MOTION)
+        if (event.type != sdl::SDL_EVENT_MOUSE_MOTION)
           give_motion();
         switch (event.type) {
-          case SDL_EVENT_CLIPBOARD_UPDATE:
+          case sdl::SDL_EVENT_CLIPBOARD_UPDATE:
             read_clipboard();
             break;
-          case SDL_EVENT_WINDOW_FOCUS_GAINED:
+          case sdl::SDL_EVENT_WINDOW_FOCUS_GAINED:
             app.focus_changed(true);
             break;
-          case SDL_EVENT_WINDOW_FOCUS_LOST:
+          case sdl::SDL_EVENT_WINDOW_FOCUS_LOST:
             app.focus_changed(false);
             break;
-          case SDL_EVENT_QUIT:
-          case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+          case sdl::SDL_EVENT_QUIT:
+          case sdl::SDL_EVENT_WINDOW_CLOSE_REQUESTED:
             running = false;
             break;
           // Off screen -- hidden, minimised, covered, suspended (a phone's
           // screen off): no frames, nothing but the connections.
-          case SDL_EVENT_WINDOW_HIDDEN:
-          case SDL_EVENT_WINDOW_MINIMIZED:
-          case SDL_EVENT_WINDOW_OCCLUDED:
+          case sdl::SDL_EVENT_WINDOW_HIDDEN:
+          case sdl::SDL_EVENT_WINDOW_MINIMIZED:
+          case sdl::SDL_EVENT_WINDOW_OCCLUDED:
             on_screen = false;
             app.shown_changed(false);
             break;
-          case SDL_EVENT_WINDOW_SHOWN:
-          case SDL_EVENT_WINDOW_RESTORED:
+          case sdl::SDL_EVENT_WINDOW_SHOWN:
+          case sdl::SDL_EVENT_WINDOW_RESTORED:
             on_screen = true;
             app.shown_changed(true);
             scene.state().invalidateLayout();
             redraw = true;
             break;
-          case SDL_EVENT_WINDOW_EXPOSED:
+          case sdl::SDL_EVENT_WINDOW_EXPOSED:
             on_screen = true;
             app.shown_changed(true);
             scene.state().invalidateLayout();
             redraw = true;
             break;
-          case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
-          case SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:
+          case sdl::SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+          case sdl::SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:
             scene.state().invalidateLayout();
             redraw = true;
             break;
-          case SDL_EVENT_MOUSE_MOTION:
+          case sdl::SDL_EVENT_MOUSE_MOTION:
             motion = skiff::scene::pointer::move{event.motion.x * to_scene, event.motion.y * to_scene};
             // Moved off where it went down: no long press -- the press held
             // back is given now, where it was, and the move after it.
             if (held && !held->fired &&
                 std::hypot(event.motion.x * to_scene - held->x, event.motion.y * to_scene - held->y) > kHoldSlop) {
-              router.pointer(skiff::scene::pointer::down{held->x, held->y, SDL_BUTTON_LEFT});
+              router.pointer(skiff::scene::pointer::down{held->x, held->y, sdl::kButtonLeft});
               held.reset();
             }
             break;
-          case SDL_EVENT_MOUSE_BUTTON_DOWN:
-            app.by_touch = event.button.which == SDL_TOUCH_MOUSEID;
+          case sdl::SDL_EVENT_MOUSE_BUTTON_DOWN:
+            app.by_touch = event.button.which == sdl::kTouchMouseid;
             // Where it may be a long press, the press is held back until it
             // is known not to be: given on a move or a lift, never where it
             // becomes the right press -- given at once, it began a selection
             // where it went down, and a selection held was gone before its
             // menu came (the user, #13637).
-            if (event.button.button == SDL_BUTTON_LEFT &&
-                (event.button.which == SDL_TOUCH_MOUSEID || (last_width < 600.0f && last_height > last_width))) {
+            if (event.button.button == sdl::kButtonLeft &&
+                (event.button.which == sdl::kTouchMouseid || (last_width < 600.0f && last_height > last_width))) {
               held = held_t{event.button.x * to_scene, event.button.y * to_scene, detail::now_ms(), false};
               break;
             }
@@ -727,20 +727,20 @@ int run(App& app, const options& how) {
             router.pointer(
                 skiff::scene::pointer::down{event.button.x * to_scene, event.button.y * to_scene, event.button.button});
             break;
-          case SDL_EVENT_MOUSE_BUTTON_UP:
+          case sdl::SDL_EVENT_MOUSE_BUTTON_UP:
             // Its lifting, where the hold was made a right press: that press
             // was all of it.
-            if (event.button.button == SDL_BUTTON_LEFT && held) {
+            if (event.button.button == sdl::kButtonLeft && held) {
               const held_t was = *std::exchange(held, std::nullopt);
               if (was.fired)
                 break;
               // A tap: the press held back, then this.
-              router.pointer(skiff::scene::pointer::down{was.x, was.y, SDL_BUTTON_LEFT});
+              router.pointer(skiff::scene::pointer::down{was.x, was.y, sdl::kButtonLeft});
             }
             router.pointer(
                 skiff::scene::pointer::up{event.button.x * to_scene, event.button.y * to_scene, event.button.button});
             break;
-          case SDL_EVENT_FINGER_DOWN:
+          case sdl::SDL_EVENT_FINGER_DOWN:
             app.by_touch = true;
             fingers[event.tfinger.fingerID] = {event.tfinger.x * last_width, event.tfinger.y * last_height};
             if (fingers.size() == 2) {
@@ -748,7 +748,7 @@ int run(App& app, const options& how) {
               held.reset();  // two fingers are no long press
             }
             break;
-          case SDL_EVENT_FINGER_MOTION:
+          case sdl::SDL_EVENT_FINGER_MOTION:
             if (const auto found = fingers.find(event.tfinger.fingerID); found != fingers.end()) {
               found->second = {event.tfinger.x * last_width, event.tfinger.y * last_height};
               if (fingers.size() == 2 && pinch_from > 0.0f) {
@@ -764,17 +764,17 @@ int run(App& app, const options& how) {
               }
             }
             break;
-          case SDL_EVENT_FINGER_UP:
-          case SDL_EVENT_FINGER_CANCELED:
+          case sdl::SDL_EVENT_FINGER_UP:
+          case sdl::SDL_EVENT_FINGER_CANCELED:
             fingers.erase(event.tfinger.fingerID);
             pinch_from = 0.0f;
             break;
-          case SDL_EVENT_MOUSE_WHEEL:
+          case sdl::SDL_EVENT_MOUSE_WHEEL:
             router.pointer(skiff::scene::pointer::scroll{event.wheel.mouse_x * to_scene, event.wheel.mouse_y * to_scene, event.wheel.x,
                                                          event.wheel.y});
             break;
-          case SDL_EVENT_KEY_DOWN:
-          case SDL_EVENT_KEY_UP: {
+          case sdl::SDL_EVENT_KEY_DOWN:
+          case sdl::SDL_EVENT_KEY_UP: {
             const skiff::scene::Key key = detail::key_of(event.key.key);
             if (key == skiff::scene::keys::kUnknown)
               break;
@@ -782,27 +782,27 @@ int run(App& app, const options& how) {
             const skiff::scene::Modifiers held = detail::modifiers_of(event.key.mod);
             // Ctrl+V with a picture on the clipboard: the picture, as if
             // dropped on the window -- not the text a field would paste.
-            if (event.type == SDL_EVENT_KEY_DOWN && event.key.key == SDLK_V && (event.key.mod & SDL_KMOD_CTRL) != 0 &&
+            if (event.type == sdl::SDL_EVENT_KEY_DOWN && event.key.key == sdl::kKeyV && (event.key.mod & sdl::kKmodCtrl) != 0 &&
                 !event.key.repeat) {
               if (std::optional<std::string> picture = pasted_picture()) {
                 app.files_given(std::vector<std::string>{std::move(*picture)}, true);
                 break;
               }
             }
-            if (event.type == SDL_EVENT_KEY_DOWN)
+            if (event.type == sdl::SDL_EVENT_KEY_DOWN)
               router.key(skiff::scene::key::down{key, held, event.key.repeat});
             else
               router.key(skiff::scene::key::up{key, held});
             break;
           }
-          case SDL_EVENT_DROP_FILE:
+          case sdl::SDL_EVENT_DROP_FILE:
             if (event.drop.data)
               app.files_given(std::vector<std::string>{event.drop.data}, true);
             break;
-          case SDL_EVENT_TEXT_INPUT:
+          case sdl::SDL_EVENT_TEXT_INPUT:
             router.text(skiff::scene::text::commit{event.text.text});
             break;
-          case SDL_EVENT_TEXT_EDITING:
+          case sdl::SDL_EVENT_TEXT_EDITING:
             router.text(skiff::scene::text::compose{event.edit.text ? event.edit.text : "", event.edit.start,
                                                     event.edit.length});
             break;
@@ -818,7 +818,7 @@ int run(App& app, const options& how) {
             }
             break;
         }
-        got = SDL_PollEvent(&event);
+        got = sdl::SDL_PollEvent(&event);
       }
       give_motion();
       if (!running)
@@ -827,12 +827,12 @@ int run(App& app, const options& how) {
       // gesture, and it is pressed and let go of with the right button.
       if (held && !held->fired && detail::now_ms() - held->since >= kHoldMs) {
         held->fired = true;
-        router.pointer(skiff::scene::pointer::down{held->x, held->y, SDL_BUTTON_RIGHT});
-        router.pointer(skiff::scene::pointer::up{held->x, held->y, SDL_BUTTON_RIGHT});
+        router.pointer(skiff::scene::pointer::down{held->x, held->y, sdl::kButtonRight});
+        router.pointer(skiff::scene::pointer::up{held->x, held->y, sdl::kButtonRight});
       }
 
       // The display's scale, times the interface's (Settings, Appearance).
-      const float scale = SDL_GetWindowDisplayScale(window) * static_cast<float>(app.interface_scale) / 100.0f;
+      const float scale = sdl::SDL_GetWindowDisplayScale(window) * static_cast<float>(app.interface_scale) / 100.0f;
       // Another: all of it laid out and painted again at it.
       static float scale_before = scale;
       if (scale != std::exchange(scale_before, scale)) {
@@ -841,7 +841,7 @@ int run(App& app, const options& how) {
       }
       skiff::scene::pixelScale() = scale;
       int pixel_width = 0, pixel_height = 0;
-      SDL_GetWindowSizeInPixels(window, &pixel_width, &pixel_height);
+      sdl::SDL_GetWindowSizeInPixels(window, &pixel_width, &pixel_height);
       const float width = static_cast<float>(pixel_width) / scale;
       const float height = static_cast<float>(pixel_height) / scale;
       last_width = width;
@@ -853,24 +853,24 @@ int run(App& app, const options& how) {
       if (work.typing != typing) {
         typing = work.typing;
         if (typing)
-          SDL_StartTextInput(window);
+          sdl::SDL_StartTextInput(window);
         else
-          SDL_StopTextInput(window);
+          sdl::SDL_StopTextInput(window);
       }
       // The field typed into, told to the system where it moved: in the
       // window's coordinates, the scene's points times the interface's scale.
       if (typing && work.typingAt && work.typingAt != typing_told) {
         typing_told = work.typingAt;
         const float to_window = static_cast<float>(app.interface_scale) / 100.0f;
-        const SDL_Rect area{static_cast<int>(work.typingAt->fLeft * to_window), static_cast<int>(work.typingAt->fTop * to_window),
+        const sdl::SDL_Rect area{static_cast<int>(work.typingAt->fLeft * to_window), static_cast<int>(work.typingAt->fTop * to_window),
                             static_cast<int>(work.typingAt->width() * to_window),
                             static_cast<int>(work.typingAt->height() * to_window)};
-        SDL_SetTextInputArea(window, &area, 0);
+        sdl::SDL_SetTextInputArea(window, &area, 0);
       } else if (!typing) {
         typing_told.reset();
       }
       if (auto copied = std::exchange(work.copied, std::nullopt)) {
-        SDL_SetClipboardText(copied->c_str());
+        sdl::SDL_SetClipboardText(copied->c_str());
         skiff::scene::clipboardContents() = std::move(*copied);
       }
       for (auto& url : std::exchange(work.links, {}))
@@ -1329,8 +1329,8 @@ int run(App& app, const options& how) {
     }
     app.closing();
   }
-  SDL_DestroyWindow(window);
-  SDL_Quit();
+  sdl::SDL_DestroyWindow(window);
+  sdl::SDL_Quit();
   return result;
 }
 

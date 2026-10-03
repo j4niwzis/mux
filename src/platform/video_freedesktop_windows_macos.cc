@@ -10,7 +10,6 @@
 // ahead of the picture at most.
 module;
 #include <errno.h>
-#include <SDL3/SDL.h>
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
@@ -22,6 +21,7 @@ extern "C" {
 export module mux.platform.video;
 
 import std;
+import sdl;
 import skia;
 
 namespace mux::platform::video {
@@ -46,7 +46,7 @@ struct resampler_closer {
   void operator()(SwrContext* s) const { swr_free(&s); }
 };
 struct stream_closer {
-  void operator()(SDL_AudioStream* s) const { SDL_DestroyAudioStream(s); }
+  void operator()(sdl::SDL_AudioStream* s) const { sdl::SDL_DestroyAudioStream(s); }
 };
 
 // A stream's decoder, opened; none where the file has no such stream or
@@ -169,7 +169,7 @@ class player {
     if (audio_)
       avcodec_flush_buffers(audio_.get());
     if (sound_)
-      SDL_ClearAudioStream(sound_.get());
+      sdl::SDL_ClearAudioStream(sound_.get());
     draining_ = false;
     ended_ = false;
     ahead_.reset();
@@ -246,7 +246,7 @@ class player {
         const int made = swr_convert(resampler_.get(), out, most,
                                      const_cast<const std::uint8_t**>(frame_->extended_data), frame_->nb_samples);
         if (made > 0)
-          SDL_PutAudioStreamData(sound_.get(), samples_.data(), made * 2 * static_cast<int>(sizeof(float)));
+          sdl::SDL_PutAudioStreamData(sound_.get(), samples_.data(), made * 2 * static_cast<int>(sizeof(float)));
       }
       av_frame_unref(frame_.get());
     }
@@ -261,18 +261,18 @@ class player {
       return;
     }
     resampler_.reset(raw);
-    if (!SDL_WasInit(SDL_INIT_AUDIO) && !SDL_InitSubSystem(SDL_INIT_AUDIO))
+    if (!sdl::SDL_WasInit(sdl::kInitAudio) && !sdl::SDL_InitSubSystem(sdl::kInitAudio))
       return;
-    const SDL_AudioSpec spec{SDL_AUDIO_F32, 2, kRate};
-    sound_.reset(SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr));
+    const sdl::SDL_AudioSpec spec{sdl::SDL_AUDIO_F32, 2, kRate};
+    sound_.reset(sdl::SDL_OpenAudioDeviceStream(sdl::kAudioDeviceDefaultPlayback, &spec, nullptr, nullptr));
   }
   void resume_sound() {
     if (sound_)
-      SDL_ResumeAudioStreamDevice(sound_.get());
+      sdl::SDL_ResumeAudioStreamDevice(sound_.get());
   }
   void pause_sound() {
     if (sound_)
-      SDL_PauseAudioStreamDevice(sound_.get());
+      sdl::SDL_PauseAudioStreamDevice(sound_.get());
   }
 
   std::unique_ptr<AVFormatContext, format_closer> file_;
@@ -282,7 +282,7 @@ class player {
   std::unique_ptr<AVFrame, frame_closer> frame_;
   std::unique_ptr<SwsContext, scaler_closer> scaler_;
   std::unique_ptr<SwrContext, resampler_closer> resampler_;
-  std::unique_ptr<SDL_AudioStream, stream_closer> sound_;
+  std::unique_ptr<sdl::SDL_AudioStream, stream_closer> sound_;
   std::vector<std::uint8_t> rgba_;
   std::vector<std::uint8_t> samples_;
   skia::Sp<skia::SkImage> picture_;

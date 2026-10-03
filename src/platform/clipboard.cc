@@ -1,13 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // mux.platform.clipboard -- Pictures put on the system's clipboard, and
 // taken from it.
-module;
-
-#include <SDL3/SDL.h>
-
 export module mux.platform.clipboard;
 
 import std;
+import sdl;
 
 export namespace mux::platform::clipboard {
 
@@ -18,7 +15,7 @@ export namespace mux::platform::clipboard {
 inline void copy_picture(std::string png) {
   auto* held = new std::string(std::move(png));
   const char* types[] = {"image/png"};
-  SDL_SetClipboardData(
+  sdl::SDL_SetClipboardData(
       +[](void* data, const char*, std::size_t* size) -> const void* {
         const auto* bytes = static_cast<const std::string*>(data);
         *size = bytes->size();
@@ -41,10 +38,10 @@ inline constexpr std::array kPictureKinds{
 [[nodiscard]] inline std::optional<std::string> pasted_picture() {
   static unsigned counter = 0;
   for (const picture_kind& kind : kPictureKinds) {
-    if (!SDL_HasClipboardData(kind.mime))
+    if (!sdl::SDL_HasClipboardData(kind.mime))
       continue;
     std::size_t size = 0;
-    void* data = SDL_GetClipboardData(kind.mime, &size);
+    void* data = sdl::SDL_GetClipboardData(kind.mime, &size);
     if (!data)
       continue;
     std::error_code failed;
@@ -53,7 +50,7 @@ inline constexpr std::array kPictureKinds{
     const std::filesystem::path path = folder / std::format("pasted-{}.{}", ++counter, kind.extension);
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     out.write(static_cast<const char*>(data), static_cast<std::streamsize>(size));
-    SDL_free(data);
+    sdl::SDL_free(data);
     if (!out)
       return std::nullopt;
     return path.string();

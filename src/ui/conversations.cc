@@ -149,6 +149,22 @@ struct folder_tab : scene::Node {
   }
 };
 
+namespace composer_view_defaults {
+template <class Actions>
+constexpr proto::sticker_view_list<> composer_views(const auto&, type_tag<Actions>) {
+  return {};
+}
+template <class Actions>
+constexpr std::nullopt_t make_composer_view(const auto&, const conversation&, type_tag<Actions>) {
+  return std::nullopt;
+}
+}  // namespace composer_view_defaults
+template <class State, class Actions>
+constexpr auto composer_views_for(const State& state, type_tag<Actions> tag) {
+  using composer_view_defaults::composer_views;
+  return composer_views(state, tag);
+}
+
 template <class Actions>
 struct conversations_screen : nodes::Stack {
   Actions* actions = nullptr;
@@ -1279,6 +1295,33 @@ struct conversations_screen : nodes::Stack {
         splice::visit(splice::overloaded{[](proto::part::no_request) {}, [&](const auto& one) { actions->ask_for(one); }}, **asks);
     }
   };
+  // A node of the chat's protocol's own over the composer (a Telegram bot's
+  // keyboard): listed by composer_views(state, type_tag<Actions>), made for
+  // a chat by make_composer_view, found by ADL; none by default.
+  template <class List>
+  struct view_nodes;
+  template <class... Vs>
+  struct view_nodes<proto::sticker_view_list<Vs...>> {
+    using type = type_list<Vs...>;
+  };
+  template <class>
+  struct protocol_composer_nodes;
+  template <class... Tags>
+  struct protocol_composer_nodes<protocol_list<Tags...>> {
+    using type = typename joined<
+        type_list<>, typename view_nodes<decltype(composer_views_for(::mux::state_of<Tags>{}, type_tag<Actions>{}))>::type...>::type;
+  };
+  using composer_view_t = typename variant_of_types<
+      typename joined<type_list<nodes::Text>, typename protocol_composer_nodes<protocols>::type>::type>::type;
+  struct composer_view_holder : nodes::Stack {
+    struct parts_t {
+      composer_view_t shown;
+    } parts;
+    template <class View>
+    explicit composer_view_holder(View made) : parts{.shown = composer_view_t(std::move(made))} {
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+    }
+  };
   struct chat_column : nodes::Stack {
     // What the banner's button asks, while it is shown.
     std::optional<proto::any_request_t> banner_asks;
@@ -1330,6 +1373,7 @@ struct conversations_screen : nodes::Stack {
       // warning that the other is not verified, or was reset.
       nodes::Text trust_warning{"", 13.0f, text_colour};
       std::optional<widgets::Button<banner_press>> banner_button;
+      std::optional<composer_view_holder> their_view;
       composer_bar<Actions> line;
       empty_state empty;
       select_hint hint;
@@ -2862,6 +2906,12 @@ struct conversations_screen : nodes::Stack {
   // What the chat's protocol says over the composer (proto::composer_banners):
   // Matrix's warning where the other is not verified, for one. Its banners
   // one under the other, the bar in the first's tone.
+  void place_composer_view(std::nullopt_t) {}
+  template <class View>
+  void place_composer_view(std::optional<View> made) {
+    if (made)
+      chat.parts.their_view.emplace(std::move(*made));
+  }
   void show_banners(const conversation* one, const model& now) {
     const auto banners = one ? proto::composer_banners(protocol_state_of(one->id.account), *one, now)
                              : std::vector<proto::any_banner>{};
@@ -2882,6 +2932,15 @@ struct conversations_screen : nodes::Stack {
       chat.invalidateLayout();
     } else if (button)
       button->setLabel(label);
+    // The protocol's own node over the composer, made again for the chat.
+    chat.parts.their_view.reset();
+    if (one)
+      splice::visit(
+          [&](const auto& now) {
+            using composer_view_defaults::make_composer_view;
+            this->place_composer_view(make_composer_view(now, *one, type_tag<Actions>{}));
+          },
+          protocol_state_of(one->id.account));
     auto& bar = chat.parts.trust_warning;
     if (!banners.empty())
       bar.apply({.background = (tone_colour(banners.front().tone) & 0x00FFFFFFu) | (0x22u << 24)});

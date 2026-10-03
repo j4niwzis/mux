@@ -114,7 +114,7 @@ struct two_lines : nodes::Stack {
 };
 
 template <class Act>
-struct row_item : nodes::Stack {
+struct row_item : pressable<nodes::Stack> {
   Act act;
   // Whether it is one of a choice, and the chosen one.
   std::optional<bool> radio;
@@ -157,13 +157,7 @@ struct row_item : nodes::Stack {
   }
   bool lit = false;
 
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   [[nodiscard]] bool focusChangesAppearance() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    act();
-    return true;
-  }
   [[nodiscard]] scene::Semantics semantics() const {
     scene::Semantics out;
     out.fRole = scene::semantic_role::button{};
@@ -253,7 +247,7 @@ struct page_header : nodes::Stack {
 // One segment of a segmented control: square, its text centred, filled
 // with the accent while it is the one chosen.
 template <class Act>
-struct segment : nodes::Stack {
+struct segment : pressable<nodes::Stack> {
   Act act;
   bool active = false;
   struct parts_t {
@@ -276,13 +270,7 @@ struct segment : nodes::Stack {
     fState.apply({.selected = on});
   }
 
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   [[nodiscard]] bool focusChangesAppearance() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    act();
-    return true;
-  }
   [[nodiscard]] scene::Semantics semantics() const {
     scene::Semantics out;
     out.fRole = scene::semantic_role::tab{};

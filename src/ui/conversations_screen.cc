@@ -125,7 +125,7 @@ struct conversations_screen : nodes::Stack {
     void operator()() const { screen->choose_mention(index); }
   };
   // One of the @ list: the avatar, the name over the ID.
-  struct mention_row : nodes::Stack {
+  struct mention_row : pressable<nodes::Stack> {
     pick_mention act;
     struct parts_t {
       avatar_mark face;
@@ -140,12 +140,6 @@ struct conversations_screen : nodes::Stack {
                     .hoverBackground = colours.chosen, .selectedBackground = colours.chosen});
     }
     void set_lit(bool on) { fState.apply({.selected = on}); }
-    [[nodiscard]] bool acceptsInput() const { return true; }
-    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-    [[nodiscard]] bool onClick(float, float) {
-      act();
-      return true;
-    }
   };
   struct mention_list : nodes::Stack {
     struct parts_t {

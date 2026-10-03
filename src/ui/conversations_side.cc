@@ -707,6 +707,16 @@ struct side_column : nodes::Stack {
   [[nodiscard]] bool menu_has(float x, float y) const {
     return (parts.menu && parts.menu->bounds().contains(x, y)) || (parts.row_menu && parts.row_menu->bounds().contains(x, y));
   }
+  // A menu just made, where it was pressed, kept inside the column: as far
+  // from its right and bottom edges as the menu is wide and high.
+  void place_menu(auto& menu, float x, float y, float width, float height) {
+    const skia::SkRect box = fState.fBounds;
+    menu.apply({.place = scene::anchor::kTopLeft,
+                .x = std::clamp(x - box.fLeft, 0.0f, std::max(0.0f, box.width() - width)),
+                .y = std::clamp(y - box.fTop, 0.0f, std::max(0.0f, box.height() - height))});
+    menu_close_due = false;
+    this->invalidateLayout();
+  }
   void drag_down(const scene::pointer::down& press, scene::PointerReply& reply) {
     // A press off the menu closes it at once -- nothing of it is pressed;
     // one on it chooses, and the program closes it then.
@@ -718,14 +728,9 @@ struct side_column : nodes::Stack {
     if (!one && press.button == 3 && list.visible())
       for (const auto& row : std::get<0>(std::get<0>(list.fChildren).fChildren))
         if (list.toView(row.bounds()).contains(press.x, press.y)) {
-          const skia::SkRect box = fState.fBounds;
           parts.row_menu.emplace(*colours_, actions, row.id, row.parts.lines.parts.top.parts.name.text(),
                                  current_account ? *current_account : row.id.account, accounts_known, theme_now);
-          parts.row_menu->apply({.place = scene::anchor::kTopLeft,
-                                 .x = std::clamp(press.x - box.fLeft, 0.0f, std::max(0.0f, box.width() - 320.0f)),
-                                 .y = std::clamp(press.y - box.fTop, 0.0f, std::max(0.0f, box.height() - 260.0f))});
-          menu_close_due = false;
-          this->invalidateLayout();
+          this->place_menu(*parts.row_menu, press.x, press.y, 320.0f, 260.0f);
           reply.handle();
           return;
         }
@@ -733,13 +738,8 @@ struct side_column : nodes::Stack {
       return;
     // A right press: its menu, where it was pressed, kept in the column.
     if (press.button == 3) {
-      const skia::SkRect box = fState.fBounds;
       parts.menu.emplace(*colours_, actions, account, one->item, one->name);
-      parts.menu->apply({.place = scene::anchor::kTopLeft,
-                         .x = std::clamp(press.x - box.fLeft, 0.0f, std::max(0.0f, box.width() - 190.0f)),
-                         .y = std::clamp(press.y - box.fTop, 0.0f, std::max(0.0f, box.height() - 180.0f))});
-      menu_close_due = false;
-      this->invalidateLayout();
+      this->place_menu(*parts.menu, press.x, press.y, 190.0f, 180.0f);
       reply.handle();
       return;
     }

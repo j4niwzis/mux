@@ -158,7 +158,7 @@ inline nodes::Text explained(std::string text) { return explained(legacy_palette
 // One of a choice, as Element's radio buttons: a ring, and a title over
 // what it means.
 template <class Act>
-struct radio_choice : nodes::Stack {
+struct radio_choice : pressable<nodes::Stack> {
   Act act;
   struct texts : nodes::Stack {
     struct parts_t {
@@ -194,12 +194,6 @@ struct radio_choice : nodes::Stack {
     parts.ring.set_on(on);
     if (!allowed)
       fState.setAlpha(0.55f);
-  }
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    act();
-    return true;
   }
 };
 
@@ -303,7 +297,7 @@ struct room_settings : nodes::Stack {
   };
 
   // ---- the tabs down the left ------------------------------------------------
-  struct tab_row : nodes::Stack {
+  struct tab_row : pressable<nodes::Stack> {
     pick_tab act;
     struct parts_t {
       icon_mark mark;
@@ -321,12 +315,6 @@ struct room_settings : nodes::Stack {
       parts.label.apply({.shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle});
     }
     void set_chosen(bool on) { fState.apply({.selected = on}); }
-    [[nodiscard]] bool acceptsInput() const { return true; }
-    [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-    [[nodiscard]] bool onClick(float, float) {
-      act();
-      return true;
-    }
   };
   struct tab_list : nodes::Stack {
     struct parts_t {

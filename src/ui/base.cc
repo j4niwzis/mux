@@ -251,6 +251,18 @@ template <class... Ts>
 struct variant_of_types<type_list<Ts...>> {
   using type = splice::variant<Ts...>;
 };
+// A node a press acts on -- a row, a tile, a tab: it takes the pointer, is
+// lit under it, and a click calls its act.
+template <class Base>
+struct pressable : Base {
+  using Base::Base;
+  [[nodiscard]] bool acceptsInput() const { return true; }
+  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
+  [[nodiscard]] bool onClick(this auto& self, float, float) {
+    self.act();
+    return true;
+  }
+};
 // The emoji and stickers kept (emoji_kept), and how fills are painted
 // (mux_paint).
 struct emoji_kept;

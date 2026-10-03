@@ -38,7 +38,7 @@ export namespace mux::ui {
 
 // One of the square buttons of a chat's info: its icon over its name.
 template <class Act>
-struct action_tile : nodes::Stack {
+struct action_tile : pressable<nodes::Stack> {
   Act act;
   struct parts_t {
     icon_mark mark;
@@ -56,13 +56,7 @@ struct action_tile : nodes::Stack {
     label.apply({.alignSelf = scene::align::kMiddle});
   }
 
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   [[nodiscard]] bool focusChangesAppearance() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    act();
-    return true;
-  }
   [[nodiscard]] scene::Semantics semantics() const {
     scene::Semantics out;
     out.fRole = scene::semantic_role::button{};

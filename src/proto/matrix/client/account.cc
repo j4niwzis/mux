@@ -351,7 +351,7 @@ class account {
   // file's bytes -- and caught where its fiber began: the message marked not
   // sent, the user told in a dialog. This client does not send encrypted
   // yet (part 2 of the E2EE PR).
-  using plaintext_refused = matrix::plaintext_refused;
+  using plaintext_refused = client::plaintext_refused;
   void refuse_plaintext(std::string_view room, std::string_view local) {
     if (!this->encrypted_room(room))
       return;

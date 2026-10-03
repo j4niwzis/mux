@@ -102,6 +102,7 @@ struct line {
 struct badge {
   std::string text;
   tone_t tone = tone::plain{};
+  friend bool operator==(const badge&, const badge&) = default;
 };
 struct banner {
   std::string text;
@@ -132,6 +133,7 @@ constexpr request_list<> requests_of(const auto&) { return {}; }
 // Nothing shown of its own.
 inline std::vector<part::line> message_lines(const auto&, const conversation&, const message&) { return {}; }
 inline std::vector<part::badge> header_badges(const auto&, const conversation&, const auto&) { return {}; }
+inline std::vector<part::badge> row_badges(const auto&, const conversation&) { return {}; }
 inline std::vector<part::banner> composer_banners(const auto&, const conversation&, const auto&) { return {}; }
 // Any chat may be left.
 inline bool can_leave(const auto&, const conversation&) { return true; }
@@ -280,6 +282,16 @@ inline constexpr struct header_badges_t {
     }, state);
   }
 } header_badges{};
+// And in the chat's row in the list, after what was said last.
+inline constexpr struct row_badges_t {
+  template <class State>
+  std::vector<part::badge> operator()(const State& state, const conversation& chat) const {
+    return splice::visit([&](const auto& now) {
+      using defaults::row_badges;
+      return row_badges(now, chat);
+    }, state);
+  }
+} row_badges{};
 inline constexpr struct composer_banners_t {
   template <class State, class Model>
   std::vector<part::banner> operator()(const State& state, const conversation& chat, const Model& known) const {

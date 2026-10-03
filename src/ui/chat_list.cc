@@ -75,9 +75,17 @@ struct conversation_row : nodes::Stack {
       // tdesktop's line: who said it -- "You:", a member's name, "Draft:"
       // -- in its own colour (dialogsTextFgService), then what was said,
       // its mentions as the bubble draws them: pills with their avatars.
+      // What the chat's protocol marks it with (proto::row_badges), each a
+      // pill in its tone, as the count is.
+      struct mark : widgets::Pill {
+        explicit mark(const proto::part::badge& one)
+            : widgets::Pill(one.text, {.plate = tone_colour(one.tone), .text = on_accent_colour, .size = 11.0f, .height = 19.0f,
+                                       .padX = 6.0f, .bold = true}) {}
+      };
       struct parts_t {
         nodes::Text sender;
         nodes::BasicText<message_pictures> preview;
+        std::vector<mark> marks;
         badge unread;
       } parts;
       bottom_line(std::int64_t count, bool chosen, bool muted)
@@ -139,6 +147,7 @@ struct conversation_row : nodes::Stack {
     std::string draft;
     std::optional<invite_info> invite;
     std::optional<skia::SkColor> strip;
+    std::vector<proto::part::badge> badges;
     friend bool operator==(const view&, const view&) = default;
   };
   // What it says of the chat -- its newest and its count -- as the chat
@@ -147,7 +156,7 @@ struct conversation_row : nodes::Stack {
                                     const room_event_filter& events = {}, std::optional<skia::SkColor> strip = std::nullopt) {
     const message* last = newest(one, events);
     return {display_name(one), last ? std::optional<message>(*last) : std::nullopt, one.unread_here(events), is_chosen,
-            is_muted, std::move(draft), one.invite, strip};
+            is_muted, std::move(draft), one.invite, strip, proto::row_badges(protocol_state_of(one.id.account), one)};
   }
   view shown;
 
@@ -158,6 +167,9 @@ struct conversation_row : nodes::Stack {
               .lines = lines_column(display_name(one), one.unread_here(events), is_chosen, is_muted)} {
     // Drawn once, played back as the list repaints around it.
     fState.setRecorded(true);
+    std::ranges::for_each(shown.badges, [&](const proto::part::badge& one) {
+      parts.lines.parts.bottom.parts.marks.emplace_back(one).apply({.alignSelf = scene::align::kMiddle});
+    });
     auto& time = parts.lines.parts.top.parts.time;
     auto& preview = parts.lines.parts.bottom.parts.preview;
     auto& sender = parts.lines.parts.bottom.parts.sender;

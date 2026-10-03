@@ -159,10 +159,12 @@ struct app : kept_settings {
   mux::ui::palette colours;
   actions ask;
   skiff::scene::Scene<window_type> scene{std::in_place,
-                                         mux::ui::ui_needs<actions>{.actions = &ask, .sound = &speaker, .colours = &colours, .emoji = &shared.emoji, .looks = &shared.looks}};
+                                         mux::ui::ui_needs<actions>{.actions = &ask, .sound = &speaker, .colours = &colours, .emoji = &shared.emoji, .looks = &shared.looks, .paint = &shared.paint}};
 
   // -- what the host asks
   skiff::scene::Scene<window_type>& window();
+  // What the host draws the window with.
+  mux::ui::mux_paint& painting() { return shared.paint; }
 
   void woken();
   // A link's message gone to, and a thread's answer to be scrolled to once

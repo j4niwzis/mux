@@ -61,14 +61,14 @@ class toasts {
     return chat;
   }
   // Each frame: the old ones gone, the rest drawn.
-  void frame() {
+  void frame(auto& paint) {
     const auto now = std::chrono::steady_clock::now();
     const auto before = shown_.size();
     std::erase_if(shown_, [&](const auto& each) { return each->until <= now; });
     if (shown_.size() != before)
       this->place();
     for (auto& each : shown_)
-      each->draw();
+      each->draw(paint);
   }
 
  private:
@@ -84,7 +84,7 @@ class toasts {
     one(const one&) = delete;
     one& operator=(const one&) = delete;
     ~one() { sdl::SDL_DestroyWindow(window); }
-    void draw() {
+    void draw(auto& paint) {
       const float scale = sdl::SDL_GetWindowDisplayScale(window);
       scene.layoutIfNeeded(skia::SkRect::MakeWH(static_cast<float>(kWidth), static_cast<float>(kHeight)));
       skia::SkSurface* surface = target.surface();
@@ -94,7 +94,7 @@ class toasts {
       canvas->clear(skia::colorSetARGB(255, 24, 27, 30));
       canvas->save();
       canvas->scale(scale, scale);
-      scene.draw(canvas);
+      scene.draw(paint, canvas);
       canvas->restore();
       target.present();
     }

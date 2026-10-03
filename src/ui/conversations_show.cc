@@ -357,8 +357,8 @@ void conversations_screen<Actions>::update(double now_ms) {
     this->show(*last_model, false);
   }
   // The panels' opacity on its way to the chat's.
-  if (auto& ease = panel_ease(); ease.t.step(now_ms)) {
-    panel_look().opacity = ease.from + (ease.to - ease.from) * ease.t.value();
+  if (auto& ease = needs_.paint->ease; ease.t.step(now_ms)) {
+    needs_.paint->panel.opacity = ease.from + (ease.to - ease.from) * ease.t.value();
     this->markDamaged();
   }
   // A room a bubble names has come -- its picture, or word that it is

@@ -194,10 +194,6 @@ struct panel_ease_t {
   skiff::paint::Tween t{1.0f, 260.0f};
   float from = 1.0f, to = 1.0f;
 };
-inline panel_ease_t& panel_ease() {
-  static panel_ease_t ease;
-  return ease;
-}
 // A chat background's dialog, for a level.
 template <class Actions>
 struct open_wallpaper_at {
@@ -255,8 +251,10 @@ template <class... Ts>
 struct variant_of_types<type_list<Ts...>> {
   using type = splice::variant<Ts...>;
 };
-// The emoji and stickers kept (emoji_kept).
+// The emoji and stickers kept (emoji_kept), and how fills are painted
+// (mux_paint).
 struct emoji_kept;
+struct mux_paint;
 // What the window's nodes are handed down, from the root -- the program's
 // own objects, each a pointer of a type of its own: what a node reads, it is
 // given by its parent, and takes what it needs of it with splice::remapped<>.
@@ -269,8 +267,9 @@ struct ui_needs {
   const palette* colours = nullptr;
   // The emoji and stickers kept: the program's.
   emoji_kept* emoji = nullptr;
-  // The looks shown: the program's.
+  // The looks shown, and how fills are painted: the program's.
   looks_shown* looks = nullptr;
+  mux_paint* paint = nullptr;
 };
 // A dialog as what it shows wants it: which of the palette's colours its
 // sheet is; its size -- fixed, as wide as fits what it shows up to a
@@ -524,26 +523,6 @@ struct panel_look_t {
   std::vector<skia::SkColor> tints;
   friend bool operator==(const panel_look_t&, const panel_look_t&) = default;
 };
-inline panel_look_t& panel_look() {
-  static panel_look_t look;
-  return look;
-}
-// Being drawn inside a panel's fill: set by the fill, put back as the node
-// that has it is done; and the node whose fill was a panel's, for its edge.
-inline bool& inside_panel() {
-  static bool inside = false;
-  return inside;
-}
-// Being drawn inside what floats over others -- a layer sliding in, a
-// dialog -- set by it, put back as it is done.
-inline bool& inside_float() {
-  static bool inside = false;
-  return inside;
-}
-inline scene::NodeId& panel_painted() {
-  static scene::NodeId id = 0;
-  return id;
-}
 // A float's backdrop kept while it moves -- sliding in, fading -- as the
 // user asked (#13420): what is under the window taken once, as it comes up,
 // blurred once, small, and drawn from until it stands still; then blurred
@@ -556,10 +535,6 @@ struct kept_blur {
   skia::Sp<skia::SkImage> blurred;              // the window under it, blurred, small
   skia::SkRect device = skia::SkRect::MakeEmpty();  // where that is on the device: all of the window
 };
-inline std::vector<std::pair<scene::NodeId, kept_blur>>& kept_blurs() {
-  static std::vector<std::pair<scene::NodeId, kept_blur>> kept;
-  return kept;
-}
 // What is drawn on a canvas's pixels so far, blurred by `sigma` (in its
 // pixels): taken a quarter of the size and blurred there -- a sixteenth of
 // the pixels. None where the canvas has no pixels of its own (a recording).
@@ -593,7 +568,8 @@ inline std::vector<std::pair<scene::NodeId, kept_blur>>& kept_blurs() {
 // shape -- `blur` 0 to 1 as Frosted's, the window's where below 0 -- and
 // its rect noted, for the host to repaint all of it with what is under it.
 // While it moves, the window under it as it came up, blurred once (above).
-inline void live_backdrop(const scene::State& state, skia::SkCanvas* canvas, float blur, float alpha) {
+inline void live_backdrop(std::vector<std::pair<scene::NodeId, kept_blur>>& all, const scene::State& state, skia::SkCanvas* canvas,
+                          float blur, float alpha) {
   const skia::SkRect on = canvas->getTotalMatrix().mapRect(state.fBounds);
   // Shown again after it was let go of -- a dialog's sheet, shut and opened
   // again: come up now, as a new one.
@@ -608,7 +584,6 @@ inline void live_backdrop(const scene::State& state, skia::SkCanvas* canvas, flo
   // A Gaussian's reach: three sigmas, on the device.
   noted.reach = std::ceil(3.0f * sigma * std::max(1.0f, canvas->getTotalMatrix().getScaleX())) + 1.0f;
 
-  auto& all = kept_blurs();
   std::erase_if(all, [](const auto& each) { return scene::work::entry(each.first) == nullptr; });
   auto found = std::ranges::find(all, state.fId, &std::pair<scene::NodeId, kept_blur>::first);
   // Come up now: what is under it is all that is drawn yet -- what is not
@@ -664,36 +639,50 @@ inline void live_backdrop(const scene::State& state, skia::SkCanvas* canvas, flo
 }
 // How mux paints every box's fill, as skiff asks a program (ProgramPaint):
 // the panels' look.
-struct mux_paint {
-  static std::optional<skia::SkColor> under(const scene::State& state, std::optional<skia::SkColor> fill, skia::SkCanvas* canvas,
+struct mux_paint : scene::Painting {
+  // The panels' look, as the program put it (show_panels), and its opacity
+  // eased from one chat's to another's.
+  panel_look_t panel;
+  panel_ease_t ease;
+  // Being drawn inside a panel's fill: set by the fill, put back as the node
+  // that has it is done; and the node whose fill was a panel's, for its
+  // edge. And inside what floats over others -- a layer sliding in, a
+  // dialog -- set by it, put back as it is done.
+  bool inside_panel = false;
+  bool inside_float = false;
+  scene::NodeId panel_painted = 0;
+  // The blurs kept of what is under each float, while it moves.
+  std::vector<std::pair<scene::NodeId, kept_blur>> blurs;
+
+  std::optional<skia::SkColor> under(const scene::State& state, std::optional<skia::SkColor> fill, skia::SkCanvas* canvas,
                                             float alpha) {
-    const panel_look_t& look = panel_look();
+    const panel_look_t& look = panel;
     if (!fill || !look.active)
       return fill;
     // A panel's fill on what floats, live: its sheet under it shows what is
     // behind already -- frosted again from the wallpaper, a title bar showed
     // the picture over the messages the sheet blurred.
-    if (inside_float() && !state.fFloats && look.frosted && window_look().live_blur &&
+    if (inside_float && !state.fFloats && look.frosted && window_look().live_blur &&
         std::ranges::contains(look.panels, *fill))
       return std::nullopt;
     // Floating over others -- a popup, a sheet -- frosted, and asked so:
     // what is really under it blurred, as it is drawn, its fill over that.
     if (state.fFloats && look.frosted && window_look().live_blur) {
       const bool panel = std::ranges::contains(look.panels, *fill);
-      if (panel && inside_panel())
+      if (panel && inside_panel)
         return std::nullopt;
-      live_backdrop(state, canvas, look.blur, alpha);
+      live_backdrop(blurs, state, canvas, look.blur, alpha);
       if (panel) {
-        inside_panel() = true;
-        panel_painted() = state.fId;
+        inside_panel = true;
+        panel_painted = state.fId;
       }
       return scene::detail::atOpacity(*fill, look.opacity);
     }
     if (std::ranges::contains(look.panels, *fill)) {
-      if (inside_panel())
+      if (inside_panel)
         return std::nullopt;
-      inside_panel() = true;
-      panel_painted() = state.fId;
+      inside_panel = true;
+      panel_painted = state.fId;
       if (look.frosted)
         widgets::drawBackdrops(canvas, frost_source{}(), look.blur, scene::detail::roundedBox(state, state.fBounds), alpha);
       return scene::detail::atOpacity(*fill, look.opacity);
@@ -702,15 +691,15 @@ struct mux_paint {
     // Seen's list over the message's menu: as it is, near opaque. At the
     // panels' opacity it let the plate under it through where they met --
     // darker there, lighter where it stood out of it.
-    if (*fill == popup_colour() && inside_float() && !state.fFloats)
+    if (*fill == popup_colour() && inside_float && !state.fFloats)
       return fill;
     if (std::ranges::contains(look.tints, *fill))
       return scene::detail::atOpacity(*fill, look.opacity);
     return fill;
   }
   // Glass: a light edge round the panel.
-  static void over(const scene::State& state, skia::SkCanvas* canvas, float alpha) {
-    if (!panel_look().edge || panel_painted() != state.fId)
+  void over(const scene::State& state, skia::SkCanvas* canvas, float alpha) {
+    if (!panel.edge || panel_painted != state.fId)
       return;
     skia::SkPaint paint;
     paint.setAntiAlias(true);
@@ -722,15 +711,16 @@ struct mux_paint {
   }
   // A panel's fill found in a node holds for what is under it, and no further.
   struct scope {
+    mux_paint* paint;
     bool was;
     bool was_float;
-    explicit scope(const scene::State& state) : was(inside_panel()), was_float(inside_float()) {
+    scope(mux_paint& p, const scene::State& state) : paint(&p), was(p.inside_panel), was_float(p.inside_float) {
       if (state.fFloats)
-        inside_float() = true;
+        p.inside_float = true;
     }
     ~scope() {
-      inside_panel() = was;
-      inside_float() = was_float;
+      paint->inside_panel = was;
+      paint->inside_float = was_float;
     }
   };
 };

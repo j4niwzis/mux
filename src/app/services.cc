@@ -31,6 +31,8 @@ struct services {
   mux::ui::emoji_kept emoji;
   // The looks the window shows.
   mux::ui::looks_shown looks;
+  // How fills are painted: handed to the host, which draws with it.
+  mux::ui::mux_paint paint;
   network* net = nullptr;
   message_store* store = nullptr;
   mailbox_type* box = nullptr;

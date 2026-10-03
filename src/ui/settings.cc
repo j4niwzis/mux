@@ -63,10 +63,10 @@ struct settings_dialog : scene::Node {
     page.parts.header.fState.setShift(0.0f, offset);
   }
   static void pin_header(auto&, float) {}
-  void draw(skia::SkCanvas* canvas, float alpha) {
+  void draw(skiff::scene::Painting& painting, skia::SkCanvas* canvas, float alpha) {
     const float offset = -parts.scroll.contentsShift();
     splice::visit([&](auto& one) { pin_header(one, offset); }, this->page());
-    skiff::scene::drawDefault(*this, canvas, alpha);
+    skiff::scene::drawDefault(*this, painting, canvas, alpha);
   }
   // Where the page is scrolled to, to be kept as it is made again.
   [[nodiscard]] float offset() const { return parts.scroll.current(); }

@@ -246,12 +246,12 @@ struct window : scene::Node {
              new_room.settling() || packs.settling() || wallpaper.settling() || explore.settling() ||
              tools.settling() || sending.settling() || passphrase.settling() || verifying.settling();
     }
-    void draw(skia::SkCanvas* canvas, float alpha) {
+    void draw(skiff::scene::Painting& painting, skia::SkCanvas* canvas, float alpha) {
       auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up] = parts;
       skia::SkMatrix inverse;
       if (!this->dialog_fading() || !canvas->getTotalMatrix().invert(&inverse)) {
         frozen = nullptr;
-        scene::drawDefault(*this, canvas, alpha);
+        scene::drawDefault(*this, painting, canvas, alpha);
         return;
       }
       if (!frozen) {
@@ -264,22 +264,22 @@ struct window : scene::Node {
           skia::SkCanvas into(pixels);
           into.translate(-device.fLeft, -device.fTop);
           into.concat(canvas->getTotalMatrix());
-          scene::draw(backdrop, &into, alpha);
-          scene::draw(behind, &into, alpha);
-          scene::draw(frame, &into, alpha);
+          scene::draw(backdrop, painting, &into, alpha);
+          scene::draw(behind, painting, &into, alpha);
+          scene::draw(frame, painting, &into, alpha);
           frozen = pixels.asImage();
           frozen_at = skia::SkRect::MakeXYWH(device.fLeft, device.fTop, static_cast<float>(width), static_cast<float>(height));
         }
       }
       if (!frozen) {
-        scene::drawDefault(*this, canvas, alpha);
+        scene::drawDefault(*this, painting, canvas, alpha);
         return;
       }
       canvas->drawImageRect(frozen, inverse.mapRect(frozen_at), skia::SkSamplingOptions(skia::SkFilterMode::kNearest));
-      const auto over = [&](auto&... each) { (scene::draw(each, canvas, alpha), ...); };
+      const auto over = [&](auto&... each) { (scene::draw(each, painting, canvas, alpha), ...); };
       over(settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore,
            tools, sending, passphrase, verifying);
-      const auto over_if = [&](auto&... each) { ((each ? scene::draw(*each, canvas, alpha) : void()), ...); };
+      const auto over_if = [&](auto&... each) { ((each ? scene::draw(*each, painting, canvas, alpha) : void()), ...); };
       over_if(emoji, menu, viewer, text_menu_up);
     }
 

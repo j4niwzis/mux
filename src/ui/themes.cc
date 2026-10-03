@@ -633,7 +633,7 @@ inline void use_theme(const config::theme_t& chosen, const config::accent_t& acc
 // The panels' look put in place, for skiff to paint them in: only over the
 // background behind the whole window. Whether it changed -- the window to
 // be repainted.
-inline bool show_panels(const config::bubble_look& look) {
+inline bool show_panels(mux_paint& paint, const config::bubble_look& look) {
   const bool kinded = window_look().behind && splice::visit(splice::overloaded{[](config::bubbles::solid) { return false; },
                                                                               [](const auto&) { return true; }},
                                                            look.kind);
@@ -649,15 +649,15 @@ inline bool show_panels(const config::bubble_look& look) {
       .tints = {chosen_colour, tile_colour, popup_colour()}};
   if (!kinded)
     next = {};
-  if (next == panel_look())
+  if (next == paint.panel)
     return false;
   // Only the opacity another: eased to it, from where it is now.
-  panel_look_t& now = panel_look();
+  panel_look_t& now = paint.panel;
   const bool same_but_opacity = now.active && next.active && now.frosted == next.frosted && now.blur == next.blur &&
                                 now.edge == next.edge &&
                                 now.panels == next.panels && now.tints == next.tints;
   if (same_but_opacity) {
-    auto& ease = panel_ease();
+    auto& ease = paint.ease;
     if (ease.t.moving() && ease.to == next.opacity)
       return false;
     ease.from = now.opacity;
@@ -666,7 +666,7 @@ inline bool show_panels(const config::bubble_look& look) {
     ease.t.setTarget(1.0f);
     return true;
   }
-  panel_ease().t.jump(1.0f);
+  paint.ease.t.jump(1.0f);
   now = std::move(next);
   return true;
 }

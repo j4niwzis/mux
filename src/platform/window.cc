@@ -464,7 +464,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
       auto due_now = app.take_toasts();
       for (std::size_t i = due_now.size() > 3 ? due_now.size() - 3 : 0; i < due_now.size(); ++i)
         shown_toasts.show(due_now[i]);
-      shown_toasts.frame();
+      shown_toasts.frame(app.painting());
       // Off screen: no frame -- not the program's either, which marks what
       // is in view as read. Woken only by events and the network.
       if (!on_screen) {
@@ -734,7 +734,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
             if (how.transparent)
               record->clear(skia::SkColor{0});
             record->scale(scale, scale);
-            scene.draw(record);
+            scene.draw(app.painting(), record);
             record->restore();
           }
           const auto picture = recorder.finishRecordingAsPicture();
@@ -765,7 +765,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
             if (how.transparent)
               into->clear(skia::SkColor{0});
             into->scale(scale, scale);
-            scene.draw(into);
+            scene.draw(app.painting(), into);
             into->restore();
           }
         }
@@ -816,7 +816,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
         canvas->clear(how.transparent ? skia::SkColor{0} : skia::colorSetARGB(255, 24, 27, 30));
         canvas->save();
         canvas->scale(scale, scale);
-        scene.draw(canvas);
+        scene.draw(app.painting(), canvas);
         canvas->restore();
         // All of it drawn: what blurs live and was not drawn is not shown.
         std::erase_if(skiff::scene::detail::liveBackdrops(),

@@ -878,7 +878,7 @@ struct conversations_screen : nodes::Stack {
   // for, and the slide went by in jerks unless the mouse moved.
   [[nodiscard]] bool settling() const {
     return jumping_to.has_value() || aiming.has_value() || slide_wait > 0 || list_in.moving() ||
-           panel_ease().t.moving() || pane_in.moving();
+           needs_.paint->ease.t.moving() || pane_in.moving();
   }
   // Where jumps in a chat came from -- a reply's quote, a link to a
   // message: "↓" goes back to each in turn, the last first, before it goes
@@ -1234,7 +1234,7 @@ struct conversations_screen : nodes::Stack {
   // by here already, and nothing ticked this again -- the arrow stayed.
   [[nodiscard]] bool wantsTick() const {
     return slide_wait > 0 || list_in.moving() || pane_in.moving() || docked_panel_height() != docked_applied ||
-           panel_ease().t.moving() ||
+           needs_.paint->ease.t.moving() ||
            this->away() != chat.area.parts.jump.visible() ||
            this->older_due() || this->history_pending() ||
            jumping_to.has_value() || aiming.has_value() || jump_age != 0 || timeline.moving() ||

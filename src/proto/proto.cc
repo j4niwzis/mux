@@ -42,6 +42,7 @@ struct room_directory {};    // rooms listed, searched and joined from a server'
 struct room_creation {};     // rooms made
 struct sticker_packs {};     // packs of stickers and emoji, a room's and an account's
 struct history_context {};   // a window of history around a message, asked of the server
+struct identity_verification {};  // people's and one's own sessions verified, by emoji
 }  // namespace feature
 
 // What a protocol's account does beyond what every account does: a flag

@@ -317,10 +317,12 @@ struct person_card : nodes::Stack {
     parts.accept.setVisible(facts.trust && splice::visit(splice::overloaded{[](trust::changed) { return true; },
                                                                             [](const auto&) { return false; }},
                                                          *facts.trust));
-    // Verify where they are not, or not any more: not for one verified.
-    parts.verify.setVisible(!facts.trust || !splice::visit(splice::overloaded{[](trust::verified) { return true; },
-                                                                              [](const auto&) { return false; }},
-                                                           *facts.trust));
+    // Verify where their protocol verifies people, and they are not, or not
+    // any more: not for one verified.
+    parts.verify.setVisible(proto::offers(protocol_state_of(account), proto::feature::identity_verification{}) &&
+                            (!facts.trust || !splice::visit(splice::overloaded{[](trust::verified) { return true; },
+                                                                               [](const auto&) { return false; }},
+                                                            *facts.trust)));
   }
 };
 

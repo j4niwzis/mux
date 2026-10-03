@@ -17,6 +17,7 @@ constexpr bool offers(const state&, feature::room_directory) { return true; }
 constexpr bool offers(const state&, feature::room_creation) { return true; }
 constexpr bool offers(const state&, feature::sticker_packs) { return true; }
 constexpr bool offers(const state&, feature::history_context) { return true; }
+constexpr bool offers(const state&, feature::identity_verification) { return true; }
 
 // matrix.to, for a person, a room and a message in it.
 inline std::optional<std::string> share_link(const state&, std::string_view address) {

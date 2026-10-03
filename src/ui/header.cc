@@ -204,19 +204,12 @@ struct chat_header : nodes::Stack {
           about = std::format("{}, {} and {} more are typing…", names[0], names[1], names.size() - 2);
       }
     }
-    // Encrypted, said under its name, as Element's shield on the header: and
-    // in a direct chat, what is known of the other's identity -- verified,
-    // not, or reset since it was verified.
-    if (one->encrypted && one->typing.empty()) {
-      std::string shield = "\U0001F512 Encrypted";
-      if (!is_group(*one))
-        if (const auto trust = now.trust_of(one->id.account, contact_of(*one)))
-          shield += splice::visit(splice::overloaded{[](trust::verified) { return std::string(" \u00b7 Verified"); },
-                                                     [](trust::unverified) { return std::string(" \u00b7 Not verified"); },
-                                                     [](trust::changed) { return std::string(" \u00b7 Identity reset"); }},
-                                  *trust);
-      about = about.empty() ? shield : std::format("{} \u00b7 {}", about, shield);
-    }
+    // What its protocol says of it after (proto::header_badges): Matrix's
+    // shield, for one.
+    about = std::ranges::fold_left(proto::header_badges(protocol_state_of(one->id.account), *one, now), std::move(about),
+                                   [](std::string so_far, const proto::part::badge& badge) {
+                                     return so_far.empty() ? badge.text : std::format("{} \u00b7 {}", so_far, badge.text);
+                                   });
     return {one->id.id, display_name(*one), std::move(about)};
   }
 

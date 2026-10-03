@@ -622,4 +622,12 @@ inline bool show_panels(const config::bubble_look& look) {
   return true;
 }
 
+// A protocol's part's tone, in the theme's colours.
+[[nodiscard]] inline skia::SkColor tone_colour(const proto::part::tone_t& tone) {
+  return splice::visit(splice::overloaded{[](proto::part::tone::plain) { return dim_colour; },
+                                          [](proto::part::tone::accent) { return accent_colour; },
+                                          [](proto::part::tone::danger) { return error_colour; }},
+                       tone);
+}
+
 }  // namespace mux::ui

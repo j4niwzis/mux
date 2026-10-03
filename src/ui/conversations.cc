@@ -1310,9 +1310,8 @@ struct conversations_screen : nodes::Stack {
       pinned_t pinned;
       timeline_area<Actions> area;
       mention_list mentions;
-      // Over the composer, as Element's: a direct chat whose other is not
-      // verified -- what is sent is encrypted to them all the same -- or
-      // whose identity was reset.
+      // Over the composer: what the chat's protocol says there -- Matrix's
+      // warning that the other is not verified, or was reset.
       nodes::Text trust_warning{"", 13.0f, text_colour};
       composer_bar<Actions> line;
       empty_state empty;
@@ -2843,28 +2842,17 @@ struct conversations_screen : nodes::Stack {
       this->show_conversation(now);
   }
 
-  // Element's warning over the composer, in a direct encrypted chat: the
-  // other not verified -- messages are still encrypted to them -- or their
-  // identity reset, to be verified again or withdrawn on their card.
-  void show_trust_warning(const conversation* one, const model& now) {
-    std::string said;
-    if (one && one->encrypted && !is_group(*one))
-      if (const auto trust = now.trust_of(one->id.account, contact_of(*one)))
-        said = splice::visit(
-            splice::overloaded{
-                [](trust::verified) { return std::string(); },
-                [&](trust::unverified) {
-                  return std::format("\u26A0 {} is not verified. Messages are encrypted to them, but verify them "
-                                     "(their card) to be sure who reads them.",
-                                     display_name(*one));
-                },
-                [&](trust::changed) {
-                  return std::format("\u26A0 {}'s identity was reset. Verify them again, or withdraw the verification, "
-                                     "on their card.",
-                                     display_name(*one));
-                }},
-            *trust);
+  // What the chat's protocol says over the composer (proto::composer_banners):
+  // Matrix's warning where the other is not verified, for one. Its banners
+  // one under the other, the bar in the first's tone.
+  void show_banners(const conversation* one, const model& now) {
+    const auto banners = one ? proto::composer_banners(protocol_state_of(one->id.account), *one, now)
+                             : std::vector<proto::part::banner>{};
+    const std::string said = banners | std::views::transform(&proto::part::banner::text) | std::views::join_with('\n') |
+                             std::ranges::to<std::string>();
     auto& bar = chat.parts.trust_warning;
+    if (!banners.empty())
+      bar.apply({.background = (tone_colour(banners.front().tone) & 0x00FFFFFFu) | (0x22u << 24)});
     if (bar.text() != said)
       bar.setText(said);
     if (bar.visible() != !said.empty()) {
@@ -2882,7 +2870,7 @@ struct conversations_screen : nodes::Stack {
     head_shown = chat_header<Actions>::view_of(one, now);
     head_shown.back = single;
     header.show(head_shown, [this](const auto& shown) { return chat_header<Actions>(actions, shown); });
-    this->show_trust_warning(one, now);
+    this->show_banners(one, now);
     if (pinned_of != chosen) {
       pinned_of = chosen;
       pinned_step = std::numeric_limits<std::size_t>::max();

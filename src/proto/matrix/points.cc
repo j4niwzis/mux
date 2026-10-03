@@ -4,6 +4,7 @@
 export module mux.proto.matrix;
 
 import std;
+import splice;
 import mux.core;
 import mux.proto;
 import mux.proto.matrix.links;
@@ -40,6 +41,51 @@ constexpr account_page_list<settings::encryption, settings::sessions> account_pa
 inline std::string direct_contact(const state&, const conversation& one) {
   const auto other = std::ranges::find_if(one.members, [&](const member& each) { return each.id != one.id.account.address; });
   return other == one.members.end() ? std::string() : other->id;
+}
+// What is known of the other person's identity, in a direct encrypted chat.
+[[nodiscard]] inline std::optional<trust_t> other_trust(const state& now, const conversation& one, const model& known) {
+  const bool direct = splice::visit(
+      splice::overloaded{[](const conversation_kind::direct&) { return true; }, [](const auto&) { return false; }}, one.kind);
+  if (!one.encrypted || !direct)
+    return std::nullopt;
+  return known.trust_of(one.id.account, direct_contact(now, one));
+}
+// Encrypted, said after the chat's status, as Element's shield on its
+// header: and in a direct chat, what is known of the other's identity.
+inline std::vector<part::badge> header_badges(const state& now, const conversation& one, const model& known) {
+  if (!one.encrypted || !one.typing.empty())
+    return {};
+  const auto trust = other_trust(now, one, known);
+  const std::string after = !trust ? std::string()
+                                   : splice::visit(splice::overloaded{[](trust::verified) { return std::string(" \u00b7 Verified"); },
+                                                                      [](trust::unverified) { return std::string(" \u00b7 Not verified"); },
+                                                                      [](trust::changed) { return std::string(" \u00b7 Identity reset"); }},
+                                                   *trust);
+  return {part::badge{"\U0001F512 Encrypted" + after}};
+}
+// Element's warning over the composer, in a direct encrypted chat: the
+// other not verified -- messages are still encrypted to them -- or their
+// identity reset, to be verified again or withdrawn on their card.
+inline std::vector<part::banner> composer_banners(const state& now, const conversation& one, const model& known) {
+  const auto trust = other_trust(now, one, known);
+  if (!trust)
+    return {};
+  const std::string& name = one.name.empty() ? one.id.id : one.name;
+  return splice::visit(
+      splice::overloaded{
+          [](trust::verified) { return std::vector<part::banner>{}; },
+          [&](trust::unverified) {
+            return std::vector<part::banner>{{std::format("\u26A0 {} is not verified. Messages are encrypted to them, but "
+                                                          "verify them (their card) to be sure who reads them.",
+                                                          name)}};
+          },
+          [&](trust::changed) {
+            return std::vector<part::banner>{{std::format("\u26A0 {}'s identity was reset. Verify them again, or withdraw "
+                                                          "the verification, on their card.",
+                                                          name),
+                                              part::tone::danger{}}};
+          }},
+      *trust);
 }
 constexpr bool can_pin(const state&, std::string_view event) { return event.starts_with('$'); }
 

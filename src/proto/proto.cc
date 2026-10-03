@@ -81,6 +81,34 @@ struct account_page_list {};
 template <class... Requests>
 struct request_list {};
 
+// What a protocol shows of its own beside the client's, made of the
+// client's basic components: each said as data, drawn by the client's own
+// nodes -- a line under a message, a badge after a chat's status, a banner
+// over the composer. Which a protocol shows, and when, its overloads say
+// (message_lines, header_badges, composer_banners), from its state, the chat
+// and what the model knows: Matrix's banner only where the other person is
+// not verified.
+namespace part {
+namespace tone {
+struct plain {};   // as a note
+struct accent {};  // as news
+struct danger {};  // as a warning
+}  // namespace tone
+using tone_t = splice::variant<tone::plain, tone::accent, tone::danger>;
+struct line {
+  std::string text;
+  tone_t tone = tone::plain{};
+};
+struct badge {
+  std::string text;
+  tone_t tone = tone::plain{};
+};
+struct banner {
+  std::string text;
+  tone_t tone = tone::accent{};
+};
+}  // namespace part
+
 }  // namespace mux::proto
 
 // The defaults: what a protocol that says nothing of a thing comes to.
@@ -101,6 +129,10 @@ inline std::string unheard_presence(const auto&) { return {}; }
 constexpr account_page_list<> account_pages(const auto&) { return {}; }
 // No requests of its own.
 constexpr request_list<> requests_of(const auto&) { return {}; }
+// Nothing shown of its own.
+inline std::vector<part::line> message_lines(const auto&, const conversation&, const message&) { return {}; }
+inline std::vector<part::badge> header_badges(const auto&, const conversation&, const auto&) { return {}; }
+inline std::vector<part::banner> composer_banners(const auto&, const conversation&, const auto&) { return {}; }
 // Any chat may be left.
 inline bool can_leave(const auto&, const conversation&) { return true; }
 // Whom a direct chat is with: the chat's own address.
@@ -227,6 +259,36 @@ inline constexpr struct can_leave_t {
     }, state);
   }
 } can_leave{};
+
+// What a protocol shows of its own: under a message, after a chat's
+// status in its header, over its composer.
+inline constexpr struct message_lines_t {
+  template <class State>
+  std::vector<part::line> operator()(const State& state, const conversation& chat, const message& one) const {
+    return splice::visit([&](const auto& now) {
+      using defaults::message_lines;
+      return message_lines(now, chat, one);
+    }, state);
+  }
+} message_lines{};
+inline constexpr struct header_badges_t {
+  template <class State, class Model>
+  std::vector<part::badge> operator()(const State& state, const conversation& chat, const Model& known) const {
+    return splice::visit([&](const auto& now) {
+      using defaults::header_badges;
+      return header_badges(now, chat, known);
+    }, state);
+  }
+} header_badges{};
+inline constexpr struct composer_banners_t {
+  template <class State, class Model>
+  std::vector<part::banner> operator()(const State& state, const conversation& chat, const Model& known) const {
+    return splice::visit([&](const auto& now) {
+      using defaults::composer_banners;
+      return composer_banners(now, chat, known);
+    }, state);
+  }
+} composer_banners{};
 
 // A protocol's own requests, asked of its state type.
 template <class State>

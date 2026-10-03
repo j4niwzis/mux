@@ -1273,6 +1273,8 @@ struct message_bubble : nodes::Stack {
       // A thread's root: its summary -- how many answers, the latest -- as
       // Element shows it under the message; pressed, the thread.
       std::optional<nodes::Text> thread;
+      // What its protocol says under it (proto::message_lines).
+      std::vector<nodes::Text> lines;
       nodes::Text time;
       // The time inside the last line of the text, where that line leaves
       // room for it, as Telegram's: out of the column's flow, at its end.
@@ -1383,7 +1385,7 @@ struct message_bubble : nodes::Stack {
     // where it is narrower; on a line of its own only where they do not.
     // Decided from the last layout; a change is laid out at the next.
     void update(double now_ms) {
-      auto& [frost, name, forwarded, quote, picture, album, file, text, blocks, cards, preview, reactions, thread, time, inline_time, tail] = parts;
+      auto& [frost, name, forwarded, quote, picture, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, time, inline_time, tail] = parts;
       // A sticker's time is over it, and nowhere else: placed beside its
       // reactions too, it was shown twice.
       if (picture && picture->sticker) {
@@ -1507,7 +1509,7 @@ struct message_bubble : nodes::Stack {
     // checks the guess, above.
     bool guessed = false;
     void guess_time(skia::SkFont& font) {
-      auto& [frost, name, forwarded, quote, picture, album, file, text, blocks, cards, preview, reactions, thread, time, inline_time, tail] = parts;
+      auto& [frost, name, forwarded, quote, picture, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, time, inline_time, tail] = parts;
       if (std::exchange(guessed, true) || text.text().empty())
         return;
       const skiff::paint::Painter p(nullptr, font);
@@ -1559,7 +1561,7 @@ struct message_bubble : nodes::Stack {
                 .time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour),
                 .inline_time = nodes::Text(when, 11.0f, mine ? sent_time_colour : dim_colour)},
           plate(plate_of(mine)) {
-      auto& [frost, name, forwarded, quote, picture, album, file, text, blocks, cards, preview, reactions, thread, time, inline_time, tail] = parts;
+      auto& [frost, name, forwarded, quote, picture, album, file, text, blocks, cards, preview, reactions, thread, protocol_lines, time, inline_time, tail] = parts;
       this->setGap(2.0f);
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
                     .padding = {kPadY, kPadX, kPadY, kPadX}, .cornerRadius = 12.0f, .background = plate});
@@ -1941,6 +1943,11 @@ struct message_bubble : nodes::Stack {
       body.parts.thread->setElided(true);
       body.parts.thread->apply({.fillX = true, .margin = {4.0f, 0.0f, 0.0f, 0.0f}});
     }
+    std::ranges::for_each(proto::message_lines(protocol_state_of(in.id.account), in, said), [&](const proto::part::line& one) {
+      nodes::Text& shown = body.parts.lines.emplace_back(one.text, 12.0f, tone_colour(one.tone));
+      shown.setWrapped(true);
+      shown.apply({.fillX = true, .margin = {4.0f, 0.0f, 0.0f, 0.0f}});
+    });
     if (!said.reactions.empty()) {
       body.parts.reactions.emplace();
       for (const auto& [key, who] : said.reactions)

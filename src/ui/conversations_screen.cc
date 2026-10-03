@@ -672,9 +672,9 @@ struct conversations_screen : nodes::Stack {
       : actions(a),
         needs_(n),
         parts{.side = side_column(*n.colours, a),
-              .edge = side_edge(resize_sidebar_to<Actions>{a}),
+              .edge = side_edge(*n.colours, resize_sidebar_to<Actions>{a}),
               .chat = chat_column(n),
-              .info_edge = info_edge_t(resize_info_to<Actions>{a}, false),
+              .info_edge = info_edge_t(*n.colours, resize_info_to<Actions>{a}, false),
               .info = info_panel<Actions>(a, *n.colours, *n.shared),
               .threads = threads_panel<Actions>(n)} {
     fState.apply({.fill = true});

@@ -11,6 +11,7 @@ import mux.vault;
 import splice;
 import mux.core;
 import mux.config;
+import mux.protocols;
 import mux.logic.room_events;
 
 export namespace mux::app {
@@ -278,6 +279,92 @@ struct kept_settings {
   }
 
   // The file as all of this says it.
+  // The settings as the file keeps them, taken in: at the start, or once
+  // local data is opened -- what file() writes, read back.
+  void take(const mux::config::file& saved) {
+    const auto chat_of = [](const std::string& account, const std::string& conversation) {
+      return mux::conversation_id{{mux::proto::protocol_of(account), account}, conversation};
+    };
+    this->saved = mux::config::accounts_of(saved);
+    this->foreign_accounts = mux::config::foreign_of(saved);
+    this->motion = saved.motion;
+    // The account shown last, shown again once it is in the model: accounts
+    // arrive after the first frame, and the first one there is not the one.
+    this->last_account = saved.last_account;
+    // The emoji picked lately, the stickers sent lately, and the favourites.
+    this->recent_emoji = saved.recent_emoji.value_or(std::vector<std::string>{});
+    const auto emotes_of = [](const std::optional<std::vector<mux::config::sticker_kept>>& kept) {
+      return kept.value_or(std::vector<mux::config::sticker_kept>{}) | std::views::transform([](const mux::config::sticker_kept& one) {
+               return mux::emote{.shortcode = one.shortcode, .url = one.url, .body = one.body, .w = one.w, .h = one.h, .size = one.size,
+                                 .mimetype = one.mimetype};
+             }) |
+             std::ranges::to<std::vector>();
+    };
+    this->recent_stickers = emotes_of(saved.recent_stickers);
+    this->favourite_stickers = emotes_of(saved.favourite_stickers);
+    this->theme = mux::config::theme_of(saved.theme);
+    if (saved.wallpaper)
+      this->wallpaper = mux::config::wallpaper_of(std::string_view(*saved.wallpaper));
+    if (saved.bubbles)
+      this->bubbles = mux::config::bubble_look_of(*saved.bubbles);
+    if (saved.panels)
+      this->panels = mux::config::bubble_look_of(*saved.panels);
+    this->accent = mux::config::accent_of(saved.accent);
+    this->renderer = mux::config::renderer_of(saved.renderer);
+    this->partial_redraw = saved.partial_redraw.value_or(false);
+    this->flash_redraws = saved.flash_redraws.value_or(false);
+    this->vsync = saved.vsync.value_or(true);
+    this->window_opacity = std::clamp(saved.window_opacity.value_or(100), 20, 100);
+    this->spaces = saved.spaces.value_or(true);
+    this->top_bar = saved.top_bar.value_or(true);
+    this->home_hides_spaced = saved.home_hides_spaced.value_or(false);
+    this->home_hides_direct = saved.home_hides_direct.value_or(false);
+    if (saved.space_places)
+      this->space_places = *saved.space_places | std::views::transform([](const mux::config::space_place& one) {
+                               return mux::config::space_placed{one.account, mux::config::space_item_of(one.item),
+                                                                mux::config::space_bar_of(one.bar)};
+                             }) |
+                             std::ranges::to<std::vector>();
+    this->show_fps = saved.show_fps.value_or(false);
+    this->interface_scale = saved.interface_scale.value_or(100);
+    this->limits = saved.cache.value_or(mux::config::cache_limits{});
+    this->sending = saved.sending.value_or(mux::config::sending_settings{});
+    this->history = saved.history.value_or(mux::config::history_settings{});
+    this->proxies = saved.proxies.value_or(std::vector<mux::config::proxy_settings>{});
+    this->notifications = saved.notifications.value_or(mux::config::notification_settings{});
+    for (const auto& one : saved.chat_notify.value_or(std::vector<mux::config::chat_notify>{}))
+      this->notify_modes.insert_or_assign(chat_of(one.account, one.conversation), mux::config::notify_mode_of(one.mode));
+    for (const auto& one : saved.room_events.value_or(std::vector<mux::config::room_events_choice>{})) {
+      const mux::conversation_id chat = chat_of(one.account, one.conversation);
+      if (one.show)
+        this->room_events.insert_or_assign(chat, *one.show);
+      if (one.kinds)
+        this->room_event_kinds.insert_or_assign(chat, *one.kinds);
+      if (one.receipts)
+        this->receipts_shown_in.insert_or_assign(chat, *one.receipts);
+      if (one.previews)
+        this->previews_shown_in.insert_or_assign(chat, *one.previews);
+      if (one.typing)
+        this->typing_sent_in.insert_or_assign(chat, *one.typing);
+      if (one.previews_direct)
+        this->previews_direct_in.insert_or_assign(chat, *one.previews_direct);
+      if (one.jump_search)
+        this->jump_search_in.insert_or_assign(chat, *one.jump_search);
+      if (one.wallpaper)
+        this->wallpaper_in.insert_or_assign(chat, mux::config::wallpaper_of(std::string_view(*one.wallpaper)));
+      if (one.bubbles)
+        this->bubbles_in.insert_or_assign(chat, mux::config::bubble_look_of(*one.bubbles));
+      if (one.panels)
+        this->panels_in.insert_or_assign(chat, mux::config::bubble_look_of(*one.panels));
+      if (one.forum.value_or(false))
+        this->forums.insert(chat);
+      if (one.hide_from_home.value_or(false))
+        this->hidden_from_home.insert(chat);
+    }
+    this->placements = saved.placements.value_or(std::vector<mux::config::chat_placement>{});
+    for (const auto& one : saved.muted.value_or(std::vector<mux::config::muted_chat>{}))
+      this->muted.insert(chat_of(one.account, one.conversation));
+  }
   [[nodiscard]] mux::config::file file() const {
     auto out = mux::config::file_of(saved, foreign_accounts);
     out.motion = motion;

@@ -57,6 +57,8 @@ export namespace mux::ui {
 template <class Actions>
 struct info_panel : nodes::Stack {
   Actions* actions = nullptr;
+  // The colours it is made in, for what it makes later.
+  const palette* colours_ = nullptr;
   account_id account;
   std::string key;
   // The member shown on a page of their own, over the group's, if one is:
@@ -165,14 +167,15 @@ struct info_panel : nodes::Stack {
     struct about_block : nodes::Stack {
       struct parts_t {
         nodes::Text text;
-        nodes::Text label{"Description", 12.0f, dim_colour};
+        nodes::Text label;
       } parts;
-      explicit about_block(const std::string& said) : parts{.text = nodes::Text(said, 14.0f, text_colour)} {
+      about_block(const palette& colours, const std::string& said)
+          : parts{.text = nodes::Text(said, 14.0f, colours.text), .label = nodes::Text("Description", 12.0f, colours.dim)} {
         this->setGap(2.0f);
         fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 20.0f, 8.0f, 20.0f}});
         parts.text.setWrapped(true);
         parts.text.setSelectable(true);
-        parts.text.setLinks(link_spans_in(said), accent_colour);
+        parts.text.setLinks(link_spans_in(said), colours.accent);
         parts.text.apply({.fillX = true});
       }
     };
@@ -192,9 +195,9 @@ struct info_panel : nodes::Stack {
     head(Actions* a, info_panel* panel, const view& shown)
         : parts{.top = top_row(a, panel, shown.of_person),
                 .avatar = avatar_button<Actions>(a, shown.key, shown.name, 96.0f),
-                .name = nodes::Text(shown.name, 17.0f, text_colour, true),
-                .status = nodes::Text(shown.status, 13.0f, dim_colour),
-                .about = about_block(shown.topic),
+                .name = nodes::Text(shown.name, 17.0f, panel->colours_->text, true),
+                .status = nodes::Text(shown.status, 13.0f, panel->colours_->dim),
+                .about = about_block(*panel->colours_, shown.topic),
                 .id_text = id_line(shown.key, shown.copied)} {
       auto& [top, avatar, name, status, tiles, person_tiles, band_1, about, addresses, id_text] = parts;
       about.setVisible(!shown.topic.empty());
@@ -220,8 +223,8 @@ struct info_panel : nodes::Stack {
       nodes::Text title;
       add_button add_member;
     } parts;
-    members_head(Actions* a, std::size_t count)
-        : parts{.title = nodes::Text(std::format("{} MEMBER{}", count, count == 1 ? "" : "S"), 13.0f, dim_colour, true),
+    members_head(Actions* a, const palette& colours, std::size_t count)
+        : parts{.title = nodes::Text(std::format("{} MEMBER{}", count, count == 1 ? "" : "S"), 13.0f, colours.dim, true),
                 .add_member = add_button(icon::add_person{}, {a, "Adding members"})} {
       this->setHorizontal();
       this->setGap(10.0f);
@@ -248,7 +251,7 @@ struct info_panel : nodes::Stack {
   };
   struct parts_t {
     nodes::ScrollContainer<column> scroll{column()};
-    nodes::Box<> edge{band_colour};  // its left edge
+    nodes::Box<> edge;  // its left edge
   } parts;
   column& content = std::get<0>(parts.scroll.fChildren);
   nodes::Memo<view, head>& upper = content.parts.upper;
@@ -260,8 +263,8 @@ struct info_panel : nodes::Stack {
 
   static constexpr float kWidth = 340.0f;
 
-  explicit info_panel(Actions* a) : actions(a) {
-    fState.apply({.background = sidebar_colour, .masking = true});
+  info_panel(Actions* a, const palette& colours) : actions(a), colours_(&colours), parts{.edge = nodes::Box<>(colours.band)} {
+    fState.apply({.background = colours.sidebar, .masking = true});
     parts.edge.apply({.place = scene::anchor::kTopLeft, .fillY = true, .width = 1.0f});
     parts.scroll.apply({.fillX = true, .grow = scene::axes::kY});
     upper.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -328,7 +331,7 @@ struct info_panel : nodes::Stack {
             }))
       members.invalidateLayout();
     members_header.show(static_cast<std::size_t>(std::max<std::int64_t>(static_cast<std::int64_t>(one.members.size()), one.member_count)),
-                        [this](std::size_t count) { return members_head(actions, count); });
+                        [this](std::size_t count) { return members_head(actions, *colours_, count); });
     this->render();
   }
   void open_member(std::string id) {

@@ -675,7 +675,7 @@ struct conversations_screen : nodes::Stack {
               .edge = side_edge(resize_sidebar_to<Actions>{a}),
               .chat = chat_column(n),
               .info_edge = info_edge_t(resize_info_to<Actions>{a}, false),
-              .info = info_panel<Actions>(a),
+              .info = info_panel<Actions>(a, *n.colours),
               .threads = threads_panel<Actions>(n)} {
     fState.apply({.fill = true});
     this->setHorizontal();

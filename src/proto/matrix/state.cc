@@ -136,6 +136,11 @@ struct room_rules {
   std::int64_t power_default = 0;
   power_needs needs;
   std::string version;
+  // Upgraded away: the room it continues in (m.room.tombstone), and what its
+  // tombstone said; and the room this one continues, where it does.
+  std::optional<std::string> replaced_by;
+  std::string replaced_why;
+  std::optional<std::string> predecessor;
 };
 constexpr room_part_list<room_rules> room_parts(const state&) { return {}; }
 

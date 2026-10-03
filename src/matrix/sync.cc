@@ -729,10 +729,10 @@ void account<Sink>::conversation(const conversation_id& in, const loom::client::
                                      .powers = powers_in(kept),
                                      .power_default = power_default_of(kept.state.template content<power_levels_content>("m.room.power_levels")),
                                      .needs = needs_of(kept.state.template content<power_levels_content>("m.room.power_levels")),
-                                     .version = kept.state.room_version()},
+                                     .version = kept.state.room_version(),
                                      .replaced_by = replaced_by_of(kept),
                                      .replaced_why = replaced_why_of(kept),
-                                     .predecessor = predecessor_of(kept),
+                                     .predecessor = predecessor_of(kept)},
                                      .other_aliases = other_aliases_of(kept.state.template content<loom::ev::m_room_canonical_alias_content_t>("m.room.canonical_alias"))});
 }
 

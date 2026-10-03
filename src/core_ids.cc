@@ -526,11 +526,6 @@ struct conversation {
   // What its protocol keeps of it beyond this (Matrix: its rules and power
   // levels), or none.
   room_part_t theirs;
-  // Upgraded away: the room it continues in (m.room.tombstone), and what
-  // its tombstone said; and the room this one continues, where it does.
-  std::optional<std::string> replaced_by;
-  std::string replaced_why;
-  std::optional<std::string> predecessor;
   // Its other published addresses, besides its alias.
   std::vector<std::string> other_aliases;
   // What is for the user in it, not yet seen, oldest first: kept to a number.

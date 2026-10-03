@@ -189,6 +189,9 @@ inline std::vector<part::badge> row_badges(const auto&, const conversation&) { r
 inline std::string local_part(const auto&, std::string_view address) { return std::string(address); }
 // Bubbles.
 inline part::style_t message_style(const auto&) { return part::style::bubbles{}; }
+// No chat continued in another, nor continuing one.
+inline std::optional<std::string> successor_of(const auto&, const conversation&) { return std::nullopt; }
+inline std::optional<std::string> predecessor_of(const auto&, const conversation&) { return std::nullopt; }
 // Nothing of its own in the Manage dialog's facts.
 inline void manage_facts(const auto&, const conversation&, auto&) {}
 // Anything one may do in a chat; nothing to anyone in it.
@@ -393,6 +396,27 @@ inline constexpr struct person_badges_t {
     }, state);
   }
 } person_badges{};
+// A chat that continues in another (a Matrix room upgraded: its tombstone's
+// room), and the one a chat continues: what the composer and the chat list
+// make of a chat moved.
+inline constexpr struct successor_of_t {
+  template <class State>
+  std::optional<std::string> operator()(const State& state, const conversation& chat) const {
+    return splice::visit([&](const auto& now) {
+      using defaults::successor_of;
+      return successor_of(now, chat);
+    }, state);
+  }
+} successor_of{};
+inline constexpr struct predecessor_of_t {
+  template <class State>
+  std::optional<std::string> operator()(const State& state, const conversation& chat) const {
+    return splice::visit([&](const auto& now) {
+      using defaults::predecessor_of;
+      return predecessor_of(now, chat);
+    }, state);
+  }
+} predecessor_of{};
 // The Manage dialog's facts, as a protocol fills its part of them: nothing
 // by default.
 inline constexpr struct manage_facts_t {

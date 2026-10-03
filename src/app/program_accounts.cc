@@ -700,8 +700,9 @@ void app::apply(const request::flip_account_strip&) {
 // protocol's link to it opens -- the chat where it is joined, its card where not.
 void app::apply(const request::open_replacement&) {
   const auto& chosen = root().main().chosen;
-  if (const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr; chat && chat->replaced_by)
-    if (auto link = mux::proto::share_link(mux::ui::protocol_state_of(chosen->account), *chat->replaced_by))
+  const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
+  if (const auto successor = chat ? mux::proto::successor_of(mux::ui::protocol_state_of(chosen->account), *chat) : std::nullopt)
+    if (auto link = mux::proto::share_link(mux::ui::protocol_state_of(chosen->account), *successor))
       this->apply(request::open_url{std::move(*link)});
 }
 

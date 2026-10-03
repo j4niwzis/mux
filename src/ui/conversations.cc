@@ -2700,9 +2700,10 @@ struct conversations_screen : nodes::Stack {
       // room's creation names it as what it continues. One side alone is not
       // believed (as matrix-js-sdk's CVE-2025-59160, the other way round):
       // a room could otherwise hide another from the list.
-      if (one.replaced_by && in)
-        if (const auto next = in->conversations.find(*one.replaced_by);
-            next != in->conversations.end() && next->second.predecessor == one.id.id)
+      if (const auto successor = proto::successor_of(protocol_state_of(one.id.account), one); successor && in)
+        if (const auto next = in->conversations.find(*successor);
+            next != in->conversations.end() &&
+            proto::predecessor_of(protocol_state_of(one.id.account), next->second) == one.id.id)
           return false;
       return in_folder(one) && (wanted.empty() || lower(display_name(one)).contains(wanted) || lower(one.id.id).contains(wanted));
     };
@@ -2922,7 +2923,7 @@ struct conversations_screen : nodes::Stack {
     {
       const proto::part::chat_rights may = proto::chat_rights(protocol_state_of(one->id.account), *one);
       chat.line.set_can_post(may.post);
-      chat.line.set_replaced(one->replaced_by.has_value());
+      chat.line.set_replaced(proto::successor_of(protocol_state_of(one->id.account), *one).has_value());
       // Those knocking, for whoever may invite.
       chat.line.show_knocks(actions, one->knocking, may.invite);
       chat.line.show_unsent(std::ranges::any_of(one->timeline, [](const message& said) {

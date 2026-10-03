@@ -96,9 +96,6 @@ struct conversation_updated {
   room_part_t theirs;  // its protocol's own part of it
   // Upgraded away: the room it continues in (m.room.tombstone), and what
   // its tombstone said; and the room this one continues, where it does.
-  std::optional<std::string> replaced_by;
-  std::string replaced_why;
-  std::optional<std::string> predecessor;
   std::vector<std::string> other_aliases;
   // Invited to, not joined: who asked.
   std::optional<invite_info> invite;
@@ -564,9 +561,6 @@ class model {
     kept.emotes = one.emotes;
     kept.stickers = one.stickers;
     kept.theirs = one.theirs;
-    kept.replaced_by = one.replaced_by;
-    kept.replaced_why = one.replaced_why;
-    kept.predecessor = one.predecessor;
     kept.other_aliases = one.other_aliases;
     kept.invite = one.invite;
   }

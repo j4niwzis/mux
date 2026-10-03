@@ -74,6 +74,10 @@ inline std::string local_part(const state&, std::string_view address) {
                                           [&](auto&) -> room_rules& { return part.template emplace<room_rules>(); }},
                        part);
 }
+// A room upgraded: the one it continues in, by its tombstone; and the one it
+// continues, by its creation.
+inline std::optional<std::string> successor_of(const state&, const conversation& in) { return rules_of(in).replaced_by; }
+inline std::optional<std::string> predecessor_of(const state&, const conversation& in) { return rules_of(in).predecessor; }
 // What the account may do in a room, as its power levels allow: write
 // in it, let in those who knock; and to someone in it, only above them.
 [[nodiscard]] inline std::int64_t level_of(const room_rules& rules, std::string_view who) {

@@ -63,6 +63,8 @@ struct room_settings_facts {
   bool holds_spaces = false;
   bool forum = false;
   bool hidden_from_home = false;  // a space whose rooms Home leaves out
+  // The protocol the room is of: which tabs it has besides the client's own.
+  protocol_t speaks;
   // Those whose level is not the default: Element's privileged users.
   struct person {
     std::string id;
@@ -82,6 +84,31 @@ struct room_settings_facts {
   if (level == fallback)
     return "Default";
   return std::format("Custom level ({})", level);
+}
+
+// Which tabs a room's protocol has: a list of their types. The client's
+// own -- Notifications, Appearance -- every room has; the rest are the
+// protocol's, as manage_tabs(tag) lists them: an overload found by ADL in
+// its tag's namespace (mux.ui.proto.<protocol>), seen where the dialog is
+// made -- it is a template on Actions, made in the program, which imports
+// every protocol's. A protocol with none: the default, no tabs of its own.
+template <class... Tabs>
+struct manage_tab_list {};
+namespace manage_defaults {
+constexpr manage_tab_list<> manage_tabs(const auto&) { return {}; }
+}  // namespace manage_defaults
+template <class... Tabs, class Tab>
+[[nodiscard]] constexpr bool lists(manage_tab_list<Tabs...>, std::type_identity<Tab>) {
+  struct all : std::type_identity<Tabs>... {};
+  return std::derived_from<all, std::type_identity<Tab>>;
+}
+// Whether the protocol a room speaks has a tab.
+template <class Tab>
+[[nodiscard]] bool protocol_has_tab(const protocol_t& speaks, Tab) {
+  return splice::visit([](const auto& tag) {
+    using manage_defaults::manage_tabs;
+    return lists(manage_tabs(tag), std::type_identity<Tab>{});
+  }, speaks);
 }
 
 // The tabs, as Element lists them.
@@ -326,6 +353,12 @@ struct room_settings : nodes::Stack {
                 .advanced = tab_row("Advanced", icon::sliders{}, {box, settings_tab::advanced{}})} {
       this->setGap(2.0f);
       fState.apply({.fillY = true, .width = 220.0f, .padding = {4.0f, 12.0f, 12.0f, 12.0f}});
+      // The protocol's own, where it has them; the client's always.
+      const protocol_t& speaks = box->facts.speaks;
+      parts.general.setVisible(protocol_has_tab(speaks, settings_tab::general{}));
+      parts.security.setVisible(protocol_has_tab(speaks, settings_tab::security{}));
+      parts.roles.setVisible(protocol_has_tab(speaks, settings_tab::roles{}));
+      parts.advanced.setVisible(protocol_has_tab(speaks, settings_tab::advanced{}));
     }
     void show(const settings_tab_t& tab) {
       const auto is = [&](auto kind) {
@@ -859,10 +892,21 @@ struct room_settings : nodes::Stack {
   bool rebuild_due = false;
   bool to_top = false;  // another tab: shown from its top
 
+  // The first tab: General where the protocol has it, else Notifications.
+  [[nodiscard]] static settings_tab_t first_tab(const room_settings_facts& shown) {
+    return protocol_has_tab(shown.speaks, settings_tab::general{}) ? settings_tab_t{settings_tab::general{}}
+                                                                   : settings_tab_t{settings_tab::notifications{}};
+  }
+  [[nodiscard]] page_t first_page(Actions* a, const room_settings_facts& shown) {
+    return protocol_has_tab(shown.speaks, settings_tab::general{}) ? page_t(std::in_place_index<0>, a, this, shown)
+                                                                   : page_t(std::in_place_index<3>, a, this, shown);
+  }
+
   room_settings(Actions* a, const room_settings_facts& shown)
       : actions(a), facts(shown),
         parts{.header = header_t("Room Settings - " + shown.name, {}, {a}, false, true),
-              .body = body_row(this, page_t(std::in_place_index<0>, a, this, shown))} {
+              .body = body_row(this, first_page(a, shown))},
+        tab(first_tab(shown)) {
     fState.apply({.fill = true});
     parts.body.parts.tabs.show(tab);
     this->show_new_level();

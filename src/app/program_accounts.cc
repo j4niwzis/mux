@@ -557,7 +557,8 @@ void app::manage_chat(const mux::conversation_id& id) {
                                        return in && in->space;
                                      }),
                                      .forum = forums.contains(chat->id),
-                                     .hidden_from_home = hidden_from_home.contains(chat->id)};
+                                     .hidden_from_home = hidden_from_home.contains(chat->id),
+                                     .speaks = chat->id.account.speaks};
   // Element's privileged users: those the power levels name with a level of
   // their own, the highest first.
   for (const auto& [user, level] : chat->powers) {

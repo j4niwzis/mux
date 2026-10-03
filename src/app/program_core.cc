@@ -144,7 +144,7 @@ void app::woken() {
                                  [](const auto&) {}},
                  one);
     model->apply(one);
-    history.keep(one);
+    paging.keep(one);
   }
   // The marks: those read back put in, written where they changed, and a
   // mark made kept with its message.
@@ -753,7 +753,7 @@ void app::apply(const request::give_passphrase& one) {
             root().close_passphrase();
             mux::config::file saved;
             std::optional<std::string> error;
-            if (auto loaded = mux::config::load(config_path, *vault))
+            if (auto loaded = mux::config::load(config_path, vault))
               saved = std::move(*loaded);
             else
               error = loaded.error();

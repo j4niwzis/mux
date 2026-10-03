@@ -71,7 +71,7 @@ struct app : kept_settings {
   settings_part settings{shared, *this, pictures};
   notices_part notices{shared};
   marks_part marks{shared};
-  history_part history{shared};
+  history_part paging{shared};
   // Work off the UI's thread: decoding pictures, reading the disk.
   workers work;
   // Files chosen in the dialog, or dropped on the window: to the outbox.
@@ -119,7 +119,7 @@ struct app : kept_settings {
     static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> || takes<marks_part, Request> || takes<history_part, Request> ||
                       takes<app, Request>, "a request no part of the program takes");
     if (!offer(search, one) && !offer(pictures, one) && !offer(reading, one) && !offer(outbox, one) &&
-        !offer(settings, one) && !offer(menu, one) && !offer(notices, one) && !offer(marks, one) && !offer(history, one))
+        !offer(settings, one) && !offer(menu, one) && !offer(notices, one) && !offer(marks, one) && !offer(paging, one))
       offer(*this, one);
   }
 

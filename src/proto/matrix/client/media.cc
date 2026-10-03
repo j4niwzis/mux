@@ -3,6 +3,7 @@
 export module mux.proto.matrix.client:media;
 
 import std;
+import loom.media;
 import mux.bytes;
 import mux.proto.matrix.crypto;
 import knot;
@@ -38,38 +39,20 @@ struct upload_answer {
 template <class Sink>
 void account<Sink>::fetch_media(std::string source, media_use_t use, int size, bool crop) {
   this->spawn_guarded([this, source = std::move(source), use = std::move(use), size, crop] {
-    if (!api_ || !source.starts_with("mxc://"))
+    // What it names, read once (loom.media): none for anything not a
+    // content URI as the specification writes one.
+    const auto named = loom::media::mxc_of(source);
+    if (!api_ || !named)
       return;
     // Asked again: a stop asked before is let go.
     cancelled_.erase(source);
-    const std::string_view rest = std::string_view(source).substr(6);
-    const auto slash = rest.find('/');
-    if (slash == std::string_view::npos)
-      return;
     // Encrypted: whole, for the server cannot make a thumbnail of
     // ciphertext; and opened here.
     const auto sealed = encrypted_media_.find(source);
     const int asked = sealed != encrypted_media_.end() ? 0 : size;
-    const std::string server(rest.substr(0, slash));
-    const std::string media(rest.substr(slash + 1));
-    // As the spec writes them: a server name (a host, maybe a port) and a
-    // media ID of letters, digits, '-' and '_'. Anything else -- "..", '/',
-    // '?' -- put into the path would ask the homeserver, with this
-    // account's token, for another endpoint than media (review 5).
-    const auto plain = [](std::string_view text, std::string_view also) {
-      return !text.empty() && std::ranges::all_of(text, [&](char c) {
-        return std::isalnum(static_cast<unsigned char>(c)) != 0 || also.contains(c);
-      });
-    };
-    if (!plain(server, ".-:[]") || !plain(media, "-_") || server.starts_with('.'))
-      return;
-    const std::string query =
-        asked > 0 ? std::format("?width={0}&height={0}&method={1}", asked, crop ? "crop" : "scale") : std::string();
-    const auto bases = asked > 0 ? std::array<std::string, 2>{"/_matrix/client/v1/media/thumbnail/",
-                                                             "/_matrix/media/v3/thumbnail/"}
-                                : std::array<std::string, 2>{"/_matrix/client/v1/media/download/",
-                                                             "/_matrix/media/v3/download/"};
-    for (const std::string& base : bases) {
+    const auto paths = asked > 0 ? loom::media::paths_of(*named, loom::media::thumbnail{.size = asked, .crop = crop})
+                                 : loom::media::paths_of(*named);
+    for (const std::string& path : paths) {
       try {
         // A download whole says how far it has come, a twentieth at a time.
         int said = -1;
@@ -86,7 +69,7 @@ void account<Sink>::fetch_media(std::string source, media_use_t use, int size, b
           }
           return true;
         };
-        const auto got = api_->request("GET", base + server + "/" + media + query, {},
+        const auto got = api_->request("GET", path, {},
                                        token_ ? std::optional<std::string_view>(*token_) : std::nullopt,
                                        std::chrono::seconds(60), {}, asked > 0 ? nullptr : &progress);
         if (got.status == 200 && !got.body.empty()) {

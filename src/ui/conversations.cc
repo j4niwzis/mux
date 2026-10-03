@@ -1783,6 +1783,8 @@ struct conversations_screen : nodes::Stack {
   }
   // Single or not as the window is now: looked at as it is laid out.
   void layoutChildren() {
+    // Its id as it is now, for the docked panel to tell it by.
+    docked_panel_watcher() = fState.fId;
     const skia::SkRect box = fState.contentBox();
     const bool now = box.width() < 600.0f && box.height() > box.width();
     if (now != single || (now && box.width() != single_width)) {

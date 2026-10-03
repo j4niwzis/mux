@@ -428,6 +428,10 @@ struct window : scene::Node {
   void close_emoji() {
     layer().emoji.reset();
     set_docked_panel_height(0.0f);  // the field back at the bottom
+    // Told here, not only by its id: the screen made at the start was moved
+    // into the window since, and the panel gone left an empty space under
+    // the field where nothing ticked it.
+    main().follow_docked();
   }
   // The GIFs saved, for the popup's GIF tab, where it is open.
   void show_gifs(const std::vector<std::string>& paths) {

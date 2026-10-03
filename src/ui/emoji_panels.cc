@@ -53,12 +53,13 @@ struct sticker_grid : nodes::Stack {
   static constexpr float kCell = 78.0f;
   struct cell : nodes::Stack {
     Actions* actions;
+    emoji_kept* kept_ = nullptr;
     emote sticker;
     struct parts_t {
       nodes::Image<from_avatars> picture;
     } parts;
-    cell(const palette& colours, Actions* a, emote one)
-        : actions(a), sticker(one), parts{.picture = nodes::Image<from_avatars>({one.url})} {
+    cell(const palette& colours, emoji_kept& kept, Actions* a, emote one)
+        : actions(a), kept_(&kept), sticker(one), parts{.picture = nodes::Image<from_avatars>({one.url})} {
       fState.apply({.width = kCell, .height = kCell, .margin = {2.0f, 2.0f, 2.0f, 2.0f}, .padding = {4.0f, 4.0f, 4.0f, 4.0f},
                     .cornerRadius = 6.0f, .hoverBackground = colours.chosen});
       parts.picture.apply({.fill = true});
@@ -66,7 +67,7 @@ struct sticker_grid : nodes::Stack {
     }
     dwell resting;
     [[nodiscard]] bool settling() const { return resting.counting(this->hovered()); }
-    void update(double now) { resting.step(this->hovered(), now, {sticker.url, ":" + sticker.shortcode + ":", true}); }
+    void update(double now) { resting.step(this->hovered(), now, {sticker.url, ":" + sticker.shortcode + ":", true}, *kept_); }
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
@@ -76,12 +77,12 @@ struct sticker_grid : nodes::Stack {
   };
   // A pack: its name over its stickers.
   struct section : cell_section<cell> {
-    section(const palette& colours, Actions* a, std::string name, const std::vector<emote>& stickers)
+    section(const palette& colours, emoji_kept& kept, Actions* a, std::string name, const std::vector<emote>& stickers)
         : cell_section<cell>(colours, std::move(name)) {
       auto& cells = this->each();
       cells.reserve(stickers.size());
       for (const emote& one : stickers)
-        cells.emplace_back(colours, a, one);
+        cells.emplace_back(colours, kept, a, one);
     }
   };
   // A pack's tab in the footer: its picture -- the pack's own, else its
@@ -138,7 +139,7 @@ struct sticker_grid : nodes::Stack {
   bool searching = false;
   // The pictures of the packs' tabs, as show_all made them.
   std::vector<std::string> tab_pictures;
-  [[nodiscard]] bool settling() const { return previewed_emote() != preview_of; }
+  [[nodiscard]] bool settling() const { return kept_->previewed_now != preview_of; }
 
   sticker_grid(const palette& colours, emoji_kept& kept, Actions* a)
       : colours_(&colours),
@@ -180,19 +181,19 @@ struct sticker_grid : nodes::Stack {
                                 }) |
                                 std::ranges::to<std::vector>();
     if (!recent.empty()) {
-      all.emplace_back(*colours_, actions, "Recently used", recent);
+      all.emplace_back(*colours_, *kept_, actions, "Recently used", recent);
       tabs.emplace_back(this, all.size() - 1, std::nullopt, "\u23F2");
     }
     // The favourites: whichever chat they came from -- a sticker is its
     // picture's URL, sent anywhere.
     if (!kept_->favourite_stickers.empty()) {
-      all.emplace_back(*colours_, actions, "Favourites", kept_->favourite_stickers);
+      all.emplace_back(*colours_, *kept_, actions, "Favourites", kept_->favourite_stickers);
       tabs.emplace_back(this, all.size() - 1, std::nullopt, "\u2605");
     }
     for (auto& [name, stickers] : packs()) {
       const std::optional<std::string> picture = stickers.front().pack_avatar ? stickers.front().pack_avatar
                                                                               : std::optional<std::string>(stickers.front().url);
-      all.emplace_back(*colours_, actions, name, stickers);
+      all.emplace_back(*colours_, *kept_, actions, name, stickers);
       tabs.emplace_back(this, all.size() - 1, picture);
       if (picture)
         tab_pictures.push_back(*picture);
@@ -219,7 +220,7 @@ struct sticker_grid : nodes::Stack {
                                      std::ranges::to<std::vector>();
     auto& all = this->sections();
     all.clear();
-    all.emplace_back(*colours_, actions, found.empty() ? std::string("Nothing found") : std::string("Search results"), found);
+    all.emplace_back(*colours_, *kept_, actions, found.empty() ? std::string("Nothing found") : std::string("Search results"), found);
     searching = true;
     parts.list.invalidateLayout();
     parts.list.scrollTo(0.0f);
@@ -252,7 +253,7 @@ struct sticker_grid : nodes::Stack {
   // The tab of the pack at the top of the list lit; the preview kept to what
   // the cells say.
   void update(double) {
-    if (follow_preview(parts.preview, preview_of, *colours_))
+    if (follow_preview(parts.preview, preview_of, *colours_, *kept_))
       this->invalidateLayout();
     auto& all = this->sections();
     std::size_t lit = 0;
@@ -333,7 +334,8 @@ struct emoji_panel : nodes::Stack {
     [[nodiscard]] bool settling() const { return resting.counting(this->hovered()); }
     void update(double now) {
       resting.step(this->hovered(), now,
-                   picture_url.empty() ? previewed{glyph, std::string(), false} : previewed{picture_url, glyph, true});
+                   picture_url.empty() ? previewed{glyph, std::string(), false} : previewed{picture_url, glyph, true},
+                   *panel->kept_);
     }
     cell(emoji_panel* p, std::string g, const alef::emoji* from = nullptr)
         : panel(p), glyph(g), source(from), parts{.face = nodes::Text(std::move(g), 22.0f, p->colours_->text)} {
@@ -553,11 +555,11 @@ struct emoji_panel : nodes::Stack {
     this->invalidateLayout();
     return true;
   }
-  [[nodiscard]] bool settling() const { return previewed_emote() != preview_of; }
+  [[nodiscard]] bool settling() const { return kept_->previewed_now != preview_of; }
   // The tab of the group at the top of the list lit; the preview kept to
   // what the cells say.
   void update(double) {
-    if (follow_preview(parts.preview, preview_of, *colours_))
+    if (follow_preview(parts.preview, preview_of, *colours_, *kept_))
       this->invalidateLayout();
     if (tones_done) {
       tones_done = false;

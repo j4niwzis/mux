@@ -28,6 +28,16 @@ import :names;
 
 export namespace mux::ui {
 
+// What the mouse rests on in a panel of emoji or stickers, shown large over
+// it, as Telegram's preview: its picture (or its glyph) and its name. Cells
+// say it here as the mouse stays on them, and let it go as it leaves; the
+// panel shows what is said -- no pointer between them.
+struct previewed {
+  std::string key;    // a picture's source, or a glyph
+  std::string label;  // its :shortcode:, or nothing
+  bool picture = false;
+  friend bool operator==(const previewed&, const previewed&) = default;
+};
 // The emoji and stickers kept, as the program holds them: handed to the
 // window with its colours (ui_needs), and from it to the panels.
 struct emoji_kept {
@@ -40,6 +50,8 @@ struct emoji_kept {
   std::vector<emote> recent_stickers, favourite_stickers;
   // Whether the lists changed since the program last kept them.
   bool emoji_changed = false, stickers_changed = false;
+  // The emoji or sticker the mouse rests on, shown large over its panel.
+  std::optional<previewed> previewed_now;
 
   void remember_emoji(const std::string& glyph) {
     constexpr std::size_t kKept = 42;
@@ -76,20 +88,6 @@ struct gifs {};
 }  // namespace popup_page
 using popup_page_t = splice::variant<popup_page::emoji, popup_page::stickers, popup_page::gifs>;
 
-// What the mouse rests on in a panel of emoji or stickers, shown large over
-// it, as Telegram's preview: its picture (or its glyph) and its name. Cells
-// say it here as the mouse stays on them, and let it go as it leaves; the
-// panel shows what is said -- no pointer between them.
-struct previewed {
-  std::string key;    // a picture's source, or a glyph
-  std::string label;  // its :shortcode:, or nothing
-  bool picture = false;
-  friend bool operator==(const previewed&, const previewed&) = default;
-};
-inline std::optional<previewed>& previewed_emote() {
-  static std::optional<previewed> now;
-  return now;
-}
 // How long the mouse rests on one before it is shown large.
 inline constexpr double kPreviewAfterMs = 450.0;
 // A cell's resting: said once the mouse has stayed long enough, let go as
@@ -99,11 +97,11 @@ struct dwell {
   bool said = false;
   // While it counts, frames are wanted.
   [[nodiscard]] bool counting(bool hovered) const { return hovered && !said; }
-  void step(bool hovered, double now, const previewed& what) {
+  void step(bool hovered, double now, const previewed& what, emoji_kept& kept) {
     if (!hovered) {
       since.reset();
-      if (said && previewed_emote() == what)
-        previewed_emote().reset();
+      if (said && kept.previewed_now == what)
+        kept.previewed_now.reset();
       said = false;
       return;
     }
@@ -111,7 +109,7 @@ struct dwell {
       since = now;
     if (!said && now - *since >= kPreviewAfterMs) {
       said = true;
-      previewed_emote() = what;
+      kept.previewed_now = what;
     }
   }
 };
@@ -143,10 +141,10 @@ struct emote_preview : nodes::Stack {
   }
 };
 // A panel's preview kept to what the cells say: made anew as it changes.
-inline bool follow_preview(std::optional<emote_preview>& shown, std::optional<previewed>& of, const palette& colours) {
-  if (of == previewed_emote())
+inline bool follow_preview(std::optional<emote_preview>& shown, std::optional<previewed>& of, const palette& colours, const emoji_kept& kept) {
+  if (of == kept.previewed_now)
     return false;
-  of = previewed_emote();
+  of = kept.previewed_now;
   shown.reset();
   if (of)
     shown.emplace(colours, *of);

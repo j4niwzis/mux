@@ -39,8 +39,8 @@ class rooms_part {
       if (const auto found = s_->model->accounts().find(*current); found != s_->model->accounts().end())
         for (const auto& [key, chat] : found->second.conversations)
           if (!mux::ui::is_group(chat))
-            known.push_back({.id = mux::ui::contact_of(chat), .name = mux::ui::display_name(chat), .avatar = chat.avatar});
-      link = mux::proto::share_link(mux::ui::protocol_state_of(*current), current->address).value_or(std::string());
+            known.push_back({.id = mux::ui::contact_of(s_->ui, chat), .name = mux::ui::display_name(chat), .avatar = chat.avatar});
+      link = mux::proto::share_link(mux::ui::protocol_state_of(s_->ui, *current), current->address).value_or(std::string());
     }
     std::ranges::sort(known, {}, &mux::found_person::name);
     s_->root().open_new_chat(std::move(known), std::move(link));
@@ -70,7 +70,7 @@ class rooms_part {
       return;
     s_->root().close_new_chat();
     for (const auto& [key, chat] : s_->model->accounts().at(*current).conversations)
-      if (!mux::ui::is_group(chat) && mux::ui::contact_of(chat) == one.user) {
+      if (!mux::ui::is_group(chat) && mux::ui::contact_of(s_->ui, chat) == one.user) {
         s_->chat_due = chat.id;
         return;
       }
@@ -138,7 +138,7 @@ class rooms_part {
       return;
     s_->root().close_new_room();
     // Its alias's local part, as the protocol has it (#name:server, name).
-    const std::string alias = mux::proto::local_part_of(mux::ui::protocol_state_of(*by), one.alias);
+    const std::string alias = mux::proto::local_part_of(mux::ui::protocol_state_of(s_->ui, *by), one.alias);
     s_->net->create_room(*by, one.name, one.topic, one.open, one.open ? alias : std::string(), one.federate, one.encrypted);
     s_->root().show_message("New room", "Making " + one.name + "\u2026");
   }

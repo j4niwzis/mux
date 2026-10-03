@@ -70,14 +70,14 @@ void app::woken() {
                                  if (person_open_ && person_open_->first.account == listed.by && person_open_->second == listed.user) {
                                    const auto [chat, user] = *person_open_;
                                    root().open_person(chat.account, user,
-                                                      mux::ui::person_of(model->find(chat), *model, chat.account, user));
+                                                      mux::ui::person_of(shared.ui, model->find(chat), *model, chat.account, user));
                                  }
                                },
                                [&](const mux::change::trust_changed& told) {
                                  if (person_open_ && person_open_->first.account == told.by && person_open_->second == told.user) {
                                    const auto [chat, user] = *person_open_;
                                    root().open_person(chat.account, user,
-                                                      mux::ui::person_of(model->find(chat), *model, chat.account, user));
+                                                      mux::ui::person_of(shared.ui, model->find(chat), *model, chat.account, user));
                                  }
                                },
                                [&](const mux::change::people_found& found) {
@@ -106,7 +106,7 @@ void app::woken() {
                                },
                                // What an account's protocol is now: what is offered of it.
                                [&](const mux::change::protocol_state_changed& now) {
-                                 mux::ui::protocol_states().insert_or_assign(now.account, now.now);
+                                 shared.ui.protocol_states.insert_or_assign(now.account, now.now);
                                  this->refresh();
                                },
                                // A protocol's own: what the program does with it, as the
@@ -369,7 +369,7 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
 
   this->keeps_nothing = demo;
   // What each protocol's account does, for the window to offer.
-  mux::app::tell_protocol_ops(mux::protocols{});
+  mux::app::tell_protocol_ops(shared.ui, mux::protocols{});
   // The settings, as kept.
   this->take(saved);
   // And what of them the window holds, put in place there.

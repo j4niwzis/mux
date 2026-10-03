@@ -565,7 +565,7 @@ class pictures_part {
       if (!found->name.empty())
         shown = found->name;
     }
-    if ((!source || source->empty()) && !mux::ui::is_group(*chat) && one.key == mux::ui::contact_of(*chat)) {
+    if ((!source || source->empty()) && !mux::ui::is_group(*chat) && one.key == mux::ui::contact_of(s_->ui, *chat)) {
       source = chat->avatar;
       shown = mux::ui::display_name(*chat);
     }

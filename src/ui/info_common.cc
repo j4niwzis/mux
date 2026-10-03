@@ -180,14 +180,14 @@ struct person_facts {
   // Their sessions, each verified or not, where their keys were listed.
   std::vector<change::device_view> devices;
 };
-[[nodiscard]] inline person_facts person_of(const conversation* in, const model& now, const account_id& account,
+[[nodiscard]] inline person_facts person_of(const ui_shared& shared, const conversation* in, const model& now, const account_id& account,
                                             const std::string& id) {
-  person_facts out{id, presence_of(now, account, id)};
+  person_facts out{id, presence_of(shared, now, account, id)};
   out.trust = now.trust_of(account, id);
   if (const auto* listed = now.devices_of(account, id))
     out.devices = *listed;
   // What their protocol says of them beside how they are (Matrix: their identity).
-  out.status = std::ranges::fold_left(proto::person_badges(protocol_state_of(account), nullptr, now, account, id),
+  out.status = std::ranges::fold_left(proto::person_badges(protocol_state_of(shared, account), nullptr, now, account, id),
                                       std::move(out.status), [](std::string so_far, const proto::part::badge& badge) {
                                         return so_far.empty() ? badge.text : std::format("{} · {}", so_far, badge.text);
                                       });
@@ -195,14 +195,14 @@ struct person_facts {
     return out;
   if (const auto found = std::ranges::find(in->members, id, &member::id); found != in->members.end()) {
     // What may be done to them, as the chat's protocol says (Matrix: its power levels).
-    const proto::part::person_rights may = proto::person_rights(protocol_state_of(account), *in, id);
+    const proto::part::person_rights may = proto::person_rights(protocol_state_of(shared, account), *in, id);
     out.may_kick = may.kick;
     out.may_ban = may.ban;
     if (!found->name.empty())
       out.name = found->name;
     if (found->role)
       out.status = out.status.empty() ? *found->role : std::format("{} · {}", out.status, *found->role);
-  } else if (!is_group(*in) && id == contact_of(*in)) {
+  } else if (!is_group(*in) && id == contact_of(shared, *in)) {
     out.name = display_name(*in);
   }
   return out;

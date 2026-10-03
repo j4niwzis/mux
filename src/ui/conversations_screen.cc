@@ -180,7 +180,7 @@ struct conversations_screen : nodes::Stack {
   // A chat shown as a forum: a space the user shows so, or a forum of its
   // protocol's own (proto::native_forum).
   [[nodiscard]] bool shown_as_forum(const conversation& one) const {
-    return one.space && (forums.contains(one.id) || proto::native_forum(protocol_state_of(one.id.account), one));
+    return one.space && (forums.contains(one.id) || proto::native_forum(protocol_state_of(*needs_.shared, one.id.account), one));
   }
   [[nodiscard]] bool is_forum(const conversation_id& id) const {
     const conversation* one = last_model ? last_model->find(id) : nullptr;
@@ -675,7 +675,7 @@ struct conversations_screen : nodes::Stack {
               .edge = side_edge(resize_sidebar_to<Actions>{a}),
               .chat = chat_column(n),
               .info_edge = info_edge_t(resize_info_to<Actions>{a}, false),
-              .info = info_panel<Actions>(a, *n.colours),
+              .info = info_panel<Actions>(a, *n.colours, *n.shared),
               .threads = threads_panel<Actions>(n)} {
     fState.apply({.fill = true});
     this->setHorizontal();

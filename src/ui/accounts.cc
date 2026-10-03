@@ -634,7 +634,7 @@ struct accounts_panel : closes_on_escape<Actions> {
             [&](account_page::proxy) { detail.template emplace<4>(this->actions, *needs_.colours, proxies, config::proxy_of(one)); },
             // A protocol's own: its node, made for the program's actions.
             [&]<class Page>(Page) {
-              detail.template emplace<typename decltype(page_type(Page{}, type_tag<Actions>{}))::type>(this->actions, *needs_.colours, one,
+              detail.template emplace<typename decltype(page_type(Page{}, type_tag<Actions>{}))::type>(this->actions, *needs_.colours, *needs_.shared, one,
                                                                                                                  now);
             }},
         page);
@@ -682,7 +682,7 @@ struct accounts_panel : closes_on_escape<Actions> {
     add.set_lit(false);
     selected = config::address_of(one);
     const std::string& address = config::address_of(one);
-    pages.show_for(protocol_state_of(account_id{protocol_of(address), address}));
+    pages.show_for(protocol_state_of(*needs_.shared, account_id{protocol_of(address), address}));
     this->show_pages(true);
     this->show_page(account_page::connection{}, one, now);
     // Narrow: its settings -- its pages -- first, not the first of them.

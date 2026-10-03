@@ -191,15 +191,15 @@ struct chat_header : nodes::Stack {
     bool back = false;
     friend bool operator==(const view&, const view&) = default;
   };
-  [[nodiscard]] static view view_of(const conversation* one, const model& now) {
+  [[nodiscard]] static view view_of(const ui_shared& shared, const conversation* one, const model& now) {
     if (one == nullptr)
       return {};
     const auto count = std::max<std::int64_t>(static_cast<std::int64_t>(one->members.size()), one->member_count);
     // As its protocol says it, where it does (a channel's subscribers);
     // else its members, or how the other is.
-    std::string about = proto::chat_status(protocol_state_of(one->id.account), *one, now)
+    std::string about = proto::chat_status(protocol_state_of(shared, one->id.account), *one, now)
                             .value_or(is_group(*one) ? std::format("{} member{}", count, count == 1 ? "" : "s")
-                                                     : presence_of(now, one->id.account, contact_of(*one)));
+                                                     : presence_of(shared, now, one->id.account, contact_of(shared, *one)));
     // Who is typing, by their names, as Telegram says it: one, two ("A and
     // B"), three ("A, B and C"); past three, the first two and how many more.
     if (!one->typing.empty()) {
@@ -216,7 +216,7 @@ struct chat_header : nodes::Stack {
     }
     // What its protocol says of it after (proto::header_badges): Matrix's
     // shield, for one.
-    about = std::ranges::fold_left(proto::header_badges(protocol_state_of(one->id.account), *one, now), std::move(about),
+    about = std::ranges::fold_left(proto::header_badges(protocol_state_of(shared, one->id.account), *one, now), std::move(about),
                                    [](std::string so_far, const proto::part::badge& badge) {
                                      return so_far.empty() ? badge.text : std::format("{} \u00b7 {}", so_far, badge.text);
                                    });

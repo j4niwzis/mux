@@ -40,10 +40,10 @@ class packs_part {
   void apply(const request::open_room_packs&) {
     const auto chosen = s_->managed();
     const mux::conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
-    if (!chat || !mux::proto::offers(mux::ui::protocol_state_of(chat->id.account), mux::proto::feature::sticker_packs{}))
+    if (!chat || !mux::proto::offers(mux::ui::protocol_state_of(s_->ui, chat->id.account), mux::proto::feature::sticker_packs{}))
       return;
     account_ = chat->id.account;
-    s_->root().open_packs(chat->id.id, mux::proto::chat_rights(mux::ui::protocol_state_of(chat->id.account), *chat).edit_packs);
+    s_->root().open_packs(chat->id.id, mux::proto::chat_rights(mux::ui::protocol_state_of(s_->ui, chat->id.account), *chat).edit_packs);
     if (!s_->demo())
       s_->net->list_packs(*account_, chat->id.id);
   }

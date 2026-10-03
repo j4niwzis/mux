@@ -30,7 +30,7 @@ void app::apply(const request::choose& one) {
   // A direct chat that is encrypted: what is known of the other's identity,
   // asked for, for its header.
   if (const mux::conversation* chat = model->find(one.which); chat && !shared.demo() && chat->encrypted && !mux::ui::is_group(*chat))
-    net->ask_trust(one.which.account, mux::ui::contact_of(*chat));
+    net->ask_trust(one.which.account, mux::ui::contact_of(shared.ui, *chat));
   // An invite: its card -- who asked, Accept, Decline -- not a chat.
   if (const mux::conversation* chat = model->find(one.which); chat && chat->invite) {
     room_card.invited(*chat);
@@ -100,7 +100,7 @@ void app::apply(const request::leave_chat&) {
     return;
   const mux::conversation* one = model->find(*chosen);
   // As its protocol says: where it may not be left, there is no Leave.
-  if (!one || !mux::proto::can_leave(mux::ui::protocol_state_of(chosen->account), *one)) {
+  if (!one || !mux::proto::can_leave(mux::ui::protocol_state_of(shared.ui, chosen->account), *one)) {
     root().show_notice("This chat cannot be left");
     return;
   }

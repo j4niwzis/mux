@@ -254,10 +254,10 @@ template <class Actions>
   }
   if (chat) {
     facts.pinned = std::ranges::contains(chat->pinned, one.message_id);
-    const protocol_state_t now = protocol_state_of(chat->id.account);
+    const protocol_state_t now = protocol_state_of(*one.shared_, chat->id.account);
     // What its account does, offered only where anything may be done now.
     if (proto::available(now))
-      facts.can = ops_of(chat->id.account);
+      facts.can = ops_of(*one.shared_, chat->id.account);
     facts.pinnable = proto::can_pin(now, one.message_id);
     // Edited as its protocol's rule allows: any of one's own, or the last.
     facts.editable = proto::may_edit(now, *chat, one.said);
@@ -269,7 +269,7 @@ template <class Actions>
   }
   // The message's link, where its protocol has one.
   if (chat)
-    if (auto link = proto::message_link(protocol_state_of(chat->id.account), *chat, one.message_id))
+    if (auto link = proto::message_link(protocol_state_of(*one.shared_, chat->id.account), *chat, one.message_id))
       facts.link = std::move(*link);
   // The link the press was on: one in the text -- its text asked a menu
   // of its own with it, which this one is in place of -- or the

@@ -32,7 +32,7 @@ void app::apply(const request::open_member_info& one) {
   if (!chosen)
     return;
   const mux::conversation* in = model->find(*chosen);
-  root().open_person(chosen->account, one.id, mux::ui::person_of(in, *model, chosen->account, one.id));
+  root().open_person(chosen->account, one.id, mux::ui::person_of(shared.ui, in, *model, chosen->account, one.id));
   person_open_ = std::pair{*chosen, one.id};
   if (!shared.demo()) {
     net->ask_trust(chosen->account, one.id);
@@ -80,8 +80,8 @@ void app::apply(const request::accounts_back&) {
 void app::apply(const request::open_replacement&) {
   const auto& chosen = root().main().chosen;
   const mux::conversation* chat = chosen ? model->find(*chosen) : nullptr;
-  if (const auto successor = chat ? mux::proto::successor_of(mux::ui::protocol_state_of(chosen->account), *chat) : std::nullopt)
-    if (auto link = mux::proto::share_link(mux::ui::protocol_state_of(chosen->account), *successor))
+  if (const auto successor = chat ? mux::proto::successor_of(mux::ui::protocol_state_of(shared.ui, chosen->account), *chat) : std::nullopt)
+    if (auto link = mux::proto::share_link(mux::ui::protocol_state_of(shared.ui, chosen->account), *successor))
       this->apply(request::open_url{std::move(*link)});
 }
 

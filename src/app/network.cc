@@ -64,8 +64,8 @@ template <class Account>
 }
 // Each protocol's, for the window: found once, as the program starts.
 template <class... Tags>
-void tell_protocol_ops(mux::protocol_list<Tags...>) {
-  (mux::ui::protocol_ops().insert_or_assign(mux::protocol_t{Tags{}}, ops_of_type<account_type_of<mux::config::kept_of<Tags>>>()),
+void tell_protocol_ops(mux::ui::ui_shared& shared, mux::protocol_list<Tags...>) {
+  (shared.protocol_ops.insert_or_assign(mux::protocol_t{Tags{}}, ops_of_type<account_type_of<mux::config::kept_of<Tags>>>()),
    ...);
 }
 

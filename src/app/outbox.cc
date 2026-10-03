@@ -56,7 +56,7 @@ class outbox_part {
   // As the chat's protocol's rule for edits allows: any of one's own, or
   // only the last (XMPP's).
   [[nodiscard]] static bool editable(const conversation& chat, const message& one) {
-    return proto::may_edit(mux::ui::protocol_state_of(chat.id.account), chat, one) && !one.id.empty() &&
+    return proto::may_edit(mux::ui::protocol_state_of(s_->ui, chat.id.account), chat, one) && !one.id.empty() &&
            (one.attachment ? captioned(one) : !one.body.plain.empty());
   }
   // What the field is given to edit: the text; a picture's caption, nothing
@@ -195,7 +195,7 @@ class outbox_part {
   // Files: chosen with the paperclip, or dropped; the send box closed, or
   // what is in it sent -- the caption with the first.
   void apply(const request::attach_files&) {
-    if (!s_->root().main().chosen || !mux::ui::may_send_files(s_->root().main().chosen->account))
+    if (!s_->root().main().chosen || !mux::ui::may_send_files(s_->ui, s_->root().main().chosen->account))
       return;
     if (to_send_.empty())
       files_thread_.reset();
@@ -203,7 +203,7 @@ class outbox_part {
   }
   // The thread panel's paperclip: what is chosen goes into the thread open.
   void apply(const request::attach_in_thread&) {
-    if (!s_->root().main().chosen || !mux::ui::may_send_files(s_->root().main().chosen->account))
+    if (!s_->root().main().chosen || !mux::ui::may_send_files(s_->ui, s_->root().main().chosen->account))
       return;
     if (to_send_.empty())
       files_thread_ = s_->root().main().thread_open();
@@ -311,7 +311,7 @@ class outbox_part {
     if (!s_->root().main().chosen)
       return;
     // Dropped or pasted where files are not sent: said, not lost silently.
-    if (!mux::ui::may_send_files(s_->root().main().chosen->account)) {
+    if (!mux::ui::may_send_files(s_->ui, s_->root().main().chosen->account)) {
       s_->root().show_message("Files", "Files cannot be sent in this chat.");
       return;
     }
@@ -370,7 +370,7 @@ class outbox_part {
       return;
     const conversation_id to = *screen.chosen;
     // A command of its protocol's own: asked, not sent.
-    if (const auto asked = mux::proto::command_of(mux::ui::protocol_state_of(to.account), to, text)) {
+    if (const auto asked = mux::proto::command_of(mux::ui::protocol_state_of(s_->ui, to.account), to, text)) {
       splice::visit(splice::overloaded{[](mux::proto::part::no_request) {}, [&](const auto& one) { s_->ask->ask_for(one); }},
                     *asked);
       screen.line.set_text({});

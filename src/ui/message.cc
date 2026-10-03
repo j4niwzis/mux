@@ -609,6 +609,8 @@ struct message_bubble : nodes::Stack {
   const palette* colours_ = nullptr;
   // The looks shown: the program's.
   const looks_shown* looks_ = nullptr;
+  // What the window's parts share: the accounts' protocol states.
+  const ui_shared* shared_ = nullptr;
   struct parts_t {
     // The sender's avatar, beside the last of their run in a group; the
     // same room, empty, beside the rest.
@@ -660,6 +662,7 @@ struct message_bubble : nodes::Stack {
     platform::audio::speaker* sound = nullptr;
     const palette* colours = nullptr;
     looks_shown* looks = nullptr;
+    ui_shared* shared = nullptr;
   };
   message_bubble(const needs& n, const conversation& in, const message& given, bool first_of_run, bool last_of_run,
                  const model* now = nullptr, bool show_events = true, bool show_preview = true)
@@ -669,7 +672,7 @@ struct message_bubble : nodes::Stack {
   message_bubble(const needs& n, const conversation& in, const message& said, bool first_of_run, bool last_of_run, const model* now,
                  bool show_events, bool show_preview, made_t)
       : said(said), first(first_of_run), last(last_of_run), message_id(said.id), plain(said.body.plain),
-        outgoing(said.outgoing), sender(said.sender), colours_(n.colours), looks_(n.looks),
+        outgoing(said.outgoing), sender(said.sender), colours_(n.colours), looks_(n.looks), shared_(n.shared),
         parts{.face = avatar_mark(said.sender, sender_name(in, said.sender), kAvatar),
               .body = body_column(*n.colours, *n.looks, said.outgoing, said.body.plain, mark_of(said) + clock_of(said.at)),
               .swipe_mark = nodes::Icon(shape_of(icon::back{}), n.colours->dim)} {
@@ -704,7 +707,7 @@ struct message_bubble : nodes::Stack {
     // Laid out as the chat's protocol says: bubbles, or lines.
     const bool as_lines = splice::visit(splice::overloaded{[](proto::part::style::lines) { return true; },
                                                            [](proto::part::style::bubbles) { return false; }},
-                                        proto::message_style(protocol_state_of(in.id.account)));
+                                        proto::message_style(protocol_state_of(*shared_, in.id.account)));
     const bool with_face = group && !outgoing && !said.service;
     fState.apply({.fillX = true, .autoSize = scene::axes::kY,
                   .padding = {first_of_run ? 8.0f : 1.0f, 0.0f, 1.0f, with_face ? kAvatar + 8.0f : 0.0f}});
@@ -723,7 +726,7 @@ struct message_bubble : nodes::Stack {
     if (((group && !outgoing) || as_lines) && first_of_run && !said.service) {
       // Their role, as the chat's protocol says it (Matrix: its power levels).
       body.parts.name.emplace(*colours_, sender_name(in, said.sender), avatar_colour(said.sender),
-                              proto::sender_role(protocol_state_of(in.id.account), in, said.sender));
+                              proto::sender_role(protocol_state_of(*shared_, in.id.account), in, said.sender));
     }
     // Forwarded: "Forwarded from" its sender, at its top, as Telegram's.
     // The sender a person's pill, as a mention is, and pressed, opens them.
@@ -790,7 +793,7 @@ struct message_bubble : nodes::Stack {
                                               using sticker_defaults::make_sticker;
                                               return body.place_sticker(make_sticker(now, said, type_tag<Actions>{}));
                                             },
-                                            protocol_state_of(in.id.account));
+                                            protocol_state_of(*shared_, in.id.account));
     // What it carries: a picture, sized as tdesktop's; or a file's row.
     if (said.attachment && !theirs) {
       const mux::attachment& carried = *said.attachment;
@@ -974,7 +977,7 @@ struct message_bubble : nodes::Stack {
       body.parts.thread->setElided(true);
       body.parts.thread->apply({.fillX = true, .margin = {4.0f, 0.0f, 0.0f, 0.0f}});
     }
-    std::ranges::for_each(proto::message_lines(protocol_state_of(in.id.account), in, said), [&](const proto::part::line& one) {
+    std::ranges::for_each(proto::message_lines(protocol_state_of(*shared_, in.id.account), in, said), [&](const proto::part::line& one) {
       nodes::Text& shown = body.parts.lines.emplace_back(one.text, 12.0f, tone_colour(*colours_, one.tone));
       shown.setWrapped(true);
       shown.apply({.fillX = true, .margin = {4.0f, 0.0f, 0.0f, 0.0f}});
@@ -984,7 +987,7 @@ struct message_bubble : nodes::Stack {
           using view_defaults::make_message_view;
           body.place_view(make_message_view(now, said, type_tag<Actions>{}));
         },
-        protocol_state_of(in.id.account));
+        protocol_state_of(*shared_, in.id.account));
     if (!said.reactions.empty()) {
       body.parts.reactions.emplace();
       for (const auto& [key, who] : said.reactions)

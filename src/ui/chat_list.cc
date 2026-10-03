@@ -204,17 +204,17 @@ struct conversation_row : nodes::Stack {
   };
   // What it says of the chat -- its newest and its count -- as the chat
   // shows it: the room events it hides left out of both.
-  [[nodiscard]] static view view_of(const conversation& one, bool is_chosen, bool is_muted, std::string draft = {},
+  [[nodiscard]] static view view_of(const ui_shared& shared, const conversation& one, bool is_chosen, bool is_muted, std::string draft = {},
                                     const room_event_filter& events = {}, std::optional<skia::SkColor> strip = std::nullopt) {
     const message* last = newest(one, events);
     return {display_name(one), last ? std::optional<message>(*last) : std::nullopt, one.unread_here(events), is_chosen,
-            is_muted, std::move(draft), one.invite, strip, proto::row_badges(protocol_state_of(one.id.account), one)};
+            is_muted, std::move(draft), one.invite, strip, proto::row_badges(protocol_state_of(shared, one.id.account), one)};
   }
   view shown;
 
   conversation_row(const ui_needs<Actions>& n, const conversation& one, bool is_chosen, bool is_muted, std::string draft = {},
                    const room_event_filter& events = {}, std::optional<skia::SkColor> strip = std::nullopt)
-      : actions(n.actions), id(one.id), chosen(is_chosen), muted(is_muted), shown(view_of(one, is_chosen, is_muted, draft, events, strip)),
+      : actions(n.actions), id(one.id), chosen(is_chosen), muted(is_muted), shown(view_of(*n.shared, one, is_chosen, is_muted, draft, events, strip)),
         parts{.face = avatar_mark(one.id.id, display_name(one), 46.0f),
               .lines = lines_column(*n.colours, display_name(one), one.unread_here(events), is_chosen, is_muted)} {
     const palette& colours = *n.colours;
@@ -228,7 +228,7 @@ struct conversation_row : nodes::Stack {
           using row_view_defaults::make_row_view;
           this->place_view(make_row_view(now, one, type_tag<Actions>{}));
         },
-        protocol_state_of(one.id.account));
+        protocol_state_of(*n.shared, one.id.account));
     auto& time = parts.lines.parts.top.parts.time;
     auto& preview = parts.lines.parts.bottom.parts.preview;
     auto& sender = parts.lines.parts.bottom.parts.sender;

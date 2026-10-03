@@ -158,7 +158,7 @@ class history_part {
       }
       // Where its protocol pages back at all: an XMPP server with no
       // archive is not asked, to time out.
-      if (!mux::proto::can_page_back(mux::ui::protocol_state_of(in.account)))
+      if (!mux::proto::can_page_back(mux::ui::protocol_state_of(s_->ui, in.account)))
         return;
       s_->net->load_older(in, std::move(from));
     };

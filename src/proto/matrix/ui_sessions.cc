@@ -175,7 +175,7 @@ struct account_sessions : nodes::Stack {
   std::vector<std::string> others;
 
   // Its sessions asked of the server as it opens.
-  account_sessions(Actions* a, const palette& colours, const config::account_t&, const model&)
+  account_sessions(Actions* a, const palette& colours, const ui_shared&, const config::account_t&, const model&)
       : actions(a), colours_(&colours), parts{.verification_title = section_title(colours, "DEVICE VERIFICATION"),
               .verification_note = nodes::Text("To verify device identity and grant access to encrypted messages: cross-signing. " "Set it up here, or, where another session of yours has it, bring it back with " "your recovery key.", 13.0f, colours.dim),
               .set_up = set_up_row(colours, "Set up cross-signing\u2026", {a}),
@@ -302,7 +302,7 @@ struct encryption_page : nodes::Stack {
     recovery_row recovery;
   } parts;
 
-  encryption_page(Actions* a, const palette& colours, const config::account_t& one, const model& now)
+  encryption_page(Actions* a, const palette& colours, const ui_shared& shared, const config::account_t& one, const model& now)
       : parts{.title = section_title(colours, "ENCRYPTION"),
               .only_verified = only_verified_row(colours, "Never send encrypted messages to unverified sessions", {a}),
               .session_line = nodes::Text("", 13.0f, colours.dim),
@@ -314,7 +314,7 @@ struct encryption_page : nodes::Stack {
     fState.apply({.fill = true});
     parts.only_verified.parts.toggle.setOnNow(config::only_verified_of(one));
     const std::string& address = config::address_of(one);
-    this->show_session(protocol_state_of(account_id{protocol_of(address), address}));
+    this->show_session(protocol_state_of(shared, account_id{protocol_of(address), address}));
   }
   void show_only_verified(bool on) { parts.only_verified.parts.toggle.setOn(on); }
   // This session, as its account's protocol state says it, once known.

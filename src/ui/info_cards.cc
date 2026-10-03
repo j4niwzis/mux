@@ -124,7 +124,7 @@ struct person_card : nodes::Stack {
     std::vector<action_tile<ask_protocol>> theirs;
   } parts;
 
-  person_card(Actions* a, const palette& colours, const account_id& account, const std::string& key, const person_facts& facts)
+  person_card(Actions* a, const palette& colours, const ui_shared& shared, const account_id& account, const std::string& key, const person_facts& facts)
       : colours_(&colours),
         parts{.top = top_bar(colours, "User info", {}, {a}, false, true),
               .face = cover(a, colours, key, facts),
@@ -142,7 +142,7 @@ struct person_card : nodes::Stack {
     // Offered only where the user may: no button for what they cannot do.
     parts.remove.setVisible(facts.may_kick);
     parts.ban.setVisible(facts.may_ban);
-    std::ranges::for_each(proto::person_actions(protocol_state_of(account), account, key), [&](proto::any_action& one) {
+    std::ranges::for_each(proto::person_actions(protocol_state_of(shared, account), account, key), [&](proto::any_action& one) {
       if (one.asks)
         parts.theirs.emplace_back(colours, one.label, icon::check{}, ask_protocol{a, std::move(*one.asks)})
             .apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
@@ -164,7 +164,7 @@ struct person_card : nodes::Stack {
                                                          *facts.trust));
     // Verify where their protocol verifies people, and they are not, or not
     // any more: not for one verified.
-    parts.verify.setVisible(proto::offers(protocol_state_of(account), proto::feature::identity_verification{}) &&
+    parts.verify.setVisible(proto::offers(protocol_state_of(shared, account), proto::feature::identity_verification{}) &&
                             (!facts.trust || !splice::visit(splice::overloaded{[](trust::verified) { return true; },
                                                                                [](const auto&) { return false; }},
                                                             *facts.trust)));

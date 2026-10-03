@@ -57,8 +57,10 @@ export namespace mux::ui {
 template <class Actions>
 struct info_panel : nodes::Stack {
   Actions* actions = nullptr;
-  // The colours it is made in, for what it makes later.
+  // The colours it is made in, for what it makes later; and what the
+  // window's parts share: the accounts' protocol states.
   const palette* colours_ = nullptr;
+  const ui_shared* shared_ = nullptr;
   account_id account;
   std::string key;
   // The member shown on a page of their own, over the group's, if one is:
@@ -266,7 +268,7 @@ struct info_panel : nodes::Stack {
 
   static constexpr float kWidth = 340.0f;
 
-  info_panel(Actions* a, const palette& colours) : actions(a), colours_(&colours), parts{.scroll = nodes::ScrollContainer<column>(column(colours)), .edge = nodes::Box<>(colours.band)} {
+  info_panel(Actions* a, const palette& colours, const ui_shared& shared) : actions(a), colours_(&colours), shared_(&shared), parts{.scroll = nodes::ScrollContainer<column>(column(colours)), .edge = nodes::Box<>(colours.band)} {
     fState.apply({.background = colours.sidebar, .masking = true});
     parts.edge.apply({.place = scene::anchor::kTopLeft, .fillY = true, .width = 1.0f});
     parts.scroll.apply({.fillX = true, .grow = scene::axes::kY});
@@ -286,15 +288,15 @@ struct info_panel : nodes::Stack {
                   display_name(one),
                   group ? std::format("{} member{}", std::max<std::int64_t>(static_cast<std::int64_t>(one.members.size()), one.member_count),
                                       std::max<std::int64_t>(static_cast<std::int64_t>(one.members.size()), one.member_count) == 1 ? "" : "s")
-                        : presence_of(now, one.id.account, contact_of(one)),
+                        : presence_of(*shared_, now, one.id.account, contact_of(*shared_, one)),
                   group,
                   muted,
                   false};
     if (group)
-      if (auto link = proto::room_link(protocol_state_of(one.id.account), one))
+      if (auto link = proto::room_link(protocol_state_of(*shared_, one.id.account), one))
         group_view.copied = std::move(*link);
     group_view.topic = one.topic.value_or("");
-    group_view.leavable = proto::can_leave(protocol_state_of(one.id.account), one);
+    group_view.leavable = proto::can_leave(protocol_state_of(*shared_, one.id.account), one);
     if (one.alias)
       group_view.addresses.push_back(*one.alias);
     std::ranges::copy(one.other_aliases, std::back_inserter(group_view.addresses));
@@ -312,13 +314,13 @@ struct info_panel : nodes::Stack {
         // levels, as Element marks its admins and moderators).
         member shown = each;
         if (!shown.role)
-          if (std::string role = proto::sender_role(protocol_state_of(one.id.account), one, each.id); !role.empty())
+          if (std::string role = proto::sender_role(protocol_state_of(*shared_, one.id.account), one, each.id); !role.empty())
             shown.role = std::move(role);
         // What their protocol says of them beside how they are (Matrix: in an
         // encrypted room, their identity -- Element's shield on each member).
         const std::string how = std::ranges::fold_left(
-            proto::person_badges(protocol_state_of(one.id.account), &one, now, one.id.account, each.id),
-            presence_of(now, one.id.account, each.id), [](std::string so_far, const proto::part::badge& badge) {
+            proto::person_badges(protocol_state_of(*shared_, one.id.account), &one, now, one.id.account, each.id),
+            presence_of(*shared_, now, one.id.account, each.id), [](std::string so_far, const proto::part::badge& badge) {
               return so_far.empty() ? badge.text : std::format("{} \u00b7 {}", so_far, badge.text);
             });
         shown_members.emplace_back(std::move(shown), std::move(how));

@@ -446,7 +446,7 @@ void conversations_screen<Actions>::update(double now_ms) {
       // fetched to the beginning and it was not found. Its thread opened.
       actions->open_thread(*held->thread);
       this->stop_jump();
-    } else if (proto::offers(protocol_state_of(chosen->account), proto::feature::history_context{}) && !jump_paging) {
+    } else if (proto::offers(protocol_state_of(*needs_.shared, chosen->account), proto::feature::history_context{}) && !jump_paging) {
       // Not here: a window of the history around it, from the server --
       // not all of it from here to there. Where that does not bring it,
       // paged back to, as far as the chat's limit.
@@ -634,7 +634,7 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
   // Files attached where the chat's account sends them, and its protocol
   // allows it now: no paperclip otherwise, in the chat or its thread.
   if (chosen) {
-    const bool files = may_send_files(chosen->account);
+    const bool files = may_send_files(*needs_.shared, chosen->account);
     line.parts.input.parts.attach.setVisible(files);
     parts.threads.parts.line.parts.input.parts.attach.setVisible(files);
   }
@@ -767,10 +767,10 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
     // room's creation names it as what it continues. One side alone is not
     // believed (as matrix-js-sdk's CVE-2025-59160, the other way round):
     // a room could otherwise hide another from the list.
-    if (const auto successor = proto::successor_of(protocol_state_of(one.id.account), one); successor && in)
+    if (const auto successor = proto::successor_of(protocol_state_of(*needs_.shared, one.id.account), one); successor && in)
       if (const auto next = in->conversations.find(*successor);
           next != in->conversations.end() &&
-          proto::predecessor_of(protocol_state_of(one.id.account), next->second) == one.id.id)
+          proto::predecessor_of(protocol_state_of(*needs_.shared, one.id.account), next->second) == one.id.id)
         return false;
     return in_folder(one) && (wanted.empty() || lower(display_name(one)).contains(wanted) || lower(one.id.id).contains(wanted));
   };
@@ -861,7 +861,7 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
           [](const conversation_row<Actions>& row) { return row.id; },
           [&](const conversation* one) {
             if (const auto kept = rows_kept.find(one->id); kept != rows_kept.end()) {
-              const bool same = kept->second.shown == conversation_row<Actions>::view_of(*one, is_chosen(one), muted.contains(one->id),
+              const bool same = kept->second.shown == conversation_row<Actions>::view_of(*needs_.shared, *one, is_chosen(one), muted.contains(one->id),
                                                                                          draft_of(one->id), events_of(one), strip_for(one));
               if (same) {
                 conversation_row<Actions> back = std::move(kept->second);
@@ -875,7 +875,7 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
           },
           [&](const conversation_row<Actions>& row, const conversation* one) {
             return row.shown ==
-                   conversation_row<Actions>::view_of(*one, is_chosen(one), muted.contains(one->id), draft_of(one->id),
+                   conversation_row<Actions>::view_of(*needs_.shared, *one, is_chosen(one), muted.contains(one->id), draft_of(one->id),
                                                       events_of(one), strip_for(one));
           })) {
     list.invalidateLayout();
@@ -924,7 +924,7 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
 
 template <class Actions>
 void conversations_screen<Actions>::show_banners(const conversation* one, const model& now) {
-  const auto banners = one ? proto::composer_banners(protocol_state_of(one->id.account), *one, now)
+  const auto banners = one ? proto::composer_banners(protocol_state_of(*needs_.shared, one->id.account), *one, now)
                            : std::vector<proto::any_banner>{};
   const std::string said = banners | std::views::transform(&proto::any_banner::text) | std::views::join_with('\n') |
                            std::ranges::to<std::string>();
@@ -951,7 +951,7 @@ void conversations_screen<Actions>::show_banners(const conversation* one, const 
           using head_view_defaults::make_head_view;
           this->place_head_view(make_head_view(now, *one, type_tag<Actions>{}));
         },
-        protocol_state_of(one->id.account));
+        protocol_state_of(*needs_.shared, one->id.account));
   // The protocol's own node over the composer, made again for the chat.
   chat.parts.their_view.reset();
   if (one)
@@ -960,7 +960,7 @@ void conversations_screen<Actions>::show_banners(const conversation* one, const 
           using composer_view_defaults::make_composer_view;
           this->place_composer_view(make_composer_view(now, *one, type_tag<Actions>{}));
         },
-        protocol_state_of(one->id.account));
+        protocol_state_of(*needs_.shared, one->id.account));
   auto& bar = chat.parts.trust_warning;
   if (!banners.empty())
     bar.apply({.background = (tone_colour(*needs_.colours, banners.front().tone) & 0x00FFFFFFu) | (0x22u << 24)});
@@ -980,7 +980,7 @@ void conversations_screen<Actions>::show_conversation(const model& now) {
   const float left_at = timeline.current();
   auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
   const conversation* one = chosen ? now.find(*chosen) : nullptr;
-  head_shown = chat_header<Actions>::view_of(one, now);
+  head_shown = chat_header<Actions>::view_of(*needs_.shared, one, now);
   head_shown.back = single;
   header.show(head_shown, [this](const auto& shown) { return chat_header<Actions>(needs_, shown); });
   this->show_banners(one, now);
@@ -1006,9 +1006,9 @@ void conversations_screen<Actions>::show_conversation(const model& now) {
   // Whether the reader may post here, as the chat's protocol says (Matrix:
   // its power levels); and whether any message of theirs here was not sent.
   {
-    const proto::part::chat_rights may = proto::chat_rights(protocol_state_of(one->id.account), *one);
+    const proto::part::chat_rights may = proto::chat_rights(protocol_state_of(*needs_.shared, one->id.account), *one);
     chat.line.set_can_post(may.post);
-    chat.line.set_replaced(proto::successor_of(protocol_state_of(one->id.account), *one).has_value());
+    chat.line.set_replaced(proto::successor_of(protocol_state_of(*needs_.shared, one->id.account), *one).has_value());
     // Those knocking, for whoever may invite.
     chat.line.show_knocks(actions, one->knocking, may.invite);
     chat.line.show_unsent(std::ranges::any_of(one->timeline, [](const message& said) {

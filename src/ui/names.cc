@@ -32,8 +32,8 @@ export namespace mux::ui {
 }
 // A contact's presence, in a word or two; one never heard of, as their
 // protocol says (proto::unheard_presence).
-[[nodiscard]] inline std::string presence_of(const model& now, const account_id& account, const std::string& contact) {
-  const auto unknown = [&] { return proto::unheard_presence(protocol_state_of(account)); };
+[[nodiscard]] inline std::string presence_of(const ui_shared& shared, const model& now, const account_id& account, const std::string& contact) {
+  const auto unknown = [&] { return proto::unheard_presence(protocol_state_of(shared, account)); };
   const auto found = now.accounts().find(account);
   if (found == now.accounts().end())
     return unknown();
@@ -41,8 +41,8 @@ export namespace mux::ui {
   return kept == found->second.presences.end() ? unknown() : presence_text(kept->second.state);
 }
 // Whom a direct chat is with, as its protocol says (proto::direct_contact).
-[[nodiscard]] inline std::string contact_of(const conversation& one) {
-  return proto::direct_contact(protocol_state_of(one.id.account), one);
+[[nodiscard]] inline std::string contact_of(const ui_shared& shared, const conversation& one) {
+  return proto::direct_contact(protocol_state_of(shared, one.id.account), one);
 }
 
 [[nodiscard]] inline bool is_group(const conversation& one) {

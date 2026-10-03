@@ -469,7 +469,7 @@ struct window : scene::Node {
   void close_verification() { layer().verifying.close(); }
 
   void open_person(const account_id& account, const std::string& key, const person_facts& facts) {
-    layer().person.open(actions, *needs_.colours, account, key, facts);
+    layer().person.open(actions, *needs_.colours, *needs_.shared, account, key, facts);
   }
   void close_person() { layer().person.close(); }
   // Opened again while up, it takes what is known now in place.

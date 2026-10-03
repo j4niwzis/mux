@@ -142,7 +142,7 @@ class manage_part {
                                        .hidden_from_home = k_->hidden_from_home.contains(chat->id),
                                        .speaks = chat->id.account.speaks};
     // What its protocol fills of them: Matrix's own level and privileged users.
-    mux::proto::manage_facts(mux::ui::protocol_state_of(chat->id.account), *chat, facts);
+    mux::proto::manage_facts(mux::ui::protocol_state_of(s_->ui, chat->id.account), *chat, facts);
     s_->root().open_manage(facts);
   }
 

@@ -137,6 +137,11 @@ struct ui_shared {
   // their mxc://, while they show.
   std::vector<std::string> pack_pictures_shown;
   std::vector<std::string> panel_pictures_shown;
+  // What each protocol's account does beyond what every one does, as the
+  // program found it from the account types as it started; and each
+  // account's protocol state, as its client last said it.
+  std::map<protocol_t, proto::account_ops> protocol_ops;
+  std::map<account_id, protocol_state_t> protocol_states;
 };
 // A message found by a chat's search, as the list of them shows it: its
 // place among them, who said it, when, and its words around what was found.
@@ -204,19 +209,15 @@ inline std::vector<std::pair<std::string, std::string>>& listed_avatars() {
   return listed;
 }
 // What each protocol's account does beyond what every one does, as the
-// program found it from the account types; and an account's, by its
-// protocol. None found: nothing beyond.
-inline std::map<protocol_t, proto::account_ops>& protocol_ops() {
-  static std::map<protocol_t, proto::account_ops> kept;
-  return kept;
-}
-[[nodiscard]] inline proto::account_ops ops_of(const account_id& of) {
-  const auto found = protocol_ops().find(of.speaks);
-  return found != protocol_ops().end() ? found->second : proto::account_ops{};
+// program found it from the account types (ui_shared::protocol_ops); and an
+// account's, by its protocol. None found: nothing beyond.
+[[nodiscard]] inline proto::account_ops ops_of(const ui_shared& shared, const account_id& of) {
+  const auto found = shared.protocol_ops.find(of.speaks);
+  return found != shared.protocol_ops.end() ? found->second : proto::account_ops{};
 }
 // Whether files may be sent into an account's chats: where its account
 // sends them, and its protocol allows it now.
-[[nodiscard]] inline bool may_send_files(const account_id& of);
+[[nodiscard]] inline bool may_send_files(const ui_shared& shared, const account_id& of);
 // Lists of types, put together: the client's and every protocol's -- the
 // Manage tabs and pages, the account pages.
 template <class... Ts>
@@ -310,18 +311,15 @@ void look_as_its_content(widgets::Dialog<Content>& dialog, const palette& colour
 // Anything else a window holds: no dialog, nothing to put.
 inline void look_as_its_content(const auto&, const palette&) {}
 
-// Each account's protocol state, as its client last said it: what the
-// extension points are asked with. One not said yet: its protocol's default.
-inline std::map<account_id, protocol_state_t>& protocol_states() {
-  static std::map<account_id, protocol_state_t> kept;
-  return kept;
+// Each account's protocol state, as its client last said it
+// (ui_shared::protocol_states): what the extension points are asked with.
+// One not said yet: its protocol's default.
+[[nodiscard]] inline protocol_state_t protocol_state_of(const ui_shared& shared, const account_id& of) {
+  const auto found = shared.protocol_states.find(of);
+  return found != shared.protocol_states.end() ? found->second : state_before(of.speaks);
 }
-[[nodiscard]] inline protocol_state_t protocol_state_of(const account_id& of) {
-  const auto found = protocol_states().find(of);
-  return found != protocol_states().end() ? found->second : state_before(of.speaks);
-}
-[[nodiscard]] inline bool may_send_files(const account_id& of) {
-  return ops_of(of).send_file && proto::can_upload(protocol_state_of(of));
+[[nodiscard]] inline bool may_send_files(const ui_shared& shared, const account_id& of) {
+  return ops_of(shared, of).send_file && proto::can_upload(protocol_state_of(shared, of));
 }
 // And Telegram's pattern over it: dark and faint on a light theme, light and
 // fainter on a dark one.

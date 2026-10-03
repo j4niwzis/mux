@@ -121,10 +121,10 @@ struct services {
   // it does, else the first.
   template <class Feature>
   [[nodiscard]] std::optional<mux::account_id> account_offering(Feature wanted) const {
-    if (const auto& current = root().main().current; current && mux::proto::offers(mux::ui::protocol_state_of(*current), wanted))
+    if (const auto& current = root().main().current; current && mux::proto::offers(mux::ui::protocol_state_of(ui, *current), wanted))
       return current;
     for (const auto& [id, account] : model->accounts())
-      if (mux::proto::offers(mux::ui::protocol_state_of(id), wanted))
+      if (mux::proto::offers(mux::ui::protocol_state_of(ui, id), wanted))
         return id;
     return std::nullopt;
   }

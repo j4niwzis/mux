@@ -596,6 +596,14 @@ inline void use_widget_theme(const config::theme_t& chosen, const config::accent
                                     : nodes::ScrollBarColours{skia::colorSetARGB(0x53, 255, 255, 255),
                                                               skia::colorSetARGB(0x7a, 255, 255, 255)};
 }
+// For the code not handed its palette yet: a palette made of the colours
+// read by name, kept where what is made of it may point at it. Goes with
+// them, once everything is handed its palette.
+inline const palette& legacy_palette() {
+  static palette now;
+  now = palette{.background = background, .sidebar = sidebar_colour, .chosen = chosen_colour, .text = text_colour, .dim = dim_colour, .accent = accent_colour, .error = error_colour, .selected = selected_colour, .selected_text = selected_text_colour, .band = band_colour, .section = section_colour, .tile = tile_colour, .bubble = bubble_colour, .out_bubble = out_bubble_colour, .sent_time = sent_time_colour, .chat = chat_colour, .chat_top = chat_top_colour, .pattern = pattern_colour, .on_accent = on_accent_colour};
+  return now;
+}
 // For the code not handed its palette yet: the palette put in the colours
 // read by name. Goes with them.
 inline void use_theme(const config::theme_t& chosen, const config::accent_t& accent) {

@@ -47,16 +47,17 @@ struct drawer_account : nodes::Stack {
   } parts;
 
   // Declared: the avatar, the address over its state, the tick.
-  drawer_account(Actions* a, const config::account_t& saved, const model& now, bool is_current)
-      : actions(a), address(config::address_of(saved)), current(is_current),
+  drawer_account(const ui_needs<Actions>& n, const config::account_t& saved, const model& now, bool is_current)
+      : actions(n.actions), address(config::address_of(saved)), current(is_current),
         parts{.face = avatar_mark(address, address, 38.0f), .texts = two_lines(address, "", 14.0f, 3.0f)} {
+    const palette& colours = *n.colours;
     this->setHorizontal();
     this->setGap(14.0f);
-    fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}, .hoverBackground = chosen_colour, .selectedBackground = chosen_colour, .focusBackground = chosen_colour, .selected = current});
+    fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}, .hoverBackground = colours.chosen, .selectedBackground = colours.chosen, .focusBackground = colours.chosen, .selected = current});
     const auto [how, failed] = state_of(saved, now);
     parts.texts.parts.state.setText(std::format("{} · {}", config::protocol_name(saved), how));
-    parts.texts.parts.state.setColour(failed ? error_colour : dim_colour);
-    parts.tick.setColour(accent_colour);
+    parts.texts.parts.state.setColour(failed ? colours.error : colours.dim);
+    parts.tick.setColour(colours.accent);
     parts.tick.setVisible(current);
   }
 
@@ -85,19 +86,25 @@ struct drawer_panel : nodes::Stack {
   using new_room_row = row_item<ask<Actions, &Actions::open_new_room>>;
   using settings_row = row_item<ask<Actions, &Actions::open_settings>>;
   using quit_row = row_item<ask<Actions, &Actions::quit>>;
+  // What it was handed, for the accounts it lists.
+  ui_needs<Actions> needs_;
   struct parts_t {
-    nodes::Text title{"mux", 20.0f, text_colour, true};
+    nodes::Text title;
     std::vector<drawer_account<Actions>> accounts;
     manage_row manage;
-    nodes::Box<> rule_1{chosen_colour};
+    nodes::Box<> rule_1;
     new_chat_row new_chat;
     new_room_row new_room;
     settings_row settings;
     quit_row quit;
   } parts;
 
-  explicit drawer_panel(Actions* a)
-      : parts{.manage = manage_row("Manage accounts", {a}, icon::person{}),
+  explicit drawer_panel(const ui_needs<Actions>& n) : drawer_panel(n, n.actions) {}
+  drawer_panel(const ui_needs<Actions>& n, Actions* a)
+      : needs_(n),
+        parts{.title = nodes::Text("mux", 20.0f, n.colours->text, true),
+              .manage = manage_row("Manage accounts", {a}, icon::person{}),
+              .rule_1 = nodes::Box<>(n.colours->chosen),
               .new_chat = new_chat_row("Start new chat", {a}, icon::person{}),
               .new_room = new_room_row("New room", {a}, icon::people{}),
               .settings = settings_row("Settings", {a}, icon::gear{}),
@@ -109,10 +116,10 @@ struct drawer_panel : nodes::Stack {
     parts.rule_1.apply({.fillX = true, .height = 1.0f});
   }
 
-  void show(Actions* a, const std::vector<config::account_t>& saved, const model& now, std::string_view current) {
+  void show(Actions*, const std::vector<config::account_t>& saved, const model& now, std::string_view current) {
     parts.accounts.clear();
     for (const config::account_t& one : saved)
-      parts.accounts.emplace_back(a, one, now, config::address_of(one) == current);
+      parts.accounts.emplace_back(needs_, one, now, config::address_of(one) == current);
     this->invalidateLayout();
   }
 

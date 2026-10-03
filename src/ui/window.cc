@@ -281,7 +281,7 @@ struct window : scene::Node {
 
     explicit layers(const ui_needs<Actions>& n) : layers(n, n.actions) {}
     layers(const ui_needs<Actions>& n, Actions* a)
-        : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(n), std::forward_as_tuple(a))},
+        : parts{.frame = frame_t(std::piecewise_construct, std::forward_as_tuple(n), std::forward_as_tuple(n))},
           actions_of(a) {
       auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying,
              emoji, menu, viewer, text_menu_up] = parts;

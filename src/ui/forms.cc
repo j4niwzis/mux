@@ -28,15 +28,20 @@ struct field : nodes::Stack {
     widgets::TextArea<> box;
   } parts;
 
-  // Declared: the caption over the field, which sits on a plate.
+  // The colours its border turns as it has the focus.
+  const palette* colours_ = nullptr;
   field(std::string label, std::string placeholder, std::string text = {})
-      : parts{.caption = nodes::Text(std::move(label), 13.0f, dim_colour), .box = widgets::TextArea<>(std::move(placeholder))} {
+      : field(legacy_palette(), std::move(label), std::move(placeholder), std::move(text)) {}
+  // Declared: the caption over the field, which sits on a plate.
+  field(const palette& colours, std::string label, std::string placeholder, std::string text = {})
+      : parts{.caption = nodes::Text(std::move(label), 13.0f, colours.dim), .box = widgets::TextArea<>(std::move(placeholder))},
+        colours_(&colours) {
     auto& box = parts.box;
     this->setGap(4.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     box.setSingleLine(true);
-    box.apply({.fillX = true, .padding = {0.0f, 10.0f, 0.0f, 10.0f}, .cornerRadius = 6.0f, .background = tile_colour,
-               .border = scene::Border{band_colour, 1.0f}});
+    box.apply({.fillX = true, .padding = {0.0f, 10.0f, 0.0f, 10.0f}, .cornerRadius = 6.0f, .background = colours.tile,
+               .border = scene::Border{colours.band, 1.0f}});
     box.setText(std::move(text));
   }
   // Its border in the accent while it has the focus.
@@ -46,7 +51,7 @@ struct field : nodes::Stack {
     if (box.focused() == lit)
       return;
     lit = box.focused();
-    box.apply({.border = scene::Border{lit ? accent_colour : band_colour, 1.0f}});
+    box.apply({.border = scene::Border{lit ? colours_->accent : colours_->band, 1.0f}});
   }
   // What is typed in it.
   [[nodiscard]] const std::string& text() const { return parts.box.text(); }

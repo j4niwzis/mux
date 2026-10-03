@@ -85,8 +85,10 @@ struct theme_card : nodes::Stack {
       nodes::Box<> incoming;
       nodes::Box<> outgoing;
     } parts;
-    picture_t(skia::SkColor back, skia::SkColor in, skia::SkColor out)
-        : parts{.incoming = nodes::Box<>(in), .outgoing = nodes::Box<>(out)} {
+    // The ring it is lit with as it is the one chosen.
+    skia::SkColor ring = 0;
+    picture_t(skia::SkColor back, skia::SkColor in, skia::SkColor out, skia::SkColor lit)
+        : parts{.incoming = nodes::Box<>(in), .outgoing = nodes::Box<>(out)}, ring(lit) {
       fState.apply({.place = scene::anchor::kTopLeft, .y = -62.0f, .fillX = true, .height = 56.0f, .cornerRadius = 8.0f,
                     .background = back});
       parts.incoming.apply({.place = scene::anchor::kTopLeft, .x = 6.0f, .y = 8.0f, .width = 44.0f, .height = 14.0f,
@@ -94,15 +96,16 @@ struct theme_card : nodes::Stack {
       parts.outgoing.apply({.place = scene::anchor::kTopRight, .x = -6.0f, .y = 30.0f, .width = 44.0f, .height = 14.0f,
                             .cornerRadius = 7.0f});
     }
-    void set_ring(bool on) { fState.apply({.border = scene::Border{on ? accent_colour : 0u, on ? 2.0f : 0.0f}}); }
+    void set_ring(bool on) { fState.apply({.border = scene::Border{on ? ring : 0u, on ? 2.0f : 0.0f}}); }
   };
   struct parts_t {
     nodes::Text name;
     picture_t picture;
   } parts;
-  theme_card(Actions* a, config::theme_t which, std::string label, skia::SkColor b, skia::SkColor in, skia::SkColor out)
+  theme_card(const palette& colours, Actions* a, config::theme_t which, std::string label, skia::SkColor b, skia::SkColor in,
+             skia::SkColor out)
       : actions(a), theme(which), back(b), bubble(in), mine(out),
-        parts{.name = nodes::Text(std::move(label), 12.0f, dim_colour), .picture = picture_t(b, in, out)} {
+        parts{.name = nodes::Text(std::move(label), 12.0f, colours.dim), .picture = picture_t(b, in, out, colours.accent)} {
     fState.apply({.width = 92.0f, .height = 92.0f, .padding = {66.0f, 6.0f, 0.0f, 6.0f}});
     parts.name.apply({.alignSelf = scene::align::kMiddle});
   }
@@ -136,14 +139,14 @@ struct appearance_page : nodes::Stack {
     struct parts_t {
       card classic, day, tinted, night;
     } parts;
-    explicit cards_row(Actions* a)
-        : parts{.classic = card(a, config::theme::classic{}, "Classic", skia::colorSetARGB(255, 155, 212, 148),
+    cards_row(const palette& colours, Actions* a)
+        : parts{.classic = card(colours, a, config::theme::classic{}, "Classic", skia::colorSetARGB(255, 155, 212, 148),
                                 skia::colorSetARGB(255, 255, 255, 255), skia::colorSetARGB(255, 234, 255, 220)),
-                .day = card(a, config::theme::day{}, "Day", skia::colorSetARGB(255, 126, 196, 234),
+                .day = card(colours, a, config::theme::day{}, "Day", skia::colorSetARGB(255, 126, 196, 234),
                             skia::colorSetARGB(255, 255, 255, 255), skia::colorSetARGB(255, 215, 240, 255)),
-                .tinted = card(a, config::theme::tinted{}, "Tinted", skia::colorSetARGB(255, 72, 87, 97),
+                .tinted = card(colours, a, config::theme::tinted{}, "Tinted", skia::colorSetARGB(255, 72, 87, 97),
                                skia::colorSetARGB(255, 107, 128, 141), skia::colorSetARGB(255, 92, 167, 212)),
-                .night = card(a, config::theme::night{}, "Night", skia::colorSetARGB(255, 72, 87, 97),
+                .night = card(colours, a, config::theme::night{}, "Night", skia::colorSetARGB(255, 72, 87, 97),
                               skia::colorSetARGB(255, 107, 128, 141), skia::colorSetARGB(255, 117, 191, 181))} {
       this->setHorizontal();
       this->setGap(6.0f);
@@ -153,13 +156,13 @@ struct appearance_page : nodes::Stack {
   using circles_row = accent_circles<set_accent_to<Actions>>;
   struct parts_t {
     header_t header;
-    nodes::Text theme_title = section_title("THEME");
+    nodes::Text theme_title;
     cards_row cards;
-    nodes::Text accent_title = section_title("ACCENT");
+    nodes::Text accent_title;
     circles_row circles;
     // Every chat's background, bubbles and panels, here -- not in a dialog.
     look_choices<Actions> looks;
-    nodes::Text spaces_title = section_title("SPACES");
+    nodes::Text spaces_title;
     switch_row<ask<Actions, &Actions::flip_spaces>> spaces;
     switch_row<ask<Actions, &Actions::flip_top_bar>> top_bar;
     switch_row<flip_home_hides<Actions>> home_hides;
@@ -167,32 +170,39 @@ struct appearance_page : nodes::Stack {
     spaces_choices<Actions> places;
     switch_row<ask<Actions, &Actions::flip_wallpaper_behind>> behind;
     switch_row<ask<Actions, &Actions::flip_live_blur>> live_blur;
-    nodes::Text scale_title = section_title(std::format("INTERFACE SCALE: {}%", window_look().interface_scale));
+    nodes::Text scale_title;
     widgets::SliderBar<scene::NoAction, scale_done<Actions>> scale;
-    nodes::Text window_title = section_title(std::format("WINDOW OPACITY: {}%", window_look().chosen));
+    nodes::Text window_title;
     widgets::SliderBar<scene::NoAction, opacity_done<Actions>> opacity;
-    nodes::Text window_note{window_look().see_through
+    nodes::Text window_note;
+  } parts;
+
+  appearance_page(const ui_needs<Actions>& n, const config::theme_t& theme, const config::accent_t& accent)
+      : appearance_page(*n.colours, n.actions, theme, accent) {}
+  appearance_page(const palette& colours, Actions* a, const config::theme_t& theme, const config::accent_t& accent)
+      : parts{.header = header_t(colours, "Appearance", {a}, {a}, true, true),
+              .theme_title = section_title(colours, "THEME"),
+              .cards = cards_row(colours, a),
+              .accent_title = section_title(colours, "ACCENT"),
+              .circles = circles_row({a}, theme, true),
+              .looks = look_choices<Actions>(a, choice_level::everywhere{}),
+              .spaces_title = section_title(colours, "SPACES"),
+              .spaces = switch_row<ask<Actions, &Actions::flip_spaces>>(colours, "Space bars", {a}),
+              .top_bar = switch_row<ask<Actions, &Actions::flip_top_bar>>(colours, "The bar after \"mux\"", {a}),
+              .home_hides = switch_row<flip_home_hides<Actions>>(colours, "Home without chats spaces hold (not direct messages)", {a}),
+              .home_direct = switch_row<flip_home_direct<Actions>>(colours, "And without direct messages", {a}),
+              .places = spaces_choices<Actions>(a),
+              .behind = switch_row<ask<Actions, &Actions::flip_wallpaper_behind>>(colours, "Background behind the whole window", {a}),
+              .live_blur = switch_row<ask<Actions, &Actions::flip_live_blur>>(colours, "Frosted menus blur what is under them (live)", {a}),
+              .scale_title = section_title(colours, std::format("INTERFACE SCALE: {}%", window_look().interface_scale)),
+              .scale = widgets::SliderBar<scene::NoAction, scale_done<Actions>>({}, {a}),
+              .window_title = section_title(colours, std::format("WINDOW OPACITY: {}%", window_look().chosen)),
+              .opacity = widgets::SliderBar<scene::NoAction, opacity_done<Actions>>({}, {a}),
+              .window_note = note_text(colours, window_look().see_through
                                 ? "The panels at this opacity, and what is under the window through them."
                                 : "Below 100% the window shows what is under it, where a compositor (picom, KWin, "
                                   "Mutter) blends windows. Made see-through when mux starts again; from then on, "
-                                  "changes here apply at once.",
-                            13.0f, dim_colour};
-  } parts;
-
-  appearance_page(Actions* a, const config::theme_t& theme, const config::accent_t& accent)
-      : parts{.header = header_t("Appearance", {a}, {a}, true, true),
-              .cards = cards_row(a),
-              .circles = circles_row({a}, theme, true),
-              .looks = look_choices<Actions>(a, choice_level::everywhere{}),
-              .spaces = switch_row<ask<Actions, &Actions::flip_spaces>>("Space bars", {a}),
-              .top_bar = switch_row<ask<Actions, &Actions::flip_top_bar>>("The bar after \"mux\"", {a}),
-              .home_hides = switch_row<flip_home_hides<Actions>>("Home without chats spaces hold (not direct messages)", {a}),
-              .home_direct = switch_row<flip_home_direct<Actions>>("And without direct messages", {a}),
-              .places = spaces_choices<Actions>(a),
-              .behind = switch_row<ask<Actions, &Actions::flip_wallpaper_behind>>("Background behind the whole window", {a}),
-              .live_blur = switch_row<ask<Actions, &Actions::flip_live_blur>>("Frosted menus blur what is under them (live)", {a}),
-              .scale = widgets::SliderBar<scene::NoAction, scale_done<Actions>>({}, {a}),
-              .opacity = widgets::SliderBar<scene::NoAction, opacity_done<Actions>>({}, {a})} {
+                                  "changes here apply at once.")} {
     fState.apply({.fill = true});
     parts.theme_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
     parts.accent_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
@@ -247,26 +257,28 @@ struct rendering_page : nodes::Stack {
     struct parts_t {
       choice gpu;
       choice cpu;
-      nodes::Text note{"Takes effect when mux starts again.", 13.0f, dim_colour};
-      nodes::Text frames_title = section_title("FRAMES");
+      nodes::Text note;
+      nodes::Text frames_title;
       partial_row partial;
       flash_row flash;
       vsync_row vsync;
       fps_row fps;
-      nodes::Text frames_note{"Partial redraw repaints only what changed, into a frame kept between them; a part "
+      nodes::Text frames_note;
+    } parts;
+    body(const palette& colours, Actions* a, bool partial, bool flash, bool vsync, bool fps)
+        : parts{.gpu = choice(colours, "OpenGL (the graphics card)", {a, config::renderer::opengl{}}, icon::none{}, false),
+                .cpu = choice(colours, "Software (the processor)", {a, config::renderer::software{}}, icon::none{}, false),
+                .note = note_text(colours, "Takes effect when mux starts again."),
+                .frames_title = section_title(colours, "FRAMES"),
+                .partial = partial_row(colours, "Partial redraw", {a}),
+                .flash = flash_row(colours, "Flash redrawn areas", {a}),
+                .vsync = vsync_row(colours, "Vsync", {a}),
+                .fps = fps_row(colours, "Show frames a second", {a}),
+                .frames_note = note_text(colours, "Partial redraw repaints only what changed, into a frame kept between them; a part "
                               "that forgets to say it changed then stays as it was. Flashing outlines what each "
                               "frame repainted. Vsync shows frames in step with the screen; off, they are shown as "
                               "soon as drawn. The counter shows frames a second and the last frame's time. All take "
-                              "effect at once.",
-                              13.0f, dim_colour};
-    } parts;
-    body(Actions* a, bool partial, bool flash, bool vsync, bool fps)
-        : parts{.gpu = choice("OpenGL (the graphics card)", {a, config::renderer::opengl{}}, icon::none{}, false),
-                .cpu = choice("Software (the processor)", {a, config::renderer::software{}}, icon::none{}, false),
-                .partial = partial_row("Partial redraw", {a}),
-                .flash = flash_row("Flash redrawn areas", {a}),
-                .vsync = vsync_row("Vsync", {a}),
-                .fps = fps_row("Show frames a second", {a})} {
+                              "effect at once.")} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}});
       parts.note.apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
       parts.frames_title.apply({.margin = {14.0f, 0.0f, 4.0f, 20.0f}});
@@ -284,10 +296,13 @@ struct rendering_page : nodes::Stack {
     body list;  // in the settings' own scroll view
   } parts;
 
-  rendering_page(Actions* a, const config::renderer_t& renderer, bool partial = false, bool flash = false,
+  rendering_page(const ui_needs<Actions>& n, const config::renderer_t& renderer, bool partial = false, bool flash = false,
                  bool vsync = true, bool fps = false)
-      : parts{.header = header_t("Rendering", {a}, {a}, true, true),
-              .list = body(a, partial, flash, vsync, fps)} {
+      : rendering_page(*n.colours, n.actions, renderer, partial, flash, vsync, fps) {}
+  rendering_page(const palette& colours, Actions* a, const config::renderer_t& renderer, bool partial, bool flash, bool vsync,
+                 bool fps)
+      : parts{.header = header_t(colours, "Rendering", {a}, {a}, true, true),
+              .list = body(colours, a, partial, flash, vsync, fps)} {
     fState.apply({.fill = true});
     parts.list.apply({.fillX = true});
     this->show(renderer);

@@ -89,7 +89,7 @@ struct settings_dialog : scene::Node {
   settings_dialog(const ui_needs<Actions>& n, std::string level) : settings_dialog(n, n.actions, std::move(level)) {}
   settings_dialog(const ui_needs<Actions>& n, Actions* a, std::string level)
       : actions(a), needs_(n), motion(std::move(level)),
-        parts{.scroll = nodes::ScrollContainer<page_t>(page_t(std::in_place_index<0>, a))} {
+        parts{.scroll = nodes::ScrollContainer<page_t>(page_t(std::in_place_index<0>, n))} {
     fState.apply({.fill = true});
     parts.scroll.apply({.fill = true});
     parts.scroll.setCopiesOnScroll(false);
@@ -98,12 +98,12 @@ struct settings_dialog : scene::Node {
 
   // Home comes back from the left, the pages come in from the right.
   void show_home() {
-    this->page().template emplace<0>(actions);
+    this->page().template emplace<0>(needs_);
     this->begin_swap(-1.0f);
   }
   void show_animations() {
     this->begin_swap(1.0f);
-    this->page().template emplace<1>(actions);
+    this->page().template emplace<1>(needs_);
     this->show_motion(motion);
   }
   // Made again where it is up -- a choice on it changed -- where it was
@@ -111,7 +111,7 @@ struct settings_dialog : scene::Node {
   void show_appearance(const config::theme_t& theme, const config::accent_t& accent) {
     const bool again = this->appearance() != nullptr;
     const float at = parts.scroll.current();
-    this->page().template emplace<4>(actions, theme, accent);
+    this->page().template emplace<4>(needs_, theme, accent);
     if (again) {
       this->fit_page();
       parts.scroll.setCurrent(at);
@@ -121,7 +121,7 @@ struct settings_dialog : scene::Node {
     }
   }
   void show_rendering(const config::renderer_t& renderer, bool partial, bool flash, bool vsync, bool fps) {
-    this->page().template emplace<5>(actions, renderer, partial, flash, vsync, fps);
+    this->page().template emplace<5>(needs_, renderer, partial, flash, vsync, fps);
     this->begin_swap(1.0f);
   }
   void show_notifications(const config::notification_settings& now) {
@@ -157,11 +157,11 @@ struct settings_dialog : scene::Node {
                       this->page());
   }
   void show_proxies(const std::vector<config::proxy_settings>& all, bool with_back = true) {
-    this->page().template emplace<2>(actions, all, with_back);
+    this->page().template emplace<2>(needs_, all, with_back);
     this->begin_swap(1.0f);
   }
   void show_proxy(const std::optional<config::proxy_settings>& from, int index) {
-    this->page().template emplace<3>(actions, from, index);
+    this->page().template emplace<3>(needs_, from, index);
     this->begin_swap(1.0f);
   }
   [[nodiscard]] proxy_editor<Actions>* editor() {

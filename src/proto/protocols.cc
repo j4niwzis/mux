@@ -7,6 +7,7 @@ export module mux.protocols;
 import std;
 import splice;
 export import mux.proto.tags;
+export import mux.proto.kept;
 export import mux.proto;
 export import mux.proto.xmpp;
 export import mux.proto.matrix;

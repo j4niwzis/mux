@@ -10,6 +10,7 @@ import std;
 import splice;
 import knot;
 import mux.vault;
+import mux.proto.kept;
 
 export namespace mux::config {
 
@@ -293,6 +294,75 @@ struct chat_notify {
 consteval auto json_schema(knot::type<chat_notify>) { return knot::schema<chat_notify>(); }
 
 // An XMPP account: a JID and how to reach its server.
+// What every saved account keeps, whatever its protocol: on or off, and the
+// client's settings of it. What a protocol keeps of its own -- its address,
+// its password, its server -- is its kept type, mux::proto::<protocol>::kept
+// (through mux.proto.kept).
+struct account_shared {
+  bool enabled = true;
+  std::optional<bool> read_receipts;
+  std::optional<bool> send_typing;  // others' typing is always shown
+  std::optional<bool> room_events;
+  std::optional<room_event_kinds> room_event_kinds;
+  std::optional<bool> show_receipts;
+  std::optional<bool> link_previews;
+  std::optional<bool> previews_direct;  // link previews fetched from the site itself
+  std::optional<std::string> wallpaper;  // its chats' background, as word_of(wallpaper_t) says it
+  std::optional<std::string> bubbles;    // its chats' bubbles, as word_of(bubble_look) says them
+  std::optional<std::string> panels;     // its panels' look
+  std::optional<bool> home_hides_spaced;  // Home without what spaces hold, but direct messages
+  std::optional<bool> home_hides_direct;  // and without direct messages too, where it is so
+  std::optional<std::int64_t> jump_search;
+  std::optional<bool> notify;
+  std::optional<bool> notify_sound;
+  std::optional<std::string> proxy;
+  std::optional<std::string> colour;
+  std::optional<bool> strip;
+  friend bool operator==(const account_shared&, const account_shared&) = default;
+};
+consteval auto json_schema(knot::type<account_shared>) { return knot::schema<account_shared>(); }
+
+// What each protocol keeps of its own: its kept type, found by ADL on its tag
+// -- kept_type(tag) -- for every protocol of the list.
+template <class Tag>
+using kept_of = typename decltype(kept_type(Tag{}))::type;
+template <class>
+struct kept_list;
+template <class... Tags>
+struct kept_list<protocol_list<Tags...>> {
+  using held = splice::variant<kept_of<Tags>...>;
+  // As the file has it, chosen by its "protocol": an account of a protocol
+  // this build has not kept as it was, and written back so -- not lost.
+  using saved = knot::tagged<"protocol", kept_of<Tags>..., knot::value>;
+};
+using kept_t = kept_list<protocols>::held;
+using kept_saved_t = kept_list<protocols>::saved;
+
+// One saved account: what its protocol keeps of its own, and what every
+// account keeps.
+struct account_t {
+  kept_t own;
+  account_shared shared;
+  friend bool operator==(const account_t&, const account_t&) = default;
+};
+
+// An account as the file has it: {"protocol": "matrix", "own": {...},
+// "shared": {...}}.
+struct saved_account {
+  std::string protocol;
+  kept_saved_t own;
+  account_shared shared;
+  friend bool operator==(const saved_account&, const saved_account&) = default;
+};
+consteval auto json_schema(knot::type<saved_account>) { return knot::schema<saved_account>(); }
+
+// The names used so far for what each protocol keeps of its own.
+using xmpp_account = proto::xmpp::kept;
+using matrix_account = proto::matrix::kept;
+
+// The accounts as files had them before, one list a protocol and every
+// setting flat in each: read, and never written.
+namespace legacy {
 struct xmpp_account {
   std::string address;  // user@domain
   std::string password;
@@ -383,7 +453,8 @@ struct matrix_account {
 };
 
 // One saved account, of either protocol.
-using account_t = std::variant<xmpp_account, matrix_account>;
+
+}  // namespace legacy
 
 // What a chat's background is: the theme's own -- its gradient and
 // Telegram's pattern -- a plain colour, or a picture of the user's (kept in
@@ -801,8 +872,11 @@ struct history_settings {
 consteval auto json_schema(knot::type<history_settings>) { return knot::schema<history_settings>(); }
 
 struct file {
-  std::vector<xmpp_account> xmpp;
-  std::vector<matrix_account> matrix;
+  // The accounts, of every protocol, in order.
+  std::optional<std::vector<saved_account>> accounts;
+  // As files had them before, one list a protocol: read, never written.
+  std::optional<std::vector<legacy::xmpp_account>> xmpp;
+  std::optional<std::vector<legacy::matrix_account>> matrix;
   // How much the window moves: "none", "reduced" (sections unfold, panels
   // just appear) or "full". Nothing said is full.
   std::optional<std::string> motion;
@@ -869,44 +943,52 @@ struct file {
 };
 
 consteval auto json_schema(knot::type<proxy_settings>) { return knot::schema<proxy_settings>(); }
+namespace legacy {
 consteval auto json_schema(knot::type<xmpp_account>) { return knot::schema<xmpp_account>(); }
 consteval auto json_schema(knot::type<matrix_account>) { return knot::schema<matrix_account>(); }
+}  // namespace legacy
 consteval auto json_schema(knot::type<muted_chat>) { return knot::schema<muted_chat>(); }
 consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
 
-// What an account is known by: its JID or its user ID. The two never meet:
-// a user ID starts with '@', and a JID cannot.
-[[nodiscard]] inline const std::string& address_of(const xmpp_account& one) noexcept { return one.address; }
-[[nodiscard]] inline const std::string& address_of(const matrix_account& one) noexcept { return one.user_id; }
+// What an account is known by: what its protocol says -- a JID, a user ID.
 [[nodiscard]] inline const std::string& address_of(const account_t& one) noexcept {
-  return splice::visit([](const auto& each) -> const std::string& { return address_of(each); }, one);
+  return splice::visit([](const auto& each) -> const std::string& { return address_of(each); }, one.own);
 }
 
 [[nodiscard]] inline bool& enabled_of(account_t& one) noexcept {
-  return splice::visit([](auto& each) -> bool& { return each.enabled; }, one);
+  return one.shared.enabled;
 }
 [[nodiscard]] inline bool enabled_of(const account_t& one) noexcept {
-  return splice::visit([](const auto& each) { return each.enabled; }, one);
+  return one.shared.enabled;
 }
 
 // Whether an account sends read receipts, and the proxy it goes through.
 [[nodiscard]] inline bool read_receipts_of(const account_t& one) {
-  return splice::visit([](const auto& each) { return each.read_receipts.value_or(true); }, one);
+  return one.shared.read_receipts.value_or(true);
+}
+// Whether an account sends room keys to verified sessions only: where its
+// protocol keeps that (only_verified_in(kept), by ADL); none for another.
+namespace only_verified_defaults {
+template <class Kept>
+[[nodiscard]] auto only_verified_in(Kept&) -> std::conditional_t<std::is_const_v<Kept>, const std::optional<bool>*, std::optional<bool>*> {
+  return nullptr;
+}
+}  // namespace only_verified_defaults
+[[nodiscard]] inline std::optional<bool>* only_verified_in(account_t& one) {
+  return splice::visit([](auto& each) -> std::optional<bool>* {
+    using only_verified_defaults::only_verified_in;
+    return only_verified_in(each);
+  }, one.own);
 }
 [[nodiscard]] inline bool only_verified_of(const account_t& one) {
-  return splice::visit(splice::overloaded{[](const matrix_account& matrix) { return matrix.only_verified.value_or(false); },
-                                          [](const auto&) { return false; }},
-                       one);
-}
-// Whether an account sends room keys to verified sessions only: a Matrix
-// account's; none for another.
-[[nodiscard]] inline std::optional<bool>* only_verified_in(account_t& one) {
-  return splice::visit(splice::overloaded{[](matrix_account& matrix) -> std::optional<bool>* { return &matrix.only_verified; },
-                                          [](auto&) -> std::optional<bool>* { return nullptr; }},
-                       one);
+  const std::optional<bool>* kept = splice::visit([](const auto& each) -> const std::optional<bool>* {
+    using only_verified_defaults::only_verified_in;
+    return only_verified_in(each);
+  }, one.own);
+  return kept && kept->value_or(false);
 }
 [[nodiscard]] inline std::optional<bool>& read_receipts_in(account_t& one) {
-  return splice::visit([](auto& each) -> std::optional<bool>& { return each.read_receipts; }, one);
+  return one.shared.read_receipts;
 }
 // An account's colour: its own choice, else one of the eight its address
 // picks -- the same every time, and accounts apart mostly apart.
@@ -928,17 +1010,17 @@ consteval auto json_schema(knot::type<file>) { return knot::schema<file>(); }
   }
 }
 [[nodiscard]] inline accent_t colour_of(const account_t& one) {
-  const std::optional<std::string>& word = splice::visit([](const auto& each) -> const std::optional<std::string>& { return each.colour; }, one);
+  const std::optional<std::string>& word = one.shared.colour;
   return word ? accent_of(word) : default_colour_of(address_of(one));
 }
 [[nodiscard]] inline std::optional<std::string>& colour_in(account_t& one) {
-  return splice::visit([](auto& each) -> std::optional<std::string>& { return each.colour; }, one);
+  return one.shared.colour;
 }
 [[nodiscard]] inline bool strip_of(const account_t& one) {
-  return splice::visit([](const auto& each) { return each.strip.value_or(true); }, one);
+  return one.shared.strip.value_or(true);
 }
 [[nodiscard]] inline std::optional<bool>& strip_in(account_t& one) {
-  return splice::visit([](auto& each) -> std::optional<bool>& { return each.strip; }, one);
+  return one.shared.strip;
 }
 // Whether the account tells whom it talks to that the user is typing.
 // What a passphrase is asked for: local data opened at the
@@ -992,98 +1074,98 @@ using passphrase_for_t = splice::variant<passphrase_for::unlock, passphrase_for:
 
 // Its own choice, if it made one; else as every account's.
 [[nodiscard]] inline const std::optional<bool>& send_typing_of(const account_t& one) {
-  return splice::visit([](const auto& each) -> const std::optional<bool>& { return each.send_typing; }, one);
+  return one.shared.send_typing;
 }
 [[nodiscard]] inline std::optional<bool>& send_typing_in(account_t& one) {
-  return splice::visit([](auto& each) -> std::optional<bool>& { return each.send_typing; }, one);
+  return one.shared.send_typing;
 }
 // Whether the account's chats show their room events: its own choice, if
 // it made one.
 [[nodiscard]] inline const std::optional<std::int64_t>& jump_search_of(const account_t& one) {
-  return splice::visit([](const auto& each) -> const std::optional<std::int64_t>& { return each.jump_search; }, one);
+  return one.shared.jump_search;
 }
 [[nodiscard]] inline std::optional<std::int64_t>& jump_search_in(account_t& one) {
-  return splice::visit([](auto& each) -> std::optional<std::int64_t>& { return each.jump_search; }, one);
+  return one.shared.jump_search;
 }
 // An account's chats' background, as word_of(wallpaper_t) says it.
 [[nodiscard]] inline const std::optional<std::string>& wallpaper_of(const account_t& one) {
-  return splice::visit([](const auto& each) -> const std::optional<std::string>& { return each.wallpaper; }, one);
+  return one.shared.wallpaper;
 }
 [[nodiscard]] inline std::optional<std::string>& wallpaper_in(account_t& one) {
-  return splice::visit([](auto& each) -> std::optional<std::string>& { return each.wallpaper; }, one);
+  return one.shared.wallpaper;
 }
 [[nodiscard]] inline const std::optional<std::string>& bubbles_of(const account_t& one) {
-  return splice::visit([](const auto& each) -> const std::optional<std::string>& { return each.bubbles; }, one);
+  return one.shared.bubbles;
 }
 [[nodiscard]] inline std::optional<std::string>& bubbles_in(account_t& one) {
-  return splice::visit([](auto& each) -> std::optional<std::string>& { return each.bubbles; }, one);
+  return one.shared.bubbles;
 }
 [[nodiscard]] inline const std::optional<std::string>& panels_of(const account_t& one) {
-  return splice::visit([](const auto& each) -> const std::optional<std::string>& { return each.panels; }, one);
+  return one.shared.panels;
 }
 [[nodiscard]] inline std::optional<std::string>& panels_in(account_t& one) {
-  return splice::visit([](auto& each) -> std::optional<std::string>& { return each.panels; }, one);
+  return one.shared.panels;
 }
 [[nodiscard]] inline const std::optional<bool>& home_hides_of(const account_t& one) {
-  return splice::visit([](const auto& each) -> const std::optional<bool>& { return each.home_hides_spaced; }, one);
+  return one.shared.home_hides_spaced;
 }
 [[nodiscard]] inline const std::optional<bool>& home_direct_of(const account_t& one) {
-  return splice::visit([](const auto& each) -> const std::optional<bool>& { return each.home_hides_direct; }, one);
+  return one.shared.home_hides_direct;
 }
 [[nodiscard]] inline std::optional<bool>& home_direct_in(account_t& one) {
-  return splice::visit([](auto& each) -> std::optional<bool>& { return each.home_hides_direct; }, one);
+  return one.shared.home_hides_direct;
 }
 [[nodiscard]] inline std::optional<bool>& home_hides_in(account_t& one) {
-  return splice::visit([](auto& each) -> std::optional<bool>& { return each.home_hides_spaced; }, one);
+  return one.shared.home_hides_spaced;
 }
 [[nodiscard]] inline const std::optional<bool>& link_previews_of(const account_t& one) {
-  return splice::visit([](const auto& each) -> const std::optional<bool>& { return each.link_previews; }, one);
+  return one.shared.link_previews;
 }
 [[nodiscard]] inline std::optional<bool>& link_previews_in(account_t& one) {
-  return splice::visit([](auto& each) -> std::optional<bool>& { return each.link_previews; }, one);
+  return one.shared.link_previews;
 }
 // Whether its chats' link previews come from the sites themselves.
 [[nodiscard]] inline const std::optional<bool>& previews_direct_of(const account_t& one) {
-  return splice::visit([](const auto& each) -> const std::optional<bool>& { return each.previews_direct; }, one);
+  return one.shared.previews_direct;
 }
 [[nodiscard]] inline std::optional<bool>& previews_direct_in(account_t& one) {
-  return splice::visit([](auto& each) -> std::optional<bool>& { return each.previews_direct; }, one);
+  return one.shared.previews_direct;
 }
 [[nodiscard]] inline const std::optional<bool>& show_receipts_of(const account_t& one) {
-  return splice::visit([](const auto& each) -> const std::optional<bool>& { return each.show_receipts; }, one);
+  return one.shared.show_receipts;
 }
 [[nodiscard]] inline std::optional<bool>& show_receipts_in(account_t& one) {
-  return splice::visit([](auto& each) -> std::optional<bool>& { return each.show_receipts; }, one);
+  return one.shared.show_receipts;
 }
 [[nodiscard]] inline const std::optional<bool>& room_events_of(const account_t& one) {
-  return splice::visit([](const auto& each) -> const std::optional<bool>& { return each.room_events; }, one);
+  return one.shared.room_events;
 }
 [[nodiscard]] inline std::optional<bool>& room_events_in(account_t& one) {
-  return splice::visit([](auto& each) -> std::optional<bool>& { return each.room_events; }, one);
+  return one.shared.room_events;
 }
 [[nodiscard]] inline const std::optional<bool>& notify_of(const account_t& one) {
-  return splice::visit([](const auto& each) -> const std::optional<bool>& { return each.notify; }, one);
+  return one.shared.notify;
 }
 [[nodiscard]] inline std::optional<bool>& notify_in(account_t& one) {
-  return splice::visit([](auto& each) -> std::optional<bool>& { return each.notify; }, one);
+  return one.shared.notify;
 }
 [[nodiscard]] inline const std::optional<bool>& notify_sound_of(const account_t& one) {
-  return splice::visit([](const auto& each) -> const std::optional<bool>& { return each.notify_sound; }, one);
+  return one.shared.notify_sound;
 }
 [[nodiscard]] inline std::optional<bool>& notify_sound_in(account_t& one) {
-  return splice::visit([](auto& each) -> std::optional<bool>& { return each.notify_sound; }, one);
+  return one.shared.notify_sound;
 }
 [[nodiscard]] inline const std::optional<room_event_kinds>& room_event_kinds_of(const account_t& one) {
-  return splice::visit([](const auto& each) -> const std::optional<room_event_kinds>& { return each.room_event_kinds; }, one);
+  return one.shared.room_event_kinds;
 }
 [[nodiscard]] inline std::optional<room_event_kinds>& room_event_kinds_in(account_t& one) {
-  return splice::visit([](auto& each) -> std::optional<room_event_kinds>& { return each.room_event_kinds; }, one);
+  return one.shared.room_event_kinds;
 }
 [[nodiscard]] inline std::optional<std::string>& proxy_in(account_t& one) {
-  return splice::visit([](auto& each) -> std::optional<std::string>& { return each.proxy; }, one);
+  return one.shared.proxy;
 }
 [[nodiscard]] inline const std::optional<std::string>& proxy_of(const account_t& one) {
-  return splice::visit([](const auto& each) -> const std::optional<std::string>& { return each.proxy; }, one);
+  return one.shared.proxy;
 }
 // The profile of that name, where there is one.
 [[nodiscard]] inline const proxy_settings* find_proxy(const std::vector<proxy_settings>& all,
@@ -1094,85 +1176,90 @@ using passphrase_for_t = splice::variant<passphrase_for::unlock, passphrase_for:
   return found == all.end() ? nullptr : &*found;
 }
 
-[[nodiscard]] constexpr std::string_view protocol_name(const xmpp_account&) noexcept { return "XMPP"; }
-[[nodiscard]] constexpr std::string_view protocol_name(const matrix_account&) noexcept { return "Matrix"; }
+// The name of an account's protocol, as the user reads it.
 [[nodiscard]] inline std::string_view protocol_name(const account_t& one) noexcept {
-  return splice::visit([](const auto& each) { return protocol_name(each); }, one);
+  return splice::visit([](const auto& each) { return protocol_name(each); }, one.own);
 }
 
 constexpr bool is_matrix(std::string_view address) noexcept { return address.starts_with('@'); }
 
-// An account from an address alone, as on the command line: the address says
-// the protocol.
+// An account from an address alone, as on the command line: the first
+// protocol of the list that owns the address -- its owns_address(tag, ...).
+template <class... Tags>
+[[nodiscard]] account_t account_from(protocol_list<Tags...>, std::string address, std::string password) {
+  std::optional<account_t> made;
+  (void)((owns_address(Tags{}, address) ? (made = account_t{.own = kept_t{kept_from(Tags{}, address, password)}}, true) : false) ||
+         ...);
+  return made.value_or(account_t{});
+}
 [[nodiscard]] inline account_t account_from(std::string address, std::string password) {
-  if (is_matrix(address))
-    return matrix_account{.user_id = std::move(address), .password = std::move(password)};
-  return xmpp_account{.address = std::move(address), .password = std::move(password)};
+  return account_from(protocols{}, std::move(address), std::move(password));
 }
 
-// Each account into its protocol's list.
-struct into_its_list {
-  file& into;
-  void operator()(const xmpp_account& one) const { into.xmpp.push_back(one); }
-  void operator()(const matrix_account& one) const { into.matrix.push_back(one); }
-};
+// The accounts of a file as the program holds them, and back.
+[[nodiscard]] inline std::optional<account_t> account_of(const saved_account& one) {
+  return splice::visit(splice::overloaded{[](const knot::value&) { return std::optional<account_t>(); },
+                                          [&](const auto& own) {
+                                            return std::optional<account_t>(account_t{.own = kept_t{own}, .shared = one.shared});
+                                          }},
+                       one.own.data());
+}
+[[nodiscard]] inline saved_account saved_of(const account_t& one) {
+  return splice::visit([&](const auto& own) {
+    return saved_account{.protocol = std::string(protocol_word(own)), .own = kept_saved_t{own}, .shared = one.shared};
+  }, one.own);
+}
+// What an old file kept flat in each account, as every account keeps it now.
+[[nodiscard]] inline account_shared shared_of(const auto& old) {
+  return {.enabled = old.enabled, .read_receipts = old.read_receipts, .send_typing = old.send_typing,
+          .room_events = old.room_events, .room_event_kinds = old.room_event_kinds, .show_receipts = old.show_receipts,
+          .link_previews = old.link_previews, .previews_direct = old.previews_direct, .wallpaper = old.wallpaper,
+          .bubbles = old.bubbles, .panels = old.panels, .home_hides_spaced = old.home_hides_spaced,
+          .home_hides_direct = old.home_hides_direct, .jump_search = old.jump_search, .notify = old.notify,
+          .notify_sound = old.notify_sound, .proxy = old.proxy, .colour = old.colour, .strip = old.strip};
+}
+[[nodiscard]] inline account_t account_of(const legacy::xmpp_account& old) {
+  return {.own = kept_t{proto::xmpp::kept{.address = old.address, .password = old.password, .resource = old.resource,
+                                          .host = old.host, .port = old.port, .plain_without_tls = old.plain_without_tls}},
+          .shared = shared_of(old)};
+}
+[[nodiscard]] inline account_t account_of(const legacy::matrix_account& old) {
+  return {.own = kept_t{proto::matrix::kept{.user_id = old.user_id, .password = old.password, .homeserver = old.homeserver,
+                                            .device_name = old.device_name, .only_verified = old.only_verified,
+                                            .access_token = old.access_token, .device_id = old.device_id}},
+          .shared = shared_of(old)};
+}
 
-// All the accounts of a file, XMPP first; and a file of accounts.
+// All the accounts of a file: an old file's lists first, then its accounts
+// of a protocol this build has.
 [[nodiscard]] inline std::vector<account_t> accounts_of(const file& from) {
   std::vector<account_t> out;
-  out.reserve(from.xmpp.size() + from.matrix.size());
-  out.append_range(from.xmpp);
-  out.append_range(from.matrix);
+  for (const auto& old : from.xmpp.value_or(std::vector<legacy::xmpp_account>{}))
+    out.push_back(account_of(old));
+  for (const auto& old : from.matrix.value_or(std::vector<legacy::matrix_account>{}))
+    out.push_back(account_of(old));
+  for (const auto& one : from.accounts.value_or(std::vector<saved_account>{}))
+    if (auto held = account_of(one))
+      out.push_back(std::move(*held));
   return out;
 }
-[[nodiscard]] inline file file_of(std::span<const account_t> accounts) {
+// The accounts of a protocol this build has not: kept to be written back.
+[[nodiscard]] inline std::vector<saved_account> foreign_of(const file& from) {
+  return from.accounts.value_or(std::vector<saved_account>{}) |
+         std::views::filter([](const saved_account& one) { return !account_of(one).has_value(); }) |
+         std::ranges::to<std::vector>();
+}
+[[nodiscard]] inline file file_of(std::span<const account_t> accounts, std::span<const saved_account> foreign = {}) {
   file out;
-  for (const account_t& one : accounts)
-    splice::visit(into_its_list{out}, one);
+  out.accounts = accounts | std::views::transform([](const account_t& one) { return saved_of(one); }) |
+                 std::ranges::to<std::vector>();
+  out.accounts->append_range(foreign);
   return out;
 }
 
-std::optional<std::string> check(const xmpp_account& one) {
-  const std::string_view address = one.address;
-  if (address.empty())
-    return "Type the address: user@example.com";
-  if (address.find_first_of(" \t\r\n/") != std::string_view::npos)
-    return "An XMPP address is user@domain, with no spaces";
-  const auto at = address.find('@');
-  if (at == std::string_view::npos || at == 0 || at + 1 == address.size() ||
-      address.find('@', at + 1) != std::string_view::npos)
-    return "An XMPP address is user@domain";
-  if (one.resource.empty() || one.resource.find_first_of(" \t\r\n") != std::string::npos)
-    return "The resource is a word with no spaces, such as mux";
-  if (one.host && one.host->empty())
-    return "Leave the host empty, or type one";
-  if (one.port && (*one.port < 1 || *one.port > 65535))
-    return "A port is a number from 1 to 65535";
-  if (one.password.empty())
-    return "Type the password";
-  return std::nullopt;
-}
-
-std::optional<std::string> check(const matrix_account& one) {
-  const std::string_view user = one.user_id;
-  if (user.empty())
-    return "Type the user ID: @user:example.org";
-  if (user.find_first_of(" \t\r\n") != std::string_view::npos)
-    return "A user ID has no spaces in it";
-  const auto colon = user.find(':');
-  if (!is_matrix(user) || colon == std::string_view::npos || colon == 1 || colon + 1 == user.size())
-    return "A Matrix user ID is @user:server";
-  if (one.homeserver && !one.homeserver->starts_with("https://") && !one.homeserver->starts_with("http://"))
-    return "The homeserver is a URL: https://matrix.example.org";
-  if (one.device_name.empty())
-    return "Name this device, such as mux";
-  if (one.password.empty())
-    return "Type the password";
-  return std::nullopt;
-}
-
+// What is wrong with an account as typed: its protocol's check(kept), by ADL.
 std::optional<std::string> check(const account_t& one) {
-  return splice::visit([](const auto& each) { return check(each); }, one);
+  return splice::visit([](const auto& each) { return check(each); }, one.own);
 }
 
 // Where what the program keeps between runs, and could make again, is put:

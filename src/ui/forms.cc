@@ -330,7 +330,7 @@ struct xmpp_form : nodes::Stack {
         return std::unexpected("A port is a number from 1 to 65535");
       out.port = number;
     }
-    if (auto wrong = config::check(out))
+    if (auto wrong = check(out))  // the protocol's own check, by ADL
       return std::unexpected(*wrong);
     return out;
   }
@@ -384,7 +384,7 @@ struct matrix_form : nodes::Stack {
                                .password = parts.password.text(),
                                .homeserver = typed_or_nothing(parts.homeserver.text()),
                                .device_name = parts.device_name.text()};
-    if (auto wrong = config::check(out))
+    if (auto wrong = check(out))  // the protocol's own check, by ADL
       return std::unexpected(*wrong);
     return out;
   }
@@ -414,7 +414,7 @@ template <class Actions>
                                [a](const config::matrix_account& one) {
                                  return account_form<Actions>(std::in_place_index<1>, a, one);
                                }},
-                    saved);
+                    saved.own);
 }
 
 // The XMPP form among them, when that is the one up.

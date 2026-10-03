@@ -29,18 +29,20 @@ TEST(Config, NoFileIsNoAccounts) {
   scratch here;
   const auto got = mux::config::load(here.dir / "mux" / "accounts.json");
   ASSERT_TRUE(got.has_value());
-  EXPECT_TRUE(got->xmpp.empty());
-  EXPECT_TRUE(got->matrix.empty());
+  EXPECT_TRUE(mux::config::accounts_of(*got).empty());
 }
 
 TEST(Config, WhatIsSavedIsWhatIsLoaded) {
   scratch here;
   const fs::path where = here.dir / "mux" / "accounts.json";
-  mux::config::file kept;
-  kept.xmpp.push_back({.address = "alice@example.com", .password = "p\"ss\\word", .resource = "laptop",
-                       .host = "xmpp.example.com", .port = 5222, .plain_without_tls = true});
-  kept.matrix.push_back({.user_id = "@bob:example.org", .password = "секрет", .enabled = false,
-                         .homeserver = "https://matrix.example.org", .device_name = "desk"});
+  const std::vector<mux::config::account_t> accounts{
+      {.own = mux::config::kept_t{xmpp_account{.address = "alice@example.com", .password = "p\"ss\\word", .resource = "laptop",
+                                               .host = "xmpp.example.com", .port = 5222, .plain_without_tls = true}},
+       .shared = {.colour = "pink"}},
+      {.own = mux::config::kept_t{matrix_account{.user_id = "@bob:example.org", .password = "секрет",
+                                                 .homeserver = "https://matrix.example.org", .device_name = "desk"}},
+       .shared = {.enabled = false}}};
+  const mux::config::file kept = mux::config::file_of(accounts);
   ASSERT_TRUE(mux::config::save(where, kept).has_value());
   const auto got = mux::config::load(where);
   ASSERT_TRUE(got.has_value()) << got.error();
@@ -50,7 +52,7 @@ TEST(Config, WhatIsSavedIsWhatIsLoaded) {
 TEST(Config, OnlyItsOwnerCanReadIt) {
   scratch here;
   const fs::path where = here.dir / "mux" / "accounts.json";
-  ASSERT_TRUE(mux::config::save(where, {.xmpp = {{.address = "a@b.c", .password = "x"}}}).has_value());
+  ASSERT_TRUE(mux::config::save(where, mux::config::file_of(std::vector{mux::config::account_from("a@b.c", "x")})).has_value());
   EXPECT_EQ(fs::status(where).permissions(), fs::perms::owner_read | fs::perms::owner_write);
   EXPECT_EQ(fs::status(where.parent_path()).permissions(), fs::perms::owner_all);
   EXPECT_FALSE(fs::exists(fs::path(where) += ".new"));
@@ -59,11 +61,11 @@ TEST(Config, OnlyItsOwnerCanReadIt) {
 TEST(Config, SavingAgainReplacesTheFile) {
   scratch here;
   const fs::path where = here.dir / "accounts.json";
-  ASSERT_TRUE(mux::config::save(where, {.xmpp = {{.address = "a@b.c", .password = "x"}}}).has_value());
+  ASSERT_TRUE(mux::config::save(where, mux::config::file_of(std::vector{mux::config::account_from("a@b.c", "x")})).has_value());
   ASSERT_TRUE(mux::config::save(where, {}).has_value());
   const auto got = mux::config::load(where);
   ASSERT_TRUE(got.has_value());
-  EXPECT_TRUE(got->xmpp.empty());
+  EXPECT_TRUE(mux::config::accounts_of(*got).empty());
 }
 
 TEST(Config, ABrokenFileSaysSo) {
@@ -84,16 +86,48 @@ TEST(Config, AnOldFileIsNotReadAsEmpty) {
   EXPECT_FALSE(mux::config::load(where).has_value());
 }
 
-TEST(Config, TheAccountsOfAFileAndBack) {
-  const mux::config::file kept{.xmpp = {{.address = "a@b.c", .password = "x"}},
-                               .matrix = {{.user_id = "@d:e.f", .password = "y"}}};
-  const auto all = mux::config::accounts_of(kept);
+// A file of before -- one list a protocol, every setting flat in each --
+// read as it is now: the account's own, and its settings kept.
+TEST(Config, AnOldFilesAccountsAreReadAsTheyAreNow) {
+  const mux::config::file old{.xmpp = std::vector<mux::config::legacy::xmpp_account>{{.address = "a@b.c", .password = "x", .colour = "red"}},
+                              .matrix = std::vector<mux::config::legacy::matrix_account>{
+                                  {.user_id = "@d:e.f", .password = "y", .enabled = false, .access_token = "t"}}};
+  const auto all = mux::config::accounts_of(old);
   ASSERT_EQ(all.size(), 2u);
   EXPECT_EQ(mux::config::address_of(all[0]), "a@b.c");
   EXPECT_EQ(mux::config::protocol_name(all[0]), "XMPP");
+  EXPECT_EQ(all[0].shared.colour, std::optional<std::string>("red"));
   EXPECT_EQ(mux::config::address_of(all[1]), "@d:e.f");
   EXPECT_EQ(mux::config::protocol_name(all[1]), "Matrix");
-  EXPECT_EQ(mux::config::file_of(all), kept);
+  EXPECT_FALSE(mux::config::enabled_of(all[1]));
+  // Written as it is now, and read back the same.
+  const mux::config::file now = mux::config::file_of(all);
+  EXPECT_FALSE(now.xmpp.has_value());
+  EXPECT_FALSE(now.matrix.has_value());
+  EXPECT_EQ(mux::config::accounts_of(now), all);
+}
+
+// An account of a protocol this build does not have -- a newer mux's -- is
+// kept as it was and written back so: never lost.
+TEST(Config, AnAccountOfAnotherProtocolIsKept) {
+  scratch here;
+  fs::create_directories(here.dir);
+  const fs::path where = here.dir / "accounts.json";
+  std::ofstream(where) << R"({"accounts": [{"protocol": "irc", "own": {"nick": "alice", "server": "irc.libera.chat"}, "shared": {"enabled": true}},
+                                           {"protocol": "xmpp", "own": {"address": "a@b.c", "password": "x", "resource": "mux", "plain_without_tls": false}, "shared": {"enabled": true}}]})";
+  const auto got = mux::config::load(where);
+  ASSERT_TRUE(got.has_value()) << got.error();
+  const auto all = mux::config::accounts_of(*got);
+  ASSERT_EQ(all.size(), 1u);
+  EXPECT_EQ(mux::config::address_of(all[0]), "a@b.c");
+  const auto foreign = mux::config::foreign_of(*got);
+  ASSERT_EQ(foreign.size(), 1u);
+  EXPECT_EQ(foreign[0].protocol, "irc");
+  ASSERT_TRUE(mux::config::save(where, mux::config::file_of(all, foreign)).has_value());
+  const auto again = mux::config::load(where);
+  ASSERT_TRUE(again.has_value()) << again.error();
+  EXPECT_EQ(mux::config::foreign_of(*again), foreign);
+  EXPECT_EQ(mux::config::accounts_of(*again), all);
 }
 
 TEST(Config, TheAddressSaysTheProtocol) {
@@ -132,16 +166,19 @@ TEST(Config, WhatIsWrongWithAMatrixAccount) {
 TEST(Config, ProxiesAndTheirAccountsAreKept) {
   scratch here;
   const fs::path where = here.dir / "accounts.json";
-  mux::config::file kept;
-  kept.xmpp.push_back({.address = "alice@example.com", .password = "x", .read_receipts = false, .proxy = "tor"});
+  auto account = mux::config::account_from("alice@example.com", "x");
+  account.shared.read_receipts = false;
+  account.shared.proxy = "tor";
+  mux::config::file kept = mux::config::file_of(std::vector{account});
   kept.proxies = std::vector<mux::config::proxy_settings>{
       {.name = "tor", .kind = "socks5", .host = "127.0.0.1", .port = 9050}};
   ASSERT_TRUE(mux::config::save(where, kept).has_value());
   const auto got = mux::config::load(where);
   ASSERT_TRUE(got.has_value()) << got.error();
   EXPECT_EQ(*got, kept);
-  ASSERT_EQ(got->xmpp.size(), 1u);
-  EXPECT_EQ(got->xmpp.front().proxy, "tor");
+  const auto all = mux::config::accounts_of(*got);
+  ASSERT_EQ(all.size(), 1u);
+  EXPECT_EQ(mux::config::proxy_of(all.front()), std::optional<std::string>("tor"));
 }
 
 }  // namespace

@@ -10,9 +10,6 @@ import mux.proto;
 
 export namespace mux::proto::xmpp {
 
-// A JID: anything a Matrix user ID is not (those begin with '@').
-constexpr bool owns_address(tag, std::string_view address) { return !address.empty() && !address.starts_with('@'); }
-
 // Edits as XMPP has them: one's own last message corrected, and no other
 // (Last Message Correction, XEP-0308).
 struct last_correction {};

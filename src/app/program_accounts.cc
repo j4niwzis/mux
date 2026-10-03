@@ -716,7 +716,7 @@ void app::apply(const request::flip_only_verified&) {
                                            mux::account_id{mux::ui::protocol_of(matrix.user_id), matrix.user_id}, **kept);
                                      },
                                      [](const auto&) {}},
-                  account);
+                  account.own);
     (void)this->write();
   });
 }

@@ -577,8 +577,8 @@ void app::keep_session(const mux::change::session_given& given) {
                                one.access_token = given.access_token;
                                one.device_id = given.device_id;
                              },
-                             [](mux::config::xmpp_account&) {}},
-             *found);
+                             [](auto&) {}},
+             found->own);
   (void)this->write();
 }
 
@@ -903,6 +903,7 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
 
   this->keeps_nothing = demo;
   this->saved = mux::config::accounts_of(saved);
+  this->foreign_accounts = mux::config::foreign_of(saved);
   this->motion = saved.motion;
   // The account shown last, shown again once it is in the model: accounts
   // arrive after the first frame, and the first one there is not the one.

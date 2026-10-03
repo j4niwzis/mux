@@ -17,8 +17,7 @@ namespace fake {
 using namespace std::chrono_literals;
 
 [[nodiscard]] inline std::vector<mux::config::account_t> accounts() {
-  return {mux::config::xmpp_account{.address = "alice@wonderland.example", .password = "demo"},
-          mux::config::matrix_account{.user_id = "@alice:matrix.example", .password = "demo"}};
+  return {mux::config::account_from("alice@wonderland.example", "demo"), mux::config::account_from("@alice:matrix.example", "demo")};
 }
 
 struct said {

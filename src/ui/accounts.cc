@@ -825,7 +825,7 @@ struct accounts_panel : closes_on_escape<Actions> {
                                                now.own_session_of(account_id{protocol_of(matrix.user_id), matrix.user_id}));
                                          },
                                          [&](const auto&) { privacy->show_session(nullptr); }},
-                      one);
+                      one.own);
       }
     } else if (page == 3) {
       detail.template emplace<5>(this->actions, config::room_events_of(one), config::room_event_kinds_of(one),

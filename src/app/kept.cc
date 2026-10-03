@@ -17,6 +17,9 @@ export namespace mux::app {
 struct kept_settings {
   std::filesystem::path config_path;
   std::vector<mux::config::account_t> saved;
+  // The file's accounts of a protocol this build has not: written back as
+  // they were, not lost.
+  std::vector<mux::config::saved_account> foreign_accounts;
   // How much moves, as read, to be written back as it was.
   std::optional<std::string> motion;
   // The account shown last, by its address, for the next start.
@@ -268,7 +271,7 @@ struct kept_settings {
 
   // The file as all of this says it.
   [[nodiscard]] mux::config::file file() const {
-    auto out = mux::config::file_of(saved);
+    auto out = mux::config::file_of(saved, foreign_accounts);
     out.motion = motion;
     out.last_account = last_account;
     if (!recent_emoji.empty())

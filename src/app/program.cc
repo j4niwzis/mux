@@ -598,7 +598,7 @@ struct app : kept_settings {
       form.say(typed.error(), true);
       return;
     }
-    mux::config::account_t account{std::move(*typed)};
+    mux::config::account_t account{.own = mux::config::kept_t{std::move(*typed)}};
     mux::config::proxy_in(account) = std::exchange(new_proxy, std::nullopt);
     const std::string address = mux::config::address_of(account);
     if (this->find(address) != saved.end()) {
@@ -624,7 +624,7 @@ struct app : kept_settings {
       form.say(typed.error(), true);
       return;
     }
-    mux::config::account_t account{std::move(*typed)};
+    mux::config::account_t account{.own = mux::config::kept_t{std::move(*typed)}};
     const std::string address = mux::config::address_of(account);
     const std::string was = form.editing.value_or(address);
     const auto old = this->find(was);
@@ -634,11 +634,10 @@ struct app : kept_settings {
       form.say("That account is already here.", true);
       return;
     }
-    // What the form does not show is kept: on or off, the proxy, receipts.
-    mux::config::enabled_of(account) = mux::config::enabled_of(*old);
-    mux::config::proxy_in(account) = mux::config::proxy_of(*old);
-    mux::config::read_receipts_in(account) = mux::config::read_receipts_in(*old);
-    mux::config::send_typing_in(account) = mux::config::send_typing_in(*old);
+    // What the form does not show is kept: every setting every account has
+    // -- on or off, the proxy, receipts, its colour and look. (Only four of
+    // them were, and an edit dropped the rest.)
+    account.shared = old->shared;
     // And a Matrix session: the same user on the same homeserver goes on
     // with the device it has, rather than logging in as a new one at every
     // Save.
@@ -650,7 +649,7 @@ struct app : kept_settings {
                                  }
                                },
                                [](auto&, const auto&) {}},
-               account, std::as_const(*old));
+               account.own, std::as_const(old->own));
     // Nothing changed: saved as it is, and the connection left alone.
     const bool same = account == *old;
     *old = account;

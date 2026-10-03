@@ -10,9 +10,6 @@ import mux.logic.links;
 
 export namespace mux::proto::matrix {
 
-// A user ID: @localpart:server.
-constexpr bool owns_address(tag, std::string_view address) { return address.starts_with('@'); }
-
 constexpr bool offers(tag, feature::people_directory) { return true; }
 constexpr bool offers(tag, feature::room_directory) { return true; }
 constexpr bool offers(tag, feature::room_creation) { return true; }

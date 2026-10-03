@@ -96,7 +96,7 @@ struct network {
                                               *named)}}});
       return;
     }
-    splice::visit([this, via](const auto& each) { this->start_one(each, proxy_of(via)); }, saved);
+    splice::visit([this, via](const auto& each) { this->start_one(each, proxy_of(via)); }, saved.own);
   }
   // The proxy a profile names, as mux.net takes it.
   static std::optional<mux::net::proxy> proxy_of(const mux::config::proxy_settings* kept) {

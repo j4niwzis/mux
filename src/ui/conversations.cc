@@ -400,7 +400,10 @@ struct conversations_screen : nodes::Stack {
     if (docked_panel_height() == docked_applied)
       return;
     docked_applied = docked_panel_height();
-    chat.apply({.padding = {0.0f, 0.0f, docked_applied, 0.0f}});
+    // Set, not applied: a spec's padding of all zeros reads as "not
+    // mentioned", so the panel closed -- or the window grown out of a
+    // phone's -- kept the padding it had, an empty space under the field.
+    chat.setPadding({0.0f, 0.0f, docked_applied, 0.0f});
     chat.invalidateLayout();
     this->markDamaged();
   }

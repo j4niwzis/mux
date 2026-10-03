@@ -42,6 +42,7 @@ import mux.app.settings;
 import mux.app.menu;
 import mux.app.notices;
 import mux.app.marks;
+import mux.app.history;
 import mux.logic.links;
 
 export namespace mux::app {
@@ -68,6 +69,7 @@ struct app : kept_settings {
   settings_part settings{shared, *this, pictures};
   notices_part notices{shared};
   marks_part marks{shared};
+  history_part history{shared};
   // Work off the UI's thread: decoding pictures, reading the disk.
   workers work;
   // Files chosen in the dialog, or dropped on the window: to the outbox.
@@ -112,10 +114,10 @@ struct app : kept_settings {
   }
   template <class Request>
   void route(const Request& one) {
-    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> || takes<marks_part, Request> ||
+    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> || takes<marks_part, Request> || takes<history_part, Request> ||
                       takes<app, Request>, "a request no part of the program takes");
     if (!offer(search, one) && !offer(pictures, one) && !offer(reading, one) && !offer(outbox, one) &&
-        !offer(settings, one) && !offer(menu, one) && !offer(notices, one) && !offer(marks, one))
+        !offer(settings, one) && !offer(menu, one) && !offer(notices, one) && !offer(marks, one) && !offer(history, one))
       offer(*this, one);
   }
 
@@ -156,19 +158,6 @@ struct app : kept_settings {
 
   // -- messages on disk: every change to one written as it is now
   message_store store;
-  void keep_on_disk(const mux::change_t& one);
-  // The gaps of each chat's history on disk, as read and as changed; the
-  // message each chat was paged back from, on the server, while it is; and
-  // the token of a first sync, for the first message it brings.
-  message_store::gaps_t& gaps_of(const mux::conversation_id& in);
-  void gaps_changed(const mux::conversation_id& in);
-  std::map<mux::conversation_id, message_store::gaps_t> gaps_;
-  std::set<mux::conversation_id> gaps_kept_before_;
-  std::map<mux::conversation_id, std::string> paging_from_;
-  std::map<mux::conversation_id, std::optional<std::string>> sync_gap_;
-  // The ids of each chat's messages on disk, read once when a window is
-  // loaded in it: a window over what is there leaves no gap.
-  std::map<mux::conversation_id, std::set<std::string>> on_disk_;
 
   std::set<mux::conversation_id> members_fetched;
 
@@ -290,10 +279,7 @@ struct app : kept_settings {
   void go_to_message(const mux::conversation_id& in, std::string id, std::optional<std::string> fragment);
   // Older messages of a chat: from the disk while it has some from before
   // the oldest in memory, from the server past that.
-  void apply(const request::load_older& one);
   // A window around a message jumped to, and a window paged forward.
-  void apply(const request::load_context& one);
-  void apply(const request::load_newer& one);
   void apply(const request::resize_sidebar& one);
   // A member written to: their direct chat, where there is one already.
   void apply(const request::message_person& one);

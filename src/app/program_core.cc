@@ -144,7 +144,7 @@ void app::woken() {
                                  [](const auto&) {}},
                  one);
     model->apply(one);
-    this->keep_on_disk(one);
+    history.keep(one);
   }
   // The marks: those read back put in, written where they changed, and a
   // mark made kept with its message.
@@ -229,125 +229,7 @@ void app::woken() {
 
 
 
-message_store::gaps_t& app::gaps_of(const mux::conversation_id& in) {
-  auto found = gaps_.find(in);
-  if (found == gaps_.end()) {
-    auto read = store.gaps(in);
-    if (read)
-      gaps_kept_before_.insert(in);
-    found = gaps_.emplace(in, read.value_or(message_store::gaps_t{})).first;
-  }
-  return found->second;
-}
-void app::gaps_changed(const mux::conversation_id& in) {
-  gaps_kept_before_.insert(in);
-  store.keep_gaps(in, gaps_of(in));
-}
 
-void app::keep_on_disk(const mux::change_t& one) {
-  if (ask.demo)
-    return;
-  // Where the history on disk has gaps, noted as it comes (see
-  // message_store::gap_mark). A page from the server: the message it was
-  // paged from now follows it, and before its oldest is the token it ended
-  // at -- or the room's beginning. A first sync: before its first message
-  // is its prev_batch. A window loaded around a message: its oldest, not
-  // known to follow anything on disk. Too many marks cost only a request.
-  splice::visit(
-      splice::overloaded{
-          [&](const mux::change::history_position& c) {
-            const mux::conversation* chat = model->find(c.in);
-            if (const auto paged = paging_from_.find(c.in); paged != paging_from_.end()) {
-              auto& gaps = gaps_of(c.in);
-              gaps.erase(paged->second);
-              // The page reached what the disk had before it was asked for
-              // (on_disk_, read then): the gap is closed, and the disk goes
-              // on from there -- else every run's first page back left a
-              // gap past which everything was asked of the server again.
-              const auto known = on_disk_.find(c.in);
-              const bool overlapped = chat && !chat->timeline.empty() && known != on_disk_.end() &&
-                                      known->second.contains(chat->timeline.front().id);
-              if (chat && !chat->timeline.empty() && !overlapped)
-                gaps.insert_or_assign(chat->timeline.front().id,
-                                      message_store::gap_mark{.token = c.from, .start = !c.from.has_value()});
-              paging_from_.erase(paged);
-              this->gaps_changed(c.in);
-            } else {
-              sync_gap_.insert_or_assign(c.in, c.from);
-            }
-          },
-          [&](const mux::change::message_added& c) {
-            splice::visit(splice::overloaded{
-                              [&](mux::placement::at_end) {
-                                if (const auto pending = sync_gap_.find(c.message.in); pending != sync_gap_.end()) {
-                                  gaps_of(c.message.in)
-                                      .insert_or_assign(c.message.id, message_store::gap_mark{.token = pending->second,
-                                                                                              .start = !pending->second});
-                                  sync_gap_.erase(pending);
-                                  this->gaps_changed(c.message.in);
-                                }
-                              },
-                              [&](mux::placement::in_window) {
-                                // A window over history already on disk -- a jump back
-                                // to what was read before -- leaves no gap: what is
-                                // before it is there already, as it was. Only one
-                                // over what the disk did not have does.
-                                auto known = on_disk_.find(c.message.in);
-                                if (known == on_disk_.end())
-                                  known = on_disk_
-                                              .emplace(c.message.in, store.everything(c.message.in) | std::views::keys |
-                                                                         std::ranges::to<std::set<std::string>>())
-                                              .first;
-                                const bool was_kept = !known->second.insert(c.message.id).second;
-                                const mux::conversation* chat = model->find(c.message.in);
-                                if (!was_kept && chat && !chat->timeline.empty() && chat->timeline.front().id == c.message.id) {
-                                  gaps_of(c.message.in).insert_or_assign(c.message.id, message_store::gap_mark{});
-                                  this->gaps_changed(c.message.in);
-                                }
-                              },
-                              [](const auto&) {}},
-                          c.where);
-          },
-          [](const auto&) {}},
-      one);
-  const auto as_now = [&](const mux::conversation_id& in, const std::string& id) {
-    if (const mux::conversation* chat = model->find(in))
-      if (const auto found = std::ranges::find(chat->timeline, id, &mux::message::id); found != chat->timeline.end())
-        store.record(*found);
-  };
-  // A message added is kept as it is now in the timeline -- or, where it is
-  // not in it (it came live while the chat is a window elsewhere), as it
-  // came: kept either way, or it would be lost on going back to the newest.
-  const auto added = [&](const mux::change::message_added& c) {
-    // A message fetched for a quote is not history read in order: kept on
-    // disk, it would be read back as though it were next to the rest.
-    if (splice::visit(splice::overloaded{[](mux::placement::aside) { return true; }, [](const auto&) { return false; }},
-                   c.where))
-      return;
-    const mux::conversation* chat = model->find(c.message.in);
-    const bool in_timeline =
-        chat && std::ranges::find(chat->timeline, c.message.id, &mux::message::id) != chat->timeline.end();
-    if (in_timeline)
-      as_now(c.message.in, c.message.id);
-    else if (!c.message.id.empty())
-      store.record(c.message);
-  };
-  splice::visit(splice::overloaded{[&](const mux::change::message_added& c) { added(c); },
-                             [&](const mux::change::message_edited& c) { as_now(c.in, c.id); },
-                             [&](const mux::change::message_encrypted& c) { as_now(c.in, c.id); },
-                             [&](const mux::change::message_discarded& c) { store.forget(c.in, c.id); },
-                             [&](const mux::change::reaction_changed& c) { as_now(c.in, c.id); },
-                             [&](const mux::change::receipts_changed& c) {
-                               if (const mux::conversation* chat = model->find(c.in))
-                                 store.keep_reads(c.in, *chat);
-                             },
-                             [&](const mux::change::message_acknowledged& c) {
-                               store.forget(c.in, c.local_id);
-                               as_now(c.in, c.id);
-                             },
-                             [](const auto&) {}},
-             one);
-}
 
 
 void app::wire() {

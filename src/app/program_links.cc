@@ -168,81 +168,8 @@ void app::apply(const request::close_room_card&) {
   root().close_room_card();
 }
 
-void app::apply(const request::load_context& one) {
-  if (!ask.demo)
-    net->load_context(one.in, one.target);
-}
 
-void app::apply(const request::load_newer& one) {
-  if (!ask.demo)
-    net->load_newer(one.in, one.from);
-}
 
-void app::apply(const request::load_older& one) {
-  if (ask.demo)
-    return;
-  const mux::conversation* chat = model->find(one.in);
-  const auto before = chat && !chat->timeline.empty() ? chat->timeline.front().at
-                                                      : message_store::time_point::max();
-  const std::optional<std::string> front = chat && !chat->timeline.empty() ? std::optional(chat->timeline.front().id) : std::nullopt;
-  // From the server: from the token of the gap before the message paged
-  // from, where there is one -- else the one the model has.
-  const auto from_server = [this](const mux::conversation_id& in, const std::optional<std::string>& paged_from,
-                                  std::string from) {
-    if (paged_from) {
-      paging_from_.insert_or_assign(in, *paged_from);
-      // What the disk has, before the page comes and is kept: whether it
-      // reaches it is told by this.
-      if (!on_disk_.contains(in))
-        on_disk_.emplace(in, store.everything(in) | std::views::keys | std::ranges::to<std::set<std::string>>());
-      if (const auto gap = gaps_of(in).find(*paged_from); gap != gaps_of(in).end()) {
-        if (gap->second.start)
-          return;  // the room's beginning: nothing older anywhere
-        if (gap->second.token)
-          from = *gap->second.token;
-      }
-    }
-    // Where its protocol pages back at all: an XMPP server with no
-    // archive is not asked, to time out.
-    if (!mux::proto::can_page_back(mux::ui::protocol_state_of(in.account)))
-      return;
-    net->load_older(in, std::move(from));
-  };
-  // A window of the history, where gaps were not kept for this chat: the
-  // disk may not have what is next to it. From the server.
-  this->gaps_of(one.in);  // read from its file, where it has one
-  const bool gaps_known = gaps_kept_before_.contains(one.in);
-  if (chat && chat->detached && !gaps_known) {
-    from_server(one.in, front, one.from);
-    return;
-  }
-  // The message paged from has a gap before it: nothing on disk follows.
-  if (front && gaps_of(one.in).contains(*front)) {
-    from_server(one.in, front, one.from);
-    return;
-  }
-  work.run([this, in = one.in, from = one.from, before, front, from_server]() -> workers::done_t {
-    auto kept = store.older(in, before, 100);
-    return [this, in, from, front, from_server, kept = std::move(kept)]() mutable {
-      // Up to the first gap from the newest: what is before it is not
-      // known to follow.
-      const auto& gaps = gaps_of(in);
-      const auto cut = std::ranges::find_if(kept | std::views::reverse,
-                                            [&](const mux::message& said) { return gaps.contains(said.id); });
-      if (cut != (kept | std::views::reverse).end())
-        kept.erase(kept.begin(), std::prev(cut.base()));
-      if (kept.empty()) {
-        from_server(in, front, from);
-        return;
-      }
-      for (auto it = kept.rbegin(); it != kept.rend(); ++it)
-        model->apply(mux::change_t{mux::change::message_added{.message = std::move(*it), .where = mux::placement::at_start{}}});
-      // The window may ask again: there may be more on the disk.
-      root().main().history_asked.reset();
-      this->refresh();
-    };
-  });
-}
 
 void app::apply(const request::resize_sidebar& one) { root().main().resize_sidebar(one.x); }
 

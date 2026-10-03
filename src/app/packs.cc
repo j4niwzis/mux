@@ -49,7 +49,7 @@ class packs_part {
   }
   void apply(const request::close_packs&) {
     s_->root().close_packs();
-    mux::ui::pack_pictures_shown().clear();
+    s_->ui.pack_pictures_shown.clear();
   }
   void apply(const request::save_pack& one) {
     if (account_ && !s_->demo())

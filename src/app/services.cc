@@ -33,6 +33,8 @@ struct services {
   mux::ui::looks_shown looks;
   // How fills are painted: handed to the host, which draws with it.
   mux::ui::mux_paint paint;
+  // What the window's parts tell one another and the program.
+  mux::ui::ui_shared ui;
   network* net = nullptr;
   message_store* store = nullptr;
   mailbox_type* box = nullptr;

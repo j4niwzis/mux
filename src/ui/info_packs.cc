@@ -54,6 +54,8 @@ struct packs_box : nodes::Stack {
   Actions* actions = nullptr;
   // The colours it is made in, for its parts and the rows it makes later.
   const palette* colours_ = nullptr;
+  // What the window's parts tell the program: the pictures shown.
+  ui_shared* shared_ = nullptr;
   std::optional<std::string> room;  // the room's packs, or one's own
   bool may_edit = true;
   std::vector<emote_pack> packs;  // as last listed
@@ -266,8 +268,8 @@ struct packs_box : nodes::Stack {
     nodes::ScrollContainer<pictures_t> pictures{pictures_t({.spacingY = 0.0f, .wrap = false}, {})};
     edit_buttons edit_actions;
   } parts;
-  packs_box(Actions* a, const palette& colours, std::optional<std::string> in, bool editable)
-      : actions(a), colours_(&colours), room(std::move(in)), may_edit(editable),
+  packs_box(Actions* a, const palette& colours, ui_shared& shared, std::optional<std::string> in, bool editable)
+      : actions(a), colours_(&colours), shared_(&shared), room(std::move(in)), may_edit(editable),
         parts{.header = header_t(colours, "Emojis & Stickers", {}, {a}, false, true),
               .note = nodes::Text("", 13.0f, colours.dim),
               .list_actions = list_buttons(this),
@@ -335,9 +337,7 @@ struct packs_box : nodes::Stack {
     for (std::size_t i = 0; i < draft.pictures.size(); ++i)
       rows.emplace_back(this, i, draft.pictures[i]);
     parts.pictures.invalidateLayout();
-    pack_pictures_shown().clear();
-    for (const pack_picture& one : draft.pictures)
-      pack_pictures_shown().push_back(one.url);
+    shared_->pack_pictures_shown = draft.pictures | std::views::transform(&pack_picture::url) | std::ranges::to<std::vector>();
   }
   // What shows: the list, or the pack open.
   void show_page() {

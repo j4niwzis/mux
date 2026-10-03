@@ -338,7 +338,7 @@ struct account_chats : nodes::Stack {
     choice_menu<pick_home> home;
     spaces_choices<Actions> places;
   } parts;
-  account_chats(Actions* a, const palette& colours, const looks_shown& looks, const chat_choice_values& chats, std::optional<bool> home_hides,
+  account_chats(Actions* a, const palette& colours, const looks_shown& looks, const ui_shared& shared, const chat_choice_values& chats, std::optional<bool> home_hides,
                 std::optional<bool> home_direct, const config::accent_t& colour, bool strip_on, const config::theme_t& theme)
       : parts{.colour_title = section_title(colours, "COLOUR"),
               .colours = accent_circles<set_colour>({a}, theme, false),
@@ -352,7 +352,7 @@ struct account_chats : nodes::Stack {
                                              {"As above", "Every chat", "Without chats spaces hold",
                                               "Without those and direct messages"},
                                              !home_hides ? 0 : !*home_hides ? 1 : home_direct.value_or(false) ? 3 : 2, pick_home{a}),
-              .places = spaces_choices<Actions>(a, colours)} {
+              .places = spaces_choices<Actions>(a, colours, shared)} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     for (nodes::Text* each : {&parts.title, &parts.looks_title, &parts.spaces_title})
@@ -621,7 +621,7 @@ struct accounts_panel : closes_on_escape<Actions> {
                                            config::link_previews_of(one));
             },
             [&](account_page::chats) {
-              detail.template emplace<5>(this->actions, *needs_.colours, *needs_.looks,
+              detail.template emplace<5>(this->actions, *needs_.colours, *needs_.looks, *needs_.shared,
                                          chat_choice_values{.events_all = config::room_events_of(one),
                                                             .event_kinds = config::room_event_kinds_of(one),
                                                             .receipts = config::show_receipts_of(one),

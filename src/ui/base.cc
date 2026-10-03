@@ -103,25 +103,6 @@ inline constexpr std::array kScales{50,  60,  70,  75,  80,  90,  100, 110, 120,
                                     150, 160, 170, 175, 180, 190, 200, 225, 250, 275, 300};
 inline constexpr int kScaleLeast = kScales.front();
 inline constexpr int kScaleMost = kScales.back();
-// The emoji, stickers and GIFs docked at the bottom of a phone's window, as
-// Telegram's apps have them -- where the keyboard would be: how high it is,
-// for the chat to stand its field over it; and the screen that does, told
-// as it changes. None while it is not up.
-inline float& docked_panel_height() {
-  static float high = 0.0f;
-  return high;
-}
-inline scene::NodeId& docked_panel_watcher() {
-  static scene::NodeId id = 0;
-  return id;
-}
-inline void set_docked_panel_height(float high) {
-  if (high == docked_panel_height())
-    return;
-  docked_panel_height() = high;
-  if (docked_panel_watcher() != 0)
-    scene::work::mark(docked_panel_watcher());
-}
 // The items of the space bars of the account shown, and where each is: for
 // the settings to list them. Said by the chat list as it shows them.
 struct space_item_shown {
@@ -130,14 +111,33 @@ struct space_item_shown {
   bool side = false;
   bool top = false;
 };
-inline std::vector<space_item_shown>& space_items_now() {
-  static std::vector<space_item_shown> items;
-  return items;
-}
-inline std::string& space_account_now() {
-  static std::string account;
-  return account;
-}
+// What the window's parts tell one another and the program, as the program
+// holds it: handed down with the colours (ui_needs).
+struct ui_shared {
+  // The emoji, stickers and GIFs docked at the bottom of a phone's window,
+  // as Telegram's apps have them -- where the keyboard would be: how high it
+  // is, for the chat to stand its field over it; and the screen that does,
+  // told as it changes. None while it is not up.
+  float docked_panel_height = 0.0f;
+  scene::NodeId docked_panel_watcher = 0;
+  void set_docked_panel_height(float high) {
+    if (high == docked_panel_height)
+      return;
+    docked_panel_height = high;
+    if (docked_panel_watcher != 0)
+      scene::work::mark(docked_panel_watcher);
+  }
+  // The items of the space bars of the account shown, and where each is,
+  // and that account: for the settings to list them. Said by the chat list
+  // as it shows them.
+  std::vector<space_item_shown> space_items;
+  std::string space_account;
+  // The images of the pack being edited, and the stickers the emoji panel
+  // shows -- in view, and its packs' tabs: fetched as avatars are, keyed by
+  // their mxc://, while they show.
+  std::vector<std::string> pack_pictures_shown;
+  std::vector<std::string> panel_pictures_shown;
+};
 // A message found by a chat's search, as the list of them shows it: its
 // place among them, who said it, when, and its words around what was found.
 struct search_result {
@@ -266,6 +266,8 @@ struct ui_needs {
   // The looks shown, and how fills are painted: the program's.
   looks_shown* looks = nullptr;
   mux_paint* paint = nullptr;
+  // What the window's parts tell one another: the program's.
+  ui_shared* shared = nullptr;
 };
 // A dialog as what it shows wants it: which of the palette's colours its
 // sheet is; its size -- fixed, as wide as fits what it shows up to a
@@ -320,18 +322,6 @@ inline std::map<account_id, protocol_state_t>& protocol_states() {
 }
 [[nodiscard]] inline bool may_send_files(const account_id& of) {
   return ops_of(of).send_file && proto::can_upload(protocol_state_of(of));
-}
-// The images of the pack being edited: fetched as avatars are, keyed by
-// their mxc://, while its dialog shows them.
-inline std::vector<std::string>& pack_pictures_shown() {
-  static std::vector<std::string> shown;
-  return shown;
-}
-// The stickers the emoji panel shows -- in view, and its packs' tabs --
-// fetched as avatars are, while it shows them.
-inline std::vector<std::string>& panel_pictures_shown() {
-  static std::vector<std::string> shown;
-  return shown;
 }
 // And Telegram's pattern over it: dark and faint on a light theme, light and
 // fainter on a dark one.

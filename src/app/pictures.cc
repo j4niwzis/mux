@@ -185,9 +185,9 @@ class pictures_part {
     auto& screen = s_->root().main();
     // The images of the pack being edited, by the account of the chat in view.
     if (screen.current) {
-      for (const std::string& url : mux::ui::pack_pictures_shown())
+      for (const std::string& url : s_->ui.pack_pictures_shown)
         want(*screen.current, url, url);
-      for (const std::string& url : mux::ui::panel_pictures_shown())
+      for (const std::string& url : s_->ui.panel_pictures_shown)
         want(*screen.current, url, url);
       // Those a dialog lists -- Explore's rooms, people found -- by their keys.
       for (const auto& [key, url] : mux::ui::listed_avatars())

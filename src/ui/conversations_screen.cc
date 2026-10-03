@@ -315,9 +315,9 @@ struct conversations_screen : nodes::Stack {
   // over it, its field just above it.
   float docked_applied = 0.0f;
   void follow_docked() {
-    if (docked_panel_height() == docked_applied)
+    if (needs_.shared->docked_panel_height == docked_applied)
       return;
-    docked_applied = docked_panel_height();
+    docked_applied = needs_.shared->docked_panel_height;
     // Zero too when the panel goes, or the window grows out of a phone's:
     // the space under the field given back.
     chat.apply({.padding = {0.0f, 0.0f, docked_applied, 0.0f}});
@@ -679,7 +679,7 @@ struct conversations_screen : nodes::Stack {
               .threads = threads_panel<Actions>(n)} {
     fState.apply({.fill = true});
     this->setHorizontal();
-    docked_panel_watcher() = fState.fId;
+    needs_.shared->docked_panel_watcher = fState.fId;
     // The edges take a pixel between the columns, their line, and are
     // wider than that over them to be caught.
     edge.apply({.fillY = true, .width = 7.0f, .margin = {0.0f, -3.0f, 0.0f, -3.0f}});
@@ -763,7 +763,7 @@ struct conversations_screen : nodes::Stack {
   // Single or not as the window is now: looked at as it is laid out.
   void layoutChildren() {
     // Its id as it is now, for the docked panel to tell it by.
-    docked_panel_watcher() = fState.fId;
+    needs_.shared->docked_panel_watcher = fState.fId;
     const skia::SkRect box = fState.contentBox();
     const bool now = box.width() < 600.0f && box.height() > box.width();
     if (now != single || (now && box.width() != single_width)) {
@@ -1223,7 +1223,7 @@ struct conversations_screen : nodes::Stack {
   // that brought the view to the end stopped in a frame whose tick had gone
   // by here already, and nothing ticked this again -- the arrow stayed.
   [[nodiscard]] bool wantsTick() const {
-    return slide_wait > 0 || list_in.moving() || pane_in.moving() || docked_panel_height() != docked_applied ||
+    return slide_wait > 0 || list_in.moving() || pane_in.moving() || needs_.shared->docked_panel_height != docked_applied ||
            needs_.paint->ease.t.moving() ||
            this->away() != chat.area.parts.jump.visible() ||
            this->older_due() || this->history_pending() ||

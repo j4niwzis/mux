@@ -215,8 +215,8 @@ void conversations_screen<Actions>::show_space_bars(const model& now) {
   const std::vector<const entry*> side_items = bar_of(config::space_bar::side{});
   const std::vector<const entry*> top_items = bar_of(config::space_bar::top{});
   // For the settings to list them.
-  space_account_now() = address;
-  space_items_now() = all | std::views::transform([&](const entry& one) {
+  needs_.shared->space_account = address;
+  needs_.shared->space_items = all | std::views::transform([&](const entry& one) {
                         return space_item_shown{one.item, one.name, in_bar(one, config::space_bar::side{}),
                                                 in_bar(one, config::space_bar::top{})};
                       }) |

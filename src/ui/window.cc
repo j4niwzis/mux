@@ -427,7 +427,7 @@ struct window : scene::Node {
   void open_emoji(float right, float bottom) { layer().emoji.emplace(needs_, right, bottom); }
   void close_emoji() {
     layer().emoji.reset();
-    set_docked_panel_height(0.0f);  // the field back at the bottom
+    needs_.shared->set_docked_panel_height(0.0f);  // the field back at the bottom
     // Told here, not only by its id: the screen made at the start was moved
     // into the window since, and the panel gone left an empty space under
     // the field where nothing ticked it.
@@ -505,7 +505,7 @@ struct window : scene::Node {
     layer().new_room.open(actions, *needs_.colours, own_server);
   }
   void close_new_room() { layer().new_room.close(); }
-  void open_packs(std::optional<std::string> room, bool editable) { layer().packs.open(actions, *needs_.colours, std::move(room), editable); }
+  void open_packs(std::optional<std::string> room, bool editable) { layer().packs.open(actions, *needs_.colours, *needs_.shared, std::move(room), editable); }
   void close_packs() { layer().packs.close(); }
   void open_wallpaper(choice_level_t level) { layer().wallpaper.open(actions, *needs_.colours, *needs_.looks, level); }
   void close_wallpaper() { layer().wallpaper.close(); }

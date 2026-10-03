@@ -254,9 +254,11 @@ struct emoji_popup : scene::Node {
   float right = 0.0f, bottom = 0.0f;
   float placed_x = -1.0f, placed_y = -1.0f, placed_h = -1.0f;
   float placed_w = 0.0f;
+  // What the window's parts tell one another: the docked panel's height.
+  ui_shared* shared_ = nullptr;
 
   emoji_popup(const ui_needs<Actions>& n, float at_right, float at_bottom)
-      : parts{.card = card_t(*n.colours, *n.emoji, n.actions)}, actions(n.actions), right(at_right), bottom(at_bottom) {
+      : parts{.card = card_t(*n.colours, *n.emoji, n.actions)}, actions(n.actions), right(at_right), bottom(at_bottom), shared_(n.shared) {
     fState.apply({.fill = true});
   }
   void layoutChildren() {
@@ -280,7 +282,7 @@ struct emoji_popup : scene::Node {
       h_at = std::round(box.height() * 0.4f);
       y = box.height() - h_at;
     }
-    set_docked_panel_height(phone ? h_at : 0.0f);
+    shared_->set_docked_panel_height(phone ? h_at : 0.0f);
     if (x_at != placed_x || y != placed_y || h_at != placed_h || w_at != placed_w) {
       placed_x = x_at;
       placed_y = y;

@@ -444,12 +444,12 @@ struct spaces_choices : nodes::Stack {
   struct parts_t {
     std::vector<row> rows;
   } parts;
-  spaces_choices(Actions* a, const palette& colours) {
+  spaces_choices(Actions* a, const palette& colours, const ui_shared& shared) {
     this->setGap(2.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-    parts.rows.reserve(space_items_now().size());
-    for (const space_item_shown& one : space_items_now())
-      parts.rows.emplace_back(a, colours, space_account_now(), one);
+    parts.rows.reserve(shared.space_items.size());
+    for (const space_item_shown& one : shared.space_items)
+      parts.rows.emplace_back(a, colours, shared.space_account, one);
   }
 };
 

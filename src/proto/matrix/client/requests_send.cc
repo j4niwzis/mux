@@ -141,7 +141,7 @@ void account<Sink>::pin(std::string room, std::string target, bool on) {
       return;
     std::vector<std::string> pinned;
     if (const auto kept = state_.joined.find(room); kept != state_.joined.end())
-      pinned = pinned_of(kept->second);
+      pinned = kept->second.state.pinned();
     std::erase(pinned, target);
     if (on)
       pinned.push_back(target);

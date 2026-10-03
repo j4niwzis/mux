@@ -677,20 +677,6 @@ auto account<Sink>::avatar_of(const std::string& room, const loom::client::joine
   return std::nullopt;
 }
 
-template <class Sink>
-auto account<Sink>::name_of(const std::string& room, const loom::client::joined_room& kept) -> std::string {
-  if (auto name = kept.state.name(); name && !name->empty())
-    return *name;
-  if (auto alias = kept.state.canonical_alias(); alias && !alias->empty())
-    return *alias;
-  std::string heroes;
-  for (const auto& hero : kept.summary.heroes) {
-    if (!heroes.empty())
-      heroes += ", ";
-    heroes += kept.state.display_name(hero).value_or(hero);
-  }
-  return heroes.empty() ? room : heroes;
-}
 
 template <class Sink>
 auto account<Sink>::direct(const std::string& room) const -> bool {
@@ -708,18 +694,18 @@ template <class Sink>
 void account<Sink>::conversation(const conversation_id& in, const loom::client::joined_room& kept) {
   sink_(change::conversation_updated{.id = in,
                                      .kind = direct(in.id) ? conversation_kind_t{conversation_kind::direct{}} : conversation_kind_t{conversation_kind::group{}},
-                                     .name = name_of(in.id, kept),
+                                     .name = loom::client::room_name(in.id, kept),
                                      .avatar = avatar_of(in.id, kept),
                                      .topic = kept.state.topic(),
                                      .encrypted = this->encrypted_room(in.id) || kept.state.encrypted(),
                                      .unread = kept.unread.notification,
                                      .encrypted_since = this->encrypted_by(in.id, encrypted_since_of(kept)),
                                      .highlights = kept.unread.highlight,
-                                     .space = space(kept),
-                                     .children = children_of(kept),
+                                     .space = kept.state.is_space(),
+                                     .children = kept.state.space_children(),
                                      .member_count = kept.summary.joined_members,
                                      .alias = kept.state.canonical_alias(),
-                                     .pinned = pinned_of(kept),
+                                     .pinned = kept.state.pinned(),
                                      .emotes = emotes_of(kept),
                                      .stickers = emotes_of(kept, true),
                                      .theirs = proto::matrix::room_rules{.join_rule = join_rule_of(rule_text(kept.state.template content<loom::ev::m_room_join_rules_content_t>("m.room.join_rules"),
@@ -768,34 +754,8 @@ auto account<Sink>::emotes_in(const std::string& room) const -> std::vector<mux:
 }
 
 // The room's pinned messages: m.room.pinned_events' "pinned", as it says.
-template <class Sink>
-auto account<Sink>::pinned_of(const loom::client::joined_room& kept) -> std::vector<std::string> {
-  std::vector<std::string> out;
-  if (const auto* said = kept.state.template content<loom::ev::m_room_pinned_events_content_t>("m.room.pinned_events"))
-    out = said->pinned;
-  return out;
-}
 
-template <class Sink>
-auto account<Sink>::space(const loom::client::joined_room& kept) -> bool {
-  const auto* created = kept.state.template content<loom::ev::m_room_create_content_t>("m.room.create");
-  return created && splice::visit([](auto of) { return of.is_space; }, room_type_of(created->type));
-}
 
-template <class Sink>
-auto account<Sink>::children_of(const loom::client::joined_room& kept) -> std::vector<std::string> {
-  std::vector<std::string> out;
-  for (const auto& [key, one] : kept.state.events) {
-    if (!splice::visit([](auto of) { return of.child; }, state_type_of(key.first)))
-      continue;
-    // A child taken out has its content emptied: then it is no longer read
-    // as a child's content, which says the servers to reach it by.
-    (void)one;
-    if (kept.state.template content<loom::ev::m_space_child_content_t>("m.space.child", key.second))
-      out.push_back(key.second);
-  }
-  return out;
-}
 
 template <class Sink>
 void account<Sink>::members(const conversation_id& in, const loom::client::joined_room& kept) {

@@ -569,21 +569,11 @@ class account {
   // A room's picture: its own, or, for a chat with one other person, theirs.
   std::optional<std::string> avatar_of(const std::string& room, const loom::client::joined_room& kept) const;
 
-  // A room's name as the spec says a client works it out: m.room.name, the
-  // canonical alias, the heroes, the room's id.
-  static std::string name_of(const std::string& room, const loom::client::joined_room& kept);
 
   bool direct(const std::string& room) const;
 
   void conversation(const conversation_id& in, const loom::client::joined_room& kept);
 
-  // Whether a room is a space: its creation says so, by its type.
-  static bool space(const loom::client::joined_room& kept);
-  // The rooms a space holds: an m.space.child for each, whose content is
-  // not empty -- an emptied one is a child taken out.
-  static std::vector<std::string> children_of(const loom::client::joined_room& kept);
-  // The room's pinned messages, as its state says.
-  static std::vector<std::string> pinned_of(const loom::client::joined_room& kept);
   // A state event's content, as a tree; null where the room has none.
   // The custom emoji usable in a room: the user's own (im.ponies.user_emotes)
   // and the room's packs (im.ponies.room_emotes), a shortcode once.

@@ -31,14 +31,10 @@ template void account<mux::app::post_change>::save_kept() const;
 template void account<mux::app::post_change>::load_kept();
 template void account<mux::app::post_change>::tell(const loom::cs::sync::response& got);
 template auto account<mux::app::post_change>::avatar_of(const std::string& room, const loom::client::joined_room& kept) const -> std::optional<std::string>;
-template auto account<mux::app::post_change>::name_of(const std::string& room, const loom::client::joined_room& kept) -> std::string;
 template auto account<mux::app::post_change>::direct(const std::string& room) const -> bool;
 template void account<mux::app::post_change>::conversation(const conversation_id& in, const loom::client::joined_room& kept);
 template auto account<mux::app::post_change>::emotes_of(const loom::client::joined_room& kept, bool stickers) const -> std::vector<mux::emote>;
 template auto account<mux::app::post_change>::emotes_in(const std::string& room) const -> std::vector<mux::emote>;
-template auto account<mux::app::post_change>::pinned_of(const loom::client::joined_room& kept) -> std::vector<std::string>;
-template auto account<mux::app::post_change>::space(const loom::client::joined_room& kept) -> bool;
-template auto account<mux::app::post_change>::children_of(const loom::client::joined_room& kept) -> std::vector<std::string>;
 template void account<mux::app::post_change>::members(const conversation_id& in, const loom::client::joined_room& kept);
 // What the members above call, defined in the same partition: made here
 // too, for nothing instantiates them elsewhere.

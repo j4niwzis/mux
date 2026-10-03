@@ -85,54 +85,22 @@ inline std::vector<std::pair<std::string, std::string>> links_in(std::string_vie
   }
   return out;
 }
-// A membership as loom reads it, as mux's.
-inline membership_t membership_from(const member_content::membership_t& said) {
-  using values = member_content::membership_values;
-  return splice::visit(splice::overloaded{[](values::join) -> membership_t { return membership::join{}; },
-                               [](values::leave) -> membership_t { return membership::leave{}; },
-                               [](values::invite) -> membership_t { return membership::invite{}; },
-                               [](values::ban) -> membership_t { return membership::ban{}; },
-                               [](values::knock) -> membership_t { return membership::knock{}; },
-                               [](const std::string&) -> membership_t { return membership::other{}; }},
-                    said);
-}
-
-// Whether a relation replaces what it relates to: an edit.
-inline bool replaces(const loom::ev::m_room_message_content_t::m_relates_to_t& relates) {
-  using values = loom::ev::m_room_message_content_t::m_relates_to_t::rel_type_values;
-  return relates.rel_type &&
-         splice::visit(splice::overloaded{[](values::m_replace) { return true; }, [](const auto&) { return false; }}, *relates.rel_type);
-}
-
-// The thread a message is in: its relation's root, where it is m.thread.
-inline std::optional<std::string> thread_of(const loom::ev::m_room_message_content_t::m_relates_to_t& relates) {
-  using values = loom::ev::m_room_message_content_t::m_relates_to_t::rel_type_values;
-  if (!relates.rel_type || !relates.event_id)
-    return std::nullopt;
-  return splice::visit(splice::overloaded{[&](values::m_thread) { return relates.event_id; },
-                                          [](const auto&) { return std::optional<std::string>(); }},
-                       *relates.rel_type);
-}
 
 template <class Sink>
 void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where, bool sealed) {
-  // A thread's root: its summary, as the server counts it, where it has one.
+  // A thread's root: its summary, as the server counts it, where it has one
+  // (loom's). In an encrypted room the server's summary is no one's word:
+  // its text is not shown -- the thread's own messages are, decrypted.
   const auto summary_of = [&]() -> std::optional<thread_summary> {
-    if (!one.unsigned_ || !one.unsigned_->m_relations || !one.unsigned_->m_relations->m_thread)
+    const auto said = loom::client::thread_summary_of(one);
+    if (!said)
       return std::nullopt;
-    const auto& thread = *one.unsigned_->m_relations->m_thread;
-    thread_summary summary{.count = thread.count, .participated = thread.current_user_participated};
-    if (thread.latest_event) {
-      summary.last_id = thread.latest_event->event_id;
-      summary.last_sender = thread.latest_event->sender;
-      // In an encrypted room the server's summary is no one's word: its
-      // text is not shown (the thread's own messages are, decrypted).
-      if (!this->encrypted_room(in.id))
-        summary.last_text = thread.latest_event->content.body.value_or("");
-      summary.last_at = std::chrono::sys_time<std::chrono::milliseconds>(
-          std::chrono::milliseconds(thread.latest_event->origin_server_ts));
-    }
-    return summary;
+    return thread_summary{.count = said->count,
+                          .last_id = said->latest_id.value_or(""),
+                          .last_sender = said->latest_sender.value_or(""),
+                          .last_text = this->encrypted_room(in.id) ? std::string() : said->latest_body.value_or(""),
+                          .last_at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(said->latest_ts.value_or(0))),
+                          .participated = said->participated};
   };
   const auto at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(one.origin_server_ts));
   // A verification step in the room: taken by the verification, not shown.
@@ -153,7 +121,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
         this->verification_request_in_room(in, one, *fields);
     const auto& relates = content.m_relates_to;
     // An edit: the event it replaces takes its new content.
-    if (relates && replaces(*relates)) {
+    if (relates && loom::client::replaces(*relates)) {
       if (relates->event_id && content.m_new_content)
         sink_(change::message_edited{in, *relates->event_id,
                                      body_of(content.m_new_content->body.value_or(""), content.m_new_content->format,
@@ -299,7 +267,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     // In a thread: its root. Its answer to the thread's latest event, where
     // it falls back, is for clients that do not know threads -- not one.
     if (relates)
-      if ((made.thread = thread_of(*relates)) && relates->is_falling_back.value_or(false))
+      if ((made.thread = loom::client::thread_of(*relates)) && relates->is_falling_back.value_or(false))
         made.replies_to.reset();
     // A thread's root: its summary, as the server counts it.
     if (auto summary = summary_of())
@@ -543,8 +511,8 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
             if (one.unsigned_ && one.unsigned_->prev_content)
               if (auto got = knot::try_read<member_content>(one.unsigned_->prev_content->text))
                 before = std::move(*got);
-            const membership_t now = membership_from(content.membership);
-            const membership_t was = before ? membership_from(before->membership) : membership_t{membership::other{}};
+            const membership_t now = loom::client::membership_of(content.membership);
+            const membership_t was = before ? loom::client::membership_of(before->membership) : membership_t{membership::other{}};
             const bool was_in = splice::visit([](auto of) { return of.in; }, was);
             const bool self = one.sender == target_id;
             const std::string target_link = person(target_id, target);

@@ -14,6 +14,7 @@ import mux.config;
 import mux.http;
 import mux.net;
 import mux.matrix;
+import mux.proto.matrix.requests;
 import loom.cs.keys;
 import mux.matrix.crypto;
 
@@ -24,6 +25,7 @@ template void account<mux::app::post_change>::stop();
 template void account<mux::app::post_change>::mark_read(std::string room, std::string event);
 template void account<mux::app::post_change>::load_older(std::string room, std::string from);
 template void account<mux::app::post_change>::manage(std::string room, room_action_t action);
+template void account<mux::app::post_change>::change_room(std::string room, mux::proto::matrix::room_change_t change);
 template void account<mux::app::post_change>::create_direct(std::string user);
 template void account<mux::app::post_change>::send_sticker(std::string room, mux::emote sticker, std::optional<std::string> reply_to);
 template void account<mux::app::post_change>::view_source(std::string room, std::string event);

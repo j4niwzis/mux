@@ -30,6 +30,7 @@ import loom.cs.typing;
 import loom.cs.wellknown;
 import mux.config;
 import mux.core;
+import mux.proto.matrix.requests;
 import mux.http;
 import mux.net;
 export import :names;
@@ -105,6 +106,8 @@ class account {
   // Something done to a room by one allowed to: its state set, or someone
   // let in or sent out.
   void manage(std::string room, room_action_t action);
+  // What Matrix changes of a room beyond that: rules, levels, encryption, version.
+  void change_room(std::string room, proto::matrix::room_change_t change);
   // A message sent on to another room: its content as it is -- a picture's
   // or a file's URL with it, so nothing is uploaded again -- less what tied
   // it to its own room (the reply it was).

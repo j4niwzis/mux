@@ -143,6 +143,15 @@ void program_asked(App& app, const rename_session& one) {
     app.net->rename_session(App::id_of(account), one.device, one.name);
   });
 }
+// A room changed as Matrix changes one: the room being managed, by its account.
+template <class App>
+void program_asked(App& app, const change_room& one) {
+  const auto chosen = app.managed();
+  if (!chosen || app.shared.demo())
+    return;
+  app.net->on_account_of(*chosen, [room = chosen->id, change = one.change](auto& account)
+                                      -> decltype(void(account.change_room(room, change))) { account.change_room(room, change); });
+}
 // The developer tools: for the room being managed, by its account.
 template <class App>
 void program_asked(App& app, const explore_state&) {

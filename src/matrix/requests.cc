@@ -220,13 +220,6 @@ void account<Sink>::manage(std::string room, room_action_t action) {
       if (!done)
         log(id_, "could not set {} in {}: {}", type, room, done.error().said());
     };
-    // The room's power levels as they are now: what a change is made on.
-    const auto power_levels = [&] {
-      if (const auto kept = state_.joined.find(room); kept != state_.joined.end())
-        if (const auto* now = kept->second.state.template content<power_levels_content>("m.room.power_levels"))
-          return *now;
-      return power_levels_content{};
-    };
     const auto told = [&](const char* what, auto done) {
       if (!done)
         log(id_, "could not {} in {}: {}", what, room, done.error().said());
@@ -243,16 +236,6 @@ void account<Sink>::manage(std::string room, room_action_t action) {
               content.topic = one.topic;
               set("m.room.topic", content);
             },
-            [&](const room_action::set_join_rule& one) {
-              loom::ev::m_room_join_rules_content_t content;
-              content.join_rule = std::string(splice::visit([](auto of) { return word_of(of); }, one.rule));
-              set("m.room.join_rules", content);
-            },
-            [&](const room_action::set_history& one) {
-              loom::ev::m_room_history_visibility_content_t content;
-              content.history_visibility = std::string(splice::visit([](auto of) { return word_of(of); }, one.rule));
-              set("m.room.history_visibility", content);
-            },
             [&](const room_action::invite& one) {
               told("invite", perform(*api_, loom::cs::invite_user{.room_id = room, .body = {.user_id = one.user}}));
             },
@@ -264,9 +247,49 @@ void account<Sink>::manage(std::string room, room_action_t action) {
             },
             [&](const room_action::unban& one) {
               told("unban", perform(*api_, loom::cs::unban{.room_id = room, .body = {.user_id = one.user}}));
+            }},
+        action);
+  });
+}
+
+// What Matrix changes of a room beyond what every protocol does.
+template <class Sink>
+void account<Sink>::change_room(std::string room, proto::matrix::room_change_t change) {
+  this->spawn_guarded([this, room = std::move(room), change = std::move(change)] {
+    if (!api_)
+      return;
+    // A state event of the room set, its content given.
+    const auto set = [&](std::string type, const auto& content) {
+      auto done = perform(*api_, loom::cs::set_room_state_with_key{
+                                     .room_id = room, .event_type = type, .state_key = "", .body = as_body(content)});
+      if (!done)
+        log(id_, "could not set {} in {}: {}", type, room, done.error().said());
+    };
+    // The room's power levels as they are now: what a change is made on.
+    const auto power_levels = [&] {
+      if (const auto kept = state_.joined.find(room); kept != state_.joined.end())
+        if (const auto* now = kept->second.state.template content<power_levels_content>("m.room.power_levels"))
+          return *now;
+      return power_levels_content{};
+    };
+    const auto told = [&](const char* what, auto done) {
+      if (!done)
+        log(id_, "could not {} in {}: {}", what, room, done.error().said());
+    };
+    splice::visit(
+        splice::overloaded{
+            [&](const proto::matrix::room_change::set_join_rule& one) {
+              loom::ev::m_room_join_rules_content_t content;
+              content.join_rule = std::string(splice::visit([](auto of) { return word_of(of); }, one.rule));
+              set("m.room.join_rules", content);
+            },
+            [&](const proto::matrix::room_change::set_history& one) {
+              loom::ev::m_room_history_visibility_content_t content;
+              content.history_visibility = std::string(splice::visit([](auto of) { return word_of(of); }, one.rule));
+              set("m.room.history_visibility", content);
             },
             // A say given: the room's power levels as they are, with it.
-            [&](const room_action::set_power& one) {
+            [&](const proto::matrix::room_change::set_power& one) {
               power_levels_content content = power_levels();
               if (!content.users)
                 content.users.emplace();
@@ -274,13 +297,13 @@ void account<Sink>::manage(std::string room, room_action_t action) {
               set("m.room.power_levels", content);
             },
             // Encryption on, as Element turns it on.
-            [&](const room_action::encrypt&) {
+            [&](const proto::matrix::room_change::encrypt&) {
               loom::ev::m_room_encryption_content_t content;
               content.algorithm = loom::ev::m_room_encryption_content_t::algorithm_values::m_megolm_v1_aes_sha2{};
               set("m.room.encryption", content);
             },
             // What a thing done asks: the power levels as they are, with it.
-            [&](const room_action::set_need& one) {
+            [&](const proto::matrix::room_change::set_need& one) {
               power_levels_content content = power_levels();
               const auto top = [&](std::optional<std::int64_t> power_levels_content::* member) {
                 content.*member = static_cast<std::int64_t>(one.level);
@@ -307,18 +330,18 @@ void account<Sink>::manage(std::string room, room_action_t action) {
               set("m.room.power_levels", content);
             },
             // Upgraded: the server makes the new room and tombstones this one.
-            [&](const room_action::upgrade& one) {
+            [&](const proto::matrix::room_change::upgrade& one) {
               told("upgrade", perform(*api_, loom::cs::upgrade_room{.room_id = room, .body = {.new_version = one.version}}));
             },
             // Any kind of event's: by its type, in the power levels' events.
-            [&](const room_action::set_event_need& one) {
+            [&](const proto::matrix::room_change::set_event_need& one) {
               power_levels_content content = power_levels();
               if (!content.events)
                 content.events.emplace();
               content.events->insert_or_assign(one.event, static_cast<std::int64_t>(one.level));
               set("m.room.power_levels", content);
             }},
-        action);
+        change);
   });
 }
 

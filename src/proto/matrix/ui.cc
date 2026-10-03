@@ -126,7 +126,7 @@ void chose(Box* box, const join_rule_t& rule) {
   if (!box->facts.may(power_need::change_access{}))
     return;
   box->facts.join_rule = rule;
-  box->actions->room_act(room_action::set_join_rule{rule});
+  box->actions->ask_for(request::change_room{room_change::set_join_rule{rule}});
   box->show_again();
 }
 template <class Box>
@@ -134,7 +134,7 @@ void chose(Box* box, const history_rule_t& rule) {
   if (!box->facts.may(power_need::change_history{}))
     return;
   box->facts.history = rule;
-  box->actions->room_act(room_action::set_history{rule});
+  box->actions->ask_for(request::change_room{room_change::set_history{rule}});
   box->show_again();
 }
 template <class Box>
@@ -148,7 +148,7 @@ void encrypt(Box* box) {
   } else {
     kept.confirming_encryption = false;
     facts.encrypted = true;
-    box->actions->room_act(room_action::encrypt{});
+    box->actions->ask_for(request::change_room{room_change::encrypt{}});
   }
   box->show_again();
 }
@@ -157,7 +157,7 @@ void needs_level(Box* box, const power_need_t& need, std::int64_t level) {
   auto& facts = box->facts;
   if (!facts.may(power_need::change_permissions{}) || level > facts.mine)
     return;
-  box->actions->room_act(room_action::set_need{need, level});
+  box->actions->ask_for(request::change_room{room_change::set_need{need, level}});
   splice::visit(splice::overloaded{[&](power_need::default_role) { facts.needs.users_default = level; },
                                    [&](power_need::send_messages) { facts.needs.events_default = level; },
                                    [&](power_need::change_settings) { facts.needs.state_default = level; },
@@ -175,7 +175,7 @@ void user_level(Box* box, const std::string& user, std::int64_t level) {
   auto& facts = box->facts;
   if (!facts.may(power_need::change_permissions{}) || level > facts.mine)
     return;
-  box->actions->room_act(room_action::set_power{user, level});
+  box->actions->ask_for(request::change_room{room_change::set_power{user, level}});
   const auto found = std::ranges::find(facts.privileged, user, &room_settings_facts::person::id);
   if (found != facts.privileged.end())
     found->level = level;
@@ -186,7 +186,7 @@ void event_level(Box* box, const std::string& event, std::int64_t level) {
   auto& facts = box->facts;
   if (!facts.may(power_need::change_permissions{}) || level > facts.mine || event.empty())
     return;
-  box->actions->room_act(room_action::set_event_need{event, level});
+  box->actions->ask_for(request::change_room{room_change::set_event_need{event, level}});
   facts.needs.events.insert_or_assign(event, level);
   box->show_again();
 }
@@ -600,7 +600,7 @@ struct advanced_page : nodes::Stack {
       if (!box->facts.may(power_need::upgrade{}))
         return;
       if (const std::string version = page->parts.upgrade_to.text(); !version.empty())
-        box->actions->room_act(room_action::upgrade{version});
+        box->actions->ask_for(request::change_room{room_change::upgrade{version}});
     }
   };
   struct parts_t {

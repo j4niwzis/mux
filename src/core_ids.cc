@@ -482,20 +482,15 @@ struct power_needs {
   }
 };
 
-// What can be done to a room by those allowed to: named, described, opened
-// or closed, people let in or sent out, and given a say.
+// What can be done to a room by those allowed to, in any protocol: named,
+// described, people let in or sent out. What a protocol has beyond these is
+// its own (Matrix's room changes: rules, power levels, encryption, upgrade).
 namespace room_action {
 struct rename {
   std::string name;
 };
 struct retopic {
   std::string topic;
-};
-struct set_join_rule {
-  join_rule_t rule;
-};
-struct set_history {
-  history_rule_t rule;
 };
 struct invite {
   std::string user;
@@ -509,33 +504,12 @@ struct ban {
 struct unban {
   std::string user;
 };
-struct set_power {
-  std::string user;
-  std::int64_t level = 0;
-};
-struct encrypt {};  // for good: it cannot be turned off
-struct set_need {  // the level a thing done asks
-  power_need_t need;
-  std::int64_t level = 0;
-};
-// Upgraded to a room version: a new room made, this one tombstoned.
-struct upgrade {
-  std::string version;
-};
-// The level any kind of event asks, by its type as Matrix names it -- one
-// of the list's or not.
-struct set_event_need {
-  std::string event;
-  std::int64_t level = 0;
-};
 }  // namespace room_action
 // A room's creator, from room version 12 on: above every level, and not
 // listed in the power levels (MSC4289).
 inline constexpr std::int64_t kCreatorPower = std::numeric_limits<std::int64_t>::max();
-using room_action_t =
-    splice::variant<room_action::rename, room_action::retopic, room_action::set_join_rule, room_action::set_history,
-                 room_action::invite, room_action::kick, room_action::ban, room_action::unban, room_action::set_power,
-                 room_action::encrypt, room_action::set_need, room_action::set_event_need, room_action::upgrade>;
+using room_action_t = splice::variant<room_action::rename, room_action::retopic, room_action::invite, room_action::kick,
+                                     room_action::ban, room_action::unban>;
 
 // A custom emoji: its shortcode, as written between colons, and its picture
 // on the server -- one of a Matrix room's packs, or the user's own.

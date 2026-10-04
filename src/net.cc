@@ -15,6 +15,9 @@
 module;
 
 #include <unistd.h>
+#if defined(__ANDROID__)
+#include "android_runtime.h"
+#endif
 
 #include <boost/asio.hpp>
 #include <boost/asio/posix/stream_descriptor.hpp>
@@ -684,7 +687,14 @@ class listener {
 
 // The nameserver /etc/resolv.conf names first; the local stub where it
 // names none.
-inline asio::ip::address nameserver() {
+inline std::optional<asio::ip::address> nameserver() {
+#if defined(__ANDROID__)
+  char name[128];
+  if (!mux_android_nameserver(name, sizeof(name))) return std::nullopt;
+  error_code bad;
+  const auto address = asio::ip::make_address(name, bad);
+  return bad ? std::nullopt : std::optional(address);
+#else
   std::ifstream conf("/etc/resolv.conf");
   std::string word;
   while (conf >> word)
@@ -695,6 +705,7 @@ inline asio::ip::address nameserver() {
         return address;
     }
   return asio::ip::make_address("127.0.0.53");
+#endif
 }
 
 // A domain's XMPP client service by its SRV records (RFC 6120, 3.2.1), in
@@ -705,7 +716,9 @@ inline std::vector<tern::srv::target> xmpp_targets(loop& owner, std::string_view
   std::vector<tern::srv::target> found;
   error_code opened;
   asio::ip::udp::socket socket(owner.io());
-  const asio::ip::udp::endpoint server(nameserver(), 53);
+  const auto dns = nameserver();
+  if (!dns) return found;
+  const asio::ip::udp::endpoint server(*dns, 53);
   socket.open(server.protocol(), opened);
   std::random_device entropy;
   if (!opened)
@@ -767,7 +780,7 @@ inline std::vector<tern::srv::target> xmpp_targets(loop& owner, const std::optio
   const std::optional<asio::ip::address> asked = splice::visit(
       splice::overloaded{[](srv_lookup::system) -> std::optional<asio::ip::address> {
                            const auto server = nameserver();
-                           return local_only(server) ? std::nullopt : std::optional(server);
+                           return !server || local_only(*server) ? std::nullopt : server;
                          },
                          [](srv_lookup::none) -> std::optional<asio::ip::address> { return std::nullopt; },
                          [](const srv_lookup::server& chosen) -> std::optional<asio::ip::address> { return chosen.address; }},

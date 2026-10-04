@@ -1,0 +1,85 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+function(mux_add_android_apk target)
+  set(MUX_ANDROID_FRAMEWORK_RES_APK "${MANDK_ROOT}/tools/framework-res.apk" CACHE FILEPATH "AOSP framework resource APK")
+  set(MUX_ANDROID_APKSIGNER_JAR "${MANDK_ROOT}/tools/apksigner.jar" CACHE FILEPATH "Source-built apksigner JAR")
+  set(MUX_ANDROID_TARGET_API 35 CACHE STRING "APK target API")
+  set(MUX_ANDROID_MIN_API 27 CACHE STRING "APK minimum API")
+  set(MUX_ANDROID_VERSION_CODE 1 CACHE STRING "Monotonic APK version code")
+  option(MUX_ANDROID_TEST_KEY "Generate a test signing key and test-signed APK" ON)
+  set(MUX_ANDROID_LIBRARY_DIRS "" CACHE STRING "Additional Android runtime library search directories")
+  if(MUX_ANDROID_MIN_API LESS 27 OR MUX_ANDROID_TARGET_API LESS MUX_ANDROID_MIN_API)
+    message(FATAL_ERROR "Android packaging requires 27 <= MUX_ANDROID_MIN_API <= MUX_ANDROID_TARGET_API")
+  endif()
+  foreach(input MUX_ANDROID_FRAMEWORK_RES_APK MUX_ANDROID_APKSIGNER_JAR)
+    if(NOT EXISTS "${${input}}")
+      message(FATAL_ERROR "Set ${input} to an existing file (currently '${${input}}')")
+    endif()
+  endforeach()
+  find_program(MUX_AAPT2 aapt2 REQUIRED NO_CMAKE_FIND_ROOT_PATH)
+  find_program(MUX_ZIPALIGN zipalign REQUIRED NO_CMAKE_FIND_ROOT_PATH)
+  find_program(MUX_JAVA java REQUIRED NO_CMAKE_FIND_ROOT_PATH)
+  find_program(MUX_READELF NAMES llvm-readelf readelf REQUIRED NO_CMAKE_FIND_ROOT_PATH)
+  find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
+  get_target_property(sdl_source SDL3::SDL3 SOURCE_DIR)
+  if(NOT EXISTS "${sdl_source}/build-scripts/native-activity/dex/CMakeLists.txt")
+    message(FATAL_ERROR "Android packaging requires the native SDL fork built from source")
+  endif()
+  cme_declare_port(NAME sdl-native-dex PROVIDES sdl-native-dex VERSION 1.0
+    SOURCE_DIR "${sdl_source}/build-scripts/native-activity/dex" MACHINE build
+    PROGRAMS "sdl-native-dex=sdl::native-dex" TARGETS sdl::native-dex)
+  find_package(sdl-native-dex REQUIRED)
+
+  set(out "${CMAKE_BINARY_DIR}/apk")
+  file(MAKE_DIRECTORY "${out}")
+  set(MUX_ANDROID_MANIFEST "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../android/AndroidManifest.xml"
+      CACHE FILEPATH "Application manifest")
+  set(manifest "${MUX_ANDROID_MANIFEST}")
+  set(packager "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../tools/android_apk.py")
+  set(search --library-dir "$<TARGET_FILE_DIR:SDL3::SDL3>")
+  # Source-built shared dependencies can live anywhere below the build tree.
+  list(APPEND search --library-dir "${CMAKE_BINARY_DIR}")
+  foreach(dir IN LISTS CMAKE_PREFIX_PATH MUX_ANDROID_LIBRARY_DIRS)
+    list(APPEND search --library-dir "${dir}")
+  endforeach()
+  add_custom_command(OUTPUT "${out}/classes.dex"
+    COMMAND "${sdl-native-dex_PROGRAM}" --out "${out}/classes.dex"
+    DEPENDS "${sdl-native-dex_PROGRAM}" VERBATIM)
+  add_custom_command(OUTPUT "${out}/mux-resources.apk"
+    COMMAND "${MUX_AAPT2}" link -o "${out}/mux-resources.apk"
+      --manifest "${manifest}" -I "${MUX_ANDROID_FRAMEWORK_RES_APK}"
+      --min-sdk-version "${MUX_ANDROID_MIN_API}" --target-sdk-version "${MUX_ANDROID_TARGET_API}"
+      --version-code "${MUX_ANDROID_VERSION_CODE}" --version-name "${PROJECT_VERSION}"
+    DEPENDS "${manifest}" "${MUX_ANDROID_FRAMEWORK_RES_APK}" VERBATIM)
+  add_custom_command(OUTPUT "${out}/mux-unsigned.apk"
+    COMMAND "${Python3_EXECUTABLE}" "${packager}"
+      --resources "${out}/mux-resources.apk" --dex "${out}/classes.dex"
+      --library "$<TARGET_FILE:${target}>" --library "$<TARGET_FILE:SDL3::SDL3>"
+      ${search} --readelf "${MUX_READELF}" --out "${out}/mux-unaligned.apk"
+    COMMAND "${MUX_ZIPALIGN}" -f 4 "${out}/mux-unaligned.apk" "${out}/mux-unsigned.apk"
+    COMMAND "${MUX_ZIPALIGN}" -c 4 "${out}/mux-unsigned.apk"
+    DEPENDS ${target} SDL3::SDL3 "${out}/classes.dex" "${out}/mux-resources.apk" "${packager}"
+    VERBATIM COMMAND_EXPAND_LISTS)
+  add_custom_target(mux-apk-unsigned DEPENDS "${out}/mux-unsigned.apk")
+  if(MUX_ANDROID_TEST_KEY)
+    find_program(MUX_KEYTOOL keytool REQUIRED NO_CMAKE_FIND_ROOT_PATH)
+    add_custom_command(OUTPUT "${out}/test.keystore"
+      COMMAND "${MUX_KEYTOOL}" -genkeypair -noprompt -keystore "${out}/test.keystore"
+        -storepass android -keypass android -alias androiddebugkey
+        -dname "CN=Mux TEST KEY - not a release key,O=Mux,C=XX"
+        -keyalg RSA -keysize 2048 -validity 10000 VERBATIM)
+    add_custom_command(OUTPUT "${out}/mux-test-signed.apk"
+      COMMAND "${MUX_JAVA}" -jar "${MUX_ANDROID_APKSIGNER_JAR}" sign
+        --ks "${out}/test.keystore" --ks-key-alias androiddebugkey --ks-pass pass:android
+        --key-pass pass:android --min-sdk-version "${MUX_ANDROID_MIN_API}"
+        --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true
+        --out "${out}/mux-test-signed.apk" "${out}/mux-unsigned.apk"
+      COMMAND "${MUX_JAVA}" -jar "${MUX_ANDROID_APKSIGNER_JAR}" verify
+        --min-sdk-version "${MUX_ANDROID_MIN_API}" "${out}/mux-test-signed.apk"
+      DEPENDS "${out}/mux-unsigned.apk" "${out}/test.keystore" "${MUX_ANDROID_APKSIGNER_JAR}" VERBATIM)
+    add_custom_target(mux-apk DEPENDS "${out}/mux-test-signed.apk")
+  else()
+    # Release signing is a separate operation; no release secret enters CMake.
+    add_custom_target(mux-apk DEPENDS "${out}/mux-unsigned.apk")
+  endif()
+endfunction()

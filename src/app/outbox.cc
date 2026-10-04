@@ -5,6 +5,7 @@
 export module mux.app.outbox;
 
 import std;
+import mux.platform.files;
 import splice.bytes;
 import splice;
 import skia;
@@ -320,11 +321,11 @@ class outbox_part {
     if (dropped && to_send_.empty())
       files_thread_ = s_->root().main().writing_in_thread() ? s_->root().main().thread_open() : std::nullopt;
     for (const std::string& path : paths) {
-      auto bytes_read = splice::bytes::file_text(path);
+      auto bytes_read = mux::platform::files::read(path);
       if (!bytes_read)
         continue;
       std::string bytes = std::move(*bytes_read);
-      file one{logic::prepared_of(std::move(bytes), std::filesystem::path(path).filename().string(), dropped, *settings_),
+      file one{logic::prepared_of(std::move(bytes), mux::platform::files::name(path), dropped, *settings_),
                std::format("mux-file-{}-{}", std::chrono::system_clock::now().time_since_epoch().count(), ++made_)};
       if (one.as.picture)
         if (auto image = skia::decodeImage(one.as.bytes.data(), one.as.bytes.size())) {

@@ -20,6 +20,7 @@ import skiff.paint;
 import skiff.scene;
 import mux.platform.events;
 import mux.platform.fonts;
+import mux.platform.window_setup;
 import mux.platform.clipboard;
 import mux.platform.dialogs;
 
@@ -41,7 +42,7 @@ struct options {
   // A window with an alpha channel the desktop blends: what is repainted
   // cleared first, the scene no longer opaque at its bottom.
   bool transparent = false;
-  std::string fonts = "/usr/share/fonts";
+  std::string fonts = window_setup::fonts;
 };
 
 namespace detail {
@@ -101,6 +102,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
   // What every Text draws with: this run's.
   skia::SkFont font;
   load_fonts(how.fonts, font);
+  window_setup::graphics();
   sdl::SDL_GL_SetAttribute(sdl::SDL_GL_STENCIL_SIZE, 8);
   sdl::SDL_GL_SetAttribute(sdl::SDL_GL_DOUBLEBUFFER, 1);
   if (how.transparent)
@@ -231,7 +233,9 @@ int run(App& app, const options& how, const events::kinds& kinds) {
       while (got) {
         // The interface's scale: the scene's points are larger than the
         // window's by it, and what the pointer says is taken in the scene's.
-        const float to_scene = 100.0f / static_cast<float>(std::max(1, app.interface_scale));
+        const float to_scene = sdl::SDL_GetWindowPixelDensity(window) /
+                               sdl::SDL_GetWindowDisplayScale(window) *
+                               100.0f / static_cast<float>(std::max(1, app.interface_scale));
         // An event of a notification's window: a press opens its chat, in
         // the window brought up; nothing else of it reaches the scene.
         if (sdl::SDL_Window* over = sdl::SDL_GetWindowFromEvent(&event); over && over != window && shown_toasts.owns(over)) {
@@ -251,6 +255,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
             read_clipboard();
             break;
           case sdl::SDL_EVENT_WINDOW_FOCUS_GAINED:
+            read_clipboard();
             app.focus_changed(true);
             break;
           case sdl::SDL_EVENT_WINDOW_FOCUS_LOST:
@@ -281,6 +286,15 @@ int run(App& app, const options& how, const events::kinds& kinds) {
             scene.state().invalidateLayout();
             redraw = true;
             break;
+          case sdl::SDL_EVENT_RENDER_DEVICE_RESET:
+            target.recover_graphics();
+            kept_frame.reset();
+            kept_frame_for = nullptr;
+            overlays.clear();
+            scene.state().invalidateLayout();
+            redraw = true;
+            break;
+          case sdl::SDL_EVENT_WINDOW_SAFE_AREA_CHANGED:
           case sdl::SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
           case sdl::SDL_EVENT_WINDOW_DISPLAY_SCALE_CHANGED:
             scene.state().invalidateLayout();
@@ -444,7 +458,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
       // window's coordinates, the scene's points times the interface's scale.
       if (typing && work.typingAt && work.typingAt != typing_told) {
         typing_told = work.typingAt;
-        const float to_window = static_cast<float>(app.interface_scale) / 100.0f;
+        const float to_window = scale / sdl::SDL_GetWindowPixelDensity(window);
         const sdl::SDL_Rect area{static_cast<int>(work.typingAt->fLeft * to_window), static_cast<int>(work.typingAt->fTop * to_window),
                             static_cast<int>(work.typingAt->width() * to_window),
                             static_cast<int>(work.typingAt->height() * to_window)};
@@ -477,7 +491,14 @@ int run(App& app, const options& how, const events::kinds& kinds) {
       const double app_done = detail::now_ms();
       scene.update(app_done);
       const double ticked = detail::now_ms();
-      scene.layoutIfNeeded(skia::SkRect::MakeWH(width, height));
+      sdl::SDL_Rect safe{};
+      auto bounds = skia::SkRect::MakeWH(width, height);
+      if (sdl::SDL_GetWindowSafeArea(window, &safe) && safe.w > 0 && safe.h > 0) {
+        const float to_points = sdl::SDL_GetWindowPixelDensity(window) / scale;
+        bounds = skia::SkRect::MakeXYWH(safe.x * to_points, safe.y * to_points,
+                                      safe.w * to_points, safe.h * to_points);
+      }
+      scene.layoutIfNeeded(bounds);
       const double laid_out = detail::now_ms();
       // What the layout put past the edge of its parent, said where it can
       // be seen: once a node, until it fits again.

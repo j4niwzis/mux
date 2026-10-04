@@ -37,7 +37,15 @@ if(NOT COMMAND cme_provider)
     "subdirectory of it.")
 endif()
 
-option(MUX_TESTS "Build the tests" ${PROJECT_IS_TOP_LEVEL})
+set(mux_desktop_default ON)
+if(ANDROID)
+  set(mux_desktop_default OFF)
+  set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+  include(cmake/android.cmake)
+endif()
+include(CMakeDependentOption)
+cmake_dependent_option(MUX_TESTS "Build the tests" ${PROJECT_IS_TOP_LEVEL} "NOT ANDROID" OFF)
+option(MUX_CLI "Build the terminal client" ${mux_desktop_default})
 # The window: SDL3 and skiff, with Skia on GL.
 option(MUX_UI "Build the window, and the mux program" ON)
 
@@ -264,7 +272,7 @@ if(MUX_UI)
   # Video, as tdesktop plays it: FFmpeg -- the system's where it has one,
   # else built with only what a chat's videos are in and made of. Off, the
   # client has no FFmpeg, and a video is played by the system's player.
-  option(MUX_VIDEO "Videos played in the window, through FFmpeg" ON)
+  option(MUX_VIDEO "Videos played in the window, through FFmpeg" ${mux_desktop_default})
   set(mux_video_libraries)
   if(MUX_VIDEO)
     cme_find_package(FFmpeg COMPONENTS mp4 matroska h264 hevc vp9 aac opus mp3 REQUIRED)
@@ -384,7 +392,18 @@ if(MUX_UI)
           src/proto/xmpp/ui.cc src/proto/matrix/ui_form.cc src/proto/matrix/ui_manage.cc src/proto/matrix/ui_sessions.cc src/proto/matrix/ui_tools.cc src/proto/matrix/ui.cc src/proto/ui.cc)
   target_link_libraries(mux_modules PUBLIC SDL3::SDL3 skiff::skiff skiff::widgets Opus::opus Vorbis::vorbisfile
     ${mux_video_libraries})
-  add_executable(mux src/main.cc)
+  if(ANDROID)
+    add_library(mux SHARED src/main.cc src/main_android.cc)
+    target_sources(mux_modules PRIVATE src/android_runtime.cc)
+    target_link_options(mux PRIVATE "LINKER:-z,max-page-size=16384" "LINKER:--no-undefined" "LINKER:--exclude-libs,ALL")
+    if(MANDK_ROOT)
+      target_link_libraries(mux PRIVATE c++ c++abi unwind)
+    endif()
+    include(cmake/android-apk.cmake)
+    mux_add_android_apk(mux)
+  else()
+    add_executable(mux src/main.cc src/main_desktop.cc)
+  endif()
   # Outside a release build, with walks erased: the big subtrees' tables and
   # walks each in a unit of its own, not all in scene.cc.
   set(mux_erased $<AND:$<BOOL:${SKIFF_ERASE_WALKS}>,$<NOT:$<CONFIG:Release>>>)
@@ -451,8 +470,10 @@ if(MUX_UI)
   endif()
 endif()
 
-add_executable(mux-cli src/proto/cli.cc)
-target_link_libraries(mux-cli PRIVATE mux_modules)
+if(MUX_CLI)
+  add_executable(mux-cli src/proto/cli.cc)
+  target_link_libraries(mux-cli PRIVATE mux_modules)
+endif()
 
 if(MUX_TESTS)
   enable_testing()

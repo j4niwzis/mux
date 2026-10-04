@@ -1,0 +1,85 @@
+name: android
+on:
+  workflow_dispatch:
+    inputs:
+      full_client:
+        description: Build the experimental full client instead of the bridge check
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - name: Host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build python3 openjdk-17-jdk-headless \
+            aapt zipalign dexdump generate-ninja nasm pkg-config perl \
+            curl lsb-release software-properties-common gnupg
+          curl -fsSL https://apt.llvm.org/llvm.sh -o /tmp/llvm.sh
+          sudo bash /tmp/llvm.sh 23
+          sudo apt-get install -y lld-23 llvm-23 libc++-23-dev libc++abi-23-dev
+          echo /usr/lib/llvm-23/bin >> "$GITHUB_PATH"
+          sudo mkdir -p /lib/share/libc++
+          sudo ln -sfn /usr/lib/llvm-23/share/libc++/v1 /lib/share/libc++/v1
+          version=4.4.3
+          curl -fsSL "https://github.com/Kitware/CMake/releases/download/v${version}/cmake-${version}-linux-x86_64.tar.gz" -o /tmp/cmake.tar.gz
+          sudo tar xzf /tmp/cmake.tar.gz -C /opt
+          echo "/opt/cmake-${version}-linux-x86_64/bin" >> "$GITHUB_PATH"
+
+      - uses: actions/checkout@v4
+        with:
+          repository: j4niwzis/minimal-android-ndk.cpp
+          ref: 1c68644f3e953ba1fa373a0ba69d5a5a203dd377
+          path: ndk-tool
+      - id: toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/mux-android
+          key: mux-android-clang23-v1-${{ hashFiles('android/toolchain-sources.json', 'ndk-tool/src/**', 'ndk-tool/CMakeLists.txt') }}
+      - name: Build toolchain and signer from source
+        if: steps.toolchain.outputs.cache-hit != 'true'
+        run: |
+          cmake -S ndk-tool -B ndk-tool/build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=clang++-23 \
+            -DCMAKE_CXX_FLAGS='-stdlib=libc++ -fno-experimental-new-constant-interpreter'
+          cmake --build ndk-tool/build -j4
+          ndk-tool/build/minimal-android-ndk \
+            --root "$HOME/.cache/mux-android" \
+            --manifest "$PWD/android/toolchain-sources.json" \
+            --clang clang-23 --llvm-bin /usr/lib/llvm-23/bin --jobs 4 \
+            build toolchain-file framework-res apksigner
+      - name: Rust Android target
+        if: inputs.full_client
+        run: rustup target add aarch64-linux-android
+      - name: Configure and package
+        env:
+          FULL_CLIENT: ${{ inputs.full_client }}
+        run: |
+          source=android/smoke
+          if [ "$FULL_CLIENT" = true ]; then source=.; fi
+          cmake -S "$source" -B build-android -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$HOME/.cache/mux-android/cmake/target.cmake" \
+            -DCMAKE_BUILD_TYPE=Debug -DMUX_PROGRAM_JOBS=1 \
+            -DMUX_CLI=OFF -DMUX_TESTS=OFF -DMUX_VIDEO=OFF \
+            -DCME_BUILD_MACHINE_CXX_COMPILER=clang++-23 \
+            -DCME_BUILD_MACHINE_CXX_FLAGS='-stdlib=libc++ -fno-experimental-new-constant-interpreter'
+          cmake --build build-android --target mux-apk -j4
+      - name: Verify package
+        run: |
+          python3 test/android_apk_test.py
+          dexdump -c build-android/apk/classes.dex
+          zipalign -c 4 build-android/apk/mux-test-signed.apk
+          java -jar "$HOME/.cache/mux-android/tools/apksigner.jar" verify --verbose \
+            build-android/apk/mux-test-signed.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mux-android-${{ inputs.full_client && 'client' || 'bridge' }}-test-signed
+          path: build-android/apk/mux-test-signed.apk
+          if-no-files-found: error

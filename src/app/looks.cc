@@ -7,6 +7,7 @@
 export module mux.app.looks;
 
 import std;
+import mux.platform.files;
 import splice.bytes;
 import splice;
 import skia;
@@ -104,7 +105,7 @@ class looks_part {
   // The picture chosen for a background: copied into mux's data, by a name
   // its bytes give, and set at the level it was chosen for.
   void picture_chosen(const mux::choice_level_t& level, const std::string& path) {
-    auto bytes_read = splice::bytes::file_text(path);
+    auto bytes_read = mux::platform::files::read(path);
     if (!bytes_read)
       return;
     std::string bytes = std::move(*bytes_read);
@@ -118,7 +119,7 @@ class looks_part {
     const auto folder = mux::config::state_path("wallpapers") / std::format("{:016x}", std::hash<std::string>{}(bytes));
     std::error_code failed;
     std::filesystem::create_directories(folder, failed);
-    const std::filesystem::path given = std::filesystem::path(path).filename();
+    const std::filesystem::path given = mux::platform::files::name(path);
     const auto kept = folder / (given.empty() ? std::filesystem::path(std::format("picture.{}", mux::media::extension_of(*type))) : given);
     std::ofstream(kept, std::ios::binary) << bytes;
     this->set_at(level, mux::config::wallpaper::picture{kept.string()});

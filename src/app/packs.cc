@@ -7,6 +7,7 @@
 export module mux.app.packs;
 
 import std;
+import mux.platform.files;
 import splice.bytes;
 import splice;
 import skia;
@@ -74,15 +75,16 @@ class packs_part {
     if (!account_ || s_->demo())
       return true;
     for (const std::string& path : paths) {
-      auto bytes_read = splice::bytes::file_text(path);
+      auto bytes_read = mux::platform::files::read(path);
       if (!bytes_read)
         continue;
       std::string bytes = std::move(*bytes_read);
       const auto type = mux::media::picture_of(bytes);
       if (!type)
         continue;
-      mux::pack_picture one{.shortcode = std::filesystem::path(path).stem().string(),
-                            .body = std::filesystem::path(path).filename().string(),
+      const auto name = mux::platform::files::name(path);
+      mux::pack_picture one{.shortcode = std::filesystem::path(name).stem().string(),
+                            .body = name,
                             .mimetype = std::string(splice::visit([](auto kind) { return mux::media::mimetype_of(kind); }, *type)),
                             .size = static_cast<std::int64_t>(bytes.size())};
       if (auto image = skia::decodeImage(bytes.data(), bytes.size())) {

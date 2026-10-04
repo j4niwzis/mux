@@ -40,7 +40,7 @@ using namespace mux::app;
 
 }  // namespace
 
-int main(int argc, char** argv) {
+int mux_main(int argc, char** argv) {
   // The window's own kinds of event, registered once, here.
   const mux::platform::events::kinds kinds;
   mailbox_type box{wake_window{kinds.wake}};

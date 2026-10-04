@@ -6,6 +6,7 @@
 export module mux.app.pictures;
 
 import std;
+import mux.platform.files;
 import splice.bytes;
 import mux.vault;
 import splice;
@@ -505,7 +506,7 @@ class pictures_part {
       if (mux::ui::animations().has(key) || mux::ui::whole_pictures().has(key) || !gifs_decoding_.insert(key).second)
         continue;
       s_->work->run([path, key, scene]() -> workers::done_t {
-        std::string bytes = splice::bytes::file_text(path).value_or(std::string());
+        std::string bytes = mux::platform::files::read(path).value_or(std::string());
         auto frames = skia::decodeFrames(bytes.data(), bytes.size());
         return [frames = std::move(frames), key, scene]() mutable {
           if (frames.size() > 1)
@@ -584,9 +585,8 @@ class pictures_part {
   }
   // Bytes written where the dialog said, and said.
   void write_chosen(const std::string& bytes, const std::string& path) {
-    std::ofstream out(path, std::ios::binary);
-    out << bytes;
-    s_->root().show_message("Saved", out ? std::format("Saved to {}", path) : std::format("Could not write {}", path));
+    const bool saved = mux::platform::files::write(path, bytes);
+    s_->root().show_message("Saved", saved ? std::format("Saved to {}", path) : std::format("Could not write {}", path));
   }
   // What Save As… was asked for, until the dialog answers; and where the
   // bytes go when they have to be fetched first.

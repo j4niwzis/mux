@@ -109,6 +109,32 @@ class canvas_target {
 #endif
   }
 
+  // SDL can replace a lost EGL context while the activity resumes. Discard
+  // Skia's resources from the old context and adopt the replacement.
+  void recover_graphics() {
+#if defined(SK_GANESH)
+    if (!gl_) return;
+    if (context_) context_->abandonContext();
+    surface_.reset();
+    context_.reset();
+    const auto restored = sdl::SDL_GL_GetCurrentContext();
+    if (gl_ != restored) sdl::SDL_GL_DestroyContext(gl_);
+    gl_ = restored;
+    if (gl_) {
+      auto interface = skia::GrGLMakeAssembledInterface(nullptr, [](void*, const char name[]) -> skia::GrGLFuncPtr {
+        return reinterpret_cast<skia::GrGLFuncPtr>(sdl::SDL_GL_GetProcAddress(name));
+      });
+      if (interface) context_ = skia::MakeGL(std::move(interface));
+    }
+    if (!context_ && gl_) {
+      sdl::SDL_GL_DestroyContext(gl_);
+      gl_ = nullptr;
+    }
+    width_ = height_ = 0;
+    fresh_ = true;
+#endif
+  }
+
   // A surface of the window's size in pixels, made again when it changes.
   // Its GL context made current first: another window's drawing -- a
   // notification's, through SDL's window surface, which SDL may accelerate

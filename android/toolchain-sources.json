@@ -1,0 +1,389 @@
+{
+  "headers": [
+    {
+      "find": "libc/include",
+      "into": "",
+      "require": [
+        "stdio.h",
+        "stdlib.h",
+        "string.h",
+        "pthread.h",
+        "dlfcn.h",
+        "math.h",
+        "fenv.h",
+        "complex.h"
+      ],
+      "source": "bionic"
+    },
+    {
+      "exclude": [
+        "asm-arm",
+        "asm-arm64",
+        "asm-riscv",
+        "asm-x86"
+      ],
+      "find": "libc/kernel/uapi",
+      "into": "",
+      "require": [
+        "linux/types.h"
+      ],
+      "source": "bionic"
+    },
+    {
+      "find": "libc/kernel/android/uapi",
+      "into": "",
+      "require": [
+        "linux/compiler_types.h",
+        "linux/compiler.h"
+      ],
+      "source": "bionic"
+    },
+    {
+      "find": "libc/kernel/uapi/asm-arm64/asm",
+      "into": "asm",
+      "require": [
+        "asm/types.h"
+      ],
+      "source": "bionic"
+    },
+    {
+      "find": "include_jni",
+      "into": "",
+      "require": [
+        "jni.h"
+      ],
+      "source": "nativehelper"
+    },
+    {
+      "find": "liblog/include/android",
+      "into": "android",
+      "require": [
+        "android/log.h"
+      ],
+      "source": "logging"
+    },
+    {
+      "all": true,
+      "find": "include/android",
+      "into": "android",
+      "require": [
+        "android/native_window.h",
+        "android/input.h",
+        "android/keycodes.h",
+        "android/rect.h"
+      ],
+      "source": "native"
+    },
+    {
+      "all": true,
+      "find": "include/android",
+      "into": "android",
+      "require": [
+        "android/native_activity.h",
+        "android/asset_manager.h",
+        "android/looper.h",
+        "android/configuration.h"
+      ],
+      "source": "base"
+    },
+    {
+      "find": "opengl/include/KHR",
+      "into": "KHR",
+      "require": [
+        "KHR/khrplatform.h"
+      ],
+      "source": "native"
+    },
+    {
+      "find": "opengl/include/EGL",
+      "into": "EGL",
+      "require": [
+        "EGL/egl.h",
+        "EGL/eglext.h"
+      ],
+      "source": "native"
+    },
+    {
+      "find": "opengl/include/GLES",
+      "into": "GLES",
+      "require": [
+        "GLES/gl.h",
+        "GLES/glext.h"
+      ],
+      "source": "native"
+    },
+    {
+      "find": "opengl/include/GLES2",
+      "into": "GLES2",
+      "require": [
+        "GLES2/gl2.h"
+      ],
+      "source": "native"
+    },
+    {
+      "find": "opengl/include/GLES3",
+      "into": "GLES3",
+      "require": [
+        "GLES3/gl3.h"
+      ],
+      "source": "native"
+    },
+    {
+      "find": "include/SLES",
+      "into": "SLES",
+      "require": [
+        "SLES/OpenSLES.h",
+        "SLES/OpenSLES_Android.h"
+      ],
+      "source": "wilhelm"
+    },
+    {
+      "find": "include/aaudio",
+      "into": "aaudio",
+      "require": [
+        "aaudio/AAudio.h"
+      ],
+      "source": "av"
+    }
+  ],
+  "packages": [],
+  "platform": "android-14.0.0_r75",
+  "sources": [
+    {
+      "commit": "d36180d359233b6489d0127c8f850021d9974590",
+      "name": "bionic",
+      "note": "libc, libm and libdl: the public headers, the kernel uapi headers and the symbol maps",
+      "paths": [
+        "libc",
+        "libm",
+        "libdl"
+      ],
+      "project": "platform/bionic",
+      "url": "https://android.googlesource.com/platform/bionic"
+    },
+    {
+      "commit": "d020705a7940138bc69f8043e82ab5994a194057",
+      "name": "native",
+      "note": "EGL, GLES, nativewindow and the android/ headers",
+      "paths": [
+        "include",
+        "libs",
+        "opengl"
+      ],
+      "project": "platform/frameworks/native",
+      "url": "https://android.googlesource.com/platform/frameworks/native"
+    },
+    {
+      "commit": "47e4947cee58fb36ba8c009c1520ded8a6c4c58c",
+      "name": "base",
+      "note": "core/res is the framework resource package; native/android carries libandroid",
+      "paths": [
+        "core/res",
+        "native/android"
+      ],
+      "project": "platform/frameworks/base",
+      "url": "https://android.googlesource.com/platform/frameworks/base"
+    },
+    {
+      "commit": "ac83afd2aee1abd7d6ceff9bdfef9c8c2961875b",
+      "name": "av",
+      "note": "AAudio headers and symbol map",
+      "paths": [
+        "media/libaaudio"
+      ],
+      "project": "platform/frameworks/av",
+      "url": "https://android.googlesource.com/platform/frameworks/av"
+    },
+    {
+      "commit": "0bfc13ae440cfbc8285d31e89832d0b002a6b1c2",
+      "name": "wilhelm",
+      "note": "OpenSL ES headers and symbol map",
+      "paths": [
+        "include",
+        "src"
+      ],
+      "project": "platform/frameworks/wilhelm",
+      "url": "https://android.googlesource.com/platform/frameworks/wilhelm"
+    },
+    {
+      "commit": "f25cdb6696ba8cb96f03ce73c5600d1e85755be0",
+      "name": "nativehelper",
+      "note": "jni.h, which android/input.h and everything else that hands a Java object to native code includes",
+      "paths": [
+        "include_jni"
+      ],
+      "project": "platform/libnativehelper",
+      "url": "https://android.googlesource.com/platform/libnativehelper"
+    },
+    {
+      "commit": "e827ed8f963ed21f453f0b673da7715ab8ec97fd",
+      "name": "logging",
+      "note": "liblog",
+      "paths": [
+        "liblog"
+      ],
+      "project": "platform/system/logging",
+      "url": "https://android.googlesource.com/platform/system/logging"
+    },
+    {
+      "commit": "c4bdd155116a9b42767534b35e93f83a91e4a06f",
+      "name": "ndk",
+      "note": "meta/platforms.json for the API map, and the native app glue the application links. Not part of a platform release: the NDK is built from its own manifest branch, so a platform tag does not name a revision for it. Set ref to pin it to something other than the head of its default branch",
+      "paths": [
+        "meta",
+        "sources"
+      ],
+      "url": "https://android.googlesource.com/platform/ndk"
+    },
+    {
+      "commit": "49ba4eb8dcbd44c8675f319bcebb1f13a122c9d3",
+      "name": "soong",
+      "note": "ndkstubgen, and the future API level a preview codename resolves to",
+      "paths": [
+        "cc",
+        "android"
+      ],
+      "project": "platform/build/soong",
+      "url": "https://android.googlesource.com/platform/build/soong"
+    },
+    {
+      "commit": "db596dc9f51b6d458b0415e59573db1dee22c9c7",
+      "name": "apksig",
+      "note": "the signer, built with javac and jar",
+      "project": "platform/tools/apksig",
+      "url": "https://android.googlesource.com/platform/tools/apksig"
+    },
+    {
+      "commit": "e013073558445169e8732e25fa86e9913bfdd24e",
+      "name": "llvm-project",
+      "note": "compiler-rt builtins and the C++ runtimes. Set ref to the llvmorg-* tag matching the host clang; a checkout that is not complete shows up as libc++ missing llvm-libc shared headers",
+      "paths": [
+        "cmake",
+        "runtimes",
+        "compiler-rt",
+        "libcxx",
+        "libcxxabi",
+        "libunwind",
+        "libc",
+        "third-party",
+        "llvm/cmake",
+        "llvm/utils"
+      ],
+      "ref": "refs/tags/llvmorg-22.1.8",
+      "url": "https://github.com/llvm/llvm-project"
+    }
+  ],
+  "stubs": [
+    {
+      "file": "libc.map.txt",
+      "library": "c",
+      "source": "bionic",
+      "verify": [
+        "malloc",
+        "free",
+        "pthread_create",
+        "openat"
+      ]
+    },
+    {
+      "file": "libm.map.txt",
+      "library": "m",
+      "source": "bionic",
+      "verify": [
+        "sqrt",
+        "fmod"
+      ]
+    },
+    {
+      "file": "libdl.map.txt",
+      "library": "dl",
+      "source": "bionic",
+      "verify": [
+        "dlopen",
+        "dlsym"
+      ]
+    },
+    {
+      "file": "liblog.map.txt",
+      "library": "log",
+      "source": "logging",
+      "verify": [
+        "__android_log_write",
+        "__android_log_print",
+        "__android_log_vprint"
+      ]
+    },
+    {
+      "file": "libandroid.map.txt",
+      "library": "android",
+      "source": [
+        "base",
+        "native"
+      ],
+      "verify": [
+        "AAssetManager_open",
+        "ALooper_wake",
+        "ANativeActivity_showSoftInput"
+      ]
+    },
+    {
+      "file": "libnativewindow.map.txt",
+      "library": "nativewindow",
+      "source": "native",
+      "verify": [
+        "ANativeWindow_setBuffersTransform",
+        "ANativeWindow_setBuffersGeometry"
+      ]
+    },
+    {
+      "file": "libEGL.map.txt",
+      "library": "EGL",
+      "source": "native",
+      "verify": [
+        "eglCreateWindowSurface",
+        "eglSwapBuffers",
+        "eglQuerySurface"
+      ]
+    },
+    {
+      "file": "libGLESv2.map.txt",
+      "library": "GLESv2",
+      "source": "native",
+      "verify": [
+        "glDrawArrays",
+        "glTexImage2D"
+      ]
+    },
+    {
+      "file": "libGLESv3.map.txt",
+      "library": "GLESv3",
+      "source": "native",
+      "verify": [
+        "glMapBufferRange"
+      ]
+    },
+    {
+      "file": "libaaudio.map.txt",
+      "library": "aaudio",
+      "source": "av",
+      "verify": [
+        "AAudio_createStreamBuilder"
+      ]
+    },
+    {
+      "file": "libOpenSLES.map.txt",
+      "library": "OpenSLES",
+      "source": "wilhelm",
+      "verify": [
+        "slCreateEngine"
+      ]
+    }
+  ],
+  "target": {
+    "abi": "arm64-v8a",
+    "api": 27,
+    "arch": "arm64",
+    "triple": "aarch64-linux-android"
+  },
+  "target-sdk": 35
+}

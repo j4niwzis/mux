@@ -23,7 +23,9 @@ used to build and run the APK signer; it does not compile the app bridge.
 Build `j4niwzis/minimal-android-ndk.cpp` at
 `1c68644f3e953ba1fa373a0ba69d5a5a203dd377`. Mux's `toolchain-sources.json`
 pins the AOSP repositories and LLVM runtimes used in validation. It excludes
-R8. The manifest builds libc++ 22.1.8 using the host Clang 23 compiler.
+R8. The manifest builds libc++ 23.1.2 using the host Clang 23 compiler.
+Mux and its libraries use the C++23 range adaptors in that runtime, including
+`std::views::enumerate`; the earlier libc++ 22 runtime does not provide it.
 
 From the Mux checkout, with the toolchain repository in `../ndk-tool`:
 

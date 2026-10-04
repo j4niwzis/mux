@@ -254,7 +254,7 @@
       "url": "https://android.googlesource.com/platform/tools/apksig"
     },
     {
-      "commit": "e013073558445169e8732e25fa86e9913bfdd24e",
+      "commit": "85ac560262434c9ccfc0c183ec22d4138ed647fb",
       "name": "llvm-project",
       "note": "compiler-rt builtins and the C++ runtimes. Set ref to the llvmorg-* tag matching the host clang; a checkout that is not complete shows up as libc++ missing llvm-libc shared headers",
       "paths": [
@@ -269,7 +269,7 @@
         "llvm/cmake",
         "llvm/utils"
       ],
-      "ref": "refs/tags/llvmorg-22.1.8",
+      "ref": "refs/tags/llvmorg-23.1.2",
       "url": "https://github.com/llvm/llvm-project"
     }
   ],

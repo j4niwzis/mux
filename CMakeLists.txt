@@ -137,11 +137,13 @@ cme_find_package(splice 0.4.1 REQUIRED)
 # for more of it finds it already built without that, and stops.
 cme_declare_port(NAME alef PROVIDES alef
   GITHUB_REPOSITORY j4niwzis/alef
-  GIT_TAG 6dc139f9590dc0d3ac1cc0e9748e67d7a1485480
+  GIT_TAG af2097d1ce5571fd22435540d411a774c199968e
+  # Alef's pipe overloads remain reachable across Clang/libstdc++ imports.
+  VERSION 0.1.1
   LICENSE AGPL-3.0-only
   TARGETS alef)
 cme_options(alef "ALEF_TESTS OFF")
-cme_find_package(alef COMPONENTS precis idna grapheme line bidi emoji REQUIRED)
+cme_find_package(alef 0.1.1 COMPONENTS precis idna grapheme line bidi emoji REQUIRED)
 
 
 # knot, with concrete writer frames and streaming raw JSON: what is not

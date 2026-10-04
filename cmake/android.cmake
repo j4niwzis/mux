@@ -2,7 +2,11 @@
 # The generated toolchain deliberately uses CMAKE_SYSTEM_NAME=Linux;
 # Cargo still needs the Android triple for the vodozemac static library.
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
-  cme_declare_port(NAME vodozemac CARGO_TARGET aarch64-linux-android)
+  # With --target, Cargo creates a cache root under the target triple.
+  # cxx-build puts its shared bridge headers there; CME's CARGO_INCLUDE
+  # is relative to the outer Cargo target directory.
+  cme_declare_port(NAME vodozemac CARGO_TARGET aarch64-linux-android
+    CARGO_INCLUDE aarch64-linux-android/cxxbridge)
 else()
   message(FATAL_ERROR "Mux's initial Android package supports arm64-v8a")
 endif()

@@ -122,3 +122,9 @@ The manual `android` workflow builds the smoke APK by default; its
 `full_client` input opts into the full client. Both produce test-signed
 artifacts, never release packages. Both Android and desktop CI allocate
 32 GiB of swap for template-heavy compilation.
+Like the desktop workflow, Android CI restores and saves the build directory
+and CPM's fetched sources, including after a failed build. It also keeps
+Cargo's downloaded crates and Git checkouts. Compiled outputs use separate
+Android keys for each toolchain and build profile; retries save their new
+progress. The source-built Android toolchain has its own cache, saved as
+soon as it finishes building.

@@ -328,9 +328,9 @@ class account {
       // not the request templates inlined into every endpoint's perform.
       const auto got = [&] {
         if constexpr (net::kErasedHandlers)
-          return http::exchange(over, asked.method_name(), asked.target, asked.body, bearer, timeout);
+          return http::exchange(over, asked.method_name(), asked.target, asked.body, bearer, timeout, asked.content_type);
         else
-          return over.request(asked.method_name(), asked.target, asked.body, bearer, timeout);
+          return over.request(asked.method_name(), asked.target, asked.body, bearer, timeout, asked.content_type);
       }();
       auto read = loom::read<Endpoint>(got.status, got.body);
       if (!read) {

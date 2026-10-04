@@ -14,6 +14,7 @@ cmake_minimum_required(VERSION 4.3.4 FATAL_ERROR)
 # it has one with what is needed, and a pinned source where it has not.
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/import-std.cmake)
 set(CMAKE_CXX_STANDARD 26)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(NOT COMMAND cme_declare_port AND NOT CMAKE_PROJECT_TOP_LEVEL_INCLUDES)
@@ -479,9 +480,18 @@ mux_targets_under(${CMAKE_CURRENT_SOURCE_DIR} mux_all_targets)
 foreach(target IN LISTS mux_all_targets)
   get_target_property(module_sets ${target} CXX_MODULE_SETS)
   get_target_property(imported ${target} IMPORTED)
+  # CMake 4.4 includes STANDARD_REQUIRED and EXTENSIONS in its BMI
+  # compatibility key, even when the resulting -std flag is identical.
+  # Include mux's libraries and test executables: normalising only fetched
+  # module libraries leaves them on a different std BMI from their users.
+  get_target_property(kind ${target} TYPE)
+  if(NOT imported AND (module_sets OR
+      (target MATCHES "^mux" AND kind MATCHES "^(EXECUTABLE|STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY|OBJECT_LIBRARY)$")))
+    set_target_properties(${target} PROPERTIES
+      CXX_STANDARD 26 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+  endif()
   if(module_sets AND NOT imported AND NOT target MATCHES "^mux")
     target_compile_options(${target} PUBLIC ${mux_std_flags})
-    set_target_properties(${target} PROPERTIES CXX_STANDARD 26 CXX_STANDARD_REQUIRED ON)
     if(mux_ipo AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
       # Its archive indexed by the toolchain's ar, which reads bitcode.
       set_property(TARGET ${target} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)

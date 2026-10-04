@@ -10,6 +10,10 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
 else()
   message(FATAL_ERROR "Mux's initial Android package supports arm64-v8a")
 endif()
+# AOSP's headers declare getentropy even below its introduction in API 28.
+# Keep OpenSSL's kernel getrandom path for those older Android targets.
+cme_declare_port(NAME openssl PATCHES
+  "${CMAKE_CURRENT_LIST_DIR}/patches/openssl-android-getentropy.patch")
 set(MUX_ANDROID_NATIVE_APP_GLUE "${MANDK_ROOT}/src/ndk/sources/android/native_app_glue"
     CACHE PATH "AOSP native_app_glue source directory")
 set(MUX_ANDROID_SDL_SOURCE_DIR "" CACHE PATH "Optional local checkout of the native SDL fork")

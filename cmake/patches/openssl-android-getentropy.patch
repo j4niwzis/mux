@@ -1,0 +1,13 @@
+diff --git a/providers/implementations/rands/seeding/rand_unix.c b/providers/implementations/rands/seeding/rand_unix.c
+--- a/providers/implementations/rands/seeding/rand_unix.c
++++ b/providers/implementations/rands/seeding/rand_unix.c
+@@ -352,6 +352,8 @@ static ssize_t syscall_random(void *buf, size_t buflen)
+      * internally. So we need to check errno for ENOSYS
+      */
+-#if !defined(__DragonFly__) && !defined(__NetBSD__) && !defined(__FreeBSD__)
++/* Android before API 28 uses the kernel getrandom syscall below. */
++#if !defined(__DragonFly__) && !defined(__NetBSD__) && !defined(__FreeBSD__) \
++    && !(defined(__ANDROID__) && __ANDROID_API__ < 28)
+ #if defined(__GNUC__) && __GNUC__ >= 2 && defined(__ELF__) && !defined(__hpux)
+     extern int getentropy(void *buffer, size_t length) __attribute__((weak));
+ 

@@ -36,12 +36,14 @@ ANDROID_ROOT="$HOME/.cache/mux-android"
 ../ndk-tool/build/minimal-android-ndk \
   --root "$ANDROID_ROOT" --manifest "$PWD/android/toolchain-sources.json" \
   --clang clang-23 --llvm-bin /usr/lib/llvm-23/bin \
-  build toolchain-file framework-res apksigner
+  build runtimes toolchain-file framework-res apksigner
 ```
 
 The generated `cmake/target.cmake` supplies the Android compiler target,
 sysroot, API stubs, libc++ modules, and native app glue. Do not run the
 toolchain builder's generic `apk` step: Mux supplies its own packaging path.
+The `runtimes` step is required explicitly: generating the toolchain file
+alone does not build compiler-rt, libc++, libc++abi or libunwind.
 
 ## Small integration build
 

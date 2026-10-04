@@ -52,10 +52,10 @@ jobs:
           ref: 1c68644f3e953ba1fa373a0ba69d5a5a203dd377
           path: ndk-tool
       - id: toolchain
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ~/.cache/mux-android
-          key: mux-android-clang23-v1-${{ hashFiles('android/toolchain-sources.json', 'ndk-tool/src/**', 'ndk-tool/CMakeLists.txt') }}
+          key: mux-android-clang23-v2-${{ hashFiles('android/toolchain-sources.json', 'ndk-tool/src/**', 'ndk-tool/CMakeLists.txt') }}
       - name: Build toolchain and signer from source
         if: steps.toolchain.outputs.cache-hit != 'true'
         run: |
@@ -67,7 +67,20 @@ jobs:
             --root "$HOME/.cache/mux-android" \
             --manifest "$PWD/android/toolchain-sources.json" \
             --clang clang-23 --llvm-bin /usr/lib/llvm-23/bin --jobs 4 \
-            build toolchain-file framework-res apksigner
+            build runtimes toolchain-file framework-res apksigner
+          # toolchain-file builds the headers/stubs/CRT, but does not depend
+          # on the C++ runtimes or compiler-rt. Require the complete sysroot
+          # before caching it or attempting the application's CMake probes.
+          test -f "$HOME/.cache/mux-android/sysroot/usr/lib/libc++.modules.json"
+          for library in libc++.a libc++abi.a libunwind.a; do
+            test -f "$HOME/.cache/mux-android/sysroot/usr/lib/aarch64-linux-android/27/$library"
+          done
+      - name: Cache the completed toolchain
+        if: steps.toolchain.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.cache/mux-android
+          key: mux-android-clang23-v2-${{ hashFiles('android/toolchain-sources.json', 'ndk-tool/src/**', 'ndk-tool/CMakeLists.txt') }}
       - name: Rust Android target
         if: inputs.full_client
         run: rustup target add aarch64-linux-android

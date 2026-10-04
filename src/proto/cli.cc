@@ -17,6 +17,7 @@ import mux.proto.xmpp.client;
 import mux.proto.matrix.client;
 import mux.config;
 import mux.proto.clients;
+import mux.vault;
 
 namespace {
 
@@ -214,6 +215,14 @@ int main(int argc, char** argv) {
   const print_change sink{&model};
 
   try {
+    // Matrix keeps its keys in mux's data directory. Locate its vault header
+    // before starting an account; this terminal client cannot unlock it yet.
+    mux::vault::vault vault;
+    vault.place(mux::config::default_path().parent_path() / "vault.json");
+    if (vault.locked()) {
+      std::println(std::cerr, "Local data is encrypted; this CLI needs vault unlock support.");
+      return 1;
+    }
     // The account its address names, made by its protocol: what it keeps
     // (config::account_from, by the protocol that owns the address), then
     // its client (make_account, by ADL on what it keeps).
@@ -222,7 +231,7 @@ int main(int argc, char** argv) {
         [&](auto& kept) {
           if (argc >= 3)
             server_given(kept, argv[2], argc == 4 ? std::optional<std::int64_t>(std::stoi(argv[3])) : std::nullopt);
-          auto account = make_account(kept, loop, tls, std::nullopt, sink);
+          auto account = make_account(kept, loop, tls, vault, std::nullopt, sink);
           account->start();
           keyboard(loop, *account);
           loop.run();

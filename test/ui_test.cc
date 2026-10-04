@@ -248,11 +248,31 @@ struct stub {
   void set_interface_scale(int) {}
 };
 
+// What each test's window reads and paints with: kept until it is gone.
+struct ui_state {
+  mux::ui::palette colours;
+  mux::ui::emoji_kept emoji;
+  mux::ui::looks_shown looks;
+  mux::ui::ui_shared shared;
+  mux::ui::mux_paint paint;
+
+  ui_state() {
+    paint.looks = &looks;
+    paint.colours = &colours;
+  }
+
+  mux::ui::ui_needs<stub> needs(stub& program) {
+    return {.actions = &program, .colours = &colours, .emoji = &emoji,
+            .looks = &looks, .paint = &paint, .shared = &shared};
+  }
+};
+
 TEST(Composer, TakesWhatIsTypedIntoIt) {
   skia::SkFont font;
   skiff::paint::defaultFont() = &font;
   stub program;
-  scene::Scene<mux::ui::window<stub>> window{std::in_place, mux::ui::ui_needs<stub>{.actions = &program}};
+  ui_state ui;
+  scene::Scene<mux::ui::window<stub>> window{std::in_place, ui.needs(program)};
 
   const mux::account_id alice{mux::protocol::xmpp{}, "alice@example.com"};
   const mux::conversation_id with_bob{alice, "bob@example.com"};
@@ -291,7 +311,8 @@ TEST(Drawer, SlidesOutAfterALongWhileOut) {
   skiff::paint::defaultFont() = &font;
   skiff::paint::motionLevel() = skiff::paint::motion::full{};
   stub program;
-  scene::Scene<mux::ui::window<stub>> window{std::in_place, mux::ui::ui_needs<stub>{.actions = &program}};
+  ui_state ui;
+  scene::Scene<mux::ui::window<stub>> window{std::in_place, ui.needs(program)};
   mux::model model;
   window.root().main().show(model);
   const skia::SkRect viewport = skia::SkRect::MakeWH(1000.0f, 700.0f);
@@ -341,7 +362,8 @@ TEST(Timeline, ScrollsALongChatAtSixtyFrames) {
   skia::SkFont font(face);
   skiff::paint::defaultFont() = &font;
   stub program;
-  scene::Scene<mux::ui::window<stub>> window{std::in_place, mux::ui::ui_needs<stub>{.actions = &program}};
+  ui_state ui;
+  scene::Scene<mux::ui::window<stub>> window{std::in_place, ui.needs(program)};
 
   const mux::account_id alice{mux::protocol::matrix{}, "@alice:example.com"};
   const mux::conversation_id room{alice, "!room:example.com"};
@@ -387,7 +409,7 @@ TEST(Timeline, ScrollsALongChatAtSixtyFrames) {
     const auto b = clock::now();
     window.layoutIfNeeded(viewport);
     const auto c = clock::now();
-    window.draw(surface->getCanvas());
+    window.draw(ui.paint, surface->getCanvas());
     (void)window.finishFrame();
     const auto d = clock::now();
     updating += ms(b - a);
@@ -474,7 +496,8 @@ TEST(Timeline, AShortReplyToALongMessageIsNarrow) {
   skia::SkFont font(face);
   skiff::paint::defaultFont() = &font;
   stub program;
-  scene::Scene<mux::ui::window<stub>> window{std::in_place, mux::ui::ui_needs<stub>{.actions = &program}};
+  ui_state ui;
+  scene::Scene<mux::ui::window<stub>> window{std::in_place, ui.needs(program)};
   const mux::account_id alice{mux::protocol::matrix{}, "@alice:example.com"};
   const mux::conversation_id room{alice, "!room:example.com"};
   mux::model model;
@@ -524,7 +547,8 @@ TEST(Emoji, ThePanelHasRowsAndScrolls) {
   skia::SkFont font;
   skiff::paint::defaultFont() = &font;
   stub program;
-  scene::Scene<mux::ui::window<stub>> window{std::in_place, mux::ui::ui_needs<stub>{.actions = &program}};
+  ui_state ui;
+  scene::Scene<mux::ui::window<stub>> window{std::in_place, ui.needs(program)};
   window.root().open_emoji(700.0f, 650.0f);
   const skia::SkRect viewport = skia::SkRect::MakeWH(1100.0f, 720.0f);
   for (int i = 0; i < 4; ++i) {
@@ -561,7 +585,8 @@ TEST(Timeline, AOneLetterMessageIsNarrow) {
   skia::SkFont font(face);
   skiff::paint::defaultFont() = &font;
   stub program;
-  scene::Scene<mux::ui::window<stub>> window{std::in_place, mux::ui::ui_needs<stub>{.actions = &program}};
+  ui_state ui;
+  scene::Scene<mux::ui::window<stub>> window{std::in_place, ui.needs(program)};
   const mux::account_id alice{mux::protocol::matrix{}, "@alice:example.com"};
   const mux::conversation_id room{alice, "!room:example.com"};
   mux::model model;
@@ -600,7 +625,8 @@ TEST(Timeline, APicturePressedIsOpened) {
   skia::SkFont font;
   skiff::paint::defaultFont() = &font;
   stub program;
-  scene::Scene<mux::ui::window<stub>> window{std::in_place, mux::ui::ui_needs<stub>{.actions = &program}};
+  ui_state ui;
+  scene::Scene<mux::ui::window<stub>> window{std::in_place, ui.needs(program)};
   const mux::account_id alice{mux::protocol::matrix{}, "@alice:example.com"};
   const mux::conversation_id room{alice, "!room:example.com"};
   mux::model model;

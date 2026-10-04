@@ -68,12 +68,12 @@ endforeach()
 # modules as it is on alef's.
 
 # The libraries of this family, each pinned to a commit.
-# chevron, which tern reads the XML of streams with, newer than tern's own:
-# mux reads a message's HTML with it too (dialect::html). Declared first, it
-# is the one tern is built with as well.
+# chevron, which tern reads the XML of streams with: mux reads a message's
+# HTML with it too (dialect::html). Declared first, at the same commit as
+# tern's own pin, so both use the streaming reader and writer.
 cme_declare_port(NAME chevron PROVIDES chevron
   GITHUB_REPOSITORY j4niwzis/chevron
-  GIT_TAG c86b173be0f6a240cd3e022478a872aee804eb80
+  GIT_TAG bbc3e0d2a2b67f1cd039c582ef131bafa2d81348
   # What the pin is: a copy installed on the machine from before it (0.1,
   # before splice::remapped and chevron.escape) is passed over.
   VERSION 0.2
@@ -82,13 +82,13 @@ cme_declare_port(NAME chevron PROVIDES chevron
 cme_options(chevron "CHEVRON_TESTS OFF")
 cme_declare_port(NAME tern PROVIDES tern
   GITHUB_REPOSITORY j4niwzis/tern
-  GIT_TAG e2fc820634033a2c79aa7f3bf1cfd977036cedaa
+  GIT_TAG 28a2bfad133e61d072d36bf831a231a3adf503a3
   LICENSE AGPL-3.0-only
   TARGETS tern)
 cme_options(tern "TERN_TESTS OFF" "TERN_EXAMPLES OFF")
 cme_declare_port(NAME loom PROVIDES loom
   GITHUB_REPOSITORY j4niwzis/loom
-  GIT_TAG a8b8d8c88528864c8d3ee7320293d42bd6aacd76
+  GIT_TAG 28a330c3972fd6622a586db94213fd24266457bd
   LICENSE AGPL-3.0-only
   TARGETS loom)
 cme_options(loom "LOOM_TESTS OFF")
@@ -134,12 +134,12 @@ cme_options(alef "ALEF_TESTS OFF")
 cme_find_package(alef COMPONENTS precis idna grapheme line bidi emoji REQUIRED)
 
 
-# knot, at knot::raw as a rest member (4903935): what is not typed kept as
-# its JSON text, no tree -- loom asks for the same. The project's pin is the
-# one taken.
+# knot, with concrete writer frames and streaming raw JSON: what is not
+# typed is kept as JSON text, no tree. The project's pin is also used by
+# loom.
 cme_declare_port(NAME knot PROVIDES knot
   GITHUB_REPOSITORY j4niwzis/knot
-  GIT_TAG 3e99d385a6a3d9869d0366ce6194dfc5ee651763
+  GIT_TAG fa98812b7a63dde5d81dcd51f3ee0dceb6f98678
   LICENSE AGPL-3.0-only)
 
 # Found by itself, and linked by itself: mux imports it (a message's HTML),

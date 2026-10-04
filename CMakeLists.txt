@@ -73,7 +73,7 @@ endforeach()
 # is the one tern is built with as well.
 cme_declare_port(NAME chevron PROVIDES chevron
   GITHUB_REPOSITORY j4niwzis/chevron
-  GIT_TAG 8941c61344f5eb7aaae29ab11e5de944da6b36b7
+  GIT_TAG c86b173be0f6a240cd3e022478a872aee804eb80
   # What the pin is: a copy installed on the machine from before it (0.1,
   # before splice::remapped and chevron.escape) is passed over.
   VERSION 0.2

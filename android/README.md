@@ -118,4 +118,5 @@ runtime permission prompts, controllers, haptics or cameras.
 
 The manual `android` workflow builds the smoke APK by default; its
 `full_client` input opts into the full client. Both produce test-signed
-artifacts, never release packages.
+artifacts, never release packages. Both Android and desktop CI allocate
+32 GiB of swap for template-heavy compilation.

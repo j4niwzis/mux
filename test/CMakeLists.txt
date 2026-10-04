@@ -47,6 +47,12 @@ add_executable(mux-config-test config_test.cc)
 target_link_libraries(mux-config-test PRIVATE mux_config ${mux_gtest})
 add_test(NAME config COMMAND mux-config-test)
 
+# Regression for byte conversions instantiated across the std/splice/mux
+# module boundaries, including libstdc++'s range-adaptor lookup.
+add_executable(mux-bytes-test bytes_test.cc)
+target_link_libraries(mux-bytes-test PRIVATE splice ${mux_gtest})
+add_test(NAME bytes COMMAND mux-bytes-test)
+
 # The window's screens, pressed and typed into, with no window.
 if(MUX_UI)
   add_executable(mux-ui-test ui_test.cc)

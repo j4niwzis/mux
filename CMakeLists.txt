@@ -114,14 +114,14 @@ cme_find_package(OpenSSL REQUIRED)
 set(SPLICE_ERASE ${MUX_ERASE_HANDLERS} CACHE BOOL "splice::variant through tables outside a release build, as mux's handlers")
 cme_declare_port(NAME splice PROVIDES splice
   GITHUB_REPOSITORY j4niwzis/splice
-  GIT_TAG 4bc078254fb74570559fe7039ac92c6a2c1a0434
-  # What the pin is: a copy installed on the machine from before it (0.2,
-  # before splice.erased_call) is passed over.
-  VERSION 0.3
+  GIT_TAG c3dc7bcff228014456b6f4b925da01118cb9e6f1
+  # splice.bytes with the libstdc++ module lookup fix. An older installed
+  # copy has the same failing range-pipe operators as the old source pin.
+  VERSION 0.4.1
   LICENSE GPL-3.0-only
   TARGETS splice)
 cme_options(splice "SPLICE_TESTS OFF")
-cme_find_package(splice 0.3 REQUIRED)
+cme_find_package(splice 0.4.1 REQUIRED)
 
 # alef, which tern reads addresses with and skiff lays text out with, asked
 # for once with all that both of them need, before either asks: a later ask

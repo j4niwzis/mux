@@ -156,7 +156,7 @@ struct kept_settings {
   // What notifies, and the chats that chose everything or mentions alone
   // (a muted chat is in `muted`).
   mux::config::notification_settings notifications;
-  std::map<conversation_id, mux::config::notify_mode_t> notify_modes;
+  std::map<conversation_id, mux::config::notify_choices> notify_in;
   std::vector<mux::config::proxy_settings> proxies;
   // Why the accounts file could not be read, when it could not: then it is
   // not written over either.
@@ -248,32 +248,41 @@ struct kept_settings {
     bool show_name = true;
     bool show_text = true;
   };
-  [[nodiscard]] mux::config::notify_mode_t notify_mode_of(const conversation_id& chat) const {
+  // A chat's own notification choices -- or a space's -- as chosen for it:
+  // muted is notifications off.
+  [[nodiscard]] mux::config::notify_choices notify_choices_of(const conversation_id& chat) const {
+    const auto own = notify_in.find(chat);
+    auto out = own == notify_in.end() ? mux::config::notify_choices{} : own->second;
     if (muted.contains(chat))
-      return mux::config::notify_mode::off{};
-    const auto own = notify_modes.find(chat);
-    return own == notify_modes.end() ? mux::config::notify_mode_t{mux::config::notify_mode::by_default{}} : own->second;
+      out.on = false;
+    return out;
+  }
+  // A setting in effect for a chat: its own, else its space's (and theirs
+  // up), else its account's, else every chat's.
+  template <class Setting>
+  [[nodiscard]] bool notify_value(const conversation_id& chat, Setting) {
+    conversation_id at = chat;
+    for (int steps = 0; steps < 17; ++steps) {
+      if (const std::optional<bool> own = this->notify_choices_of(at).*Setting::chat)
+        return *own;
+      const auto up = space_above.find(at);
+      if (up == space_above.end())
+        break;
+      at = up->second;
+    }
+    if (const mux::config::account_t* account = this->settings_of(chat.account.address))
+      if (const std::optional<bool>& chosen = account->shared.*Setting::account)
+        return *chosen;
+    return Setting::of(notifications);
   }
   [[nodiscard]] notify_decision notify_for(const conversation_id& chat, bool mentions_me) {
-    const mux::config::account_t* account = this->settings_of(chat.account.address);
-    // A chat's own choice, else its account's, else every message.
-    const auto mode = splice::visit(
-        splice::overloaded{[&](mux::config::notify_mode::by_default) {
-                             return account ? mux::config::account_notify_mode_of(*account)
-                                            : mux::config::notify_mode_t{mux::config::notify_mode::by_default{}};
-                           },
-                           [](const auto& own) { return mux::config::notify_mode_t{own}; }},
-        this->notify_mode_of(chat));
-    const bool wanted = splice::visit(splice::overloaded{[](mux::config::notify_mode::off) { return false; },
-                                                   [&](mux::config::notify_mode::mentions) { return mentions_me; },
-                                                   [](const auto&) { return true; }},
-                                   mode);
-    if (!wanted)
+    namespace setting = mux::config::notify_setting;
+    if (!this->notify_value(chat, setting::on{}) || (this->notify_value(chat, setting::mentions{}) && !mentions_me))
       return {};
-    return {account ? mux::config::notify_of(*account).value_or(notifications.desktop) : notifications.desktop,
-            account ? mux::config::notify_sound_of(*account).value_or(notifications.sound) : notifications.sound,
-            account ? mux::config::notify_name_of(*account).value_or(notifications.show_name) : notifications.show_name,
-            account ? mux::config::notify_text_of(*account).value_or(notifications.show_text) : notifications.show_text};
+    return {.popup = true,
+            .sound = this->notify_value(chat, setting::sound{}),
+            .show_name = this->notify_value(chat, setting::name{}),
+            .show_text = this->notify_value(chat, setting::text{})};
   }
 
   // Which room events a chat shows, kind by kind: its own choices, its
@@ -345,7 +354,17 @@ struct kept_settings {
     this->proxies = saved.proxies.value_or(std::vector<mux::config::proxy_settings>{});
     this->notifications = saved.notifications.value_or(mux::config::notification_settings{});
     for (const auto& one : saved.chat_notify.value_or(std::vector<mux::config::chat_notify>{}))
-      this->notify_modes.insert_or_assign(chat_of(one.account, one.conversation), mux::config::notify_mode_of(one.mode));
+      this->notify_in.insert_or_assign(
+          chat_of(one.account, one.conversation),
+          mux::config::notify_choices{
+              .on = one.on,
+              .mentions = splice::visit(splice::overloaded{[](mux::config::notify_mode::mentions) { return std::optional<bool>(true); },
+                                                           [](mux::config::notify_mode::all) { return std::optional<bool>(false); },
+                                                           [](const auto&) { return std::optional<bool>(); }},
+                                        mux::config::notify_mode_of(one.mode)),
+              .name = one.name,
+              .text = one.text,
+              .sound = one.sound});
     for (const auto& one : saved.room_events.value_or(std::vector<mux::config::room_events_choice>{})) {
       const mux::conversation_id chat = chat_of(one.account, one.conversation);
       if (one.show)
@@ -441,11 +460,19 @@ struct kept_settings {
     out.sending = sending;
     out.history = history;
     out.notifications = notifications;
-    if (!notify_modes.empty()) {
-      out.chat_notify.emplace();
-      for (const auto& [chat, mode] : notify_modes)
-        out.chat_notify->push_back({chat.account.address, chat.id, mux::config::word_of(mode)});
-    }
+    if (!notify_in.empty())
+      out.chat_notify = notify_in | std::views::transform([](const auto& one) {
+                          const auto& [chat, chosen] = one;
+                          return mux::config::chat_notify{
+                              .account = chat.account.address,
+                              .conversation = chat.id,
+                              .mode = chosen.mentions.transform([](bool only) { return std::string(only ? "mentions" : "all"); }),
+                              .on = chosen.on,
+                              .name = chosen.name,
+                              .text = chosen.text,
+                              .sound = chosen.sound};
+                        }) |
+                        std::ranges::to<std::vector<mux::config::chat_notify>>();
     if (!room_events.empty() || !room_event_kinds.empty() || !receipts_shown_in.empty() || !jump_search_in.empty() ||
         !previews_shown_in.empty() || !typing_sent_in.empty() || !previews_direct_in.empty() || !wallpaper_in.empty() || !bubbles_in.empty() ||
         !panels_in.empty() || !forums.empty() || !hidden_from_home.empty()) {

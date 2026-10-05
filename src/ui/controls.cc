@@ -741,6 +741,69 @@ struct show_hide_choice : nodes::Stack {
     parts.rows.reserve(1);
     parts.rows.emplace_back(a, colours, at, now);
   }
+  // Shown again as it is now: said at every chat's level, whatever was saved.
+  void show(std::optional<bool> now) {
+    auto& one = parts.rows.front();
+    one.show_choice(has_level_above(one.level) ? now : std::optional<bool>(now.value_or(Setting::unsaid)));
+  }
+};
+
+// Notifications, the same rows at every level: on, of mentions alone, the
+// sender's name, the text, a sound -- each chosen through set_notify_choice.
+template <class Which>
+struct notify_setting_base {
+  static constexpr bool unsaid = Which::unsaid;
+  template <class Actions>
+  static void set(Actions& actions, choice_level_t level, std::optional<bool> now) {
+    actions.set_notify_choice(level, config::notify_setting_t{Which{}}, now);
+  }
+};
+struct notify_on_setting : notify_setting_base<config::notify_setting::on> {
+  static constexpr std::string_view label = "Notifications";
+  static constexpr std::string_view yes = "On", no = "Off";
+};
+struct notify_mentions_setting : notify_setting_base<config::notify_setting::mentions> {
+  static constexpr std::string_view label = "Of messages";
+  static constexpr std::string_view yes = "Mentions", no = "All";
+};
+struct notify_name_setting : notify_setting_base<config::notify_setting::name> {
+  static constexpr std::string_view label = "The sender's name";
+  static constexpr std::string_view yes = "Show", no = "Hide";
+};
+struct notify_text_setting : notify_setting_base<config::notify_setting::text> {
+  static constexpr std::string_view label = "The message's text";
+  static constexpr std::string_view yes = "Show", no = "Hide";
+};
+struct notify_sound_setting : notify_setting_base<config::notify_setting::sound> {
+  static constexpr std::string_view label = "Sound";
+  static constexpr std::string_view yes = "Play", no = "Silent";
+};
+template <class Actions>
+struct notify_choice_rows : nodes::Stack {
+  struct parts_t {
+    show_hide_choice<Actions, notify_on_setting> on;
+    show_hide_choice<Actions, notify_mentions_setting> mentions;
+    show_hide_choice<Actions, notify_name_setting> name;
+    show_hide_choice<Actions, notify_text_setting> text;
+    show_hide_choice<Actions, notify_sound_setting> sound;
+  } parts;
+  notify_choice_rows(Actions* a, const palette& colours, choice_level_t level, const config::notify_choices& now, float gap = 8.0f)
+      : parts{.on = {a, colours, level, now.on},
+              .mentions = {a, colours, level, now.mentions},
+              .name = {a, colours, level, now.name},
+              .text = {a, colours, level, now.text},
+              .sound = {a, colours, level, now.sound}} {
+    this->setGap(gap);
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+  }
+  void show(const config::notify_choices& now) {
+    auto& [on, mentions, name, text, sound] = parts;
+    on.show(now.on);
+    mentions.show(now.mentions);
+    name.show(now.name);
+    text.show(now.text);
+    sound.show(now.sound);
+  }
 };
 
 // Link previews: shown, where nothing says otherwise.

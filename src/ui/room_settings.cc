@@ -41,7 +41,8 @@ struct room_settings_facts {
   bool encrypted = false;
   // Its protocol's part (Matrix: its rules and levels), for its pages.
   room_part_t theirs;
-  config::notify_mode_t notify_mode = config::notify_mode::by_default{};
+  // Its notifications, as chosen for it (muted: off).
+  config::notify_choices notify;
   // Which of its room events it shows, as chosen for it: none chosen is as
   // its account's.
   std::optional<bool> events_all;
@@ -282,11 +283,6 @@ struct room_settings : nodes::Stack {
       box->show_tab(tab);
     }
   };
-  struct notify_as {
-    room_settings* box;
-    config::notify_mode_t mode;
-    void operator()() const { box->notify(mode); }
-  };
 
   // ---- the tabs down the left ------------------------------------------------
   struct tab_row : pressable<nodes::Stack> {
@@ -406,25 +402,22 @@ struct room_settings : nodes::Stack {
 
   // ---- Notifications ----------------------------------------------------------------
   struct notifications_page : nodes::Stack {
-    using choice = radio_choice<notify_as>;
     struct parts_t {
       nodes::Text heading;
-      choice by_default, all, mentions, off;
+      notify_choice_rows<Actions> choices;
+      nodes::Text note;
     } parts;
-    notifications_page(Actions*, room_settings* box, const room_settings_facts& facts)
+    notifications_page(Actions* a, room_settings* box, const room_settings_facts& facts)
         : parts{.heading = tab_heading(*box->colours_, "Notifications"),
-                .by_default = choice(*box->colours_, "Default", "As your account's notifications are set up",
-                                     {box, config::notify_mode::by_default{}},
-                                     is_rule<config::notify_mode::by_default>(facts.notify_mode), true),
-                .all = choice(*box->colours_, "All messages", "Get notified of every message", {box, config::notify_mode::all{}},
-                              is_rule<config::notify_mode::all>(facts.notify_mode), true),
-                .mentions = choice(*box->colours_, "@mentions & keywords", "Get notified only with mentions and keywords",
-                                   {box, config::notify_mode::mentions{}},
-                                   is_rule<config::notify_mode::mentions>(facts.notify_mode), true),
-                .off = choice(*box->colours_, "Off", "You won't get any notifications", {box, config::notify_mode::off{}},
-                              is_rule<config::notify_mode::off>(facts.notify_mode), true)} {
-      this->setGap(4.0f);
+                .choices = notify_choice_rows<Actions>(a, *box->colours_, choice_level::chat{}, facts.notify),
+                .note = nodes::Text(facts.space ? "For every chat in this space, unless the chat chooses again; Default is "
+                                                  "as the space above it, or the account, says."
+                                                : "Default is as the space it is in, or the account, says.",
+                                    12.0f, box->colours_->dim)} {
+      this->setGap(10.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
+      parts.note.setWrapped(true);
+      parts.note.apply({.fillX = true});
     }
   };
 
@@ -553,11 +546,6 @@ struct room_settings : nodes::Stack {
     if (std::exchange(to_top, false))
       parts.body.parts.content.scrollTo(0.0f);
     this->invalidateLayout();
-  }
-  void notify(const config::notify_mode_t& mode) {
-    facts.notify_mode = mode;
-    actions->set_chat_notify(mode);
-    this->show_tab(tab);
   }
 };
 

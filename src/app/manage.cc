@@ -112,7 +112,7 @@ class manage_part {
                                        .other_aliases = chat->other_aliases,
                                        .encrypted = chat->encrypted,
                                        .theirs = chat->theirs,
-                                       .notify_mode = k_->notify_mode_of(chat->id),
+                                       .notify = k_->notify_choices_of(chat->id),
                                        .events_all = k_->room_events.contains(chat->id)
                                                          ? std::optional<bool>(k_->room_events.at(chat->id))
                                                          : std::nullopt,

@@ -134,57 +134,45 @@ class preferences_part {
     }
     s_->refresh_due = true;
   }
-  void apply(const request::flip_account_notify&) {
-    s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-      auto& kept = mux::config::notify_in(account);
-      kept = !kept.value_or(k_->notifications.desktop);
-      (void)k_->write();
-    });
-  }
-  void apply(const request::flip_account_notify_name&) {
-    s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-      auto& kept = mux::config::notify_name_in(account);
-      kept = !kept.value_or(k_->notifications.show_name);
-      (void)k_->write();
-    });
-  }
-  void apply(const request::flip_account_notify_text&) {
-    s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-      auto& kept = mux::config::notify_text_in(account);
-      kept = !kept.value_or(k_->notifications.show_text);
-      (void)k_->write();
-    });
-  }
-  // Every message: as every account's, nothing kept; mentions: kept.
-  void apply(const request::set_account_notify_mode& one) {
-    s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-      auto& kept = mux::config::notify_mode_in(account);
-      kept = splice::visit(splice::overloaded{[](mux::config::notify_mode::mentions) { return std::optional<std::string>("mentions"); },
-                                              [](const auto&) { return std::optional<std::string>(); }},
-                           one.mode);
-      (void)k_->write();
-    });
-  }
-  void apply(const request::flip_account_notify_sound&) {
-    s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-      auto& kept = mux::config::notify_sound_in(account);
-      kept = !kept.value_or(k_->notifications.sound);
-      (void)k_->write();
-    });
-  }
-  void apply(const request::set_chat_notify& one) {
-    const auto chosen = s_->managed();
-    if (!chosen)
-      return;
-    k_->notify_modes.erase(*chosen);
-    k_->muted.erase(*chosen);
-    splice::visit(splice::overloaded{[&](mux::config::notify_mode::off) { k_->muted.insert(*chosen); },
-                               [&](mux::config::notify_mode::by_default) {},
-                               [&](const auto& own) { k_->notify_modes.insert_or_assign(*chosen, own); }},
-               one.mode);
+  // A notification setting at a level: every chat's -- said, the client's
+  // own --, the chosen account's, or the chat or space being managed.
+  void apply(const request::set_notify_choice& one) {
+    splice::visit([&](auto which) { this->set_notify(one.level, which, one.value); }, one.which);
     (void)k_->write();
     s_->refresh_due = true;
   }
+  template <class Setting>
+  void set_notify(const mux::choice_level_t& level, Setting which, std::optional<bool> value) {
+    splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) { Setting::set(k_->notifications, value.value_or(Setting::unsaid)); },
+                                     [&](mux::choice_level::account) {
+                                       s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+                                         account.shared.*Setting::account = value;
+                                       });
+                                     },
+                                     [&](mux::choice_level::chat) {
+                                       if (const auto chosen = s_->managed())
+                                         this->set_chat_notify(*chosen, which, value);
+                                     }},
+                  level);
+  }
+  // A chat's (or space's): kept with its others, and none kept where all
+  // are as the level above.
+  template <class Setting>
+  void set_chat_notify(const mux::conversation_id& chat, Setting, std::optional<bool> value) {
+    auto& own = k_->notify_in[chat];
+    own.*Setting::chat = value;
+    if (own == mux::config::notify_choices{})
+      k_->notify_in.erase(chat);
+  }
+  // Notifications off is muted -- the chat list's mute, the same.
+  void set_chat_notify(const mux::conversation_id& chat, mux::config::notify_setting::on which, std::optional<bool> value) {
+    if (value == false)
+      k_->muted.insert(chat);
+    else
+      k_->muted.erase(chat);
+    this->set_chat_notify<mux::config::notify_setting::on>(chat, which, value == true ? value : std::nullopt);
+  }
+
   // Which room events show, as chosen at a level: all of them, or one kind --
   // none said, as the level under says.
   void apply(const request::set_room_event_kind& one) {

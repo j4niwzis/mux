@@ -175,12 +175,6 @@ struct storage_page : nodes::Stack {
 // the desktop or not, the sender's name and the text in it or not, a sound
 // or not; and what shows it -- the desktop's own service, or mux's window.
 template <class Actions>
-struct flip_notify_flag {
-  Actions* actions = nullptr;
-  config::notify_flag_t flag;
-  void operator()() const { actions->flip_notify(flag); }
-};
-template <class Actions>
 struct choose_notify_backend {
   Actions* actions = nullptr;
   config::notify_backend_t backend;
@@ -189,7 +183,6 @@ struct choose_notify_backend {
 template <class Actions>
 struct notifications_page : nodes::Stack {
   using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
-  using flag_row = switch_row<flip_notify_flag<Actions>>;
   using push_row = switch_row<ask<Actions, &Actions::flip_unified_push>>;
   using backend_segment = segment<choose_notify_backend<Actions>>;
   struct backend_row : nodes::Stack {
@@ -207,11 +200,7 @@ struct notifications_page : nodes::Stack {
   struct parts_t {
     header_t header;
     nodes::Text title;
-    flag_row desktop;
-    flag_row name;
-    flag_row text;
-    nodes::Text sound_title;
-    flag_row sound;
+    notify_choice_rows<Actions> choices;
     nodes::Text backend_title;
     backend_row backend;
     nodes::Text note;
@@ -223,12 +212,8 @@ struct notifications_page : nodes::Stack {
       : notifications_page(*n.colours, n.actions, now) {}
   notifications_page(const palette& colours, Actions* a, const config::notification_settings& now)
       : parts{.header = header_t(colours, "Notifications", {a}, {a}, true, true),
-              .title = section_title(colours, "DESKTOP NOTIFICATIONS"),
-              .desktop = flag_row(colours, "Desktop notifications", {a, config::notify_flag::desktop{}}),
-              .name = flag_row(colours, "Show the sender's name", {a, config::notify_flag::show_name{}}),
-              .text = flag_row(colours, "Show the message's text", {a, config::notify_flag::show_text{}}),
-              .sound_title = section_title(colours, "SOUND"),
-              .sound = flag_row(colours, "Play a sound", {a, config::notify_flag::sound{}}),
+              .title = section_title(colours, "NOTIFICATIONS"),
+              .choices = notify_choice_rows<Actions>(a, colours, choice_level::everywhere{}, config::notify_choices_of(now), 4.0f),
               .backend_title = section_title(colours, "SHOWN BY"),
               .backend = backend_row(colours, a),
               .note = note_text(colours, "System asks the desktop's own notification service (org.freedesktop.Notifications); Built in "
@@ -239,7 +224,8 @@ struct notifications_page : nodes::Stack {
                           "KDE's), which wakes mux at once. Off, nothing is given to the servers, and mux only learns "
                           "of messages while it runs.")} {
     fState.apply({.fill = true});
-    for (nodes::Text* title : {&parts.title, &parts.sound_title, &parts.backend_title, &parts.push_title})
+    parts.choices.apply({.padding = {0.0f, 20.0f, 0.0f, 20.0f}});
+    for (nodes::Text* title : {&parts.title, &parts.backend_title, &parts.push_title})
       title->apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
     for (nodes::Text* note : {&parts.note, &parts.push_note}) {
       note->setWrapped(true);
@@ -248,10 +234,7 @@ struct notifications_page : nodes::Stack {
     this->show(now);
   }
   void show(const config::notification_settings& now) {
-    parts.desktop.parts.toggle.setOnNow(now.desktop);
-    parts.name.parts.toggle.setOnNow(now.show_name);
-    parts.text.parts.toggle.setOnNow(now.show_text);
-    parts.sound.parts.toggle.setOnNow(now.sound);
+    parts.choices.show(config::notify_choices_of(now));
     parts.push.parts.toggle.setOnNow(now.unified_push.value_or(false));
     const bool native = splice::visit(splice::overloaded{[](config::notify_backend::native) { return true; },
                                               [](const auto&) { return false; }},

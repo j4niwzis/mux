@@ -105,23 +105,47 @@ struct call_buttons : nodes::Stack {
     Actions* actions;
     void operator()() const { actions->hang_up(); }
   };
+  // Over: called again, as Element's Call back; or put away.
+  struct call_back_it {
+    call_buttons* buttons;
+    void operator()() const {
+      if (buttons->in_)
+        buttons->actions_->start_call(*buttons->in_);
+    }
+  };
+  struct dismiss_it {
+    Actions* actions;
+    void operator()() const { actions->dismiss_call(); }
+  };
   struct parts_t {
     icon_button<mute_it> mute;
     icon_button<decline_it> decline;
     icon_button<hang_up_it> hang_up;
     icon_button<accept_it> accept;
+    icon_button<call_back_it> call_back;
+    icon_button<dismiss_it> dismiss;
   } parts;
   const palette* colours_;
+  Actions* actions_;
+  std::optional<conversation_id> in_;
+  // Ended, it goes by itself in a moment: frames asked for until then, so
+  // the program sees the moment come.
+  bool ending_ = false;
+  [[nodiscard]] bool wantsTick() const { return ending_; }
+  void update(double) {}
   call_buttons(const palette& colours, Actions* a, float size)
       : parts{.mute = icon_button<mute_it>(colours, icon::microphone{}, {a}),
               .decline = icon_button<decline_it>(colours, icon::hang_up{}, {a}),
               .hang_up = icon_button<hang_up_it>(colours, icon::hang_up{}, {a}),
-              .accept = icon_button<accept_it>(colours, icon::phone{}, {a})},
-        colours_(&colours) {
+              .accept = icon_button<accept_it>(colours, icon::phone{}, {a}),
+              .call_back = icon_button<call_back_it>(colours, icon::phone{}, {this}),
+              .dismiss = icon_button<dismiss_it>(colours, icon::close{}, {a})},
+        colours_(&colours),
+        actions_(a) {
     this->setHorizontal();
     this->setGap(size / 2.0f);
     fState.apply({.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle});
-    auto& [mute, decline, hang_up, accept] = parts;
+    auto& [mute, decline, hang_up, accept, call_back, dismiss] = parts;
     const auto round = [&](auto& button, skia::SkColor plate, skia::SkColor hover) {
       button.apply({.width = size, .height = size, .cornerRadius = size / 2.0f, .background = plate, .hoverBackground = hover,
                     .focusBackground = hover});
@@ -130,13 +154,19 @@ struct call_buttons : nodes::Stack {
     round(decline, kHangUpRed, kHangUpRed);
     round(hang_up, kHangUpRed, kHangUpRed);
     round(accept, kAnswerGreen, kAnswerGreen);
-    for (auto* white : {&decline.parts.mark, &hang_up.parts.mark, &accept.parts.mark})
+    round(call_back, kAnswerGreen, kAnswerGreen);
+    round(dismiss, colours.tile, colours.chosen);
+    for (auto* white : {&decline.parts.mark, &hang_up.parts.mark, &accept.parts.mark, &call_back.parts.mark})
       white->setColour(skia::colorSetARGB(255, 255, 255, 255));
   }
   void show(const call_view& view) {
-    auto& [mute, decline, hang_up, accept] = parts;
+    auto& [mute, decline, hang_up, accept, call_back, dismiss] = parts;
     const bool ringing = rings_here(view);
     const bool ended = has_ended(view);
+    in_ = view.in;
+    ending_ = ended;
+    call_back.setVisible(ended && view.available);
+    dismiss.setVisible(ended);
     mute.setVisible(!ringing && !ended);
     mute.parts.mark.setShape(view.muted ? shape_of(icon::microphone_off{}) : shape_of(icon::microphone{}));
     hang_up.setVisible(!ringing && !ended);

@@ -46,6 +46,14 @@ class calls_part {
     s_->net->call_servers(one.in.account);
     this->show();
   }
+  // An ended call put away before its moment is up.
+  void apply(const request::dismiss_call&) {
+    if (current_)
+      return;
+    ended_.reset();
+    shown_.reset();
+    s_->root().hide_call();
+  }
   void apply(const request::call_chosen&) {
     if (const auto& chosen = s_->root().main().chosen)
       this->apply(request::start_call{*chosen});

@@ -30,6 +30,10 @@ class workers {
     ready_.notify_all();
   }
 
+  // What wakes the window when a job is done: its event's kind, as main
+  // registered it -- given once the program is wired.
+  void wake_with(std::uint32_t kind) { kind_.store(kind); }
+
   // A job, to be run on a worker.
   void run(job_t job) {
     {
@@ -71,10 +75,15 @@ class workers {
         std::lock_guard held(lock_);
         done_.push_back(std::move(done));
       }
-      wake_window{}();
+      // The window woken by the kind main registered: a default one is kind
+      // 0, no event the window looks at -- what the job made then waited
+      // until something else woke it (a picture decoded and not shown
+      // until the network said something).
+      wake_window{kind_.load()}();
     }
   }
 
+  std::atomic<std::uint32_t> kind_{0};
   std::mutex lock_;
   std::condition_variable_any ready_;
   std::deque<job_t> jobs_;

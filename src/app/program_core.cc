@@ -234,6 +234,7 @@ void app::wire() {
   shared.kept = this;
   shared.vault = vault;
   shared.work = &work;
+  work.wake_with(wake.kind);
   shared.system_dialogs = &system_dialogs;
   shared.wake = &wake;
   shared.speaker = &speaker;

@@ -28,6 +28,7 @@ import :header;
 import :info;
 import :composer;
 import :timeline;
+import :call_bar;
 
 export import :conversations_side;
 
@@ -570,6 +571,8 @@ struct conversations_screen : nodes::Stack {
       selection_bar<Actions> selection;
       // The pinned message, under the head, where the chat has any.
       pinned_t pinned;
+      // A call in this chat, as Element's call view: under the head.
+      std::optional<call_panel<Actions>> call;
       // Its protocol's own node under the head (make_head_view).
       std::optional<head_view_holder> their_head;
       timeline_area<Actions> area;
@@ -591,6 +594,23 @@ struct conversations_screen : nodes::Stack {
     empty_state& empty = parts.empty;
     select_hint& hint = parts.hint;
     explicit chat_column(const ui_needs<Actions>& n) : chat_column(n, n.actions) {}
+    const ui_needs<Actions>* needs_ = nullptr;
+    // The call shown in it, or none.
+    void show_call(const call_view& view) {
+      if (parts.call)
+        parts.call->show(view);
+      else
+        parts.call.emplace(*needs_, view);
+      this->invalidateLayout();
+      this->markDamaged();
+    }
+    void hide_call() {
+      if (!parts.call)
+        return;
+      parts.call.reset();
+      this->invalidateLayout();
+      this->markDamaged();
+    }
     chat_column(const ui_needs<Actions>& n, Actions* a)
         : parts{.search = search_bar<Actions>(n),
                 .selection = selection_bar<Actions>(n),
@@ -599,6 +619,7 @@ struct conversations_screen : nodes::Stack {
                 .trust_warning = nodes::Text("", 13.0f, n.colours->text),
                 .line = composer_bar<Actions>(n),
                 .empty = empty_state(*n.colours, a)} {
+      needs_ = &n;
       header.apply({.fillX = true, .height = chat_header<Actions>::kHeight});
       parts.pinned.apply({.fillX = true, .height = pinned_bar<pinned_press>::kHeight});
       parts.pinned.setVisible(false);

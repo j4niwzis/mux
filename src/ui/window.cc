@@ -446,9 +446,17 @@ struct window : scene::Node {
     now.invalidateLayout();
     now.markDamaged();
   }
-  // The call bar, as the call is now; and gone, with the call.
+  // A call, as the call is now: in its chat, where that is the one shown
+  // and it does not ring here; else the card at the top of the window. And
+  // gone, with the call.
   void show_call(const call_view& view) {
     auto& now = *parts.now;
+    if (view.in_view && !rings_here(view)) {
+      this->hide_call_card();
+      this->main().chat.show_call(view);
+      return;
+    }
+    this->main().chat.hide_call();
     if (now.parts.call_up)
       now.parts.call_up->show(view);
     else
@@ -457,6 +465,10 @@ struct window : scene::Node {
     now.markDamaged();
   }
   void hide_call() {
+    this->main().chat.hide_call();
+    this->hide_call_card();
+  }
+  void hide_call_card() {
     auto& now = *parts.now;
     if (!now.parts.call_up)
       return;

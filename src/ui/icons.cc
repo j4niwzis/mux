@@ -44,6 +44,9 @@ struct down {};    // a chevron down
 struct download {};
 struct compass {};  // Explore rooms
 struct phone {};   // a handset: a call
+struct hang_up {};  // the handset turned down: a call ended
+struct microphone {};
+struct microphone_off {};  // the microphone, crossed out: muted
 struct threads {};  // a room's threads  // an arrow down onto a line: saved to the disk
 struct reply {};   // tdesktop's historyReplyIcon: an arrow turned back
 struct pencil {};  // tdesktop's historyEditIcon
@@ -59,7 +62,8 @@ using icon_t = splice::variant<icon::none, icon::person, icon::gear, icon::power
                             icon::close, icon::info, icon::people, icon::add_person, icon::bell, icon::sliders,
                             icon::leave, icon::check, icon::clip, icon::send, icon::eye, icon::dot, icon::minus,
                             icon::reply, icon::pencil, icon::search, icon::up, icon::down, icon::smile,
-                            icon::play, icon::pause, icon::download, icon::compass, icon::threads, icon::phone>;
+                            icon::play, icon::pause, icon::download, icon::compass, icon::threads, icon::phone,
+                            icon::hang_up, icon::microphone, icon::microphone_off>;
 
 // Each icon's shape, as data, in points from the middle of its box -- about
 // 20 across -- for nodes::Icon to draw.
@@ -90,6 +94,24 @@ namespace steps = nodes::path_step;
                          steps::line{-5.38f, -1.21f},
                          steps::close{}}},
             0.0f, true}}};
+}
+// The handset turned down, as Element's hang-up button has it.
+[[nodiscard]] inline IconShape shape_of(icon::hang_up) {
+  IconShape out = shape_of(icon::phone{});
+  out.rotation = 135.0f;
+  return out;
+}
+// A microphone: its head, the holder round it, its stem and foot.
+[[nodiscard]] inline IconShape shape_of(icon::microphone) {
+  return {{{marks::rect{-3.2f, -9.0f, 3.2f, 3.0f, 3.2f}, 1.8f},
+           {marks::arc{-6.5f, -4.5f, 6.5f, 6.5f, 0.0f, 180.0f}, 1.8f},
+           {marks::line{0.0f, 6.5f, 0.0f, 9.0f}, 1.8f},
+           {marks::line{-3.5f, 9.0f, 3.5f, 9.0f}, 1.8f}}};
+}
+[[nodiscard]] inline IconShape shape_of(icon::microphone_off) {
+  IconShape out = shape_of(icon::microphone{});
+  out.marks.push_back({marks::line{-8.0f, -8.0f, 8.0f, 8.0f}, 1.8f});
+  return out;
 }
 [[nodiscard]] inline IconShape shape_of(icon::person) {
   return {{{marks::circle{0.0f, -4.0f, 3.8f}}, {marks::arc{-7.5f, 2.0f, 7.5f, 17.0f, 180.0f, 180.0f}}}};

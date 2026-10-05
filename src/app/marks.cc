@@ -31,20 +31,23 @@ class marks_part {
     const auto read = knot::try_read<mux::config::marks_file>(std::string_view(*opened));
     if (!read)
       return;
+    for (const mux::config::chat_marks& chat : read->chats)
+      this->hold({{mux::ui::protocol_of(chat.account), chat.account}, chat.conversation}, chat);
+  }
+  // A chat's marks held until the chat is here, and put in then: read back
+  // at the start, or kept from the last save while the chat was gone.
+  void hold(const mux::conversation_id& id, const mux::config::chat_marks& chat) {
     const auto at = [](std::int64_t ms) {
       return std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(ms));
     };
-    for (const mux::config::chat_marks& chat : read->chats) {
-      const mux::conversation_id id{{mux::ui::protocol_of(chat.account), chat.account}, chat.conversation};
-      not_here_.insert_or_assign(id, chat);
-      // What was seen first, so that nothing seen comes back as unread.
-      if (chat.seen)
-        pending_.emplace_back(id, mux::change_t{mux::change::marks_seen{id, *chat.seen}});
-      for (const auto& mark : chat.mentions)
-        pending_.emplace_back(id, mux::change_t{mux::change::mentioned{id, mark.event, at(mark.at)}});
-      for (const auto& mark : chat.reactions)
-        pending_.emplace_back(id, mux::change_t{mux::change::reacted_to_mine{id, mark.event, mark.target, at(mark.at)}});
-    }
+    not_here_.insert_or_assign(id, chat);
+    // What was seen first, so that nothing seen comes back as unread.
+    if (chat.seen)
+      pending_.emplace_back(id, mux::change_t{mux::change::marks_seen{id, *chat.seen}});
+    for (const auto& mark : chat.mentions)
+      pending_.emplace_back(id, mux::change_t{mux::change::mentioned{id, mark.event, at(mark.at)}});
+    for (const auto& mark : chat.reactions)
+      pending_.emplace_back(id, mux::change_t{mux::change::reacted_to_mine{id, mark.event, mark.target, at(mark.at)}});
   }
 
   // The marks written, as the model has them and as they were read of the
@@ -53,6 +56,7 @@ class marks_part {
     if (s_->demo())
       return;
     mux::config::marks_file out;
+    std::map<mux::conversation_id, mux::config::chat_marks> now;
     const auto kept = [](const mux::unread_mark& mark) {
       return mux::config::kept_mark{mark.event, mark.target, static_cast<std::int64_t>(mark.at.time_since_epoch().count())};
     };
@@ -65,8 +69,18 @@ class marks_part {
           chat.seen = one.seen_marks;
         std::ranges::transform(one.unread_mentions, std::back_inserter(chat.mentions), kept);
         std::ranges::transform(one.unread_reactions, std::back_inserter(chat.reactions), kept);
-        out.chats.push_back(std::move(chat));
+        now.insert_or_assign(one.id, std::move(chat));
       }
+    // A chat gone from the model since the last save -- its account made
+    // again (a proxy changed), a room out of a sliding sync's window, an
+    // account taken away and added again -- keeps its marks: held as those
+    // read back are, and put back as it comes. Written from the model alone,
+    // its seen list was lost, and its mentions came back unread.
+    for (const auto& [id, chat] : saved_)
+      if (!now.contains(id) && !not_here_.contains(id))
+        this->hold(id, chat);
+    saved_ = now;
+    std::ranges::copy(now | std::views::values, std::back_inserter(out.chats));
     std::ranges::copy(not_here_ | std::views::values, std::back_inserter(out.chats));
     (void)s_->vault->write_file(mux::config::state_path("marks.json"), knot::to_json_string(out));
   }
@@ -266,6 +280,9 @@ class marks_part {
   // written again as they were until then, not dropped by a save before.
   std::vector<std::pair<mux::conversation_id, mux::change_t>> pending_;
   std::map<mux::conversation_id, mux::config::chat_marks> not_here_;
+  // What the last save wrote of the chats the model had: carried where one
+  // has gone since.
+  std::map<mux::conversation_id, mux::config::chat_marks> saved_;
 };
 
 }  // namespace mux::app

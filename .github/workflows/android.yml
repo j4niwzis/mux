@@ -68,7 +68,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: j4niwzis/minimal-android-ndk.cpp
-          ref: ce85100f84c88a1b3c9420d8d7f6cdda3b671764
+          ref: 517d2f85f613dc07c71b98bad79e424a46e1a4c3
           path: ndk-tool
       - name: Toolchain manifest for the ABI
         id: abi

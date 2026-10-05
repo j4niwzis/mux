@@ -1,0 +1,11 @@
+/* What libmux.so exports: NativeActivity's entry point, and JNI_OnLoad --
+   SDL's, from its static archive -- which registers the native methods of
+   the generated DEX's callback classes when it loads this library. Nothing
+   else: everything linked in, SDL, libc++ and the rest, stays inside. */
+{
+  global:
+    ANativeActivity_onCreate;
+    JNI_OnLoad;
+  local:
+    *;
+};

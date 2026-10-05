@@ -43,14 +43,14 @@ function(mux_add_android_apk target)
       CACHE FILEPATH "Application manifest")
   set(manifest "${MUX_ANDROID_MANIFEST}")
   set(packager "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../tools/android_apk.py")
-  set(search --library-dir "$<TARGET_FILE_DIR:SDL3::SDL3>")
-  # Source-built shared dependencies can live anywhere below the build tree.
-  list(APPEND search --library-dir "${CMAKE_BINARY_DIR}")
+  # Source-built shared dependencies, if any, can live anywhere below the
+  # build tree. SDL is not one: it is linked into the application statically.
+  set(search --library-dir "${CMAKE_BINARY_DIR}")
   foreach(dir IN LISTS CMAKE_PREFIX_PATH MUX_ANDROID_LIBRARY_DIRS)
     list(APPEND search --library-dir "${dir}")
   endforeach()
   add_custom_command(OUTPUT "${out}/classes.dex"
-    COMMAND "${sdl-native-dex_PROGRAM}" --out "${out}/classes.dex"
+    COMMAND "${sdl-native-dex_PROGRAM}" --out "${out}/classes.dex" --library "$<TARGET_FILE_BASE_NAME:${target}>"
     DEPENDS "${sdl-native-dex_PROGRAM}" VERBATIM)
   add_custom_command(OUTPUT "${out}/mux-resources.apk"
     COMMAND "${MUX_AAPT2}" link -o "${out}/mux-resources.apk"
@@ -61,11 +61,11 @@ function(mux_add_android_apk target)
   add_custom_command(OUTPUT "${out}/mux-unsigned.apk"
     COMMAND "${Python3_EXECUTABLE}" "${packager}"
       --resources "${out}/mux-resources.apk" --dex "${out}/classes.dex"
-      --library "$<TARGET_FILE:${target}>" --library "$<TARGET_FILE:SDL3::SDL3>"
+      --library "$<TARGET_FILE:${target}>"
       ${search} --readelf "${MUX_READELF}" --abi "${MUX_ANDROID_ABI}" --out "${out}/mux-unaligned.apk"
     COMMAND "${MUX_ZIPALIGN}" -f 4 "${out}/mux-unaligned.apk" "${out}/mux-unsigned.apk"
     COMMAND "${MUX_ZIPALIGN}" -c 4 "${out}/mux-unsigned.apk"
-    DEPENDS ${target} SDL3::SDL3 "${out}/classes.dex" "${out}/mux-resources.apk" "${packager}"
+    DEPENDS ${target} "${out}/classes.dex" "${out}/mux-resources.apk" "${packager}"
       "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../android/abis.json"
     VERBATIM COMMAND_EXPAND_LISTS)
   add_custom_target(mux-apk-unsigned DEPENDS "${out}/mux-unsigned.apk")

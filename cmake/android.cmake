@@ -40,10 +40,27 @@ if(MUX_ANDROID_SDL_SOURCE_DIR)
   list(APPEND mux_sdl_source SOURCE_DIR "${MUX_ANDROID_SDL_SOURCE_DIR}")
 endif()
 cme_declare_port(NAME sdl3 PROVIDES SDL3 sdl3 VERSION 3.5.0
-  GITHUB_REPOSITORY j4niwzis/SDL GIT_TAG fa303c72fbd83038f80815b3187d33e27d3f0512
+  GITHUB_REPOSITORY j4niwzis/SDL GIT_TAG ce58363f4fccd346e795f2bcac39d3454c65ff73
   ${mux_sdl_source} LICENSE Zlib TARGETS SDL3::SDL3)
+# Static, in libmux.so: the DEX loads libmux.so (sdl-native-dex --library),
+# whose JNI_OnLoad is SDL's (android/exports.map).
 cme_options(sdl3 "SDL_ANDROID_NATIVE_ACTIVITY ON" "SDL_ANDROID_JAR OFF"
-  "SDL_SHARED ON" "SDL_STATIC OFF" "SDL_INSTALL OFF" "SDL_VULKAN OFF"
+  "SDL_SHARED OFF" "SDL_STATIC ON" "SDL_INSTALL OFF" "SDL_VULKAN OFF"
   "SDL_ANDROID_NATIVE_APP_GLUE ${MUX_ANDROID_NATIVE_APP_GLUE}")
 # A system SDL does not carry this fork's entry point or generated bridge.
 set(CME_SYSTEM_SDL3 OFF)
+
+# One library, optimised whole: every object -- mux's and each dependency's,
+# which cmake-everywhere builds with these flags -- is LLVM bitcode, and the
+# link of libmux.so is full LTO over all of it (not CMake's IPO switch, which
+# is ThinLTO for Clang). Symbols hidden unless exported, and what libmux.so
+# exports is android/exports.map.
+string(APPEND CMAKE_C_FLAGS " -flto=full -fvisibility=hidden")
+string(APPEND CMAKE_CXX_FLAGS " -flto=full -fvisibility=hidden -fvisibility-inlines-hidden")
+string(APPEND CMAKE_SHARED_LINKER_FLAGS " -flto=full")
+string(APPEND CMAKE_MODULE_LINKER_FLAGS " -flto=full")
+string(APPEND CMAKE_EXE_LINKER_FLAGS " -flto=full")
+# The link options of an Android library: 16 KB pages, nothing undefined,
+# only android/exports.map exported, and no symbol table in what is shipped.
+set(MUX_ANDROID_LINK_OPTIONS "LINKER:-z,max-page-size=16384" "LINKER:--no-undefined"
+  "LINKER:--version-script=${CMAKE_CURRENT_LIST_DIR}/../android/exports.map" "LINKER:--strip-all")

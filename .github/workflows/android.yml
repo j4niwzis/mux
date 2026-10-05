@@ -1,5 +1,7 @@
 name: android
 on:
+  # Every commit: the full client, for every ABI. By hand: the one asked for.
+  push:
   workflow_dispatch:
     inputs:
       full_client:
@@ -17,12 +19,20 @@ permissions:
 
 env:
   CPM_SOURCE_CACHE: ${{ github.workspace }}/.cache/cpm
-  ABI: ${{ inputs.abi || 'arm64-v8a' }}
 
 jobs:
   apk:
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.abi) || '["arm64-v8a","armeabi-v7a"]') }}
     timeout-minutes: 360
+    # Here, not at the top: the matrix is a job's.
+    env:
+      ABI: ${{ matrix.abi }}
+      # The full client on a push; by hand, as asked.
+      FULL: ${{ github.event_name == 'push' && 'client' || inputs.full_client && 'client' || 'bridge' }}
     steps:
       - uses: actions/checkout@v4
       - name: Space and swap for template-heavy compilation
@@ -98,7 +108,7 @@ jobs:
           path: ~/.cache/mux-android-${{ env.ABI }}
           key: mux-android-${{ env.ABI }}-clang23-v2-${{ hashFiles('android/toolchain-sources.json', 'android/abis.json', 'ndk-tool/src/**', 'ndk-tool/CMakeLists.txt') }}
       - name: Rust Android target
-        if: inputs.full_client
+        if: env.FULL == 'client'
         run: rustup target add ${{ steps.abi.outputs.rust }}
 
       # As in check.yml, keep both the build and the fetched sources, and
@@ -130,8 +140,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
           # A fresh key lets retries save further progress from a failed build.
-          key: build-${{ runner.os }}-android-${{ env.ABI }}-${{ inputs.full_client && 'client' || 'bridge' }}-${{ steps.build-identity.outputs.digest }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: build-${{ runner.os }}-android-${{ env.ABI }}-${{ inputs.full_client && 'client' || 'bridge' }}-${{ steps.build-identity.outputs.digest }}-
+          key: build-${{ runner.os }}-android-${{ env.ABI }}-${{ env.FULL }}-${{ steps.build-identity.outputs.digest }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: build-${{ runner.os }}-android-${{ env.ABI }}-${{ env.FULL }}-${{ steps.build-identity.outputs.digest }}-
       - name: File times against the build restored
         run: |
           git ls-files -z | xargs -0 touch -d "@1000000000"
@@ -146,7 +156,7 @@ jobs:
       - name: Configure and package
         id: build
         env:
-          FULL_CLIENT: ${{ inputs.full_client }}
+          FULL_CLIENT: ${{ env.FULL == 'client' }}
         run: |
           source=android/smoke
           if [ "$FULL_CLIENT" = true ]; then source=.; fi
@@ -168,7 +178,7 @@ jobs:
             build-android/apk/mux-test-signed.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: mux-android-${{ env.ABI }}-${{ inputs.full_client && 'client' || 'bridge' }}-test-signed
+          name: mux-android-${{ env.ABI }}-${{ env.FULL }}-test-signed
           path: build-android/apk/mux-test-signed.apk
           if-no-files-found: error
       - name: No source list where the build failed

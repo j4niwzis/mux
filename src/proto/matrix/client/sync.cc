@@ -16,6 +16,7 @@ import loom.cs.joining;
 import loom.cs.leaving;
 import loom.cs.login;
 import loom.cs.registration;
+import loom.cs.oauth_server_metadata;
 import loom.cs.message_pagination;
 import loom.cs.receipts;
 import loom.cs.redaction;
@@ -29,6 +30,7 @@ import mux.core;
 import mux.http;
 import mux.net;
 import :account;
+import :oauth;
 
 // The members defined here are declared in :account, and exported there.
 namespace mux::proto::matrix::client {
@@ -344,16 +346,182 @@ void account<Sink>::run() {
     }
     return failed("not finished in time");
   };
+  // Signed in in the browser, on the server's own page (Matrix's OAuth 2.0
+  // API): mux registered as a client of the server's once (RFC 7591), then
+  // the authorization code with PKCE (RFC 6749, RFC 7636), the browser sent
+  // back to a port of this machine (RFC 8252), the code traded for tokens
+  // -- for this device, named in the scope. The tokens are kept as a
+  // password login's session is, and renewed a minute before they end.
+  const auto take_tokens = [&](const oauth::tokens& given) {
+    token_ = given.access_token;
+    if (given.refresh_token)
+      how_.refresh_token = given.refresh_token;
+    sink_(proto::matrix::session_given{id_, given.access_token, how_.device_id.value_or(""), how_.refresh_token, how_.oauth_client_id});
+  };
+  const auto keep_fresh = [this, wake](std::string endpoint, std::optional<std::int64_t> expires_in) {
+    if (!expires_in || !how_.refresh_token || !how_.oauth_client_id)
+      return;
+    loop_->spawn([this, wake, endpoint = std::move(endpoint), left = *expires_in] mutable {
+      while (wake->alive && !stopping_) {
+        loop_->sleep(std::chrono::seconds(std::max<std::int64_t>(30, left - 60)));
+        if (!wake->alive || stopping_)
+          return;  // the sync gone, and its session with it
+        auto renewed = oauth::refreshed(*loop_, *tls_, how_.proxy, endpoint, *how_.oauth_client_id, *how_.refresh_token);
+        if (!renewed) {
+          log(id_, "the session could not be renewed: {}", renewed.error());
+          return;
+        }
+        token_ = renewed->access_token;
+        if (renewed->refresh_token)
+          how_.refresh_token = renewed->refresh_token;
+        sink_(proto::matrix::session_given{id_, renewed->access_token, how_.device_id.value_or(""), how_.refresh_token,
+                                           how_.oauth_client_id});
+        log(id_, "the session renewed");
+        if (!renewed->expires_in)
+          return;
+        left = *renewed->expires_in;
+      }
+    });
+  };
+  const auto oauth_sign_in = [&]() -> bool {
+    const auto failed = [&](std::string why) {
+      log(id_, "sign-in: {}", why);
+      say(connection::failed{"sign-in: " + why});
+      return false;
+    };
+    log(id_, "signing in in the browser");
+    auto metadata = perform(api, loom::cs::get_auth_metadata{});
+    if (!metadata)
+      return failed("the server has no sign-in in the browser (OAuth 2.0): " + metadata.error().said());
+    if (!how_.oauth_client_id) {
+      const oauth::client_metadata self{.client_name = "mux",
+                                        .client_uri = "https://github.com/j4niwzis/mux",
+                                        .application_type = "native",
+                                        .redirect_uris = {"http://127.0.0.1/callback"},
+                                        .grant_types = {"authorization_code", "refresh_token"},
+                                        .response_types = {"code"},
+                                        .token_endpoint_auth_method = "none"};
+      const auto got = oauth::post(*loop_, *tls_, how_.proxy, metadata->registration_endpoint, knot::to_json_string(self),
+                                   "application/json");
+      if (!got || got->status / 100 != 2)
+        return failed("the server would not register mux as a client" + (got ? ": " + got->body : std::string()));
+      const auto registered = knot::try_read<oauth::client_registered>(got->body);
+      if (!registered)
+        return failed("the server's answer to registering mux was not understood");
+      how_.oauth_client_id = registered->client_id;
+      log(id_, "registered as the client {}", *how_.oauth_client_id);
+    }
+    // The port the browser comes back to: any free one, on this machine
+    // alone. Given up when the account stops, or after a quarter of an hour.
+    net::listener back(*loop_);
+    const auto waiting = std::make_shared<bool>(true);
+    loop_->spawn([this, waiting, &back] {
+      for (int second = 0; second < 900; ++second) {
+        loop_->sleep(std::chrono::seconds(1));
+        if (!*waiting)
+          return;  // come back, or given up: `back` is gone
+        if (stopping_)
+          break;
+      }
+      back.close();
+    });
+    const std::string redirect = std::format("http://127.0.0.1:{}/callback", back.port());
+    const std::string verifier = oauth::random_text(64);
+    const std::string state = oauth::random_text(24);
+    if (!how_.device_id)
+      how_.device_id = oauth::random_text(10, oauth::capitals);
+    const bool offers_create =
+        metadata->prompt_values_supported && std::ranges::contains(*metadata->prompt_values_supported, std::string_view("create"));
+    const std::string scope = "urn:matrix:client:api:* urn:matrix:client:device:" + *how_.device_id;
+    const std::string asked =
+        metadata->authorization_endpoint + (metadata->authorization_endpoint.contains('?') ? "&" : "?") +
+        oauth::form({{"response_type", "code"},
+                     {"response_mode", "query"},
+                     {"client_id", *how_.oauth_client_id},
+                     {"redirect_uri", redirect},
+                     {"scope", scope},
+                     {"state", state},
+                     {"code_challenge", oauth::challenge_of(verifier)},
+                     {"code_challenge_method", "S256"}}) +
+        (how_.create && offers_create ? "&prompt=create" : "");
+    sink_(proto::matrix::sign_in_page{id_, asked});
+    // The browser sent back: GET /callback?code=...&state=... -- anything
+    // else on the port answered and passed over.
+    std::optional<std::string> code;
+    std::optional<std::string> refused;
+    while (!code && !refused) {
+      try {
+        auto came = back.accept();
+        const std::string head = net::read_request_head(*loop_, came);
+        const std::string_view line = std::string_view(head).substr(0, head.find("\r\n"));
+        const std::string_view after_method = line.substr(std::min(line.size(), line.find(' ') + 1));
+        const std::string_view target = after_method.substr(0, after_method.find(' '));
+        const std::string_view query =
+            target.find('?') == std::string_view::npos ? std::string_view() : target.substr(target.find('?') + 1);
+        if (!target.starts_with("/callback") || oauth::query_value(query, "state") != state) {
+          net::answer(*loop_, came, oauth::page("This is not the sign-in mux asked for."));
+          continue;
+        }
+        if (const auto error = oauth::query_value(query, "error")) {
+          const auto described = oauth::query_value(query, "error_description");
+          refused = *error + (described ? ": " + *described : std::string());
+          net::answer(*loop_, came, oauth::page("Not signed in: " + *refused));
+          continue;
+        }
+        code = oauth::query_value(query, "code");
+        if (!code)
+          refused = "the server sent no code back";
+        net::answer(*loop_, came,
+                    oauth::page(code ? "Signed in to mux. This page can be closed now." : "Not signed in: no code came back."));
+      } catch (const net::failure&) {
+        refused = stopping_ ? "stopped" : "not finished in time";
+      }
+    }
+    *waiting = false;
+    if (!code)
+      return failed(*refused);
+    auto given = oauth::tokens_of(oauth::post(*loop_, *tls_, how_.proxy, metadata->token_endpoint,
+                                              oauth::form({{"grant_type", "authorization_code"},
+                                                           {"code", *code},
+                                                           {"redirect_uri", redirect},
+                                                           {"client_id", *how_.oauth_client_id},
+                                                           {"code_verifier", verifier}}),
+                                              oauth::form_type));
+    if (!given)
+      return failed(given.error());
+    log(id_, "signed in, as the device {}", *how_.device_id);
+    take_tokens(*given);
+    keep_fresh(metadata->token_endpoint, given->expires_in);
+    return true;
+  };
   bool kept = false;
-  if (how_.create && !how_.access_token) {
+  if (how_.access_token) {
+    token_ = how_.access_token;
+    kept = true;
+    log(id_, "going on with the session kept, as the device {}", how_.device_id.value_or("?"));
+    // Signed in in the browser: renewed at once -- it may have run out while
+    // mux was closed -- and kept fresh from then on.
+    if (how_.oauth && how_.refresh_token && how_.oauth_client_id) {
+      if (auto metadata = perform(api, loom::cs::get_auth_metadata{})) {
+        if (auto renewed = oauth::refreshed(*loop_, *tls_, how_.proxy, metadata->token_endpoint, *how_.oauth_client_id,
+                                            *how_.refresh_token)) {
+          take_tokens(*renewed);
+          keep_fresh(metadata->token_endpoint, renewed->expires_in);
+        } else {
+          log(id_, "the session could not be renewed: {}", renewed.error());
+        }
+      }
+    }
+  } else if (how_.oauth) {
+    if (!oauth_sign_in()) {
+      api_ = nullptr;
+      return;
+    }
+  } else if (how_.create) {
     if (!register_account()) {
       api_ = nullptr;
       return;
     }
-  } else if (how_.access_token) {
-    token_ = how_.access_token;
-    kept = true;
-    log(id_, "going on with the session kept, as the device {}", how_.device_id.value_or("?"));
   } else if (!log_in()) {
     api_ = nullptr;
     return;

@@ -679,11 +679,32 @@ class listener {
       throw failure("accepting", error);
     return socket;
   }
+  // No more connections: an accept waiting ends with a failure.
+  void close() {
+    error_code ignored;
+    acceptor_.close(ignored);
+  }
 
  private:
   loop* owner_;
   tcp::acceptor acceptor_;
 };
+
+// A request's head, off a connection accepted: up to its blank line -- a
+// browser sent back to this machine, as an OAuth 2.0 sign-in ends.
+inline std::string read_request_head(loop& owner, tcp::socket& socket) {
+  std::string head;
+  const auto [error, n] = owner.await<std::size_t>([&](auto done) {
+    asio::async_read_until(socket, asio::dynamic_buffer(head, 16 * 1024), "\r\n\r\n", std::move(done));
+  });
+  if (error)
+    throw failure("reading a request", error);
+  return head;
+}
+// An answer written back on a connection accepted.
+inline void answer(loop& owner, tcp::socket& socket, std::string_view bytes) {
+  detail::write_all(owner, socket, bytes, "answering a request");
+}
 
 // The nameserver /etc/resolv.conf names first; the local stub where it
 // names none.

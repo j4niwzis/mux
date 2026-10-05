@@ -91,6 +91,10 @@ struct session_given {
   account_id account;
   std::string access_token;
   std::string device_id;
+  // Signed in in the browser (OAuth 2.0): the token that renews the session,
+  // and the client the server knows mux as.
+  std::optional<std::string> refresh_token = {};
+  std::optional<std::string> oauth_client_id = {};
 };
 // A registration stage done on the server's own page -- a CAPTCHA,
 // whichever the server uses; an email confirmed -- to be opened in the
@@ -100,11 +104,20 @@ struct registration_page {
   std::string url;
 };
 
-using changes = change_list<session_given, registration_page, verification_changed, security_state, devtools_text, state_listed, packs_listed, pack_saved, pack_picture_uploaded, sessions_listed, sessions_refused>;
+// The server's own sign-in page (OAuth 2.0), to be opened in the browser:
+// the account goes on by itself once the browser comes back to mux.
+struct sign_in_page {
+  account_id account;
+  std::string url;
+};
+
+using changes = change_list<session_given, registration_page, sign_in_page, verification_changed, security_state, devtools_text, state_listed, packs_listed, pack_saved, pack_picture_uploaded, sessions_listed, sessions_refused>;
 constexpr type_tag<changes> changes_type(const state&) { return {}; }
 
 // As the command line says them.
 inline std::string describe(const session_given& one) { return one.account.address + " was given a session"; }
+inline std::string describe(const registration_page& one) { return one.account.address + ": registering on " + one.url; }
+inline std::string describe(const sign_in_page& one) { return one.account.address + ": signing in on " + one.url; }
 inline std::string describe(const devtools_text& one) { return one.title + "\n" + one.text; }
 inline std::string describe(const state_entry& one) { return one.type + " " + one.key; }
 inline std::string describe(const state_listed& one) {

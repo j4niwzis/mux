@@ -25,6 +25,12 @@ struct kept {
   std::optional<bool> create;
   std::optional<std::string> registration_token;
   std::optional<bool> accept_terms;
+  // Signed in in the browser, on the server's own page (OAuth 2.0): no
+  // password kept; the client the server registered mux as, and the token
+  // that renews the session.
+  std::optional<bool> oauth;
+  std::optional<std::string> oauth_client_id;
+  std::optional<std::string> refresh_token;
   friend bool operator==(const kept&, const kept&) = default;
 };
 consteval auto json_schema(knot::type<kept>) { return knot::schema<kept>().tag("matrix"); }
@@ -77,8 +83,8 @@ inline std::optional<std::string> check(const kept& one) {
     return "The homeserver is a URL: https://matrix.example.org";
   if (one.device_name.empty())
     return "Name this device, such as mux";
-  if (one.password.empty())
-    return "Type the password";
+  if (one.password.empty() && !one.oauth.value_or(false))
+    return "Type the password, or sign in in the browser";
   return std::nullopt;
 }
 
@@ -86,15 +92,23 @@ inline std::optional<std::string> check(const kept& one) {
 // password, goes on with the device it has, rather than logging in as a
 // new one at every Save.
 inline void carry_over(kept& now, const kept& before) {
-  if (before.user_id == now.user_id && before.homeserver == now.homeserver && before.password == now.password) {
+  const bool same_way = before.oauth.value_or(false) == now.oauth.value_or(false) &&
+                        (now.oauth.value_or(false) || before.password == now.password);
+  if (before.user_id == now.user_id && before.homeserver == now.homeserver && same_way) {
     now.access_token = before.access_token;
     now.device_id = before.device_id;
+    now.refresh_token = before.refresh_token;
+    now.oauth_client_id = before.oauth_client_id;
   }
 }
 // The session the server gave at login, kept.
 inline void take_session(kept& one, const auto& given) {
   one.access_token = given.access_token;
   one.device_id = given.device_id;
+  if (given.refresh_token)
+    one.refresh_token = given.refresh_token;
+  if (given.oauth_client_id)
+    one.oauth_client_id = given.oauth_client_id;
   // Registered: logged in as from now on.
   one.create.reset();
   one.registration_token.reset();

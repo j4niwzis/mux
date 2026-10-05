@@ -111,6 +111,12 @@ struct settings {
   bool create = false;
   std::optional<std::string> registration_token;
   bool accept_terms = false;
+  // Signed in in the browser, on the server's own page (OAuth 2.0, the
+  // authorization code with PKCE): the client the server knows mux as, and
+  // the token that renews the session, where they are kept.
+  bool oauth = false;
+  std::optional<std::string> oauth_client_id;
+  std::optional<std::string> refresh_token;
 };
 
 // A typed content as a request's body: its JSON text.

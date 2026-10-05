@@ -38,6 +38,13 @@ struct matrix_form : nodes::Stack {
   // word that they agree to its terms, where it has some.
   bool creating = false;
   bool agrees = false;
+  // Signed in in the browser, on the server's own page (OAuth 2.0), rather
+  // than with a password typed here.
+  bool in_browser = false;
+  struct pick_way {
+    matrix_form* form;
+    void operator()(std::size_t index) const { form->set_in_browser(index == 1); }
+  };
   struct pick_mode {
     matrix_form* form;
     void operator()(std::size_t index) const { form->set_creating(index == 1); }
@@ -49,6 +56,7 @@ struct matrix_form : nodes::Stack {
 
   struct parts_t {
     field user_id;
+    choice_menu<pick_way> way;
     field password;
     field homeserver;
     field device_name;
@@ -60,6 +68,8 @@ struct matrix_form : nodes::Stack {
 
   matrix_form(Actions* a, const palette& colours, const std::optional<::mux::proto::matrix::kept>& from)
       : actions(a), parts{.user_id = field(colours, "User ID", "@user:example.org"),
+              .way = choice_menu<pick_way>(colours, "Sign in", {"With a password", "In the browser, on the server's page"},
+                                           from && from->oauth.value_or(false) ? 1 : 0, pick_way{this}),
               .password = field(colours, "Password", "Password"),
               .homeserver = field(colours, "Homeserver", "found through the server's .well-known"),
               .device_name = field(colours, "Device name", "mux", "mux"),
@@ -68,7 +78,9 @@ struct matrix_form : nodes::Stack {
               .terms = choice_menu<pick_terms>(colours, "The server's terms", {"Not agreed to", "I agree to the server's terms"}, 0,
                                                pick_terms{this}),
               .end = form_end<Actions>(colours, a, from.has_value())} {
-    auto& [user_id, password, homeserver, device_name, mode, token, terms, end] = parts;
+    auto& [user_id, way, password, homeserver, device_name, mode, token, terms, end] = parts;
+    in_browser = from && from->oauth.value_or(false);
+    password.setVisible(!in_browser);
     // Editing an account kept: it is one already.
     mode.setVisible(!from.has_value());
     token.setVisible(false);
@@ -86,12 +98,20 @@ struct matrix_form : nodes::Stack {
     }
   }
 
-  // A new account or one there is: the registration's fields shown with it.
+  // A new account or one there is: the registration's fields shown with it
+  // -- not where the server's own page registers it.
   void set_creating(bool on) {
     creating = on;
-    parts.token.setVisible(on);
-    parts.terms.setVisible(on);
+    parts.token.setVisible(on && !in_browser);
+    parts.terms.setVisible(on && !in_browser);
     this->invalidateLayout();
+  }
+  // Signed in in the browser: no password here, nor the registration's
+  // fields -- the server's page asks what it needs.
+  void set_in_browser(bool on) {
+    in_browser = on;
+    parts.password.setVisible(!on);
+    this->set_creating(creating);
   }
 
   [[nodiscard]] std::expected<::mux::proto::matrix::kept, std::string> account() const {
@@ -99,11 +119,15 @@ struct matrix_form : nodes::Stack {
                                .password = parts.password.text(),
                                .homeserver = typed_or_nothing(parts.homeserver.text()),
                                .device_name = parts.device_name.text()};
+    if (in_browser) {
+      out.oauth = true;
+      out.password.clear();
+    }
     if (creating) {
       out.create = true;
       out.registration_token = typed_or_nothing(parts.token.text());
       out.accept_terms = agrees;
-      if (out.password.empty())
+      if (out.password.empty() && !in_browser)
         return std::unexpected(std::string("A new account needs a password"));
     }
     if (auto wrong = check(out))  // the protocol's own check, by ADL

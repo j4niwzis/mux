@@ -5,6 +5,7 @@
 export module mux.proto.matrix.client;
 
 export import :base;
+export import :oauth;
 export import :names;
 export import :account;
 export import :events;

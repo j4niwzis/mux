@@ -35,7 +35,10 @@ template <class Sink>
                               .vault = &vault,
                               .create = saved.create.value_or(false) && !saved.access_token,
                               .registration_token = saved.registration_token,
-                              .accept_terms = saved.accept_terms.value_or(false)};
+                              .accept_terms = saved.accept_terms.value_or(false),
+                              .oauth = saved.oauth.value_or(false),
+                              .oauth_client_id = saved.oauth_client_id,
+                              .refresh_token = saved.refresh_token};
   return std::make_unique<::mux::proto::matrix::client::account<Sink>>(loop, tls, std::move(how), std::move(sink));
 }
 

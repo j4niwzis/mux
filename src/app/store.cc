@@ -50,6 +50,13 @@ struct message_line {
   std::optional<std::string> reply;
   std::optional<std::string> thread;
   std::optional<bool> edited;
+  // Its edit history: what it said before each edit, and until when.
+  struct version_line {
+    std::optional<std::string> plain;
+    std::optional<std::string> html;
+    std::optional<std::int64_t> until;
+  };
+  std::optional<std::vector<version_line>> versions;
   std::optional<bool> redacted;
   std::optional<bool> out;
   std::optional<bool> service;
@@ -365,6 +372,12 @@ class message_store {
       one.replies_to = std::move(o.reply);
       one.thread = std::move(o.thread);
       one.edited = o.edited.value_or(false);
+      one.versions = o.versions.value_or(std::vector<store_file::message_line::version_line>{}) |
+                     std::views::transform([&](const store_file::message_line::version_line& v) {
+                       return mux::message::version{mux::body{v.plain.value_or(""), v.html},
+                                                    time_point(std::chrono::milliseconds(v.until.value_or(0)))};
+                     }) |
+                     std::ranges::to<std::vector>();
       one.encrypted = o.encrypted.value_or(false);
       one.unverified = o.unverified.value_or(false);
       one.came_plain = o.came_plain.value_or(false);
@@ -434,6 +447,13 @@ class message_store {
         .reply = one.replies_to,
         .thread = one.thread,
         .edited = store_file::flag(one.edited),
+        .versions = one.versions.empty()
+                        ? std::nullopt
+                        : std::optional(one.versions | std::views::transform([](const mux::message::version& v) {
+                                          return store_file::message_line::version_line{
+                                              v.body.plain, v.body.html, static_cast<std::int64_t>(v.until.time_since_epoch().count())};
+                                        }) |
+                                        std::ranges::to<std::vector>()),
         .redacted = store_file::flag(one.redacted),
         .out = store_file::flag(one.outgoing),
         // Something done, not said: read back as a line of its own again,

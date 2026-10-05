@@ -201,6 +201,9 @@ struct message_edited {
   // Came from the server in the clear: never applied to a message that came
   // encrypted -- the server could otherwise rewrite it (review 4, H3).
   bool plain = false;
+  // When it was edited, where the protocol says: what replaced the text
+  // before it, in the message's edit history. Now, where it does not.
+  std::chrono::sys_time<std::chrono::milliseconds> at{};
 };
 
 // A message that came encrypted and was read so.
@@ -791,6 +794,13 @@ class model {
     if (message* kept = message_in(where, one.id)) {
       if ((one.by && *one.by != kept->sender) || (one.plain && kept->encrypted))
         return;
+      // What it said until now, kept in its edit history: once for each edit
+      // that changed it -- the same edit come again changes nothing.
+      if (kept->body != one.now)
+        kept->versions.push_back(
+            {kept->body, one.at != std::chrono::sys_time<std::chrono::milliseconds>{}
+                             ? one.at
+                             : std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now())});
       kept->body = one.now;
       kept->edited = true;
     }

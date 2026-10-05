@@ -197,6 +197,28 @@ class menu_part {
     if (const auto& chosen = s_->root().main().chosen; chosen && !s_->demo())
       s_->net->view_source(*chosen, target_.id);
   }
+  // A message's edit history: what it says now, then what it said before
+  // each edit, newest first, each with when it was replaced.
+  void apply(const request::menu_edit_history&) {
+    s_->root().close_menu();
+    const auto& chosen = s_->root().main().chosen;
+    const mux::conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
+    if (!chat)
+      return;
+    const auto in_threads = chat->threads | std::views::values | std::views::join;
+    const auto is_it = [&](const mux::message& one) { return one.id == target_.id; };
+    const mux::message* found = nullptr;
+    if (const auto at = std::ranges::find_if(chat->timeline, is_it); at != chat->timeline.end())
+      found = &*at;
+    else if (const auto there = std::ranges::find_if(in_threads, is_it); there != std::ranges::end(in_threads))
+      found = &*there;
+    if (!found || found->versions.empty())
+      return;
+    std::string said = std::format("Now:\n{}", found->body.plain);
+    for (const mux::message::version& one : found->versions | std::views::reverse)
+      said += std::format("\n\nUntil {}:\n{}", mux::ui::seen_at(one.until), one.body.plain);
+    s_->root().show_message("Edit History", said);
+  }
   void apply(const request::forward_to& one) {
     s_->root().close_forward();
     if (!forwarding_ || s_->demo())

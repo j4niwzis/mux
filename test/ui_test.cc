@@ -160,6 +160,7 @@ struct stub {
   void text_key(scene::Key) {}
   void start_call(mux::conversation_id) {}
   void call_chosen() {}
+  void menu_edit_history() {}
   void accept_call() {}
   void decline_call() {}
   void hang_up() {}

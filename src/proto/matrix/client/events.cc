@@ -127,7 +127,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
         sink_(change::message_edited{in, *relates->event_id,
                                      body_of(content.m_new_content->body.value_or(""), content.m_new_content->format,
                                              content.m_new_content->formatted_body),
-                                     one.sender, !sealed});
+                                     one.sender, !sealed, at});
       // Nothing shows an edit under its own id: what waits for it there --
       // a mark made of it before edits were told apart -- let go.
       sink_(change::event_missing{in, one.event_id, relates->event_id});

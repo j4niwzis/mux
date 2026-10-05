@@ -50,6 +50,7 @@ struct menu_facts {
   bool pinned = false;  // pinned in its chat: the menu offers Unpin
   bool pinnable = false;  // in a chat where pins are kept: a Matrix room
   bool editable = false;  // one's own, as its protocol's rule for edits allows
+  bool history = false;   // edited here before: its edit history can be shown
   proto::account_ops can;  // what its account does: React, Forward, threads...
   bool deletable = false;  // one may take it away: one's own, or another's with the power to
   bool reaction_events = false;  // reacted to, the reactions being events
@@ -268,6 +269,7 @@ template <class Actions>
     facts.pinnable = proto::can_pin(now, one.message_id);
     // Edited as its protocol's rule allows: any of one's own, or the last.
     facts.editable = proto::may_edit(now, *chat, one.said);
+    facts.history = !one.said.versions.empty();
     // Delete as the protocol allows it -- Matrix: as the room's power levels do.
     facts.deletable = proto::may_delete(now, *chat, one.outgoing);
     facts.reaction_events = !one.said.reaction_events.empty();

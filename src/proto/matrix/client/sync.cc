@@ -37,6 +37,11 @@ struct user_field {
   std::string user;
   friend consteval auto json_schema(knot::type<user_field>) { return knot::schema<user_field>(); }
 };
+// The registration token stage's answer, beside its type and session.
+struct registration_token_field {
+  std::string token;
+  friend consteval auto json_schema(knot::type<registration_token_field>) { return knot::schema<registration_token_field>(); }
+};
 
 // A rule's word, as loom reads it: its text, for mux's own table.
 template <class Content, class Rule>
@@ -236,8 +241,115 @@ void account<Sink>::run() {
     sink_(proto::matrix::session_given{id_, logged->access_token, logged->device_id});
     return true;
   };
+  // A new account: registered first (POST /register), its interactive auth
+  // walked a stage at a time, the first flow offered whose stages can be
+  // passed -- a dummy stage by itself; a registration token and the terms
+  // as the account form gave them; any other (a CAPTCHA, whichever the
+  // server uses; an email) on the stage's own page on the server, opened in
+  // the browser, the server asked again every few seconds until it says
+  // that stage is done. Then logged in as, with the session it gives.
+  const auto base_text = [&] {
+    return std::format("https://{}{}{}", base->host, base->port == 443 ? std::string() : std::format(":{}", base->port), base->path);
+  };
+  const auto register_account = [&]() -> bool {
+    using asked_t = loom::cs::register_;
+    log(id_, "registering {}", localpart_);
+    std::optional<asked_t::body_t::authentication_data_t> auth;
+    std::set<std::string> opened;
+    const auto failed = [&](std::string why) {
+      log(id_, "registration: {}", why);
+      say(connection::failed{"registration: " + why});
+      return false;
+    };
+    for (int round = 0; round < 600 && !stopping_; ++round) {
+      auto made = perform(api, asked_t{.kind = asked_t::kind_t{asked_t::kind_values::user{}},
+                                       .body = {.auth = auth,
+                                                .username = localpart_,
+                                                .password = how_.password,
+                                                .initial_device_display_name = how_.device_name}});
+      if (made) {
+        if (!made->access_token)
+          return failed("registered, but the server gave no session: log in as the account");
+        token_ = *made->access_token;
+        how_.device_id = made->device_id;
+        log(id_, "registered, as the device {}", how_.device_id.value_or("?"));
+        sink_(proto::matrix::session_given{id_, *made->access_token, made->device_id.value_or("")});
+        return true;
+      }
+      const auto& said = made.error().server;
+      if (!said || said->status != 401 || !said->auth || !said->session)
+        return failed(made.error().said());
+      const loom::interactive_auth& wanted = *said->auth;
+      const std::string session = *said->session;
+      const auto passable = [&](const loom::auth_stage_t& stage) {
+        return splice::visit(splice::overloaded{[](loom::auth_stage::password) { return false; },
+                                                [&](loom::auth_stage::registration_token) { return how_.registration_token.has_value(); },
+                                                [](const auto&) { return true; }},
+                             stage);
+      };
+      const auto flow = std::ranges::find_if(wanted.flows, [&](const auto& stages) { return std::ranges::all_of(stages, passable); });
+      if (flow == wanted.flows.end()) {
+        const bool token_wanted = std::ranges::any_of(wanted.flows | std::views::join, [](const loom::auth_stage_t& stage) {
+          return splice::visit(splice::overloaded{[](loom::auth_stage::registration_token) { return true; },
+                                                  [](const auto&) { return false; }},
+                               stage);
+        });
+        return failed(token_wanted ? "this server registers by invitation: type the registration token it gave you"
+                                   : "this server's registration asks for what mux cannot give");
+      }
+      const auto next = std::ranges::find_if(*flow, [&](const loom::auth_stage_t& stage) {
+        return !std::ranges::contains(wanted.completed, stage);
+      });
+      // Every stage done: asked again with the session alone.
+      if (next == flow->end()) {
+        auth = asked_t::body_t::authentication_data_t{.session = session};
+        continue;
+      }
+      const auto answer = [&](knot::raw rest = knot::raw{"{}"}) {
+        auth = asked_t::body_t::authentication_data_t{.type = loom::name_of(*next), .session = session, .rest = std::move(rest)};
+      };
+      const bool go_on = splice::visit(
+          splice::overloaded{
+              [&](loom::auth_stage::dummy) { return answer(), true; },
+              [&](loom::auth_stage::registration_token) {
+                return answer(as_body(registration_token_field{*how_.registration_token})), true;
+              },
+              [&](loom::auth_stage::terms) {
+                if (!how_.accept_terms) {
+                  const std::string listed = wanted.terms | std::views::transform([](const loom::auth_policy& one) {
+                                               return std::format("{} ({})", one.name, one.url);
+                                             }) |
+                                             std::views::join_with(std::string(", ")) | std::ranges::to<std::string>();
+                  return failed("the server asks you to agree to its terms -- " + listed +
+                                " -- turn on I agree to the server's terms, and add the account again");
+                }
+                return answer(), true;
+              },
+              [&](loom::auth_stage::password) { return failed("the server asks for a password stage registration does not have"); },
+              // Done on the server's own page: opened once, then the server
+              // asked again with the session until it says it is done.
+              [&](const auto&) {
+                const std::string name = loom::name_of(*next);
+                if (opened.insert(name).second)
+                  sink_(proto::matrix::registration_page{
+                      id_, std::format("{}/_matrix/client/v3/auth/{}/fallback/web?session={}", base_text(), name, session)});
+                loop_->sleep(std::chrono::seconds(3));
+                auth = asked_t::body_t::authentication_data_t{.session = session};
+                return true;
+              }},
+          *next);
+      if (!go_on)
+        return false;
+    }
+    return failed("not finished in time");
+  };
   bool kept = false;
-  if (how_.access_token) {
+  if (how_.create && !how_.access_token) {
+    if (!register_account()) {
+      api_ = nullptr;
+      return;
+    }
+  } else if (how_.access_token) {
     token_ = how_.access_token;
     kept = true;
     log(id_, "going on with the session kept, as the device {}", how_.device_id.value_or("?"));

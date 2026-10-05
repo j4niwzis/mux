@@ -99,6 +99,15 @@ void program_told(App& app, const session_given& given) {
                 found->own);
   (void)app.write();
 }
+// A registration stage done on the server's own page: opened in the browser,
+// and said -- the registration carries on by itself once it is done there.
+template <class App>
+void program_told(App& app, const registration_page& page) {
+  app.ask.open_url(page.url);
+  app.root().show_message("Finish registering in your browser",
+                          "The server asks for a step it does on its own page, now open in your browser. Once it is done "
+                          "there, mux carries on with the registration by itself.");
+}
 // What the developer tools asked, shown.
 template <class App>
 void program_told(App& app, const devtools_text& shown) {

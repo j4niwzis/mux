@@ -18,6 +18,13 @@ struct kept {
   std::optional<bool> only_verified;  // room keys to verified sessions alone
   std::optional<std::string> access_token;
   std::optional<std::string> device_id;
+  // A new account, to be registered on its homeserver before it is logged
+  // in as: until the server gives it its session. With the token a server
+  // that registers by invitation asks for, and the user's word that they
+  // agree to the server's terms, where it has some.
+  std::optional<bool> create;
+  std::optional<std::string> registration_token;
+  std::optional<bool> accept_terms;
   friend bool operator==(const kept&, const kept&) = default;
 };
 consteval auto json_schema(knot::type<kept>) { return knot::schema<kept>().tag("matrix"); }
@@ -88,6 +95,9 @@ inline void carry_over(kept& now, const kept& before) {
 inline void take_session(kept& one, const auto& given) {
   one.access_token = given.access_token;
   one.device_id = given.device_id;
+  // Registered: logged in as from now on.
+  one.create.reset();
+  one.registration_token.reset();
 }
 
 }  // namespace mux::proto::matrix

@@ -34,12 +34,27 @@ struct matrix_form : nodes::Stack {
   static constexpr std::string_view note = "A user ID like @user:example.org, on a homeserver such as Synapse.";
   Actions* actions = nullptr;
   std::optional<std::string> editing;
+  // A new account, to be registered on the server first; and the user's
+  // word that they agree to its terms, where it has some.
+  bool creating = false;
+  bool agrees = false;
+  struct pick_mode {
+    matrix_form* form;
+    void operator()(std::size_t index) const { form->set_creating(index == 1); }
+  };
+  struct pick_terms {
+    matrix_form* form;
+    void operator()(std::size_t index) const { form->agrees = index == 1; }
+  };
 
   struct parts_t {
     field user_id;
     field password;
     field homeserver;
     field device_name;
+    choice_menu<pick_mode> mode;
+    field token;
+    choice_menu<pick_terms> terms;
     form_end<Actions> end;
   } parts;
 
@@ -48,8 +63,16 @@ struct matrix_form : nodes::Stack {
               .password = field(colours, "Password", "Password"),
               .homeserver = field(colours, "Homeserver", "found through the server's .well-known"),
               .device_name = field(colours, "Device name", "mux", "mux"),
+              .mode = choice_menu<pick_mode>(colours, "Account", {"Sign in to an account", "Create a new account"}, 0, pick_mode{this}),
+              .token = field(colours, "Registration token", "where the server registers by invitation"),
+              .terms = choice_menu<pick_terms>(colours, "The server's terms", {"Not agreed to", "I agree to the server's terms"}, 0,
+                                               pick_terms{this}),
               .end = form_end<Actions>(colours, a, from.has_value())} {
-    auto& [user_id, password, homeserver, device_name, end] = parts;
+    auto& [user_id, password, homeserver, device_name, mode, token, terms, end] = parts;
+    // Editing an account kept: it is one already.
+    mode.setVisible(!from.has_value());
+    token.setVisible(false);
+    terms.setVisible(false);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     this->setGap(12.0f);
     password.parts.box.setMasked(true);
@@ -63,11 +86,26 @@ struct matrix_form : nodes::Stack {
     }
   }
 
+  // A new account or one there is: the registration's fields shown with it.
+  void set_creating(bool on) {
+    creating = on;
+    parts.token.setVisible(on);
+    parts.terms.setVisible(on);
+    this->invalidateLayout();
+  }
+
   [[nodiscard]] std::expected<::mux::proto::matrix::kept, std::string> account() const {
     ::mux::proto::matrix::kept out{.user_id = parts.user_id.text(),
                                .password = parts.password.text(),
                                .homeserver = typed_or_nothing(parts.homeserver.text()),
                                .device_name = parts.device_name.text()};
+    if (creating) {
+      out.create = true;
+      out.registration_token = typed_or_nothing(parts.token.text());
+      out.accept_terms = agrees;
+      if (out.password.empty())
+        return std::unexpected(std::string("A new account needs a password"));
+    }
     if (auto wrong = check(out))  // the protocol's own check, by ADL
       return std::unexpected(*wrong);
     return out;

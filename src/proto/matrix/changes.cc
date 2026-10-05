@@ -92,8 +92,15 @@ struct session_given {
   std::string access_token;
   std::string device_id;
 };
+// A registration stage done on the server's own page -- a CAPTCHA,
+// whichever the server uses; an email confirmed -- to be opened in the
+// browser: the registration carries on by itself once it is done there.
+struct registration_page {
+  account_id account;
+  std::string url;
+};
 
-using changes = change_list<session_given, verification_changed, security_state, devtools_text, state_listed, packs_listed, pack_saved, pack_picture_uploaded, sessions_listed, sessions_refused>;
+using changes = change_list<session_given, registration_page, verification_changed, security_state, devtools_text, state_listed, packs_listed, pack_saved, pack_picture_uploaded, sessions_listed, sessions_refused>;
 constexpr type_tag<changes> changes_type(const state&) { return {}; }
 
 // As the command line says them.

@@ -32,7 +32,10 @@ template <class Sink>
                                                   return std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_' ? c : '_';
                                                 }) | std::ranges::to<std::string>()) + ".json"),
                               .only_verified = saved.only_verified.value_or(false),
-                              .vault = &vault};
+                              .vault = &vault,
+                              .create = saved.create.value_or(false) && !saved.access_token,
+                              .registration_token = saved.registration_token,
+                              .accept_terms = saved.accept_terms.value_or(false)};
   return std::make_unique<::mux::proto::matrix::client::account<Sink>>(loop, tls, std::move(how), std::move(sink));
 }
 

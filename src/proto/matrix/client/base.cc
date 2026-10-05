@@ -105,6 +105,12 @@ struct settings {
   bool only_verified = false;
   // What is kept on disk is read and written through: the program's.
   mux::vault::vault* vault = nullptr;
+  // A new account, registered before anything else (POST /register, its
+  // interactive auth walked): the token a server registering by invitation
+  // asks for, and whether the user agrees to the server's terms.
+  bool create = false;
+  std::optional<std::string> registration_token;
+  bool accept_terms = false;
 };
 
 // A typed content as a request's body: its JSON text.

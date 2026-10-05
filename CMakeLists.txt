@@ -246,7 +246,7 @@ if(MUX_UI)
     GIT_TAG 9278a8b3ce5621b8a0ecfcb4562210093831f296)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
-    GIT_TAG cf9038915cfe4fd34433eca1a1af87053a95cf8a)
+    GIT_TAG 7af629426b24618cabeccc4c31b03b5ec8c3e0ab)
   # Skia's features, each an option asking for its component: GL to draw on
   # the GPU (the software renderer is there either way), and the pictures
   # decoded. A system Skia without one is taken where its option is off.

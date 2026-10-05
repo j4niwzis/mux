@@ -8,6 +8,7 @@ import std;
 import mux.vault;
 import mux.core;
 import mux.net;
+import tern;
 import mux.proto.xmpp.client;
 import mux.proto.kept;
 
@@ -25,6 +26,12 @@ template <class Sink>
                             .proxy = std::move(via)};
   if (saved.port)
     how.port = static_cast<std::uint16_t>(*saved.port);
+  if (saved.create.value_or(false))
+    how.create = saved.answers.value_or(std::vector<registration_answer>{}) |
+                 std::views::transform([](const registration_answer& one) {
+                   return tern::registration::answer{.var = one.var, .value = one.value};
+                 }) |
+                 std::ranges::to<std::vector<tern::registration::answer>>();
   return std::make_unique<::mux::proto::xmpp::client::account<Sink>>(loop, tls, std::move(how), std::move(sink));
 }
 

@@ -4,3 +4,4 @@
 export module mux.proto.changes;
 
 export import mux.proto.matrix.changes;
+export import mux.proto.xmpp.changes;

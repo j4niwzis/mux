@@ -11,6 +11,15 @@ import mux.proto.tags;
 
 export namespace mux::proto::xmpp {
 
+// An answer to what the server asks to register (XEP-0077): its form's
+// field, and what was typed in it -- or what the form held, where hidden.
+struct registration_answer {
+  std::string var;
+  std::string value;
+  friend bool operator==(const registration_answer&, const registration_answer&) = default;
+};
+consteval auto json_schema(knot::type<registration_answer>) { return knot::schema<registration_answer>(); }
+
 struct kept {
   std::string address;  // user@domain
   std::string password;
@@ -18,6 +27,10 @@ struct kept {
   std::optional<std::string> host;
   std::optional<std::int64_t> port;
   bool plain_without_tls = false;
+  // A new account, made on the server first, with these answers to what it
+  // asks; both gone once it is made (registered).
+  std::optional<bool> create;
+  std::optional<std::vector<registration_answer>> answers;
   friend bool operator==(const kept&, const kept&) = default;
 };
 consteval auto json_schema(knot::type<kept>) { return knot::schema<kept>().tag("xmpp"); }
@@ -55,6 +68,11 @@ constexpr std::string_view protocol_word(const kept&) { return "xmpp"; }
 constexpr std::string_view protocol_name(const kept&) { return "XMPP"; }
 // A JID: anything a Matrix user ID is not (those begin with '@').
 constexpr bool owns_address(const state&, std::string_view address) { return !address.empty() && !address.starts_with('@'); }
+// Made on the server: signed in to from now on.
+inline void registered(kept& one) {
+  one.create.reset();
+  one.answers.reset();
+}
 inline kept kept_from(const state&, std::string address, std::string password) {
   return {.address = std::move(address), .password = std::move(password)};
 }

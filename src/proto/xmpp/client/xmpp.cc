@@ -14,6 +14,7 @@ import splice;
 import tern;
 import mux.core;
 import mux.net;
+import mux.proto.xmpp.changes;
 
 export namespace mux::proto::xmpp::client {
 
@@ -55,7 +56,78 @@ struct settings {
   // A proxy to connect through, where there is one: the domain's SRV
   // records are asked through it too.
   std::optional<net::proxy> proxy;
+  // XEP-0077: the account made on the server first, with these answers to
+  // what it asks beyond the address and the password.
+  std::optional<std::vector<tern::registration::answer>> create;
 };
+
+// What the server asks to register, as the account's form shows it: each
+// field of its form -- a captcha's picture, sent with it, decoded -- or
+// the old fields it lists, or only the page to register on.
+inline mux::proto::xmpp::registration_asked registration_asked_of(const account_id& id, const tern::registration::asked& asked) {
+  using mux::proto::xmpp::registration_field;
+  namespace shown = mux::proto::xmpp::field_shown;
+  const auto picture_of = [&](const tern::data_form::field& one) {
+    const auto cids = one.media ? one.media->uri | std::views::filter([](const tern::data_form::uri& where) {
+                                    return where.location.starts_with("cid:");
+                                  }) | std::views::transform([](const tern::data_form::uri& where) {
+                                    return std::string_view(where.location).substr(4);
+                                  }) | std::ranges::to<std::vector<std::string_view>>()
+                                : std::vector<std::string_view>{};
+    const auto sent = std::ranges::find_if(asked.data, [&](const tern::bob::data& one_sent) {
+      return std::ranges::contains(cids, std::string_view(one_sent.cid));
+    });
+    if (sent == asked.data.end())
+      return std::vector<std::uint8_t>{};
+    const std::string packed = sent->base64 | std::views::filter([](char c) { return c != ' ' && c != '\n' && c != '\r' && c != '\t'; }) |
+                               std::ranges::to<std::string>();
+    return tern::crypto::base64_decode(packed).value_or(std::vector<std::uint8_t>{});
+  };
+  const auto links_of = [](const tern::data_form::field& one) {
+    return one.media ? one.media->uri | std::views::filter([](const tern::data_form::uri& where) {
+                         return where.location.starts_with("http://") || where.location.starts_with("https://");
+                       }) | std::views::transform(&tern::data_form::uri::location) |
+                           std::ranges::to<std::vector<std::string>>()
+                     : std::vector<std::string>{};
+  };
+  // The form's type says how a field is shown; what XEP-0004 has not, typed.
+  const auto shown_as = [](const std::optional<std::string>& type) -> mux::proto::xmpp::field_shown_t {
+    static const std::map<std::string, mux::proto::xmpp::field_shown_t, std::less<>> by_type{
+        {"text-private", shown::masked{}}, {"hidden", shown::hidden{}}, {"fixed", shown::read{}}};
+    const auto found = type ? by_type.find(*type) : by_type.end();
+    return found == by_type.end() ? mux::proto::xmpp::field_shown_t{shown::typed{}} : found->second;
+  };
+  mux::proto::xmpp::registration_asked out{.account = id,
+                                            .instructions = asked.instructions.value_or(""),
+                                            .page = asked.page ? asked.page->url : std::nullopt};
+  if (asked.form) {
+    out.instructions = (asked.form->instructions | std::views::join_with('\n') | std::ranges::to<std::string>());
+    if (out.instructions.empty())
+      out.instructions = asked.instructions.value_or("");
+    // The address and the password are the form's own fields: not asked
+    // again.
+    out.fields = asked.form->fields | std::views::filter([](const tern::data_form::field& one) {
+                   return one.var != std::optional<std::string>("username") && one.var != std::optional<std::string>("password");
+                 }) |
+                 std::views::transform([&](const tern::data_form::field& one) {
+                   return registration_field{.var = one.var.value_or(""),
+                                             .label = one.label.value_or(one.var.value_or("")),
+                                             .desc = one.desc.value_or(""),
+                                             .shown = one.var ? shown_as(one.type) : shown::read{},
+                                             .value = one.value,
+                                             .required = one.required.has_value(),
+                                             .picture = picture_of(one),
+                                             .links = links_of(one),
+                                             .choices = one.options | std::views::transform([](const tern::data_form::option& o) {
+                                                          return o.label ? *o.label + " (" + o.value + ")" : o.value;
+                                                        }) | std::ranges::to<std::vector<std::string>>()};
+                 }) |
+                 std::ranges::to<std::vector<registration_field>>();
+  } else if (asked.email) {
+    out.fields.push_back(registration_field{.var = "email", .label = "Email", .shown = shown::typed{}, .required = true});
+  }
+  return out;
+}
 
 // The protocol spoken: the standard one, rooms (XEP-0045), bookmarks
 // (XEP-0402) and chat markers (XEP-0333).
@@ -417,14 +489,49 @@ class account {
     options.password = how_.password;
     options.resource = how_.resource;
     options.plain_without_tls = how_.plain_without_tls;
+    options.create = how_.create;
     options.self = {.identities = {{.category = "client", .type = "pc", .name = "mux"}}};
     options.caps_node = "https://github.com/j4niwzis/mux";
     auto made = tern::try_connect<proto>(wire, options, tern::answering<>{}, net::scheduler{loop_});
     if (!made) {
       log(id_, "the stream failed: {}", made.error().detail.empty() ? "the connection failed" : made.error().detail);
       wire_ = nullptr;
+      // Registering: what the server asks more, to the account's form; what
+      // it refused, said as what it means.
+      if (made.error().registration) {
+        sink_(registration_asked_of(id_, *made.error().registration));
+        say(connection::failed{"the server asks more to register: see the account's settings"});
+        return;
+      }
+      if (made.error().code == tern::connect_code::registration_refused) {
+        const auto& refused = made.error().stanza;
+        std::string meaning = made.error().detail;
+        const auto closed = [&](const auto&) { meaning = "the server does not let accounts be made here"; };
+        if (refused && refused->what)
+          refused->what->with(splice::overloaded{
+              [&](const tern::conditions::conflict&) { meaning = "that address is taken"; },
+              // The answers not taken -- a captcha's, perhaps: asked afresh
+              // next time, the form shown again.
+              [&](const tern::conditions::not_acceptable&) {
+                meaning = "the server did not take the answers -- a captcha's, perhaps: it asks again";
+                how_.create = std::vector<tern::registration::answer>{};
+              },
+              [&](const tern::conditions::service_unavailable& one) { closed(one); },
+              [&](const tern::conditions::not_allowed& one) { closed(one); },
+              [&](const tern::conditions::forbidden& one) { closed(one); },
+              [](const auto&) {}});
+        const std::string text = refused && refused->text ? refused->text->content : std::string();
+        say(connection::failed{"registration refused: " + meaning + (text.empty() ? std::string() : " -- " + text)});
+        return;
+      }
       say(connection::failed{made.error().detail.empty() ? "the connection failed" : made.error().detail});
       return;
+    }
+    // Registered: from now on only signed in to.
+    if (how_.create) {
+      log(id_, "registered");
+      how_.create.reset();
+      sink_(mux::proto::xmpp::registered{id_});
     }
     session_type& session = *made;
     session_ = &session;

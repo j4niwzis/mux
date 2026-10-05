@@ -34,17 +34,35 @@ inline gl_kind_t gl_kind_of(std::string_view renderer) {
       return gl_kind::emulated{};
   return gl_kind::hardware{};
 }
-// Said at the start, where it is seen: which renderer drawing got.
-inline void say_gl_renderer(const std::string& name) {
+// Said at the start, where it is seen: which renderer drawing got. And
+// whether GL is kept: emulated on the processor, Skia's own software
+// renderer draws much the faster, and the window is drawn with it instead.
+inline bool keep_gl_renderer(const std::string& name) {
   const std::string_view renderer = name.empty() ? std::string_view("unknown") : std::string_view(name);
   std::println(std::cerr, "[render] OpenGL renderer: {}", renderer);
-  splice::visit(splice::overloaded{[](gl_kind::hardware) {},
-                                   [](gl_kind::emulated) {
-                                     std::println(std::cerr,
-                                                  "[render] OpenGL is emulated on the processor here: Settings, "
-                                                  "Rendering, Software draws faster");
-                                   }},
-                gl_kind_of(renderer));
+  return splice::visit(splice::overloaded{[](gl_kind::hardware) { return true; },
+                                          [](gl_kind::emulated) {
+                                            std::println(std::cerr,
+                                                         "[render] OpenGL is emulated on the processor here: drawn "
+                                                         "with Skia's software renderer instead");
+                                            return false;
+                                          }},
+                       gl_kind_of(renderer));
+}
+// What the window's own pixels are, as Skia reads them: by their bytes'
+// order, as SDL names it -- not Skia's N32, which is another order on
+// another platform. Nothing, where Skia cannot draw into them as they are.
+inline std::optional<skia::SkColorType> colour_type_of(sdl::SDL_PixelFormat format) {
+  switch (format) {
+    case sdl::SDL_PIXELFORMAT_XRGB8888:
+    case sdl::SDL_PIXELFORMAT_ARGB8888:
+      return skia::kBGRA_8888_SkColorType;
+    case sdl::SDL_PIXELFORMAT_XBGR8888:
+    case sdl::SDL_PIXELFORMAT_ABGR8888:
+      return skia::kRGBA_8888_SkColorType;
+    default:
+      return std::nullopt;
+  }
 }
 
 class canvas_target {
@@ -71,11 +89,13 @@ class canvas_target {
         // "unknown" while drawing went on.
         using get_string_t = const unsigned char* (*)(unsigned int);
         // As above: the loader's one pointer type, made the function's.
-        if (const auto get_string = reinterpret_cast<get_string_t>(sdl::SDL_GL_GetProcAddress("glGetString")))
-          say_gl_renderer(splice::bytes::text_of_terminated(get_string(0x1F01 /* GL_RENDERER */)));
-        else if (interface && interface->fFunctions.fGetString)
-          say_gl_renderer(splice::bytes::text_of_terminated(interface->fFunctions.fGetString(0x1F01 /* GL_RENDERER */)));
-        if (interface)
+        const auto get_string = reinterpret_cast<get_string_t>(sdl::SDL_GL_GetProcAddress("glGetString"));
+        const bool kept = keep_gl_renderer(
+            get_string ? splice::bytes::text_of_terminated(get_string(0x1F01 /* GL_RENDERER */))
+            : interface && interface->fFunctions.fGetString
+                ? splice::bytes::text_of_terminated(interface->fFunctions.fGetString(0x1F01 /* GL_RENDERER */))
+                : std::string());
+        if (interface && kept)
           context_ = skia::MakeGL(std::move(interface));
       }
       if (!context_ && gl_) {
@@ -150,11 +170,11 @@ class canvas_target {
     // and they stay from one frame to the next -- the kept frame themselves.
     if (!this->on_gpu()) {
       sdl::SDL_Surface* shown = sdl::SDL_GetWindowSurface(window_);
-      if (shown && shown->pixels &&
-          (shown->format == sdl::SDL_PIXELFORMAT_XRGB8888 || shown->format == sdl::SDL_PIXELFORMAT_ARGB8888)) {
+      const auto colour_type = shown ? colour_type_of(shown->format) : std::nullopt;
+      if (shown && shown->pixels && colour_type) {
         if (!direct_ || shown != shown_ || shown->pixels != shown_pixels_ || shown->w != width_ || shown->h != height_) {
-          surface_ = skia::WrapPixels(skia::SkImageInfo::MakeN32Premul(shown->w, shown->h), shown->pixels,
-                                      static_cast<std::size_t>(shown->pitch));
+          surface_ = skia::WrapPixels(skia::SkImageInfo::Make(shown->w, shown->h, *colour_type, skia::kPremul_SkAlphaType),
+                                      shown->pixels, static_cast<std::size_t>(shown->pitch));
           shown_ = shown;
           shown_pixels_ = shown->pixels;
           width_ = shown->w;
@@ -239,9 +259,9 @@ class canvas_target {
     sdl::SDL_Surface* shown = sdl::SDL_GetWindowSurface(window_);
     if (!shown)
       return;
-    // Skia's N32 is SDL's ARGB8888 on a little-endian machine: the same
-    // bytes in the same order. Anything else is converted.
-    const auto info = skia::SkImageInfo::MakeN32Premul(width_, height_);
+    // Read out as SDL's ARGB8888 -- Skia's BGRA, the same bytes in the same
+    // order on a little-endian machine -- and converted to the window's.
+    const auto info = skia::SkImageInfo::Make(width_, height_, skia::kBGRA_8888_SkColorType, skia::kPremul_SkAlphaType);
     const std::size_t pitch = static_cast<std::size_t>(width_) * 4;
     // Not zeroed: every byte is written by the read.
     const auto pixels = std::make_unique_for_overwrite<std::byte[]>(pitch * static_cast<std::size_t>(height_));

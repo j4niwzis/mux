@@ -69,11 +69,27 @@ namespace marks = nodes::mark;
 namespace steps = nodes::path_step;
 
 [[nodiscard]] inline IconShape shape_of(icon::none) { return {}; }
-// A handset: its curve, and its two ends heavier.
+// A handset, filled, as the call buttons of Telegram and Element draw it:
+// the earpiece at the upper left, the mouthpiece at the lower right, the
+// grip curving between them.
 [[nodiscard]] inline IconShape shape_of(icon::phone) {
-  return {{{marks::arc{-7.5f, -7.5f, 7.5f, 7.5f, 135.0f, 180.0f}},
-           {marks::line{-7.8f, -2.4f, -2.4f, -7.8f}, 3.4f},
-           {marks::line{2.4f, 7.8f, 7.8f, 2.4f}, 3.4f}}};
+  return {{{marks::path{{steps::move{-5.38f, -1.21f},
+                         steps::cubic{-3.94f, 1.62f, -1.62f, 3.93f, 1.21f, 5.38f},
+                         steps::line{3.41f, 3.18f},
+                         steps::cubic{3.68f, 2.91f, 4.08f, 2.82f, 4.43f, 2.94f},
+                         steps::cubic{5.55f, 3.31f, 6.76f, 3.51f, 8.00f, 3.51f},
+                         steps::cubic{8.55f, 3.51f, 9.00f, 3.96f, 9.00f, 4.51f},
+                         steps::line{9.00f, 8.00f},
+                         steps::cubic{9.00f, 8.55f, 8.55f, 9.00f, 8.00f, 9.00f},
+                         steps::cubic{-1.39f, 9.00f, -9.00f, 1.39f, -9.00f, -8.00f},
+                         steps::cubic{-9.00f, -8.55f, -8.55f, -9.00f, -8.00f, -9.00f},
+                         steps::line{-4.50f, -9.00f},
+                         steps::cubic{-3.95f, -9.00f, -3.50f, -8.55f, -3.50f, -8.00f},
+                         steps::cubic{-3.50f, -6.75f, -3.30f, -5.55f, -2.93f, -4.43f},
+                         steps::cubic{-2.82f, -4.08f, -2.90f, -3.69f, -3.18f, -3.41f},
+                         steps::line{-5.38f, -1.21f},
+                         steps::close{}}},
+            0.0f, true}}};
 }
 [[nodiscard]] inline IconShape shape_of(icon::person) {
   return {{{marks::circle{0.0f, -4.0f, 3.8f}}, {marks::arc{-7.5f, 2.0f, 7.5f, 17.0f, 180.0f, 180.0f}}}};

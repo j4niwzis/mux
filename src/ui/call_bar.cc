@@ -46,6 +46,8 @@ struct call_view {
                            return std::format("{}:{:02}", gone.count() / 60, gone.count() % 60);
                          }},
       view.phase);
+  if (!view.available)
+    return where + " · calls aren't in this build";
   return view.encrypted ? where : where + " · not end-to-end encrypted";
 }
 

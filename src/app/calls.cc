@@ -30,6 +30,14 @@ class calls_part {
   void apply(const request::start_call& one) {
     if (current_)
       return;
+    // A build without calls: said so, and nothing sent -- it would only
+    // fail, and the room be told it had.
+    if (!calls::kAvailable) {
+      s_->root().show_message("Calls aren't in this build",
+                              "This mux was built without calls (MUX_CALLS=OFF). Configure it with -DMUX_CALLS=ON to "
+                              "make and take voice calls; libdatachannel is taken from the system where it is installed.");
+      return;
+    }
     current_.emplace(call{.in = one.in, .id = new_call_id(), .outgoing = true, .state = state::starting{}});
     // The microphone asked for now, where the system asks the user: the
     // sound opens once it is given (mux.calls.media tries again).
@@ -221,6 +229,11 @@ class calls_part {
                                        s_->net->call(current_->in, current_->id,
                                                      change::call_said_t{change::call_said::hangup{change::call_end_t{change::call_end::failed{}}}});
                                        this->end();
+                                       s_->root().show_message(
+                                           "The call failed",
+                                           "No connection could be made between the two of you. Where you are on "
+                                           "different networks, the account's server has to offer a relay (a TURN "
+                                           "server) for calls to get through.");
                                      },
                                      [&](calls::said::ended) { this->end(); }},
                   said);

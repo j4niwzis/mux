@@ -488,6 +488,12 @@ int run(App& app, const options& how, const events::kinds& kinds) {
       }
       const double events_done = detail::now_ms();
       app.before_frame();
+      // Keys the program's own controls stand for -- a text menu's Paste is
+      // Ctrl+V -- given to what has the focus, down and up, before the frame.
+      for (const skiff::scene::key::down& press : std::exchange(skiff::scene::hostWork().keys, {})) {
+        router.key(press);
+        router.key(skiff::scene::key::up{press.key, press.modifiers});
+      }
       const double app_done = detail::now_ms();
       scene.update(app_done);
       const double ticked = detail::now_ms();

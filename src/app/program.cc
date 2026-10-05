@@ -310,6 +310,7 @@ struct app : kept_settings {
   }
   void apply(const request::close_dialog&);
   void apply(const request::copy_text& one);
+  void apply(const request::text_key& one);
   void apply(const request::give_passphrase&);
   // The account whose room keys a passphrase was asked for.
   std::optional<mux::account_id> keys_of;

@@ -281,8 +281,8 @@ template <class Actions>
   // The link the press was on: one in the text -- its text asked a menu
   // of its own with it, which this one is in place of -- or the
   // preview's.
-  if (const auto& asked = skiff::nodes::textMenusAsked(); !asked.empty() && asked.back().link)
-    facts.pressed_link = *asked.back().link;
+  if (auto pressed = skiff::scene::pressedLink())
+    facts.pressed_link = std::move(*pressed);
   else if (const auto& preview = one.parts.body.parts.preview;
            preview && preview->fState.fBounds.contains(press.x, press.y))
     facts.pressed_link = preview->url;

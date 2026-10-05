@@ -112,8 +112,8 @@ struct reactions_box : nodes::Stack {
       facts.selection = one.parts.body.parts.text.hasSelection();
       facts.copied = facts.selection ? one.parts.body.parts.text.selected() : one.plain;
       facts.deletable = entry.mine && !entry.event.empty();
-      if (const auto& asked = skiff::nodes::textMenusAsked(); !asked.empty() && asked.back().link)
-        facts.pressed_link = *asked.back().link;
+      if (auto pressed = skiff::scene::pressedLink())
+        facts.pressed_link = std::move(*pressed);
       else if (const auto& preview = one.parts.body.parts.preview; preview && preview->fState.fBounds.contains(press.x, press.y))
         facts.pressed_link = preview->url;
       if (!entry.event.empty() && !entry.to.empty())

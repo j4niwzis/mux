@@ -49,6 +49,13 @@ void app::apply(const request::copy_text& one) {
   skiff::scene::setClipboardText(one.text);
   root().close_text_menu();
 }
+// A field's text menu: its item's key given to the field with the focus,
+// with Ctrl -- the field's own paste, cut, copy or select all -- and the
+// menu gone.
+void app::apply(const request::text_key& one) {
+  skiff::scene::giveKey({one.key, skiff::scene::Modifiers{}.with<skiff::scene::modifier::control>(true)});
+  root().close_text_menu();
+}
 
 // The developer tools, for the chat being read.
 void app::apply(const request::close_dialog&) { root().close_dialog(); }

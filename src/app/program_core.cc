@@ -276,10 +276,14 @@ void app::before_frame() {
   auto pending = std::exchange(ask.requests, {});
   for (const request_t& one : pending)
     splice::visit([this](const auto& each) { this->route(each); }, one);
-  // A selectable text pressed with the right button: its menu, the last
-  // asked for.
-  if (auto asked = std::exchange(skiff::nodes::textMenusAsked(), {}); !asked.empty() && !root().context_menu_up())
-    root().show_text_menu(std::move(asked.back().text), std::move(asked.back().link));
+  // A selectable text or a field pressed with the right button -- a long
+  // press, on a phone: its menu, the last asked for.
+  if (auto asked = std::exchange(skiff::scene::textMenusAsked(), {}); !asked.empty() && !root().context_menu_up())
+    splice::visit(splice::overloaded{[&](skiff::scene::text_menu::of_text& text) {
+                                       root().show_text_menu(std::move(text.text), std::move(text.link));
+                                     },
+                                     [&](const skiff::scene::text_menu::of_field& field) { root().show_field_menu(field); }},
+                  asked.back());
   // What the parts left to do: a chat opened, a link followed; the window
   // made again, brought up to date; the emoji picked lately kept.
   if (auto chat = std::exchange(shared.chat_due, std::nullopt))

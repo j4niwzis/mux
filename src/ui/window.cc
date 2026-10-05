@@ -41,30 +41,66 @@ struct window : scene::Node {
 
   // What the window holds, made anew when the theme changes: what is made
   // takes its colours then. Its layers, bottom to top.
-  // A selectable text's menu: Copy, what it selected; and Copy Link, where
-  // the press was on a link.
+  // A text menu, where the pointer was pressed -- a right press, a long one
+  // on a phone. A selectable text's: Copy, what it selected; and Copy Link,
+  // where the press was on a link. A field's: Cut and Copy where something
+  // is selected and it is no password's, Paste, Select All -- each the key
+  // the field takes for it, given to it (it keeps the focus: a button takes
+  // none).
   struct text_menu : nodes::Stack {
     struct copy_it {
       Actions* actions;
       std::string text;
       void operator()() const { actions->copy_text(text); }
     };
+    struct key_it {
+      Actions* actions;
+      scene::Key key;
+      void operator()() const { actions->text_key(key); }
+    };
     struct parts_t {
-      widgets::Button<copy_it> copy;
+      std::optional<widgets::Button<copy_it>> copy;
       std::optional<widgets::Button<copy_it>> copy_link;
+      std::optional<widgets::Button<key_it>> cut;
+      std::optional<widgets::Button<key_it>> copy_selected;
+      std::optional<widgets::Button<key_it>> paste;
+      std::optional<widgets::Button<key_it>> select_all;
     } parts;
-    text_menu(const ui_needs<Actions>& n, std::string text, std::optional<std::string> link)
-        : text_menu(*n.colours, n.actions, std::move(text), std::move(link)) {}
-    text_menu(const palette& colours, Actions* a, std::string text, std::optional<std::string> link)
-        : parts{.copy = widgets::Button<copy_it>(colours.widgets, "Copy", {a, std::move(text)})} {
-      if (link) {
-        parts.copy_link.emplace(colours.widgets, "Copy Link", copy_it{a, std::move(*link)});
-        parts.copy_link->apply({.fillX = true, .height = 30.0f});
+    // A selectable text's.
+    text_menu(const ui_needs<Actions>& n, std::string text, std::optional<std::string> link) : text_menu(*n.colours) {
+      parts.copy.emplace(n.colours->widgets, "Copy", copy_it{n.actions, std::move(text)});
+      if (link)
+        parts.copy_link.emplace(n.colours->widgets, "Copy Link", copy_it{n.actions, std::move(*link)});
+      this->rows();
+    }
+    // A field's.
+    text_menu(const ui_needs<Actions>& n, const scene::text_menu::of_field& field) : text_menu(*n.colours) {
+      const auto item = [&](std::optional<widgets::Button<key_it>>& button, std::string label, scene::Key key) {
+        button.emplace(n.colours->widgets, std::move(label), key_it{n.actions, key});
+      };
+      if (field.selection && !field.masked) {
+        item(parts.cut, "Cut", scene::keys::kX);
+        item(parts.copy_selected, "Copy", scene::keys::kC);
       }
+      item(parts.paste, "Paste", scene::keys::kV);
+      item(parts.select_all, "Select All", scene::keys::kA);
+      this->rows();
+    }
+    // How tall it is, for where it is put: its rows and its padding.
+    [[nodiscard]] float tall() const {
+      const auto& [... row] = parts;
+      return 12.0f + 34.0f * static_cast<float>((0 + ... + (row ? 1 : 0)));
+    }
+
+   private:
+    explicit text_menu(const palette& colours) {
       fState.apply({.width = 150.0f, .autoSize = scene::axes::kY, .padding = {6.0f, 6.0f, 6.0f, 6.0f}, .cornerRadius = 10.0f,
                     .background = colours.popup(), .border = scene::Border{colours.band, 1.0f},
                     .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
-      parts.copy.apply({.fillX = true, .height = 30.0f});
+    }
+    void rows() {
+      auto& [... row] = parts;
+      ((row ? (row->apply({.fillX = true, .height = 30.0f}), 0) : 0), ...);
     }
   };
   // The dialogs protocols have of their own (dialogs(state), made by their
@@ -392,13 +428,18 @@ struct window : scene::Node {
   // A selectable text's menu, where the pointer was pressed, kept in the
   // window; and gone.
   void show_text_menu(std::string text, std::optional<std::string> link = std::nullopt) {
+    this->place_text_menu(parts.now->parts.text_menu_up.emplace(needs_, std::move(text), std::move(link)));
+  }
+  // A field's: Paste and the rest, for the field with the focus.
+  void show_field_menu(const scene::text_menu::of_field& field) {
+    this->place_text_menu(parts.now->parts.text_menu_up.emplace(needs_, field));
+  }
+  void place_text_menu(text_menu& menu) {
     auto& now = *parts.now;
     const skia::SkRect box = fState.fBounds;
-    const float tall = link ? 80.0f : 44.0f;
-    now.parts.text_menu_up.emplace(needs_, std::move(text), std::move(link));
-    now.parts.text_menu_up->apply({.place = scene::anchor::kTopLeft,
-                                    .x = std::clamp(now.last_press.x() - box.fLeft, 0.0f, std::max(0.0f, box.width() - 150.0f)),
-                                    .y = std::clamp(now.last_press.y() - box.fTop, 0.0f, std::max(0.0f, box.height() - tall))});
+    menu.apply({.place = scene::anchor::kTopLeft,
+                .x = std::clamp(now.last_press.x() - box.fLeft, 0.0f, std::max(0.0f, box.width() - 150.0f)),
+                .y = std::clamp(now.last_press.y() - box.fTop, 0.0f, std::max(0.0f, box.height() - menu.tall()))});
     now.invalidateLayout();
     now.markDamaged();
   }

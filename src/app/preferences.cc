@@ -141,6 +141,30 @@ class preferences_part {
       (void)k_->write();
     });
   }
+  void apply(const request::flip_account_notify_name&) {
+    s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+      auto& kept = mux::config::notify_name_in(account);
+      kept = !kept.value_or(k_->notifications.show_name);
+      (void)k_->write();
+    });
+  }
+  void apply(const request::flip_account_notify_text&) {
+    s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+      auto& kept = mux::config::notify_text_in(account);
+      kept = !kept.value_or(k_->notifications.show_text);
+      (void)k_->write();
+    });
+  }
+  // Every message: as every account's, nothing kept; mentions: kept.
+  void apply(const request::set_account_notify_mode& one) {
+    s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
+      auto& kept = mux::config::notify_mode_in(account);
+      kept = splice::visit(splice::overloaded{[](mux::config::notify_mode::mentions) { return std::optional<std::string>("mentions"); },
+                                              [](const auto&) { return std::optional<std::string>(); }},
+                           one.mode);
+      (void)k_->write();
+    });
+  }
   void apply(const request::flip_account_notify_sound&) {
     s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
       auto& kept = mux::config::notify_sound_in(account);

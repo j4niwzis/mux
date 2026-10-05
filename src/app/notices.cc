@@ -56,14 +56,13 @@ class notices_part {
       return;
     }
     const mux::conversation* chat = s_->model->find(said.in);
-    const auto& settings = s_->kept->notifications;
     std::string title = "mux";
-    if (settings.show_name && chat) {
+    if (decision.show_name && chat) {
       const std::string who = mux::ui::sender_name(*chat, said.sender);
       title = mux::ui::is_group(*chat) ? std::format("{} ({})", who, mux::ui::display_name(*chat)) : who;
     }
     std::string text = "New message";
-    if (settings.show_text) {
+    if (decision.show_text) {
       text = said.body.plain.empty() && said.attachment ? std::string("Picture or file") : said.body.plain;
       if (text.size() > 300) {
         // Cut where a character starts: half of one is not UTF-8, and the bus

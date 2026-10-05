@@ -245,6 +245,8 @@ struct kept_settings {
   struct notify_decision {
     bool popup = false;
     bool sound = false;
+    bool show_name = true;
+    bool show_text = true;
   };
   [[nodiscard]] mux::config::notify_mode_t notify_mode_of(const conversation_id& chat) const {
     if (muted.contains(chat))
@@ -253,15 +255,25 @@ struct kept_settings {
     return own == notify_modes.end() ? mux::config::notify_mode_t{mux::config::notify_mode::by_default{}} : own->second;
   }
   [[nodiscard]] notify_decision notify_for(const conversation_id& chat, bool mentions_me) {
+    const mux::config::account_t* account = this->settings_of(chat.account.address);
+    // A chat's own choice, else its account's, else every message.
+    const auto mode = splice::visit(
+        splice::overloaded{[&](mux::config::notify_mode::by_default) {
+                             return account ? mux::config::account_notify_mode_of(*account)
+                                            : mux::config::notify_mode_t{mux::config::notify_mode::by_default{}};
+                           },
+                           [](const auto& own) { return mux::config::notify_mode_t{own}; }},
+        this->notify_mode_of(chat));
     const bool wanted = splice::visit(splice::overloaded{[](mux::config::notify_mode::off) { return false; },
                                                    [&](mux::config::notify_mode::mentions) { return mentions_me; },
                                                    [](const auto&) { return true; }},
-                                   this->notify_mode_of(chat));
+                                   mode);
     if (!wanted)
       return {};
-    const mux::config::account_t* account = this->settings_of(chat.account.address);
     return {account ? mux::config::notify_of(*account).value_or(notifications.desktop) : notifications.desktop,
-            account ? mux::config::notify_sound_of(*account).value_or(notifications.sound) : notifications.sound};
+            account ? mux::config::notify_sound_of(*account).value_or(notifications.sound) : notifications.sound,
+            account ? mux::config::notify_name_of(*account).value_or(notifications.show_name) : notifications.show_name,
+            account ? mux::config::notify_text_of(*account).value_or(notifications.show_text) : notifications.show_text};
   }
 
   // Which room events a chat shows, kind by kind: its own choices, its

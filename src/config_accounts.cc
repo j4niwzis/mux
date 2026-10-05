@@ -194,6 +194,12 @@ struct decrypt {
 [[nodiscard]] inline std::optional<bool>& notify_in(account_t& one) {
   return one.shared.notify;
 }
+[[nodiscard]] inline notify_mode_t account_notify_mode_of(const account_t& one) { return notify_mode_of(one.shared.notify_mode); }
+[[nodiscard]] inline std::optional<std::string>& notify_mode_in(account_t& one) { return one.shared.notify_mode; }
+[[nodiscard]] inline const std::optional<bool>& notify_name_of(const account_t& one) { return one.shared.notify_name; }
+[[nodiscard]] inline std::optional<bool>& notify_name_in(account_t& one) { return one.shared.notify_name; }
+[[nodiscard]] inline const std::optional<bool>& notify_text_of(const account_t& one) { return one.shared.notify_text; }
+[[nodiscard]] inline std::optional<bool>& notify_text_in(account_t& one) { return one.shared.notify_text; }
 [[nodiscard]] inline const std::optional<bool>& notify_sound_of(const account_t& one) {
   return one.shared.notify_sound;
 }

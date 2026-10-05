@@ -117,6 +117,12 @@ struct account_shared {
   std::optional<std::int64_t> jump_search;
   std::optional<bool> notify;
   std::optional<bool> notify_sound;
+  // Which of its messages notify -- every one, or mentions and keywords
+  // alone -- as word_of(notify_mode_t) says it; and what a notification of
+  // it shows: the sender's name, the message's text.
+  std::optional<std::string> notify_mode;
+  std::optional<bool> notify_name;
+  std::optional<bool> notify_text;
   std::optional<std::string> proxy;
   std::optional<std::string> colour;
   std::optional<bool> strip;

@@ -303,29 +303,64 @@ struct account_privacy : nodes::Stack {
 // An account's Notifications page: whether what comes through it is told --
 // a message, an invite -- and with sound; each chat of it may choose again
 // in its own settings.
+// What it has, as the main Notifications page has it: whether it notifies
+// at all, of which messages -- a chat's Default is this -- what a
+// notification shows, and the sound.
+struct account_notify_values {
+  bool notify = true;
+  bool sound = true;
+  bool name = true;
+  bool text = true;
+  bool mentions_only = false;
+};
 template <class Actions>
 struct account_notifications : nodes::Stack {
   using notify_row = switch_row<ask<Actions, &Actions::flip_account_notify>>;
   using notify_sound_row = switch_row<ask<Actions, &Actions::flip_account_notify_sound>>;
+  using name_row = switch_row<ask<Actions, &Actions::flip_account_notify_name>>;
+  using text_row = switch_row<ask<Actions, &Actions::flip_account_notify_text>>;
+  struct pick_mode {
+    Actions* actions;
+    void operator()(std::size_t index) const {
+      actions->set_account_notify_mode(index == 1 ? config::notify_mode_t{config::notify_mode::mentions{}}
+                                                  : config::notify_mode_t{config::notify_mode::all{}});
+    }
+  };
   struct parts_t {
     nodes::Text title;
     notify_row notify;
+    choice_menu<pick_mode> which;
+    nodes::Text shown_title;
+    name_row name;
+    text_row text;
+    nodes::Text sound_title;
     notify_sound_row notify_sound;
     nodes::Text note;
   } parts;
-  account_notifications(const ui_needs<Actions>& n, bool notify_on, bool sound_on)
+  account_notifications(const ui_needs<Actions>& n, const account_notify_values& now)
       : parts{.title = section_title(*n.colours, "NOTIFICATIONS"),
               .notify = notify_row(*n.colours, "Notifications from this account", {n.actions}),
-              .notify_sound = notify_sound_row(*n.colours, "With sound", {n.actions}),
-              .note = note_text(*n.colours, "Messages and invites that come through it are told as the Notifications "
-                                            "settings say -- by the system, or by mux's own. Each chat can choose again "
-                                            "in its own settings.")} {
+              .which = choice_menu<pick_mode>(*n.colours, "Messages", {"Every message", "Only @mentions and keywords"},
+                                              now.mentions_only ? 1 : 0, pick_mode{n.actions}),
+              .shown_title = section_title(*n.colours, "SHOWN IN A NOTIFICATION"),
+              .name = name_row(*n.colours, "The sender's name", {n.actions}),
+              .text = text_row(*n.colours, "The message's text", {n.actions}),
+              .sound_title = section_title(*n.colours, "SOUND"),
+              .notify_sound = notify_sound_row(*n.colours, "Play a sound", {n.actions}),
+              .note = note_text(*n.colours, "Messages and invites that come through this account are told as the Notifications "
+                                            "settings say -- by the system, or by mux's own -- with these choices in place of "
+                                            "theirs. Each chat can choose again in its own settings; its Default is this "
+                                            "page's.")} {
     this->setGap(8.0f);
     fState.apply({.fill = true});
-    parts.note.apply({.fillX = true});
+    for (nodes::Text* title : {&parts.shown_title, &parts.sound_title})
+      title->apply({.margin = {10.0f, 0.0f, 0.0f, 0.0f}});
+    parts.note.apply({.fillX = true, .margin = {10.0f, 0.0f, 0.0f, 0.0f}});
     parts.note.setWrapped(true);
-    parts.notify.parts.toggle.setOnNow(notify_on);
-    parts.notify_sound.parts.toggle.setOnNow(sound_on);
+    parts.notify.parts.toggle.setOnNow(now.notify);
+    parts.name.parts.toggle.setOnNow(now.name);
+    parts.text.parts.toggle.setOnNow(now.text);
+    parts.notify_sound.parts.toggle.setOnNow(now.sound);
   }
   void say(std::string, bool) {}
 };
@@ -647,7 +682,15 @@ struct accounts_panel : closes_on_escape<Actions> {
                                            config::link_previews_of(one));
             },
             [&](account_page::notifications) {
-              detail.template emplace<6>(needs_, config::notify_of(one).value_or(true), config::notify_sound_of(one).value_or(true));
+              detail.template emplace<6>(
+                  needs_, account_notify_values{
+                              .notify = config::notify_of(one).value_or(true),
+                              .sound = config::notify_sound_of(one).value_or(true),
+                              .name = config::notify_name_of(one).value_or(true),
+                              .text = config::notify_text_of(one).value_or(true),
+                              .mentions_only = splice::visit(splice::overloaded{[](config::notify_mode::mentions) { return true; },
+                                                                                [](const auto&) { return false; }},
+                                                             config::account_notify_mode_of(one))});
             },
             [&](account_page::chats) {
               detail.template emplace<5>(this->actions, *needs_.colours, *needs_.looks, *needs_.shared,

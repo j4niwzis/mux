@@ -62,10 +62,11 @@ function(mux_add_android_apk target)
     COMMAND "${Python3_EXECUTABLE}" "${packager}"
       --resources "${out}/mux-resources.apk" --dex "${out}/classes.dex"
       --library "$<TARGET_FILE:${target}>" --library "$<TARGET_FILE:SDL3::SDL3>"
-      ${search} --readelf "${MUX_READELF}" --out "${out}/mux-unaligned.apk"
+      ${search} --readelf "${MUX_READELF}" --abi "${MUX_ANDROID_ABI}" --out "${out}/mux-unaligned.apk"
     COMMAND "${MUX_ZIPALIGN}" -f 4 "${out}/mux-unaligned.apk" "${out}/mux-unsigned.apk"
     COMMAND "${MUX_ZIPALIGN}" -c 4 "${out}/mux-unsigned.apk"
     DEPENDS ${target} SDL3::SDL3 "${out}/classes.dex" "${out}/mux-resources.apk" "${packager}"
+      "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../android/abis.json"
     VERBATIM COMMAND_EXPAND_LISTS)
   add_custom_target(mux-apk-unsigned DEPENDS "${out}/mux-unsigned.apk")
   if(MUX_ANDROID_TEST_KEY)

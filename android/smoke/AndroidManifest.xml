@@ -3,7 +3,7 @@
     package="io.github.j4niwzis.mux.smoke">
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-feature android:glEsVersion="0x00030000" android:required="true" />
+    <uses-feature android:glEsVersion="0x00020000" android:required="false" />
     <application android:label="Mux bridge check" android:allowBackup="false"
         android:hasCode="true" android:extractNativeLibs="true"
         android:theme="@android:style/Theme.Material.NoActionBar">

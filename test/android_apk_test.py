@@ -27,7 +27,7 @@ class Packaging(unittest.TestCase):
         path.write_bytes(data)
         return path
 
-    def metadata(self, path, _):
+    def metadata(self, path, _readelf, _abi):
         return path.name, {'libmux.so': ['libSDL3.so', 'libc.so'],
                            'libSDL3.so': ['libandroid.so', 'libc.so']}[path.name]
 
@@ -63,13 +63,29 @@ class Packaging(unittest.TestCase):
                  '0x1 (NEEDED) Shared library: [libc.so]\n'
                  '0xe (SONAME) Library soname: [libmux.so]\n')
         with patch.object(apk.subprocess, 'check_output', return_value=valid):
-            self.assertEqual(apk.elf(self.app, 'readelf'), ('libmux.so', ['libc.so']))
-        for text, expected in ((valid.replace('AArch64', 'X86-64'), 'ARM64'),
+            self.assertEqual(apk.elf(self.app, 'readelf', 'arm64-v8a'), ('libmux.so', ['libc.so']))
+        for text, expected in ((valid.replace('AArch64', 'X86-64'), 'arm64-v8a'),
                                (valid.replace('0x4000', '0x1000'), '16 KB')):
             with self.subTest(expected=expected):
                 with patch.object(apk.subprocess, 'check_output', return_value=text):
                     with self.assertRaisesRegex(ValueError, expected):
-                        apk.elf(self.app, 'readelf')
+                        apk.elf(self.app, 'readelf', 'arm64-v8a')
+
+    def test_32_bit_arm(self):
+        valid = ('Type: DYN (Shared object file)\nMachine: ARM\n'
+                 'LOAD 0x000000 0x000000 0x000000 0x001000 0x001000 R E 0x4000\n'
+                 '0xe (SONAME) Library soname: [libmux.so]\n')
+        with patch.object(apk.subprocess, 'check_output', return_value=valid):
+            self.assertEqual(apk.elf(self.app, 'readelf', 'armeabi-v7a'), ('libmux.so', []))
+            with self.assertRaisesRegex(ValueError, 'arm64-v8a'):
+                apk.elf(self.app, 'readelf', 'arm64-v8a')
+        resources = self.root / 'resources.apk'
+        with zipfile.ZipFile(resources, 'w') as archive:
+            archive.writestr('AndroidManifest.xml', b'manifest')
+        apk.package(resources, self.library('classes.dex', b'dex'), {'libmux.so': self.app}, self.root / 'arm.apk',
+                    'armeabi-v7a')
+        with zipfile.ZipFile(self.root / 'arm.apk') as archive:
+            self.assertEqual(archive.read('lib/armeabi-v7a/libmux.so'), b'app')
 
     def test_reproducible_apk_and_uncompressed_resource_table(self):
         resources = self.root / 'resources.apk'

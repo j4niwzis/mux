@@ -6,12 +6,18 @@ on:
         description: Build the experimental full client instead of the bridge check
         type: boolean
         default: false
+      abi:
+        description: The Android ABI to build for (android/abis.json)
+        type: choice
+        options: [arm64-v8a, armeabi-v7a]
+        default: arm64-v8a
 
 permissions:
   contents: read
 
 env:
   CPM_SOURCE_CACHE: ${{ github.workspace }}/.cache/cpm
+  ABI: ${{ inputs.abi || 'arm64-v8a' }}
 
 jobs:
   apk:
@@ -52,13 +58,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: j4niwzis/minimal-android-ndk.cpp
-          ref: 1c68644f3e953ba1fa373a0ba69d5a5a203dd377
+          ref: f1ef538a8f0c0a9394202005b11ab49ae19a72af
           path: ndk-tool
+      - name: Toolchain manifest for the ABI
+        id: abi
+        run: |
+          python3 tools/android_manifest.py --abi "$ABI" --out android-toolchain.json
+          echo "rust=$(python3 tools/android_manifest.py --abi "$ABI" --field rust)" >> "$GITHUB_OUTPUT"
+          echo "sysroot-triple=$(python3 tools/android_manifest.py --abi "$ABI" --field sysroot-triple)" >> "$GITHUB_OUTPUT"
       - id: toolchain
         uses: actions/cache/restore@v4
         with:
-          path: ~/.cache/mux-android
-          key: mux-android-clang23-v2-${{ hashFiles('android/toolchain-sources.json', 'ndk-tool/src/**', 'ndk-tool/CMakeLists.txt') }}
+          path: ~/.cache/mux-android-${{ env.ABI }}
+          key: mux-android-${{ env.ABI }}-clang23-v2-${{ hashFiles('android/toolchain-sources.json', 'android/abis.json', 'ndk-tool/src/**', 'ndk-tool/CMakeLists.txt') }}
       - name: Build toolchain and signer from source
         if: steps.toolchain.outputs.cache-hit != 'true'
         run: |
@@ -67,27 +79,27 @@ jobs:
             -DCMAKE_CXX_FLAGS='-stdlib=libc++ -fno-experimental-new-constant-interpreter'
           cmake --build ndk-tool/build -j4
           ndk-tool/build/minimal-android-ndk \
-            --root "$HOME/.cache/mux-android" \
-            --manifest "$PWD/android/toolchain-sources.json" \
+            --root "$HOME/.cache/mux-android-$ABI" \
+            --manifest "$PWD/android-toolchain.json" \
             --clang clang-23 --llvm-bin /usr/lib/llvm-23/bin --jobs 4 \
             build runtimes toolchain-file framework-res apksigner
           # toolchain-file builds the headers/stubs/CRT, but does not depend
           # on the C++ runtimes or compiler-rt. Require the complete sysroot
           # before caching it or attempting the application's CMake probes.
-          test -f "$HOME/.cache/mux-android/sysroot/usr/lib/libc++.modules.json"
-          api=$(python3 -c 'import json; print(json.load(open("android/toolchain-sources.json"))["target"]["api"])')
+          test -f "$HOME/.cache/mux-android-$ABI/sysroot/usr/lib/libc++.modules.json"
+          api=$(python3 -c 'import json; print(json.load(open("android-toolchain.json"))["target"]["api"])')
           for library in libc++.a libc++abi.a libunwind.a; do
-            test -f "$HOME/.cache/mux-android/sysroot/usr/lib/aarch64-linux-android/$api/$library"
+            test -f "$HOME/.cache/mux-android-$ABI/sysroot/usr/lib/${{ steps.abi.outputs.sysroot-triple }}/$api/$library"
           done
       - name: Cache the completed toolchain
         if: steps.toolchain.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: ~/.cache/mux-android
-          key: mux-android-clang23-v2-${{ hashFiles('android/toolchain-sources.json', 'ndk-tool/src/**', 'ndk-tool/CMakeLists.txt') }}
+          path: ~/.cache/mux-android-${{ env.ABI }}
+          key: mux-android-${{ env.ABI }}-clang23-v2-${{ hashFiles('android/toolchain-sources.json', 'android/abis.json', 'ndk-tool/src/**', 'ndk-tool/CMakeLists.txt') }}
       - name: Rust Android target
         if: inputs.full_client
-        run: rustup target add aarch64-linux-android
+        run: rustup target add ${{ steps.abi.outputs.rust }}
 
       # As in check.yml, keep both the build and the fetched sources, and
       # save them even if compilation fails. Android and desktop outputs
@@ -95,7 +107,7 @@ jobs:
       - name: Identify the build cache
         id: build-identity
         env:
-          PROFILE_HASH: ${{ hashFiles('.github/workflows/android.yml', 'android/toolchain-sources.json') }}
+          PROFILE_HASH: ${{ hashFiles('.github/workflows/android.yml', 'android/toolchain-sources.json', 'android/abis.json') }}
         run: |
           digest=$({
             clang++-23 --version
@@ -118,8 +130,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
           # A fresh key lets retries save further progress from a failed build.
-          key: build-${{ runner.os }}-android-${{ inputs.full_client && 'client' || 'bridge' }}-${{ steps.build-identity.outputs.digest }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: build-${{ runner.os }}-android-${{ inputs.full_client && 'client' || 'bridge' }}-${{ steps.build-identity.outputs.digest }}-
+          key: build-${{ runner.os }}-android-${{ env.ABI }}-${{ inputs.full_client && 'client' || 'bridge' }}-${{ steps.build-identity.outputs.digest }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: build-${{ runner.os }}-android-${{ env.ABI }}-${{ inputs.full_client && 'client' || 'bridge' }}-${{ steps.build-identity.outputs.digest }}-
       - name: File times against the build restored
         run: |
           git ls-files -z | xargs -0 touch -d "@1000000000"
@@ -139,7 +151,7 @@ jobs:
           source=android/smoke
           if [ "$FULL_CLIENT" = true ]; then source=.; fi
           cmake -S "$source" -B build-android -G Ninja \
-            -DCMAKE_TOOLCHAIN_FILE="$HOME/.cache/mux-android/cmake/target.cmake" \
+            -DCMAKE_TOOLCHAIN_FILE="$HOME/.cache/mux-android-$ABI/cmake/target.cmake" \
             -DCMAKE_BUILD_TYPE=Debug -DMUX_PROGRAM_JOBS=1 \
             -DMUX_CLI=OFF -DMUX_TESTS=OFF -DMUX_VIDEO=OFF \
             -DCME_BUILD_MACHINE_CXX_COMPILER=clang++-23 \
@@ -152,11 +164,11 @@ jobs:
           python3 test/android_apk_test.py
           dexdump -c build-android/apk/classes.dex
           zipalign -c 4 build-android/apk/mux-test-signed.apk
-          java -jar "$HOME/.cache/mux-android/tools/apksigner.jar" verify --verbose \
+          java -jar "$HOME/.cache/mux-android-$ABI/tools/apksigner.jar" verify --verbose \
             build-android/apk/mux-test-signed.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: mux-android-${{ inputs.full_client && 'client' || 'bridge' }}-test-signed
+          name: mux-android-${{ env.ABI }}-${{ inputs.full_client && 'client' || 'bridge' }}-test-signed
           path: build-android/apk/mux-test-signed.apk
           if-no-files-found: error
       - name: No source list where the build failed

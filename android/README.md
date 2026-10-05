@@ -1,6 +1,10 @@
 # Android packaging without D8
 
-The initial Android profile targets ARM64, API 21 (Android 5.0) or later, and GLES 3.
+The Android profile targets ARM64 or 32-bit ARM (armeabi-v7a, NEON), API 21
+(Android 5.0) or later, and GLES 2.0 or none: where there is no usable GLES,
+Skia draws in software and the window is shown through ANativeWindow_lock.
+The ABIs are in android/abis.json; tools/android_manifest.py writes the
+toolchain manifest for one (the android workflow's abi input).
 It uses the NativeActivity profile of the SDL fork. A host C++ program emits
 four small callback classes directly as DEX; IME composition and document
 selection are implemented through JNI. No D8, R8, Gradle, SDLActivity Java

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Add generated DEX and the ARM64 native dependency closure to an aapt2 APK."""
+"""Add generated DEX and an ABI's native dependency closure to an aapt2 APK."""
 import argparse
 import hashlib
+import json
 import re
 import subprocess
 import zipfile
@@ -15,12 +16,15 @@ SYSTEM_LIBRARIES = {
     'libvulkan.so', 'libz.so', 'libnativewindow.so', 'libjnigraphics.so',
 }
 STAMP = (2001, 1, 1, 0, 0, 0)
+# Each ABI's ELF machine, as readelf names it: android/abis.json.
+ABIS = json.loads((Path(__file__).resolve().parent.parent / 'android' / 'abis.json').read_text())
 
 
-def elf(path, readelf):
+def elf(path, readelf, abi):
     text = subprocess.check_output([readelf, '-h', '-lW', '-d', str(path)], text=True)
-    if not re.search(r'Machine:\s+AArch64\b', text) or not re.search(r'Type:\s+DYN\b', text):
-        raise ValueError(f'{path}: expected an ARM64 shared library')
+    machine = ABIS[abi]['machine']
+    if not re.search(rf'Machine:\s+{machine}\b', text) or not re.search(r'Type:\s+DYN\b', text):
+        raise ValueError(f'{path}: expected an {abi} shared library')
     loads = [line.split() for line in text.splitlines() if line.lstrip().startswith('LOAD ')]
     if not loads or any(int(line[-1], 16) < 16384 for line in loads):
         raise ValueError(f'{path}: load segments need 16 KB alignment')
@@ -29,7 +33,7 @@ def elf(path, readelf):
     return soname.group(1) if soname else path.name, needed
 
 
-def native_closure(roots, directories, readelf):
+def native_closure(roots, directories, readelf, abi='arm64-v8a'):
     candidates = {}
     for directory in directories:
         if directory.is_dir():
@@ -41,7 +45,7 @@ def native_closure(roots, directories, readelf):
     result = {}
     while queue:
         path = queue.pop().resolve()
-        soname, needed = elf(path, readelf)
+        soname, needed = elf(path, readelf, abi)
         if '/' in soname or not soname.endswith('.so'):
             raise ValueError(f'{path}: Android requires an unversioned .so SONAME, got {soname}')
         if soname in result:
@@ -66,7 +70,7 @@ def native_closure(roots, directories, readelf):
     return result
 
 
-def package(resources, dex, libraries, output):
+def package(resources, dex, libraries, output, abi='arm64-v8a'):
     with zipfile.ZipFile(resources) as source:
         entries = {info.filename: source.read(info) for info in source.infolist() if not info.is_dir()}
     if 'AndroidManifest.xml' not in entries:
@@ -75,7 +79,7 @@ def package(resources, dex, libraries, output):
         raise ValueError('resource APK already contains code or signatures')
     entries['classes.dex'] = dex.read_bytes()
     for name, path in libraries.items():
-        entries[f'lib/arm64-v8a/{name}'] = path.read_bytes()
+        entries[f'lib/{abi}/{name}'] = path.read_bytes()
     # extractNativeLibs=true in the manifest: compression is deliberate. The
     # loader uses extracted, 16 KB-aligned ELF files, not unaligned ZIP offsets.
     with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as apk:
@@ -95,11 +99,12 @@ def main():
     parser.add_argument('--library', type=Path, action='append', required=True)
     parser.add_argument('--library-dir', type=Path, action='append', default=[])
     parser.add_argument('--readelf', default='readelf')
+    parser.add_argument('--abi', default='arm64-v8a', choices=sorted(ABIS))
     parser.add_argument('--out', type=Path, required=True)
     args = parser.parse_args()
     try:
-        libraries = native_closure(args.library, args.library_dir, args.readelf)
-        package(args.resources, args.dex, libraries, args.out)
+        libraries = native_closure(args.library, args.library_dir, args.readelf, args.abi)
+        package(args.resources, args.dex, libraries, args.out, args.abi)
     except (ValueError, OSError, subprocess.CalledProcessError, zipfile.BadZipFile) as error:
         parser.exit(1, f'APK: {error}\n')
     print(f'{args.out}: {", ".join(sorted(libraries))}, generated classes.dex')

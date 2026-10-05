@@ -499,13 +499,24 @@ struct message_bubble : nodes::Stack {
                 0.0f, true}}};
     }
     void grow_tail(bool mine) {
+      const scene::Corners squared = mine ? scene::Corners{12.0f, 12.0f, 0.0f, 12.0f} : scene::Corners{12.0f, 12.0f, 12.0f, 0.0f};
+      // The bubble's own fill and its tail one shape (skiff's Tail): a
+      // see-through bubble is so once, with no seam -- a tail of its own
+      // over the bubble's edge showed both through, darker where they met.
+      if (!parts.frost) {
+        fState.apply({.corners = squared,
+                      .tail = scene::Tail{.side = mine ? scene::TailSide{scene::tail_side::right{}} : scene::TailSide{scene::tail_side::left{}}}});
+        return;
+      }
+      // Frosted, the fill is the pane's, under the bubble's own: the tail a
+      // shape of its own, in the pane's tint.
       parts.tail.emplace(tail_shape(mine), plate);
       parts.tail->apply({.place = mine ? scene::anchor::kBottomRight : scene::anchor::kBottomLeft,
                          .x = mine ? kPadX + 10.0f : -(kPadX + 10.0f),
                          .y = kPadY,
                          .width = 10.0f,
                          .height = 12.0f});
-      fState.apply({.corners = mine ? scene::Corners{12.0f, 12.0f, 0.0f, 12.0f} : scene::Corners{12.0f, 12.0f, 12.0f, 0.0f}});
+      fState.apply({.corners = squared});
       this->sync_frost();
     }
     // Before its first layout, where the time goes is guessed from the text

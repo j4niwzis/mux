@@ -381,7 +381,7 @@
   ],
   "target": {
     "abi": "arm64-v8a",
-    "api": 27,
+    "api": 21,
     "arch": "arm64",
     "triple": "aarch64-linux-android"
   },

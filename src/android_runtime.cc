@@ -97,7 +97,17 @@ bool mux_android_nameserver(char* output, size_t capacity) {
       "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;"), env->NewStringUTF("connectivity"));
   if (!manager || env->ExceptionCheck()) return false;
   auto cls = env->FindClass("android/net/ConnectivityManager");
-  auto network = env->CallObjectMethod(manager, env->GetMethodID(cls, "getActiveNetwork", "()Landroid/net/Network;"));
+  // The active network: getActiveNetwork is API 23. Before it, the first
+  // network there is (getAllNetworks, API 21); where it names no DNS server,
+  // the platform's resolver is used, as below.
+  const auto first_network = [&]() -> jobject {
+    auto all = static_cast<jobjectArray>(env->CallObjectMethod(manager,
+        env->GetMethodID(cls, "getAllNetworks", "()[Landroid/net/Network;")));
+    return all && !env->ExceptionCheck() && env->GetArrayLength(all) > 0 ? env->GetObjectArrayElement(all, 0) : nullptr;
+  };
+  auto network = SDL_GetAndroidSDKVersion() >= 23
+      ? env->CallObjectMethod(manager, env->GetMethodID(cls, "getActiveNetwork", "()Landroid/net/Network;"))
+      : first_network();
   if (!network || env->ExceptionCheck()) return false;
   auto properties = env->CallObjectMethod(manager, env->GetMethodID(cls, "getLinkProperties", "(Landroid/net/Network;)Landroid/net/LinkProperties;"), network);
   if (!properties || env->ExceptionCheck()) return false;

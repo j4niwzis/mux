@@ -3,12 +3,19 @@ function(mux_add_android_apk target)
   set(MUX_ANDROID_FRAMEWORK_RES_APK "${MANDK_ROOT}/tools/framework-res.apk" CACHE FILEPATH "AOSP framework resource APK")
   set(MUX_ANDROID_APKSIGNER_JAR "${MANDK_ROOT}/tools/apksigner.jar" CACHE FILEPATH "Source-built apksigner JAR")
   set(MUX_ANDROID_TARGET_API 35 CACHE STRING "APK target API")
-  set(MUX_ANDROID_MIN_API 27 CACHE STRING "APK minimum API")
+  set(MUX_ANDROID_MIN_API 21 CACHE STRING "APK minimum API")
   set(MUX_ANDROID_VERSION_CODE 1 CACHE STRING "Monotonic APK version code")
   option(MUX_ANDROID_TEST_KEY "Generate a test signing key and test-signed APK" ON)
   set(MUX_ANDROID_LIBRARY_DIRS "" CACHE STRING "Additional Android runtime library search directories")
-  if(MUX_ANDROID_MIN_API LESS 27 OR MUX_ANDROID_TARGET_API LESS MUX_ANDROID_MIN_API)
-    message(FATAL_ERROR "Android packaging requires 27 <= MUX_ANDROID_MIN_API <= MUX_ANDROID_TARGET_API")
+  if(MUX_ANDROID_MIN_API LESS 21 OR MUX_ANDROID_TARGET_API LESS MUX_ANDROID_MIN_API)
+    message(FATAL_ERROR "Android packaging requires 21 <= MUX_ANDROID_MIN_API <= MUX_ANDROID_TARGET_API")
+  endif()
+  # Android reads APK signature scheme v2 from 7.0 (API 24): below it, only
+  # the v1 (JAR) signature is checked, and an APK without one is refused.
+  if(MUX_ANDROID_MIN_API LESS 24)
+    set(v1_signing true)
+  else()
+    set(v1_signing false)
   endif()
   foreach(input MUX_ANDROID_FRAMEWORK_RES_APK MUX_ANDROID_APKSIGNER_JAR)
     if(NOT EXISTS "${${input}}")
@@ -72,7 +79,8 @@ function(mux_add_android_apk target)
       COMMAND "${MUX_JAVA}" -jar "${MUX_ANDROID_APKSIGNER_JAR}" sign
         --ks "${out}/test.keystore" --ks-key-alias androiddebugkey --ks-pass pass:android
         --key-pass pass:android --min-sdk-version "${MUX_ANDROID_MIN_API}"
-        --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true
+        --v1-signing-enabled ${v1_signing}
+        --v2-signing-enabled true --v3-signing-enabled true
         --out "${out}/mux-test-signed.apk" "${out}/mux-unsigned.apk"
       COMMAND "${MUX_JAVA}" -jar "${MUX_ANDROID_APKSIGNER_JAR}" verify
         --min-sdk-version "${MUX_ANDROID_MIN_API}" "${out}/mux-test-signed.apk"

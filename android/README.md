@@ -1,6 +1,6 @@
 # Android packaging without D8
 
-The initial Android profile targets ARM64, API 27 or later, and GLES 3.
+The initial Android profile targets ARM64, API 21 (Android 5.0) or later, and GLES 3.
 It uses the NativeActivity profile of the SDL fork. A host C++ program emits
 four small callback classes directly as DEX; IME composition and document
 selection are implemented through JNI. No D8, R8, Gradle, SDLActivity Java

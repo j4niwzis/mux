@@ -203,6 +203,64 @@ class speaker {
   bool paused_ = false;
 };
 
+// A call's sound: what the microphone hears, and the other side played --
+// mono, 48 kHz, in floats, as Opus has it -- each on a stream of SDL's own,
+// which SDL fills and drains on its own thread. Read in frames of 20 ms,
+// what a call sends at a time.
+class call_audio {
+ public:
+  static constexpr int kRate = 48000;
+  static constexpr int kFrame = kRate / 50;
+  using frame = std::array<float, kFrame>;
+
+  call_audio() = default;
+  call_audio(const call_audio&) = delete;
+  call_audio& operator=(const call_audio&) = delete;
+  ~call_audio() {
+    if (heard_)
+      sdl::SDL_DestroyAudioStream(heard_);
+    if (played_)
+      sdl::SDL_DestroyAudioStream(played_);
+  }
+  // Both opened: false where there is no sound, or no microphone -- or, on a
+  // phone, where it was not allowed.
+  [[nodiscard]] bool open() {
+    if (!sdl::SDL_WasInit(sdl::kInitAudio) && !sdl::SDL_InitSubSystem(sdl::kInitAudio))
+      return false;
+    const sdl::SDL_AudioSpec spec{sdl::SDL_AUDIO_F32, 1, kRate};
+    heard_ = sdl::SDL_OpenAudioDeviceStream(sdl::kAudioDeviceDefaultRecording, &spec, nullptr, nullptr);
+    played_ = sdl::SDL_OpenAudioDeviceStream(sdl::kAudioDeviceDefaultPlayback, &spec, nullptr, nullptr);
+    if (!heard_ || !played_)
+      return false;
+    sdl::SDL_ResumeAudioStreamDevice(heard_);
+    sdl::SDL_ResumeAudioStreamDevice(played_);
+    return true;
+  }
+  // The next 20 ms the microphone heard, where there is that much yet.
+  [[nodiscard]] std::optional<frame> heard() {
+    constexpr int bytes = kFrame * static_cast<int>(sizeof(float));
+    if (!heard_ || sdl::SDL_GetAudioStreamAvailable(heard_) < bytes)
+      return std::nullopt;
+    frame out{};
+    if (sdl::SDL_GetAudioStreamData(heard_, out.data(), bytes) != bytes)
+      return std::nullopt;
+    return out;
+  }
+  // The other side's samples, played after what is queued. SDL copies them:
+  // the floats are read where they lie.
+  template <std::ranges::contiguous_range Samples>
+    requires std::same_as<std::ranges::range_value_t<Samples>, float>
+  void play(const Samples& samples) {
+    if (played_)
+      sdl::SDL_PutAudioStreamData(played_, std::ranges::data(samples),
+                                  static_cast<int>(std::ranges::size(samples) * sizeof(float)));
+  }
+
+ private:
+  sdl::SDL_AudioStream* heard_ = nullptr;
+  sdl::SDL_AudioStream* played_ = nullptr;
+};
+
 // A time, as a player shows it: minutes and seconds.
 [[nodiscard]] inline std::string clock(double seconds) {
   const auto whole = static_cast<long>(std::max(0.0, seconds));

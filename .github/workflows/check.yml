@@ -126,7 +126,7 @@ jobs:
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DMUX_PROGRAM_JOBS=1 \
             -DCMAKE_CXX_COMPILER=/usr/local/bin/clang++ \
             -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
-            -DMUX_UI=ON
+            -DMUX_UI=ON -DMUX_CALLS=ON
 
 
           # Every unit that fails, not only the first: a run shows them all.

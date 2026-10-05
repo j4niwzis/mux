@@ -280,6 +280,17 @@ if(MUX_UI)
     cme_find_package(FFmpeg COMPONENTS mp4 matroska h264 hevc vp9 aac opus mp3 REQUIRED)
     set(mux_video_libraries FFmpeg::avformat FFmpeg::avcodec FFmpeg::swscale FFmpeg::swresample FFmpeg::avutil)
   endif()
+  # Calls -- voice, for now -- through WebRTC: libdatachannel, and libjuice,
+  # libSRTP and usrsctp under it. Off, nothing of them is fetched or built,
+  # and mux.calls.media is the one that connects nothing (media_none.cc).
+  option(MUX_CALLS "Voice calls, through WebRTC (libdatachannel)" OFF)
+  set(mux_calls_sources src/calls/types.cc src/calls/media_none.cc)
+  set(mux_calls_libraries)
+  if(MUX_CALLS)
+    cme_find_package(LibDataChannel REQUIRED)
+    set(mux_calls_sources src/calls/types.cc src/calls/media.cc)
+    set(mux_calls_libraries LibDataChannel::LibDataChannel)
+  endif()
 
   # What the platform gives the window -- its events, dialogs, clipboard,
   # notifications, pushes, sound and video -- in src/platform/, as osu-cpp's
@@ -389,11 +400,11 @@ if(MUX_UI)
   set_property(SOURCE src/telegram_pattern.cc APPEND PROPERTY COMPILE_OPTIONS --embed-dir=${mux_art_dir})
   set_property(SOURCE src/telegram_pattern.cc APPEND PROPERTY OBJECT_DEPENDS ${mux_pattern})
   target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
-    FILES ${mux_platform_sources} src/ui.cc
+    FILES ${mux_platform_sources} ${mux_calls_sources} src/ui.cc
           src/ui/base.cc src/ui/icons.cc src/ui/avatars.cc src/ui/controls.cc src/ui/themes.cc src/ui/names.cc src/ui/html.cc src/ui/chat_list.cc src/ui/message_pieces.cc src/ui/message_media.cc src/ui/message_text.cc src/ui/message.cc src/ui/header.cc src/ui/info_common.cc src/ui/info_cards.cc src/ui/info_reactions.cc src/ui/info_new_chats.cc src/ui/info_looks.cc src/ui/info_threads.cc src/ui/info_packs.cc src/ui/info_explore.cc src/ui/info.cc src/ui/room_settings.cc src/ui/composer.cc src/ui/timeline.cc src/ui/conversations_side.cc src/ui/conversations_screen.cc src/ui/conversations_show.cc src/ui/conversations.cc src/ui/forms.cc src/ui/add_account.cc src/ui/accounts.cc src/ui/drawer.cc src/ui/proxies.cc src/ui/appearance.cc src/ui/storage.cc src/ui/settings.cc src/ui/emoji_kept.cc src/ui/emoji_panels.cc src/ui/emoji_popup.cc src/ui/context_menu.cc src/ui/sending.cc src/ui/viewer.cc src/ui/window.cc
           src/proto/xmpp/ui.cc src/proto/matrix/ui_form.cc src/proto/matrix/ui_manage.cc src/proto/matrix/ui_sessions.cc src/proto/matrix/ui_tools.cc src/proto/matrix/ui.cc src/proto/ui.cc)
   target_link_libraries(mux_modules PUBLIC SDL3::SDL3 skiff::skiff skiff::widgets Opus::opus Vorbis::vorbisfile
-    ${mux_video_libraries})
+    ${mux_video_libraries} ${mux_calls_libraries})
   if(ANDROID)
     add_library(mux SHARED src/main.cc src/main_android.cc)
     # NativeActivity runs on a small pthread stack. Catch large startup

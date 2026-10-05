@@ -373,7 +373,7 @@ struct selection_bar : nodes::Stack {
     bottom_line.apply({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f});
     count.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
     for (scene::Node* each : std::initializer_list<scene::Node*>{&forward, &copy, &remove, &cancel})
-      each->apply({.alignSelf = scene::align::kMiddle, .height = 32.0f});
+      each->apply({.height = 32.0f, .alignSelf = scene::align::kMiddle});
     this->setVisible(false);
   }
   // How many are selected, and which of what can be done with them is.

@@ -20,6 +20,9 @@ namespace scene = skiff::scene;
 // The program's side, noting only what is sent.
 struct stub {
   std::vector<std::string> sent;
+  int rooms_joined = 0;
+  int invites_declined = 0;
+  int room_cards_closed = 0;
   void choose(const mux::conversation_id&) {}
   void send(const mux::conversation_id&, std::string) {}
   void back() {}
@@ -51,7 +54,7 @@ struct stub {
   void menu_copy_link() {}
   void menu_copy_url() {}
   void menu_fave_sticker() {}
-  void decline_room_card() {}
+  void decline_room_card() { ++invites_declined; }
   void menu_save() {}
   void menu_react(std::string) {}
   void react(std::string, std::string) {}
@@ -95,7 +98,7 @@ struct stub {
   void open_member_info(std::string) {}
   void close_notice() {}
   void close_person_info() {}
-  void close_room_card() {}
+  void close_room_card() { ++room_cards_closed; }
   void jump_to_mark(mux::mark_kind_t) {}
   void list_marks(mux::mark_kind_t) {}
   void go_to_mark(mux::mark_kind_t, std::string) {}
@@ -180,7 +183,7 @@ struct stub {
   void press_loader(std::string) {}
   void stop_jump() {}
   void open_video(std::string, std::string, std::string, std::string, std::string) {}
-  void join_room_card() {}
+  void join_room_card() { ++rooms_joined; }
   void toggle_emoji() {}
   void close_emoji() {}
   void insert_emoji(std::string, std::string = {}) {}
@@ -346,6 +349,112 @@ TEST(Drawer, SlidesOutAfterALongWhileOut) {
     frame(now + 16.0);
   EXPECT_FALSE(panel.visible());
   skiff::paint::defaultFont() = nullptr;
+}
+
+TEST(RoomInfo, LongDescriptionsScrollWithoutHidingTheActions) {
+  auto manager = skia::SkFontMgr_New_Custom_Directory("/usr/share/fonts");
+  skia::Sp<skia::SkTypeface> face;
+  for (const char* family : {"DejaVu Sans", "Noto Sans", "Liberation Sans"})
+    if (manager && !face)
+      face = manager->matchFamilyStyle(family, skia::SkFontStyle());
+  ASSERT_TRUE(face);
+  skiff::paint::fonts().setPrimary(face);
+  skia::SkFont font(face);
+  skiff::paint::defaultFont() = &font;
+  struct clear_font {
+    ~clear_font() { skiff::paint::defaultFont() = nullptr; }
+  } clear;
+  stub program;
+  ui_state ui;
+  scene::Scene<mux::ui::window<stub>> window{std::in_place, ui.needs(program)};
+  scene::InputRouter router;
+  const std::array layers{scene::InputRouter::Layer{window.handle(), false}};
+  router.setLayers(layers);
+  auto viewport = skia::SkRect::MakeWH(1000.0f, 720.0f);
+  double now = 1000.0;
+  const auto frame = [&] {
+    window.update(now += 16.0);
+    window.layoutIfNeeded(viewport);
+  };
+  const auto click = [&](const auto& node) {
+    const auto box = node.bounds();
+    router.pointer(scene::PointerEvent{scene::pointer::down{box.centerX(), box.centerY()}});
+    router.pointer(scene::PointerEvent{scene::pointer::up{box.centerX(), box.centerY()}});
+  };
+  mux::room_preview preview{.id = "!room:example.com", .name = "A room with a long description"};
+  for (int i = 0; i < 100; ++i)
+    preview.topic += "A long paragraph about this room, with words that wrap on a narrow screen.\n\n";
+
+  for (const bool invite : {false, true}) {
+    preview.invite = invite;
+    window.root().open_room_card(preview.id, preview);
+    auto* card = window.root().layer().room.shown();
+    ASSERT_NE(card, nullptr);
+    auto& scroll = card->parts.scroll;
+    auto& details = std::get<0>(scroll.fChildren);
+    // Resize the same open card through desktop, portrait and landscape.
+    for (const auto size : {skia::SkRect::MakeWH(1000.0f, 720.0f), skia::SkRect::MakeWH(360.0f, 640.0f),
+                            skia::SkRect::MakeWH(640.0f, 360.0f)}) {
+      viewport = size;
+      for (int i = 0; i < 30; ++i)
+        frame();
+      EXPECT_TRUE(viewport.contains(card->bounds()));
+      EXPECT_GT(scroll.bounds().height(), 0.0f);
+      EXPECT_GT(scroll.extent(), scroll.bounds().height());
+      EXPECT_GE(scroll.bounds().fTop, card->parts.top.bounds().fBottom);
+      EXPECT_LE(scroll.bounds().fBottom, card->parts.join.bounds().fTop);
+      EXPECT_TRUE(card->bounds().contains(card->parts.join.bounds()));
+      if (invite) {
+        ASSERT_TRUE(card->parts.decline);
+        EXPECT_TRUE(card->bounds().contains(card->parts.decline->bounds()));
+      }
+
+      scroll.setCurrent(0.0f);
+      frame();
+      const auto top = card->parts.top.bounds();
+      const auto join = card->parts.join.bounds();
+      const auto view = scroll.bounds();
+      // Start over the selectable description, even in a short window.
+      scroll.setCurrent(details.parts.about.bounds().fTop - view.fTop);
+      frame();
+      const float before = scroll.current();
+      router.pointer(scene::PointerEvent{scene::pointer::scroll{view.centerX(), view.fTop + 8.0f, 0.0f, -1.0f}});
+      for (int i = 0; i < 120; ++i)
+        frame();
+      EXPECT_GT(scroll.current(), before) << "the wheel over the description did not scroll";
+      EXPECT_EQ(card->parts.top.bounds(), top);
+      EXPECT_EQ(card->parts.join.bounds(), join);
+
+      scroll.scrollToEnd(false);
+      frame();
+      EXPECT_NEAR(scroll.current(), scroll.extent(), 1.0f);
+      EXPECT_LE(details.parts.id.bounds().fBottom - scroll.current(), view.fBottom + 1.0f);
+      EXPECT_GE(details.parts.id.bounds().fTop - scroll.current(), view.fTop - 1.0f);
+      const int joined = program.rooms_joined;
+      click(card->parts.join);
+      EXPECT_EQ(program.rooms_joined, joined + 1);
+      if (invite) {
+        const int declined = program.invites_declined;
+        click(*card->parts.decline);
+        EXPECT_EQ(program.invites_declined, declined + 1);
+      }
+    }
+    const int closed = program.room_cards_closed;
+    click(card->parts.top.parts.close);
+    EXPECT_EQ(program.room_cards_closed, closed + 1);
+  }
+
+  // A new, short preview must not inherit the old offset or a tall viewport.
+  viewport = skia::SkRect::MakeWH(1000.0f, 720.0f);
+  preview.topic = "A brief description.";
+  preview.invite = false;
+  window.root().open_room_card(preview.id, preview);
+  frame();
+  auto* card = window.root().layer().room.shown();
+  ASSERT_NE(card, nullptr);
+  EXPECT_LT(card->bounds().height(), 500.0f);
+  EXPECT_FLOAT_EQ(card->parts.scroll.extent(), 0.0f);
+  EXPECT_FLOAT_EQ(card->parts.scroll.current(), 0.0f);
 }
 
 // A long chat scrolled with the wheel, a frame at a time: how long update,

@@ -221,12 +221,33 @@ struct room_card : nodes::Stack {
       out += std::format("{}{} {}", out.empty() ? "" : " · ", *known.members, *known.members == 1 ? "member" : "members");
     return out.empty() ? std::string("Room") : out;
   }
+  // The details can be taller than the window. Only this column scrolls;
+  // closing the card and accepting or declining an invite stay in reach.
+  struct details : nodes::Stack {
+    struct parts_t {
+      cover face;
+      nodes::Box<> band;
+      nodes::Text about;
+      id_line id;
+    } parts;
+
+    details(const palette& colours, const std::string& asked, const room_preview& known)
+        : parts{.face = cover(colours, known.id.empty() ? asked : known.id, name_of(asked, known), line_of(asked, known)),
+                .band = section_band(colours),
+                .about = nodes::Text(!known.topic.empty() ? known.topic : !known.note.empty() ? known.note : std::string("No description"), 14.0f,
+                                     known.topic.empty() ? colours.dim : colours.text),
+                .id = id_line(colours, known.id.empty() ? asked : known.id, "")} {
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
+      parts.about.setWrapped(true);
+      parts.about.apply({.fillX = true, .margin = {2.0f, 22.0f, 8.0f, 22.0f}});
+      parts.about.setSelectable(true);
+      parts.face.parts.texts.parts.name.setSelectable(true);
+      parts.face.parts.texts.parts.state.setSelectable(true);
+    }
+  };
   struct parts_t {
     top_bar top;
-    cover face;
-    nodes::Box<> band;
-    nodes::Text about;
-    id_line id;
+    nodes::ScrollContainer<details> scroll;
     action_tile<join_it> join;
     // An invite's: let go of.
     std::optional<action_tile<decline_it>> decline;
@@ -234,25 +255,34 @@ struct room_card : nodes::Stack {
 
   room_card(Actions* a, const palette& colours, const std::string& asked, const room_preview& known)
       : parts{.top = top_bar(colours, "Room info", {}, {a}, false, true),
-              .face = cover(colours, known.id.empty() ? asked : known.id, name_of(asked, known), line_of(asked, known)),
-              .band = section_band(colours),
-              .about = nodes::Text(!known.topic.empty() ? known.topic : !known.note.empty() ? known.note : std::string("No description"), 14.0f,
-                                   known.topic.empty() ? colours.dim : colours.text),
-              .id = id_line(colours, known.id.empty() ? asked : known.id, ""),
+              .scroll = nodes::ScrollContainer<details>(details(colours, asked, known)),
               .join = action_tile<join_it>(colours, known.invite ? "Accept" : known.knock ? "Ask to join" : "Join", icon::plus{},
                                            {a, known.knock && !known.invite})} {
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}});
+    fState.apply({.fillX = true, .padding = {0.0f, 0.0f, 16.0f, 0.0f}});
+    parts.scroll.apply({.fillX = true, .grow = scene::axes::kY});
     if (known.invite) {
       parts.top.parts.title.setText("Invite");
       parts.decline.emplace(colours, "Decline", icon::close{}, decline_it{a});
       parts.decline->apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
     }
-    parts.about.setWrapped(true);
-    parts.about.apply({.fillX = true, .margin = {2.0f, 22.0f, 8.0f, 22.0f}});
-    parts.about.setSelectable(true);
-    parts.face.parts.texts.parts.name.setSelectable(true);
-    parts.face.parts.texts.parts.state.setSelectable(true);
     parts.join.apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
+  }
+
+  void measure(const skia::SkRect& parent) {
+    // Keep a short card compact. For a long one, size the viewport to the
+    // room the dialog gives us, not to the description's unbounded height.
+    const auto height_of = [&](auto& node) {
+      // Measure in its previous position so the scroll container's anchor
+      // is not moved before it has had a chance to remember that position.
+      const auto previous = node.fState.fLastConstraint;
+      const auto room = skia::SkRect::MakeXYWH(previous.fLeft, previous.fTop, parent.width(), 0.0f);
+      scene::layout(node, room);
+      return node.bounds().height() + node.fState.fMargin.totalY();
+    };
+    const float natural = height_of(parts.top) + height_of(std::get<0>(parts.scroll.fChildren)) +
+                          height_of(parts.join) + (parts.decline ? height_of(*parts.decline) : 0.0f) +
+                          fState.fPadding.totalY();
+    fState.fHeight = std::min(natural, std::max(0.0f, parent.height()));
   }
 };
 

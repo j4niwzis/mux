@@ -7,6 +7,7 @@ export module mux.app.menu;
 import std;
 import skiff.scene;
 import mux.core;
+import mux.proto;
 import mux.ui;
 import mux.app.network;
 import mux.app.requests;

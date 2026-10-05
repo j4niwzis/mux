@@ -50,43 +50,61 @@ void account<Sink>::fetch_media(std::string source, media_use_t use, int size, b
     // ciphertext; and opened here.
     const auto sealed = encrypted_media_.find(source);
     const int asked = sealed != encrypted_media_.end() ? 0 : size;
-    const auto paths = asked > 0 ? loom::media::paths_of(*named, loom::media::thumbnail{.size = asked, .crop = crop})
-                                 : loom::media::paths_of(*named);
-    for (const std::string& path : paths) {
-      try {
-        // A download whole says how far it has come, a twentieth at a time.
-        int said = -1;
-        // Going on as long as it is not stopped.
-        const auto progress = [&](std::size_t read, std::optional<std::size_t> total) {
-          if (cancelled_.erase(source))
-            return false;
-          if (!total || *total == 0)
+    // Thumbnail generation may fail even though the original is available.
+    // Bound that wait, then download the original for local downsampling.
+    // Encrypted media always takes only the original/decryption path.
+    bool cancelled = false;
+    for (int pass = 0; pass < (asked > 0 ? 2 : 1); ++pass) {
+      const bool small = asked > 0 && pass == 0;
+      const auto paths = small ? loom::media::paths_of(*named, loom::media::thumbnail{.size = asked, .crop = crop})
+                               : loom::media::paths_of(*named);
+      for (const std::string& path : paths) {
+        if (stopping_ || cancelled || cancelled_.erase(source))
+          return;
+        try {
+          // A download whole says how far it has come, a twentieth at a time.
+          int said = -1;
+          // Going on as long as it is not stopped.
+          const auto progress = [&](std::size_t read, std::optional<std::size_t> total) {
+            if (stopping_ || cancelled_.erase(source)) {
+              cancelled = true;
+              return false;
+            }
+            if (small || !total || *total == 0)
+              return true;
+            const int now = static_cast<int>(20 * read / *total);
+            if (now != said) {
+              said = now;
+              sink_(change::media_progress{source, static_cast<float>(read) / static_cast<float>(*total)});
+            }
             return true;
-          const int now = static_cast<int>(20 * read / *total);
-          if (now != said) {
-            said = now;
-            sink_(change::media_progress{source, static_cast<float>(read) / static_cast<float>(*total)});
-          }
-          return true;
-        };
-        const auto got = api_->request("GET", path, {},
-                                       token_ ? std::optional<std::string_view>(*token_) : std::nullopt,
-                                       std::chrono::seconds(60), {}, asked > 0 ? nullptr : &progress);
-        if (got.status == 200 && !got.body.empty()) {
-          if (sealed == encrypted_media_.end()) {
-            sink_(change::avatar_loaded{use, source, got.body});
+          };
+          const auto got = api_->request("GET", path, {},
+                                         token_ ? std::optional<std::string_view>(*token_) : std::nullopt,
+                                         std::chrono::seconds(small ? 15 : 60), {}, &progress);
+          if (stopping_ || cancelled || cancelled_.erase(source))
+            return;
+          if (got.status == 200 && !got.body.empty()) {
+            if (sealed == encrypted_media_.end()) {
+              sink_(change::avatar_loaded{use, source, got.body});
+              return;
+            }
+            const auto opened = crypto::open_file(splice::bytes::of(got.body), sealed->second);
+            if (!opened) {
+              log(id_, "{} is not what its event says: not shown", source);
+              return;
+            }
+            sink_(change::avatar_loaded{use, source, splice::bytes::text_of(*opened)});
             return;
           }
-          const auto opened = crypto::open_file(splice::bytes::of(got.body), sealed->second);
-          if (!opened) {
-            log(id_, "{} is not what its event says: not shown", source);
+        } catch (const net::failure&) {
+          if (stopping_ || cancelled || cancelled_.erase(source))
             return;
-          }
-          sink_(change::avatar_loaded{use, source, splice::bytes::text_of(*opened)});
+          // A timeout on thumbnail generation must not skip the original.
+          if (small)
+            break;
           return;
         }
-      } catch (const net::failure&) {
-        return;
       }
     }
   });
@@ -126,7 +144,7 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
   this->spawn_sending([this, room = std::move(room), local = std::move(local), bytes = std::move(bytes),
                 name = std::move(name), mimetype = std::move(mimetype), image, width, height,
                 caption = std::move(caption), reply_to = std::move(reply_to), thread = std::move(thread),
-                video = std::move(video)] {
+                video = std::move(video)] mutable {
     const conversation_id in{id_, room};
     mux::attachment carried;
     // A video: shown here by its first picture, as one that came is by its
@@ -258,6 +276,13 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
     knot::raw message = video   ? with_file(video_message())
                         : image ? with_file(loom::client::picture_message(said, width, height))
                                 : with_file(loom::client::file_message(said));
+    // Seed the server URI before sending the event: its echo may arrive
+    // during send_room_event. The bytes are already here, including the
+    // plaintext thumbnail of an encrypted upload.
+    if (video && thumbnail_uri)
+      sink_(change::avatar_loaded{media_use::thumbnail{}, *thumbnail_uri, std::move(video->thumbnail)});
+    else if (image && !video)
+      sink_(change::avatar_loaded{media_use::thumbnail{}, *uri, std::move(bytes)});
     auto sent = this->send_room_event(loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.room.message",
                                                       .txn_id = local,

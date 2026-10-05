@@ -271,7 +271,7 @@ void app::before_frame() {
   // when something else refreshed the window.
   if (auto shown = root().emoji_pictures_shown(); shown != shared.ui.panel_pictures_shown) {
     shared.ui.panel_pictures_shown = std::move(shown);
-    pictures.ask();
+    shared.ui.pictures_due = true;
   }
   auto pending = std::exchange(ask.requests, {});
   for (const request_t& one : pending)
@@ -290,6 +290,8 @@ void app::before_frame() {
     this->rebuild_in_theme();
   if (std::exchange(shared.refresh_due, false))
     this->refresh();
+  if (std::exchange(shared.ui.pictures_due, false))
+    pictures.ask();
   if (std::exchange(shared.emoji.emoji_changed, false)) {
     recent_emoji = shared.emoji.recent_emoji;
     (void)this->write();
@@ -334,7 +336,6 @@ void app::refresh(std::source_location from) {
     refresh_waiting_ = true;
     return;
   }
-  pictures.ask();
   this->note_spaces();
   this->show_placements();
   this->show_event_filters();
@@ -345,6 +346,8 @@ void app::refresh(std::source_location from) {
   this->show_chat_choices();
   root().show(saved, *model);
   root().main().show(*model);
+  // The newly made range is now known, including a just-opened chat.
+  pictures.ask();
   // The accounts page, where it is up: the account being added shown in,
   // and the chats then.
   if (auto* up = root().open_panel())

@@ -112,6 +112,9 @@ class player {
       std::tie(made->audio_index_, made->audio_) = decoder_of(raw, AVMEDIA_TYPE_AUDIO);
     made->packet_.reset(av_packet_alloc());
     made->frame_.reset(av_frame_alloc());
+    made->rgba_.reset(av_frame_alloc());
+    if (!made->packet_ || !made->frame_ || !made->rgba_)
+      return nullptr;
     if (made->audio_)
       made->open_sound();
     return made;
@@ -227,11 +230,29 @@ class player {
                                        got.width, got.height, AV_PIX_FMT_RGBA, SWS_BILINEAR, nullptr, nullptr, nullptr));
     if (!scaler_)
       return {nullptr, at};
-    rgba_.resize(static_cast<std::size_t>(got.width) * static_cast<std::size_t>(got.height) * 4u);
-    std::uint8_t* planes[4] = {rgba_.data(), nullptr, nullptr, nullptr};
-    int strides[4] = {got.width * 4, 0, 0, 0};
-    sws_scale(scaler_.get(), got.data, got.linesize, 0, got.height, planes, strides);
-    return {skia::imageFromRGBA(got.width, got.height, rgba_.data()), at};
+    // swscale's SIMD paths require padded rows and a padded allocation.
+    // A width*height*4 vector can be overrun, corrupting the heap and only
+    // crashing later when the player is closed. Let FFmpeg size its output.
+    if (!rgba_->buf[0] || rgba_->width != got.width || rgba_->height != got.height) {
+      av_frame_unref(rgba_.get());
+      rgba_->format = AV_PIX_FMT_RGBA;
+      rgba_->width = got.width;
+      rgba_->height = got.height;
+      if (av_frame_get_buffer(rgba_.get(), 0) < 0)
+        return {nullptr, at};
+    }
+    if (sws_scale(scaler_.get(), got.data, got.linesize, 0, got.height, rgba_->data, rgba_->linesize) != got.height)
+      return {nullptr, at};
+    // Copy with the actual stride. The immutable bitmap is then shared by
+    // Skia, so reusing the FFmpeg frame cannot change a picture being drawn.
+    const auto info = skia::SkImageInfo::Make(got.width, got.height, skia::kRGBA_8888_SkColorType,
+                                             skia::kUnpremul_SkAlphaType);
+    skia::SkBitmap pixels;
+    if (!pixels.tryAllocPixels(info) ||
+        !pixels.writePixels(skia::SkPixmap(info, rgba_->data[0], static_cast<std::size_t>(rgba_->linesize[0]))))
+      return {nullptr, at};
+    pixels.setImmutable();
+    return {skia::RasterFromBitmap(pixels), at};
   }
   // A packet of sound: decoded, made float stereo, queued to be played.
   void hear(const AVPacket& packet) {
@@ -283,7 +304,7 @@ class player {
   std::unique_ptr<SwsContext, scaler_closer> scaler_;
   std::unique_ptr<SwrContext, resampler_closer> resampler_;
   std::unique_ptr<sdl::SDL_AudioStream, stream_closer> sound_;
-  std::vector<std::uint8_t> rgba_;
+  std::unique_ptr<AVFrame, frame_closer> rgba_;
   std::vector<std::uint8_t> samples_;
   skia::Sp<skia::SkImage> picture_;
   std::optional<std::pair<skia::Sp<skia::SkImage>, double>> ahead_;

@@ -45,7 +45,7 @@ struct settings_dialog : scene::Node {
           raise_header(one, *needs_.colours);
         },
         this->page());
-    parts.scroll.scrollToStart();
+    this->keep_offset(0.0f);
   }
   // A page's header pinned at the top while what is under it scrolls: drawn
   // over the rest, on the dialog's colour, moved down by the offset. The
@@ -70,10 +70,15 @@ struct settings_dialog : scene::Node {
   }
   // Where the page is scrolled to, to be kept as it is made again.
   [[nodiscard]] float offset() const { return parts.scroll.current(); }
-  void keep_offset(float at) { parts.scroll.setCurrent(at); }
+  std::optional<float> offset_due;
+  void keep_offset(float at) {
+    offset_due = at;
+    this->invalidateLayout();
+  }
   // What is up coming in from the side, fading in, when the page changes.
   skiff::paint::Tween swap{1.0f, 200.0f, skiff::paint::movement::subtle{}};
   float swap_from = 1.0f;
+  std::optional<std::pair<config::theme_t, config::accent_t>> appearance_due;
   void begin_swap(float side) {
     swap_from = side;
     this->fit_page();
@@ -81,9 +86,16 @@ struct settings_dialog : scene::Node {
     swap.setTarget(1.0f);
     this->invalidateLayout();
   }
-  [[nodiscard]] bool settling() const { return swap.moving(); }
-  [[nodiscard]] bool wantsTick() const { return swap.moving(); }
+  [[nodiscard]] bool settling() const { return swap.moving() || appearance_due.has_value(); }
+  [[nodiscard]] bool wantsTick() const { return this->settling(); }
   void update(double now_ms) {
+    if (auto due = std::exchange(appearance_due, std::nullopt); due && this->appearance()) {
+      const float at = parts.scroll.current();
+      this->page().template emplace<4>(needs_, due->first, due->second);
+      this->fit_page();
+      this->keep_offset(at);
+      this->invalidateLayout();
+    }
     if (swap.step(now_ms))
       this->invalidateLayout();
   }
@@ -104,23 +116,23 @@ struct settings_dialog : scene::Node {
     this->begin_swap(-1.0f);
   }
   void show_animations() {
-    this->begin_swap(1.0f);
     this->page().template emplace<1>(needs_);
+    this->begin_swap(1.0f);
     this->show_motion(motion);
   }
   // Made again where it is up -- a choice on it changed -- where it was
-  // scrolled to, not slid in again from its top.
+  // scrolled to, not slid in again from its top. The request handler asks
+  // before the program refreshes looks_shown; rebuild on the next update
+  // so the selected option and sliders read the new values.
   void show_appearance(const config::theme_t& theme, const config::accent_t& accent) {
-    const bool again = this->appearance() != nullptr;
-    const float at = parts.scroll.current();
-    this->page().template emplace<4>(needs_, theme, accent);
-    if (again) {
-      this->fit_page();
-      parts.scroll.setCurrent(at);
-      this->invalidateLayout();
-    } else {
-      this->begin_swap(1.0f);
+    if (this->appearance()) {
+      appearance_due = std::pair{theme, accent};
+      scene::work::mark(fState.fId);
+      return;
     }
+    appearance_due.reset();
+    this->page().template emplace<4>(needs_, theme, accent);
+    this->begin_swap(1.0f);
   }
   void show_rendering(const config::renderer_t& renderer, bool partial, bool flash, bool vsync, bool fps) {
     this->page().template emplace<5>(needs_, renderer, partial, flash, vsync, fps);
@@ -179,9 +191,15 @@ struct settings_dialog : scene::Node {
 
   void layoutChildren() {
     auto& scroll = parts.scroll;
+    const skia::SkRect box = fState.contentBox();
+    // Settings keep their offset through measurement and dialog resizing.
+    // A scroll view otherwise follows its end when an initially short page
+    // becomes scrollable, opening the menu at its bottom.
+    if (auto at = std::exchange(offset_due, std::nullopt);
+        at || scroll.bounds().width() != box.width() || scroll.bounds().height() != box.height())
+      scroll.setCurrent(at.value_or(scroll.current()));
     scroll.fState.arrange(0.0f, 0.0f);
     const float value = swap.value();
-    const skia::SkRect box = fState.contentBox();
     scroll.fState.setAlpha(value);
     scene::layout(scroll, skia::SkRect::MakeXYWH(box.fLeft + (1.0f - value) * 32.0f * swap_from, box.fTop,
                                                  box.width(), box.height()));

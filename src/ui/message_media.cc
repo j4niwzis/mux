@@ -100,8 +100,14 @@ struct picture_view : scene::Node {
     // A video's: the play mark in the middle, its length at the top left.
     std::optional<video_marks> video;
   } parts;
-  void show_video(std::int64_t duration_ms) {
+  bool has_thumbnail = true;
+  void show_video(std::int64_t duration_ms, bool thumbnail = true) {
+    has_thumbnail = thumbnail;
     parts.video.emplace(duration_ms);
+    parts.picture.setVisible(has_thumbnail);
+    parts.preview.setVisible(has_thumbnail);
+    if (!has_thumbnail)
+      parts.loader.setVisible(false);
     this->invalidateLayout();
   }
 
@@ -126,7 +132,7 @@ struct picture_view : scene::Node {
   [[nodiscard]] bool wantsTick() const { return parts.loader.visible() || animations().has(source); }
   void update(double) {
     const bool moving = animations().has(source);
-    const bool coming = !moving && !thumbnails().has(source) && !whole_pictures().has(source);
+    const bool coming = has_thumbnail && !moving && !thumbnails().has(source) && !whole_pictures().has(source);
     if (coming != parts.loader.visible())
       parts.loader.setVisible(coming);
     if (moving)

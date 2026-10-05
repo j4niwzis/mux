@@ -800,7 +800,7 @@ struct message_bubble : nodes::Stack {
       splice::visit(splice::overloaded{[&](attachment_kind::image) {
                               body.parts.picture.emplace(*colours_, carried.source, carried.width, carried.height);
                               if (carried.video)
-                                body.parts.picture->show_video(carried.duration_ms);
+                                body.parts.picture->show_video(carried.duration_ms, carried.video != carried.source);
                             },
                             [&](attachment_kind::file) {
                               body.parts.file.emplace(*colours_, n.sound, carried.source, carried.name, carried.size,

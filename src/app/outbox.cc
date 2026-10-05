@@ -274,7 +274,7 @@ class outbox_part {
     if (auto image = skia::decodeImage(sent.as.bytes.data(), sent.as.bytes.size())) {
       sent.width = image->width();
       sent.height = image->height();
-      mux::ui::thumbnails().put(sent.local, std::move(image));
+      mux::ui::thumbnails().put("local:" + sent.local, std::move(image));
     }
     s_->root().close_emoji();
     s_->go_live(*chosen);
@@ -331,7 +331,7 @@ class outbox_part {
         if (auto image = skia::decodeImage(one.as.bytes.data(), one.as.bytes.size())) {
           one.width = image->width();
           one.height = image->height();
-          mux::ui::thumbnails().put(one.local, std::move(image));
+          mux::ui::thumbnails().put("local:" + one.local, std::move(image));
         }
       // A video: its size, length and first picture, sent with it as m.video
       // says them; the picture shown under its local id while it goes.
@@ -343,7 +343,7 @@ class outbox_part {
                                       .thumbnail = skia::encodeImage(*seen->first, false),
                                       .thumbnail_width = seen->width,
                                       .thumbnail_height = seen->height};
-          mux::ui::thumbnails().put(one.local, std::move(seen->first));
+          mux::ui::thumbnails().put("local:" + one.local, std::move(seen->first));
         }
       to_send_.push_back(std::move(one));
     }
@@ -351,7 +351,7 @@ class outbox_part {
       return;
     std::vector<mux::ui::pending_file> shown;
     for (const file& one : to_send_)
-      shown.push_back({one.as.name, one.as.picture ? one.local : std::string(),
+      shown.push_back({one.as.name, one.as.picture ? "local:" + one.local : std::string(),
                        static_cast<std::int64_t>(one.as.bytes.size()), one.as.picture.has_value()});
     s_->root().open_send_box(shown);
   }

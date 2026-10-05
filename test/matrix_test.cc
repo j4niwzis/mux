@@ -212,4 +212,106 @@ TEST(Matrix, AgainstAHomeserverOverTls) {
   EXPECT_TRUE(put);
 }
 
+struct media_sink {
+  bool* online;
+  std::vector<mux::change::avatar_loaded>* pictures;
+  int* acknowledged;
+  void operator()(mux::change_t one) const {
+    splice::visit(splice::overloaded{
+        [&](const mux::change::connection_changed& change) {
+          *online = change.state == mux::connection_t{mux::connection::online{}};
+        },
+        [&](const mux::change::avatar_loaded& picture) { pictures->push_back(picture); },
+        [&](const mux::change::message_acknowledged&) { ++*acknowledged; },
+        [](const auto&) {}}, one);
+  }
+};
+
+TEST(Matrix, MediaFallsBackToOriginalsAndReusesUploads) {
+  const auto certificate = mux::test::self_signed();
+  mux::net::loop running;
+  auto server_tls = mux::net::server_tls(certificate.certificate_pem, certificate.key_pem);
+  auto client_tls = mux::net::client_tls();
+  mux::net::trust(client_tls, certificate.certificate_pem);
+  mux::net::listener listening(running);
+  bool online = false, finished = false;
+  int acknowledged = 0;
+  std::vector<request> heard;
+  std::vector<mux::change::avatar_loaded> pictures;
+  mux::vault::vault vault;
+  mux::proto::matrix::client::settings how{.user_id = "@a:x.org", .password = "pw",
+      .homeserver = "https://127.0.0.1:" + std::to_string(listening.port()),
+      .sync_timeout = std::chrono::milliseconds(0), .vault = &vault};
+  mux::proto::matrix::client::account account(running, client_tls, how, media_sink{&online, &pictures, &acknowledged});
+  running.spawn([&] {
+    for (;;) {
+      auto socket = listening.accept();
+      auto wire = std::make_shared<mux::net::stream>(running, server_tls, std::move(socket));
+      running.spawn([&, wire] {
+        if (!wire->accept_tls())
+          return;
+        std::string pending;
+        for (auto it = wire->input().begin(); it != std::default_sentinel; ++it) {
+          pending += *it;
+          while (auto one = take(pending)) {
+            heard.push_back(*one);
+            std::string body = "{}";
+            if (one->target.starts_with("/_matrix/client/v3/login"))
+              body = login;
+            else if (one->target.starts_with("/_matrix/client/v3/sync")) {
+              running.sleep(std::chrono::milliseconds(10));
+              body = R"({"next_batch":"s1"})";
+            } else if (one->target.contains("/thumbnail/x.org/missing?")) {
+              wire->write("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n");
+              wire->flush();
+              continue;
+            } else if (one->target.contains("/thumbnail/x.org/ready?"))
+              body = "server thumbnail";
+            else if (one->target.contains("/download/x.org/missing"))
+              body = "original image";
+            else if (one->target.contains("/upload?filename=")) {
+              const auto name = one->target.substr(one->target.find("filename=") + 9);
+              body = "{\"content_uri\":\"mxc://x.org/" + name + "\"}";
+            } else if (one->target.contains("/send/m.room.message/"))
+              body = "{\"event_id\":\"$" + one->target.substr(one->target.rfind('/') + 1) + "\"}";
+            wire->write(answer(body));
+            wire->flush();
+          }
+        }
+      });
+    }
+  });
+  // Bound failures too: the old implementation never delivers the missing thumbnail.
+  running.spawn([&] { running.sleep(std::chrono::seconds(5)); running.stop(); });
+  account.start();
+  running.spawn([&] {
+    while (!online)
+      running.sleep(std::chrono::milliseconds(1));
+    account.fetch_media("mxc://x.org/missing", mux::media_use::thumbnail{}, 860);
+    account.fetch_media("mxc://x.org/ready", mux::media_use::thumbnail{}, 860);
+    account.send_file("!r:x.org", "image", "uploaded image", "image.png", "image/png", true, 2, 2, "");
+    account.send_file("!r:x.org", "video", "uploaded video", "video.mp4", "video/mp4", false, 2, 2, "",
+                      std::nullopt, std::nullopt, mux::video_look{1000, "video thumbnail", 2, 2});
+    while (pictures.size() < 4 || acknowledged < 2)
+      running.sleep(std::chrono::milliseconds(1));
+    finished = true;
+    account.stop();
+    running.stop();
+  });
+  running.run();
+  ASSERT_TRUE(finished);
+  const auto bytes = [&](std::string_view source) {
+    const auto found = std::ranges::find(pictures, source, &mux::change::avatar_loaded::source);
+    return found == pictures.end() ? std::string() : found->bytes;
+  };
+  EXPECT_EQ(bytes("mxc://x.org/missing"), "original image");
+  EXPECT_EQ(bytes("mxc://x.org/ready"), "server thumbnail");
+  EXPECT_EQ(bytes("mxc://x.org/image.png"), "uploaded image");
+  EXPECT_EQ(bytes("mxc://x.org/thumbnail.png"), "video thumbnail");
+  EXPECT_FALSE(std::ranges::any_of(heard, [](const request& one) {
+    return one.target.contains("/download/x.org/ready") ||
+           (one.method == "GET" && (one.target.contains("image.png") || one.target.contains("thumbnail.png")));
+  }));
+}
+
 }  // namespace

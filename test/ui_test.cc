@@ -773,4 +773,126 @@ TEST(Timeline, APicturePressedIsOpened) {
   skiff::paint::defaultFont() = nullptr;
 }
 
+TEST(Timeline, MovingTheMadeRangeRequestsItsMedia) {
+  stub program;
+  ui_state ui;
+  scene::Scene<mux::ui::window<stub>> window{std::in_place, ui.needs(program)};
+  auto& screen = window.root().main();
+  std::vector<mux::message> messages(3);
+  messages[0].id = "$first";
+  messages[1].id = "$middle";
+  messages[2].id = "$last";
+  screen.set_made(messages, 1, 3);
+  EXPECT_TRUE(std::exchange(ui.shared.pictures_due, false));
+  screen.set_made(messages, 1, 3);
+  EXPECT_FALSE(ui.shared.pictures_due);
+  screen.set_made(messages, 0, 2);
+  EXPECT_TRUE(ui.shared.pictures_due);
+}
+
+TEST(Media, AThumbnailArrivalStopsTheLoader) {
+  ui_state ui;
+  const std::string source = "local:ui-test-picture";
+  mux::ui::picture_view picture(ui.colours, source, 2, 2);
+  picture.update(0.0);
+  EXPECT_TRUE(picture.parts.loader.visible());
+  const std::array<std::uint8_t, 16> pixels{};
+  mux::ui::thumbnails().put(source, skia::imageFromRGBA(2, 2, pixels.data()));
+  picture.update(16.0);
+  EXPECT_FALSE(picture.parts.loader.visible());
+  EXPECT_NE(picture.parts.picture.image(), nullptr);
+  mux::ui::thumbnails().clear();
+}
+
+TEST(Media, AVideoWithoutAThumbnailDoesNotWaitForAnImage) {
+  ui_state ui;
+  mux::ui::picture_view picture(ui.colours, "mxc://example.com/video-without-thumbnail", 320, 240);
+  picture.show_video(5000, false);
+  picture.update(16.0);
+  ASSERT_TRUE(picture.parts.video);
+  EXPECT_FALSE(picture.parts.loader.visible());
+  EXPECT_FALSE(picture.wantsTick());
+}
+
+TEST(Settings, AppearanceUsesTheRefreshedChoiceOnTheNextFrame) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  stub program;
+  ui_state ui;
+  scene::Scene<mux::ui::settings_dialog<stub>> dialog{std::in_place, ui.needs(program), "none"};
+  auto& settings = dialog.root();
+  const mux::config::theme_t theme{};
+  const mux::config::accent_t accent{};
+  const auto frame = [&](double now) {
+    dialog.update(now);
+    dialog.layoutIfNeeded(skia::SkRect::MakeWH(440.0f, 520.0f));
+    (void)dialog.finishFrame();
+  };
+  settings.show_appearance(theme, accent);
+  frame(1000.0);
+  frame(1300.0);
+  settings.keep_offset(100.0f);
+  frame(1316.0);
+  const float offset = settings.offset();
+  ASSERT_GT(offset, 0.0f);
+
+  // Requests reach the dialog before app::refresh publishes looks_shown.
+  settings.show_appearance(theme, accent);
+  ui.looks.everywhere.bubbles = mux::config::bubble_look{mux::config::bubbles::translucent{}, 65};
+  ui.looks.bubbles_everywhere = *ui.looks.everywhere.bubbles;
+  frame(1332.0);
+  ASSERT_NE(settings.appearance(), nullptr);
+  auto& bubbles = settings.appearance()->parts.looks.parts.bubbles;
+  EXPECT_EQ(bubbles.parts.kinds.parts.head.parts.value.text(), "Translucent");
+  EXPECT_EQ(bubbles.parts.opacity_label.text(), "Opacity: 65%");
+  EXPECT_NEAR(bubbles.parts.opacity.fraction(), 55.0f / 90.0f, 0.001f);
+  EXPECT_NEAR(settings.offset(), offset, 1.0f);
+
+  settings.show_appearance(theme, accent);
+  ui.looks.everywhere.bubbles = mux::config::bubble_look{mux::config::bubbles::frosted{}, 80};
+  ui.looks.bubbles_everywhere = *ui.looks.everywhere.bubbles;
+  frame(1348.0);
+  EXPECT_EQ(settings.appearance()->parts.looks.parts.bubbles.parts.kinds.parts.head.parts.value.text(), "Frosted");
+
+  // A queued refresh must not reopen a page the user just left.
+  settings.show_appearance(theme, accent);
+  settings.show_home();
+  frame(1364.0);
+  EXPECT_EQ(settings.appearance(), nullptr);
+  skiff::paint::defaultFont() = nullptr;
+}
+
+TEST(Settings, OpeningAndChangingPagesStartsAtTheTop) {
+  skia::SkFont font;
+  skiff::paint::defaultFont() = &font;
+  for (const auto viewport : {skia::SkRect::MakeWH(1100.0f, 720.0f), skia::SkRect::MakeWH(390.0f, 360.0f)}) {
+    stub program;
+    ui_state ui;
+    scene::Scene<mux::ui::window<stub>> window{std::in_place, ui.needs(program)};
+    window.root().open_settings("none");
+    auto* settings = window.root().settings_up();
+    ASSERT_NE(settings, nullptr);
+    double now = 1000.0;
+    const auto settle = [&] {
+      for (int i = 0; i < 25; ++i) {
+        window.update(now += 16.0);
+        window.layoutIfNeeded(viewport);
+        (void)window.finishFrame();
+      }
+    };
+    settle();
+    EXPECT_FLOAT_EQ(settings->offset(), 0.0f);
+    settings->show_appearance({}, {});
+    settle();
+    EXPECT_FLOAT_EQ(settings->offset(), 0.0f);
+    settings->keep_offset(150.0f);
+    settle();
+    EXPECT_GT(settings->offset(), 0.0f);
+    settings->show_home();
+    settle();
+    EXPECT_FLOAT_EQ(settings->offset(), 0.0f);
+  }
+  skiff::paint::defaultFont() = nullptr;
+}
+
 }  // namespace

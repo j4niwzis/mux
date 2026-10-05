@@ -137,6 +137,8 @@ struct ui_shared {
   // their mxc://, while they show.
   std::vector<std::string> pack_pictures_shown;
   std::vector<std::string> panel_pictures_shown;
+  // A viewport moved onto messages whose media has not been requested yet.
+  bool pictures_due = false;
   // What each protocol's account does beyond what every one does, as the
   // program found it from the account types as it started; and each
   // account's protocol state, as its client last said it.

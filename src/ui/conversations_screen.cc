@@ -971,6 +971,7 @@ struct conversations_screen : nodes::Stack {
   struct made_range {
     std::optional<std::string> from, to;
     bool to_end = true;
+    friend bool operator==(const made_range&, const made_range&) = default;
   };
   made_range made;
   std::map<conversation_id, made_range> made_of;
@@ -999,9 +1000,11 @@ struct conversations_screen : nodes::Stack {
   void set_made(const std::vector<message>& all, std::size_t from, std::size_t to) {
     to = std::min(to, all.size());
     from = std::min(from, to);
-    made.from = from < all.size() ? std::optional<std::string>(all[from].id) : std::nullopt;
-    made.to = to > 0 ? std::optional<std::string>(all[to - 1].id) : std::nullopt;
-    made.to_end = to == all.size();
+    made_range next{from < all.size() ? std::optional<std::string>(all[from].id) : std::nullopt,
+                    to > 0 ? std::optional<std::string>(all[to - 1].id) : std::nullopt, to == all.size()};
+    if (next != made)
+      needs_.shared->pictures_due = true;
+    made = std::move(next);
   }
   // A message to bring into view, once it is made and laid out -- flashed,
   // unless it is where a chat opened, at what it was read up to.

@@ -129,13 +129,18 @@ class pictures_part {
                             // An avatar is shown at 120 px at most -- twice that on a dense screen.
                             shown(mux::ui::avatar_images(), one.of, 256);
                           },
-                          [&](const media_use::thumbnail&) { shown(mux::ui::thumbnails(), picture.source, 0); },
+                          [&](const media_use::thumbnail&) { shown(mux::ui::thumbnails(), picture.source, 860); },
                           [&](const media_use::whole&) { shown_whole(picture.source); },
                           // A file fetched to be saved: into Downloads, a number
                           // added where the name is taken, and opened; or only saved.
                           [&](const media_use::to_open& one) { this->save_download(picture.bytes, one.name, true); },
                           [&](const media_use::to_play&) { this->play(picture.source, picture.bytes); },
-                          [&](const media_use::to_copy&) { copy_bytes(picture.bytes); },
+                          [&](const media_use::to_copy&) {
+                            copy_bytes(picture.bytes);
+                            // The full download is also usable in the chat, even
+                            // when the server could not produce a thumbnail.
+                            shown(mux::ui::thumbnails(), picture.source, 860);
+                          },
                           // A video: into its file, and played where the viewer waits for it.
                           [&](const media_use::to_watch&) {
                             videos_fetching_.erase(picture.source);
@@ -156,7 +161,7 @@ class pictures_part {
     if (!fresh)
       return;
     splice::visit(splice::overloaded{[](const media_use::avatar&) {}, [](const media_use::thumbnail&) {},
-                                     [](const media_use::whole&) {},
+                                     [](const media_use::whole&) {}, [](const media_use::to_copy&) {},
                                      [&](const auto&) { this->keep(picture.use, picture.source, picture.bytes); }},
                   picture.use);
   }
@@ -166,6 +171,7 @@ class pictures_part {
   // avatars, the people of the chat being read, and the thumbnails of the
   // pictures in the bubbles made.
   void ask() {
+    s_->ui.pictures_due = false;
     if (s_->demo())
       return;
     const auto want = [&](const account_id& of, const std::optional<std::string>& source, const std::string& key) {
@@ -694,7 +700,7 @@ class pictures_part {
   // The whole of a picture that moves, for its frames: from the disk where
   // it was fetched before, from the account where not.
   void want_whole(const account_id& of, const std::string& source) {
-    if (source.empty() || mux::ui::animations().has(source) || mux::ui::whole_pictures().has(source) ||
+    if (source.empty() || source.starts_with("local:") || mux::ui::animations().has(source) || mux::ui::whole_pictures().has(source) ||
         decoding_.contains(source))
       return;
     if (this->read_back(media_use::whole{}, source) || !fetches_.due(source))
@@ -706,7 +712,8 @@ class pictures_part {
   // A message's picture's thumbnail: from the disk where it was fetched
   // before, from the account where not.
   void want_thumbnail(const account_id& of, const std::string& source) {
-    if (source.empty() || mux::ui::thumbnails().has(source) || decoding_.contains(source))
+    if (source.empty() || source.starts_with("local:") || mux::ui::thumbnails().has(source) ||
+        mux::ui::whole_pictures().has(source) || mux::ui::animations().has(source) || decoding_.contains(source))
       return;
     if (this->read_back(media_use::thumbnail{}, source) || !fetches_.due(source))
       return;

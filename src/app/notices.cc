@@ -51,10 +51,10 @@ class notices_part {
     if (in_view && window_focused_)
       return;
     const auto decision = s_->kept->notify_for(said.in, mentions_me);
-    if (decision.sound)
-      chime_.play();
-    if (!decision.popup)
+    if (!decision.popup) {
+      this->sound_only(decision.sound);
       return;
+    }
     const mux::conversation* chat = s_->model->find(said.in);
     const auto& settings = s_->kept->notifications;
     std::string title = "mux";
@@ -74,7 +74,7 @@ class notices_part {
         text = text.substr(0, cut) + "…";
       }
     }
-    this->show(said.in, std::move(title), std::move(text));
+    this->show(said.in, std::move(title), std::move(text), decision.sound);
   }
 
   // An invite come: said once a run -- who asked, and to what -- by the
@@ -83,13 +83,13 @@ class notices_part {
     if (!invites_told_.insert(in).second)
       return;
     const auto decision = s_->kept->notify_for(in, true);
-    if (decision.sound)
-      chime_.play();
-    if (!decision.popup)
+    if (!decision.popup) {
+      this->sound_only(decision.sound);
       return;
+    }
     const std::string who = invite.from_name.empty() ? invite.from : invite.from_name;
     this->show(in, invite.direct ? std::format("{} invites you to chat", who) : std::format("Invite to {}", name),
-               invite.direct ? std::string("A direct chat") : std::format("from {}", who));
+               invite.direct ? std::string("A direct chat") : std::format("from {}", who), decision.sound);
   }
 
   // Notifications in Settings: the page, its switches, what shows them.
@@ -189,20 +189,27 @@ class notices_part {
   }
 
  private:
-  // Shown by the backend chosen: the desktop's service, asked off the UI's
-  // thread; or mux's own window.
-  void show(const mux::conversation_id& in, std::string title, std::string text) {
+  // Shown by the backend chosen: the system's service, asked off the UI's
+  // thread, with the system's own sound -- the user's, by default (#16873);
+  // or mux's own window, with the chime.
+  void show(const mux::conversation_id& in, std::string title, std::string text, bool sound) {
     splice::visit(splice::overloaded{[&](mux::config::notify_backend::native) {
-                                       std::thread([title, text] {
-                                         if (!mux::platform::notifications::notify(title, text))
+                                       std::thread([title, text, sound] {
+                                         if (!mux::platform::notifications::notify(title, text, sound))
                                            std::println(std::cerr, "[notify] no desktop notification service; {}: {}",
                                                         title, text);
                                        }).detach();
                                      },
                                      [&](mux::config::notify_backend::built_in) {
+                                       this->sound_only(sound);
                                        toasts_due_.push_back({in, in.id, std::move(title), std::move(text)});
                                      }},
                   mux::config::notify_backend_of(s_->kept->notifications.backend));
+  }
+  // A sound with nothing shown, or with mux's own window: the chime.
+  void sound_only(bool sound) {
+    if (sound)
+      chime_.play();
   }
   void show_page() {
     if (auto* up = s_->root().settings_up())

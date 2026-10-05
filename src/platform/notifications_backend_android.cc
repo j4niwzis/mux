@@ -56,19 +56,28 @@ jstring string_of(JNIEnv* env, std::string_view text) {
                                              array, env->NewStringUTF("UTF-8")));
 }
 
-// mux's channel: made once each run -- making it again changes nothing the
-// user set. Silent: the chime is mux's own, played as the settings say.
-constexpr const char* kChannel = "messages";
-void make_channel(JNIEnv* env, jobject manager) {
+// mux's channels, a sound being the channel's from Android 8 on: messages
+// with the system's notification sound, and the same without -- where the
+// settings say no sound. Made each time -- making one again changes nothing
+// the user set in it.
+struct channel {
+  const char* id;
+  const char* name;
+  bool sound;
+};
+constexpr channel kWithSound{"messages", "Messages", true};
+constexpr channel kSilent{"messages-silent", "Messages without sound", false};
+void make_channel(JNIEnv* env, jobject manager, const channel& made) {
   jclass channel_class = env->FindClass("android/app/NotificationChannel");
   constexpr jint importance_high = 4;
   jobject channel = env->NewObject(channel_class,
                                    env->GetMethodID(channel_class, "<init>", "(Ljava/lang/String;Ljava/lang/CharSequence;I)V"),
-                                   env->NewStringUTF(kChannel), string_of(env, "Messages"), importance_high);
+                                   env->NewStringUTF(made.id), string_of(env, made.name), importance_high);
   if (!channel)
     return;
-  env->CallVoidMethod(channel, env->GetMethodID(channel_class, "setSound", "(Landroid/net/Uri;Landroid/media/AudioAttributes;)V"),
-                      nullptr, nullptr);
+  if (!made.sound)
+    env->CallVoidMethod(channel, env->GetMethodID(channel_class, "setSound", "(Landroid/net/Uri;Landroid/media/AudioAttributes;)V"),
+                        nullptr, nullptr);
   env->CallVoidMethod(manager, env->GetMethodID(env->GetObjectClass(manager), "createNotificationChannel",
                                                 "(Landroid/app/NotificationChannel;)V"),
                       channel);
@@ -113,8 +122,9 @@ jint chat_icon(JNIEnv* env, jobject activity) {
 export namespace mux::platform::notifications::backend {
 
 // Posted; false where Android could not be asked. One notification for each
-// title -- a chat, or a person -- the newest in place of the one before.
-[[nodiscard]] inline bool notify(std::string_view title, std::string_view text) {
+// title -- a chat, or a person -- the newest in place of the one before;
+// with the system's notification sound, or silent.
+[[nodiscard]] inline bool notify(std::string_view title, std::string_view text, bool sound) {
   const jni_frame frame;
   JNIEnv* env = frame.env();
   if (!env)
@@ -128,14 +138,15 @@ export namespace mux::platform::notifications::backend {
                                           env->NewStringUTF("notification"));
   if (!manager || frame.threw())
     return false;
+  const channel& posted_in = sound ? kWithSound : kSilent;
   if (sdk >= 26)
-    make_channel(env, manager);
+    make_channel(env, manager, posted_in);
   if (frame.threw())
     return false;
   jclass builder_class = env->FindClass("android/app/Notification$Builder");
   jobject builder = sdk >= 26 ? env->NewObject(builder_class,
                                                env->GetMethodID(builder_class, "<init>", "(Landroid/content/Context;Ljava/lang/String;)V"),
-                                               activity, env->NewStringUTF(kChannel))
+                                               activity, env->NewStringUTF(posted_in.id))
                               : env->NewObject(builder_class, env->GetMethodID(builder_class, "<init>", "(Landroid/content/Context;)V"),
                                                activity);
   if (!builder || frame.threw())
@@ -151,6 +162,10 @@ export namespace mux::platform::notifications::backend {
   // Before channels, a notification's own priority: high, shown at once.
   constexpr jint priority_high = 1;
   set("setPriority", "(I)Landroid/app/Notification$Builder;", priority_high);
+  // Before channels, the sound is the notification's: the default one.
+  constexpr jint default_sound = 1;
+  if (sound)
+    set("setDefaults", "(I)Landroid/app/Notification$Builder;", default_sound);
   if (jobject opening = opening_mux(env, activity, sdk))
     set("setContentIntent", "(Landroid/app/PendingIntent;)Landroid/app/Notification$Builder;", opening);
   if (frame.threw())

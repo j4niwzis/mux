@@ -8,7 +8,8 @@ import mux.platform.notifications.backend;
 
 export namespace mux::platform::notifications {
 // False where the platform has nowhere to show it, or did not take it.
-[[nodiscard]] inline bool notify(std::string_view title, std::string_view text) {
-  return backend::notify(title, text);
+// `sound`: with the system's own sound for a message, or silent.
+[[nodiscard]] inline bool notify(std::string_view title, std::string_view text, bool sound) {
+  return backend::notify(title, text, sound);
 }
 }  // namespace mux::platform::notifications

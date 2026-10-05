@@ -10,8 +10,10 @@ import mux.platform.freedesktop.bus;
 export namespace mux::platform::notifications::backend {
 
 // A notification on the desktop: the title over the text, with an "Open"
-// action. False where there is no bus, or it did not take it.
-inline bool notify(std::string_view title, std::string_view text) {
+// action -- with the sound theme's sound for a message (the spec's
+// sound-name, message-new-instant), or none (suppress-sound). False where
+// there is no bus, or it did not take it.
+inline bool notify(std::string_view title, std::string_view text, bool sound) {
   using namespace freedesktop::bus;
   auto bus = session::open();
   if (!bus)
@@ -31,7 +33,18 @@ inline bool notify(std::string_view title, std::string_view text) {
     body.string("default");
     body.string("Open");
   });
-  body.array(8, [&] {});  // hints: none
+  body.array(8, [&] {  // hints: a{sv}, one entry
+    body.align(8);
+    if (sound) {
+      body.string("sound-name");
+      body.signature("s");
+      body.string("message-new-instant");
+    } else {
+      body.string("suppress-sound");
+      body.signature("b");
+      body.u32(1);
+    }
+  });
   body.i32(-1);           // expire_timeout: the server's
   if (!bus->send(message(kind::call, 0, bus->next_serial(),
                          {.path = "/org/freedesktop/Notifications", .interface = "org.freedesktop.Notifications",

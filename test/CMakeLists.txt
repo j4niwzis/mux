@@ -53,6 +53,11 @@ add_executable(mux-bytes-test bytes_test.cc)
 target_link_libraries(mux-bytes-test PRIVATE splice ${mux_gtest})
 add_test(NAME bytes COMMAND mux-bytes-test)
 
+# Notification identity survives account reconnections and timeline trimming.
+add_executable(mux-notifications-test notifications_test.cc)
+target_link_libraries(mux-notifications-test PRIVATE mux_logic ${mux_gtest})
+add_test(NAME notifications COMMAND mux-notifications-test)
+
 # The window's screens, pressed and typed into, with no window.
 if(MUX_UI)
   add_executable(mux-ui-test ui_test.cc)

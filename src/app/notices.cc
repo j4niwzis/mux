@@ -10,6 +10,7 @@ import std;
 import splice;
 import mux.core;
 import mux.config;
+import mux.logic.notifications;
 import mux.ui;
 import mux.platform.audio;
 import mux.platform.notifications;
@@ -41,11 +42,11 @@ class notices_part {
 
   // A message come as it happened, notified as the settings say -- where it
   // was said since mux started (a minute's grace for clocks): not a chat's
-  // last messages, which the first sync puts at its end too, as tdesktop
-  // notifies nothing of what it catches up on. `in_view`: its chat is the
-  // one on the screen.
+  // last messages, which the first sync puts at its end too. An account
+  // recreated after a proxy change also replays its saved timeline: each
+  // message is handled only once per run. `in_view`: its chat is on screen.
   void message_came(const mux::message& said, bool mentions_me, bool in_view) {
-    if (said.at < started_at_ - std::chrono::minutes(1) || said.outgoing || said.service)
+    if (!messages_.first(said))
       return;
     if (in_view && window_focused_)
       return;
@@ -230,9 +231,7 @@ class notices_part {
   services* s_;
   bool window_focused_ = true;
   std::vector<toast_due> toasts_due_;
-  // When mux started: what was said before it is caught up on, not notified.
-  std::chrono::sys_time<std::chrono::milliseconds> started_at_ =
-      std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
+  mux::logic::notification_history messages_;
   std::set<mux::conversation_id> invites_told_;
   mux::platform::audio::chime chime_;
   std::shared_ptr<push_inbox> push_box_ = std::make_shared<push_inbox>();

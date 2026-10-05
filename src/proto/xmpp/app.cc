@@ -48,7 +48,7 @@ void program_told(App& app, const registered& made) {
   const auto found = app.find(made.account.address);
   if (found == app.saved.end())
     return;
-  splice::visit(splice::overloaded{[](kept& one) { registered(one); }, [](auto&) {}}, found->own);
+  splice::visit(splice::overloaded{[](kept& one) { forget_registration(one); }, [](auto&) {}}, found->own);
   (void)app.write();
 }
 

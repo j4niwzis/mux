@@ -69,7 +69,7 @@ constexpr std::string_view protocol_name(const kept&) { return "XMPP"; }
 // A JID: anything a Matrix user ID is not (those begin with '@').
 constexpr bool owns_address(const state&, std::string_view address) { return !address.empty() && !address.starts_with('@'); }
 // Made on the server: signed in to from now on.
-inline void registered(kept& one) {
+inline void forget_registration(kept& one) {
   one.create.reset();
   one.answers.reset();
 }

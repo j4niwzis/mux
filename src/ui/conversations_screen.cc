@@ -594,13 +594,15 @@ struct conversations_screen : nodes::Stack {
     empty_state& empty = parts.empty;
     select_hint& hint = parts.hint;
     explicit chat_column(const ui_needs<Actions>& n) : chat_column(n, n.actions) {}
-    const ui_needs<Actions>* needs_ = nullptr;
+    // What it makes its call view with: a copy, as the window keeps one --
+    // the needs it was made from were not always there by then.
+    ui_needs<Actions> needs_{};
     // The call shown in it, or none.
     void show_call(const call_view& view) {
       if (parts.call)
         parts.call->show(view);
       else
-        parts.call.emplace(*needs_, view);
+        parts.call.emplace(needs_, view);
       this->invalidateLayout();
       this->markDamaged();
     }
@@ -619,7 +621,7 @@ struct conversations_screen : nodes::Stack {
                 .trust_warning = nodes::Text("", 13.0f, n.colours->text),
                 .line = composer_bar<Actions>(n),
                 .empty = empty_state(*n.colours, a)} {
-      needs_ = &n;
+      needs_ = n;
       header.apply({.fillX = true, .height = chat_header<Actions>::kHeight});
       parts.pinned.apply({.fillX = true, .height = pinned_bar<pinned_press>::kHeight});
       parts.pinned.setVisible(false);

@@ -277,6 +277,7 @@ void app::before_frame() {
     shared.ui.pictures_due = true;
   }
   calls.tick();
+  menu.keep_selection();
   auto pending = std::exchange(ask.requests, {});
   for (const request_t& one : pending)
     splice::visit([this](const auto& each) { this->route(each); }, one);

@@ -181,10 +181,14 @@ class menu_part {
     const auto& chosen = s_->root().main().chosen;
     if (!chosen)
       return;
-    forwarding_ = std::pair{*chosen, target_.id};
+    this->forward_from(*chosen, {target_.id});
+  }
+  // Messages of a chat, to be forwarded: the chats they may go to, asked.
+  void forward_from(const conversation_id& chosen, std::vector<std::string> events) {
+    forwarding_ = std::pair{chosen, std::move(events)};
     std::vector<mux::ui::forward_target> chats;
     for (const auto& [id, account] : s_->model->accounts())
-      if (id == chosen->account)
+      if (id == chosen.account)
         for (const auto& [key, one] : account.conversations)
           chats.push_back({one.id, mux::ui::display_name(one)});
     std::ranges::sort(chats, {}, &mux::ui::forward_target::name);
@@ -196,6 +200,62 @@ class menu_part {
     s_->root().close_menu();
     if (const auto& chosen = s_->root().main().chosen; chosen && !s_->demo())
       s_->net->view_source(*chosen, target_.id);
+  }
+  // -- messages selected, as tdesktop's: from a message's menu; a press on
+  // one while some are; and what the selection bar does with them, in the
+  // order they are in the chat.
+  void apply(const request::menu_select&) {
+    s_->root().close_menu();
+    selected_chat_ = s_->root().main().chosen;
+    selected_ = {target_.id};
+    this->show_selection();
+  }
+  void apply(const request::toggle_selected& one) {
+    if (!selected_.erase(one.id))
+      selected_.insert(one.id);
+    this->show_selection();
+  }
+  void apply(const request::selection_cancel&) {
+    selected_.clear();
+    this->show_selection();
+  }
+  void apply(const request::selection_copy&) {
+    const std::string text = this->selected_messages() | std::views::transform([](const message* one) { return one->body.plain; }) |
+                             std::views::join_with(std::string("\n\n")) | std::ranges::to<std::string>();
+    skiff::scene::setClipboardText(text);
+    selected_.clear();
+    this->show_selection();
+  }
+  void apply(const request::selection_delete&) {
+    if (!selected_chat_)
+      return;
+    for (const message* one : this->selected_messages())
+      if (s_->demo())
+        s_->box->push(change_t{change::message_redacted{*selected_chat_, one->id}});
+      else
+        s_->net->remove_message(*selected_chat_, one->id);
+    selected_.clear();
+    this->show_selection();
+  }
+  void apply(const request::selection_forward&) {
+    if (!selected_chat_)
+      return;
+    this->forward_from(*selected_chat_, this->selected_messages() | std::views::transform([](const message* one) { return one->id; }) |
+                                            std::ranges::to<std::vector>());
+    selected_.clear();
+    this->show_selection();
+  }
+  // Each frame: kept on the messages as the timeline is made again, and let
+  // go where another chat is shown.
+  void keep_selection() {
+    if (selected_.empty())
+      return;
+    if (s_->root().main().chosen != selected_chat_) {
+      selected_.clear();
+      this->show_selection();
+      return;
+    }
+    s_->root().main().chat.area.set_selected(selected_);
   }
   // A message's edit history: what it says now, then what it said before
   // each edit, newest first, each with when it was replaced.
@@ -223,8 +283,9 @@ class menu_part {
     s_->root().close_forward();
     if (!forwarding_ || s_->demo())
       return;
-    const auto [from, event] = *std::exchange(forwarding_, std::nullopt);
-    s_->net->forward(from, event, one.to);
+    const auto [from, events] = *std::exchange(forwarding_, std::nullopt);
+    for (const std::string& event : events)
+      s_->net->forward(from, event, one.to);
     s_->root().show_message("Forward", "Forwarded to " + [&] {
       const conversation* to = s_->model->find(one.to);
       return to ? mux::ui::display_name(*to) : one.to.id;
@@ -272,7 +333,25 @@ class menu_part {
  private:
   // The message being forwarded, and the chat it is in, until a chat is
   // chosen to forward it to.
-  std::optional<std::pair<conversation_id, std::string>> forwarding_;
+  std::optional<std::pair<conversation_id, std::vector<std::string>>> forwarding_;
+  // The messages selected, and in which chat.
+  std::set<std::string> selected_;
+  std::optional<conversation_id> selected_chat_;
+  // The selected ones the chat has, in its order.
+  [[nodiscard]] std::vector<const message*> selected_messages() const {
+    const conversation* chat = selected_chat_ ? s_->model->find(*selected_chat_) : nullptr;
+    if (!chat)
+      return {};
+    return chat->timeline | std::views::filter([&](const message& one) { return selected_.contains(one.id); }) |
+           std::views::transform([](const message& one) { return &one; }) | std::ranges::to<std::vector>();
+  }
+  void show_selection() {
+    const conversation* chat = selected_chat_ ? s_->model->find(*selected_chat_) : nullptr;
+    const auto ops = chat ? mux::ui::ops_of(s_->ui, chat->id.account) : mux::proto::account_ops{};
+    const auto chosen = this->selected_messages();
+    const bool deletable = !chosen.empty() && std::ranges::all_of(chosen, [](const message* one) { return one->outgoing; });
+    s_->root().main().show_selection(selected_, ops.forward, deletable);
+  }
   services* s_;
   outbox_part* outbox_;
   pictures_part* pictures_;

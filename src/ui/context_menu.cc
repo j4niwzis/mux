@@ -255,6 +255,7 @@ struct context_menu : scene::Node {
     using forward_row = row_item<ask<Actions, &Actions::menu_forward>>;
     using source_row = row_item<ask<Actions, &Actions::menu_view_source>>;
     using history_row = row_item<ask<Actions, &Actions::menu_edit_history>>;
+    using select_row = row_item<ask<Actions, &Actions::menu_select>>;
     using delete_row = row_item<ask<Actions, &Actions::menu_delete>>;
     // As tdesktop's, in its order: the quick reactions; every emoji, in
     // place of the rest once asked for; Reply, Edit, Pin, Copy, Copy
@@ -283,6 +284,7 @@ struct context_menu : scene::Node {
       forward_row forward;
       source_row source;
       history_row history;
+      select_row select;
       delete_row remove;
       nodes::Box<> seen_band;
       seen_row<Actions> seen;
@@ -291,7 +293,7 @@ struct context_menu : scene::Node {
       std::optional<emoji_panel<react_with<Actions>>> emoji;
     } parts;
     void expand() {
-      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, copy_image, save, save_gif, reactions, forward, source, history,
+      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, copy_image, save, save_gif, reactions, forward, source, history, select,
              remove, seen_band, seen, emoji] = parts;
       if (emoji)
         return;
@@ -318,7 +320,7 @@ struct context_menu : scene::Node {
     // The items, once the list is down over them: gone, the menu keeping
     // its size by its least height.
     void hide_items() {
-      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, copy_image, save, save_gif, reactions, forward, source, history, remove,
+      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, copy_image, save, save_gif, reactions, forward, source, history, select, remove,
              seen_band, seen, emoji] = parts;
       for (scene::Node* item : std::initializer_list<scene::Node*>{&reply, &thread_reply, &quote_reply, &edit, &pin, &copy, &copy_link, &copy_url, &fave, &copy_image, &save,
                                                                    &save_gif, &reactions, &forward, &source,
@@ -377,11 +379,12 @@ struct context_menu : scene::Node {
                 .forward = forward_row(colours, "Forward", {a}, icon::send{}),
                 .source = source_row(colours, "View Source", {a}, icon::info{}),
                 .history = history_row(colours, "Edit History", {a}, icon::pencil{}),
+                .select = select_row(colours, "Select", {a}, icon::check{}),
                 .remove = delete_row(colours, "Delete", {a}, icon::close{}),
                 .seen_band = nodes::Box<>(colours.band),
                 .seen = seen_row<Actions>(colours, a, facts.seen)} {
       fState.setFloats(true);  // over the chat: frosted live, where asked
-      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, copy_image, save, save_gif, reactions, forward, source, history,
+      auto& [quick, quick_band, reply, thread_reply, quote_reply, edit, pin, copy, copy_link, copy_url, fave, copy_image, save, save_gif, reactions, forward, source, history, select,
              remove, seen_band, seen, emoji] = parts;
       quick_band.apply({.fillX = true, .height = 1.0f, .margin = {0.0f, 0.0f, 4.0f, 0.0f}});
       // A menu's rows as tdesktop's menuWithIcons: 8 over and under the
@@ -430,6 +433,7 @@ struct context_menu : scene::Node {
       thread_reply.setVisible(facts.can.threads && !facts.link.empty());
       source.setVisible(facts.can.view_source && !facts.link.empty());
       history.setVisible(facts.history);
+      select.setVisible(!facts.id.empty());
       // Who reacted, as Telegram's menu lists them: wherever there are any.
       reactions.setVisible(facts.reaction_count > 0);
       seen_band.apply({.fillX = true, .height = 1.0f, .margin = {4.0f, 0.0f, 4.0f, 0.0f}});

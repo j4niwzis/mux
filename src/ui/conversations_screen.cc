@@ -567,6 +567,7 @@ struct conversations_screen : nodes::Stack {
       // The head, as a function of the chat shown.
       header_t header;
       search_bar<Actions> search;
+      selection_bar<Actions> selection;
       // The pinned message, under the head, where the chat has any.
       pinned_t pinned;
       // Its protocol's own node under the head (make_head_view).
@@ -592,6 +593,7 @@ struct conversations_screen : nodes::Stack {
     explicit chat_column(const ui_needs<Actions>& n) : chat_column(n, n.actions) {}
     chat_column(const ui_needs<Actions>& n, Actions* a)
         : parts{.search = search_bar<Actions>(n),
+                .selection = selection_bar<Actions>(n),
                 .area = timeline_area<Actions>(n),
                 .mentions = mention_list(*n.colours),
                 .trust_warning = nodes::Text("", 13.0f, n.colours->text),
@@ -644,6 +646,17 @@ struct conversations_screen : nodes::Stack {
   // messages; Esc lets an answer or an edit go.
   using Node::onKey;
   void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply);
+  // Messages selected: the selection bar in place of the head, and the
+  // messages marked; none, the head back.
+  void show_selection(const std::set<std::string>& ids, bool forwardable, bool deletable) {
+    auto& bar = chat.parts.selection;
+    bar.setVisible(!ids.empty());
+    if (!ids.empty())
+      bar.show(ids.size(), forwardable, deletable);
+    header.setVisible(ids.empty() && !search.visible());
+    chat.area.set_selected(ids);
+    this->invalidateLayout();
+  }
   // The search bar in place of the head, or the head back.
   void show_search(bool shown) {
     search.setVisible(shown);

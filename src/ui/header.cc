@@ -339,6 +339,59 @@ struct pinned_bar : nodes::Stack {
   }
 };
 
+// Messages selected, as tdesktop's: in place of the head, how many, and
+// what can be done with them -- Forward, Copy, Delete -- and Cancel. Esc
+// cancels too.
+template <class Actions>
+struct selection_bar : nodes::Stack {
+  Actions* actions;
+  using forward_button = widgets::Button<ask<Actions, &Actions::selection_forward>>;
+  using copy_button = widgets::Button<ask<Actions, &Actions::selection_copy>>;
+  using delete_button = widgets::Button<ask<Actions, &Actions::selection_delete>>;
+  using cancel_button = widgets::Button<ask<Actions, &Actions::selection_cancel>>;
+  struct parts_t {
+    nodes::Text count;
+    forward_button forward;
+    copy_button copy;
+    delete_button remove;
+    cancel_button cancel;
+    nodes::Box<> bottom_line;
+  } parts;
+  explicit selection_bar(const ui_needs<Actions>& n)
+      : actions(n.actions),
+        parts{.count = nodes::Text("", 15.0f, n.colours->text, true),
+              .forward = forward_button(n.colours->widgets, "Forward", {n.actions}),
+              .copy = copy_button(n.colours->widgets, "Copy", {n.actions}),
+              .remove = delete_button(n.colours->widgets, "Delete", {n.actions}),
+              .cancel = cancel_button(n.colours->widgets, "Cancel", {n.actions}),
+              .bottom_line = nodes::Box<>(n.colours->band)} {
+    auto& [count, forward, copy, remove, cancel, bottom_line] = parts;
+    this->setHorizontal();
+    this->setGap(8.0f);
+    fState.apply({.fillX = true, .height = chat_header<Actions>::kHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f},
+                  .background = n.colours->sidebar});
+    bottom_line.apply({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f});
+    count.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+    for (scene::Node* each : std::initializer_list<scene::Node*>{&forward, &copy, &remove, &cancel})
+      each->apply({.alignSelf = scene::align::kMiddle, .height = 32.0f});
+    this->setVisible(false);
+  }
+  // How many are selected, and which of what can be done with them is.
+  void show(std::size_t selected, bool forwardable, bool deletable) {
+    parts.count.setText(std::format("{} selected", selected));
+    parts.forward.setVisible(forwardable);
+    parts.remove.setVisible(deletable);
+    this->invalidateLayout();
+  }
+  using Node::onKey;
+  void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
+    if (press.key == scene::keys::kEscape) {
+      actions->selection_cancel();
+      reply.handle();
+    }
+  }
+};
+
 // Finding in a chat, as tdesktop's search in a chat: in place of the head,
 // a field with the magnifier, how many are found and which is shown ("3 of
 // 12"), the arrows to the newer and the older, and ✕. Enter goes to the

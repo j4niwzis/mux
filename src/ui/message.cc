@@ -1041,6 +1041,19 @@ struct message_bubble : nodes::Stack {
   // A stretch of its text marked -- what a reply quoted of it -- while it
   // is flashed; let go as the flash ends.
   bool marked = false;
+  // Selected, among messages selected: the whole row washed in the accent,
+  // as the flash washes it, and held.
+  bool selected = false;
+  [[nodiscard]] skia::SkColor wash(float strength) const {
+    return (colours_->accent & 0x00FFFFFFu) | (static_cast<skia::SkColor>(std::lround(strength)) << 24);
+  }
+  void select(bool on) {
+    if (on == selected)
+      return;
+    selected = on;
+    if (!flash.moving())
+      fState.apply({.background = selected ? this->wash(56.0f) : skia::SkColor{0}});
+  }
   // The quote its text opened with, shown in its header instead: what a
   // click on the header goes to, marked.
   std::optional<std::string> header_quote;
@@ -1080,8 +1093,7 @@ struct message_bubble : nodes::Stack {
   [[nodiscard]] bool wantsTick() const { return this->settling(); }
   void update(double now_ms) {
     if (flash.step(now_ms))
-      fState.apply({.background = (colours_->accent & 0x00FFFFFFu) |
-                                  (static_cast<skia::SkColor>(std::lround(80.0f * flash.value())) << 24)});
+      fState.apply({.background = this->wash(std::max(80.0f * flash.value(), selected ? 56.0f : 0.0f))});
     if (marked && !flash.moving())
       this->unmark();
     if (appearing.step(now_ms)) {

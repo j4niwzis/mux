@@ -161,6 +161,12 @@ struct stub {
   void start_call(mux::conversation_id) {}
   void call_chosen() {}
   void menu_edit_history() {}
+  void menu_select() {}
+  void toggle_selected(std::string) {}
+  void selection_forward() {}
+  void selection_copy() {}
+  void selection_delete() {}
+  void selection_cancel() {}
   void accept_call() {}
   void decline_call() {}
   void hang_up() {}

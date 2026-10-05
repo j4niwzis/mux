@@ -609,11 +609,27 @@ struct timeline_area : scene::Node {
   // its sender -- as a click: it comes here from what was pressed when that
   // did not take it, at once or, in a list that scrolls, on the release.
   [[nodiscard]] const conversation* seen_chat_of() const { return seen_model && seen_chat ? seen_model->find(*seen_chat) : nullptr; }
+  // Messages selected: while there are, a press on a message selects it or
+  // lets it go, rather than doing what a press there does.
+  std::set<std::string> selected_ids;
+  void set_selected(const std::set<std::string>& ids) {
+    selected_ids = ids;
+    for (message_bubble<Actions>& one : this->bubbles())
+      one.select(selected_ids.contains(one.message_id));
+  }
   [[nodiscard]] bool onClick(float x, float y) {
     // In the space the rows are laid out in: the list draws them scrolled.
     const struct {
       float x, y;
     } press{x, y - parts.timeline.contentsShift()};
+    if (!selected_ids.empty()) {
+      for (const message_bubble<Actions>& one : this->bubbles())
+        if (one.bounds().contains(press.x, press.y) && !one.message_id.empty()) {
+          actions->toggle_selected(one.message_id);
+          return true;
+        }
+      return false;
+    }
       for (const message_bubble<Actions>& one : this->bubbles()) {
         if (press_in_bubble(actions, one, press.x, press.y, seen_chat_of()))
           return true;

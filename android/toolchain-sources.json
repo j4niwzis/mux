@@ -72,7 +72,15 @@
         "android/keycodes.h",
         "android/rect.h"
       ],
-      "source": "native"
+      "source": "native",
+      "corrections": [
+        {
+          "file": "android/hardware_buffer.h",
+          "replace": "AHARDWAREBUFFER_USAGE_FRONT_BUFFER = 1UL << 32,",
+          "with": "AHARDWAREBUFFER_USAGE_FRONT_BUFFER = 1ULL << 32,",
+          "why": "1UL << 32 is no constant where unsigned long has 32 bits (armeabi-v7a); the NDK publishes it as 1ULL, as its neighbours are"
+        }
+      ]
     },
     {
       "all": true,

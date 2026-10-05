@@ -216,6 +216,9 @@ class settings_part {
   void apply(const request::flip_show_deleted&) {
     k_->history.show_deleted = !k_->history.show_deleted;
     s_->model->show_deleted = k_->history.show_deleted;
+    if (auto* up = s_->root().settings_up())
+      if (auto* page = up->storage())
+        page->show_deleted(k_->history.show_deleted);
     (void)k_->write();
   }
   // Room events, for every chat that has not chosen, nor its account.

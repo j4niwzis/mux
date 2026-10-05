@@ -167,6 +167,7 @@ struct storage_page : nodes::Stack {
   }
   void show_motion(std::string_view) {}
   void show_receipts(bool) {}
+  void show_deleted(bool shown) { this->content().parts.show_deleted.parts.toggle.setOn(shown); }
   void show_sealed(bool sealed) { this->content().show_sealed(sealed); }
 };
 

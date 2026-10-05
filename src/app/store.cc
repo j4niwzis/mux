@@ -55,6 +55,7 @@ struct message_line {
     std::optional<std::string> plain;
     std::optional<std::string> html;
     std::optional<std::int64_t> until;
+    friend consteval auto json_schema(knot::type<version_line>) { return knot::schema<version_line>(); }
   };
   std::optional<std::vector<version_line>> versions;
   std::optional<bool> redacted;

@@ -59,7 +59,7 @@ fork checkout, add `-DMUX_ANDROID_SDL_SOURCE_DIR=/absolute/path/to/SDL`.
 ```sh
 cmake -S android/smoke -B build-android-smoke -G Ninja \
   -DCMAKE_TOOLCHAIN_FILE="$ANDROID_ROOT/cmake/target.cmake" \
-  -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_BUILD_TYPE=Release \
   -DCME_BUILD_MACHINE_CXX_COMPILER=clang++-23 \
   -DCME_BUILD_MACHINE_CXX_FLAGS='-stdlib=libc++ -fno-experimental-new-constant-interpreter'
 cmake --build build-android-smoke --target mux-apk -j4
@@ -82,7 +82,7 @@ the source-built CMake toolchain uses `CMAKE_SYSTEM_NAME=Linux`.
 rustup target add aarch64-linux-android
 cmake -S . -B build-android -G Ninja \
   -DCMAKE_TOOLCHAIN_FILE="$ANDROID_ROOT/cmake/target.cmake" \
-  -DCMAKE_BUILD_TYPE=Debug -DMUX_PROGRAM_JOBS=1 \
+  -DCMAKE_BUILD_TYPE=Release -DMUX_PROGRAM_JOBS=1 \
   -DMUX_CLI=OFF -DMUX_TESTS=OFF -DMUX_VIDEO=OFF \
   -DCME_BUILD_MACHINE_CXX_COMPILER=clang++-23 \
   -DCME_BUILD_MACHINE_CXX_FLAGS='-stdlib=libc++ -fno-experimental-new-constant-interpreter'

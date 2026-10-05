@@ -157,6 +157,13 @@ struct stub {
   void open_new_room() {}
   void close_new_room() {}
   void copy_text(std::string) {}
+  void text_key(scene::Key) {}
+  void start_call(mux::conversation_id) {}
+  void call_chosen() {}
+  void accept_call() {}
+  void decline_call() {}
+  void hang_up() {}
+  void mute_call() {}
   void settings_notifications() {}
   void flip_notify(mux::config::notify_flag_t) {}
   void flip_unified_push() {}

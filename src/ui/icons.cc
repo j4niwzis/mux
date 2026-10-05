@@ -43,6 +43,7 @@ struct up {};      // a chevron up
 struct down {};    // a chevron down
 struct download {};
 struct compass {};  // Explore rooms
+struct phone {};   // a handset: a call
 struct threads {};  // a room's threads  // an arrow down onto a line: saved to the disk
 struct reply {};   // tdesktop's historyReplyIcon: an arrow turned back
 struct pencil {};  // tdesktop's historyEditIcon
@@ -58,7 +59,7 @@ using icon_t = splice::variant<icon::none, icon::person, icon::gear, icon::power
                             icon::close, icon::info, icon::people, icon::add_person, icon::bell, icon::sliders,
                             icon::leave, icon::check, icon::clip, icon::send, icon::eye, icon::dot, icon::minus,
                             icon::reply, icon::pencil, icon::search, icon::up, icon::down, icon::smile,
-                            icon::play, icon::pause, icon::download, icon::compass, icon::threads>;
+                            icon::play, icon::pause, icon::download, icon::compass, icon::threads, icon::phone>;
 
 // Each icon's shape, as data, in points from the middle of its box -- about
 // 20 across -- for nodes::Icon to draw.
@@ -68,6 +69,12 @@ namespace marks = nodes::mark;
 namespace steps = nodes::path_step;
 
 [[nodiscard]] inline IconShape shape_of(icon::none) { return {}; }
+// A handset: its curve, and its two ends heavier.
+[[nodiscard]] inline IconShape shape_of(icon::phone) {
+  return {{{marks::arc{-7.5f, -7.5f, 7.5f, 7.5f, 135.0f, 180.0f}},
+           {marks::line{-7.8f, -2.4f, -2.4f, -7.8f}, 3.4f},
+           {marks::line{2.4f, 7.8f, 7.8f, 2.4f}, 3.4f}}};
+}
 [[nodiscard]] inline IconShape shape_of(icon::person) {
   return {{{marks::circle{0.0f, -4.0f, 3.8f}}, {marks::arc{-7.5f, 2.0f, 7.5f, 17.0f, 180.0f, 180.0f}}}};
 }

@@ -401,7 +401,7 @@ if(MUX_UI)
   set_property(SOURCE src/telegram_pattern.cc APPEND PROPERTY OBJECT_DEPENDS ${mux_pattern})
   target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
     FILES ${mux_platform_sources} ${mux_calls_sources} src/ui.cc
-          src/ui/base.cc src/ui/icons.cc src/ui/avatars.cc src/ui/controls.cc src/ui/themes.cc src/ui/names.cc src/ui/html.cc src/ui/chat_list.cc src/ui/message_pieces.cc src/ui/message_media.cc src/ui/message_text.cc src/ui/message.cc src/ui/header.cc src/ui/info_common.cc src/ui/info_cards.cc src/ui/info_reactions.cc src/ui/info_new_chats.cc src/ui/info_looks.cc src/ui/info_threads.cc src/ui/info_packs.cc src/ui/info_explore.cc src/ui/info.cc src/ui/room_settings.cc src/ui/composer.cc src/ui/timeline.cc src/ui/conversations_side.cc src/ui/conversations_screen.cc src/ui/conversations_show.cc src/ui/conversations.cc src/ui/forms.cc src/ui/add_account.cc src/ui/accounts.cc src/ui/drawer.cc src/ui/proxies.cc src/ui/appearance.cc src/ui/storage.cc src/ui/settings.cc src/ui/emoji_kept.cc src/ui/emoji_panels.cc src/ui/emoji_popup.cc src/ui/context_menu.cc src/ui/sending.cc src/ui/viewer.cc src/ui/window.cc
+          src/ui/base.cc src/ui/icons.cc src/ui/avatars.cc src/ui/controls.cc src/ui/themes.cc src/ui/names.cc src/ui/html.cc src/ui/chat_list.cc src/ui/message_pieces.cc src/ui/message_media.cc src/ui/message_text.cc src/ui/message.cc src/ui/header.cc src/ui/info_common.cc src/ui/info_cards.cc src/ui/info_reactions.cc src/ui/info_new_chats.cc src/ui/info_looks.cc src/ui/info_threads.cc src/ui/info_packs.cc src/ui/info_explore.cc src/ui/info.cc src/ui/room_settings.cc src/ui/composer.cc src/ui/timeline.cc src/ui/conversations_side.cc src/ui/conversations_screen.cc src/ui/conversations_show.cc src/ui/conversations.cc src/ui/forms.cc src/ui/add_account.cc src/ui/accounts.cc src/ui/drawer.cc src/ui/proxies.cc src/ui/appearance.cc src/ui/storage.cc src/ui/settings.cc src/ui/emoji_kept.cc src/ui/emoji_panels.cc src/ui/emoji_popup.cc src/ui/context_menu.cc src/ui/sending.cc src/ui/viewer.cc src/ui/call_bar.cc src/ui/window.cc
           src/proto/xmpp/ui.cc src/proto/matrix/ui_form.cc src/proto/matrix/ui_manage.cc src/proto/matrix/ui_sessions.cc src/proto/matrix/ui_tools.cc src/proto/matrix/ui.cc src/proto/ui.cc)
   target_link_libraries(mux_modules PUBLIC SDL3::SDL3 skiff::skiff skiff::widgets Opus::opus Vorbis::vorbisfile
     ${mux_video_libraries} ${mux_calls_libraries})
@@ -463,7 +463,7 @@ if(MUX_UI)
           src/app/store.cc src/app/requests.cc src/app/words.cc src/app/kept.cc src/app/services.cc src/app/search.cc src/app/pictures.cc src/app/drafts.cc
           src/app/reading.cc src/app/outbox.cc src/app/settings.cc src/app/menu.cc src/app/notices.cc src/app/verification.cc src/app/proxies.cc src/app/packs.cc
           src/app/rooms.cc src/app/room_card.cc src/app/preferences.cc src/app/manage.cc src/app/looks.cc src/app/threads.cc src/app/emoji.cc src/app/accounts.cc
-          src/app/local_data.cc src/app/marks.cc src/app/history.cc src/proto/matrix/app.cc src/proto/app.cc)
+          src/app/local_data.cc src/app/calls.cc src/app/marks.cc src/app/history.cc src/proto/matrix/app.cc src/proto/app.cc)
   target_compile_definitions(mux_app PUBLIC $<${mux_split}:MUX_SPLIT_ACCOUNTS>)
   target_link_libraries(mux_app PUBLIC mux_modules)
   # The program itself: its module, beside its implementation units.

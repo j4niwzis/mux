@@ -43,6 +43,9 @@ void app::woken() {
                                  pictures.take(picture, true);
                                  mux::ui::download_progress().erase(picture.source);
                                },
+                               // A call's: the calls part's.
+                               [&](const mux::change::call_signalled& said) { calls.take(said); },
+                               [&](const mux::change::call_servers& given) { calls.take(given); },
                                // A room the user made: shown, once the model has it.
                                [&](const mux::change::room_created& made) { made_room_ = made.id; },
                                // A directory searched: its rooms, in Explore.
@@ -273,6 +276,7 @@ void app::before_frame() {
     shared.ui.panel_pictures_shown = std::move(shown);
     shared.ui.pictures_due = true;
   }
+  calls.tick();
   auto pending = std::exchange(ask.requests, {});
   for (const request_t& one : pending)
     splice::visit([this](const auto& each) { this->route(each); }, one);

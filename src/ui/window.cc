@@ -23,6 +23,7 @@ import :accounts;
 import :drawer;
 import :settings;
 import :context_menu;
+import :call_bar;
 import :sending;
 import :viewer;
 
@@ -180,6 +181,8 @@ struct window : scene::Node {
       std::optional<picture_viewer<Actions>> viewer;
       // A selectable text's menu, where it was pressed with the right button.
       std::optional<text_menu> text_menu_up;
+      // A call, while there is one: over everything.
+      std::optional<call_bar<Actions>> call_up;
     } parts;
 
     Actions* actions_of = nullptr;
@@ -276,14 +279,14 @@ struct window : scene::Node {
     skia::SkRect frozen_at = skia::SkRect::MakeEmpty();  // where it is on the device
 
     [[nodiscard]] bool dialog_fading() {
-      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up] = parts;
+      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, call_up] = parts;
       return settings.settling() || notice.settling() || person.settling() || room.settling() || reactions.settling() ||
              marks.settling() || manage.settling() || forwarding.settling() || new_chat.settling() ||
              new_room.settling() || packs.settling() || wallpaper.settling() || explore.settling() ||
              tools.settling() || sending.settling() || passphrase.settling() || verifying.settling();
     }
     void draw(skiff::scene::Painting& painting, skia::SkCanvas* canvas, float alpha) {
-      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up] = parts;
+      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, call_up] = parts;
       skia::SkMatrix inverse;
       if (!this->dialog_fading() || !canvas->getTotalMatrix().invert(&inverse)) {
         frozen = nullptr;
@@ -316,7 +319,7 @@ struct window : scene::Node {
       over(settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore,
            tools, sending, passphrase, verifying);
       const auto over_if = [&](auto&... each) { ((each ? scene::draw(*each, painting, canvas, alpha) : void()), ...); };
-      over_if(emoji, menu, viewer, text_menu_up);
+      over_if(emoji, menu, viewer, text_menu_up, call_up);
     }
 
     explicit layers(const ui_needs<Actions>& n) : layers(n, n.actions) {}
@@ -440,6 +443,24 @@ struct window : scene::Node {
     menu.apply({.place = scene::anchor::kTopLeft,
                 .x = std::clamp(now.last_press.x() - box.fLeft, 0.0f, std::max(0.0f, box.width() - 150.0f)),
                 .y = std::clamp(now.last_press.y() - box.fTop, 0.0f, std::max(0.0f, box.height() - menu.tall()))});
+    now.invalidateLayout();
+    now.markDamaged();
+  }
+  // The call bar, as the call is now; and gone, with the call.
+  void show_call(const call_view& view) {
+    auto& now = *parts.now;
+    if (now.parts.call_up)
+      now.parts.call_up->show(view);
+    else
+      now.parts.call_up.emplace(needs_, view);
+    now.invalidateLayout();
+    now.markDamaged();
+  }
+  void hide_call() {
+    auto& now = *parts.now;
+    if (!now.parts.call_up)
+      return;
+    now.parts.call_up.reset();
     now.invalidateLayout();
     now.markDamaged();
   }

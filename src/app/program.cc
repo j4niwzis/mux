@@ -55,6 +55,7 @@ import mux.app.threads;
 import mux.app.emoji;
 import mux.app.accounts;
 import mux.app.local_data;
+import mux.app.calls;
 import mux.logic.links;
 
 export namespace mux::app {
@@ -96,6 +97,7 @@ struct app : kept_settings {
   emoji_part emoji{shared};
   accounts_part accounts_screen{shared, *this};
   local_data_part local_data{shared, *this};
+  calls_part calls{shared};
   // Work off the UI's thread: decoding pictures, reading the disk.
   workers work;
   // Files chosen in the dialog, or dropped on the window: to the outbox.
@@ -134,7 +136,7 @@ struct app : kept_settings {
   }
   template <class Request>
   void route(const Request& one) {
-    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> || takes<marks_part, Request> || takes<history_part, Request> || takes<verification_part, Request> || takes<proxies_part, Request> || takes<packs_part, Request> || takes<rooms_part, Request> || takes<room_card_part, Request> || takes<preferences_part, Request> || takes<manage_part, Request> || takes<looks_part, Request> || takes<threads_part, Request> || takes<emoji_part, Request> || takes<accounts_part, Request> || takes<local_data_part, Request> ||
+    static_assert(takes<search_part, Request> || takes<pictures_part, Request> || takes<reading_part, Request> || takes<outbox_part, Request> || takes<settings_part, Request> || takes<menu_part, Request> || takes<notices_part, Request> || takes<marks_part, Request> || takes<history_part, Request> || takes<verification_part, Request> || takes<proxies_part, Request> || takes<packs_part, Request> || takes<rooms_part, Request> || takes<room_card_part, Request> || takes<preferences_part, Request> || takes<manage_part, Request> || takes<looks_part, Request> || takes<threads_part, Request> || takes<emoji_part, Request> || takes<accounts_part, Request> || takes<local_data_part, Request> || takes<calls_part, Request> ||
                       takes<app, Request>, "a request no part of the program takes");
     if (!offer(search, one) && !offer(pictures, one) && !offer(reading, one) && !offer(outbox, one) &&
         !offer(settings, one) && !offer(menu, one) && !offer(notices, one) && !offer(marks, one) && !offer(paging, one) &&
@@ -142,7 +144,7 @@ struct app : kept_settings {
         !offer(rooms, one) && !offer(room_card, one) &&
         !offer(preferences, one) && !offer(manage, one) &&
         !offer(looks, one) && !offer(threads, one) && !offer(emoji, one) &&
-        !offer(accounts_screen, one) && !offer(local_data, one))
+        !offer(accounts_screen, one) && !offer(local_data, one) && !offer(calls, one))
       offer(*this, one);
   }
 

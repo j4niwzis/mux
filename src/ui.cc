@@ -36,4 +36,5 @@ export import :settings;
 export import :context_menu;
 export import :sending;
 export import :viewer;
+export import :call_bar;
 export import :window;

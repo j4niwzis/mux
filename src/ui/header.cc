@@ -189,6 +189,8 @@ struct chat_header : nodes::Stack {
     std::string status;
     // A back arrow before it, to the chats: shown one thing at a time.
     bool back = false;
+    // A call can be made in it: its protocol calls, and it is two.
+    bool callable = false;
     friend bool operator==(const view&, const view&) = default;
   };
   [[nodiscard]] static view view_of(const ui_shared& shared, const conversation* one, const model& now) {
@@ -220,7 +222,10 @@ struct chat_header : nodes::Stack {
                                    [](std::string so_far, const proto::part::badge& badge) {
                                      return so_far.empty() ? badge.text : std::format("{} \u00b7 {}", so_far, badge.text);
                                    });
-    return {one->id.id, display_name(*one), std::move(about)};
+    return {.key = one->id.id,
+            .title = display_name(*one),
+            .status = std::move(about),
+            .callable = ops_of(shared, one->id.account).calls && count <= 2};
   }
 
   // The chat's avatar, its name over how it is, and the button to its info.
@@ -228,6 +233,7 @@ struct chat_header : nodes::Stack {
     using find_button = icon_button<ask<Actions, &Actions::open_search>>;
     using info_button = icon_button<ask<Actions, &Actions::toggle_info>>;
     using threads_button = icon_button<ask<Actions, &Actions::toggle_threads>>;
+    using call_button = icon_button<ask<Actions, &Actions::call_chosen>>;
     using back_button = icon_button<ask<Actions, &Actions::close_chat>>;
     // Shown one thing at a time, a tap on the chat's name or avatar opens
     // its info, as on Telegram's phones.
@@ -238,6 +244,8 @@ struct chat_header : nodes::Stack {
       avatar_mark face;
       two_lines texts;
       find_button find;
+      // A call to the other, where the chat is two and its protocol calls.
+      call_button call;
       // The room's threads, as Element's header has them.
       threads_button threads;
       info_button info;
@@ -248,6 +256,7 @@ struct chat_header : nodes::Stack {
                 .face = avatar_mark(shown.key.value_or(""), shown.title, 38.0f),
                 .texts = two_lines(colours, shown.title, shown.status, 15.0f, 3.0f),
                 .find = find_button(colours, icon::search{}, {a}),
+                .call = call_button(colours, icon::phone{}, {a}),
                 .threads = threads_button(colours, icon::threads{}, {a}),
                 .info = info_button(colours, icon::info{}, {a})} {
       this->setHorizontal();
@@ -256,6 +265,8 @@ struct chat_header : nodes::Stack {
       parts.find.apply({.alignSelf = scene::align::kMiddle});
       parts.threads.apply({.alignSelf = scene::align::kMiddle});
       parts.threads.setVisible(shown.key.has_value());
+      parts.call.apply({.alignSelf = scene::align::kMiddle});
+      parts.call.setVisible(shown.key.has_value() && shown.callable);
       parts.info.apply({.alignSelf = scene::align::kMiddle});
       parts.back.apply({.alignSelf = scene::align::kMiddle});
       parts.back.setVisible(shown.back && shown.key.has_value());

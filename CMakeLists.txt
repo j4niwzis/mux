@@ -396,6 +396,10 @@ if(MUX_UI)
     ${mux_video_libraries})
   if(ANDROID)
     add_library(mux SHARED src/main.cc src/main_android.cc)
+    # NativeActivity runs on a small pthread stack. Catch large startup
+    # locals before packaging an APK that crashes at function entry.
+    set_property(SOURCE src/main.cc APPEND PROPERTY COMPILE_OPTIONS
+      -Wframe-larger-than=65536 -Werror=frame-larger-than)
     target_sources(mux_modules PRIVATE src/android_runtime.cc)
     target_link_options(mux PRIVATE "LINKER:-z,max-page-size=16384" "LINKER:--no-undefined" "LINKER:--exclude-libs,ALL")
     if(MANDK_ROOT)

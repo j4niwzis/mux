@@ -115,7 +115,16 @@ int mux_main(int argc, char** argv) {
                             .see_through = opacity < 100,
                             .frost = std::clamp(saved.frost ? *saved.frost : saved.frost_blur ? static_cast<double>(*saved.frost_blur) / 3.0 : 10.0, 0.0, 100.0)};
   mux::ui::use_scroll_bars(mux::config::theme_of(saved.theme));
-  app program{mux::ui::palette_of(mux::config::theme_of(saved.theme), mux::config::accent_of(saved.accent), opacity), window};
+  // The application owns the UI tree inline, which exceeds Android's
+  // native activity thread stack. Use static storage, but destroy it before
+  // the local model, vault and network that it borrows go out of scope.
+  static std::optional<app> program_storage;
+  struct reset_program {
+    std::optional<app>& storage;
+    ~reset_program() { storage.reset(); }
+  } program_lifetime{program_storage};
+  auto& program = program_storage.emplace(
+      mux::ui::palette_of(mux::config::theme_of(saved.theme), mux::config::accent_of(saved.accent), opacity), window);
   program.box = &box;
   program.wake = wake_window{kinds.wake};
   program.vault = &vault;

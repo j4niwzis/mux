@@ -202,7 +202,8 @@ struct room_page : nodes::Stack {
               .published = part_heading((*box->colours_), "Published Addresses"),
               .published_about = explained((*box->colours_),  "Published addresses can be used by anyone on any server to join your room. To publish an address, it " "needs to be set as a local address first."),
               .main_address = nodes::Text("Main address: " + facts.alias.value_or("none"), 14.0f, box->colours_->text),
-              .others_title = nodes::Text("Other published addresses:", 14.0f, (*box->colours_).text)} {
+              .others_title = nodes::Text("Other published addresses:", 14.0f, (*box->colours_).text)},
+        box_(box) {
     this->setGap(6.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
     parts.photo.apply({.alignSelf = scene::align::kStart});
@@ -217,6 +218,15 @@ struct room_page : nodes::Stack {
       parts.others.emplace_back(one, 14.0f, box->colours_->text);
     if (facts.other_aliases.empty())
       parts.others.emplace_back("No other published addresses yet.", 13.0f, box->colours_->dim);
+  }  // Enter in the name or the topic: saved, as Save does -- a single-line
+  // field leaves its Enter to the form it is in.
+  Box* box_ = nullptr;
+  using Node::onKey;
+  void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
+    if (press.key != scene::keys::kEnter || press.repeat || !parts.buttons.visible())
+      return;
+    save{box_, this}();
+    reply.handle();
   }
 };
 

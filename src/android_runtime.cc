@@ -67,6 +67,23 @@ bool certificates(JNIEnv* env, const std::filesystem::path& destination) {
   std::filesystem::rename(temporary, destination);
   return setenv("SSL_CERT_FILE", destination.c_str(), 1) == 0;
 }
+
+// Android 13 and later post a notification only for an app the user let:
+// asked once at the start, where it was not given yet. The answer is the
+// system's to keep; nothing here waits for it.
+void ask_to_notify(JNIEnv* env) {
+  if (SDL_GetAndroidSDKVersion() < 33) return;
+  auto activity = static_cast<jobject>(SDL_GetAndroidActivity());
+  if (!activity) return;
+  auto permission = env->NewStringUTF("android.permission.POST_NOTIFICATIONS");
+  auto context = env->FindClass("android/content/Context");
+  constexpr jint granted = 0;  // PackageManager.PERMISSION_GRANTED
+  if (env->CallIntMethod(activity, env->GetMethodID(context, "checkSelfPermission", "(Ljava/lang/String;)I"), permission) ==
+          granted || env->ExceptionCheck()) return;
+  auto asked = env->NewObjectArray(1, env->FindClass("java/lang/String"), permission);
+  env->CallVoidMethod(activity, env->GetMethodID(env->FindClass("android/app/Activity"), "requestPermissions",
+      "([Ljava/lang/String;I)V"), asked, 1);
+}
 }
 
 bool mux_android_initialize() {
@@ -82,6 +99,8 @@ bool mux_android_initialize() {
   std::filesystem::create_directories(cache);
   if (setenv("HOME", files, 1) || setenv("XDG_CONFIG_HOME", config.c_str(), 1) ||
       setenv("XDG_STATE_HOME", state.c_str(), 1) || setenv("XDG_CACHE_HOME", cache, 1)) return false;
+  ask_to_notify(jni.env);
+  if (jni.env->ExceptionCheck()) jni.env->ExceptionClear();
   // Export the platform's trust anchors for OpenSSL; peer/hostname checking
   // stays enabled. Refresh on each launch, including system CA updates.
   return certificates(jni.env, std::filesystem::path(cache) / "mux-ca.pem");

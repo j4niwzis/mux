@@ -153,6 +153,8 @@ struct window : scene::Node {
       widgets::Dialog<room_card<Actions>> room;
       // A message's reactions as events.
       widgets::Dialog<reactions_box<Actions>> reactions;
+      // A message's earlier versions, as AyuGram's edit history.
+      widgets::Dialog<edit_history_box<Actions>> history;
       // The mentions or the reactions not yet seen, listed.
       widgets::Dialog<marks_box<Actions>> marks;
       // A room's management.
@@ -255,6 +257,8 @@ struct window : scene::Node {
         return a->close_manage(), closed();
       if (parts.marks.shown())
         return a->close_marks(), closed();
+      if (parts.history.shown())
+        return a->close_edit_history(), closed();
       if (parts.reactions.shown())
         return a->close_reactions(), closed();
       if (parts.room.shown())
@@ -279,14 +283,15 @@ struct window : scene::Node {
     skia::SkRect frozen_at = skia::SkRect::MakeEmpty();  // where it is on the device
 
     [[nodiscard]] bool dialog_fading() {
-      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, call_up] = parts;
+      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, history, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, call_up] = parts;
       return settings.settling() || notice.settling() || person.settling() || room.settling() || reactions.settling() ||
+             history.settling() ||
              marks.settling() || manage.settling() || forwarding.settling() || new_chat.settling() ||
              new_room.settling() || packs.settling() || wallpaper.settling() || explore.settling() ||
              tools.settling() || sending.settling() || passphrase.settling() || verifying.settling();
     }
     void draw(skiff::scene::Painting& painting, skia::SkCanvas* canvas, float alpha) {
-      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, call_up] = parts;
+      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, history, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, call_up] = parts;
       skia::SkMatrix inverse;
       if (!this->dialog_fading() || !canvas->getTotalMatrix().invert(&inverse)) {
         frozen = nullptr;
@@ -316,7 +321,7 @@ struct window : scene::Node {
       }
       canvas->drawImageRect(frozen, inverse.mapRect(frozen_at), skia::SkSamplingOptions(skia::SkFilterMode::kNearest));
       const auto over = [&](auto&... each) { (scene::draw(each, painting, canvas, alpha), ...); };
-      over(settings, notice, person, room, reactions, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore,
+      over(settings, notice, person, room, reactions, history, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore,
            tools, sending, passphrase, verifying);
       const auto over_if = [&](auto&... each) { ((each ? scene::draw(*each, painting, canvas, alpha) : void()), ...); };
       over_if(emoji, menu, viewer, text_menu_up, call_up);
@@ -393,6 +398,7 @@ struct window : scene::Node {
     layer().person.dropClosed();
     layer().room.dropClosed();
     layer().reactions.dropClosed();
+    layer().history.dropClosed();
     layer().marks.dropClosed();
     layer().manage.dropClosed();
     layer().forwarding.dropClosed();
@@ -556,6 +562,10 @@ struct window : scene::Node {
     layer().reactions.open(needs_, in, entries, now);
   }
   void close_reactions() { layer().reactions.close(); }
+  void open_edit_history(const conversation& in, const message& now, const model* known) {
+    layer().history.open(needs_, in, now, known);
+  }
+  void close_edit_history() { layer().history.close(); }
   void open_marks(mark_kind_t kind, const conversation& in, const std::vector<mark_entry>& entries, const model* now) {
     layer().marks.open(needs_, kind, in, entries, now);
   }

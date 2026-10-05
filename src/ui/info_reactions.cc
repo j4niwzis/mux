@@ -158,6 +158,60 @@ struct reactions_box : nodes::Stack {
   }
 };
 
+// A message's edit history, as AyuGram Desktop's: each version of it the
+// chat's own bubble, on the chat's colour, oldest first, each at the time
+// it was written -- the message as it is now last, the list scrolled to it.
+template <class Actions>
+struct edit_history_box : nodes::Stack {
+  [[nodiscard]] static dialog_look look_of_dialog() { return {.sheet = sheet::chat{}, .size = dialog_size::fixed{460.0f, 560.0f}}; }
+  using close_act = ask<Actions, &Actions::close_edit_history>;
+  using top_bar = page_header<no_back, close_act>;
+  struct row : nodes::Stack {
+    struct parts_t {
+      message_bubble<Actions> bubble;
+    } parts;
+    row(const ui_needs<Actions>& n, const conversation& in, const message& said, const model* now)
+        : parts{.bubble = message_bubble<Actions>(splice::remapped<typename message_bubble<Actions>::needs>(n), in, said, true, true, now)} {
+      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 4.0f, 12.0f}});
+    }
+  };
+  // Each version as a message of its own: what it said then, at the time it
+  // was written -- the first when the message was sent, each after it when
+  // the one before was replaced -- and none of it marked edited.
+  [[nodiscard]] static std::vector<message> versions_of(const message& now) {
+    const auto written = [&](std::size_t at) { return at == 0 ? now.at : now.versions[at - 1].until; };
+    const auto as_message = [&](const mux::body& said, std::chrono::sys_time<std::chrono::milliseconds> when) {
+      message out = now;
+      out.body = said;
+      out.at = when;
+      out.versions.clear();
+      out.edited = false;
+      return out;
+    };
+    auto out = std::views::iota(std::size_t{0}, now.versions.size()) | std::views::transform([&](std::size_t at) {
+                 return as_message(now.versions[at].body, written(at));
+               }) |
+               std::ranges::to<std::vector<message>>();
+    out.push_back(as_message(now.body, written(now.versions.size())));
+    return out;
+  }
+  using rows_t = nodes::Flow<std::vector<row>>;
+  struct parts_t {
+    top_bar top;
+    nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
+  } parts;
+
+  edit_history_box(const ui_needs<Actions>& n, const conversation& in, const message& now, const model* known)
+      : parts{.top = top_bar(*n.colours, "Edit History", {}, {n.actions}, false, true)} {
+    auto& rows = listed_rows(*this, parts.list, 560.0f);
+    const auto versions = versions_of(now);
+    // Made where they stay: a bubble knows its parts by their addresses.
+    rows.reserve(versions.size());
+    std::ranges::for_each(versions, [&](const message& one) { rows.emplace_back(n, in, one, known); });
+    parts.list.scrollToEnd(false);
+  }
+};
+
 // What a mark list shows of each: the message, and for a reaction to it who
 // reacted and with what.
 struct mark_entry {

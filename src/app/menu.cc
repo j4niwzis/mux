@@ -176,6 +176,7 @@ class menu_part {
     s_->root().open_reactions(*chat, entries, &*s_->model);
   }
   void apply(const request::close_reactions&) { s_->root().close_reactions(); }
+  void apply(const request::close_edit_history&) { s_->root().close_edit_history(); }
   // Forward: the chats of the account, to choose where; then sent there.
   void apply(const request::menu_forward&) {
     s_->root().close_menu();
@@ -258,8 +259,8 @@ class menu_part {
     }
     s_->root().main().chat.area.set_selected(selected_);
   }
-  // A message's edit history: what it says now, then what it said before
-  // each edit, newest first, each with when it was replaced.
+  // A message's edit history, in a dialog of the chat's bubbles: what it
+  // said before each edit, oldest first, and what it says now.
   void apply(const request::menu_edit_history&) {
     s_->root().close_menu();
     const auto& chosen = s_->root().main().chosen;
@@ -275,10 +276,7 @@ class menu_part {
       found = &*there;
     if (!found || found->versions.empty())
       return;
-    std::string said = std::format("Now:\n{}", found->body.plain);
-    for (const mux::message::version& one : found->versions | std::views::reverse)
-      said += std::format("\n\nUntil {}:\n{}", mux::ui::seen_at(one.until), one.body.plain);
-    s_->root().show_message("Edit History", said);
+    s_->root().open_edit_history(*chat, *found, s_->model);
   }
   void apply(const request::forward_to& one) {
     s_->root().close_forward();

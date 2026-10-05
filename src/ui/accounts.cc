@@ -177,6 +177,7 @@ struct switch_row : nodes::Stack {
 namespace account_page {
 struct connection {};
 struct privacy {};
+struct notifications {};
 struct chats {};
 struct proxy {};
 }  // namespace account_page
@@ -196,7 +197,8 @@ struct protocol_account_pages<protocol_list<Tags...>> {
 };
 // A page of an account's: the client's, or one of a protocol's.
 using account_page_t = typename variant_of_types<typename joined<
-    type_list<account_page::connection, account_page::privacy, account_page::chats, account_page::proxy>,
+    type_list<account_page::connection, account_page::privacy, account_page::notifications, account_page::chats,
+              account_page::proxy>,
     typename protocol_account_pages<protocols>::type>::type>::type;
 
 // A page of an account's settings chosen from its list.
@@ -219,6 +221,7 @@ struct account_pages : nodes::Stack {
   struct parts_t {
     row connection;
     row privacy;
+    row notifications;
     row chats;
     std::vector<row> own;  // its protocol's, as it lists them
     row proxy;
@@ -228,6 +231,7 @@ struct account_pages : nodes::Stack {
       : actions(a), colours_(&colours),
         parts{.connection = row(colours, "Connection", {a, account_page::connection{}}, icon::sliders{}),
               .privacy = row(colours, "Privacy", {a, account_page::privacy{}}, icon::eye{}),
+              .notifications = row(colours, "Notifications", {a, account_page::notifications{}}, icon::bell{}),
               .chats = row(colours, "Chats", {a, account_page::chats{}}, icon::people{}),
               .proxy = row(colours, "Proxy", {a, account_page::proxy{}}, icon::gear{})} {
     fState.apply({.padding = {6.0f, 0.0f, 0.0f, 0.0f}});
@@ -248,7 +252,7 @@ struct account_pages : nodes::Stack {
   }
   void light(const account_page_t& page) {
     const auto lit = [&](row& one) { one.set_lit(one.act.page.index() == page.index()); };
-    std::ranges::for_each(std::array{&parts.connection, &parts.privacy, &parts.chats, &parts.proxy}, [&](row* one) { lit(*one); });
+    std::ranges::for_each(std::array{&parts.connection, &parts.privacy, &parts.notifications, &parts.chats, &parts.proxy}, [&](row* one) { lit(*one); });
     std::ranges::for_each(parts.own, lit);
   }
 };
@@ -266,14 +270,10 @@ inline nodes::Text note_text(const palette& colours, std::string text) { return 
 template <class Actions>
 struct account_privacy : nodes::Stack {
   using receipts_row = switch_row<ask<Actions, &Actions::flip_account_receipts>>;
-  using notify_row = switch_row<ask<Actions, &Actions::flip_account_notify>>;
-  using notify_sound_row = switch_row<ask<Actions, &Actions::flip_account_notify_sound>>;
   struct parts_t {
     nodes::Text title;
     receipts_row receipts;
     typing_choice<Actions> typing;
-    notify_row notify;
-    notify_sound_row notify_sound;
     nodes::Text note;
   } parts;
 
@@ -286,21 +286,47 @@ struct account_privacy : nodes::Stack {
       : parts{.title = section_title(colours, "PRIVACY"),
               .receipts = receipts_row(colours, "Send read receipts", {a}),
               .typing = typing_choice<Actions>(a, colours, choice_level::account{}, typing_on),
-              .notify = notify_row(colours, "Desktop notifications from it", {a}),
-              .notify_sound = notify_sound_row(colours, "Their sound", {a}),
               .note = note_text(colours, "Off, the people you talk to through this account are not told when you have read "
                                          "their messages, or that you are typing. Theirs are still shown, and receipts are "
                                          "still kept here.")} {
-    (void)events_all, (void)kinds, (void)faces_on, (void)jump_most, (void)previews_on;
+    (void)events_all, (void)kinds, (void)faces_on, (void)jump_most, (void)previews_on, (void)notify_on, (void)notify_sound_on;
     this->setGap(8.0f);
     parts.note.apply({.fillX = true});
     fState.apply({.fill = true});
     parts.note.setWrapped(true);
     parts.receipts.parts.toggle.setOnNow(receipts_on);
-    parts.notify.parts.toggle.setOnNow(notify_on);
-    parts.notify_sound.parts.toggle.setOnNow(notify_sound_on);
   }
   void show(bool receipts_on) { parts.receipts.parts.toggle.setOn(receipts_on); }
+  void say(std::string, bool) {}
+};
+
+// An account's Notifications page: whether what comes through it is told --
+// a message, an invite -- and with sound; each chat of it may choose again
+// in its own settings.
+template <class Actions>
+struct account_notifications : nodes::Stack {
+  using notify_row = switch_row<ask<Actions, &Actions::flip_account_notify>>;
+  using notify_sound_row = switch_row<ask<Actions, &Actions::flip_account_notify_sound>>;
+  struct parts_t {
+    nodes::Text title;
+    notify_row notify;
+    notify_sound_row notify_sound;
+    nodes::Text note;
+  } parts;
+  account_notifications(const ui_needs<Actions>& n, bool notify_on, bool sound_on)
+      : parts{.title = section_title(*n.colours, "NOTIFICATIONS"),
+              .notify = notify_row(*n.colours, "Notifications from this account", {n.actions}),
+              .notify_sound = notify_sound_row(*n.colours, "With sound", {n.actions}),
+              .note = note_text(*n.colours, "Messages and invites that come through it are told as the Notifications "
+                                            "settings say -- by the system, or by mux's own. Each chat can choose again "
+                                            "in its own settings.")} {
+    this->setGap(8.0f);
+    fState.apply({.fill = true});
+    parts.note.apply({.fillX = true});
+    parts.note.setWrapped(true);
+    parts.notify.parts.toggle.setOnNow(notify_on);
+    parts.notify_sound.parts.toggle.setOnNow(sound_on);
+  }
   void say(std::string, bool) {}
 };
 
@@ -458,7 +484,7 @@ struct accounts_panel : closes_on_escape<Actions> {
     // The client's pages, then each protocol's own: made by its page_type.
     using detail_t = typename variant_of_types<typename joined<
         type_list<nodes::Text, account_editor<Actions>, add_account_pane<Actions>, account_privacy<Actions>, account_proxy<Actions>,
-                  account_chats<Actions>>,
+                  account_chats<Actions>, account_notifications<Actions>>,
         typename page_nodes<typename protocol_account_pages<protocols>::type>::type>::type>::type;
     struct detail_column : nodes::Stack {
       // No account chosen, or the chosen one, or adding one.
@@ -619,6 +645,9 @@ struct accounts_panel : closes_on_escape<Actions> {
                                            config::notify_of(one).value_or(true), config::notify_sound_of(one).value_or(true),
                                            config::show_receipts_of(one), config::jump_search_of(one),
                                            config::link_previews_of(one));
+            },
+            [&](account_page::notifications) {
+              detail.template emplace<6>(needs_, config::notify_of(one).value_or(true), config::notify_sound_of(one).value_or(true));
             },
             [&](account_page::chats) {
               detail.template emplace<5>(this->actions, *needs_.colours, *needs_.looks, *needs_.shared,

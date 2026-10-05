@@ -144,9 +144,13 @@ class media_session {
   // The sound opened, and the microphone read and sent, a frame at a time,
   // on a thread of its own until the session goes.
   void start_sound() {
-    if (sending_.joinable() || !audio_.open())
+    if (sending_.joinable())
       return;
     sending_ = std::jthread([this](std::stop_token stop) {
+      // Opened as soon as it can be: on a phone, once the microphone is
+      // allowed -- asked as the call began.
+      while (!stop.stop_requested() && !audio_.open())
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
       std::uint32_t samples = 0;
       std::array<unsigned char, kMostBytes> packet{};
       while (!stop.stop_requested()) {

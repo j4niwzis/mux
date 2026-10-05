@@ -11,6 +11,7 @@ import splice;
 import mux.core;
 import mux.ui;
 import mux.calls.media;
+import mux.platform.permissions;
 import mux.app.network;
 import mux.app.services;
 import mux.app.requests;
@@ -30,6 +31,9 @@ class calls_part {
     if (current_)
       return;
     current_.emplace(call{.in = one.in, .id = new_call_id(), .outgoing = true, .state = state::starting{}});
+    // The microphone asked for now, where the system asks the user: the
+    // sound opens once it is given (mux.calls.media tries again).
+    (void)platform::permissions::microphone();
     s_->net->call_servers(one.in.account);
     this->show();
   }
@@ -41,6 +45,7 @@ class calls_part {
     if (!current_ || !holds<state::ringing_in>())
       return;
     current_->state = state::starting{};
+    (void)platform::permissions::microphone();
     s_->net->call_servers(current_->in.account);
     this->show();
   }

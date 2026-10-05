@@ -217,32 +217,38 @@ class call_audio {
   call_audio(const call_audio&) = delete;
   call_audio& operator=(const call_audio&) = delete;
   ~call_audio() {
-    if (heard_)
-      sdl::SDL_DestroyAudioStream(heard_);
-    if (played_)
-      sdl::SDL_DestroyAudioStream(played_);
+    if (auto* heard = heard_.load())
+      sdl::SDL_DestroyAudioStream(heard);
+    if (auto* played = played_.load())
+      sdl::SDL_DestroyAudioStream(played);
   }
-  // Both opened: false where there is no sound, or no microphone -- or, on a
-  // phone, where it was not allowed.
+  // Both opened -- each where it is not yet, so that it can be asked again:
+  // false where there is no sound, or no microphone -- or, on a phone, where
+  // it is not allowed yet.
   [[nodiscard]] bool open() {
     if (!sdl::SDL_WasInit(sdl::kInitAudio) && !sdl::SDL_InitSubSystem(sdl::kInitAudio))
       return false;
     const sdl::SDL_AudioSpec spec{sdl::SDL_AUDIO_F32, 1, kRate};
-    heard_ = sdl::SDL_OpenAudioDeviceStream(sdl::kAudioDeviceDefaultRecording, &spec, nullptr, nullptr);
-    played_ = sdl::SDL_OpenAudioDeviceStream(sdl::kAudioDeviceDefaultPlayback, &spec, nullptr, nullptr);
-    if (!heard_ || !played_)
-      return false;
-    sdl::SDL_ResumeAudioStreamDevice(heard_);
-    sdl::SDL_ResumeAudioStreamDevice(played_);
-    return true;
+    if (!played_.load())
+      if (auto* played = sdl::SDL_OpenAudioDeviceStream(sdl::kAudioDeviceDefaultPlayback, &spec, nullptr, nullptr)) {
+        sdl::SDL_ResumeAudioStreamDevice(played);
+        played_.store(played);
+      }
+    if (!heard_.load())
+      if (auto* heard = sdl::SDL_OpenAudioDeviceStream(sdl::kAudioDeviceDefaultRecording, &spec, nullptr, nullptr)) {
+        sdl::SDL_ResumeAudioStreamDevice(heard);
+        heard_.store(heard);
+      }
+    return heard_.load() && played_.load();
   }
   // The next 20 ms the microphone heard, where there is that much yet.
   [[nodiscard]] std::optional<frame> heard() {
     constexpr int bytes = kFrame * static_cast<int>(sizeof(float));
-    if (!heard_ || sdl::SDL_GetAudioStreamAvailable(heard_) < bytes)
+    auto* heard = heard_.load();
+    if (!heard || sdl::SDL_GetAudioStreamAvailable(heard) < bytes)
       return std::nullopt;
     frame out{};
-    if (sdl::SDL_GetAudioStreamData(heard_, out.data(), bytes) != bytes)
+    if (sdl::SDL_GetAudioStreamData(heard, out.data(), bytes) != bytes)
       return std::nullopt;
     return out;
   }
@@ -251,14 +257,16 @@ class call_audio {
   template <std::ranges::contiguous_range Samples>
     requires std::same_as<std::ranges::range_value_t<Samples>, float>
   void play(const Samples& samples) {
-    if (played_)
-      sdl::SDL_PutAudioStreamData(played_, std::ranges::data(samples),
+    if (auto* played = played_.load())
+      sdl::SDL_PutAudioStreamData(played, std::ranges::data(samples),
                                   static_cast<int>(std::ranges::size(samples) * sizeof(float)));
   }
 
  private:
-  sdl::SDL_AudioStream* heard_ = nullptr;
-  sdl::SDL_AudioStream* played_ = nullptr;
+  // Opened on the call's sending thread, played into from the connection's:
+  // each pointer read and set whole.
+  std::atomic<sdl::SDL_AudioStream*> heard_{nullptr};
+  std::atomic<sdl::SDL_AudioStream*> played_{nullptr};
 };
 
 // A time, as a player shows it: minutes and seconds.

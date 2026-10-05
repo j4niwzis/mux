@@ -20,6 +20,7 @@ import loom.cs.message_pagination;
 import loom.cs.receipts;
 import loom.cs.redaction;
 import loom.cs.room_send;
+import loom.cs.voip;
 import loom.cs.rooms;
 import loom.cs.room_upgrades;
 import loom.cs.knocking;
@@ -297,6 +298,13 @@ class account {
   // gives it its event id, and the echo in the next sync is the same message.
   void send(std::string room, std::string body, std::optional<std::string> reply_to = std::nullopt,
             std::vector<mention> mentions = {});
+
+  // A call's signalling sent to its room: an m.call.* event, version 1, from
+  // this session's party -- encrypted where the room is, as a message is.
+  void call(std::string room, std::string call_id, change::call_said_t what);
+  // The servers a call goes through, as the server gives them
+  // (/voip/turnServer): said as change::call_servers.
+  void call_servers();
 
  private:
   void say(connection_t state);
@@ -619,6 +627,11 @@ class account {
                room_event_t kind = room_event::other{}, std::optional<std::string> html = std::nullopt);
   void done(const conversation_id& in, const loom::ev::timeline_event& one, event_type_t type,
             std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where);
+  // A call's signalling come, to the program -- as it happens only: what
+  // history pages back is the timeline's, a call long over.
+  void call_signal(const conversation_id& in, const loom::ev::timeline_event& one,
+                   std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where, std::string call,
+                   std::string party, change::call_said_t said);
   [[nodiscard]] std::string name_in(const std::string& room, const std::string& user) const;
 
   // A message's body: its plain text, and its HTML where it says it has

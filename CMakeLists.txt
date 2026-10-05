@@ -160,7 +160,7 @@ cme_find_package(chevron 0.2 REQUIRED)
 cme_find_package(tern REQUIRED)
 # Of loom, what mux uses: the state a sync leaves, and the parts of the API it
 # calls -- logging in, sending, syncing, finding the homeserver.
-cme_find_package(loom 0.1.1 COMPONENTS state crypto cs-joining cs-leaving cs-login cs-message_pagination cs-event_context cs-receipts cs-redaction cs-room_send cs-rooms cs-sync cs-typing cs-wellknown cs-room_state cs-kicking cs-banning cs-inviting cs-create_room cs-account_data cs-content_repo cs-authed_content_repo cs-room_summary cs-list_public_rooms cs-space_hierarchy cs-sliding_sync cs-versions cs-users cs-relations cs-threads_list cs-profile cs-device_management cs-room_upgrades cs-knocking cs-keys cs-to_device cs-cross_signing cs-key_backup cs-pusher REQUIRED)
+cme_find_package(loom 0.1.1 COMPONENTS state crypto cs-joining cs-leaving cs-login cs-message_pagination cs-event_context cs-receipts cs-redaction cs-room_send cs-rooms cs-sync cs-typing cs-wellknown cs-room_state cs-kicking cs-banning cs-inviting cs-create_room cs-account_data cs-content_repo cs-authed_content_repo cs-room_summary cs-list_public_rooms cs-space_hierarchy cs-sliding_sync cs-versions cs-users cs-relations cs-threads_list cs-profile cs-device_management cs-room_upgrades cs-knocking cs-keys cs-to_device cs-cross_signing cs-key_backup cs-pusher cs-voip REQUIRED)
 # End-to-end encryption: Olm and Megolm, by vodozemac -- the kazv project's
 # C++ bindings, a Rust library built by cargo through cmake-everywhere.
 cme_find_package(vodozemac REQUIRED)
@@ -170,7 +170,7 @@ cme_find_package(vodozemac REQUIRED)
 # built.
 add_library(mux_modules)
 target_sources(mux_modules PUBLIC FILE_SET CXX_MODULES BASE_DIRS src
-  FILES src/core_ids.cc src/proto/matrix/changes.cc src/proto/changes.cc src/proto/proto.cc src/proto/xmpp/points.cc src/proto/matrix/points.cc src/proto/matrix/requests.cc src/proto/protocols.cc
+  FILES src/calls/types.cc src/core_ids.cc src/proto/matrix/changes.cc src/proto/changes.cc src/proto/proto.cc src/proto/xmpp/points.cc src/proto/matrix/points.cc src/proto/matrix/requests.cc src/proto/protocols.cc
         src/core.cc src/net.cc src/proto/xmpp/client/xmpp.cc src/http.cc src/preview.cc src/proto/matrix/client/matrix.cc src/media.cc
         src/proto/matrix/client/base.cc src/proto/matrix/client/names.cc src/proto/matrix/client/account.cc src/proto/matrix/client/requests.cc src/proto/matrix/client/requests_more.cc src/proto/matrix/client/requests_send.cc src/proto/matrix/client/sync.cc src/proto/matrix/client/sync_crypto.cc src/proto/matrix/client/sync_keys.cc
         src/proto/matrix/client/events.cc src/proto/matrix/client/media.cc
@@ -284,11 +284,11 @@ if(MUX_UI)
   # libSRTP and usrsctp under it. Off, nothing of them is fetched or built,
   # and mux.calls.media is the one that connects nothing (media_none.cc).
   option(MUX_CALLS "Voice calls, through WebRTC (libdatachannel)" OFF)
-  set(mux_calls_sources src/calls/types.cc src/calls/media_none.cc)
+  set(mux_calls_sources src/calls/media_none.cc)
   set(mux_calls_libraries)
   if(MUX_CALLS)
     cme_find_package(LibDataChannel REQUIRED)
-    set(mux_calls_sources src/calls/types.cc src/calls/media.cc)
+    set(mux_calls_sources src/calls/media.cc)
     set(mux_calls_libraries LibDataChannel::LibDataChannel)
   endif()
 

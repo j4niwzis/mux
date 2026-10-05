@@ -336,6 +336,42 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
                             }},
                  where);
     }
+  // A call's signalling: to the program's calls, as it happens; and in the
+  // timeline as before, a line of its own.
+  }, [&](const loom::ev::m_call_invite_content_t& content) {
+    this->call_signal(in, one, at, where, content.call_id, content.party_id,
+                      change::call_said::invite{{calls::sdp_kind::offer{}, content.offer.sdp},
+                                                std::chrono::milliseconds(content.lifetime)});
+    done(in, one, event_type_of(one.type), at, where);
+  }, [&](const loom::ev::m_call_answer_content_t& content) {
+    this->call_signal(in, one, at, where, content.call_id, content.party_id,
+                      change::call_said::answer{{calls::sdp_kind::answer{}, content.answer.sdp}});
+    done(in, one, event_type_of(one.type), at, where);
+  }, [&](const loom::ev::m_call_candidates_content_t& content) {
+    this->call_signal(in, one, at, where, content.call_id, content.party_id,
+                      change::call_said::candidates{content.candidates | std::views::transform([](const auto& each) {
+                                                      return calls::ice_candidate{each.candidate, each.sdp_mid.value_or("")};
+                                                    }) | std::ranges::to<std::vector>()});
+  }, [&](const loom::ev::m_call_hangup_content_t& content) {
+    using reasons = loom::ev::m_call_hangup_content_t::reason_values;
+    const change::call_end_t why = splice::visit(
+        splice::overloaded{[](reasons::user_hangup) -> change::call_end_t { return change::call_end::hung_up{}; },
+                           [](reasons::user_busy) -> change::call_end_t { return change::call_end::busy{}; },
+                           [](reasons::invite_timeout) -> change::call_end_t { return change::call_end::timed_out{}; },
+                           [](reasons::ice_failed) -> change::call_end_t { return change::call_end::failed{}; },
+                           [](reasons::ice_timeout) -> change::call_end_t { return change::call_end::failed{}; },
+                           [](reasons::user_media_failed) -> change::call_end_t { return change::call_end::failed{}; },
+                           [](reasons::unknown_error) -> change::call_end_t { return change::call_end::failed{}; },
+                           [](const std::string& said) -> change::call_end_t { return change::call_end::other{said}; }},
+        content.reason);
+    this->call_signal(in, one, at, where, content.call_id, content.party_id, change::call_said::hangup{why});
+    done(in, one, event_type_of(one.type), at, where);
+  }, [&](const loom::ev::m_call_reject_content_t& content) {
+    this->call_signal(in, one, at, where, content.call_id, content.party_id, change::call_said::reject{});
+    done(in, one, event_type_of(one.type), at, where);
+  }, [&](const loom::ev::m_call_select_answer_content_t& content) {
+    this->call_signal(in, one, at, where, content.call_id, content.party_id,
+                      change::call_said::select_answer{content.selected_party_id});
   }, [&](const auto&) {
     // The rest, by its type: loom's timeline union does not have their
     // content yet.
@@ -693,6 +729,20 @@ auto account<Sink>::body_of(std::string plain, const std::optional<std::string>&
   if (splice::visit([](auto of) { return of.html_given; }, body_format_of(format)))
     made.html = formatted_body;
   return made;
+}
+
+template <class Sink>
+void account<Sink>::call_signal(const conversation_id& in, const loom::ev::timeline_event& one,
+                                std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where, std::string call,
+                                std::string party, change::call_said_t said) {
+  const bool live = splice::visit(splice::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
+  if (!live)
+    return;
+  // This session's own, echoed by the sync: nothing to tell.
+  if (one.sender == id_.address && how_.device_id && party == *how_.device_id)
+    return;
+  sink_(change::call_signalled{in, std::move(call), std::move(party), one.sender, one.sender == id_.address, at,
+                               std::move(said)});
 }
 
 }  // namespace mux::proto::matrix::client

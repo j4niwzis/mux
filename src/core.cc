@@ -18,6 +18,7 @@ export import mux.proto.state;
 // protocol's own changes too (mux.proto.changes).
 export import mux.core.ids;
 export import mux.proto.changes;
+export import mux.calls.types;
 
 export namespace mux {
 
@@ -335,12 +336,64 @@ struct event_missing {
   std::optional<std::string> instead{};
 };
 
+// A call's signalling, as its protocol carried it: what was said in one
+// call, by the other side or by the user's own other session. Protocol-
+// neutral: Matrix's m.call.* events and XMPP's Jingle are read into it.
+namespace call_end {
+struct hung_up {};
+struct busy {};
+struct timed_out {};    // not answered in time
+struct failed {};       // the connection, or the sound, could not be had
+struct other {
+  std::string said;
+};
+}  // namespace call_end
+using call_end_t = splice::variant<call_end::hung_up, call_end::busy, call_end::timed_out, call_end::failed, call_end::other>;
+namespace call_said {
+struct invite {
+  calls::session_description offer;
+  std::chrono::milliseconds lifetime{60000};
+};
+struct answer {
+  calls::session_description it;
+};
+struct candidates {
+  std::vector<calls::ice_candidate> them;
+};
+struct hangup {
+  call_end_t why;
+};
+struct reject {};
+// The caller's choice among those who answered: the one it talks to.
+struct select_answer {
+  std::string party;
+};
+}  // namespace call_said
+using call_said_t =
+    splice::variant<call_said::invite, call_said::answer, call_said::candidates, call_said::hangup, call_said::reject,
+                    call_said::select_answer>;
+struct call_signalled {
+  conversation_id in;
+  std::string call;    // the call's id
+  std::string party;   // the device that said it: one of several a person has
+  std::string sender;
+  bool mine = false;   // the user's own, from another session
+  std::chrono::sys_time<std::chrono::milliseconds> at{};
+  call_said_t said;
+};
+// The servers a call of an account goes through, as its server gave them
+// (Matrix's /voip/turnServer): asked as a call starts.
+struct call_servers {
+  account_id account;
+  std::vector<calls::ice_server> servers;
+};
+
 }  // namespace change
 
 // The changes every protocol says, here; and each protocol's own, from its
 // change list -- changes_type(state), found by ADL in its folder (mux.proto.
 // <p>.changes), none where it gives none -- all one variant.
-using core_changes = splice::variant<change::protocol_state_changed, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::account_removed, change::conversation_updated, change::conversation_removed, change::presence_changed, change::message_added, change::message_edited, change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed, change::typing_changed, change::history_position, change::event_missing, change::members_changed, change::avatar_loaded, change::receipts_changed, change::window_opened, change::window_extended, change::media_progress, change::room_created, change::preview_loaded, change::room_previewed, change::mentioned, change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine, change::directory_listed, change::people_found, change::profile_found, change::threads_listed>;
+using core_changes = splice::variant<change::protocol_state_changed, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::account_removed, change::conversation_updated, change::conversation_removed, change::presence_changed, change::message_added, change::message_edited, change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed, change::typing_changed, change::history_position, change::event_missing, change::members_changed, change::avatar_loaded, change::receipts_changed, change::window_opened, change::window_extended, change::media_progress, change::room_created, change::preview_loaded, change::room_previewed, change::mentioned, change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine, change::directory_listed, change::people_found, change::profile_found, change::threads_listed, change::call_signalled, change::call_servers>;
 namespace changes_defaults {
 constexpr type_tag<change_list<>> changes_type(const auto&) { return {}; }
 }  // namespace changes_defaults
@@ -776,6 +829,9 @@ class model {
       where.latest.reset();
   }
   void on(const change::threads_listed& one) { of(one.in).thread_roots = one.roots; }
+  // A call's: the program's calls part's (mux.app.calls), not the model's.
+  void on(const change::call_signalled&) {}
+  void on(const change::call_servers&) {}
   void on(const change::message_acknowledged& one) {
     conversation& where = of(one.in);
     in_latest(where, one.local_id, [&](message& kept) {

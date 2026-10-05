@@ -24,6 +24,7 @@ import loom.cs.room_summary;
 import loom.cs.list_public_rooms;
 import loom.cs.space_hierarchy;
 import loom.cs.room_send;
+import loom.cs.voip;
 import loom.cs.rooms;
 import loom.crypto;
 import loom.cs.keys;
@@ -298,6 +299,163 @@ void account<Sink>::send_text(const conversation_id& in, const std::string& room
     return;
   }
   sink_(change::message_acknowledged{in, txn, sent->event_id});
+}
+
+// A TURN or STUN server as Matrix gives it, a URI (RFC 7064, 7065) --
+// turn:host:port?transport=udp, turns:..., stun:... -- read into what a
+// call's connection takes. Nothing, for one it cannot read.
+[[nodiscard]] inline std::optional<calls::ice_server> ice_server_of(std::string_view uri, const std::string& username,
+                                                                   const std::string& password) {
+  const auto colon = uri.find(':');
+  if (colon == std::string_view::npos)
+    return std::nullopt;
+  const std::string_view scheme = uri.substr(0, colon);
+  std::string_view rest = uri.substr(colon + 1);
+  std::string_view transport = "udp";
+  if (const auto query = rest.find('?'); query != std::string_view::npos) {
+    if (const auto said = rest.substr(query + 1); said.starts_with("transport="))
+      transport = said.substr(std::string_view("transport=").size());
+    rest = rest.substr(0, query);
+  }
+  calls::ice_server out{.username = username, .password = password};
+  if (scheme == "stun" || scheme == "stuns")
+    out.kind = calls::relay::stun{};
+  else if (scheme == "turns")
+    out.kind = calls::relay::turn_tls{};
+  else if (scheme == "turn")
+    out.kind = transport == "tcp" ? calls::relay_t{calls::relay::turn_tcp{}} : calls::relay_t{calls::relay::turn_udp{}};
+  else
+    return std::nullopt;
+  out.port = scheme == "turns" ? 5349 : 3478;
+  // host, host:port, or [v6]:port.
+  if (rest.starts_with('[')) {
+    const auto close = rest.find(']');
+    if (close == std::string_view::npos)
+      return std::nullopt;
+    out.host = std::string(rest.substr(1, close - 1));
+    rest = rest.substr(close + 1);
+    if (rest.starts_with(':'))
+      rest = rest.substr(1);
+    else
+      rest = {};
+  } else if (const auto port_at = rest.rfind(':'); port_at != std::string_view::npos) {
+    out.host = std::string(rest.substr(0, port_at));
+    rest = rest.substr(port_at + 1);
+  } else {
+    out.host = std::string(rest);
+    rest = {};
+  }
+  if (!rest.empty()) {
+    std::uint16_t port = 0;
+    if (std::from_chars(rest.data(), rest.data() + rest.size(), port).ec != std::errc{})
+      return std::nullopt;
+    out.port = port;
+  }
+  if (out.host.empty())
+    return std::nullopt;
+  return out;
+}
+
+template <class Sink>
+void account<Sink>::call(std::string room, std::string call_id, change::call_said_t what) {
+  this->spawn_sending([this, room = std::move(room), call_id = std::move(call_id), what = std::move(what)] {
+    if (!api_)
+      return;
+    const std::string party = how_.device_id.value_or("mux");
+    const std::string version = "1";
+    // Each kind of signal, as its event: its type, and its content.
+    const auto [type, body] = splice::visit(
+        splice::overloaded{
+            [&](const change::call_said::invite& one) {
+              loom::ev::m_call_invite_content_t content{};
+              content.offer.type = loom::ev::m_call_invite_content_t::offer_t::type_values::offer{};
+              content.offer.sdp = one.offer.sdp;
+              content.lifetime = one.lifetime.count();
+              content.call_id = call_id;
+              content.version = version;
+              content.party_id = party;
+              return std::pair{std::string("m.call.invite"), as_body(content)};
+            },
+            [&](const change::call_said::answer& one) {
+              loom::ev::m_call_answer_content_t content{};
+              content.answer.type = loom::ev::m_call_answer_content_t::answer_t::type_values::answer{};
+              content.answer.sdp = one.it.sdp;
+              content.call_id = call_id;
+              content.version = version;
+              content.party_id = party;
+              return std::pair{std::string("m.call.answer"), as_body(content)};
+            },
+            [&](const change::call_said::candidates& one) {
+              loom::ev::m_call_candidates_content_t content{};
+              content.candidates = one.them | std::views::transform([](const calls::ice_candidate& each) {
+                                     loom::ev::m_call_candidates_content_t::candidate_t made{};
+                                     made.candidate = each.line;
+                                     made.sdp_mid = each.mid;
+                                     made.sdp_m_line_index = 0;
+                                     return made;
+                                   }) |
+                                   std::ranges::to<std::vector>();
+              content.call_id = call_id;
+              content.version = version;
+              content.party_id = party;
+              return std::pair{std::string("m.call.candidates"), as_body(content)};
+            },
+            [&](const change::call_said::hangup& one) {
+              using reasons = loom::ev::m_call_hangup_content_t::reason_values;
+              loom::ev::m_call_hangup_content_t content{};
+              content.reason = splice::visit(
+                  splice::overloaded{
+                      [](change::call_end::hung_up) -> loom::ev::m_call_hangup_content_t::reason_t { return reasons::user_hangup{}; },
+                      [](change::call_end::busy) -> loom::ev::m_call_hangup_content_t::reason_t { return reasons::user_busy{}; },
+                      [](change::call_end::timed_out) -> loom::ev::m_call_hangup_content_t::reason_t { return reasons::invite_timeout{}; },
+                      [](change::call_end::failed) -> loom::ev::m_call_hangup_content_t::reason_t { return reasons::ice_failed{}; },
+                      [](const change::call_end::other& said) -> loom::ev::m_call_hangup_content_t::reason_t { return said.said; }},
+                  one.why);
+              content.call_id = call_id;
+              content.version = version;
+              content.party_id = party;
+              return std::pair{std::string("m.call.hangup"), as_body(content)};
+            },
+            [&](const change::call_said::reject&) {
+              loom::ev::m_call_reject_content_t content{};
+              content.call_id = call_id;
+              content.version = version;
+              content.party_id = party;
+              return std::pair{std::string("m.call.reject"), as_body(content)};
+            },
+            [&](const change::call_said::select_answer& one) {
+              loom::ev::m_call_select_answer_content_t content{};
+              content.selected_party_id = one.party;
+              content.call_id = call_id;
+              content.version = version;
+              content.party_id = party;
+              return std::pair{std::string("m.call.select_answer"), as_body(content)};
+            }},
+        what);
+    auto sent = this->send_room_event(
+        loom::cs::send_message{.room_id = room, .event_type = type, .txn_id = this->transaction(), .body = body});
+    if (!sent)
+      log(id_, "could not send {} in {}", type, room);
+  });
+}
+
+template <class Sink>
+void account<Sink>::call_servers() {
+  this->spawn_guarded([this] {
+    if (!api_)
+      return;
+    auto got = perform(*api_, loom::cs::get_turn_server{});
+    std::vector<calls::ice_server> servers;
+    if (got)
+      servers = got->uris | std::views::transform([&](const std::string& uri) {
+                  return ice_server_of(uri, got->username, got->password);
+                }) |
+                std::views::filter([](const auto& one) { return one.has_value(); }) |
+                std::views::transform([](const auto& one) { return *one; }) | std::ranges::to<std::vector>();
+    else
+      log(id_, "no TURN servers: {}", got.error().said());
+    sink_(change::call_servers{id_, std::move(servers)});
+  });
 }
 
 template <class Sink>

@@ -60,7 +60,8 @@ template <class Account>
           .view_source = requires { &Account::view_source; },
           .send_file = requires { &Account::send_file; },
           .send_sticker = requires { &Account::send_sticker; },
-          .typing = requires { &Account::typing; }};
+          .typing = requires { &Account::typing; },
+          .calls = requires { &Account::call; }};
 }
 // Each protocol's, for the window: found once, as the program starts.
 template <class... Tags>

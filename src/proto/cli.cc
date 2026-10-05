@@ -98,6 +98,8 @@ std::string of(const change::preview_loaded& one) { return std::format("a previe
 std::string of(const change::mentioned& one) { return std::format("mentioned in {}", one.in.id); }
 std::string of(const change::marks_shown&) { return std::string(); }
 std::string of(const change::threads_listed& one) { return std::format("{} threads in {}", one.roots.size(), one.in.id); }
+std::string of(const change::call_signalled& one) { return std::format("call {} in {} from {}", one.call, one.in.id, one.sender); }
+std::string of(const change::call_servers& one) { return std::format("{} call servers", one.servers.size()); }
 std::string of(const change::refused& one) { return one.what; }
 std::string of(const change::devices_listed& one) { return std::format("{} has {} sessions", one.user, one.devices.size()); }
 std::string of(const change::trust_changed& one) {

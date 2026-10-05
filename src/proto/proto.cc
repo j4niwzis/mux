@@ -57,6 +57,7 @@ struct account_ops {
   bool send_file = false;    // files and pictures
   bool send_sticker = false;
   bool typing = false;       // others told one is typing
+  bool calls = false;        // calls made and taken
   friend bool operator==(const account_ops&, const account_ops&) = default;
 };
 

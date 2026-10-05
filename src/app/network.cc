@@ -404,6 +404,30 @@ struct network {
             one.account);
     });
   }
+  // A call's signalling, sent by the account of its chat; and the servers
+  // a call of an account goes through, asked of it (change::call_servers).
+  void call(const mux::conversation_id& in, std::string call_id, mux::change::call_said_t what) {
+    loop.post([this, in, call_id = std::move(call_id), what = std::move(what)] {
+      for (auto& one : accounts)
+        splice::visit(
+            [&](auto& account) {
+              if (account->id() == in.account)
+                ask_if_able([&](auto& a) -> decltype(void(a.call(in.id, call_id, what))) { a.call(in.id, call_id, what); }, *account);
+            },
+            one.account);
+    });
+  }
+  void call_servers(const mux::account_id& of) {
+    loop.post([this, of] {
+      for (auto& one : accounts)
+        splice::visit(
+            [&](auto& account) {
+              if (account->id() == of)
+                ask_if_able([&](auto& a) -> decltype(void(a.call_servers())) { a.call_servers(); }, *account);
+            },
+            one.account);
+    });
+  }
   // A server's public directory, searched by the account named.
   void search_directory(const mux::account_id& by, std::string server, std::string query) {
     loop.post([this, by, server = std::move(server), query = std::move(query)] {

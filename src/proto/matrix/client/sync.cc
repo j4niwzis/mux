@@ -15,6 +15,7 @@ import loom.state;
 import loom.cs.joining;
 import loom.cs.leaving;
 import loom.cs.login;
+import loom.cs.registration;
 import loom.cs.message_pagination;
 import loom.cs.receipts;
 import loom.cs.redaction;

@@ -97,7 +97,7 @@ cme_declare_port(NAME tern PROVIDES tern
 cme_options(tern "TERN_TESTS OFF" "TERN_EXAMPLES OFF")
 cme_declare_port(NAME loom PROVIDES loom
   GITHUB_REPOSITORY j4niwzis/loom
-  GIT_TAG ba4b5cd6753c41e76f9146a4b070c6cab588d84a
+  GIT_TAG 1f9d88a58fea85e071d511fd98648683523cbad9
   VERSION 0.1.1
   LICENSE AGPL-3.0-only
   TARGETS loom)
@@ -160,7 +160,7 @@ cme_find_package(chevron 0.2 REQUIRED)
 cme_find_package(tern REQUIRED)
 # Of loom, what mux uses: the state a sync leaves, and the parts of the API it
 # calls -- logging in, sending, syncing, finding the homeserver.
-cme_find_package(loom 0.1.1 COMPONENTS state crypto cs-joining cs-leaving cs-login cs-message_pagination cs-event_context cs-receipts cs-redaction cs-room_send cs-rooms cs-sync cs-typing cs-wellknown cs-room_state cs-kicking cs-banning cs-inviting cs-create_room cs-account_data cs-content_repo cs-authed_content_repo cs-room_summary cs-list_public_rooms cs-space_hierarchy cs-sliding_sync cs-versions cs-users cs-relations cs-threads_list cs-profile cs-device_management cs-room_upgrades cs-knocking cs-keys cs-to_device cs-cross_signing cs-key_backup cs-pusher cs-voip REQUIRED)
+cme_find_package(loom 0.1.1 COMPONENTS state crypto cs-joining cs-leaving cs-login cs-registration cs-message_pagination cs-event_context cs-receipts cs-redaction cs-room_send cs-rooms cs-sync cs-typing cs-wellknown cs-room_state cs-kicking cs-banning cs-inviting cs-create_room cs-account_data cs-content_repo cs-authed_content_repo cs-room_summary cs-list_public_rooms cs-space_hierarchy cs-sliding_sync cs-versions cs-users cs-relations cs-threads_list cs-profile cs-device_management cs-room_upgrades cs-knocking cs-keys cs-to_device cs-cross_signing cs-key_backup cs-pusher cs-voip REQUIRED)
 # End-to-end encryption: Olm and Megolm, by vodozemac -- the kazv project's
 # C++ bindings, a Rust library built by cargo through cmake-everywhere.
 cme_find_package(vodozemac REQUIRED)

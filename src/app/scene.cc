@@ -5,6 +5,7 @@
 import std;
 import skiff.scene;
 import mux.ui;
+import mux.ui.proto;
 import mux.app.requests;
 
 // The tables of the window's big subtrees -- and so the walks of all in them

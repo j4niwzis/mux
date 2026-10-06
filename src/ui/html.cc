@@ -32,9 +32,15 @@ struct emphasis {};  // <i>, <em>
 struct struck {};    // <del>, <s>, <strike>
 struct code {};      // <code>
 struct quote {};     // <blockquote>
+struct underline {}; // <u>, <ins>
+// <span>: a spoiler where it says so (data-mx-spoiler), else nothing -- a
+// span all the same, so that its end closes it and not another.
+struct span {
+  bool spoiler = false;
+};
 }  // namespace text_style
-using text_style_t =
-    spl::variant<text_style::strong, text_style::emphasis, text_style::struck, text_style::code, text_style::quote>;
+using text_style_t = spl::variant<text_style::strong, text_style::emphasis, text_style::struck, text_style::code,
+                                  text_style::quote, text_style::underline, text_style::span>;
 [[nodiscard]] inline nodes::Text::Styled styled(text_style::strong, std::size_t a, std::size_t b) {
   return {.first = a, .last = b, .strong = true};
 }
@@ -49,6 +55,12 @@ using text_style_t =
 }
 [[nodiscard]] inline nodes::Text::Styled styled(text_style::quote, std::size_t a, std::size_t b) {
   return {.first = a, .last = b, .quote = true};
+}
+[[nodiscard]] inline nodes::Text::Styled styled(text_style::underline, std::size_t a, std::size_t b) {
+  return {.first = a, .last = b, .underline = true};
+}
+[[nodiscard]] inline nodes::Text::Styled styled(text_style::span one, std::size_t a, std::size_t b) {
+  return {.first = a, .last = b, .spoiler = one.spoiler};
 }
 // An HTML tag, as read: what it does to the text, told by its type. Its
 // name is looked up once, where it is read (start_of, end_of); what follows works on
@@ -103,6 +115,9 @@ using html_tag_t = spl::variant<html_tag::line_break, html_tag::block_end, html_
       {"del", html_tag::style_open{text_style::struck{}}},
       {"s", html_tag::style_open{text_style::struck{}}},
       {"strike", html_tag::style_open{text_style::struck{}}},
+      {"u", html_tag::style_open{text_style::underline{}}},
+      {"ins", html_tag::style_open{text_style::underline{}}},
+      {"span", html_tag::style_open{text_style::span{}}},
       {"code", html_tag::code_open{}},
       {"pre", html_tag::block_open{}},
       {"blockquote", html_tag::style_open{text_style::quote{}}},
@@ -127,6 +142,17 @@ using html_tag_t = spl::variant<html_tag::line_break, html_tag::block_end, html_
                                             return html_tag::code_open{classes.substr(
                                                 at + prefix.size(), end == std::string::npos ? std::string::npos : end - at - prefix.size())};
                                           },
+                                          // A span: a spoiler where it has data-mx-spoiler, a
+                                          // value or none.
+                                          [&](html_tag::style_open open) -> html_tag_t {
+                                            const bool spoiler = std::ranges::any_of(one.attributes, [](const chevron::attribute& each) {
+                                              return each.name.local == "data-mx-spoiler";
+                                            });
+                                            spl::visit(spl::overloaded{[&](text_style::span& span) { span.spoiler = spoiler; },
+                                                                       [](const auto&) {}},
+                                                       open.style);
+                                            return open;
+                                          },
                                           [&](html_tag::image) -> html_tag_t {
                                             return html_tag::image{attribute("src"), attribute("alt")};
                                           },
@@ -150,6 +176,9 @@ using html_tag_t = spl::variant<html_tag::line_break, html_tag::block_end, html_
       {"del", html_tag::style_close{text_style::struck{}}},
       {"s", html_tag::style_close{text_style::struck{}}},
       {"strike", html_tag::style_close{text_style::struck{}}},
+      {"u", html_tag::style_close{text_style::underline{}}},
+      {"ins", html_tag::style_close{text_style::underline{}}},
+      {"span", html_tag::style_close{text_style::span{}}},
       {"code", html_tag::style_close{text_style::code{}}},
       {"pre", html_tag::block_close{}},
       {"blockquote", html_tag::style_close{text_style::quote{}}},

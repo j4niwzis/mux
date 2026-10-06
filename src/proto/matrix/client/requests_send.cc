@@ -57,7 +57,8 @@ import :requests_more;
 namespace mux::proto::matrix::client {
 
 // Defined further down, beside send: a message made HTML.
-[[nodiscard]] inline std::optional<std::string> html_of(std::string_view body, const std::vector<mux::emote>& emotes);
+[[nodiscard]] inline std::optional<std::string> html_of(std::string_view body, const std::vector<mux::emote>& emotes,
+                                                        const std::vector<styled_run>& styles = {});
 
 template <class Sink>
 void account<Sink>::edit(std::string room, std::string event, std::string text) {
@@ -234,17 +235,36 @@ void account<Sink>::leave(std::string room) {
 // What a message is sent as: its Markdown made HTML, as Element sends it,
 // and the room's custom emoji in that; else the emoji alone, where it names
 // any; else nothing -- the text as it is.
-[[nodiscard]] inline std::optional<std::string> html_of(std::string_view body, const std::vector<mux::emote>& emotes) {
-  if (auto marked = mux::logic::markdown_html(body))
+// A run's tags in Matrix's HTML: what each style is written as.
+[[nodiscard]] inline mux::logic::html_run html_run_of(const styled_run& run) {
+  const auto tags = [&](std::string open, std::string close) {
+    return mux::logic::html_run{run.first, run.last, std::move(open), std::move(close)};
+  };
+  return spl::visit(spl::overloaded{[&](const run_style::bold&) { return tags("<strong>", "</strong>"); },
+                                    [&](const run_style::italic&) { return tags("<em>", "</em>"); },
+                                    [&](const run_style::underline&) { return tags("<u>", "</u>"); },
+                                    [&](const run_style::strike&) { return tags("<del>", "</del>"); },
+                                    [&](const run_style::spoiler&) { return tags("<span data-mx-spoiler>", "</span>"); },
+                                    [&](const run_style::code&) { return tags("<code>", "</code>"); },
+                                    [&](const run_style::link& one) {
+                                      return tags("<a href=\"" + chevron::escaped(one.url) + "\">", "</a>");
+                                    }},
+                    run.style);
+}
+[[nodiscard]] inline std::optional<std::string> html_of(std::string_view body, const std::vector<mux::emote>& emotes,
+                                                        const std::vector<styled_run>& styles) {
+  const std::vector<mux::logic::html_run> runs =
+      std::ranges::to<std::vector<mux::logic::html_run>>(std::views::transform(styles, html_run_of));
+  if (auto marked = mux::logic::markdown_html(body, runs))
     return emotes.empty() ? *marked : emotes_in_html(*marked, emotes);
   return with_emotes(body, emotes);
 }
 
 template <class Sink>
 void account<Sink>::send(std::string room, std::string body, std::optional<std::string> reply_to,
-                         std::vector<mention> mentions) {
+                         std::vector<mention> mentions, std::vector<styled_run> styles) {
   this->spawn_sending([this, room = std::move(room), body = std::move(body), reply_to = std::move(reply_to),
-                mentions = std::move(mentions)] {
+                mentions = std::move(mentions), styles = std::move(styles)]() mutable {
     const std::string txn = this->transaction();
     const conversation_id in{id_, room};
     // Each mention a link to its person in the Markdown, as Element sends a
@@ -264,8 +284,14 @@ void account<Sink>::send(std::string room, std::string body, std::optional<std::
       const std::string link = std::format("[{}](https://matrix.to/#/{})", label, one.user);
       marked.replace(at, one.name.size(), link);
       from = at + link.size();
+      // The runs moved with it: past it by what it grew, over it to its end.
+      const std::size_t grown = link.size() - one.name.size();
+      for (styled_run& run : styles) {
+        run.first += run.first > at ? grown : 0;
+        run.last += run.last > at ? grown : 0;
+      }
     }
-    const auto html = html_of(marked, emotes_in(room));
+    const auto html = html_of(marked, emotes_in(room), styles);
     sink_(change::message_added{message{
         .in = in,
         .id = txn,

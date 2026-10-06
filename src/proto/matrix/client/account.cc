@@ -297,7 +297,7 @@ class account {
   // conversation at once, under its transaction id; the server's answer
   // gives it its event id, and the echo in the next sync is the same message.
   void send(std::string room, std::string body, std::optional<std::string> reply_to = std::nullopt,
-            std::vector<mention> mentions = {});
+            std::vector<mention> mentions = {}, std::vector<styled_run> styles = {});
 
   // A call's signalling sent to its room: an m.call.* event, version 1, from
   // this session's party -- encrypted where the room is, as a message is.

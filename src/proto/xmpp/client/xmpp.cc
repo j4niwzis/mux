@@ -356,8 +356,10 @@ class account {
     });
   }
 
+  // Its runs' styles are not sent: XMPP carries none beside the body but
+  // XEP-0393's, which are marks in the text itself.
   void send(std::string to, std::string text, std::optional<std::string> reply_to = std::nullopt,
-            std::vector<mux::mention> = {}) {
+            std::vector<mux::mention> = {}, std::vector<mux::styled_run> = {}) {
     this->spawn_guarded([this, to = bare(to), text = std::move(text), reply_to = std::move(reply_to)] {
       message out{.in = {id_, to},
                   .id = "mux-" + std::to_string(++sent_),

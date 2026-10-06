@@ -166,13 +166,14 @@ struct network {
     });
   }
   void send(const mux::conversation_id& to, std::string text, std::optional<std::string> reply_to = std::nullopt,
-            std::vector<mux::mention> mentions = {}) {
-    loop.post([this, to, text = std::move(text), reply_to = std::move(reply_to), mentions = std::move(mentions)] {
+            std::vector<mux::mention> mentions = {}, std::vector<mux::styled_run> styles = {}) {
+    loop.post([this, to, text = std::move(text), reply_to = std::move(reply_to), mentions = std::move(mentions),
+               styles = std::move(styles)] {
       for (auto& one : accounts)
         spl::visit(
             [&](auto& account) {
               if (account->id() == to.account)
-                account->send(to.id, text, reply_to, mentions);
+                account->send(to.id, text, reply_to, mentions, styles);
             },
             one.account);
     });

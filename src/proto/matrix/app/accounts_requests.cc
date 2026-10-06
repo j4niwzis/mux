@@ -64,7 +64,7 @@ template void account<mux::app::post_change>::remove(std::string room, std::stri
 template void account<mux::app::post_change>::react(std::string room, std::string target, std::string key, bool on);
 template void account<mux::app::post_change>::pin(std::string room, std::string target, bool on);
 template void account<mux::app::post_change>::leave(std::string room);
-template void account<mux::app::post_change>::send(std::string room, std::string body, std::optional<std::string> reply_to, std::vector<mention> mentions);
+template void account<mux::app::post_change>::send(std::string room, std::string body, std::optional<std::string> reply_to, std::vector<mention> mentions, std::vector<styled_run> styles);
 template void account<mux::app::post_change>::typing(std::string room, bool on);
 template void account<mux::app::post_change>::join(std::string room, std::vector<std::string> via);
 template void account<mux::app::post_change>::knock(std::string room, std::vector<std::string> via, std::string reason);

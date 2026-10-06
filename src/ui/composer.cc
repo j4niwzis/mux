@@ -3,6 +3,7 @@
 export module mux.ui:composer;
 
 import std;
+import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
@@ -402,6 +403,147 @@ struct field_quotes {
     }
     return std::nullopt;
   }
+
+  // Formatting, as Telegram's field has it (lib_ui's input_field.cpp): runs
+  // of what is written bold, italic, underlined, struck through, a spoiler
+  // or code -- spans the field keeps beside the text, drawn as the message
+  // will show them and sent as Matrix's HTML. Made by tdesktop's shortcuts
+  // on what is selected, and by its Markdown as it is typed: a run closed
+  // by the mark that opened it is that run, the marks gone.
+  using format = mux::run_style_t;
+  using span = widgets::TextSpan<format>;
+  using field_view = widgets::FieldView<format>;
+  using field_change = widgets::FieldChange<format>;
+  [[nodiscard]] static widgets::RunLook runLook(const format& style) {
+    return spl::visit(spl::overloaded{[](const run_style::bold&) { return widgets::RunLook{.face = {.bold = true}}; },
+                                      [](const run_style::italic&) { return widgets::RunLook{.face = {.italic = true}}; },
+                                      [](const run_style::underline&) { return widgets::RunLook{.underline = true}; },
+                                      [](const run_style::strike&) { return widgets::RunLook{.strike = true}; },
+                                      [](const run_style::spoiler&) { return widgets::RunLook{.plate = true}; },
+                                      [](const run_style::code&) { return widgets::RunLook{.monospace = true, .accent = true}; },
+                                      [](const run_style::link&) { return widgets::RunLook{.underline = true, .accent = true}; }},
+                      style);
+  }
+  // What is typed at a run's end is not of it: tdesktop's field goes on in
+  // its default format after a run its Markdown made.
+  [[nodiscard]] static bool grows(const format&) { return false; }
+
+  // The spans with [from, to) cut out of those `of` takes.
+  template <class Of>
+  [[nodiscard]] static std::vector<span> without(const std::vector<span>& spans, std::size_t from, std::size_t to, Of of) {
+    return std::ranges::to<std::vector<span>>(std::views::join(std::views::transform(spans, [&](const span& one) {
+      if (!of(one) || one.last <= from || one.first >= to)
+        return std::vector<span>{one};
+      std::vector<span> kept;
+      if (one.first < from)
+        kept.push_back({one.first, from, one.format});
+      if (one.last > to)
+        kept.push_back({to, one.last, one.format});
+      return kept;
+    })));
+  }
+  // A style put on what is selected -- or taken off it, where all of it has
+  // it already: tdesktop's toggleSelectionMarkdown. A link put on replaces
+  // the links there.
+  [[nodiscard]] static std::optional<field_change> toggled(const field_view& field, format style) {
+    if (!field.selection())
+      return std::nullopt;
+    const std::size_t low = field.low(), high = field.high();
+    const auto same = [&](const span& one) { return one.format.index() == style.index(); };
+    std::vector<span> kind = std::ranges::to<std::vector<span>>(std::views::filter(field.spans, same));
+    std::ranges::sort(kind, {}, &span::first);
+    const std::size_t reached = std::ranges::fold_left(
+        kind, low, [](std::size_t at, const span& one) { return one.first <= at && one.last > at ? one.last : at; });
+    std::vector<span> spans = without(field.spans, low, high, same);
+    if (reached < high)
+      spans.push_back({low, high, std::move(style)});
+    return field_change{.spans = std::move(spans), .caret = field.caret, .anchor = field.anchor};
+  }
+  // tdesktop's shortcuts (InputField's kShortcuts): Ctrl+B bold, Ctrl+I
+  // italic, Ctrl+U underlined; with Shift, X struck through, M code, P a
+  // spoiler, N every format taken off what is selected.
+  [[nodiscard]] static std::optional<field_change> edit(const field_view& field, const scene::key::down& press) {
+    namespace keys = scene::keys;
+    namespace modifier = scene::modifier;
+    if (!press.modifiers.has<modifier::control>())
+      return std::nullopt;
+    if (!press.modifiers.has<modifier::shift>()) {
+      if (press.key == keys::kB)
+        return toggled(field, run_style::bold{});
+      if (press.key == keys::kI)
+        return toggled(field, run_style::italic{});
+      if (press.key == keys::kU)
+        return toggled(field, run_style::underline{});
+      return std::nullopt;
+    }
+    if (press.key == keys::kX)
+      return toggled(field, run_style::strike{});
+    if (press.key == keys::kM)
+      return toggled(field, run_style::code{});
+    if (press.key == keys::kP)
+      return toggled(field, run_style::spoiler{});
+    if (press.key == keys::kN && field.selection())
+      return field_change{.spans = without(field.spans, field.low(), field.high(), [](const span&) { return true; }),
+                          .caret = field.caret,
+                          .anchor = field.anchor};
+    return std::nullopt;
+  }
+
+  // Telegram's Markdown as it is typed (TextUtilities' Markdown*GoodBefore
+  // and BadAfter): a run closed by the mark that opened it on its line --
+  // the opening mark at the line's start or after what is not a letter, a
+  // digit or the mark's own character; the run not starting or ending with
+  // a space, nor with the mark's character (``` is a fence, *** not bold).
+  // Not in a block of code, nor in a quote's marks.
+  // Its marks, read into the styles they make: the one place they are text.
+  [[nodiscard]] static const std::array<std::pair<std::string_view, format>, 5>& markdown_marks() {
+    static const std::array<std::pair<std::string_view, format>, 5> marks{{{"**", run_style::bold{}},
+                                                                            {"__", run_style::italic{}},
+                                                                            {"~~", run_style::strike{}},
+                                                                            {"||", run_style::spoiler{}},
+                                                                            {"`", run_style::code{}}}};
+    return marks;
+  }
+  [[nodiscard]] static std::optional<field_change> typedIn(const field_view& field) {
+    const std::string_view text = field.text;
+    const std::size_t caret = field.caret;
+    if (field.selection() || caret == 0)
+      return std::nullopt;
+    const std::size_t start = start_of(text, caret);
+    if (code_at(text, start) != code_line::none)
+      return std::nullopt;
+    const std::size_t body = body_at(text, start);
+    const auto blank = [](char c) { return c == ' ' || c == '\t' || c == '\n'; };
+    const auto word = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) != 0; };
+    for (const auto& [mark, style] : markdown_marks()) {
+      const std::size_t size = mark.size();
+      if (caret < body + 2 * size + 1 || text.substr(caret - size, size) != mark)
+        continue;
+      const std::size_t close = caret - size;
+      const char own = mark.front();
+      if (blank(text[close - 1]) || text[close - 1] == own)
+        continue;
+      for (std::size_t from = close - size - 1;;) {
+        const std::size_t open = text.rfind(mark, from);
+        if (open == std::string_view::npos || open < body)
+          break;
+        const bool good_before = open == body || (!word(text[open - 1]) && text[open - 1] != own);
+        const char first = text[open + size];
+        if (good_before && open + size < close && !blank(first) && first != own) {
+          // The closing mark out, then the opening one: the run where its
+          // text now is, the caret after it.
+          return field_change{.edits = {{close, caret, ""}, {open, open + size, ""}},
+                              .added = {span{open, close - size, style}},
+                              .caret = close - size,
+                              .anchor = close - size};
+        }
+        if (open == 0)
+          break;
+        from = open - 1;
+      }
+    }
+    return std::nullopt;
+  }
 };
 
 // Where a message is written: the paperclip, the field growing with what is
@@ -606,6 +748,11 @@ struct composer_bar : nodes::Stack {
       if (!one.picture)
         out.push_back({one.plain, one.target});
     return out;
+  }
+  // How what is written is formatted, by offsets in plain(): sent with it.
+  [[nodiscard]] std::vector<mux::styled_run> styles() const {
+    return std::ranges::to<std::vector<mux::styled_run>>(std::views::transform(
+        parts.input.parts.field.plainSpans(), [](const auto& one) { return mux::styled_run{one.first, one.last, one.format}; }));
   }
   // A mention picked from the list, over the @ and what was typed of it
   // (from `from` on): a pill, as the message will show it, and a space.

@@ -383,17 +383,19 @@ class outbox_part {
     screen.jump_to_end();
     // Who was picked from the @ list for it, its pills: sent as mentions.
     auto mentions = screen.line.mentions();
+    // How it is formatted: its runs, as the field has them.
+    auto styles = screen.line.styles();
     spl::visit(spl::overloaded{[&](const compose::plain&) {
                             if (s_->demo())
                               s_->ask->send(to, std::move(text));
                             else
-                              s_->net->send(to, std::move(text), std::nullopt, std::move(mentions));
+                              s_->net->send(to, std::move(text), std::nullopt, std::move(mentions), std::move(styles));
                           },
                           [&](const compose::reply& one) {
                             if (s_->demo())
                               s_->ask->send(to, std::move(text));
                             else
-                              s_->net->send(to, std::move(text), one.id, std::move(mentions));
+                              s_->net->send(to, std::move(text), one.id, std::move(mentions), std::move(styles));
                           },
                           [&](const compose::edit& one) {
                             // A picture's: its caption, the picture kept.

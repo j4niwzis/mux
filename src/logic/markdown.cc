@@ -11,21 +11,64 @@ import chevron.escape;
 export namespace mux::logic {
 
 
+// A run of the text formatted in the field -- bold, a link -- by byte
+// offsets in the whole text, and the tags it is written with.
+struct html_run {
+  std::size_t first = 0;
+  std::size_t last = 0;
+  std::string open;
+  std::string close;
+};
+// The runs a line is written with: they, and where the whole text they
+// count in starts -- the line a view into it.
+struct runs_in {
+  const char* origin = nullptr;
+  const std::vector<html_run>* runs = nullptr;
+};
+
 // A line's inline Markdown: `code` first (nothing inside it is Markdown),
 // then [text](url), **strong**, ~~strike~~, *emphasis* and _emphasis_.
-// `marked` is set where any of it was found.
-[[nodiscard]] inline std::string inline_html(std::string_view line, bool& marked) {
+// `marked` is set where any of it was found. With the field's runs: each
+// written with its tags where it is -- all those open closed and the ones
+// there opened again at each place one starts or ends, so that they nest
+// -- and Markdown read only where no run starts or ends inside it.
+[[nodiscard]] inline std::string inline_html(std::string_view line, bool& marked, runs_in in = {}) {
   std::string out;
   std::size_t at = 0;
+  const std::vector<html_run> none;
+  const std::vector<html_run>& runs = in.runs != nullptr ? *in.runs : none;
+  const std::size_t base = in.origin != nullptr ? static_cast<std::size_t>(line.data() - in.origin) : 0;
+  std::vector<std::size_t> open_runs;
+  // The runs at `here`, opened, and those that ended closed.
+  const auto sync = [&](std::size_t here) {
+    std::vector<std::size_t> now = std::ranges::to<std::vector<std::size_t>>(std::views::filter(
+        std::views::iota(std::size_t{0}, runs.size()), [&](std::size_t i) { return runs[i].first <= here && here < runs[i].last; }));
+    if (now == open_runs)
+      return;
+    for (const std::size_t i : std::views::reverse(open_runs))
+      out += runs[i].close;
+    for (const std::size_t i : now)
+      out += runs[i].open;
+    open_runs = std::move(now);
+    marked = true;
+  };
+  // Whether no run starts or ends inside [from, to) of the line, past its
+  // start: Markdown there may be read as one piece.
+  const auto whole = [&](std::size_t from, std::size_t to) {
+    return std::ranges::none_of(runs, [&](const html_run& run) {
+      return (run.first > base + from && run.first < base + to) || (run.last > base + from && run.last < base + to);
+    });
+  };
   // A run closed by `close` on this line, from just after its opening.
   const auto closing = [&](std::size_t from, std::string_view close) {
     const auto end = line.find(close, from);
     return end == std::string_view::npos || end == from ? std::string_view::npos : end;
   };
   while (at < line.size()) {
+    sync(base + at);
     const std::string_view rest = line.substr(at);
     if (rest.starts_with("`")) {
-      if (const auto end = closing(at + 1, "`"); end != std::string_view::npos) {
+      if (const auto end = closing(at + 1, "`"); end != std::string_view::npos && whole(at, end + 1)) {
         out += "<code>" + chevron::escaped(line.substr(at + 1, end - at - 1)) + "</code>";
         at = end + 1;
         marked = true;
@@ -35,7 +78,7 @@ export namespace mux::logic {
     if (rest.starts_with("[")) {
       const auto text_end = line.find("](", at + 1);
       const auto url_end = text_end == std::string_view::npos ? text_end : line.find(')', text_end + 2);
-      if (text_end != std::string_view::npos && url_end != std::string_view::npos) {
+      if (text_end != std::string_view::npos && url_end != std::string_view::npos && whole(at, url_end + 1)) {
         bool inner = false;
         out += "<a href=\"" + chevron::escaped(line.substr(text_end + 2, url_end - text_end - 2)) + "\">" +
                inline_html(line.substr(at + 1, text_end - at - 1), inner) + "</a>";
@@ -57,7 +100,7 @@ export namespace mux::logic {
       if (one.mark == "_" && at > 0 && std::isalnum(static_cast<unsigned char>(line[at - 1])))
         continue;
       const auto end = closing(at + one.mark.size(), one.mark);
-      if (end == std::string_view::npos)
+      if (end == std::string_view::npos || !whole(at, end + one.mark.size()))
         continue;
       bool inner = false;
       out += std::format("<{}>{}</{}>", one.tag, inline_html(line.substr(at + one.mark.size(), end - at - one.mark.size()), inner),
@@ -71,12 +114,21 @@ export namespace mux::logic {
     out += chevron::escaped(line.substr(at, 1));
     ++at;
   }
+  for (const std::size_t i : std::views::reverse(open_runs))
+    out += runs[i].close;
   return out;
 }
 
 // The whole of what is typed, as HTML where it has Markdown; nothing where
 // it has none.
-[[nodiscard]] inline std::optional<std::string> markdown_html(std::string_view text) {
+[[nodiscard]] inline std::optional<std::string> markdown_html(std::string_view text, const std::vector<html_run>& runs = {}) {
+  // The field's runs, by where they start (the longer first where two do):
+  // opened in that order, they nest.
+  std::vector<html_run> ordered = runs;
+  std::ranges::sort(ordered, [](const html_run& a, const html_run& b) {
+    return a.first != b.first ? a.first < b.first : a.last > b.last;
+  });
+  const runs_in in{text.data(), &ordered};
   std::vector<std::string_view> lines;
   for (std::size_t at = 0; at <= text.size();) {
     const auto end = text.find('\n', at);
@@ -160,19 +212,19 @@ export namespace mux::logic {
         html += "<blockquote>";
       for (; quotes > depth; --quotes)
         html += "</blockquote>";
-      html += inline_html(line.substr(text), marked);
+      html += inline_html(line.substr(text), marked, in);
       first_line = false;
       continue;
     }
     if (line.starts_with("- ") || line.starts_with("* ") || line.starts_with("+ ")) {
       begin(block::bullets, "<ul>");
-      html += "<li>" + inline_html(line.substr(2), marked) + "</li>";
+      html += "<li>" + inline_html(line.substr(2), marked, in) + "</li>";
       continue;
     }
     if (const auto dot = line.find(". "); dot != std::string_view::npos && dot > 0 && dot < 4 &&
                                           std::ranges::all_of(line.substr(0, dot), [](char c) { return std::isdigit(static_cast<unsigned char>(c)); })) {
       begin(block::numbers, "<ol>");
-      html += "<li>" + inline_html(line.substr(dot + 2), marked) + "</li>";
+      html += "<li>" + inline_html(line.substr(dot + 2), marked, in) + "</li>";
       continue;
     }
     if (open != block::none) {
@@ -181,7 +233,7 @@ export namespace mux::logic {
     }
     if (!first_line)
       html += "<br>";
-    html += inline_html(line, marked);
+    html += inline_html(line, marked, in);
     first_line = false;
   }
   close();

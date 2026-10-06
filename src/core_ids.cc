@@ -503,6 +503,43 @@ struct mention {
   friend bool operator==(const mention&, const mention&) = default;
 };
 
+// How a run of what is sent is formatted: the tags of Telegram's field
+// (lib_ui's input_field.cpp) that Matrix's HTML carries too -- bold,
+// italic, underline, struck through, a spoiler, code, a link.
+namespace run_style {
+struct bold {
+  friend bool operator==(const bold&, const bold&) = default;
+};
+struct italic {
+  friend bool operator==(const italic&, const italic&) = default;
+};
+struct underline {
+  friend bool operator==(const underline&, const underline&) = default;
+};
+struct strike {
+  friend bool operator==(const strike&, const strike&) = default;
+};
+struct spoiler {
+  friend bool operator==(const spoiler&, const spoiler&) = default;
+};
+struct code {
+  friend bool operator==(const code&, const code&) = default;
+};
+struct link {
+  std::string url;
+  friend bool operator==(const link&, const link&) = default;
+};
+}  // namespace run_style
+using run_style_t = spl::variant<run_style::bold, run_style::italic, run_style::underline, run_style::strike,
+                                 run_style::spoiler, run_style::code, run_style::link>;
+// A run of what is sent, by byte offsets in its text, and how it is formatted.
+struct styled_run {
+  std::size_t first = 0;
+  std::size_t last = 0;
+  run_style_t style;
+  friend bool operator==(const styled_run&, const styled_run&) = default;
+};
+
 // An invite to a room not joined yet: who sent it, by their ID and their
 // name, and whether it is to a direct chat.
 struct invite_info {

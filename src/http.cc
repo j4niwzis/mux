@@ -166,8 +166,9 @@ class connection {
       stream_->async_handshake(asio::ssl::stream_base::client, std::move(done));
     });
     if (shaken) {
+      const std::string reason = net::verify_reason(stream_->native_handle());
       stream_.reset();
-      throw net::failure("TLS with " + where_.host, shaken);
+      throw net::failure("TLS with " + where_.host + (reason.empty() ? std::string() : " (" + reason + ")"), shaken);
     }
     log_line(where_.host, std::format("TLS up, in {} ms", since_ms(started)));
   }

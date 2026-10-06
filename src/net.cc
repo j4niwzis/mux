@@ -223,7 +223,29 @@ inline tls client_tls() {
   made.set_options(asio::ssl::context::default_workarounds | asio::ssl::context::no_sslv2 |
                    asio::ssl::context::no_sslv3 | asio::ssl::context::no_tlsv1 | asio::ssl::context::no_tlsv1_1);
   made.set_verify_mode(asio::ssl::verify_peer);
+  // The platform's trust anchors written to a file (Android's, by
+  // android_runtime.cc): each added on its own, one OpenSSL cannot read
+  // passed over -- read as one file, such a one dropped them all.
+  if (const char* file = std::getenv("MUX_CA_FILE")) {
+    std::ifstream in(file, std::ios::binary);
+    const std::string all{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+    static constexpr std::string_view kEnd = "-----END CERTIFICATE-----";
+    for (std::size_t from = 0, end = all.find(kEnd); end != std::string::npos; end = all.find(kEnd, from)) {
+      const std::string_view one = std::string_view(all).substr(from, end + kEnd.size() - from);
+      error_code skipped;
+      made.add_certificate_authority(asio::buffer(one.data(), one.size()), skipped);
+      from = end + kEnd.size();
+    }
+  }
   return tls(std::move(made));
+}
+
+// Why a peer's certificate was not trusted, in OpenSSL's words ("unable to
+// get local issuer certificate", "certificate has expired"), where that was
+// what failed: what "certificate verify failed" alone did not say.
+inline std::string verify_reason(const ::SSL* connection) {
+  const long result = ::SSL_get_verify_result(connection);
+  return result == X509_V_OK ? std::string() : std::string(::X509_verify_cert_error_string(result));
 }
 
 // A server's TLS settings, from its certificate chain and key in PEM:

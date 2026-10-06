@@ -65,7 +65,11 @@ bool certificates(JNIEnv* env, const std::filesystem::path& destination) {
   output.close();
   if (!count || !output) return false;
   std::filesystem::rename(temporary, destination);
-  return setenv("SSL_CERT_FILE", destination.c_str(), 1) == 0;
+  // Not SSL_CERT_FILE: OpenSSL reads such a file whole or not at all, and a
+  // phone's store may hold one certificate it cannot parse -- then nothing
+  // was trusted, and every server failed to verify. net.cc's client_tls()
+  // adds them one by one from here, passing over what it cannot read.
+  return setenv("MUX_CA_FILE", destination.c_str(), 1) == 0;
 }
 
 // Android 13 and later post a notification only for an app the user let:

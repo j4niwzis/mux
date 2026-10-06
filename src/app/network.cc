@@ -430,13 +430,14 @@ struct network {
     });
   }
   // A server's public directory, searched by the account named.
-  void search_directory(const mux::account_id& by, std::string server, std::string query) {
-    loop.post([this, by, server = std::move(server), query = std::move(query)] {
+  void search_directory(const mux::account_id& by, std::string server, std::string query,
+                        std::optional<std::string> since = std::nullopt) {
+    loop.post([this, by, server = std::move(server), query = std::move(query), since = std::move(since)] {
       for (auto& one : accounts)
         spl::visit(
             [&](auto& account) {
               if (account->id() == by)
-                ask_if_able([&](auto& a) -> decltype(void(a.search_directory(server, query))) { a.search_directory(server, query); }, *account);
+                ask_if_able([&](auto& a) -> decltype(void(a.search_directory(server, query, since))) { a.search_directory(server, query, since); }, *account);
             },
             one.account);
     });

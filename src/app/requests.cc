@@ -226,6 +226,7 @@ struct manage_forum {};
 struct search_rooms {
   std::string server;
   std::string query;
+  std::optional<std::string> since;  // the next page of the same search
 };
 struct join_directory_room {
   std::string room;
@@ -792,6 +793,9 @@ struct actions {
   void manage_forum() { requests.emplace_back(request::manage_forum{}); }
   void search_rooms(std::string server, std::string query) {
     requests.emplace_back(request::search_rooms{std::move(server), std::move(query)});
+  }
+  void more_rooms(std::string server, std::string query, std::string since) {
+    requests.emplace_back(request::search_rooms{std::move(server), std::move(query), std::move(since)});
   }
   void join_directory_room(std::string room, std::string server) {
     requests.emplace_back(request::join_directory_room{std::move(room), std::move(server)});

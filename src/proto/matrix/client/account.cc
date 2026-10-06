@@ -121,7 +121,7 @@ class account {
   void fetch_preview(std::string url);
   // A server's public directory searched -- the account's own where none is
   // named -- for what matches, all of it where nothing is asked.
-  void search_directory(std::string server, std::string query);
+  void search_directory(std::string server, std::string query, std::optional<std::string> since = std::nullopt);
   // The room being read, for the sliding sync to follow apart; none, none.
   void follow(std::optional<std::string> room) { followed_room_ = std::move(room); }
   // What a space holds -- its rooms and spaces, joined or not -- as its

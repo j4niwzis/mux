@@ -307,6 +307,10 @@ struct directory_listed {
   std::vector<directory_room> rooms;
   // A space's rooms and spaces, joined or not, where it is its listing.
   std::optional<std::string> space;
+  // Where the next page starts, where there is one; and whether this is a
+  // further page, to go after what was listed.
+  std::optional<std::string> next;
+  bool more = false;
 };
 // A mark of a kind, gone to: the one named, else the oldest.
 // Marks seen before, read back from the disk: not to be unread again.

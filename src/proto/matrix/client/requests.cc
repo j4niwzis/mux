@@ -514,19 +514,20 @@ void account<Sink>::fetch_preview(std::string url) {
 }
 
 template <class Sink>
-void account<Sink>::search_directory(std::string server, std::string query) {
-  this->spawn_guarded([this, server = std::move(server), query = std::move(query)] {
+void account<Sink>::search_directory(std::string server, std::string query, std::optional<std::string> since) {
+  this->spawn_guarded([this, server = std::move(server), query = std::move(query), since = std::move(since)] {
     if (!api_)
       return;
     using asked = loom::cs::query_public_rooms;
     auto got = perform(*api_, asked{.server = server.empty() ? std::nullopt : std::optional<std::string>(server),
                                     .body = {.limit = 50,
+                                             .since = since,
                                              .filter = query.empty() ? std::nullopt
                                                                      : std::optional<asked::body_t::filter_t>(
                                                                            asked::body_t::filter_t{.generic_search_term = query})}});
     if (!got) {
       log(id_, "the directory of {}: {}", server.empty() ? std::string("the home server") : server, got.error().said());
-      sink_(change::directory_listed{id_, server, query, {}});
+      sink_(change::directory_listed{.by = id_, .server = server, .query = query, .more = since.has_value()});
       return;
     }
     std::vector<directory_room> rooms;
@@ -537,7 +538,12 @@ void account<Sink>::search_directory(std::string server, std::string query) {
                        .topic = one.topic.value_or(""),
                        .avatar = one.avatar_url,
                        .members = one.num_joined_members});
-    sink_(change::directory_listed{id_, server, query, std::move(rooms)});
+    sink_(change::directory_listed{.by = id_,
+                                   .server = server,
+                                   .query = query,
+                                   .rooms = std::move(rooms),
+                                   .next = got->next_batch,
+                                   .more = since.has_value()});
   });
 }
 

@@ -50,7 +50,8 @@ void app::woken() {
                                [&](const mux::change::room_created& made) { made_room_ = made.id; },
                                // A directory searched: its rooms, in Explore.
                                [&](const mux::change::directory_listed& listed) {
-                                 root().show_directory(listed.rooms, listed.server, listed.space);
+                                 root().show_directory(listed.rooms, listed.server, listed.space, listed.query, listed.next,
+                                                       listed.more);
                                  // The own server's, for what the chat list searched.
                                  if (listed.server.empty() && !listed.space)
                                    root().main().found_rooms_elsewhere(listed.query, listed.rooms);

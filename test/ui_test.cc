@@ -106,6 +106,7 @@ struct stub {
   void open_explore() {}
   void close_explore() {}
   void search_rooms(std::string, std::string) {}
+  void more_rooms(std::string, std::string, std::string) {}
   void search_pick(std::size_t) {}
   void manage_space(std::string) {}
   void flip_forum(std::string) {}

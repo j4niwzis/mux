@@ -121,7 +121,7 @@ class rooms_part {
     const auto by = s_->account_offering(mux::proto::feature::room_directory{});
     if (!by || s_->demo())
       return;
-    s_->net->search_directory(*by, one.server, one.query);
+    s_->net->search_directory(*by, one.server, one.query, one.since);
   }
   // A room of the directory joined, through the server it was listed by, and
   // opened when it comes.

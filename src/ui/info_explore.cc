@@ -138,6 +138,18 @@ struct explore_box : nodes::Stack {
   std::optional<std::string> space;
   std::vector<directory_room> listed;
   std::string listed_server;
+  // The search listed, and where its next page starts, where there is one.
+  std::string listed_query;
+  std::optional<std::string> next;
+  struct more_press {
+    explore_box* box;
+    void operator()() const {
+      if (!box->next)
+        return;
+      box->parts.more.setLabel("Loading\u2026");
+      box->actions->more_rooms(box->listed_server, box->listed_query, *box->next);
+    }
+  };
   // A space's name and picture, over what it holds.
   struct space_head_t : nodes::Stack {
     struct parts_t {
@@ -185,6 +197,8 @@ struct explore_box : nodes::Stack {
     search_row search;
     nodes::Text status;
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
+    // The server's next page, after its first fifty, as Element's.
+    widgets::Button<more_press> more;
   } parts;
   // The row's fields, by their names, for what reads them.
   field& query_field() { return parts.search.parts.query; }
@@ -194,7 +208,10 @@ struct explore_box : nodes::Stack {
         parts{.header = header_t(colours, "Explore rooms", {}, {a}, false, true),
               .space_head = space_head_t(colours),
               .search = search_row(this, own_server),
-              .status = nodes::Text("", 13.0f, colours.dim)} {
+              .status = nodes::Text("", 13.0f, colours.dim),
+              .more = widgets::Button<more_press>(colours.widgets, "Load more", {this})} {
+    parts.more.apply({.fillX = true, .height = 32.0f, .margin = {6.0f, 10.0f, 0.0f, 10.0f}});
+    parts.more.setVisible(false);
     fState.apply({.fillX = true, .height = 560.0f, .padding = {0.0f, 12.0f, 12.0f, 12.0f}});
     parts.status.setWrapped(true);
     parts.status.apply({.fillX = true, .margin = {6.0f, 10.0f, 4.0f, 10.0f}});
@@ -225,11 +242,20 @@ struct explore_box : nodes::Stack {
     this->show_rows(found, listed_server, space);
   }
   // What the directory listed -- or a space.
+  // A further page goes after what was listed.
   void show(const std::vector<directory_room>& rooms, const std::string& server,
-            const std::optional<std::string>& space_of = std::nullopt) {
-    listed = rooms;
+            const std::optional<std::string>& space_of = std::nullopt, const std::string& query = {},
+            const std::optional<std::string>& after = std::nullopt, bool more = false) {
+    if (more)
+      listed.insert(listed.end(), rooms.begin(), rooms.end());
+    else
+      listed = rooms;
     listed_server = server;
-    this->show_rows(rooms, server, space_of);
+    listed_query = query;
+    next = after;
+    parts.more.setLabel("Load more");
+    parts.more.setVisible(next.has_value() && !space_of);
+    this->show_rows(listed, server, space_of);
   }
   void show_rows(const std::vector<directory_room>& rooms, const std::string& server,
                  const std::optional<std::string>& space) {

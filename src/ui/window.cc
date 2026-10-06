@@ -702,9 +702,10 @@ struct window : scene::Node {
     }
   }
   void show_directory(const std::vector<directory_room>& rooms, const std::string& server,
-                      const std::optional<std::string>& space = std::nullopt) {
+                      const std::optional<std::string>& space = std::nullopt, const std::string& query = {},
+                      const std::optional<std::string>& next = std::nullopt, bool more = false) {
     if (auto* up = layer().explore.shown())
-      up->show(rooms, server, space);
+      up->show(rooms, server, space, query, next, more);
   }
   // A protocol's own dialog up (Node, one of its dialogs), made from args.
   template <class Node, class... Args>

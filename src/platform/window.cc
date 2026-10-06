@@ -58,6 +58,7 @@ inline double now_ms() {
 //   woken()         another thread woke the window
 //   files_given(paths, dropped)  files chosen in the dialog, or dropped
 //   save_path_chosen(path)  where to save a file, chosen in the dialog
+//   dialog_failed(why)  the system's file dialog could not be shown
 //   open_link(url)  a link pressed in a text
 //   focus_changed(on)  the window given the keyboard's focus, or losing it
 //   take_toasts()   the notifications to show in windows of their own
@@ -410,9 +411,12 @@ int run(App& app, const options& how, const events::kinds& kinds) {
           default:
             if (event.type == kinds.wake)
               app.woken();
-            else if (event.type == kinds.files)
+            else if (event.type == kinds.files) {
               std::ranges::for_each(app.system_dialogs.take_files(),
                                     [&](std::vector<std::string>& paths) { app.files_given(std::move(paths), false); });
+              std::ranges::for_each(app.system_dialogs.take_failures(),
+                                    [&](std::string& why) { app.dialog_failed(std::move(why)); });
+            }
             else if (event.type == kinds.save)
               std::ranges::for_each(app.system_dialogs.take_save_paths(),
                                     [&](std::string& path) { app.save_path_chosen(std::move(path)); });

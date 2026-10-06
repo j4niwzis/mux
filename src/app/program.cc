@@ -110,6 +110,14 @@ struct app : kept_settings {
   }
   // Where Save As… was asked to put what it saves: to the pictures part.
   void save_path_chosen(std::string path) { pictures.save_to(std::move(path)); }
+  // The file dialog not shown -- on Linux, SDL asks xdg-desktop-portal for
+  // it, else zenity: with neither, the paperclip did nothing at all.
+  void dialog_failed(std::string why) {
+    root().show_message("The file dialog could not be opened",
+                        "The system gave no file dialog (" + why +
+                            "). On Linux it comes from xdg-desktop-portal with a backend (-gtk, -gnome, -kde or -wlr), or "
+                            "from zenity: install one of them. Meanwhile files can be dropped on the window, and pictures pasted.");
+  }
   // What the parts share, pointed at the program's own: once the program
   // is given its model, network and mailbox.
   void wire();

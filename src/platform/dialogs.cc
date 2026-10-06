@@ -29,8 +29,12 @@ class dialogs {
     sdl::SDL_ShowOpenFileDialog(
         // SDL's C interface gives back what it was given as a void*: this.
         +[](void* self, const char* const* list, int) {
+          // None at all -- not an empty list, which is the dialog let go --
+          // where SDL could not show one: why, told to the user.
           if (list)
             static_cast<dialogs*>(self)->chose(list);
+          else
+            static_cast<dialogs*>(self)->failed(sdl::SDL_GetError());
         },
         this, parent_, nullptr, 0, nullptr, true);
   }
@@ -42,6 +46,8 @@ class dialogs {
         +[](void* self, const char* const* list, int) {
           if (list && *list)
             static_cast<dialogs*>(self)->saved(*list);
+          else if (!list)
+            static_cast<dialogs*>(self)->failed(sdl::SDL_GetError());
         },
         this, parent_, nullptr, 0, offered_.empty() ? nullptr : offered_.c_str());
   }
@@ -55,6 +61,11 @@ class dialogs {
     const std::lock_guard held(lock_);
     return std::exchange(save_paths_, {});
   }
+  // Why a dialog could not be shown, since: SDL's words.
+  [[nodiscard]] std::vector<std::string> take_failures() {
+    const std::lock_guard held(lock_);
+    return std::exchange(failures_, {});
+  }
 
  private:
   void chose(const char* const* list) {
@@ -64,6 +75,13 @@ class dialogs {
     {
       const std::lock_guard held(lock_);
       files_.push_back(std::move(paths));
+    }
+    events::push(kinds_.files);
+  }
+  void failed(const char* why) {
+    {
+      const std::lock_guard held(lock_);
+      failures_.emplace_back(why != nullptr && *why != '\0' ? why : "no reason given");
     }
     events::push(kinds_.files);
   }
@@ -81,6 +99,7 @@ class dialogs {
   std::mutex lock_;
   std::vector<std::vector<std::string>> files_;
   std::vector<std::string> save_paths_;
+  std::vector<std::string> failures_;
 };
 
 }  // namespace mux::platform::dialogs

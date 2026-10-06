@@ -193,9 +193,8 @@ void conversations_screen<Actions>::show_space_bars(const model& now) {
     }
     return out;
   };
-  const std::vector<config::space_placed> mine = space_places |
-                                                 std::views::filter([&](const config::space_placed& p) { return p.account == address; }) |
-                                                 std::ranges::to<std::vector>();
+  const std::vector<config::space_placed> mine = std::ranges::to<std::vector>(space_places |
+                                                 std::views::filter([&](const config::space_placed& p) { return p.account == address; }));
   const auto in_bar = [&](const entry& one, const config::space_bar_t& bar) {
     const bool placed = std::ranges::any_of(mine, [&](const auto& p) { return p.item == one.item; });
     if (!placed)
@@ -210,17 +209,16 @@ void conversations_screen<Actions>::show_space_bars(const model& now) {
         ranked.emplace_back(at == mine.end() ? mine.size() + i : static_cast<std::size_t>(at - mine.begin()), &all[i]);
       }
     std::ranges::sort(ranked, {}, &std::pair<std::size_t, const entry*>::first);
-    return ranked | std::views::values | std::ranges::to<std::vector>();
+    return std::ranges::to<std::vector>(ranked | std::views::values);
   };
   const std::vector<const entry*> side_items = bar_of(config::space_bar::side{});
   const std::vector<const entry*> top_items = bar_of(config::space_bar::top{});
   // For the settings to list them.
   needs_.shared->space_account = address;
-  needs_.shared->space_items = all | std::views::transform([&](const entry& one) {
+  needs_.shared->space_items = std::ranges::to<std::vector>(all | std::views::transform([&](const entry& one) {
                         return space_item_shown{one.item, one.name, in_bar(one, config::space_bar::side{}),
                                                 in_bar(one, config::space_bar::top{})};
-                      }) |
-                      std::ranges::to<std::vector>();
+                      }));
   side.account = address;
   // Made again only where they changed.
   std::vector<std::string> made;
@@ -842,12 +840,11 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
     return pointed ? *pointed == one->id : chosen && *chosen == one->id;
   };
   const std::vector<conversation_id> listed_before =
-      rows | std::views::transform([](const conversation_row<Actions>& row) { return row.id; }) | std::ranges::to<std::vector>();
+      std::ranges::to<std::vector>(rows | std::views::transform([](const conversation_row<Actions>& row) { return row.id; }));
   chats_listed = chats.size();
   {
-    const std::set<conversation_id> listed = chats | std::views::take(chats_made) |
-                                             std::views::transform([](const conversation* one) { return one->id; }) |
-                                             std::ranges::to<std::set>();
+    const std::set<conversation_id> listed = std::ranges::to<std::set>(chats | std::views::take(chats_made) |
+                                             std::views::transform([](const conversation* one) { return one->id; }));
     for (conversation_row<Actions>& row : rows)
       if (!listed.contains(row.id)) {
         const conversation_id id = row.id;
@@ -926,8 +923,7 @@ template <class Actions>
 void conversations_screen<Actions>::show_banners(const conversation* one, const model& now) {
   const auto banners = one ? proto::composer_banners(protocol_state_of(*needs_.shared, one->id.account), *one, now)
                            : std::vector<proto::any_banner>{};
-  const std::string said = banners | std::views::transform(&proto::any_banner::text) | std::views::join_with('\n') |
-                           std::ranges::to<std::string>();
+  const std::string said = std::ranges::to<std::string>(banners | std::views::transform(&proto::any_banner::text) | std::views::join_with('\n'));
   // The first's button, where it has one.
   const std::string label = banners.empty() ? std::string() : banners.front().button;
   chat.banner_asks = banners.empty() ? std::nullopt : banners.front().asks;

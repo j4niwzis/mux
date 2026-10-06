@@ -109,12 +109,11 @@ class proxies_part {
     if (!editor || editor->index < 0 || static_cast<std::size_t>(editor->index) >= k_->proxies.size())
       return;
     const std::string name = k_->proxies[static_cast<std::size_t>(editor->index)].name;
-    const auto users = k_->saved | std::views::filter([&](const auto& one) { return mux::config::proxy_of(one) == name; }) |
-                       std::views::transform([](const auto& one) { return mux::config::address_of(one); }) |
-                       std::ranges::to<std::vector<std::string>>();
+    const auto users = std::ranges::to<std::vector<std::string>>(k_->saved | std::views::filter([&](const auto& one) { return mux::config::proxy_of(one) == name; }) |
+                       std::views::transform([](const auto& one) { return mux::config::address_of(one); }));
     if (!users.empty()) {
       editor->say(std::format("In use by {}: choose another proxy for them, or none, first.",
-                              users | std::views::join_with(std::string_view(", ")) | std::ranges::to<std::string>()),
+                              std::ranges::to<std::string>(users | std::views::join_with(std::string_view(", ")))),
                   true);
       return;
     }

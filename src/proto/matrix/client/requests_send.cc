@@ -387,14 +387,13 @@ void account<Sink>::call(std::string room, std::string call_id, change::call_sai
             },
             [&](const change::call_said::candidates& one) {
               loom::ev::m_call_candidates_content_t content{};
-              content.candidates = one.them | std::views::transform([](const calls::ice_candidate& each) {
+              content.candidates = std::ranges::to<std::vector>(one.them | std::views::transform([](const calls::ice_candidate& each) {
                                      loom::ev::m_call_candidates_content_t::candidate_t made{};
                                      made.candidate = each.line;
                                      made.sdp_mid = each.mid;
                                      made.sdp_m_line_index = 0;
                                      return made;
-                                   }) |
-                                   std::ranges::to<std::vector>();
+                                   }));
               content.call_id = call_id;
               content.version = version;
               content.party_id = party;
@@ -447,11 +446,11 @@ void account<Sink>::call_servers() {
     auto got = perform(*api_, loom::cs::get_turn_server{});
     std::vector<calls::ice_server> servers;
     if (got)
-      servers = got->uris | std::views::transform([&](const std::string& uri) {
+      servers = std::ranges::to<std::vector>(got->uris | std::views::transform([&](const std::string& uri) {
                   return ice_server_of(uri, got->username, got->password);
                 }) |
                 std::views::filter([](const auto& one) { return one.has_value(); }) |
-                std::views::transform([](const auto& one) { return *one; }) | std::ranges::to<std::vector>();
+                std::views::transform([](const auto& one) { return *one; }));
     else
       log(id_, "no TURN servers: {}", got.error().said());
     sink_(change::call_servers{id_, std::move(servers)});
@@ -632,8 +631,8 @@ void account<Sink>::sign_out_unverified(std::string password) {
     if (!all)
       return;
     std::vector<std::string> unverified =
-        *all | std::views::filter([&](const own_session& one) { return one.id != crypto_->device_id() && !one.trusted; }) |
-        std::views::transform(&own_session::id) | std::ranges::to<std::vector>();
+        std::ranges::to<std::vector>(*all | std::views::filter([&](const own_session& one) { return one.id != crypto_->device_id() && !one.trusted; }) |
+        std::views::transform(&own_session::id));
     if (unverified.empty()) {
       sink_(change::notice{id_, "Sign out unverified sessions", "Every other session of yours is verified."});
       return;

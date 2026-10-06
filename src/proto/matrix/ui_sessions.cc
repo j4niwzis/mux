@@ -329,11 +329,11 @@ struct encryption_page : nodes::Stack {
     parts.session_line.setVisible(own.has_value());
     if (!own)
       return;
-    const std::string grouped = own->second | std::views::enumerate | std::views::transform([](const auto& at) {
+    const std::string grouped = std::ranges::to<std::string>(own->second | std::views::enumerate | std::views::transform([](const auto& at) {
                                   const auto [index, letter] = at;
                                   return index > 0 && index % 4 == 0 ? std::string{' ', letter} : std::string(1, letter);
                                 }) |
-                                std::views::join | std::ranges::to<std::string>();
+                                std::views::join);
     parts.session_line.setText(std::format("Session ID: {}\nSession key: {}", own->first, grouped));
   }
   void say(std::string, bool) {}

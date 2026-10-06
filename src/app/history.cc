@@ -76,8 +76,7 @@ class history_part {
                                   auto known = on_disk_.find(c.message.in);
                                   if (known == on_disk_.end())
                                     known = on_disk_
-                                                .emplace(c.message.in, s_->store->everything(c.message.in) | std::views::keys |
-                                                                           std::ranges::to<std::set<std::string>>())
+                                                .emplace(c.message.in, std::ranges::to<std::set<std::string>>(s_->store->everything(c.message.in) | std::views::keys))
                                                 .first;
                                   const bool was_kept = !known->second.insert(c.message.id).second;
                                   const mux::conversation* chat = s_->model->find(c.message.in);
@@ -148,7 +147,7 @@ class history_part {
         // What the disk has, before the page comes and is kept: whether it
         // reaches it is told by this.
         if (!on_disk_.contains(in))
-          on_disk_.emplace(in, s_->store->everything(in) | std::views::keys | std::ranges::to<std::set<std::string>>());
+          on_disk_.emplace(in, std::ranges::to<std::set<std::string>>(s_->store->everything(in) | std::views::keys));
         if (const auto gap = gaps_of(in).find(*paged_from); gap != gaps_of(in).end()) {
           if (gap->second.start)
             return;  // the room's beginning: nothing older anywhere

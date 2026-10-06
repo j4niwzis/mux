@@ -349,9 +349,9 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     done(in, one, event_type_of(one.type), at, where);
   }, [&](const loom::ev::m_call_candidates_content_t& content) {
     this->call_signal(in, one, at, where, content.call_id, content.party_id,
-                      change::call_said::candidates{content.candidates | std::views::transform([](const auto& each) {
+                      change::call_said::candidates{std::ranges::to<std::vector>(content.candidates | std::views::transform([](const auto& each) {
                                                       return calls::ice_candidate{each.candidate, each.sdp_mid.value_or("")};
-                                                    }) | std::ranges::to<std::vector>()});
+                                                    }))});
   }, [&](const loom::ev::m_call_hangup_content_t& content) {
     using reasons = loom::ev::m_call_hangup_content_t::reason_values;
     const change::call_end_t why = spl::visit(
@@ -494,7 +494,7 @@ void account<Sink>::decrypt_waiting(const std::string& session) {
 }
 template <class Sink>
 void account<Sink>::decrypt_all_waiting() {
-  const auto sessions = undecrypted_ | std::views::keys | std::ranges::to<std::vector<std::string>>();
+  const auto sessions = std::ranges::to<std::vector<std::string>>(undecrypted_ | std::views::keys);
   for (const std::string& session : sessions)
     this->decrypt_waiting(session);
 }

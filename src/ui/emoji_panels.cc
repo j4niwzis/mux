@@ -159,14 +159,12 @@ struct sticker_grid : nodes::Stack {
   // unnamed together, as "Stickers".
   [[nodiscard]] static std::string pack_of(const emote& one) { return one.pack.empty() ? std::string("Stickers") : one.pack; }
   [[nodiscard]] std::vector<std::pair<std::string, std::vector<emote>>> packs() const {
-    const std::vector<std::string> names = kept_->chat_stickers | std::views::transform(pack_of) | std::ranges::to<std::vector>();
-    return std::views::iota(std::size_t{0}, names.size()) |
+    const std::vector<std::string> names = std::ranges::to<std::vector>(kept_->chat_stickers | std::views::transform(pack_of));
+    return std::ranges::to<std::vector>(std::views::iota(std::size_t{0}, names.size()) |
            std::views::filter([&](std::size_t i) { return std::ranges::find(names, names[i]) == names.begin() + static_cast<std::ptrdiff_t>(i); }) |
            std::views::transform([&](std::size_t i) {
-             return std::pair{names[i], kept_->chat_stickers | std::views::filter([&](const emote& one) { return pack_of(one) == names[i]; }) |
-                                            std::ranges::to<std::vector>()};
-           }) |
-           std::ranges::to<std::vector>();
+             return std::pair{names[i], std::ranges::to<std::vector>(kept_->chat_stickers | std::views::filter([&](const emote& one) { return pack_of(one) == names[i]; }))};
+           }));
   }
   // Recent, then every pack, one under another; a tab for each.
   void show_all() {
@@ -176,10 +174,9 @@ struct sticker_grid : nodes::Stack {
     tabs.clear();
     tab_pictures.clear();
     // Recent: those sent lately that the chat still has.
-    std::vector<emote> recent = kept_->recent_stickers | std::views::filter([this](const emote& one) {
+    std::vector<emote> recent = std::ranges::to<std::vector>(kept_->recent_stickers | std::views::filter([this](const emote& one) {
                                   return std::ranges::contains(kept_->chat_stickers, one.url, &emote::url);
-                                }) |
-                                std::ranges::to<std::vector>();
+                                }));
     if (!recent.empty()) {
       all.emplace_back(*colours_, *kept_, actions, "Recently used", recent);
       tabs.emplace_back(this, all.size() - 1, std::nullopt, "\u23F2");
@@ -213,11 +210,10 @@ struct sticker_grid : nodes::Stack {
     }
     constexpr auto lower = mux::logic::folded;
     const std::string wanted = lower(query);
-    const std::vector<emote> found = kept_->chat_stickers | std::views::filter([&](const emote& one) {
+    const std::vector<emote> found = std::ranges::to<std::vector>(kept_->chat_stickers | std::views::filter([&](const emote& one) {
                                        return lower(one.shortcode).contains(wanted) || lower(one.body).contains(wanted) ||
                                               lower(one.pack).contains(wanted);
-                                     }) |
-                                     std::ranges::to<std::vector>();
+                                     }));
     auto& all = this->sections();
     all.clear();
     all.emplace_back(*colours_, *kept_, actions, found.empty() ? std::string("Nothing found") : std::string("Search results"), found);
@@ -234,9 +230,9 @@ struct sticker_grid : nodes::Stack {
       return {};
     const skia::SkRect view = parts.list.bounds().makeOutset(0.0f, kCell);
     std::vector<std::string> out =
-        this->sections() | std::views::transform([](section& one) -> std::vector<cell>& { return one.each(); }) | std::views::join |
+        std::ranges::to<std::vector>(this->sections() | std::views::transform([](section& one) -> std::vector<cell>& { return one.each(); }) | std::views::join |
         std::views::filter([&](cell& one) { return !one.bounds().isEmpty() && parts.list.toView(one.bounds()).intersects(view); }) |
-        std::views::transform([](cell& one) { return one.sticker.url; }) | std::ranges::to<std::vector>();
+        std::views::transform([](cell& one) { return one.sticker.url; }));
     out.append_range(tab_pictures);
     return out;
   }

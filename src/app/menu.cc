@@ -222,8 +222,8 @@ class menu_part {
     this->show_selection();
   }
   void apply(const request::selection_copy&) {
-    const std::string text = this->selected_messages() | std::views::transform([](const message* one) { return one->body.plain; }) |
-                             std::views::join_with(std::string("\n\n")) | std::ranges::to<std::string>();
+    const std::string text = std::ranges::to<std::string>(this->selected_messages() | std::views::transform([](const message* one) { return one->body.plain; }) |
+                             std::views::join_with(std::string("\n\n")));
     skiff::scene::setClipboardText(text);
     selected_.clear();
     this->show_selection();
@@ -242,8 +242,7 @@ class menu_part {
   void apply(const request::selection_forward&) {
     if (!selected_chat_)
       return;
-    this->forward_from(*selected_chat_, this->selected_messages() | std::views::transform([](const message* one) { return one->id; }) |
-                                            std::ranges::to<std::vector>());
+    this->forward_from(*selected_chat_, std::ranges::to<std::vector>(this->selected_messages() | std::views::transform([](const message* one) { return one->id; })));
     selected_.clear();
     this->show_selection();
   }
@@ -341,8 +340,8 @@ class menu_part {
     const conversation* chat = selected_chat_ ? s_->model->find(*selected_chat_) : nullptr;
     if (!chat)
       return {};
-    return chat->timeline | std::views::filter([&](const message& one) { return selected_.contains(one.id); }) |
-           std::views::transform([](const message& one) { return &one; }) | std::ranges::to<std::vector>();
+    return std::ranges::to<std::vector>(chat->timeline | std::views::filter([&](const message& one) { return selected_.contains(one.id); }) |
+           std::views::transform([](const message& one) { return &one; }));
   }
   void show_selection() {
     const conversation* chat = selected_chat_ ? s_->model->find(*selected_chat_) : nullptr;

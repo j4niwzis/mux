@@ -126,8 +126,7 @@ inline loom::cs::sync::response legacy_of(const loom::cs::sliding_sync::response
                                             .events = room.timeline.value_or(std::vector<loom::ev::timeline_event>{})};
       if (room.heroes || room.joined_count || room.invited_count)
         one.summary = joined_t::room_summary_t{
-            .m_heroes = room.heroes ? std::optional(*room.heroes | std::views::transform([](const auto& hero) { return hero.user_id; }) |
-                                                    std::ranges::to<std::vector>())
+            .m_heroes = room.heroes ? std::optional(std::ranges::to<std::vector>(*room.heroes | std::views::transform([](const auto& hero) { return hero.user_id; })))
                                     : std::nullopt,
             .m_joined_member_count = room.joined_count,
             .m_invited_member_count = room.invited_count};
@@ -319,10 +318,10 @@ void account<Sink>::run() {
               },
               [&](loom::auth_stage::terms) {
                 if (!how_.accept_terms) {
-                  const std::string listed = wanted.terms | std::views::transform([](const loom::auth_policy& one) {
+                  const std::string listed = std::ranges::to<std::string>(wanted.terms | std::views::transform([](const loom::auth_policy& one) {
                                                return std::format("{} ({})", one.name, one.url);
                                              }) |
-                                             std::views::join_with(std::string(", ")) | std::ranges::to<std::string>();
+                                             std::views::join_with(std::string(", ")));
                   return failed("the server asks you to agree to its terms -- " + listed +
                                 " -- turn on I agree to the server's terms, and add the account again");
                 }

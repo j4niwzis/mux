@@ -192,7 +192,7 @@ class marks_part {
       }
       return entry;
     };
-    const auto entries = marks_of(*chat, one.kind) | std::views::transform(entry_of) | std::ranges::to<std::vector>();
+    const auto entries = std::ranges::to<std::vector>(marks_of(*chat, one.kind) | std::views::transform(entry_of));
     s_->root().open_marks(one.kind, *chat, entries, s_->model);
     listed_ = one.kind;
   }
@@ -258,7 +258,7 @@ class marks_part {
       }
     auto on_disk = on_disk_.find(in);
     if (on_disk == on_disk_.end())
-      on_disk = on_disk_.emplace(in, s_->store->marked(in) | std::views::keys | std::ranges::to<std::set<std::string>>()).first;
+      on_disk = on_disk_.emplace(in, std::ranges::to<std::set<std::string>>(s_->store->marked(in) | std::views::keys)).first;
     if (on_disk->second.contains(id))
       return;
     kept_.erase(id);

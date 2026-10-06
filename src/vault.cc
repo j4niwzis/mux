@@ -496,15 +496,13 @@ class vault {
       if (!text_read)
         continue;
       const std::string text = std::move(*text_read);
-      auto opened = text | std::views::split('\n') |
+      auto opened = std::ranges::to<std::vector<std::optional<std::string>>>(text | std::views::split('\n') |
                     std::views::transform([](auto&& line) { return std::string_view(line.begin(), line.end()); }) |
                     std::views::filter([](std::string_view line) { return !line.empty(); }) |
-                    std::views::transform([&](std::string_view line) { return this->open_line(line, path, migrating{}); }) |
-                    std::ranges::to<std::vector<std::optional<std::string>>>();
+                    std::views::transform([&](std::string_view line) { return this->open_line(line, path, migrating{}); }));
       if (std::ranges::any_of(opened, [](const auto& one) { return !one.has_value(); }))
         return std::nullopt;
-      out.lines.emplace_back(path, opened | std::views::transform([](auto& one) { return std::move(*one); }) |
-                                       std::ranges::to<std::vector<std::string>>());
+      out.lines.emplace_back(path, std::ranges::to<std::vector<std::string>>(opened | std::views::transform([](auto& one) { return std::move(*one); })));
     }
     return out;
   }
@@ -517,8 +515,8 @@ class vault {
     });
     const bool lines_written = std::ranges::all_of(all.lines, [&](const auto& one) {
       const auto& [path, lines] = one;
-      const std::string text = lines | std::views::transform([&](const std::string& line) { return this->line_of(line, path) + "\n"; }) |
-                               std::views::join | std::ranges::to<std::string>();
+      const std::string text = std::ranges::to<std::string>(lines | std::views::transform([&](const std::string& line) { return this->line_of(line, path) + "\n"; }) |
+                               std::views::join);
       return write_plain(path, text, true);
     });
     return whole_written && lines_written;

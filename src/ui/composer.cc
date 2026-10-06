@@ -859,6 +859,13 @@ struct composer_bar : nodes::Stack {
     this->invalidateLayout();
   }
   void set_text(std::string text) { parts.input.parts.field.setText(std::move(text)); }
+  // What is written from `from` to its end replaced by `text`, the caret
+  // after it: a suggestion picked over what was typed for it.
+  void put_over_end(std::size_t from, const std::string& text) {
+    auto& field = parts.input.parts.field;
+    field.select(from, field.text().size());
+    field.insertText(text);
+  }
   // Text and its runs, as a message edited had them.
   void set_formatted(std::string text, const std::vector<mux::styled_run>& runs) {
     auto& field = parts.input.parts.field;

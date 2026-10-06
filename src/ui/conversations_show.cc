@@ -537,6 +537,7 @@ void conversations_screen<Actions>::update(double now_ms) {
       loading != chat.area.parts.loading.visible())
     chat.area.parts.loading.setVisible(loading);
   this->find_mentions();
+  this->find_emoji();
   // What is in the composer: typing while there is text in it.
   if (const bool has_text = !line.text().empty(); has_text != was_typing || (has_text && line.text() != typed_last)) {
     was_typing = has_text;

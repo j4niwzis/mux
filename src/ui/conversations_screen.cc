@@ -4,6 +4,7 @@ export module mux.ui:conversations_screen;
 
 import std;
 import mux.logic.text;
+import mux.logic.emoji;
 import splice;
 import skia;
 import skiff.paint;
@@ -125,16 +126,30 @@ struct conversations_screen : nodes::Stack {
     std::size_t index;
     void operator()() const { screen->choose_mention(index); }
   };
-  // One of the @ list: the avatar, the name over the ID.
-  struct mention_row : pressable<nodes::Stack> {
-    pick_mention act;
+  // The emoji list: the emoji whose names or keywords (CLDR's, English and
+  // Russian) have what follows a ':' at the end of what is written -- one at
+  // its start or after a space, two letters at least -- as tdesktop's
+  // suggestions; the one picked put in their place.
+  std::vector<const alef::emoji*> emoji_matches;
+  std::size_t emoji_lit = 0;
+  std::string emoji_query;
+  struct pick_emoji {
+    conversations_screen* screen;
+    std::size_t index;
+    void operator()() const { screen->choose_emoji(index); }
+  };
+  // A row of a list over the field -- the @ list's, the emoji list's: what
+  // it shows at its start, its text beside it; lit while Up and Down are
+  // on it, pressed to pick.
+  template <class Pick, class Face>
+  struct suggestion_row : pressable<nodes::Stack> {
+    Pick act;
     struct parts_t {
-      avatar_mark face;
+      Face face;
       two_lines texts;
     } parts;
-    mention_row(const palette& colours, pick_mention what, const member& one)
-        : act(what), parts{.face = avatar_mark(one.id, one.name.empty() ? one.id : one.name, 28.0f),
-                           .texts = two_lines(colours, one.name.empty() ? one.id : one.name, one.id, 14.0f, 1.0f)} {
+    suggestion_row(const palette& colours, Pick what, Face face, std::string first, std::string second)
+        : act(what), parts{.face = std::move(face), .texts = two_lines(colours, std::move(first), std::move(second), 14.0f, 1.0f)} {
       this->setHorizontal();
       this->setGap(10.0f);
       fState.apply({.fillX = true, .height = 44.0f, .padding = {0.0f, 14.0f, 0.0f, 14.0f},
@@ -142,14 +157,21 @@ struct conversations_screen : nodes::Stack {
     }
     void set_lit(bool on) { fState.apply({.selected = on}); }
   };
-  struct mention_list : nodes::Stack {
+  // One of the @ list: the avatar, the name over the ID.
+  using mention_row = suggestion_row<pick_mention, avatar_mark>;
+  // One of the emoji list: the emoji, its name.
+  using emoji_row = suggestion_row<pick_emoji, nodes::Text>;
+  template <class Row>
+  struct suggestion_list : nodes::Stack {
     struct parts_t {
-      std::vector<mention_row> rows;
+      std::vector<Row> rows;
     } parts;
-    explicit mention_list(const palette& colours) {
+    explicit suggestion_list(const palette& colours) {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .background = colours.sidebar});
     }
   };
+  using mention_list = suggestion_list<mention_row>;
+  using emoji_list = suggestion_list<emoji_row>;
   // The account to list once the model has it: the one shown last, kept.
   // Taken the first time it is there; dropped when an account is chosen.
   std::optional<account_id> wanted;
@@ -380,7 +402,10 @@ struct conversations_screen : nodes::Stack {
     auto& rows = chat.parts.mentions.parts.rows;
     rows.clear();
     for (std::size_t i = 0; i < mention_matches.size(); ++i)
-      rows.emplace_back(*needs_.colours, pick_mention{this, i}, mention_matches[i]);
+      rows.emplace_back(*needs_.colours, pick_mention{this, i},
+                        avatar_mark(mention_matches[i].id,
+                                    mention_matches[i].name.empty() ? mention_matches[i].id : mention_matches[i].name, 28.0f),
+                        mention_matches[i].name.empty() ? mention_matches[i].id : mention_matches[i].name, mention_matches[i].id);
     mention_lit = 0;
     if (!rows.empty())
       rows.front().set_lit(true);
@@ -404,6 +429,84 @@ struct conversations_screen : nodes::Stack {
     chat.parts.mentions.setVisible(false);
     this->invalidateLayout();
   }
+  // The emoji list, as what is written now asks.
+  void find_emoji() {
+    const std::string& text = chat.line.text();
+    std::optional<std::string> query;
+    if (const auto colon = text.rfind(':');
+        colon != std::string::npos && (colon == 0 || text[colon - 1] == ' ' || text[colon - 1] == '\n')) {
+      const std::string_view after = std::string_view(text).substr(colon + 1);
+      if (after.size() >= 2 && after.find_first_of(" \n:") == std::string_view::npos)
+        query = std::string(after);
+    }
+    auto& list = chat.parts.emojis;
+    if (!query) {
+      if (list.visible()) {
+        list.setVisible(false);
+        emoji_matches.clear();
+        this->invalidateLayout();
+      }
+      emoji_query.clear();
+      return;
+    }
+    // The same as before: as it was -- closed, where Esc closed it.
+    if (*query == emoji_query)
+      return;
+    emoji_query = *query;
+    emoji_matches = mux::logic::emoji_found(*query, 6);
+    auto& rows = list.parts.rows;
+    rows.clear();
+    for (std::size_t i = 0; i < emoji_matches.size(); ++i)
+      rows.emplace_back(*needs_.colours, pick_emoji{this, i},
+                        nodes::Text(std::string(emoji_matches[i]->text), 22.0f, needs_.colours->text),
+                        std::string(emoji_matches[i]->name), std::string());
+    emoji_lit = 0;
+    if (!rows.empty())
+      rows.front().set_lit(true);
+    list.setVisible(!rows.empty());
+    this->invalidateLayout();
+  }
+  // One picked: the ':' and what follows it made that emoji.
+  void choose_emoji(std::size_t index) {
+    if (index >= emoji_matches.size())
+      return;
+    const std::string emoji(emoji_matches[index]->text);
+    const auto colon = chat.line.text().rfind(':');
+    if (colon == std::string::npos)
+      return;
+    chat.line.put_over_end(colon, emoji);
+    emoji_query.clear();
+    emoji_matches.clear();
+    chat.parts.emojis.parts.rows.clear();
+    chat.parts.emojis.setVisible(false);
+    this->invalidateLayout();
+  }
+  // Up and Down through a list over the field, Enter or Tab picks, Esc
+  // closes it: true where the key was the list's.
+  template <class List, class Choose>
+  bool list_keys(List& list, std::size_t& lit, Choose choose, const scene::key::down& press) {
+    namespace keys = scene::keys;
+    auto& rows = list.parts.rows;
+    if (!list.visible() || rows.empty())
+      return false;
+    if (press.key == keys::kUp || press.key == keys::kDown) {
+      rows[lit].set_lit(false);
+      const std::size_t n = rows.size();
+      lit = press.key == keys::kUp ? (lit + n - 1) % n : (lit + 1) % n;
+      rows[lit].set_lit(true);
+      return true;
+    }
+    if (press.key == keys::kEnter || press.key == keys::kTab) {
+      choose(lit);
+      return true;
+    }
+    if (press.key == keys::kEscape) {
+      list.setVisible(false);
+      this->invalidateLayout();
+      return true;
+    }
+    return false;
+  }
   // The keys, while the list is up: Up and Down through it, Enter picks,
   // Esc closes it -- before the input reads Enter as sending.
   void onKey(scene::phase::capture, const scene::key::down& press, scene::Reply& reply) {
@@ -423,23 +526,9 @@ struct conversations_screen : nodes::Stack {
       reply.handle();
       return;
     }
-    if (!chat.parts.mentions.visible() || mention_matches.empty())
-      return;
-    auto& rows = chat.parts.mentions.parts.rows;
-    if (press.key == keys::kUp || press.key == keys::kDown) {
-      rows[mention_lit].set_lit(false);
-      const std::size_t n = rows.size();
-      mention_lit = press.key == keys::kUp ? (mention_lit + n - 1) % n : (mention_lit + 1) % n;
-      rows[mention_lit].set_lit(true);
+    if (this->list_keys(chat.parts.mentions, mention_lit, [this](std::size_t i) { this->choose_mention(i); }, press) ||
+        this->list_keys(chat.parts.emojis, emoji_lit, [this](std::size_t i) { this->choose_emoji(i); }, press))
       reply.handle();
-    } else if (press.key == keys::kEnter) {
-      this->choose_mention(mention_lit);
-      reply.handle();
-    } else if (press.key == keys::kEscape) {
-      chat.parts.mentions.setVisible(false);
-      this->invalidateLayout();
-      reply.handle();
-    }
   }
   void choose_folder(const folder_t& which) {
     if (which != folder)
@@ -577,6 +666,7 @@ struct conversations_screen : nodes::Stack {
       std::optional<head_view_holder> their_head;
       timeline_area<Actions> area;
       mention_list mentions;
+      emoji_list emojis;
       // Over the composer: what the chat's protocol says there -- Matrix's
       // warning that the other is not verified, or was reset.
       nodes::Text trust_warning;
@@ -618,6 +708,7 @@ struct conversations_screen : nodes::Stack {
                 .selection = selection_bar<Actions>(n),
                 .area = timeline_area<Actions>(n),
                 .mentions = mention_list(*n.colours),
+                .emojis = emoji_list(*n.colours),
                 .trust_warning = nodes::Text("", 13.0f, n.colours->text),
                 .line = composer_bar<Actions>(n),
                 .empty = empty_state(*n.colours, a)} {
@@ -633,6 +724,7 @@ struct conversations_screen : nodes::Stack {
                     .background = n.looks->window.behind ? skia::SkColor{0} : n.colours->chat});
       area.apply({.fillX = true, .grow = scene::axes::kY});
       parts.mentions.setVisible(false);
+      parts.emojis.setVisible(false);
       parts.trust_warning.setWrapped(true);
       parts.trust_warning.apply({.fillX = true, .padding = {6.0f, 14.0f, 6.0f, 14.0f},
                                  .background = (n.colours->accent & 0x00FFFFFFu) | (0x22u << 24)});

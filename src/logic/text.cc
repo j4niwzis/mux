@@ -15,8 +15,7 @@ export namespace mux::logic {
 // A text with its case folded, for finding words in any case: Unicode's
 // full case folding (alef).
 inline constexpr auto folded = [](std::string_view text) {
-  return std::views::transform(text | alef::as_folded | alef::as_utf8, [](char8_t unit) { return std::bit_cast<char>(unit); }) |
-         std::ranges::to<std::string>();
+  return std::ranges::to<std::string>(std::views::transform(text | alef::as_folded | alef::as_utf8, [](char8_t unit) { return std::bit_cast<char>(unit); }));
 };
 
 // The protocol an address speaks -- the one that owns it, asked of each --

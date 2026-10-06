@@ -58,10 +58,7 @@ class dialogs {
 
  private:
   void chose(const char* const* list) {
-    auto paths = std::views::iota(std::size_t{0}) |
-                 std::views::take_while([list](std::size_t at) { return list[at] != nullptr; }) |
-                 std::views::transform([list](std::size_t at) { return std::string(list[at]); }) |
-                 std::ranges::to<std::vector>();
+    auto paths = std::ranges::to<std::vector>(std::views::transform(std::views::take_while(std::views::iota(std::size_t{0}), [list](std::size_t at) { return list[at] != nullptr; }), [list](std::size_t at) { return std::string(list[at]); }));
     if (paths.empty())
       return;
     {

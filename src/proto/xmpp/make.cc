@@ -27,11 +27,9 @@ template <class Sink>
   if (saved.port)
     how.port = static_cast<std::uint16_t>(*saved.port);
   if (saved.create.value_or(false))
-    how.create = saved.answers.value_or(std::vector<registration_answer>{}) |
-                 std::views::transform([](const registration_answer& one) {
+    how.create = std::ranges::to<std::vector<tern::registration::answer>>(std::views::transform(saved.answers.value_or(std::vector<registration_answer>{}), [](const registration_answer& one) {
                    return tern::registration::answer{.var = one.var, .value = one.value};
-                 }) |
-                 std::ranges::to<std::vector<tern::registration::answer>>();
+                 }));
   return std::make_unique<::mux::proto::xmpp::client::account<Sink>>(loop, tls, std::move(how), std::move(sink));
 }
 

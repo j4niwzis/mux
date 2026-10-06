@@ -107,9 +107,7 @@ class reader {
     const auto length = this->u32();
     if (!length || at_ + *length > in_.size())
       return std::nullopt;
-    std::vector<std::uint8_t> out = in_.substr(at_, *length) |
-                                    std::views::transform([](char c) { return static_cast<std::uint8_t>(c); }) |
-                                    std::ranges::to<std::vector>();
+    std::vector<std::uint8_t> out = std::ranges::to<std::vector>(std::views::transform(in_.substr(at_, *length), [](char c) { return static_cast<std::uint8_t>(c); }));
     at_ += *length;
     return out;
   }

@@ -188,10 +188,9 @@ struct edit_history_box : nodes::Stack {
       out.edited = false;
       return out;
     };
-    auto out = std::views::transform(std::views::iota(std::size_t{0}, now.versions.size()), [&](std::size_t at) {
+    auto out = std::ranges::to<std::vector<message>>(std::views::transform(std::views::iota(std::size_t{0}, now.versions.size()), [&](std::size_t at) {
                  return as_message(now.versions[at].body, written(at));
-               }) |
-               std::ranges::to<std::vector<message>>();
+               }));
     out.push_back(as_message(now.body, written(now.versions.size())));
     return out;
   }

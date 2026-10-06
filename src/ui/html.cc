@@ -357,8 +357,7 @@ using html_tag_t = spl::variant<html_tag::line_break, html_tag::block_end, html_
 // The links of a plain text, each with its words: where link_spans_in finds
 // them, the URL its own words.
 [[nodiscard]] inline std::vector<std::pair<std::string, std::string>> links_in(std::string_view text) {
-  return std::views::transform(link_spans_in(text), [](const nodes::Text::Link& one) { return std::pair{one.target, one.target}; }) |
-         std::ranges::to<std::vector>();
+  return std::ranges::to<std::vector>(std::views::transform(link_spans_in(text), [](const nodes::Text::Link& one) { return std::pair{one.target, one.target}; }));
 }
 
 }  // namespace mux::ui

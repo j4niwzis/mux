@@ -672,10 +672,7 @@ struct side_column : nodes::Stack {
                                                              float x, float y) {
     const bool along_x = spl::visit(spl::overloaded{[](config::space_bar::top) { return true; }, [](const auto&) { return false; }}, bar);
     space_icons<Pick>& icons = along_x ? top_line : side_line;
-    std::vector<config::space_item_t> out = icons_of(icons) |
-                                            std::views::filter([&](const auto& one) { return one.item != item; }) |
-                                            std::views::transform([](const auto& one) { return one.item; }) |
-                                            std::ranges::to<std::vector>();
+    std::vector<config::space_item_t> out = std::ranges::to<std::vector>(std::views::transform(std::views::filter(icons_of(icons), [&](const auto& one) { return one.item != item; }), [](const auto& one) { return one.item; }));
     const auto before = std::ranges::count_if(icons_of(icons), [&](const auto& one) {
       const skia::SkRect at = this->shown_at(one);
       return one.item != item && (along_x ? at.centerX() < x : at.centerY() < y);

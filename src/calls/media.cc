@@ -30,8 +30,7 @@ class media_session {
  public:
   media_session(const std::vector<ice_server>& servers, Wake wake) : wake_(std::move(wake)) {
     rtc::Configuration config;
-    config.iceServers = std::views::transform(servers, [](const ice_server& one) { return server_of(one); }) |
-                        std::ranges::to<std::vector>();
+    config.iceServers = std::ranges::to<std::vector>(std::views::transform(servers, [](const ice_server& one) { return server_of(one); }));
     pc_ = std::make_unique<rtc::PeerConnection>(config);
     pc_->onLocalDescription([this](rtc::Description given) {
       this->tell(said::description{{kind_of(given.type()), std::string(given)}});
@@ -166,8 +165,7 @@ class media_session {
         samples += platform::audio::call_audio::kFrame;
         if (bytes <= 0 || !track_ || !track_->isOpen())
           continue;
-        const auto sent = std::views::transform(std::views::take(packet, bytes), [](unsigned char b) { return static_cast<std::byte>(b); }) |
-                          std::ranges::to<rtc::binary>();
+        const auto sent = std::ranges::to<rtc::binary>(std::views::transform(std::views::take(packet, bytes), [](unsigned char b) { return static_cast<std::byte>(b); }));
         track_->sendFrame(sent, rtc::FrameInfo(samples));
       }
     });

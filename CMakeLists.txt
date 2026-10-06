@@ -82,7 +82,7 @@ endforeach()
 # tern's own pin, so both use the streaming reader and writer.
 cme_declare_port(NAME chevron PROVIDES chevron
   GITHUB_REPOSITORY j4niwzis/chevron
-  GIT_TAG e9f31b8a57a6ef9fc0bd6883f6ff01022c07b1f1
+  GIT_TAG 6bf0c76cb3e4a8446d9fac6b2fdd848b7b487003
   # What the pin is: a copy installed on the machine from before it (0.1,
   # before spl::remapped and chevron.escape) is passed over.
   VERSION 0.2
@@ -91,13 +91,13 @@ cme_declare_port(NAME chevron PROVIDES chevron
 cme_options(chevron "CHEVRON_TESTS OFF")
 cme_declare_port(NAME tern PROVIDES tern
   GITHUB_REPOSITORY j4niwzis/tern
-  GIT_TAG 25a211d30f437c3a9f0632c02259b5b6791c153e
+  GIT_TAG 880220ab3ac28a3a124363d9038e9e724e071a9f
   LICENSE AGPL-3.0-only
   TARGETS tern)
 cme_options(tern "TERN_TESTS OFF" "TERN_EXAMPLES OFF")
 cme_declare_port(NAME loom PROVIDES loom
   GITHUB_REPOSITORY j4niwzis/loom
-  GIT_TAG 2397df8f9635cb5dcb05dc6ad047023590e59b70
+  GIT_TAG bc199bac6a96e09751c9187c02033a8cf78ecdd5
   VERSION 0.1.1
   LICENSE AGPL-3.0-only
   TARGETS loom)
@@ -151,7 +151,7 @@ cme_find_package(alef 0.1.1 COMPONENTS precis idna grapheme line bidi emoji REQU
 # loom.
 cme_declare_port(NAME knot PROVIDES knot
   GITHUB_REPOSITORY j4niwzis/knot
-  GIT_TAG f16967238d016bff8ea0acbdb1bcdd8518a13b50
+  GIT_TAG 5e73faba05b1824bae1e0bf0d49ef800411253d1
   LICENSE AGPL-3.0-only)
 
 # Found by itself, and linked by itself: mux imports it (a message's HTML),
@@ -246,7 +246,7 @@ if(MUX_UI)
     GIT_TAG eef86253928d7969d4f09a2fa77e4ef32812e54b)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
-    GIT_TAG c4afcadf5576f0b250787aca059ebbaddf68313c)
+    GIT_TAG 919af8c0afa7ebad57b6f8176c9eff04d7107e33)
   # Skia's features, each an option asking for its component: GL to draw on
   # the GPU (the software renderer is there either way), and the pictures
   # decoded. A system Skia without one is taken where its option is off.

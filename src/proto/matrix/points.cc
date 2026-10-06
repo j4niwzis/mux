@@ -96,15 +96,12 @@ template <class Facts>
 void manage_facts(const state&, const conversation& chat, Facts& facts) {
   const room_rules& rules = rules_of(chat);
   facts.mine = level_of(rules, chat.id.account.address);
-  facts.privileged = rules.powers |
-                     std::views::filter([&](const auto& each) { return each.second != rules.needs.users_default; }) |
-                     std::views::transform([&](const auto& each) {
+  facts.privileged = std::ranges::to<decltype(facts.privileged)>(std::views::transform(std::views::filter(rules.powers, [&](const auto& each) { return each.second != rules.needs.users_default; }), [&](const auto& each) {
                        const auto member = std::ranges::find(chat.members, each.first, &mux::member::id);
                        return typename decltype(facts.privileged)::value_type{
                            each.first, member != chat.members.end() && !member->name.empty() ? member->name : each.first,
                            each.second};
-                     }) |
-                     std::ranges::to<decltype(facts.privileged)>();
+                     }));
   std::ranges::stable_sort(facts.privileged, std::greater{}, &decltype(facts.privileged)::value_type::level);
 }
 inline part::chat_rights chat_rights(const state&, const conversation& in) {

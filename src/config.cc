@@ -32,16 +32,14 @@ export namespace mux::config {
     constexpr std::string_view digits = "0123456789ABCDEF";
     return plain ? std::string(1, name[at]) : std::string{'%', digits[c >> 4], digits[c & 15u]};
   };
-  std::string out = std::views::join(std::views::transform(std::views::iota(std::size_t{0}, name.size()), as_file)) |
-                    std::ranges::to<std::string>();
+  std::string out = std::ranges::to<std::string>(std::views::join(std::views::transform(std::views::iota(std::size_t{0}, name.size()), as_file)));
   return out.empty() ? std::string("%") : out;
 }
 // The name as files were named before: to find what was kept under it.
 [[nodiscard]] inline std::string old_file_name_of(std::string_view name) {
-  return std::views::transform(name, [](char c) {
+  return std::ranges::to<std::string>(std::views::transform(name, [](char c) {
            return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '@' || c == '.' || c == '-' ? c : '_';
-         }) |
-         std::ranges::to<std::string>();
+         }));
 }
 // Where something is kept: what was kept where it was before moved there,
 // where it is still there and nothing is where it goes now.

@@ -295,7 +295,7 @@ void account<Sink>::list_sessions() {
       return;
     }
     std::vector<mux::proto::matrix::session_info> out =
-        std::views::transform(got->devices.value_or(std::vector<loom::cs::def::device_t>{}), [](const loom::cs::def::device_t& one) {
+        std::ranges::to<std::vector>(std::views::transform(got->devices.value_or(std::vector<loom::cs::def::device_t>{}), [](const loom::cs::def::device_t& one) {
           return mux::proto::matrix::session_info{
               .id = one.device_id,
               .name = one.display_name.value_or(""),
@@ -303,8 +303,7 @@ void account<Sink>::list_sessions() {
               .last_seen = one.last_seen_ts ? std::optional(std::chrono::sys_time<std::chrono::milliseconds>(
                                                   std::chrono::milliseconds(*one.last_seen_ts)))
                                             : std::nullopt};
-        }) |
-        std::ranges::to<std::vector>();
+        }));
     sink_(proto::matrix::sessions_listed{id_, how_.device_id.value_or(""), std::move(out)});
     sink_(proto::matrix::security_state{id_, crypto_ && crypto_->cross_signing_keys().has_value(), crypto_ && crypto_->backup().has_value()});
   });

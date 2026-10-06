@@ -218,11 +218,10 @@ struct explore_box : nodes::Stack {
     constexpr auto lower = mux::logic::folded;
     const std::string wanted = lower(typed);
     const std::vector<directory_room> found =
-        std::views::filter(listed, [&](const directory_room& one) {
+        std::ranges::to<std::vector>(std::views::filter(listed, [&](const directory_room& one) {
           return wanted.empty() || lower(one.name).contains(wanted) || lower(one.topic).contains(wanted) ||
                  lower(one.alias).contains(wanted);
-        }) |
-        std::ranges::to<std::vector>();
+        }));
     this->show_rows(found, listed_server, space);
   }
   // What the directory listed -- or a space.

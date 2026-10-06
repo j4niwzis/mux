@@ -266,13 +266,11 @@ template <class... Tags>
 }
 // The accounts of a protocol this build has not: kept to be written back.
 [[nodiscard]] inline std::vector<saved_account> foreign_of(const file& from) {
-  return std::views::filter(from.accounts.value_or(std::vector<saved_account>{}), [](const saved_account& one) { return !account_of(one).has_value(); }) |
-         std::ranges::to<std::vector>();
+  return std::ranges::to<std::vector>(std::views::filter(from.accounts.value_or(std::vector<saved_account>{}), [](const saved_account& one) { return !account_of(one).has_value(); }));
 }
 [[nodiscard]] inline file file_of(std::span<const account_t> accounts, std::span<const saved_account> foreign = {}) {
   file out;
-  out.accounts = std::views::transform(accounts, [](const account_t& one) { return saved_of(one); }) |
-                 std::ranges::to<std::vector>();
+  out.accounts = std::ranges::to<std::vector>(std::views::transform(accounts, [](const account_t& one) { return saved_of(one); }));
   out.accounts->append_range(foreign);
   return out;
 }

@@ -23,11 +23,9 @@ if(NOT DEFINED MUX_ANDROID_ABI)
   message(FATAL_ERROR "No Android ABI in android/abis.json is built for ${CMAKE_SYSTEM_PROCESSOR}")
 endif()
 # Cargo still needs the Android triple for the vodozemac static library.
-# With --target, Cargo creates a cache root under the target triple.
-# cxx-build puts its shared bridge headers there; CME's CARGO_INCLUDE
-# is relative to the outer Cargo target directory.
-cme_declare_port(NAME vodozemac CARGO_TARGET ${mux_cargo_target}
-  CARGO_INCLUDE ${mux_cargo_target}/cxxbridge)
+# Built with --target, its bridge headers are under target/<triple>/, which
+# cmake-everywhere looks in itself (0.2.41) for the port's CARGO_INCLUDE.
+cme_declare_port(NAME vodozemac CARGO_TARGET ${mux_cargo_target} CARGO_INCLUDE cxxbridge)
 # AOSP's headers declare getentropy even below its introduction in API 28.
 # Keep OpenSSL's kernel getrandom path for those older Android targets.
 cme_declare_port(NAME openssl PATCHES

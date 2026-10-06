@@ -11,6 +11,7 @@ import std;
 import splice;
 import skia;
 import skiff.scene;
+import skiff.nodes.box;
 import skiff.nodes.flow;
 import skiff.nodes.text;
 import skiff.widgets.button;
@@ -52,6 +53,7 @@ struct call_view {
   bool encrypted = false;  // its signalling end-to-end encrypted: the room is
   bool available = true;   // calls in this build
   bool in_view = false;    // its chat is the one shown
+  bool whole = false;      // a phone's window: the call over all of it
   friend bool operator==(const call_view&, const call_view&) = default;
 };
 
@@ -205,6 +207,51 @@ struct call_panel : nodes::Stack {
     this->invalidateLayout();
     this->markDamaged();
   }
+};
+
+// The call on a phone -- a window narrow and taller than wide, mux's
+// single column -- as Element's phone apps show it: the whole window,
+// the other's picture large in its upper middle with their name and where
+// the call is under it, and the buttons along the bottom, larger.
+template <class Actions>
+struct call_screen : nodes::Stack {
+  struct parts_t {
+    nodes::Box<> above;
+    avatar_mark face;
+    nodes::Text who;
+    nodes::Text said;
+    nodes::Box<> below;
+    call_buttons<Actions> buttons;
+  } parts;
+  call_screen(const ui_needs<Actions>& n, const call_view& view)
+      : parts{.above = nodes::Box<>(skia::SkColor{0}),
+              .face = avatar_mark(view.in.id, view.who, 128.0f),
+              .who = nodes::Text(view.who, 24.0f, n.colours->text, true),
+              .said = nodes::Text(said_of(view), 15.0f, n.colours->dim),
+              .below = nodes::Box<>(skia::SkColor{0}),
+              .buttons = call_buttons<Actions>(*n.colours, n.actions, 64.0f)} {
+    this->setGap(12.0f);
+    fState.apply({.place = scene::anchor::kTopLeft, .fill = true, .padding = {24.0f, 24.0f, 48.0f, 24.0f},
+                  .background = n.colours->sidebar});
+    auto& [above, face, who, said, below, buttons] = parts;
+    above.apply({.fillX = true, .height = 1.0f, .grow = scene::axes::kY});
+    below.apply({.fillX = true, .height = 1.0f, .grow = scene::axes::kY});
+    for (nodes::Text* each : {&who, &said}) {
+      each->setWrapped(true);
+      each->apply({.alignSelf = scene::align::kMiddle});
+    }
+    this->show(view);
+  }
+  void show(const call_view& view) {
+    parts.face.show(view.in.id, view.who);
+    parts.who.setText(view.who);
+    parts.said.setText(said_of(view));
+    parts.buttons.show(view);
+    this->invalidateLayout();
+    this->markDamaged();
+  }
+  // Over the whole window: nothing under it is pressed.
+  [[nodiscard]] bool acceptsInput() const { return true; }
 };
 
 // The call anywhere else, and ringing here: a card at the top of the

@@ -307,6 +307,7 @@ class calls_part {
   // Pushed to the window only where it changed: its seconds, the chat shown.
   void show_view(mux::ui::call_view view) {
     view.in_view = s_->root().main().chosen == view.in;
+    view.whole = s_->root().main().single;
     if (shown_ == view)
       return;
     shown_ = view;

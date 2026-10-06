@@ -45,7 +45,7 @@ class jni_frame {
 // NewStringUTF, whose modified UTF-8 is not UTF-8 for what is past the BMP
 // (emoji). The bytes are copied into a Java array -- what JNI reads them from.
 jstring string_of(JNIEnv* env, std::string_view text) {
-  const auto bytes = text | std::views::transform([](char c) { return static_cast<jbyte>(c); }) |
+  const auto bytes = std::views::transform(text, [](char c) { return static_cast<jbyte>(c); }) |
                      std::ranges::to<std::vector>();
   jbyteArray array = env->NewByteArray(static_cast<jsize>(bytes.size()));
   if (!array)

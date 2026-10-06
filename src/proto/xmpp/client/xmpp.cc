@@ -68,9 +68,9 @@ inline mux::proto::xmpp::registration_asked registration_asked_of(const account_
   using mux::proto::xmpp::registration_field;
   namespace shown = mux::proto::xmpp::field_shown;
   const auto picture_of = [&](const tern::data_form::field& one) {
-    const auto cids = one.media ? std::ranges::to<std::vector<std::string_view>>(one.media->uri | std::views::filter([](const tern::data_form::uri& where) {
+    const auto cids = one.media ? std::ranges::to<std::vector<std::string_view>>(std::views::transform(std::views::filter(one.media->uri, [](const tern::data_form::uri& where) {
                                     return where.location.starts_with("cid:");
-                                  }) | std::views::transform([](const tern::data_form::uri& where) {
+                                  }), [](const tern::data_form::uri& where) {
                                     return std::string_view(where.location).substr(4);
                                   }))
                                 : std::vector<std::string_view>{};
@@ -79,13 +79,13 @@ inline mux::proto::xmpp::registration_asked registration_asked_of(const account_
     });
     if (sent == asked.data.end())
       return std::vector<std::uint8_t>{};
-    const std::string packed = std::ranges::to<std::string>(sent->base64 | std::views::filter([](char c) { return c != ' ' && c != '\n' && c != '\r' && c != '\t'; }));
+    const std::string packed = std::ranges::to<std::string>(std::views::filter(sent->base64, [](char c) { return c != ' ' && c != '\n' && c != '\r' && c != '\t'; }));
     return tern::crypto::base64_decode(packed).value_or(std::vector<std::uint8_t>{});
   };
   const auto links_of = [](const tern::data_form::field& one) {
-    return one.media ? std::ranges::to<std::vector<std::string>>(one.media->uri | std::views::filter([](const tern::data_form::uri& where) {
+    return one.media ? std::ranges::to<std::vector<std::string>>(std::views::transform(std::views::filter(one.media->uri, [](const tern::data_form::uri& where) {
                          return where.location.starts_with("http://") || where.location.starts_with("https://");
-                       }) | std::views::transform(&tern::data_form::uri::location))
+                       }), &tern::data_form::uri::location))
                      : std::vector<std::string>{};
   };
   // The form's type says how a field is shown; what XEP-0004 has not, typed.
@@ -99,15 +99,14 @@ inline mux::proto::xmpp::registration_asked registration_asked_of(const account_
                                             .instructions = asked.instructions.value_or(""),
                                             .page = asked.page ? asked.page->url : std::nullopt};
   if (asked.form) {
-    out.instructions = (std::ranges::to<std::string>(asked.form->instructions | std::views::join_with('\n')));
+    out.instructions = (std::ranges::to<std::string>(std::views::join_with(asked.form->instructions, '\n')));
     if (out.instructions.empty())
       out.instructions = asked.instructions.value_or("");
     // The address and the password are the form's own fields: not asked
     // again.
-    out.fields = std::ranges::to<std::vector<registration_field>>(asked.form->fields | std::views::filter([](const tern::data_form::field& one) {
+    out.fields = std::ranges::to<std::vector<registration_field>>(std::views::transform(std::views::filter(asked.form->fields, [](const tern::data_form::field& one) {
                    return one.var != std::optional<std::string>("username") && one.var != std::optional<std::string>("password");
-                 }) |
-                 std::views::transform([&](const tern::data_form::field& one) {
+                 }), [&](const tern::data_form::field& one) {
                    return registration_field{.var = one.var.value_or(""),
                                              .label = one.label.value_or(one.var.value_or("")),
                                              .desc = one.desc.value_or(""),
@@ -116,7 +115,7 @@ inline mux::proto::xmpp::registration_asked registration_asked_of(const account_
                                              .required = one.required.has_value(),
                                              .picture = picture_of(one),
                                              .links = links_of(one),
-                                             .choices = std::ranges::to<std::vector<std::string>>(one.options | std::views::transform([](const tern::data_form::option& o) {
+                                             .choices = std::ranges::to<std::vector<std::string>>(std::views::transform(one.options, [](const tern::data_form::option& o) {
                                                           return o.label ? *o.label + " (" + o.value + ")" : o.value;
                                                         }))};
                  }));

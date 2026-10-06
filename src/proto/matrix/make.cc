@@ -28,7 +28,7 @@ template <class Sink>
                               // Named by the user ID with what a file name cannot hold put
                               // aside: ':' is not one on Windows.
                               .crypto_store = ::mux::config::state_path("crypto") /
-                                              ((std::ranges::to<std::string>(saved.user_id | std::views::transform([](char c) {
+                                              ((std::ranges::to<std::string>(std::views::transform(saved.user_id, [](char c) {
                                                   return std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_' ? c : '_';
                                                 }))) + ".json"),
                               .only_verified = saved.only_verified.value_or(false),

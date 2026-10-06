@@ -72,13 +72,12 @@ inline constexpr auto kPercentEscapes = [] {
   return out;
 }();
 [[nodiscard]] inline auto percent_encoded(std::string_view text) {
-  return text | std::views::transform([](const char& c) -> std::string_view {
+  return std::views::join(std::views::transform(text, [](const char& c) -> std::string_view {
            if (std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_')
              return std::string_view(&c, 1);
            const auto& escape = kPercentEscapes[static_cast<unsigned char>(c)];
            return std::string_view(escape.data(), escape.size());
-         }) |
-         std::views::join;
+         }));
 }
 
 struct settings {

@@ -220,7 +220,7 @@ class preferences_part {
     });
     // Where the item came from the side bar by default -- put nowhere -- the
     // rest of the side bar is put too, so it stays as it was.
-    std::ranges::copy(one.order | std::views::transform([&](const mux::config::space_item_t& item) {
+    std::ranges::copy(std::views::transform(one.order, [&](const mux::config::space_item_t& item) {
                         return mux::config::space_placed{one.account, item, one.bar};
                       }),
                       std::back_inserter(k_->space_places));

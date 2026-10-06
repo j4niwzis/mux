@@ -231,10 +231,10 @@ struct account_sessions : nodes::Stack {
     parts.current.clear();
     parts.rows.clear();
     others.clear();
-    for (const proto::matrix::session_info& one : all | std::views::filter([&](const proto::matrix::session_info& s) { return s.id == current; }))
+    for (const proto::matrix::session_info& one : std::views::filter(all, [&](const proto::matrix::session_info& s) { return s.id == current; }))
       parts.current.emplace_back(this, 0, one, true);
     std::size_t index = 0;
-    for (const proto::matrix::session_info& one : all | std::views::filter([&](const proto::matrix::session_info& s) { return s.id != current; })) {
+    for (const proto::matrix::session_info& one : std::views::filter(all, [&](const proto::matrix::session_info& s) { return s.id != current; })) {
       parts.rows.emplace_back(this, ++index, one, false);
       others.push_back(one.id);
     }
@@ -329,11 +329,10 @@ struct encryption_page : nodes::Stack {
     parts.session_line.setVisible(own.has_value());
     if (!own)
       return;
-    const std::string grouped = std::ranges::to<std::string>(own->second | std::views::enumerate | std::views::transform([](const auto& at) {
+    const std::string grouped = std::ranges::to<std::string>(std::views::join(std::views::transform(std::views::enumerate(own->second), [](const auto& at) {
                                   const auto [index, letter] = at;
                                   return index > 0 && index % 4 == 0 ? std::string{' ', letter} : std::string(1, letter);
-                                }) |
-                                std::views::join);
+                                })));
     parts.session_line.setText(std::format("Session ID: {}\nSession key: {}", own->first, grouped));
   }
   void say(std::string, bool) {}

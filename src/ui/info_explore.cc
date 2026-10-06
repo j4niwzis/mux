@@ -218,7 +218,7 @@ struct explore_box : nodes::Stack {
     constexpr auto lower = mux::logic::folded;
     const std::string wanted = lower(typed);
     const std::vector<directory_room> found =
-        listed | std::views::filter([&](const directory_room& one) {
+        std::views::filter(listed, [&](const directory_room& one) {
           return wanted.empty() || lower(one.name).contains(wanted) || lower(one.topic).contains(wanted) ||
                  lower(one.alias).contains(wanted);
         }) |

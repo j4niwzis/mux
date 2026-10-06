@@ -32,13 +32,13 @@ export namespace mux::config {
     constexpr std::string_view digits = "0123456789ABCDEF";
     return plain ? std::string(1, name[at]) : std::string{'%', digits[c >> 4], digits[c & 15u]};
   };
-  std::string out = std::views::iota(std::size_t{0}, name.size()) | std::views::transform(as_file) | std::views::join |
+  std::string out = std::views::join(std::views::transform(std::views::iota(std::size_t{0}, name.size()), as_file)) |
                     std::ranges::to<std::string>();
   return out.empty() ? std::string("%") : out;
 }
 // The name as files were named before: to find what was kept under it.
 [[nodiscard]] inline std::string old_file_name_of(std::string_view name) {
-  return name | std::views::transform([](char c) {
+  return std::views::transform(name, [](char c) {
            return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '@' || c == '.' || c == '-' ? c : '_';
          }) |
          std::ranges::to<std::string>();

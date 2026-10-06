@@ -128,8 +128,8 @@ template <class Sealed>
   const std::size_t total = std::ranges::size(sealed);
   if (total < kNonce + kTag)
     return std::nullopt;
-  const auto nonce = spl::bytes::exactly<kNonce>(sealed | std::views::take(kNonce));
-  auto tag = spl::bytes::exactly<kTag>(sealed | std::views::drop(total - kTag));
+  const auto nonce = spl::bytes::exactly<kNonce>(std::views::take(sealed, kNonce));
+  auto tag = spl::bytes::exactly<kTag>(std::views::drop(sealed, total - kTag));
   if (!nonce || !tag)
     return std::nullopt;
   std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)> ctx(EVP_CIPHER_CTX_new(), &EVP_CIPHER_CTX_free);
@@ -142,7 +142,7 @@ template <class Sealed>
   });
   std::vector<std::uint8_t> out;
   out.reserve(total - kNonce - kTag);
-  spl::bytes::in_pieces(sealed | std::views::drop(kNonce) | std::views::take(total - kNonce - kTag),
+  spl::bytes::in_pieces(std::views::take(std::views::drop(sealed, kNonce), total - kNonce - kTag),
                         [&](std::span<const std::uint8_t> piece) {
                           const std::size_t at = out.size();
                           out.resize(at + piece.size());
@@ -370,7 +370,7 @@ class vault {
     }
     if (!key_)
       return std::nullopt;
-    auto opened = this->opened_by_either(spl::bytes::of(text) | std::views::drop(detail::kMagic.size()), detail::bound_of(path));
+    auto opened = this->opened_by_either(std::views::drop(spl::bytes::of(text), detail::kMagic.size()), detail::bound_of(path));
     if (!opened)
       return std::nullopt;
     return spl::bytes::text_of(*opened);
@@ -496,13 +496,10 @@ class vault {
       if (!text_read)
         continue;
       const std::string text = std::move(*text_read);
-      auto opened = std::ranges::to<std::vector<std::optional<std::string>>>(text | std::views::split('\n') |
-                    std::views::transform([](auto&& line) { return std::string_view(line.begin(), line.end()); }) |
-                    std::views::filter([](std::string_view line) { return !line.empty(); }) |
-                    std::views::transform([&](std::string_view line) { return this->open_line(line, path, migrating{}); }));
+      auto opened = std::ranges::to<std::vector<std::optional<std::string>>>(std::views::transform(std::views::filter(std::views::transform(std::views::split(text, '\n'), [](auto&& line) { return std::string_view(line.begin(), line.end()); }), [](std::string_view line) { return !line.empty(); }), [&](std::string_view line) { return this->open_line(line, path, migrating{}); }));
       if (std::ranges::any_of(opened, [](const auto& one) { return !one.has_value(); }))
         return std::nullopt;
-      out.lines.emplace_back(path, std::ranges::to<std::vector<std::string>>(opened | std::views::transform([](auto& one) { return std::move(*one); })));
+      out.lines.emplace_back(path, std::ranges::to<std::vector<std::string>>(std::views::transform(opened, [](auto& one) { return std::move(*one); })));
     }
     return out;
   }
@@ -515,8 +512,7 @@ class vault {
     });
     const bool lines_written = std::ranges::all_of(all.lines, [&](const auto& one) {
       const auto& [path, lines] = one;
-      const std::string text = std::ranges::to<std::string>(lines | std::views::transform([&](const std::string& line) { return this->line_of(line, path) + "\n"; }) |
-                               std::views::join);
+      const std::string text = std::ranges::to<std::string>(std::views::join(std::views::transform(lines, [&](const std::string& line) { return this->line_of(line, path) + "\n"; })));
       return write_plain(path, text, true);
     });
     return whole_written && lines_written;

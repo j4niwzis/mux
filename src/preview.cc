@@ -71,7 +71,7 @@ struct page {
   // A code point as UTF-8 (alef): none where it is past Unicode's.
   const auto utf8 = [](std::uint32_t c) {
     const std::u32string point = c < 0x110000 ? std::u32string(1, static_cast<char32_t>(c)) : std::u32string();
-    return point | alef::as_utf8 | std::views::transform([](char8_t unit) { return std::bit_cast<char>(unit); }) |
+    return std::views::transform(point | alef::as_utf8, [](char8_t unit) { return std::bit_cast<char>(unit); }) |
            std::ranges::to<std::string>();
   };
   std::string out;

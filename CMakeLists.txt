@@ -82,7 +82,7 @@ endforeach()
 # tern's own pin, so both use the streaming reader and writer.
 cme_declare_port(NAME chevron PROVIDES chevron
   GITHUB_REPOSITORY j4niwzis/chevron
-  GIT_TAG fb62ad5f427c8c6e4b7f4609e628f0af48f713de
+  GIT_TAG e9f31b8a57a6ef9fc0bd6883f6ff01022c07b1f1
   # What the pin is: a copy installed on the machine from before it (0.1,
   # before spl::remapped and chevron.escape) is passed over.
   VERSION 0.2
@@ -91,13 +91,13 @@ cme_declare_port(NAME chevron PROVIDES chevron
 cme_options(chevron "CHEVRON_TESTS OFF")
 cme_declare_port(NAME tern PROVIDES tern
   GITHUB_REPOSITORY j4niwzis/tern
-  GIT_TAG 7d3e7ba8c83c59d353db847b0718c9f234795f2e
+  GIT_TAG 25a211d30f437c3a9f0632c02259b5b6791c153e
   LICENSE AGPL-3.0-only
   TARGETS tern)
 cme_options(tern "TERN_TESTS OFF" "TERN_EXAMPLES OFF")
 cme_declare_port(NAME loom PROVIDES loom
   GITHUB_REPOSITORY j4niwzis/loom
-  GIT_TAG 2ee433a548f0ebccf6d6d6e5129aca52c8a0723c
+  GIT_TAG 2397df8f9635cb5dcb05dc6ad047023590e59b70
   VERSION 0.1.1
   LICENSE AGPL-3.0-only
   TARGETS loom)
@@ -137,7 +137,7 @@ cme_find_package(splice 0.4.1 REQUIRED)
 # for more of it finds it already built without that, and stops.
 cme_declare_port(NAME alef PROVIDES alef
   GITHUB_REPOSITORY j4niwzis/alef
-  GIT_TAG 02084be31e8c0474c10cd606cffdbe238d8019f0
+  GIT_TAG 582cbdaed7ea7703a1df7cfbce8df2df19ecd4d9
   # Alef's pipe overloads remain reachable across Clang/libstdc++ imports.
   VERSION 0.1.1
   LICENSE AGPL-3.0-only
@@ -151,7 +151,7 @@ cme_find_package(alef 0.1.1 COMPONENTS precis idna grapheme line bidi emoji REQU
 # loom.
 cme_declare_port(NAME knot PROVIDES knot
   GITHUB_REPOSITORY j4niwzis/knot
-  GIT_TAG 43b874b4946cc6e0668c90a8936f022868b7d62f
+  GIT_TAG f16967238d016bff8ea0acbdb1bcdd8518a13b50
   LICENSE AGPL-3.0-only)
 
 # Found by itself, and linked by itself: mux imports it (a message's HTML),
@@ -243,10 +243,10 @@ if(MUX_UI)
   # skiff and skiff-widgets say the rest of what they are in their own trees.
   cme_declare_port(NAME skiff PROVIDES skiff
     GITHUB_REPOSITORY j4niwzis/skiff
-    GIT_TAG ee311dd7dfc156fe1cddb7f3e481b8cb5d90fccb)
+    GIT_TAG eef86253928d7969d4f09a2fa77e4ef32812e54b)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
-    GIT_TAG d076d55add240d2b30de586abbfa6a240ee03cb5)
+    GIT_TAG c4afcadf5576f0b250787aca059ebbaddf68313c)
   # Skia's features, each an option asking for its component: GL to draw on
   # the GPU (the software renderer is there either way), and the pictures
   # decoded. A system Skia without one is taken where its option is off.

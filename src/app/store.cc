@@ -373,8 +373,7 @@ class message_store {
       one.replies_to = std::move(o.reply);
       one.thread = std::move(o.thread);
       one.edited = o.edited.value_or(false);
-      one.versions = o.versions.value_or(std::vector<store_file::message_line::version_line>{}) |
-                     std::views::transform([&](const store_file::message_line::version_line& v) {
+      one.versions = std::views::transform(o.versions.value_or(std::vector<store_file::message_line::version_line>{}), [&](const store_file::message_line::version_line& v) {
                        return mux::message::version{mux::body{v.plain.value_or(""), v.html},
                                                     time_point(std::chrono::milliseconds(v.until.value_or(0)))};
                      }) |
@@ -450,7 +449,7 @@ class message_store {
         .edited = store_file::flag(one.edited),
         .versions = one.versions.empty()
                         ? std::nullopt
-                        : std::optional(one.versions | std::views::transform([](const mux::message::version& v) {
+                        : std::optional(std::views::transform(one.versions, [](const mux::message::version& v) {
                                           return store_file::message_line::version_line{
                                               v.body.plain, v.body.html, static_cast<std::int64_t>(v.until.time_since_epoch().count())};
                                         }) |

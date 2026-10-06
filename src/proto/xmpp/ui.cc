@@ -80,7 +80,7 @@ struct sent_picture {
 // sound elsewhere.
 [[nodiscard]] inline std::string note_of(const registration_field& one) {
   const auto joined = [](const std::vector<std::string>& lines, std::string_view between) {
-    return std::ranges::to<std::string>(lines | std::views::join_with(between));
+    return std::ranges::to<std::string>(std::views::join_with(lines, between));
   };
   const std::string read = spl::visit(
       spl::overloaded{[&](field_shown::read) { return one.label.empty() || one.value.empty() ? joined(one.value, "\n") + one.label
@@ -89,7 +89,7 @@ struct sent_picture {
       one.shown);
   const std::vector<std::string> said{read, one.choices.empty() ? std::string() : "One of: " + joined(one.choices, ", "),
                                       joined(one.links, "\n")};
-  return joined(std::ranges::to<std::vector<std::string>>(said | std::views::filter([](const std::string& line) { return !line.empty(); })),
+  return joined(std::ranges::to<std::vector<std::string>>(std::views::filter(said, [](const std::string& line) { return !line.empty(); })),
                 "\n");
 }
 
@@ -158,13 +158,12 @@ struct asked_part : nodes::Stack {
   void show(const palette& colours, const registration_asked& asked) {
     parts.instructions.setText(asked.instructions + (asked.page ? "\nOr make the account on the server's page: " + *asked.page : std::string()));
     parts.instructions.setVisible(!parts.instructions.text().empty());
-    parts.rows = std::ranges::to<std::vector<asked_row>>(asked.fields | std::views::transform([&](const registration_field& one) { return asked_row(colours, one); }));
+    parts.rows = std::ranges::to<std::vector<asked_row>>(std::views::transform(asked.fields, [&](const registration_field& one) { return asked_row(colours, one); }));
     this->setVisible(true);
     this->invalidateLayout();
   }
   [[nodiscard]] std::vector<registration_answer> answers() const {
-    return std::ranges::to<std::vector<registration_answer>>(parts.rows | std::views::transform([](const asked_row& row) { return row.answer(); }) | std::views::filter([](const auto& one) { return one.has_value(); }) |
-           std::views::transform([](const auto& one) { return *one; }));
+    return std::ranges::to<std::vector<registration_answer>>(std::views::transform(std::views::filter(std::views::transform(parts.rows, [](const asked_row& row) { return row.answer(); }), [](const auto& one) { return one.has_value(); }), [](const auto& one) { return *one; }));
   }
 };
 

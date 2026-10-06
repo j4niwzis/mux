@@ -76,7 +76,7 @@ class history_part {
                                   auto known = on_disk_.find(c.message.in);
                                   if (known == on_disk_.end())
                                     known = on_disk_
-                                                .emplace(c.message.in, std::ranges::to<std::set<std::string>>(s_->store->everything(c.message.in) | std::views::keys))
+                                                .emplace(c.message.in, std::ranges::to<std::set<std::string>>(std::views::keys(s_->store->everything(c.message.in))))
                                                 .first;
                                   const bool was_kept = !known->second.insert(c.message.id).second;
                                   const mux::conversation* chat = s_->model->find(c.message.in);
@@ -147,7 +147,7 @@ class history_part {
         // What the disk has, before the page comes and is kept: whether it
         // reaches it is told by this.
         if (!on_disk_.contains(in))
-          on_disk_.emplace(in, std::ranges::to<std::set<std::string>>(s_->store->everything(in) | std::views::keys));
+          on_disk_.emplace(in, std::ranges::to<std::set<std::string>>(std::views::keys(s_->store->everything(in))));
         if (const auto gap = gaps_of(in).find(*paged_from); gap != gaps_of(in).end()) {
           if (gap->second.start)
             return;  // the room's beginning: nothing older anywhere
@@ -180,9 +180,9 @@ class history_part {
         // Up to the first gap from the newest: what is before it is not
         // known to follow.
         const auto& gaps = gaps_of(in);
-        const auto cut = std::ranges::find_if(kept | std::views::reverse,
+        const auto cut = std::ranges::find_if(std::views::reverse(kept),
                                               [&](const mux::message& said) { return gaps.contains(said.id); });
-        if (cut != (kept | std::views::reverse).end())
+        if (cut != (std::views::reverse(kept)).end())
           kept.erase(kept.begin(), std::prev(cut.base()));
         if (kept.empty()) {
           from_server(in, front, from);

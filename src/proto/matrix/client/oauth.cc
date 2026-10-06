@@ -51,17 +51,16 @@ consteval auto json_schema(knot::type<token_error>) { return knot::schema<token_
 // Text in a query or a form: RFC 3986's unreserved characters as they are,
 // every other byte as %XX.
 inline std::string escaped(std::string_view text) {
-  return std::ranges::to<std::string>(text | std::views::transform([](char c) {
+  return std::ranges::to<std::string>(std::views::join(std::views::transform(text, [](char c) {
            const auto byte = static_cast<unsigned char>(c);
            return std::isalnum(byte) || c == '-' || c == '.' || c == '_' || c == '~' ? std::string(1, c)
                                                                                      : std::format("%{:02X}", byte);
-         }) |
-         std::views::join);
+         })));
 }
 // And back: '+' a space, %XX its byte.
 inline std::string unescaped(std::string_view text) {
-  const std::string spaced = std::ranges::to<std::string>(text | std::views::transform([](char c) { return c == '+' ? ' ' : c; }));
-  return std::ranges::to<std::string>(std::views::enumerate(spaced | std::views::split('%')) | std::views::transform([](const auto& numbered) {
+  const std::string spaced = std::ranges::to<std::string>(std::views::transform(text, [](char c) { return c == '+' ? ' ' : c; }));
+  return std::ranges::to<std::string>(std::views::join(std::views::transform(std::views::enumerate(std::views::split(spaced, '%')), [](const auto& numbered) {
            const auto& [at, piece] = numbered;
            const std::string_view part(piece.begin(), piece.end());
            unsigned value = 0;
@@ -69,19 +68,16 @@ inline std::string unescaped(std::string_view text) {
            return at == 0 ? std::string(part)
                   : hex   ? std::string(1, static_cast<char>(value)) + std::string(part.substr(2))
                           : "%" + std::string(part);
-         }) |
-         std::views::join);
+         })));
 }
 // A form's body, or a query: name=value, joined by '&'.
 inline std::string form(std::initializer_list<std::pair<std::string_view, std::string_view>> fields) {
-  return std::ranges::to<std::string>(fields | std::views::transform([](const auto& one) { return std::string(one.first) + "=" + escaped(one.second); }) |
-         std::views::join_with('&'));
+  return std::ranges::to<std::string>(std::views::join_with(std::views::transform(fields, [](const auto& one) { return std::string(one.first) + "=" + escaped(one.second); }), '&'));
 }
 // A query's value, by its name.
 inline std::optional<std::string> query_value(std::string_view query, std::string_view name) {
   // Not const: a split is walked through itself.
-  auto pairs = query | std::views::split('&') |
-                     std::views::transform([](const auto& piece) { return std::string_view(piece.begin(), piece.end()); });
+  auto pairs = std::views::transform(std::views::split(query, '&'), [](const auto& piece) { return std::string_view(piece.begin(), piece.end()); });
   const auto found = std::ranges::find_if(pairs, [&](std::string_view one) {
     return one.starts_with(name) && one.size() > name.size() && one[name.size()] == '=';
   });
@@ -96,16 +92,14 @@ inline constexpr std::string_view capitals = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 inline std::string random_text(std::size_t length, std::string_view alphabet = unreserved) {
   std::random_device entropy;
   std::uniform_int_distribution<std::size_t> pick(0, alphabet.size() - 1);
-  return std::ranges::to<std::string>(std::views::iota(std::size_t{0}, length) | std::views::transform([&](std::size_t) { return alphabet[pick(entropy)]; }));
+  return std::ranges::to<std::string>(std::views::transform(std::views::iota(std::size_t{0}, length), [&](std::size_t) { return alphabet[pick(entropy)]; }));
 }
 // PKCE's challenge (RFC 7636, 4.2): SHA-256 of the verifier, in unpadded
 // URL-safe Base64.
 inline std::string challenge_of(std::string_view verifier) {
   // Whole: the digest takes contiguous bytes.
-  const auto bytes = std::ranges::to<std::vector<std::uint8_t>>(verifier | std::views::transform([](char c) { return static_cast<std::uint8_t>(c); }));
-  return std::ranges::to<std::string>(tern::crypto::base64_encode(tern::crypto::sha256::digest(bytes)) |
-         std::views::filter([](char c) { return c != '='; }) |
-         std::views::transform([](char c) { return c == '+' ? '-' : c == '/' ? '_' : c; }));
+  const auto bytes = std::ranges::to<std::vector<std::uint8_t>>(std::views::transform(verifier, [](char c) { return static_cast<std::uint8_t>(c); }));
+  return std::ranges::to<std::string>(std::views::transform(std::views::filter(tern::crypto::base64_encode(tern::crypto::sha256::digest(bytes)), [](char c) { return c != '='; }), [](char c) { return c == '+' ? '-' : c == '/' ? '_' : c; }));
 }
 
 // A POST to an address of the server's sign-in service: its answer, or

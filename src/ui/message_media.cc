@@ -245,8 +245,7 @@ struct album_view : nodes::Stack {
     if (scale <= 0.0f || scale == fitted)
       return;
     fitted = scale;
-    auto cells = parts.rows | std::views::transform([](row& one) -> std::vector<picture_view>& { return one.parts.cells; }) |
-                 std::views::join;
+    auto cells = std::views::join(std::views::transform(parts.rows, [](row& one) -> std::vector<picture_view>& { return one.parts.cells; }));
     for (auto&& [cell, size] : std::views::zip(cells, sizes))
       cell.set_cell(std::floor(size.first * scale), std::floor(size.second * scale));
   }

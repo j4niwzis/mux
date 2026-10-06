@@ -222,8 +222,7 @@ class menu_part {
     this->show_selection();
   }
   void apply(const request::selection_copy&) {
-    const std::string text = std::ranges::to<std::string>(this->selected_messages() | std::views::transform([](const message* one) { return one->body.plain; }) |
-                             std::views::join_with(std::string("\n\n")));
+    const std::string text = std::ranges::to<std::string>(std::views::join_with(std::views::transform(this->selected_messages(), [](const message* one) { return one->body.plain; }), std::string("\n\n")));
     skiff::scene::setClipboardText(text);
     selected_.clear();
     this->show_selection();
@@ -242,7 +241,7 @@ class menu_part {
   void apply(const request::selection_forward&) {
     if (!selected_chat_)
       return;
-    this->forward_from(*selected_chat_, std::ranges::to<std::vector>(this->selected_messages() | std::views::transform([](const message* one) { return one->id; })));
+    this->forward_from(*selected_chat_, std::ranges::to<std::vector>(std::views::transform(this->selected_messages(), [](const message* one) { return one->id; })));
     selected_.clear();
     this->show_selection();
   }
@@ -266,7 +265,7 @@ class menu_part {
     const mux::conversation* chat = chosen ? s_->model->find(*chosen) : nullptr;
     if (!chat)
       return;
-    const auto in_threads = chat->threads | std::views::values | std::views::join;
+    const auto in_threads = std::views::join(std::views::values(chat->threads));
     const auto is_it = [&](const mux::message& one) { return one.id == target_.id; };
     const mux::message* found = nullptr;
     if (const auto at = std::ranges::find_if(chat->timeline, is_it); at != chat->timeline.end())
@@ -340,8 +339,7 @@ class menu_part {
     const conversation* chat = selected_chat_ ? s_->model->find(*selected_chat_) : nullptr;
     if (!chat)
       return {};
-    return std::ranges::to<std::vector>(chat->timeline | std::views::filter([&](const message& one) { return selected_.contains(one.id); }) |
-           std::views::transform([](const message& one) { return &one; }));
+    return std::ranges::to<std::vector>(std::views::transform(std::views::filter(chat->timeline, [&](const message& one) { return selected_.contains(one.id); }), [](const message& one) { return &one; }));
   }
   void show_selection() {
     const conversation* chat = selected_chat_ ? s_->model->find(*selected_chat_) : nullptr;

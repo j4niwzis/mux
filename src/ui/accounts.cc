@@ -573,7 +573,7 @@ struct accounts_panel : closes_on_escape<Actions> {
     const float shift = (1.0f - value) * 36.0f * side_from;
     const std::array<scene::Node*, 2> shown = pages.visible() ? std::array<scene::Node*, 2>{&pages, nullptr}
                                                                : std::array<scene::Node*, 2>{&list, &add};
-    for (scene::Node* each : shown | std::views::filter([](scene::Node* one) { return one != nullptr; })) {
+    for (scene::Node* each : std::views::filter(shown, [](scene::Node* one) { return one != nullptr; })) {
       each->fState.setAlpha(value);
       each->apply({.shiftX = shift});
     }

@@ -68,7 +68,7 @@ inline constexpr struct composer_banners_t {
   std::vector<any_banner> operator()(const State& state, const conversation& chat, const Model& known) const {
     return spl::visit([&](const auto& now) {
       using banner_defaults::composer_banners;
-      return composer_banners(now, chat, known) | std::views::transform([](auto one) {
+      return std::views::transform(composer_banners(now, chat, known), [](auto one) {
                return any_banner{std::move(one.text), one.tone, std::move(one.button), as_any(one.asks)};
              }) |
              std::ranges::to<std::vector>();
@@ -141,7 +141,7 @@ inline constexpr struct person_actions_t {
   std::vector<any_action> operator()(const State& state, const account_id& by, std::string_view who) const {
     return spl::visit([&](const auto& now) {
       using action_defaults::person_actions;
-      return person_actions(now, by, who) | std::views::transform([](auto one) {
+      return std::views::transform(person_actions(now, by, who), [](auto one) {
                return any_action{std::move(one.label), as_any(one.asks)};
              }) |
              std::ranges::to<std::vector>();

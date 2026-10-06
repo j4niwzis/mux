@@ -110,7 +110,7 @@ struct decrypt {
 [[nodiscard]] inline std::optional<std::string> new_passphrase_refused(const std::string& fresh, const std::string& again) {
   if (fresh.empty())
     return "Type a passphrase.";
-  if (std::ranges::distance(fresh | std::views::filter([](char c) { return (c & 0xC0) != 0x80; })) < 10)
+  if (std::ranges::distance(std::views::filter(fresh, [](char c) { return (c & 0xC0) != 0x80; })) < 10)
     return "A passphrase of at least 10 characters.";
   if (fresh != again)
     return "The new passphrase is not the same twice.";
@@ -266,13 +266,12 @@ template <class... Tags>
 }
 // The accounts of a protocol this build has not: kept to be written back.
 [[nodiscard]] inline std::vector<saved_account> foreign_of(const file& from) {
-  return from.accounts.value_or(std::vector<saved_account>{}) |
-         std::views::filter([](const saved_account& one) { return !account_of(one).has_value(); }) |
+  return std::views::filter(from.accounts.value_or(std::vector<saved_account>{}), [](const saved_account& one) { return !account_of(one).has_value(); }) |
          std::ranges::to<std::vector>();
 }
 [[nodiscard]] inline file file_of(std::span<const account_t> accounts, std::span<const saved_account> foreign = {}) {
   file out;
-  out.accounts = accounts | std::views::transform([](const account_t& one) { return saved_of(one); }) |
+  out.accounts = std::views::transform(accounts, [](const account_t& one) { return saved_of(one); }) |
                  std::ranges::to<std::vector>();
   out.accounts->append_range(foreign);
   return out;

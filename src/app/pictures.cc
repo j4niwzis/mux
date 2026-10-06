@@ -220,10 +220,10 @@ class pictures_part {
             if (const message* root = mux::ui::held_message(one, *open))
               in_thread.push_back(root);
             if (const auto found = one.threads.find(*open); found != one.threads.end())
-              std::ranges::copy(found->second | std::views::transform([](const message& answer) { return &answer; }),
+              std::ranges::copy(std::views::transform(found->second, [](const message& answer) { return &answer; }),
                                 std::back_inserter(in_thread));
           }
-          senders.insert_range(in_thread | std::views::transform([](const message* said) -> std::string_view { return said->sender; }));
+          senders.insert_range(std::views::transform(in_thread, [](const message* said) -> std::string_view { return said->sender; }));
           for (const member& each : one.members)
             if (senders.contains(each.id))
               want(id, each.avatar, each.id);

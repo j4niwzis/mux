@@ -77,9 +77,8 @@ export namespace mux::ui {
   const auto pictured = [](std::uint32_t code) {
     return code >= 0x1F000 || (code >= 0x2600 && code <= 0x27BF) || code == 0xFE0F;
   };
-  const auto characters = std::ranges::to<std::vector>(name | std::views::chunk_by([](char, char next) { return (static_cast<unsigned char>(next) & 0xC0) == 0x80; }) |
-                          std::views::transform([](auto&& each) { return std::string_view(each.begin(), each.end()); }));
-  const auto codes = std::ranges::to<std::vector>(characters | std::views::transform(code_of));
+  const auto characters = std::ranges::to<std::vector>(std::views::transform(std::views::chunk_by(name, [](char, char next) { return (static_cast<unsigned char>(next) & 0xC0) == 0x80; }), [](auto&& each) { return std::string_view(each.begin(), each.end()); }));
+  const auto codes = std::ranges::to<std::vector>(std::views::transform(characters, code_of));
   // A zero-width joiner between two emoji makes them one (a family, a
   // rainbow flag): kept there, and stripped anywhere else, as before.
   const auto kept = [&](std::size_t i) {
@@ -87,8 +86,7 @@ export namespace mux::ui {
       return i > 0 && i + 1 < codes.size() && pictured(codes[i - 1]) && pictured(codes[i + 1]);
     return !hidden(codes[i]);
   };
-  return std::ranges::to<std::string>(std::views::iota(std::size_t{0}, characters.size()) | std::views::filter(kept) |
-         std::views::transform([&](std::size_t i) { return characters[i]; }) | std::views::join);
+  return std::ranges::to<std::string>(std::views::join(std::views::transform(std::views::filter(std::views::iota(std::size_t{0}, characters.size()), kept), [&](std::size_t i) { return characters[i]; })));
 }
 // What someone is called in a chat, before telling them apart: their name
 // there, shown plainly, or their ID's local part.

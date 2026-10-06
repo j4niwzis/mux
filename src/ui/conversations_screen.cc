@@ -233,11 +233,11 @@ struct conversations_screen : nodes::Stack {
     auto& shown = std::get<0>(side.elsewhere.fChildren);
     auto& rooms = std::get<0>(shown.parts.rooms.fChildren);
     rooms.clear();
-    for (const directory_room& one : rooms_elsewhere | std::views::take(30))
+    for (const directory_room& one : std::views::take(rooms_elsewhere, 30))
       rooms.emplace_back(actions, *needs_.colours, one, std::string());
     auto& people = std::get<0>(shown.parts.people.fChildren);
     people.clear();
-    for (const found_person& one : people_elsewhere | std::views::take(30))
+    for (const found_person& one : std::views::take(people_elsewhere, 30))
       people.emplace_back(actions, *needs_.colours, one);
     shown.parts.rooms_title.setVisible(!rooms.empty());
     shown.parts.people_title.setVisible(!people.empty());

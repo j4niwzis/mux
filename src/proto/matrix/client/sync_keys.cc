@@ -559,7 +559,7 @@ auto account<Sink>::own_sessions_now() -> std::optional<std::vector<own_session>
                               : crypto::device_of(*got, id_.address, curve->second, crypto_->pinned_master(id_.address));
     return identity && (identity->cross_signed || std::ranges::contains(verified_here, identity->ed25519));
   };
-  return std::ranges::to<std::vector>(mine->second | std::views::transform([&](const auto& each) {
+  return std::ranges::to<std::vector>(std::views::transform(mine->second, [&](const auto& each) {
            const auto& [id, info] = each;
            return own_session{.id = id,
                               .name = info.unsigned_ && info.unsigned_->device_display_name ? *info.unsigned_->device_display_name : id,
@@ -576,8 +576,7 @@ void account<Sink>::check_own_sessions() {
     return;
   const auto here = std::ranges::find(*all, crypto_->device_id(), &own_session::id);
   const bool this_one = here != all->end() && here->trusted;
-  const auto others = std::ranges::to<std::vector>(*all | std::views::filter([&](const own_session& one) { return one.id != crypto_->device_id() && !one.trusted; }) |
-                      std::views::transform(&own_session::name));
+  const auto others = std::ranges::to<std::vector>(std::views::transform(std::views::filter(*all, [&](const own_session& one) { return one.id != crypto_->device_id() && !one.trusted; }), &own_session::name));
   if (!this_one)
     sink_(change::notice{id_, "Verify this session",
                          "Verify this session to allow it to read your message history, and so that others can trust "
@@ -586,7 +585,7 @@ void account<Sink>::check_own_sessions() {
   if (!others.empty())
     sink_(change::notice{id_, "New login. Was this you?",
                          std::format("Not verified: {}. Verify each from Sessions -- or sign it out, if it was not you.",
-                                     std::ranges::to<std::string>(others | std::views::join_with(std::string_view(", "))))});
+                                     std::ranges::to<std::string>(std::views::join_with(others, std::string_view(", "))))});
 }
 }  // namespace mux::proto::matrix::client
 

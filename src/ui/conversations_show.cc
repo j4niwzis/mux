@@ -176,7 +176,7 @@ void conversations_screen<Actions>::show_space_bars(const model& now) {
       std::vector<std::pair<const conversation*, int>> todo;
       const auto push_children = [&](const std::string& of, int depth) {
         if (const auto found = spaces_in.find(of); found != spaces_in.end())
-          for (const conversation* sub : found->second | std::views::reverse)
+          for (const conversation* sub : std::views::reverse(found->second))
             todo.emplace_back(sub, depth);
       };
       push_children(*room, 1);
@@ -193,8 +193,7 @@ void conversations_screen<Actions>::show_space_bars(const model& now) {
     }
     return out;
   };
-  const std::vector<config::space_placed> mine = std::ranges::to<std::vector>(space_places |
-                                                 std::views::filter([&](const config::space_placed& p) { return p.account == address; }));
+  const std::vector<config::space_placed> mine = std::ranges::to<std::vector>(std::views::filter(space_places, [&](const config::space_placed& p) { return p.account == address; }));
   const auto in_bar = [&](const entry& one, const config::space_bar_t& bar) {
     const bool placed = std::ranges::any_of(mine, [&](const auto& p) { return p.item == one.item; });
     if (!placed)
@@ -209,13 +208,13 @@ void conversations_screen<Actions>::show_space_bars(const model& now) {
         ranked.emplace_back(at == mine.end() ? mine.size() + i : static_cast<std::size_t>(at - mine.begin()), &all[i]);
       }
     std::ranges::sort(ranked, {}, &std::pair<std::size_t, const entry*>::first);
-    return std::ranges::to<std::vector>(ranked | std::views::values);
+    return std::ranges::to<std::vector>(std::views::values(ranked));
   };
   const std::vector<const entry*> side_items = bar_of(config::space_bar::side{});
   const std::vector<const entry*> top_items = bar_of(config::space_bar::top{});
   // For the settings to list them.
   needs_.shared->space_account = address;
-  needs_.shared->space_items = std::ranges::to<std::vector>(all | std::views::transform([&](const entry& one) {
+  needs_.shared->space_items = std::ranges::to<std::vector>(std::views::transform(all, [&](const entry& one) {
                         return space_item_shown{one.item, one.name, in_bar(one, config::space_bar::side{}),
                                                 in_bar(one, config::space_bar::top{})};
                       }));
@@ -713,8 +712,7 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
   // Forums: each listed as one chat; their rooms in them, not beside them.
   std::set<std::string> in_forums;
   if (in)
-    std::ranges::for_each(in->conversations | std::views::values |
-                              std::views::filter([&](const conversation& one) { return this->shown_as_forum(one); }),
+    std::ranges::for_each(std::views::filter(std::views::values(in->conversations), [&](const conversation& one) { return this->shown_as_forum(one); }),
                           [&](const conversation& one) { in_forums.insert(one.children.begin(), one.children.end()); });
   // The forum open: still one; its rooms, the list.
   if (forum_open && (!current || !this->is_forum(conversation_id{*current, *forum_open})))
@@ -840,11 +838,10 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
     return pointed ? *pointed == one->id : chosen && *chosen == one->id;
   };
   const std::vector<conversation_id> listed_before =
-      std::ranges::to<std::vector>(rows | std::views::transform([](const conversation_row<Actions>& row) { return row.id; }));
+      std::ranges::to<std::vector>(std::views::transform(rows, [](const conversation_row<Actions>& row) { return row.id; }));
   chats_listed = chats.size();
   {
-    const std::set<conversation_id> listed = std::ranges::to<std::set>(chats | std::views::take(chats_made) |
-                                             std::views::transform([](const conversation* one) { return one->id; }));
+    const std::set<conversation_id> listed = std::ranges::to<std::set>(std::views::transform(std::views::take(chats, chats_made), [](const conversation* one) { return one->id; }));
     for (conversation_row<Actions>& row : rows)
       if (!listed.contains(row.id)) {
         const conversation_id id = row.id;
@@ -854,7 +851,7 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
       rows_kept.erase(rows_kept.begin());
   }
   if (nodes::reconcile(
-          rows, chats | std::views::take(chats_made), [](const conversation* one) { return one->id; },
+          rows, std::views::take(chats, chats_made), [](const conversation* one) { return one->id; },
           [](const conversation_row<Actions>& row) { return row.id; },
           [&](const conversation* one) {
             if (const auto kept = rows_kept.find(one->id); kept != rows_kept.end()) {
@@ -923,7 +920,7 @@ template <class Actions>
 void conversations_screen<Actions>::show_banners(const conversation* one, const model& now) {
   const auto banners = one ? proto::composer_banners(protocol_state_of(*needs_.shared, one->id.account), *one, now)
                            : std::vector<proto::any_banner>{};
-  const std::string said = std::ranges::to<std::string>(banners | std::views::transform(&proto::any_banner::text) | std::views::join_with('\n'));
+  const std::string said = std::ranges::to<std::string>(std::views::join_with(std::views::transform(banners, &proto::any_banner::text), '\n'));
   // The first's button, where it has one.
   const std::string label = banners.empty() ? std::string() : banners.front().button;
   chat.banner_asks = banners.empty() ? std::nullopt : banners.front().asks;

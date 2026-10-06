@@ -302,7 +302,7 @@ void account<Sink>::sas_send_mac(crypto::sas_state& state) {
     const std::string master_key = "ed25519:" + *master;
     macs.emplace(master_key, state.mac(*master, base + master_key));
   }
-  const std::string ids = std::ranges::to<std::string>(macs | std::views::keys | std::views::join_with(','));
+  const std::string ids = std::ranges::to<std::string>(std::views::join_with(std::views::keys(macs), ','));
   this->send_step(state, "m.key.verification.mac",
                   loom::ev::m_key_verification_mac_content_t{.mac = std::move(macs), .keys = state.mac(ids, base + "KEY_IDS")});
 }
@@ -320,7 +320,7 @@ template <class Sink>
 void account<Sink>::sas_check_mac(crypto::sas_state& state) {
   const std::string txn = state.txn;
   const std::string base = std::string(kMacInfo) + state.their_user + state.their_device + id_.address + crypto_->device_id() + txn;
-  const std::string ids = std::ranges::to<std::string>(*state.their_mac | std::views::keys | std::views::join_with(','));
+  const std::string ids = std::ranges::to<std::string>(std::views::join_with(std::views::keys(*state.their_mac), ','));
   if (!state.mac_ok(ids, base + "KEY_IDS", state.their_keys_mac))
     return this->cancel_verification(txn, "m.key_mismatch", "The keys they listed are not the ones they sent.");
   if (!api_)

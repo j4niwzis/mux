@@ -220,9 +220,7 @@ struct app : kept_settings {
   void show_chat_choices();
   // Every chat of every account.
   [[nodiscard]] auto all_chats() const {
-    return model->accounts() | std::views::values |
-           std::views::transform([](const auto& account) -> const auto& { return account.conversations; }) | std::views::join |
-           std::views::values;
+    return std::views::values(std::views::join(std::views::transform(std::views::values(model->accounts()), [](const auto& account) -> const auto& { return account.conversations; })));
   }
   // What is kept, applied: the settings read at the start -- or, where local
   // data is encrypted, once it is unlocked -- and the accounts started.

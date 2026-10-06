@@ -122,7 +122,7 @@ void account<Sink>::catch_up(std::string room, std::string from, std::string unt
     }
     // Into the timeline, oldest first, by their time: between what was there
     // and what the sync brought.
-    for (const auto& one : gap | std::views::reverse)
+    for (const auto& one : std::views::reverse(gap))
       this->event(in, one, placement::in_window{});
     // The reactions to what the user sent: known by who sent it, where the
     // pages or the room's last events held it.
@@ -295,7 +295,7 @@ void account<Sink>::list_sessions() {
       return;
     }
     std::vector<mux::proto::matrix::session_info> out =
-        got->devices.value_or(std::vector<loom::cs::def::device_t>{}) | std::views::transform([](const loom::cs::def::device_t& one) {
+        std::views::transform(got->devices.value_or(std::vector<loom::cs::def::device_t>{}), [](const loom::cs::def::device_t& one) {
           return mux::proto::matrix::session_info{
               .id = one.device_id,
               .name = one.display_name.value_or(""),

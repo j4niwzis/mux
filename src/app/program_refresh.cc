@@ -72,7 +72,7 @@ void app::show_placements() {
 // the one thing to see before writing on.
 void app::show_event_filters() {
   root().main().event_filters =
-      std::ranges::to<std::remove_cvref_t<decltype(root().main().event_filters)>>(this->all_chats() | std::views::transform([this](const mux::conversation& one) {
+      std::ranges::to<std::remove_cvref_t<decltype(root().main().event_filters)>>(std::views::transform(this->all_chats(), [this](const mux::conversation& one) {
         auto filter = this->room_event_filter_of(one.id);
         if (one.encrypted)
           for (const mux::room_event_t kind : {mux::room_event_t{mux::room_event::joins{}}, mux::room_event_t{mux::room_event::invites{}}})
@@ -174,11 +174,9 @@ void app::show_backgrounds() {
 // and how far a jump's search pages back in each.
 void app::show_chat_choices() {
   auto& screen = root().main();
-  screen.receipts_in = std::ranges::to<std::remove_cvref_t<decltype(screen.receipts_in)>>(this->all_chats() | std::views::filter([this](const mux::conversation& one) { return this->receipts_shown(one.id); }) |
-                       std::views::transform(&mux::conversation::id));
-  screen.previews_off = std::ranges::to<std::remove_cvref_t<decltype(screen.previews_off)>>(this->all_chats() | std::views::filter([this](const mux::conversation& one) { return !this->previews_shown(one.id); }) |
-                        std::views::transform(&mux::conversation::id));
-  screen.jump_limits = std::ranges::to<std::remove_cvref_t<decltype(screen.jump_limits)>>(this->all_chats() | std::views::transform([this](const mux::conversation& one) {
+  screen.receipts_in = std::ranges::to<std::remove_cvref_t<decltype(screen.receipts_in)>>(std::views::transform(std::views::filter(this->all_chats(), [this](const mux::conversation& one) { return this->receipts_shown(one.id); }), &mux::conversation::id));
+  screen.previews_off = std::ranges::to<std::remove_cvref_t<decltype(screen.previews_off)>>(std::views::transform(std::views::filter(this->all_chats(), [this](const mux::conversation& one) { return !this->previews_shown(one.id); }), &mux::conversation::id));
+  screen.jump_limits = std::ranges::to<std::remove_cvref_t<decltype(screen.jump_limits)>>(std::views::transform(this->all_chats(), [this](const mux::conversation& one) {
                          return std::pair{one.id, this->jump_search_of(one.id)};
                        }));
 }

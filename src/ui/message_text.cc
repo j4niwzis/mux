@@ -239,9 +239,7 @@ struct mentioned {
   for (std::size_t at = text.find("\u2002"); at != std::string::npos; at = text.find("\u2002", at))
     text.erase(at, std::string_view("\u2002").size());
   const auto blank = [](char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; };
-  std::string out = std::ranges::to<std::string>(text | std::views::chunk_by([&](char a, char b) { return blank(a) == blank(b); }) |
-                    std::views::transform([&](auto run) { return blank(run.front()) ? std::string(" ") : std::string(run.begin(), run.end()); }) |
-                    std::views::join);
+  std::string out = std::ranges::to<std::string>(std::views::join(std::views::transform(std::views::chunk_by(text, [&](char a, char b) { return blank(a) == blank(b); }), [&](auto run) { return blank(run.front()) ? std::string(" ") : std::string(run.begin(), run.end()); })));
   const auto first = out.find_first_not_of(' ');
   const auto last = out.find_last_not_of(' ');
   return first == std::string::npos ? std::string() : out.substr(first, last - first + 1);
@@ -424,7 +422,7 @@ struct text_piece {
 [[nodiscard]] inline std::vector<text_piece> pieces_of(const std::string& text, const std::vector<nodes::Text::Link>& links,
                                                       const std::vector<nodes::Text::Styled>& styles) {
   std::vector<nodes::Text::Styled> blocks =
-      std::ranges::to<std::vector>(styles | std::views::filter([](const nodes::Text::Styled& one) { return one.block; }));
+      std::ranges::to<std::vector>(std::views::filter(styles, [](const nodes::Text::Styled& one) { return one.block; }));
   std::ranges::sort(blocks, {}, &nodes::Text::Styled::first);
   // Words from `a` to `b`: their links and styles cut to them, counted from
   // their start; the line breaks around a block gone.
@@ -434,14 +432,12 @@ struct text_piece {
     while (b > a && text[b - 1] == '\n')
       --b;
     text_piece out{.text = text.substr(a, b - a)};
-    out.links = std::ranges::to<std::vector>(links | std::views::filter([&](const auto& one) { return one.first >= a && one.last <= b; }) |
-                std::views::transform([&](auto one) {
+    out.links = std::ranges::to<std::vector>(std::views::transform(std::views::filter(links, [&](const auto& one) { return one.first >= a && one.last <= b; }), [&](auto one) {
                   one.first -= a;
                   one.last -= a;
                   return one;
                 }));
-    out.styles = std::ranges::to<std::vector>(styles | std::views::filter([&](const auto& one) { return !one.block && one.last > a && one.first < b; }) |
-                 std::views::transform([&](auto one) {
+    out.styles = std::ranges::to<std::vector>(std::views::transform(std::views::filter(styles, [&](const auto& one) { return !one.block && one.last > a && one.first < b; }), [&](auto one) {
                    one.first = std::max(one.first, a) - a;
                    one.last = std::min(one.last, b) - a;
                    return one;

@@ -57,7 +57,8 @@ struct window : scene::Node {
     struct key_it {
       Actions* actions;
       scene::Key key;
-      void operator()() const { actions->text_key(key); }
+      bool shift = false;
+      void operator()() const { actions->text_key(key, shift); }
     };
     struct parts_t {
       std::optional<widgets::Button<copy_it>> copy;
@@ -66,6 +67,16 @@ struct window : scene::Node {
       std::optional<widgets::Button<key_it>> copy_selected;
       std::optional<widgets::Button<key_it>> paste;
       std::optional<widgets::Button<key_it>> select_all;
+      // A field that formats, with something selected: tdesktop's
+      // Formatting items, each its shortcut given to the field.
+      std::optional<widgets::Button<key_it>> bold;
+      std::optional<widgets::Button<key_it>> italic;
+      std::optional<widgets::Button<key_it>> underline;
+      std::optional<widgets::Button<key_it>> strike;
+      std::optional<widgets::Button<key_it>> monospace;
+      std::optional<widgets::Button<key_it>> spoiler;
+      std::optional<widgets::Button<key_it>> link;
+      std::optional<widgets::Button<key_it>> plain;
     } parts;
     // A selectable text's.
     text_menu(const ui_needs<Actions>& n, std::string text, std::optional<std::string> link) : text_menu(*n.colours) {
@@ -76,8 +87,9 @@ struct window : scene::Node {
     }
     // A field's.
     text_menu(const ui_needs<Actions>& n, const scene::text_menu::of_field& field) : text_menu(*n.colours) {
-      const auto item = [&](std::optional<widgets::Button<key_it>>& button, std::string label, scene::Key key) {
-        button.emplace(n.colours->widgets, std::move(label), key_it{n.actions, key});
+      const auto item = [&](std::optional<widgets::Button<key_it>>& button, std::string label, scene::Key key,
+                            bool shift = false) {
+        button.emplace(n.colours->widgets, std::move(label), key_it{n.actions, key, shift});
       };
       if (field.selection && !field.masked) {
         item(parts.cut, "Cut", scene::keys::kX);
@@ -85,6 +97,16 @@ struct window : scene::Node {
       }
       item(parts.paste, "Paste", scene::keys::kV);
       item(parts.select_all, "Select All", scene::keys::kA);
+      if (field.formats && field.selection && !field.masked) {
+        item(parts.bold, "Bold", scene::keys::kB);
+        item(parts.italic, "Italic", scene::keys::kI);
+        item(parts.underline, "Underline", scene::keys::kU);
+        item(parts.strike, "Strikethrough", scene::keys::kX, true);
+        item(parts.monospace, "Monospace", scene::keys::kM, true);
+        item(parts.spoiler, "Spoiler", scene::keys::kP, true);
+        item(parts.link, "Link", scene::keys::kK);
+        item(parts.plain, "Plain text", scene::keys::kN, true);
+      }
       this->rows();
     }
     // How tall it is, for where it is put: its rows and its padding.
@@ -155,6 +177,8 @@ struct window : scene::Node {
       widgets::Dialog<reactions_box<Actions>> reactions;
       // A message's earlier versions, as AyuGram's edit history.
       widgets::Dialog<edit_history_box<Actions>> history;
+      // A link put on what is selected in the message field: Ctrl+K's.
+      widgets::Dialog<link_box<Actions>> linking;
       // The mentions or the reactions not yet seen, listed.
       widgets::Dialog<marks_box<Actions>> marks;
       // A room's management.
@@ -259,6 +283,8 @@ struct window : scene::Node {
         return a->close_manage(), closed();
       if (parts.marks.shown())
         return a->close_marks(), closed();
+      if (parts.linking.shown())
+        return a->close_link(), closed();
       if (parts.history.shown())
         return a->close_edit_history(), closed();
       if (parts.reactions.shown())
@@ -285,15 +311,15 @@ struct window : scene::Node {
     skia::SkRect frozen_at = skia::SkRect::MakeEmpty();  // where it is on the device
 
     [[nodiscard]] bool dialog_fading() {
-      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, history, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, call_up, call_whole] = parts;
+      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, history, linking, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, call_up, call_whole] = parts;
       return settings.settling() || notice.settling() || person.settling() || room.settling() || reactions.settling() ||
-             history.settling() ||
+             history.settling() || linking.settling() ||
              marks.settling() || manage.settling() || forwarding.settling() || new_chat.settling() ||
              new_room.settling() || packs.settling() || wallpaper.settling() || explore.settling() ||
              tools.settling() || sending.settling() || passphrase.settling() || verifying.settling();
     }
     void draw(skiff::scene::Painting& painting, skia::SkCanvas* canvas, float alpha) {
-      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, history, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, call_up, call_whole] = parts;
+      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, history, linking, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, call_up, call_whole] = parts;
       skia::SkMatrix inverse;
       if (!this->dialog_fading() || !canvas->getTotalMatrix().invert(&inverse)) {
         frozen = nullptr;
@@ -323,7 +349,7 @@ struct window : scene::Node {
       }
       canvas->drawImageRect(frozen, inverse.mapRect(frozen_at), skia::SkSamplingOptions(skia::SkFilterMode::kNearest));
       const auto over = [&](auto&... each) { (scene::draw(each, painting, canvas, alpha), ...); };
-      over(settings, notice, person, room, reactions, history, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore,
+      over(settings, notice, person, room, reactions, history, linking, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore,
            tools, sending, passphrase, verifying);
       const auto over_if = [&](auto&... each) { ((each ? scene::draw(*each, painting, canvas, alpha) : void()), ...); };
       over_if(emoji, menu, viewer, text_menu_up, call_up, call_whole);
@@ -401,6 +427,7 @@ struct window : scene::Node {
     layer().room.dropClosed();
     layer().reactions.dropClosed();
     layer().history.dropClosed();
+    layer().linking.dropClosed();
     layer().marks.dropClosed();
     layer().manage.dropClosed();
     layer().forwarding.dropClosed();
@@ -590,6 +617,8 @@ struct window : scene::Node {
     layer().history.open(needs_, in, now, known);
   }
   void close_edit_history() { layer().history.close(); }
+  void open_link(std::string text, std::string url) { layer().linking.open(needs_, std::move(text), std::move(url)); }
+  void close_link() { layer().linking.close(); }
   void open_marks(mark_kind_t kind, const conversation& in, const std::vector<mark_entry>& entries, const model* now) {
     layer().marks.open(needs_, kind, in, entries, now);
   }

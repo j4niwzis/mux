@@ -60,6 +60,8 @@ void conversations_screen<Actions>::onKey(scene::phase::bubble, const scene::key
     return;
   if (press.key == keys::kF && control) {
     actions->open_search();
+  } else if (press.key == keys::kK && control) {
+    actions->ask_link();
   } else if (press.key == keys::kUp && control) {
     actions->reply_step(true);
   } else if (press.key == keys::kDown && control) {

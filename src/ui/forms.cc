@@ -62,6 +62,42 @@ struct field : nodes::Stack {
   }
 };
 
+// A link put on what is selected in the message field, as tdesktop's
+// EditLinkBox: its text and its URL, the forms' own fields; Done puts it on,
+// Esc or Cancel leaves the field as it was.
+template <class Actions>
+struct link_box : nodes::Stack {
+  // The dialog it is shown in.
+  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{400.0f}}; }
+  struct done {
+    link_box* box;
+    void operator()() const { box->actions->set_link(box->parts.text.text(), box->parts.url.text()); }
+  };
+  struct cancel {
+    Actions* actions;
+    void operator()() const { actions->close_link(); }
+  };
+  Actions* actions = nullptr;
+  struct parts_t {
+    nodes::Text title;
+    field text;
+    field url;
+    widgets::Button<done> go;
+    widgets::Button<cancel> back;
+  } parts;
+  link_box(const ui_needs<Actions>& n, std::string text, std::string url)
+      : actions(n.actions),
+        parts{.title = nodes::Text(url.empty() ? "Add link" : "Edit link", 17.0f, n.colours->text, true),
+              .text = field(*n.colours, "Text", "Text", std::move(text)),
+              .url = field(*n.colours, "URL", "https://", std::move(url)),
+              .go = widgets::Button<done>(n.colours->widgets, "Done", {this}),
+              .back = widgets::Button<cancel>(n.colours->widgets, "Cancel", {n.actions})} {
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
+    this->setGap(10.0f);
+    parts.title.apply({.fillX = true});
+  }
+};
+
 // A passphrase asked for: to open local data at the start (not dismissed --
 // nothing behind it is anything until it opens), to turn its encryption on
 // or off, or to change it. Its fields are the forms' own, masked; what each

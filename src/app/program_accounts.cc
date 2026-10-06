@@ -53,7 +53,8 @@ void app::apply(const request::copy_text& one) {
 // with Ctrl -- the field's own paste, cut, copy or select all -- and the
 // menu gone.
 void app::apply(const request::text_key& one) {
-  skiff::scene::giveKey({one.key, skiff::scene::Modifiers{}.with<skiff::scene::modifier::control>(true)});
+  skiff::scene::giveKey(
+      {one.key, skiff::scene::Modifiers{}.with<skiff::scene::modifier::control>(true).with<skiff::scene::modifier::shift>(one.shift)});
   root().close_text_menu();
 }
 

@@ -71,6 +71,16 @@ class outbox_part {
         return &*found;
     return nullptr;
   }
+  // Ctrl+K: the link box, with what is selected and the link on it.
+  void apply(const request::ask_link&) {
+    auto [text, url] = s_->root().main().line.link_asked();
+    s_->root().open_link(std::move(text), std::move(url));
+  }
+  void apply(const request::set_link& one) {
+    s_->root().close_link();
+    s_->root().main().line.put_link(one.text, one.url);
+  }
+  void apply(const request::close_link&) { s_->root().close_link(); }
   // Up in an empty input: the last message sent here edited.
   void apply(const request::edit_last&) {
     const auto& chosen = s_->root().main().chosen;

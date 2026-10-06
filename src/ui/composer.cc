@@ -754,6 +754,43 @@ struct composer_bar : nodes::Stack {
     return std::ranges::to<std::vector<mux::styled_run>>(std::views::transform(
         parts.input.parts.field.plainSpans(), [](const auto& one) { return mux::styled_run{one.first, one.last, one.format}; }));
   }
+  // What is selected, and the link on it where it has one: what Ctrl+K's
+  // box starts with.
+  [[nodiscard]] std::pair<std::string, std::string> link_asked() const {
+    const auto& field = parts.input.parts.field;
+    const auto [low, high] = field.selectionRange();
+    std::string url;
+    for (const auto& one : field.spans())
+      if (one.first <= low && one.last >= high)
+        spl::visit(spl::overloaded{[&](const run_style::link& link) { url = link.url; }, [](const auto&) {}}, one.format);
+    return {field.text().substr(low, high - low), std::move(url)};
+  }
+  // A link put on what was selected, as tdesktop's EditLinkBox: its text as
+  // given (what was selected replaced where it differs), the URL with a
+  // scheme -- https where it has none; with no URL, the links there taken
+  // off.
+  void put_link(std::string text, std::string url) {
+    auto& field = parts.input.parts.field;
+    auto [low, high] = field.selectionRange();
+    if (text.empty())
+      text = url;
+    if (text.empty())
+      return;
+    if (std::string_view(field.text()).substr(low, high - low) != text) {
+      field.insertText(text);
+      high = low + text.size();
+    }
+    if (!url.empty() && !url.contains("://") && !url.starts_with("mailto:"))
+      url = "https://" + url;
+    const auto link = [](const auto& one) {
+      return spl::visit(spl::overloaded{[](const run_style::link&) { return true; }, [](const auto&) { return false; }}, one.format);
+    };
+    auto spans = field_quotes::without(field.spans(), low, high, link);
+    if (!url.empty())
+      spans.push_back({low, high, run_style::link{std::move(url)}});
+    field.setSpans(std::move(spans));
+    field.select(high, high);
+  }
   // A mention picked from the list, over the @ and what was typed of it
   // (from `from` on): a pill, as the message will show it, and a space.
   void put_mention(std::size_t from, const std::string& name, const std::string& user) {

@@ -157,7 +157,10 @@ struct stub {
   void open_new_room() {}
   void close_new_room() {}
   void copy_text(std::string) {}
-  void text_key(scene::Key) {}
+  void text_key(scene::Key, bool = false) {}
+  void ask_link() {}
+  void set_link(std::string, std::string) {}
+  void close_link() {}
   void start_call(mux::conversation_id) {}
   void call_chosen() {}
   void dismiss_call() {}

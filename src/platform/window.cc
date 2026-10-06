@@ -86,6 +86,8 @@ inline video_driver_t video_driver_of(const char* name) {
 
 template <class App>
 int run(App& app, const options& how, const events::kinds& kinds) {
+  // Android's Back comes to the app as a key, instead of Android closing the app.
+  sdl::SDL_SetHint(sdl::kHintTrapBackButton, "1");
   if (!sdl::SDL_Init(sdl::kInitVideo | sdl::kInitEvents)) {
     std::println(std::cerr, "[mux] no window: {}", sdl::SDL_GetError());
     return 1;

@@ -59,6 +59,8 @@ inline skiff::scene::Key key_of(sdl::SDL_Keycode key) {
     case sdl::kKeyReturn:
     case sdl::kKeyKpEnter: return keys::kEnter;
     case sdl::kKeySpace: return keys::kSpace;
+    // Android's Back (button or gesture) closes what Escape closes.
+    case sdl::kKeyBack:
     case sdl::kKeyEscape: return keys::kEscape;
     case sdl::kKeyLeft: return keys::kLeft;
     case sdl::kKeyRight: return keys::kRight;

@@ -141,6 +141,11 @@ class manage_part {
                                        .forum = k_->forums.contains(chat->id),
                                        .hidden_from_home = k_->hidden_from_home.contains(chat->id),
                                        .speaks = chat->id.account.speaks};
+    // The spaces it is in: those of its account whose rooms list it.
+    if (const auto account = s_->model->accounts().find(chat->id.account); account != s_->model->accounts().end())
+      for (const auto& [id, one] : account->second.conversations)
+        if (one.space && std::ranges::contains(one.children, chat->id.id))
+          facts.parents.push_back({id, one.name.empty() ? id : one.name});
     // What its protocol fills of them: Matrix's own level and privileged users.
     mux::proto::manage_facts(mux::ui::protocol_state_of(s_->ui, chat->id.account), *chat, facts);
     s_->root().open_manage(facts);

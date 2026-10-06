@@ -167,6 +167,7 @@ void account<Sink>::preview_room(std::string room, std::vector<std::string> via)
                                   .avatar = got->avatar_url,
                                   .members = got->num_joined_members,
                                   .knock = spl::visit(spl::overloaded{[](mux::proto::matrix::join_rule::knock) { return true; },
+                                                                            [](const mux::proto::matrix::join_rule::knock_restricted&) { return true; },
                                                                             [](const auto&) { return false; }},
                                                          join_rule_of(got->join_rule))}});
   });

@@ -242,6 +242,21 @@ struct room_page : nodes::Stack {
 };
 
 // ---- Security & Privacy -----------------------------------------------------------
+// The spaces a room is in, for a rule for their members: their IDs; and
+// said, as Element says it -- or that it is in none, which leaves the rule
+// nothing to name.
+[[nodiscard]] inline std::vector<std::string> space_ids(const room_settings_facts& facts) {
+  return std::ranges::to<std::vector<std::string>>(
+      std::views::transform(facts.parents, [](const room_settings_facts::parent& one) { return one.id; }));
+}
+[[nodiscard]] inline std::string spaces_said(const room_settings_facts& facts, std::string_view before, std::string_view after) {
+  if (facts.parents.empty())
+    return "This room is in no space.";
+  std::string names;
+  for (std::size_t i = 0; i < facts.parents.size(); ++i)
+    names += (i == 0 ? "" : i + 1 == facts.parents.size() ? " or " : ", ") + facts.parents[i].name;
+  return std::string(before) + names + std::string(after);
+}
 template <class Box>
 struct security_page : nodes::Stack {
   using Actions = typename Box::actions_type;
@@ -255,7 +270,7 @@ struct security_page : nodes::Stack {
     nodes::Text encryption_warning;
     nodes::Text access;
     nodes::Text access_about;
-    join_choice invite, knock, open;
+    join_choice invite, members, knock, knock_members, open;
     nodes::Text history;
     nodes::Text history_about;
     history_choice anyone, shared, invited, joined;
@@ -275,8 +290,17 @@ struct security_page : nodes::Stack {
               .access_about = explained((*box->colours_), "Decide who can join " + facts.name + "."),
               .invite = join_choice((*box->colours_), "Private (invite only)", "Only invited people can join.", {box, join_rule::invite{}},
                                     is_rule<join_rule::invite>(rules_of(facts.theirs).join_rule), may(facts, power_need::change_access{})),
+              .members = join_choice((*box->colours_), "Space members", spaces_said(facts, "Anyone in ", " can find and join."),
+                                     {box, join_rule::restricted{space_ids(facts)}},
+                                     is_rule<join_rule::restricted>(rules_of(facts.theirs).join_rule),
+                                     may(facts, power_need::change_access{}) && !facts.parents.empty()),
               .knock = join_choice((*box->colours_), "Ask to join", "People cannot join unless access is granted.", {box, join_rule::knock{}},
                                    is_rule<join_rule::knock>(rules_of(facts.theirs).join_rule), may(facts, power_need::change_access{})),
+              .knock_members = join_choice((*box->colours_), "Ask to join, or join as a space member",
+                                           spaces_said(facts, "Anyone in ", " can join; anyone else can ask."),
+                                           {box, join_rule::knock_restricted{space_ids(facts)}},
+                                           is_rule<join_rule::knock_restricted>(rules_of(facts.theirs).join_rule),
+                                           may(facts, power_need::change_access{}) && !facts.parents.empty()),
               .open = join_choice((*box->colours_), "Public", "Anyone can find and join.", {box, join_rule::open{}},
                                   is_rule<join_rule::open>(rules_of(facts.theirs).join_rule), may(facts, power_need::change_access{})),
               .history = part_heading((*box->colours_), "Who can read history?"),

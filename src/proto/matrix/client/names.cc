@@ -63,7 +63,11 @@ using loom::names::errcode_of;
 // words, as a room's state is written.
 [[nodiscard]] inline join_rule_t join_rule_of(std::optional<std::string_view> name) {
   static const std::unordered_map<std::string_view, join_rule_t> known = {
-      {"public", mux::proto::matrix::join_rule::open{}}, {"invite", mux::proto::matrix::join_rule::invite{}}, {"knock", mux::proto::matrix::join_rule::knock{}}};
+      {"public", mux::proto::matrix::join_rule::open{}},
+      {"invite", mux::proto::matrix::join_rule::invite{}},
+      {"knock", mux::proto::matrix::join_rule::knock{}},
+      {"restricted", mux::proto::matrix::join_rule::restricted{}},
+      {"knock_restricted", mux::proto::matrix::join_rule::knock_restricted{}}};
   return named<join_rule_t, mux::proto::matrix::join_rule::other>(known, name);
 }
 [[nodiscard]] inline history_rule_t history_rule_of(std::optional<std::string_view> name) {
@@ -78,6 +82,50 @@ using loom::names::errcode_of;
 [[nodiscard]] constexpr std::string_view word_of(mux::proto::matrix::join_rule::invite) { return "invite"; }
 [[nodiscard]] constexpr std::string_view word_of(mux::proto::matrix::join_rule::knock) { return "knock"; }
 [[nodiscard]] constexpr std::string_view word_of(mux::proto::matrix::join_rule::other) { return "invite"; }
+[[nodiscard]] constexpr std::string_view word_of(const mux::proto::matrix::join_rule::restricted&) { return "restricted"; }
+[[nodiscard]] constexpr std::string_view word_of(const mux::proto::matrix::join_rule::knock_restricted&) { return "knock_restricted"; }
+// A room's join rule as its state says it, read from the event's types:
+// the spaces a restricted one lets in, from its allow list.
+[[nodiscard]] inline join_rule_t join_rule_from(const loom::ev::m_room_join_rules_content_t* content) {
+  namespace rule = mux::proto::matrix::join_rule;
+  using said = loom::ev::m_room_join_rules_content_t::join_rule_values;
+  using condition = loom::ev::m_room_join_rules_content_t::allow_condition_t;
+  if (content == nullptr)
+    return rule::other{};
+  const auto spaces = [&] {
+    std::vector<std::string> out;
+    for (const condition& one : content->allow.value_or(std::vector<condition>{}))
+      spl::visit(spl::overloaded{[&](const condition::type_values::m_room_membership&) {
+                                   if (one.room_id)
+                                     out.push_back(*one.room_id);
+                                 },
+                                 [](const std::string&) {}},
+                 one.type);
+    return out;
+  };
+  return spl::visit(spl::overloaded{[](const said::public_&) -> join_rule_t { return rule::open{}; },
+                                    [](const said::invite&) -> join_rule_t { return rule::invite{}; },
+                                    [](const said::knock&) -> join_rule_t { return rule::knock{}; },
+                                    [](const said::private_&) -> join_rule_t { return rule::other{}; },
+                                    [&](const said::restricted&) -> join_rule_t { return rule::restricted{spaces()}; },
+                                    [&](const said::knock_restricted&) -> join_rule_t { return rule::knock_restricted{spaces()}; },
+                                    [](const std::string&) -> join_rule_t { return rule::other{}; }},
+                    content->join_rule);
+}
+// The allow list a join rule writes: each space it names, its members let in.
+[[nodiscard]] inline std::optional<std::vector<loom::ev::m_room_join_rules_content_t::allow_condition_t>> allow_of(
+    const join_rule_t& rule) {
+  using condition = loom::ev::m_room_join_rules_content_t::allow_condition_t;
+  const auto of = [](const std::vector<std::string>& spaces) {
+    return std::optional(std::ranges::to<std::vector<condition>>(std::views::transform(spaces, [](const std::string& space) {
+      return condition{.type = condition::type_values::m_room_membership{}, .room_id = space};
+    })));
+  };
+  return spl::visit(spl::overloaded{[&](const mux::proto::matrix::join_rule::restricted& one) { return of(one.spaces); },
+                                    [&](const mux::proto::matrix::join_rule::knock_restricted& one) { return of(one.spaces); },
+                                    [](const auto&) { return std::optional<std::vector<condition>>(); }},
+                    rule);
+}
 [[nodiscard]] constexpr std::string_view word_of(mux::proto::matrix::history_rule::shared) { return "shared"; }
 [[nodiscard]] constexpr std::string_view word_of(mux::proto::matrix::history_rule::invited) { return "invited"; }
 [[nodiscard]] constexpr std::string_view word_of(mux::proto::matrix::history_rule::joined) { return "joined"; }

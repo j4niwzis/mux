@@ -272,7 +272,8 @@ void account<Sink>::change_room(std::string room, proto::matrix::room_change_t c
         spl::overloaded{
             [&](const proto::matrix::room_change::set_join_rule& one) {
               loom::ev::m_room_join_rules_content_t content;
-              content.join_rule = std::string(spl::visit([](auto of) { return word_of(of); }, one.rule));
+              content.join_rule = std::string(spl::visit([](const auto& of) { return word_of(of); }, one.rule));
+              content.allow = allow_of(one.rule);
               set("m.room.join_rules", content);
             },
             [&](const proto::matrix::room_change::set_history& one) {

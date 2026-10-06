@@ -25,9 +25,21 @@ namespace join_rule {
 struct open {};      // anyone: "public"
 struct invite {};    // those invited
 struct knock {};     // those who ask, once let in
-struct other {};     // restricted, private -- a rule not offered here
+// Members of the spaces it names (Element's "Space members"): they join as
+// they would a public room; anyone else, as one invited.
+struct restricted {
+  std::vector<std::string> spaces;
+  friend bool operator==(const restricted&, const restricted&) = default;
+};
+// The same, and anyone else may ask to join (knock_restricted).
+struct knock_restricted {
+  std::vector<std::string> spaces;
+  friend bool operator==(const knock_restricted&, const knock_restricted&) = default;
+};
+struct other {};     // private, or a rule unknown -- not offered here
 }  // namespace join_rule
-using join_rule_t = spl::variant<join_rule::open, join_rule::invite, join_rule::knock, join_rule::other>;
+using join_rule_t = spl::variant<join_rule::open, join_rule::invite, join_rule::knock, join_rule::restricted,
+                                 join_rule::knock_restricted, join_rule::other>;
 // Who may read a room's history.
 namespace history_rule {
 struct shared {};          // members, all of it

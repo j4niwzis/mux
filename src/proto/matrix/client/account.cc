@@ -318,7 +318,8 @@ class account {
   }
   // A state event of a room set, its content given; and what was asked of a
   // room, logged where it failed.
-  void set_room_state(const std::string& room, std::string type, const auto& content);
+  void set_room_state(const std::string& room, std::string type, const auto& content, std::string key = {});
+  [[nodiscard]] std::string server_of(const std::string& room) const;
   void send_text(const conversation_id& in, const std::string& room, const std::string& txn, knot::raw body);
   void told_failing(const std::string& room, const char* what, const auto& done) {
     if (!done)

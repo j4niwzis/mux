@@ -141,11 +141,29 @@ class manage_part {
                                        .forum = k_->forums.contains(chat->id),
                                        .hidden_from_home = k_->hidden_from_home.contains(chat->id),
                                        .speaks = chat->id.account.speaks};
-    // The spaces it is in: those of its account whose rooms list it.
-    if (const auto account = s_->model->accounts().find(chat->id.account); account != s_->model->accounts().end())
-      for (const auto& [id, one] : account->second.conversations)
+    // The spaces it is in: those of its account whose rooms list it. A
+    // space's rooms, by their names; and the account's other rooms, by
+    // name, to be added to it.
+    if (const auto account = s_->model->accounts().find(chat->id.account); account != s_->model->accounts().end()) {
+      const auto named = [](const std::string& id, const mux::conversation& one) {
+        return mux::ui::room_settings_facts::named_room{id, one.name.empty() ? id : one.name};
+      };
+      for (const auto& [id, one] : account->second.conversations) {
         if (one.space && std::ranges::contains(one.children, chat->id.id))
-          facts.parents.push_back({id, one.name.empty() ? id : one.name});
+          facts.parents.push_back(named(id, one));
+        if (!chat->space || id == chat->id.id)
+          continue;
+        if (std::ranges::contains(chat->children, id))
+          facts.children.push_back(named(id, one));
+        else
+          facts.addable.push_back(named(id, one));
+      }
+      // The children the account is not in: by their IDs.
+      for (const std::string& child : chat->children)
+        if (!account->second.conversations.contains(child))
+          facts.children.push_back({child, child});
+      std::ranges::sort(facts.addable, {}, &mux::ui::room_settings_facts::named_room::name);
+    }
     // What its protocol fills of them: Matrix's own level and privileged users.
     mux::proto::manage_facts(mux::ui::protocol_state_of(s_->ui, chat->id.account), *chat, facts);
     s_->root().open_manage(facts);

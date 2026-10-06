@@ -211,9 +211,20 @@ struct link_facts {
 
 using power_levels_content = loom::ev::m_room_power_levels_content_t;
 
+// The server a room is reached through: the one its ID names (rooms before
+// version 12 have one), else this account's own.
 template <class Sink>
-void account<Sink>::set_room_state(const std::string& room, std::string type, const auto& content) {
-  auto done = this->perform(*api_, loom::cs::set_room_state_with_key{.room_id = room, .event_type = type, .state_key = "", .body = as_body(content)});
+std::string account<Sink>::server_of(const std::string& room) const {
+  const auto colon = room.find(':');
+  if (colon != std::string::npos)
+    return room.substr(colon + 1);
+  const auto own = id_.address.find(':');
+  return own == std::string::npos ? std::string() : id_.address.substr(own + 1);
+}
+
+template <class Sink>
+void account<Sink>::set_room_state(const std::string& room, std::string type, const auto& content, std::string key) {
+  auto done = this->perform(*api_, loom::cs::set_room_state_with_key{.room_id = room, .event_type = type, .state_key = std::move(key), .body = as_body(content)});
   if (!done)
     log(id_, "could not set {} in {}: {}", type, room, done.error().said());
 }
@@ -333,6 +344,17 @@ void account<Sink>::change_room(std::string room, proto::matrix::room_change_t c
                 content.events.emplace();
               content.events->insert_or_assign(one.event, static_cast<std::int64_t>(one.level));
               set("m.room.power_levels", content);
+            },
+            // Listed in the space, keyed by the room: through its own
+            // server where its ID names one, else through this account's.
+            [&](const proto::matrix::room_change::add_child& one) {
+              loom::ev::m_space_child_content_t content;
+              content.via = {this->server_of(one.room)};
+              this->set_room_state(room, "m.space.child", content, one.room);
+            },
+            // No longer: its entry with no via, which the spec reads as none.
+            [&](const proto::matrix::room_change::remove_child& one) {
+              this->set_room_state(room, "m.space.child", loom::ev::m_space_child_content_t{}, one.room);
             }},
         change);
   });

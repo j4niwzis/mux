@@ -40,10 +40,17 @@ struct set_event_need {
   std::string event;
   std::int64_t level = 0;
 };
+// A space's room or space: listed in it (m.space.child), or no longer.
+struct add_child {
+  std::string room;
+};
+struct remove_child {
+  std::string room;
+};
 }  // namespace room_change
 using room_change_t = spl::variant<room_change::set_join_rule, room_change::set_history, room_change::set_power,
                                       room_change::encrypt, room_change::set_need, room_change::upgrade,
-                                      room_change::set_event_need>;
+                                      room_change::set_event_need, room_change::add_child, room_change::remove_child>;
 
 namespace request {
 // A room changed, as Matrix changes one: the room being managed.

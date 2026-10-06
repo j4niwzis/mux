@@ -57,13 +57,18 @@ struct room_settings_facts {
   std::optional<config::room_event_kinds> event_kinds;
   // The user's own level, as the protocol fills it (manage_facts).
   std::int64_t mine = 0;
-  // The spaces it is in, as theirs list it: what a rule for their members
-  // names.
-  struct parent {
+  // A room by its ID and name.
+  struct named_room {
     std::string id;
     std::string name;
   };
-  std::vector<parent> parents;
+  // The spaces it is in, as theirs list it: what a rule for their members
+  // names.
+  std::vector<named_room> parents;
+  // A space's: the rooms and spaces it holds, and the account's others --
+  // those that may be added to it.
+  std::vector<named_room> children;
+  std::vector<named_room> addable;
   // A space: whether it holds spaces, and whether it is shown as a forum.
   bool space = false;
   bool holds_spaces = false;

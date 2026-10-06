@@ -153,6 +153,57 @@ struct pick_new_level {
   }
 };
 
+// ---- A space's rooms: listed, taken out, added -------------------------------
+// A room put in the space or taken out of it: asked of the server, and the
+// facts kept as they will be -- moved from one list to the other.
+template <class Box>
+void change_child(Box* box, const std::string& room, bool add) {
+  auto& facts = box->facts;
+  if (!may(facts, power_need::change_settings{}))
+    return;
+  auto& from = add ? facts.addable : facts.children;
+  auto& to = add ? facts.children : facts.addable;
+  const auto found = std::ranges::find(from, room, &room_settings_facts::named_room::id);
+  if (found == from.end())
+    return;
+  to.push_back(*found);
+  from.erase(found);
+  box->actions->ask_for(request::change_room{add ? room_change_t{room_change::add_child{room}}
+                                                 : room_change_t{room_change::remove_child{room}}});
+  box->show_again();
+}
+template <class Box>
+struct add_child_press {
+  Box* box;
+  std::string room;
+  void operator()() const { change_child(box, room, true); }
+};
+template <class Box>
+struct remove_child_press {
+  Box* box;
+  std::string room;
+  void operator()() const { change_child(box, room, false); }
+};
+// A room listed with what may be done to it: its name, and a button.
+template <class Press>
+struct listed_room_row : nodes::Stack {
+  struct parts_t {
+    nodes::Text name;
+    widgets::Button<Press> act;
+  } parts;
+  listed_room_row(const palette& colours, std::string name, std::string label, Press press, bool allowed)
+      : parts{.name = nodes::Text(std::move(name), 14.0f, colours.text),
+              .act = widgets::Button<Press>(colours.widgets, std::move(label), std::move(press))} {
+    this->setHorizontal();
+    this->setGap(8.0f);
+    fState.apply({.fillX = true, .height = 34.0f});
+    parts.name.setElided(true);
+    parts.name.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+    parts.act.apply({.width = 90.0f, .height = 28.0f, .alignSelf = scene::align::kMiddle});
+    parts.act.setVisible(allowed);
+  }
+};
+
 // ---- Room: its picture, name, topic and addresses ----------------------------
 template <class Box>
 struct room_page : nodes::Stack {
@@ -191,7 +242,15 @@ struct room_page : nodes::Stack {
     nodes::Text main_address;
     nodes::Text others_title;
     std::vector<nodes::Text> others;
+    // A space's: the rooms in it, each to be taken out; and the account's
+    // others, each to be added -- as Element's Add existing rooms.
+    nodes::Text space_rooms;
+    std::vector<listed_room_row<remove_child_press<Box>>> children;
+    nodes::Text add_heading;
+    std::vector<listed_room_row<add_child_press<Box>>> addable;
   } parts;
+  // At most this many of the account's rooms offered to be added.
+  static constexpr std::size_t kMostAddable = 60;
   room_page(Actions*, Box* box, const room_settings_facts& facts)
       : parts{.heading = tab_heading((*box->colours_), "Room"),
               .photo = avatar_mark(facts.id, facts.name, 88.0f),
@@ -202,8 +261,22 @@ struct room_page : nodes::Stack {
               .published = part_heading((*box->colours_), "Published Addresses"),
               .published_about = explained((*box->colours_),  "Published addresses can be used by anyone on any server to join your room. To publish an address, it " "needs to be set as a local address first."),
               .main_address = nodes::Text("Main address: " + facts.alias.value_or("none"), 14.0f, box->colours_->text),
-              .others_title = nodes::Text("Other published addresses:", 14.0f, (*box->colours_).text)},
+              .others_title = nodes::Text("Other published addresses:", 14.0f, (*box->colours_).text),
+              .space_rooms = part_heading((*box->colours_), "Rooms in this space"),
+              .add_heading = part_heading((*box->colours_), "Add existing rooms")},
         box_(box) {
+    const bool arrange = facts.space && may(facts, power_need::change_settings{});
+    parts.space_rooms.setVisible(facts.space);
+    parts.add_heading.setVisible(arrange);
+    if (facts.space) {
+      for (const auto& one : facts.children)
+        parts.children.emplace_back(*box->colours_, one.name, "Remove", remove_child_press<Box>{box, one.id}, arrange);
+      if (facts.children.empty())
+        parts.space_rooms.setText("No rooms in this space yet");
+    }
+    if (arrange)
+      for (const auto& one : std::views::take(facts.addable, kMostAddable))
+        parts.addable.emplace_back(*box->colours_, one.name, "Add", add_child_press<Box>{box, one.id}, true);
     this->setGap(6.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
     parts.photo.apply({.alignSelf = scene::align::kStart});
@@ -247,7 +320,7 @@ struct room_page : nodes::Stack {
 // nothing to name.
 [[nodiscard]] inline std::vector<std::string> space_ids(const room_settings_facts& facts) {
   return std::ranges::to<std::vector<std::string>>(
-      std::views::transform(facts.parents, [](const room_settings_facts::parent& one) { return one.id; }));
+      std::views::transform(facts.parents, [](const room_settings_facts::named_room& one) { return one.id; }));
 }
 [[nodiscard]] inline std::string spaces_said(const room_settings_facts& facts, std::string_view before, std::string_view after) {
   if (facts.parents.empty())

@@ -1046,6 +1046,18 @@ class model {
     conversation& kept = of(one.in);
     for (const auto& [user, event] : one.read_by)
       kept.read_by.insert_or_assign(user, event);
+    // The user's own, from another device (or this one's, echoed): where it
+    // is past the position kept here -- or there is none -- the position
+    // moves on to it. Never back: a receipt older than what was read here.
+    if (const auto mine = one.read_by.find(one.in.account.address); mine != one.read_by.end()) {
+      const auto place = [&](const std::string& id) { return std::ranges::find(kept.timeline, id, &message::id); };
+      const auto theirs = place(mine->second);
+      const bool past = !kept.read_up_to ||
+                        (theirs != kept.timeline.end() &&
+                         (place(*kept.read_up_to) == kept.timeline.end() || theirs > place(*kept.read_up_to)));
+      if (past)
+        kept.read_up_to = mine->second;
+    }
     for (const auto& [user, when] : one.read_at)
       kept.receipt_times.insert_or_assign(user, when);
   }

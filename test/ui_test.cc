@@ -113,7 +113,9 @@ struct stub {
   void manage_forum() {}
   void explore_space(std::string, std::string = {}) {}
   void join_directory_room(std::string, std::string) {}
-  void create_room(std::string, std::string, bool, std::string, bool = true, bool = false) {}
+  void create_room(std::string, std::string, bool, std::string, bool = true, bool = false,
+                   std::optional<mux::conversation_id> = std::nullopt, bool = false, bool = false) {}
+  void open_new_room_in(mux::conversation_id, std::string, bool) {}
   void find_people(std::string) {}
   void search_elsewhere(std::string) {}
   void open_packs() {}

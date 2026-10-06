@@ -637,9 +637,9 @@ struct window : scene::Node {
     if (auto* up = layer().new_chat.shown())
       up->show_found(people, query);
   }
-  void open_new_room(const std::string& own_server) {
+  void open_new_room(const std::string& own_server, std::optional<new_room_place> place = std::nullopt) {
     close_drawer();
-    layer().new_room.open(actions, *needs_.colours, own_server);
+    layer().new_room.open(actions, *needs_.colours, own_server, std::move(place));
   }
   void close_new_room() { layer().new_room.close(); }
   void open_packs(std::optional<std::string> room, bool editable) { layer().packs.open(actions, *needs_.colours, *needs_.shared, std::move(room), editable); }

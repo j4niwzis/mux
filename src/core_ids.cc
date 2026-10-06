@@ -503,6 +503,16 @@ struct mention {
   friend bool operator==(const mention&, const mention&) = default;
 };
 
+// Where a room is made: in a space -- listed in it, the space its parent --
+// and whether the space's members may join it (Element's "Visible to space
+// members"); and whether it is a space itself.
+struct room_place {
+  std::optional<std::string> space;
+  bool space_members = false;
+  bool make_space = false;
+  friend bool operator==(const room_place&, const room_place&) = default;
+};
+
 // How a run of what is sent is formatted: the tags of Telegram's field
 // (lib_ui's input_field.cpp) that Matrix's HTML carries too -- bold,
 // italic, underline, struck through, a spoiler, code, a link.

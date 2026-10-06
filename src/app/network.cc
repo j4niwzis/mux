@@ -467,14 +467,14 @@ struct network {
   }
   // A room made by the account named, as Element's Create room.
   void create_room(const mux::account_id& by, std::string name, std::string topic, bool open, std::string alias,
-                   bool federate = true, bool encrypted = false) {
+                   bool federate = true, bool encrypted = false, mux::room_place place = {}) {
     loop.post([this, by, name = std::move(name), topic = std::move(topic), open, alias = std::move(alias), federate,
-               encrypted] {
+               encrypted, place = std::move(place)] {
       for (auto& one : accounts)
         spl::visit(
             [&](auto& account) {
               if (account->id() == by)
-                ask_if_able([&](auto& a) -> decltype(void(a.create_room(name, topic, open, alias, federate, encrypted))) { a.create_room(name, topic, open, alias, federate, encrypted); }, *account);
+                ask_if_able([&](auto& a) -> decltype(void(a.create_room(name, topic, open, alias, federate, encrypted, place))) { a.create_room(name, topic, open, alias, federate, encrypted, place); }, *account);
             },
             one.account);
     });

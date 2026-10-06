@@ -62,6 +62,11 @@ class rooms_part {
     const auto by = s_->account_offering(mux::proto::feature::room_creation{});
     s_->root().open_new_room(by ? by->address.substr(by->address.find(':') + 1) : std::string());
   }
+  void apply(const request::open_new_room_in& one) {
+    const std::string& address = one.space.account.address;
+    s_->root().open_new_room(address.substr(address.find(':') + 1),
+                             mux::ui::new_room_place{one.space, one.name, one.make_space});
+  }
   void apply(const request::close_new_room&) { s_->root().close_new_room(); }
   void apply(const request::close_new_chat&) { s_->root().close_new_chat(); }
   void apply(const request::start_direct& one) {
@@ -133,13 +138,17 @@ class rooms_part {
   }
   // A room made, and opened once the model has it.
   void apply(const request::create_room& one) {
-    const auto by = s_->account_offering(mux::proto::feature::room_creation{});
+    // In a space: by its account.
+    const auto by = one.space ? std::optional<mux::account_id>(one.space->account)
+                              : s_->account_offering(mux::proto::feature::room_creation{});
     if (!by || s_->demo())
       return;
     s_->root().close_new_room();
     // Its alias's local part, as the protocol has it (#name:server, name).
     const std::string alias = mux::proto::local_part_of(mux::ui::protocol_state_of(s_->ui, *by), one.alias);
-    s_->net->create_room(*by, one.name, one.topic, one.open, one.open ? alias : std::string(), one.federate, one.encrypted);
+    s_->net->create_room(*by, one.name, one.topic, one.open, one.open ? alias : std::string(), one.federate, one.encrypted,
+                         mux::room_place{one.space ? std::optional<std::string>(one.space->id) : std::nullopt,
+                                         one.space_members, one.make_space});
     s_->root().show_message("New room", "Making " + one.name + "\u2026");
   }
   void apply(const request::start_group& one) {

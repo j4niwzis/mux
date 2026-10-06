@@ -130,7 +130,7 @@ class account {
   // A room made, as Element's Create room makes one: named, about
   // something, public -- with an address -- or private.
   void create_room(std::string name, std::string topic, bool open, std::string alias, bool federate = true,
-                   bool encrypted = false);
+                   bool encrypted = false, mux::room_place place = {});
   // A picture's caption edited: the picture kept, its caption the text.
   void edit_caption(std::string room, std::string event, std::string caption, mux::attachment picture);
   // Packs of custom emoji and stickers (MSC2545): a room's, or one's own

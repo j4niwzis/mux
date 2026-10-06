@@ -39,6 +39,14 @@ import :info_cards;
 import :info_reactions;
 
 export namespace mux::ui {
+// A room made in a space, as its menu asks: the space, its name, and
+// whether what is made is a space.
+struct new_room_place {
+  conversation_id space;
+  std::string name;
+  bool make_space = false;
+};
+
 // A chat to forward to: its id and name.
 struct forward_target {
   conversation_id id;
@@ -324,6 +332,10 @@ struct create_room_box : nodes::Stack {
   bool open_room = false;
   bool federate = true;
   bool encrypted = true;  // as Element: on for a private room, off for a public one
+  // Made in a space, where it is: its members let in by default, as
+  // Element's "Visible to space members".
+  std::optional<new_room_place> place;
+  bool space_members = false;
   bool advanced = false;
   bool choosing = false;  // the list of who can join, open
   struct close_it {
@@ -336,7 +348,8 @@ struct create_room_box : nodes::Stack {
       const std::string& name = box->parts.name.text();
       if (!name.empty())
         box->actions->create_room(name, box->parts.topic.text(), box->open_room, box->parts.address.text(), box->federate,
-                                  box->encrypted);
+                                  box->encrypted, box->place ? std::optional<conversation_id>(box->place->space) : std::nullopt,
+                                  box->space_members, box->place && box->place->make_space);
     }
   };
   struct cancel_press {
@@ -350,10 +363,21 @@ struct create_room_box : nodes::Stack {
       box->show_choice();
     }
   };
+  struct choose_members {
+    create_room_box* box;
+    void operator()() const {
+      box->open_room = false;
+      box->space_members = true;
+      box->encrypted = true;
+      box->choosing = false;
+      box->show_choice();
+    }
+  };
   struct choose_private {
     create_room_box* box;
     void operator()() const {
       box->open_room = false;
+      box->space_members = false;
       box->encrypted = true;
       box->choosing = false;
       box->show_choice();
@@ -363,6 +387,7 @@ struct create_room_box : nodes::Stack {
     create_room_box* box;
     void operator()() const {
       box->open_room = true;
+      box->space_members = false;
       box->encrypted = false;
       box->choosing = false;
       box->show_choice();
@@ -466,6 +491,7 @@ struct create_room_box : nodes::Stack {
     nodes::Text rule_caption;
     choice_button rule;
     option_row<choose_private> private_option;
+    option_row<choose_members> members_option;
     option_row<choose_public> public_option;
     nodes::Text rule_note;
     field address;
@@ -476,8 +502,8 @@ struct create_room_box : nodes::Stack {
     nodes::Text block_note;
     buttons_row buttons;
   } parts;
-  create_room_box(Actions* a, const palette& colours, std::string own_server)
-      : actions(a), colours_(&colours), server(std::move(own_server)),
+  create_room_box(Actions* a, const palette& colours, std::string own_server, std::optional<new_room_place> where = std::nullopt)
+      : actions(a), colours_(&colours), server(std::move(own_server)), place(std::move(where)), space_members(place.has_value()),
         parts{.header = header_t(colours, "Create a room", {}, {a}, false, true),
               .name = field(colours, "Name", ""),
               .topic = field(colours, "Topic (optional)", ""),
@@ -485,6 +511,9 @@ struct create_room_box : nodes::Stack {
               .rule = choice_button(this),
               .private_option = option_row<choose_private>(this, "Private room (invite only)",
                                                            "Only people invited will be able to find and join this room."),
+              .members_option = option_row<choose_members>(
+                  this, "Visible to space members",
+                  place ? "Anyone in " + place->name + " will be able to find and join." : std::string()),
               .public_option = option_row<choose_public>(this, "Public room", "Anyone will be able to find and join this room."),
               .rule_note = nodes::Text("", 13.0f, colours.dim),
               .address = field(colours, "Address", std::format("#room-name:{}", server)),
@@ -513,14 +542,26 @@ struct create_room_box : nodes::Stack {
   // What is shown for the choices made: the list open or not, the address
   // for a public room, the advanced part.
   void show_choice() {
-    parts.header.parts.title.setText(open_room ? "Create a public room" : "Create a room");
-    parts.rule.parts.value.setText(open_room ? "Public room" : "Private room (invite only)");
+    // What is made, and where: a room or a space, in a space or not.
+    const std::string what = place && place->make_space ? "space" : "room";
+    parts.header.parts.title.setText(place ? std::format("Create a {} in {}", what, place->name)
+                                           : open_room ? "Create a public room" : "Create a room");
+    parts.rule.parts.value.setText(open_room       ? "Public " + what
+                                   : space_members ? std::string("Visible to space members")
+                                                   : std::format("Private {} (invite only)", what));
     parts.private_option.setVisible(choosing);
+    parts.members_option.setVisible(choosing && place.has_value());
     parts.public_option.setVisible(choosing);
-    parts.rule_note.setText(open_room ? "Anyone will be able to find and join this room."
-                                      : "Only people invited will be able to find and join this room. You can change "
-                                        "this at any time from room settings.");
+    parts.rule_note.setText(open_room       ? std::format("Anyone will be able to find and join this {}.", what)
+                            : space_members ? std::format("Anyone in {} will be able to find and join this {}.",
+                                                          place ? place->name : std::string(), what)
+                                            : std::format("Only people invited will be able to find and join this {}. You can "
+                                                          "change this at any time from its settings.",
+                                                          what));
     parts.address.setVisible(open_room);
+    // A space has no messages to encrypt.
+    parts.encryption.setVisible(!(place && place->make_space));
+    parts.encryption_note.setVisible(!(place && place->make_space));
     parts.encryption.parts.toggle.setOn(encrypted);
     parts.encryption_note.setText(
         encrypted ? "Only those in the room will read its messages -- not the server. You can't turn this off later."

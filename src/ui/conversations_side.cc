@@ -421,6 +421,17 @@ struct side_column : nodes::Stack {
     std::string room;
     void operator()() const { actions->manage_space(room); }
   };
+  // A room, or a space, made in it -- Element's Add room and Add space.
+  struct create_in_act {
+    Actions* actions;
+    std::string account;
+    std::string room;
+    std::string name;
+    bool make_space = false;
+    void operator()() const {
+      actions->open_new_room_in(conversation_id{account_id{protocol_of(account), account}, room}, name, make_space);
+    }
+  };
   // The column's menus' look: a card over the rest, 190 wide.
   static void as_popup(nodes::Stack& menu, const palette& colours) {
     menu.setGap(4.0f);
@@ -510,6 +521,7 @@ struct side_column : nodes::Stack {
       nodes::Text title;
       widgets::Button<explore_act> explore;
       widgets::Button<manage_act> manage;
+      widgets::Button<create_in_act> add_room, add_space;
       widgets::Button<set_bars_act> side, top, both, hide;
     } parts;
     [[nodiscard]] static std::string room_of(const config::space_item_t& item) {
@@ -518,9 +530,11 @@ struct side_column : nodes::Stack {
                            item);
     }
     space_menu(const palette& colours, Actions* a, const std::string& account, const config::space_item_t& item, std::string name)
-        : parts{.title = nodes::Text(std::move(name), 13.0f, colours.dim, true),
+        : parts{.title = nodes::Text(name, 13.0f, colours.dim, true),
                 .explore = widgets::Button<explore_act>(colours.widgets, "Explore its rooms\u2026", {a, room_of(item)}),
                 .manage = widgets::Button<manage_act>(colours.widgets, "Space settings\u2026", {a, room_of(item)}),
+                .add_room = widgets::Button<create_in_act>(colours.widgets, "Create a room in it\u2026", {a, account, room_of(item), name, false}),
+                .add_space = widgets::Button<create_in_act>(colours.widgets, "Create a space in it\u2026", {a, account, room_of(item), name, true}),
                 .side = widgets::Button<set_bars_act>(colours.widgets, "Side bar only", {a, account, item, true, false}),
                 .top = widgets::Button<set_bars_act>(colours.widgets, "Top bar only", {a, account, item, false, true}),
                 .both = widgets::Button<set_bars_act>(colours.widgets, "Both bars", {a, account, item, true, true}),
@@ -528,10 +542,11 @@ struct side_column : nodes::Stack {
       as_popup(*this, colours);
       parts.title.setElided(true);
       parts.title.apply({.fillX = true});
-      for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.explore, &parts.manage, &parts.side, &parts.top, &parts.both, &parts.hide})
+      for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.explore, &parts.manage, &parts.add_room, &parts.add_space,
+                                                                   &parts.side, &parts.top, &parts.both, &parts.hide})
         each->apply({.fillX = true, .height = 30.0f});
-      parts.explore.setVisible(!room_of(item).empty());
-      parts.manage.setVisible(!room_of(item).empty());
+      for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.explore, &parts.manage, &parts.add_room, &parts.add_space})
+        each->setVisible(!room_of(item).empty());
     }
   };
   struct parts_t {

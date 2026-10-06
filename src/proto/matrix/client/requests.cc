@@ -744,12 +744,35 @@ void account<Sink>::search_people(std::string term) {
 
 template <class Sink>
 void account<Sink>::create_room(std::string name, std::string topic, bool open, std::string alias, bool federate,
-                                bool encrypted) {
+                                bool encrypted, mux::room_place place) {
   this->spawn_guarded([this, name = std::move(name), topic = std::move(topic), open, alias = std::move(alias), federate,
-                       encrypted] {
+                       encrypted, place = std::move(place)] {
     if (!api_)
       return;
     using made_t = loom::cs::create_room::body_t;
+    // What it is made as: a space, where asked; one of this server's only,
+    // where others are blocked -- Element's two switches, in its creation.
+    loom::ev::m_room_create_content_t creation;
+    if (!federate)
+      creation.m_federate = false;
+    if (place.make_space)
+      creation.type = "m.space";
+    // Its first state: encrypted, where asked; in a space, the space its
+    // parent and, where the space's members may join it, the rule saying so.
+    std::vector<made_t::state_event_t> first = encrypted && !place.make_space ? encrypted_from_the_start()
+                                                                              : std::vector<made_t::state_event_t>{};
+    if (place.space) {
+      loom::ev::m_space_parent_content_t parent;
+      parent.via = {this->server_of(*place.space)};
+      parent.canonical = true;
+      first.push_back({.type = "m.space.parent", .state_key = *place.space, .content = knot::raw{knot::to_json_string(parent)}});
+      if (place.space_members && !open) {
+        loom::ev::m_room_join_rules_content_t rule;
+        rule.join_rule = loom::ev::m_room_join_rules_content_t::join_rule_values::restricted{};
+        rule.allow = allow_of(proto::matrix::join_rule::restricted{{*place.space}});
+        first.push_back({.type = "m.room.join_rules", .state_key = "", .content = knot::raw{knot::to_json_string(rule)}});
+      }
+    }
     auto made = perform(
         *api_, loom::cs::create_room{
                    .body = {.visibility = open ? made_t::visibility_t{made_t::visibility_values::public_{}}
@@ -759,18 +782,24 @@ void account<Sink>::create_room(std::string name, std::string topic, bool open, 
                             .topic = topic.empty() ? std::nullopt : std::optional<std::string>(topic),
                             // Element's "Block anyone not part of the server":
                             // the room's creation content, as the spec has it.
-                            .creation_content = federate ? std::nullopt
-                                                         : std::optional<knot::raw>(knot::raw{R"({"m.federate":false})"}),
-                            // Encrypted, when asked, from the very start.
-                            .initial_state = encrypted ? std::optional(encrypted_from_the_start()) : std::nullopt,
+                            .creation_content = federate && !place.make_space
+                                                    ? std::nullopt
+                                                    : std::optional<knot::raw>(knot::raw{knot::to_json_string(creation)}),
+                            .initial_state = first.empty() ? std::nullopt : std::optional(std::move(first)),
                             .preset = open ? made_t::preset_t{made_t::preset_values::public_chat{}}
                                            : made_t::preset_t{made_t::preset_values::private_chat{}}}});
     if (!made) {
       log(id_, "could not make the room {}: {}", name, made.error().said());
       return;
     }
-    if (encrypted)
+    if (encrypted && !place.make_space)
       this->remember_encrypted(made->room_id);
+    // Listed in its space, as Element lists one made there.
+    if (place.space) {
+      loom::ev::m_space_child_content_t child;
+      child.via = {this->server_of(made->room_id)};
+      this->set_room_state(*place.space, "m.space.child", child, made->room_id);
+    }
     sink_(change::room_created{{id_, made->room_id}});
   });
 }

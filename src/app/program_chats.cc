@@ -104,10 +104,36 @@ void app::apply(const request::leave_chat&) {
     root().show_notice("This chat cannot be left");
     return;
   }
+  // A space: Element's box first, for which of its rooms to leave with it.
+  if (one->space) {
+    this->apply(request::open_leave_space{*chosen});
+    return;
+  }
   if (!ask.demo)
     net->leave(*chosen);
   root().main().info_open = false;
 }
+
+void app::apply(const request::open_leave_space& one) {
+  const mux::conversation* space = model->find(one.space);
+  if (!space)
+    return;
+  mux::ui::leave_space_facts facts{.space = one.space, .name = space->name.empty() ? one.space.id : space->name};
+  for (const std::string& child : space->children)
+    if (const mux::conversation* room = model->find(mux::conversation_id{one.space.account, child}))
+      facts.rooms.push_back({child, room->name.empty() ? child : room->name});
+  root().open_leave_space(std::move(facts));
+}
+void app::apply(const request::leave_space& one) {
+  root().close_leave_space();
+  if (ask.demo)
+    return;
+  for (const std::string& room : one.rooms)
+    net->leave(mux::conversation_id{one.space.account, room});
+  net->leave(one.space);
+  root().main().info_open = false;
+}
+void app::apply(const request::close_leave_space&) { root().close_leave_space(); }
 
 void app::apply(const request::back&) { this->show_conversations(); }
 

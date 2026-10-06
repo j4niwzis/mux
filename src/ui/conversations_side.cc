@@ -421,6 +421,12 @@ struct side_column : nodes::Stack {
     std::string room;
     void operator()() const { actions->manage_space(room); }
   };
+  struct leave_act {
+    Actions* actions;
+    std::string account;
+    std::string room;
+    void operator()() const { actions->open_leave_space(conversation_id{account_id{protocol_of(account), account}, room}); }
+  };
   // A room, or a space, made in it -- Element's Add room and Add space.
   struct create_in_act {
     Actions* actions;
@@ -522,6 +528,7 @@ struct side_column : nodes::Stack {
       widgets::Button<explore_act> explore;
       widgets::Button<manage_act> manage;
       widgets::Button<create_in_act> add_room, add_space;
+      widgets::Button<leave_act> leave;
       widgets::Button<set_bars_act> side, top, both, hide;
     } parts;
     [[nodiscard]] static std::string room_of(const config::space_item_t& item) {
@@ -535,6 +542,7 @@ struct side_column : nodes::Stack {
                 .manage = widgets::Button<manage_act>(colours.widgets, "Space settings\u2026", {a, room_of(item)}),
                 .add_room = widgets::Button<create_in_act>(colours.widgets, "Create a room in it\u2026", {a, account, room_of(item), name, false}),
                 .add_space = widgets::Button<create_in_act>(colours.widgets, "Create a space in it\u2026", {a, account, room_of(item), name, true}),
+                .leave = widgets::Button<leave_act>(colours.widgets, "Leave space\u2026", {a, account, room_of(item)}),
                 .side = widgets::Button<set_bars_act>(colours.widgets, "Side bar only", {a, account, item, true, false}),
                 .top = widgets::Button<set_bars_act>(colours.widgets, "Top bar only", {a, account, item, false, true}),
                 .both = widgets::Button<set_bars_act>(colours.widgets, "Both bars", {a, account, item, true, true}),
@@ -543,9 +551,10 @@ struct side_column : nodes::Stack {
       parts.title.setElided(true);
       parts.title.apply({.fillX = true});
       for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.explore, &parts.manage, &parts.add_room, &parts.add_space,
-                                                                   &parts.side, &parts.top, &parts.both, &parts.hide})
+                                                                   &parts.leave, &parts.side, &parts.top, &parts.both, &parts.hide})
         each->apply({.fillX = true, .height = 30.0f});
-      for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.explore, &parts.manage, &parts.add_room, &parts.add_space})
+      for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.explore, &parts.manage, &parts.add_room, &parts.add_space,
+                                                                   &parts.leave})
         each->setVisible(!room_of(item).empty());
     }
   };

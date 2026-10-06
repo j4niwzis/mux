@@ -226,6 +226,102 @@ struct toggle_line : nodes::Stack {
   }
 };
 
+// Leaving a space, as Element's LeaveSpaceDialog: the rooms of it one is in
+// left with it -- none of them, all, or those chosen, each by a switch.
+struct leave_space_facts {
+  conversation_id space;
+  std::string name;
+  std::vector<room_settings_facts::named_room> rooms;  // its rooms one is in
+};
+namespace leave_choice {
+struct none {};
+struct all {};
+struct some {};
+}  // namespace leave_choice
+using leave_choice_t = spl::variant<leave_choice::none, leave_choice::all, leave_choice::some>;
+template <class Actions>
+struct leave_space_box : nodes::Stack {
+  // The dialog it is shown in.
+  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{440.0f}}; }
+  Actions* actions = nullptr;
+  leave_space_facts facts;
+  leave_choice_t choice = leave_choice::none{};
+  std::set<std::string> chosen;  // the rooms to leave, where some are
+  struct pick {
+    leave_space_box* box;
+    leave_choice_t to;
+    void operator()() const {
+      box->choice = to;
+      box->show();
+    }
+  };
+  struct flip_room {
+    leave_space_box* box;
+    std::string room;
+    void operator()() const {
+      if (!box->chosen.erase(room))
+        box->chosen.insert(room);
+    }
+  };
+  struct go {
+    leave_space_box* box;
+    void operator()() const { box->actions->leave_space(box->facts.space, box->leaving()); }
+  };
+  struct cancel {
+    Actions* actions;
+    void operator()() const { actions->close_leave_space(); }
+  };
+  struct parts_t {
+    nodes::Text title;
+    nodes::Text about;
+    radio_choice<pick> none, all, some;
+    std::vector<toggle_line<flip_room>> rooms;
+    dialog_buttons<cancel, go> buttons;
+  } parts;
+  leave_space_box(const ui_needs<Actions>& n, leave_space_facts what)
+      : actions(n.actions), facts(std::move(what)),
+        parts{.title = nodes::Text("Leave " + facts.name, 17.0f, n.colours->text, true),
+              .about = explained(*n.colours, facts.rooms.empty()
+                                                 ? "You are in none of its rooms."
+                                                 : "Would you like to leave the rooms in this space too?"),
+              .none = radio_choice<pick>(*n.colours, "Don't leave any rooms", "", {this, leave_choice::none{}}, true, true),
+              .all = radio_choice<pick>(*n.colours, "Leave all rooms", "", {this, leave_choice::all{}}, false, true),
+              .some = radio_choice<pick>(*n.colours, "Leave some rooms", "", {this, leave_choice::some{}}, false, true),
+              .buttons = dialog_buttons<cancel, go>(*n.colours, "Leave space", {n.actions}, {this}, 130.0f)} {
+    for (const auto& one : facts.rooms)
+      parts.rooms.emplace_back(*n.colours, one.name, flip_room{this, one.id}, false, true);
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
+    this->setGap(8.0f);
+    for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.none, &parts.all, &parts.some})
+      each->setVisible(!facts.rooms.empty());
+    this->show();
+  }
+  // The choice made shown: its ring lit, the rooms' switches where some.
+  void show() {
+    const auto is = [&](auto which) {
+      return spl::visit(spl::overloaded{[](decltype(which)) { return true; }, [](const auto&) { return false; }}, choice);
+    };
+    parts.none.parts.ring.set_on(is(leave_choice::none{}));
+    parts.all.parts.ring.set_on(is(leave_choice::all{}));
+    parts.some.parts.ring.set_on(is(leave_choice::some{}));
+    for (auto& one : parts.rooms)
+      one.setVisible(is(leave_choice::some{}));
+    this->invalidateLayout();
+    this->markDamaged();
+  }
+  // The rooms to leave with it, as chosen.
+  [[nodiscard]] std::vector<std::string> leaving() const {
+    return spl::visit(
+        spl::overloaded{[](const leave_choice::none&) { return std::vector<std::string>{}; },
+                        [&](const leave_choice::all&) {
+                          return std::ranges::to<std::vector<std::string>>(
+                              std::views::transform(facts.rooms, [](const room_settings_facts::named_room& one) { return one.id; }));
+                        },
+                        [&](const leave_choice::some&) { return std::vector<std::string>(chosen.begin(), chosen.end()); }},
+        choice);
+  }
+};
+
 // A text to copy, as Element's "Internal room ID": the text, and a button.
 struct copy_line : nodes::Stack {
   struct copy_it {

@@ -116,6 +116,9 @@ struct stub {
   void create_room(std::string, std::string, bool, std::string, bool = true, bool = false,
                    std::optional<mux::conversation_id> = std::nullopt, bool = false, bool = false) {}
   void open_new_room_in(mux::conversation_id, std::string, bool) {}
+  void open_leave_space(mux::conversation_id) {}
+  void leave_space(mux::conversation_id, std::vector<std::string>) {}
+  void close_leave_space() {}
   void find_people(std::string) {}
   void search_elsewhere(std::string) {}
   void open_packs() {}

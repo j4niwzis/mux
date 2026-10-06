@@ -179,6 +179,8 @@ struct window : scene::Node {
       widgets::Dialog<edit_history_box<Actions>> history;
       // A link put on what is selected in the message field: Ctrl+K's.
       widgets::Dialog<link_box<Actions>> linking;
+      // Leaving a space, and which of its rooms with it.
+      widgets::Dialog<leave_space_box<Actions>> leaving;
       // The mentions or the reactions not yet seen, listed.
       widgets::Dialog<marks_box<Actions>> marks;
       // A room's management.
@@ -283,6 +285,8 @@ struct window : scene::Node {
         return a->close_manage(), closed();
       if (parts.marks.shown())
         return a->close_marks(), closed();
+      if (parts.leaving.shown())
+        return a->close_leave_space(), closed();
       if (parts.linking.shown())
         return a->close_link(), closed();
       if (parts.history.shown())
@@ -311,15 +315,15 @@ struct window : scene::Node {
     skia::SkRect frozen_at = skia::SkRect::MakeEmpty();  // where it is on the device
 
     [[nodiscard]] bool dialog_fading() {
-      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, history, linking, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, call_up, call_whole] = parts;
+      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, history, linking, leaving, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, call_up, call_whole] = parts;
       return settings.settling() || notice.settling() || person.settling() || room.settling() || reactions.settling() ||
-             history.settling() || linking.settling() ||
+             history.settling() || linking.settling() || leaving.settling() ||
              marks.settling() || manage.settling() || forwarding.settling() || new_chat.settling() ||
              new_room.settling() || packs.settling() || wallpaper.settling() || explore.settling() ||
              tools.settling() || sending.settling() || passphrase.settling() || verifying.settling();
     }
     void draw(skiff::scene::Painting& painting, skia::SkCanvas* canvas, float alpha) {
-      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, history, linking, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, call_up, call_whole] = parts;
+      auto& [backdrop, behind, frame, settings, notice, person, room, reactions, history, linking, leaving, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore, tools, sending, passphrase, verifying, emoji, menu, viewer, text_menu_up, call_up, call_whole] = parts;
       skia::SkMatrix inverse;
       if (!this->dialog_fading() || !canvas->getTotalMatrix().invert(&inverse)) {
         frozen = nullptr;
@@ -349,7 +353,7 @@ struct window : scene::Node {
       }
       canvas->drawImageRect(frozen, inverse.mapRect(frozen_at), skia::SkSamplingOptions(skia::SkFilterMode::kNearest));
       const auto over = [&](auto&... each) { (scene::draw(each, painting, canvas, alpha), ...); };
-      over(settings, notice, person, room, reactions, history, linking, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore,
+      over(settings, notice, person, room, reactions, history, linking, leaving, marks, manage, forwarding, new_chat, new_room, packs, wallpaper, explore,
            tools, sending, passphrase, verifying);
       const auto over_if = [&](auto&... each) { ((each ? scene::draw(*each, painting, canvas, alpha) : void()), ...); };
       over_if(emoji, menu, viewer, text_menu_up, call_up, call_whole);
@@ -428,6 +432,7 @@ struct window : scene::Node {
     layer().reactions.dropClosed();
     layer().history.dropClosed();
     layer().linking.dropClosed();
+    layer().leaving.dropClosed();
     layer().marks.dropClosed();
     layer().manage.dropClosed();
     layer().forwarding.dropClosed();
@@ -619,6 +624,8 @@ struct window : scene::Node {
   void close_edit_history() { layer().history.close(); }
   void open_link(std::string text, std::string url) { layer().linking.open(needs_, std::move(text), std::move(url)); }
   void close_link() { layer().linking.close(); }
+  void open_leave_space(leave_space_facts facts) { layer().leaving.open(needs_, std::move(facts)); }
+  void close_leave_space() { layer().leaving.close(); }
   void open_marks(mark_kind_t kind, const conversation& in, const std::vector<mark_entry>& entries, const model* now) {
     layer().marks.open(needs_, kind, in, entries, now);
   }

@@ -742,6 +742,11 @@ void account<Sink>::load_kept() {
     return;
   }
   state_.apply(*saved);
+  // Who was typing when it was kept is long past: the server tells m.typing
+  // only as it changes, so a typer kept here stayed "typing" -- re-told at
+  // every sync -- until they typed in that room again.
+  for (auto& [room, kept] : state_.joined)
+    kept.typing.clear();
   telling_history_ = true;
   tell(*saved);
   telling_history_ = false;

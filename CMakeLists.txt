@@ -82,7 +82,7 @@ endforeach()
 # tern's own pin, so both use the streaming reader and writer.
 cme_declare_port(NAME chevron PROVIDES chevron
   GITHUB_REPOSITORY j4niwzis/chevron
-  GIT_TAG 6bf0c76cb3e4a8446d9fac6b2fdd848b7b487003
+  GIT_TAG 8f40c545f0120747b3bf2ad6a61b420505e1249b
   # What the pin is: a copy installed on the machine from before it (0.1,
   # before spl::remapped and chevron.escape) is passed over.
   VERSION 0.2
@@ -91,13 +91,13 @@ cme_declare_port(NAME chevron PROVIDES chevron
 cme_options(chevron "CHEVRON_TESTS OFF")
 cme_declare_port(NAME tern PROVIDES tern
   GITHUB_REPOSITORY j4niwzis/tern
-  GIT_TAG 880220ab3ac28a3a124363d9038e9e724e071a9f
+  GIT_TAG 4178dfe4aa539799a04a71e3c6fde3a62c84d8d8
   LICENSE AGPL-3.0-only
   TARGETS tern)
 cme_options(tern "TERN_TESTS OFF" "TERN_EXAMPLES OFF")
 cme_declare_port(NAME loom PROVIDES loom
   GITHUB_REPOSITORY j4niwzis/loom
-  GIT_TAG bc199bac6a96e09751c9187c02033a8cf78ecdd5
+  GIT_TAG 0de943e75a2632df0de75a426918091f85fcb40b
   VERSION 0.1.1
   LICENSE AGPL-3.0-only
   TARGETS loom)
@@ -123,7 +123,7 @@ cme_find_package(OpenSSL REQUIRED)
 set(SPLICE_ERASE ${MUX_ERASE_HANDLERS} CACHE BOOL "spl::variant through tables outside a release build, as mux's handlers")
 cme_declare_port(NAME splice PROVIDES splice
   GITHUB_REPOSITORY j4niwzis/splice
-  GIT_TAG eb07788f6751dad1636aec9fd6bb134fe03a953f
+  GIT_TAG 8a7755a335917daf3bbfc54ef8a3a160f8445d15
   # splice.bytes with the libstdc++ module lookup fix. An older installed
   # copy has the same failing range-pipe operators as the old source pin.
   VERSION 0.4.1
@@ -137,7 +137,7 @@ cme_find_package(splice 0.4.1 REQUIRED)
 # for more of it finds it already built without that, and stops.
 cme_declare_port(NAME alef PROVIDES alef
   GITHUB_REPOSITORY j4niwzis/alef
-  GIT_TAG 582cbdaed7ea7703a1df7cfbce8df2df19ecd4d9
+  GIT_TAG ca0dacaab3c6dd5a9dfb3fc4c2322b756f36f744
   # Alef's pipe overloads remain reachable across Clang/libstdc++ imports.
   VERSION 0.1.1
   LICENSE AGPL-3.0-only
@@ -151,7 +151,7 @@ cme_find_package(alef 0.1.1 COMPONENTS precis idna grapheme line bidi emoji REQU
 # loom.
 cme_declare_port(NAME knot PROVIDES knot
   GITHUB_REPOSITORY j4niwzis/knot
-  GIT_TAG 5e73faba05b1824bae1e0bf0d49ef800411253d1
+  GIT_TAG 50319a44359801517711438d9882b504922c714b
   LICENSE AGPL-3.0-only)
 
 # Found by itself, and linked by itself: mux imports it (a message's HTML),
@@ -243,10 +243,10 @@ if(MUX_UI)
   # skiff and skiff-widgets say the rest of what they are in their own trees.
   cme_declare_port(NAME skiff PROVIDES skiff
     GITHUB_REPOSITORY j4niwzis/skiff
-    GIT_TAG eef86253928d7969d4f09a2fa77e4ef32812e54b)
+    GIT_TAG e0024449e9ab92cc0a254510961adeec6e004fa2)
   cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
     GITHUB_REPOSITORY j4niwzis/skiff-widgets
-    GIT_TAG 919af8c0afa7ebad57b6f8176c9eff04d7107e33)
+    GIT_TAG 40435c3d850a57a15fd10ab607213738fec4faf3)
   # Skia's features, each an option asking for its component: GL to draw on
   # the GPU (the software renderer is there either way), and the pictures
   # decoded. A system Skia without one is taken where its option is off.

@@ -356,10 +356,54 @@ class account {
     });
   }
 
-  // Its runs' styles are not sent: XMPP carries none beside the body but
-  // XEP-0393's, which are marks in the text itself.
+  // The text with its runs as XEP-0393 (Message Styling) writes them: marks
+  // in the body itself -- *strong*, _emphasis_, ~strike~ and `code`. A run
+  // is marked where its text starts and ends with no space, as the XEP
+  // asks; underline, spoilers and links it has none for, and they go as
+  // plain text. Put in from the end back, so each offset before is as it was.
+  [[nodiscard]] static std::string styled_body(std::string text, const std::vector<mux::styled_run>& runs) {
+    struct mark_at {
+      std::size_t at;
+      std::string_view mark;
+      bool closing;
+    };
+    std::vector<mark_at> marks;
+    const auto blank = [](char c) { return c == ' ' || c == '\n' || c == '\t'; };
+    for (const mux::styled_run& run : runs) {
+      std::size_t first = run.first, last = std::min(run.last, text.size());
+      while (first < last && blank(text[first]))
+        ++first;
+      while (last > first && blank(text[last - 1]))
+        --last;
+      if (first >= last)
+        continue;
+      const std::string_view mark = spl::visit(
+          spl::overloaded{[](const mux::run_style::bold&) { return std::string_view("*"); },
+                          [](const mux::run_style::italic&) { return std::string_view("_"); },
+                          [](const mux::run_style::strike&) { return std::string_view("~"); },
+                          [](const mux::run_style::code&) { return std::string_view("`"); },
+                          [](const mux::run_style::underline&) { return std::string_view(); },
+                          [](const mux::run_style::spoiler&) { return std::string_view(); },
+                          [](const mux::run_style::link&) { return std::string_view(); }},
+          run.style);
+      if (mark.empty())
+        continue;
+      marks.push_back({first, mark, false});
+      marks.push_back({last, mark, true});
+    }
+    // Back to front; at one place, closings before openings in the text --
+    // so put in openings first going backwards.
+    std::ranges::sort(marks, [](const mark_at& a, const mark_at& b) {
+      return a.at != b.at ? a.at > b.at : a.closing < b.closing;
+    });
+    for (const mark_at& one : marks)
+      text.insert(one.at, one.mark);
+    return text;
+  }
+
   void send(std::string to, std::string text, std::optional<std::string> reply_to = std::nullopt,
-            std::vector<mux::mention> = {}, std::vector<mux::styled_run> = {}) {
+            std::vector<mux::mention> = {}, std::vector<mux::styled_run> styles = {}) {
+    text = styled_body(std::move(text), styles);
     this->spawn_guarded([this, to = bare(to), text = std::move(text), reply_to = std::move(reply_to)] {
       message out{.in = {id_, to},
                   .id = "mux-" + std::to_string(++sent_),
@@ -383,7 +427,8 @@ class account {
   }
 
   // A message of one's own corrected (XEP-0308): the new text in its place.
-  void edit(std::string to, std::string id, std::string text, std::vector<mux::styled_run> = {}) {
+  void edit(std::string to, std::string id, std::string text, std::vector<mux::styled_run> styles = {}) {
+    text = styled_body(std::move(text), styles);
     this->spawn_guarded([this, to = bare(to), id = std::move(id), text = std::move(text)] {
       if (!session_)
         return;

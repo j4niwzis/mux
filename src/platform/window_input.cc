@@ -108,6 +108,7 @@ inline skiff::scene::Key key_of(sdl::SDL_Keycode key) {
     case sdl::kKey7: return keys::k7;
     case sdl::kKey8: return keys::k8;
     case sdl::kKey9: return keys::k9;
+    case sdl::kKeyPeriod: return keys::kPeriod;
     default: return keys::kUnknown;
   }
 }

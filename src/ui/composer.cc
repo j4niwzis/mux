@@ -459,6 +459,34 @@ struct field_quotes {
       spans.push_back({low, high, std::move(style)});
     return field_change{.spans = std::move(spans), .caret = field.caret, .anchor = field.anchor};
   }
+  // Ctrl+Shift+. -- tdesktop's blockquote: the lines selected (or the
+  // caret's) made a quote, a level of "> " before each; where all of them
+  // are quoted already, a level taken off them instead.
+  [[nodiscard]] static std::optional<field_change> quoted(const field_view& field) {
+    const std::string_view text = field.text;
+    const std::size_t low = field.low(), high = field.high();
+    std::vector<std::size_t> starts;
+    for (std::size_t at = start_of(text, low);;) {
+      starts.push_back(at);
+      const std::size_t end = text.find('\n', at);
+      // The line the selection ends at the start of is not in it.
+      if (end == std::string_view::npos || end + 1 >= high + (high == low ? 1 : 0))
+        break;
+      at = end + 1;
+    }
+    const bool off = std::ranges::all_of(starts, [&](std::size_t at) { return depth(text, at) > 0; });
+    // Back to front: each edit leaves the offsets before it as they were.
+    std::vector<widgets::TextReplace> edits = std::ranges::to<std::vector<widgets::TextReplace>>(std::views::transform(
+        std::views::reverse(starts), [&](std::size_t at) {
+          return off ? widgets::TextReplace{at, at + 2, ""} : widgets::TextReplace{at, at, "> "};
+        }));
+    // The selection moved by the marks put in or taken out before it.
+    const auto moved = [&](std::size_t at) {
+      const auto before = static_cast<std::size_t>(std::ranges::count_if(starts, [&](std::size_t one) { return one <= at; }));
+      return off ? at - std::min(at - starts.front(), 2 * before) : at + 2 * before;
+    };
+    return field_change{.edits = std::move(edits), .caret = moved(field.caret), .anchor = moved(field.anchor)};
+  }
   // tdesktop's shortcuts (InputField's kShortcuts): Ctrl+B bold, Ctrl+I
   // italic, Ctrl+U underlined; with Shift, X struck through, M code, P a
   // spoiler, N every format taken off what is selected.
@@ -482,6 +510,8 @@ struct field_quotes {
       return toggled(field, run_style::code{});
     if (press.key == keys::kP)
       return toggled(field, run_style::spoiler{});
+    if (press.key == keys::kPeriod)
+      return quoted(field);
     if (press.key == keys::kN && field.selection())
       return field_change{.spans = without(field.spans, field.low(), field.high(), [](const span&) { return true; }),
                           .caret = field.caret,

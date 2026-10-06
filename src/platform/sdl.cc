@@ -147,6 +147,7 @@ inline constexpr auto kKey6 = SDLK_6;
 inline constexpr auto kKey7 = SDLK_7;
 inline constexpr auto kKey8 = SDLK_8;
 inline constexpr auto kKey9 = SDLK_9;
+inline constexpr auto kKeyPeriod = SDLK_PERIOD;
 inline constexpr auto kKeyA = SDLK_A;
 inline constexpr auto kKeyB = SDLK_B;
 inline constexpr auto kKeyBackspace = SDLK_BACKSPACE;

@@ -61,12 +61,12 @@ namespace mux::proto::matrix::client {
                                                         const std::vector<styled_run>& styles = {});
 
 template <class Sink>
-void account<Sink>::edit(std::string room, std::string event, std::string text) {
-  this->spawn_sending([this, room = std::move(room), event = std::move(event), text = std::move(text)] {
+void account<Sink>::edit(std::string room, std::string event, std::string text, std::vector<styled_run> styles) {
+  this->spawn_sending([this, room = std::move(room), event = std::move(event), text = std::move(text), styles = std::move(styles)] {
     if (!api_)
       return;
-    // Made HTML as a message sent is: its Markdown, the room's emoji.
-    const auto html = html_of(text, emotes_in(room));
+    // Made HTML as a message sent is: its runs and its Markdown, the room's emoji.
+    const auto html = html_of(text, emotes_in(room), styles);
     const auto content = loom::client::edit_message(event, text, html);
     if (this->send_room_event(loom::cs::send_message{.room_id = room,
                                               .event_type = "m.room.message",

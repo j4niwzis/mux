@@ -41,11 +41,17 @@ class outbox_part {
         spl::overloaded{[](const compose::edit& e) { return e.before; },
                            [&](const auto&) { return s_->root().main().line.plain(); }},
         composing_);
+    const std::string edited = id;
     composing_ = compose::edit{std::move(id), std::move(before)};
     std::string line = text;
     std::ranges::replace(line, '\n', ' ');
     s_->root().main().line.show_context(mux::ui::compose_context{mux::ui::icon::pencil{}, "Edit message", std::move(line)});
     s_->root().main().line.set_text(text);
+    // Its formatting back, where its HTML has only runs.
+    if (const auto& chosen = s_->root().main().chosen; chosen && !text.empty())
+      if (const message* said = this->message_of(*chosen, edited); said && said->body.html)
+        if (auto runs = mux::ui::editable_runs(*said->body.html))
+          s_->root().main().line.set_formatted(std::move(runs->first), runs->second);
   }
   // A picture whose caption may be edited (not a video's, whose own is its
   // file): as Element edits one.
@@ -416,7 +422,7 @@ class outbox_part {
                             else if (picture)
                               s_->net->edit_caption(to, one.id, std::move(text), *said->attachment);
                             else
-                              s_->net->edit(to, one.id, std::move(text));
+                              s_->net->edit(to, one.id, std::move(text), std::move(styles));
                           }},
                composing_);
     composing_ = compose::plain{};

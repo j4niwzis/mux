@@ -279,7 +279,7 @@ class account {
                  std::optional<video_look> video = std::nullopt);
 
   // A message of one's own edited (m.replace): the new text in its place.
-  void edit(std::string room, std::string event, std::string text);
+  void edit(std::string room, std::string event, std::string text, std::vector<styled_run> styles = {});
   // A message removed (redacted).
   void remove(std::string room, std::string event);
 

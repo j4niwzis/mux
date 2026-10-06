@@ -58,7 +58,7 @@ template void account<mux::app::post_change>::fetch_quoted(std::string room, std
 template void account<mux::app::post_change>::load_context(std::string room, std::string target);
 template void account<mux::app::post_change>::load_newer(std::string room, std::string from);
 template void account<mux::app::post_change>::fetch_avatar(std::string source, std::string of);
-template void account<mux::app::post_change>::edit(std::string room, std::string event, std::string text);
+template void account<mux::app::post_change>::edit(std::string room, std::string event, std::string text, std::vector<styled_run> styles);
 template void account<mux::app::post_change>::edit_caption(std::string room, std::string event, std::string caption, mux::attachment picture);
 template void account<mux::app::post_change>::remove(std::string room, std::string event);
 template void account<mux::app::post_change>::react(std::string room, std::string target, std::string key, bool on);

@@ -178,13 +178,13 @@ struct network {
             one.account);
     });
   }
-  void edit(const mux::conversation_id& in, std::string id, std::string text) {
-    loop.post([this, in, id = std::move(id), text = std::move(text)] {
+  void edit(const mux::conversation_id& in, std::string id, std::string text, std::vector<mux::styled_run> styles = {}) {
+    loop.post([this, in, id = std::move(id), text = std::move(text), styles = std::move(styles)] {
       for (auto& one : accounts)
         spl::visit(
             [&](auto& account) {
               if (account->id() == in.account)
-                account->edit(in.id, id, text);
+                account->edit(in.id, id, text, styles);
             },
             one.account);
     });

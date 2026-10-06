@@ -383,7 +383,7 @@ class account {
   }
 
   // A message of one's own corrected (XEP-0308): the new text in its place.
-  void edit(std::string to, std::string id, std::string text) {
+  void edit(std::string to, std::string id, std::string text, std::vector<mux::styled_run> = {}) {
     this->spawn_guarded([this, to = bare(to), id = std::move(id), text = std::move(text)] {
       if (!session_)
         return;

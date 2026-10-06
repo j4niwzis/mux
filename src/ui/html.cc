@@ -389,4 +389,34 @@ using html_tag_t = spl::variant<html_tag::line_break, html_tag::block_end, html_
   return std::ranges::to<std::vector>(std::views::transform(link_spans_in(text), [](const nodes::Text::Link& one) { return std::pair{one.target, one.target}; }));
 }
 
+// A message's HTML as the message field edits it: its text and its runs,
+// where it has only runs -- bold, links and the like. Not where it has a
+// quote, a block of code or a list, which the field writes as marks of
+// their own, nor a mention's pill or a custom emoji, which are atoms there:
+// those are edited from the text as it is.
+[[nodiscard]] inline std::optional<std::pair<std::string, std::vector<mux::styled_run>>> editable_runs(std::string_view html) {
+  formatted read = read_html(html);
+  if (std::ranges::any_of(read.styles, [](const nodes::Text::Styled& one) { return one.quote || one.block; }) ||
+      std::ranges::any_of(read.spans, [](const nodes::Text::Link& one) { return one.pill || one.picture; }) ||
+      read.text.contains("\u2022 "))
+    return std::nullopt;
+  std::vector<mux::styled_run> runs;
+  for (const nodes::Text::Styled& one : read.styles) {
+    const auto put = [&](bool on, mux::run_style_t style) {
+      if (on)
+        runs.push_back({one.first, one.last, std::move(style)});
+    };
+    put(one.strong, run_style::bold{});
+    put(one.emphasis, run_style::italic{});
+    put(one.underline, run_style::underline{});
+    put(one.struck, run_style::strike{});
+    put(one.code, run_style::code{});
+    put(one.spoiler, run_style::spoiler{});
+  }
+  for (const nodes::Text::Link& one : read.spans)
+    if (!one.target.empty())
+      runs.push_back({one.first, one.last, run_style::link{one.target}});
+  return std::pair{std::move(read.text), std::move(runs)};
+}
+
 }  // namespace mux::ui

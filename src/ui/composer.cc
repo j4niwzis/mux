@@ -859,6 +859,13 @@ struct composer_bar : nodes::Stack {
     this->invalidateLayout();
   }
   void set_text(std::string text) { parts.input.parts.field.setText(std::move(text)); }
+  // Text and its runs, as a message edited had them.
+  void set_formatted(std::string text, const std::vector<mux::styled_run>& runs) {
+    auto& field = parts.input.parts.field;
+    field.setText(std::move(text));
+    field.setSpans(std::ranges::to<std::vector<field_quotes::span>>(
+        std::views::transform(runs, [](const mux::styled_run& one) { return field_quotes::span{one.first, one.last, one.style}; })));
+  }
   void clear() { parts.input.parts.field.setText({}); }
 };
 

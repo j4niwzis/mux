@@ -133,16 +133,6 @@ void program_told(App& app, const uia_in_browser& asked) {
   app.ask.open_url(asked.url);
   app.root().template open_dialog<uia_page<typename App::accounts::actions_type>>(asked.what, asked.url);
 }
-template <class App>
-void program_asked(App& app, const continue_uia&) {
-  app.root().close_dialog();
-  app.shared.with_chosen_account([&](auto&, config::account_t& account) { ops::continue_uia(*app.net, App::id_of(account)); });
-}
-template <class App>
-void program_asked(App& app, const cancel_uia&) {
-  app.root().close_dialog();
-  app.shared.with_chosen_account([&](auto&, config::account_t& account) { ops::cancel_uia(*app.net, App::id_of(account)); });
-}
 // What the developer tools asked, shown.
 template <class App>
 void program_told(App& app, const devtools_text& shown) {
@@ -310,6 +300,18 @@ void program_asked(App& app, const refresh_sessions&) {
   app.shared.with_chosen_account([&](auto&, config::account_t& account) { ops::list_sessions(*app.net, App::id_of(account)); });
 }
 
+// A step of interactive auth done in the browser: the request sent again,
+// or let go; the box closed either way.
+template <class App>
+void program_asked(App& app, const continue_uia&) {
+  app.root().close_dialog();
+  app.shared.with_chosen_account([&](auto&, config::account_t& account) { ops::continue_uia(*app.net, App::id_of(account)); });
+}
+template <class App>
+void program_asked(App& app, const cancel_uia&) {
+  app.root().close_dialog();
+  app.shared.with_chosen_account([&](auto&, config::account_t& account) { ops::cancel_uia(*app.net, App::id_of(account)); });
+}
 }  // namespace mux::proto::matrix::request
 
 // A passphrase or a password given, for what Matrix asked it for: for the

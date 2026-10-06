@@ -160,6 +160,7 @@ struct stub {
   void text_key(scene::Key) {}
   void start_call(mux::conversation_id) {}
   void call_chosen() {}
+  void dismiss_call() {}
   void menu_edit_history() {}
   void menu_select() {}
   void toggle_selected(std::string) {}
@@ -175,8 +176,7 @@ struct stub {
   void flip_notify(mux::config::notify_flag_t) {}
   void flip_unified_push() {}
   void set_notify_backend(mux::config::notify_backend_t) {}
-  void flip_account_notify() {}
-  void flip_account_notify_sound() {}
+  void set_notify_choice(mux::choice_level_t, mux::config::notify_setting_t, std::optional<bool>) {}
   void set_chat_notify(mux::config::notify_mode_t) {}
   void set_room_event_kind(mux::choice_level_t, std::optional<mux::room_event_t>, std::optional<bool>) {}
   void set_room_events(mux::choice_level_t, std::optional<bool>, std::optional<mux::config::room_event_kinds>) {}
@@ -209,6 +209,7 @@ struct stub {
   void menu_pin() {}
   void menu_reactions() {}
   void close_reactions() {}
+  void close_edit_history() {}
   void open_avatar(std::string) {}
   void open_manage() {}
   void menu_forward() {}

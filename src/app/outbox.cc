@@ -276,7 +276,7 @@ class outbox_part {
   // while it goes.
   void apply(const request::send_gif& one) {
     const auto& chosen = s_->root().main().chosen;
-    if (!chosen)
+    if (!chosen || s_->demo())
       return;
     auto bytes_read = spl::bytes::file_text(one.path);
     if (!bytes_read)
@@ -295,8 +295,24 @@ class outbox_part {
     s_->root().close_emoji();
     s_->go_live(*chosen);
     s_->root().main().jump_to_end();
+    // Sent while answering: the answer, as a sticker or a text would be.
+    const std::optional<std::string> reply_to = this->answering();
     s_->net->send_file(*chosen, sent.local, std::move(sent.as.bytes), sent.as.name, sent.as.mimetype,
-                       sent.as.picture.has_value(), sent.width, sent.height, std::string());
+                       sent.as.picture.has_value(), sent.width, sent.height, std::string(), reply_to);
+    if (reply_to)
+      this->stop_answering();
+  }
+  // The message being answered, where one is: what a GIF or a sticker sent
+  // now answers.
+  [[nodiscard]] std::optional<std::string> answering() const {
+    return spl::visit(spl::overloaded{[](const compose::reply& r) { return std::optional<std::string>(r.id); },
+                                      [](const auto&) { return std::optional<std::string>(); }},
+                      composing_);
+  }
+  // The answer sent: the field writes plainly again, the bar over it gone.
+  void stop_answering() {
+    composing_ = compose::plain{};
+    s_->root().main().line.show_context(std::nullopt);
   }
 
   // A sticker, sent into the chat being read; the popup closed.
@@ -310,15 +326,10 @@ class outbox_part {
     s_->go_live(*chosen);
     s_->root().main().jump_to_end();
     // Sent while answering: the answer, as a text would be.
-    const std::optional<std::string> reply_to =
-        spl::visit(spl::overloaded{[](const compose::reply& r) { return std::optional<std::string>(r.id); },
-                                         [](const auto&) { return std::optional<std::string>(); }},
-                      composing_);
+    const std::optional<std::string> reply_to = this->answering();
     s_->net->send_sticker(*chosen, one.sticker, reply_to);
-    if (reply_to) {
-      composing_ = compose::plain{};
-      s_->root().main().line.show_context(std::nullopt);
-    }
+    if (reply_to)
+      this->stop_answering();
   }
 
   // Files given: read and prepared as the logic of sending says; a

@@ -9,6 +9,7 @@ import loom.api;
 import loom.ev;
 import loom.state;
 import loom.cs.joining;
+import loom.cs.cross_signing;
 import loom.cs.keys;
 import loom.cs.to_device;
 import loom.cs.sliding_sync;

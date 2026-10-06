@@ -666,7 +666,9 @@ void account<Sink>::run() {
           if (const auto had = state_.joined.find(room); had != state_.joined.end() && !had->second.timeline.empty())
             gaps.emplace_back(room, *part.timeline->prev_batch, had->second.timeline.back().event_id);
     state_.apply(*got);
+    telling_history_ = first || sliding_first;
     tell(*got);
+    telling_history_ = false;
     for (auto& [room, from, until] : gaps)
       this->catch_up(std::move(room), std::move(from), std::move(until));
     // Written every half a minute, and at the end: a restart goes on from
@@ -740,7 +742,9 @@ void account<Sink>::load_kept() {
     return;
   }
   state_.apply(*saved);
+  telling_history_ = true;
   tell(*saved);
+  telling_history_ = false;
   log(id_, "the sync kept: {} rooms, going on from there", state_.joined.size());
 }
 

@@ -652,6 +652,16 @@ class account {
   // rest where it is history paged back to.
   // `sealed`: it came end-to-end encrypted, and was read here -- an edit
   // so is one an encrypted message may take (review 4, H3).
+  // What a sync tells is history, not news, while this is set: the first
+  // sync of a login, and the sync kept on disk told again at a start. Its
+  // events are shown, but mark no mention or reaction as unseen and ring
+  // no call -- a login showed every old mention as new.
+  bool telling_history_ = false;
+  // Whether an event placed so is news: come at the end, not from history.
+  [[nodiscard]] bool live(const placement_t& where) const {
+    return !telling_history_ &&
+           spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
+  }
   void event(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where = placement::at_end{},
              bool sealed = false);
 

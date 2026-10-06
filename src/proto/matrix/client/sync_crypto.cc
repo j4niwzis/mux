@@ -395,7 +395,8 @@ bool account<Sink>::verification_in_room(const conversation_id& in, const loom::
   const bool step = spl::visit(spl::overloaded{[](verification_kind::none) { return false; }, [](const auto&) { return true; }}, kind);
   if (!step)
     return false;
-  const bool live = spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
+  // An old request -- in the first sync's history -- is not one to answer.
+  const bool live = this->live(where);
   if (!live || one.sender == id_.address || !crypto_)
     return true;
   // The step, read as its type's content, its reference made its transaction

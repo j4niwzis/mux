@@ -134,7 +134,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       // An edit that mentions the user, by another: the message it edits
       // marked as mentioning them, as tdesktop counts a mention added by an
       // edit -- the @ to go to, and no notification.
-      const bool live = spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
+      const bool live = this->live(where);
       if (live && relates->event_id && one.sender != id_.address && loom::client::mentions(content, id_.address))
         sink_(change::mentioned{in, *relates->event_id, at});
       return;
@@ -275,7 +275,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       made.threaded = std::move(*summary);
     // A message for the user, come as it happened: listed, as Telegram's @.
     // Who it mentions, as m.mentions says; before that, the user's ID in it.
-    const bool live = spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
+    const bool live = this->live(where);
     const auto mentions_me = [&] { return loom::client::mentions(content, id_.address); };
     if (live && !made.outgoing && mentions_me())
       sink_(change::mentioned{in, made.id, made.at});
@@ -288,8 +288,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
   }, [&](const loom::ev::m_reaction_content_t& content) {
     if (content.m_relates_to && content.m_relates_to->event_id && content.m_relates_to->key) {
       reactions_[one.event_id] = {*content.m_relates_to->event_id, *content.m_relates_to->key, one.sender};
-      const bool live =
-          spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
+      const bool live = this->live(where);
       sink_(change::reaction_changed{in, *content.m_relates_to->event_id, *content.m_relates_to->key, one.sender,
                                      true, one.event_id, at, live});
       // Fetched on its own, as what a reply quotes: a message of its own for
@@ -735,7 +734,7 @@ template <class Sink>
 void account<Sink>::call_signal(const conversation_id& in, const loom::ev::timeline_event& one,
                                 std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where, std::string call,
                                 std::string party, change::call_said_t said) {
-  const bool live = spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
+  const bool live = this->live(where);
   if (!live)
     return;
   // This session's own, echoed by the sync: nothing to tell.

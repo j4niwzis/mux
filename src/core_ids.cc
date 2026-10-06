@@ -44,9 +44,9 @@ struct group {
   friend bool operator==(const group&, const group&) = default;
 };
 }  // namespace conversation_kind
-using conversation_kind_t = splice::variant<conversation_kind::direct, conversation_kind::group>;
+using conversation_kind_t = spl::variant<conversation_kind::direct, conversation_kind::group>;
 [[nodiscard]] inline bool one_to_one(const conversation_kind_t& kind) {
-  return splice::visit([](auto one) { return one.one_to_one; }, kind);
+  return spl::visit([](auto one) { return one.one_to_one; }, kind);
 }
 
 // Where an account is with its server. A failure says why; a connection
@@ -67,10 +67,10 @@ struct failed {
   friend bool operator==(const failed&, const failed&) = default;
 };
 }  // namespace connection
-using connection_t = splice::variant<connection::offline, connection::connecting, connection::online, connection::failed>;
+using connection_t = spl::variant<connection::offline, connection::connecting, connection::online, connection::failed>;
 
 [[nodiscard]] inline bool is_online(const connection_t& state) {
-  return splice::visit(splice::overloaded{[](const connection::online&) { return true; }, [](const auto&) { return false; }},
+  return spl::visit(spl::overloaded{[](const connection::online&) { return true; }, [](const auto&) { return false; }},
                     state);
 }
 
@@ -94,7 +94,7 @@ struct chat {
   friend bool operator==(const chat&, const chat&) = default;
 };
 }  // namespace availability
-using availability_t = splice::variant<availability::offline, availability::online, availability::away,
+using availability_t = spl::variant<availability::offline, availability::online, availability::away,
                                     availability::extended_away, availability::do_not_disturb, availability::chat>;
 
 struct presence {
@@ -128,7 +128,7 @@ struct failed {
   friend bool operator==(const failed&, const failed&) = default;
 };
 }  // namespace delivery
-using delivery_t = splice::variant<delivery::sending, delivery::sent, delivery::delivered, delivery::read, delivery::failed>;
+using delivery_t = spl::variant<delivery::sending, delivery::sent, delivery::delivered, delivery::read, delivery::failed>;
 
 // What a message carries besides its text: a picture, shown in it, or a
 // file, offered to be saved -- by where its protocol keeps it (an mxc://).
@@ -144,13 +144,13 @@ struct file {
   friend bool operator==(file, file) = default;
 };
 }  // namespace attachment_kind
-using attachment_kind_t = splice::variant<attachment_kind::image, attachment_kind::file>;
+using attachment_kind_t = spl::variant<attachment_kind::image, attachment_kind::file>;
 [[nodiscard]] inline bool is_picture(const attachment_kind_t& kind) {
-  return splice::visit([](auto one) { return one.picture; }, kind);
+  return spl::visit([](auto one) { return one.picture; }, kind);
 }
 // Whether it is a picture that moves.
 [[nodiscard]] inline bool moves(const attachment_kind_t& kind) {
-  return splice::visit(splice::overloaded{[](attachment_kind::image one) { return one.moves; },
+  return spl::visit(spl::overloaded{[](attachment_kind::image one) { return one.moves; },
                                [](attachment_kind::file) { return false; }},
                     kind);
 }
@@ -233,11 +233,11 @@ struct unreactions {
 };    // each reaction taken back, as a line of its own: hidden unless chosen
 }  // namespace room_event
 using room_event_t =
-    splice::variant<room_event::joins, room_event::invites, room_event::names, room_event::avatars, room_event::room_name,
+    spl::variant<room_event::joins, room_event::invites, room_event::names, room_event::avatars, room_event::room_name,
                  room_event::topic, room_event::room_avatar, room_event::address, room_event::pins,
                  room_event::permissions, room_event::access, room_event::encryption, room_event::other,
                  room_event::unreadable, room_event::reactions, room_event::unreactions>;
-inline constexpr std::size_t kRoomEventKinds = splice::variant_size_v<room_event_t>;
+inline constexpr std::size_t kRoomEventKinds = spl::variant_size_v<room_event_t>;
 inline const std::array<room_event_t, kRoomEventKinds> all_room_events{
     room_event::joins{},     room_event::invites{}, room_event::names{},       room_event::avatars{},
     room_event::room_name{}, room_event::topic{},   room_event::room_avatar{}, room_event::address{},
@@ -257,10 +257,10 @@ struct everywhere {};
 struct account {};
 struct chat {};
 }  // namespace choice_level
-using choice_level_t = splice::variant<choice_level::everywhere, choice_level::account, choice_level::chat>;
+using choice_level_t = spl::variant<choice_level::everywhere, choice_level::account, choice_level::chat>;
 // Whether a level has one over it to be as: every level but everywhere.
 [[nodiscard]] inline bool has_level_above(const choice_level_t& level) {
-  return splice::visit(splice::overloaded{[](choice_level::everywhere) { return false; }, [](const auto&) { return true; }}, level);
+  return spl::visit(spl::overloaded{[](choice_level::everywhere) { return false; }, [](const auto&) { return true; }}, level);
 }
 
 // A thread's summary, on its root (m.relations' m.thread, or counted
@@ -415,7 +415,7 @@ struct unban {
   std::string user;
 };
 }  // namespace room_action
-using room_action_t = splice::variant<room_action::rename, room_action::retopic, room_action::invite, room_action::kick,
+using room_action_t = spl::variant<room_action::rename, room_action::retopic, room_action::invite, room_action::kick,
                                      room_action::ban, room_action::unban>;
 
 // A custom emoji: its shortcode, as written between colons, and its picture
@@ -446,7 +446,7 @@ namespace mark_kind {
 struct mention {};
 struct reaction {};
 }  // namespace mark_kind
-using mark_kind_t = splice::variant<mark_kind::mention, mark_kind::reaction>;
+using mark_kind_t = spl::variant<mark_kind::mention, mark_kind::reaction>;
 
 // A room of a server's public directory, as it lists it.
 // Someone found -- in the user directory, or among one's chats: their ID,
@@ -690,7 +690,7 @@ struct to_watch {};
 // the clipboard.
 struct to_copy {};
 }  // namespace media_use
-using media_use_t = splice::variant<media_use::avatar, media_use::thumbnail, media_use::whole, media_use::to_open,
+using media_use_t = spl::variant<media_use::avatar, media_use::thumbnail, media_use::whole, media_use::to_open,
                                  media_use::to_save, media_use::to_play, media_use::to_watch, media_use::to_copy>;
 
 // Where a message goes among those of its chat.
@@ -700,7 +700,7 @@ struct at_start {};   // history paged back: before the rest
 struct in_window {};  // a window's own: loaded around a message, or paged forward
 struct aside {};      // not in the timeline: a message a reply quotes, fetched for its quote
 }  // namespace placement
-using placement_t = splice::variant<placement::at_end, placement::at_start, placement::in_window, placement::aside>;
+using placement_t = spl::variant<placement::at_end, placement::at_start, placement::in_window, placement::aside>;
 
 // What a link in a message is, as its page says (Open Graph): the site, the
 // title, a line about it, and its picture, kept on the server.
@@ -777,7 +777,7 @@ struct cancelled {
   friend bool operator==(const cancelled&, const cancelled&) = default;
 };
 }  // namespace verification_step
-using verification_step_t = splice::variant<verification_step::asked, verification_step::waiting, verification_step::compare,
+using verification_step_t = spl::variant<verification_step::asked, verification_step::waiting, verification_step::compare,
                                             verification_step::done, verification_step::cancelled>;
 // What this account knows of another's encryption identity, as Element
 // says it: verified (here, by emoji, or their master key verified), not
@@ -794,7 +794,7 @@ struct changed {
   friend bool operator==(changed, changed) = default;
 };
 }  // namespace trust
-using trust_t = splice::variant<trust::unverified, trust::verified, trust::changed>;
+using trust_t = spl::variant<trust::unverified, trust::verified, trust::changed>;
 
 // A list of a protocol's own changes (its changes_type(state)), made into the
 // one variant of all changes in mux.core.

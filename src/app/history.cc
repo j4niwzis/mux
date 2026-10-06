@@ -34,8 +34,8 @@ class history_part {
     // at -- or the room's beginning. A first sync: before its first message
     // is its prev_batch. A window loaded around a message: its oldest, not
     // known to follow anything on disk. Too many marks cost only a request.
-    splice::visit(
-        splice::overloaded{
+    spl::visit(
+        spl::overloaded{
             [&](const mux::change::history_position& c) {
               const mux::conversation* chat = s_->model->find(c.in);
               if (const auto paged = paging_from_.find(c.in); paged != paging_from_.end()) {
@@ -58,7 +58,7 @@ class history_part {
               }
             },
             [&](const mux::change::message_added& c) {
-              splice::visit(splice::overloaded{
+              spl::visit(spl::overloaded{
                                 [&](mux::placement::at_end) {
                                   if (const auto pending = sync_gap_.find(c.message.in); pending != sync_gap_.end()) {
                                     gaps_of(c.message.in)
@@ -102,7 +102,7 @@ class history_part {
     const auto added = [&](const mux::change::message_added& c) {
       // A message fetched for a quote is not history read in order: kept on
       // disk, it would be read back as though it were next to the rest.
-      if (splice::visit(splice::overloaded{[](mux::placement::aside) { return true; }, [](const auto&) { return false; }},
+      if (spl::visit(spl::overloaded{[](mux::placement::aside) { return true; }, [](const auto&) { return false; }},
                      c.where))
         return;
       const mux::conversation* chat = s_->model->find(c.message.in);
@@ -113,7 +113,7 @@ class history_part {
       else if (!c.message.id.empty())
         s_->store->record(c.message);
     };
-    splice::visit(splice::overloaded{[&](const mux::change::message_added& c) { added(c); },
+    spl::visit(spl::overloaded{[&](const mux::change::message_added& c) { added(c); },
                                [&](const mux::change::message_edited& c) { as_now(c.in, c.id); },
                                [&](const mux::change::message_encrypted& c) { as_now(c.in, c.id); },
                                [&](const mux::change::message_discarded& c) { s_->store->forget(c.in, c.id); },

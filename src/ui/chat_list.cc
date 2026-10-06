@@ -223,7 +223,7 @@ struct conversation_row : nodes::Stack {
     std::ranges::for_each(shown.badges, [&](const proto::part::badge& one) {
       parts.lines.parts.bottom.parts.marks.emplace_back(colours, one).apply({.alignSelf = scene::align::kMiddle});
     });
-    splice::visit(
+    spl::visit(
         [&](const auto& now) {
           using row_view_defaults::make_row_view;
           this->place_view(make_row_view(now, one, type_tag<Actions>{}));

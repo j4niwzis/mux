@@ -72,7 +72,7 @@ void needs_level(Box* box, const power_need_t& need, std::int64_t level) {
   if (!may(facts, power_need::change_permissions{}) || level > facts.mine)
     return;
   box->actions->ask_for(request::change_room{room_change::set_need{need, level}});
-  splice::visit(splice::overloaded{[&](power_need::default_role) { rules_in(facts.theirs).needs.users_default = level; },
+  spl::visit(spl::overloaded{[&](power_need::default_role) { rules_in(facts.theirs).needs.users_default = level; },
                                    [&](power_need::send_messages) { rules_in(facts.theirs).needs.events_default = level; },
                                    [&](power_need::change_settings) { rules_in(facts.theirs).needs.state_default = level; },
                                    [&](power_need::invite) { rules_in(facts.theirs).needs.invite = level; },
@@ -524,7 +524,7 @@ struct roles_page : nodes::Stack {
     // Those the list has by their own row are not again.
     std::set<std::string_view> listed;
     for (const auto& [text, need] : all)
-      splice::visit(splice::overloaded{[&]<sends_state Need>(const Need&) { listed.insert(Need::event); }, [](const auto&) {}}, need);
+      spl::visit(spl::overloaded{[&]<sends_state Need>(const Need&) { listed.insert(Need::event); }, [](const auto&) {}}, need);
     for (const auto& [event, level] : rules_of(facts.theirs).needs.events)
       if (!listed.contains(event))
         parts.others.emplace_back(box, event, level, facts);

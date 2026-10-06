@@ -125,7 +125,7 @@ class pictures_part {
         };
       });
     };
-    splice::visit(splice::overloaded{[&](const media_use::avatar& one) {
+    spl::visit(spl::overloaded{[&](const media_use::avatar& one) {
                             // An avatar is shown at 120 px at most -- twice that on a dense screen.
                             shown(mux::ui::avatar_images(), one.of, 256);
                           },
@@ -160,7 +160,7 @@ class pictures_part {
                picture.use);
     if (!fresh)
       return;
-    splice::visit(splice::overloaded{[](const media_use::avatar&) {}, [](const media_use::thumbnail&) {},
+    spl::visit(spl::overloaded{[](const media_use::avatar&) {}, [](const media_use::thumbnail&) {},
                                      [](const media_use::whole&) {}, [](const media_use::to_copy&) {},
                                      [&](const auto&) { this->keep(picture.use, picture.source, picture.bytes); }},
                   picture.use);
@@ -484,7 +484,7 @@ class pictures_part {
   // one; touched, so it comes first.
   void save_gif(const std::string& source) {
     const auto kept = kept_file(media_use::whole{}, source);
-    auto bytes_read = kept ? splice::bytes::file_text(*kept) : std::nullopt;
+    auto bytes_read = kept ? spl::bytes::file_text(*kept) : std::nullopt;
     if (!bytes_read) {
       s_->root().show_message("GIFs", "The GIF has not loaded yet. Save it once it plays.");
       return;
@@ -587,7 +587,7 @@ class pictures_part {
     const auto kept = kept_file(media_use::whole{}, source);
     if (!kept)
       return std::nullopt;
-    return splice::bytes::file_text(*kept);
+    return spl::bytes::file_text(*kept);
   }
   // Bytes written where the dialog said, and said.
   void write_chosen(const std::string& bytes, const std::string& path) {
@@ -611,7 +611,7 @@ class pictures_part {
     const auto named = [&](std::string_view kind) {
       return std::optional(mux::config::cache_path("avatars") / (std::string(kind) + mux::config::file_name_of(source)));
     };
-    return splice::visit(splice::overloaded{[&](const media_use::avatar&) { return named(""); },
+    return spl::visit(spl::overloaded{[&](const media_use::avatar&) { return named(""); },
                                  [&](const media_use::thumbnail&) { return named("thumb_"); },
                                  [&](const media_use::whole&) { return named("full_"); },
                                  [](const media_use::to_open&) { return std::optional<std::filesystem::path>(); },
@@ -662,7 +662,7 @@ class pictures_part {
     const auto where = kept_file(use, source);
     if (!where)
       return false;
-    auto bytes_read = splice::bytes::file_text(*where);
+    auto bytes_read = spl::bytes::file_text(*where);
     if (!bytes_read)
       return false;
     std::string bytes = std::move(*bytes_read);
@@ -755,7 +755,7 @@ class pictures_part {
         ".exe", ".com", ".bat", ".cmd", ".scr", ".pif", ".msi", ".msp", ".lnk", ".url", ".js",   ".jse",
         ".vbs", ".vbe", ".wsf", ".wsh", ".ps1", ".psm1", ".hta", ".cpl", ".reg", ".jar", ".desktop", ".sh",
         ".run", ".appimage", ".command", ".app", ".pkg", ".dmg", ".apk", ".py", ".pl", ".deb"};
-    const std::string extension = splice::bytes::lower_text(name.extension().string());
+    const std::string extension = spl::bytes::lower_text(name.extension().string());
     return std::ranges::contains(kinds, std::string_view(extension));
   }
   void save_download(const std::string& bytes, std::string name, bool open) {

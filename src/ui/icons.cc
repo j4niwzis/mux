@@ -58,7 +58,7 @@ struct dot {
   skia::SkColor colour;
 };
 }  // namespace icon
-using icon_t = splice::variant<icon::none, icon::person, icon::gear, icon::power, icon::plus, icon::motion, icon::back,
+using icon_t = spl::variant<icon::none, icon::person, icon::gear, icon::power, icon::plus, icon::motion, icon::back,
                             icon::close, icon::info, icon::people, icon::add_person, icon::bell, icon::sliders,
                             icon::leave, icon::check, icon::clip, icon::send, icon::eye, icon::dot, icon::minus,
                             icon::reply, icon::pencil, icon::search, icon::up, icon::down, icon::smile,
@@ -264,7 +264,7 @@ namespace steps = nodes::path_step;
             0.0f, true}}};
 }
 [[nodiscard]] inline IconShape shape_of(const icon_t& which) {
-  return splice::visit([](auto one) { return shape_of(one); }, which);
+  return spl::visit([](auto one) { return shape_of(one); }, which);
 }
 
 // Whether an icon draws anything: all but none.

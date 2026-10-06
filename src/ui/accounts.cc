@@ -38,7 +38,7 @@ export namespace mux::ui {
   if (found == now.accounts().end())
     return {"offline", false};
   bool failed = false;
-  std::string said = splice::visit(splice::overloaded{[](const connection::offline&) { return std::string("offline"); },
+  std::string said = spl::visit(spl::overloaded{[](const connection::offline&) { return std::string("offline"); },
                                            [](const connection::connecting&) { return std::string("connecting…"); },
                                            [](const connection::online&) { return std::string("online"); },
                                            [&failed](const connection::failed& why) {
@@ -149,7 +149,7 @@ struct account_editor : nodes::Stack {
   }
 
   void say(std::string text, bool error) {
-    splice::visit([&](auto& one) { one.say(std::move(text), error); }, parts.form);
+    spl::visit([&](auto& one) { one.say(std::move(text), error); }, parts.form);
   }
 };
 
@@ -247,7 +247,7 @@ struct account_pages : nodes::Stack {
   // The rows of the chosen account's protocol.
   void show_for(const protocol_state_t& state) {
     parts.own.clear();
-    splice::visit([&](const auto& now) { this->add(proto::account_pages_of(now)); }, state);
+    spl::visit([&](const auto& now) { this->add(proto::account_pages_of(now)); }, state);
     this->invalidateLayout();
   }
   void light(const account_page_t& page) {
@@ -536,7 +536,7 @@ struct accounts_panel : closes_on_escape<Actions> {
   // The page shown: across the pane, as tall as what it holds -- scrolled
   // from its top.
   void fit_detail() {
-    splice::visit(
+    spl::visit(
         [](auto& one) {
           one.fState.apply({.relativeSize = scene::axes::kX});
           one.fState.apply({.autoSize = scene::axes::kY});
@@ -557,7 +557,7 @@ struct accounts_panel : closes_on_escape<Actions> {
   void fade() {
     const float value = swap.value();
     const float shift = (1.0f - value) * 28.0f * swap_side;
-    splice::visit(
+    spl::visit(
         [&](auto& one) {
           one.fState.setAlpha(value);
           one.apply({.shiftX = shift});
@@ -627,11 +627,11 @@ struct accounts_panel : closes_on_escape<Actions> {
                  const std::vector<config::proxy_settings>& proxies = {}, const config::theme_t& theme = config::theme_t{}) {
     pages.light(page);
     this->show_detail(true);
-    splice::visit(
-        splice::overloaded{
+    spl::visit(
+        spl::overloaded{
             [&](account_page::connection) {
               detail.template emplace<1>(needs_, one);
-              splice::get<1>(detail).show(one, now);
+              spl::get<1>(detail).show(one, now);
             },
             [&](account_page::privacy) {
               detail.template emplace<3>(needs_, config::read_receipts_of(one), config::send_typing_of(one),
@@ -666,12 +666,12 @@ struct accounts_panel : closes_on_escape<Actions> {
     this->invalidateLayout();
   }
   [[nodiscard]] account_privacy<Actions>* privacy() {
-    return splice::visit(splice::overloaded{[](account_privacy<Actions>& one) { return &one; },
+    return spl::visit(spl::overloaded{[](account_privacy<Actions>& one) { return &one; },
                                  [](auto&) -> account_privacy<Actions>* { return nullptr; }},
                       detail);
   }
   [[nodiscard]] account_chats<Actions>* chats_page() {
-    return splice::visit(splice::overloaded{[](account_chats<Actions>& one) { return &one; },
+    return spl::visit(spl::overloaded{[](account_chats<Actions>& one) { return &one; },
                                             [](auto&) -> account_chats<Actions>* { return nullptr; }},
                          detail);
   }
@@ -688,14 +688,14 @@ struct accounts_panel : closes_on_escape<Actions> {
   static void tell(F&, Page&) {}
   template <class F>
   void tell_shown(F f) {
-    splice::visit([&](auto& page) { tell(f, page); }, detail);
+    spl::visit([&](auto& page) { tell(f, page); }, detail);
   }
   template <class Node>
   [[nodiscard]] Node* shown_page() {
-    return splice::visit(splice::overloaded{[](Node& one) { return &one; }, [](auto&) -> Node* { return nullptr; }}, detail);
+    return spl::visit(spl::overloaded{[](Node& one) { return &one; }, [](auto&) -> Node* { return nullptr; }}, detail);
   }
   [[nodiscard]] account_proxy<Actions>* proxy() {
-    return splice::visit(splice::overloaded{[](account_proxy<Actions>& one) { return &one; },
+    return spl::visit(spl::overloaded{[](account_proxy<Actions>& one) { return &one; },
                                  [](auto&) -> account_proxy<Actions>* { return nullptr; }},
                       detail);
   }
@@ -766,18 +766,18 @@ struct accounts_panel : closes_on_escape<Actions> {
   }
 
   [[nodiscard]] account_editor<Actions>* editor() {
-    return splice::visit(splice::overloaded{[](account_editor<Actions>& one) { return &one; },
+    return spl::visit(spl::overloaded{[](account_editor<Actions>& one) { return &one; },
                                  [](auto&) -> account_editor<Actions>* { return nullptr; }},
                       detail);
   }
   [[nodiscard]] add_account_pane<Actions>* adding() {
-    return splice::visit(splice::overloaded{[](add_account_pane<Actions>& one) { return &one; },
+    return spl::visit(spl::overloaded{[](add_account_pane<Actions>& one) { return &one; },
                                  [](auto&) -> add_account_pane<Actions>* { return nullptr; }},
                       detail);
   }
   // The account form up -- an editor's, or the pane's that adds one.
   [[nodiscard]] account_form<Actions>* form() {
-    return splice::visit(splice::overloaded{[](account_editor<Actions>& one) { return &one.parts.form; },
+    return spl::visit(spl::overloaded{[](account_editor<Actions>& one) { return &one.parts.form; },
                                  [](add_account_pane<Actions>& one) { return &one.parts.form; },
                                  [](auto&) -> account_form<Actions>* { return nullptr; }},
                       detail);

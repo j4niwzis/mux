@@ -72,7 +72,7 @@ inline constexpr std::size_t kMostSamples = std::size_t{64} << 20;
   pcm out{.channels = channels, .rate = 48000};
   std::vector<float> frame(static_cast<std::size_t>(5760 * channels));
   for (std::size_t i = 2; i < packets.size(); ++i) {
-    const auto packet = splice::bytes::buffer_of(splice::bytes::of(packets[i]));  // opus reads the packet whole
+    const auto packet = spl::bytes::buffer_of(spl::bytes::of(packets[i]));  // opus reads the packet whole
     const int got = opus_decode_float(decoder, packet.data(), static_cast<opus_int32>(packet.size()), frame.data(), 5760, 0);
     if (got > 0)
       out.samples.insert(out.samples.end(), frame.begin(), frame.begin() + got * channels);

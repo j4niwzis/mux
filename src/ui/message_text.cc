@@ -74,7 +74,7 @@ struct mentioned {
   // What a mention is called here, and what it links to: a person by their
   // name in the chat, a room by its name where it is known.
   const auto name_of = [&](const logic::link_t& what) -> std::pair<std::string, std::string> {
-    return splice::visit(splice::overloaded{[&](const logic::mention::person& one) { return std::pair(sender_name(in, one.id), one.id); },
+    return spl::visit(spl::overloaded{[&](const logic::mention::person& one) { return std::pair(sender_name(in, one.id), one.id); },
                                  [&](const logic::mention::place& one) {
                                    if (now)
                                      if (const auto chat = logic::chat_of(*now, what))
@@ -116,7 +116,7 @@ struct mentioned {
     // A person: a pill. A place named by words over it: a pill; given as
     // its URL, or a message in it: a card, the URL out of the text. One
     // kept: a link as it is.
-    splice::visit(splice::overloaded{[&](const logic::mention::person&) { spans.push_back({link.first, link.last, what}); },
+    spl::visit(spl::overloaded{[&](const logic::mention::person&) { spans.push_back({link.first, link.last, what}); },
                           [&](const logic::mention::place& one) {
                             if (bare || one.event) {
                               spans.push_back({link.first, link.last, std::nullopt});
@@ -154,12 +154,12 @@ struct mentioned {
   for (const replaced& span : spans) {
     std::string shown;
     std::optional<nodes::Text::Link> pill;
-    const bool person = span.pill && splice::visit(splice::overloaded{[](const logic::mention::person&) { return true; },
+    const bool person = span.pill && spl::visit(spl::overloaded{[](const logic::mention::person&) { return true; },
                                                            [](const auto&) { return false; }},
                                                 logic::mention_in(*span.pill));
     // What a pill to a place opens: as its protocol says.
     const std::string opens = !span.pill ? std::string()
-                                         : splice::visit(splice::overloaded{[](const logic::mention::place& one) { return one.link; },
+                                         : spl::visit(spl::overloaded{[](const logic::mention::place& one) { return one.link; },
                                                                             [](const logic::mention::person& one) {
                                                                               return proto::person_link(state_before(protocol_of(one.id)), one.id)
                                                                                   .value_or(std::string());
@@ -307,8 +307,8 @@ struct mentioned {
 // A card for a link to a room, or to a message in one: as the chat it is of
 // is known here, or as a room not joined.
 [[nodiscard]] inline link_card card_of(const palette& colours, const std::string& url, const logic::link_t& where, const model* now) {
-  const logic::mention::place room = splice::visit(
-      splice::overloaded{[](const logic::mention::place& one) { return one; }, [](const auto&) { return logic::mention::place{}; }},
+  const logic::mention::place room = spl::visit(
+      spl::overloaded{[](const logic::mention::place& one) { return one; }, [](const auto&) { return logic::mention::place{}; }},
       logic::mention_in(where));
   const conversation* chat = nullptr;
   if (now)
@@ -341,7 +341,7 @@ struct message_pictures {
     const std::string_view id = at == std::string_view::npos ? target : target.substr(at + 2);
     // A room's -- a place, as its protocol reads the ID: its real picture only.
     const auto link = logic::link_of_id(id);
-    const bool place = link && splice::visit(splice::overloaded{[](const logic::mention::place&) { return true; },
+    const bool place = link && spl::visit(spl::overloaded{[](const logic::mention::place&) { return true; },
                                                                 [](const auto&) { return false; }},
                                              logic::mention_in(*link));
     if (place) {

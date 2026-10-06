@@ -471,7 +471,7 @@ struct conversations_screen : nodes::Stack {
     const std::optional<proto::any_request_t>* asks;
     void operator()() const {
       if (*asks)
-        splice::visit(splice::overloaded{[](proto::part::no_request) {}, [&](const auto& one) { actions->ask_for(one); }}, **asks);
+        spl::visit(spl::overloaded{[](proto::part::no_request) {}, [&](const auto& one) { actions->ask_for(one); }}, **asks);
     }
   };
   // A node of the chat's protocol's own over the composer (a Telegram bot's

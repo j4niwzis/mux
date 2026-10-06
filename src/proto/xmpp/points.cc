@@ -29,7 +29,7 @@ inline std::string unheard_presence(const state&) { return "offline"; }
 // A group chat is left; a direct chat, a contact's, is not: there is
 // nothing to leave.
 inline bool can_leave(const state&, const conversation& chat) {
-  return splice::visit(splice::overloaded{[](const conversation_kind::direct&) { return false; }, [](const auto&) { return true; }},
+  return spl::visit(spl::overloaded{[](const conversation_kind::direct&) { return false; }, [](const auto&) { return true; }},
                        chat.kind);
 }
 

@@ -27,9 +27,9 @@ struct picture {
   friend bool operator==(const picture&, const picture&) = default;
 };
 }  // namespace wallpaper
-using wallpaper_t = splice::variant<wallpaper::theme, wallpaper::plain, wallpaper::picture>;
+using wallpaper_t = spl::variant<wallpaper::theme, wallpaper::plain, wallpaper::picture>;
 [[nodiscard]] inline std::string word_of(const wallpaper_t& one) {
-  return splice::visit(splice::overloaded{[](wallpaper::theme) { return std::string("theme"); },
+  return spl::visit(spl::overloaded{[](wallpaper::theme) { return std::string("theme"); },
                                           [](wallpaper::plain) { return std::string("plain"); },
                                           [](const wallpaper::picture& at) { return at.path; }},
                        one);
@@ -56,9 +56,9 @@ struct space {
   friend bool operator==(const space&, const space&) = default;
 };
 }  // namespace space_item
-using space_item_t = splice::variant<space_item::home, space_item::direct, space_item::space>;
+using space_item_t = spl::variant<space_item::home, space_item::direct, space_item::space>;
 [[nodiscard]] inline std::string word_of(const space_item_t& one) {
-  return splice::visit(splice::overloaded{[](space_item::home) { return std::string("home"); },
+  return spl::visit(spl::overloaded{[](space_item::home) { return std::string("home"); },
                                           [](space_item::direct) { return std::string("direct"); },
                                           [](const space_item::space& s) { return s.room; }},
                        one);
@@ -83,9 +83,9 @@ struct hidden {
   friend bool operator==(hidden, hidden) = default;
 };
 }  // namespace space_bar
-using space_bar_t = splice::variant<space_bar::side, space_bar::top, space_bar::hidden>;
+using space_bar_t = spl::variant<space_bar::side, space_bar::top, space_bar::hidden>;
 [[nodiscard]] inline std::string_view word_of(const space_bar_t& one) {
-  return splice::visit(splice::overloaded{[](space_bar::side) { return std::string_view("side"); },
+  return spl::visit(spl::overloaded{[](space_bar::side) { return std::string_view("side"); },
                                           [](space_bar::top) { return std::string_view("top"); },
                                           [](space_bar::hidden) { return std::string_view("hidden"); }},
                        one);
@@ -131,7 +131,7 @@ struct glass {
   friend bool operator==(glass, glass) = default;
 };
 }  // namespace bubbles
-using bubbles_t = splice::variant<bubbles::solid, bubbles::translucent, bubbles::frosted, bubbles::glass>;
+using bubbles_t = spl::variant<bubbles::solid, bubbles::translucent, bubbles::frosted, bubbles::glass>;
 // What is in a chat besides the bubbles, each at an opacity of its own
 // where one is chosen -- else the bubbles'.
 struct element_opacity {
@@ -189,9 +189,9 @@ struct panels {
   friend bool operator==(panels, panels) = default;
 };
 }  // namespace look_part
-using look_part_t = splice::variant<look_part::bubbles, look_part::panels>;
+using look_part_t = spl::variant<look_part::bubbles, look_part::panels>;
 [[nodiscard]] inline std::string word_of(const bubble_look& one) {
-  const std::string_view kind = splice::visit(splice::overloaded{[](bubbles::solid) { return std::string_view("solid"); },
+  const std::string_view kind = spl::visit(spl::overloaded{[](bubbles::solid) { return std::string_view("solid"); },
                                                                  [](bubbles::translucent) { return std::string_view("translucent"); },
                                                                  [](bubbles::frosted) { return std::string_view("frosted"); },
                                                                  [](bubbles::glass) { return std::string_view("glass"); }},
@@ -261,6 +261,6 @@ struct plain {};
 struct picture {};
 }  // namespace wallpaper_pick
 using wallpaper_pick_t =
-    splice::variant<wallpaper_pick::inherit, wallpaper_pick::theme, wallpaper_pick::plain, wallpaper_pick::picture>;
+    spl::variant<wallpaper_pick::inherit, wallpaper_pick::theme, wallpaper_pick::plain, wallpaper_pick::picture>;
 
 }  // namespace mux::config

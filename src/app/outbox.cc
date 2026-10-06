@@ -37,8 +37,8 @@ class outbox_part {
   void edit(std::string id, const std::string& text) {
     // What was being written kept, to be put back when the edit is let go --
     // from before the first edit, where one edit steps to another.
-    std::string before = splice::visit(
-        splice::overloaded{[](const compose::edit& e) { return e.before; },
+    std::string before = spl::visit(
+        spl::overloaded{[](const compose::edit& e) { return e.before; },
                            [&](const auto&) { return s_->root().main().line.plain(); }},
         composing_);
     composing_ = compose::edit{std::move(id), std::move(before)};
@@ -93,8 +93,8 @@ class outbox_part {
     // Editing: Ctrl+Up and Down step through the user's own messages, the
     // one above or below edited in its place -- past the newest, the edit
     // let go.
-    const std::optional<std::string> editing = splice::visit(
-        splice::overloaded{[](const compose::edit& e) { return std::optional<std::string>(e.id); },
+    const std::optional<std::string> editing = spl::visit(
+        spl::overloaded{[](const compose::edit& e) { return std::optional<std::string>(e.id); },
                    [](const auto&) { return std::optional<std::string>(); }},
         composing_);
     if (editing) {
@@ -126,8 +126,8 @@ class outbox_part {
         answerable.push_back(&each);
     if (answerable.empty())
       return;
-    const std::optional<std::string> now = splice::visit(
-        splice::overloaded{[](const compose::reply& r) { return std::optional<std::string>(r.id); },
+    const std::optional<std::string> now = spl::visit(
+        spl::overloaded{[](const compose::reply& r) { return std::optional<std::string>(r.id); },
                    [](const auto&) { return std::optional<std::string>(); }},
         composing_);
     const auto at = now ? std::ranges::find(answerable, *now, &message::id) : answerable.end();
@@ -156,7 +156,7 @@ class outbox_part {
     if (const mux::conversation* chat = chosen ? s_->model->find(*chosen) : nullptr)
       for (const mux::message& one : chat->timeline)
         if (one.outgoing &&
-            splice::visit(splice::overloaded{[](const mux::delivery::failed&) { return true; }, [](const auto&) { return false; }},
+            spl::visit(spl::overloaded{[](const mux::delivery::failed&) { return true; }, [](const auto&) { return false; }},
                           one.delivery))
           out.push_back(one);
     return out;
@@ -177,7 +177,7 @@ class outbox_part {
   // An edit let go: the field back to what was written before it, not the
   // edited message's text left in it to be sent as a new one.
   void apply(const request::cancel_compose&) {
-    splice::visit(splice::overloaded{[&](const compose::edit& e) { s_->root().main().line.set_text(e.before); },
+    spl::visit(spl::overloaded{[&](const compose::edit& e) { s_->root().main().line.set_text(e.before); },
                                      [](const auto&) {}},
                   composing_);
     composing_ = compose::plain{};
@@ -235,7 +235,7 @@ class outbox_part {
         reply_to = screen.parts.threads.answering;
     } else {
       // Sent while answering: the first of them the answer, as Element sends.
-      reply_to = splice::visit(splice::overloaded{[](const compose::reply& r) { return std::optional<std::string>(r.id); },
+      reply_to = spl::visit(spl::overloaded{[](const compose::reply& r) { return std::optional<std::string>(r.id); },
                                                   [](const auto&) { return std::optional<std::string>(); }},
                                composing_);
     }
@@ -246,7 +246,7 @@ class outbox_part {
     if (thread) {
       if (screen.thread_open() == files_thread_)
         screen.parts.threads.stop_answering();
-    } else if (splice::visit(splice::overloaded{[](const compose::reply&) { return true; }, [](const auto&) { return false; }},
+    } else if (spl::visit(spl::overloaded{[](const compose::reply&) { return true; }, [](const auto&) { return false; }},
                              composing_)) {
       composing_ = compose::plain{};
       screen.line.show_context(std::nullopt);
@@ -262,7 +262,7 @@ class outbox_part {
     const auto& chosen = s_->root().main().chosen;
     if (!chosen)
       return;
-    auto bytes_read = splice::bytes::file_text(one.path);
+    auto bytes_read = spl::bytes::file_text(one.path);
     if (!bytes_read)
       return;
     std::string bytes = std::move(*bytes_read);
@@ -295,7 +295,7 @@ class outbox_part {
     s_->root().main().jump_to_end();
     // Sent while answering: the answer, as a text would be.
     const std::optional<std::string> reply_to =
-        splice::visit(splice::overloaded{[](const compose::reply& r) { return std::optional<std::string>(r.id); },
+        spl::visit(spl::overloaded{[](const compose::reply& r) { return std::optional<std::string>(r.id); },
                                          [](const auto&) { return std::optional<std::string>(); }},
                       composing_);
     s_->net->send_sticker(*chosen, one.sticker, reply_to);
@@ -372,7 +372,7 @@ class outbox_part {
     const conversation_id to = *screen.chosen;
     // A command of its protocol's own: asked, not sent.
     if (const auto asked = mux::proto::command_of(mux::ui::protocol_state_of(s_->ui, to.account), to, text)) {
-      splice::visit(splice::overloaded{[](mux::proto::part::no_request) {}, [&](const auto& one) { s_->ask->ask_for(one); }},
+      spl::visit(spl::overloaded{[](mux::proto::part::no_request) {}, [&](const auto& one) { s_->ask->ask_for(one); }},
                     *asked);
       screen.line.set_text({});
       return;
@@ -383,7 +383,7 @@ class outbox_part {
     screen.jump_to_end();
     // Who was picked from the @ list for it, its pills: sent as mentions.
     auto mentions = screen.line.mentions();
-    splice::visit(splice::overloaded{[&](const compose::plain&) {
+    spl::visit(spl::overloaded{[&](const compose::plain&) {
                             if (s_->demo())
                               s_->ask->send(to, std::move(text));
                             else

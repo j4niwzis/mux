@@ -52,7 +52,7 @@ struct stopped {
   conversation_id in;
 };
 }  // namespace typing_said
-using typing_said_t = splice::variant<typing_said::started, typing_said::stopped>;
+using typing_said_t = spl::variant<typing_said::started, typing_said::stopped>;
 
 // Where 'typing' was last said, and when.
 struct typing_state {

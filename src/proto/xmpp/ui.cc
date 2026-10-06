@@ -82,8 +82,8 @@ struct sent_picture {
   const auto joined = [](const std::vector<std::string>& lines, std::string_view between) {
     return lines | std::views::join_with(between) | std::ranges::to<std::string>();
   };
-  const std::string read = splice::visit(
-      splice::overloaded{[&](field_shown::read) { return one.label.empty() || one.value.empty() ? joined(one.value, "\n") + one.label
+  const std::string read = spl::visit(
+      spl::overloaded{[&](field_shown::read) { return one.label.empty() || one.value.empty() ? joined(one.value, "\n") + one.label
                                                                                                  : one.label + ": " + joined(one.value, "\n"); },
                          [](const auto&) { return std::string(); }},
       one.shown);
@@ -123,7 +123,7 @@ struct asked_row : nodes::Stack {
     parts.note.setSelectable(true);
     parts.note.apply({.fillX = true});
     parts.note.setVisible(!parts.note.text().empty());
-    splice::visit(splice::overloaded{[&](field_shown::typed) {},
+    spl::visit(spl::overloaded{[&](field_shown::typed) {},
                                      [&](field_shown::masked) { parts.box.parts.box.setMasked(true); },
                                      [&](field_shown::hidden) { this->setVisible(false); },
                                      [&](field_shown::read) { parts.box.setVisible(false); }},
@@ -132,8 +132,8 @@ struct asked_row : nodes::Stack {
   // Its answer: what is typed, or a hidden field's value as it came; none
   // for one only read.
   [[nodiscard]] std::optional<registration_answer> answer() const {
-    return splice::visit(
-        splice::overloaded{[](field_shown::read) { return std::optional<registration_answer>(); },
+    return spl::visit(
+        spl::overloaded{[](field_shown::read) { return std::optional<registration_answer>(); },
                            [&](field_shown::hidden) {
                              return std::optional(registration_answer{.var = var, .value = held.empty() ? std::string() : held.front()});
                            },

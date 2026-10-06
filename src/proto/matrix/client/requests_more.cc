@@ -88,14 +88,14 @@ void account<Sink>::catch_up(std::string room, std::string from, std::string unt
         if (one.sender == id_.address)
           continue;
         const auto at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(one.origin_server_ts));
-        splice::visit(
-            splice::overloaded{
+        spl::visit(
+            spl::overloaded{
                 [&](const loom::ev::m_room_message_content_t& content) {
                   // Not an edit: it is never shown under its own id -- its
                   // mark said "Loading..." for ever, the server finding it.
                   using values = loom::ev::m_room_message_content_t::m_relates_to_t::rel_type_values;
                   const bool edit = content.m_relates_to && content.m_relates_to->rel_type &&
-                                    splice::visit(splice::overloaded{[](values::m_replace) { return true; },
+                                    spl::visit(spl::overloaded{[](values::m_replace) { return true; },
                                                                      [](const auto&) { return false; }},
                                                   *content.m_relates_to->rel_type);
                   // An edit that mentions the user: the message it edits, as
@@ -166,7 +166,7 @@ void account<Sink>::preview_room(std::string room, std::vector<std::string> via)
                                   .topic = got->topic.value_or(""),
                                   .avatar = got->avatar_url,
                                   .members = got->num_joined_members,
-                                  .knock = splice::visit(splice::overloaded{[](mux::proto::matrix::join_rule::knock) { return true; },
+                                  .knock = spl::visit(spl::overloaded{[](mux::proto::matrix::join_rule::knock) { return true; },
                                                                             [](const auto&) { return false; }},
                                                          join_rule_of(got->join_rule))}});
   });
@@ -233,7 +233,7 @@ void account<Sink>::forward(std::string from, std::string event, std::string to)
     // replaced: sent on as a message of its own. Anything else is not
     // forwarded.
     std::optional<loom::ev::m_room_message_content_t> content;
-    splice::visit(splice::overloaded{[&](const loom::ev::m_room_message_content_t& one) { content = one; },
+    spl::visit(spl::overloaded{[&](const loom::ev::m_room_message_content_t& one) { content = one; },
                                      [](const auto&) {}},
                   got->content.data());
     if (!content) {

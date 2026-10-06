@@ -469,7 +469,7 @@ namespace proxy_kind {
 struct socks5 {};
 struct http {};
 }  // namespace proxy_kind
-using proxy_kind_t = splice::variant<proxy_kind::socks5, proxy_kind::http>;
+using proxy_kind_t = spl::variant<proxy_kind::socks5, proxy_kind::http>;
 
 // Who a domain's SRV records are asked of, through a proxy: the system's
 // nameserver (where the proxy can reach it), none at all, or one chosen --
@@ -481,7 +481,7 @@ struct server {
   asio::ip::address address;
 };
 }  // namespace srv_lookup
-using srv_lookup_t = splice::variant<srv_lookup::system, srv_lookup::none, srv_lookup::server>;
+using srv_lookup_t = spl::variant<srv_lookup::system, srv_lookup::none, srv_lookup::server>;
 // As a profile says it, read once: unset the system's; "off" none; else a
 // nameserver's address -- and none where it is not one, rather than the
 // system's, which the user had chosen not to ask.
@@ -634,7 +634,7 @@ inline void http_connect(loop& owner, tcp::socket& socket, const proxy& via, std
 // there -- a router's page, a printer's -- from the user's machine. A name
 // that resolves to such an address is not caught here.
 [[nodiscard]] inline bool public_host(std::string_view host) {
-  const std::string lower = splice::bytes::lower_text(host);
+  const std::string lower = spl::bytes::lower_text(host);
   if (lower == "localhost" || lower.ends_with(".localhost") || lower.ends_with(".local") ||
       lower.ends_with(".internal") || lower.ends_with(".lan") || (!lower.contains('.') && !lower.contains(':')))
     return false;
@@ -658,7 +658,7 @@ inline tcp::socket connect(loop& owner, const std::optional<proxy>& via, std::st
   if (!via)
     return connect(owner, host, port);
   tcp::socket socket = connect(owner, via->host, via->port);
-  splice::visit(splice::overloaded{[&](proxy_kind::socks5) { detail::socks5(owner, socket, *via, host, port); },
+  spl::visit(spl::overloaded{[&](proxy_kind::socks5) { detail::socks5(owner, socket, *via, host, port); },
                                    [&](proxy_kind::http) { detail::http_connect(owner, socket, *via, host, port); }},
                 via->kind);
   return socket;
@@ -798,8 +798,8 @@ inline std::vector<tern::srv::target> xmpp_targets(loop& owner, const std::optio
   std::vector<tern::srv::target> found;
   // Whom to ask: the system's nameserver, where one the proxy can reach;
   // the one chosen; or none.
-  const std::optional<asio::ip::address> asked = splice::visit(
-      splice::overloaded{[](srv_lookup::system) -> std::optional<asio::ip::address> {
+  const std::optional<asio::ip::address> asked = spl::visit(
+      spl::overloaded{[](srv_lookup::system) -> std::optional<asio::ip::address> {
                            const auto server = nameserver();
                            return !server || local_only(*server) ? std::nullopt : server;
                          },

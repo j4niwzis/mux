@@ -24,7 +24,7 @@ struct room {  // !room:server or #alias:server, and a message in it
   friend bool operator==(const room&, const room&) = default;
 };
 }  // namespace link
-using any_link = splice::variant<link::person, link::room>;
+using any_link = spl::variant<link::person, link::room>;
 constexpr type_tag<logic::link_list<link::person, link::room>> links_type(const state&) { return {}; }
 
 // A Matrix ID read by its sigil into what it names; none for another.

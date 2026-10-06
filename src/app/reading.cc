@@ -69,7 +69,7 @@ class reading_part {
     const auto allowed = [&](const conversation_id& in) { return s_->kept->typing_sent(in); };
     auto step = logic::typing_after(typing_, one.on, s_->root().main().chosen, std::chrono::steady_clock::now(), allowed);
     for (const auto& said : step.say)
-      splice::visit(splice::overloaded{[&](const logic::typing_said::started& it) { s_->net->typing(it.in, true); },
+      spl::visit(spl::overloaded{[&](const logic::typing_said::started& it) { s_->net->typing(it.in, true); },
                             [&](const logic::typing_said::stopped& it) { s_->net->typing(it.in, false); }},
                  said);
     typing_ = step.next;

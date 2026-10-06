@@ -217,7 +217,7 @@ class reader {
 // A dictionary's value as UnifiedPush sends them: a string, bytes, or
 // something else, passed over.
 struct other_value {};
-using dict_value = splice::variant<std::string, std::vector<std::uint8_t>, other_value>;
+using dict_value = spl::variant<std::string, std::vector<std::uint8_t>, other_value>;
 
 // a{sv}, read into its keys and values.
 inline std::optional<std::map<std::string, dict_value>> read_dict(reader& in) {
@@ -257,7 +257,7 @@ inline std::optional<std::string> text_in(const std::map<std::string, dict_value
   const auto found = dict.find(std::string(key));
   if (found == dict.end())
     return std::nullopt;
-  return splice::visit(splice::overloaded{[](const std::string& text) -> std::optional<std::string> { return text; },
+  return spl::visit(spl::overloaded{[](const std::string& text) -> std::optional<std::string> { return text; },
                                           [](const std::vector<std::uint8_t>&) -> std::optional<std::string> { return std::nullopt; },
                                           [](other_value) -> std::optional<std::string> { return std::nullopt; }},
                        found->second);

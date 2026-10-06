@@ -546,7 +546,7 @@ struct message_bubble : nodes::Stack {
     // opacity -- over what is behind it, frosted where it is so.
     [[nodiscard]] static skia::SkColor plate_of(const palette& colours, const config::bubble_look& look, bool mine) {
       const skia::SkColor solid = mine ? colours.out_bubble : colours.bubble;
-      return splice::visit(splice::overloaded{[&](config::bubbles::solid) { return solid; },
+      return spl::visit(spl::overloaded{[&](config::bubbles::solid) { return solid; },
                                               [&](const auto&) { return at_opacity(solid, look.opacity); }},
                            look.kind);
     }
@@ -583,7 +583,7 @@ struct message_bubble : nodes::Stack {
       fState.apply({.autoSize = scene::axes::kBoth, .maxWidth = kMaxWidth + 2.0f * kPadX,
                     .padding = {kPadY, kPadX, kPadY, kPadX}, .cornerRadius = 12.0f, .background = plate});
       // Frosted: what is behind blurred under the tint; glass: a light edge.
-      splice::visit(splice::overloaded{[&](config::bubbles::frosted) { this->frosted(blur_of(looks.bubbles, looks.window)); },
+      spl::visit(spl::overloaded{[&](config::bubbles::frosted) { this->frosted(blur_of(looks.bubbles, looks.window)); },
                                        [&](config::bubbles::glass) {
                                          fState.apply({.border = scene::Border{skia::colorSetARGB(70, 255, 255, 255), 1.0f}});
                                        },
@@ -694,7 +694,7 @@ struct message_bubble : nodes::Stack {
     // parts were last drawn left behind when history moved it.
     // Frosted, its backdrop is where it is on the screen: drawn each time,
     // not played back from where it was recorded.
-    const bool frosted = splice::visit(splice::overloaded{[](config::bubbles::frosted) { return true; },
+    const bool frosted = spl::visit(spl::overloaded{[](config::bubbles::frosted) { return true; },
                                                           [](const auto&) { return false; }},
                                        looks_->bubbles.kind);
     fState.setRecorded(!said.attachment && said.album.empty() && !frosted);
@@ -716,7 +716,7 @@ struct message_bubble : nodes::Stack {
     // 34-high avatar made a one-line bubble's row taller, and the last
     // bubble of a run stood apart from the rest.
     // Laid out as the chat's protocol says: bubbles, or lines.
-    const bool as_lines = splice::visit(splice::overloaded{[](proto::part::style::lines) { return true; },
+    const bool as_lines = spl::visit(spl::overloaded{[](proto::part::style::lines) { return true; },
                                                            [](proto::part::style::bubbles) { return false; }},
                                         proto::message_style(protocol_state_of(*shared_, in.id.account)));
     const bool with_face = group && !outgoing && !said.service;
@@ -788,7 +788,7 @@ struct message_bubble : nodes::Stack {
                                 : said.encrypted && said.unauthenticated ? std::string("authenticity not guaranteed \u00b7 ")
                                                                           : std::string();
     std::string when = warning + mark_of(said) + clock_of(said.at);
-    when += splice::visit(splice::overloaded{[](const delivery::sending&) { return " · sending"; },
+    when += spl::visit(spl::overloaded{[](const delivery::sending&) { return " · sending"; },
                                   [](const delivery::failed&) { return " · not sent"; },
                                   [](const auto&) { return ""; }},
                        said.delivery);
@@ -799,7 +799,7 @@ struct message_bubble : nodes::Stack {
     body.parts.inline_time.setText(when);
     // A sticker its protocol draws itself (a Telegram TGS or WebM): its node,
     // not the picture.
-    const bool theirs = said.sticker && splice::visit(
+    const bool theirs = said.sticker && spl::visit(
                                             [&](const auto& now) {
                                               using sticker_defaults::make_sticker;
                                               return body.place_sticker(make_sticker(now, said, type_tag<Actions>{}));
@@ -808,7 +808,7 @@ struct message_bubble : nodes::Stack {
     // What it carries: a picture, sized as tdesktop's; or a file's row.
     if (said.attachment && !theirs) {
       const mux::attachment& carried = *said.attachment;
-      splice::visit(splice::overloaded{[&](attachment_kind::image) {
+      spl::visit(spl::overloaded{[&](attachment_kind::image) {
                               body.parts.picture.emplace(*colours_, carried.source, carried.width, carried.height);
                               if (carried.video)
                                 body.parts.picture->show_video(carried.duration_ms, carried.video != carried.source);
@@ -993,7 +993,7 @@ struct message_bubble : nodes::Stack {
       shown.setWrapped(true);
       shown.apply({.fillX = true, .margin = {4.0f, 0.0f, 0.0f, 0.0f}});
     });
-    splice::visit(
+    spl::visit(
         [&](const auto& now) {
           using view_defaults::make_message_view;
           body.place_view(make_message_view(now, said, type_tag<Actions>{}));

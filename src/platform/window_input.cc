@@ -36,7 +36,7 @@ class pointer_shapes {
         sdl::SDL_DestroyCursor(one);
   }
   void show(const skiff::scene::Cursor& shape) {
-    const sdl::SDL_SystemCursor which = splice::visit([](auto one) { return system_cursor(one); }, shape);
+    const sdl::SDL_SystemCursor which = spl::visit([](auto one) { return system_cursor(one); }, shape);
     if (which == shown_)
       return;
     sdl::SDL_Cursor*& made = made_[static_cast<std::size_t>(which)];

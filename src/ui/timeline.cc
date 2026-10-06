@@ -82,7 +82,7 @@ inline void show_wallpaper_on(wallpaper_t& wall, const config::wallpaper_t& chos
         blurs.push_back(element_blur_of(*look, member, looks.window));
     }
   wall.setBlurs(std::move(blurs));
-  splice::visit(splice::overloaded{[&](config::wallpaper::theme) {
+  spl::visit(spl::overloaded{[&](config::wallpaper::theme) {
                                      wall.setFreeform({});
                                      wall.setPicture(nullptr);
                                      wall.setGradient(scene::Gradient{colours.chat_top, colours.chat});
@@ -184,7 +184,7 @@ template <class Actions>
   }
   // A reaction shown as a line: pressed anywhere, to what it is on.
   if (one.said.service && one.said.replies_to && one.parts.body.bounds().contains(press.x, press.y) &&
-      splice::visit(splice::overloaded{[](room_event::reactions) { return true; },
+      spl::visit(spl::overloaded{[](room_event::reactions) { return true; },
                                        [](room_event::unreactions) { return true; }, [](const auto&) { return false; }},
                  one.said.event_kind)) {
     actions->jump_to_message(*one.said.replies_to, std::nullopt, one.message_id);
@@ -447,7 +447,7 @@ struct timeline_area : scene::Node {
             entries, std::views::iota(first_made, last_made),
             [&](std::size_t i) { return all[i].id; }, [](const message_bubble<Actions>& row) { return row.message_id; },
             [&](std::size_t i) {
-              message_bubble<Actions> made(splice::remapped<typename message_bubble<Actions>::needs>(needs_), one, all[i], first_of_run(i), last_of_run(i), &now, shows(all[i]),
+              message_bubble<Actions> made(spl::remapped<typename message_bubble<Actions>::needs>(needs_), one, all[i], first_of_run(i), last_of_run(i), &now, shows(all[i]),
                                   how.previews);
               made.quote_said = quote_body(i);
               if (how.unread_from && all[i].id == *how.unread_from)

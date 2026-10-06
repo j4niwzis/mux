@@ -88,7 +88,7 @@ class calls_part {
 
   // -- what accounts said
   void take(const change::call_signalled& one) {
-    splice::visit(splice::overloaded{[&](const change::call_said::invite& invite) { this->invited(one, invite); },
+    spl::visit(spl::overloaded{[&](const change::call_said::invite& invite) { this->invited(one, invite); },
                                      [&](const change::call_said::answer& answer) { this->answered(one, answer); },
                                      [&](const change::call_said::candidates& them) {
                                        if (!this->is_current(one) || one.mine)
@@ -102,8 +102,8 @@ class calls_part {
                                      [&](const change::call_said::hangup& done) {
                                        if (!this->is_current(one))
                                          return;
-                                       this->end(splice::visit(
-                                           splice::overloaded{
+                                       this->end(spl::visit(
+                                           spl::overloaded{
                                                [](change::call_end::hung_up) { return std::string("Call ended"); },
                                                [](change::call_end::busy) { return std::string("They're busy"); },
                                                [](change::call_end::timed_out) { return std::string("No answer"); },
@@ -181,7 +181,7 @@ class calls_part {
       std::chrono::steady_clock::time_point since;
     };
   };
-  using state_t = splice::variant<state::starting, state::ringing_out, state::ringing_in, state::connecting, state::connected>;
+  using state_t = spl::variant<state::starting, state::ringing_out, state::ringing_in, state::connecting, state::connected>;
   struct call {
     conversation_id in;
     std::string id;
@@ -197,7 +197,7 @@ class calls_part {
 
   template <class State>
   [[nodiscard]] bool holds() const {
-    return current_ && splice::visit(splice::overloaded{[](const State&) { return true; }, [](const auto&) { return false; }},
+    return current_ && spl::visit(spl::overloaded{[](const State&) { return true; }, [](const auto&) { return false; }},
                                      current_->state);
   }
   [[nodiscard]] bool is_current(const change::call_signalled& one) const { return current_ && current_->id == one.call; }
@@ -240,8 +240,8 @@ class calls_part {
     this->show();
   }
   void connection_said(const calls::said_t& said) {
-    splice::visit(splice::overloaded{[&](const calls::said::description& ours) {
-                                       splice::visit(splice::overloaded{[&](calls::sdp_kind::offer) {
+    spl::visit(spl::overloaded{[&](const calls::said::description& ours) {
+                                       spl::visit(spl::overloaded{[&](calls::sdp_kind::offer) {
                                                                           s_->net->call(current_->in, current_->id,
                                                                                         change::call_said_t{change::call_said::invite{ours.it, std::chrono::milliseconds(60000)}});
                                                                         },
@@ -281,8 +281,8 @@ class calls_part {
   }
   [[nodiscard]] mux::ui::call_view view_of(const call& now) const {
     const mux::conversation* chat = s_->model->find(now.in);
-    const auto phase = splice::visit(
-        splice::overloaded{[](state::starting) -> mux::ui::call_phase_t { return mux::ui::call_phase::connecting{}; },
+    const auto phase = spl::visit(
+        spl::overloaded{[](state::starting) -> mux::ui::call_phase_t { return mux::ui::call_phase::connecting{}; },
                            [](state::ringing_out) -> mux::ui::call_phase_t { return mux::ui::call_phase::ringing_out{}; },
                            [](state::ringing_in) -> mux::ui::call_phase_t { return mux::ui::call_phase::ringing_in{}; },
                            [](state::connecting) -> mux::ui::call_phase_t { return mux::ui::call_phase::connecting{}; },

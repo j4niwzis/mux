@@ -85,9 +85,9 @@ struct recorder {
 };
 
 void sink::operator()(mux::change_t one) const {
-  splice::visit(splice::overloaded{[&](const mux::change::connection_changed& changed) {
+  spl::visit(spl::overloaded{[&](const mux::change::connection_changed& changed) {
                                to->states.push_back(changed.state);
-                               if (splice::visit(splice::overloaded{[](const mux::connection::offline&) { return true; },
+                               if (spl::visit(spl::overloaded{[](const mux::connection::offline&) { return true; },
                                                               [](const mux::connection::failed&) { return true; },
                                                               [](const auto&) { return false; }},
                                               changed.state))
@@ -96,7 +96,7 @@ void sink::operator()(mux::change_t one) const {
                              [](const auto&) {}},
              one);
   // A message sent once the room is there.
-  const bool room_there = splice::visit(splice::overloaded{[](const mux::change::conversation_updated&) { return true; },
+  const bool room_there = spl::visit(spl::overloaded{[](const mux::change::conversation_updated&) { return true; },
                                                      [](const auto&) { return false; }},
                                      one);
   if (room_there && !to->sent) {
@@ -217,7 +217,7 @@ struct media_sink {
   std::vector<mux::change::avatar_loaded>* pictures;
   int* acknowledged;
   void operator()(mux::change_t one) const {
-    splice::visit(splice::overloaded{
+    spl::visit(spl::overloaded{
         [&](const mux::change::connection_changed& change) {
           *online = change.state == mux::connection_t{mux::connection::online{}};
         },

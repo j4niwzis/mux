@@ -256,7 +256,7 @@ struct start_chat_box : nodes::Stack {
   // it: offered as it is, first.
   [[nodiscard]] static bool whole_id(std::string_view text) {
     const auto link = logic::link_of_id(text);
-    return link && splice::visit(splice::overloaded{[](const logic::mention::person&) { return true; },
+    return link && spl::visit(spl::overloaded{[](const logic::mention::person&) { return true; },
                                                     [](const auto&) { return false; }},
                                  logic::mention_in(*link));
   }

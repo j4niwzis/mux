@@ -56,9 +56,9 @@ void account<Sink>::crypto_answer_now(const loom::cs::sliding_sync::response_t& 
   if (extensions.to_device) {
     if (extensions.to_device->events)
       for (const auto& one : *extensions.to_device->events)
-        splice::visit(splice::overloaded{[&](const loom::ev::m_room_encrypted_content_t& content) {
+        spl::visit(spl::overloaded{[&](const loom::ev::m_room_encrypted_content_t& content) {
                                            if (auto said = crypto_->to_device(one.sender.value_or(""), content))
-                                             splice::visit(splice::overloaded{[&](const crypto::room_key_offer& offer) { this->vet_room_key(offer); },
+                                             spl::visit(spl::overloaded{[&](const crypto::room_key_offer& offer) { this->vet_room_key(offer); },
                                                                               [&](const crypto::secret_got& got) { this->secret_in(got); }},
                                                            *said);
                                          },
@@ -136,7 +136,7 @@ void account<Sink>::import_room_keys(std::string path, std::string passphrase) {
       sink_(change::refused{id_, "Not imported: encryption is not running for this account."});
       return;
     }
-    const std::optional<std::string> read = splice::bytes::file_text(path);
+    const std::optional<std::string> read = spl::bytes::file_text(path);
     if (!read) {
       sink_(change::refused{id_, std::format("Not imported: {} could not be read.", path)});
       return;
@@ -430,7 +430,7 @@ void account<Sink>::secret_in(const crypto::secret_got& got) {
   }
   const crypto::secret_name_t which = asked->second;
   secrets_asked_.erase(asked);
-  splice::visit(splice::overloaded{[&](crypto::secret_name::master) { secrets_got_.master = got.secret; },
+  spl::visit(spl::overloaded{[&](crypto::secret_name::master) { secrets_got_.master = got.secret; },
                                    [&](crypto::secret_name::self_signing) { secrets_got_.self_signing = got.secret; },
                                    [&](crypto::secret_name::user_signing) { secrets_got_.user_signing = got.secret; },
                                    [&](crypto::secret_name::backup) {
@@ -467,7 +467,7 @@ template <class Sink>
 void account<Sink>::secret_request_in(const std::string& sender, const loom::ev::m_secret_request_content_t& content) {
   if (!api_ || !crypto_ || sender != id_.address || content.requesting_device_id == crypto_->device_id() || !content.name)
     return;
-  const bool asking = splice::visit(splice::overloaded{[](loom::ev::m_secret_request_content_t::action_values::request_) { return true; },
+  const bool asking = spl::visit(spl::overloaded{[](loom::ev::m_secret_request_content_t::action_values::request_) { return true; },
                                                        [](const auto&) { return false; }},
                                     content.action);
   if (!asking)
@@ -477,7 +477,7 @@ void account<Sink>::secret_request_in(const std::string& sender, const loom::ev:
   if (!keys || !which)
     return;
   const std::optional<std::string> secret =
-      splice::visit(splice::overloaded{[&](crypto::secret_name::master) { return std::optional<std::string>(keys->master); },
+      spl::visit(spl::overloaded{[&](crypto::secret_name::master) { return std::optional<std::string>(keys->master); },
                                        [&](crypto::secret_name::self_signing) { return std::optional<std::string>(keys->self_signing); },
                                        [&](crypto::secret_name::user_signing) { return std::optional<std::string>(keys->user_signing); },
                                        [](crypto::secret_name::backup) { return std::optional<std::string>(); }},
@@ -597,8 +597,8 @@ void account<Sink>::withheld_in(const loom::ev::m_room_key_withheld_content_t& c
   if (!content.session_id)
     return;
   using codes = loom::ev::m_room_key_withheld_content_t::code_values;
-  const std::string said = splice::visit(
-      splice::overloaded{
+  const std::string said = spl::visit(
+      spl::overloaded{
           [](codes::m_unverified) { return std::string("🔒 You don't have access to this message: the sender does not trust this session (it is not verified)."); },
           [](codes::m_blacklisted) { return std::string("🔒 You don't have access to this message: the sender has blocked this session."); },
           [](codes::m_unauthorised) { return std::string("🔒 You don't have access to this message."); },

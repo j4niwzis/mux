@@ -16,7 +16,7 @@ template <class>
 struct state_list;
 template <class... Tags>
 struct state_list<protocol_list<Tags...>> {
-  using type = splice::variant<state_of<Tags>...>;
+  using type = spl::variant<state_of<Tags>...>;
 };
 using protocol_state_t = state_list<protocols>::type;
 
@@ -33,7 +33,7 @@ template <class... Lists>
 struct room_part_union;
 template <class... Ps>
 struct room_part_union<proto::room_part_list<Ps...>> {
-  using type = splice::variant<proto::no_room_part, Ps...>;
+  using type = spl::variant<proto::no_room_part, Ps...>;
 };
 template <class... As, class... Bs, class... Rest>
 struct room_part_union<proto::room_part_list<As...>, proto::room_part_list<Bs...>, Rest...>
@@ -59,7 +59,7 @@ template <class... Lists>
 struct message_part_union;
 template <class... Ps>
 struct message_part_union<proto::message_part_list<Ps...>> {
-  using type = splice::variant<proto::no_message_part, Ps...>;
+  using type = spl::variant<proto::no_message_part, Ps...>;
 };
 template <class... As, class... Bs, class... Rest>
 struct message_part_union<proto::message_part_list<As...>, proto::message_part_list<Bs...>, Rest...>
@@ -74,9 +74,9 @@ struct message_part_list_of<protocol_list<Tags...>> {
 struct message_part {
   typename message_part_list_of<protocols>::type is;
   friend bool operator==(const message_part& a, const message_part& b) {
-    return splice::visit(
+    return spl::visit(
         [&](const auto& mine) {
-          return splice::visit(splice::overloaded{[&](const std::remove_cvref_t<decltype(mine)>& theirs) { return mine == theirs; },
+          return spl::visit(spl::overloaded{[&](const std::remove_cvref_t<decltype(mine)>& theirs) { return mine == theirs; },
                                                   [](const auto&) { return false; }},
                                b.is);
         },
@@ -86,7 +86,7 @@ struct message_part {
 
 // A protocol's state before its account says anything: its type's default.
 [[nodiscard]] inline protocol_state_t state_before(const protocol_t& speaks) {
-  return splice::visit([](auto of) { return protocol_state_t{state_of<decltype(of)>{}}; }, speaks);
+  return spl::visit([](auto of) { return protocol_state_t{state_of<decltype(of)>{}}; }, speaks);
 }
 
 }  // namespace mux

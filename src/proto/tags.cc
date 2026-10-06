@@ -36,7 +36,7 @@ template <class>
 struct variant_of_list;
 template <class... Tags>
 struct variant_of_list<protocol_list<Tags...>> {
-  using type = splice::variant<Tags...>;
+  using type = spl::variant<Tags...>;
 };
 using protocol_t = variant_of_list<protocols>::type;
 

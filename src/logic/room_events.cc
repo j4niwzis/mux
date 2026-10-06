@@ -54,7 +54,7 @@ using kinds_t = config::room_event_kinds;
 [[nodiscard]] constexpr std::string_view word_of(room_event::reactions) { return "reactions"; }
 [[nodiscard]] constexpr std::string_view word_of(room_event::unreactions) { return "unreactions"; }
 [[nodiscard]] inline std::string_view word_of(const room_event_t& kind) {
-  return splice::visit([](auto one) { return word_of(one); }, kind);
+  return spl::visit([](auto one) { return word_of(one); }, kind);
 }
 [[nodiscard]] inline room_event_t room_event_of(std::string_view word) {
   for (const room_event_t& kind : all_room_events)
@@ -64,12 +64,12 @@ using kinds_t = config::room_event_kinds;
 }
 
 [[nodiscard]] inline std::optional<bool>& choice_in(kinds_t& in, const room_event_t& kind) {
-  return in.*splice::visit([](auto one) { return member_of(one); }, kind);
+  return in.*spl::visit([](auto one) { return member_of(one); }, kind);
 }
 [[nodiscard]] inline std::optional<bool> choice_of(const std::optional<kinds_t>& in, const room_event_t& kind) {
   if (!in)
     return std::nullopt;
-  return (*in).*splice::visit([](auto one) { return member_of(one); }, kind);
+  return (*in).*spl::visit([](auto one) { return member_of(one); }, kind);
 }
 
 // A chat's room events, as shown: for each kind, the chat's choice of it,
@@ -90,7 +90,7 @@ using kinds_t = config::room_event_kinds;
       shown = account_all;
     if (!shown)
       shown = choice_of(every_kinds, kind);
-    const bool fallback = splice::visit([](auto one) { return shown_unless_chosen(one); }, kind);
+    const bool fallback = spl::visit([](auto one) { return shown_unless_chosen(one); }, kind);
     out.shown[kind.index()] = shown.value_or(fallback && every_all);
   }
   return out;

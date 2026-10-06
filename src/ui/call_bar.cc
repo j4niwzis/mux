@@ -44,7 +44,7 @@ struct ended {
 };
 }  // namespace call_phase
 using call_phase_t =
-    splice::variant<call_phase::ringing_in, call_phase::ringing_out, call_phase::connecting, call_phase::connected, call_phase::ended>;
+    spl::variant<call_phase::ringing_in, call_phase::ringing_out, call_phase::connecting, call_phase::connected, call_phase::ended>;
 struct call_view {
   conversation_id in;
   std::string who;
@@ -58,16 +58,16 @@ struct call_view {
 };
 
 [[nodiscard]] inline bool rings_here(const call_view& view) {
-  return splice::visit(splice::overloaded{[](call_phase::ringing_in) { return true; }, [](const auto&) { return false; }},
+  return spl::visit(spl::overloaded{[](call_phase::ringing_in) { return true; }, [](const auto&) { return false; }},
                        view.phase);
 }
 [[nodiscard]] inline bool has_ended(const call_view& view) {
-  return splice::visit(splice::overloaded{[](const call_phase::ended&) { return true; }, [](const auto&) { return false; }},
+  return spl::visit(spl::overloaded{[](const call_phase::ended&) { return true; }, [](const auto&) { return false; }},
                        view.phase);
 }
 [[nodiscard]] inline std::string said_of(const call_view& view) {
-  const std::string where = splice::visit(
-      splice::overloaded{[](call_phase::ringing_in) { return std::string("Incoming voice call"); },
+  const std::string where = spl::visit(
+      spl::overloaded{[](call_phase::ringing_in) { return std::string("Incoming voice call"); },
                          [](call_phase::ringing_out) { return std::string("Calling…"); },
                          [](call_phase::connecting) { return std::string("Connecting…"); },
                          [](const call_phase::connected& now) {

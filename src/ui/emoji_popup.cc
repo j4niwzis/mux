@@ -229,7 +229,7 @@ struct emoji_popup : scene::Node {
     // as their tab opens, for what was saved since.
     void show(const popup_page_t& page) {
       const auto [emoji, stickers, gifs] =
-          splice::visit(splice::overloaded{[](popup_page::emoji) { return std::array{true, false, false}; },
+          spl::visit(spl::overloaded{[](popup_page::emoji) { return std::array{true, false, false}; },
                                 [](popup_page::stickers) { return std::array{false, true, false}; },
                                 [](popup_page::gifs) { return std::array{false, false, true}; }},
                      page);

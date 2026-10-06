@@ -225,8 +225,8 @@ void account<Sink>::manage(std::string room, room_action_t action) {
       return;
     const auto set = [&](std::string type, const auto& content) { this->set_room_state(room, std::move(type), content); };
     const auto told = [&](const char* what, auto done) { this->told_failing(room, what, done); };
-    splice::visit(
-        splice::overloaded{
+    spl::visit(
+        spl::overloaded{
             [&](const room_action::rename& one) {
               loom::ev::m_room_name_content_t content;
               content.name = one.name;
@@ -268,16 +268,16 @@ void account<Sink>::change_room(std::string room, proto::matrix::room_change_t c
       return power_levels_content{};
     };
     const auto told = [&](const char* what, auto done) { this->told_failing(room, what, done); };
-    splice::visit(
-        splice::overloaded{
+    spl::visit(
+        spl::overloaded{
             [&](const proto::matrix::room_change::set_join_rule& one) {
               loom::ev::m_room_join_rules_content_t content;
-              content.join_rule = std::string(splice::visit([](auto of) { return word_of(of); }, one.rule));
+              content.join_rule = std::string(spl::visit([](auto of) { return word_of(of); }, one.rule));
               set("m.room.join_rules", content);
             },
             [&](const proto::matrix::room_change::set_history& one) {
               loom::ev::m_room_history_visibility_content_t content;
-              content.history_visibility = std::string(splice::visit([](auto of) { return word_of(of); }, one.rule));
+              content.history_visibility = std::string(spl::visit([](auto of) { return word_of(of); }, one.rule));
               set("m.room.history_visibility", content);
             },
             // A say given: the room's power levels as they are, with it.
@@ -300,7 +300,7 @@ void account<Sink>::change_room(std::string room, proto::matrix::room_change_t c
               const auto top = [&](std::optional<std::int64_t> power_levels_content::* member) {
                 content.*member = static_cast<std::int64_t>(one.level);
               };
-              splice::visit(splice::overloaded{[&](power_need::default_role) { top(&power_levels_content::users_default); },
+              spl::visit(spl::overloaded{[&](power_need::default_role) { top(&power_levels_content::users_default); },
                                     [&](power_need::send_messages) { top(&power_levels_content::events_default); },
                                     [&](power_need::change_settings) { top(&power_levels_content::state_default); },
                                     [&](power_need::invite) { top(&power_levels_content::invite); },
@@ -540,7 +540,7 @@ void account<Sink>::explore_space(std::string room) {
                          .avatar = one.avatar_url,
                          .members = one.num_joined_members,
                          .space = !one.children_state.empty() ||
-                                  splice::visit([](auto of) { return of.is_space; },
+                                  spl::visit([](auto of) { return of.is_space; },
                                                 room_type_of(one.room_type ? std::optional<std::string_view>(*one.room_type) : std::nullopt))});
     log(id_, "the rooms of {}: {} listed, {} of them spaces", room, rooms.size(),
         std::ranges::count_if(rooms, [](const directory_room& one) { return one.space; }));
@@ -636,7 +636,7 @@ void account<Sink>::list_packs(std::optional<std::string> room) {
     std::vector<emote_pack> found;
     if (!room) {
       if (const auto own = state_.account_data.find("im.ponies.user_emotes"); own != state_.account_data.end())
-        splice::visit(splice::overloaded{[&](const loom::ev::im_ponies_user_emotes_content_t& content) {
+        spl::visit(spl::overloaded{[&](const loom::ev::im_ponies_user_emotes_content_t& content) {
                                            found.push_back(packs::pack_of(content, std::nullopt, std::string()));
                                          },
                                          [](const auto&) {}},
@@ -646,7 +646,7 @@ void account<Sink>::list_packs(std::optional<std::string> room) {
         found.push_back(emote_pack{});
     } else if (const auto joined = state_.joined.find(*room); joined != state_.joined.end()) {
       for (const auto& [key, one] : joined->second.state.events)
-        splice::visit(splice::overloaded{[&](const loom::ev::im_ponies_room_emotes_content_t& content) {
+        spl::visit(spl::overloaded{[&](const loom::ev::im_ponies_room_emotes_content_t& content) {
                                            // An emptied one is a pack taken away.
                                            if (!content.images.empty() || content.pack)
                                              found.push_back(packs::pack_of(content, room, key.second));
@@ -663,7 +663,7 @@ void account<Sink>::save_pack(emote_pack pack) {
   this->spawn_guarded([this, pack = std::move(pack)]() mutable {
     // A new room pack: its state key made of its name.
     if (pack.chat && pack.key.empty()) {
-      pack.key = splice::bytes::key_text(pack.name);
+      pack.key = spl::bytes::key_text(pack.name);
       if (pack.key.empty())
         pack.key = "pack";
     }

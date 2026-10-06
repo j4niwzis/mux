@@ -38,8 +38,8 @@ namespace mux::logic {
     std::unordered_map<std::string, std::string> out;
     // Copied once, a byte at a time, into text.
     const std::array<std::string, 2> texts{
-        splice::bytes::text_of(std::span<const std::uint8_t>(mux_cldr_en, mux_cldr_en_size)),
-        splice::bytes::text_of(std::span<const std::uint8_t>(mux_cldr_ru, mux_cldr_ru_size))};
+        spl::bytes::text_of(std::span<const std::uint8_t>(mux_cldr_en, mux_cldr_en_size)),
+        spl::bytes::text_of(std::span<const std::uint8_t>(mux_cldr_ru, mux_cldr_ru_size))};
     const std::array<std::string_view, 2> files{texts[0], texts[1]};
     static constexpr std::string_view kOpen = "<annotation cp=\"";
     for (const std::string_view xml : files)

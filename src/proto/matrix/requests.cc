@@ -41,7 +41,7 @@ struct set_event_need {
   std::int64_t level = 0;
 };
 }  // namespace room_change
-using room_change_t = splice::variant<room_change::set_join_rule, room_change::set_history, room_change::set_power,
+using room_change_t = spl::variant<room_change::set_join_rule, room_change::set_history, room_change::set_power,
                                       room_change::encrypt, room_change::set_need, room_change::upgrade,
                                       room_change::set_event_need>;
 

@@ -319,8 +319,8 @@ struct encryption_page : nodes::Stack {
   void show_only_verified(bool on) { parts.only_verified.parts.toggle.setOn(on); }
   // This session, as its account's protocol state says it, once known.
   void show_session(const protocol_state_t& known) {
-    const auto own = splice::visit(
-        splice::overloaded{[](const state& now) {
+    const auto own = spl::visit(
+        spl::overloaded{[](const state& now) {
                              return now.device_id.empty() ? std::optional<std::pair<std::string, std::string>>()
                                                           : std::optional(std::pair{now.device_id, now.ed25519});
                            },

@@ -22,7 +22,7 @@ export namespace mux::ui {
 
 // What a presence says, in a word or two.
 [[nodiscard]] inline std::string presence_text(const availability_t& state) {
-  return splice::visit(splice::overloaded{[](const availability::online&) { return std::string("online"); },
+  return spl::visit(spl::overloaded{[](const availability::online&) { return std::string("online"); },
                                [](const availability::chat&) { return std::string("online"); },
                                [](const availability::away&) { return std::string("away"); },
                                [](const availability::extended_away&) { return std::string("away for a while"); },
@@ -46,7 +46,7 @@ export namespace mux::ui {
 }
 
 [[nodiscard]] inline bool is_group(const conversation& one) {
-  return splice::visit(splice::overloaded{[](const conversation_kind::direct&) { return false; }, [](const auto&) { return true; }},
+  return spl::visit(spl::overloaded{[](const conversation_kind::direct&) { return false; }, [](const auto&) { return true; }},
                     one.kind);
 }
 

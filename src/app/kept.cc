@@ -358,7 +358,7 @@ struct kept_settings {
           chat_of(one.account, one.conversation),
           mux::config::notify_choices{
               .on = one.on,
-              .mentions = splice::visit(splice::overloaded{[](mux::config::notify_mode::mentions) { return std::optional<bool>(true); },
+              .mentions = spl::visit(spl::overloaded{[](mux::config::notify_mode::mentions) { return std::optional<bool>(true); },
                                                            [](mux::config::notify_mode::all) { return std::optional<bool>(false); },
                                                            [](const auto&) { return std::optional<bool>(); }},
                                         mux::config::notify_mode_of(one.mode)),

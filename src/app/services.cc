@@ -102,7 +102,7 @@ struct services {
     auto* up = root().open_panel();
     if (!up)
       return;
-    splice::visit(
+    spl::visit(
         [&](mux::ui::accounts_panel<actions>& panel) {
           if (!panel.selected)
             return;

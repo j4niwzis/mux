@@ -27,7 +27,7 @@ struct invite {};    // those invited
 struct knock {};     // those who ask, once let in
 struct other {};     // restricted, private -- a rule not offered here
 }  // namespace join_rule
-using join_rule_t = splice::variant<join_rule::open, join_rule::invite, join_rule::knock, join_rule::other>;
+using join_rule_t = spl::variant<join_rule::open, join_rule::invite, join_rule::knock, join_rule::other>;
 // Who may read a room's history.
 namespace history_rule {
 struct shared {};          // members, all of it
@@ -36,7 +36,7 @@ struct joined {};          // members, from when they joined
 struct world_readable {};  // anyone
 }  // namespace history_rule
 using history_rule_t =
-    splice::variant<history_rule::shared, history_rule::invited, history_rule::joined, history_rule::world_readable>;
+    spl::variant<history_rule::shared, history_rule::invited, history_rule::joined, history_rule::world_readable>;
 
 // What a room asks of those who do something in it: the level each needs,
 // as its power levels say (m.room.power_levels), Matrix's defaults where
@@ -87,7 +87,7 @@ struct pin {
 };
 }  // namespace power_need
 using power_need_t =
-    splice::variant<power_need::default_role, power_need::send_messages, power_need::invite, power_need::change_settings,
+    spl::variant<power_need::default_role, power_need::send_messages, power_need::invite, power_need::change_settings,
                  power_need::kick, power_need::ban, power_need::redact, power_need::notify_everyone,
                  power_need::rename, power_need::retopic, power_need::change_avatar, power_need::change_address,
                  power_need::change_history, power_need::change_access, power_need::change_permissions,
@@ -121,7 +121,7 @@ struct power_needs {
     return found == events.end() ? state_default : found->second;
   }
   [[nodiscard]] std::int64_t of(const power_need_t& need) const {
-    return splice::visit([this](auto one) { return this->of(one); }, need);
+    return spl::visit([this](auto one) { return this->of(one); }, need);
   }
 };
 

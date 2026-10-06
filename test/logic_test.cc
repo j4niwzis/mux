@@ -93,7 +93,7 @@ TEST(Reading, TypingSaidAtMostEveryTwentySeconds) {
   const clock::time_point t0{};
   auto step = logic::typing_after({}, true, with_juliet, t0, yes);
   ASSERT_EQ(step.say.size(), 1u);
-  EXPECT_TRUE(splice::visit(splice::overloaded{[](const logic::typing_said::started&) { return true; },
+  EXPECT_TRUE(spl::visit(spl::overloaded{[](const logic::typing_said::started&) { return true; },
                                     [](const logic::typing_said::stopped&) { return false; }},
                          step.say[0]));
   // Still typing a little later: nothing said again.

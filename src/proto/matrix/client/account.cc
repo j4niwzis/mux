@@ -384,7 +384,7 @@ class account {
   // A message, added: one that came in the clear, live, into a room known
   // to be encrypted, says so whatever its time says (review 6).
   void added(message made, placement_t where, bool sealed) {
-    const bool live = splice::visit(splice::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
+    const bool live = spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
     made.came_plain = !sealed && live && encrypted_rooms_.contains(made.in.id);
     sink_(change::message_added{std::move(made), where});
   }

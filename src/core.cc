@@ -351,7 +351,7 @@ struct other {
   std::string said;
 };
 }  // namespace call_end
-using call_end_t = splice::variant<call_end::hung_up, call_end::busy, call_end::timed_out, call_end::failed, call_end::other>;
+using call_end_t = spl::variant<call_end::hung_up, call_end::busy, call_end::timed_out, call_end::failed, call_end::other>;
 namespace call_said {
 struct invite {
   calls::session_description offer;
@@ -373,7 +373,7 @@ struct select_answer {
 };
 }  // namespace call_said
 using call_said_t =
-    splice::variant<call_said::invite, call_said::answer, call_said::candidates, call_said::hangup, call_said::reject,
+    spl::variant<call_said::invite, call_said::answer, call_said::candidates, call_said::hangup, call_said::reject,
                     call_said::select_answer>;
 struct call_signalled {
   conversation_id in;
@@ -396,7 +396,7 @@ struct call_servers {
 // The changes every protocol says, here; and each protocol's own, from its
 // change list -- changes_type(state), found by ADL in its folder (mux.proto.
 // <p>.changes), none where it gives none -- all one variant.
-using core_changes = splice::variant<change::protocol_state_changed, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::account_removed, change::conversation_updated, change::conversation_removed, change::presence_changed, change::message_added, change::message_edited, change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed, change::typing_changed, change::history_position, change::event_missing, change::members_changed, change::avatar_loaded, change::receipts_changed, change::window_opened, change::window_extended, change::media_progress, change::room_created, change::preview_loaded, change::room_previewed, change::mentioned, change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine, change::directory_listed, change::people_found, change::profile_found, change::threads_listed, change::call_signalled, change::call_servers>;
+using core_changes = spl::variant<change::protocol_state_changed, change::trust_changed, change::devices_listed, change::message_encrypted, change::connection_changed, change::refused, change::notice, change::account_removed, change::conversation_updated, change::conversation_removed, change::presence_changed, change::message_added, change::message_edited, change::message_redacted, change::message_acknowledged, change::delivery_changed, change::message_discarded, change::reaction_changed, change::typing_changed, change::history_position, change::event_missing, change::members_changed, change::avatar_loaded, change::receipts_changed, change::window_opened, change::window_extended, change::media_progress, change::room_created, change::preview_loaded, change::room_previewed, change::mentioned, change::marks_shown, change::mark_taken, change::marks_seen, change::reacted_to_mine, change::directory_listed, change::people_found, change::profile_found, change::threads_listed, change::call_signalled, change::call_servers>;
 namespace changes_defaults {
 constexpr type_tag<change_list<>> changes_type(const auto&) { return {}; }
 }  // namespace changes_defaults
@@ -412,8 +412,8 @@ struct with_changes {
   using type = Variant;
 };
 template <class... Have, class... Theirs, class... Lists>
-struct with_changes<splice::variant<Have...>, change_list<Theirs...>, Lists...>
-    : with_changes<splice::variant<Have..., Theirs...>, Lists...> {};
+struct with_changes<spl::variant<Have...>, change_list<Theirs...>, Lists...>
+    : with_changes<spl::variant<Have..., Theirs...>, Lists...> {};
 template <class>
 struct all_changes;
 template <class... Tags>
@@ -500,7 +500,7 @@ class model {
   }
 
   void apply(const change_t& what) {
-    splice::visit([this](const auto& one) { on(one); }, what);
+    spl::visit([this](const auto& one) { on(one); }, what);
   }
 
   // The user has read a chat up to a message: kept, sent or not.
@@ -676,7 +676,7 @@ class model {
     if (one.message.thread) {
       auto& answers = where.threads[*one.message.thread];
       answers.insert(std::ranges::upper_bound(answers, one.message.at, {}, &message::at), one.message);
-      const bool live = splice::visit(splice::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }},
+      const bool live = spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }},
                                       one.where);
       note_answer(where, *one.message.thread, one.message, live);
       return;
@@ -708,7 +708,7 @@ class model {
       else
         by_time();
     };
-    splice::visit(splice::overloaded{[&](placement::at_end) {
+    spl::visit(spl::overloaded{[&](placement::at_end) {
                             if (!where.latest || one.message.at >= where.latest->at)
                               where.latest = one.message;
                             if (where.detached)
@@ -717,8 +717,8 @@ class model {
                             // shown, whatever its time -- this machine's clock,
                             // which a few seconds behind the server's put a
                             // reply above the message it answered.
-                            const bool sending = splice::visit(
-                                splice::overloaded{[](const delivery::sending&) { return true; },
+                            const bool sending = spl::visit(
+                                spl::overloaded{[](const delivery::sending&) { return true; },
                                                    [](const auto&) { return false; }},
                                 one.message.delivery);
                             if (sending) {
@@ -734,7 +734,7 @@ class model {
                             if (one.message.outgoing) {
                               const auto pending = std::ranges::find_if(where.timeline, [](const message& said) {
                                 return said.outgoing &&
-                                       splice::visit(splice::overloaded{[](const delivery::sending&) { return true; },
+                                       spl::visit(spl::overloaded{[](const delivery::sending&) { return true; },
                                                                         [](const auto&) { return false; }},
                                                      said.delivery);
                               });
@@ -974,7 +974,7 @@ class model {
   }
   void on(const change::mark_taken& one) {
     conversation& where = of(one.in);
-    auto& marks = splice::visit(splice::overloaded{[&](mark_kind::mention) -> std::vector<unread_mark>& { return where.unread_mentions; },
+    auto& marks = spl::visit(spl::overloaded{[&](mark_kind::mention) -> std::vector<unread_mark>& { return where.unread_mentions; },
                                         [&](mark_kind::reaction) -> std::vector<unread_mark>& { return where.unread_reactions; }},
                              one.kind);
     if (one.event) {

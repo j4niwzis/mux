@@ -20,7 +20,7 @@ struct masked {};
 struct hidden {};
 struct read {};
 }  // namespace field_shown
-using field_shown_t = splice::variant<field_shown::typed, field_shown::masked, field_shown::hidden, field_shown::read>;
+using field_shown_t = spl::variant<field_shown::typed, field_shown::masked, field_shown::hidden, field_shown::read>;
 
 // A field the server asks: what it is called and says, how it is shown, what
 // it holds already, and what goes with it -- a picture (a captcha's, sent

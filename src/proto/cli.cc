@@ -23,7 +23,7 @@ namespace {
 
 // Each change in a line, by its own overload.
 std::string name_of(const mux::connection_t& state) {
-  return splice::visit(splice::overloaded{
+  return spl::visit(spl::overloaded{
                         [](const mux::connection::offline&) { return std::string("offline"); },
                         [](const mux::connection::connecting& now) {
                           return "connecting" + (now.reason ? ": " + *now.reason : std::string());
@@ -34,7 +34,7 @@ std::string name_of(const mux::connection_t& state) {
                     state);
 }
 std::string name_of(const mux::availability_t& state) {
-  return splice::visit(splice::overloaded{
+  return spl::visit(spl::overloaded{
                         [](const mux::availability::offline&) { return "offline"; },
                         [](const mux::availability::online&) { return "online"; },
                         [](const mux::availability::away&) { return "away"; },
@@ -45,7 +45,7 @@ std::string name_of(const mux::availability_t& state) {
                     state);
 }
 std::string name_of(const mux::delivery_t& state) {
-  return splice::visit(splice::overloaded{
+  return spl::visit(spl::overloaded{
                         [](const mux::delivery::sending&) { return "sending"; },
                         [](const mux::delivery::sent&) { return "sent"; },
                         [](const mux::delivery::delivered&) { return "delivered"; },
@@ -55,7 +55,7 @@ std::string name_of(const mux::delivery_t& state) {
                     state);
 }
 std::string name_of(const mux::conversation_kind_t& kind) {
-  return splice::visit(splice::overloaded{[](const mux::conversation_kind::direct&) { return "contact"; },
+  return spl::visit(spl::overloaded{[](const mux::conversation_kind::direct&) { return "contact"; },
                                     [](const mux::conversation_kind::group&) { return "room"; }},
                     kind);
 }
@@ -103,7 +103,7 @@ std::string of(const change::call_servers& one) { return std::format("{} call se
 std::string of(const change::refused& one) { return one.what; }
 std::string of(const change::devices_listed& one) { return std::format("{} has {} sessions", one.user, one.devices.size()); }
 std::string of(const change::trust_changed& one) {
-  return one.user + splice::visit(splice::overloaded{[](trust::verified) { return std::string(" is verified"); },
+  return one.user + spl::visit(spl::overloaded{[](trust::verified) { return std::string(" is verified"); },
                                                      [](trust::unverified) { return std::string(" is not verified"); },
                                                      [](trust::changed) { return std::string("'s identity changed"); }},
                                   one.now);
@@ -145,7 +145,7 @@ std::string of(const Change& one) {
 }  // namespace said
 
 std::string describe(const mux::change_t& what) {
-  return splice::visit([](const auto& one) { return said::of(one); }, what);
+  return spl::visit([](const auto& one) { return said::of(one); }, what);
 }
 
 // What the account says: told, and kept in the model. A type of its own,
@@ -229,7 +229,7 @@ int main(int argc, char** argv) {
     // (config::account_from, by the protocol that owns the address), then
     // its client (make_account, by ADL on what it keeps).
     mux::config::account_t saved = mux::config::account_from(address, password);
-    splice::visit(
+    spl::visit(
         [&](auto& kept) {
           if (argc >= 3)
             server_given(kept, argv[2], argc == 4 ? std::optional<std::int64_t>(std::stoi(argv[3])) : std::nullopt);

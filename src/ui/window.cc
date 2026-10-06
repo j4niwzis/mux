@@ -37,7 +37,7 @@ export namespace mux::ui {
 // events.
 template <class Actions>
 struct window : scene::Node {
-  using panel_type = splice::variant<accounts_panel<Actions>>;
+  using panel_type = spl::variant<accounts_panel<Actions>>;
   using with_drawer = widgets::Drawer<conversations_screen<Actions>, drawer_panel<Actions>>;
 
   // What the window holds, made anew when the theme changes: what is made
@@ -384,10 +384,10 @@ struct window : scene::Node {
   template <class Panel>
   Panel& open() {
     if (panel_type* up = layer().frame.shown())
-      if (Panel* same = up->visit(splice::overloaded{[](Panel& one) -> Panel* { return &one; },
+      if (Panel* same = up->visit(spl::overloaded{[](Panel& one) -> Panel* { return &one; },
                                              [](auto&) -> Panel* { return nullptr; }}))
         return *same;
-    return splice::get<Panel>(layer().frame.open(std::in_place_type<Panel>, needs_));
+    return spl::get<Panel>(layer().frame.open(std::in_place_type<Panel>, needs_));
   }
   // The top panel goes, and the one under it is up again.
   void back_panel() { layer().frame.back(); }
@@ -560,8 +560,8 @@ struct window : scene::Node {
   // A passphrase asked for: the one at the start is not dismissed.
   void ask_passphrase(proto::passphrase_for_t why) {
     auto& dialog = layer().passphrase;
-    dialog.setDismissable(splice::visit(
-        splice::overloaded{[](config::passphrase_for::unlock) { return false; }, [](const auto&) { return true; }}, why));
+    dialog.setDismissable(spl::visit(
+        spl::overloaded{[](config::passphrase_for::unlock) { return false; }, [](const auto&) { return true; }}, why));
     dialog.open(needs_, why);
   }
   void passphrase_refused(std::string why) {

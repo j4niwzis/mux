@@ -157,7 +157,7 @@ class notices_part {
     }
     auto& settings = s_->kept->notifications;
     for (const auto& one : said)
-      splice::visit(splice::overloaded{[&](const mux::platform::push::endpoint& given) {
+      spl::visit(spl::overloaded{[&](const mux::platform::push::endpoint& given) {
                                          std::println(std::cerr, "[push] endpoint {}", given.url);
                                          if (settings.push_endpoint != given.url) {
                                            settings.push_endpoint = given.url;
@@ -192,7 +192,7 @@ class notices_part {
   // thread, with the system's own sound -- the user's, by default (#16873);
   // or mux's own window, with the chime.
   void show(const mux::conversation_id& in, std::string title, std::string text, bool sound) {
-    splice::visit(splice::overloaded{[&](mux::config::notify_backend::native) {
+    spl::visit(spl::overloaded{[&](mux::config::notify_backend::native) {
                                        std::thread([title, text, sound] {
                                          if (!mux::platform::notifications::notify(title, text, sound))
                                            std::println(std::cerr, "[notify] no desktop notification service; {}: {}",

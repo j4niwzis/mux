@@ -236,7 +236,7 @@ struct notifications_page : nodes::Stack {
   void show(const config::notification_settings& now) {
     parts.choices.show(config::notify_choices_of(now));
     parts.push.parts.toggle.setOnNow(now.unified_push.value_or(false));
-    const bool native = splice::visit(splice::overloaded{[](config::notify_backend::native) { return true; },
+    const bool native = spl::visit(spl::overloaded{[](config::notify_backend::native) { return true; },
                                               [](const auto&) { return false; }},
                                    config::notify_backend_of(now.backend));
     parts.backend.parts.native.set_active(native);

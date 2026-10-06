@@ -146,7 +146,7 @@ struct passphrase_box : nodes::Stack {
     parts.go.apply({.width = 110.0f, .height = 34.0f, .alignSelf = scene::align::kEnd});
   }
   [[nodiscard]] words said() const {
-    return splice::visit([](auto why) { return words_of(why); }, purpose);
+    return spl::visit([](auto why) { return words_of(why); }, purpose);
   }
   // Why it was not taken: said under the fields, which are emptied.
   void say(std::string what) {
@@ -225,7 +225,7 @@ template <class Actions, class>
 struct form_list;
 template <class Actions, class... Tags>
 struct form_list<Actions, protocol_list<Tags...>> {
-  using type = splice::variant<form_of_t<Tags, Actions>...>;
+  using type = spl::variant<form_of_t<Tags, Actions>...>;
 };
 template <class Actions>
 using account_form = typename form_list<Actions, protocols>::type;
@@ -233,7 +233,7 @@ using account_form = typename form_list<Actions, protocols>::type;
 // The form of an account's own protocol, filled in from what it keeps.
 template <class Actions>
 [[nodiscard]] account_form<Actions> form_of(Actions* a, const palette& colours, const config::account_t& saved) {
-  return splice::visit([&](const auto& kept) {
+  return spl::visit([&](const auto& kept) {
     using form = typename decltype(form_type_for(kept, type_tag<Actions>{}))::type;
     return account_form<Actions>(std::in_place_type<form>, a, colours, std::optional(kept));
   }, saved.own);
@@ -241,7 +241,7 @@ template <class Actions>
 // A form laid out in the column under `top`.
 template <class Actions>
 void place_form(account_form<Actions>& form, const skia::SkRect& column, float top) {
-  splice::visit(
+  spl::visit(
       [&](auto& one) {
         one.fState.arrange(0.0f, 0.0f);
         scene::layout(one, skia::SkRect::MakeLTRB(column.fLeft, column.fTop + top, column.fRight, column.fBottom));

@@ -132,7 +132,7 @@ struct tab_types<manage_tab_list<Tabs...>> {
 };
 template <class Rule, class Variant>
 [[nodiscard]] bool is_rule(const Variant& now) {
-  return splice::visit(splice::overloaded{[](const Rule&) { return true; }, [](const auto&) { return false; }}, now);
+  return spl::visit(spl::overloaded{[](const Rule&) { return true; }, [](const auto&) { return false; }}, now);
 }
 
 // A heading over a tab, and over a part of one, as Element's.
@@ -318,7 +318,7 @@ struct room_settings : nodes::Stack {
         : parts{.general = tab_row(*box->colours_, "General", icon::gear{}, {box, settings_tab::general{}}),
                 .notifications = tab_row(*box->colours_, "Notifications", icon::bell{}, {box, settings_tab::notifications{}}),
                 .looks = tab_row(*box->colours_, "Appearance", icon::eye{}, {box, settings_tab::looks{}})} {
-      splice::visit([&](auto of) { this->add(box, tabs_of_t<decltype(of)>{}); }, box->facts.speaks);
+      spl::visit([&](auto of) { this->add(box, tabs_of_t<decltype(of)>{}); }, box->facts.speaks);
       this->setGap(2.0f);
       fState.apply({.fillY = true, .width = 220.0f, .padding = {4.0f, 12.0f, 12.0f, 12.0f}});
     }
@@ -535,7 +535,7 @@ struct room_settings : nodes::Stack {
   void rebuild() {
     const settings_tab_t to = tab;
     auto& page = holder().parts.page;
-    splice::visit(splice::overloaded{
+    spl::visit(spl::overloaded{
                       [&](settings_tab::general) { page.template emplace<general_page>(actions, this, facts); },
                       [&](settings_tab::notifications) { page.template emplace<notifications_page>(actions, this, facts); },
                       [&](settings_tab::looks) { page.template emplace<looks_page>(actions, this, facts); },

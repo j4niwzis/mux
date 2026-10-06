@@ -41,7 +41,7 @@ template <class>
 struct variant_of_links;
 template <class... Kinds>
 struct variant_of_links<link_list<Kinds...>> {
-  using type = splice::variant<Kinds...>;
+  using type = spl::variant<Kinds...>;
 };
 // What a link points at, of every protocol's kinds.
 using link_t = typename variant_of_links<typename all_links<protocols>::list>::type;
@@ -49,7 +49,7 @@ using link_t = typename variant_of_links<typename all_links<protocols>::list>::t
 // A protocol's own, as any link.
 template <class Theirs>
 [[nodiscard]] link_t as_link(const Theirs& one) {
-  return splice::visit([](const auto& kind) { return link_t{kind}; }, one);
+  return spl::visit([](const auto& kind) { return link_t{kind}; }, one);
 }
 // What a protocol read, as any link: none where it reads none of the kind.
 inline std::optional<link_t> as_some_link(const std::optional<std::monostate>&) { return std::nullopt; }
@@ -89,14 +89,14 @@ std::optional<link_t> first_id(protocol_list<Tags...>, std::string_view word) {
 
 // The chat a link names, where the model has it.
 [[nodiscard]] inline std::optional<conversation_id> chat_of(const model& now, const link_t& where) {
-  return splice::visit([&](const auto& kind) {
+  return spl::visit([&](const auto& kind) {
     using links_defaults::chat_for;
     return chat_for(kind, now);
   }, where);
 }
 // What a link is in a message: as its kind says.
 [[nodiscard]] inline mention_t mention_in(const link_t& where) {
-  return splice::visit([](const auto& kind) {
+  return spl::visit([](const auto& kind) {
     using links_defaults::mention_of;
     return mention_of(kind);
   }, where);
@@ -104,7 +104,7 @@ std::optional<link_t> first_id(protocol_list<Tags...>, std::string_view word) {
 // Where a link leads, from the chat being read and the account in view: as
 // its protocol says (step_for).
 [[nodiscard]] inline link_step_t where_to(const model& now, const link_t& where, const std::optional<account_id>& current) {
-  return splice::visit([&](const auto& kind) { return step_for(kind, now, current); }, where);
+  return spl::visit([&](const auto& kind) { return step_for(kind, now, current); }, where);
 }
 
 }  // namespace mux::logic

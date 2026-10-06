@@ -91,9 +91,9 @@ inline loom::cs::sync::response legacy_of(const loom::cs::sliding_sync::response
       if (events)
         for (const auto& one : *events)
           if (one.state_key && *one.state_key == user)
-            splice::visit(splice::overloaded{[&](const loom::ev::m_room_member_content_t& member) {
+            spl::visit(spl::overloaded{[&](const loom::ev::m_room_member_content_t& member) {
                                                using values = loom::ev::m_room_member_content_t::membership_values;
-                                               out_of_it = splice::visit(splice::overloaded{[](values::leave) { return true; },
+                                               out_of_it = spl::visit(spl::overloaded{[](values::leave) { return true; },
                                                                                             [](values::ban) { return true; },
                                                                                             [](const auto&) { return false; }},
                                                                          member.membership);
@@ -285,7 +285,7 @@ void account<Sink>::run() {
       const loom::interactive_auth& wanted = *said->auth;
       const std::string session = *said->session;
       const auto passable = [&](const loom::auth_stage_t& stage) {
-        return splice::visit(splice::overloaded{[](loom::auth_stage::password) { return false; },
+        return spl::visit(spl::overloaded{[](loom::auth_stage::password) { return false; },
                                                 [&](loom::auth_stage::registration_token) { return how_.registration_token.has_value(); },
                                                 [](const auto&) { return true; }},
                              stage);
@@ -293,7 +293,7 @@ void account<Sink>::run() {
       const auto flow = std::ranges::find_if(wanted.flows, [&](const auto& stages) { return std::ranges::all_of(stages, passable); });
       if (flow == wanted.flows.end()) {
         const bool token_wanted = std::ranges::any_of(wanted.flows | std::views::join, [](const loom::auth_stage_t& stage) {
-          return splice::visit(splice::overloaded{[](loom::auth_stage::registration_token) { return true; },
+          return spl::visit(spl::overloaded{[](loom::auth_stage::registration_token) { return true; },
                                                   [](const auto&) { return false; }},
                                stage);
         });
@@ -311,8 +311,8 @@ void account<Sink>::run() {
       const auto answer = [&](knot::raw rest = knot::raw{"{}"}) {
         auth = asked_t::body_t::authentication_data_t{.type = loom::name_of(*next), .session = session, .rest = std::move(rest)};
       };
-      const bool go_on = splice::visit(
-          splice::overloaded{
+      const bool go_on = spl::visit(
+          spl::overloaded{
               [&](loom::auth_stage::dummy) { return answer(), true; },
               [&](loom::auth_stage::registration_token) {
                 return answer(as_body(registration_token_field{*how_.registration_token})), true;
@@ -607,7 +607,7 @@ void account<Sink>::run() {
     }();
     if (!got) {
       const failure& why = got.error();
-      if (why.server && splice::visit([](auto code) { return code.gone; }, errcode_of(why.server->errcode))) {
+      if (why.server && spl::visit([](auto code) { return code.gone; }, errcode_of(why.server->errcode))) {
         // A kept session no longer good: logged in again, once.
         if (kept) {
           log(id_, "the session kept is no longer good: logging in again");
@@ -750,7 +750,7 @@ void account<Sink>::load_kept() {
 // value the spec does not name is taken as offline.
 [[nodiscard]] inline mux::presence presence_from(const loom::ev::m_presence_content_t& content) {
   using values = loom::ev::m_presence_content_t::presence_values;
-  return {splice::visit(splice::overloaded{[](values::online) -> mux::availability_t { return mux::availability::online{}; },
+  return {spl::visit(spl::overloaded{[](values::online) -> mux::availability_t { return mux::availability::online{}; },
                                 [](values::unavailable) -> mux::availability_t { return mux::availability::away{}; },
                                 [](values::offline) -> mux::availability_t { return mux::availability::offline{}; },
                                 [](const std::string&) -> mux::availability_t { return mux::availability::offline{}; }},
@@ -764,7 +764,7 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
   if (got.presence && got.presence->events)
     for (const auto& event : *got.presence->events)
       if (event.sender)
-        splice::visit(splice::overloaded{[&](const loom::ev::m_presence_content_t& content) {
+        spl::visit(spl::overloaded{[&](const loom::ev::m_presence_content_t& content) {
                                 sink_(change::presence_changed{id_, *event.sender, presence_from(content)});
                               },
                               [](const auto&) {}},
@@ -824,8 +824,8 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
       std::map<std::string, std::string> names;
       if (const auto kept = state_.invited.find(room); kept != state_.invited.end())
         for (const auto& [key, one] : kept->second)
-          splice::visit(
-              splice::overloaded{
+          spl::visit(
+              spl::overloaded{
                   [&](const loom::ev::m_room_name_content_t& c) {
                     if (!c.name.empty())
                       made.name = c.name;
@@ -837,7 +837,7 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
                   },
                   [&](const loom::ev::m_room_canonical_alias_content_t& c) { made.alias = c.alias; },
                   [&](const loom::ev::m_room_create_content_t& c) {
-                    made.space = splice::visit([](auto of) { return of.is_space; }, room_type_of(c.type));
+                    made.space = spl::visit([](auto of) { return of.is_space; }, room_type_of(c.type));
                   },
                   [&](const loom::ev::m_room_member_content_t& c) {
                     if (c.displayname)

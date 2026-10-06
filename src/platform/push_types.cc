@@ -25,6 +25,6 @@ struct refused {  // the distributor would not
 };
 struct no_distributor {};  // none on the bus, running or to be started
 struct no_bus {};          // no session bus at all
-using event = splice::variant<endpoint, message, unregistered, registered, refused, no_distributor, no_bus>;
+using event = spl::variant<endpoint, message, unregistered, registered, refused, no_distributor, no_bus>;
 
 }  // namespace mux::platform::push

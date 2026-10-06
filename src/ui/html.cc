@@ -34,7 +34,7 @@ struct code {};      // <code>
 struct quote {};     // <blockquote>
 }  // namespace text_style
 using text_style_t =
-    splice::variant<text_style::strong, text_style::emphasis, text_style::struck, text_style::code, text_style::quote>;
+    spl::variant<text_style::strong, text_style::emphasis, text_style::struck, text_style::code, text_style::quote>;
 [[nodiscard]] inline nodes::Text::Styled styled(text_style::strong, std::size_t a, std::size_t b) {
   return {.first = a, .last = b, .strong = true};
 }
@@ -80,7 +80,7 @@ struct block_open {};   // <pre>: a block of code
 struct block_close {};  // </pre>
 struct other {};  // anything else: dropped
 }  // namespace html_tag
-using html_tag_t = splice::variant<html_tag::line_break, html_tag::block_end, html_tag::list_item, html_tag::quote,
+using html_tag_t = spl::variant<html_tag::line_break, html_tag::block_end, html_tag::list_item, html_tag::quote,
                                 html_tag::reply, html_tag::link_open, html_tag::link_close, html_tag::image,
                                 html_tag::style_open, html_tag::style_close, html_tag::code_open, html_tag::block_open,
                                 html_tag::block_close, html_tag::other>;
@@ -112,7 +112,7 @@ using html_tag_t = splice::variant<html_tag::line_break, html_tag::block_end, ht
   const auto found = known.find(one.name.local);
   if (found == known.end())
     return html_tag::other{};
-  return splice::visit(splice::overloaded{[&](html_tag::link_open) -> html_tag_t {
+  return spl::visit(spl::overloaded{[&](html_tag::link_open) -> html_tag_t {
                                             const std::string href = attribute("href");
                                             return href.empty() ? html_tag_t{html_tag::other{}} : html_tag_t{html_tag::link_open{href}};
                                           },
@@ -175,7 +175,7 @@ using html_tag_t = splice::variant<html_tag::line_break, html_tag::block_end, ht
   // between two, nor one at the start. Inside code, every line kept.
   const auto in_code = [&] {
     return block_from.has_value() || std::ranges::any_of(opened, [](const auto& one) {
-      return splice::visit(splice::overloaded{[](text_style::code) { return true; }, [](const auto&) { return false; }}, one.first);
+      return spl::visit(spl::overloaded{[](text_style::code) { return true; }, [](const auto&) { return false; }}, one.first);
     });
   };
   const auto end_line = [&] {
@@ -187,7 +187,7 @@ using html_tag_t = splice::variant<html_tag::line_break, html_tag::block_end, ht
   // elements passed over -- not shown twice.
   int skipping = 0;
   const auto apply = [&](html_tag_t read) {
-      splice::visit(splice::overloaded{[&](html_tag::line_break) { out.text += '\n'; },
+      spl::visit(spl::overloaded{[&](html_tag::line_break) { out.text += '\n'; },
                             // A block of code: on lines of its own, its language as its
                             // code says, a stretch of the text marked as one.
                             [&](html_tag::block_open) {
@@ -221,7 +221,7 @@ using html_tag_t = splice::variant<html_tag::line_break, html_tag::block_end, ht
                             [&](html_tag::quote) {},
                             [&](html_tag::style_open& open) {
                               // A quote and a block of code start on a line of their own.
-                              splice::visit(splice::overloaded{[&](text_style::quote) { end_line(); },
+                              spl::visit(spl::overloaded{[&](text_style::quote) { end_line(); },
                                                     [](const auto&) {}},
                                          open.style);
                               opened.emplace_back(open.style, out.text.size());
@@ -231,12 +231,12 @@ using html_tag_t = splice::variant<html_tag::line_break, html_tag::block_end, ht
                                 if (it->first.index() == close.style.index()) {
                                   const std::size_t from = it->second;
                                   if (out.text.size() > from)
-                                    out.styles.push_back(splice::visit(
+                                    out.styles.push_back(spl::visit(
                                         [&](auto kind) { return styled(kind, from, out.text.size()); }, close.style));
                                   opened.erase(std::next(it).base());
                                   break;
                                 }
-                              splice::visit(splice::overloaded{[&](text_style::quote) { end_line(); }, [](const auto&) {}},
+                              spl::visit(spl::overloaded{[&](text_style::quote) { end_line(); }, [](const auto&) {}},
                                          close.style);
                             },
                             [&](html_tag::reply) { skipping = 1; },
@@ -288,7 +288,7 @@ using html_tag_t = splice::variant<html_tag::line_break, html_tag::block_end, ht
   reader.feed(html);
   reader.finish();
   for (auto next = reader.next(); next && *next; next = reader.next())
-    splice::visit(splice::overloaded{[&](const chevron::start_element& one) {
+    spl::visit(spl::overloaded{[&](const chevron::start_element& one) {
                                        if (skipping > 0) {
                                          ++skipping;
                                          return;

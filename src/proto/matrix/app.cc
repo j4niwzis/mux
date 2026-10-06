@@ -92,7 +92,7 @@ void program_told(App& app, const session_given& given) {
   const auto found = app.find(given.account.address);
   if (found == app.saved.end())
     return;
-  splice::visit([&](auto& one) {
+  spl::visit([&](auto& one) {
                   using kept_defaults::take_session;
                   take_session(one, given);
                 },
@@ -152,7 +152,7 @@ template <class App, class Then>
 void on_sessions_page(App& app, const account_id& by, Then then) {
   using accounts = typename App::accounts;
   if (auto* up = app.root().open_panel())
-    splice::visit([&](accounts& panel) {
+    spl::visit([&](accounts& panel) {
                     if (auto* page = panel.template shown_page<sessions_page<typename accounts::actions_type>>();
                         page && panel.selected == by.address)
                       then(*page);

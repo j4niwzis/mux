@@ -26,7 +26,7 @@ struct edit {
   std::string before;
 };
 }  // namespace compose
-using compose_t = splice::variant<compose::plain, compose::reply, compose::edit>;
+using compose_t = spl::variant<compose::plain, compose::reply, compose::edit>;
 
 namespace request {
 struct choose {
@@ -424,7 +424,7 @@ namespace writing {
 struct chat {};
 struct thread {};
 }  // namespace writing
-using writing_t = splice::variant<writing::chat, writing::thread>;
+using writing_t = spl::variant<writing::chat, writing::thread>;
 struct close_emoji {};
 struct insert_emoji {
   std::string text;
@@ -611,7 +611,7 @@ struct settings_home {};
 struct settings_animations {};
 }  // namespace request
 
-// Every request, one of them: a splice::variant, built in time linear in how
+// Every request, one of them: a spl::variant, built in time linear in how
 // many there are (std::variant's nested union made it quadratic).
 // Every protocol's own requests, as each lists them.
 template <class List>

@@ -128,7 +128,7 @@ struct row_item : pressable<nodes::Stack> {
     this->setHorizontal();
     this->setGap(16.0f);
     fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}, .hoverBackground = colours.chosen, .selectedBackground = colours.chosen, .focusBackground = colours.chosen});
-    mark.setVisible(splice::visit([](auto one) { return drawn(one); }, icon));
+    mark.setVisible(spl::visit([](auto one) { return drawn(one); }, icon));
     label.setElided(true);
     label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
     dot.set_on(choice.value_or(false));
@@ -461,7 +461,7 @@ struct room_events_held {
 };
 inline room_events_held& room_events_at(const choice_level_t& level) {
   static room_events_held everywhere, account, chat;
-  return splice::visit(splice::overloaded{[](choice_level::everywhere) -> room_events_held& { return everywhere; },
+  return spl::visit(spl::overloaded{[](choice_level::everywhere) -> room_events_held& { return everywhere; },
                                           [](choice_level::account) -> room_events_held& { return account; },
                                           [](choice_level::chat) -> room_events_held& { return chat; }},
                        level);
@@ -471,8 +471,8 @@ inline room_events_held& room_events_at(const choice_level_t& level) {
   const room_events_held& every = room_events_at(choice_level::everywhere{});
   const room_events_held& account = room_events_at(choice_level::account{});
   const room_events_held& chat = room_events_at(choice_level::chat{});
-  return splice::visit(
-      splice::overloaded{[&](choice_level::everywhere) {
+  return spl::visit(
+      spl::overloaded{[&](choice_level::everywhere) {
                            return logic::filter_of(std::nullopt, std::nullopt, std::nullopt, std::nullopt, every.kinds, every.all.value_or(true));
                          },
                          [&](choice_level::account) {
@@ -485,7 +485,7 @@ inline room_events_held& room_events_at(const choice_level_t& level) {
 }
 // And with the level as the one over it: what "As above" shows.
 [[nodiscard]] inline room_event_filter events_above(const choice_level_t& level) {
-  return splice::visit(splice::overloaded{[](choice_level::chat) { return events_in_effect(choice_level::account{}); },
+  return spl::visit(spl::overloaded{[](choice_level::chat) { return events_in_effect(choice_level::account{}); },
                                           [](const auto&) { return events_in_effect(choice_level::everywhere{}); }},
                        level);
 }
@@ -613,7 +613,7 @@ struct event_kind_list : nodes::Stack {
                                                          return one;
                                                        }();
     for (const room_event_t& kind : all_room_events) {
-      parts.rows.emplace_back(a, colours, level, kind, splice::visit([](auto one) { return label_of(one); }, kind));
+      parts.rows.emplace_back(a, colours, level, kind, spl::visit([](auto one) { return label_of(one); }, kind));
       parts.rows.back().show_value(shown.shows(kind));
       parts.rows.back().set_live(way == kCustom);
     }

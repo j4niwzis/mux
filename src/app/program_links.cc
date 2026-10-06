@@ -68,7 +68,7 @@ void app::go_to_message(const mux::conversation_id& in, std::string id, std::opt
 
 void app::follow(const mux::logic::link_t& where) {
   auto& screen = root().main();
-  splice::visit(splice::overloaded{[&](const mux::logic::link_step::open_chat& step) {
+  spl::visit(spl::overloaded{[&](const mux::logic::link_step::open_chat& step) {
                                if (step.event)
                                  this->go_to_linked(step.chat, *step.event);
                                else

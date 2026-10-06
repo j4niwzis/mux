@@ -25,7 +25,7 @@ struct settings_dialog : scene::Node {
   // What it was handed, for the pages it makes.
   ui_needs<Actions> needs_;
   std::string motion;
-  using page_t = splice::variant<settings_home<Actions>, animations_page<Actions>, proxies_page<Actions>, proxy_editor<Actions>,
+  using page_t = spl::variant<settings_home<Actions>, animations_page<Actions>, proxies_page<Actions>, proxy_editor<Actions>,
                               appearance_page<Actions>, rendering_page<Actions>, storage_page<Actions>, files_page<Actions>,
                               notifications_page<Actions>>;
   // The page up: home, or one of its pages.
@@ -38,7 +38,7 @@ struct settings_dialog : scene::Node {
   [[nodiscard]] page_t& page() { return std::get<0>(parts.scroll.fChildren); }
   // A page fills the dialog across, and is as tall as what it holds.
   void fit_page() {
-    splice::visit(
+    spl::visit(
         [this](auto& one) {
           one.fState.apply({.relativeSize = scene::axes::kX});
           one.fState.apply({.autoSize = scene::axes::kY});
@@ -65,7 +65,7 @@ struct settings_dialog : scene::Node {
   static void pin_header(auto&, float) {}
   void draw(skiff::scene::Painting& painting, skia::SkCanvas* canvas, float alpha) {
     const float offset = -parts.scroll.contentsShift();
-    splice::visit([&](auto& one) { pin_header(one, offset); }, this->page());
+    spl::visit([&](auto& one) { pin_header(one, offset); }, this->page());
     skiff::scene::drawDefault(*this, painting, canvas, alpha);
   }
   // Where the page is scrolled to, to be kept as it is made again.
@@ -143,7 +143,7 @@ struct settings_dialog : scene::Node {
     this->begin_swap(1.0f);
   }
   [[nodiscard]] notifications_page<Actions>* notifications() {
-    return splice::visit(splice::overloaded{[](notifications_page<Actions>& one) { return &one; },
+    return spl::visit(spl::overloaded{[](notifications_page<Actions>& one) { return &one; },
                                  [](auto&) -> notifications_page<Actions>* { return nullptr; }},
                       this->page());
   }
@@ -156,17 +156,17 @@ struct settings_dialog : scene::Node {
     this->begin_swap(1.0f);
   }
   [[nodiscard]] storage_page<Actions>* storage() {
-    return splice::visit(splice::overloaded{[](storage_page<Actions>& one) { return &one; },
+    return spl::visit(spl::overloaded{[](storage_page<Actions>& one) { return &one; },
                                  [](auto&) -> storage_page<Actions>* { return nullptr; }},
                       this->page());
   }
   [[nodiscard]] rendering_page<Actions>* rendering() {
-    return splice::visit(splice::overloaded{[](rendering_page<Actions>& one) { return &one; },
+    return spl::visit(spl::overloaded{[](rendering_page<Actions>& one) { return &one; },
                                  [](auto&) -> rendering_page<Actions>* { return nullptr; }},
                       this->page());
   }
   [[nodiscard]] appearance_page<Actions>* appearance() {
-    return splice::visit(splice::overloaded{[](appearance_page<Actions>& one) { return &one; },
+    return spl::visit(spl::overloaded{[](appearance_page<Actions>& one) { return &one; },
                                  [](auto&) -> appearance_page<Actions>* { return nullptr; }},
                       this->page());
   }
@@ -179,13 +179,13 @@ struct settings_dialog : scene::Node {
     this->begin_swap(1.0f);
   }
   [[nodiscard]] proxy_editor<Actions>* editor() {
-    return splice::visit(splice::overloaded{[](proxy_editor<Actions>& one) { return &one; },
+    return spl::visit(spl::overloaded{[](proxy_editor<Actions>& one) { return &one; },
                                  [](auto&) -> proxy_editor<Actions>* { return nullptr; }},
                       this->page());
   }
   void show_motion(std::string level) {
     motion = std::move(level);
-    splice::visit([this](auto& one) { one.show_motion(motion); }, this->page());
+    spl::visit([this](auto& one) { one.show_motion(motion); }, this->page());
   }
 
 

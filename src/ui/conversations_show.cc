@@ -167,8 +167,8 @@ void conversations_screen<Actions>::show_space_bars(const model& now) {
     std::vector<shown_icon> out;
     for (const entry* one : items) {
       out.push_back({one, nullptr, 0});
-      const std::optional<std::string> room = splice::visit(
-          splice::overloaded{[](const config::space_item::space& it) { return std::optional<std::string>(it.room); },
+      const std::optional<std::string> room = spl::visit(
+          spl::overloaded{[](const config::space_item::space& it) { return std::optional<std::string>(it.room); },
                              [](const auto&) { return std::optional<std::string>(); }},
           one->item);
       if (!room || !open.contains(*room))
@@ -663,8 +663,8 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
   }
   // The folder chosen kept while it is still there: a tab's, or a bar's --
   // Direct messages, or a space the account has (the bars' are no tabs).
-  const bool in_bars = spaces_on && splice::visit(
-      splice::overloaded{[](const folder::direct&) { return true; },
+  const bool in_bars = spaces_on && spl::visit(
+      spl::overloaded{[](const folder::direct&) { return true; },
                          [&](const folder::space& s) {
                            if (!current)
                              return false;
@@ -735,7 +735,7 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
       if (each.space && (home_hides_spaced || hidden_from_home.contains(each.id)))
         in_spaces.insert(each.children.begin(), each.children.end());
   const auto direct = [](const conversation& one) {
-    return splice::visit(splice::overloaded{[](conversation_kind::direct) { return true; }, [](const auto&) { return false; }}, one.kind);
+    return spl::visit(spl::overloaded{[](conversation_kind::direct) { return true; }, [](const auto&) { return false; }}, one.kind);
   };
   const auto in_folder = [&](const conversation& one) {
     if (!one.space && in_spaces.contains(one.id.id) && !direct(one))
@@ -749,11 +749,11 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
       return false;
     if (!one.space && in_forums.contains(one.id.id))
       return false;
-    return splice::visit(splice::overloaded{[](const folder::all&) { return true; },
+    return spl::visit(spl::overloaded{[](const folder::all&) { return true; },
                                  [&](const folder::space&) { return in_space.contains(one.id.id); },
                                  [&](const folder::group& g) { return std::ranges::contains(one.groups, g.name); },
                                  [&](const folder::direct&) {
-                                   return splice::visit(splice::overloaded{[](conversation_kind::direct) { return true; },
+                                   return spl::visit(spl::overloaded{[](conversation_kind::direct) { return true; },
                                                                            [](const auto&) { return false; }},
                                                         one.kind);
                                  }},
@@ -946,7 +946,7 @@ void conversations_screen<Actions>::show_banners(const conversation* one, const 
   // The protocol's own node under the head, made again for the chat.
   chat.parts.their_head.reset();
   if (one)
-    splice::visit(
+    spl::visit(
         [&](const auto& now) {
           using head_view_defaults::make_head_view;
           this->place_head_view(make_head_view(now, *one, type_tag<Actions>{}));
@@ -955,7 +955,7 @@ void conversations_screen<Actions>::show_banners(const conversation* one, const 
   // The protocol's own node over the composer, made again for the chat.
   chat.parts.their_view.reset();
   if (one)
-    splice::visit(
+    spl::visit(
         [&](const auto& now) {
           using composer_view_defaults::make_composer_view;
           this->place_composer_view(make_composer_view(now, *one, type_tag<Actions>{}));
@@ -1013,7 +1013,7 @@ void conversations_screen<Actions>::show_conversation(const model& now) {
     chat.line.show_knocks(actions, one->knocking, may.invite);
     chat.line.show_unsent(std::ranges::any_of(one->timeline, [](const message& said) {
       return said.outgoing &&
-             splice::visit(splice::overloaded{[](const delivery::failed&) { return true; }, [](const auto&) { return false; }},
+             spl::visit(spl::overloaded{[](const delivery::failed&) { return true; }, [](const auto&) { return false; }},
                            said.delivery);
     }));
   }
@@ -1050,7 +1050,7 @@ void conversations_screen<Actions>::show_conversation(const model& now) {
   const std::size_t new_from =
       newest_before == all.end() ? all.size() : static_cast<std::size_t>(newest_before - all.begin()) + 1;
   const auto arrives = [&](std::size_t i) {
-    const bool acknowledged = all[i].outgoing && splice::visit(splice::overloaded{[](const delivery::sent&) { return true; },
+    const bool acknowledged = all[i].outgoing && spl::visit(spl::overloaded{[](const delivery::sent&) { return true; },
                                                                        [](const auto&) { return false; }},
                                                             all[i].delivery);
     return same_chat && was_at_end && i >= new_from && shows(all[i]) && !acknowledged &&

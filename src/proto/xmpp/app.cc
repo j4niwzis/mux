@@ -40,7 +40,7 @@ void program_told(App& app, const registration_asked& asked) {
   }
   auto& panel = app.accounts_screen.show_account(asked.account.address);
   if (auto* editor = panel.editor())
-    splice::visit([&](auto& form) { app_detail::show_in(form, asked); }, editor->parts.form);
+    spl::visit([&](auto& form) { app_detail::show_in(form, asked); }, editor->parts.form);
 }
 // The account made: kept as one to sign in to from now on.
 template <class App>
@@ -48,7 +48,7 @@ void program_told(App& app, const registered& made) {
   const auto found = app.find(made.account.address);
   if (found == app.saved.end())
     return;
-  splice::visit(splice::overloaded{[](kept& one) { forget_registration(one); }, [](auto&) {}}, found->own);
+  spl::visit(spl::overloaded{[](kept& one) { forget_registration(one); }, [](auto&) {}}, found->own);
   (void)app.write();
 }
 

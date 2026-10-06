@@ -69,7 +69,7 @@ concept byte_range = std::ranges::input_range<Bytes> && std::same_as<std::ranges
   if (text.size() % 4 != 0)
     return std::nullopt;
   std::vector<std::uint8_t> out(3 * text.size() / 4 + 1);
-  const auto in = splice::bytes::buffer_of(splice::bytes::of(text));  // EVP_DecodeBlock reads one block
+  const auto in = spl::bytes::buffer_of(spl::bytes::of(text));  // EVP_DecodeBlock reads one block
   const int n = EVP_DecodeBlock(out.data(), in.data(), static_cast<int>(in.size()));
   if (n < 0)
     return std::nullopt;
@@ -99,11 +99,11 @@ template <byte_range Plain>
   if (!ctx || EVP_EncryptInit_ex(ctx.get(), EVP_aes_256_gcm(), nullptr, key.data(), nonce.data()) != 1)
     throw std::runtime_error("encryption failed");
   bool fine = true;
-  splice::bytes::in_pieces(splice::bytes::of(bound), [&](std::span<const std::uint8_t> piece) {
+  spl::bytes::in_pieces(spl::bytes::of(bound), [&](std::span<const std::uint8_t> piece) {
     int len = 0;
     fine = fine && EVP_EncryptUpdate(ctx.get(), nullptr, &len, piece.data(), static_cast<int>(piece.size())) == 1;
   });
-  splice::bytes::in_pieces(std::forward<Plain>(plain), [&](std::span<const std::uint8_t> piece) {
+  spl::bytes::in_pieces(std::forward<Plain>(plain), [&](std::span<const std::uint8_t> piece) {
     const std::size_t at = out.size();
     out.resize(at + piece.size());
     int len = 0;
@@ -128,21 +128,21 @@ template <class Sealed>
   const std::size_t total = std::ranges::size(sealed);
   if (total < kNonce + kTag)
     return std::nullopt;
-  const auto nonce = splice::bytes::exactly<kNonce>(sealed | std::views::take(kNonce));
-  auto tag = splice::bytes::exactly<kTag>(sealed | std::views::drop(total - kTag));
+  const auto nonce = spl::bytes::exactly<kNonce>(sealed | std::views::take(kNonce));
+  auto tag = spl::bytes::exactly<kTag>(sealed | std::views::drop(total - kTag));
   if (!nonce || !tag)
     return std::nullopt;
   std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)> ctx(EVP_CIPHER_CTX_new(), &EVP_CIPHER_CTX_free);
   if (!ctx || EVP_DecryptInit_ex(ctx.get(), EVP_aes_256_gcm(), nullptr, key.data(), nonce->data()) != 1)
     return std::nullopt;
   bool fine = true;
-  splice::bytes::in_pieces(splice::bytes::of(bound), [&](std::span<const std::uint8_t> piece) {
+  spl::bytes::in_pieces(spl::bytes::of(bound), [&](std::span<const std::uint8_t> piece) {
     int len = 0;
     fine = fine && EVP_DecryptUpdate(ctx.get(), nullptr, &len, piece.data(), static_cast<int>(piece.size())) == 1;
   });
   std::vector<std::uint8_t> out;
   out.reserve(total - kNonce - kTag);
-  splice::bytes::in_pieces(sealed | std::views::drop(kNonce) | std::views::take(total - kNonce - kTag),
+  spl::bytes::in_pieces(sealed | std::views::drop(kNonce) | std::views::take(total - kNonce - kTag),
                         [&](std::span<const std::uint8_t> piece) {
                           const std::size_t at = out.size();
                           out.resize(at + piece.size());
@@ -262,7 +262,7 @@ class vault {
     header how = this->fresh_header(passphrase);
     how.resealing = true;
     if (before)
-      how.previous = splice::bytes::base64_padded_text(detail::seal(*key_, std::span(before->data(), before->size()), detail::kPreviousBound));
+      how.previous = spl::bytes::base64_padded_text(detail::seal(*key_, std::span(before->data(), before->size()), detail::kPreviousBound));
     write_plain(header_file_, knot::to_json_string(how));
     previous_ = before;
     resealing_ = true;
@@ -320,16 +320,16 @@ class vault {
     const std::scoped_lock held(lock_);
     header how;
     const auto salt = detail::random_bytes(16);
-    how.salt = splice::bytes::base64_padded_text(salt);
+    how.salt = spl::bytes::base64_padded_text(salt);
     const key_t key = detail::derive(passphrase, salt, how);
     const std::string_view text = detail::kCheckText;
-    how.check = splice::bytes::base64_padded_text(
-        detail::seal(key, splice::bytes::of(text), detail::kCheckBound));
+    how.check = spl::bytes::base64_padded_text(
+        detail::seal(key, spl::bytes::of(text), detail::kCheckBound));
     key_ = key;
     return how;
   }
   [[nodiscard]] std::optional<header> header_read() const {
-    const std::string text = splice::bytes::file_text(header_file_).value_or(std::string());
+    const std::string text = spl::bytes::file_text(header_file_).value_or(std::string());
     auto how = knot::try_read<header>(text);
     if (!how)
       return std::nullopt;
@@ -359,7 +359,7 @@ class vault {
   }
   [[nodiscard]] std::optional<std::string> read_whole(const std::filesystem::path& path, bool plain_too) const {
     const std::scoped_lock held(lock_);
-    auto text_read = splice::bytes::file_text(path);
+    auto text_read = spl::bytes::file_text(path);
     if (!text_read)
       return std::nullopt;
     std::string text = std::move(*text_read);
@@ -370,10 +370,10 @@ class vault {
     }
     if (!key_)
       return std::nullopt;
-    auto opened = this->opened_by_either(splice::bytes::of(text) | std::views::drop(detail::kMagic.size()), detail::bound_of(path));
+    auto opened = this->opened_by_either(spl::bytes::of(text) | std::views::drop(detail::kMagic.size()), detail::bound_of(path));
     if (!opened)
       return std::nullopt;
-    return splice::bytes::text_of(*opened);
+    return spl::bytes::text_of(*opened);
   }
   // A whole file written, through a temporary renamed over it: sealed where
   // the vault is on. Made the user's alone first where `secret`.
@@ -388,11 +388,11 @@ class vault {
     const std::scoped_lock held(lock_);
     if (!key_ || going_off_)
       return std::string(text);
-    const auto sealed = detail::seal(*key_, splice::bytes::of(text), detail::bound_of(path));
+    const auto sealed = detail::seal(*key_, spl::bytes::of(text), detail::bound_of(path));
     std::string out;
     out.reserve(detail::kMagic.size() + sealed.size());
     out.append(detail::kMagic);
-    std::ranges::copy(splice::bytes::chars(sealed), std::back_inserter(out));
+    std::ranges::copy(spl::bytes::chars(sealed), std::back_inserter(out));
     return out;
   }
   // A line appended: sealed on its own where the vault is on.
@@ -412,9 +412,9 @@ class vault {
     if (!key_ || going_off_)
       return std::string(line);
     const auto sealed =
-        detail::seal(*key_, splice::bytes::of(line), detail::bound_of(path));
+        detail::seal(*key_, spl::bytes::of(line), detail::bound_of(path));
     std::string out(detail::kLinePrefix);
-    std::ranges::copy(splice::bytes::base64_padded(sealed), std::back_inserter(out));
+    std::ranges::copy(spl::bytes::base64_padded(sealed), std::back_inserter(out));
     return out;
   }
   // A line read back from the file at `path`: opened where it is sealed;
@@ -492,7 +492,7 @@ class vault {
       out.whole.emplace_back(path, std::move(*text));
     }
     for (const auto& path : files.lines) {
-      auto text_read = splice::bytes::file_text(path);
+      auto text_read = spl::bytes::file_text(path);
       if (!text_read)
         continue;
       const std::string text = std::move(*text_read);

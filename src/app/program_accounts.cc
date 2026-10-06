@@ -70,7 +70,7 @@ void app::apply(const request::accounts_back&) {
   auto* up = root().open_panel();
   if (!up)
     return;
-  splice::visit(
+  spl::visit(
       [this](accounts& panel) {
         if (panel.step_back())
           return;

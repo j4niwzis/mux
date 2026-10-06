@@ -104,7 +104,7 @@ struct add_account_pane : nodes::Stack {
 
   // A protocol's form, blank, in place of the one up.
   void show(const protocol_t& speaks) {
-    splice::visit([this](auto of) {
+    spl::visit([this](auto of) {
       parts.form.template emplace<form_of_t<decltype(of), Actions>>(this->actions, *colours_, std::nullopt);
     }, speaks);
     this->begin_swap();
@@ -145,7 +145,7 @@ struct add_account_pane : nodes::Stack {
   }
   void fade() {
     const float value = swap.value();
-    splice::visit([value](auto& one) { one.fState.setAlpha(value); }, parts.form);
+    spl::visit([value](auto& one) { one.fState.setAlpha(value); }, parts.form);
   }
   [[nodiscard]] bool settling() const { return swap.moving(); }
   void update(double now_ms) {
@@ -159,7 +159,7 @@ struct add_account_pane : nodes::Stack {
     auto& each = parts.tabs.parts.each;
     for (std::size_t i = 0; i < each.size(); ++i)
       each[i].set_active(i == parts.form.index());
-    parts.note.setText(std::string(splice::visit([](const auto& one) { return one.note; }, parts.form)));
+    parts.note.setText(std::string(spl::visit([](const auto& one) { return one.note; }, parts.form)));
   }
 };
 

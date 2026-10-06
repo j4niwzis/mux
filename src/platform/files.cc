@@ -4,7 +4,7 @@ import std;
 import splice.bytes;
 
 export namespace mux::platform::files {
-inline std::optional<std::string> read(const std::string& path) { return splice::bytes::file_text(path); }
+inline std::optional<std::string> read(const std::string& path) { return spl::bytes::file_text(path); }
 inline std::string name(const std::string& path) { return std::filesystem::path(path).filename().string(); }
 inline bool write(const std::string& path, std::string_view bytes) {
   std::ofstream out(path, std::ios::binary);

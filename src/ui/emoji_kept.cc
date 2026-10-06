@@ -86,7 +86,7 @@ struct emoji {};
 struct stickers {};
 struct gifs {};
 }  // namespace popup_page
-using popup_page_t = splice::variant<popup_page::emoji, popup_page::stickers, popup_page::gifs>;
+using popup_page_t = spl::variant<popup_page::emoji, popup_page::stickers, popup_page::gifs>;
 
 // How long the mouse rests on one before it is shown large.
 inline constexpr double kPreviewAfterMs = 450.0;

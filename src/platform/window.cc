@@ -74,7 +74,7 @@ struct x11 {};
 struct wayland {};
 struct other {};
 }  // namespace video_driver
-using video_driver_t = splice::variant<video_driver::x11, video_driver::wayland, video_driver::other>;
+using video_driver_t = spl::variant<video_driver::x11, video_driver::wayland, video_driver::other>;
 inline video_driver_t video_driver_of(const char* name) {
   const std::string_view said = name ? name : "";
   if (said == "x11")
@@ -96,7 +96,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
   // GPU, the whole window drawn again at each frame. Not on Wayland, which
   // has no such framebuffer in SDL: there the texture is the only way.
   if (how.software)
-    splice::visit(splice::overloaded{[](video_driver::x11) { sdl::SDL_SetHint(sdl::kHintFramebufferAcceleration, "0"); },
+    spl::visit(spl::overloaded{[](video_driver::x11) { sdl::SDL_SetHint(sdl::kHintFramebufferAcceleration, "0"); },
                                      [](const auto&) {}},
                   video_driver_of(sdl::SDL_GetCurrentVideoDriver()));
   // What every Text draws with: this run's.

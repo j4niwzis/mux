@@ -60,7 +60,7 @@ struct palette {
 [[nodiscard]] inline int element_opacity_of(const config::bubble_look& look, std::optional<int> config::element_opacity::* which) {
   if (const auto& own = look.elements.*which)
     return *own;
-  return splice::visit(splice::overloaded{[](config::bubbles::solid) { return 100; }, [&](const auto&) { return look.opacity; }},
+  return spl::visit(spl::overloaded{[](config::bubbles::solid) { return 100; }, [&](const auto&) { return look.opacity; }},
                        look.kind);
 }
 // How much a look's Frosted blurs, 0 to 1: its own, else the window's.
@@ -71,7 +71,7 @@ struct window_look_t;
                                            const window_look_t& window);
 // Whether a look frosts.
 [[nodiscard]] inline bool frosts(const config::bubble_look& look) {
-  return splice::visit(splice::overloaded{[](config::bubbles::frosted) { return true; }, [](const auto&) { return false; }}, look.kind);
+  return spl::visit(spl::overloaded{[](config::bubbles::frosted) { return true; }, [](const auto&) { return false; }}, look.kind);
 }
 // A menu's plate: the side's colour, all but opaque -- never taken for a
 // panel's fill, so a see-through panel look leaves menus readable over it.
@@ -174,7 +174,7 @@ struct looks_shown {
   looks_held everywhere, account, chat;
   template <class Self>
   [[nodiscard]] auto& at(this Self& self, const choice_level_t& level) {
-    return splice::visit(splice::overloaded{[&](choice_level::everywhere) -> auto& { return self.everywhere; },
+    return spl::visit(spl::overloaded{[&](choice_level::everywhere) -> auto& { return self.everywhere; },
                                             [&](choice_level::account) -> auto& { return self.account; },
                                             [&](choice_level::chat) -> auto& { return self.chat; }},
                          level);
@@ -198,7 +198,7 @@ inline skia::Sp<skia::SkImage> wallpaper_picture(const std::string& path) {
   static std::map<std::string, skia::Sp<skia::SkImage>> read;
   if (const auto found = read.find(path); found != read.end())
     return found->second;
-  std::string bytes = splice::bytes::file_text(path).value_or(std::string());
+  std::string bytes = spl::bytes::file_text(path).value_or(std::string());
   auto image = bytes.empty() ? skia::Sp<skia::SkImage>() : skia::decodeImage(bytes.data(), bytes.size());
   read.insert_or_assign(path, image);
   return image;
@@ -236,7 +236,7 @@ template <class List>
 struct variant_of_types;
 template <class... Ts>
 struct variant_of_types<type_list<Ts...>> {
-  using type = splice::variant<Ts...>;
+  using type = spl::variant<Ts...>;
 };
 // A node a press acts on -- a row, a tile, a tab: it takes the pointer, is
 // lit under it, and a click calls its act.
@@ -256,7 +256,7 @@ struct emoji_kept;
 struct mux_paint;
 // What the window's nodes are handed down, from the root -- the program's
 // own objects, each a pointer of a type of its own: what a node reads, it is
-// given by its parent, and takes what it needs of it with splice::remapped<>.
+// given by its parent, and takes what it needs of it with spl::remapped<>.
 template <class Actions>
 struct ui_needs {
   Actions* actions = nullptr;
@@ -291,8 +291,8 @@ struct fitting {
 struct as_opened {};
 }  // namespace dialog_size
 struct dialog_look {
-  splice::variant<sheet::side, sheet::chat> sheet = sheet::side{};
-  splice::variant<dialog_size::as_opened, dialog_size::fixed, dialog_size::fitting> size = dialog_size::as_opened{};
+  spl::variant<sheet::side, sheet::chat> sheet = sheet::side{};
+  spl::variant<dialog_size::as_opened, dialog_size::fixed, dialog_size::fitting> size = dialog_size::as_opened{};
   widgets::DialogPlace place = widgets::dialog_place::centred{};
   bool dismissable = true;
 };
@@ -302,8 +302,8 @@ struct dialog_look {
 template <class Content>
 void look_as_its_content(widgets::Dialog<Content>& dialog, const palette& colours) {
   const dialog_look look = Content::look_of_dialog();
-  dialog.setSheetColour(splice::visit([&](auto one) { return colour_of(one, colours); }, look.sheet));
-  splice::visit(splice::overloaded{[](dialog_size::as_opened) {},
+  dialog.setSheetColour(spl::visit([&](auto one) { return colour_of(one, colours); }, look.sheet));
+  spl::visit(spl::overloaded{[](dialog_size::as_opened) {},
                                    [&](dialog_size::fixed size) { dialog.setSize(size.width, size.height); },
                                    [&](dialog_size::fitting size) { dialog.setWidthFittingContent(size.width); }},
                 look.size);

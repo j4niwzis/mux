@@ -392,10 +392,10 @@ template <class Sink>
 bool account<Sink>::verification_in_room(const conversation_id& in, const loom::ev::timeline_event& one, const knot::raw& raw,
                                          placement_t where) {
   const auto kind = verification_kind_of(one.type);
-  const bool step = splice::visit(splice::overloaded{[](verification_kind::none) { return false; }, [](const auto&) { return true; }}, kind);
+  const bool step = spl::visit(spl::overloaded{[](verification_kind::none) { return false; }, [](const auto&) { return true; }}, kind);
   if (!step)
     return false;
-  const bool live = splice::visit(splice::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
+  const bool live = spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
   if (!live || one.sender == id_.address || !crypto_)
     return true;
   // The step, read as its type's content, its reference made its transaction
@@ -414,7 +414,7 @@ bool account<Sink>::verification_in_room(const conversation_id& in, const loom::
     content->transaction_id = found->first;
     this->verification_in(one.sender, *content);
   };
-  splice::visit(splice::overloaded{[](verification_kind::none) {},
+  spl::visit(spl::overloaded{[](verification_kind::none) {},
                                    [&](verification_kind::ready) { take(type_tag<loom::ev::m_key_verification_ready_content_t>{}); },
                                    [&](verification_kind::start) { take(type_tag<loom::ev::m_key_verification_start_content_t>{}); },
                                    [&](verification_kind::accept) { take(type_tag<loom::ev::m_key_verification_accept_content_t>{}); },

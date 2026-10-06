@@ -134,18 +134,18 @@ struct verification_box : nodes::Stack {
               .mismatch = mismatch_button(colours.widgets, "They don't match", {a}),
               .close = close_button(colours.widgets, "OK", {a})} {
     lay_out_notice(*this, parts.title, parts.note);
-    splice::visit(splice::overloaded{[&](const verification_step::compare& shown) { parts.emoji.emplace(colours, shown.emoji); },
+    spl::visit(spl::overloaded{[&](const verification_step::compare& shown) { parts.emoji.emplace(colours, shown.emoji); },
                                      [](const auto&) {}},
                   view.step);
-    const auto shown_in = [&](auto in_step) { return splice::visit(in_step, view.step); };
-    parts.accept.setVisible(shown_in(splice::overloaded{[](verification_step::asked) { return true; }, [](const auto&) { return false; }}));
-    parts.decline.setVisible(shown_in(splice::overloaded{[](verification_step::asked) { return true; },
+    const auto shown_in = [&](auto in_step) { return spl::visit(in_step, view.step); };
+    parts.accept.setVisible(shown_in(spl::overloaded{[](verification_step::asked) { return true; }, [](const auto&) { return false; }}));
+    parts.decline.setVisible(shown_in(spl::overloaded{[](verification_step::asked) { return true; },
                                                          [](verification_step::waiting) { return true; },
                                                          [](const auto&) { return false; }}));
-    const bool comparing = shown_in(splice::overloaded{[](const verification_step::compare&) { return true; }, [](const auto&) { return false; }});
+    const bool comparing = shown_in(spl::overloaded{[](const verification_step::compare&) { return true; }, [](const auto&) { return false; }});
     parts.match.setVisible(comparing);
     parts.mismatch.setVisible(comparing);
-    parts.close.setVisible(shown_in(splice::overloaded{[](verification_step::done) { return true; },
+    parts.close.setVisible(shown_in(spl::overloaded{[](verification_step::done) { return true; },
                                                        [](const verification_step::cancelled&) { return true; },
                                                        [](const auto&) { return false; }}));
     parts.accept.setPrimary(true);
@@ -158,12 +158,12 @@ struct verification_box : nodes::Stack {
     parts.close.apply({.width = 90.0f, .height = 34.0f, .alignSelf = scene::align::kEnd});
   }
   [[nodiscard]] static bool declines(const verification_step_t& step) {
-    return splice::visit(splice::overloaded{[](verification_step::asked) { return true; }, [](const auto&) { return false; }}, step);
+    return spl::visit(spl::overloaded{[](verification_step::asked) { return true; }, [](const auto&) { return false; }}, step);
   }
   [[nodiscard]] static std::string note_of(const verification_view& view) {
     const std::string device = view.device.empty() ? std::string("one of their devices") : "device " + view.device;
-    return splice::visit(
-        splice::overloaded{
+    return spl::visit(
+        spl::overloaded{
             [&](verification_step::asked) { return std::format("{} ({}) asks to verify with emoji.", view.user, device); },
             [&](verification_step::waiting) { return std::format("Waiting for {} ({})\u2026", view.user, device); },
             [&](const verification_step::compare&) {

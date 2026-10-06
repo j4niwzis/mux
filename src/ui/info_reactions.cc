@@ -81,7 +81,7 @@ struct reactions_box : nodes::Stack {
     } parts;
     row(const ui_needs<Actions>& n, const conversation& in, reaction_entry one, bool first, bool last, const model* now)
         : actions(n.actions), entry(one),
-          parts{.bubble = message_bubble<Actions>(splice::remapped<typename message_bubble<Actions>::needs>(n), in, message_of(in, one), first, last, now)} {
+          parts{.bubble = message_bubble<Actions>(spl::remapped<typename message_bubble<Actions>::needs>(n), in, message_of(in, one), first, last, now)} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 0.0f, 12.0f},
                     .hoverBackground = n.colours->chosen});
       fState.setCursor(scene::cursor::hand{});
@@ -171,7 +171,7 @@ struct edit_history_box : nodes::Stack {
       message_bubble<Actions> bubble;
     } parts;
     row(const ui_needs<Actions>& n, const conversation& in, const message& said, const model* now)
-        : parts{.bubble = message_bubble<Actions>(splice::remapped<typename message_bubble<Actions>::needs>(n), in, said, true, true, now)} {
+        : parts{.bubble = message_bubble<Actions>(spl::remapped<typename message_bubble<Actions>::needs>(n), in, said, true, true, now)} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 4.0f, 12.0f}});
     }
   };
@@ -256,7 +256,7 @@ struct marks_box : nodes::Stack {
     } parts;
     row(const ui_needs<Actions>& n, mark_kind_t which, const conversation& in, const mark_entry& one, const model* now)
         : actions(n.actions), kind(which), event(one.event),
-          parts{.bubble = message_bubble<Actions>(splice::remapped<typename message_bubble<Actions>::needs>(n), in, one.said, true, true, now)} {
+          parts{.bubble = message_bubble<Actions>(spl::remapped<typename message_bubble<Actions>::needs>(n), in, one.said, true, true, now)} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 12.0f, 8.0f, 12.0f},
                     .hoverBackground = n.colours->chosen});
       fState.setCursor(scene::cursor::hand{});
@@ -277,7 +277,7 @@ struct marks_box : nodes::Stack {
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
   } parts;
   marks_box(const ui_needs<Actions>& n, mark_kind_t kind, const conversation& in, const std::vector<mark_entry>& entries, const model* now)
-      : parts{.top = top_bar(*n.colours, splice::visit(splice::overloaded{[](mark_kind::mention) { return std::string("Mentions"); },
+      : parts{.top = top_bar(*n.colours, spl::visit(spl::overloaded{[](mark_kind::mention) { return std::string("Mentions"); },
                                                    [](mark_kind::reaction) { return std::string("Reactions"); }},
                                 kind),
                              {}, {n.actions}, false, true)} {

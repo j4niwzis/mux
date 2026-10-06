@@ -364,8 +364,8 @@ void account<Sink>::call(std::string room, std::string call_id, change::call_sai
     const std::string party = how_.device_id.value_or("mux");
     const std::string version = "1";
     // Each kind of signal, as its event: its type, and its content.
-    const auto [type, body] = splice::visit(
-        splice::overloaded{
+    const auto [type, body] = spl::visit(
+        spl::overloaded{
             [&](const change::call_said::invite& one) {
               loom::ev::m_call_invite_content_t content{};
               content.offer.type = loom::ev::m_call_invite_content_t::offer_t::type_values::offer{};
@@ -403,8 +403,8 @@ void account<Sink>::call(std::string room, std::string call_id, change::call_sai
             [&](const change::call_said::hangup& one) {
               using reasons = loom::ev::m_call_hangup_content_t::reason_values;
               loom::ev::m_call_hangup_content_t content{};
-              content.reason = splice::visit(
-                  splice::overloaded{
+              content.reason = spl::visit(
+                  spl::overloaded{
                       [](change::call_end::hung_up) -> loom::ev::m_call_hangup_content_t::reason_t { return reasons::user_hangup{}; },
                       [](change::call_end::busy) -> loom::ev::m_call_hangup_content_t::reason_t { return reasons::user_busy{}; },
                       [](change::call_end::timed_out) -> loom::ev::m_call_hangup_content_t::reason_t { return reasons::invite_timeout{}; },

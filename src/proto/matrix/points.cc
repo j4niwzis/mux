@@ -63,14 +63,14 @@ inline std::string local_part(const state&, std::string_view address) {
 // kept, the defaults.
 [[nodiscard]] inline const room_rules& rules_of(const room_part_t& part) {
   static const room_rules none{};
-  return splice::visit(splice::overloaded{[](const room_rules& kept) -> const room_rules& { return kept; },
+  return spl::visit(spl::overloaded{[](const room_rules& kept) -> const room_rules& { return kept; },
                                           [](const auto&) -> const room_rules& { return none; }},
                        part);
 }
 [[nodiscard]] inline const room_rules& rules_of(const conversation& in) { return rules_of(in.theirs); }
 // And to change: the part made Matrix's where it was none.
 [[nodiscard]] inline room_rules& rules_in(room_part_t& part) {
-  return splice::visit(splice::overloaded{[](room_rules& kept) -> room_rules& { return kept; },
+  return spl::visit(spl::overloaded{[](room_rules& kept) -> room_rules& { return kept; },
                                           [&](auto&) -> room_rules& { return part.template emplace<room_rules>(); }},
                        part);
 }
@@ -130,7 +130,7 @@ inline std::vector<part::badge> person_badges(const state&, const conversation* 
   const auto trust = known.trust_of(by, std::string(who));
   if (!trust)
     return {};
-  return {splice::visit(splice::overloaded{[](trust::verified) { return part::badge{"Verified", part::tone::accent{}}; },
+  return {spl::visit(spl::overloaded{[](trust::verified) { return part::badge{"Verified", part::tone::accent{}}; },
                                            [](trust::unverified) { return part::badge{"Not verified"}; },
                                            [](trust::changed) { return part::badge{"Identity reset", part::tone::danger{}}; }},
                         *trust)};
@@ -142,8 +142,8 @@ inline std::string sender_role(const state&, const conversation& in, std::string
 }
 // What is known of the other person's identity, in a direct encrypted chat.
 [[nodiscard]] inline std::optional<trust_t> other_trust(const state& now, const conversation& one, const model& known) {
-  const bool direct = splice::visit(
-      splice::overloaded{[](const conversation_kind::direct&) { return true; }, [](const auto&) { return false; }}, one.kind);
+  const bool direct = spl::visit(
+      spl::overloaded{[](const conversation_kind::direct&) { return true; }, [](const auto&) { return false; }}, one.kind);
   if (!one.encrypted || !direct)
     return std::nullopt;
   return known.trust_of(one.id.account, direct_contact(now, one));
@@ -155,7 +155,7 @@ inline std::vector<part::badge> header_badges(const state& now, const conversati
     return {};
   const auto trust = other_trust(now, one, known);
   const std::string after = !trust ? std::string()
-                                   : splice::visit(splice::overloaded{[](trust::verified) { return std::string(" \u00b7 Verified"); },
+                                   : spl::visit(spl::overloaded{[](trust::verified) { return std::string(" \u00b7 Verified"); },
                                                                       [](trust::unverified) { return std::string(" \u00b7 Not verified"); },
                                                                       [](trust::changed) { return std::string(" \u00b7 Identity reset"); }},
                                                    *trust);
@@ -171,8 +171,8 @@ inline std::vector<banner> composer_banners(const state& now, const conversation
     return {};
   const std::string& name = one.name.empty() ? one.id.id : one.name;
   const request::verify_them them{one.id.account, direct_contact(now, one)};
-  return splice::visit(
-      splice::overloaded{
+  return spl::visit(
+      spl::overloaded{
           [](trust::verified) { return std::vector<banner>{}; },
           [&](trust::unverified) {
             return std::vector<banner>{{std::format("\u26A0 {} is not verified. Messages are encrypted to them, but verify "

@@ -117,8 +117,8 @@ class media_session {
   static constexpr int kMostBytes = 1275;          // the largest Opus frame
 
   static rtc::IceServer server_of(const ice_server& one) {
-    return splice::visit(
-        splice::overloaded{
+    return spl::visit(
+        spl::overloaded{
             [&](relay::stun) { return rtc::IceServer(one.host, one.port); },
             [&](relay::turn_udp) {
               return rtc::IceServer(one.host, one.port, one.username, one.password, rtc::IceServer::RelayType::TurnUdp);

@@ -60,7 +60,7 @@ struct bubbles_picker : nodes::Stack {
   // shown.
   [[nodiscard]] static config::bubble_look current(const look_level& level, const config::look_part_t& part) {
     const bool everywhere = !has_level_above(level.level);
-    return splice::visit(splice::overloaded{[&](config::look_part::bubbles) {
+    return spl::visit(spl::overloaded{[&](config::look_part::bubbles) {
                                               return everywhere ? level.looks->bubbles_everywhere : level.looks->bubbles;
                                             },
                                             [&](config::look_part::panels) {
@@ -69,7 +69,7 @@ struct bubbles_picker : nodes::Stack {
                          part);
   }
   [[nodiscard]] static bool usable(const look_level& level, const config::look_part_t& part) {
-    return splice::visit(splice::overloaded{[](config::look_part::bubbles) { return true; },
+    return spl::visit(spl::overloaded{[](config::look_part::bubbles) { return true; },
                                             [&](config::look_part::panels) { return level.looks->window.behind; }},
                          part);
   }
@@ -102,7 +102,7 @@ struct bubbles_picker : nodes::Stack {
       if (!usable(level, part) || !own_here(level, part))
         return;
       config::bubble_look look = current(level, part);
-      look.kind = splice::visit(splice::overloaded{[](config::bubbles::solid) { return config::bubbles_t{config::bubbles::translucent{}}; },
+      look.kind = spl::visit(spl::overloaded{[](config::bubbles::solid) { return config::bubbles_t{config::bubbles::translucent{}}; },
                                                    [](const auto& other) { return config::bubbles_t{other}; }},
                                 look.kind);
       look.opacity = static_cast<int>(std::lround(10.0f + std::clamp(fraction, 0.0f, 1.0f) * 90.0f));
@@ -160,7 +160,7 @@ struct bubbles_picker : nodes::Stack {
   [[nodiscard]] static std::vector<std::string> kind_names(const look_level& level) {
     std::vector<std::string> out;
     if (has_level_above(level.level))
-      out.emplace_back(splice::visit(splice::overloaded{[](choice_level::chat) { return "As above"; },
+      out.emplace_back(spl::visit(spl::overloaded{[](choice_level::chat) { return "As above"; },
                                                         [](const auto&) { return "As above"; }},
                                      level.level));
     for (const char* name : {"Solid", "Translucent", "Frosted", "Glass"})
@@ -171,7 +171,7 @@ struct bubbles_picker : nodes::Stack {
   [[nodiscard]] static std::size_t kind_index(const look_level& level, const config::look_part_t& part) {
     const looks_held& held = level.looks->at(level.level);
     const std::optional<config::bubble_look>& own =
-        splice::visit(splice::overloaded{[&](config::look_part::bubbles) -> const std::optional<config::bubble_look>& { return held.bubbles; },
+        spl::visit(spl::overloaded{[&](config::look_part::bubbles) -> const std::optional<config::bubble_look>& { return held.bubbles; },
                                          [&](config::look_part::panels) -> const std::optional<config::bubble_look>& { return held.panels; }},
                       part);
     const std::size_t shift = has_level_above(level.level) ? 1 : 0;
@@ -185,7 +185,7 @@ struct bubbles_picker : nodes::Stack {
     if (!has_level_above(level.level))
       return true;
     const looks_held& held = level.looks->at(level.level);
-    return splice::visit(splice::overloaded{[&](config::look_part::bubbles) { return held.bubbles.has_value(); },
+    return spl::visit(spl::overloaded{[&](config::look_part::bubbles) { return held.bubbles.has_value(); },
                                             [&](config::look_part::panels) { return held.panels.has_value(); }},
                          part);
   }
@@ -311,7 +311,7 @@ struct bubbles_picker : nodes::Stack {
     std::vector<element_blur_row> element_blurs;
   } parts;
   bubbles_picker(Actions* a, const look_level& level, const config::look_part_t& part = config::look_part::bubbles{})
-      : parts{.title = nodes::Text(splice::visit(splice::overloaded{[](config::look_part::bubbles) { return "MESSAGE BUBBLES"; },
+      : parts{.title = nodes::Text(spl::visit(spl::overloaded{[](config::look_part::bubbles) { return "MESSAGE BUBBLES"; },
                                                                     [](config::look_part::panels) { return "PANELS"; }},
                                                  part),
                                    13.0f, level.colours->dim, true),
@@ -329,20 +329,20 @@ struct bubbles_picker : nodes::Stack {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 10.0f, 0.0f, 10.0f}});
     parts.why.setWrapped(true);
     parts.why.apply({.fillX = true});
-    parts.why.setVisible(splice::visit(splice::overloaded{[](config::look_part::panels) { return true; },
+    parts.why.setVisible(spl::visit(spl::overloaded{[](config::look_part::panels) { return true; },
                                                           [](const auto&) { return false; }},
                                        part));
     const int opacity = current(level, part).opacity;
     parts.opacity_label.setText(std::format("Opacity: {}%", opacity));
     parts.opacity.setFraction(static_cast<float>(opacity - 10) / 90.0f);
     parts.opacity.apply({.margin = {4.0f, 8.0f, 8.0f, 8.0f}});
-    const bool frosted = splice::visit(splice::overloaded{[](config::bubbles::frosted) { return true; }, [](const auto&) { return false; }},
+    const bool frosted = spl::visit(spl::overloaded{[](config::bubbles::frosted) { return true; }, [](const auto&) { return false; }},
                                        current(level, part).kind);
     parts.blur_label.setVisible(frosted);
     parts.blur.setVisible(frosted);
     parts.blur.setFraction(blur_of(current(level, part), level.looks->window));
     parts.blur.apply({.margin = {4.0f, 8.0f, 8.0f, 8.0f}});
-    const bool bubbles = splice::visit(splice::overloaded{[](config::look_part::bubbles) { return true; },
+    const bool bubbles = spl::visit(spl::overloaded{[](config::look_part::bubbles) { return true; },
                                                           [](const auto&) { return false; }},
                                        part);
     parts.elements_title.setVisible(bubbles);
@@ -395,14 +395,14 @@ struct look_choices : nodes::Stack {
   [[nodiscard]] static std::vector<std::string> background_names(const looks_shown& looks, const choice_level_t& level) {
     std::vector<std::string> out;
     if (has_level_above(level))
-      out.emplace_back(splice::visit(splice::overloaded{[](choice_level::chat) { return "As above"; },
+      out.emplace_back(spl::visit(spl::overloaded{[](choice_level::chat) { return "As above"; },
                                                         [](const auto&) { return "As above"; }},
                                      level));
     for (const char* name : {"Theme default", "Plain colour"})
       out.emplace_back(name);
     // The picture's: by its file's name, where one is chosen here.
-    out.emplace_back(splice::visit(
-        splice::overloaded{[](const config::wallpaper::picture& at) {
+    out.emplace_back(spl::visit(
+        spl::overloaded{[](const config::wallpaper::picture& at) {
                              return std::format("Image: {}", std::filesystem::path(at.path).filename().string());
                            },
                            [](const auto&) { return std::string("Image\u2026"); }},
@@ -424,7 +424,7 @@ struct look_choices : nodes::Stack {
   } parts;
   [[nodiscard]] static std::string note_of(const looks_shown& looks, const choice_level_t& level) {
     const std::string where = looks.window.behind ? "Behind the whole window" : "Behind the messages";
-    return splice::visit(splice::overloaded{[&](choice_level::everywhere) { return where + ", in every chat."; },
+    return spl::visit(spl::overloaded{[&](choice_level::everywhere) { return where + ", in every chat."; },
                                             [&](choice_level::account) { return where + ", in this account's chats."; },
                                             [&](choice_level::chat) { return where + ", in this chat."; }},
                          level);

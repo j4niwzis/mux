@@ -32,7 +32,7 @@ template <class... Lists>
 struct request_union;
 template <class... Rs>
 struct request_union<request_list<Rs...>> {
-  using type = splice::variant<part::no_request, Rs...>;
+  using type = spl::variant<part::no_request, Rs...>;
 };
 template <class... As, class... Bs, class... Rest>
 struct request_union<request_list<As...>, request_list<Bs...>, Rest...> : request_union<request_list<As..., Bs...>, Rest...> {};
@@ -51,10 +51,10 @@ template <class R>
   return one ? std::optional<any_request_t>(any_request_t{*one}) : std::nullopt;
 }
 template <class... Rs>
-[[nodiscard]] std::optional<any_request_t> as_any(const std::optional<splice::variant<Rs...>>& one) {
+[[nodiscard]] std::optional<any_request_t> as_any(const std::optional<spl::variant<Rs...>>& one) {
   if (!one)
     return std::nullopt;
-  return splice::visit([](const auto& each) { return std::optional<any_request_t>(any_request_t{each}); }, *one);
+  return spl::visit([](const auto& each) { return std::optional<any_request_t>(any_request_t{each}); }, *one);
 }
 
 // No banners of its own, by default.
@@ -66,7 +66,7 @@ inline std::vector<part::banner> composer_banners(const auto&, const conversatio
 inline constexpr struct composer_banners_t {
   template <class State, class Model>
   std::vector<any_banner> operator()(const State& state, const conversation& chat, const Model& known) const {
-    return splice::visit([&](const auto& now) {
+    return spl::visit([&](const auto& now) {
       using banner_defaults::composer_banners;
       return composer_banners(now, chat, known) | std::views::transform([](auto one) {
                return any_banner{std::move(one.text), one.tone, std::move(one.button), as_any(one.asks)};
@@ -96,7 +96,7 @@ template <class... Lists>
 struct passphrase_union;
 template <class... Ps>
 struct passphrase_union<passphrase_list<Ps...>> {
-  using type = splice::variant<config::passphrase_for::unlock, config::passphrase_for::encrypt, config::passphrase_for::change,
+  using type = spl::variant<config::passphrase_for::unlock, config::passphrase_for::encrypt, config::passphrase_for::change,
                                config::passphrase_for::decrypt, Ps...>;
 };
 template <class... As, class... Bs, class... Rest>
@@ -119,7 +119,7 @@ inline std::nullopt_t command_of(const auto&, const conversation_id&, std::strin
 inline constexpr struct command_of_t {
   template <class State>
   std::optional<any_request_t> operator()(const State& state, const conversation_id& in, std::string_view typed) const {
-    return splice::visit([&](const auto& now) {
+    return spl::visit([&](const auto& now) {
       using command_defaults::command_of;
       return as_command(command_of(now, in, typed));
     }, state);
@@ -139,7 +139,7 @@ inline std::vector<part::action> person_actions(const auto&, const account_id&, 
 inline constexpr struct person_actions_t {
   template <class State>
   std::vector<any_action> operator()(const State& state, const account_id& by, std::string_view who) const {
-    return splice::visit([&](const auto& now) {
+    return spl::visit([&](const auto& now) {
       using action_defaults::person_actions;
       return person_actions(now, by, who) | std::views::transform([](auto one) {
                return any_action{std::move(one.label), as_any(one.asks)};

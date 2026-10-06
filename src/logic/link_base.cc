@@ -48,7 +48,7 @@ struct link_list {};
   const auto colon = url.find(':');
   if (colon == std::string_view::npos)
     return false;
-  const std::string scheme = splice::bytes::lower_text(url.substr(0, colon + 1));
+  const std::string scheme = spl::bytes::lower_text(url.substr(0, colon + 1));
   return std::ranges::contains(allowed, std::string_view(scheme));
 }
 
@@ -68,7 +68,7 @@ struct place {
 };
 struct kept {};
 }  // namespace mention
-using mention_t = splice::variant<mention::person, mention::place, mention::kept>;
+using mention_t = spl::variant<mention::person, mention::place, mention::kept>;
 
 // What following a link comes to.
 namespace link_step {
@@ -92,7 +92,7 @@ struct join {  // a room not joined: joined through an account, then opened
   friend bool operator==(const join&, const join&) = default;
 };
 }  // namespace link_step
-using link_step_t = splice::variant<link_step::open_chat, link_step::member_page, link_step::say, link_step::join>;
+using link_step_t = spl::variant<link_step::open_chat, link_step::member_page, link_step::say, link_step::join>;
 
 // A chat of an account of the protocol, named by its id, its main address
 // or any other it publishes.

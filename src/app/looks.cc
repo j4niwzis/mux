@@ -35,7 +35,7 @@ class looks_part {
   // A background chosen: the theme's, plain, or as the level over it says,
   // set at once; a picture, chosen first in the system's dialog (took_files).
   void apply(const request::set_wallpaper& one) {
-    splice::visit(splice::overloaded{[&](mux::config::wallpaper_pick::inherit) { this->set_at(one.level, std::nullopt); },
+    spl::visit(spl::overloaded{[&](mux::config::wallpaper_pick::inherit) { this->set_at(one.level, std::nullopt); },
                                      [&](mux::config::wallpaper_pick::theme) { this->set_at(one.level, mux::config::wallpaper::theme{}); },
                                      [&](mux::config::wallpaper_pick::plain) { this->set_at(one.level, mux::config::wallpaper::plain{}); },
                                      [&](mux::config::wallpaper_pick::picture) {
@@ -58,25 +58,25 @@ class looks_part {
   void apply(const request::set_bubbles& one) {
     // Where each level keeps the look asked for: the bubbles', or the panels'.
     using look_t = std::optional<mux::config::bubble_look>;
-    auto& everywhere = splice::visit(splice::overloaded{[&](mux::config::look_part::bubbles) -> look_t& { return k_->bubbles; },
+    auto& everywhere = spl::visit(spl::overloaded{[&](mux::config::look_part::bubbles) -> look_t& { return k_->bubbles; },
                                                         [&](mux::config::look_part::panels) -> look_t& { return k_->panels; }},
                                      one.part);
-    auto& known = splice::visit(
-        splice::overloaded{[this](mux::config::look_part::bubbles) -> mux::config::bubble_look& { return s_->looks.bubbles_everywhere; },
+    auto& known = spl::visit(
+        spl::overloaded{[this](mux::config::look_part::bubbles) -> mux::config::bubble_look& { return s_->looks.bubbles_everywhere; },
                            [this](mux::config::look_part::panels) -> mux::config::bubble_look& { return s_->looks.panels_everywhere; }},
         one.part);
-    auto& per_chat = splice::visit(
-        splice::overloaded{[&](mux::config::look_part::bubbles) -> std::map<mux::conversation_id, mux::config::bubble_look>& { return k_->bubbles_in; },
+    auto& per_chat = spl::visit(
+        spl::overloaded{[&](mux::config::look_part::bubbles) -> std::map<mux::conversation_id, mux::config::bubble_look>& { return k_->bubbles_in; },
                            [&](mux::config::look_part::panels) -> std::map<mux::conversation_id, mux::config::bubble_look>& { return k_->panels_in; }},
         one.part);
-    splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) {
+    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) {
                                        everywhere = one.look;
                                        known = one.look.value_or(mux::config::bubble_look{});
                                      },
                                      [&](mux::choice_level::account) {
                                        s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-                                         auto& kept = splice::visit(
-                                             splice::overloaded{[&](mux::config::look_part::bubbles) -> std::optional<std::string>& { return mux::config::bubbles_in(account); },
+                                         auto& kept = spl::visit(
+                                             spl::overloaded{[&](mux::config::look_part::bubbles) -> std::optional<std::string>& { return mux::config::bubbles_in(account); },
                                                                 [&](mux::config::look_part::panels) -> std::optional<std::string>& { return mux::config::panels_in(account); }},
                                              one.part);
                                          kept = one.look ? std::optional<std::string>(mux::config::word_of(*one.look)) : std::nullopt;
@@ -128,7 +128,7 @@ class looks_part {
   // and what shows the choice shown again: Appearance, Manage's tab, the
   // account's Chats page.
   void set_at(const mux::choice_level_t& level, std::optional<mux::config::wallpaper_t> chosen) {
-    splice::visit(splice::overloaded{[&](mux::choice_level::everywhere) { k_->wallpaper = chosen; },
+    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) { k_->wallpaper = chosen; },
                                      [&](mux::choice_level::account) {
                                        s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
                                          mux::config::wallpaper_in(account) =

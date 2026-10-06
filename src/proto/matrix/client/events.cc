@@ -105,19 +105,19 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
   };
   const auto at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(one.origin_server_ts));
   // A verification step in the room: taken by the verification, not shown.
-  const bool verification = splice::visit(
-      splice::overloaded{[&](const knot::raw& raw) { return this->verification_in_room(in, one, raw, where); },
+  const bool verification = spl::visit(
+      spl::overloaded{[&](const knot::raw& raw) { return this->verification_in_room(in, one, raw, where); },
                          [](const auto&) { return false; }},
       one.content.data());
   if (verification)
     return;
   // By the content's type: a message, a reaction, or the rest by the type
   // it says.
-  splice::visit(splice::overloaded{[&](const loom::ev::m_room_message_content_t& content) {
+  spl::visit(spl::overloaded{[&](const loom::ev::m_room_message_content_t& content) {
     // A verification request, to this user: asked of them (and shown as
     // the message it is).
     if (verification_request_of(content.msgtype) &&
-        splice::visit(splice::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where))
+        spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where))
       if (auto fields = knot::try_read<crypto::room_request_fields>(content.rest.text))
         this->verification_request_in_room(in, one, *fields);
     const auto& relates = content.m_relates_to;
@@ -134,7 +134,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       // An edit that mentions the user, by another: the message it edits
       // marked as mentioning them, as tdesktop counts a mention added by an
       // edit -- the @ to go to, and no notification.
-      const bool live = splice::visit(splice::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
+      const bool live = spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
       if (live && relates->event_id && one.sender != id_.address && loom::client::mentions(content, id_.address))
         sink_(change::mentioned{in, *relates->event_id, at});
       return;
@@ -145,7 +145,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
                  .at = at,
                  .body = body_of(content.body, content.format, content.formatted_body),
                  .outgoing = one.sender == id_.address};
-    const auto [carries, picture, emote] = splice::visit(
+    const auto [carries, picture, emote] = spl::visit(
         [](auto of) { return std::tuple(of.carries, of.picture, of.is_emote); }, msgtype_of(content.msgtype));
     if (emote)
       made.body.plain = "* " + made.body.plain;
@@ -168,7 +168,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
         carry_info(carried, *content.info);
         // A video: shown by its thumbnail, as a picture, until it can be
         // played here; its own size where the video gives none.
-        const bool video = splice::visit(splice::overloaded{[](msgtype::video) { return true; }, [](const auto&) { return false; }},
+        const bool video = spl::visit(spl::overloaded{[](msgtype::video) { return true; }, [](const auto&) { return false; }},
                                       msgtype_of(content.msgtype));
         if (video && content.info->thumbnail_url) {
           carried.video = carried.source;
@@ -198,11 +198,11 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     }
     // A gallery (MSC4274): each of its itemtypes read as a picture or a file
     // alone is, its body the caption.
-    if (splice::visit(splice::overloaded{[](msgtype::gallery) { return true; }, [](const auto&) { return false; }},
+    if (spl::visit(spl::overloaded{[](msgtype::gallery) { return true; }, [](const auto&) { return false; }},
                    msgtype_of(content.msgtype)) &&
         content.itemtypes)
       for (const auto& item : *content.itemtypes) {
-        const bool is_picture_item = splice::visit([](auto of) { return of.picture; }, msgtype_of(item.itemtype));
+        const bool is_picture_item = spl::visit([](auto of) { return of.picture; }, msgtype_of(item.itemtype));
         mux::attachment carried;
         carried.source = item.url.value_or("");
         carried.name = item.filename.value_or(item.body.value_or(""));
@@ -275,7 +275,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       made.threaded = std::move(*summary);
     // A message for the user, come as it happened: listed, as Telegram's @.
     // Who it mentions, as m.mentions says; before that, the user's ID in it.
-    const bool live = splice::visit(splice::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
+    const bool live = spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
     const auto mentions_me = [&] { return loom::client::mentions(content, id_.address); };
     if (live && !made.outgoing && mentions_me())
       sink_(change::mentioned{in, made.id, made.at});
@@ -289,7 +289,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     if (content.m_relates_to && content.m_relates_to->event_id && content.m_relates_to->key) {
       reactions_[one.event_id] = {*content.m_relates_to->event_id, *content.m_relates_to->key, one.sender};
       const bool live =
-          splice::visit(splice::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
+          spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
       sink_(change::reaction_changed{in, *content.m_relates_to->event_id, *content.m_relates_to->key, one.sender,
                                      true, one.event_id, at, live});
       // Fetched on its own, as what a reply quotes: a message of its own for
@@ -300,7 +300,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       // as a message carries one -- not said to be "a custom emoji".
       const bool pictured = loom::media::mxc_of(key).has_value();
       const std::string emote = std::format(R"(<img data-mx-emoticon src="{}" alt=":emoji:" height="32">)", chevron::escaped(key));
-      splice::visit(splice::overloaded{[&](placement::aside) {
+      spl::visit(spl::overloaded{[&](placement::aside) {
                               message made{.in = in,
                                            .id = one.event_id,
                                            .sender = one.sender,
@@ -354,8 +354,8 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
                                                     }) | std::ranges::to<std::vector>()});
   }, [&](const loom::ev::m_call_hangup_content_t& content) {
     using reasons = loom::ev::m_call_hangup_content_t::reason_values;
-    const change::call_end_t why = splice::visit(
-        splice::overloaded{[](reasons::user_hangup) -> change::call_end_t { return change::call_end::hung_up{}; },
+    const change::call_end_t why = spl::visit(
+        spl::overloaded{[](reasons::user_hangup) -> change::call_end_t { return change::call_end::hung_up{}; },
                            [](reasons::user_busy) -> change::call_end_t { return change::call_end::busy{}; },
                            [](reasons::invite_timeout) -> change::call_end_t { return change::call_end::timed_out{}; },
                            [](reasons::ice_failed) -> change::call_end_t { return change::call_end::failed{}; },
@@ -388,7 +388,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       this->added(std::move(made), where, sealed);
       sink_(change::message_redacted{in, one.event_id});
     };
-    splice::visit(splice::overloaded{[&](event_type::encrypted) { encrypted(in, one, at, where); },
+    spl::visit(spl::overloaded{[&](event_type::encrypted) { encrypted(in, one, at, where); },
                           [&](event_type::message) {
                             if (redacted)
                               deleted();
@@ -420,7 +420,7 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
   if (crypto_) {
     std::optional<crypto::decrypted> clear;
     try {
-      splice::visit(splice::overloaded{[&](const loom::ev::m_room_encrypted_content_t& content) {
+      spl::visit(spl::overloaded{[&](const loom::ev::m_room_encrypted_content_t& content) {
                                          clear = crypto_->room_event(in.id, one.event_id, one.sender, content);
                                        },
                                        [](const auto&) {}},
@@ -437,7 +437,7 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
       loom::ev::timeline_event made = one;
       made.type = std::move(clear->event.type);
       made.content = std::move(clear->event.content);
-      splice::visit(splice::overloaded{[&](const loom::ev::m_room_encrypted_content_t& content) {
+      spl::visit(spl::overloaded{[&](const loom::ev::m_room_encrypted_content_t& content) {
                                          if (auto outer = knot::try_read<crypto::reference_part>(content.rest.text);
                                              outer && outer->relates_to)
                                            outer_reference_ = outer->relates_to->event_id;
@@ -460,7 +460,7 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
   // (a room key, the backup). Kept by its session, to be said again if the
   // reason comes after it.
   std::optional<std::string> session;
-  splice::visit(splice::overloaded{[&](const loom::ev::m_room_encrypted_content_t& content) { session = content.session_id; },
+  spl::visit(spl::overloaded{[&](const loom::ev::m_room_encrypted_content_t& content) { session = content.session_id; },
                                    [](const auto&) {}},
                 one.content.data());
   message waiting{.in = in,
@@ -488,7 +488,7 @@ void account<Sink>::decrypt_waiting(const std::string& session) {
   undecrypted_.erase(found);
   for (const undecrypted_event& one : waiting)
     this->event(one.in, one.event,
-                splice::visit(splice::overloaded{[](placement::aside aside) -> placement_t { return aside; },
+                spl::visit(spl::overloaded{[](placement::aside aside) -> placement_t { return aside; },
                                                  [](const auto&) -> placement_t { return placement::in_window{}; }},
                               one.where));
 }
@@ -538,8 +538,8 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
   const auto say = [&](room_event_t kind, std::string done_what) {
     service(in, one, at, where, who + done_what, kind, who_link + chevron::escaped(done_what));
   };
-  splice::visit(
-      splice::overloaded{
+  spl::visit(
+      spl::overloaded{
           [&](const member_content& content) {
             const std::string target_id = one.state_key.value_or(one.sender);
             const std::string target = content.displayname.value_or(name_in(in.id, target_id));
@@ -550,7 +550,7 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
                 before = std::move(*got);
             const membership_t now = loom::client::membership_of(content.membership);
             const membership_t was = before ? loom::client::membership_of(before->membership) : membership_t{membership::other{}};
-            const bool was_in = splice::visit([](auto of) { return of.in; }, was);
+            const bool was_in = spl::visit([](auto of) { return of.in; }, was);
             const bool self = one.sender == target_id;
             const std::string target_link = person(target_id, target);
             // A line of who did it ({0}) and to whom ({1}): plain, and with
@@ -559,7 +559,7 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
               service(in, one, at, where, std::vformat(pattern, std::make_format_args(who, target)), kind,
                       std::vformat(pattern, std::make_format_args(who_link, target_link)));
             };
-            splice::visit(splice::overloaded{[&](membership::join) {
+            spl::visit(spl::overloaded{[&](membership::join) {
                                     if (!was_in) {
                                       say_people(room_event::joins{}, "{1} joined");
                                       return;
@@ -595,7 +595,7 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
                                                                                       : "{1} set a profile picture");
                                   },
                                   [&](membership::leave) {
-                                    splice::visit(splice::overloaded{[&](membership::ban) { say_people(room_event::invites{}, "{0} unbanned {1}"); },
+                                    spl::visit(spl::overloaded{[&](membership::ban) { say_people(room_event::invites{}, "{0} unbanned {1}"); },
                                                           [&](membership::invite) {
                                                             say_people(room_event::invites{}, self ? "{1} declined the invitation"
                                                                                                : "{0} withdrew {1}'s invitation");
@@ -680,7 +680,7 @@ void account<Sink>::redaction(const conversation_id& in, const loom::ev::timelin
                               std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where) {
   std::optional<std::string> target = one.redacts;
   // From room version 11, in its content.
-  splice::visit(splice::overloaded{[&](const loom::ev::m_room_redaction_content_t& content) {
+  spl::visit(spl::overloaded{[&](const loom::ev::m_room_redaction_content_t& content) {
                                      if (content.redacts)
                                        target = content.redacts;
                                    },
@@ -713,7 +713,7 @@ void account<Sink>::redaction(const conversation_id& in, const loom::ev::timelin
                  .outgoing = one.sender == id_.address,
                  .service = true,
                  .event_kind = room_event::unreactions{}};
-    splice::visit(splice::overloaded{[](placement::aside) {},
+    spl::visit(spl::overloaded{[](placement::aside) {},
                                      [&](const auto&) { sink_(change::message_added{std::move(made), where}); }},
                   where);
     reactions_.erase(reaction);
@@ -726,7 +726,7 @@ template <class Sink>
 auto account<Sink>::body_of(std::string plain, const std::optional<std::string>& format,
                             const std::optional<std::string>& formatted_body) -> body {
   body made{std::move(plain), std::nullopt};
-  if (splice::visit([](auto of) { return of.html_given; }, body_format_of(format)))
+  if (spl::visit([](auto of) { return of.html_given; }, body_format_of(format)))
     made.html = formatted_body;
   return made;
 }
@@ -735,7 +735,7 @@ template <class Sink>
 void account<Sink>::call_signal(const conversation_id& in, const loom::ev::timeline_event& one,
                                 std::chrono::sys_time<std::chrono::milliseconds> at, placement_t where, std::string call,
                                 std::string party, change::call_said_t said) {
-  const bool live = splice::visit(splice::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
+  const bool live = spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where);
   if (!live)
     return;
   // This session's own, echoed by the sync: nothing to tell.

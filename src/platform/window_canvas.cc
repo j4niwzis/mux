@@ -27,7 +27,7 @@ namespace gl_kind {
 struct hardware {};
 struct emulated {};
 }  // namespace gl_kind
-using gl_kind_t = splice::variant<gl_kind::hardware, gl_kind::emulated>;
+using gl_kind_t = spl::variant<gl_kind::hardware, gl_kind::emulated>;
 inline gl_kind_t gl_kind_of(std::string_view renderer) {
   for (const std::string_view emulator : {"llvmpipe", "softpipe", "SwiftShader", "Software Rasterizer"})
     if (renderer.contains(emulator))
@@ -40,7 +40,7 @@ inline gl_kind_t gl_kind_of(std::string_view renderer) {
 inline bool keep_gl_renderer(const std::string& name) {
   const std::string_view renderer = name.empty() ? std::string_view("unknown") : std::string_view(name);
   std::println(std::cerr, "[render] OpenGL renderer: {}", renderer);
-  return splice::visit(splice::overloaded{[](gl_kind::hardware) { return true; },
+  return spl::visit(spl::overloaded{[](gl_kind::hardware) { return true; },
                                           [](gl_kind::emulated) {
                                             std::println(std::cerr,
                                                          "[render] OpenGL is emulated on the processor here: drawn "
@@ -91,9 +91,9 @@ class canvas_target {
         // As above: the loader's one pointer type, made the function's.
         const auto get_string = reinterpret_cast<get_string_t>(sdl::SDL_GL_GetProcAddress("glGetString"));
         const bool kept = keep_gl_renderer(
-            get_string ? splice::bytes::text_of_terminated(get_string(0x1F01 /* GL_RENDERER */))
+            get_string ? spl::bytes::text_of_terminated(get_string(0x1F01 /* GL_RENDERER */))
             : interface && interface->fFunctions.fGetString
-                ? splice::bytes::text_of_terminated(interface->fFunctions.fGetString(0x1F01 /* GL_RENDERER */))
+                ? spl::bytes::text_of_terminated(interface->fFunctions.fGetString(0x1F01 /* GL_RENDERER */))
                 : std::string());
         if (interface && kept)
           context_ = skia::MakeGL(std::move(interface));

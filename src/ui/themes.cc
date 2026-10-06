@@ -153,7 +153,7 @@ inline bool codes(bits& from, std::string& out, const huffman& literals, const h
       from.at += 4;
       if (from.at + length > from.in.size())
         return std::nullopt;
-      out.append(splice::bytes::text_of(from.in.subspan(from.at, length)));
+      out.append(spl::bytes::text_of(from.in.subspan(from.at, length)));
       from.at += length;
     } else if (type == 1) {
       std::array<short, 288> lengths{};
@@ -571,9 +571,9 @@ inline widgets::Theme widget_theme_of(config::theme::night) {
 // -- the desktop, or the background behind all of it: their colours taken
 // once here, not blended at each frame.
 [[nodiscard]] inline palette palette_of(const config::theme_t& chosen, const config::accent_t& accent, int opacity) {
-  palette out = splice::visit([](auto one) { return palette_of(one); }, chosen);
+  palette out = spl::visit([](auto one) { return palette_of(one); }, chosen);
   out.accent = colour_of(accent, chosen);
-  out.widgets = splice::visit([](auto one) { return widget_theme_of(one); }, chosen);
+  out.widgets = spl::visit([](auto one) { return widget_theme_of(one); }, chosen);
   out.widgets.fAccent = out.accent;
   if (opacity < 100) {
     out.background = at_opacity(out.background, 0);
@@ -584,7 +584,7 @@ inline widgets::Theme widget_theme_of(config::theme::night) {
 }
 // skiff's scroll bars, as the theme has them.
 inline void use_scroll_bars(const config::theme_t& chosen) {
-  const bool light = splice::visit([](auto one) { return one.light; }, chosen);
+  const bool light = spl::visit([](auto one) { return one.light; }, chosen);
   nodes::scrollBarColours() = light ? nodes::ScrollBarColours{skia::colorSetARGB(0x53, 0, 0, 0), skia::colorSetARGB(0x7a, 0, 0, 0)}
                                     : nodes::ScrollBarColours{skia::colorSetARGB(0x53, 255, 255, 255),
                                                               skia::colorSetARGB(0x7a, 255, 255, 255)};
@@ -594,15 +594,15 @@ inline void use_scroll_bars(const config::theme_t& chosen) {
 // background behind the whole window. Whether it changed -- the window to
 // be repainted.
 inline bool show_panels(mux_paint& paint, const config::bubble_look& look, const window_look_t& window, const palette& colours) {
-  const bool kinded = window.behind && splice::visit(splice::overloaded{[](config::bubbles::solid) { return false; },
+  const bool kinded = window.behind && spl::visit(spl::overloaded{[](config::bubbles::solid) { return false; },
                                                                               [](const auto&) { return true; }},
                                                            look.kind);
   panel_look_t next{
       .active = kinded,
       .opacity = static_cast<float>(look.opacity) / 100.0f,
-      .frosted = splice::visit(splice::overloaded{[](config::bubbles::frosted) { return true; }, [](const auto&) { return false; }}, look.kind),
+      .frosted = spl::visit(spl::overloaded{[](config::bubbles::frosted) { return true; }, [](const auto&) { return false; }}, look.kind),
       .blur = blur_of(look, window),
-      .edge = splice::visit(splice::overloaded{[](config::bubbles::glass) { return true; }, [](const auto&) { return false; }}, look.kind),
+      .edge = spl::visit(spl::overloaded{[](config::bubbles::glass) { return true; }, [](const auto&) { return false; }}, look.kind),
       .panels = {colours.sidebar},
       // Tinted at the opacity, never left out as a panel fill again: what is
       // chosen or hovered, a tab lit, a menu.
@@ -633,7 +633,7 @@ inline bool show_panels(mux_paint& paint, const config::bubble_look& look, const
 
 // A protocol's part's tone, in a palette's colours.
 [[nodiscard]] inline skia::SkColor tone_colour(const palette& colours, const proto::part::tone_t& tone) {
-  return splice::visit(splice::overloaded{[&](proto::part::tone::plain) { return colours.dim; },
+  return spl::visit(spl::overloaded{[&](proto::part::tone::plain) { return colours.dim; },
                                           [&](proto::part::tone::accent) { return colours.accent; },
                                           [&](proto::part::tone::danger) { return colours.error; }},
                        tone);

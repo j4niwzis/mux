@@ -388,7 +388,7 @@ struct packs_box : nodes::Stack {
   void add_picture(pack_picture one) {
     if (!open)
       return;
-    std::string code = splice::bytes::key_text(one.shortcode);
+    std::string code = spl::bytes::key_text(one.shortcode);
     if (code.empty())
       code = "image";
     std::string unique = code;

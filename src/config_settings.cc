@@ -84,7 +84,7 @@ consteval auto json_schema(knot::type<notification_settings>) { return knot::sch
 [[nodiscard]] constexpr bool notification_settings::* flag_member(notify_flag::show_text) { return &notification_settings::show_text; }
 [[nodiscard]] constexpr bool notification_settings::* flag_member(notify_flag::sound) { return &notification_settings::sound; }
 [[nodiscard]] inline bool& flag_in(notification_settings& in, const notify_flag_t& flag) {
-  return in.*splice::visit([](auto one) { return flag_member(one); }, flag);
+  return in.*spl::visit([](auto one) { return flag_member(one); }, flag);
 }
 // A chat's own choice of what notifies: everything, or what mentions the
 // user -- muted chats are kept apart, as before.
@@ -186,7 +186,7 @@ struct sound {
 };
 }  // namespace notify_setting
 using notify_setting_t =
-    splice::variant<notify_setting::on, notify_setting::mentions, notify_setting::name, notify_setting::text, notify_setting::sound>;
+    spl::variant<notify_setting::on, notify_setting::mentions, notify_setting::name, notify_setting::text, notify_setting::sound>;
 // The client's, all said.
 [[nodiscard]] inline notify_choices notify_choices_of(const notification_settings& every) {
   return {.on = every.desktop, .mentions = every.mentions_only.value_or(false), .name = every.show_name,
@@ -206,7 +206,7 @@ template <class>
 struct kept_list;
 template <class... Tags>
 struct kept_list<protocol_list<Tags...>> {
-  using held = splice::variant<kept_of<Tags>...>;
+  using held = spl::variant<kept_of<Tags>...>;
   // As the file has it, chosen by its "protocol": an account of a protocol
   // this build has not kept as it was, and written back so -- not lost.
   using saved = knot::tagged<"protocol", kept_of<Tags>..., knot::value>;

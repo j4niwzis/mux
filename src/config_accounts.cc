@@ -15,7 +15,7 @@ import :config_limits;
 export namespace mux::config {
 // What an account is known by: what its protocol says -- a JID, a user ID.
 [[nodiscard]] inline const std::string& address_of(const account_t& one) noexcept {
-  return splice::visit([](const auto& each) -> const std::string& { return address_of(each); }, one.own);
+  return spl::visit([](const auto& each) -> const std::string& { return address_of(each); }, one.own);
 }
 
 [[nodiscard]] inline bool& enabled_of(account_t& one) noexcept {
@@ -38,13 +38,13 @@ template <class Kept>
 }
 }  // namespace only_verified_defaults
 [[nodiscard]] inline std::optional<bool>* only_verified_in(account_t& one) {
-  return splice::visit([](auto& each) -> std::optional<bool>* {
+  return spl::visit([](auto& each) -> std::optional<bool>* {
     using only_verified_defaults::only_verified_in;
     return only_verified_in(each);
   }, one.own);
 }
 [[nodiscard]] inline bool only_verified_of(const account_t& one) {
-  const std::optional<bool>* kept = splice::visit([](const auto& each) -> const std::optional<bool>* {
+  const std::optional<bool>* kept = spl::visit([](const auto& each) -> const std::optional<bool>* {
     using only_verified_defaults::only_verified_in;
     return only_verified_in(each);
   }, one.own);
@@ -223,7 +223,7 @@ struct decrypt {
 
 // The name of an account's protocol, as the user reads it.
 [[nodiscard]] inline std::string_view protocol_name(const account_t& one) noexcept {
-  return splice::visit([](const auto& each) { return protocol_name(each); }, one.own);
+  return spl::visit([](const auto& each) { return protocol_name(each); }, one.own);
 }
 
 constexpr bool is_matrix(std::string_view address) noexcept { return address.starts_with('@'); }
@@ -243,14 +243,14 @@ template <class... Tags>
 
 // The accounts of a file as the program holds them, and back.
 [[nodiscard]] inline std::optional<account_t> account_of(const saved_account& one) {
-  return splice::visit(splice::overloaded{[](const knot::value&) { return std::optional<account_t>(); },
+  return spl::visit(spl::overloaded{[](const knot::value&) { return std::optional<account_t>(); },
                                           [&](const auto& own) {
                                             return std::optional<account_t>(account_t{.own = kept_t{own}, .shared = one.shared});
                                           }},
                        one.own.data());
 }
 [[nodiscard]] inline saved_account saved_of(const account_t& one) {
-  return splice::visit([&](const auto& own) {
+  return spl::visit([&](const auto& own) {
     return saved_account{.protocol = std::string(protocol_word(own)), .own = kept_saved_t{own}, .shared = one.shared};
   }, one.own);
 }
@@ -280,7 +280,7 @@ template <class... Tags>
 
 // What is wrong with an account as typed: its protocol's check(kept), by ADL.
 std::optional<std::string> check(const account_t& one) {
-  return splice::visit([](const auto& each) { return check(each); }, one.own);
+  return spl::visit([](const auto& each) { return check(each); }, one.own);
 }
 
 // Where what the program keeps between runs, and could make again, is put:

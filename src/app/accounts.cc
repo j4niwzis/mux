@@ -66,7 +66,7 @@ class accounts_part {
     panel.proxies = k_->proxies;
     panel.show(k_->saved, *s_->model);
     auto* pane = panel.adding();
-    return pane && splice::visit([this](auto& form) { return this->watch_login(form); }, pane->parts.form);
+    return pane && spl::visit([this](auto& form) { return this->watch_login(form); }, pane->parts.form);
   }
 
   void apply(const request::open_accounts&) { (void)this->show_accounts(); }
@@ -78,7 +78,7 @@ class accounts_part {
     if (!up)
       return;
     pending_login_.reset();
-    splice::visit(
+    spl::visit(
         [&](accounts& panel) {
           if (auto* pane = panel.adding())
             pane->show(one.speaks);
@@ -89,7 +89,7 @@ class accounts_part {
     auto* up = s_->root().open_panel();
     if (!up)
       return;
-    splice::visit(
+    spl::visit(
         [&](accounts& panel) {
           if (const auto found = k_->find(one.address); found != k_->saved.end()) {
             pending_login_.reset();
@@ -103,13 +103,13 @@ class accounts_part {
   // form up, where it has them.
   void apply(const request::toggle_advanced&) {
     if (auto* up = this->form_up())
-      splice::visit([](auto& form) {
+      spl::visit([](auto& form) {
         mux::app::ask_if_able([](auto& f) -> decltype(void(f.show_advanced(!f.advanced))) { f.show_advanced(!f.advanced); }, form);
       }, *up);
   }
   void apply(const request::toggle_plain&) {
     if (auto* up = this->form_up())
-      splice::visit([](auto& form) {
+      spl::visit([](auto& form) {
         mux::app::ask_if_able([](auto& f) -> decltype(void(f.flip_plain())) { f.flip_plain(); }, form);
       }, *up);
   }
@@ -118,13 +118,13 @@ class accounts_part {
     auto* up = s_->root().open_panel();
     if (!up)
       return;
-    splice::visit(
+    spl::visit(
         [this](accounts& panel) {
           if (auto* editor = panel.editor())
-            splice::visit([this](auto& form) { this->edit(form); }, editor->parts.form);
+            spl::visit([this](auto& form) { this->edit(form); }, editor->parts.form);
           else if (auto* pane = panel.adding()) {
             new_proxy_ = pane->proxy;
-            splice::visit([this](auto& form) { this->add(form); }, pane->parts.form);
+            spl::visit([this](auto& form) { this->add(form); }, pane->parts.form);
           }
         },
         *up);
@@ -153,7 +153,7 @@ class accounts_part {
   // The proxy the account being added is to go through.
   void apply(const request::choose_new_proxy& one) {
     if (auto* up = s_->root().open_panel())
-      splice::visit(
+      spl::visit(
           [&](accounts& panel) {
             if (auto* pane = panel.adding())
               pane->set_proxy(one.index);
@@ -162,7 +162,7 @@ class accounts_part {
   }
   void apply(const request::close_account_pages&) {
     if (auto* up = s_->root().open_panel())
-      splice::visit([](accounts& panel) { panel.close_pages(); }, *up);
+      spl::visit([](accounts& panel) { panel.close_pages(); }, *up);
   }
   // A page of the chosen account: one that wants something of the server
   // asks for it as it opens.
@@ -178,7 +178,7 @@ class accounts_part {
     auto* up = s_->root().open_panel();
     if (!up)
       return nullptr;
-    return splice::visit([](auto& panel) { return panel.form(); }, *up);
+    return spl::visit([](auto& panel) { return panel.form(); }, *up);
   }
   // A new account waiting to log in: online, it is in; failed, it is said.
   template <class Form>
@@ -188,7 +188,7 @@ class accounts_part {
     const auto found = s_->model->accounts().find(mux::account_id{mux::ui::protocol_of(*pending_login_), *pending_login_});
     if (found == s_->model->accounts().end())
       return false;
-    return splice::visit(splice::overloaded{[&](const mux::connection::online&) {
+    return spl::visit(spl::overloaded{[&](const mux::connection::online&) {
                                               pending_login_.reset();
                                               return true;
                                             },
@@ -251,7 +251,7 @@ class accounts_part {
     account.shared = old->shared;
     // And what its protocol keeps through an edit (a Matrix session: the
     // device it has, not a new one at every Save).
-    splice::visit([](auto& now, const auto& before) {
+    spl::visit([](auto& now, const auto& before) {
                     using mux::proto::kept_defaults::carry_over;
                     carry_over(now, before);
                   },
@@ -274,7 +274,7 @@ class accounts_part {
   void save() {
     if (auto failed = k_->write())
       if (auto* up = s_->root().open_panel())
-        splice::visit([&](accounts& panel) { panel.say(*failed); }, *up);
+        spl::visit([&](accounts& panel) { panel.say(*failed); }, *up);
   }
 
   services* s_;

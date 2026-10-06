@@ -31,7 +31,7 @@ struct night {
   friend bool operator==(night, night) = default;
 };
 }  // namespace theme
-using theme_t = splice::variant<theme::classic, theme::day, theme::tinted, theme::night>;
+using theme_t = spl::variant<theme::classic, theme::day, theme::tinted, theme::night>;
 // The accent a theme is drawn with: its own, or one of Telegram's circles --
 // each a shade of its own in each theme.
 namespace accent {
@@ -63,7 +63,7 @@ struct gold {
   friend bool operator==(gold, gold) = default;
 };
 }  // namespace accent
-using accent_t = splice::variant<accent::theme_own, accent::blue, accent::green, accent::pink, accent::orange,
+using accent_t = spl::variant<accent::theme_own, accent::blue, accent::green, accent::pink, accent::orange,
                               accent::purple, accent::red, accent::grey, accent::gold>;
 namespace renderer {
 struct opengl {
@@ -73,7 +73,7 @@ struct software {
   friend bool operator==(software, software) = default;
 };
 }  // namespace renderer
-using renderer_t = splice::variant<renderer::opengl, renderer::software>;
+using renderer_t = spl::variant<renderer::opengl, renderer::software>;
 namespace proxy_kind {
 struct socks5 {
   friend bool operator==(socks5, socks5) = default;
@@ -82,7 +82,7 @@ struct http {
   friend bool operator==(http, http) = default;
 };
 }  // namespace proxy_kind
-using proxy_kind_t = splice::variant<proxy_kind::socks5, proxy_kind::http>;
+using proxy_kind_t = spl::variant<proxy_kind::socks5, proxy_kind::http>;
 
 // The words of the file, and what they mean: anything else is the default.
 // A word of the file looked up in a table of the ones known; the default
@@ -128,7 +128,7 @@ struct built_in {
   friend bool operator==(built_in, built_in) = default;
 };
 }  // namespace notify_backend
-using notify_backend_t = splice::variant<notify_backend::native, notify_backend::built_in>;
+using notify_backend_t = spl::variant<notify_backend::native, notify_backend::built_in>;
 [[nodiscard]] inline notify_backend_t notify_backend_of(const std::optional<std::string>& word) {
   static const std::unordered_map<std::string_view, notify_backend_t> known = {
       {"native", notify_backend::native{}}, {"built-in", notify_backend::built_in{}}};
@@ -150,7 +150,7 @@ struct off {
   friend bool operator==(off, off) = default;
 };
 }  // namespace notify_mode
-using notify_mode_t = splice::variant<notify_mode::by_default, notify_mode::all, notify_mode::mentions, notify_mode::off>;
+using notify_mode_t = spl::variant<notify_mode::by_default, notify_mode::all, notify_mode::mentions, notify_mode::off>;
 [[nodiscard]] inline notify_mode_t notify_mode_of(const std::optional<std::string>& word) {
   static const std::unordered_map<std::string_view, notify_mode_t> known = {{"all", notify_mode::all{}},
                                                                             {"mentions", notify_mode::mentions{}}};
@@ -163,7 +163,7 @@ struct show_name {};
 struct show_text {};
 struct sound {};
 }  // namespace notify_flag
-using notify_flag_t = splice::variant<notify_flag::desktop, notify_flag::show_name, notify_flag::show_text, notify_flag::sound>;
+using notify_flag_t = spl::variant<notify_flag::desktop, notify_flag::show_name, notify_flag::show_text, notify_flag::sound>;
 
 [[nodiscard]] inline proxy_kind_t proxy_kind_of(std::string_view word) {
   static const std::unordered_map<std::string_view, proxy_kind_t> known = {{"http", proxy_kind::http{}},
@@ -194,14 +194,14 @@ using notify_flag_t = splice::variant<notify_flag::desktop, notify_flag::show_na
 [[nodiscard]] constexpr std::string_view word_of(notify_mode::mentions) { return "mentions"; }
 [[nodiscard]] constexpr std::string_view word_of(notify_mode::off) { return "off"; }
 template <class... Ts>
-[[nodiscard]] std::string word_of(const splice::variant<Ts...>& one) {
-  return std::string(splice::visit([](auto each) { return word_of(each); }, one));
+[[nodiscard]] std::string word_of(const spl::variant<Ts...>& one) {
+  return std::string(spl::visit([](auto each) { return word_of(each); }, one));
 }
 // What a user reads for a proxy's kind.
 [[nodiscard]] constexpr std::string_view label_of(proxy_kind::socks5) { return "SOCKS5"; }
 [[nodiscard]] constexpr std::string_view label_of(proxy_kind::http) { return "HTTP"; }
 [[nodiscard]] inline std::string_view label_of(const proxy_kind_t& one) {
-  return splice::visit([](auto each) { return label_of(each); }, one);
+  return spl::visit([](auto each) { return label_of(each); }, one);
 }
 
 }  // namespace mux::config

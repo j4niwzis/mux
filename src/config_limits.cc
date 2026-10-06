@@ -94,7 +94,7 @@ struct deleted_on_disk {
   friend bool operator==(deleted_on_disk, deleted_on_disk) = default;
 };
 }  // namespace limit
-using limit_t = splice::variant<limit::messages_in_memory, limit::messages_on_disk, limit::pictures_in_memory,
+using limit_t = spl::variant<limit::messages_in_memory, limit::messages_on_disk, limit::pictures_in_memory,
                              limit::pictures_on_disk, limit::deleted_on_disk>;
 inline constexpr std::int64_t kDeletedOnDiskMb = 256;
 [[nodiscard]] inline std::int64_t deleted_on_disk_of(const cache_limits& all) {
@@ -120,7 +120,7 @@ inline constexpr std::int64_t kDeletedOnDiskMb = 256;
   return *all.deleted_on_disk_mb;
 }
 [[nodiscard]] inline std::int64_t& value_of(cache_limits& all, const limit_t& which) {
-  return splice::visit([&](auto one) -> std::int64_t& { return value_of(all, one); }, which);
+  return spl::visit([&](auto one) -> std::int64_t& { return value_of(all, one); }, which);
 }
 // Messages are counted, pictures weighed in MiB.
 [[nodiscard]] inline std::pair<std::int64_t, std::int64_t> bounds_of(limit::messages_in_memory) { return {250, 200000}; }
@@ -129,7 +129,7 @@ inline constexpr std::int64_t kDeletedOnDiskMb = 256;
 [[nodiscard]] inline std::pair<std::int64_t, std::int64_t> bounds_of(limit::pictures_on_disk) { return {4, 65536}; }
 [[nodiscard]] inline std::pair<std::int64_t, std::int64_t> bounds_of(limit::deleted_on_disk) { return {4, 65536}; }
 [[nodiscard]] inline std::pair<std::int64_t, std::int64_t> bounds_of(const limit_t& which) {
-  return splice::visit([](auto one) { return bounds_of(one); }, which);
+  return spl::visit([](auto one) { return bounds_of(one); }, which);
 }
 
 // What is done to a picture dropped on the window before it is sent.

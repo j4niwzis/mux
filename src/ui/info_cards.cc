@@ -91,7 +91,7 @@ struct person_card : nodes::Stack {
     Actions* actions = nullptr;
     proto::any_request_t asks;
     void operator()() const {
-      splice::visit(splice::overloaded{[](proto::part::no_request) {}, [&](const auto& one) { actions->ask_for(one); }}, asks);
+      spl::visit(spl::overloaded{[](proto::part::no_request) {}, [&](const auto& one) { actions->ask_for(one); }}, asks);
     }
   };
   struct verify_them {
@@ -159,13 +159,13 @@ struct person_card : nodes::Stack {
       line.setElided(true);
       line.apply({.fillX = true, .margin = {2.0f, 22.0f, 0.0f, 22.0f}});
     }
-    parts.accept.setVisible(facts.trust && splice::visit(splice::overloaded{[](trust::changed) { return true; },
+    parts.accept.setVisible(facts.trust && spl::visit(spl::overloaded{[](trust::changed) { return true; },
                                                                             [](const auto&) { return false; }},
                                                          *facts.trust));
     // Verify where their protocol verifies people, and they are not, or not
     // any more: not for one verified.
     parts.verify.setVisible(proto::offers(protocol_state_of(shared, account), proto::feature::identity_verification{}) &&
-                            (!facts.trust || !splice::visit(splice::overloaded{[](trust::verified) { return true; },
+                            (!facts.trust || !spl::visit(spl::overloaded{[](trust::verified) { return true; },
                                                                                [](const auto&) { return false; }},
                                                             *facts.trust)));
   }

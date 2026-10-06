@@ -20,7 +20,7 @@ struct unregistered {};
 struct other {};
 }  // namespace connector_call
 using connector_call_t =
-    splice::variant<connector_call::new_endpoint, connector_call::message, connector_call::unregistered, connector_call::other>;
+    spl::variant<connector_call::new_endpoint, connector_call::message, connector_call::unregistered, connector_call::other>;
 inline connector_call_t connector_call_of(std::string_view member) {
   static const std::array<std::pair<std::string_view, connector_call_t>, 3> kNames{
       {{"NewEndpoint", connector_call_t{connector_call::new_endpoint{}}},
@@ -68,7 +68,7 @@ void run(std::stop_token stop, std::string service, std::string token, std::stri
     // Another registration's -- an old token: answered, not acted on.
     const bool mine = text_in(said, "token") == token;
     std::vector<std::pair<std::string, std::string>> answer;
-    splice::visit(splice::overloaded{[&](connector_call::new_endpoint) {
+    spl::visit(spl::overloaded{[&](connector_call::new_endpoint) {
                                        if (const auto url = text_in(said, "endpoint"); mine && url)
                                          sink(event{push::endpoint{*url}});
                                      },

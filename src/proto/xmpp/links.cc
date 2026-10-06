@@ -16,7 +16,7 @@ struct address {  // a JID
   friend bool operator==(const address&, const address&) = default;
 };
 }  // namespace link
-using any_link = splice::variant<link::address>;
+using any_link = spl::variant<link::address>;
 constexpr type_tag<logic::link_list<link::address>> links_type(const state&) { return {}; }
 
 // xmpp:<jid>[?...]

@@ -59,7 +59,7 @@ class emoji_part {
       if (!s_->by_touch)
         s_->scene->focus(field);
     };
-    splice::visit(splice::overloaded{[&](request::writing::chat) { put(screen.line.field); },
+    spl::visit(spl::overloaded{[&](request::writing::chat) { put(screen.line.field); },
                                      [&](request::writing::thread) { put(screen.parts.threads.parts.line.parts.input.parts.field); }},
                   into_);
   }

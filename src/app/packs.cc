@@ -85,7 +85,7 @@ class packs_part {
       const auto name = mux::platform::files::name(path);
       mux::pack_picture one{.shortcode = std::filesystem::path(name).stem().string(),
                             .body = name,
-                            .mimetype = std::string(splice::visit([](auto kind) { return mux::media::mimetype_of(kind); }, *type)),
+                            .mimetype = std::string(spl::visit([](auto kind) { return mux::media::mimetype_of(kind); }, *type)),
                             .size = static_cast<std::int64_t>(bytes.size())};
       if (auto image = skia::decodeImage(bytes.data(), bytes.size())) {
         one.width = image->width();

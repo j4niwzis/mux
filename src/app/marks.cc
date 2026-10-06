@@ -98,7 +98,7 @@ class marks_part {
       return true;
     });
     const bool changed = std::ranges::any_of(changes, [](const mux::change_t& one) {
-      return splice::visit(splice::overloaded{[](const mux::change::mentioned&) { return true; },
+      return spl::visit(spl::overloaded{[](const mux::change::mentioned&) { return true; },
                                               [](const mux::change::reacted_to_mine&) { return true; },
                                               [](const mux::change::reaction_changed& c) { return c.live; },
                                               [](const auto&) { return false; }},
@@ -109,7 +109,7 @@ class marks_part {
     if (s_->demo())
       return;
     for (const mux::change_t& one : changes)
-      splice::visit(splice::overloaded{[&](const mux::change::mentioned& m) { this->keep_marked(m.in, m.event); },
+      spl::visit(spl::overloaded{[&](const mux::change::mentioned& m) { this->keep_marked(m.in, m.event); },
                                        [&](const mux::change::reacted_to_mine& r) { this->keep_marked(r.in, r.target); },
                                        [](const auto&) {}},
                     one);
@@ -135,8 +135,8 @@ class marks_part {
       return;
     }
     const bool waited = std::ranges::any_of(changes, [](const mux::change_t& one) {
-      return splice::visit(splice::overloaded{[](const mux::change::message_added& c) {
-                                                return splice::visit(splice::overloaded{[](mux::placement::aside) { return true; },
+      return spl::visit(spl::overloaded{[](const mux::change::message_added& c) {
+                                                return spl::visit(spl::overloaded{[](mux::placement::aside) { return true; },
                                                                                         [](const auto&) { return false; }},
                                                                      c.where);
                                               },
@@ -219,8 +219,8 @@ class marks_part {
     return chosen ? s_->model->find(*chosen) : nullptr;
   }
   [[nodiscard]] static const std::vector<mux::unread_mark>& marks_of(const mux::conversation& chat, mux::mark_kind_t kind) {
-    return splice::visit(
-        splice::overloaded{[&](mux::mark_kind::mention) -> const std::vector<mux::unread_mark>& { return chat.unread_mentions; },
+    return spl::visit(
+        spl::overloaded{[&](mux::mark_kind::mention) -> const std::vector<mux::unread_mark>& { return chat.unread_mentions; },
                            [&](mux::mark_kind::reaction) -> const std::vector<mux::unread_mark>& { return chat.unread_reactions; }},
         kind);
   }

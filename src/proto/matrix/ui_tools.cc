@@ -235,9 +235,50 @@ struct devtools_box : nodes::Stack {
   }
 };
 
+// A step of interactive auth done in the browser, as Element's: what it is
+// for, its page opened there again where it was closed, and Continue once
+// it is done there -- or Cancel.
+template <class Actions>
+struct uia_box : nodes::Stack {
+  struct open_again {
+    Actions* actions;
+    std::string url;
+    void operator()() const { actions->open_url(url); }
+  };
+  struct cancel {
+    Actions* actions;
+    void operator()() const { actions->ask_for(request::cancel_uia{}); }
+  };
+  struct go {
+    Actions* actions;
+    void operator()() const { actions->ask_for(request::continue_uia{}); }
+  };
+  struct parts_t {
+    nodes::Text title;
+    nodes::Text about;
+    widgets::Button<open_again> again;
+    dialog_buttons<cancel, go> buttons;
+  } parts;
+  uia_box(Actions* a, const palette& colours, std::string what, std::string url)
+      : parts{.title = nodes::Text(std::move(what), 17.0f, colours.text, true),
+              .about = nodes::Text("Your server asks you to confirm this in your browser: the page is open there. "
+                                   "Once you have done what it asks, press Continue.",
+                                   14.0f, colours.dim),
+              .again = widgets::Button<open_again>(colours.widgets, "Open the page again", {a, std::move(url)}),
+              .buttons = dialog_buttons<cancel, go>(colours, "Continue", {a}, {a}, 120.0f)} {
+    fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
+    this->setGap(10.0f);
+    parts.about.setWrapped(true);
+    parts.about.apply({.fillX = true});
+    parts.again.apply({.width = 200.0f, .height = 32.0f});
+  }
+};
+
 }  // namespace mux::proto::matrix::tools_detail
 
 export namespace mux::proto::matrix {
+template <class Actions>
+using uia_page = tools_detail::uia_box<Actions>;
 // For the program, which opens it with what the client says.
 template <class Actions>
 using devtools_page = tools_detail::devtools_box<Actions>;
@@ -246,6 +287,10 @@ using devtools_page = tools_detail::devtools_box<Actions>;
 export namespace mux::proto::matrix::tool {
 template <class Actions>
 constexpr type_tag<tools_detail::devtools_box<Actions>> dialog_type(devtools, type_tag<Actions>) {
+  return {};
+}
+template <class Actions>
+constexpr type_tag<tools_detail::uia_box<Actions>> dialog_type(uia, type_tag<Actions>) {
   return {};
 }
 }  // namespace mux::proto::matrix::tool

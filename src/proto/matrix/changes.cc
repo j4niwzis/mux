@@ -86,6 +86,14 @@ struct sessions_refused {
   bool needs_password = false;
 };
 
+// A step of interactive auth to be done in the browser -- an SSO login
+// again, an OIDC server's page: where, and for what.
+struct uia_in_browser {
+  account_id by;
+  std::string url;
+  std::string what;
+};
+
 // A session the server gave at login: kept with the account (take_session).
 struct session_given {
   account_id account;
@@ -111,7 +119,7 @@ struct sign_in_page {
   std::string url;
 };
 
-using changes = change_list<session_given, registration_page, sign_in_page, verification_changed, security_state, devtools_text, state_listed, packs_listed, pack_saved, pack_picture_uploaded, sessions_listed, sessions_refused>;
+using changes = change_list<session_given, registration_page, sign_in_page, verification_changed, security_state, devtools_text, state_listed, packs_listed, pack_saved, pack_picture_uploaded, sessions_listed, sessions_refused, uia_in_browser>;
 constexpr type_tag<changes> changes_type(const state&) { return {}; }
 
 // As the command line says them.
@@ -137,5 +145,6 @@ inline std::string describe(const verification_changed& one) {
 inline std::string describe(const session_info& one) { return one.id + " " + one.name; }
 inline std::string describe(const sessions_listed& one) { return std::format("{} sessions", one.sessions.size()); }
 inline std::string describe(const sessions_refused& one) { return one.why; }
+inline std::string describe(const uia_in_browser& one) { return one.what + ": " + one.url; }
 
 }  // namespace mux::proto::matrix

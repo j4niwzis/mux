@@ -228,6 +228,41 @@ class account {
   // A key backup made on the server, its auth data signed by this device and
   // the master key: its private key, for secret storage.
   std::optional<std::string> make_backup(const crypto::cross_signing_secrets& secrets);
+  // What follows cross-signing keys uploaded: kept, this device signed, the
+  // backup and secret storage made, the recovery key said.
+  void finish_cross_signing(const crypto::cross_signing_secrets& secrets, const std::string& master_pub,
+                            const std::string& self_pub);
+  // How a 401's interactive auth is answered: with the password, where a
+  // flow of it is the password alone and there is one; else on a page in
+  // the browser -- an OIDC server's page for a cross-signing reset where it
+  // names one (MSC4312), else the spec's fallback page for the first stage
+  // of the first flow not done; else not at all.
+  struct uia_password {
+    std::string given;
+  };
+  struct uia_browser {
+    std::string url;
+  };
+  struct uia_none {};
+  using uia_way_t = spl::variant<uia_password, uia_browser, uia_none>;
+  uia_way_t uia_answer(const loom::error& said, const std::string& given);
+  // What was asked while its auth is done in the browser: done again with
+  // the session once Continue is pressed -- the same request, as the
+  // server's session is for it.
+  struct uia_sign_out {
+    std::vector<std::string> devices;
+  };
+  struct uia_cross_signing {
+    crypto::cross_signing_secrets secrets;
+    loom::cs::upload_cross_signing_keys::body_t body;
+    std::string master_pub;
+    std::string self_pub;
+  };
+  struct pending_uia {
+    std::string session;
+    spl::variant<uia_sign_out, uia_cross_signing> what;
+  };
+  std::optional<pending_uia> uia_;
   // The room keys not in the backup yet, put in it: after each sync.
   void upload_backup();
   // The backup read with its private key, from secret storage: how many
@@ -245,6 +280,10 @@ class account {
   void import_room_keys(std::string path, std::string passphrase);
   void rename_session(std::string device, std::string name);
   void sign_out_sessions(std::vector<std::string> devices, std::string password);
+  // A step of interactive auth done in the browser: what it was for, done
+  // again with its session; or let go.
+  void continue_uia();
+  void cancel_uia() { uia_.reset(); }
   // The developer tools, as Element's: an event as the server has it; the
   // room's state, every event of it; and an event of any type sent.
   void view_source(std::string room, std::string event);

@@ -340,10 +340,20 @@ void account<Sink>::sign_out_sessions(std::vector<std::string> devices, std::str
       return;
     }
     const std::string given = !password.empty() ? password : how_.password;
-    if (given.empty()) {
-      sink_(proto::matrix::sessions_refused{id_, "Your password is needed to sign sessions out.", true});
+    const bool asked_elsewhere = spl::visit(
+        spl::overloaded{[](const uia_password&) { return false; },
+                        [&](const uia_browser& page) {
+                          uia_ = pending_uia{*said->session, uia_sign_out{devices}};
+                          sink_(proto::matrix::uia_in_browser{id_, page.url, "Sign sessions out"});
+                          return true;
+                        },
+                        [&](const uia_none&) {
+                          sink_(proto::matrix::sessions_refused{id_, "Your password is needed to sign sessions out.", true});
+                          return true;
+                        }},
+        this->uia_answer(*said, given));
+    if (asked_elsewhere)
       return;
-    }
     body_t::authentication_data_t auth{.type = "m.login.password", .session = *said->session};
     auth.rest = as_body(password_auth{.identifier = {.user = how_.user_id}, .password = given});
     auto done = perform(*api_, loom::cs::delete_devices{.body = body_t{.devices = devices, .auth = std::move(auth)}});
@@ -416,6 +426,20 @@ void account<Sink>::setup_cross_signing(std::string password, bool reset) {
         return;
       }
       const std::string given = !password.empty() ? password : how_.password;
+      const bool asked_elsewhere = spl::visit(
+          spl::overloaded{[](const uia_password&) { return false; },
+                          [&](const uia_browser& page) {
+                            uia_ = pending_uia{*said->session, uia_cross_signing{secrets, body, *master_pub, *self_pub}};
+                            sink_(proto::matrix::uia_in_browser{id_, page.url, "Set up cross-signing"});
+                            return true;
+                          },
+                          [&](const uia_none&) {
+                            sink_(change::refused{id_, "Cross-signing not set up: your password is needed."});
+                            return true;
+                          }},
+          this->uia_answer(*said, given));
+      if (asked_elsewhere)
+        return;
       upload::body_t::authentication_data_t auth{.type = "m.login.password", .session = *said->session};
       auth.rest = as_body(password_auth{.identifier = {.user = how_.user_id}, .password = given});
       body.auth = std::move(auth);
@@ -424,33 +448,90 @@ void account<Sink>::setup_cross_signing(std::string password, bool reset) {
         return;
       }
     }
-    crypto_->keep_cross_signing(secrets);
-    crypto_->verify_master(id_.address, *master_pub);
-    // This device, signed with the self-signing key.
-    if (const auto own = crypto_->signed_device_keys()) {
-      const auto canonical = knot::to_canonical_json(own->keys);
-      const auto by_self = canonical ? crypto::detail::ed25519_sign(secrets.self_signing, *canonical) : std::nullopt;
-      if (by_self) {
-        const crypto::signed_device_part signed_one{.algorithms = own->keys.algorithms,
-                                                    .device_id = own->keys.device_id,
-                                                    .keys = own->keys.keys,
-                                                    .user_id = own->keys.user_id,
-                                                    .signatures = {{id_.address, {{"ed25519:" + *self_pub, *by_self}}}}};
-        std::map<std::string, std::map<std::string, knot::raw>> signed_body;
-        signed_body[id_.address][own->keys.device_id] = knot::raw{knot::to_json_string(signed_one)};
-        (void)perform(*api_, loom::cs::upload_cross_signing_signatures{.body = std::move(signed_body)});
-      }
+    this->finish_cross_signing(secrets, *master_pub, *self_pub);
+  });
+}
+
+template <class Sink>
+void account<Sink>::finish_cross_signing(const crypto::cross_signing_secrets& secrets, const std::string& master_pub,
+                                         const std::string& self_pub) {
+  crypto_->keep_cross_signing(secrets);
+  crypto_->verify_master(id_.address, master_pub);
+  // This device, signed with the self-signing key.
+  if (const auto own = crypto_->signed_device_keys()) {
+    const auto canonical = knot::to_canonical_json(own->keys);
+    const auto by_self = canonical ? crypto::detail::ed25519_sign(secrets.self_signing, *canonical) : std::nullopt;
+    if (by_self) {
+      const crypto::signed_device_part signed_one{.algorithms = own->keys.algorithms,
+                                                  .device_id = own->keys.device_id,
+                                                  .keys = own->keys.keys,
+                                                  .user_id = own->keys.user_id,
+                                                  .signatures = {{id_.address, {{"ed25519:" + self_pub, *by_self}}}}};
+      std::map<std::string, std::map<std::string, knot::raw>> signed_body;
+      signed_body[id_.address][own->keys.device_id] = knot::raw{knot::to_json_string(signed_one)};
+      (void)perform(*api_, loom::cs::upload_cross_signing_signatures{.body = std::move(signed_body)});
     }
-    const auto backup_secret = this->make_backup(secrets);
-    const auto recovery = this->store_secrets(secrets, backup_secret);
-    sink_(change::notice{
-        id_, "Cross-signing set up",
-        recovery ? std::format("This account now has its own cross-signing keys. They are kept on this device, and on "
-                               "your server sealed under this recovery key -- write it down and keep it safe: with it, "
-                               "another device takes them back; without it, they are lost with this device.\n\n{}",
-                               *recovery)
-                 : std::string("This account now has its own cross-signing keys, kept on this device only: they could "
-                               "not be put in secret storage.")});
+  }
+  const auto backup_secret = this->make_backup(secrets);
+  const auto recovery = this->store_secrets(secrets, backup_secret);
+  sink_(change::notice{
+      id_, "Cross-signing set up",
+      recovery ? std::format("This account now has its own cross-signing keys. They are kept on this device, and on "
+                             "your server sealed under this recovery key -- write it down and keep it safe: with it, "
+                             "another device takes them back; without it, they are lost with this device.\n\n{}",
+                             *recovery)
+               : std::string("This account now has its own cross-signing keys, kept on this device only: they could "
+                             "not be put in secret storage.")});
+}
+
+template <class Sink>
+auto account<Sink>::uia_answer(const loom::error& said, const std::string& given) -> uia_way_t {
+  const bool by_password = !said.auth || std::ranges::any_of(said.auth->flows, [](const std::vector<loom::auth_stage_t>& flow) {
+    return flow == std::vector<loom::auth_stage_t>{loom::auth_stage::password{}};
+  });
+  if (by_password && !given.empty())
+    return uia_password{given};
+  if (!said.auth || !said.session || said.auth->flows.empty())
+    return uia_none{};
+  if (said.auth->reset_url)
+    return uia_browser{*said.auth->reset_url};
+  const auto& flow = said.auth->flows.front();
+  const auto stage = std::ranges::find_if(flow, [&](const loom::auth_stage_t& one) { return !std::ranges::contains(said.auth->completed, one); });
+  const auto home = this->homeserver();
+  if (stage == flow.end() || !home)
+    return uia_none{};
+  return uia_browser{std::format("https://{}{}{}/_matrix/client/v3/auth/{}/fallback/web?session={}", home->host,
+                                 home->port == 443 ? std::string() : std::format(":{}", home->port), home->path,
+                                 loom::name_of(*stage), *said.session)};
+}
+
+template <class Sink>
+void account<Sink>::continue_uia() {
+  this->spawn_guarded([this] {
+    if (!api_ || !uia_)
+      return;
+    pending_uia pending = std::move(*std::exchange(uia_, std::nullopt));
+    spl::visit(
+        spl::overloaded{
+            [&](uia_sign_out& one) {
+              using body_t = loom::cs::delete_devices::body_t;
+              auto done = perform(*api_, loom::cs::delete_devices{
+                                             .body = body_t{.devices = one.devices,
+                                                            .auth = body_t::authentication_data_t{.session = pending.session}}});
+              if (!done)
+                sink_(proto::matrix::sessions_refused{id_, "Could not sign out: " + done.error().said()});
+              this->list_sessions();
+            },
+            [&](uia_cross_signing& one) {
+              using upload = loom::cs::upload_cross_signing_keys;
+              one.body.auth = upload::body_t::authentication_data_t{.session = pending.session};
+              if (auto done = perform(*api_, upload{.body = one.body}); !done) {
+                sink_(change::refused{id_, "Cross-signing not set up: " + done.error().said()});
+                return;
+              }
+              this->finish_cross_signing(one.secrets, one.master_pub, one.self_pub);
+            }},
+        pending.what);
   });
 }
 

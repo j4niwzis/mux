@@ -34,8 +34,9 @@ inline std::optional<std::string> message_link(const state&, const conversation&
 // Its own dialog: the developer tools, as Element's.
 namespace tool {
 struct devtools {};
+struct uia {};  // a step of interactive auth, done in the browser
 }  // namespace tool
-constexpr dialog_list<tool::devtools> dialogs(const state&) { return {}; }
+constexpr dialog_list<tool::devtools, tool::uia> dialogs(const state&) { return {}; }
 // Its own account pages: its encryption, and its sessions under
 // cross-signing and the key backup.
 namespace settings {

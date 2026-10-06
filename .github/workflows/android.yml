@@ -181,6 +181,12 @@ jobs:
           name: mux-android-${{ env.ABI }}-${{ env.FULL }}-test-signed
           path: build-android/apk/mux-test-signed.apk
           if-no-files-found: error
+      # The same APK unsigned, aligned: to be signed with a key of one's own.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mux-android-${{ env.ABI }}-${{ env.FULL }}-unsigned
+          path: build-android/apk/mux-unsigned.apk
+          if-no-files-found: error
       - name: No source list where the build failed
         if: always() && steps.build.outcome != 'success'
         run: rm -f build-android/sources.sha1

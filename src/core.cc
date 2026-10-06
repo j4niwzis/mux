@@ -669,6 +669,13 @@ class model {
       for (auto& each : reaction_events)
         if (!std::ranges::contains(kept->reaction_events, each))
           kept->reaction_events.push_back(std::move(each));
+      // A thread's answers are in time's order, and one's own came first with
+      // this machine's time: its copy from the server, stamped by the server,
+      // may belong elsewhere -- put there. With a clock a minute behind, one's
+      // reply stood above the answer it replied to.
+      if (one.message.thread)
+        if (const auto found = where.threads.find(*one.message.thread); found != where.threads.end())
+          std::ranges::stable_sort(found->second, {}, &message::at);
       return;
     }
     // An answer in a thread: with the thread's, in time's order, not in the
@@ -691,6 +698,17 @@ class model {
     // made again.
     const auto in_time = [&](auto at) {
       auto& timeline = where.timeline;
+      // Answered already by something shown -- come late, after the reply to
+      // it (a sync giving a room's newest first, the rest after): before the
+      // first answer, whatever the clocks say. Within the minutes allowed
+      // for clocks it went at the end, below the reply that quoted it.
+      if (const auto answer = std::ranges::find_if(timeline, [&](const message& said) {
+            return said.replies_to == one.message.id;
+          });
+          answer != timeline.end()) {
+        timeline.insert(answer, one.message);
+        return;
+      }
       const auto by_time = [&] {
         timeline.insert(std::ranges::upper_bound(timeline, one.message.at, {}, &message::at), one.message);
       };

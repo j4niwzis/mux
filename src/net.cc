@@ -223,22 +223,69 @@ inline tls client_tls() {
   made.set_options(asio::ssl::context::default_workarounds | asio::ssl::context::no_sslv2 |
                    asio::ssl::context::no_sslv3 | asio::ssl::context::no_tlsv1 | asio::ssl::context::no_tlsv1_1);
   made.set_verify_mode(asio::ssl::verify_peer);
-  // The platform's trust anchors written to a file (Android's, by
-  // android_runtime.cc): each added on its own, one OpenSSL cannot read
-  // passed over -- read as one file, such a one dropped them all.
-  if (const char* file = std::getenv("MUX_CA_FILE")) {
-    std::ifstream in(file, std::ios::binary);
-    const std::string all{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
-    static constexpr std::string_view kEnd = "-----END CERTIFICATE-----";
-    for (std::size_t from = 0, end = all.find(kEnd); end != std::string::npos; end = all.find(kEnd, from)) {
-      const std::string_view one = std::string_view(all).substr(from, end + kEnd.size() - from);
-      error_code skipped;
-      made.add_certificate_authority(asio::buffer(one.data(), one.size()), skipped);
-      from = end + kEnd.size();
-    }
-  }
   return tls(std::move(made));
 }
+
+// How a server's certificate is checked: against its name, always (as
+// asio's host_name_verification); and for trust, by OpenSSL against the
+// system's CAs -- or, on Android, by Android itself, as its own TLS would
+// (mux_android_trusts): the whole chain the server sent, decided once, at
+// the leaf. Earlier depths are let through there: OpenSSL has no CAs of
+// Android's to build the chain with, and Android builds it.
+struct peer_verification {
+  std::string host;
+  // What Android said of this connection's chain, once asked, and why not.
+  std::shared_ptr<std::optional<bool>> android_said = std::make_shared<std::optional<bool>>();
+  std::shared_ptr<std::string> refused = std::make_shared<std::string>();
+  bool operator()(bool preverified, asio::ssl::verify_context& context) const {
+#if defined(__ANDROID__)
+    (void)preverified;  // OpenSSL's own verdict: it holds none of Android's CAs
+    ::X509_STORE_CTX* store = context.native_handle();
+    if (::X509_STORE_CTX_get_error_depth(store) > 0)
+      return true;
+    if (!android_said->has_value()) {
+      // The chain as the server sent it, leaf first, each DER-encoded.
+      const STACK_OF(X509)* sent = ::X509_STORE_CTX_get0_untrusted(store);
+      std::vector<std::vector<unsigned char>> ders;
+      const int count = sent ? ::sk_X509_num(sent) : 0;
+      for (int at = 0; at < count; ++at) {
+        ::X509* one = ::sk_X509_value(sent, at);
+        const int size = ::i2d_X509(one, nullptr);
+        if (size <= 0)
+          continue;
+        std::vector<unsigned char> der(static_cast<std::size_t>(size));
+        unsigned char* into = der.data();
+        ::i2d_X509(one, &into);
+        ders.push_back(std::move(der));
+      }
+      if (ders.empty())
+        if (::X509* leaf = ::X509_STORE_CTX_get0_cert(store)) {
+          const int size = ::i2d_X509(leaf, nullptr);
+          std::vector<unsigned char> der(static_cast<std::size_t>(size > 0 ? size : 0));
+          unsigned char* into = der.data();
+          if (size > 0 && ::i2d_X509(leaf, &into) > 0)
+            ders.push_back(std::move(der));
+        }
+      const std::vector<const unsigned char*> pointers =
+          std::ranges::to<std::vector<const unsigned char*>>(std::views::transform(ders, [](const auto& one) { return one.data(); }));
+      const std::vector<std::size_t> sizes =
+          std::ranges::to<std::vector<std::size_t>>(std::views::transform(ders, [](const auto& one) { return one.size(); }));
+      char why[256] = {};
+      *android_said = mux_android_trusts(pointers.data(), sizes.data(), pointers.size(), host.c_str(), why, sizeof why);
+      if (!**android_said)
+        *refused = why;
+    }
+    if (!**android_said) {
+      ::X509_STORE_CTX_set_error(store, X509_V_ERR_CERT_UNTRUSTED);
+      return false;
+    }
+    // Trusted by Android: the name checked as anywhere else.
+    return asio::ssl::host_name_verification(host)(true, context);
+#else
+    return asio::ssl::host_name_verification(host)(preverified, context);
+#endif
+  }
+};
 
 // Why a peer's certificate was not trusted, in OpenSSL's words ("unable to
 // get local issuer certificate", "certificate has expired"), where that was
@@ -334,7 +381,7 @@ class stream {
     if (!::SSL_set_tlsext_host_name(stream_.native_handle(), name.c_str()))
       return false;
     stream_.set_verify_mode(asio::ssl::verify_peer);
-    stream_.set_verify_callback(asio::ssl::host_name_verification(name));
+    stream_.set_verify_callback(peer_verification{name});
     const auto [error] = owner_->await<>([&](auto done) {
       stream_.async_handshake(asio::ssl::stream_base::client, std::move(done));
     });

@@ -156,7 +156,7 @@ class connection {
       throw net::failure("naming " + where_.host, error_code(static_cast<int>(::ERR_get_error()),
                                                                asio::error::get_ssl_category()));
     stream_->set_verify_mode(asio::ssl::verify_peer);
-    stream_->set_verify_callback(asio::ssl::host_name_verification(where_.host));
+    stream_->set_verify_callback(net::peer_verification{where_.host});
     const auto started = std::chrono::steady_clock::now();
     beast::get_lowest_layer(*stream_).socket() = net::connect(*owner_, via_, where_.host, where_.port);
     log_line(where_.host, std::format("connected{}, in {} ms", via_ ? std::format(" through {}:{}", via_->host, via_->port) : "",

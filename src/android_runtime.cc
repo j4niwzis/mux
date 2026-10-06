@@ -8,6 +8,8 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <mutex>
+#include <vector>
 
 namespace {
 struct frame {
@@ -18,60 +20,6 @@ struct frame {
     if (ready) env->PopLocalFrame(nullptr);
   }
 };
-bool certificates(JNIEnv* env, const std::filesystem::path& destination) {
-  auto factory_class = env->FindClass("javax/net/ssl/TrustManagerFactory");
-  auto algorithm = env->CallStaticObjectMethod(factory_class, env->GetStaticMethodID(factory_class,
-      "getDefaultAlgorithm", "()Ljava/lang/String;"));
-  auto factory = env->CallStaticObjectMethod(factory_class, env->GetStaticMethodID(factory_class,
-      "getInstance", "(Ljava/lang/String;)Ljavax/net/ssl/TrustManagerFactory;"), algorithm);
-  if (!factory || env->ExceptionCheck()) return false;
-  env->CallVoidMethod(factory, env->GetMethodID(factory_class, "init", "(Ljava/security/KeyStore;)V"), nullptr);
-  if (env->ExceptionCheck()) return false;
-  auto managers = static_cast<jobjectArray>(env->CallObjectMethod(factory, env->GetMethodID(factory_class,
-      "getTrustManagers", "()[Ljavax/net/ssl/TrustManager;")));
-  if (!managers || env->ExceptionCheck()) return false;
-  auto trust_class = env->FindClass("javax/net/ssl/X509TrustManager");
-  auto cert_class = env->FindClass("java/security/cert/Certificate");
-  auto base64 = env->FindClass("android/util/Base64");
-  auto temporary = destination;
-  temporary += ".tmp";
-  std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
-  std::size_t count = 0;
-  for (jsize i = 0; output && i < env->GetArrayLength(managers); ++i) {
-    auto manager = env->GetObjectArrayElement(managers, i);
-    if (!env->IsInstanceOf(manager, trust_class)) { env->DeleteLocalRef(manager); continue; }
-    auto certs = static_cast<jobjectArray>(env->CallObjectMethod(manager, env->GetMethodID(trust_class,
-        "getAcceptedIssuers", "()[Ljava/security/cert/X509Certificate;")));
-    if (!certs || env->ExceptionCheck()) return false;
-    for (jsize j = 0; j < env->GetArrayLength(certs); ++j) {
-      auto cert = env->GetObjectArrayElement(certs, j);
-      auto der = env->CallObjectMethod(cert, env->GetMethodID(cert_class, "getEncoded", "()[B"));
-      if (!der || env->ExceptionCheck()) return false;
-      auto text = static_cast<jstring>(env->CallStaticObjectMethod(base64, env->GetStaticMethodID(base64,
-          "encodeToString", "([BI)Ljava/lang/String;"), der, 2 /* NO_WRAP */));
-      if (!text || env->ExceptionCheck()) return false;
-      const char* bytes = env->GetStringUTFChars(text, nullptr); // Base64 is ASCII.
-      if (!bytes) return false;
-      output << "-----BEGIN CERTIFICATE-----\n" << bytes << "\n-----END CERTIFICATE-----\n";
-      env->ReleaseStringUTFChars(text, bytes);
-      env->DeleteLocalRef(text);
-      env->DeleteLocalRef(der);
-      env->DeleteLocalRef(cert);
-      ++count;
-    }
-    env->DeleteLocalRef(certs);
-    env->DeleteLocalRef(manager);
-  }
-  output.close();
-  if (!count || !output) return false;
-  std::filesystem::rename(temporary, destination);
-  // Not SSL_CERT_FILE: OpenSSL reads such a file whole or not at all, and a
-  // phone's store may hold one certificate it cannot parse -- then nothing
-  // was trusted, and every server failed to verify. net.cc's client_tls()
-  // adds them one by one from here, passing over what it cannot read.
-  return setenv("MUX_CA_FILE", destination.c_str(), 1) == 0;
-}
-
 // Android 13 and later post a notification only for an app the user let:
 // asked once at the start, where it was not given yet. The answer is the
 // system's to keep; nothing here waits for it.
@@ -105,9 +53,10 @@ bool mux_android_initialize() {
       setenv("XDG_STATE_HOME", state.c_str(), 1) || setenv("XDG_CACHE_HOME", cache, 1)) return false;
   ask_to_notify(jni.env);
   if (jni.env->ExceptionCheck()) jni.env->ExceptionClear();
-  // Export the platform's trust anchors for OpenSSL; peer/hostname checking
-  // stays enabled. Refresh on each launch, including system CA updates.
-  return certificates(jni.env, std::filesystem::path(cache) / "mux-ca.pem");
+  // Certificates are not exported for OpenSSL: Android itself is asked
+  // whether it trusts each server's chain (mux_android_trusts), as its own
+  // TLS would. A file of its CAs was read by OpenSSL whole or not at all.
+  return true;
 }
 
 bool mux_android_nameserver(char* output, size_t capacity) {
@@ -152,4 +101,93 @@ bool mux_android_nameserver(char* output, size_t capacity) {
   if (length < capacity) std::memcpy(output, bytes, length + 1);
   env->ReleaseStringUTFChars(address, bytes);
   return length < capacity;
+}
+
+bool mux_android_trusts(const unsigned char* const* certificates, const size_t* sizes, size_t count, const char* host,
+                        char* why, size_t capacity) {
+  const auto said = [&](const char* text) {
+    if (why && capacity) {
+      std::strncpy(why, text, capacity - 1);
+      why[capacity - 1] = '\0';
+    }
+    return false;
+  };
+  frame jni;
+  if (!jni.ready || count == 0) return said("Android could not be asked");
+  JNIEnv* env = jni.env;
+  // The platform's default trust manager, made once and kept (a global
+  // reference), behind X509TrustManagerExtensions: the check Android's own
+  // TLS makes, the host given for its network security config.
+  static jobject extensions = nullptr;
+  static std::mutex making;
+  {
+    const std::lock_guard held(making);
+    if (!extensions) {
+      auto factory_class = env->FindClass("javax/net/ssl/TrustManagerFactory");
+      auto algorithm = env->CallStaticObjectMethod(factory_class, env->GetStaticMethodID(factory_class,
+          "getDefaultAlgorithm", "()Ljava/lang/String;"));
+      auto factory = env->CallStaticObjectMethod(factory_class, env->GetStaticMethodID(factory_class,
+          "getInstance", "(Ljava/lang/String;)Ljavax/net/ssl/TrustManagerFactory;"), algorithm);
+      if (!factory || env->ExceptionCheck()) return said("no trust manager factory");
+      env->CallVoidMethod(factory, env->GetMethodID(factory_class, "init", "(Ljava/security/KeyStore;)V"), nullptr);
+      if (env->ExceptionCheck()) return said("the trust manager factory would not start");
+      auto managers = static_cast<jobjectArray>(env->CallObjectMethod(factory, env->GetMethodID(factory_class,
+          "getTrustManagers", "()[Ljavax/net/ssl/TrustManager;")));
+      if (!managers || env->ExceptionCheck()) return said("no trust managers");
+      auto trust_class = env->FindClass("javax/net/ssl/X509TrustManager");
+      jobject manager = nullptr;
+      for (jsize i = 0; !manager && i < env->GetArrayLength(managers); ++i)
+        if (auto one = env->GetObjectArrayElement(managers, i); env->IsInstanceOf(one, trust_class))
+          manager = one;
+      if (!manager) return said("no X.509 trust manager");
+      auto extensions_class = env->FindClass("android/net/http/X509TrustManagerExtensions");
+      auto made = env->NewObject(extensions_class, env->GetMethodID(extensions_class, "<init>",
+          "(Ljavax/net/ssl/X509TrustManager;)V"), manager);
+      if (!made || env->ExceptionCheck()) return said("no X509TrustManagerExtensions");
+      extensions = env->NewGlobalRef(made);
+    }
+  }
+  // The chain as Java's certificates, leaf first.
+  auto factory_class = env->FindClass("java/security/cert/CertificateFactory");
+  auto factory = env->CallStaticObjectMethod(factory_class, env->GetStaticMethodID(factory_class, "getInstance",
+      "(Ljava/lang/String;)Ljava/security/cert/CertificateFactory;"), env->NewStringUTF("X.509"));
+  if (!factory || env->ExceptionCheck()) return said("no X.509 certificate factory");
+  auto stream_class = env->FindClass("java/io/ByteArrayInputStream");
+  auto x509_class = env->FindClass("java/security/cert/X509Certificate");
+  auto chain = env->NewObjectArray(static_cast<jsize>(count), x509_class, nullptr);
+  for (size_t at = 0; at < count; ++at) {
+    // jbyte is signed: the DER's bytes converted one by one, not viewed.
+    std::vector<jbyte> bytes(sizes[at]);
+    for (size_t i = 0; i < sizes[at]; ++i) bytes[i] = static_cast<jbyte>(certificates[at][i]);
+    auto array = env->NewByteArray(static_cast<jsize>(bytes.size()));
+    env->SetByteArrayRegion(array, 0, static_cast<jsize>(bytes.size()), bytes.data());
+    auto stream = env->NewObject(stream_class, env->GetMethodID(stream_class, "<init>", "([B)V"), array);
+    auto certificate = env->CallObjectMethod(factory, env->GetMethodID(factory_class, "generateCertificate",
+        "(Ljava/io/InputStream;)Ljava/security/cert/Certificate;"), stream);
+    if (!certificate || env->ExceptionCheck()) return said("a certificate Android could not read");
+    env->SetObjectArrayElement(chain, static_cast<jsize>(at), certificate);
+    env->DeleteLocalRef(certificate);
+    env->DeleteLocalRef(stream);
+    env->DeleteLocalRef(array);
+  }
+  auto extensions_class = env->GetObjectClass(extensions);
+  env->CallObjectMethod(extensions, env->GetMethodID(extensions_class, "checkServerTrusted",
+      "([Ljava/security/cert/X509Certificate;Ljava/lang/String;Ljava/lang/String;)Ljava/util/List;"),
+      chain, env->NewStringUTF("GENERIC"), env->NewStringUTF(host));
+  if (env->ExceptionCheck()) {
+    // Its reason: the exception's message, then the exception let go.
+    jthrowable thrown = env->ExceptionOccurred();
+    env->ExceptionClear();
+    auto message = static_cast<jstring>(env->CallObjectMethod(thrown, env->GetMethodID(env->FindClass("java/lang/Throwable"),
+        "getMessage", "()Ljava/lang/String;")));
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    if (message) {
+      const char* text = env->GetStringUTFChars(message, nullptr);
+      const bool refused = said(text ? text : "not trusted");
+      if (text) env->ReleaseStringUTFChars(message, text);
+      return refused;
+    }
+    return said("not trusted");
+  }
+  return true;
 }

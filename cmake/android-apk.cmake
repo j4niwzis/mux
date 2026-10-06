@@ -70,22 +70,22 @@ function(mux_add_android_apk target)
     VERBATIM COMMAND_EXPAND_LISTS)
   add_custom_target(mux-apk-unsigned DEPENDS "${out}/mux-unsigned.apk")
   if(MUX_ANDROID_TEST_KEY)
-    find_program(MUX_KEYTOOL keytool REQUIRED NO_CMAKE_FIND_ROOT_PATH)
-    add_custom_command(OUTPUT "${out}/test.keystore"
-      COMMAND "${MUX_KEYTOOL}" -genkeypair -noprompt -keystore "${out}/test.keystore"
-        -storepass android -keypass android -alias androiddebugkey
-        -dname "CN=Mux TEST KEY - not a release key,O=Mux,C=XX"
-        -keyalg RSA -keysize 2048 -validity 10000 VERBATIM)
+    # The test key, the same for every build: android/test-signing.p12, a
+    # PKCS#12 keystore in the repository -- public, not a release key (its
+    # name says so), alias androiddebugkey, password android. One made anew
+    # at each build signed each APK otherwise, and Android would not update
+    # an installed mux with the next one.
+    set(test_keystore "${PROJECT_SOURCE_DIR}/android/test-signing.p12")
     add_custom_command(OUTPUT "${out}/mux-test-signed.apk"
       COMMAND "${MUX_JAVA}" -jar "${MUX_ANDROID_APKSIGNER_JAR}" sign
-        --ks "${out}/test.keystore" --ks-key-alias androiddebugkey --ks-pass pass:android
+        --ks "${test_keystore}" --ks-type PKCS12 --ks-key-alias androiddebugkey --ks-pass pass:android
         --key-pass pass:android --min-sdk-version "${MUX_ANDROID_MIN_API}"
         --v1-signing-enabled ${v1_signing}
         --v2-signing-enabled true --v3-signing-enabled true
         --out "${out}/mux-test-signed.apk" "${out}/mux-unsigned.apk"
       COMMAND "${MUX_JAVA}" -jar "${MUX_ANDROID_APKSIGNER_JAR}" verify
         --min-sdk-version "${MUX_ANDROID_MIN_API}" "${out}/mux-test-signed.apk"
-      DEPENDS "${out}/mux-unsigned.apk" "${out}/test.keystore" "${MUX_ANDROID_APKSIGNER_JAR}" VERBATIM)
+      DEPENDS "${out}/mux-unsigned.apk" "${test_keystore}" "${MUX_ANDROID_APKSIGNER_JAR}" VERBATIM)
     add_custom_target(mux-apk DEPENDS "${out}/mux-test-signed.apk")
   else()
     # Release signing is a separate operation; no release secret enters CMake.

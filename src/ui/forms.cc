@@ -53,6 +53,13 @@ struct field : nodes::Stack {
   }
   // What is typed in it.
   [[nodiscard]] const std::string& text() const { return parts.box.text(); }
+  // Several lines, as a topic's: Enter starts a new one, up to `lines`
+  // shown before it scrolls.
+  void multi_line(int lines) {
+    parts.box.setSingleLine(false);
+    parts.box.setMaxLines(lines);
+    parts.box.apply({.padding = {6.0f, 10.0f, 6.0f, 10.0f}});
+  }
 };
 
 // A passphrase asked for: to open local data at the start (not dismissed --

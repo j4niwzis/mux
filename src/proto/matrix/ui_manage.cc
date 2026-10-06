@@ -211,6 +211,8 @@ struct room_page : nodes::Stack {
     const bool retopic = may(facts, power_need::retopic{});
     parts.name.apply({.disabled = !rename});
     parts.topic.apply({.disabled = !retopic});
+    // A topic of several lines, as Element's: Enter starts a new one.
+    parts.topic.multi_line(6);
     parts.buttons.setVisible(rename || retopic);
     parts.main_address.setWrapped(true);
     parts.main_address.apply({.fillX = true});
@@ -218,10 +220,19 @@ struct room_page : nodes::Stack {
       parts.others.emplace_back(one, 14.0f, box->colours_->text);
     if (facts.other_aliases.empty())
       parts.others.emplace_back("No other published addresses yet.", 13.0f, box->colours_->dim);
-  }  // Enter in the name or the topic: saved, as Save does -- a single-line
-  // field leaves its Enter to the form it is in.
+  }
+  // Enter in the name: saved, as Save does -- a single-line field leaves
+  // its Enter to the form it is in. In the topic Enter is a new line, as in
+  // Element's; Ctrl+Enter saves from either, taken before the field.
   Box* box_ = nullptr;
   using Node::onKey;
+  void onKey(scene::phase::capture, const scene::key::down& press, scene::Reply& reply) {
+    if (press.key != scene::keys::kEnter || !press.modifiers.template has<scene::modifier::control>() || press.repeat ||
+        !parts.buttons.visible())
+      return;
+    save{box_, this}();
+    reply.handle();
+  }
   void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
     if (press.key != scene::keys::kEnter || press.repeat || !parts.buttons.visible())
       return;

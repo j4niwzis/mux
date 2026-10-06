@@ -498,6 +498,7 @@ struct create_room_box : nodes::Stack {
                                         12.0f, colours.dim),
               .buttons = buttons_row(colours, "Create room", {a}, {this}, 120.0f)} {
     this->setGap(8.0f);
+    parts.topic.multi_line(4);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 12.0f, 18.0f, 12.0f}});
     parts.rule_caption.apply({.margin = {4.0f, 10.0f, 0.0f, 10.0f}});
     parts.rule_note.setWrapped(true);

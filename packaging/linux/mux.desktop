@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=mux
+GenericName=Messenger
+Comment=Matrix and XMPP messenger
+Exec=/usr/local/bin/mux
+TryExec=/usr/local/bin/mux
+Icon=mux
+Terminal=false
+Categories=Network;InstantMessaging;Chat;
+Keywords=Matrix;XMPP;Jabber;chat;messenger;
+StartupNotify=true
+StartupWMClass=mux

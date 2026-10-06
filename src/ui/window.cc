@@ -220,9 +220,20 @@ struct window : scene::Node {
     // by that press is put. A press off the text menu closes it, at once --
     // nothing of it is pressed.
     skia::SkPoint last_press{};
+    // A press off the emoji popup, where it was: let go there -- a tap, not
+    // a drag to scroll the chat under it -- it closes the popup.
+    std::optional<skia::SkPoint> press_off_emoji;
     using Node::onPointer;
+    void onPointer(scene::phase::capture, const scene::pointer::up& lift, scene::PointerReply&) {
+      const auto off = std::exchange(press_off_emoji, std::nullopt);
+      if (off && parts.emoji && std::hypot(lift.x - off->fX, lift.y - off->fY) < 8.0f)
+        actions_of->close_emoji();
+    }
     void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply&) {
       last_press = {press.x, press.y};
+      press_off_emoji = parts.emoji && !parts.emoji->parts.card.bounds().contains(press.x, press.y)
+                            ? std::optional<skia::SkPoint>(skia::SkPoint::Make(press.x, press.y))
+                            : std::nullopt;
       if (parts.text_menu_up && !parts.text_menu_up->bounds().contains(press.x, press.y)) {
         parts.text_menu_up.reset();
         this->invalidateLayout();

@@ -292,13 +292,10 @@ struct emoji_popup : scene::Node {
     }
     scene::layoutChildrenInContentBox(*this);
   }
-  // A press off it closes it.
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  using Node::onPointer;
-  void onPointer(scene::phase::target, const scene::pointer::down&, scene::PointerReply& reply) {
-    actions->close_emoji();
-    reply.handle();
-  }
+  // A press off it goes through to what is under it -- the chat scrolled
+  // with the popup open, as tdesktop's panel lets it be; a tap off it, the
+  // window's, closes it (window.cc).
+  [[nodiscard]] bool acceptsInput() const { return false; }
 };
 
 }  // namespace mux::ui

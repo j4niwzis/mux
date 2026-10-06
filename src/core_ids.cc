@@ -496,6 +496,20 @@ struct directory_room {
   friend bool operator==(const directory_room&, const directory_room&) = default;
 };
 
+// What an account the program makes is let go with: the deleter its sink
+// names (account_deleter), where it names one -- the account destroyed in
+// the unit it was instantiated in, not by every unit that holds it -- else
+// delete.
+template <class Sink, class Account>
+struct account_deleter_of {
+  using type = std::default_delete<Account>;
+};
+template <class Sink, class Account>
+  requires requires { typename Sink::account_deleter; }
+struct account_deleter_of<Sink, Account> {
+  using type = typename Sink::account_deleter;
+};
+
 // Someone mentioned in what is sent: the name as written in it, and who.
 struct mention {
   std::string name;

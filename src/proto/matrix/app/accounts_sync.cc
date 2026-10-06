@@ -86,3 +86,8 @@ template void account<mux::app::post_change>::request_secrets(const std::string&
 template void account<mux::app::post_change>::secret_in(const crypto::secret_got& got);
 template void account<mux::app::post_change>::secret_request_in(const std::string& sender, const loom::ev::m_secret_request_content_t& content);
 }  // namespace mux::proto::matrix::client
+
+#if defined(MUX_SPLIT_ACCOUNTS)
+// Let go here, among its members made here: see app/sink.cc.
+void mux::app::destroy_account(mux::proto::matrix::client::account<mux::app::post_change>* one) { delete one; }
+#endif

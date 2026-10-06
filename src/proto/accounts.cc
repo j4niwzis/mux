@@ -25,3 +25,14 @@ extern template class mux::proto::matrix::client::account<mux::app::post_change>
 template class mux::proto::xmpp::client::account<mux::app::post_change>;
 template class mux::proto::matrix::client::account<mux::app::post_change>;
 #endif
+
+// Each account let go: in its own unit where accounts are split (xmpp's
+// app/accounts.cc, matrix's app/accounts_sync.cc), else here.
+export namespace mux::app {
+void destroy_account(mux::proto::xmpp::client::account<post_change>* one);
+void destroy_account(mux::proto::matrix::client::account<post_change>* one);
+}  // namespace mux::app
+#if !defined(MUX_SPLIT_ACCOUNTS)
+void mux::app::destroy_account(mux::proto::xmpp::client::account<post_change>* one) { delete one; }
+void mux::app::destroy_account(mux::proto::matrix::client::account<post_change>* one) { delete one; }
+#endif

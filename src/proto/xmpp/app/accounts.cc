@@ -8,3 +8,7 @@ import mux.core;
 import mux.proto.xmpp.client;
 
 template class mux::proto::xmpp::client::account<mux::app::post_change>;
+#if defined(MUX_SPLIT_ACCOUNTS)
+// Let go here, where it is made: see app/sink.cc.
+void mux::app::destroy_account(mux::proto::xmpp::client::account<mux::app::post_change>* one) { delete one; }
+#endif

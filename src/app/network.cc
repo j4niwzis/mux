@@ -45,7 +45,9 @@ template <class>
 struct account_list;
 template <class... Tags>
 struct account_list<mux::protocol_list<Tags...>> {
-  using type = spl::variant<std::unique_ptr<account_type_of<mux::config::kept_of<Tags>>>...>;
+  using type = spl::variant<decltype(make_account(std::declval<const mux::config::kept_of<Tags>&>(), std::declval<mux::net::loop&>(),
+                                                  std::declval<mux::net::tls&>(), std::declval<mux::vault::vault&>(),
+                                                  std::declval<std::optional<mux::net::proxy>>(), std::declval<post_change>()))...>;
 };
 using any_account = account_list<mux::protocols>::type;
 

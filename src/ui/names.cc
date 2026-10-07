@@ -97,22 +97,54 @@ export namespace mux::ui {
   std::string name = shown_plainly(one.name);
   return name.empty() ? local_part(one.id) : name;
 }
+// What a chat's members are called, made once for each version of its
+// member list (members_revision): each one's name by their ID, and how many
+// go by each name, folded. Asked for every message shown, it walked the
+// whole list for the sender and again, folding every name, to see who else
+// shared it -- in a room of thousands, millions of strings at each switch,
+// on the UI's thread.
+struct member_names {
+  bool built = false;
+  std::uint64_t revision = 0;
+  std::unordered_map<std::string, std::string> called;
+  std::unordered_map<std::string, std::size_t> folded_count;
+};
+[[nodiscard]] inline const member_names& names_of(const conversation& in) {
+  // The UI's thread alone asks; one entry for each chat shown.
+  static std::map<conversation_id, member_names> kept;
+  member_names& names = kept[in.id];
+  if (!names.built || names.revision != in.members_revision) {
+    names.built = true;
+    names.revision = in.members_revision;
+    names.called.clear();
+    names.folded_count.clear();
+    for (const member& one : in.members) {
+      std::string name = called(one);
+      ++names.folded_count[mux::logic::folded(name)];
+      names.called.insert_or_assign(one.id, std::move(name));
+    }
+  }
+  return names;
+}
 [[nodiscard]] inline std::string called(const conversation& in, std::string_view who) {
-  const auto found = std::ranges::find(in.members, who, &member::id);
-  return found != in.members.end() ? called(*found) : local_part(who);
+  const member_names& names = names_of(in);
+  const auto found = names.called.find(std::string(who));
+  return found != names.called.end() ? found->second : local_part(who);
 }
 // What a sender is called in a chat -- with their whole ID after it where
 // someone else there is called the same, in any case: a display name, or a
 // local part on another server, is anyone's to take, and "Alice" written by
 // someone else looked like Alice's (as Element tells them apart).
 [[nodiscard]] inline std::string sender_name(const conversation& in, std::string_view sender) {
-  const std::string name = called(in, sender);
-  constexpr auto folded = mux::logic::folded;
-  const std::string mine = folded(name);
-  const bool shared = std::ranges::any_of(in.members, [&](const member& one) {
-    return one.id != sender && folded(called(one)) == mine;
-  });
-  return shared ? std::format("{} ({})", name, sender) : name;
+  const member_names& names = names_of(in);
+  const auto found = names.called.find(std::string(sender));
+  const bool member = found != names.called.end();
+  const std::string name = member ? found->second : local_part(sender);
+  // How many others go by the same name: all of them, less the sender where
+  // the sender is one of them.
+  const auto same = names.folded_count.find(mux::logic::folded(name));
+  const std::size_t others = same == names.folded_count.end() ? 0 : same->second - (member ? 1 : 0);
+  return others > 0 ? std::format("{} ({})", name, sender) : name;
 }
 
 // A time of day, as the clock on the wall says it.

@@ -514,20 +514,48 @@ class descriptor {
   asio::posix::stream_descriptor stream_;
 };
 
+// How long a host's name is looked up for, and its addresses tried, before
+// it is given up on: each waited for as long as the system let it -- a
+// connect whose first packet is dropped, two minutes and more -- and an
+// account stood offline with nothing said.
+inline constexpr std::chrono::seconds kResolveFor{15};
+inline constexpr std::chrono::seconds kConnectFor{15};
+
 // A host's addresses, each tried in turn: the connected socket.
 inline tcp::socket connect(loop& owner, std::string_view host, std::uint16_t port) {
   tcp::resolver resolver(owner.io());
+  bool resolve_expired = false;
+  asio::steady_timer resolving(owner.io(), kResolveFor);
+  resolving.async_wait([&](error_code ended) {
+    if (!ended) {
+      resolve_expired = true;
+      resolver.cancel();
+    }
+  });
   const auto [resolved, found] = owner.await<tcp::resolver::results_type>([&](auto done) {
     resolver.async_resolve(std::string(host), std::to_string(port), std::move(done));
   });
+  resolving.cancel();
   if (resolved)
-    throw failure("resolving " + std::string(host), resolved);
+    throw failure("resolving " + std::string(host) + (resolve_expired ? " (timed out)" : ""),
+                  resolve_expired ? error_code(asio::error::timed_out) : resolved);
   tcp::socket socket(owner.io());
+  bool connect_expired = false;
+  asio::steady_timer connecting(owner.io(), kConnectFor);
+  connecting.async_wait([&](error_code ended) {
+    if (!ended) {
+      connect_expired = true;
+      error_code ignored;
+      socket.cancel(ignored);
+    }
+  });
   const auto [connected, to] = owner.await<tcp::endpoint>([&](auto done) {
     asio::async_connect(socket, found, std::move(done));
   });
+  connecting.cancel();
   if (connected)
-    throw failure("connecting to " + std::string(host), connected);
+    throw failure("connecting to " + std::string(host) + (connect_expired ? " (timed out)" : ""),
+                  connect_expired ? error_code(asio::error::timed_out) : connected);
   return socket;
 }
 

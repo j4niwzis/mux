@@ -410,7 +410,18 @@ void account<Sink>::request_secrets(const std::string& device) {
     (void)perform(*api_, loom::cs::send_to_device{.event_type = "m.secret.request", .txn_id = this->transaction(),
                                                   .body = {.messages = std::move(messages)}});
   }
-  log(id_, "asked {} for the cross-signing keys and the backup key", device);
+  // And the key read mentions are sealed under, mux's own (not one of
+  // loom's names): asked the same way, kept apart.
+  {
+    const std::string request = this->transaction();
+    mentions_key_asked_.insert(request);
+    std::map<std::string, std::map<std::string, knot::raw>> messages;
+    messages[id_.address][device] = knot::raw{knot::to_json_string(crypto::secret_request_part{
+        .name = "net.mux.mentions_key", .requesting_device_id = crypto_->device_id(), .request_id = request})};
+    (void)perform(*api_, loom::cs::send_to_device{.event_type = "m.secret.request", .txn_id = this->transaction(),
+                                                  .body = {.messages = std::move(messages)}});
+  }
+  log(id_, "asked {} for the cross-signing keys, the backup key and the mentions key", device);
 }
 
 // A secret given: taken only as the answer to one asked here, from this
@@ -422,6 +433,17 @@ template <class Sink>
 void account<Sink>::secret_in(const crypto::secret_got& got) {
   if (!api_ || !crypto_)
     return;
+  // The mentions key: kept, where it is one, from a session verified here.
+  if (mentions_key_asked_.contains(got.request_id)) {
+    if (got.sender != id_.address || !std::ranges::contains(crypto_->verified_keys(id_.address), got.ed25519))
+      return;
+    mentions_key_asked_.erase(got.request_id);
+    if (auto bytes = crypto::from_base64(got.secret); bytes && bytes->size() == 32) {
+      this->keep_mentions_key(std::move(*bytes));
+      log(id_, "the mentions key given by another session of yours");
+    }
+    return;
+  }
   const auto asked = secrets_asked_.find(got.request_id);
   if (asked == secrets_asked_.end() || got.sender != id_.address)
     return;
@@ -473,16 +495,19 @@ void account<Sink>::secret_request_in(const std::string& sender, const loom::ev:
                                     content.action);
   if (!asking)
     return;
+  // The secret asked for, as this device has it: one of loom's names, or
+  // mux's own mentions key -- told apart where the name comes in.
   const auto keys = crypto_->cross_signing_keys();
   const auto which = crypto::secret_name_of(*content.name);
-  if (!keys || !which)
-    return;
-  const std::optional<std::string> secret =
-      spl::visit(spl::overloaded{[&](crypto::secret_name::master) { return std::optional<std::string>(keys->master); },
-                                       [&](crypto::secret_name::self_signing) { return std::optional<std::string>(keys->self_signing); },
-                                       [&](crypto::secret_name::user_signing) { return std::optional<std::string>(keys->user_signing); },
-                                       [](crypto::secret_name::backup) { return std::optional<std::string>(); }},
-                    *which);
+  std::optional<std::string> secret;
+  if (which && keys)
+    secret = spl::visit(spl::overloaded{[&](crypto::secret_name::master) { return std::optional<std::string>(keys->master); },
+                                        [&](crypto::secret_name::self_signing) { return std::optional<std::string>(keys->self_signing); },
+                                        [&](crypto::secret_name::user_signing) { return std::optional<std::string>(keys->user_signing); },
+                                        [](crypto::secret_name::backup) { return std::optional<std::string>(); }},
+                        *which);
+  else if (!which && *content.name == "net.mux.mentions_key" && this->mentions_key())
+    secret = spl::bytes::base64_text(*this->mentions_key());
   if (!secret)
     return;
   auto got = this->keys_of(id_.address);
@@ -700,7 +725,9 @@ void account<Sink>::mentions_from(const conversation_id& in, std::string_view co
     if (!key)
       return;
     const auto opened = crypto::detail::open_secret(*key, mentions_sealed_for(in.id), *read->sealed);
-    auto list = opened ? knot::try_read<std::vector<std::string>>(std::string_view(*opened)) : std::nullopt;
+    if (!opened)
+      return;
+    auto list = knot::try_read<std::vector<std::string>>(std::string_view(*opened));
     if (!list)
       return;
     seen = std::move(*list);

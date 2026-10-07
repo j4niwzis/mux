@@ -447,6 +447,8 @@ class account {
   std::optional<std::vector<std::uint8_t>> mentions_key_;
   bool mentions_key_read_ = false;
   bool mentions_key_missing_told_ = false;
+  // The mentions key asked of another session of this account, by request.
+  std::set<std::string, std::less<>> mentions_key_asked_;
   [[nodiscard]] std::filesystem::path mentions_key_file() const;
   [[nodiscard]] const std::optional<std::vector<std::uint8_t>>& mentions_key();
   void keep_mentions_key(std::vector<std::uint8_t> key);

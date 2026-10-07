@@ -288,6 +288,8 @@ struct account_sessions : nodes::Stack {
 template <class Actions>
 struct encryption_page : nodes::Stack {
   using only_verified_row = switch_row<ask<Actions, &Actions::flip_only_verified>>;
+  using mentions_shared_row = switch_row<asks<Actions, request::flip_mentions_shared>>;
+  using mentions_sealed_row = switch_row<asks<Actions, request::flip_mentions_sealed>>;
   using export_row = row_item<asks<Actions, request::export_room_keys>>;
   using import_row = row_item<asks<Actions, request::import_room_keys>>;
   using cross_signing_row = row_item<asks<Actions, request::setup_cross_signing>>;
@@ -295,6 +297,9 @@ struct encryption_page : nodes::Stack {
   struct parts_t {
     nodes::Text title;
     only_verified_row only_verified;
+    // Read mentions shared with the account's other sessions; sealed so.
+    mentions_shared_row mentions_shared;
+    mentions_sealed_row mentions_sealed;
     nodes::Text session_line;
     export_row export_keys;
     import_row import_keys;
@@ -305,6 +310,8 @@ struct encryption_page : nodes::Stack {
   encryption_page(Actions* a, const palette& colours, const ui_shared& shared, const config::account_t& one, const model& now)
       : parts{.title = section_title(colours, "ENCRYPTION"),
               .only_verified = only_verified_row(colours, "Never send encrypted messages to unverified sessions", {a}),
+              .mentions_shared = mentions_shared_row(colours, "Sync read mentions between sessions", {a}),
+              .mentions_sealed = mentions_sealed_row(colours, "Encrypt them (with the recovery key)", {a}),
               .session_line = nodes::Text("", 13.0f, colours.dim),
               .export_keys = export_row(colours, "Export room keys\u2026", {a}),
               .import_keys = import_row(colours, "Import room keys\u2026", {a}),
@@ -313,10 +320,24 @@ struct encryption_page : nodes::Stack {
     this->setGap(8.0f);
     fState.apply({.fill = true});
     parts.only_verified.parts.toggle.setOnNow(config::only_verified_of(one));
+    const mentions_sharing mentions = spl::visit(
+        spl::overloaded{[](const kept& own) { return mentions_sharing_of(own); }, [](const auto&) { return mentions_sharing{}; }}, one.own);
+    parts.mentions_shared.parts.toggle.setOnNow(mentions.shared);
+    parts.mentions_sealed.parts.toggle.setOnNow(mentions.sealed);
+    this->show_mentions_sealable(mentions.shared);
     const std::string& address = config::address_of(one);
     this->show_session(protocol_state_of(shared, account_id{protocol_of(address), address}));
   }
   void show_only_verified(bool on) { parts.only_verified.parts.toggle.setOn(on); }
+  void show_mentions(mentions_sharing now) {
+    parts.mentions_shared.parts.toggle.setOn(now.shared);
+    parts.mentions_sealed.parts.toggle.setOn(now.sealed);
+    this->show_mentions_sealable(now.shared);
+  }
+  // Sealing only says something while they are shared.
+  void show_mentions_sealable(bool shared) {
+    parts.mentions_sealed.apply({.alpha = shared ? 1.0f : 0.4f, .disabled = !shared});
+  }
   // This session, as its account's protocol state says it, once known.
   void show_session(const protocol_state_t& known) {
     const auto own = spl::visit(

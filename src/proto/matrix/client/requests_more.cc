@@ -624,6 +624,29 @@ std::size_t account<Sink>::restore_backup(const std::string& secret) {
   return taken;
 }
 
+// The key read mentions are sealed under, in Secret Storage under its storage
+// key: taken where it is there, put there (this device's, or a new one) where not.
+template <class Sink>
+template <class Key>
+void account<Sink>::mentions_key_in_storage(const Key& storage, const std::string& storage_id) {
+  const std::string name("net.mux.mentions_key");
+  const auto got = perform(*api_, loom::cs::get_account_data{.user_id = id_.address, .type = name});
+  if (const auto stored = read_answer<crypto::stored_secret>(got)) {
+    if (const auto sealed = stored->encrypted.find(storage_id); sealed != stored->encrypted.end())
+      if (const auto opened = crypto::detail::open_secret(storage, name, sealed->second))
+        if (auto bytes = crypto::from_base64(*opened); bytes && bytes->size() == 32) {
+          this->keep_mentions_key(std::move(*bytes));
+          return;
+        }
+  }
+  // None there yet: this device's own, or a new one, put there.
+  std::vector<std::uint8_t> key = this->mentions_key() ? *this->mentions_key() : crypto::random_bytes(32);
+  const crypto::stored_secret sealed{
+      .encrypted = {{storage_id, crypto::detail::seal_secret(storage, name, spl::bytes::base64_text(key))}}};
+  if (perform(*api_, loom::cs::set_account_data{.user_id = id_.address, .type = name,
+                                                 .body = knot::raw{knot::to_json_string(sealed)}}))
+    this->keep_mentions_key(std::move(key));
+}
 template <class Sink>
 std::optional<std::string> account<Sink>::store_secrets(const crypto::cross_signing_secrets& secrets,
                                                         const std::optional<std::string>& backup_secret) {
@@ -642,6 +665,8 @@ std::optional<std::string> account<Sink>::store_secrets(const crypto::cross_sign
                    put("m.cross_signing.user_signing", sealed("m.cross_signing.user_signing", secrets.user_signing)) &&
                    (!backup_secret || put("m.megolm_backup.v1", sealed("m.megolm_backup.v1", *backup_secret))) &&
                    put("m.secret_storage.default_key", crypto::default_storage_key{made.id});
+  if (all)
+    this->mentions_key_in_storage(made.key, made.id);
   return all ? std::optional<std::string>(made.recovery) : std::nullopt;
 }
 
@@ -677,6 +702,8 @@ void account<Sink>::restore_cross_signing(std::string recovery) {
     if (!master || !self || !users)
       return refused("the keys kept there could not be opened.");
     const crypto::cross_signing_secrets secrets{.master = *master, .self_signing = *self, .user_signing = *users};
+    // The key read mentions are sealed under, as Secret Storage keeps it.
+    this->mentions_key_in_storage(*key, id->key);
     // Taken only where they are the keys the server lists for this user.
     auto got = this->keys_of(id_.address);
     const auto listed = got ? crypto::master_of(*got, id_.address) : std::nullopt;

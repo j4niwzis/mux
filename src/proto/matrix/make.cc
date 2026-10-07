@@ -34,6 +34,8 @@ make_account(const kept& saved, ::mux::net::loop& loop,
                                                   return std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' || c == '_' ? c : '_';
                                                 }))) + ".json"),
                               .only_verified = saved.only_verified.value_or(false),
+                              .mentions_shared = saved.mentions_shared.value_or(false),
+                              .mentions_sealed = saved.mentions_sealed.value_or(false),
                               .vault = &vault,
                               .create = saved.create.value_or(false) && !saved.access_token,
                               .registration_token = saved.registration_token,

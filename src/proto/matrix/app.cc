@@ -45,6 +45,13 @@ void restore_cross_signing(Net& net, const account_id& by, std::string recovery)
 }
 
 template <class Net>
+void set_mentions_sharing(Net& net, const account_id& by, bool shared, bool sealed) {
+  net.on_account(by, [shared, sealed](auto& account) -> decltype(void(account.set_mentions_sharing(shared, sealed))) {
+    account.set_mentions_sharing(shared, sealed);
+  });
+}
+
+template <class Net>
 void reset_backup(Net& net, const account_id& by) {
   net.on_account(by, [](auto& account) -> decltype(void(account.reset_backup())) { account.reset_backup(); });
 }
@@ -240,6 +247,31 @@ void program_asked(App& app, const delete_backup&) {
     if (!app.shared.demo())
       ops::delete_backup(*app.net, App::id_of(account));
   });
+}
+// Its read mentions shared with its other sessions, or sealed there: one
+// of the two switched, kept with the account, shown on its page and told
+// to it running.
+template <class App, class Flip>
+void flip_mentions(App& app, Flip flip) {
+  app.shared.with_chosen_account([&](auto& panel, config::account_t& account) {
+    spl::visit(spl::overloaded{[&](kept& own) {
+                                 flip(own);
+                                 const mentions_sharing now = mentions_sharing_of(own);
+                                 panel.tell_shown([&](auto& page) -> decltype(void(page.show_mentions(now))) { page.show_mentions(now); });
+                                 ops::set_mentions_sharing(*app.net, App::id_of(account), now.shared, now.sealed);
+                               },
+                               [](auto&) {}},
+               account.own);
+  });
+  (void)app.write();
+}
+template <class App>
+void program_asked(App& app, const flip_mentions_shared&) {
+  flip_mentions(app, [](kept& own) { own.mentions_shared = !own.mentions_shared.value_or(false); });
+}
+template <class App>
+void program_asked(App& app, const flip_mentions_sealed&) {
+  flip_mentions(app, [](kept& own) { own.mentions_sealed = !own.mentions_sealed.value_or(false); });
 }
 // The sessions: one verified by emoji, some signed out, one renamed, listed.
 template <class App>

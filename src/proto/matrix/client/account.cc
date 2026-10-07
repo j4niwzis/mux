@@ -156,6 +156,11 @@ class account {
   // emoji here.
   void tell_devices(std::string user);
   void set_only_verified(bool on);
+  // Read mentions shared with this account's other sessions -- room account
+  // data, net.mux.mentions_read -- sealed or in the clear, as set.
+  void set_mentions_sharing(bool shared, bool sealed);
+  // A room's mentions seen here: shared where some are news to the server.
+  void share_marks_seen(std::string room, std::vector<std::string> seen);
   // A person's reset identity accepted: Element's "Withdraw verification".
   void accept_identity(std::string user);
   // Element's Secure Backup: the key backup made anew (the old one deleted,
@@ -433,6 +438,24 @@ class account {
   std::set<std::string, std::less<>> identity_changed_;
   [[nodiscard]] std::filesystem::path encrypted_rooms_file() const;
   void load_encrypted();
+  // The mentions read, as the server last said of each room: nothing is
+  // sent that it has already, so two sessions never answer each other.
+  std::map<std::string, std::set<std::string>, std::less<>> mentions_remote_;
+  // The key read mentions are sealed under: kept on this device, sealed, and
+  // in Secret Storage, from which a session restored with the recovery key
+  // takes it.
+  std::optional<std::vector<std::uint8_t>> mentions_key_;
+  bool mentions_key_read_ = false;
+  bool mentions_key_missing_told_ = false;
+  [[nodiscard]] std::filesystem::path mentions_key_file() const;
+  [[nodiscard]] const std::optional<std::vector<std::uint8_t>>& mentions_key();
+  void keep_mentions_key(std::vector<std::uint8_t> key);
+  // A room's net.mux.mentions_read, as it came: its mentions seen.
+  void mentions_from(const conversation_id& in, std::string_view content);
+  // The key in Secret Storage, under the storage key there: taken where it
+  // is, put there where it is not.
+  template <class Key>
+  void mentions_key_in_storage(const Key& storage, const std::string& storage_id);
   // What was to go in the clear into an encrypted room (#12169, review 4,
   // H2): thrown where it would leave, before any of it does -- the text, the
   // file's bytes -- and caught where its fiber began: the message marked not

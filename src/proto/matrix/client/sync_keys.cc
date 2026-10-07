@@ -22,6 +22,7 @@ import loom.cs.redaction;
 import loom.cs.room_send;
 import loom.cs.rooms;
 import loom.cs.sync;
+import loom.cs.account_data;
 import loom.cs.typing;
 import loom.cs.wellknown;
 import mux.config;
@@ -639,4 +640,111 @@ void account<Sink>::accept_identity(std::string user) {
   identity_changed_.erase(user);
   this->tell_trust(std::move(user));
 }
+
+// Read mentions shared between this account's sessions: a room's account
+// data, net.mux.mentions_read -- {"seen": [event IDs]} in the clear, or
+// {"sealed": {iv, ciphertext, mac}} sealed as Secret Storage seals a secret,
+// under a key of its own named for the room.
+struct mentions_read {
+  std::optional<std::vector<std::string>> seen;
+  std::optional<crypto::sealed_secret> sealed;
+  friend consteval auto json_schema(knot::type<mentions_read>) { return knot::schema<mentions_read>(); }
+};
+inline constexpr std::string_view kMentionsRead = "net.mux.mentions_read";
+inline constexpr std::string_view kMentionsKeySecret = "net.mux.mentions_key";
+// The most a room's list keeps: what each session keeps, a few times over.
+inline constexpr std::size_t kMentionsShared = 2000;
+[[nodiscard]] inline std::string mentions_sealed_for(std::string_view room) {
+  return std::string(kMentionsRead) + ":" + std::string(room);
+}
+
+template <class Sink>
+void account<Sink>::set_mentions_sharing(bool shared, bool sealed) {
+  how_.mentions_shared = shared;
+  how_.mentions_sealed = sealed;
+  mentions_key_missing_told_ = false;
+}
+template <class Sink>
+std::filesystem::path account<Sink>::mentions_key_file() const {
+  return std::filesystem::path(this->kept_file()).concat(".mentions-key");
+}
+template <class Sink>
+const std::optional<std::vector<std::uint8_t>>& account<Sink>::mentions_key() {
+  if (!mentions_key_read_) {
+    mentions_key_read_ = true;
+    if (const auto opened = how_.vault->read_file(this->mentions_key_file()))
+      if (auto bytes = crypto::from_base64(*opened); bytes && bytes->size() == 32)
+        mentions_key_ = std::move(*bytes);
+  }
+  return mentions_key_;
+}
+template <class Sink>
+void account<Sink>::keep_mentions_key(std::vector<std::uint8_t> key) {
+  if (!how_.vault->write_file(this->mentions_key_file(), spl::bytes::base64_text(key), true))
+    log(id_, "the key read mentions are sealed under could not be kept in {}", this->mentions_key_file().string());
+  mentions_key_ = std::move(key);
+  mentions_key_read_ = true;
+}
+template <class Sink>
+void account<Sink>::mentions_from(const conversation_id& in, std::string_view content) {
+  if (!how_.mentions_shared)
+    return;
+  const auto read = knot::try_read<mentions_read>(content);
+  if (!read)
+    return;
+  std::vector<std::string> seen;
+  if (read->seen) {
+    seen = *read->seen;
+  } else if (read->sealed) {
+    const auto& key = this->mentions_key();
+    if (!key)
+      return;
+    const auto opened = crypto::detail::open_secret(*key, mentions_sealed_for(in.id), *read->sealed);
+    auto list = opened ? knot::try_read<std::vector<std::string>>(std::string_view(*opened)) : std::nullopt;
+    if (!list)
+      return;
+    seen = std::move(*list);
+  }
+  mentions_remote_[in.id].insert(seen.begin(), seen.end());
+  if (!seen.empty())
+    sink_(change::marks_seen{in, std::move(seen)});
+}
+template <class Sink>
+void account<Sink>::share_marks_seen(std::string room, std::vector<std::string> seen) {
+  if (!how_.mentions_shared || !api_)
+    return;
+  auto& remote = mentions_remote_[room];
+  const auto news = [&](const std::string& one) { return !remote.contains(one); };
+  if (std::ranges::none_of(seen, news))
+    return;
+  // What the server has, then what is news to it: the oldest let go past
+  // the most a list keeps.
+  std::vector<std::string> all(remote.begin(), remote.end());
+  std::ranges::copy_if(seen, std::back_inserter(all), news);
+  if (all.size() > kMentionsShared)
+    all.erase(all.begin(), all.end() - static_cast<std::ptrdiff_t>(kMentionsShared));
+  mentions_read body;
+  if (how_.mentions_sealed) {
+    const auto& key = this->mentions_key();
+    if (!key) {
+      if (!std::exchange(mentions_key_missing_told_, true))
+        sink_(change::notice{id_, "Read mentions not synced",
+                             "They are to be sealed, and this session has no key for them yet. Restore with the recovery "
+                             "key (Accounts, Encryption) once, and they go from then on -- or turn sealing off."});
+      return;
+    }
+    body.sealed = crypto::detail::seal_secret(*key, mentions_sealed_for(room), knot::to_json_string(all));
+  } else {
+    body.seen = all;
+  }
+  remote.insert(seen.begin(), seen.end());
+  this->spawn_guarded([this, room = std::move(room), text = knot::to_json_string(body)] {
+    if (!api_)
+      return;
+    if (!perform(*api_, loom::cs::set_account_data_per_room{.user_id = id_.address, .room_id = room,
+                                                              .type = std::string(kMentionsRead), .body = knot::raw{text}}))
+      log(id_, "the mentions read in {} could not be shared", room);
+  });
+}
+
 }  // namespace mux::proto::matrix::client

@@ -805,6 +805,14 @@ void account<Sink>::tell(const loom::cs::sync::response& got) {
       std::ranges::copy_if(found->second.typing, std::back_inserter(typing),
                            [&](const std::string& who) { return who != id_.address; });
       sink_(change::typing_changed{in, std::move(typing)});
+      // The mentions read in another session of this account (theirs, in
+      // the room's account data): seen here too.
+      if (part.account_data && part.account_data->events)
+        for (const auto& one : *part.account_data->events)
+          if (one.type == "net.mux.mentions_read")
+            spl::visit(spl::overloaded{[&](const knot::raw& content) { this->mentions_from(in, content.text); },
+                                       [](const auto&) {}},
+                       one.content.data());
       // Receipts: m.receipt's content is event -> kind -> user; the public
       // and the private m.read both say how far someone has read.
       if (part.ephemeral && part.ephemeral->events) {

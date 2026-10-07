@@ -102,6 +102,9 @@ struct settings {
   // by emoji here: Element's "Never send encrypted messages to unverified
   // sessions".
   bool only_verified = false;
+  // Read mentions shared with the account's other sessions, and sealed.
+  bool mentions_shared = false;
+  bool mentions_sealed = false;
   // What is kept on disk is read and written through: the program's.
   mux::vault::vault* vault = nullptr;
   // A new account, registered before anything else (POST /register, its

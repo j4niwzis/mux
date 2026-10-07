@@ -79,6 +79,14 @@ class marks_part {
     for (const auto& [id, chat] : saved_)
       if (!now.contains(id) && !not_here_.contains(id))
         this->hold(id, chat);
+    // Each chat's mentions seen, to its account: shared with its other
+    // sessions where it shares them (Matrix's, as set), where they changed.
+    for (const auto& [id, chat] : now)
+      if (chat.seen && chat.seen != shared_[id]) {
+        shared_[id] = chat.seen;
+        s_->net->on_account_of(id, [room = id.id, seen = *chat.seen](auto& account)
+                                       -> decltype(void(account.share_marks_seen(room, seen))) { account.share_marks_seen(room, seen); });
+      }
     saved_ = now;
     std::ranges::copy(std::views::values(now), std::back_inserter(out.chats));
     std::ranges::copy(std::views::values(not_here_), std::back_inserter(out.chats));
@@ -283,6 +291,8 @@ class marks_part {
   // What the last save wrote of the chats the model had: carried where one
   // has gone since.
   std::map<mux::conversation_id, mux::config::chat_marks> saved_;
+  // Each chat's mentions seen, as last given to its account to share.
+  std::map<mux::conversation_id, std::optional<std::vector<std::string>>> shared_;
 };
 
 }  // namespace mux::app

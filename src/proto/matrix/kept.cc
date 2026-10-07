@@ -16,6 +16,11 @@ struct kept {
   std::optional<std::string> homeserver;
   std::string device_name = "mux";
   std::optional<bool> only_verified;  // room keys to verified sessions alone
+  // Which mentions are read, shared with the account's other sessions in
+  // room account data (net.mux.mentions_read); and sealed there, under a key
+  // kept in Secret Storage, or in the clear.
+  std::optional<bool> mentions_shared;
+  std::optional<bool> mentions_sealed;
   std::optional<std::string> access_token;
   std::optional<std::string> device_id;
   // A new account, to be registered on its homeserver before it is logged
@@ -69,6 +74,14 @@ inline kept kept_from(const state&, std::string address, std::string password) {
 // Whether its room keys go to verified sessions alone: Matrix's alone.
 [[nodiscard]] inline std::optional<bool>* only_verified_in(kept& one) { return &one.only_verified; }
 [[nodiscard]] inline const std::optional<bool>* only_verified_in(const kept& one) { return &one.only_verified; }
+// Whether its read mentions are shared with its other sessions, and sealed.
+struct mentions_sharing {
+  bool shared = false;
+  bool sealed = false;
+};
+[[nodiscard]] inline mentions_sharing mentions_sharing_of(const kept& one) {
+  return {one.mentions_shared.value_or(false), one.mentions_sealed.value_or(false)};
+}
 
 inline std::optional<std::string> check(const kept& one) {
   const std::string_view user = one.user_id;

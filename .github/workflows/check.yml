@@ -12,6 +12,11 @@ concurrency:
   group: check-${{ github.sha }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  # To drop the caches a run's own supersede (tools/prune_caches.sh).
+  actions: write
+
 env:
   CPM_SOURCE_CACHE: ${{ github.workspace }}/.cache/cpm
   # clang 23 is the only one installed: its crashes print named frames.
@@ -174,3 +179,8 @@ jobs:
             build
             .cache/cpm
           key: build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ github.sha }}
+      - name: drop the builds this one supersedes
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: sh tools/prune_caches.sh "build-${{ runner.os }}-clang${{ matrix.llvm }}-" "build-${{ runner.os }}-clang${{ matrix.llvm }}-${{ github.sha }}"

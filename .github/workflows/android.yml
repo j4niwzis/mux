@@ -16,6 +16,8 @@ on:
 
 permissions:
   contents: read
+  # To drop the caches a run's own supersede (tools/prune_caches.sh).
+  actions: write
 
 env:
   CPM_SOURCE_CACHE: ${{ github.workspace }}/.cache/cpm
@@ -101,12 +103,21 @@ jobs:
           for library in libc++.a libc++abi.a libunwind.a; do
             test -f "$HOME/.cache/mux-android-$ABI/sysroot/usr/lib/${{ steps.abi.outputs.sysroot-triple }}/$api/$library"
           done
+          # One time for all of it: a toolchain built again the same -- its
+          # cache evicted -- must not make every object of the build
+          # restored out of date, as its headers' new times did.
+          find "$HOME/.cache/mux-android-$ABI" -exec touch -h -d "@1000000000" {} +
       - name: Cache the completed toolchain
         if: steps.toolchain.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: ~/.cache/mux-android-${{ env.ABI }}
           key: mux-android-${{ env.ABI }}-clang23-v2-${{ hashFiles('android/toolchain-sources.json', 'android/abis.json', 'ndk-tool/src/**', 'ndk-tool/CMakeLists.txt') }}
+      - name: Drop the toolchains this one replaces
+        if: steps.toolchain.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: sh tools/prune_caches.sh "mux-android-$ABI-" "${{ steps.toolchain.outputs.cache-primary-key }}"
       - name: Rust Android target
         if: env.FULL == 'client'
         run: rustup target add ${{ steps.abi.outputs.rust }}
@@ -200,3 +211,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
           key: ${{ steps.build-cache.outputs.cache-primary-key }}
+      - name: Drop the builds this one supersedes
+        if: always() && steps.build-cache.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: sh tools/prune_caches.sh "build-${{ runner.os }}-android-$ABI-$FULL-" "${{ steps.build-cache.outputs.cache-primary-key }}"

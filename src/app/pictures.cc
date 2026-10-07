@@ -224,16 +224,22 @@ class pictures_part {
                                 std::back_inserter(in_thread));
           }
           senders.insert_range(std::views::transform(in_thread, [](const message* said) -> std::string_view { return said->sender; }));
-          for (const member& each : one.members)
-            if (senders.contains(each.id))
-              want(id, each.avatar, each.id);
+          // Each sender looked up, not every member walked for them.
+          const auto& placed = mux::ui::names_of(one).at;
+          const auto member_called = [&](std::string_view who) -> const member* {
+            const auto found = placed.find(std::string(who));
+            return found != placed.end() && found->second < one.members.size() ? &one.members[found->second] : nullptr;
+          };
+          for (const std::string_view sender : senders)
+            if (const member* each = member_called(sender))
+              want(id, each->avatar, each->id);
           // Those the forwards made are from: a member's picture as theirs,
           // anyone else's profile asked of their server, once, and its
           // picture then.
           for (std::size_t i = first; i < last && i < one.timeline.size(); ++i)
             if (const auto& forwarded = one.timeline[i].forwarded; forwarded && mux::proto::person_link(mux::state_before(mux::proto::protocol_of(forwarded->from)), forwarded->from)) {
               const std::string& from = forwarded->from;
-              if (const auto in_room = std::ranges::find(one.members, from, &member::id); in_room != one.members.end() && in_room->avatar)
+              if (const member* in_room = member_called(from); in_room && in_room->avatar)
                 want(id, in_room->avatar, from);
               else if (const auto known = profile_avatars.find(from); known != profile_avatars.end())
                 want(id, known->second, from);

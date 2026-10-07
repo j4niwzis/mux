@@ -363,6 +363,15 @@ void conversations_screen<Actions>::update(double now_ms) {
   // The older asked long ago and not come: asked again.
   if (this->history_pending() && now_ms - history_asked_ms > kHistoryPatienceMs)
     history_asked.reset();
+  // The info's members near their end, with more: the next few made; or a
+  // member opened past those made, theirs worked out.
+  if (last_model && chosen && info.visible() && (info.wants_show || info.wants_more()))
+    if (const conversation* one = last_model->find(*chosen)) {
+      if (!info.wants_show)
+        info.members_made += info.kMembersStep;
+      info.wants_show = false;
+      info.show(*one, *last_model, muted.contains(one->id));
+    }
   // Near the last chat made, with more listed: the next few made.
   if (last_model && chats_made < chats_listed && list.visible() &&
       list.atEnd(std::max(300.0f, list.bounds().height() * 1.5f))) {
@@ -1008,7 +1017,10 @@ void conversations_screen<Actions>::show_conversation(const model& now) {
     needs_.looks->bubbles = bubbles;
     entries.clear();
   }
-  info.show(*one, now, muted.contains(one->id));
+  // Only while it is open: its members were made at every switch of chat,
+  // the panel shut or not. Opened, it is shown then (toggle_info).
+  if (info.visible())
+    info.show(*one, now, muted.contains(one->id));
   chat.area.show_wallpaper(wallpaper);
   if (parts.threads.visible())
     parts.threads.show(*one, &now);

@@ -72,6 +72,23 @@ struct info_panel : nodes::Stack {
   std::optional<conversation_id> members_of;
   std::uint64_t members_revision = 0;
   std::uint64_t trust_seen = 0;
+  // Only the first of them made, and more as the list is scrolled near its
+  // end, as Qt's fetchMore: a big room has thousands, each with its role,
+  // badges and presence worked out, and all of them were made at every
+  // switch to it. How many there are, and how many were made.
+  static constexpr std::size_t kMembersStep = 60;
+  std::size_t members_made = kMembersStep;
+  std::size_t members_built = 0;
+  std::size_t members_total = 0;
+  // The member open on their page, where they are past those made.
+  std::optional<std::pair<member, std::string>> person_entry;
+  // To be shown again at the next frame: a member opened past those made.
+  bool wants_show = false;
+  // Near the end of the members made, with more there: the next few wanted.
+  [[nodiscard]] bool wants_more() {
+    return members.visible() && members_built < members_total &&
+           parts.scroll.atEnd(std::max(300.0f, parts.scroll.bounds().height() * 1.5f));
+  }
 
   // What a press does, to the panel -- which stays where it is while its
   // pages are made again.
@@ -277,6 +294,22 @@ struct info_panel : nodes::Stack {
     members.apply({.fillX = true, .autoSize = scene::axes::kY});
   }
 
+  // A member as the list shows them: their role, as the chat's protocol
+  // says it (Matrix: its power levels, as Element marks its admins and
+  // moderators); and what their protocol says of them beside how they are
+  // (Matrix: in an encrypted room, their identity -- Element's shield).
+  [[nodiscard]] std::pair<member, std::string> entry_of(const conversation& one, const model& now, const member& each) const {
+    member shown = each;
+    if (!shown.role)
+      if (std::string role = proto::sender_role(protocol_state_of(*shared_, one.id.account), one, each.id); !role.empty())
+        shown.role = std::move(role);
+    std::string how = std::ranges::fold_left(
+        proto::person_badges(protocol_state_of(*shared_, one.id.account), &one, now, one.id.account, each.id),
+        presence_of(*shared_, now, one.id.account, each.id), [](std::string so_far, const proto::part::badge& badge) {
+          return so_far.empty() ? badge.text : std::format("{} \u00b7 {}", so_far, badge.text);
+        });
+    return {std::move(shown), std::move(how)};
+  }
   // The chat shown: its view worked out, its members reconciled.
   void show(const conversation& one, const model& now, bool muted) {
     if (one.id.id != key || one.id.account != account)
@@ -302,30 +335,27 @@ struct info_panel : nodes::Stack {
     std::ranges::copy(one.other_aliases, std::back_inserter(group_view.addresses));
     // Its members made again only where they changed -- or another chat's
     // are shown: a big room has thousands, and every refresh rebuilt them.
-    const bool same_members =
-        members_of == one.id && members_revision == one.members_revision && trust_seen == now.trust_revision();
+    if (members_of != one.id)
+      members_made = kMembersStep;
+    const std::size_t making = std::min(members_made, one.members.size());
+    const bool same_members = members_of == one.id && members_revision == one.members_revision &&
+                              trust_seen == now.trust_revision() && members_built == making;
     members_of = one.id;
     members_revision = one.members_revision;
     trust_seen = now.trust_revision();
+    members_total = one.members.size();
     if (!same_members) {
       shown_members.clear();
-      for (const member& each : one.members) {
-        // Their role, as the chat's protocol says it (Matrix: its power
-        // levels, as Element marks its admins and moderators).
-        member shown = each;
-        if (!shown.role)
-          if (std::string role = proto::sender_role(protocol_state_of(*shared_, one.id.account), one, each.id); !role.empty())
-            shown.role = std::move(role);
-        // What their protocol says of them beside how they are (Matrix: in an
-        // encrypted room, their identity -- Element's shield on each member).
-        const std::string how = std::ranges::fold_left(
-            proto::person_badges(protocol_state_of(*shared_, one.id.account), &one, now, one.id.account, each.id),
-            presence_of(*shared_, now, one.id.account, each.id), [](std::string so_far, const proto::part::badge& badge) {
-              return so_far.empty() ? badge.text : std::format("{} \u00b7 {}", so_far, badge.text);
-            });
-        shown_members.emplace_back(std::move(shown), std::move(how));
-      }
+      shown_members.reserve(making);
+      for (const member& each : std::views::take(one.members, making))
+        shown_members.push_back(this->entry_of(one, now, each));
+      members_built = making;
     }
+    // The member open, where they are past those made: theirs alone.
+    person_entry.reset();
+    if (person && !std::ranges::contains(shown_members, *person, [](const auto& each) { return each.first.id; }))
+      if (const auto found = std::ranges::find(one.members, *person, &member::id); found != one.members.end())
+        person_entry = this->entry_of(one, now, *found);
     auto& rows = std::get<0>(members.fChildren);
     if (!same_members && nodes::reconcile(
             rows, shown_members, [](const auto& each) { return each.first.id; },
@@ -341,6 +371,8 @@ struct info_panel : nodes::Stack {
   }
   void open_member(std::string id) {
     person = std::move(id);
+    // Past those made: theirs worked out at the next frame.
+    wants_show = !std::ranges::contains(shown_members, *person, [](const auto& each) { return each.first.id; });
     this->render();
   }
   void close_member() {
@@ -355,8 +387,10 @@ struct info_panel : nodes::Stack {
       // for someone the chat does not list -- the other side of a direct
       // chat, a sender from further back -- by their address.
       shown = {*person, *person, std::string("not a member of this chat"), group_view.group, group_view.muted, true};
-      if (const auto found = std::ranges::find(shown_members, *person, [](const auto& each) { return each.first.id; });
-          found != shown_members.end()) {
+      const auto made = std::ranges::find(shown_members, *person, [](const auto& each) { return each.first.id; });
+      const std::pair<member, std::string>* found =
+          made != shown_members.end() ? &*made : (person_entry && person_entry->first.id == *person ? &*person_entry : nullptr);
+      if (found) {
         const member& who = found->first;
         shown = {who.id,
                  who.name.empty() ? who.id : who.name,

@@ -946,6 +946,10 @@ struct conversations_screen : nodes::Stack {
   void toggle_info() {
     info_open = !info_open;
     this->show_info();
+    // Not kept up while shut: shown as it is now.
+    if (info.visible() && last_model && chosen)
+      if (const conversation* one = last_model->find(*chosen))
+        info.show(*one, *last_model, muted.contains(one->id));
   }
 
 

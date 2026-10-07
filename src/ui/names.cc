@@ -108,6 +108,9 @@ struct member_names {
   std::uint64_t revision = 0;
   std::unordered_map<std::string, std::string> called;
   std::unordered_map<std::string, std::size_t> folded_count;
+  // Where each member is in the chat's list, by their ID: one found
+  // without a walk of it -- a sender's picture, a forward's.
+  std::unordered_map<std::string, std::size_t> at;
 };
 [[nodiscard]] inline const member_names& names_of(const conversation& in) {
   // The UI's thread alone asks; one entry for each chat shown.
@@ -118,7 +121,9 @@ struct member_names {
     names.revision = in.members_revision;
     names.called.clear();
     names.folded_count.clear();
+    names.at.clear();
     for (const member& one : in.members) {
+      names.at.insert_or_assign(one.id, static_cast<std::size_t>(&one - in.members.data()));
       std::string name = called(one);
       ++names.folded_count[mux::logic::folded(name)];
       names.called.insert_or_assign(one.id, std::move(name));

@@ -247,9 +247,9 @@ struct peer_verification {
       // The chain as the server sent it, leaf first, each DER-encoded.
       const STACK_OF(X509)* sent = ::X509_STORE_CTX_get0_untrusted(store);
       std::vector<std::vector<unsigned char>> ders;
-      const int count = sent ? ::sk_X509_num(sent) : 0;
+      const int count = sent ? sk_X509_num(sent) : 0;
       for (int at = 0; at < count; ++at) {
-        ::X509* one = ::sk_X509_value(sent, at);
+        ::X509* one = sk_X509_value(sent, at);
         const int size = ::i2d_X509(one, nullptr);
         if (size <= 0)
           continue;

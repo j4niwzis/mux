@@ -125,6 +125,7 @@ using ::SDL_ShowSaveFileDialog;
 using ::SDL_ShowWindow;
 using ::SDL_StartTextInput;
 using ::SDL_StopTextInput;
+using ::SDL_TextInputActive;
 using ::SDL_Surface;
 using ::SDL_SystemCursor;
 using ::SDL_UpdateWindowSurface;

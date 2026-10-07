@@ -197,6 +197,8 @@ int run(App& app, const options& how, const events::kinds& kinds) {
     };
     std::optional<held_t> held;
     constexpr double kHoldMs = 500.0;
+    // How much taller the window grows as an on-screen keyboard goes away.
+    constexpr float kKeyboardGone = 80.0f;
     constexpr float kHoldSlop = 8.0f;
     float last_width = 0.0f, last_height = 0.0f;
     // Fingers on the screen, where they are in the scene's points: two of
@@ -448,6 +450,19 @@ int run(App& app, const options& how, const events::kinds& kinds) {
       sdl::SDL_GetWindowSizeInPixels(window, &pixel_width, &pixel_height);
       const float width = static_cast<float>(pixel_width) / scale;
       const float height = static_cast<float>(pixel_height) / scale;
+      // The on-screen keyboard put away by the user, the field still
+      // focused: the field let go of, and with it the text input. Told where
+      // SDL stopped the text input itself (Android's Back over the
+      // keyboard), or by the window grown back as tall as before with its
+      // width the same (postmarketOS: its keyboard tells the program
+      // nothing). Left focused, the field's place was told to the system
+      // again as the window grew, and that brought the keyboard straight back
+      // up (the user's, #18718).
+      if (typing && (!sdl::SDL_TextInputActive(window) ||
+                     (app.shared.by_touch && width == last_width && height > last_height + kKeyboardGone))) {
+        scene.clearFocus();
+        redraw = true;
+      }
       last_width = width;
       last_height = height;
       // What the scene left for the host: the text input started or stopped

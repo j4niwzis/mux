@@ -154,14 +154,24 @@ int run(App& app, const options& how, const events::kinds& kinds) {
     const std::array layers{skiff::scene::InputRouter::Layer{scene.handle(), false}};
     router.setLayers(layers);
     // Kept here for as long as the hook is set: the hook keeps a pointer.
-    // The system's clipboard, for pasting: read now, and again whenever it
-    // changes.
-    const auto read_clipboard = [] {
+    // The system's clipboard, for pasting: read only as something is pasted
+    // -- Ctrl+V, the text menu's Paste -- and only where it
+    // changed since. Read at the start, at every change and whenever the
+    // window came back, it was read without the user pasting anything, and
+    // a phone said so ("mux pasted from your clipboard") at every start
+    // (the user's, #18813).
+    bool clipboard_stale = true;
+    const auto fresh_clipboard = [&clipboard_stale] {
+      if (!std::exchange(clipboard_stale, false))
+        return;
       char* text = sdl::SDL_GetClipboardText();
       skiff::scene::clipboardContents() = text ? text : "";
       sdl::SDL_free(text);
     };
-    read_clipboard();
+    // Whether a key pastes: Ctrl+V, with Shift too.
+    const auto pastes = [](const skiff::scene::key::down& press) {
+      return press.key == skiff::scene::keys::kV && press.modifiers.template has<skiff::scene::modifier::control>();
+    };
     bool typing = false;  // the text input, as last started or stopped
 
     bool running = true;
@@ -258,10 +268,10 @@ int run(App& app, const options& how, const events::kinds& kinds) {
           give_motion();
         switch (event.type) {
           case sdl::SDL_EVENT_CLIPBOARD_UPDATE:
-            read_clipboard();
+            clipboard_stale = true;
             break;
           case sdl::SDL_EVENT_WINDOW_FOCUS_GAINED:
-            read_clipboard();
+            clipboard_stale = true;
             app.focus_changed(true);
             break;
           case sdl::SDL_EVENT_WINDOW_FOCUS_LOST:
@@ -394,9 +404,12 @@ int run(App& app, const options& how, const events::kinds& kinds) {
                 break;
               }
             }
-            if (event.type == sdl::SDL_EVENT_KEY_DOWN)
-              router.key(skiff::scene::key::down{key, held, event.key.repeat});
-            else
+            if (event.type == sdl::SDL_EVENT_KEY_DOWN) {
+              const skiff::scene::key::down press{key, held, event.key.repeat};
+              if (pastes(press))
+                fresh_clipboard();
+              router.key(press);
+            } else
               router.key(skiff::scene::key::up{key, held});
             break;
           }
@@ -513,6 +526,8 @@ int run(App& app, const options& how, const events::kinds& kinds) {
       // Keys the program's own controls stand for -- a text menu's Paste is
       // Ctrl+V -- given to what has the focus, down and up, before the frame.
       for (const skiff::scene::key::down& press : std::exchange(skiff::scene::hostWork().keys, {})) {
+        if (pastes(press))
+          fresh_clipboard();
         router.key(press);
         router.key(skiff::scene::key::up{press.key, press.modifiers});
       }

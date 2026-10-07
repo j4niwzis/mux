@@ -399,8 +399,12 @@ template <class Sink>
 bool account<Sink>::verification_in_room(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where) {
   // The step, its reference made its transaction -- for the room it came in
   // only. An old one -- in the first sync's history -- is not one to answer.
+  // Asked here, outside the step's lambda, as before: an inline member
+  // reached only from inside a generic lambda was not emitted where this is
+  // explicitly instantiated.
+  const bool answerable = this->live(where) && one.sender != id_.address && crypto_;
   const auto take = [&](auto content) {
-    if (!this->live(where) || one.sender == id_.address || !crypto_)
+    if (!answerable)
       return true;
     const auto reference = content.m_relates_to && content.m_relates_to->event_id ? content.m_relates_to->event_id
                                                                                    : outer_reference_;

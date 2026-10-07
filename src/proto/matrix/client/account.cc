@@ -39,6 +39,38 @@ export import :names;
 
 export namespace mux::proto::matrix::client {
 
+// What mux reads of a room's account data and of the secrets asked of it,
+// by their names: read once, where the name comes in, into a kind -- its
+// own, or any other, passed over.
+namespace room_data {
+struct mentions_read {};  // net.mux.mentions_read: the mentions read
+struct other {};
+}  // namespace room_data
+using room_data_t = spl::variant<room_data::mentions_read, room_data::other>;
+[[nodiscard]] inline room_data_t room_data_of(std::string_view type) {
+  struct named {
+    std::string_view name;
+    room_data_t kind;
+  };
+  static const std::array<named, 1> kKinds{{{"net.mux.mentions_read", room_data::mentions_read{}}}};
+  const auto found = std::ranges::find(kKinds, type, &named::name);
+  return found != kKinds.end() ? found->kind : room_data_t{room_data::other{}};
+}
+namespace own_secret {
+struct mentions_key {};  // net.mux.mentions_key: what read mentions are sealed under
+struct other {};
+}  // namespace own_secret
+using own_secret_t = spl::variant<own_secret::mentions_key, own_secret::other>;
+[[nodiscard]] inline own_secret_t own_secret_of(std::string_view name) {
+  struct named {
+    std::string_view name;
+    own_secret_t kind;
+  };
+  static const std::array<named, 1> kKinds{{{"net.mux.mentions_key", own_secret::mentions_key{}}}};
+  const auto found = std::ranges::find(kKinds, name, &named::name);
+  return found != kKinds.end() ? found->kind : own_secret_t{own_secret::other{}};
+}
+
 struct failure {
   std::optional<loom::error> server;
   std::string network;

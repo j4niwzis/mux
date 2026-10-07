@@ -506,8 +506,13 @@ void account<Sink>::secret_request_in(const std::string& sender, const loom::ev:
                                         [&](crypto::secret_name::user_signing) { return std::optional<std::string>(keys->user_signing); },
                                         [](crypto::secret_name::backup) { return std::optional<std::string>(); }},
                         *which);
-  else if (!which && *content.name == "net.mux.mentions_key" && this->mentions_key())
-    secret = spl::bytes::base64_text(*this->mentions_key());
+  else if (!which)
+    spl::visit(spl::overloaded{[&](own_secret::mentions_key) {
+                                 if (this->mentions_key())
+                                   secret = spl::bytes::base64_text(*this->mentions_key());
+                               },
+                               [](own_secret::other) {}},
+               own_secret_of(*content.name));
   if (!secret)
     return;
   auto got = this->keys_of(id_.address);

@@ -1025,10 +1025,6 @@ void conversations_screen<Actions>::show_conversation(const model& now) {
     needs_.looks->bubbles = bubbles;
     entries.clear();
   }
-  // Frosted bubbles blur what is under them where they are on the screen:
-  // not drawn ahead into kept pixels, where what is under them is not.
-  timeline.setDrawsAhead(!spl::visit(spl::overloaded{[](config::bubbles::frosted) { return true; }, [](const auto&) { return false; }},
-                                     needs_.looks->bubbles.kind));
   // Only while it is open: its members were made at every switch of chat,
   // the panel shut or not. Opened, it is shown then (toggle_info).
   if (info.visible())

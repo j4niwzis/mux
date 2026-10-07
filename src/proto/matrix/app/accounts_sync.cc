@@ -58,7 +58,7 @@ template void account<mux::app::post_change>::verification_in(const std::string&
 template void account<mux::app::post_change>::sas_check_mac(crypto::sas_state& state);
 template void account<mux::app::post_change>::verification_in(const std::string& sender, const loom::ev::m_key_verification_cancel_content_t& content);
 template void account<mux::app::post_change>::verification_request_in_room(const conversation_id& in, const loom::ev::timeline_event& one, const crypto::room_request_fields& fields);
-template bool account<mux::app::post_change>::verification_in_room(const conversation_id& in, const loom::ev::timeline_event& one, const knot::raw& raw, placement_t where);
+template bool account<mux::app::post_change>::verification_in_room(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where);
 template void account<mux::app::post_change>::verify_cancel(std::string txn);
 template void account<mux::app::post_change>::mend_session(const std::string& user, const std::string& curve25519);
 template void account<mux::app::post_change>::upload_fallback_key();

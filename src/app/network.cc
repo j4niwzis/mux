@@ -588,6 +588,13 @@ struct network {
             one.account);
     });
   }
+  // Read mentions shared with the account's other sessions, sealed or not:
+  // told to the account, where its client can.
+  void set_mentions_sharing(const mux::account_id& by, bool shared, bool sealed) {
+    on_account(by, [shared, sealed](auto& a) -> decltype(void(a.set_mentions_sharing(shared, sealed))) {
+      a.set_mentions_sharing(shared, sealed);
+    });
+  }
   // Room keys to verified sessions only, or not: told to the account.
   void set_only_verified(const mux::account_id& by, bool on) {
     loop.post([this, by, on] {

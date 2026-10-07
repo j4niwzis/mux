@@ -60,6 +60,30 @@ class preferences_part {
       (void)k_->write();
     });
   }
+  // Its read mentions shared with its other sessions, or sealed there: the
+  // one switched, kept, shown on its page, told to it running.
+  void flip_mentions(mux::config::account_t& account, std::optional<bool>& kept, accounts& panel) {
+    kept = !kept.value_or(false);
+    const auto now = mux::config::mentions_choice_of(account);
+    if (!now)
+      return;
+    if (auto* page = panel.privacy())
+      page->show_mentions(*now);
+    s_->net->set_mentions_sharing(kept_settings::id_of(account), now->shared, now->sealed);
+    (void)k_->write();
+  }
+  void apply(const request::flip_account_mentions_shared&) {
+    s_->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
+      if (std::optional<bool>* kept = mux::config::mentions_shared_in(account))
+        this->flip_mentions(account, *kept, panel);
+    });
+  }
+  void apply(const request::flip_account_mentions_sealed&) {
+    s_->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
+      if (std::optional<bool>* kept = mux::config::mentions_sealed_in(account))
+        this->flip_mentions(account, *kept, panel);
+    });
+  }
   void apply(const request::flip_account_receipts&) {
     s_->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
       auto& kept = mux::config::read_receipts_in(account);

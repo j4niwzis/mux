@@ -270,11 +270,18 @@ inline nodes::Text note_text(const palette& colours, std::string text) { return 
 template <class Actions>
 struct account_privacy : nodes::Stack {
   using receipts_row = switch_row<ask<Actions, &Actions::flip_account_receipts>>;
+  using mentions_shared_row = switch_row<ask<Actions, &Actions::flip_account_mentions_shared>>;
+  using mentions_sealed_row = switch_row<ask<Actions, &Actions::flip_account_mentions_sealed>>;
   struct parts_t {
     nodes::Text title;
     receipts_row receipts;
     typing_choice<Actions> typing;
     nodes::Text note;
+    // The mentions read, shared with the account's other sessions; sealed
+    // there -- where its protocol can (Matrix's).
+    mentions_shared_row mentions_shared;
+    mentions_sealed_row mentions_sealed;
+    nodes::Text mentions_note;
   } parts;
 
   template <class... Rest>
@@ -282,21 +289,44 @@ struct account_privacy : nodes::Stack {
   account_privacy(const palette& colours, Actions* a, bool receipts_on, std::optional<bool> typing_on, std::optional<bool> events_all = std::nullopt,
                   const std::optional<config::room_event_kinds>& kinds = std::nullopt, bool notify_on = true,
                   bool notify_sound_on = true, std::optional<bool> faces_on = std::nullopt,
-                  std::optional<std::int64_t> jump_most = std::nullopt, std::optional<bool> previews_on = std::nullopt)
+                  std::optional<std::int64_t> jump_most = std::nullopt, std::optional<bool> previews_on = std::nullopt,
+                  std::optional<config::mentions_choice> mentions = std::nullopt)
       : parts{.title = section_title(colours, "PRIVACY"),
               .receipts = receipts_row(colours, "Send read receipts", {a}),
               .typing = typing_choice<Actions>(a, colours, choice_level::account{}, typing_on),
               .note = note_text(colours, "Off, the people you talk to through this account are not told when you have read "
                                          "their messages, or that you are typing. Theirs are still shown, and receipts are "
-                                         "still kept here.")} {
+                                         "still kept here."),
+              .mentions_shared = mentions_shared_row(colours, "Sync read mentions between sessions", {a}),
+              .mentions_sealed = mentions_sealed_row(colours, "Encrypt them (with the recovery key)", {a}),
+              .mentions_note = note_text(colours, "Which mentions you have read, kept with your account on its server, so "
+                                                  "your other sessions take them as read too. Encrypted, the server cannot "
+                                                  "read them; a session gets the key when it is restored with the "
+                                                  "recovery key.")} {
     (void)events_all, (void)kinds, (void)faces_on, (void)jump_most, (void)previews_on, (void)notify_on, (void)notify_sound_on;
     this->setGap(8.0f);
     parts.note.apply({.fillX = true});
     fState.apply({.fill = true});
     parts.note.setWrapped(true);
     parts.receipts.parts.toggle.setOnNow(receipts_on);
+    parts.mentions_note.apply({.fillX = true});
+    parts.mentions_note.setWrapped(true);
+    for (scene::Node* one : std::initializer_list<scene::Node*>{&parts.mentions_shared, &parts.mentions_sealed, &parts.mentions_note})
+      one->setVisible(mentions.has_value());
+    if (mentions) {
+      parts.mentions_shared.parts.toggle.setOnNow(mentions->shared);
+      parts.mentions_sealed.parts.toggle.setOnNow(mentions->sealed);
+      this->show_sealable(mentions->shared);
+    }
   }
   void show(bool receipts_on) { parts.receipts.parts.toggle.setOn(receipts_on); }
+  void show_mentions(config::mentions_choice now) {
+    parts.mentions_shared.parts.toggle.setOn(now.shared);
+    parts.mentions_sealed.parts.toggle.setOn(now.sealed);
+    this->show_sealable(now.shared);
+  }
+  // Sealing says something only while they are shared.
+  void show_sealable(bool shared) { parts.mentions_sealed.apply({.alpha = shared ? 1.0f : 0.4f, .disabled = !shared}); }
   void say(std::string, bool) {}
 };
 
@@ -638,7 +668,7 @@ struct accounts_panel : closes_on_escape<Actions, ask<Actions, &Actions::account
                                            config::room_events_of(one), config::room_event_kinds_of(one),
                                            config::notify_of(one).value_or(true), config::notify_sound_of(one).value_or(true),
                                            config::show_receipts_of(one), config::jump_search_of(one),
-                                           config::link_previews_of(one));
+                                           config::link_previews_of(one), config::mentions_choice_of(one));
             },
             [&](account_page::notifications) {
               detail.template emplace<6>(needs_, config::notify_choices_of(one.shared));

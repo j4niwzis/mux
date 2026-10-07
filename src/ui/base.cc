@@ -357,7 +357,7 @@ inline void look_as_its_content(const auto&, const palette&) {}
 //   void choose_new_proxy(int)       -- the proxy of an account being added
 //   void accounts_back()              -- ← on the accounts page
 //   void account_page(account_page_t) -- a page of the chosen account
-//   void flip_account_receipts(), flip_only_verified(), accept_identity(who), flip_account_typing(), choose_account_proxy(int), manage_proxies()
+//   void flip_account_receipts(), flip_account_mentions_shared(), flip_account_mentions_sealed(), flip_only_verified(), accept_identity(who), flip_account_typing(), choose_account_proxy(int), manage_proxies()
 //   template <class Request> void ask_for(Request) -- a protocol's own request (asks<Actions, Request>)
 //   void typing(bool)                -- the composer has text in it, or not
 //   void settings_proxies(), add_proxy(), edit_proxy(int), proxy_kind(int),

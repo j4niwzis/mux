@@ -50,6 +50,48 @@ template <class Kept>
   }, one.own);
   return kept && kept->value_or(false);
 }
+// Whether an account shares the mentions read with its other sessions, and
+// seals them there: where its protocol keeps that (mentions_shared_in and
+// mentions_sealed_in(kept), by ADL); none for another.
+namespace mentions_defaults {
+template <class Kept>
+[[nodiscard]] auto mentions_shared_in(Kept&) -> std::conditional_t<std::is_const_v<Kept>, const std::optional<bool>*, std::optional<bool>*> {
+  return nullptr;
+}
+template <class Kept>
+[[nodiscard]] auto mentions_sealed_in(Kept&) -> std::conditional_t<std::is_const_v<Kept>, const std::optional<bool>*, std::optional<bool>*> {
+  return nullptr;
+}
+}  // namespace mentions_defaults
+[[nodiscard]] inline std::optional<bool>* mentions_shared_in(account_t& one) {
+  return spl::visit([](auto& each) -> std::optional<bool>* {
+    using mentions_defaults::mentions_shared_in;
+    return mentions_shared_in(each);
+  }, one.own);
+}
+[[nodiscard]] inline std::optional<bool>* mentions_sealed_in(account_t& one) {
+  return spl::visit([](auto& each) -> std::optional<bool>* {
+    using mentions_defaults::mentions_sealed_in;
+    return mentions_sealed_in(each);
+  }, one.own);
+}
+// As they are now; none where the account's protocol cannot share them.
+struct mentions_choice {
+  bool shared = false;
+  bool sealed = false;
+  friend bool operator==(const mentions_choice&, const mentions_choice&) = default;
+};
+[[nodiscard]] inline std::optional<mentions_choice> mentions_choice_of(const account_t& one) {
+  return spl::visit([](const auto& each) -> std::optional<mentions_choice> {
+    using mentions_defaults::mentions_shared_in;
+    using mentions_defaults::mentions_sealed_in;
+    const std::optional<bool>* shared = mentions_shared_in(each);
+    const std::optional<bool>* sealed = mentions_sealed_in(each);
+    if (!shared || !sealed)
+      return std::nullopt;
+    return mentions_choice{shared->value_or(false), sealed->value_or(false)};
+  }, one.own);
+}
 [[nodiscard]] inline std::optional<bool>& read_receipts_in(account_t& one) {
   return one.shared.read_receipts;
 }

@@ -74,14 +74,12 @@ inline kept kept_from(const state&, std::string address, std::string password) {
 // Whether its room keys go to verified sessions alone: Matrix's alone.
 [[nodiscard]] inline std::optional<bool>* only_verified_in(kept& one) { return &one.only_verified; }
 [[nodiscard]] inline const std::optional<bool>* only_verified_in(const kept& one) { return &one.only_verified; }
-// Whether its read mentions are shared with its other sessions, and sealed.
-struct mentions_sharing {
-  bool shared = false;
-  bool sealed = false;
-};
-[[nodiscard]] inline mentions_sharing mentions_sharing_of(const kept& one) {
-  return {one.mentions_shared.value_or(false), one.mentions_sealed.value_or(false)};
-}
+// Whether its read mentions are shared with its other sessions, and sealed
+// there: Matrix's alone.
+[[nodiscard]] inline std::optional<bool>* mentions_shared_in(kept& one) { return &one.mentions_shared; }
+[[nodiscard]] inline const std::optional<bool>* mentions_shared_in(const kept& one) { return &one.mentions_shared; }
+[[nodiscard]] inline std::optional<bool>* mentions_sealed_in(kept& one) { return &one.mentions_sealed; }
+[[nodiscard]] inline const std::optional<bool>* mentions_sealed_in(const kept& one) { return &one.mentions_sealed; }
 
 inline std::optional<std::string> check(const kept& one) {
   const std::string_view user = one.user_id;

@@ -69,10 +69,6 @@ struct delete_backup {};
 // Its room keys, written to a key file or read from one.
 struct export_room_keys {};
 struct import_room_keys {};
-// Its read mentions shared with its other sessions, or not; sealed there,
-// or not.
-struct flip_mentions_shared {};
-struct flip_mentions_sealed {};
 // Its sessions: one verified by emoji, some signed out (with the password
 // typed, where one is), one renamed, the list asked again.
 struct verify_session {
@@ -180,7 +176,7 @@ constexpr request_list<request::setup_cross_signing, request::restore_cross_sign
                        request::import_room_keys, request::verify_session, request::sign_out_sessions, request::rename_session,
                        request::refresh_sessions, request::verify_them, request::explore_state,
                        request::open_send_custom, request::send_custom, request::change_room, request::continue_uia,
-                       request::cancel_uia, request::flip_mentions_shared, request::flip_mentions_sealed>
+                       request::cancel_uia>
 requests_of(const state&) {
   return {};
 }

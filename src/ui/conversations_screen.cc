@@ -292,8 +292,36 @@ struct conversations_screen : nodes::Stack {
   // hundreds of chats was hundreds of rows made in the frame it was chosen
   // in -- the slide waited on them.
   static constexpr std::size_t kChatsFirst = 40, kChatsStep = 40;
+  // The chats listed made into rows: from chats_from to chats_made, those
+  // a screen above the view to two below it, in steps of kChatsStep -- as
+  // Qt's list view with uniform rows, the rest stand-ins of their height
+  // (the flow's padding above and below), not rows reconciled at every
+  // refresh. Made rows grew without end as the list was scrolled down.
+  std::size_t chats_from = 0;
   std::size_t chats_made = kChatsFirst;
   std::size_t chats_listed = 0;
+  // Every chat listed, in order; and where each one's row begins, from
+  // their heights, known without making them -- one more: where the last
+  // ends.
+  std::vector<conversation_id> order;
+  std::vector<float> tops;
+  // The chats to make for where the list is now.
+  [[nodiscard]] std::pair<std::size_t, std::size_t> chats_window() const {
+    const std::size_t count = order.size();
+    if (tops.size() != count + 1 || count == 0)
+      return {0, std::min(kChatsFirst, count)};
+    const float view = std::max(list.bounds().height(), 400.0f);
+    const float at = list.current();
+    const auto index_at = [&](float y) {
+      const auto past = std::ranges::upper_bound(tops, y);
+      return std::min(count, static_cast<std::size_t>(std::max<std::ptrdiff_t>(0, past - tops.begin() - 1)));
+    };
+    std::size_t from = index_at(at - view);
+    from -= from % kChatsStep;
+    std::size_t to = index_at(at + 2.0f * view) + 1;
+    to += (kChatsStep - to % kChatsStep) % kChatsStep;
+    return {from, std::min(count, std::max(to, from + kChatsFirst))};
+  }
   // Rows that left the list -- another space chosen -- kept by their chat,
   // already laid out and recorded: coming back showing the same, a row is
   // taken back as it was, not made again. A few hundred at most.
@@ -305,6 +333,7 @@ struct conversations_screen : nodes::Stack {
   // first frames, and the slide jumped, then went on.
   int slide_wait = 0;
   void slide_list(float from) {
+    chats_from = 0;
     chats_made = kChatsFirst;
     list_from = from;
     list_in.jump(0.0f);

@@ -98,21 +98,22 @@ void conversations_screen<Actions>::onKey(scene::phase::bubble, const scene::key
     // To the next chat in the list, or the one before: Ctrl+Tab and
     // Ctrl+Shift+Tab, Alt+Down and Alt+Up.
     const bool back = press.key == keys::kUp || press.modifiers.template has<scene::modifier::shift>();
-    const auto& rows = std::get<0>(std::get<0>(list.fChildren).fChildren);
+    // Over every chat listed, not only the rows made.
+    const std::vector<conversation_id>& rows = order;
     // From the forum gone to, where one is; else from the chat open.
-    const auto at = std::ranges::find(rows, pointed ? *pointed : *chosen, &conversation_row<Actions>::id);
+    const auto at = std::ranges::find(rows, pointed ? *pointed : *chosen);
     if (at == rows.end() || rows.empty())
       return;
     const auto index = static_cast<std::size_t>(at - rows.begin());
     const std::size_t to = back ? (index == 0 ? rows.size() - 1 : index - 1) : (index + 1) % rows.size();
     // A forum: gone to, lit, not opened -- Alt+Right opens it. A chat: opened.
-    if (is_forum(rows[to].id)) {
-      pointed = rows[to].id;
+    if (is_forum(rows[to])) {
+      pointed = rows[to];
       if (last_model)
         this->show(*last_model, false);
     } else {
       pointed.reset();
-      actions->choose(rows[to].id);
+      actions->choose(rows[to]);
     }
   } else if (press.key == keys::kPageUp || press.key == keys::kPageDown) {
     // A page of the messages, most of what is in view.
@@ -372,12 +373,10 @@ void conversations_screen<Actions>::update(double now_ms) {
       info.wants_show = false;
       info.show(*one, *last_model, muted.contains(one->id));
     }
-  // Near the last chat made, with more listed: the next few made.
-  if (last_model && chats_made < chats_listed && list.visible() &&
-      list.atEnd(std::max(300.0f, list.bounds().height() * 1.5f))) {
-    chats_made += kChatsStep;
+  // The list scrolled past the rows made: those for where it is now made,
+  // those far from it let go.
+  if (last_model && list.visible() && this->chats_window() != std::pair{chats_from, chats_made})
     this->show(*last_model, false);
-  }
   // The panels' opacity on its way to the chat's.
   if (auto& ease = needs_.paint->ease; ease.t.step(now_ms)) {
     needs_.paint->panel.opacity = ease.from + (ease.to - ease.from) * ease.t.value();
@@ -865,8 +864,17 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
   const std::vector<conversation_id> listed_before =
       std::ranges::to<std::vector>(std::views::transform(rows, [](const conversation_row<Actions>& row) { return row.id; }));
   chats_listed = chats.size();
+  order = std::ranges::to<std::vector>(std::views::transform(chats, [](const conversation* one) { return one->id; }));
+  tops.assign(1, 0.0f);
+  tops.reserve(chats.size() + 1);
+  for (const conversation* one : chats)
+    tops.push_back(tops.back() + conversation_row<Actions>::height_of(*one));
+  std::tie(chats_from, chats_made) = this->chats_window();
+  const auto made = std::views::take(std::views::drop(chats, chats_from), chats_made - chats_from);
+  // The rows not made, above and below: as much room as they would take.
+  std::get<0>(list.fChildren).apply({.padding = scene::Margin{tops[chats_from], 0.0f, tops.back() - tops[chats_made], 0.0f}});
   {
-    const std::set<conversation_id> listed = std::ranges::to<std::set>(std::views::transform(std::views::take(chats, chats_made), [](const conversation* one) { return one->id; }));
+    const std::set<conversation_id> listed = std::ranges::to<std::set>(std::views::transform(made, [](const conversation* one) { return one->id; }));
     for (conversation_row<Actions>& row : rows)
       if (!listed.contains(row.id)) {
         const conversation_id id = row.id;
@@ -876,7 +884,7 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
       rows_kept.erase(rows_kept.begin());
   }
   if (nodes::reconcile(
-          rows, std::views::take(chats, chats_made), [](const conversation* one) { return one->id; },
+          rows, made, [](const conversation* one) { return one->id; },
           [](const conversation_row<Actions>& row) { return row.id; },
           [&](const conversation* one) {
             if (const auto kept = rows_kept.find(one->id); kept != rows_kept.end()) {

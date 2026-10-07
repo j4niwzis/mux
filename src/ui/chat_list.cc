@@ -181,6 +181,11 @@ struct conversation_row : nodes::Stack {
   } parts;
 
   static constexpr float kHeight = 62.0f;
+  // The height its row will have, without making it: a forum's, with a
+  // message, has the topic on a line of its own.
+  [[nodiscard]] static float height_of(const conversation& one) {
+    return one.forum_topic && !one.timeline.empty() ? kHeight + 20.0f : kHeight;
+  }
   void place_view(std::nullopt_t) {}
   template <class View>
   void place_view(std::optional<View> made) {

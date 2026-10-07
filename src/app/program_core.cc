@@ -36,6 +36,9 @@ void app::woken() {
   auto changes = box->take();
   if (changes.empty())
     return;
+  // Deletions of what is not held in memory, by chat: looked for on disk on
+  // a worker, each chat's file read once for all of its (mark_deleted_on_disk).
+  std::map<mux::conversation_id, std::vector<std::string>> deleted_on_disk;
   for (const auto& one : changes) {
     // What the program itself does with a change, besides the model: a
     // session kept, a picture shown.
@@ -124,18 +127,24 @@ void app::woken() {
     // as it was, before the model takes it out of view.
     if (!ask.demo)
       spl::visit(spl::overloaded{[&](const mux::change::message_redacted& c) {
-                                   std::optional<mux::message> was;
-                                   if (const mux::conversation* chat = model->find(c.in))
-                                     if (const auto found = std::ranges::find(chat->timeline, c.id, &mux::message::id);
-                                         found != chat->timeline.end())
-                                       was = *found;
-                                   store.mark_deleted(c.in, c.id, was);
+                                   const mux::conversation* chat = model->find(c.in);
+                                   const auto found = chat ? std::ranges::find(chat->timeline, c.id, &mux::message::id)
+                                                           : std::vector<mux::message>::const_iterator{};
+                                   if (chat && found != chat->timeline.end())
+                                     store.mark_deleted(c.in, c.id, *found);
+                                   else
+                                     deleted_on_disk[c.in].push_back(c.id);
                                  },
                                  [](const auto&) {}},
                  one);
     model->apply(one);
     paging.keep(one);
   }
+  for (auto& [in, ids] : deleted_on_disk)
+    work.run([this, in, ids = std::move(ids)]() -> workers::done_t {
+      store.mark_deleted_on_disk(in, ids);
+      return {};
+    });
   // The marks: those read back put in, written where they changed, and a
   // mark made kept with its message.
   marks.took(changes);

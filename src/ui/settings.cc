@@ -36,6 +36,13 @@ struct settings_dialog : scene::Node {
     nodes::ScrollContainer<page_t> scroll;
   } parts;
   [[nodiscard]] page_t& page() { return std::get<0>(parts.scroll.fChildren); }
+  // Esc: the page's ← -- home from a page, the proxies from one being
+  // edited. False on home, which Esc closes.
+  bool step_back() {
+    return spl::visit(spl::overloaded{[](settings_home<Actions>&) { return false; },
+                                      [](auto& one) { return one.parts.header.step_back(); }},
+                      this->page());
+  }
   // A page fills the dialog across, and is as tall as what it holds.
   void fit_page() {
     spl::visit(

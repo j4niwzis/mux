@@ -428,7 +428,7 @@ struct account_proxy : nodes::Stack {
 // The saved accounts down the side, and the chosen one's settings beside
 // them.
 template <class Actions>
-struct accounts_panel : closes_on_escape<Actions> {
+struct accounts_panel : closes_on_escape<Actions, ask<Actions, &Actions::accounts_back>> {
   static constexpr int kTab = 2;
   static constexpr float kListWidth = 280.0f;
 
@@ -590,7 +590,7 @@ struct accounts_panel : closes_on_escape<Actions> {
   ui_needs<Actions> needs_;
   explicit accounts_panel(const ui_needs<Actions>& n) : accounts_panel(n, n.actions) {}
   accounts_panel(const ui_needs<Actions>& n, Actions* a)
-      : closes_on_escape<Actions>(a),
+      : closes_on_escape<Actions, ask<Actions, &Actions::accounts_back>>(a),
         parts{.header = header_t(*n.colours, "Accounts", {a}, {a}, true, false), .body = body_row(*n.colours, a)},
         needs_(n) {
     this->fState.apply({.fill = true});

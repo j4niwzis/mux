@@ -231,6 +231,14 @@ struct page_header : nodes::Stack {
     title.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle,
                  .margin = {0.0f, 0.0f, 0.0f, has_back ? 0.0f : 10.0f}});
   }
+  // Esc, as its ← is pressed: a step back where it has one -- false where
+  // it has none, for what holds it to close instead.
+  bool step_back() {
+    if (!parts.back.visible())
+      return false;
+    parts.back.act();
+    return true;
+  }
 };
 
 // One segment of a segmented control: square, its text centred, filled

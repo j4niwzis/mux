@@ -275,6 +275,14 @@ struct window : scene::Node {
         return a->close_emoji(), closed();
       if (parts.viewer)
         return a->close_picture(), closed();
+      // A verification: OK where it is over, Decline or Cancel where it
+      // waits. Not while the emoji are compared: an answer is asked there.
+      if (auto* box = parts.verifying.shown()) {
+        if (box->parts.close.visible())
+          return a->close_verification(), closed();
+        if (box->parts.decline.visible())
+          return a->verify_cancel_now(), closed();
+      }
       // The dialogs, the one drawn last -- on top -- first.
       if (parts.sending.shown())
         return a->close_send_box(), closed();
@@ -310,8 +318,15 @@ struct window : scene::Node {
         return a->close_person_info(), closed();
       if (parts.notice.shown())
         return a->close_notice(), closed();
-      if (parts.settings.shown())
+      // Settings: a page back to where its ← goes; home, closed.
+      if (auto* box = parts.settings.shown()) {
+        if (box->step_back())
+          return closed();
         return a->close_settings(), closed();
+      }
+      // The drawer, under every dialog.
+      if (parts.frame.base().isOpen())
+        return parts.frame.base().close(), closed();
     }
 
     // While a dialog fades in or out, what is under it -- the window's

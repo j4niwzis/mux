@@ -285,8 +285,9 @@ void place_form(account_form<Actions>& form, const skia::SkRect& column, float t
       form);
 }
 
-// Esc closes a panel: back to what is under it.
-template <class Actions>
+// Esc leaves a panel: back to what is under it, or a step back within it
+// first, as Back says.
+template <class Actions, class Back = ask<Actions, &Actions::pop_panel>>
 struct closes_on_escape : nodes::Stack {
   Actions* actions = nullptr;
   explicit closes_on_escape(Actions* a) : actions(a) {}
@@ -294,7 +295,7 @@ struct closes_on_escape : nodes::Stack {
   using Node::onKey;
   void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
     if (press.key == scene::keys::kEscape) {
-      actions->pop_panel();
+      Back{actions}();
       reply.handle();
     }
   }

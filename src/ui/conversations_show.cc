@@ -53,6 +53,12 @@ void conversations_screen<Actions>::onKey(scene::phase::bubble, const scene::key
     reply.handle();
     return;
   }
+  // A forum gone into, no chat of it open: Esc back out to the chats.
+  if (press.key == keys::kEscape && !any && !chosen && forum_open) {
+    this->close_forum();
+    reply.handle();
+    return;
+  }
   if (!chosen && !pointed)
     return;
   // Only a forum gone to: Alt+Up and Alt+Down go on from it, nothing else.
@@ -78,6 +84,11 @@ void conversations_screen<Actions>::onKey(scene::phase::bubble, const scene::key
       return;
     }
     skiff::scene::setClipboardText(selected->parts.body.parts.text.selected());
+  } else if (press.key == keys::kEscape && !any && chat.parts.selection.visible()) {
+    // Messages selected, the focus elsewhere than their bar: let go first.
+    actions->selection_cancel();
+  } else if (press.key == keys::kEscape && !any && search.visible()) {
+    actions->close_search();
   } else if (press.key == keys::kEscape && !any && parts.threads.answering) {
     parts.threads.stop_answering();
   } else if (press.key == keys::kEscape && !any && line.answering()) {
@@ -109,7 +120,9 @@ void conversations_screen<Actions>::onKey(scene::phase::bubble, const scene::key
     timeline.scrollTo(std::max(0.0f, timeline.current() + (press.key == keys::kPageUp ? -page : page)));
   } else if (press.key == keys::kEnd && control) {
     actions->jump_to_end();
-  } else if (press.key == keys::kEscape && !any && single) {
+  } else if (press.key == keys::kEscape && !any) {
+    // Nothing else to cancel: a step back -- the threads or the info shut,
+    // else the chat closed, as tdesktop's Esc closes it.
     this->step_back();
   } else {
     return;

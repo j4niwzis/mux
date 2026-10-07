@@ -200,13 +200,6 @@ struct link_facts {
   std::optional<std::string> title;
   std::optional<std::string> description;
   std::optional<std::string> image;
-  friend consteval auto json_schema(knot::type<link_facts>) {
-    return knot::schema<link_facts>()
-    .member<"site">(knot::key("og:site_name"))
-    .member<"title">(knot::key("og:title"))
-    .member<"description">(knot::key("og:description"))
-    .member<"image">(knot::key("og:image"));
-  }
 };
 
 using power_levels_content = loom::ev::m_room_power_levels_content_t;
@@ -488,13 +481,10 @@ void account<Sink>::fetch_preview(std::string url) {
     // The authenticated endpoint (Matrix 1.11), and the old one where the
     // server has not that.
     std::optional<link_facts> facts;
-    // What the spec leaves open -- og:title and the rest -- is kept as the
-    // answer's remainder, read here once; og:image is typed already.
+    // The page's Open Graph facts, as loom read them with the answer.
     const auto facts_of = [](const auto& answer) {
-      link_facts read = knot::try_read<link_facts>(answer.rest.text).value_or(link_facts{});
-      if (!read.image)
-        read.image = answer.og_image;
-      return read;
+      return link_facts{.site = answer.og_site_name, .title = answer.og_title, .description = answer.og_description,
+                        .image = answer.og_image};
     };
     if (auto got = perform(*api_, loom::cs::get_url_preview_authed{.url = url}))
       facts = facts_of(*got);

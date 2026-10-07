@@ -85,7 +85,7 @@ template void account<mux::app::post_change>::share_marks_seen(std::string room,
 template std::filesystem::path account<mux::app::post_change>::mentions_key_file() const;
 template const std::optional<std::vector<std::uint8_t>>& account<mux::app::post_change>::mentions_key();
 template void account<mux::app::post_change>::keep_mentions_key(std::vector<std::uint8_t> key);
-template void account<mux::app::post_change>::mentions_from(const conversation_id& in, std::string_view content);
+template void account<mux::app::post_change>::mentions_from(const conversation_id& in, const loom::ev::net_mux_mentions_read_content_t& content);
 template void account<mux::app::post_change>::accept_identity(std::string user);
 template void account<mux::app::post_change>::withheld_in(const loom::ev::m_room_key_withheld_content_t& content);
 template void account<mux::app::post_change>::request_secrets(const std::string& device);

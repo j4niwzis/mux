@@ -39,23 +39,8 @@ export import :names;
 
 export namespace mux::proto::matrix::client {
 
-// What mux reads of a room's account data and of the secrets asked of it,
-// by their names: read once, where the name comes in, into a kind -- its
-// own, or any other, passed over.
-namespace room_data {
-struct mentions_read {};  // net.mux.mentions_read: the mentions read
-struct other {};
-}  // namespace room_data
-using room_data_t = spl::variant<room_data::mentions_read, room_data::other>;
-[[nodiscard]] inline room_data_t room_data_of(std::string_view type) {
-  struct named {
-    std::string_view name;
-    room_data_t kind;
-  };
-  static const std::array<named, 1> kKinds{{{"net.mux.mentions_read", room_data::mentions_read{}}}};
-  const auto found = std::ranges::find(kKinds, type, &named::name);
-  return found != kKinds.end() ? found->kind : room_data_t{room_data::other{}};
-}
+// What mux reads of the secrets asked of it, by their names: read once,
+// where the name comes in, into a kind -- its own, or any other, passed over.
 namespace own_secret {
 struct mentions_key {};  // net.mux.mentions_key: what read mentions are sealed under
 struct other {};
@@ -484,8 +469,8 @@ class account {
   [[nodiscard]] std::filesystem::path mentions_key_file() const;
   [[nodiscard]] const std::optional<std::vector<std::uint8_t>>& mentions_key();
   void keep_mentions_key(std::vector<std::uint8_t> key);
-  // A room's net.mux.mentions_read, as it came: its mentions seen.
-  void mentions_from(const conversation_id& in, std::string_view content);
+  // A room's net.mux.mentions_read, as knot read it: its mentions seen.
+  void mentions_from(const conversation_id& in, const loom::ev::net_mux_mentions_read_content_t& content);
   // The key in Secret Storage, under the storage key there: taken where it
   // is, put there where it is not.
   template <class Key>

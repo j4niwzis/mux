@@ -672,14 +672,10 @@ void account<Sink>::accept_identity(std::string user) {
 }
 
 // Read mentions shared between this account's sessions: a room's account
-// data, net.mux.mentions_read -- {"seen": [event IDs]} in the clear, or
-// {"sealed": {iv, ciphertext, mac}} sealed as Secret Storage seals a secret,
-// under a key of its own named for the room.
-struct mentions_read {
-  std::optional<std::vector<std::string>> seen;
-  std::optional<crypto::sealed_secret> sealed;
-  friend consteval auto json_schema(knot::type<mentions_read>) { return knot::schema<mentions_read>(); }
-};
+// data, net.mux.mentions_read (loom's net_mux_mentions_read_content_t) --
+// seen, the event IDs, in the clear; or sealed, as Secret Storage seals a
+// secret, under a key of its own named for the room.
+using mentions_read = loom::ev::net_mux_mentions_read_content_t;
 inline constexpr std::string_view kMentionsRead = "net.mux.mentions_read";
 inline constexpr std::string_view kMentionsKeySecret = "net.mux.mentions_key";
 // The most a room's list keeps: what each session keeps, a few times over.
@@ -716,20 +712,19 @@ void account<Sink>::keep_mentions_key(std::vector<std::uint8_t> key) {
   mentions_key_read_ = true;
 }
 template <class Sink>
-void account<Sink>::mentions_from(const conversation_id& in, std::string_view content) {
+void account<Sink>::mentions_from(const conversation_id& in, const mentions_read& read) {
   if (!how_.mentions_shared)
     return;
-  const auto read = knot::try_read<mentions_read>(content);
-  if (!read)
-    return;
   std::vector<std::string> seen;
-  if (read->seen) {
-    seen = *read->seen;
-  } else if (read->sealed) {
+  if (read.seen) {
+    seen = *read.seen;
+  } else if (read.sealed) {
     const auto& key = this->mentions_key();
     if (!key)
       return;
-    const auto opened = crypto::detail::open_secret(*key, mentions_sealed_for(in.id), *read->sealed);
+    const crypto::sealed_secret sealed{.iv = read.sealed->iv, .ciphertext = read.sealed->ciphertext, .mac = read.sealed->mac};
+    // What opens is plaintext come in as text: read once, here.
+    const auto opened = crypto::detail::open_secret(*key, mentions_sealed_for(in.id), sealed);
     if (!opened)
       return;
     auto list = knot::try_read<std::vector<std::string>>(std::string_view(*opened));
@@ -765,7 +760,8 @@ void account<Sink>::share_marks_seen(std::string room, std::vector<std::string> 
                              "key (Accounts, Encryption) once, and they go from then on -- or turn sealing off."});
       return;
     }
-    body.sealed = crypto::detail::seal_secret(*key, mentions_sealed_for(room), knot::to_json_string(all));
+    const crypto::sealed_secret sealed = crypto::detail::seal_secret(*key, mentions_sealed_for(room), knot::to_json_string(all));
+    body.sealed = mentions_read::sealed_t{.iv = sealed.iv, .ciphertext = sealed.ciphertext, .mac = sealed.mac};
   } else {
     body.seen = all;
   }

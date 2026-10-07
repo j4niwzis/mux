@@ -246,6 +246,8 @@ struct stub {
   void ask_for(Request) {}
   void flip_account_receipts() {}
   void flip_only_verified() {}
+  void flip_account_mentions_shared() {}
+  void flip_account_mentions_sealed() {}
   void accept_identity(mux::conversation_id) {}
   void proxy_kind(mux::config::proxy_kind_t) {}
   void choose_account_proxy(int) {}

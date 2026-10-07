@@ -152,14 +152,17 @@ struct appearance_page : nodes::Stack {
                               skia::colorSetARGB(255, 107, 128, 141), skia::colorSetARGB(255, 117, 191, 181))} {
       this->setHorizontal();
       this->setGap(6.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 16.0f, 8.0f, 16.0f}});
+      fState.apply({.autoSize = scene::axes::kBoth});
     }
   };
+  // The cards, moved along where the page is narrower than they are -- a
+  // phone's -- rather than cut off at its edge.
+  using cards_view = side_scroll<cards_row>;
   using circles_row = accent_circles<set_accent_to<Actions>>;
   struct parts_t {
     header_t header;
     nodes::Text theme_title;
-    cards_row cards;
+    cards_view cards;
     nodes::Text accent_title;
     circles_row circles;
     // Every chat's background, bubbles and panels, here -- not in a dialog.
@@ -184,7 +187,7 @@ struct appearance_page : nodes::Stack {
   appearance_page(const palette& colours, const looks_shown& looks, const ui_shared& shared, Actions* a, const config::theme_t& theme, const config::accent_t& accent)
       : parts{.header = header_t(colours, "Appearance", {a}, {a}, true, true),
               .theme_title = section_title(colours, "THEME"),
-              .cards = cards_row(colours, a),
+              .cards = cards_view(cards_row(colours, a)),
               .accent_title = section_title(colours, "ACCENT"),
               .circles = circles_row({a}, theme, true),
               .looks = look_choices<Actions>(a, colours, looks, choice_level::everywhere{}),
@@ -207,6 +210,7 @@ struct appearance_page : nodes::Stack {
                                   "changes here apply at once.")} {
     fState.apply({.fill = true});
     parts.theme_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
+    parts.cards.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 16.0f, 8.0f, 16.0f}});
     parts.accent_title.apply({.margin = {6.0f, 0.0f, 4.0f, 20.0f}});
     parts.looks.apply({.margin = {6.0f, 10.0f, 0.0f, 10.0f}});
     parts.spaces_title.apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
@@ -235,7 +239,7 @@ struct appearance_page : nodes::Stack {
     this->show(theme, accent);
   }
   void show(const config::theme_t& theme, const config::accent_t& accent) {
-    auto& [classic, day, tinted, night] = parts.cards.parts;
+    auto& [classic, day, tinted, night] = parts.cards.parts.line.parts;
     for (auto* card : {&classic, &day, &tinted, &night})
       card->set_chosen(card->theme == theme);
     parts.circles.show_chosen(accent);

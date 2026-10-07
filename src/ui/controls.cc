@@ -1132,4 +1132,139 @@ struct accent_circles : nodes::Stack {
   }
 };
 
+// A row longer than its room, moved sideways -- by a finger or a mouse
+// dragged along it, flicked to glide on, or a sideways wheel -- and cut to
+// its room. Up and down are left to the page round it: a gesture going more
+// that way than along is not taken, nor is an upright wheel.
+template <class Line>
+struct side_scroll : nodes::Stack {
+  struct parts_t {
+    Line line;
+  } parts;
+  explicit side_scroll(Line line) : parts{.line = std::move(line)} {
+    this->setHorizontal();
+    fState.apply({.masking = true});
+  }
+  // How far it goes along: what of the line is past its room.
+  [[nodiscard]] float most() const {
+    return std::max(0.0f, parts.line.bounds().width() - fState.contentBox().width());
+  }
+  [[nodiscard]] float offset() const noexcept { return gesture.offset(); }
+  // Where the line is put: at the gesture's offset, its ends held to.
+  void place() {
+    const float at = scene::snapToPixel(gesture.offset());
+    if (at == shown)
+      return;
+    shown = at;
+    parts.line.apply({.shiftX = -at});
+    this->markDamaged();
+  }
+  void scroll_by(float delta) {
+    gesture.setBounds(0.0f, this->most());
+    gesture.glideTo(gesture.target() + delta);
+    scene::work::mark(fState.fId);
+  }
+
+  using Node::onPointer;
+  template <class Phase>
+  void onPointer(const Phase&, const scene::pointer::scroll& wheel, scene::PointerReply& reply)
+    requires(std::same_as<Phase, scene::phase::bubble> || std::same_as<Phase, scene::phase::target>)
+  {
+    if (wheel.dx == 0.0f || this->most() <= 0.0f)
+      return;
+    this->scroll_by(-wheel.dx * 40.0f);
+    reply.handle();
+  }
+  // The press is only noted, and what is under it clicked later: a press
+  // that goes along is a drag of the row, not a choice.
+  template <class Phase>
+  void onPointer(const Phase&, const scene::pointer::down& press, scene::PointerReply& reply)
+    requires(std::same_as<Phase, scene::phase::capture> || std::same_as<Phase, scene::phase::target>)
+  {
+    if (press.button > 1 || this->most() <= 0.0f)
+      return;
+    gesture.setBounds(0.0f, this->most());
+    armed = true;
+    press_x = press.x;
+    press_y = press.y;
+    if constexpr (std::same_as<Phase, scene::phase::capture>)
+      reply.deferClick();
+    if (gesture.press(press.x))
+      reply.handle();  // the press was spent catching a glide
+  }
+  template <class Phase>
+  void onPointer(const Phase&, const scene::pointer::move& move, scene::PointerReply& reply)
+    requires(std::same_as<Phase, scene::phase::capture> || std::same_as<Phase, scene::phase::target>)
+  {
+    if (!armed)
+      return;
+    if (!gesture.dragging()) {
+      const float dx = move.x - press_x;
+      const float dy = move.y - press_y;
+      // Going more up or down than along: the page's, from here on.
+      if (std::abs(dy) >= scene::ScrollGesture::kSlop && std::abs(dy) > std::abs(dx)) {
+        armed = false;
+        return;
+      }
+    }
+    const bool was = gesture.dragging();
+    if (!gesture.drag(move.x, now_ms()))
+      return;
+    if (!was) {
+      if (reply.fCaptured) {
+        armed = false;  // something else is dragged already
+        return;
+      }
+      reply.capturePointer();
+    }
+    reply.suppressHover();
+    this->place();
+    reply.handle();
+  }
+  template <class Phase>
+  void onPointer(const Phase&, const scene::pointer::up&, scene::PointerReply& reply)
+    requires(std::same_as<Phase, scene::phase::capture> || std::same_as<Phase, scene::phase::target>)
+  {
+    this->finish(reply);
+  }
+  template <class Phase>
+  void onPointer(const Phase&, const scene::pointer::cancel&, scene::PointerReply& reply)
+    requires(std::same_as<Phase, scene::phase::capture> || std::same_as<Phase, scene::phase::target>)
+  {
+    this->finish(reply);
+  }
+  void finish(scene::PointerReply& reply) {
+    armed = false;
+    if (!gesture.dragging())
+      return;
+    gesture.release();
+    scene::work::mark(fState.fId);  // to glide on, or spring back
+    reply.releasePointer();
+    reply.suppressHover();
+    reply.handle();
+  }
+  [[nodiscard]] bool acceptsInput() const { return true; }
+
+  // Gliding: a frame at a time, until it rests.
+  void update(double now) {
+    const double dt = last_ms > 0.0 ? now - last_ms : 16.0;
+    last_ms = now;
+    gesture.setBounds(0.0f, this->most());
+    if (gesture.advance(dt))
+      this->place();
+  }
+  [[nodiscard]] bool wantsTick() const { return gesture.moving() || gesture.dragging(); }
+
+ private:
+  [[nodiscard]] static double now_ms() {
+    return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count();
+  }
+  scene::ScrollGesture gesture;
+  float shown = 0.0f;
+  bool armed = false;
+  float press_x = 0.0f, press_y = 0.0f;
+  double last_ms = 0.0;
+};
+
+
 }  // namespace mux::ui

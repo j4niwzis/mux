@@ -382,7 +382,8 @@ class account {
   // room, logged where it failed.
   void set_room_state(const std::string& room, std::string type, const auto& content, std::string key = {});
   [[nodiscard]] std::string server_of(const std::string& room) const;
-  void send_text(const conversation_id& in, const std::string& room, const std::string& txn, knot::raw body);
+  void send_text(const conversation_id& in, const std::string& room, const std::string& txn, knot::raw body,
+                 std::optional<knot::raw> relates_to);
   void told_failing(const std::string& room, const char* what, const auto& done) {
     if (!done)
       log(id_, "could not {} in {}: {}", what, room, done.error().said());
@@ -490,9 +491,9 @@ class account {
   // A room event sent: encrypted where the room is -- or, where it cannot
   // be, not sent at all.
   template <class Ask>
-  auto send_room_event(Ask ask) {
+  auto send_room_event(Ask ask, std::optional<knot::raw> relates_to = std::nullopt) {
     if (this->encrypted_room(ask.room_id))
-      return this->send_encrypted(std::move(ask));
+      return this->send_encrypted(std::move(ask), std::move(relates_to));
     return perform(*api_, ask);
   }
   // Into an encrypted room: the room's key given to its readers' devices
@@ -500,7 +501,7 @@ class account {
   // under the same transaction. Anything that fails on the way refuses it,
   // with what failed: it never goes in the clear.
   template <class Ask>
-  auto send_encrypted(Ask ask) {
+  auto send_encrypted(Ask ask, std::optional<knot::raw> relates_to) {
     const conversation_id in{id_, ask.room_id};
     constexpr std::string_view kNot = "Not sent: it could not be encrypted -- ";
     if (!crypto_)
@@ -508,13 +509,12 @@ class account {
     try {
       // Shared, then sealed with that very session: where another send
       // rotated it in between, shared and sealed again.
-      const auto relation = knot::try_read<crypto::relation_part>(ask.body.text);
       std::optional<crypto::megolm_content> sealed;
       for (int attempt = 0; attempt < 3 && !sealed; ++attempt) {
         const auto session = this->share_room_key(ask.room_id);
         if (!session)
           throw plaintext_refused(in, ask.txn_id, std::string(kNot) + "the room's key could not be given to its members.");
-        sealed = crypto_->encrypt(ask.room_id, *session, ask.event_type, ask.body, relation ? relation->relates_to : std::nullopt);
+        sealed = crypto_->encrypt(ask.room_id, *session, ask.event_type, ask.body, relates_to);
       }
       if (!sealed)
         throw plaintext_refused(in, ask.txn_id, std::string(kNot) + "the room's session failed.");
@@ -592,7 +592,8 @@ class account {
   }
   template <class Content>
   void send_step(const crypto::sas_state& state, std::string type, const Content& content) {
-    const knot::raw body{knot::to_json_string(this->stamped(state, content))};
+    const auto step = this->stamped(state, content);
+    const knot::raw body{knot::to_json_string(step)};
     if (!state.room) {
       (void)this->send_plain(std::move(type), state.their_user, state.their_device.empty() ? std::string("*") : state.their_device,
                              body);
@@ -600,7 +601,8 @@ class account {
     }
     try {
       (void)this->send_room_event(
-          loom::cs::send_message{.room_id = *state.room, .event_type = std::move(type), .txn_id = this->transaction(), .body = body});
+          loom::cs::send_message{.room_id = *state.room, .event_type = std::move(type), .txn_id = this->transaction(), .body = body},
+          relates_to_of(step));
     } catch (const plaintext_refused& refused) {
       log(id_, "verification step not sent: {}", refused.what());
     }
@@ -609,8 +611,7 @@ class account {
   // steps, by their events -- live ones only, and never this side's own.
   void verification_request_in_room(const conversation_id& in, const loom::ev::timeline_event& one,
                                      const crypto::room_request_fields& fields);
-  [[nodiscard]] bool verification_in_room(const conversation_id& in, const loom::ev::timeline_event& one, const knot::raw& raw,
-                                          placement_t where);
+  [[nodiscard]] bool verification_in_room(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where);
   // While a decrypted event is read: the event its cleartext relation
   // refers to, where its content does not say.
   std::optional<std::string> outer_reference_;

@@ -246,7 +246,7 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
         content.rest = knot::raw{knot::to_json_string(crypto::file_part{sealed->info})};
         encrypted_media_.insert_or_assign(*uri, sealed->info);
       }
-      return as_body(content);
+      return std::pair{as_body(content), relates_to_of(content)};
     };
     // A video: m.video, its size, length and thumbnail said -- as a file,
     // every client showed it as one. Its thumbnail sealed where the room is
@@ -273,7 +273,7 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
       }
       return content;
     };
-    knot::raw message = video   ? with_file(video_message())
+    auto [message, relates_to] = video   ? with_file(video_message())
                         : image ? with_file(loom::client::picture_message(said, width, height))
                                 : with_file(loom::client::file_message(said));
     // Seed the server URI before sending the event: its echo may arrive
@@ -286,7 +286,8 @@ void account<Sink>::send_file(std::string room, std::string local, std::string b
     auto sent = this->send_room_event(loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.room.message",
                                                       .txn_id = local,
-                                                      .body = std::move(message)});
+                                                      .body = std::move(message)},
+                                      std::move(relates_to));
     if (!sent) {
       sink_(change::delivery_changed{in, local, delivery::failed{}});
       return;

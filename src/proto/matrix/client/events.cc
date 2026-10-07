@@ -77,11 +77,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
   };
   const auto at = std::chrono::sys_time<std::chrono::milliseconds>(std::chrono::milliseconds(one.origin_server_ts));
   // A verification step in the room: taken by the verification, not shown.
-  const bool verification = spl::visit(
-      spl::overloaded{[&](const knot::raw& raw) { return this->verification_in_room(in, one, raw, where); },
-                         [](const auto&) { return false; }},
-      one.content.data());
-  if (verification)
+  if (this->verification_in_room(in, one, where))
     return;
   // By the content's type: a message, a reaction, or the rest by the type
   // it says.

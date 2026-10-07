@@ -396,42 +396,32 @@ void account<Sink>::verification_request_in_room(const conversation_id& in, cons
 // Its steps: read by their type as the to-device ones are, the request they
 // refer to standing for the transaction. Shown nowhere in the timeline.
 template <class Sink>
-bool account<Sink>::verification_in_room(const conversation_id& in, const loom::ev::timeline_event& one, const knot::raw& raw,
-                                         placement_t where) {
-  const auto kind = verification_kind_of(one.type);
-  const bool step = spl::visit(spl::overloaded{[](verification_kind::none) { return false; }, [](const auto&) { return true; }}, kind);
-  if (!step)
-    return false;
-  // An old request -- in the first sync's history -- is not one to answer.
-  const bool live = this->live(where);
-  if (!live || one.sender == id_.address || !crypto_)
-    return true;
-  // The step, read as its type's content, its reference made its transaction
-  // -- for the room it came in only.
-  const auto take = [&]<class Content>(type_tag<Content>) {
-    auto content = knot::try_read<Content>(raw.text);
-    if (!content)
-      return;
-    const auto reference = content->m_relates_to && content->m_relates_to->event_id ? content->m_relates_to->event_id
-                                                                                     : outer_reference_;
+bool account<Sink>::verification_in_room(const conversation_id& in, const loom::ev::timeline_event& one, placement_t where) {
+  // The step, its reference made its transaction -- for the room it came in
+  // only. An old one -- in the first sync's history -- is not one to answer.
+  const auto take = [&](auto content) {
+    if (!this->live(where) || one.sender == id_.address || !crypto_)
+      return true;
+    const auto reference = content.m_relates_to && content.m_relates_to->event_id ? content.m_relates_to->event_id
+                                                                                   : outer_reference_;
     if (!reference)
-      return;
+      return true;
     const auto found = verifications_.find(*reference);
     if (found == verifications_.end() || found->second.room != in.id)
-      return;
-    content->transaction_id = found->first;
-    this->verification_in(one.sender, *content);
+      return true;
+    content.transaction_id = found->first;
+    this->verification_in(one.sender, content);
+    return true;
   };
-  spl::visit(spl::overloaded{[](verification_kind::none) {},
-                                   [&](verification_kind::ready) { take(type_tag<loom::ev::m_key_verification_ready_content_t>{}); },
-                                   [&](verification_kind::start) { take(type_tag<loom::ev::m_key_verification_start_content_t>{}); },
-                                   [&](verification_kind::accept) { take(type_tag<loom::ev::m_key_verification_accept_content_t>{}); },
-                                   [&](verification_kind::key) { take(type_tag<loom::ev::m_key_verification_key_content_t>{}); },
-                                   [&](verification_kind::mac) { take(type_tag<loom::ev::m_key_verification_mac_content_t>{}); },
-                                   [&](verification_kind::cancel) { take(type_tag<loom::ev::m_key_verification_cancel_content_t>{}); },
-                                   [](verification_kind::done) {}},
-                kind);
-  return true;
+  return spl::visit(spl::overloaded{[&](const loom::ev::m_key_verification_ready_content_t& step) { return take(step); },
+                                    [&](const loom::ev::m_key_verification_start_content_t& step) { return take(step); },
+                                    [&](const loom::ev::m_key_verification_accept_content_t& step) { return take(step); },
+                                    [&](const loom::ev::m_key_verification_key_content_t& step) { return take(step); },
+                                    [&](const loom::ev::m_key_verification_mac_content_t& step) { return take(step); },
+                                    [&](const loom::ev::m_key_verification_cancel_content_t& step) { return take(step); },
+                                    [](const loom::ev::m_key_verification_done_content_t&) { return true; },
+                                    [](const auto&) { return false; }},
+                    one.content.data());
 }
 
 template <class Sink>

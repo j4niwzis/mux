@@ -71,7 +71,8 @@ void account<Sink>::edit(std::string room, std::string event, std::string text, 
     if (this->send_room_event(loom::cs::send_message{.room_id = room,
                                               .event_type = "m.room.message",
                                               .txn_id = this->transaction(),
-                                              .body = as_body(content)}))
+                                              .body = as_body(content)},
+                              relates_to_of(content)))
       sink_(change::message_edited{{id_, room}, event, body{text, html}});
   });
 }
@@ -89,7 +90,8 @@ void account<Sink>::edit_caption(std::string room, std::string event, std::strin
     if (this->send_room_event(loom::cs::send_message{.room_id = room,
                                               .event_type = "m.room.message",
                                               .txn_id = this->transaction(),
-                                              .body = as_body(content)}))
+                                              .body = as_body(content)},
+                              relates_to_of(content)))
       sink_(change::message_edited{{id_, room}, event, body{caption.empty() ? picture.name : caption, std::nullopt}});
   });
 }
@@ -124,7 +126,8 @@ void account<Sink>::react(std::string room, std::string target, std::string key,
       (void)this->send_room_event(loom::cs::send_message{.room_id = room,
                                                   .event_type = "m.reaction",
                                                   .txn_id = this->transaction(),
-                                                  .body = as_body(content)});
+                                                  .body = as_body(content)},
+                                relates_to_of(content));
       return;
     }
     for (const auto& [event, one] : reactions_)
@@ -310,16 +313,18 @@ void account<Sink>::send(std::string room, std::string body, std::optional<std::
     for (const mention& one : mentions)
       said.mentions.push_back(one.user);
     const auto content = loom::client::text_message(said);
-    this->send_text(in, room, txn, as_body(content));
+    this->send_text(in, room, txn, as_body(content), relates_to_of(content));
   });
 }
 
 // A text message sent under its transaction ID: acknowledged with the
 // event ID the server gave it, or marked failed.
 template <class Sink>
-void account<Sink>::send_text(const conversation_id& in, const std::string& room, const std::string& txn, knot::raw body) {
+void account<Sink>::send_text(const conversation_id& in, const std::string& room, const std::string& txn, knot::raw body,
+                              std::optional<knot::raw> relates_to) {
   auto sent = this->send_room_event(
-      loom::cs::send_message{.room_id = room, .event_type = "m.room.message", .txn_id = txn, .body = std::move(body)});
+      loom::cs::send_message{.room_id = room, .event_type = "m.room.message", .txn_id = txn, .body = std::move(body)},
+      std::move(relates_to));
   if (!sent) {
     sink_(change::delivery_changed{in, txn, delivery::failed{}});
     return;
@@ -551,7 +556,7 @@ void account<Sink>::send_in_thread(std::string room, std::string body, std::stri
     }
     const auto content = loom::client::text_message(
         loom::client::text_said{.body = body, .html = html, .reply_to = reply_to, .thread = root, .thread_latest = latest});
-    this->send_text(in, room, txn, as_body(content));
+    this->send_text(in, room, txn, as_body(content), relates_to_of(content));
   });
 }
 

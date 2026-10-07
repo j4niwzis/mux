@@ -543,13 +543,14 @@ std::optional<std::string> account<Sink>::make_backup(const crypto::cross_signin
   const auto by_master = canonical ? crypto::detail::ed25519_sign(secrets.master, *canonical) : std::nullopt;
   if (!canonical || !master_pub || !by_master)
     return std::nullopt;
-  const crypto::backup_auth_data auth{
-      .public_key = public_key,
-      .signatures = {{id_.address,
-                      {{"ed25519:" + crypto_->device_id(), crypto_->sign_as_device(*canonical)}, {"ed25519:" + *master_pub, *by_master}}}}};
   using version_t = loom::cs::post_room_keys_version;
+  const version_t::body_t::auth_data_t auth{
+      .public_key = public_key,
+      .signatures = std::map<std::string, std::map<std::string, std::string>>{
+          {id_.address,
+           {{"ed25519:" + crypto_->device_id(), crypto_->sign_as_device(*canonical)}, {"ed25519:" + *master_pub, *by_master}}}}};
   auto made = perform(*api_, version_t{.body = {.algorithm = version_t::body_t::algorithm_values::m_megolm_backup_v1_curve25519_aes_sha2{},
-                                                .auth_data = knot::raw{knot::to_json_string(auth)}}});
+                                                .auth_data = auth}});
   if (!made) {
     log(id_, "key backup not made: {}", made.error().said());
     return std::nullopt;
@@ -582,7 +583,9 @@ void account<Sink>::upload_backup() {
         one.session_id, loom::cs::def::key_backup_data_t{.first_message_index = one.first_index,
                                                           .forwarded_count = 0,
                                                           .is_verified = one.verified,
-                                                          .session_data = knot::raw{knot::to_json_string(*sealed)}});
+                                                          .session_data = {.ephemeral = sealed->ephemeral,
+                                                                           .ciphertext = sealed->ciphertext,
+                                                                           .mac = sealed->mac}});
     ids.push_back(one.session_id);
   }
   if (auto done = perform(*api_, ask); !done) {
@@ -597,10 +600,10 @@ std::size_t account<Sink>::restore_backup(const std::string& secret) {
   auto current = perform(*api_, loom::cs::get_room_keys_version_current{});
   if (!current)
     return 0;
-  const auto auth = knot::try_read<crypto::backup_auth_data>(current->auth_data.text);
   // The backup's key is the one secret storage gave: else it is not this
   // account's backup to read, nor to write to.
-  if (!auth || crypto::backup_public_of(secret) != auth->public_key)
+  const auto& public_key = current->auth_data.public_key;
+  if (!public_key || crypto::backup_public_of(secret) != *public_key)
     return 0;
   auto keys = perform(*api_, loom::cs::get_room_keys{.version = current->version});
   if (!keys)
@@ -608,8 +611,12 @@ std::size_t account<Sink>::restore_backup(const std::string& secret) {
   std::vector<crypto::exported_session> sessions;
   for (const auto& [room, backup] : keys->rooms)
     for (const auto& [id, data] : backup.sessions) {
-      const auto sealed = knot::try_read<crypto::backup_session_data>(data.session_data.text);
-      const auto plain = sealed ? crypto::open_backup(secret, *sealed) : std::nullopt;
+      const auto& said = data.session_data;
+      const auto plain = said.ephemeral && said.ciphertext && said.mac
+                             ? crypto::open_backup(secret, crypto::backup_session_data{.ephemeral = *said.ephemeral,
+                                                                                         .ciphertext = *said.ciphertext,
+                                                                                         .mac = *said.mac})
+                             : std::nullopt;
       if (!plain)
         continue;
       sessions.push_back(crypto::exported_session{.room_id = room,
@@ -630,8 +637,7 @@ template <class Sink>
 template <class Key>
 void account<Sink>::mentions_key_in_storage(const Key& storage, const std::string& storage_id) {
   const std::string name("net.mux.mentions_key");
-  const auto got = perform(*api_, loom::cs::get_account_data{.user_id = id_.address, .type = name});
-  if (const auto stored = read_answer<crypto::stored_secret>(got)) {
+  if (const auto stored = perform(*api_, account_data_as<crypto::stored_secret>{{.user_id = id_.address, .type = name}})) {
     if (const auto sealed = stored->encrypted.find(storage_id); sealed != stored->encrypted.end())
       if (const auto opened = crypto::detail::open_secret(storage, name, sealed->second))
         if (auto bytes = crypto::from_base64(*opened); bytes && bytes->size() == 32) {
@@ -679,18 +685,17 @@ void account<Sink>::restore_cross_signing(std::string recovery) {
     const auto key = crypto::key_of_recovery(recovery);
     if (!key)
       return refused("that is not a recovery key (a letter wrong, or one missing).");
-    const auto get = [&](std::string type) { return perform(*api_, loom::cs::get_account_data{.user_id = id_.address, .type = std::move(type)}); };
-    const auto chosen = get("m.secret_storage.default_key");
-    const auto id = read_answer<crypto::default_storage_key>(chosen);
+    const auto get = [&]<class Content>(std::string type) {
+      return perform(*api_, account_data_as<Content>{{.user_id = id_.address, .type = std::move(type)}});
+    };
+    const auto id = get.template operator()<crypto::default_storage_key>("m.secret_storage.default_key");
     if (!id)
       return refused("this account keeps no secrets on its server.");
-    const auto info_raw = get("m.secret_storage.key." + id->key);
-    const auto info = read_answer<crypto::storage_key_info>(info_raw);
+    const auto info = get.template operator()<crypto::storage_key_info>("m.secret_storage.key." + id->key);
     if (!info || !crypto::is_storage_key(*key, *info))
       return refused("that is not this account's recovery key.");
     const auto secret = [&](std::string name) -> std::optional<std::string> {
-      const auto raw = get(name);
-      const auto stored = read_answer<crypto::stored_secret>(raw);
+      const auto stored = get.template operator()<crypto::stored_secret>(name);
       if (!stored)
         return std::nullopt;
       const auto sealed = stored->encrypted.find(id->key);

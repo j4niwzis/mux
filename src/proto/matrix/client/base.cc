@@ -124,5 +124,14 @@ struct settings {
 // A typed content as a request's body: its JSON text.
 inline knot::raw as_body(const auto& content) { return knot::raw{knot::to_json_string(content)}; }
 
+// A typed content's relation, written out for the encrypted envelope, which
+// carries it in the clear: none where the content has none.
+inline std::optional<knot::raw> relates_to_of(const auto& content) {
+  if constexpr (requires { content.m_relates_to; })
+    if (content.m_relates_to)
+      return knot::raw{knot::to_json_string(*content.m_relates_to)};
+  return std::nullopt;
+}
+
 
 }  // namespace mux::proto::matrix::client

@@ -356,15 +356,12 @@ void account<Sink>::change_room(std::string room, proto::matrix::room_change_t c
 // A room encrypted from its first event: m.room.encryption in its initial
 // state, as Element makes direct chats and private rooms -- never a first
 // message in the clear while the state catches up.
-// What an account data request answered, read as a type: nothing where it
-// failed or is not that type (knot's error is not wanted here).
-template <class Type, class Answer>
-[[nodiscard]] std::optional<Type> read_answer(const Answer& answer) {
-  if (!answer)
-    return std::nullopt;
-  auto read = knot::try_read<Type>(answer->text);
-  return read ? std::optional<Type>(std::move(*read)) : std::nullopt;
-}
+// An account data request whose answer is read as the type it is kept as:
+// once, from the response's body.
+template <class Content>
+struct account_data_as : loom::cs::get_account_data {
+  using response = Content;
+};
 
 inline std::vector<loom::cs::create_room::body_t::state_event_t> encrypted_from_the_start() {
   loom::ev::m_room_encryption_content_t content;
@@ -415,7 +412,8 @@ void account<Sink>::send_sticker(std::string room, mux::emote sticker, std::opti
     auto sent = this->send_room_event(loom::cs::send_message{.room_id = room,
                                                       .event_type = "m.sticker",
                                                       .txn_id = this->transaction(),
-                                                      .body = as_body(content)});
+                                                      .body = as_body(content)},
+                                      relates_to_of(content));
     if (!sent)
       log(id_, "could not send a sticker to {}: {}", room, sent.error().said());
   });
@@ -467,7 +465,11 @@ void account<Sink>::send_custom(std::string room, std::string type, std::optiona
       sink_(proto::matrix::devtools_text{title, done ? "Sent: " + done->event_id : "Not sent: " + done.error().said()});
     } else {
       auto done = this->send_room_event(loom::cs::send_message{
-                                     .room_id = room, .event_type = type, .txn_id = this->transaction(), .body = knot::raw{json}});
+                                     .room_id = room, .event_type = type, .txn_id = this->transaction(), .body = knot::raw{json}},
+                                     [&] -> std::optional<knot::raw> {
+                                       const auto typed = knot::try_read<crypto::relation_part>(json);
+                                       return typed ? typed->relates_to : std::nullopt;
+                                     }());
       sink_(proto::matrix::devtools_text{title, done ? "Sent: " + done->event_id : "Not sent: " + done.error().said()});
     }
   });

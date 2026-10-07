@@ -42,34 +42,6 @@ inline void carry_info(mux::attachment& carried, const auto& info) {
 }
 
 using member_content = loom::ev::m_room_member_content_t;
-// Extera's mark of a forwarded message, as it comes beside the content.
-struct forward_mark_in {
-  struct attribution_t {
-    std::optional<std::string> attribution;
-    knot::raw rest;
-    friend consteval auto json_schema(knot::type<attribution_t>) { return knot::schema<attribution_t>().member<"rest">(knot::rest); }
-  };
-  // MSC2723's: the original's event, room and sender -- by its stable name
-  // or its unstable one.
-  struct where_t {
-    std::string event_id;
-    std::string room_id;
-    std::string sender;
-    knot::raw rest;
-    friend consteval auto json_schema(knot::type<where_t>) { return knot::schema<where_t>().member<"rest">(knot::rest); }
-  };
-  std::optional<attribution_t> forward;
-  std::optional<where_t> forwarded;
-  std::optional<where_t> forwarded_unstable;
-  knot::raw rest;
-  friend consteval auto json_schema(knot::type<forward_mark_in>) {
-    return knot::schema<forward_mark_in>()
-        .member<"forward">(knot::key("xyz.extera.forward"))
-        .member<"forwarded">(knot::key("m.forwarded"))
-        .member<"forwarded_unstable">(knot::key("com.famedly.app.forwarded"))
-        .member<"rest">(knot::rest);
-  }
-};
 // The links of an attribution, in order: where each goes, and its words.
 inline std::vector<std::pair<std::string, std::string>> links_in(std::string_view html) {
   std::vector<std::pair<std::string, std::string>> out;
@@ -118,8 +90,9 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     // the message it is).
     if (verification_request_of(content.msgtype) &&
         spl::visit(spl::overloaded{[](placement::at_end) { return true; }, [](const auto&) { return false; }}, where))
-      if (auto fields = knot::try_read<crypto::room_request_fields>(content.rest.text))
-        this->verification_request_in_room(in, one, *fields);
+      if (content.to && content.from_device && content.methods)
+        this->verification_request_in_room(
+            in, one, crypto::room_request_fields{.to = *content.to, .from_device = *content.from_device, .methods = *content.methods});
     const auto& relates = content.m_relates_to;
     // An edit: the event it replaces takes its new content.
     if (relates && loom::client::replaces(*relates)) {
@@ -158,10 +131,10 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
       carried.source = content.url.value_or("");
       // Encrypted: its ciphertext's URI, and what opens it kept for when it
       // is downloaded.
-      if (carried.source.empty())
-        if (auto sealed = knot::try_read<crypto::file_part>(content.rest.text)) {
-          carried.source = sealed->file.url;
-          encrypted_media_.insert_or_assign(sealed->file.url, std::move(sealed->file));
+      if (carried.source.empty() && content.file)
+        if (auto sealed = knot::convert<crypto::encrypted_file>(*content.file)) {
+          carried.source = sealed->url;
+          encrypted_media_.insert_or_assign(sealed->url, std::move(*sealed));
         }
       carried.name = content.filename.value_or(content.body);
       if (content.info) {
@@ -218,14 +191,18 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
     // Forwarded, as Extera marks it: who from and where, read from the mark;
     // the attribution its text was given dropped from what is shown -- the
     // bubble says it, as Telegram's does.
-    auto mark = knot::try_read<forward_mark_in>(content.rest.text);
-    // Forwarded as MSC2723 says: the content as it was, where it is from beside.
-    if (mark && (mark->forwarded || mark->forwarded_unstable)) {
-      const auto& where = mark->forwarded ? *mark->forwarded : *mark->forwarded_unstable;
-      made.forwarded = forward_info{.from = where.sender,
-                                    .name = where.sender,
-                                    .link = std::format("https://matrix.to/#/{}/{}", where.room_id, where.event_id)};
-    } else if (mark && mark->forward && mark->forward->attribution) {
+    // Forwarded as MSC2723 says -- by its stable name or its unstable one:
+    // the content as it was, where it is from beside.
+    const auto origin = [](const auto& where) {
+      return forward_info{.from = where.sender,
+                          .name = where.sender,
+                          .link = std::format("https://matrix.to/#/{}/{}", where.room_id, where.event_id)};
+    };
+    if (content.m_forwarded) {
+      made.forwarded = origin(*content.m_forwarded);
+    } else if (content.com_famedly_app_forwarded) {
+      made.forwarded = origin(*content.com_famedly_app_forwarded);
+    } else if (content.xyz_extera_forward && content.xyz_extera_forward->attribution) {
       // Who from, as an attribution's links say: the person, then where.
       const auto from_links = [](const std::string& attribution) -> std::optional<forward_info> {
         const auto links = links_in(attribution);
@@ -237,7 +214,7 @@ void account<Sink>::event(const conversation_id& in, const loom::ev::timeline_ev
                             .name = links.front().second,
                             .link = links.size() > 1 ? links[1].first : std::string()};
       };
-      made.forwarded = from_links(*mark->forward->attribution);
+      made.forwarded = from_links(*content.xyz_extera_forward->attribution);
       // Its attribution in bold, the message quoted under it -- and, forwarded
       // again, the same inside, as many times over: each taken off, and the
       // innermost's author said, as Telegram says a forward's first author.
@@ -437,9 +414,8 @@ void account<Sink>::encrypted(const conversation_id& in, const loom::ev::timelin
       made.type = std::move(clear->event.type);
       made.content = std::move(clear->event.content);
       spl::visit(spl::overloaded{[&](const loom::ev::m_room_encrypted_content_t& content) {
-                                         if (auto outer = knot::try_read<crypto::reference_part>(content.rest.text);
-                                             outer && outer->relates_to)
-                                           outer_reference_ = outer->relates_to->event_id;
+                                         if (content.m_relates_to)
+                                           outer_reference_ = content.m_relates_to->event_id;
                                        },
                                        [](const auto&) {}},
                     one.content.data());

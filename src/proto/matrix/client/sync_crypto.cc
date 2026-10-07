@@ -216,7 +216,14 @@ void account<Sink>::verification_in(const std::string& sender, const loom::ev::m
   // Both sides started: the one whose user and device sort first keeps its.
   if (state.we_started && std::pair(id_.address, crypto_->device_id()) < std::pair(sender, content.from_device))
     return;
-  const auto offer = knot::try_read<crypto::sas_offer>(content.rest.text);
+  // The SAS method's offer, as loom read it with the start.
+  const std::optional<crypto::sas_offer> offer =
+      content.key_agreement_protocols && content.hashes && content.message_authentication_codes && content.short_authentication_string
+          ? std::optional(crypto::sas_offer{.key_agreement_protocols = *content.key_agreement_protocols,
+                                            .hashes = *content.hashes,
+                                            .message_authentication_codes = *content.message_authentication_codes,
+                                            .short_authentication_string = *content.short_authentication_string})
+          : std::nullopt;
   if (content.method != "m.sas.v1" || !offer || !crypto::speaks(*offer))
     return this->cancel_verification(state.txn, "m.unknown_method", "Only emoji verification is spoken here.");
   // Committed to as its sender wrote it: in a room, with its reference (out

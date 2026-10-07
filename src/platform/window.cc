@@ -158,8 +158,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
     // -- Ctrl+V, the text menu's Paste -- and only where it
     // changed since. Read at the start, at every change and whenever the
     // window came back, it was read without the user pasting anything, and
-    // a phone said so ("mux pasted from your clipboard") at every start
-    // (the user's, #18813).
+    // a phone said so ("mux pasted from your clipboard") at every start.
     bool clipboard_stale = true;
     const auto fresh_clipboard = [&clipboard_stale] {
       if (!std::exchange(clipboard_stale, false))
@@ -470,7 +469,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
       // width the same (postmarketOS: its keyboard tells the program
       // nothing). Left focused, the field's place was told to the system
       // again as the window grew, and that brought the keyboard straight back
-      // up (the user's, #18718).
+      // up.
       if (typing && (!sdl::SDL_TextInputActive(window) ||
                      (app.shared.by_touch && width == last_width && height > last_height + kKeyboardGone))) {
         scene.clearFocus();

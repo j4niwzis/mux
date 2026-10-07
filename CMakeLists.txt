@@ -97,7 +97,7 @@ cme_declare_port(NAME tern PROVIDES tern
 cme_options(tern "TERN_TESTS OFF" "TERN_EXAMPLES OFF")
 cme_declare_port(NAME loom PROVIDES loom
   GITHUB_REPOSITORY j4niwzis/loom
-  GIT_TAG f2926152e943eb45d951f0b3c3b2ec9c2f656c05
+  GIT_TAG 0a7235c6faa93b5b2035a7960c9ac71d291b5f91
   VERSION 0.1.1
   LICENSE AGPL-3.0-only
   TARGETS loom)
@@ -151,7 +151,7 @@ cme_find_package(alef 0.1.1 COMPONENTS precis idna grapheme line bidi emoji REQU
 # loom.
 cme_declare_port(NAME knot PROVIDES knot
   GITHUB_REPOSITORY j4niwzis/knot
-  GIT_TAG 50319a44359801517711438d9882b504922c714b
+  GIT_TAG f915e34f13265ee1302775cd4851dbfdf6201b24
   LICENSE AGPL-3.0-only)
 
 # Found by itself, and linked by itself: mux imports it (a message's HTML),

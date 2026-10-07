@@ -519,10 +519,12 @@ void account<Sink>::done(const conversation_id& in, const loom::ev::timeline_eve
             const std::string target_id = one.state_key.value_or(one.sender);
             const std::string target = content.displayname.value_or(name_in(in.id, target_id));
             // What it was: the content before, as the server gives it beside.
+            // What it was: the content before, as the server gives it beside --
+            // read by knot as the event's own type, from the event's type.
             std::optional<member_content> before;
             if (one.unsigned_ && one.unsigned_->prev_content)
-              if (auto got = knot::try_read<member_content>(one.unsigned_->prev_content->text))
-                before = std::move(*got);
+              spl::visit(spl::overloaded{[&](const member_content& was) { before = was; }, [](const auto&) {}},
+                         one.unsigned_->prev_content->data());
             const membership_t now = loom::client::membership_of(content.membership);
             const membership_t was = before ? loom::client::membership_of(before->membership) : membership_t{membership::other{}};
             const bool was_in = spl::visit([](auto of) { return of.in; }, was);

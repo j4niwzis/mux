@@ -18,6 +18,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import mux.platform.pointing;
 import mux.platform.events;
 import mux.platform.fonts;
 import mux.platform.window_setup;
@@ -139,7 +140,7 @@ int run(App& app, const options& how, const events::kinds& kinds) {
   {
     int touch_screens = 0;
     sdl::SDL_free(sdl::SDL_GetTouchDevices(&touch_screens));  // the list SDL made, given back: only its count is read
-    app.shared.by_touch = touch_screens > 0 && !sdl::SDL_HasMouse();
+    app.shared.by_touch = mux::platform::pointing::touch_first() || (touch_screens > 0 && !sdl::SDL_HasMouse());
   }
   int result = 0;
   {

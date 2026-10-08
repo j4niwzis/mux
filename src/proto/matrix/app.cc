@@ -112,7 +112,7 @@ void program_told(App& app, const session_given& given) {
 // and said -- the registration carries on by itself once it is done there.
 template <class App>
 void program_told(App& app, const registration_page& page) {
-  app.ask.open_url(page.url);
+  app.ask.take(mux::ui::request::open_url{page.url});
   app.root().show_message("Finish registering in your browser",
                           "The server asks for a step it does on its own page, now open in your browser. Once it is done "
                           "there, mux carries on with the registration by itself.");
@@ -121,7 +121,7 @@ void program_told(App& app, const registration_page& page) {
 // said -- the account carries on by itself once the browser comes back.
 template <class App>
 void program_told(App& app, const sign_in_page& page) {
-  app.ask.open_url(page.url);
+  app.ask.take(mux::ui::request::open_url{page.url});
   app.root().show_message("Sign in in your browser",
                           "The server's sign-in page is open in your browser. Once you have signed in there, the "
                           "browser comes back to mux, and the account carries on by itself.");
@@ -130,7 +130,7 @@ void program_told(App& app, const sign_in_page& page) {
 // box to say when it is done.
 template <class App>
 void program_told(App& app, const uia_in_browser& asked) {
-  app.ask.open_url(asked.url);
+  app.ask.take(mux::ui::request::open_url{asked.url});
   app.root().template open_dialog<uia_page<typename App::accounts::actions_type>>(asked.what, asked.url);
 }
 // What the developer tools asked, shown.

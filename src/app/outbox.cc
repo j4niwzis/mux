@@ -399,7 +399,7 @@ class outbox_part {
     const conversation_id to = *screen.chosen;
     // A command of its protocol's own: asked, not sent.
     if (const auto asked = mux::proto::command_of(mux::ui::protocol_state_of(s_->ui, to.account), to, text)) {
-      spl::visit(spl::overloaded{[](mux::proto::part::no_request) {}, [&](const auto& one) { s_->ask->ask_for(one); }},
+      spl::visit(spl::overloaded{[](mux::proto::part::no_request) {}, [&](const auto& one) { s_->ask->take(one); }},
                     *asked);
       screen.line.set_text({});
       return;

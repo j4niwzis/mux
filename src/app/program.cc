@@ -218,7 +218,7 @@ struct app : kept_settings {
   // A Matrix session given: kept with its account, for the next start.
 
   // A link pressed in a message's text: routed as a link is.
-  void open_link(std::string url) { ask.open_url(std::move(url)); }
+  void open_link(std::string url) { ask.take(mux::ui::request::open_url{std::move(url)}); }
   void before_frame();
   void after_event();
   void apply_asked();

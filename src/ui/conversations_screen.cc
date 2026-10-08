@@ -1395,6 +1395,12 @@ struct conversations_screen : nodes::Stack, outbox {
   // only what the list lists changed (another space, a forum, the search),
   // the list alone: the chat's messages were reconciled again for nothing.
   void show(const model& now, bool with_chat = true);
+  // Read by the chats binding: the screen shown again from the model it was
+  // last given, as the chats move.
+  void refresh(const chats_model&) {
+    if (last_model)
+      this->show(*last_model);
+  }
 
   // What the chat's protocol says over the composer (proto::composer_banners):
   // Matrix's warning where the other is not verified, for one. Its banners

@@ -465,7 +465,11 @@ void app::refresh(std::source_location from) {
   this->show_backgrounds();
   this->show_chat_choices();
   root().show(this->accounts().values(), *model);
-  root().main().show(*model);
+  // The chat screen, as the chats binding reads it: against everything the
+  // model holds beside the chats, and shown again whether or not they moved.
+  root().main().last_model = &*model;
+  chats_binding.invalidate();
+  chats_binding.refresh(root(), model->chats());
   // The newly made range is now known, including a just-opened chat.
   pictures.ask();
   // The accounts page, where it is up: the account being added shown in,

@@ -1441,22 +1441,31 @@ struct conversations_screen : nodes::Stack, outbox {
     const auto own_or = [&](const std::optional<bool>& theirs, bool everyone) { return theirs.value_or(everyone); };
     // The chats listed in other accounts' lists, each with its strip: its
     // own colour, else its account's; shown as it says, else as its account.
-    std::map<account_id, std::vector<conversation_id>> listed_now;
-    std::set<conversation_id> moved_now;
-    std::map<conversation_id, skia::SkColor> strips_now;
-    std::ranges::for_each(root.placements.fValue, [&](const config::chat_placement& one) {
-      const conversation_id chat{{protocol_of(one.account), one.account}, one.conversation};
-      listed_now[account_id{protocol_of(one.listed_in), one.listed_in}].push_back(chat);
-      if (one.moved)
-        moved_now.insert(chat);
+    const auto& placements = root.placements.fValue;
+    const auto chat_of = [](const config::chat_placement& one) {
+      return conversation_id{{protocol_of(one.account), one.account}, one.conversation};
+    };
+    const auto strip_shown = [&](const config::chat_placement& one) {
       const config::account_t* theirs = account_settings(root, one.account);
-      if (!one.strip.value_or(theirs == nullptr || config::strip_of(*theirs)))
-        return;
+      return one.strip.value_or(theirs == nullptr || config::strip_of(*theirs));
+    };
+    const auto strip_of = [&](const config::chat_placement& one) {
+      const config::account_t* theirs = account_settings(root, one.account);
       const config::accent_t colour = one.strip_colour ? config::accent_of(one.strip_colour)
                                       : theirs != nullptr ? config::colour_of(*theirs)
                                                           : config::default_colour_of(one.account);
-      strips_now.insert_or_assign(chat, colour_of(colour, looks.theme));
-    });
+      return std::pair{chat_of(one), colour_of(colour, looks.theme)};
+    };
+    auto listed_now = std::ranges::fold_left(placements, std::map<account_id, std::vector<conversation_id>>{},
+                                             [&](auto by_list, const config::chat_placement& one) {
+                                               by_list[account_id{protocol_of(one.listed_in), one.listed_in}].push_back(chat_of(one));
+                                               return by_list;
+                                             });
+    auto moved_now = placements | std::views::filter(&config::chat_placement::moved) | std::views::transform(chat_of) |
+                     std::ranges::to<std::set>();
+    // The last placement of a chat says its strip, as it was written last.
+    auto strips_now = placements | std::views::reverse | std::views::filter(strip_shown) | std::views::transform(strip_of) |
+                      std::ranges::to<std::map>();
     auto now = std::tuple{std::move(listed_now), std::move(moved_now), std::move(strips_now), chats_where<&config::chat_choices::muted>(root), chats_where<&config::chat_choices::forum>(root),
                           chats_where<&config::chat_choices::hidden_from_home>(root), looks.spaces, looks.top_bar, looks.space_places,
                           own ? own_or(config::home_hides_of(*own), looks.home_hides_spaced) : looks.home_hides_spaced,

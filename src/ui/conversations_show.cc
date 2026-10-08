@@ -672,27 +672,26 @@ chat_listing<Actions> conversations_screen<Actions>::listing_of(const model& now
       todo.pop_back();
       if (!seen.insert(at).second)
         continue;
-      if (const auto* found = in->conversations.find(at); found != nullptr)
-        std::ranges::for_each(found->children, [&](const std::string& child) {
-          in_space.insert(child);
-          todo.push_back(child);
-        });
+      if (const auto* found = in->conversations.find(at); found != nullptr) {
+        in_space.insert_range(found->children);
+        todo.append_range(found->children);
+      }
     }
   }
   // Forums: each listed as one chat; their rooms in them, not beside them.
-  std::set<std::string> in_forums;
-  std::ranges::for_each(in->conversations.values() | std::views::filter([&](const conversation& one) { return this->shown_as_forum(one); }),
-                        [&](const conversation& one) { in_forums.insert(one.children.begin(), one.children.end()); });
+  const auto rooms_of = [](const conversation& one) -> const std::vector<std::string>& { return one.children; };
+  const std::set<std::string> in_forums = in->conversations.values() |
+                                          std::views::filter([&](const conversation& one) { return this->shown_as_forum(one); }) |
+                                          std::views::transform(rooms_of) | std::views::join | std::ranges::to<std::set>();
   const conversation* forum = forum_open ? in->conversations.find(*forum_open) : nullptr;
   // What the account's spaces hold: out of Home, where it is chosen so --
   // but direct messages. Every space's, where Home hides all that spaces
   // hold; else those of the spaces that hide theirs.
-  std::set<std::string> in_spaces;
-  if (folder == folder_t{folder::all{}})
-    std::ranges::for_each(in->conversations.values() | std::views::filter([&](const conversation& each) {
-                            return each.space && (home_hides_spaced || hidden_from_home.contains(each.id));
-                          }),
-                          [&](const conversation& each) { in_spaces.insert(each.children.begin(), each.children.end()); });
+  const bool home = folder == folder_t{folder::all{}};
+  const std::set<std::string> in_spaces = in->conversations.values() | std::views::filter([&](const conversation& each) {
+                                            return home && each.space && (home_hides_spaced || hidden_from_home.contains(each.id));
+                                          }) |
+                                          std::views::transform(rooms_of) | std::views::join | std::ranges::to<std::set>();
   const auto direct = [](const conversation& one) {
     return spl::visit(spl::overloaded{[](conversation_kind::direct) { return true; }, [](const auto&) { return false; }}, one.kind);
   };

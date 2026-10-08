@@ -100,7 +100,7 @@ class notices_part {
     this->show_page();
   }
   void apply(const request::set_notify_backend& one) {
-    s_->kept->notifications.backend = mux::config::word_of(one.backend);
+    s_->kept->notifications.backend.value = mux::config::word_of(one.backend);
     (void)s_->kept->write();
     this->show_page();
   }
@@ -109,8 +109,8 @@ class notices_part {
   // distributor, and the endpoint forgotten.
   void apply(const request::flip_unified_push&) {
     auto& settings = s_->kept->notifications;
-    const bool on = !settings.unified_push.value_or(false);
-    settings.unified_push = on;
+    const bool on = !settings.unified_push.value.value_or(false);
+    settings.unified_push.value = on;
     if (on)
       this->start_push();
     else
@@ -123,22 +123,22 @@ class notices_part {
     auto& settings = s_->kept->notifications;
     if (push_thread_.joinable() || s_->kept->keeps_nothing)
       return;
-    if (!settings.push_token) {
-      settings.push_token = mux::platform::push::new_token();
+    if (!settings.push_token.value) {
+      settings.push_token.value = mux::platform::push::new_token();
       (void)s_->kept->write();
     }
     push_forget_ = std::make_shared<std::atomic<bool>>(false);
     push_thread_ = std::jthread([inbox = push_box_, wake = *s_->wake, forget = push_forget_,
-                                 token = *settings.push_token](std::stop_token stop) {
+                                 token = *settings.push_token.value](std::stop_token stop) {
       mux::platform::push::run(stop, std::string(mux::platform::push::kAppId), token, "Messages from your accounts",
                                forget, push_sink{inbox, wake});
     });
-    if (settings.push_endpoint)
-      s_->net->set_push_endpoint(settings.push_endpoint);
+    if (settings.push_endpoint.value)
+      s_->net->set_push_endpoint(settings.push_endpoint.value);
   }
   void stop_push() {
     s_->net->set_push_endpoint(std::nullopt);
-    s_->kept->notifications.push_endpoint.reset();
+    s_->kept->notifications.push_endpoint.value.reset();
     if (!push_thread_.joinable())
       return;
     // Left to finish on its own -- it waits a second for the bus at a time,
@@ -159,8 +159,8 @@ class notices_part {
     for (const auto& one : said)
       spl::visit(spl::overloaded{[&](const mux::platform::push::endpoint& given) {
                                          std::println(std::cerr, "[push] endpoint {}", given.url);
-                                         if (settings.push_endpoint != given.url) {
-                                           settings.push_endpoint = given.url;
+                                         if (settings.push_endpoint.value != given.url) {
+                                           settings.push_endpoint.value = given.url;
                                            (void)s_->kept->write();
                                          }
                                          s_->net->set_push_endpoint(given.url);
@@ -168,7 +168,7 @@ class notices_part {
                                        [&](const mux::platform::push::message&) { s_->net->sync_now(); },
                                        [&](const mux::platform::push::unregistered&) {
                                          std::println(std::cerr, "[push] the distributor dropped the registration");
-                                         settings.push_endpoint.reset();
+                                         settings.push_endpoint.value.reset();
                                          s_->net->set_push_endpoint(std::nullopt);
                                          (void)s_->kept->write();
                                        },
@@ -203,7 +203,7 @@ class notices_part {
                                        this->sound_only(sound);
                                        toasts_due_.push_back({in, in.id, std::move(title), std::move(text)});
                                      }},
-                  mux::config::notify_backend_of(s_->kept->notifications.backend));
+                  mux::config::notify_backend_of(s_->kept->notifications.backend.value));
   }
   // A sound with nothing shown, or with mux's own window: the chime.
   void sound_only(bool sound) {

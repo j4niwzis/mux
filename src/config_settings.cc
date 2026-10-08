@@ -30,8 +30,23 @@ struct proxy_settings {
 // Which kinds of room events show, each as chosen: nothing said is as the
 // level under says -- a chat's its account's, an account's every one's.
 struct room_event_kinds {
-  std::optional<bool> joins, invites, names, avatars, room_name, topic, room_avatar, address, pins, permissions,
-      access, encryption, other, unreadable, reactions, unreactions;
+  // Each a Named field, found in the model by its name.
+  skiff::model::Named<"joins", std::optional<bool>> joins;
+  skiff::model::Named<"invites", std::optional<bool>> invites;
+  skiff::model::Named<"names", std::optional<bool>> names;
+  skiff::model::Named<"avatars", std::optional<bool>> avatars;
+  skiff::model::Named<"room_name", std::optional<bool>> room_name;
+  skiff::model::Named<"topic", std::optional<bool>> topic;
+  skiff::model::Named<"room_avatar", std::optional<bool>> room_avatar;
+  skiff::model::Named<"address", std::optional<bool>> address;
+  skiff::model::Named<"pins", std::optional<bool>> pins;
+  skiff::model::Named<"permissions", std::optional<bool>> permissions;
+  skiff::model::Named<"access", std::optional<bool>> access;
+  skiff::model::Named<"encryption", std::optional<bool>> encryption;
+  skiff::model::Named<"other", std::optional<bool>> other;
+  skiff::model::Named<"unreadable", std::optional<bool>> unreadable;
+  skiff::model::Named<"reactions", std::optional<bool>> reactions;
+  skiff::model::Named<"unreactions", std::optional<bool>> unreactions;
   friend bool operator==(const room_event_kinds&, const room_event_kinds&) = default;
 };
 consteval auto json_schema(knot::type<room_event_kinds>) { return knot::schema<room_event_kinds>(); }
@@ -63,29 +78,29 @@ consteval auto json_schema(knot::type<marks_file>) { return knot::schema<marks_f
 // notification on the desktop, with the sender's name and the message's
 // text or not, and a sound -- the chime, or a file -- by one backend.
 struct notification_settings {
-  bool desktop = true;
-  bool show_name = true;
-  bool show_text = true;
-  bool sound = true;
-  std::optional<bool> mentions_only;  // only @mentions and keywords notify
-  std::string backend = "native";
-  std::optional<std::string> sound_file;
+  skiff::model::Named<"desktop", bool> desktop{true};
+  skiff::model::Named<"show_name", bool> show_name{true};
+  skiff::model::Named<"show_text", bool> show_text{true};
+  skiff::model::Named<"sound", bool> sound{true};
+  skiff::model::Named<"mentions_only", std::optional<bool>> mentions_only;  // only @mentions and keywords notify
+  skiff::model::Named<"backend", std::string> backend{"native"};
+  skiff::model::Named<"sound_file", std::optional<std::string>> sound_file;
   // Woken by UnifiedPush, through the desktop's distributor (its D-Bus
   // specification) -- off unless chosen: only then is the bus asked, and
   // the servers given a pusher. The connection token, kept across runs, and
   // the endpoint the distributor gave for it.
-  std::optional<bool> unified_push;
-  std::optional<std::string> push_token;
-  std::optional<std::string> push_endpoint;
+  skiff::model::Named<"unified_push", std::optional<bool>> unified_push;
+  skiff::model::Named<"push_token", std::optional<std::string>> push_token;
+  skiff::model::Named<"push_endpoint", std::optional<std::string>> push_endpoint;
   friend bool operator==(const notification_settings&, const notification_settings&) = default;
 };
 consteval auto json_schema(knot::type<notification_settings>) { return knot::schema<notification_settings>(); }
-[[nodiscard]] constexpr bool notification_settings::* flag_member(notify_flag::desktop) { return &notification_settings::desktop; }
-[[nodiscard]] constexpr bool notification_settings::* flag_member(notify_flag::show_name) { return &notification_settings::show_name; }
-[[nodiscard]] constexpr bool notification_settings::* flag_member(notify_flag::show_text) { return &notification_settings::show_text; }
-[[nodiscard]] constexpr bool notification_settings::* flag_member(notify_flag::sound) { return &notification_settings::sound; }
+[[nodiscard]] constexpr auto flag_member(notify_flag::desktop) { return &notification_settings::desktop; }
+[[nodiscard]] constexpr auto flag_member(notify_flag::show_name) { return &notification_settings::show_name; }
+[[nodiscard]] constexpr auto flag_member(notify_flag::show_text) { return &notification_settings::show_text; }
+[[nodiscard]] constexpr auto flag_member(notify_flag::sound) { return &notification_settings::sound; }
 [[nodiscard]] inline bool& flag_in(notification_settings& in, const notify_flag_t& flag) {
-  return in.*spl::visit([](auto one) { return flag_member(one); }, flag);
+  return spl::visit([&](auto one) -> bool& { return (in.*flag_member(one)).value; }, flag);
 }
 // A chat's own choice of what notifies: everything, or what mentions the
 // user -- muted chats are kept apart, as before.
@@ -157,44 +172,44 @@ struct on {
   static constexpr bool unsaid = true;
   static constexpr auto chat = &notify_choices::on;
   static constexpr auto account = &account_shared::notify;
-  static bool of(const notification_settings& every) { return every.desktop; }
-  static void set(notification_settings& every, bool now) { every.desktop = now; }
+  static bool of(const notification_settings& every) { return every.desktop.value; }
+  static void set(notification_settings& every, bool now) { every.desktop.value = now; }
 };
 struct mentions {
   static constexpr bool unsaid = false;
   static constexpr auto chat = &notify_choices::mentions;
   static constexpr auto account = &account_shared::notify_mentions;
-  static bool of(const notification_settings& every) { return every.mentions_only.value_or(false); }
-  static void set(notification_settings& every, bool now) { every.mentions_only = now; }
+  static bool of(const notification_settings& every) { return every.mentions_only.value.value_or(false); }
+  static void set(notification_settings& every, bool now) { every.mentions_only.value = now; }
 };
 struct name {
   static constexpr bool unsaid = true;
   static constexpr auto chat = &notify_choices::name;
   static constexpr auto account = &account_shared::notify_name;
-  static bool of(const notification_settings& every) { return every.show_name; }
-  static void set(notification_settings& every, bool now) { every.show_name = now; }
+  static bool of(const notification_settings& every) { return every.show_name.value; }
+  static void set(notification_settings& every, bool now) { every.show_name.value = now; }
 };
 struct text {
   static constexpr bool unsaid = true;
   static constexpr auto chat = &notify_choices::text;
   static constexpr auto account = &account_shared::notify_text;
-  static bool of(const notification_settings& every) { return every.show_text; }
-  static void set(notification_settings& every, bool now) { every.show_text = now; }
+  static bool of(const notification_settings& every) { return every.show_text.value; }
+  static void set(notification_settings& every, bool now) { every.show_text.value = now; }
 };
 struct sound {
   static constexpr bool unsaid = true;
   static constexpr auto chat = &notify_choices::sound;
   static constexpr auto account = &account_shared::notify_sound;
-  static bool of(const notification_settings& every) { return every.sound; }
-  static void set(notification_settings& every, bool now) { every.sound = now; }
+  static bool of(const notification_settings& every) { return every.sound.value; }
+  static void set(notification_settings& every, bool now) { every.sound.value = now; }
 };
 }  // namespace notify_setting
 using notify_setting_t =
     spl::variant<notify_setting::on, notify_setting::mentions, notify_setting::name, notify_setting::text, notify_setting::sound>;
 // The client's, all said.
 [[nodiscard]] inline notify_choices notify_choices_of(const notification_settings& every) {
-  return {.on = every.desktop, .mentions = every.mentions_only.value_or(false), .name = every.show_name,
-          .text = every.show_text, .sound = every.sound};
+  return {.on = every.desktop.value, .mentions = every.mentions_only.value.value_or(false), .name = every.show_name.value,
+          .text = every.show_text.value, .sound = every.sound.value};
 }
 // An account's, as it keeps them.
 [[nodiscard]] inline notify_choices notify_choices_of(const account_shared& one) {

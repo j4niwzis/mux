@@ -422,7 +422,7 @@ void app::begin(const mux::config::file& saved, std::vector<mux::config::account
   this->settings.apply_limits();
   marks.load();
   // UnifiedPush only where chosen; off by default.
-  if (notifications.unified_push.value_or(false) && !demo)
+  if (notifications.unified_push.value.value_or(false) && !demo)
     notices.start_push();
   skiff::paint::motionLevel() = motion_of(saved.motion);
   this->root().show_motion(saved.motion.value_or("full"));

@@ -492,9 +492,9 @@ struct window : scene::Node {
       // A verification: OK where it is over, Decline or Cancel where it
       // waits. Not while the emoji are compared: an answer is asked there.
       if (auto* box = parts.verifying.shown()) {
-        if (box->parts.close.visible())
+        if (step_over(box->step))
           return closed(::mux::ui::request::close_verification{});
-        if (box->parts.decline.visible())
+        if (step_waits(box->step))
           return closed(::mux::ui::request::verify_cancel_now{});
       }
       // The dialogs, the one drawn last -- on top -- first.

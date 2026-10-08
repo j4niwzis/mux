@@ -87,8 +87,58 @@ struct verification_view {
   std::string device;
   verification_step_t step;
 };
+// One emoji, big, its name under it.
+[[nodiscard]] inline auto emoji_cell(const palette& colours, std::string_view picture, std::string_view name) {
+  using skiff::compose::styled;
+  return skiff::compose::column(skiff::compose::vbox(4.0f, {.width = 52.0f, .autoSize = scene::axes::kY}),
+                                styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::string(picture), 30.0f, colours.text)),
+                                styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::string(name), 11.0f, colours.dim)));
+}
+using emoji_cell_t = decltype(emoji_cell(std::declval<const palette&>(), {}, {}));
+// The seven to compare, in a row: none where nothing is compared.
+[[nodiscard]] inline skiff::compose::Many<emoji_cell_t> emoji_row(const palette& colours, const verification_step_t& step) {
+  const std::array<int, 7> none{};
+  const std::array<int, 7>& indices = spl::visit(spl::overloaded{[](const verification_step::compare& shown) -> const std::array<int, 7>& { return shown.emoji; },
+                                                                 [&](const auto&) -> const std::array<int, 7>& { return none; }},
+                                                 step);
+  const bool comparing = &indices != &none;
+  return skiff::compose::visible(
+      comparing, skiff::compose::many(skiff::compose::hbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+                                      comparing ? indices | std::views::transform([&](int index) {
+                                        const auto& [picture, name] = sas_emoji[static_cast<std::size_t>(index & 63)];
+                                        return emoji_cell(colours, picture, name);
+                                      }) | std::ranges::to<std::vector>()
+                                                : std::vector<emoji_cell_t>{}));
+}
+
+// Which of a verification's buttons its step shows.
+[[nodiscard]] inline bool in_step(const verification_step_t& step, auto shows) { return spl::visit(shows, step); }
+[[nodiscard]] inline bool step_asks(const verification_step_t& step) {
+  return in_step(step, spl::overloaded{[](verification_step::asked) { return true; }, [](const auto&) { return false; }});
+}
+[[nodiscard]] inline bool step_waits(const verification_step_t& step) {
+  return in_step(step, spl::overloaded{[](verification_step::asked) { return true; }, [](verification_step::waiting) { return true; },
+                                       [](const auto&) { return false; }});
+}
+[[nodiscard]] inline bool step_compares(const verification_step_t& step) {
+  return in_step(step, spl::overloaded{[](const verification_step::compare&) { return true; }, [](const auto&) { return false; }});
+}
+[[nodiscard]] inline bool step_over(const verification_step_t& step) {
+  return in_step(step, spl::overloaded{[](verification_step::done) { return true; }, [](const verification_step::cancelled&) { return true; },
+                                       [](const auto&) { return false; }});
+}
+
+// An emoji verification, as Element shows it: with whom, and where it is --
+// asked of you (Accept, Decline), waiting on them (Cancel), the 7 emoji to
+// compare (They match, They don't match), over (OK). What shows is what
+// its step says.
 template <class Actions>
-struct verification_box : nodes::Stack {
+using verification_box_of =
+    skiff::compose::Box<nodes::Text, nodes::Text, skiff::compose::Many<emoji_cell_t>, button_for<sends<request::verify_accept_now>>,
+                        button_for<sends<request::verify_cancel_now>>, button_for<sends<request::verify_match>>,
+                        button_for<sends<request::verify_mismatch>>, button_for<sends<request::close_verification>>>;
+template <class Actions>
+struct verification_box : verification_box_of<Actions> {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{440.0f}, .dismissable = false}; }
   using accept_button = button_for<sends<request::verify_accept_now>>;
@@ -96,82 +146,24 @@ struct verification_box : nodes::Stack {
   using match_button = button_for<sends<request::verify_match>>;
   using mismatch_button = button_for<sends<request::verify_mismatch>>;
   using close_button = button_for<sends<request::close_verification>>;
-  // One emoji, big, its name under it.
-  struct emoji_cell : nodes::Stack {
-    struct parts_t {
-      nodes::Text picture;
-      nodes::Text name;
-    } parts;
-    emoji_cell(const palette& colours, std::string_view picture, std::string_view name)
-        : parts{.picture = nodes::Text(std::string(picture), 30.0f, colours.text),
-                .name = nodes::Text(std::string(name), 11.0f, colours.dim)} {
-      this->setGap(4.0f);
-      fState.apply({.width = 52.0f, .autoSize = scene::axes::kY});
-      for (nodes::Text* each : {&parts.picture, &parts.name})
-        each->apply({.alignSelf = scene::align::kMiddle});
-    }
-  };
-  struct emoji_row : nodes::Stack {
-    struct parts_t {
-      std::vector<emoji_cell> cells;
-    } parts;
-    emoji_row(const palette& colours, const std::array<int, 7>& indices) {
-      this->setHorizontal();
-      this->setGap(4.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-      parts.cells.reserve(indices.size());
-      for (const int index : indices)
-        parts.cells.emplace_back(colours, sas_emoji[static_cast<std::size_t>(index & 63)].first,
-                                 sas_emoji[static_cast<std::size_t>(index & 63)].second);
-    }
-  };
-  struct parts_t {
-    nodes::Text title;
-    nodes::Text note;
-    std::optional<emoji_row> emoji;
-    accept_button accept;
-    decline_button decline;
-    match_button match;
-    mismatch_button mismatch;
-    close_button close;
-  } parts;
+  verification_step_t step;
 
-  verification_box(const ui_needs<Actions>& n, const verification_view& view)
-      : verification_box(*n.colours, view) {}
+  verification_box(const ui_needs<Actions>& n, const verification_view& view) : verification_box(*n.colours, view) {}
   verification_box(const palette& colours, const verification_view& view)
-      : parts{.title = nodes::Text("Verify " + view.user, 17.0f, colours.text, true),
-              .note = nodes::Text(note_of(view), 14.0f, colours.dim),
-              .accept = accept_button(colours.widgets, "Accept", {}),
-              .decline = decline_button(colours.widgets, declines(view.step) ? "Decline" : "Cancel", {}),
-              .match = match_button(colours.widgets, "They match", {}),
-              .mismatch = mismatch_button(colours.widgets, "They don't match", {}),
-              .close = close_button(colours.widgets, "OK", {})} {
-    lay_out_notice(*this, parts.title, parts.note);
-    spl::visit(spl::overloaded{[&](const verification_step::compare& shown) { parts.emoji.emplace(colours, shown.emoji); },
-                                     [](const auto&) {}},
-                  view.step);
-    const auto shown_in = [&](auto in_step) { return spl::visit(in_step, view.step); };
-    parts.accept.setVisible(shown_in(spl::overloaded{[](verification_step::asked) { return true; }, [](const auto&) { return false; }}));
-    parts.decline.setVisible(shown_in(spl::overloaded{[](verification_step::asked) { return true; },
-                                                         [](verification_step::waiting) { return true; },
-                                                         [](const auto&) { return false; }}));
-    const bool comparing = shown_in(spl::overloaded{[](const verification_step::compare&) { return true; }, [](const auto&) { return false; }});
-    parts.match.setVisible(comparing);
-    parts.mismatch.setVisible(comparing);
-    parts.close.setVisible(shown_in(spl::overloaded{[](verification_step::done) { return true; },
-                                                       [](const verification_step::cancelled&) { return true; },
-                                                       [](const auto&) { return false; }}));
-    parts.accept.setPrimary(true);
-    parts.match.setPrimary(true);
-    parts.close.setPrimary(true);
-    parts.accept.apply({.width = 120.0f, .height = 34.0f, .alignSelf = scene::align::kEnd});
-    parts.decline.apply({.width = 120.0f, .height = 34.0f, .alignSelf = scene::align::kEnd});
-    parts.match.apply({.width = 160.0f, .height = 34.0f, .alignSelf = scene::align::kEnd});
-    parts.mismatch.apply({.width = 160.0f, .height = 34.0f, .alignSelf = scene::align::kEnd});
-    parts.close.apply({.width = 90.0f, .height = 34.0f, .alignSelf = scene::align::kEnd});
-  }
-  [[nodiscard]] static bool declines(const verification_step_t& step) {
-    return spl::visit(spl::overloaded{[](verification_step::asked) { return true; }, [](const auto&) { return false; }}, step);
+      : verification_box_of<Actions>(
+            skiff::compose::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
+            notice_line("Verify " + view.user, 17.0f, colours.text, true), notice_line(note_of(view), 14.0f, colours.dim),
+            emoji_row(colours, view.step),
+            answer(step_asks(view.step), 120.0f, primary(accept_button(colours.widgets, "Accept", {}))),
+            answer(step_waits(view.step), 120.0f, decline_button(colours.widgets, step_asks(view.step) ? "Decline" : "Cancel", {})),
+            answer(step_compares(view.step), 160.0f, primary(match_button(colours.widgets, "They match", {}))),
+            answer(step_compares(view.step), 160.0f, mismatch_button(colours.widgets, "They don't match", {})),
+            answer(step_over(view.step), 90.0f, primary(close_button(colours.widgets, "OK", {})))),
+        step(view.step) {}
+  // A button of it: at the end, as wide as said, there where its step has it.
+  template <class Button>
+  [[nodiscard]] static Button answer(bool shown, float width, Button button) {
+    return skiff::compose::visible(shown, skiff::compose::styled({.width = width, .height = 34.0f, .alignSelf = scene::align::kEnd}, std::move(button)));
   }
   [[nodiscard]] static std::string note_of(const verification_view& view) {
     const std::string device = view.device.empty() ? std::string("one of their devices") : "device " + view.device;

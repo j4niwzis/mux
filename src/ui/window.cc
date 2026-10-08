@@ -54,6 +54,10 @@ struct shown_root {
   skiff::model::Tracked<std::optional<new_room_facts>> new_room;
   skiff::model::Tracked<std::optional<packs_facts>> packs;
   skiff::model::Tracked<std::optional<explore_facts>> explore;
+  skiff::model::Tracked<std::optional<settings_facts>> settings;
+  skiff::model::Tracked<std::optional<room_settings_facts>> manage;
+  skiff::model::Tracked<std::optional<send_facts>> sending;
+  skiff::model::Tracked<std::optional<verification_view>> verifying;
 };
 struct shown_reactions {};
 using shown_model = skiff::model::Model<shown_root, shown_reactions>;
@@ -225,7 +229,7 @@ struct window : scene::Node {
       wallpaper_t behind;
       // The pages slide over the drawer too: Manage accounts comes in over it.
       frame_t frame;
-      widgets::Dialog<settings_dialog<Actions>> settings;
+      shown_in<settings_dialog<Actions>, settings_facts> settings;
       shown_in<notice_box<Actions>, notice_facts> notice;
       // A person's info, in the middle, as tdesktop's profile layer.
       shown_in<person_card<Actions>, person_shown> person;
@@ -242,7 +246,7 @@ struct window : scene::Node {
       // The mentions or the reactions not yet seen, listed.
       shown_in<marks_box<Actions>, marks_facts> marks;
       // A room's management.
-      widgets::Dialog<room_settings<Actions>> manage;
+      shown_in<room_settings<Actions>, room_settings_facts> manage;
       // Where a message is forwarded to.
       shown_in<forward_box<Actions>, forward_facts> forwarding;
       // Element's Start chat, and its Create a room.
@@ -256,12 +260,12 @@ struct window : scene::Node {
       shown_in<explore_box<Actions>, explore_facts> explore;
       // A protocol's own dialog: Matrix's developer tools, for one.
       widgets::Dialog<tool_holder> tools;
-      widgets::Dialog<send_box<Actions>> sending;
+      shown_in<send_box<Actions>, send_facts> sending;
       // A passphrase asked for: at the start, where local data is encrypted;
       // or to turn that on or off, or change it. Over everything.
       widgets::Dialog<passphrase_box<Actions>> passphrase;
       // An emoji verification, as it goes.
-      widgets::Dialog<verification_box<Actions>> verifying;
+      shown_in<verification_box<Actions>, verification_view> verifying;
       std::optional<emoji_popup<Actions>> emoji;
       std::optional<context_menu<Actions>> menu;
       std::optional<picture_viewer<Actions>> viewer;
@@ -452,6 +456,7 @@ struct window : scene::Node {
     layers(const ui_needs<Actions>& n)
         : parts{.backdrop = nodes::Box<>(n.colours->background),
                 .frame = frame_t(std::piecewise_construct, std::forward_as_tuple(n), std::forward_as_tuple(n)),
+                .settings = shown_made<settings_dialog<Actions>, settings_facts>(n),
                 .notice = shown_made<notice_box<Actions>, notice_facts>(n),
                 .person = shown_made<person_card<Actions>, person_shown>(n),
                 .room = shown_made<room_card<Actions>, room_card_facts>(n),
@@ -460,12 +465,15 @@ struct window : scene::Node {
                 .linking = shown_made<link_box<Actions>, link_facts>(n),
                 .leaving = shown_made<leave_space_box<Actions>, leave_space_facts>(n),
                 .marks = shown_made<marks_box<Actions>, marks_facts>(n),
+                .manage = shown_made<room_settings<Actions>, room_settings_facts>(n),
                 .forwarding = shown_made<forward_box<Actions>, forward_facts>(n),
                 .new_chat = shown_made<start_chat_box<Actions>, new_chat_facts>(n),
                 .new_room = shown_made<create_room_box<Actions>, new_room_facts>(n),
                 .packs = shown_made<packs_box<Actions>, packs_facts>(n),
                 .wallpaper = shown_made<wallpaper_box<Actions>, wallpaper_facts>(n),
-                .explore = shown_made<explore_box<Actions>, explore_facts>(n)} {
+                .explore = shown_made<explore_box<Actions>, explore_facts>(n),
+                .sending = shown_made<send_box<Actions>, send_facts>(n),
+                .verifying = shown_made<verification_box<Actions>, verification_view>(n)} {
       auto& [backdrop, behind, frame, ...over] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
@@ -477,6 +485,8 @@ struct window : scene::Node {
       frame.base().setSheetColour(n.colours->sidebar);
       // Each dialog as what it shows declares it.
       (look_as_its_content(over, *n.colours), ...);
+      // The files to send: as wide as 440 at most, as high as they are.
+      parts.sending.setWidthFittingContent(440.0f);
     }
   };
   struct parts_t {
@@ -604,15 +614,9 @@ struct window : scene::Node {
     layer().sending.dropClosed();
   }
 
-  void open_settings() { layer().settings.open(needs_); }
   void open_picture(std::string source, std::string sender, std::string name, std::string when) {
     layer().viewer.emplace(needs_, std::move(source), std::move(sender), std::move(name), std::move(when));
   }
-  void open_send_box(const std::vector<pending_file>& files) {
-    layer().sending.setWidthFittingContent(440.0f);
-    layer().sending.open(needs_, files);
-  }
-  void close_send_box() { layer().sending.close(); }
   [[nodiscard]] send_box<Actions>* send_box_up() { return layer().sending.shown(); }
   void close_picture() { layer().viewer.reset(); }
   // A video: the viewer on its thumbnail, waiting for it; played once its
@@ -625,7 +629,6 @@ struct window : scene::Node {
     if (auto& up = layer().viewer; up && up->video == video)
       up->start(file);
   }
-  void close_settings() { layer().settings.close(); }
   [[nodiscard]] settings_dialog<Actions>* settings_up() { return layer().settings.shown(); }
   // A selectable text's menu, where the pointer was pressed, kept in the
   // window; and gone.
@@ -753,11 +756,7 @@ struct window : scene::Node {
       box->say(std::move(why));
   }
   void close_passphrase() { layer().passphrase.close(); }
-  void show_verification(const verification_view& view) { layer().verifying.open(needs_, view); }
-  void close_verification() { layer().verifying.close(); }
 
-  void open_manage(const room_settings_facts& facts) { layer().manage.open(needs_, facts); }
-  void close_manage() { layer().manage.close(); }
   void show_found_people(const std::vector<found_person>& people, const std::string& query) {
     if (auto* up = layer().new_chat.shown())
       up->show_found(people, query);

@@ -85,7 +85,7 @@ class manage_part {
   }
   void apply(const request::close_manage&) {
     s_->manage_target.reset();
-    s_->root().close_manage();
+    mux::ui::show<mux::ui::room_settings_facts>(*s_->showing, std::nullopt);
   }
   // Done to the room being read, by its account.
   void apply(const request::room_act& one) {
@@ -153,7 +153,7 @@ class manage_part {
     }
     // What its protocol fills of them: Matrix's own level and privileged users.
     mux::proto::manage_facts(mux::ui::protocol_state_of(s_->ui, chat->id.account), *chat, facts);
-    s_->root().open_manage(facts);
+    mux::ui::show(*s_->showing, std::optional(facts));
   }
 
   services* s_;

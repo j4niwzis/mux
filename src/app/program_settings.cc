@@ -43,7 +43,8 @@ void app::rebuild_in_theme() {
   after.info_width = info_width;
   after.info_open = info_open;
   this->refresh();
-  root().open_settings();
+  mux::ui::show(showing, std::optional(mux::ui::settings_facts{}));
+  showing_binding.refresh(root(), showing);
   if (auto* up = root().settings_up()) {
     up->show_appearance(this->appearance().theme, this->appearance().accent);
     up->keep_offset(settings_at);

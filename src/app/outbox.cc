@@ -229,7 +229,7 @@ class outbox_part {
   void apply(const request::close_send_box&) {
     to_send_.clear();
     files_thread_.reset();
-    s_->root().close_send_box();
+    mux::ui::show<mux::ui::send_facts>(*s_->showing, std::nullopt);
   }
   void apply(const request::send_files&) {
     const auto& chosen = s_->root().main().chosen;
@@ -269,7 +269,7 @@ class outbox_part {
     }
     to_send_.clear();
     files_thread_.reset();
-    s_->root().close_send_box();
+    mux::ui::show<mux::ui::send_facts>(*s_->showing, std::nullopt);
   }
   // A saved GIF sent into the chat, as a picture that moves -- as a file
   // dropped is, without the send box: its thumbnail shown under its local id
@@ -380,7 +380,7 @@ class outbox_part {
     for (const file& one : to_send_)
       shown.push_back({one.as.name, one.as.picture ? "local:" + one.local : std::string(),
                        static_cast<std::int64_t>(one.as.bytes.size()), one.as.picture.has_value()});
-    s_->root().open_send_box(shown);
+    mux::ui::show(*s_->showing, std::optional(mux::ui::send_facts{shown}));
   }
 
  private:

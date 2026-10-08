@@ -35,13 +35,13 @@ class verification_part {
   void apply(const request::verify_cancel_now&) {
     if (shown_)
       s_->net->verify_cancel(shown_->first, shown_->second);
-    s_->root().close_verification();
+    mux::ui::show<mux::ui::verification_view>(*s_->showing, std::nullopt);
   }
   void apply(const request::verify_match&) { this->confirm(true); }
   void apply(const request::verify_mismatch&) { this->confirm(false); }
   void apply(const request::close_verification&) {
     shown_.reset();
-    s_->root().close_verification();
+    mux::ui::show<mux::ui::verification_view>(*s_->showing, std::nullopt);
   }
   // A person's reset identity accepted ("Withdraw verification").
   void apply(const request::accept_identity& one) {

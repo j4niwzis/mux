@@ -40,7 +40,7 @@ class proxies_part {
 
   // Settings opened on the proxies, from an account's page.
   void apply(const request::manage_proxies&) {
-    s_->root().open_settings();
+    mux::ui::show(*s_->showing, std::optional(mux::ui::settings_facts{}));
     if (auto* up = s_->root().settings_up())
       up->show_proxies(k_->proxies(), false);
   }

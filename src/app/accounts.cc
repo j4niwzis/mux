@@ -36,7 +36,7 @@ class accounts_part {
   accounts& show_accounts() {
     if (s_->root().drawer_open())
       s_->drawer_waits = true;
-    s_->root().close_settings();
+    mux::ui::show<mux::ui::settings_facts>(*s_->showing, std::nullopt);
     pending_login_.reset();
     auto& panel = s_->root().open<accounts>();
     if (k_->config_error)

@@ -31,6 +31,10 @@ struct pending_file {
   std::int64_t size = 0;
   bool image = false;
 };
+// The files about to be sent, shown before they go.
+struct send_facts {
+  std::vector<pending_file> files;
+};
 template <class Actions>
 struct send_box : nodes::Stack {
   // Sized as it is opened, by the files it is opened with.
@@ -98,6 +102,7 @@ struct send_box : nodes::Stack {
     buttons_row buttons;
   } parts;
 
+  send_box(const ui_needs<Actions>& n, const send_facts& facts) : send_box(*n.colours, facts.files) {}
   send_box(const ui_needs<Actions>& n, const std::vector<pending_file>& all) : send_box(*n.colours, all) {}
   send_box(const palette& colours, const std::vector<pending_file>& all)
       : parts{.title = nodes::Text(title_of(all), 17.0f, colours.text, true),

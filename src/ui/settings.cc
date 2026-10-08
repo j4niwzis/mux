@@ -17,6 +17,8 @@ import :storage;
 
 export namespace mux::ui {
 
+// Settings open: nothing more to say of it -- its pages are its own.
+struct settings_facts {};
 template <class Actions>
 struct settings_dialog : scene::Node {
   // The dialog it is shown in.
@@ -105,6 +107,7 @@ struct settings_dialog : scene::Node {
       this->invalidateLayout();
   }
 
+  settings_dialog(const ui_needs<Actions>& n, const settings_facts&) : settings_dialog(n) {}
   settings_dialog(const ui_needs<Actions>& n)
       : needs_(n),
         parts{.scroll = nodes::ScrollContainer<page_t>(page_t(std::in_place_index<0>, n))} {

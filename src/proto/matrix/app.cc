@@ -160,7 +160,7 @@ void program_told(App& app, const pack_picture_uploaded& uploaded) {
 template <class App>
 void program_told(App& app, const verification_changed& one) {
   app.verification.showing(one.by, one.txn);
-  app.root().show_verification(ui::verification_view{one.user, one.device, one.step});
+  mux::ui::show(app.showing, std::optional(ui::verification_view{one.user, one.device, one.step}));
 }
 
 // The account's Sessions page, where it is open for that account.
@@ -275,13 +275,13 @@ void program_asked(App& app, const explore_state&) {
   const auto chosen = app.shared.managed();
   if (!chosen || app.shared.demo())
     return;
-  app.root().close_manage();
+  mux::ui::show<mux::ui::room_settings_facts>(app.showing, std::nullopt);
   ops::list_state(*app.net, *chosen);
 }
 template <class App>
 void program_asked(App& app, const open_send_custom&) {
   using page = devtools_page<typename App::accounts::actions_type>;
-  app.root().close_manage();
+  mux::ui::show<mux::ui::room_settings_facts>(app.showing, std::nullopt);
   app.root().template open_dialog<page>(typename page::send_form_t{});
 }
 template <class App>

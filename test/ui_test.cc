@@ -262,8 +262,8 @@ struct ui_state {
     paint.colours = &colours;
   }
 
-  mux::ui::ui_needs<stub> needs(stub& program) {
-    return {.actions = &program, .colours = &colours, .emoji = &emoji,
+  mux::ui::ui_needs<stub> needs(stub&) {
+    return {.colours = &colours, .emoji = &emoji,
             .looks = &looks, .paint = &paint, .shared = &shared};
   }
 };

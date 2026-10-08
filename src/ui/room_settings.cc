@@ -369,6 +369,44 @@ inline auto chat_settings_view(const palette& colours, const conversation_id& ch
       chat);
 }
 
+// A chat's notifications on or off: off is muted -- the chat list's mute,
+// the same -- and on, said apart from it; Default, neither. So it reads
+// and sets the chat's choices whole.
+struct chat_on_field : show_hide_field<notify_on_setting, std::optional<bool>> {
+  config::chat_choices shown;
+  explicit chat_on_field(const palette& colours) : show_hide_field(colours, choice_level::chat{}) {}
+  void read(const config::chat_choices& now) {
+    shown = now;
+    show_hide_field::read(now.muted ? std::optional<bool>(false) : now.notify.on);
+  }
+  std::vector<skiff::model::SetTo<config::chat_choices>> takeChanges() {
+    std::vector<skiff::model::SetTo<config::chat_choices>> out;
+    for (auto& chosen : show_hide_field::takeChanges()) {
+      auto next = shown;
+      next.muted = chosen.fValue == false;
+      next.notify.on = chosen.fValue == true ? chosen.fValue : std::nullopt;
+      out.push_back(skiff::model::setTo(std::move(next)));
+    }
+    return out;
+  }
+};
+// A chat's notification rows, bound to its own choices in the model.
+inline auto chat_notify_view(const palette& colours, const conversation_id& chat) {
+  using notify = config::notify_choices;
+  using skiff::compose::bound;
+  const choice_level_t level = choice_level::chat{};
+  return skiff::compose::scoped<config::chat_choices>(
+      skiff::compose::handlers(),
+      skiff::compose::column(
+          skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          bound<config::chat_choices>(chat_on_field(colours)),
+          bound<skiff::model::Field<&notify::mentions>>(show_hide_field<notify_mentions_setting, std::optional<bool>>(colours, level)),
+          bound<skiff::model::Field<&notify::name>>(show_hide_field<notify_name_setting, std::optional<bool>>(colours, level)),
+          bound<skiff::model::Field<&notify::text>>(show_hide_field<notify_text_setting, std::optional<bool>>(colours, level)),
+          bound<skiff::model::Field<&notify::sound>>(show_hide_field<notify_sound_setting, std::optional<bool>>(colours, level))),
+      chat);
+}
+
 template <class Actions>
 struct room_settings : nodes::Stack {
   // The dialog it is shown in.
@@ -530,12 +568,12 @@ struct room_settings : nodes::Stack {
   struct notifications_page : nodes::Stack {
     struct parts_t {
       nodes::Text heading;
-      notify_choice_rows<Actions> choices;
+      decltype(chat_notify_view(std::declval<const palette&>(), std::declval<const conversation_id&>())) settings;
       nodes::Text note;
     } parts;
-    notifications_page(Actions* a, room_settings* box, const room_settings_facts& facts)
+    notifications_page(Actions*, room_settings* box, const room_settings_facts& facts)
         : parts{.heading = tab_heading(*box->colours_, "Notifications"),
-                .choices = notify_choice_rows<Actions>(a, *box->colours_, choice_level::chat{}, facts.notify),
+                .settings = chat_notify_view(*box->colours_, facts.chat),
                 .note = nodes::Text(facts.space ? "For every chat in this space, unless the chat chooses again; Default is "
                                                   "as the space above it, or the account, says."
                                                 : "Default is as the space it is in, or the account, says.",

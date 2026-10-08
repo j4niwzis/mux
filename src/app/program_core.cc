@@ -253,48 +253,32 @@ void app::wire() {
   store.vault = vault;
 }
 
-// A page with the model's widgets (parts.settings) bound: afresh where it
-// is another than the one bound, its input drained; a page without them,
-// nothing bound.
+// The window, bound to the model whole: one binding, its change log read
+// once a frame. Where a page with the model's widgets has come up -- the
+// settings dialog's, the room settings', the accounts panel's -- the tree
+// was changed by hand, and is walked whole once; else only what changed.
 template <class Page>
-void app::bind_page(Page& page, skiff::bind::Binding<kept_model>& binding, const void*& bound) {
-  if constexpr (requires { page.parts.settings; }) {
-    if (bound != &page.parts.settings) {
-      bound = &page.parts.settings;
-      binding = {};
-      binding.refresh(page.parts.settings, this->state);
-    }
-    binding.drain(page.parts.settings, this->state);
-  } else {
-    bound = nullptr;
-  }
-}
-template <class Page>
-void app::refresh_page(Page& page, skiff::bind::Binding<kept_model>& binding) {
+const void* bound_part_of(Page& page) {
   if constexpr (requires { page.parts.settings; })
-    binding.refresh(page.parts.settings, this->state);
+    return &page.parts.settings;
+  else
+    return nullptr;
 }
-// The settings page up, where it has the model's widgets (parts.settings):
-// a page newly up bound afresh; its input taken as edits of the model.
 void app::take_page_input() {
-  auto* up = root().settings_up();
-  if (up == nullptr)
-    bound_page = nullptr;
+  std::array<const void*, 3> now{};
+  if (auto* up = root().settings_up())
+    now[0] = spl::visit([](auto& page) { return bound_part_of(page); }, up->page());
   if (auto* managing = root().manage_up())
-    spl::visit([&](auto& page) { this->bind_page(page, manage_binding, bound_manage); }, managing->holder().parts.page);
-  else
-    bound_manage = nullptr;
+    now[1] = spl::visit([](auto& page) { return bound_part_of(page); }, managing->holder().parts.page);
   if (auto* panel = root().open_panel())
-    spl::visit([&](auto& accounts) {
-      spl::visit([&](auto& page) { this->bind_page(page, panel_binding, bound_panel); }, accounts.detail);
-    }, *panel);
-  else
-    bound_panel = nullptr;
-  if (up == nullptr) {
-    this->settle_model();
-    return;
+    now[2] = spl::visit([](auto& accounts) { return spl::visit([](auto& page) { return bound_part_of(page); }, accounts.detail); },
+                        *panel);
+  if (now != bound_pages) {
+    bound_pages = now;
+    window_binding.invalidate();
+    window_binding.refresh(root(), this->state);
   }
-  spl::visit([&](auto& page) { this->bind_page(page, page_binding, bound_page); }, up->page());
+  window_binding.drain(root(), this->state);
   this->settle_model();
 }
 // How the window looks, as the model holds it, put where the window's
@@ -350,13 +334,7 @@ void app::settle_model() {
                                    notices.stop_push();
                                }},
                effect);
-  if (auto* up = root().settings_up())
-    spl::visit([&](auto& page) { this->refresh_page(page, page_binding); }, up->page());
-  if (auto* managing = root().manage_up())
-    spl::visit([&](auto& page) { this->refresh_page(page, manage_binding); }, managing->holder().parts.page);
-  if (auto* panel = root().open_panel())
-    spl::visit([&](auto& accounts) { spl::visit([&](auto& page) { this->refresh_page(page, panel_binding); }, accounts.detail); },
-               *panel);
+  window_binding.refresh(root(), this->state);
 }
 
 void app::before_frame() {

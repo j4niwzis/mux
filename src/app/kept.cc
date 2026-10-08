@@ -687,8 +687,6 @@ struct kept_settings {
   }
   // Written back: nothing, or why not.
   [[nodiscard]] std::optional<std::string> write() {
-    // The change log is not read yet: let go of, as the file is written.
-    (void)state.takeChanges();
     if (keeps_nothing)
       return std::nullopt;
     if (config_error)

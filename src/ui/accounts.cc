@@ -387,10 +387,11 @@ struct account_chats : nodes::Stack {
   };
   // Home without what its spaces hold -- but direct messages -- or as every
   // account's.
-  struct pick_home : outbox {
-    void operator()(std::size_t index) {
-      this->emit(::mux::ui::request::set_home_hides{choice_level::account{}, index == 0 ? std::nullopt : std::optional<bool>(index >= 2)});
-      this->emit(::mux::ui::request::set_home_direct{choice_level::account{}, index == 0 ? std::nullopt : std::optional<bool>(index == 3)});
+  struct pick_home {
+    using Answer = std::tuple<::mux::ui::request::set_home_hides, ::mux::ui::request::set_home_direct>;
+    Answer operator()(std::size_t index) const {
+      const auto said = [&](bool on) { return index == 0 ? std::nullopt : std::optional<bool>(on); };
+      return {::mux::ui::request::set_home_hides{choice_level::account{}, said(index >= 2)}, ::mux::ui::request::set_home_direct{choice_level::account{}, said(index == 3)}};
     }
   };
   struct parts_t {

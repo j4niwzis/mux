@@ -44,12 +44,10 @@ struct person_card : nodes::Stack {
   // tdesktop's profile layer: 392 wide (infoDesiredWidth), as high as what
   // it shows, a 24th of the window down within 20 and 40.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{392.0f}, .place = widgets::dialog_place::near_top{}}; }
-  struct message_them : outbox {
+  struct message_them {
+    using Answer = std::tuple<::mux::ui::request::message_person, ::mux::ui::request::close_person_info>;
     conversation_id who;
-    void operator()() {
-      this->emit(::mux::ui::request::message_person{who});
-      this->emit(::mux::ui::request::close_person_info{});
-    }
+    Answer operator()() const { return {::mux::ui::request::message_person{who}, ::mux::ui::request::close_person_info{}}; }
   };
   using close_act = sends<::mux::ui::request::close_person_info>;
   using close_button = icon_button<close_act>;
@@ -71,12 +69,10 @@ struct person_card : nodes::Stack {
     }
   };
   // What a moderator does to them, as Element's user info offers it.
-  struct to_them : outbox {
+  struct to_them {
+    using Answer = std::tuple<::mux::ui::request::room_act, ::mux::ui::request::close_person_info>;
     room_action_t action;
-    void operator()() {
-      this->emit(::mux::ui::request::room_act{action});
-      this->emit(::mux::ui::request::close_person_info{});
-    }
+    Answer operator()() const { return {::mux::ui::request::room_act{action}, ::mux::ui::request::close_person_info{}}; }
   };
   // Verified by comparing emoji with each of their devices that answers.
   struct accept_them {
@@ -91,12 +87,10 @@ struct person_card : nodes::Stack {
       spl::visit(spl::overloaded{[](proto::part::no_request) {}, [&](const auto& one) { this->emit(one); }}, asks);
     }
   };
-  struct verify_them : outbox {
+  struct verify_them {
+    using Answer = std::tuple<::mux::ui::request::verify_person, ::mux::ui::request::close_person_info>;
     conversation_id who;
-    void operator()() {
-      this->emit(::mux::ui::request::verify_person{who});
-      this->emit(::mux::ui::request::close_person_info{});
-    }
+    Answer operator()() const { return {::mux::ui::request::verify_person{who}, ::mux::ui::request::close_person_info{}}; }
   };
   // The colours it is made in.
   const palette* colours_ = nullptr;
@@ -127,10 +121,10 @@ struct person_card : nodes::Stack {
               .band = section_band(colours),
               .id = id_line(colours, key, ""),
               .message = action_tile<message_them>(colours, "Message", icon::send{}, {conversation_id{account, key}}),
-              .verify = action_tile<verify_them>(colours, "Verify with emoji", icon::check{}, {{}, conversation_id{account, key}}),
+              .verify = action_tile<verify_them>(colours, "Verify with emoji", icon::check{}, {conversation_id{account, key}}),
               .accept = action_tile<accept_them>(colours, "Withdraw verification", icon::close{}, {conversation_id{account, key}}),
-              .remove = action_tile<to_them>(colours, "Remove from room", icon::leave{}, {{}, room_action::kick{key}}),
-              .ban = action_tile<to_them>(colours, "Ban from room", icon::close{}, {{}, room_action::ban{key}}),
+              .remove = action_tile<to_them>(colours, "Remove from room", icon::leave{}, {room_action::kick{key}}),
+              .ban = action_tile<to_them>(colours, "Ban from room", icon::close{}, {room_action::ban{key}}),
               .sessions_title = nodes::Text("", 13.0f, colours.dim, true)} {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 16.0f, 0.0f}});
     for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.message, &parts.verify, &parts.accept, &parts.remove, &parts.ban})
@@ -175,13 +169,13 @@ template <class Actions>
 struct room_card : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{392.0f}, .place = widgets::dialog_place::near_top{}}; }
-  struct join_it : outbox {
+  struct join_it {
+    using Answer = std::variant<::mux::ui::request::knock_room_card, ::mux::ui::request::join_room_card>;
     bool knock = false;  // asked to be let in, where it lets people knock
-    void operator()() {
+    Answer operator()() const {
       if (knock)
-        this->emit(::mux::ui::request::knock_room_card{});
-      else
-        this->emit(::mux::ui::request::join_room_card{});
+        return ::mux::ui::request::knock_room_card{};
+      return ::mux::ui::request::join_room_card{};
     }
   };
   struct decline_it {
@@ -252,7 +246,7 @@ struct room_card : nodes::Stack {
       : parts{.top = top_bar(colours, "Room info", {}, {}, false, true),
               .scroll = nodes::ScrollContainer<details>(details(colours, asked, known)),
               .join = action_tile<join_it>(colours, known.invite ? "Accept" : known.knock ? "Ask to join" : "Join", icon::plus{},
-                                           {{}, known.knock && !known.invite})} {
+                                           {known.knock && !known.invite})} {
     fState.apply({.fillX = true, .padding = {0.0f, 0.0f, 16.0f, 0.0f}});
     parts.scroll.apply({.fillX = true, .grow = scene::axes::kY});
     if (known.invite) {

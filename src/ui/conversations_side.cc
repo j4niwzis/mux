@@ -451,12 +451,10 @@ struct side_column : nodes::Stack, outbox {
                        .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
   }
   // A chat's: its settings.
-  struct chat_settings_act : outbox {
+  struct chat_settings_act {
+    using Answer = std::tuple<::mux::ui::request::choose, ::mux::ui::request::open_manage>;
     conversation_id id;
-    void operator()() {
-      this->emit(::mux::ui::request::choose{id});
-      this->emit(::mux::ui::request::open_manage{});
-    }
+    Answer operator()() const { return {::mux::ui::request::choose{id}, ::mux::ui::request::open_manage{}}; }
   };
   // Listed in another account's list too, or moved there.
   struct place_act {
@@ -500,7 +498,7 @@ struct side_column : nodes::Stack, outbox {
     chat_menu(const palette& colours, conversation_id id, std::string name, const account_id& listing,
               const std::vector<account_id>& accounts, const config::theme_t& theme)
         : parts{.title = nodes::Text(std::move(name), 13.0f, colours.dim, true),
-                .settings = widgets::Button<chat_settings_act>(colours.widgets, "Chat settings\u2026", {{}, id})} {
+                .settings = widgets::Button<chat_settings_act>(colours.widgets, "Chat settings\u2026", {id})} {
       as_popup(*this, colours);
       fState.apply({.width = 320.0f});
       parts.title.setElided(true);

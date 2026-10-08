@@ -916,7 +916,8 @@ struct composer_bar : nodes::Stack {
 // Telegram's @ and heart over "↓": how many mentions of the user, or
 // reactions to theirs, are not yet seen; pressed, the oldest is gone to.
 template <class Actions>
-struct mark_button : scene::Node, outbox {
+struct mark_button : scene::Node {
+  using Answer = std::variant<::mux::ui::request::jump_to_mark, ::mux::ui::request::list_marks>;
   mark_kind_t kind;
   using badge_t = count_badge;
   struct parts_t {
@@ -947,30 +948,26 @@ struct mark_button : scene::Node, outbox {
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    this->emit(::mux::ui::request::jump_to_mark{kind});
-    return true;
-  }
+  std::optional<Answer> onClick(float, float) { return ::mux::ui::request::jump_to_mark{kind}; }
   // The other button: all of them, listed. On the way back up, not at the
   // target: a press there of its own hid the one that clicks, and a left
   // press did nothing.
   using Node::onPointer;
-  void onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
+  std::optional<Answer> onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
     if (press.button != 3)
-      return;
-    this->emit(::mux::ui::request::list_marks{kind});
+      return std::nullopt;
     reply.handle();
+    return ::mux::ui::request::list_marks{kind};
   }
   // And where the press is on the button itself -- the target, which the
   // way back up does not reach: the right button lists them; any other
   // press as a node's is, a click.
-  void onPointer(scene::phase::target, const scene::pointer::down& press, scene::PointerReply& reply) {
+  std::optional<Answer> onPointer(scene::phase::target, const scene::pointer::down& press, scene::PointerReply& reply) {
     if (press.button == 3) {
-      this->emit(::mux::ui::request::list_marks{kind});
       reply.handle();
-      return;
+      return ::mux::ui::request::list_marks{kind};
     }
-    scene::defaultPointer(*this, scene::phase::target{}, press, reply);
+    return scene::defaultPointer(*this, scene::phase::target{}, press, reply);
   }
 };
 

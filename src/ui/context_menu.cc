@@ -40,14 +40,16 @@ export namespace mux::ui {
 // menu's colour. Hovered, every reader in a submenu beside the menu: a
 // userpic of 30, 13 in, the name 57 in, and under it when they read.
 template <class Actions>
-struct seen_row : nodes::Stack, outbox {
+struct seen_row : nodes::Stack {
   static constexpr float kHeight = 33.0f, kFace = 22.0f, kOverlap = 8.0f, kRight = 17.0f;
   static constexpr std::size_t kMostFaces = 3;
   // How far the readers list lies over the menu it opens from.
   static constexpr float kOverlapMenu = 6.0f;
   // A reader, as a line of the submenu: pressed, their card, as a name
   // pressed anywhere opens it.
-  struct reader_row : nodes::Stack, outbox {
+  struct reader_row : nodes::Stack {
+    // A press: the menu closed, the reader's card opened.
+    using Answer = std::tuple<::mux::ui::request::close_menu, ::mux::ui::request::open_member_info>;
     std::string id;
     struct lines_t : nodes::Stack {
       struct parts_t {
@@ -76,11 +78,7 @@ struct seen_row : nodes::Stack, outbox {
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-    [[nodiscard]] bool onClick(float, float) {
-      this->emit(::mux::ui::request::close_menu{});
-      this->emit(::mux::ui::request::open_member_info{id});
-      return true;
-    }
+    std::optional<Answer> onClick(float, float) { return Answer{::mux::ui::request::close_menu{}, ::mux::ui::request::open_member_info{id}}; }
   };
   // The readers, scrolling where there are more than fit: at most about
   // seven rows tall.
@@ -185,8 +183,11 @@ struct seen_row : nodes::Stack, outbox {
 };
 
 template <class Actions>
-struct context_menu : scene::Node, outbox {
-  struct card : nodes::Stack, outbox {
+struct context_menu : scene::Node {
+  // A press off it, Esc in it: closed.
+  using Answer = ::mux::ui::request::close_menu;
+  struct card : nodes::Stack {
+    using Answer = ::mux::ui::request::close_menu;
     // Quick reactions, as tdesktop's menu has them at its top.
     struct quick_reaction : nodes::Stack {
       // What its handlers ask for, returned.
@@ -341,14 +342,15 @@ struct context_menu : scene::Node, outbox {
     // items, round; Enter does what is lit (the item's own); Esc closes it.
     [[nodiscard]] bool focusable() const { return true; }
     using Node::onKey;
-    void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
+    std::optional<::mux::ui::request::close_menu> onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
       namespace keys = scene::keys;
       if (press.key == keys::kUp || press.key == keys::kDown) {
         reply.moveFocus(press.key == keys::kUp);
       } else if (press.key == keys::kEscape) {
-        this->emit(::mux::ui::request::close_menu{});
         reply.handle();
+        return ::mux::ui::request::close_menu{};
       }
+      return std::nullopt;
     }
     // What does not apply to the message left out.
     card(const palette& colours, emoji_kept& kept, const menu_facts& facts)
@@ -483,9 +485,9 @@ struct context_menu : scene::Node, outbox {
   // A press off the menu closes it.
   [[nodiscard]] bool acceptsInput() const { return true; }
   using Node::onPointer;
-  void onPointer(scene::phase::target, const scene::pointer::down&, scene::PointerReply& reply) {
-    this->emit(::mux::ui::request::close_menu{});
+  ::mux::ui::request::close_menu onPointer(scene::phase::target, const scene::pointer::down&, scene::PointerReply& reply) {
     reply.handle();
+    return ::mux::ui::request::close_menu{};
   }
 };
 

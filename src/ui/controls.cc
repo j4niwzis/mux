@@ -72,16 +72,17 @@ struct avatar_mark : widgets::Avatar<from_avatars> {
 // looked at whole and saved -- a person's in their card, a chat's in its
 // info.
 template <class Actions>
-struct avatar_button : avatar_mark, outbox {
+struct avatar_button : avatar_mark {
+  using Answer = std::variant<::skiff::scene::Taken, ::mux::ui::request::open_avatar>;
   avatar_button(std::string id, std::string shown, float size)
       : avatar_mark(std::move(id), shown, size) {
     fState.setCursor(scene::cursor::hand{});
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    if (!key.empty())
-      this->emit(::mux::ui::request::open_avatar{key});
-    return true;
+  std::optional<Answer> onClick(float, float) {
+    if (key.empty())
+      return ::skiff::scene::Taken{};
+    return ::mux::ui::request::open_avatar{key};
   }
 };
 // A name over how it is: two lines, each cut where it runs out of room,

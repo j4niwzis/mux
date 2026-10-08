@@ -231,7 +231,7 @@ target_link_libraries(mux_vault PUBLIC knot splice OpenSSL::Crypto)
 # skiff and skiff-widgets say the rest of what they are in their own trees.
 cme_declare_port(NAME skiff PROVIDES skiff
   GITHUB_REPOSITORY j4niwzis/skiff
-  GIT_TAG 8c8dbca1934e81295930a25436d14145bd235a01)
+  GIT_TAG 73fce17bbb7bb38615559ba4c0e8a1a6752903c6)
 cme_declare_port(NAME skiff-widgets PROVIDES skiff-widgets skiff_widgets
   GITHUB_REPOSITORY j4niwzis/skiff-widgets
   GIT_TAG 004d3b836625f37e960bfec612623c9d640f12e7
@@ -473,6 +473,7 @@ if(MUX_UI)
           src/app/reading.cc src/app/outbox.cc src/app/settings.cc src/app/menu.cc src/app/notices.cc src/app/verification.cc src/app/proxies.cc src/app/packs.cc
           src/app/rooms.cc src/app/room_card.cc src/app/preferences.cc src/app/manage.cc src/app/looks.cc src/app/threads.cc src/app/emoji.cc src/app/accounts.cc
           src/app/local_data.cc src/app/calls.cc src/app/marks.cc src/app/history.cc src/proto/matrix/app.cc src/proto/xmpp/app.cc src/proto/app.cc)
+  target_sources(mux_app PRIVATE src/app/shown_binding.cc)
   target_compile_definitions(mux_app PUBLIC $<${mux_split}:MUX_SPLIT_ACCOUNTS>)
   target_link_libraries(mux_app PUBLIC mux_modules)
   # The program itself: its module, beside its implementation units.

@@ -390,7 +390,7 @@ void app::take_wants() {
 }
 
 void app::refresh_shown() {
-  showing_binding.refresh(root(), showing);
+  shared.read_shown_now();
   if (std::exchange(shared.menu_focus_due, false))
     if (skiff::scene::Node* card = root().menu_card())
       scene.focus(*card);

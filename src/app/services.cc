@@ -85,6 +85,8 @@ struct services {
   mux::platform::audio::speaker* speaker = nullptr;
 
   [[nodiscard]] window_type& root() const { return scene->root(); }
+  // The whole-window binding is instantiated in one implementation unit.
+  void read_shown_now() const;
   // A notice shown, or the one up closed: what the window shows, edited.
   void notice(std::string heading, std::string text) const {
     mux::ui::show(*showing, std::optional(mux::ui::notice_facts{std::move(heading), std::move(text)}));

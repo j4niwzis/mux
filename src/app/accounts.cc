@@ -49,7 +49,7 @@ class accounts_part {
   // brought up to date now, for its form to be filled in.
   accounts* show_account_now(const std::string& address) {
     this->show_account(address);
-    s_->showing_binding->refresh(s_->root(), *s_->showing);
+    s_->read_shown_now();
     auto* up = s_->root().open_panel();
     if (!up)
       return nullptr;

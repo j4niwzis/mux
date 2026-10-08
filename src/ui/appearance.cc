@@ -185,38 +185,22 @@ inline auto frame_look_view(const palette& colours, bool see_through) {
                                  "when mux starts again; from then on, "
                                  "changes here apply at once."));
 }
-template <class Actions> struct appearance_page : skiff::compose::Stacked {
-  using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
-  using settings_t = decltype(skiff::compose::column(
-      skiff::compose::vbox(), appearance_settings_view(std::declval<const palette&>(), std::declval<const config::theme_t&>()),
-      std::declval<look_choices<Actions>>(), window_settings_view(std::declval<const palette&>()),
-      std::declval<spaces_choices<Actions>>(), frame_look_view(std::declval<const palette&>(), false)));
-  struct parts_t {
-    header_t header;
-    settings_t settings;
-  } parts;
-
-  appearance_page(const ui_needs<Actions>& n, const config::theme_t& theme, const config::accent_t&)
-      : appearance_page(*n.colours, *n.looks, *n.shared, theme) {}
-  appearance_page(const palette &colours, const looks_shown &looks,
-                  const ui_shared &shared, const config::theme_t &theme)
-      : Stacked(skiff::compose::vbox(0.0f, {.fill = true})),
-        parts{.header = header_t(colours, "Appearance", {}, {}, true, true),
-              .settings = skiff::compose::column(
-                  skiff::compose::vbox(
-                      0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-                  appearance_settings_view(colours, theme),
-                  skiff::compose::styled(
-                      {.margin = {6.0f, 10.0f, 0.0f, 10.0f}},
-                      look_choices<Actions>(colours, looks,
-                                            choice_level::everywhere{})),
-                  window_settings_view(colours),
-                  skiff::compose::visible(
-                      looks.window.spaces,
-                      spaces_choices<Actions>(colours, shared)),
-                  frame_look_view(colours, looks.window.see_through))} {}
-  void show_receipts(bool) {}
-};
+template <class Actions>
+auto appearance_page(const ui_needs<Actions>& needs, const config::theme_t& theme, const config::accent_t&) {
+  const auto& colours = *needs.colours;
+  using header = page_header<sends<request::settings_home>, sends<request::close_settings>>;
+  return skiff::compose::column(
+      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar}, header(colours, "Appearance", {}, {}, true, true)),
+      skiff::compose::column(
+          skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+          appearance_settings_view(colours, theme),
+          skiff::compose::styled({.margin = {6.0f, 10.0f, 0.0f, 10.0f}}, look_choices<Actions>(colours, *needs.looks, choice_level::everywhere{})),
+          window_settings_view(colours), skiff::compose::visible(needs.looks->window.spaces, spaces_choices<Actions>(colours, *needs.shared)),
+          frame_look_view(colours, needs.looks->window.see_through)));
+}
+template <class Actions>
+using appearance_page_t = decltype(appearance_page(std::declval<const ui_needs<Actions>&>(), config::theme_t{}, config::accent_t{}));
 
 // Settings' Rendering page: what draws the window, from the next start.
 // The Rendering page's frames: a toggle bound to each of frame_settings'
@@ -234,50 +218,19 @@ inline auto frame_settings_view(const palette& colours) {
                               "soon as drawn. The counter shows frames a second and the last frame's time. All take "
                               "effect at once."));
 }
-template <class Actions> struct rendering_page : skiff::compose::Stacked {
-  using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
-  using choice =
-      skiff::bind::Bound<skiff::model::Field<&config::look_settings::renderer>,
-                         widgets::ChoiceRowField<config::renderer_t>>;
-  // What is under the header: it scrolls where the dialog is too low for it.
-  struct body : skiff::compose::Stacked {
-    struct parts_t {
-      choice gpu;
-      choice cpu;
-      nodes::Text note;
-    } parts;
-    body(const palette &colours)
-        : Stacked(skiff::compose::vbox(0.0f,
-                                       {.fillX = true,
-                                        .autoSize = scene::axes::kY,
-                                        .padding = {0.0f, 0.0f, 12.0f, 0.0f}})),
-          parts{
-              .gpu = choice(std::in_place, colours.widgets,
-                            "OpenGL (the graphics card)",
-                            config::renderer_t{config::renderer::opengl{}}),
-              .cpu = choice(std::in_place, colours.widgets,
-                            "Software (the processor)",
-                            config::renderer_t{config::renderer::software{}}),
-              .note = wrapped(skiff::compose::styled(
-                  {.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}},
-                  note_text(colours, "Takes effect when mux starts again.")))} {
-    }
-  };
-  using settings_t = decltype(frame_settings_view(std::declval<const palette&>()));
-  struct parts_t {
-    header_t header;
-    body list;  // in the settings' own scroll view
-    settings_t settings;
-  } parts;
-
-  rendering_page(const ui_needs<Actions>& n, const config::renderer_t& renderer)
-      : rendering_page(*n.colours, renderer) {}
-  rendering_page(const palette &colours, const config::renderer_t &)
-      : Stacked(skiff::compose::vbox(0.0f, {.fill = true})),
-        parts{.header = header_t(colours, "Rendering", {}, {}, true, true),
-              .list = skiff::compose::styled({.fillX = true}, body(colours)),
-              .settings = frame_settings_view(colours)} {}
-  void show_receipts(bool) {}
-};
+inline auto rendering_page(const palette& colours) {
+  using header = page_header<sends<request::settings_home>, sends<request::close_settings>>;
+  using field = skiff::model::Field<&config::look_settings::renderer>;
+  return skiff::compose::column(
+      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar}, header(colours, "Rendering", {}, {}, true, true)),
+      skiff::compose::column(
+          skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
+          skiff::compose::bound<field>(widgets::ChoiceRowField<config::renderer_t>(colours.widgets, "OpenGL (the graphics card)", config::renderer::opengl{})),
+          skiff::compose::bound<field>(widgets::ChoiceRowField<config::renderer_t>(colours.widgets, "Software (the processor)", config::renderer::software{})),
+          wrapped(skiff::compose::styled({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}}, note_text(colours, "Takes effect when mux starts again.")))),
+      frame_settings_view(colours));
+}
+using rendering_page_t = decltype(rendering_page(std::declval<const palette&>()));
 
 }  // namespace mux::ui

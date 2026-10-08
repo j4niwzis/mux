@@ -197,9 +197,9 @@ template <class Actions> struct storage_page : skiff::compose::Stacked {
 
 inline auto notification_settings_view(const palette& colours) {
   using every = config::notification_settings;
-  auto backend = skiff::compose::bound<skiff::model::Field<&every::backend>>(widgets::ChoiceTabs<config::notify_backend_t>(
-      {{"System", config::notify_backend::native{}}, {"Built in", config::notify_backend::built_in{}}}));
-  backend.apply({.margin = {4.0f, 20.0f, 4.0f, 20.0f}});
+  auto backend = skiff::compose::bound<skiff::model::Field<&every::backend>>(
+      skiff::compose::styled({.margin = {4.0f, 20.0f, 4.0f, 20.0f}}, widgets::ChoiceTabs<config::notify_backend_t>(
+          {{"System", config::notify_backend::native{}}, {"Built in", config::notify_backend::built_in{}}})));
   return skiff::compose::column(
       skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), spaced_title(colours, "NOTIFICATIONS"),
       setting_switch<&every::desktop>(colours, "Notifications"),
@@ -215,21 +215,14 @@ inline auto notification_settings_view(const palette& colours) {
                            "KDE's), which wakes mux at once. Off, nothing is given to the servers, and mux only learns "
                            "of messages while it runs."));
 }
-template <class Actions> struct notifications_page : skiff::compose::Stacked {
-  using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
-  using settings_t = decltype(notification_settings_view(std::declval<const palette&>()));
-  struct parts_t {
-    header_t header;
-    settings_t settings;
-  } parts;
-  notifications_page(const ui_needs<Actions>& n, const config::notification_settings&)
-      : notifications_page(*n.colours) {}
-  notifications_page(const palette &colours)
-      : Stacked(skiff::compose::vbox(0.0f, {.fill = true})),
-        parts{.header = header_t(colours, "Notifications", {}, {}, true, true),
-              .settings = notification_settings_view(colours)} {}
-  void show_receipts(bool) {}
-};
+inline auto notifications_page(const palette& colours) {
+  using header = page_header<sends<request::settings_home>, sends<request::close_settings>>;
+  return skiff::compose::column(
+      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar}, header(colours, "Notifications", {}, {}, true, true)),
+      notification_settings_view(colours));
+}
+using notifications_page_t = decltype(notifications_page(std::declval<const palette&>()));
 
 // Settings' Files page: what is done to a picture dropped on the window
 // before it is sent.
@@ -243,19 +236,13 @@ inline auto files_settings_view(const palette& colours) {
       spaced_note(colours, "Metadata is where and when a picture was taken, with what, by whom: EXIF, XMP and the like. "
                            "It is cut out of the file; the picture itself is sent as it is, not compressed again."));
 }
-template <class Actions> struct files_page : skiff::compose::Stacked {
-  using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
-  using settings_t = decltype(files_settings_view(std::declval<const palette&>()));
-  struct parts_t {
-    header_t header;
-    settings_t settings;
-  } parts;
-  files_page(const ui_needs<Actions>& n, const config::sending_settings&) : files_page(*n.colours) {}
-  files_page(const palette &colours)
-      : Stacked(skiff::compose::vbox(0.0f, {.fill = true})),
-        parts{.header = header_t(colours, "Files", {}, {}, true, true),
-              .settings = files_settings_view(colours)} {}
-  void show_receipts(bool) {}
-};
+inline auto files_page(const palette& colours) {
+  using header = page_header<sends<request::settings_home>, sends<request::close_settings>>;
+  return skiff::compose::column(
+      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar}, header(colours, "Files", {}, {}, true, true)),
+      files_settings_view(colours));
+}
+using files_page_t = decltype(files_page(std::declval<const palette&>()));
 
 }  // namespace mux::ui

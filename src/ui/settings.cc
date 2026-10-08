@@ -56,14 +56,23 @@ using settings_page_t = spl::variant<settings_page::home, settings_page::animati
 struct settings_facts {
   settings_page_t page = settings_page::home{};
 };
+// A page's header is the first child of its expression. Older pages keep
+// named parts until their own conversion reaches them.
+template <class Page> auto& settings_header(Page& page)
+  requires requires { page.parts.header; }
+{ return page.parts.header; }
+template <class Page> auto& settings_header(Page& page)
+  requires requires { page.fParts; }
+{ return std::get<0>(page.fParts); }
+
 template <class Actions> struct settings_dialog : skiff::compose::Specced {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{440.0f, 520.0f}}; }
   // What it was handed, for the pages it makes.
   ui_needs<Actions> needs_;
   using page_t = spl::variant<settings_home<Actions>, animations_page<Actions>, proxies_page<Actions>, proxy_editor<Actions>,
-                              appearance_page<Actions>, rendering_page<Actions>, storage_page<Actions>, files_page<Actions>,
-                              notifications_page<Actions>>;
+                              appearance_page_t<Actions>, rendering_page_t, storage_page<Actions>, files_page_t,
+                              notifications_page_t>;
   // The page up: home, or one of its pages.
   // The page up, in a scroll view of the dialog's size: sized to what it
   // holds, it scrolls where it is taller -- never past the dialog's edges,
@@ -76,7 +85,7 @@ template <class Actions> struct settings_dialog : skiff::compose::Specced {
   // edited. False on home, which Esc closes.
   bool step_back() {
     return spl::visit(spl::overloaded{[](settings_home<Actions>&) { return false; },
-                                      [](auto& one) { return one.parts.header.step_back(); }},
+                                      [](auto& one) { return settings_header(one).step_back(); }},
                       this->page());
   }
   // A page fills the dialog across, and is as tall as what it holds.
@@ -95,15 +104,15 @@ template <class Actions> struct settings_dialog : skiff::compose::Specced {
   // view is repainted at each step of a scroll, not copied, so it is not
   // carried along with what scrolls.
   template <class P>
-    requires requires(P& page) { page.parts.header; }
+    requires requires(P& page) { settings_header(page); }
   static void raise_header(P& page, const palette& colours) {
-    page.parts.header.apply({.depth = 1.0f, .background = colours.sidebar});
+    settings_header(page).apply({.depth = 1.0f, .background = colours.sidebar});
   }
   static void raise_header(auto&, const palette&) {}
   template <class P>
-    requires requires(P& page) { page.parts.header; }
+    requires requires(P& page) { settings_header(page); }
   static void pin_header(P& page, float offset) {
-    page.parts.header.fState.setShift(0.0f, offset);
+    settings_header(page).fState.setShift(0.0f, offset);
   }
   static void pin_header(auto&, float) {}
   void draw(skiff::scene::Painting& painting, skia::SkCanvas* canvas, float alpha) {
@@ -134,7 +143,7 @@ template <class Actions> struct settings_dialog : skiff::compose::Specced {
   void update(double now_ms) {
     if (auto due = std::exchange(appearance_due, std::nullopt); due && this->appearance()) {
       const float at = parts.scroll.current();
-      this->page().template emplace<4>(needs_, due->first, due->second);
+      this->page().template emplace<4>(appearance_page(needs_, due->first, due->second));
       this->fit_page();
       this->keep_offset(at);
       this->invalidateLayout();
@@ -189,24 +198,24 @@ template <class Actions> struct settings_dialog : skiff::compose::Specced {
       return;
     }
     appearance_due.reset();
-    this->page().template emplace<4>(needs_, theme, accent);
+    this->page().template emplace<4>(appearance_page(needs_, theme, accent));
     this->begin_swap(1.0f);
   }
   void show_rendering(const config::renderer_t& renderer) {
-    this->page().template emplace<5>(needs_, renderer);
+    this->page().template emplace<5>(rendering_page(*needs_.colours));
     this->begin_swap(1.0f);
   }
   void show_notifications(const config::notification_settings& now) {
-    this->page().template emplace<8>(needs_, now);
+    this->page().template emplace<8>(notifications_page(*needs_.colours));
     this->begin_swap(1.0f);
   }
-  [[nodiscard]] notifications_page<Actions>* notifications() {
-    return spl::visit(spl::overloaded{[](notifications_page<Actions>& one) { return &one; },
-                                 [](auto&) -> notifications_page<Actions>* { return nullptr; }},
+  [[nodiscard]] notifications_page_t* notifications() {
+    return spl::visit(spl::overloaded{[](notifications_page_t& one) { return &one; },
+                                 [](auto&) -> notifications_page_t* { return nullptr; }},
                       this->page());
   }
   void show_files(const config::sending_settings& now) {
-    this->page().template emplace<7>(needs_, now);
+    this->page().template emplace<7>(files_page(*needs_.colours));
     this->begin_swap(1.0f);
   }
   void show_storage(const config::cache_limits& limits, const config::history_settings& history, bool sealed) {
@@ -218,14 +227,14 @@ template <class Actions> struct settings_dialog : skiff::compose::Specced {
                                  [](auto&) -> storage_page<Actions>* { return nullptr; }},
                       this->page());
   }
-  [[nodiscard]] rendering_page<Actions>* rendering() {
-    return spl::visit(spl::overloaded{[](rendering_page<Actions>& one) { return &one; },
-                                 [](auto&) -> rendering_page<Actions>* { return nullptr; }},
+  [[nodiscard]] rendering_page_t* rendering() {
+    return spl::visit(spl::overloaded{[](rendering_page_t& one) { return &one; },
+                                 [](auto&) -> rendering_page_t* { return nullptr; }},
                       this->page());
   }
-  [[nodiscard]] appearance_page<Actions>* appearance() {
-    return spl::visit(spl::overloaded{[](appearance_page<Actions>& one) { return &one; },
-                                 [](auto&) -> appearance_page<Actions>* { return nullptr; }},
+  [[nodiscard]] appearance_page_t<Actions>* appearance() {
+    return spl::visit(spl::overloaded{[](appearance_page_t<Actions>& one) { return &one; },
+                                 [](auto&) -> appearance_page_t<Actions>* { return nullptr; }},
                       this->page());
   }
   void show_proxies(const std::vector<config::proxy_settings>& all, bool with_back = true) {

@@ -78,7 +78,7 @@ struct shown_root {
   skiff::model::Tracked<std::optional<room_settings_facts>> manage;
   skiff::model::Tracked<std::optional<send_facts>> sending;
   skiff::model::Tracked<std::optional<verification_view>> verifying;
-  skiff::model::Tracked<std::optional<proto::passphrase_for_t>> passphrase;
+  skiff::model::Tracked<std::optional<passphrase_facts>> passphrase;
   skiff::model::Tracked<std::optional<menu_facts>> menu;
   skiff::model::Tracked<std::optional<viewer_facts>> viewer;
   skiff::model::Tracked<std::optional<emoji_facts>> emoji;
@@ -414,7 +414,7 @@ struct window : scene::Node {
       shown_in<send_box<Actions>, send_facts> sending;
       // A passphrase asked for: at the start, where local data is encrypted;
       // or to turn that on or off, or change it. Over everything.
-      shown_in<passphrase_box<Actions>, proto::passphrase_for_t> passphrase;
+      shown_in<passphrase_box<Actions>, passphrase_facts> passphrase;
       // An emoji verification, as it goes.
       shown_in<verification_box<Actions>, verification_view> verifying;
       skiff::bind::Bound<std::optional<emoji_facts>, shown_layer<emoji_popup<Actions>, emoji_facts, ui_needs<Actions>>> emoji;
@@ -633,7 +633,7 @@ struct window : scene::Node {
                 .wallpaper = shown_made<wallpaper_box<Actions>, wallpaper_facts>(n),
                 .explore = shown_made<explore_box<Actions>, explore_facts>(n),
                 .sending = shown_made<send_box<Actions>, send_facts>(n),
-                .passphrase = shown_made<passphrase_box<Actions>, proto::passphrase_for_t>(n),
+                .passphrase = shown_made<passphrase_box<Actions>, passphrase_facts>(n),
                 .verifying = shown_made<verification_box<Actions>, verification_view>(n),
                 .emoji = decltype(parts_t::emoji)(shown_layer<emoji_popup<Actions>, emoji_facts, ui_needs<Actions>>(&n)),
                 .menu = decltype(parts_t::menu)(shown_layer<context_menu<Actions>, menu_facts, ui_needs<Actions>>(&n)),
@@ -910,10 +910,6 @@ struct window : scene::Node {
     return up ? &up->parts.menu : nullptr;
   }
 
-  void passphrase_refused(std::string why) {
-    if (auto* box = layer().passphrase.shown())
-      box->say(std::move(why));
-  }
 
   void show_packs(std::vector<emote_pack> packs) {
     if (auto* up = layer().packs.shown())

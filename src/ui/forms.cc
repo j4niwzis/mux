@@ -112,6 +112,11 @@ struct link_box : skiff::compose::Stacked {
 // nothing behind it is anything until it opens), to turn its encryption on
 // or off, or to change it. Its fields are the forms' own, masked; what each
 // purpose shows and says, by its type.
+// A passphrase asked for: why, and why the last one given was not taken.
+struct passphrase_facts {
+  proto::passphrase_for_t why;
+  std::optional<std::string> refused;
+};
 template <class Actions>
 struct passphrase_box : skiff::compose::Stacked {
   // The dialog it is shown in.
@@ -164,11 +169,16 @@ struct passphrase_box : skiff::compose::Stacked {
     widgets::Button<submit> go;
   } parts;
 
-  passphrase_box(const ui_needs<Actions>& n, proto::passphrase_for_t why) : passphrase_box(*n.colours, why) {}
+  passphrase_box(const ui_needs<Actions>& n, const passphrase_facts& facts) : passphrase_box(*n.colours, facts.why) { this->show_page(facts); }
+  // Refused, as its facts say: why, under the fields.
+  void show_page(const passphrase_facts& facts) {
+    if (facts.refused)
+      this->say(*facts.refused);
+  }
   // Not dismissed where it is asked at the start: the local data is locked
   // until it is given.
-  [[nodiscard]] static bool dismissable(const proto::passphrase_for_t& why) {
-    return spl::visit(spl::overloaded{[](config::passphrase_for::unlock) { return false; }, [](const auto&) { return true; }}, why);
+  [[nodiscard]] static bool dismissable(const passphrase_facts& facts) {
+    return spl::visit(spl::overloaded{[](config::passphrase_for::unlock) { return false; }, [](const auto&) { return true; }}, facts.why);
   }
   passphrase_box(const palette& colours, proto::passphrase_for_t why)
       : Stacked(skiff::compose::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}})),

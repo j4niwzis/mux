@@ -123,6 +123,13 @@ struct services {
     if (showing->look<std::optional<mux::ui::settings_facts>>()->has_value())
       mux::ui::show(*showing, std::optional(mux::ui::settings_facts{std::move(page)}));
   }
+  // The passphrase given refused: why, said in its box.
+  void passphrase_refused(std::string why) const {
+    mux::ui::change_shown<std::optional<mux::ui::passphrase_facts>>(*showing, [&](auto& now) {
+      if (now)
+        now->refused = std::move(why);
+    });
+  }
   void close_notice() const { mux::ui::show<mux::ui::notice_facts>(*showing, std::nullopt); }
   // A chat that is a window of its history away from its newest: back to
   // its newest, live -- before anything is put at its end. Its newest from

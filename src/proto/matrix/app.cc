@@ -199,7 +199,7 @@ template <class App, class Purpose>
 void with_passphrase(App& app, Purpose purpose) {
   app.shared.with_chosen_account([&](auto&, config::account_t& account) {
     app.keys_of = App::id_of(account);
-    mux::ui::show<mux::proto::passphrase_for_t>(app.showing, purpose);
+    mux::ui::show(app.showing, std::optional(mux::ui::passphrase_facts{purpose, std::nullopt}));
   });
 }
 template <class App>
@@ -321,49 +321,49 @@ export namespace mux::proto::matrix::passphrase {
 template <class App, class Given>
 void passphrase_given(App& app, const export_keys&, const Given& one) {
   if (auto refused = config::new_passphrase_refused(one.fresh, one.again))
-    return app.root().passphrase_refused(*refused);
+    return app.shared.passphrase_refused(*refused);
   if (!app.keys_of)
-    return mux::ui::show<mux::proto::passphrase_for_t>(app.showing, std::nullopt);
+    return mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
   const char* home = std::getenv("HOME");
   const auto folder = home && *home ? std::filesystem::path(home) / "Downloads" : std::filesystem::current_path();
   // Joined, not formatted: clang 23 crashed on format strings first made in
   // these modules (see app/network.cc).
   const std::string file = "mux-room-keys-" + std::string(config::file_name_of(app.keys_of->address)) + ".txt";
   ops::export_room_keys(*app.net, *app.keys_of, (folder / file).string(), one.fresh);
-  mux::ui::show<mux::proto::passphrase_for_t>(app.showing, std::nullopt);
+  mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
 }
 template <class App, class Given>
 void passphrase_given(App& app, const import_keys&, const Given& one) {
   if (one.file.empty())
-    return app.root().passphrase_refused("Type the key file's path.");
+    return app.shared.passphrase_refused("Type the key file's path.");
   if (!app.keys_of)
-    return mux::ui::show<mux::proto::passphrase_for_t>(app.showing, std::nullopt);
+    return mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
   ops::import_room_keys(*app.net, *app.keys_of, one.file, one.current);
-  mux::ui::show<mux::proto::passphrase_for_t>(app.showing, std::nullopt);
+  mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
 }
 template <class App, class Given>
 void passphrase_given(App& app, const cross_signing&, const Given& one) {
   if (app.keys_of)
     ops::setup_cross_signing(*app.net, *app.keys_of, one.current);
-  mux::ui::show<mux::proto::passphrase_for_t>(app.showing, std::nullopt);
+  mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
 }
 template <class App, class Given>
 void passphrase_given(App& app, const sign_out_unverified&, const Given& one) {
   if (app.keys_of)
     ops::sign_out_unverified(*app.net, *app.keys_of, one.current);
-  mux::ui::show<mux::proto::passphrase_for_t>(app.showing, std::nullopt);
+  mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
 }
 template <class App, class Given>
 void passphrase_given(App& app, const reset_identity&, const Given& one) {
   if (app.keys_of)
     ops::setup_cross_signing(*app.net, *app.keys_of, one.current, true);
-  mux::ui::show<mux::proto::passphrase_for_t>(app.showing, std::nullopt);
+  mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
 }
 template <class App, class Given>
 void passphrase_given(App& app, const recovery&, const Given& one) {
   if (app.keys_of)
     ops::restore_cross_signing(*app.net, *app.keys_of, one.current);
-  mux::ui::show<mux::proto::passphrase_for_t>(app.showing, std::nullopt);
+  mux::ui::show<mux::ui::passphrase_facts>(app.showing, std::nullopt);
 }
 
 }  // namespace mux::proto::matrix::passphrase

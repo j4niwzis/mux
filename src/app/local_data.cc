@@ -31,7 +31,7 @@ class local_data_part {
   void lock(std::vector<mux::config::account_t> extra, bool demo) {
     waiting_extra_ = std::move(extra);
     waiting_demo_ = demo;
-    mux::ui::show<mux::proto::passphrase_for_t>(*s_->showing, mux::config::passphrase_for::unlock{});
+    mux::ui::show(*s_->showing, std::optional(mux::ui::passphrase_facts{mux::config::passphrase_for::unlock{}, std::nullopt}));
   }
   // What the start does once local data is open: the settings read, and
   // what it waited with.
@@ -47,13 +47,13 @@ class local_data_part {
   [[nodiscard]] std::optional<opened> unlock(const request::give_passphrase& one) {
     auto& vault = *s_->vault;
     if (!vault.unlock(one.current)) {
-      s_->root().passphrase_refused("That is not the passphrase.");
+      s_->passphrase_refused("That is not the passphrase.");
       return std::nullopt;
     }
     if (vault.resealing() && !this->reseal([](mux::vault::vault&) {}))
       s_->notice("Local data", "Re-sealing what is kept, begun before, could not be finished. It is "
                                             "tried again at the next start; everything stays readable.");
-    mux::ui::show<mux::proto::passphrase_for_t>(*s_->showing, std::nullopt);
+    mux::ui::show<mux::ui::passphrase_facts>(*s_->showing, std::nullopt);
     opened out{.extra = std::move(waiting_extra_), .demo = waiting_demo_};
     if (auto loaded = mux::config::load(k_->config_path, vault))
       out.saved = std::move(*loaded);
@@ -67,7 +67,7 @@ class local_data_part {
     if (s_->vault->on())
       return this->done();
     if (auto refused = mux::config::new_passphrase_refused(one.fresh, one.again))
-      return s_->root().passphrase_refused(*refused);
+      return s_->passphrase_refused(*refused);
     if (!this->resealed([&](mux::vault::vault& v) { v.begin_encrypt(one.fresh); }))
       return;
     std::error_code ignored;
@@ -77,32 +77,32 @@ class local_data_part {
   // Under another passphrase, the one now given first.
   void change(const request::give_passphrase& one) {
     if (!s_->vault->matches(one.current))
-      return s_->root().passphrase_refused("That is not the passphrase now.");
+      return s_->passphrase_refused("That is not the passphrase now.");
     if (auto refused = mux::config::new_passphrase_refused(one.fresh, one.again))
-      return s_->root().passphrase_refused(*refused);
+      return s_->passphrase_refused(*refused);
     if (this->resealed([&](mux::vault::vault& v) { v.begin_change(one.fresh); }))
       this->done();
   }
   // Turned off, the passphrase given first.
   void decrypt(const request::give_passphrase& one) {
     if (!s_->vault->matches(one.current))
-      return s_->root().passphrase_refused("That is not the passphrase.");
+      return s_->passphrase_refused("That is not the passphrase.");
     if (this->resealed([](mux::vault::vault& v) { v.begin_decrypt(); }))
       this->done();
   }
   // From Storage: on asks for a new passphrase, off for the one now.
   void apply(const request::flip_local_encryption&) {
     if (s_->vault->on())
-      mux::ui::show<mux::proto::passphrase_for_t>(*s_->showing, mux::config::passphrase_for::decrypt{});
+      mux::ui::show(*s_->showing, std::optional(mux::ui::passphrase_facts{mux::config::passphrase_for::decrypt{}, std::nullopt}));
     else
-      mux::ui::show<mux::proto::passphrase_for_t>(*s_->showing, mux::config::passphrase_for::encrypt{});
+      mux::ui::show(*s_->showing, std::optional(mux::ui::passphrase_facts{mux::config::passphrase_for::encrypt{}, std::nullopt}));
   }
-  void apply(const request::change_passphrase&) { mux::ui::show<mux::proto::passphrase_for_t>(*s_->showing, mux::config::passphrase_for::change{}); }
+  void apply(const request::change_passphrase&) { mux::ui::show(*s_->showing, std::optional(mux::ui::passphrase_facts{mux::config::passphrase_for::change{}, std::nullopt})); }
 
  private:
   // The passphrase asked for done: its dialog closed, Storage showing it.
   void done() {
-    mux::ui::show<mux::proto::passphrase_for_t>(*s_->showing, std::nullopt);
+    mux::ui::show<mux::ui::passphrase_facts>(*s_->showing, std::nullopt);
     if (auto* up = s_->root().settings_up())
       if (auto* page = up->storage())
         page->show_sealed(s_->vault->on());
@@ -112,7 +112,7 @@ class local_data_part {
   [[nodiscard]] bool resealed(Turn turn) {
     if (this->reseal(std::move(turn)))
       return true;
-    s_->root().passphrase_refused(std::string(s_->vault->resealing() ? kCutShort : kUnread));
+    s_->passphrase_refused(std::string(s_->vault->resealing() ? kCutShort : kUnread));
     return false;
   }
   // Everything kept sealed again as the vault is after `turn` -- on, off, or

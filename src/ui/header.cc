@@ -376,57 +376,39 @@ struct pinned_bar : skiff::compose::Stacked {
   }
 };
 
+// Messages selected, as what is shown says: how many, and what can be
+// done with them.
+struct selection_shown {
+  std::size_t count = 0;
+  bool forwardable = false;
+  bool deletable = false;
+};
 // Messages selected, as tdesktop's: in place of the head, how many, and
 // what can be done with them -- Forward, Copy, Delete -- and Cancel. Esc
-// cancels too.
+// cancels too. All of it read from what is shown: nothing set by hand.
 template <class Actions>
-struct selection_bar : skiff::compose::Stacked {
-  // What its handlers ask for, returned.
-  using Answer = ::mux::ui::request::selection_cancel;
-  using forward_button = button_for<sends<::mux::ui::request::selection_forward>>;
-  using copy_button = button_for<sends<::mux::ui::request::selection_copy>>;
-  using delete_button = button_for<sends<::mux::ui::request::selection_delete>>;
-  using cancel_button = button_for<sends<::mux::ui::request::selection_cancel>>;
-  struct parts_t {
-    nodes::Text count;
-    forward_button forward;
-    copy_button copy;
-    delete_button remove;
-    cancel_button cancel;
-    nodes::Box<> bottom_line;
-  } parts;
-  // Its buttons: as high as one another, in the middle of the bar.
-  [[nodiscard]] static scene::Spec button_spec() { return {.height = 32.0f, .alignSelf = scene::align::kMiddle}; }
-  explicit selection_bar(const ui_needs<Actions>& n)
-      : Stacked(skiff::compose::hbox(8.0f, {.fillX = true, .height = chat_header<Actions>::kHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f},
-                                            .background = n.colours->sidebar})),
-        parts{.count = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
-                                              nodes::Text("", 15.0f, n.colours->text, true)),
-              .forward = skiff::compose::styled(button_spec(), forward_button(n.colours->widgets, "Forward", {})),
-              .copy = skiff::compose::styled(button_spec(), copy_button(n.colours->widgets, "Copy", {})),
-              .remove = skiff::compose::styled(button_spec(), delete_button(n.colours->widgets, "Delete", {})),
-              .cancel = skiff::compose::styled(button_spec(), cancel_button(n.colours->widgets, "Cancel", {})),
-              .bottom_line = skiff::compose::styled({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f},
-                                                    nodes::Box<>(n.colours->band))} {
-    this->setVisible(false);
-  }
-  // How many are selected, and which of what can be done with them is.
-  void show(std::size_t selected, bool forwardable, bool deletable) {
-    parts.count.setText(std::format("{} selected", selected));
-    parts.forward.setVisible(forwardable);
-    parts.remove.setVisible(deletable);
-    this->invalidateLayout();
-  }
-  using Node::onKey;
-  std::optional<Answer> onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
-    std::optional<Answer> answer;
-    if (press.key == scene::keys::kEscape) {
-      answer = ::mux::ui::request::selection_cancel{};
-      reply.handle();
-    }
-    return answer;
-  }
-};
+auto selection_bar(const ui_needs<Actions>& n) {
+  namespace c = skiff::compose;
+  const palette& colours = *n.colours;
+  const scene::Spec button{.height = 32.0f, .alignSelf = scene::align::kMiddle};
+  return c::shown_if<selection_shown>(
+      [](const selection_shown& now) { return now.count > 0; },
+      c::onKey(scene::keys::kEscape, ::mux::ui::request::selection_cancel{},
+               c::row(c::hbox(8.0f, {.fillX = true, .height = chat_header<Actions>::kHeight, .padding = {0.0f, 16.0f, 1.0f, 22.0f},
+                                     .background = colours.sidebar}),
+                      c::text_of<selection_shown>([](const selection_shown& now) { return std::format("{} selected", now.count); },
+                                                  c::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                                                            nodes::Text("", 15.0f, colours.text, true))),
+                      c::shown_if<selection_shown>([](const selection_shown& now) { return now.forwardable; },
+                                                   c::styled(button, button_for<sends<::mux::ui::request::selection_forward>>(colours.widgets, "Forward", {}))),
+                      c::styled(button, button_for<sends<::mux::ui::request::selection_copy>>(colours.widgets, "Copy", {})),
+                      c::shown_if<selection_shown>([](const selection_shown& now) { return now.deletable; },
+                                                   c::styled(button, button_for<sends<::mux::ui::request::selection_delete>>(colours.widgets, "Delete", {}))),
+                      c::styled(button, button_for<sends<::mux::ui::request::selection_cancel>>(colours.widgets, "Cancel", {})),
+                      c::styled({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f}, nodes::Box<>(colours.band)))));
+}
+template <class Actions>
+using selection_bar_t = decltype(selection_bar(std::declval<const ui_needs<Actions>&>()));
 
 // Finding in a chat, as tdesktop's search in a chat: in place of the head,
 // a field with the magnifier, how many are found and which is shown ("3 of

@@ -346,7 +346,8 @@ class menu_part {
     const auto ops = chat ? mux::ui::ops_of(s_->ui, chat->id.account) : mux::proto::account_ops{};
     const auto chosen = this->selected_messages();
     const bool deletable = !chosen.empty() && std::ranges::all_of(chosen, [](const message* one) { return one->outgoing; });
-    s_->root().main().show_selection(selected_, ops.forward, deletable);
+    mux::ui::show(*s_->showing, mux::ui::selection_shown{selected_.size(), ops.forward, deletable});
+    s_->root().main().show_selection(selected_);
   }
   services* s_;
   outbox_part* outbox_;

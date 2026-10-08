@@ -680,7 +680,7 @@ struct conversations_screen : nodes::Stack {
       // The head, as a function of the chat shown.
       header_t header;
       search_bar<Actions> search;
-      selection_bar<Actions> selection;
+      selection_bar_t<Actions> selection;
       // The pinned message, under the head, where the chat has any.
       pinned_t pinned;
       // A call in this chat, as Element's call view: under the head.
@@ -727,7 +727,7 @@ struct conversations_screen : nodes::Stack {
     }
     chat_column(const ui_needs<Actions>& n)
         : parts{.search = search_bar<Actions>(n),
-                .selection = selection_bar<Actions>(n),
+                .selection = selection_bar(n),
                 .area = timeline_area<Actions>(n),
                 .mentions = mention_list(*n.colours),
                 .emojis = emoji_list(*n.colours),
@@ -786,11 +786,7 @@ struct conversations_screen : nodes::Stack {
   std::optional<Answer> onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply);
   // Messages selected: the selection bar in place of the head, and the
   // messages marked; none, the head back.
-  void show_selection(const std::set<std::string>& ids, bool forwardable, bool deletable) {
-    auto& bar = chat.parts.selection;
-    bar.setVisible(!ids.empty());
-    if (!ids.empty())
-      bar.show(ids.size(), forwardable, deletable);
+  void show_selection(const std::set<std::string>& ids) {
     header.setVisible(ids.empty() && !search.visible());
     chat.area.set_selected(ids);
     this->invalidateLayout();

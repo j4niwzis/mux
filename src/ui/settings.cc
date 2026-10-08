@@ -18,7 +18,7 @@ import :storage;
 export namespace mux::ui {
 
 template <class Actions>
-struct settings_dialog : scene::Node {
+struct settings_dialog : scene::Node, outbox {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{440.0f, 520.0f}}; }
   Actions* actions = nullptr;

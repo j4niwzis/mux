@@ -91,21 +91,17 @@ inline constexpr skia::SkColor kAnswerGreen = skia::colorSetARGB(255, 0x0D, 0xBD
 // none once it has ended.
 template <class Actions>
 struct call_buttons : nodes::Stack {
-  struct accept_it {
-    Actions* actions;
-    void operator()() const { actions->accept_call(); }
+  struct accept_it : outbox {
+    void operator()() { this->send(::mux::ui::request::accept_call{}); }
   };
-  struct decline_it {
-    Actions* actions;
-    void operator()() const { actions->decline_call(); }
+  struct decline_it : outbox {
+    void operator()() { this->send(::mux::ui::request::decline_call{}); }
   };
-  struct mute_it {
-    Actions* actions;
-    void operator()() const { actions->mute_call(); }
+  struct mute_it : outbox {
+    void operator()() { this->send(::mux::ui::request::mute_call{}); }
   };
-  struct hang_up_it {
-    Actions* actions;
-    void operator()() const { actions->hang_up(); }
+  struct hang_up_it : outbox {
+    void operator()() { this->send(::mux::ui::request::hang_up{}); }
   };
   // Over: called again, as Element's Call back; or put away.
   struct call_back_it {
@@ -115,9 +111,8 @@ struct call_buttons : nodes::Stack {
         buttons->actions_->start_call(*buttons->in_);
     }
   };
-  struct dismiss_it {
-    Actions* actions;
-    void operator()() const { actions->dismiss_call(); }
+  struct dismiss_it : outbox {
+    void operator()() { this->send(::mux::ui::request::dismiss_call{}); }
   };
   struct parts_t {
     icon_button<mute_it> mute;

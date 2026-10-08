@@ -72,14 +72,12 @@ struct drag_edge : scene::Node {
 
 // Where an edge was dragged to, asked of the program.
 template <class Actions>
-struct resize_sidebar_to {
-  Actions* actions = nullptr;
-  void operator()(float x) const { actions->resize_sidebar(x); }
+struct resize_sidebar_to : outbox {
+  void operator()(float x) { this->send(::mux::ui::request::resize_sidebar{x}); }
 };
 template <class Actions>
-struct resize_info_to {
-  Actions* actions = nullptr;
-  void operator()(float x) const { actions->resize_info(x); }
+struct resize_info_to : outbox {
+  void operator()(float x) { this->send(::mux::ui::request::resize_info{x}); }
 };
 
 // ---- the message field --------------------------------------------------------------
@@ -99,9 +97,8 @@ struct resize_info_to {
 
 // What Enter in the message field does: asks for its text to be sent.
 template <class Actions>
-struct submit_message {
-  Actions* actions = nullptr;
-  void operator()(std::string_view text) const { actions->submit_message(with_blocks_closed(text)); }
+struct submit_message : outbox {
+  void operator()(std::string_view text) { this->send(::mux::ui::request::submit_message{with_blocks_closed(text)}); }
 };
 
 
@@ -712,15 +709,13 @@ struct composer_bar : nodes::Stack {
   // Those asking to join, for those who may let them in: the first
   // of them -- who, and why -- with Approve (an invite) and Deny (their
   // knock refused), and how many more.
-  struct approve_it {
-    Actions* actions;
+  struct approve_it : outbox {
     std::string user;
-    void operator()() const { actions->room_act(room_action::invite{user}); }
+    void operator()() { this->send(::mux::ui::request::room_act{room_action::invite{user}}); }
   };
-  struct deny_it {
-    Actions* actions;
+  struct deny_it : outbox {
     std::string user;
-    void operator()() const { actions->room_act(room_action::kick{user}); }
+    void operator()() { this->send(::mux::ui::request::room_act{room_action::kick{user}}); }
   };
   using knock_row = two_choice_bar<deny_it, approve_it>;
   [[nodiscard]] static std::string knock_said(const knock_request& one, std::size_t more) {
@@ -909,7 +904,7 @@ struct composer_bar : nodes::Stack {
 // Telegram's @ and heart over "↓": how many mentions of the user, or
 // reactions to theirs, are not yet seen; pressed, the oldest is gone to.
 template <class Actions>
-struct mark_button : scene::Node {
+struct mark_button : scene::Node, outbox {
   Actions* actions = nullptr;
   mark_kind_t kind;
   using badge_t = count_badge;
@@ -942,7 +937,7 @@ struct mark_button : scene::Node {
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
-    actions->jump_to_mark(kind);
+    this->send(::mux::ui::request::jump_to_mark{kind});
     return true;
   }
   // The other button: all of them, listed. On the way back up, not at the
@@ -952,7 +947,7 @@ struct mark_button : scene::Node {
   void onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
     if (press.button != 3)
       return;
-    actions->list_marks(kind);
+    this->send(::mux::ui::request::list_marks{kind});
     reply.handle();
   }
   // And where the press is on the button itself -- the target, which the
@@ -960,7 +955,7 @@ struct mark_button : scene::Node {
   // press as a node's is, a click.
   void onPointer(scene::phase::target, const scene::pointer::down& press, scene::PointerReply& reply) {
     if (press.button == 3) {
-      actions->list_marks(kind);
+      this->send(::mux::ui::request::list_marks{kind});
       reply.handle();
       return;
     }
@@ -970,7 +965,7 @@ struct mark_button : scene::Node {
 
 // "↓": back to the newest, with how many came while one read above them.
 template <class Actions>
-struct jump_button : scene::Node {
+struct jump_button : scene::Node, outbox {
   Actions* actions = nullptr;
   int unseen = 0;
   // A round plate with a chevron down, and over its top the count of what
@@ -1003,7 +998,7 @@ struct jump_button : scene::Node {
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
-    actions->jump_to_end();
+    this->send(::mux::ui::request::jump_to_end{});
     return true;
   }
 };
@@ -1011,7 +1006,7 @@ struct jump_button : scene::Node {
 // Back to the chat a jump came from -- a link or a reply into another chat
 // -- over "↓", as Telegram's: the chat as it was left.
 template <class Actions>
-struct back_button : scene::Node {
+struct back_button : scene::Node, outbox {
   Actions* actions = nullptr;
   struct parts_t {
     nodes::Icon mark;
@@ -1034,7 +1029,7 @@ struct back_button : scene::Node {
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
-    actions->return_to_chat();
+    this->send(::mux::ui::request::return_to_chat{});
     return true;
   }
 };

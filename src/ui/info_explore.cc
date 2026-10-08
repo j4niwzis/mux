@@ -45,17 +45,16 @@ import :info_packs;
 export namespace mux::ui {
 // Join a room; a space in a space's listing, opened -- its own listed.
 template <class Actions>
-struct directory_join {
-  Actions* actions;
+struct directory_join : outbox {
   std::string room;
   std::string server;
   bool open = false;
   std::string name;
-  void operator()() const {
+  void operator()() {
     if (open)
-      actions->explore_space(room, name);
+      this->send(::mux::ui::request::explore_space{room, name});
     else
-      actions->join_directory_room(room, server);
+      this->send(::mux::ui::request::join_directory_room{room, server});
   }
 };
 
@@ -111,15 +110,14 @@ struct directory_row : nodes::Stack {
 // many are in it and what it is about, and Join. An address typed in is
 // gone to at once.
 template <class Actions>
-struct explore_box : nodes::Stack {
+struct explore_box : nodes::Stack, outbox {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{640.0f, 560.0f}}; }
   Actions* actions = nullptr;
   // The colours it is made in, for its parts and the rows it makes later.
   const palette* colours_ = nullptr;
-  struct close_it {
-    Actions* actions;
-    void operator()() const { actions->close_explore(); }
+  struct close_it : outbox {
+    void operator()() { this->send(::mux::ui::request::close_explore{}); }
   };
   struct search_press {
     explore_box* box;
@@ -130,7 +128,7 @@ struct explore_box : nodes::Stack {
       }
       box->parts.status.setText("Searching\u2026");
       box->parts.status.setVisible(true);
-      box->actions->search_rooms(box->parts.search.parts.server.text(), box->parts.search.parts.query.text());
+      box->send(::mux::ui::request::search_rooms{box->parts.search.parts.server.text(), box->parts.search.parts.query.text()});
     }
   };
   // Whose rooms are listed, where a space's are; and what it listed, to be
@@ -147,7 +145,7 @@ struct explore_box : nodes::Stack {
       if (!box->next)
         return;
       box->parts.more.setLabel("Loading\u2026");
-      box->actions->more_rooms(box->listed_server, box->listed_query, *box->next);
+      box->send(::mux::ui::request::search_rooms{box->listed_server, box->listed_query, *box->next});
     }
   };
   // A space's name and picture, over what it holds.

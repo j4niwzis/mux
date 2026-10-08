@@ -81,24 +81,24 @@ template <class Actions>
   // without video, by the system's player, as a file is opened.
   if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y) &&
       one.said.attachment && one.said.attachment->video && !mux::platform::video::kPlays) {
-    actions->open_file(*one.said.attachment->video, one.said.attachment->name);
+    this->send(::mux::ui::request::open_file{*one.said.attachment->video, one.said.attachment->name});
     return true;
   }
   if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y) &&
       one.said.attachment && one.said.attachment->video) {
     
     const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
-    actions->open_video(one.parts.body.parts.picture->source, *one.said.attachment->video, one.sender,
+    this->send(::mux::ui::request::open_video{one.parts.body.parts.picture->source, *one.said.attachment->video, one.sender,
                         chat ? sender_name(*chat, one.sender) : one.sender,
-                        std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day}, clock_of(one.said.at)));
+                        std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day}, clock_of(one.said.at))});
     return true;
   }
   if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y)) {
     
     const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
-    actions->open_picture(one.parts.body.parts.picture->source, one.sender,
+    this->send(::mux::ui::request::open_picture{one.parts.body.parts.picture->source, one.sender,
                           chat ? sender_name(*chat, one.sender) : one.sender,
-                          std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day}, clock_of(one.said.at)));
+                          std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day}, clock_of(one.said.at))});
     return true;
   }
   // A picture of an album: seen whole, as one alone is.
@@ -108,39 +108,39 @@ template <class Actions>
         if (cell.bounds().contains(press.x, press.y)) {
           
           const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
-          actions->open_picture(cell.source, one.sender, chat ? sender_name(*chat, one.sender) : one.sender,
+          this->send(::mux::ui::request::open_picture{cell.source, one.sender, chat ? sender_name(*chat, one.sender) : one.sender,
                                 std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day},
-                                            clock_of(one.said.at)));
+                                            clock_of(one.said.at))});
           return true;
         }
   if (one.parts.body.parts.file && one.parts.body.parts.file->bounds().contains(press.x, press.y) && one.said.attachment) {
     if (one.parts.body.parts.file->sound)
-      actions->play_audio(one.parts.body.parts.file->source);
+      this->send(::mux::ui::request::play_audio{one.parts.body.parts.file->source});
     else
-      actions->open_file(one.parts.body.parts.file->source, one.said.attachment->name);
+      this->send(::mux::ui::request::open_file{one.parts.body.parts.file->source, one.said.attachment->name});
     return true;
   }
   // A reaction's chip: the user's own put or taken back.
   if (one.parts.body.parts.reactions)
-    for (const reaction_chip& chip : one.parts.body.parts.reactions->chips())
+    for (const reaction_chip& chip : one.parts.body.parts.rethis->send(::mux::ui::request::chips{}))
       if (chip.bounds().contains(press.x, press.y)) {
-        actions->react(one.message_id, chip.key);
+        this->send(::mux::ui::request::react{one.message_id, chip.key});
         return true;
       }
   // A card of a link to a room or a message: followed.
   for (const link_card& card : one.parts.body.parts.cards)
     if (card.bounds().contains(press.x, press.y)) {
-      actions->open_url(card.url);
+      this->send(::mux::ui::request::open_url{card.url});
       return true;
     }
   // A link's preview: the link, followed.
   if (const auto& preview = one.parts.body.parts.preview; preview && preview->bounds().contains(press.x, press.y)) {
-    actions->open_url(preview->url);
+    this->send(::mux::ui::request::open_url{preview->url});
     return true;
   }
   // A thread's summary under its root: the thread, beside the chat.
   if (const auto& thread = one.parts.body.parts.thread; thread && thread->bounds().contains(press.x, press.y)) {
-    actions->open_thread(one.message_id);
+    this->send(::mux::ui::request::open_thread{one.message_id});
     return true;
   }
   // A reaction shown as a line: pressed anywhere, to what it is on.
@@ -148,7 +148,7 @@ template <class Actions>
       spl::visit(spl::overloaded{[](room_event::reactions) { return true; },
                                        [](room_event::unreactions) { return true; }, [](const auto&) { return false; }},
                  one.said.event_kind)) {
-    actions->jump_to_message(*one.said.replies_to, std::nullopt, one.message_id);
+    this->send(::mux::ui::request::jump_to_message{*one.said.replies_to, std::nullopt, one.message_id});
     return true;
   }
   // A quoted stretch of a reply's text -- the part of the message it
@@ -158,9 +158,9 @@ template <class Actions>
       one.said.replies_to && text.visible() && text.bounds().contains(press.x, press.y) && !text.hasSelection()) {
     // The quote pressed, of those the reply has: its own words marked.
     if (const auto quote = text.quoteAt(press.x, press.y)) {
-      actions->jump_to_message(*one.said.replies_to,
+      this->send(::mux::ui::request::jump_to_message{*one.said.replies_to,
                                trimmed_fragment(std::string_view(text.text()).substr(quote->first, quote->second - quote->first)),
-                               one.message_id);
+                               one.message_id});
       return true;
     }
   }
@@ -170,9 +170,9 @@ template <class Actions>
   if (one.parts.body.parts.quote && one.said.replies_to && one.parts.body.parts.quote->shownBounds().contains(press.x, press.y)) {
     // Where the header shows the quote itself, the quoted part marked.
     if (one.header_quote)
-      actions->jump_to_message(*one.said.replies_to, one.header_quote, one.message_id);
+      this->send(::mux::ui::request::jump_to_message{*one.said.replies_to, one.header_quote, one.message_id});
     else
-      actions->jump_to_message(*one.said.replies_to, std::nullopt, one.message_id);
+      this->send(::mux::ui::request::jump_to_message{*one.said.replies_to, std::nullopt, one.message_id});
     return true;
   }
   // A forward's line: its sender's pill, their page; its words, the
@@ -183,18 +183,18 @@ template <class Actions>
         one.parts.body.parts.forwarded->parts.who.bounds()
             .makeOffset(one.parts.body.parts.forwarded->fState.fShiftX, one.parts.body.parts.forwarded->fState.fShiftY)
             .contains(press.x, press.y)) {
-      actions->open_member_info(one.said.forwarded->from);
+      this->send(::mux::ui::request::open_member_info{one.said.forwarded->from});
       return true;
     }
     if (!one.said.forwarded->link.empty()) {
-      actions->open_url(one.said.forwarded->link);
+      this->send(::mux::ui::request::open_url{one.said.forwarded->link});
       return true;
     }
   }
   // The sender, by their avatar or their name: their page.
   if ((one.parts.face.visible() && one.parts.face.fState.fAlpha > 0.0f && one.parts.face.bounds().contains(press.x, press.y)) ||
       (one.parts.body.parts.name && one.parts.body.parts.name->bounds().contains(press.x, press.y))) {
-    actions->open_member_info(one.sender);
+    this->send(::mux::ui::request::open_member_info{one.sender});
     return true;
   }
   return false;
@@ -276,11 +276,10 @@ struct shown_how {
 };
 
 template <class Actions>
-struct timeline_area : scene::Node {
+struct timeline_area : scene::Node, outbox {
   // The loader's cross: the message jumped to no longer looked for.
-  struct stop_jump {
-    Actions* actions = nullptr;
-    void operator()() const { actions->stop_jump(); }
+  struct stop_jump : outbox {
+    void operator()() { this->send(::mux::ui::request::stop_jump{}); }
   };
   struct parts_t {
     // Behind the messages: the theme's gradient, Telegram's pattern over it.
@@ -492,7 +491,7 @@ struct timeline_area : scene::Node {
     swipe_armed = false;
     if (message_bubble<Actions>* one = this->swiped()) {
       if (one->swipe.value() <= -message_bubble<Actions>::kSwipeToReply)
-        actions->reply_to(one->message_id, one->plain);
+        this->send(::mux::ui::request::reply_to{one->message_id, one->plain});
       one->swipe.setTarget(0.0f);
       scene::work::mark(one->fState.fId);  // ticked back: nothing else asks for its frames
       swiping.reset();
@@ -586,7 +585,7 @@ struct timeline_area : scene::Node {
     if (!selected_ids.empty()) {
       for (const message_bubble<Actions>& one : this->bubbles())
         if (one.bounds().contains(press.x, press.y) && !one.message_id.empty()) {
-          actions->toggle_selected(one.message_id);
+          this->send(::mux::ui::request::toggle_selected{one.message_id});
           return true;
         }
       return false;
@@ -609,7 +608,7 @@ struct timeline_area : scene::Node {
       if (parts.timeline.toView(one.bounds()).contains(press.x, press.y)) {
         menu_facts facts = facts_of_bubble(one, seen_chat_of(), press.x, press.y);
         facts.seen = this->seen_by(one.message_id, one.sender);
-        actions->message_menu(std::move(facts));
+        this->send(std::move(facts));
         reply.handle();
         return;
       }

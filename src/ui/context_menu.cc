@@ -40,14 +40,14 @@ export namespace mux::ui {
 // menu's colour. Hovered, every reader in a submenu beside the menu: a
 // userpic of 30, 13 in, the name 57 in, and under it when they read.
 template <class Actions>
-struct seen_row : nodes::Stack {
+struct seen_row : nodes::Stack, outbox {
   static constexpr float kHeight = 33.0f, kFace = 22.0f, kOverlap = 8.0f, kRight = 17.0f;
   static constexpr std::size_t kMostFaces = 3;
   // How far the readers list lies over the menu it opens from.
   static constexpr float kOverlapMenu = 6.0f;
   // A reader, as a line of the submenu: pressed, their card, as a name
   // pressed anywhere opens it.
-  struct reader_row : nodes::Stack {
+  struct reader_row : nodes::Stack, outbox {
     Actions* actions = nullptr;
     std::string id;
     struct lines_t : nodes::Stack {
@@ -78,8 +78,8 @@ struct seen_row : nodes::Stack {
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
-      actions->close_menu();
-      actions->open_member_info(id);
+      this->send(::mux::ui::request::close_menu{});
+      this->send(::mux::ui::request::open_member_info{id});
       return true;
     }
   };
@@ -187,10 +187,10 @@ struct seen_row : nodes::Stack {
 };
 
 template <class Actions>
-struct context_menu : scene::Node {
+struct context_menu : scene::Node, outbox {
   struct card : nodes::Stack {
     // Quick reactions, as tdesktop's menu has them at its top.
-    struct quick_reaction : nodes::Stack {
+    struct quick_reaction : nodes::Stack, outbox {
       Actions* actions;
       std::string key;
       struct parts_t {
@@ -208,7 +208,7 @@ struct context_menu : scene::Node {
       [[nodiscard]] bool acceptsInput() const { return true; }
       [[nodiscard]] bool hoverChangesAppearance() const { return true; }
       [[nodiscard]] bool onClick(float, float) {
-        actions->menu_react(key);
+        this->send(::mux::ui::request::menu_react{key});
         return true;
       }
     };
@@ -489,7 +489,7 @@ struct context_menu : scene::Node {
   [[nodiscard]] bool acceptsInput() const { return true; }
   using Node::onPointer;
   void onPointer(scene::phase::target, const scene::pointer::down&, scene::PointerReply& reply) {
-    actions->close_menu();
+    this->send(::mux::ui::request::close_menu{});
     reply.handle();
   }
 };

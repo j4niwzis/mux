@@ -200,7 +200,7 @@ struct top_view : nodes::Stack {
   [[nodiscard]] bool acceptsInput() const { return true; }
 };
 template <class Actions, class Pick>
-struct side_column : nodes::Stack {
+struct side_column : nodes::Stack, outbox {
   // The colours it is made in, for what it makes later: its menus, the
   // icon dragged.
   const palette* colours_ = nullptr;
@@ -278,10 +278,9 @@ struct side_column : nodes::Stack {
     }
   };
   // A message found, in the list of them: who, when, and its words.
-  struct pick_found {
-    Actions* actions;
+  struct pick_found : outbox {
     std::size_t index;
-    void operator()() const { actions->search_pick(index); }
+    void operator()() { this->send(::mux::ui::request::search_pick{index}); }
   };
   struct found_row : nodes::Stack {
     pick_found pick;
@@ -404,38 +403,33 @@ struct side_column : nodes::Stack {
     }
   };
   // What a right press on an item offers: the bars it is in, or hidden.
-  struct set_bars_act {
-    Actions* actions;
+  struct set_bars_act : outbox {
     std::string account;
     config::space_item_t item;
     bool side = true, top = false;
-    void operator()() const { actions->set_space_bars(account, item, side, top); }
+    void operator()() { this->send(::mux::ui::request::set_space_bars{account, item, side, top}); }
   };
-  struct explore_act {
-    Actions* actions;
+  struct explore_act : outbox {
     std::string room;
-    void operator()() const { actions->explore_space(room); }
+    void operator()() { this->send(::mux::ui::request::explore_space{room}); }
   };
-  struct manage_act {
-    Actions* actions;
+  struct manage_act : outbox {
     std::string room;
-    void operator()() const { actions->manage_space(room); }
+    void operator()() { this->send(::mux::ui::request::manage_space{room}); }
   };
-  struct leave_act {
-    Actions* actions;
+  struct leave_act : outbox {
     std::string account;
     std::string room;
-    void operator()() const { actions->open_leave_space(conversation_id{account_id{protocol_of(account), account}, room}); }
+    void operator()() { this->send(::mux::ui::request::open_leave_space{conversation_id{account_id{protocol_of(account), account}, room}}); }
   };
   // A room, or a space, made in it -- Element's Add room and Add space.
-  struct create_in_act {
-    Actions* actions;
+  struct create_in_act : outbox {
     std::string account;
     std::string room;
     std::string name;
     bool make_space = false;
-    void operator()() const {
-      actions->open_new_room_in(conversation_id{account_id{protocol_of(account), account}, room}, name, make_space);
+    void operator()() {
+      this->send(::mux::ui::request::open_new_room_in{conversation_id{account_id{protocol_of(account), account}, room}, name, make_space});
     }
   };
   // The column's menus' look: a card over the rest, 190 wide.
@@ -446,41 +440,36 @@ struct side_column : nodes::Stack {
                        .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}});
   }
   // A chat's: its settings.
-  struct chat_settings_act {
-    Actions* actions;
+  struct chat_settings_act : outbox {
     conversation_id id;
-    void operator()() const {
-      actions->choose(id);
-      actions->open_manage();
+    void operator()() {
+      this->send(::mux::ui::request::choose{id});
+      this->send(::mux::ui::request::open_manage{});
     }
   };
   // Listed in another account's list too, or moved there.
-  struct place_act {
-    Actions* actions;
+  struct place_act : outbox {
     conversation_id chat;
     account_id to;
     bool moved;
-    void operator()() const { actions->place_chat(chat, to, moved); }
+    void operator()() { this->send(::mux::ui::request::place_chat{chat, to, moved}); }
   };
   // Out of this list, where it is another account's: back to its own
   // where it was moved.
-  struct unplace_act {
-    Actions* actions;
+  struct unplace_act : outbox {
     conversation_id chat;
     account_id from;
-    void operator()() const { actions->unplace_chat(chat, from); }
+    void operator()() { this->send(::mux::ui::request::unplace_chat{chat, from}); }
   };
-  struct strip_act {
-    Actions* actions;
+  struct strip_act : outbox {
     conversation_id chat;
     account_id in;
-    void operator()() const { actions->flip_chat_strip(chat, in); }
+    void operator()() { this->send(::mux::ui::request::flip_chat_strip{chat, in}); }
   };
-  struct strip_colour_act {
-    Actions* actions;
+  struct strip_colour_act : outbox {
     conversation_id chat;
     account_id in;
-    void operator()(const config::accent_t& colour) const { actions->set_chat_strip_colour(chat, in, colour); }
+    void operator()(const config::accent_t& colour) { this->send(::mux::ui::request::set_chat_strip_colour{chat, in, colour}); }
   };
   struct chat_menu : nodes::Stack {
     struct parts_t {
@@ -846,7 +835,7 @@ struct side_column : nodes::Stack {
       target = along_x ? skia::SkPoint{top_bar.bounds().fLeft + step * 0.5f, top_bar.bounds().centerY()}
                        : skia::SkPoint{side_bar.bounds().centerX(), side_bar.bounds().fTop + step * 0.5f};
     if (bar)
-      actions->place_spaces(account, *bar, order, was.from, was.item);
+      this->send(::mux::ui::request::place_spaces{account, *bar, order, was.from, was.item});
     this->let_go(was.item, {at.x, at.y}, target);
     this->show_drop_targets(false);
   }

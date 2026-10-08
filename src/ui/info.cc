@@ -55,7 +55,7 @@ export namespace mux::ui {
 }
 
 template <class Actions>
-struct info_panel : nodes::Stack {
+struct info_panel : nodes::Stack, outbox {
   Actions* actions = nullptr;
   // The colours it is made in, for what it makes later; and what the
   // window's parts share: the accounts' protocol states.
@@ -94,18 +94,17 @@ struct info_panel : nodes::Stack {
   // pages are made again.
   struct open_person {
     info_panel* panel;
-    void operator()(const auto& row) const { panel->actions->open_member_info(row.id); }
+    void operator()(const auto& row) const { panel->send(::mux::ui::request::open_member_info{row.id}); }
   };
   struct back_to_group {
     info_panel* panel;
     void operator()() const { panel->close_member(); }
   };
-  struct message_them {
-    Actions* actions;
+  struct message_them : outbox {
     info_panel* panel;
-    void operator()() const {
+    void operator()() {
       if (panel->person)
-        actions->message_person(conversation_id{panel->account, *panel->person});
+        this->send(::mux::ui::request::message_person{conversation_id{panel->account, *panel->person}});
     }
   };
 

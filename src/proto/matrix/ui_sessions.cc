@@ -45,7 +45,7 @@ using namespace ::mux::ui;
 }
 
 template <class Actions>
-struct account_sessions : nodes::Stack {
+struct account_sessions : nodes::Stack, outbox {
   Actions* actions = nullptr;
   // The colours it is made in, for the rows it makes later.
   const palette* colours_ = nullptr;
@@ -61,7 +61,7 @@ struct account_sessions : nodes::Stack {
   struct verify_one {
     account_sessions* page;
     std::string device;
-    void operator()() const { page->actions->ask_for(request::verify_session{device}); }
+    void operator()() const { page->send(request::verify_session{device}); }
   };
   struct start_rename {
     account_sessions* page;
@@ -73,9 +73,8 @@ struct account_sessions : nodes::Stack {
     std::size_t row;
     void operator()() const { page->rename(row); }
   };
-  struct reload {
-    Actions* actions;
-    void operator()() const { actions->ask_for(request::refresh_sessions{}); }
+  struct reload : outbox {
+    void operator()() { this->send(request::refresh_sessions{}); }
   };
   // One session: its name over its ID, when and where it was last seen;
   // Rename, and Sign out where it is not this one.
@@ -260,7 +259,7 @@ struct account_sessions : nodes::Stack {
     parts.note.setText("Signing out…");
     parts.note.setColour(colours_->dim);
     parts.note.setVisible(true);
-    actions->ask_for(request::sign_out_sessions{std::move(devices), parts.password.parts.field.text()});
+    this->send(request::sign_out_sessions{std::move(devices), parts.password.parts.field.text()});
     this->invalidateLayout();
   }
   [[nodiscard]] session_row* row_at(std::size_t index) {
@@ -275,7 +274,7 @@ struct account_sessions : nodes::Stack {
   void rename(std::size_t index) {
     if (session_row* row = this->row_at(index)) {
       row->show_field(false);
-      actions->ask_for(request::rename_session{row->device, row->parts.field.text()});
+      this->send(request::rename_session{row->device, row->parts.field.text()});
     }
   }
   void say(std::string, bool) {}

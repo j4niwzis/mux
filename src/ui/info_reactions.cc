@@ -73,7 +73,7 @@ struct reactions_box : nodes::Stack {
   // A reaction as the chat would show it: a bubble from who reacted,
   // saying what they reacted with, in runs as the chat's bubbles are.
   // Pressed, it is answered.
-  struct row : nodes::Stack {
+  struct row : nodes::Stack, outbox {
     Actions* actions;
     reaction_entry entry;
     struct parts_t {
@@ -120,25 +120,25 @@ struct reactions_box : nodes::Stack {
         facts.reaction = menu_facts::reaction_facts{entry.to, entry.key};
       facts.x = press.x;
       facts.y = press.y;
-      actions->message_menu(std::move(facts));
+      this->send(std::move(facts));
       reply.handle();
     }
     [[nodiscard]] bool onClick(float x, float y) {
       // A link's preview or card in it: followed, as in the chat.
       const message_bubble<Actions>& one = parts.bubble;
       if (const auto& preview = one.parts.body.parts.preview; preview && preview->bounds().contains(x, y)) {
-        actions->open_url(preview->url);
+        this->send(::mux::ui::request::open_url{preview->url});
         return true;
       }
       for (const link_card& card : one.parts.body.parts.cards)
         if (card.bounds().contains(x, y)) {
-          actions->open_url(card.url);
+          this->send(::mux::ui::request::open_url{card.url});
           return true;
         }
       // Answered, where it is an event of its own to answer.
       if (!entry.event.empty())
-        actions->reply_to(entry.event, std::format("{} reacted {}", entry.name, entry.key));
-      actions->close_reactions();
+        this->send(::mux::ui::request::reply_to{entry.event, std::format("{} reacted {}", entry.name, entry.key)});
+      this->send(::mux::ui::request::close_reactions{});
       return true;
     }
   };
@@ -245,7 +245,7 @@ struct marks_box : nodes::Stack {
       parts.key.apply({.alignSelf = scene::align::kMiddle});
     }
   };
-  struct row : nodes::Stack {
+  struct row : nodes::Stack, outbox {
     Actions* actions = nullptr;
     mark_kind_t kind;
     std::string event;
@@ -265,8 +265,8 @@ struct marks_box : nodes::Stack {
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
-      actions->go_to_mark(kind, event);
-      actions->close_marks();
+      this->send(::mux::ui::request::go_to_mark{kind, event});
+      this->send(::mux::ui::request::close_marks{});
       return true;
     }
   };

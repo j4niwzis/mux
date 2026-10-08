@@ -27,7 +27,7 @@ export namespace mux::ui {
 // the room. A press on the dark around it closes it; the whole picture
 // replaces its thumbnail when it has come.
 template <class Actions>
-struct picture_viewer : nodes::Stack {
+struct picture_viewer : nodes::Stack, outbox {
   Actions* actions = nullptr;
   // The colours its menu is made in.
   const palette* colours_ = nullptr;
@@ -47,15 +47,14 @@ struct picture_viewer : nodes::Stack {
     float factor;
     void operator()() const { viewer->zoom_to(viewer->zoom * factor); }
   };
-  struct save_it {
-    Actions* actions;
+  struct save_it : outbox {
     std::string source;
-    void operator()() const { actions->save_picture(source); }
+    void operator()() { this->send(::mux::ui::request::save_picture{source}); }
   };
   // The loader pressed: the download stopped, or started again.
   struct press_loader {
     picture_viewer* viewer;
-    void operator()() const { viewer->actions->press_loader(viewer->video.value_or(viewer->source)); }
+    void operator()() const { viewer->send(::mux::ui::request::press_loader{viewer->video.value_or(viewer->source)}); }
   };
   struct top_bar : nodes::Stack {
     using close_button = icon_button<sends<::mux::ui::request::close_picture>>;
@@ -191,7 +190,7 @@ struct picture_viewer : nodes::Stack {
       }
       // Off the picture: closed. On it, and larger than the room: dragged.
       if (!this->where().contains(press.x, press.y)) {
-        viewer->actions->close_picture();
+        viewer->send(::mux::ui::request::close_picture{});
         reply.handle();
         return;
       }
@@ -282,11 +281,11 @@ struct picture_viewer : nodes::Stack {
   // picture copied, or saved. A press anywhere else closes it.
   struct copy_it {
     picture_viewer* viewer;
-    void operator()() const { viewer->actions->copy_picture(viewer->source); }
+    void operator()() const { viewer->send(::mux::ui::request::copy_picture{viewer->source}); }
   };
   struct save_this {
     picture_viewer* viewer;
-    void operator()() const { viewer->actions->save_picture(viewer->source); }
+    void operator()() const { viewer->send(::mux::ui::request::save_picture{viewer->source}); }
   };
   template <class Do>
   struct menu_row : nodes::Stack {

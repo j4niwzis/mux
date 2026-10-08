@@ -72,7 +72,7 @@ struct avatar_mark : widgets::Avatar<from_avatars> {
 // looked at whole and saved -- a person's in their card, a chat's in its
 // info.
 template <class Actions>
-struct avatar_button : avatar_mark {
+struct avatar_button : avatar_mark, outbox {
   Actions* actions = nullptr;
   avatar_button(Actions* a, std::string id, std::string shown, float size)
       : avatar_mark(std::move(id), shown, size), actions(a) {
@@ -81,7 +81,7 @@ struct avatar_button : avatar_mark {
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
     if (!key.empty())
-      actions->open_avatar(key);
+      this->send(::mux::ui::request::open_avatar{key});
     return true;
   }
 };
@@ -303,7 +303,7 @@ struct segment : pressable<nodes::Stack> {
 // Three lines at the top-left of the conversation list: a press pulls the
 // drawer out.
 template <class Actions>
-struct menu_button : scene::Node {
+struct menu_button : scene::Node, outbox {
   // Three bars, and a plate under them while it is hovered or focused.
   struct parts_t {
     nodes::Icon bars;
@@ -326,7 +326,7 @@ struct menu_button : scene::Node {
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   [[nodiscard]] bool focusChangesAppearance() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
-    actions->open_drawer();
+    this->send(::mux::ui::request::open_drawer{});
     return true;
   }
   [[nodiscard]] scene::Semantics semantics() const {
@@ -443,14 +443,13 @@ struct choice_menu : nodes::Stack {
 // with where it is: the side bar, the top one, both, or hidden.
 template <class Actions>
 struct spaces_choices : nodes::Stack {
-  struct pick_bars {
-    Actions* actions;
+  struct pick_bars : outbox {
     std::string account;
     config::space_item_t item;
     void operator()(std::size_t index) const {
       static constexpr std::array<std::pair<bool, bool>, 4> kWays{{{true, false}, {false, true}, {true, true}, {false, false}}};
       if (index < kWays.size())
-        actions->set_space_bars(account, item, kWays[index].first, kWays[index].second);
+        this->send(::mux::ui::request::set_space_bars{account, item, kWays[index].first, kWays[index].second});
     }
   };
   struct row : nodes::Stack {

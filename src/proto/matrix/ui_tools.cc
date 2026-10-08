@@ -29,13 +29,12 @@ using namespace ::mux::ui;
 // The developer tools, as Element's: some JSON to read and copy; a room's
 // state, by type, then by key, then the event; an event of any type sent.
 template <class Actions>
-struct devtools_box : nodes::Stack {
+struct devtools_box : nodes::Stack, outbox {
   Actions* actions = nullptr;
   // The colours it is made in, for its parts and the rows it makes later.
   const palette* colours_ = nullptr;
-  struct close_it {
-    Actions* actions;
-    void operator()() const { actions->close_dialog(); }
+  struct close_it : outbox {
+    void operator()() { this->send(::mux::ui::request::close_dialog{}); }
   };
   struct back_up {
     devtools_box* box;
@@ -230,7 +229,7 @@ struct devtools_box : nodes::Stack {
     auto& [type, key, caption, body, button] = parts.sending->parts;
     if (type.text().empty())
       return;
-    actions->ask_for(request::send_custom{type.text(), key.text().empty() ? std::nullopt : std::optional<std::string>(key.text()),
+    this->send(request::send_custom{type.text(), key.text().empty() ? std::nullopt : std::optional<std::string>(key.text()),
                                           body.text()});
   }
 };
@@ -240,18 +239,15 @@ struct devtools_box : nodes::Stack {
 // it is done there -- or Cancel.
 template <class Actions>
 struct uia_box : nodes::Stack {
-  struct open_again {
-    Actions* actions;
+  struct open_again : outbox {
     std::string url;
-    void operator()() const { actions->open_url(url); }
+    void operator()() { this->send(::mux::ui::request::open_url{url}); }
   };
-  struct cancel {
-    Actions* actions;
-    void operator()() const { actions->ask_for(request::cancel_uia{}); }
+  struct cancel : outbox {
+    void operator()() { this->send(request::cancel_uia{}); }
   };
-  struct go {
-    Actions* actions;
-    void operator()() const { actions->ask_for(request::continue_uia{}); }
+  struct go : outbox {
+    void operator()() { this->send(request::continue_uia{}); }
   };
   struct parts_t {
     nodes::Text title;

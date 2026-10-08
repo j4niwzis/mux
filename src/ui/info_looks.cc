@@ -73,29 +73,26 @@ struct bubbles_picker : nodes::Stack {
                                             [&](config::look_part::panels) { return level.looks->window.behind; }},
                          part);
   }
-  struct inherit_it {
-    Actions* actions;
+  struct inherit_it : outbox {
     look_level level;
     config::look_part_t part;
-    void operator()() const {
+    void operator()() {
       if (usable(level, part))
-        actions->set_bubbles(level.level, std::nullopt, part);
+        this->send(::mux::ui::request::set_bubbles{level.level, std::nullopt, part});
     }
   };
-  struct pick_kind {
-    Actions* actions;
+  struct pick_kind : outbox {
     look_level level;
     config::look_part_t part;
     config::bubbles_t kind;
-    void operator()() const {
+    void operator()() {
       if (usable(level, part))
-        actions->set_bubbles(level.level, config::bubble_look{kind, current(level, part).opacity}, part);
+        this->send(::mux::ui::request::set_bubbles{level.level, config::bubble_look{kind, current(level, part).opacity}, part});
     }
   };
   // An opacity let go at: of the kind in use -- solid has none, so
   // translucent.
-  struct opacity_done {
-    Actions* actions;
+  struct opacity_done : outbox {
     look_level level;
     config::look_part_t part;
     void operator()(float fraction) const {
@@ -106,14 +103,13 @@ struct bubbles_picker : nodes::Stack {
                                                    [](const auto& other) { return config::bubbles_t{other}; }},
                                 look.kind);
       look.opacity = static_cast<int>(std::lround(10.0f + std::clamp(fraction, 0.0f, 1.0f) * 90.0f));
-      actions->set_bubbles(level.level, look, part);
+      this->send(::mux::ui::request::set_bubbles{level.level, look, part});
     }
   };
   // An element's opacity, apart from the bubbles': let go at, or given back
   // to them.
   using element_t = std::optional<int> config::element_opacity::*;
-  struct element_done {
-    Actions* actions;
+  struct element_done : outbox {
     look_level level;
     element_t which;
     void operator()(float fraction) const {
@@ -121,11 +117,10 @@ struct bubbles_picker : nodes::Stack {
         return;
       config::bubble_look look = current(level, config::look_part::bubbles{});
       look.elements.*which = static_cast<int>(std::lround(std::clamp(fraction, 0.0f, 1.0f) * 100.0f));
-      actions->set_bubbles(level.level, look, config::look_part::bubbles{});
+      this->send(::mux::ui::request::set_bubbles{level.level, look, config::look_part::bubbles{}});
     }
   };
-  struct element_reset {
-    Actions* actions;
+  struct element_reset : outbox {
     look_level level;
     element_t which;
     void operator()() const {
@@ -133,7 +128,7 @@ struct bubbles_picker : nodes::Stack {
         return;
       config::bubble_look look = current(level, config::look_part::bubbles{});
       look.elements.*which = std::nullopt;
-      actions->set_bubbles(level.level, look, config::look_part::bubbles{});
+      this->send(::mux::ui::request::set_bubbles{level.level, look, config::look_part::bubbles{}});
     }
   };
   struct element_row : nodes::Stack {
@@ -189,8 +184,7 @@ struct bubbles_picker : nodes::Stack {
                                             [&](config::look_part::panels) { return held.panels.has_value(); }},
                          part);
   }
-  struct pick_kind_at {
-    Actions* actions;
+  struct pick_kind_at : outbox {
     look_level level;
     config::look_part_t part;
     bool inherit;
@@ -198,7 +192,7 @@ struct bubbles_picker : nodes::Stack {
       if (!usable(level, part))
         return;
       if (inherit && index == 0) {
-        actions->set_bubbles(level.level, std::nullopt, part);
+        this->send(::mux::ui::request::set_bubbles{level.level, std::nullopt, part});
         return;
       }
       static const std::array<config::bubbles_t, 4> kinds{config::bubbles::solid{}, config::bubbles::translucent{},
@@ -208,27 +202,25 @@ struct bubbles_picker : nodes::Stack {
         return;
       config::bubble_look look = current(level, part);
       look.kind = kinds[at];
-      actions->set_bubbles(level.level, look, part);
+      this->send(::mux::ui::request::set_bubbles{level.level, look, part});
     }
   };
   // Frosted's blur, let go at: the look's own -- the bubbles' apart from the
   // panels' -- where it was let go, as it is: 55.2%, not rounded.
-  struct blur_done {
-    Actions* actions;
+  struct blur_done : outbox {
     look_level level;
     config::look_part_t part;
-    void operator()(float fraction) const {
+    void operator()(float fraction) {
       if (!usable(level, part) || !own_here(level, part))
         return;
       config::bubble_look look = current(level, part);
       look.blur = static_cast<double>(std::clamp(fraction, 0.0f, 1.0f)) * 100.0;
-      actions->set_bubbles(level.level, look, part);
+      this->send(::mux::ui::request::set_bubbles{level.level, look, part});
     }
   };
   // An element's blur, apart from the bubbles': let go at, or given back.
   using element_blur_t = std::optional<double> config::element_blur::*;
-  struct element_blur_done {
-    Actions* actions;
+  struct element_blur_done : outbox {
     look_level level;
     element_blur_t which;
     void operator()(float fraction) const {
@@ -236,11 +228,10 @@ struct bubbles_picker : nodes::Stack {
         return;
       config::bubble_look look = current(level, config::look_part::bubbles{});
       look.blurs.*which = static_cast<double>(std::clamp(fraction, 0.0f, 1.0f)) * 100.0;
-      actions->set_bubbles(level.level, look, config::look_part::bubbles{});
+      this->send(::mux::ui::request::set_bubbles{level.level, look, config::look_part::bubbles{}});
     }
   };
-  struct element_blur_reset {
-    Actions* actions;
+  struct element_blur_reset : outbox {
     look_level level;
     element_blur_t which;
     void operator()() const {
@@ -248,7 +239,7 @@ struct bubbles_picker : nodes::Stack {
         return;
       config::bubble_look look = current(level, config::look_part::bubbles{});
       look.blurs.*which = std::nullopt;
-      actions->set_bubbles(level.level, look, config::look_part::bubbles{});
+      this->send(::mux::ui::request::set_bubbles{level.level, look, config::look_part::bubbles{}});
     }
   };
   // An element drawn frosted: its blur, and a way back to the bubbles'.
@@ -377,19 +368,18 @@ struct bubbles_picker : nodes::Stack {
 // room's Manage (its own).
 template <class Actions>
 struct look_choices : nodes::Stack {
-  struct pick_wallpaper_at {
-    Actions* actions;
+  struct pick_wallpaper_at : outbox {
     choice_level_t level;
     bool inherit;
     void operator()(std::size_t index) const {
       if (inherit && index == 0) {
-        actions->set_wallpaper(level, config::wallpaper_pick::inherit{});
+        this->send(::mux::ui::request::set_wallpaper{level, config::wallpaper_pick::inherit{}});
         return;
       }
       static const std::array<config::wallpaper_pick_t, 3> picks{config::wallpaper_pick::theme{}, config::wallpaper_pick::plain{},
                                                                 config::wallpaper_pick::picture{}};
       if (const std::size_t at = index - (inherit ? 1 : 0); at < picks.size())
-        actions->set_wallpaper(level, picks[at]);
+        this->send(::mux::ui::request::set_wallpaper{level, picks[at]});
     }
   };
   [[nodiscard]] static std::vector<std::string> background_names(const looks_shown& looks, const choice_level_t& level) {
@@ -452,9 +442,8 @@ template <class Actions>
 struct wallpaper_box : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{380.0f}}; }
-  struct close_it {
-    Actions* actions;
-    void operator()() const { actions->close_wallpaper(); }
+  struct close_it : outbox {
+    void operator()() { this->send(::mux::ui::request::close_wallpaper{}); }
   };
   using header_t = page_header<no_back, close_it>;
   struct parts_t {

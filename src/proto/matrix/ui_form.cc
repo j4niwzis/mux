@@ -29,7 +29,7 @@ using namespace ::mux::ui;
 // (found through the server's .well-known when left empty) and what this
 // device is called.
 template <class Actions>
-struct matrix_form : nodes::Stack {
+struct matrix_form : nodes::Stack, outbox {
   // What the add-account pane says of the protocol.
   static constexpr std::string_view note = "A user ID like @user:example.org, on a homeserver such as Synapse.";
   Actions* actions = nullptr;
@@ -140,7 +140,7 @@ struct matrix_form : nodes::Stack {
   using Node::onKey;
   void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
     if (press.key == scene::keys::kEnter) {
-      actions->submit_login();
+      this->send(::mux::ui::request::submit_login{});
       reply.handle();
     }
   }

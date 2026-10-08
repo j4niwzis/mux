@@ -22,23 +22,21 @@ export namespace mux::ui {
 
 // A proxy chosen for an account being added: -1 for none.
 template <class Actions>
-struct choose_new_proxy {
-  Actions* actions = nullptr;
+struct choose_new_proxy : outbox {
   int index = -1;
-  void operator()() const { actions->choose_new_proxy(index); }
+  void operator()() { this->send(::mux::ui::request::choose_new_proxy{index}); }
 };
 
 // Adding an account, beside the list of them: XMPP or Matrix at the top, and
 // that protocol's form under it.
 template <class Actions>
-struct add_account_pane : nodes::Stack {
+struct add_account_pane : nodes::Stack, outbox {
   Actions* actions = nullptr;
   // A segment a protocol, in a thin frame -- from the list, each named as
   // its protocol names itself.
-  struct pick_protocol {
-    Actions* actions = nullptr;
+  struct pick_protocol : outbox {
     protocol_t speaks;
-    void operator()() const { actions->add_account_of(speaks); }
+    void operator()() { this->send(::mux::ui::request::add_account_of{speaks}); }
   };
   struct protocol_switch : nodes::Stack {
     struct parts_t {

@@ -31,29 +31,27 @@ import :emoji_panels;
 export namespace mux::ui {
 // What the menu's emoji do: react with it.
 template <class Actions>
-struct react_with {
-  Actions* actions = nullptr;
+struct react_with : outbox {
   // What is typed in its search, a reaction too: Matrix takes any text.
   [[nodiscard]] static constexpr bool takes_text() { return true; }
-  void operator()(const std::string&, const std::string& key) const { actions->menu_react(key); }
+  void operator()(const std::string&, const std::string& key) { this->send(::mux::ui::request::menu_react{key}); }
 };
 // What the input's emoji do: go into what is written.
 template <class Actions>
-struct insert_emoji_into {
-  Actions* actions = nullptr;
+struct insert_emoji_into : outbox {
   [[nodiscard]] static constexpr bool takes_text() { return false; }
   // A glyph as itself; a custom emoji (its key its picture's, not its
   // text) as its picture.
-  void operator()(const std::string& text, const std::string& key) const {
-    actions->insert_emoji(text, key == text ? std::string() : key);
+  void operator()(const std::string& text, const std::string& key) {
+    this->send(::mux::ui::request::insert_emoji{text, key == text ? std::string() : key});
   }
 };
 
 // The GIFs saved, as tdesktop's GIF tab shows them: a grid of them playing,
 // newest first; a press sends one into the chat.
 template <class Actions>
-struct gif_grid : nodes::Stack {
-  struct gif_cell : nodes::Stack {
+struct gif_grid : nodes::Stack, outbox {
+  struct gif_cell : nodes::Stack, outbox {
     Actions* actions;
     std::string path;
     std::string key;
@@ -69,7 +67,7 @@ struct gif_grid : nodes::Stack {
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
-      actions->send_gif(path);
+      this->send(::mux::ui::request::send_gif{path});
       return true;
     }
     // Drawn again each frame while it moves, for its next frame.
@@ -116,8 +114,8 @@ struct gif_grid : nodes::Stack {
 // right of the button that opened it; a press off it closes it. It stays
 // open while emoji are picked, and the input keeps the keys.
 template <class Actions>
-struct emoji_popup : scene::Node {
-  struct card_t : nodes::Stack {
+struct emoji_popup : scene::Node, outbox {
+  struct card_t : nodes::Stack, outbox {
     using panel_t = emoji_panel<insert_emoji_into<Actions>>;
     // Emoji, stickers or GIFs, as tdesktop's tabs at the panel's top.
     struct tab : nodes::Stack {
@@ -241,7 +239,7 @@ struct emoji_popup : scene::Node {
       parts.tabs.parts.stickers.fState.apply({.selected = stickers});
       parts.tabs.parts.gifs.fState.apply({.selected = gifs});
       if (gifs)
-        actions->show_gifs();
+        this->send(::mux::ui::request::show_gifs{});
       this->invalidateLayout();
     }
     [[nodiscard]] bool acceptsInput() const { return true; }

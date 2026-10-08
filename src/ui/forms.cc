@@ -66,16 +66,15 @@ struct field : nodes::Stack {
 // EditLinkBox: its text and its URL, the forms' own fields; Done puts it on,
 // Esc or Cancel leaves the field as it was.
 template <class Actions>
-struct link_box : nodes::Stack {
+struct link_box : nodes::Stack, outbox {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{400.0f}}; }
   struct done {
     link_box* box;
-    void operator()() const { box->actions->set_link(box->parts.text.text(), box->parts.url.text()); }
+    void operator()() const { box->send(::mux::ui::request::set_link{box->parts.text.text(), box->parts.url.text()}); }
   };
-  struct cancel {
-    Actions* actions;
-    void operator()() const { actions->close_link(); }
+  struct cancel : outbox {
+    void operator()() { this->send(::mux::ui::request::close_link{}); }
   };
   Actions* actions = nullptr;
   struct parts_t {
@@ -103,7 +102,7 @@ struct link_box : nodes::Stack {
 // or off, or to change it. Its fields are the forms' own, masked; what each
 // purpose shows and says, by its type.
 template <class Actions>
-struct passphrase_box : nodes::Stack {
+struct passphrase_box : nodes::Stack, outbox {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{420.0f}}; }
   struct words {
@@ -137,8 +136,8 @@ struct passphrase_box : nodes::Stack {
   struct submit {
     passphrase_box* box;
     void operator()() const {
-      box->actions->give_passphrase(box->purpose, box->parts.current.text(), box->parts.fresh.text(), box->parts.again.text(),
-                                    box->parts.file.text());
+      box->send(::mux::ui::request::give_passphrase{box->purpose, box->parts.current.text(), box->parts.fresh.text(), box->parts.again.text(),
+                                    box->parts.file.text()});
     }
   };
   Actions* actions = nullptr;
@@ -288,7 +287,7 @@ void place_form(account_form<Actions>& form, const skia::SkRect& column, float t
 // Esc leaves a panel: back to what is under it, or a step back within it
 // first, as Back says.
 template <class Actions, class Back = sends<::mux::ui::request::pop_panel>>
-struct closes_on_escape : nodes::Stack {
+struct closes_on_escape : nodes::Stack, outbox {
   Actions* actions = nullptr;
   explicit closes_on_escape(Actions* a) : actions(a) {}
 

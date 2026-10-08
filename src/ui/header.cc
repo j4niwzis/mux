@@ -74,8 +74,7 @@ struct verification_box : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{440.0f}, .dismissable = false}; }
   template <auto Member>
-  struct press {
-    Actions* actions;
+  struct press : outbox {
     void operator()() const { (actions->*Member)(); }
   };
   using accept_button = widgets::Button<press<&Actions::verify_accept_now>>;
@@ -229,7 +228,7 @@ struct chat_header : nodes::Stack {
   }
 
   // The chat's avatar, its name over how it is, and the button to its info.
-  struct head_row : nodes::Stack {
+  struct head_row : nodes::Stack, outbox {
     using find_button = icon_button<sends<::mux::ui::request::open_search>>;
     using info_button = icon_button<sends<::mux::ui::request::toggle_info>>;
     using threads_button = icon_button<sends<::mux::ui::request::toggle_threads>>;
@@ -279,7 +278,7 @@ struct chat_header : nodes::Stack {
     [[nodiscard]] bool onClick(float, float) {
       if (!taps_to_info)
         return false;
-      actions->toggle_info();
+      this->send(::mux::ui::request::toggle_info{});
       return true;
     }
   };
@@ -343,7 +342,7 @@ struct pinned_bar : nodes::Stack {
 // what can be done with them -- Forward, Copy, Delete -- and Cancel. Esc
 // cancels too.
 template <class Actions>
-struct selection_bar : nodes::Stack {
+struct selection_bar : nodes::Stack, outbox {
   Actions* actions;
   using forward_button = button_for<sends<::mux::ui::request::selection_forward>>;
   using copy_button = button_for<sends<::mux::ui::request::selection_copy>>;
@@ -386,7 +385,7 @@ struct selection_bar : nodes::Stack {
   using Node::onKey;
   void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
     if (press.key == scene::keys::kEscape) {
-      actions->selection_cancel();
+      this->send(::mux::ui::request::selection_cancel{});
       reply.handle();
     }
   }
@@ -397,18 +396,16 @@ struct selection_bar : nodes::Stack {
 // 12"), the arrows to the newer and the older, and ✕. Enter goes to the
 // older one, Shift+Enter to the newer, Esc closes.
 template <class Actions>
-struct search_typed {
-  Actions* actions = nullptr;
-  void operator()(std::string_view text) const { actions->search_typed(std::string(text)); }
+struct search_typed : outbox {
+  void operator()(std::string_view text) { this->send(::mux::ui::request::search_typed{std::string(text)}); }
 };
 template <class Actions>
-struct search_step {
-  Actions* actions = nullptr;
+struct search_step : outbox {
   bool older = true;
-  void operator()() const { actions->search_step(older); }
+  void operator()() { this->send(::mux::ui::request::search_step{older}); }
 };
 template <class Actions>
-struct search_bar : nodes::Stack {
+struct search_bar : nodes::Stack, outbox {
   Actions* actions;
   using field_t = widgets::TextBox<search_typed<Actions>>;
   using step_button = icon_button<search_step<Actions>>;
@@ -451,16 +448,16 @@ struct search_bar : nodes::Stack {
   using Node::onKey;
   void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
     if (press.key == scene::keys::kEnter) {
-      actions->search_step(!press.modifiers.template has<scene::modifier::shift>());
+      this->send(::mux::ui::request::search_step{!press.modifiers.template has<scene::modifier::shift>()});
       reply.handle();
     } else if (press.key == scene::keys::kEscape) {
-      actions->close_search();
+      this->send(::mux::ui::request::close_search{});
       reply.handle();
     } else if (press.key == scene::keys::kUp) {
-      actions->search_step(false);
+      this->send(::mux::ui::request::search_step{false});
       reply.handle();
     } else if (press.key == scene::keys::kDown) {
-      actions->search_step(true);
+      this->send(::mux::ui::request::search_step{true});
       reply.handle();
     }
   }

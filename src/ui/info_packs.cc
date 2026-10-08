@@ -48,7 +48,7 @@ export namespace mux::ui {
 // removable; images added from files, uploaded as they are chosen; saved as
 // the room's state, or one's account data.
 template <class Actions>
-struct packs_box : nodes::Stack {
+struct packs_box : nodes::Stack, outbox {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{620.0f, 600.0f}}; }
   Actions* actions = nullptr;
@@ -62,9 +62,8 @@ struct packs_box : nodes::Stack {
   emote_pack draft;               // the pack open, as it is edited
   bool open = false;              // a pack open, not the list
   bool new_pack = false;          // the one open not yet saved
-  struct close_it {
-    Actions* actions;
-    void operator()() const { actions->close_packs(); }
+  struct close_it : outbox {
+    void operator()() { this->send(::mux::ui::request::close_packs{}); }
   };
   struct back_press {
     packs_box* box;
@@ -74,9 +73,8 @@ struct packs_box : nodes::Stack {
     packs_box* box;
     void operator()() const { box->open_pack(std::nullopt); }
   };
-  struct add_press {
-    Actions* actions;
-    void operator()() const { actions->pick_pack_images(); }
+  struct add_press : outbox {
+    void operator()() { this->send(::mux::ui::request::pick_pack_images{}); }
   };
   struct save_press {
     packs_box* box;
@@ -406,14 +404,14 @@ struct packs_box : nodes::Stack {
     if (!draft.avatar && !draft.pictures.empty())
       draft.avatar = draft.pictures.front().url;
     std::erase_if(draft.pictures, [](const pack_picture& one) { return one.shortcode.empty() || one.url.empty(); });
-    actions->save_pack(draft);
+    this->send(::mux::ui::request::save_pack{draft});
     parts.note.setText("Saving…");
   }
   // As its protocol takes a pack away; a new one, not saved yet, is nothing.
   void remove_pack() {
     if (draft.key.empty())
       return;
-    actions->delete_pack(draft);
+    this->send(::mux::ui::request::delete_pack{draft});
     parts.note.setText("Deleting…");
   }
 };

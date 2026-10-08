@@ -244,7 +244,7 @@ struct some {};
 }  // namespace leave_choice
 using leave_choice_t = spl::variant<leave_choice::none, leave_choice::all, leave_choice::some>;
 template <class Actions>
-struct leave_space_box : nodes::Stack {
+struct leave_space_box : nodes::Stack, outbox {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{440.0f}}; }
   Actions* actions = nullptr;
@@ -269,11 +269,10 @@ struct leave_space_box : nodes::Stack {
   };
   struct go {
     leave_space_box* box;
-    void operator()() const { box->actions->leave_space(box->facts.space, box->leaving()); }
+    void operator()() const { box->send(::mux::ui::request::leave_space{box->facts.space, box->leaving()}); }
   };
-  struct cancel {
-    Actions* actions;
-    void operator()() const { actions->close_leave_space(); }
+  struct cancel : outbox {
+    void operator()() { this->send(::mux::ui::request::close_leave_space{}); }
   };
   struct parts_t {
     nodes::Text title;
@@ -410,7 +409,7 @@ inline auto chat_notify_view(const palette& colours, const conversation_id& chat
 }
 
 template <class Actions>
-struct room_settings : nodes::Stack {
+struct room_settings : nodes::Stack, outbox {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{860.0f, 620.0f}}; }
   using actions_type = Actions;
@@ -509,21 +508,19 @@ struct room_settings : nodes::Stack {
   // ---- General: the room as the client shows it -------------------------------------
   // A space as one chat, its rooms as topics: a switch, off for a space
   // that holds spaces.
-  struct flip_forum_act {
-    Actions* actions;
+  struct flip_forum_act : outbox {
     std::string room;
     bool allowed = true;
-    void operator()() const {
+    void operator()() {
       if (allowed)
-        actions->flip_forum(room);
+        this->send(::mux::ui::request::flip_forum{room});
     }
   };
   // A space's rooms out of Home, or in it: a switch, for a space that is
   // not shown as one chat.
-  struct flip_home_hide_act {
-    Actions* actions;
+  struct flip_home_hide_act : outbox {
     std::string room;
-    void operator()() const { actions->flip_home_hide(room); }
+    void operator()() { this->send(::mux::ui::request::flip_home_hide{room}); }
   };
   using settings_t = decltype(chat_settings_view(std::declval<const palette&>(), std::declval<const conversation_id&>()));
   struct general_page : nodes::Stack {
@@ -608,9 +605,8 @@ struct room_settings : nodes::Stack {
   };
 
   // ---- the dialog ---------------------------------------------------------------------
-  struct close_it {
-    Actions* actions;
-    void operator()() const { actions->close_manage(); }
+  struct close_it : outbox {
+    void operator()() { this->send(::mux::ui::request::close_manage{}); }
   };
   using header_t = page_header<no_back, close_it>;
   struct body_row : nodes::Stack {

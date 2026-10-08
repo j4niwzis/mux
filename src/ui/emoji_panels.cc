@@ -49,9 +49,9 @@ inline void lay_out_picker(nodes::Stack& panel, auto& field, auto& list, auto& f
 }
 
 template <class Actions>
-struct sticker_grid : nodes::Stack {
+struct sticker_grid : nodes::Stack, outbox {
   static constexpr float kCell = 78.0f;
-  struct cell : nodes::Stack {
+  struct cell : nodes::Stack, outbox {
     Actions* actions;
     emoji_kept* kept_ = nullptr;
     emote sticker;
@@ -71,7 +71,7 @@ struct sticker_grid : nodes::Stack {
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
-      actions->send_sticker(sticker);
+      this->send(::mux::ui::request::send_sticker{sticker});
       return true;
     }
   };

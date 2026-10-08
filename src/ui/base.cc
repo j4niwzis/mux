@@ -192,10 +192,9 @@ struct panel_ease_t {
 };
 // A chat background's dialog, for a level.
 template <class Actions>
-struct open_wallpaper_at {
-  Actions* actions = nullptr;
+struct open_wallpaper_at : outbox {
   choice_level_t level;
-  void operator()() const { actions->open_wallpaper(level); }
+  void operator()() { this->send(::mux::ui::request::open_wallpaper{level}); }
 };
 // A background's picture, read from where mux keeps it and decoded once.
 inline skia::Sp<skia::SkImage> wallpaper_picture(const std::string& path) {
@@ -244,8 +243,7 @@ struct mux_paint;
 // own objects, each a pointer of a type of its own: what a node reads, it is
 // given by its parent, and takes what it needs of it with spl::remapped<>.
 template <class Actions>
-struct ui_needs {
-  Actions* actions = nullptr;
+struct ui_needs : outbox {
   // What plays voice messages: the program's.
   platform::audio::speaker* sound = nullptr;
   // The theme's colours: the program's.
@@ -413,30 +411,26 @@ template <class Act>
 using toggle_for = std::conditional_t<sending<Act>, widgets::internal::Toggle<Act>, widgets::Toggle<Act>>;
 // A request with nothing to say but itself: `sends<::mux::ui::request::back>`.
 template <class Actions, auto Method>
-struct ask {
-  Actions* actions = nullptr;
+struct ask : outbox {
   void operator()() const { (actions->*Method)(); }
 };
 // A protocol's own request with nothing to say but itself, as its UI asks
 // it: `sends<request::refresh_sessions>`, through the program's
 // ask_for.
 template <class Actions, class Request>
-struct asks {
-  Actions* actions = nullptr;
-  void operator()() const { actions->ask_for(Request{}); }
+struct asks : outbox {
+  void operator()() { this->send(Request{}); }
 };
 // The requests about one saved account.
 template <class Actions>
-struct flip_account {
-  Actions* actions = nullptr;
+struct flip_account : outbox {
   std::string address;
-  void operator()() const { actions->flip_enabled(address); }
+  void operator()() { this->send(::mux::ui::request::flip_enabled{address}); }
 };
 template <class Actions>
-struct remove_account {
-  Actions* actions = nullptr;
+struct remove_account : outbox {
   std::string address;
-  void operator()() const { actions->remove_account(address); }
+  void operator()() { this->send(::mux::ui::request::remove_account{address}); }
 };
 
 // ---- laying out ----------------------------------------------------------

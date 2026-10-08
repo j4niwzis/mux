@@ -441,13 +441,13 @@ struct message_bubble : nodes::Stack {
       }
       // What the time goes beside: the reactions where there are some, as
       // Telegram puts it on their line, else the text's last line.
-      const skia::SkRect last = reactions ? reactions->bounds() : text.bounds();
+      const skia::SkRect last = reactions ? rethis->send(::mux::ui::request::bounds{}) : text.bounds();
       if (last.isEmpty())
         return;
       time_placed = true;
       float last_width = text.lastLineWidth();
       if (reactions)
-        last_width = reactions->chips().empty() ? 0.0f : reactions->chips().back().bounds().fRight - last.fLeft;
+        last_width = rethis->send(::mux::ui::request::chips{}).empty() ? 0.0f : rethis->send(::mux::ui::request::chips{}).back().bounds().fRight - last.fLeft;
       // Measured again only where what it goes beside moved or changed: not
       // a font's measuring for every bubble in view, every frame.
       // The widest the text can be here: the bubble's widest, or what the
@@ -1003,7 +1003,7 @@ struct message_bubble : nodes::Stack {
       body.parts.reactions.emplace();
       for (const auto& [key, who] : said.reactions)
         if (!who.empty())
-          body.parts.reactions->chips().emplace_back(*colours_, *looks_, key, who.size(), who.contains(said.in.account.address), [&] {
+          body.parts.rethis->send(::mux::ui::request::chips{}).emplace_back(*colours_, *looks_, key, who.size(), who.contains(said.in.account.address), [&] {
             std::vector<std::pair<std::string, std::string>> people;
             for (const std::string& one : who)
               people.emplace_back(one, sender_name(in, one));

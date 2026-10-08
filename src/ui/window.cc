@@ -36,7 +36,7 @@ export namespace mux::ui {
 // out from the left. All in this one window, switched by the program between
 // events.
 template <class Actions>
-struct window : scene::Node {
+struct window : scene::Node, outbox {
   using panel_type = spl::variant<accounts_panel<Actions>>;
   using with_drawer = widgets::Drawer<conversations_screen<Actions>, drawer_panel<Actions>>;
 
@@ -49,16 +49,14 @@ struct window : scene::Node {
   // the field takes for it, given to it (it keeps the focus: a button takes
   // none).
   struct text_menu : nodes::Stack {
-    struct copy_it {
-      Actions* actions;
+    struct copy_it : outbox {
       std::string text;
-      void operator()() const { actions->copy_text(text); }
+      void operator()() { this->send(::mux::ui::request::copy_text{text}); }
     };
-    struct key_it {
-      Actions* actions;
+    struct key_it : outbox {
       scene::Key key;
       bool shift = false;
-      void operator()() const { actions->text_key(key, shift); }
+      void operator()() { this->send(::mux::ui::request::text_key{key, shift}); }
     };
     struct parts_t {
       std::optional<widgets::Button<copy_it>> copy;

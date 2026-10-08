@@ -56,22 +56,21 @@ struct forward_target {
 // Where to forward a message, as tdesktop's box: the account's chats, with
 // a field to find one by its name; a press sends it there.
 template <class Actions>
-struct forward_box : nodes::Stack {
+struct forward_box : nodes::Stack, outbox {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{400.0f, 520.0f}}; }
   Actions* actions = nullptr;
   // The colours it is made in, for the rows it makes later.
   const palette* colours_ = nullptr;
   std::vector<forward_target> all;
-  struct close_it {
-    Actions* actions;
-    void operator()() const { actions->close_forward(); }
+  struct close_it : outbox {
+    void operator()() { this->send(::mux::ui::request::close_forward{}); }
   };
   struct typed {
     forward_box* box;
     void operator()(std::string_view text) const { box->find(text); }
   };
-  struct row : nodes::Stack {
+  struct row : nodes::Stack, outbox {
     Actions* actions;
     conversation_id id;
     struct parts_t {
@@ -92,7 +91,7 @@ struct forward_box : nodes::Stack {
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
-      actions->forward_to(id);
+      this->send(::mux::ui::request::forward_to{id});
       return true;
     }
   };
@@ -132,7 +131,7 @@ struct forward_box : nodes::Stack {
 // Someone found: their picture, name and ID; pressed, the chat with them --
 // in Start chat, and in the chat list where nothing joined matches.
 template <class Actions>
-struct found_person_row : nodes::Stack {
+struct found_person_row : nodes::Stack, outbox {
   Actions* actions;
   std::string id;
   struct lines_t : two_lines {
@@ -154,7 +153,7 @@ struct found_person_row : nodes::Stack {
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
-    actions->start_direct(id);
+    this->send(::mux::ui::request::start_direct{id});
     return true;
   }
 };
@@ -165,7 +164,7 @@ struct found_person_row : nodes::Stack {
 // a press on one starting the chat; and one's own link, to send to someone
 // not found.
 template <class Actions>
-struct start_chat_box : nodes::Stack {
+struct start_chat_box : nodes::Stack, outbox {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{480.0f, 560.0f}}; }
   Actions* actions = nullptr;
@@ -177,9 +176,8 @@ struct start_chat_box : nodes::Stack {
   std::vector<found_person> found;
   std::string query;
   std::string link;
-  struct close_it {
-    Actions* actions;
-    void operator()() const { actions->close_new_chat(); }
+  struct close_it : outbox {
+    void operator()() { this->send(::mux::ui::request::close_new_chat{}); }
   };
   struct typed {
     start_chat_box* box;
@@ -191,7 +189,7 @@ struct start_chat_box : nodes::Stack {
   };
   struct copy_press {
     start_chat_box* box;
-    void operator()() const { box->actions->copy_text(box->link); }
+    void operator()() const { box->send(::mux::ui::request::copy_text{box->link}); }
   };
   using person_row = found_person_row<Actions>;
   using header_t = page_header<no_back, close_it>;
@@ -274,7 +272,7 @@ struct start_chat_box : nodes::Stack {
     found.clear();
     this->show_rows();
     if (query.size() >= 2)
-      actions->find_people(query);
+      this->send(::mux::ui::request::find_people{query});
   }
   // The directory's answer, where it is for what is typed now.
   void show_found(const std::vector<found_person>& people, const std::string& asked) {
@@ -309,12 +307,12 @@ struct start_chat_box : nodes::Stack {
   // Go: the ID typed, or the first found.
   void go() {
     if (whole_id(query)) {
-      actions->start_direct(query);
+      this->send(::mux::ui::request::start_direct{query});
       return;
     }
     const auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
     if (!rows.empty())
-      actions->start_direct(rows.front().id);
+      this->send(::mux::ui::request::start_direct{rows.front().id});
   }
 };
 
@@ -322,7 +320,7 @@ struct start_chat_box : nodes::Stack {
 // join -- by invitation, or anyone, with the address it is found by -- and,
 // among the advanced, whether those of other servers may ever join.
 template <class Actions>
-struct create_room_box : nodes::Stack {
+struct create_room_box : nodes::Stack, outbox {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{480.0f}}; }
   Actions* actions = nullptr;
@@ -338,23 +336,21 @@ struct create_room_box : nodes::Stack {
   bool space_members = false;
   bool advanced = false;
   bool choosing = false;  // the list of who can join, open
-  struct close_it {
-    Actions* actions;
-    void operator()() const { actions->close_new_room(); }
+  struct close_it : outbox {
+    void operator()() { this->send(::mux::ui::request::close_new_room{}); }
   };
   struct create_press {
     create_room_box* box;
     void operator()() const {
       const std::string& name = box->parts.name.text();
       if (!name.empty())
-        box->actions->create_room(name, box->parts.topic.text(), box->open_room, box->parts.address.text(), box->federate,
+        box->send(::mux::ui::request::create_room{name, box->parts.topic.text(), box->open_room, box->parts.address.text(), box->federate,
                                   box->encrypted, box->place ? std::optional<conversation_id>(box->place->space) : std::nullopt,
-                                  box->space_members, box->place && box->place->make_space);
+                                  box->space_members, box->place && box->place->make_space});
     }
   };
-  struct cancel_press {
-    Actions* actions;
-    void operator()() const { actions->close_new_room(); }
+  struct cancel_press : outbox {
+    void operator()() { this->send(::mux::ui::request::close_new_room{}); }
   };
   struct flip_list {
     create_room_box* box;

@@ -134,17 +134,15 @@ struct animations_page : nodes::Stack {
 
 // A proxy profile opened from the list in Settings.
 template <class Actions>
-struct edit_proxy {
-  Actions* actions = nullptr;
+struct edit_proxy : outbox {
   int index = 0;
-  void operator()() const { actions->edit_proxy(index); }
+  void operator()() { this->send(::mux::ui::request::edit_proxy{index}); }
 };
 // A kind of proxy chosen on a profile's page.
 template <class Actions>
-struct choose_proxy_kind {
-  Actions* actions = nullptr;
+struct choose_proxy_kind : outbox {
   config::proxy_kind_t kind;
-  void operator()() const { actions->proxy_kind(kind); }
+  void operator()() { this->send(::mux::ui::request::proxy_kind{kind}); }
 };
 
 // Settings' Proxies page, as Gajim's Manage Proxies: the profiles, and a way

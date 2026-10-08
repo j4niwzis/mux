@@ -44,12 +44,11 @@ struct person_card : nodes::Stack {
   // tdesktop's profile layer: 392 wide (infoDesiredWidth), as high as what
   // it shows, a 24th of the window down within 20 and 40.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{392.0f}, .place = widgets::dialog_place::near_top{}}; }
-  struct message_them {
-    Actions* actions = nullptr;
+  struct message_them : outbox {
     conversation_id who;
-    void operator()() const {
-      actions->message_person(who);
-      actions->close_person_info();
+    void operator()() {
+      this->send(::mux::ui::request::message_person{who});
+      this->send(::mux::ui::request::close_person_info{});
     }
   };
   using close_act = sends<::mux::ui::request::close_person_info>;
@@ -72,34 +71,30 @@ struct person_card : nodes::Stack {
     }
   };
   // What a moderator does to them, as Element's user info offers it.
-  struct to_them {
-    Actions* actions = nullptr;
+  struct to_them : outbox {
     room_action_t action;
-    void operator()() const {
-      actions->room_act(action);
-      actions->close_person_info();
+    void operator()() {
+      this->send(::mux::ui::request::room_act{action});
+      this->send(::mux::ui::request::close_person_info{});
     }
   };
   // Verified by comparing emoji with each of their devices that answers.
-  struct accept_them {
-    Actions* actions;
+  struct accept_them : outbox {
     conversation_id who;
-    void operator()() const { actions->accept_identity(who); }
+    void operator()() { this->send(::mux::ui::request::accept_identity{who}); }
   };
   // A button of its protocol's own: its request asked.
-  struct ask_protocol {
-    Actions* actions = nullptr;
+  struct ask_protocol : outbox {
     proto::any_request_t asks;
     void operator()() const {
-      spl::visit(spl::overloaded{[](proto::part::no_request) {}, [&](const auto& one) { actions->ask_for(one); }}, asks);
+      spl::visit(spl::overloaded{[](proto::part::no_request) {}, [&](const auto& one) { this->send(one); }}, asks);
     }
   };
-  struct verify_them {
-    Actions* actions = nullptr;
+  struct verify_them : outbox {
     conversation_id who;
-    void operator()() const {
-      actions->verify_person(who);
-      actions->close_person_info();
+    void operator()() {
+      this->send(::mux::ui::request::verify_person{who});
+      this->send(::mux::ui::request::close_person_info{});
     }
   };
   // The colours it is made in.
@@ -179,19 +174,17 @@ template <class Actions>
 struct room_card : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{392.0f}, .place = widgets::dialog_place::near_top{}}; }
-  struct join_it {
-    Actions* actions = nullptr;
+  struct join_it : outbox {
     bool knock = false;  // asked to be let in, where it lets people knock
-    void operator()() const {
+    void operator()() {
       if (knock)
-        actions->knock_room_card();
+        this->send(::mux::ui::request::knock_room_card{});
       else
-        actions->join_room_card();
+        this->send(::mux::ui::request::join_room_card{});
     }
   };
-  struct decline_it {
-    Actions* actions = nullptr;
-    void operator()() const { actions->decline_room_card(); }
+  struct decline_it : outbox {
+    void operator()() { this->send(::mux::ui::request::decline_room_card{}); }
   };
   using close_act = sends<::mux::ui::request::close_room_card>;
   using close_button = icon_button<close_act>;

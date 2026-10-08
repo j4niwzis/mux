@@ -54,7 +54,7 @@ export namespace mux::ui {
 // One account in the list: its address, protocol and state. A click shows
 // its settings beside the list.
 template <class Actions>
-struct account_entry : nodes::Stack {
+struct account_entry : nodes::Stack, outbox {
   Actions* actions = nullptr;
   std::string address;
   bool selected = false;
@@ -82,7 +82,7 @@ struct account_entry : nodes::Stack {
 
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
-    actions->select_account(address);
+    this->send(::mux::ui::request::select_account{address});
     return true;
   }
   [[nodiscard]] scene::Semantics semantics() const {
@@ -178,17 +178,16 @@ struct switch_row : nodes::Stack {
 
 // A page of an account's settings chosen from its list.
 template <class Actions>
-struct choose_account_page {
-  Actions* actions = nullptr;
+struct choose_account_page : outbox {
   account_page_t page = account_page::connection{};
-  void operator()() const { actions->account_page(page); }
+  void operator()() { this->send(::mux::ui::request::account_page{page}); }
 };
 
 // An account's pages, in place of the list of accounts once one is chosen: a
 // line for each page of its settings, the one shown lit -- the client's, and
 // after Chats its protocol's own.
 template <class Actions>
-struct account_pages : nodes::Stack {
+struct account_pages : nodes::Stack, outbox {
   using row = row_item<choose_account_page<Actions>>;
   Actions* actions = nullptr;
   // The colours its protocol's rows are made in, as they change.
@@ -382,17 +381,15 @@ struct account_notifications : nodes::Stack {
 template <class Actions>
 struct account_chats : nodes::Stack {
   // Its colour chosen.
-  struct set_colour {
-    Actions* actions;
-    void operator()(const config::accent_t& one) const { actions->set_account_colour(one); }
+  struct set_colour : outbox {
+    void operator()(const config::accent_t& one) { this->send(::mux::ui::request::set_account_colour{one}); }
   };
   // Home without what its spaces hold -- but direct messages -- or as every
   // account's.
-  struct pick_home {
-    Actions* actions;
-    void operator()(std::size_t index) const {
-      actions->set_home_hides(choice_level::account{}, index == 0 ? std::nullopt : std::optional<bool>(index >= 2));
-      actions->set_home_direct(choice_level::account{}, index == 0 ? std::nullopt : std::optional<bool>(index == 3));
+  struct pick_home : outbox {
+    void operator()(std::size_t index) {
+      this->send(::mux::ui::request::set_home_hides{choice_level::account{}, index == 0 ? std::nullopt : std::optional<bool>(index >= 2)});
+      this->send(::mux::ui::request::set_home_direct{choice_level::account{}, index == 0 ? std::nullopt : std::optional<bool>(index == 3)});
     }
   };
   struct parts_t {
@@ -440,10 +437,9 @@ struct account_chats : nodes::Stack {
 
 // A proxy profile chosen for the chosen account: -1 for none.
 template <class Actions>
-struct choose_account_proxy {
-  Actions* actions = nullptr;
+struct choose_account_proxy : outbox {
   int index = -1;
-  void operator()() const { actions->choose_account_proxy(index); }
+  void operator()() { this->send(::mux::ui::request::choose_account_proxy{index}); }
 };
 
 // An account's Proxy page, as Gajim's: which of the program's proxy profiles

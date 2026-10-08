@@ -67,7 +67,7 @@ constexpr auto composer_views_for(const State& state, type_tag<Actions> tag) {
 }
 
 template <class Actions>
-struct conversations_screen : nodes::Stack {
+struct conversations_screen : nodes::Stack, outbox {
   Actions* actions = nullptr;
   // What it was handed, for the rows it makes.
   ui_needs<Actions> needs_;
@@ -545,7 +545,7 @@ struct conversations_screen : nodes::Stack {
     // whatever the modifiers, and took Alt+Left from under this.
     if (press.modifiers.template has<scene::modifier::alt>() && press.key == keys::kRight && pointed) {
       const conversation_id into = *std::exchange(pointed, std::nullopt);
-      actions->choose(into);
+      this->send(::mux::ui::request::choose{into});
       reply.handle();
       return;
     }
@@ -580,16 +580,15 @@ struct conversations_screen : nodes::Stack {
     conversations_screen* screen;
     std::string id;
     void operator()() const {
-      screen->actions->jump_to_message(id);
+      screen->send(::mux::ui::request::jump_to_message{id});
     }
   };
   // A banner's button pressed: its protocol's request, asked.
-  struct banner_press {
-    Actions* actions;
+  struct banner_press : outbox {
     const std::optional<proto::any_request_t>* asks;
     void operator()() const {
       if (*asks)
-        spl::visit(spl::overloaded{[](proto::part::no_request) {}, [&](const auto& one) { actions->ask_for(one); }}, **asks);
+        spl::visit(spl::overloaded{[](proto::part::no_request) {}, [&](const auto& one) { this->send(one); }}, **asks);
     }
   };
   // A node of the chat's protocol's own over the composer (a Telegram bot's
@@ -862,11 +861,11 @@ struct conversations_screen : nodes::Stack {
   // the chat to the chats -- a swipe across, or Esc.
   void step_back() {
     if (threads_open)
-      actions->toggle_threads();
+      this->send(::mux::ui::request::toggle_threads{});
     else if (info_open)
-      actions->toggle_info();
+      this->send(::mux::ui::request::toggle_info{});
     else
-      actions->close_chat();
+      this->send(::mux::ui::request::close_chat{});
   }
   // Esc too.
   bool close_space_menu() {

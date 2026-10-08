@@ -45,7 +45,7 @@ export namespace mux::ui {
 // when the latest came -- and one opened: its root, its answers, and a
 // field to answer in it.
 template <class Actions>
-struct threads_panel : nodes::Stack {
+struct threads_panel : nodes::Stack, outbox {
   Actions* actions = nullptr;
   std::optional<std::string> open;  // the thread open, else the list
   std::vector<message> shown;       // what the open thread shows now
@@ -53,13 +53,11 @@ struct threads_panel : nodes::Stack {
   // The chat it is of, as last shown: names and powers for its menus.
   const model* seen_model = nullptr;
   std::optional<conversation_id> seen_chat;
-  struct close_it {
-    Actions* actions;
-    void operator()() const { actions->toggle_threads(); }
+  struct close_it : outbox {
+    void operator()() { this->send(::mux::ui::request::toggle_threads{}); }
   };
-  struct back_it {
-    Actions* actions;
-    void operator()() const { actions->close_thread(); }
+  struct back_it : outbox {
+    void operator()() { this->send(::mux::ui::request::close_thread{}); }
   };
   struct sent {
     threads_panel* panel;
@@ -77,7 +75,7 @@ struct threads_panel : nodes::Stack {
   // the latest's time; pressed, opened.
   // The colours it is made in, for the rows it makes later.
   const palette* colours_ = nullptr;
-  struct thread_row : nodes::Stack {
+  struct thread_row : nodes::Stack, outbox {
     Actions* actions;
     std::string root;
     struct lines_t : nodes::Stack {
@@ -128,7 +126,7 @@ struct threads_panel : nodes::Stack {
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
-      actions->open_thread(root);
+      this->send(::mux::ui::request::open_thread{root});
       return true;
     }
   };
@@ -264,7 +262,7 @@ struct threads_panel : nodes::Stack {
     const std::string text = parts.line.plain();
     if (!open || text.empty())
       return;
-    actions->send_in_thread(*open, text, answering);
+    this->send(::mux::ui::request::send_in_thread{*open, text, answering});
     parts.line.clear();
     this->stop_answering();
   }

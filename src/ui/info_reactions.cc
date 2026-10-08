@@ -149,7 +149,7 @@ struct reactions_box : nodes::Stack {
   } parts;
 
   reactions_box(const ui_needs<Actions>& n, const conversation& in, const std::vector<reaction_entry>& entries, const model* now)
-      : parts{.top = top_bar(*n.colours, "Reactions", {}, {n.actions}, false, true)} {
+      : parts{.top = top_bar(*n.colours, "Reactions", {}, {}, false, true)} {
     auto& rows = listed_rows(*this, parts.list, 420.0f);
     rows.reserve(entries.size());
     for (std::size_t i = 0; i < entries.size(); ++i)
@@ -201,7 +201,7 @@ struct edit_history_box : nodes::Stack {
   } parts;
 
   edit_history_box(const ui_needs<Actions>& n, const conversation& in, const message& now, const model* known)
-      : parts{.top = top_bar(*n.colours, "Edit History", {}, {n.actions}, false, true)} {
+      : parts{.top = top_bar(*n.colours, "Edit History", {}, {}, false, true)} {
     auto& rows = listed_rows(*this, parts.list, 560.0f);
     const auto versions = versions_of(now);
     // Made where they stay: a bubble knows its parts by their addresses.
@@ -279,7 +279,7 @@ struct marks_box : nodes::Stack {
       : parts{.top = top_bar(*n.colours, spl::visit(spl::overloaded{[](mark_kind::mention) { return std::string("Mentions"); },
                                                    [](mark_kind::reaction) { return std::string("Reactions"); }},
                                 kind),
-                             {}, {n.actions}, false, true)} {
+                             {}, {}, false, true)} {
     auto& rows = listed_rows(*this, parts.list, 520.0f);
     rows.reserve(entries.size());
     for (const mark_entry& one : entries)

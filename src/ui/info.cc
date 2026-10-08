@@ -140,7 +140,7 @@ struct info_panel : nodes::Stack, outbox {
       } parts;
       top_row(Actions* a, info_panel* panel, bool with_back)
           : parts{.back = icon_button<back_to_group>(*panel->colours_, icon::back{}, {panel}),
-                  .close = close_button(*panel->colours_, icon::close{}, {a})} {
+                  .close = close_button(*panel->colours_, icon::close{}, {})} {
         this->setHorizontal();
         fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {8.0f, 8.0f, 0.0f, 8.0f}});
         parts.gap.apply({.height = 1.0f, .grow = scene::axes::kX});
@@ -157,9 +157,9 @@ struct info_panel : nodes::Stack, outbox {
         leave_tile leave;
       } parts;
       tiles_row(Actions* a, const palette& colours, bool muted, bool leavable)
-          : parts{.mute = mute_tile(colours, muted ? "Unmute" : "Mute", icon::bell{}, {a}),
-                  .manage = manage_tile(colours, "Manage", icon::sliders{}, {a}),
-                  .leave = leave_tile(colours, "Leave", icon::leave{}, {a})} {
+          : parts{.mute = mute_tile(colours, muted ? "Unmute" : "Mute", icon::bell{}, {}),
+                  .manage = manage_tile(colours, "Manage", icon::sliders{}, {}),
+                  .leave = leave_tile(colours, "Leave", icon::leave{}, {})} {
         this->setHorizontal();
         this->setGap(8.0f);
         fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}});

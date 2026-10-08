@@ -260,7 +260,7 @@ struct proxy_editor : nodes::Stack {
               .password = field(colours, "Password", "none"),
               .resolver = field(colours, "XMPP SRV lookups: nameserver", "the system's; an IP address, or off"),
               .message = nodes::Text("", 13.0f, colours.dim),
-              .buttons = button_row<save_button, delete_button>(save_button(colours.widgets, "Save", {a}), delete_button(colours.widgets, "Delete", {a}))} {
+              .buttons = button_row<save_button, delete_button>(save_button(colours.widgets, "Save", {}), delete_button(colours.widgets, "Delete", {}))} {
     auto& [header, name, kinds, host, port, username, password, resolver, message, buttons] = parts;
     fState.apply({.fill = true});
     this->setGap(8.0f);

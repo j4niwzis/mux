@@ -223,7 +223,7 @@ struct side_column : nodes::Stack, outbox {
     head_row(const palette& colours, Actions* a)
         : parts{.menu = menu_button<Actions>(colours, a),
                 .name = nodes::Text("mux", 17.0f, colours.text, true),
-                .explore = explore_button(colours, icon::compass{}, {a})} {
+                .explore = explore_button(colours, icon::compass{}, {})} {
       this->setHorizontal();
       this->setGap(10.0f);
       fState.apply({.fillX = true, .height = 52.0f, .padding = {8.0f, 8.0f, 8.0f, 8.0f}});
@@ -265,9 +265,9 @@ struct side_column : nodes::Stack, outbox {
       icon_button<sends<::mux::ui::request::manage_forum>> settings;
     } parts;
     forum_head_t(const palette& colours, Actions* a)
-        : parts{.back = icon_button<sends<::mux::ui::request::close_forum>>(colours, icon::back{}, {a}),
+        : parts{.back = icon_button<sends<::mux::ui::request::close_forum>>(colours, icon::back{}, {}),
                 .name = nodes::Text("", 15.0f, colours.text, true),
-                .settings = icon_button<sends<::mux::ui::request::manage_forum>>(colours, icon::gear{}, {a})} {
+                .settings = icon_button<sends<::mux::ui::request::manage_forum>>(colours, icon::gear{}, {})} {
       this->setHorizontal();
       this->setGap(8.0f);
       fState.apply({.fillX = true, .height = 40.0f, .padding = {0.0f, 8.0f, 0.0f, 8.0f}});

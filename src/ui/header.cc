@@ -51,7 +51,7 @@ struct notice_box : nodes::Stack {
   notice_box(const palette& colours, Actions* a, std::string heading, std::string text)
       : parts{.title = nodes::Text(std::move(heading), 17.0f, colours.text, true),
               .note = nodes::Text(std::move(text), 14.0f, colours.dim),
-              .ok = ok_button(colours.widgets, "OK", {a})} {
+              .ok = ok_button(colours.widgets, "OK", {})} {
     // As high as what it says: no room left empty under its button.
     lay_out_notice(*this, parts.title, parts.note);
     parts.ok.setPrimary(true);
@@ -123,11 +123,11 @@ struct verification_box : nodes::Stack {
   verification_box(const palette& colours, Actions* a, const verification_view& view)
       : parts{.title = nodes::Text("Verify " + view.user, 17.0f, colours.text, true),
               .note = nodes::Text(note_of(view), 14.0f, colours.dim),
-              .accept = accept_button(colours.widgets, "Accept", {a}),
-              .decline = decline_button(colours.widgets, declines(view.step) ? "Decline" : "Cancel", {a}),
-              .match = match_button(colours.widgets, "They match", {a}),
-              .mismatch = mismatch_button(colours.widgets, "They don't match", {a}),
-              .close = close_button(colours.widgets, "OK", {a})} {
+              .accept = accept_button(colours.widgets, "Accept", {}),
+              .decline = decline_button(colours.widgets, declines(view.step) ? "Decline" : "Cancel", {}),
+              .match = match_button(colours.widgets, "They match", {}),
+              .mismatch = mismatch_button(colours.widgets, "They don't match", {}),
+              .close = close_button(colours.widgets, "OK", {})} {
     lay_out_notice(*this, parts.title, parts.note);
     spl::visit(spl::overloaded{[&](const verification_step::compare& shown) { parts.emoji.emplace(colours, shown.emoji); },
                                      [](const auto&) {}},
@@ -247,13 +247,13 @@ struct chat_header : nodes::Stack {
     } parts;
     head_row(const palette& colours, Actions* a, const view& shown)
         : actions(a), taps_to_info(shown.back && shown.key.has_value()),
-          parts{.back = back_button(colours, icon::back{}, {a}),
+          parts{.back = back_button(colours, icon::back{}, {}),
                 .face = avatar_mark(shown.key.value_or(""), shown.title, 38.0f),
                 .texts = two_lines(colours, shown.title, shown.status, 15.0f, 3.0f),
-                .find = find_button(colours, icon::search{}, {a}),
-                .call = call_button(colours, icon::phone{}, {a}),
-                .threads = threads_button(colours, icon::threads{}, {a}),
-                .info = info_button(colours, icon::info{}, {a})} {
+                .find = find_button(colours, icon::search{}, {}),
+                .call = call_button(colours, icon::phone{}, {}),
+                .threads = threads_button(colours, icon::threads{}, {}),
+                .info = info_button(colours, icon::info{}, {})} {
       this->setHorizontal();
       this->setGap(12.0f);
       fState.apply({.fillX = true, .grow = scene::axes::kY, .padding = {0.0f, 16.0f, 0.0f, 22.0f}});
@@ -388,10 +388,10 @@ struct selection_bar : nodes::Stack, outbox {
   explicit selection_bar(const ui_needs<Actions>& n)
       : actions(n.actions),
         parts{.count = nodes::Text("", 15.0f, n.colours->text, true),
-              .forward = forward_button(n.colours->widgets, "Forward", {n.actions}),
-              .copy = copy_button(n.colours->widgets, "Copy", {n.actions}),
-              .remove = delete_button(n.colours->widgets, "Delete", {n.actions}),
-              .cancel = cancel_button(n.colours->widgets, "Cancel", {n.actions}),
+              .forward = forward_button(n.colours->widgets, "Forward", {}),
+              .copy = copy_button(n.colours->widgets, "Copy", {}),
+              .remove = delete_button(n.colours->widgets, "Delete", {}),
+              .cancel = cancel_button(n.colours->widgets, "Cancel", {}),
               .bottom_line = nodes::Box<>(n.colours->band)} {
     auto& [count, forward, copy, remove, cancel, bottom_line] = parts;
     this->setHorizontal();
@@ -449,11 +449,11 @@ struct search_bar : nodes::Stack, outbox {
 
   explicit search_bar(const ui_needs<Actions>& n) : search_bar(*n.colours, n.actions) {}
   search_bar(const palette& colours, Actions* a)
-      : actions(a), parts{.field = field_t(colours.widgets, "Search", {a}),
+      : actions(a), parts{.field = field_t(colours.widgets, "Search", {}),
                           .found = nodes::Text("", 13.0f, colours.dim),
                           .newer = step_button(colours, icon::up{}, {a, false}),
                           .older = step_button(colours, icon::down{}, {a, true}),
-                          .close = close_button(colours, icon::close{}, {a}),
+                          .close = close_button(colours, icon::close{}, {}),
                           .bottom_line = nodes::Box<>(colours.band)} {
     auto& [field, found, newer, older, close, bottom_line] = parts;
     this->setHorizontal();

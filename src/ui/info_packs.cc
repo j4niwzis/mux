@@ -236,7 +236,7 @@ struct packs_box : nodes::Stack, outbox {
       widgets::Button<save_press> save;
     } parts;
     edit_buttons(Actions* a, packs_box* box)
-        : parts{.add = widgets::Button<add_press>(box->colours_->widgets, "Add images", {a}),
+        : parts{.add = widgets::Button<add_press>(box->colours_->widgets, "Add images", {}),
                 .remove = widgets::Button<delete_press>(box->colours_->widgets, "Delete pack", {box}),
                 .back = widgets::Button<back_press>(box->colours_->widgets, "Back", {box}),
                 .save = widgets::Button<save_press>(box->colours_->widgets, "Save", {box})} {

@@ -74,7 +74,7 @@ struct picture_viewer : nodes::Stack, outbox {
                 .smaller = icon_button<zoom_by>(colours, icon::minus{}, {viewer, 1.0f / 1.25f}),
                 .larger = icon_button<zoom_by>(colours, icon::plus{}, {viewer, 1.25f}),
                 .save = icon_button<save_it>(colours, icon::download{}, {a, source}),
-                .close = close_button(colours, icon::close{}, {a})} {
+                .close = close_button(colours, icon::close{}, {})} {
       this->setHorizontal();
       this->setGap(8.0f);
       fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 12.0f, 0.0f, 16.0f}});

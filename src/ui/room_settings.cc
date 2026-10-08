@@ -290,7 +290,7 @@ struct leave_space_box : nodes::Stack, outbox {
               .none = radio_choice<pick>(*n.colours, "Don't leave any rooms", "", {this, leave_choice::none{}}, true, true),
               .all = radio_choice<pick>(*n.colours, "Leave all rooms", "", {this, leave_choice::all{}}, false, true),
               .some = radio_choice<pick>(*n.colours, "Leave some rooms", "", {this, leave_choice::some{}}, false, true),
-              .buttons = dialog_buttons<cancel, go>(*n.colours, "Leave space", {n.actions}, {this}, 130.0f)} {
+              .buttons = dialog_buttons<cancel, go>(*n.colours, "Leave space", {}, {this}, 130.0f)} {
     for (const auto& one : facts.rooms)
       parts.rooms.emplace_back(*n.colours, one.name, flip_room{this, one.id}, false, true);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
@@ -547,7 +547,7 @@ struct room_settings : nodes::Stack, outbox {
                                              : "On: in the chat list as one chat; its rooms open inside it, as Telegram's topics."),
                 .home_hide = toggle_line<flip_home_hide_act>(*box->colours_, "Its rooms not in Home", {a, facts.id}, facts.hidden_from_home, true),
                 .leave_heading = part_heading(*box->colours_, "Leave room"),
-                .leave = button_for<sends<::mux::ui::request::leave_chat>>(box->colours_->widgets, "Leave room", {a})} {
+                .leave = button_for<sends<::mux::ui::request::leave_chat>>(box->colours_->widgets, "Leave room", {})} {
       for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.forum_heading, &parts.forum, &parts.forum_about})
         each->setVisible(facts.space);
       // A space's own: its rooms out of Home -- not one shown as one chat,

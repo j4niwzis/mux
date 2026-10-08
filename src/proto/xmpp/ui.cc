@@ -36,7 +36,7 @@ struct xmpp_advanced : nodes::Stack {
       nodes::Text label;
     } parts;
     plain_row(Actions* a, const palette& colours)
-        : parts{.plain = plain_toggle(colours.widgets, {a}),
+        : parts{.plain = plain_toggle(colours.widgets, {}),
                 .label = nodes::Text("Allow PLAIN without TLS. Only for a test server on this machine: never over a network.",
                                      13.0f, colours.error)} {
       this->setHorizontal();
@@ -208,7 +208,7 @@ struct xmpp_form : nodes::Stack, outbox {
               .mode = choice_menu<pick_mode>(colours, "Account", {"Sign in to an account", "Create a new account"},
                                              creating ? 1 : 0, pick_mode{this}),
               .asked = asked_part(colours),
-              .advanced_button = advanced_button_t(colours.widgets, "Advanced", {a}),
+              .advanced_button = advanced_button_t(colours.widgets, "Advanced", {}),
               .more = widgets::Collapsible<xmpp_advanced<Actions>>(a, colours),
               .end = form_end<Actions>(colours, a, from.has_value())} {
     auto& [address, password, mode, asked, advanced_button, more, end] = parts;

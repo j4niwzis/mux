@@ -177,19 +177,19 @@ struct account_sessions : nodes::Stack, outbox {
   account_sessions(Actions* a, const palette& colours, const ui_shared&, const config::account_t&, const model&)
       : actions(a), colours_(&colours), parts{.verification_title = section_title(colours, "DEVICE VERIFICATION"),
               .verification_note = nodes::Text("To verify device identity and grant access to encrypted messages: cross-signing. " "Set it up here, or, where another session of yours has it, bring it back with " "your recovery key.", 13.0f, colours.dim),
-              .set_up = set_up_row(colours, "Set up cross-signing\u2026", {a}),
-              .restore = restore_row(colours, "Restore with the recovery key\u2026", {a}),
-              .reset = reset_row(colours, "Reset your identity\u2026", {a}),
-              .reset_backup = reset_backup_row(colours, "Reset the key backup", {a}),
-              .delete_backup = delete_backup_row(colours, "Delete the key backup", {a}),
+              .set_up = set_up_row(colours, "Set up cross-signing\u2026", {}),
+              .restore = restore_row(colours, "Restore with the recovery key\u2026", {}),
+              .reset = reset_row(colours, "Reset your identity\u2026", {}),
+              .reset_backup = reset_backup_row(colours, "Reset the key backup", {}),
+              .delete_backup = delete_backup_row(colours, "Delete the key backup", {}),
               .title = section_title(colours, "SESSIONS"),
               .note = nodes::Text("Loading the sessions…", 13.0f, colours.dim),
               .current_title = section_title(colours, "CURRENT SESSION"),
               .others_title = section_title(colours, "OTHER SESSIONS"),
-              .sign_out_unverified = sign_out_unverified_row(colours, "Sign out unverified sessions\u2026", {a}),
+              .sign_out_unverified = sign_out_unverified_row(colours, "Sign out unverified sessions\u2026", {}),
               .password = password_row(colours),
               .rest = widgets::Button<sign_out_rest>(colours.widgets, "Sign out of all other sessions", {this}),
-              .refresh = widgets::Button<reload>(colours.widgets, "Refresh", {a})} {
+              .refresh = widgets::Button<reload>(colours.widgets, "Refresh", {})} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     parts.verification_note.setWrapped(true);
@@ -303,12 +303,12 @@ struct encryption_page : nodes::Stack {
 
   encryption_page(Actions* a, const palette& colours, const ui_shared& shared, const config::account_t& one, const model& now)
       : parts{.title = section_title(colours, "ENCRYPTION"),
-              .only_verified = only_verified_row(colours, "Never send encrypted messages to unverified sessions", {a}),
+              .only_verified = only_verified_row(colours, "Never send encrypted messages to unverified sessions", {}),
               .session_line = nodes::Text("", 13.0f, colours.dim),
-              .export_keys = export_row(colours, "Export room keys\u2026", {a}),
-              .import_keys = import_row(colours, "Import room keys\u2026", {a}),
-              .cross_signing = cross_signing_row(colours, "Set up cross-signing\u2026", {a}),
-              .recovery = recovery_row(colours, "Restore with the recovery key\u2026", {a})} {
+              .export_keys = export_row(colours, "Export room keys\u2026", {}),
+              .import_keys = import_row(colours, "Import room keys\u2026", {}),
+              .cross_signing = cross_signing_row(colours, "Set up cross-signing\u2026", {}),
+              .recovery = recovery_row(colours, "Restore with the recovery key\u2026", {})} {
     this->setGap(8.0f);
     fState.apply({.fill = true});
     parts.only_verified.parts.toggle.setOnNow(config::only_verified_of(one));

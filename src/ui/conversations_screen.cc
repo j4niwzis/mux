@@ -651,7 +651,7 @@ struct conversations_screen : nodes::Stack, outbox {
       empty_state(const palette& colours, Actions* a)
           : parts{.title = nodes::Text("No accounts yet", 22.0f, colours.text, true),
                   .note = nodes::Text("Add an XMPP or a Matrix account, and its chats will be here.", 14.0f, colours.dim),
-                  .add = add_button(colours.widgets, "Add account", {a})} {
+                  .add = add_button(colours.widgets, "Add account", {})} {
         this->setGap(12.0f);
         fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {120.0f, 48.0f, 0.0f, 48.0f}});
         parts.note.setWrapped(true);

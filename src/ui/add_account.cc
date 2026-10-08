@@ -63,7 +63,7 @@ struct add_account_pane : nodes::Stack, outbox {
       add_button add;
     } parts;
     proxy_row(const palette& colours, Actions* a)
-        : parts{.title = nodes::Text("Proxy", 13.0f, colours.dim), .add = add_button(colours, "Add proxy\u2026", {a})} {
+        : parts{.title = nodes::Text("Proxy", 13.0f, colours.dim), .add = add_button(colours, "Add proxy\u2026", {})} {
       this->setHorizontal();
       this->setGap(4.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});

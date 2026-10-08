@@ -131,12 +131,12 @@ struct call_buttons : nodes::Stack {
   [[nodiscard]] bool wantsTick() const { return ending_; }
   void update(double) {}
   call_buttons(const palette& colours, Actions* a, float size)
-      : parts{.mute = icon_button<mute_it>(colours, icon::microphone{}, {a}),
-              .decline = icon_button<decline_it>(colours, icon::hang_up{}, {a}),
-              .hang_up = icon_button<hang_up_it>(colours, icon::hang_up{}, {a}),
-              .accept = icon_button<accept_it>(colours, icon::phone{}, {a}),
+      : parts{.mute = icon_button<mute_it>(colours, icon::microphone{}, {}),
+              .decline = icon_button<decline_it>(colours, icon::hang_up{}, {}),
+              .hang_up = icon_button<hang_up_it>(colours, icon::hang_up{}, {}),
+              .accept = icon_button<accept_it>(colours, icon::phone{}, {}),
               .call_back = icon_button<call_back_it>(colours, icon::phone{}, {this}),
-              .dismiss = icon_button<dismiss_it>(colours, icon::close{}, {a})},
+              .dismiss = icon_button<dismiss_it>(colours, icon::close{}, {})},
         colours_(&colours),
         actions_(a) {
     this->setHorizontal();

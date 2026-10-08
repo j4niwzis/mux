@@ -303,7 +303,7 @@ struct timeline_area : scene::Node, outbox {
               .back = back_button<Actions>(*n.colours, a),
               .mentions = mark_button<Actions>(*n.colours, a, mark_kind::mention{}, "@"),
               .reactions = mark_button<Actions>(*n.colours, a, mark_kind::reaction{}, "\u2665"),
-              .loading = widgets::RadialLoader<stop_jump>(44.0f, {a})},
+              .loading = widgets::RadialLoader<stop_jump>(44.0f, {})},
         actions(a),
         needs_(n) {
     parts.wall.apply({.fill = true});

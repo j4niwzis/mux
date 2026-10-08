@@ -128,8 +128,8 @@ struct storage_page : nodes::Stack {
       change_row change;
     } parts;
     seal_rows(const palette& colours, Actions* a, bool sealed)
-        : parts{.seal = seal_row(colours, "Encrypt local data", {a}),
-                .change = change_row(colours, "Change the passphrase", {a})} {
+        : parts{.seal = seal_row(colours, "Encrypt local data", {}),
+                .change = change_row(colours, "Change the passphrase", {})} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
       this->show_sealed(sealed, true);
     }

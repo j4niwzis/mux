@@ -696,7 +696,7 @@ struct composer_bar : nodes::Stack {
     } parts;
     replaced_row(const palette& colours, Actions* a)
         : parts{.line = nodes::Text("This room has been replaced and is no longer active.", 13.0f, colours.dim),
-                .go = widgets::Button<go_on>(colours.widgets, "The conversation continues here", {a})} {
+                .go = widgets::Button<go_on>(colours.widgets, "The conversation continues here", {})} {
       this->setHorizontal();
       this->setGap(10.0f);
       fStack.justify = nodes::justify::middle{};
@@ -741,13 +741,13 @@ struct composer_bar : nodes::Stack {
 
   // Declared: the divider, the unsent bar, the answer's line where there is
   // one, the row -- or, where the reader may not post, the line saying so.
-  explicit composer_bar(const ui_needs<Actions>& n) : composer_bar(n, {n.actions}, {n.actions}, {n.actions}, {n.actions}, {n.actions}) {}
+  explicit composer_bar(const ui_needs<Actions>& n) : composer_bar(n, {}, {}, {}, {}, {}) {}
   composer_bar(const ui_needs<Actions>& n, typename Where::cancel cancel, typename Where::submit submit, typename Where::attach attach,
                typename Where::emoji emoji, typename Where::send send)
       : colours_(n.colours),
         parts{.divider = nodes::Box<>(n.colours->band),
-              .unsent = unsent_row(*n.colours, "Some of your messages have not been sent", n.colours->error, "Delete all", {n.actions},
-                                  "Retry all", {n.actions}),
+              .unsent = unsent_row(*n.colours, "Some of your messages have not been sent", n.colours->error, "Delete all", {},
+                                  "Retry all", {}),
               .context_line = context_row(*n.colours, std::move(cancel)),
               .input = input_row(*n.colours, std::string(Where::placeholder), std::move(submit), std::move(attach), std::move(emoji),
                                  std::move(send)),

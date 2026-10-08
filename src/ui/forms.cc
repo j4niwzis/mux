@@ -90,7 +90,7 @@ struct link_box : nodes::Stack, outbox {
               .text = field(*n.colours, "Text", "Text", std::move(text)),
               .url = field(*n.colours, "URL", "https://", std::move(url)),
               .go = widgets::Button<done>(n.colours->widgets, "Done", {this}),
-              .back = widgets::Button<cancel>(n.colours->widgets, "Cancel", {n.actions})} {
+              .back = widgets::Button<cancel>(n.colours->widgets, "Cancel", {})} {
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}});
     this->setGap(10.0f);
     parts.title.apply({.fillX = true});
@@ -223,8 +223,8 @@ struct form_end : nodes::Stack {
   form_end(const palette& colours, Actions* a, bool editing)
       : colours_(&colours),
         parts{.message = nodes::Text("", 13.0f, colours.error),
-              .buttons = button_row<submit_button, close_button>(submit_button(colours.widgets, editing ? "Save" : "Log in", {a}),
-                                                                 close_button(colours.widgets, "Close", {a}))} {
+              .buttons = button_row<submit_button, close_button>(submit_button(colours.widgets, editing ? "Save" : "Log in", {}),
+                                                                 close_button(colours.widgets, "Close", {}))} {
     auto& message = parts.message;
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     this->setGap(12.0f);

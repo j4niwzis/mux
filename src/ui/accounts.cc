@@ -293,13 +293,13 @@ struct account_privacy : nodes::Stack {
                   std::optional<std::int64_t> jump_most = std::nullopt, std::optional<bool> previews_on = std::nullopt,
                   std::optional<config::mentions_choice> mentions = std::nullopt)
       : parts{.title = section_title(colours, "PRIVACY"),
-              .receipts = receipts_row(colours, "Send read receipts", {a}),
+              .receipts = receipts_row(colours, "Send read receipts", {}),
               .settings = account_typing_view(colours, std::move(address)),
               .note = note_text(colours, "Off, the people you talk to through this account are not told when you have read "
                                          "their messages, or that you are typing. Theirs are still shown, and receipts are "
                                          "still kept here."),
-              .mentions_shared = mentions_shared_row(colours, "Sync read mentions between sessions", {a}),
-              .mentions_sealed = mentions_sealed_row(colours, "Encrypt them (with the recovery key)", {a}),
+              .mentions_shared = mentions_shared_row(colours, "Sync read mentions between sessions", {}),
+              .mentions_sealed = mentions_sealed_row(colours, "Encrypt them (with the recovery key)", {}),
               .mentions_note = note_text(colours, "Which mentions you have read, kept with your account on its server, so "
                                                   "your other sessions take them as read too. Encrypted, the server cannot "
                                                   "read them; a session gets the key when it is restored with the "
@@ -411,7 +411,7 @@ struct account_chats : nodes::Stack {
                 std::optional<bool> home_direct, const config::accent_t& colour, bool strip_on, const config::theme_t& theme)
       : parts{.colour_title = section_title(colours, "COLOUR"),
               .colours = accent_circles<set_colour>({a}, theme, false),
-              .strip = switch_row<sends<::mux::ui::request::flip_account_strip>>(colours, "A strip on its chats in other lists", {a}),
+              .strip = switch_row<sends<::mux::ui::request::flip_account_strip>>(colours, "A strip on its chats in other lists", {}),
               .title = section_title(colours, "CHATS"),
               .settings = account_chats_view(colours, std::move(address)),
               .looks_title = section_title(colours, "LOOKS"),

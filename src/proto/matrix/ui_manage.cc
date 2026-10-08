@@ -674,10 +674,10 @@ struct advanced_page : nodes::Stack {
               .upgrade_to = field((*box->colours_), "Upgrade to room version", "12", "12"),
               .upgrade = widgets::Button<upgrade_press>((*box->colours_).widgets, "Upgrade this room", {box, this}),
               .tools = part_heading((*box->colours_), "Developer tools"),
-              .explore = button_for<sends<request::explore_state>>((*box->colours_).widgets, "Explore room state", {a}),
-              .send_custom = button_for<sends<request::open_send_custom>>((*box->colours_).widgets, "Send custom event", {a}),
+              .explore = button_for<sends<request::explore_state>>((*box->colours_).widgets, "Explore room state", {}),
+              .send_custom = button_for<sends<request::open_send_custom>>((*box->colours_).widgets, "Send custom event", {}),
               .packs_heading = part_heading((*box->colours_), "Emojis & Stickers"),
-              .packs = button_for<sends<::mux::ui::request::open_room_packs>>((*box->colours_).widgets, "Edit room packs", {a})} {
+              .packs = button_for<sends<::mux::ui::request::open_room_packs>>((*box->colours_).widgets, "Edit room packs", {})} {
     this->setGap(6.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 28.0f, 24.0f, 12.0f}});
     for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.explore, &parts.send_custom, &parts.packs, &parts.upgrade})

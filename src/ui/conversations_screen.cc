@@ -814,6 +814,13 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
   int unseen = 0;
   composer_bar<Actions>& line = chat.line;
 
+  // Its child references and handlers point into this screen. Construct it
+  // in its final place; moving it would leave them pointing at the old one.
+  conversations_screen(const conversations_screen&) = delete;
+  conversations_screen& operator=(const conversations_screen&) = delete;
+  conversations_screen(conversations_screen&&) = delete;
+  conversations_screen& operator=(conversations_screen&&) = delete;
+
   conversations_screen(const ui_needs<Actions> &n)
       : Stacked(skiff::compose::hbox(0.0f, {.fill = true})), needs_(n),
         parts{.side = side_column(*n.colours),

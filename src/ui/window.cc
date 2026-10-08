@@ -637,10 +637,9 @@ template <class Actions> struct window : skiff::compose::Specced {
         : Specced({.fill = true}),
           parts{.backdrop = nodes::Box<>(n.colours->background),
                 .frame = frame_t(std::in_place, &n,
-                                 with_drawer(drawer_node(
-                                     std::piecewise_construct,
-                                     std::forward_as_tuple(std::in_place, n),
-                                     std::forward_as_tuple(n)))),
+                                 std::in_place, std::piecewise_construct,
+                                 std::forward_as_tuple(std::in_place, n),
+                                 std::forward_as_tuple(n)),
                 .settings =
                     shown_made<settings_dialog<Actions>, settings_facts>(n),
                 .notice = shown_made<notice_box_t, notice_facts>(n),

@@ -15,14 +15,15 @@ import skiff.compose;
 import skiff.bind;
 import skiff.model;
 import skiff.nodes.box;
+import skiff.nodes.icon;
 import skiff.nodes.flow;
 import skiff.nodes.text;
-import skiff.widgets.button;
+import skiff.widgets.avatar;
 import mux.core;
 import :base;
 import :icons;
 import :themes;
-import :controls;
+import :avatars;
 
 export namespace mux::ui {
 
@@ -135,239 +136,99 @@ struct call_panel_of {
                : std::nullopt;
   }
 };
-template <class Actions> struct call_arguments {
-  ui_needs<Actions> needs;
-  auto operator()(const call_view &view) const { return std::tie(needs, view); }
-};
-
 // Element's call colours: hanging up and declining red, answering green.
 inline constexpr skia::SkColor kHangUpRed = skia::colorSetARGB(255, 0xFF, 0x5B, 0x55);
 inline constexpr skia::SkColor kAnswerGreen = skia::colorSetARGB(255, 0x0D, 0xBD, 0x8B);
 
-// The round buttons, the same in the view and in the card: the microphone
-// and hanging up during the call; Decline and Accept while it rings here;
-// none once it has ended.
-template <class Actions> struct call_buttons : skiff::compose::Stacked {
-  struct accept_it {
-    using Answer = ::mux::ui::request::accept_call;
-    ::mux::ui::request::accept_call operator()() { return ::mux::ui::request::accept_call{}; }
-  };
-  struct decline_it {
-    using Answer = ::mux::ui::request::decline_call;
-    ::mux::ui::request::decline_call operator()() { return ::mux::ui::request::decline_call{}; }
-  };
-  struct mute_it {
-    using Answer = ::mux::ui::request::mute_call;
-    ::mux::ui::request::mute_call operator()() { return ::mux::ui::request::mute_call{}; }
-  };
-  struct hang_up_it {
-    using Answer = ::mux::ui::request::hang_up;
-    ::mux::ui::request::hang_up operator()() { return ::mux::ui::request::hang_up{}; }
-  };
-  // Over: called again, as Element's Call back; or put away.
-  struct call_back_it {
-    using Answer = ::mux::ui::request::start_call;
-    conversation_id in;
-    Answer operator()() const { return {in}; }
-  };
-  struct dismiss_it {
-    using Answer = ::mux::ui::request::dismiss_call;
-    ::mux::ui::request::dismiss_call operator()() { return ::mux::ui::request::dismiss_call{}; }
-  };
-  struct parts_t {
-    icon_button<mute_it> mute;
-    icon_button<decline_it> decline;
-    icon_button<hang_up_it> hang_up;
-    icon_button<accept_it> accept;
-    icon_button<call_back_it> call_back;
-    icon_button<dismiss_it> dismiss;
-  } parts;
-  bool ending_ = false;
-  [[nodiscard]] bool wantsTick() const { return ending_; }
-  void update(double) {}
-  [[nodiscard]] static scene::Spec round(float size, skia::SkColor plate,
-                                         skia::SkColor hover) {
-    return {.width = size,
-            .height = size,
-            .cornerRadius = size / 2.0f,
-            .background = plate,
-            .hoverBackground = hover,
-            .focusBackground = hover};
-  }
-  [[nodiscard]] static palette white_icons(palette colours) {
-    colours.text = skia::colorSetARGB(255, 255, 255, 255);
-    return colours;
-  }
-  call_buttons(const palette &colours, float size, const call_view &view)
-      : Stacked(skiff::compose::hbox(size / 2.0f,
-                                     {.autoSize = scene::axes::kBoth,
-                                      .alignSelf = scene::align::kMiddle})),
-        parts{.mute = skiff::compose::visible(
-                  !rings_here(view) && !has_ended(view),
-                  skiff::compose::styled(
-                      round(size, colours.tile, colours.chosen),
-                      icon_button<mute_it>(colours,
-                                           view.muted
-                                               ? icon_t{icon::microphone_off{}}
-                                               : icon_t{icon::microphone{}},
-                                           {}))),
-              .decline = skiff::compose::visible(
-                  rings_here(view),
-                  skiff::compose::styled(
-                      round(size, kHangUpRed, kHangUpRed),
-                      icon_button<decline_it>(white_icons(colours),
-                                              icon::hang_up{}, {}))),
-              .hang_up = skiff::compose::visible(
-                  !rings_here(view) && !has_ended(view),
-                  skiff::compose::styled(
-                      round(size, kHangUpRed, kHangUpRed),
-                      icon_button<hang_up_it>(white_icons(colours),
-                                              icon::hang_up{}, {}))),
-              .accept = skiff::compose::visible(
-                  rings_here(view) && view.available,
-                  skiff::compose::styled(
-                      round(size, kAnswerGreen, kAnswerGreen),
-                      icon_button<accept_it>(white_icons(colours),
-                                             icon::phone{}, {}))),
-              .call_back = skiff::compose::visible(
-                  has_ended(view) && view.available,
-                  skiff::compose::styled(
-                      round(size, kAnswerGreen, kAnswerGreen),
-                      icon_button<call_back_it>(white_icons(colours),
-                                                icon::phone{}, {view.in}))),
-              .dismiss = skiff::compose::visible(
-                  has_ended(view),
-                  skiff::compose::styled(
-                      round(size, colours.tile, colours.chosen),
-                      icon_button<dismiss_it>(colours, icon::close{}, {})))},
-        ending_(has_ended(view)) {}
-};
+inline scene::Spec call_button_look(float size, skia::SkColor plate, skia::SkColor hover) {
+  return {.width = size, .height = size, .cornerRadius = size / 2.0f, .background = plate,
+          .hoverBackground = hover, .focusBackground = hover};
+}
+template <class Event>
+auto call_button(const palette& colours, float size, skia::SkColor plate, skia::SkColor hover,
+                 skia::SkColor ink, icon_t mark, Event event, bool shown) {
+  return skiff::compose::visible(shown, skiff::compose::onClick(std::move(event),
+      skiff::compose::styled(call_button_look(size, plate, hover), nodes::Icon(shape_of(mark), ink))));
+}
+inline auto call_buttons(const palette& colours, float size, const call_view& view) {
+  const auto white = skia::colorSetARGB(255, 255, 255, 255);
+  const bool ringing = rings_here(view), ended = has_ended(view);
+  return skiff::compose::keep_ticking(ended, skiff::compose::row(
+      skiff::compose::hbox(size / 2.0f, {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
+      call_button(colours, size, colours.tile, colours.chosen, colours.text,
+                  view.muted ? icon_t{icon::microphone_off{}} : icon_t{icon::microphone{}},
+                  request::mute_call{}, !ringing && !ended),
+      call_button(colours, size, kHangUpRed, kHangUpRed, white, icon::hang_up{}, request::decline_call{}, ringing),
+      call_button(colours, size, kHangUpRed, kHangUpRed, white, icon::hang_up{}, request::hang_up{}, !ringing && !ended),
+      call_button(colours, size, kAnswerGreen, kAnswerGreen, white, icon::phone{}, request::accept_call{}, ringing && view.available),
+      call_button(colours, size, kAnswerGreen, kAnswerGreen, white, icon::phone{}, request::start_call{view.in}, ended && view.available),
+      call_button(colours, size, colours.tile, colours.chosen, colours.text, icon::close{}, request::dismiss_call{}, ended)));
+}
+inline auto call_avatar(const call_view& view, float size) {
+  return skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+      widgets::Avatar<from_avatars>(initials_of(view.who), size, picture_of(view.in.id), gradient_of(view.in.id)));
+}
+inline auto call_status(const palette& colours, const call_view& view, float size) {
+  return skiff::compose::text_of<call_shown>(call_words{}, nodes::Text(said_of(view), size, colours.dim));
+}
+// The call in its chat, beneath the header.
+inline auto call_panel(const palette& colours, const call_view& view) {
+  return skiff::compose::column(
+      skiff::compose::justified(skiff::compose::vbox(10.0f,
+          {.fillX = true, .height = 280.0f, .padding = {20.0f, 16.0f, 20.0f, 16.0f},
+           .background = colours.sidebar, .border = scene::Border{colours.band, 1.0f}}), nodes::justify::middle{}),
+      call_avatar(view, 88.0f),
+      skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(view.who, 18.0f, colours.text, true)),
+      skiff::compose::styled({.alignSelf = scene::align::kMiddle, .margin = {0.0f, 0.0f, 8.0f, 0.0f}}, call_status(colours, view, 13.0f)),
+      call_buttons(colours, 52.0f, view));
+}
+// On a phone the call fills the window and takes presses off its controls.
+inline auto call_screen(const palette& colours, const call_view& view) {
+  return skiff::compose::onClick(scene::Taken{}, skiff::compose::column(
+      skiff::compose::vbox(12.0f, {.place = scene::anchor::kTopLeft, .fill = true,
+                                 .padding = {24.0f, 24.0f, 48.0f, 24.0f}, .background = colours.sidebar}),
+      skiff::compose::styled({.fillX = true, .height = 1.0f, .grow = scene::axes::kY}, nodes::Box<>(skia::SkColor{0})),
+      call_avatar(view, 128.0f),
+      skiff::compose::styled({.alignSelf = scene::align::kMiddle}, wrapped(nodes::Text(view.who, 24.0f, colours.text, true))),
+      skiff::compose::styled({.alignSelf = scene::align::kMiddle}, wrapped(call_status(colours, view, 15.0f))),
+      skiff::compose::styled({.fillX = true, .height = 1.0f, .grow = scene::axes::kY}, nodes::Box<>(skia::SkColor{0})),
+      call_buttons(colours, 64.0f, view)));
+}
+// A compact card above the conversation while the call rings elsewhere.
+inline auto call_bar(const palette& colours, const call_view& view) {
+  return skiff::compose::row(
+      skiff::compose::hbox(12.0f, {.place = scene::anchor::kTopRight, .x = 12.0f, .y = 12.0f,
+                                  .width = 360.0f, .autoSize = scene::axes::kY,
+                                  .padding = {12.0f, 14.0f, 12.0f, 14.0f}, .cornerRadius = 12.0f,
+                                  .background = colours.popup(), .border = scene::Border{colours.band, 1.0f},
+                                  .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}}),
+      call_avatar(view, 40.0f),
+      skiff::compose::column(
+          skiff::compose::vbox(2.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+          skiff::compose::styled({.fillX = true}, elided(nodes::Text(view.who, 15.0f, colours.text, true))),
+          skiff::compose::styled({.fillX = true}, elided(call_status(colours, view, 13.0f)))),
+      call_buttons(colours, 40.0f, view));
+}
+namespace call_ui {
+struct panel {};
+struct card {};
+struct screen {};
+}
+inline auto call_content(call_ui::panel, const palette& colours, const call_view& view) { return call_panel(colours, view); }
+inline auto call_content(call_ui::card, const palette& colours, const call_view& view) { return call_bar(colours, view); }
+inline auto call_content(call_ui::screen, const palette& colours, const call_view& view) { return call_screen(colours, view); }
 
-// The call, in its chat: under the head, as Element's call view.
-template <class Actions> struct call_panel : skiff::compose::Stacked {
-  struct parts_t {
-    avatar_mark face;
-    nodes::Text who;
-    call_status_t said;
-    call_buttons<Actions> buttons;
-  } parts;
-  call_panel(const ui_needs<Actions> &n, const call_view &view)
-      : Stacked(skiff::compose::justified(
-            skiff::compose::vbox(
-                10.0f, {.fillX = true,
-                        .height = 280.0f,
-                        .padding = {20.0f, 16.0f, 20.0f, 16.0f},
-                        .background = n.colours->sidebar,
-                        .border = scene::Border{n.colours->band, 1.0f}}),
-            nodes::justify::middle{})),
-        parts{.face = avatar_mark(view.in.id, view.who, 88.0f),
-              .who = skiff::compose::styled(
-                  {.alignSelf = scene::align::kMiddle},
-                  nodes::Text(view.who, 18.0f, n.colours->text, true)),
-              .said = skiff::compose::styled(
-                  {.alignSelf = scene::align::kMiddle,
-                   .margin = {0.0f, 0.0f, 8.0f, 0.0f}},
-                  skiff::compose::text_of<call_shown>(
-                      call_words{},
-                      nodes::Text(said_of(view), 13.0f, n.colours->dim))),
-              .buttons = call_buttons<Actions>(*n.colours, 52.0f, view)} {}
-};
-
-// The call on a phone -- a window narrow and taller than wide, mux's
-// single column -- as Element's phone apps show it: the whole window,
-// the other's picture large in its upper middle with their name and where
-// the call is under it, and the buttons along the bottom, larger.
-template <class Actions> struct call_screen : skiff::compose::Stacked {
-  struct parts_t {
-    nodes::Box<> above;
-    avatar_mark face;
-    nodes::Text who;
-    call_status_t said;
-    nodes::Box<> below;
-    call_buttons<Actions> buttons;
-  } parts;
-  call_screen(const ui_needs<Actions> &n, const call_view &view)
-      : Stacked(skiff::compose::vbox(12.0f,
-                                     {.place = scene::anchor::kTopLeft,
-                                      .fill = true,
-                                      .padding = {24.0f, 24.0f, 48.0f, 24.0f},
-                                      .background = n.colours->sidebar})),
-        parts{.above = skiff::compose::styled(
-                  {.fillX = true, .height = 1.0f, .grow = scene::axes::kY},
-                  nodes::Box<>(skia::SkColor{0})),
-              .face = avatar_mark(view.in.id, view.who, 128.0f),
-              .who = skiff::compose::styled(
-                  {.alignSelf = scene::align::kMiddle},
-                  wrapped(nodes::Text(view.who, 24.0f, n.colours->text, true))),
-              .said = skiff::compose::styled(
-                  {.alignSelf = scene::align::kMiddle},
-                  skiff::compose::text_of<call_shown>(
-                      call_words{}, wrapped(nodes::Text(said_of(view), 15.0f,
-                                                        n.colours->dim)))),
-              .below = skiff::compose::styled(
-                  {.fillX = true, .height = 1.0f, .grow = scene::axes::kY},
-                  nodes::Box<>(skia::SkColor{0})),
-              .buttons = call_buttons<Actions>(*n.colours, 64.0f, view)} {}
-
-  // Over the whole window: nothing under it is pressed.
-  [[nodiscard]] bool acceptsInput() const { return true; }
-};
-
-// The call anywhere else, and ringing here: a card at the top of the
-// window, as Element's toast.
-template <class Actions> struct call_bar : skiff::compose::Stacked {
-  struct texts : skiff::compose::Stacked {
-    struct parts_t {
-      nodes::Text who;
-      call_status_t said;
-    } parts;
-    texts(const palette &colours, const call_view &view)
-        : Stacked(
-              skiff::compose::vbox(2.0f, {.autoSize = scene::axes::kY,
-                                          .grow = scene::axes::kX,
-                                          .alignSelf = scene::align::kMiddle})),
-          parts{.who = skiff::compose::styled(
-                    {.fillX = true},
-                    elided(nodes::Text(view.who, 15.0f, colours.text, true))),
-                .said = skiff::compose::styled(
-                    {.fillX = true},
-                    skiff::compose::text_of<call_shown>(
-                        call_words{}, elided(nodes::Text(said_of(view), 13.0f,
-                                                         colours.dim))))} {}
-  };
-  struct parts_t {
-    avatar_mark face;
-    texts lines;
-    call_buttons<Actions> buttons;
-  } parts;
-
-  call_bar(const ui_needs<Actions> &n, const call_view &view)
-      : Stacked(skiff::compose::hbox(
-            12.0f,
-            {.place = scene::anchor::kTopRight,
-             .x = 12.0f,
-             .y = 12.0f,
-             .width = 360.0f,
-             .autoSize = scene::axes::kY,
-             .padding = {12.0f, 14.0f, 12.0f, 14.0f},
-             .cornerRadius = 12.0f,
-             .background = n.colours->popup(),
-             .border = scene::Border{n.colours->band, 1.0f},
-             .shadow = scene::Shadow{skia::colorSetARGB(70, 0, 0, 0), 3.0f}})),
-        parts{.face = avatar_mark(view.in.id, view.who, 40.0f),
-              .lines = texts(*n.colours, view),
-              .buttons = call_buttons<Actions>(*n.colours, 40.0f, view)} {}
-};
-
-template <class Content, class Actions, class Which>
-[[nodiscard]] auto call_layer(const ui_needs<Actions> &needs, Which which,
+template <class Actions, class Which, class View>
+[[nodiscard]] auto call_layer(const ui_needs<Actions>& needs, Which which, View view,
                               scene::Spec spec, bool floats = false) {
-  return skiff::compose::derived<call_shown>(
-      which, skiff::compose::mount<Content, call_view>(
-                 call_arguments<Actions>{needs}, spec, floats));
+  using Content = decltype(call_content(view, *needs.colours, call_view{}));
+  return skiff::compose::derived<call_shown>(which, skiff::compose::mount<Content, call_view>(
+      [colours = needs.colours, view](const call_view& facts) {
+        return std::tuple{call_content(view, *colours, facts)};
+      }, spec, floats));
 }
 template <class Actions>
-using call_panel_t = decltype(call_layer<call_panel<Actions>>(
-    std::declval<const ui_needs<Actions> &>(), call_panel_of{}, scene::Spec{}));
+using call_panel_t = decltype(call_layer(std::declval<const ui_needs<Actions>&>(),
+    call_panel_of{}, call_ui::panel{}, scene::Spec{}));
 
 } // namespace mux::ui

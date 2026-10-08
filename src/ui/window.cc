@@ -423,12 +423,12 @@ template <class Actions> struct window : skiff::compose::Specced {
       // A selectable text's menu, where it was pressed with the right button.
       std::optional<text_menu> text_menu_up;
       // A call, while there is one: over everything.
-      decltype(call_layer<call_bar<Actions>>(
-          std::declval<const ui_needs<Actions> &>(), call_card_of{},
+      decltype(call_layer(
+          std::declval<const ui_needs<Actions> &>(), call_card_of{}, call_ui::card{},
           scene::Spec{}, true)) call_up;
       // A call on a phone: the whole window, as Element's phone apps.
-      decltype(call_layer<call_screen<Actions>>(
-          std::declval<const ui_needs<Actions> &>(), call_screen_of{},
+      decltype(call_layer(
+          std::declval<const ui_needs<Actions> &>(), call_screen_of{}, call_ui::screen{},
           scene::Spec{}, true)) call_whole;
     } parts;
     // Where the pointer was last pressed, in the window: where a menu asked
@@ -658,10 +658,10 @@ template <class Actions> struct window : skiff::compose::Specced {
                 .emoji = layer_for<emoji_popup<Actions>, emoji_facts>(n),
                 .menu = layer_for<context_menu<Actions>, menu_facts>(n),
                 .viewer = layer_for<picture_viewer<Actions>, viewer_facts>(n),
-                .call_up = call_layer<call_bar<Actions>>(n, call_card_of{},
+                .call_up = call_layer(n, call_card_of{}, call_ui::card{},
                                                          {.fill = true}, true),
-                .call_whole = call_layer<call_screen<Actions>>(
-                    n, call_screen_of{}, {.fill = true}, true)} {
+                .call_whole = call_layer(
+                    n, call_screen_of{}, call_ui::screen{}, {.fill = true}, true)} {
       auto& [backdrop, behind, frame, ...over] = parts;
       backdrop.apply({.fill = true});
       behind.apply({.fill = true});

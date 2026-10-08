@@ -932,21 +932,21 @@ TEST(Calls, TimerUpdatesTextWithoutRebuildingControls) {
   root.call.fValue.now = mux::ui::call_view{};
   root.call.fValue.now->phase = mux::ui::call_phase::connected{61};
   root.call.fValue.now->encrypted = true;
-  auto shown = mux::ui::call_layer<mux::ui::call_bar<stub>>(
-      ui.needs(program), mux::ui::call_card_of{}, {.fill = true});
+  auto shown = mux::ui::call_layer(
+      ui.needs(program), mux::ui::call_card_of{}, mux::ui::call_ui::card{}, {.fill = true});
   mux::ui::shown_model model(std::move(root));
   skiff::bind::Binding<mux::ui::shown_model> binding;
   binding.refresh(shown, model);
   ASSERT_NE(shown.shown(), nullptr);
   const auto id = shown.shown()->fState.id();
-  EXPECT_EQ(shown.shown()->parts.lines.parts.said.text(), "1:01");
+  EXPECT_EQ(std::get<1>(std::get<1>(shown.shown()->fParts).fParts).text(), "1:01");
   auto next = *model.look<mux::ui::call_shown>();
   next.now->phase = mux::ui::call_phase::connected{62};
   mux::ui::show(model, std::move(next));
   binding.refresh(shown, model);
   ASSERT_NE(shown.shown(), nullptr);
   EXPECT_EQ(shown.shown()->fState.id(), id);
-  EXPECT_EQ(shown.shown()->parts.lines.parts.said.text(), "1:02");
+  EXPECT_EQ(std::get<1>(std::get<1>(shown.shown()->fParts).fParts).text(), "1:02");
 }
 
 TEST(Appearance, ThemeCardPressEditsTheFieldAndRefreshesItsRing) {

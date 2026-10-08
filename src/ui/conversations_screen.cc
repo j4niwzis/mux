@@ -728,8 +728,8 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
           parts{
               .search = search_bar<Actions>(n),
               .selection = selection_bar(n),
-              .call = call_layer<call_panel<Actions>>(
-                  n, call_panel_of{},
+              .call = call_layer(
+                  n, call_panel_of{}, call_ui::panel{},
                   {.fillX = true, .autoSize = scene::axes::kY}),
               .area = timeline_area<Actions>(n),
               .mentions =

@@ -91,11 +91,6 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
 
   // What a press does, to the panel -- which stays where it is while its
   // pages are made again.
-  struct open_person {
-    using Answer = ::mux::ui::request::open_member_info;
-    info_panel* panel;
-    ::mux::ui::request::open_member_info operator()(const auto& row) const { return ::mux::ui::request::open_member_info{row.id}; }
-  };
   struct back_to_group {
     info_panel* panel;
     void operator()() const { panel->close_member(); }
@@ -277,7 +272,9 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
                   add_button(colours, icon::add_person{}, {"Adding members"})} {
     }
   };
-  using member_rows = nodes::Flow<std::vector<member_row<open_person>>>;
+  using member_entry = std::pair<member, std::string>;
+  using kept_member = nodes::KeptRow<std::string, member_entry, member_row_t>;
+  using member_rows = nodes::Flow<std::vector<kept_member>>;
   // All of it in one column that scrolls, as Telegram's profile: the head
   // -- however long its description and addresses -- then the members.
   struct column : skiff::compose::Stacked {
@@ -409,11 +406,15 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
     auto& rows = std::get<0>(members.fChildren);
     if (!same_members && nodes::reconcile(
             rows, shown_members, [](const auto& each) { return each.first.id; },
-            [](const member_row<open_person>& row) { return row.id; },
-            [&](const auto& each) { return member_row<open_person>(*colours_, each.first, each.second, open_person{this}); },
-            [](const member_row<open_person>& row, const auto& each) {
-              return row.who == each.first && row.how_shown == each.second;
-            }))
+            [](const kept_member& row) { return row.fKey; },
+            [&](const auto& each) {
+              auto make = [&](const auto& item) {
+                const auto& [person, how] = std::get<1>(item);
+                return member_row(*colours_, person, how);
+              };
+              return kept_member(std::tuple{each.first.id, each}, make);
+            },
+            [](const kept_member& row, const auto& each) { return row.fView == each; }))
       members.invalidateLayout();
     members_header.show(static_cast<std::size_t>(std::max<std::int64_t>(static_cast<std::int64_t>(one.members.size()), one.member_count)),
                         [this](std::size_t count) { return members_head(*colours_, count); });

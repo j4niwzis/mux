@@ -1084,3 +1084,19 @@ TEST(Proxies, LocalEditorPressesSendTypedSaveAndDeleteRequests) {
   ASSERT_TRUE(skiff::bind::press(editor, model, scene::Path{9, 1}, &requests));
   EXPECT_EQ(requests.removed, 2);
 }
+
+TEST(Controls, MemberRowPressSendsItsIdAndKeepsDrawingCached) {
+  struct sink {
+    std::string opened;
+    void take(const mux::ui::request::open_member_info& request) { opened = request.id; }
+  } requests;
+  using model_t = skiff::model::Model<int, skiff::bind::NoReactions>;
+  model_t model(0);
+  mux::ui::palette colours;
+  const mux::member person{.id = "@alice:example.com", .name = "Alice"};
+  auto row = mux::ui::member_row(colours, person, "Online");
+  EXPECT_TRUE(row.fState.fRecorded);
+  EXPECT_EQ(row.semantics().fLabel, "Alice");
+  ASSERT_TRUE(skiff::bind::press(row, model, scene::Path{}, &requests));
+  EXPECT_EQ(requests.opened, person.id);
+}

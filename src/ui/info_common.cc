@@ -79,57 +79,18 @@ template <class Act> struct action_tile : pressable<skiff::compose::Stacked> {
 
 // Someone in a group, in its info: avatar, name, how they are, and their
 // role in a pill. Pressed, they are shown on a page of their own.
-template <class Open> struct member_row : skiff::compose::Stacked {
-  // Who it shows and how they are: while the same, the row is kept.
-  member who;
-  std::string how_shown;
-  Open open;
-  std::string id;
-  std::optional<std::string> role;
-  // Their name, and how they are under it.
-  // Their role, in a pill beside their name.
-  struct role_pill : widgets::Pill {
-    explicit role_pill(std::string what)
-        : widgets::Pill(std::move(what), {.plate = skia::colorSetARGB(255, 62, 52, 96),
-                                          .text = skia::colorSetARGB(255, 190, 170, 250),
-                                          .size = 12.0f,
-                                          .height = 20.0f,
-                                          .padX = 8.0f}) {
-      fState.apply({.alignSelf = scene::align::kStart, .margin = {10.0f, 0.0f, 0.0f, 0.0f}});
-    }
-  };
-  struct parts_t {
-    avatar_mark face;
-    two_lines_t texts;
-    role_pill pill;
-  } parts;
-
-  // Declared: the avatar, the name over how they are, the role at the end.
-  member_row(const palette &colours, const member &one, std::string how,
-             Open what)
-      : Stacked(
-            skiff::compose::hbox(12.0f, {.fillX = true,
-                                         .height = 54.0f,
-                                         .padding = {0.0f, 16.0f, 0.0f, 16.0f},
-                                         .hoverBackground = colours.chosen})),
-        who(one), how_shown(how), open(std::move(what)), id(one.id),
-        role(one.role),
-        parts{
-            .face = avatar_mark(one.id, one.name.empty() ? one.id : one.name,
-                                40.0f),
-            .texts = two_lines(colours, one.name.empty() ? one.id : one.name, std::move(how), 14.0f, 4.0f),
-            .pill = skiff::compose::visible(one.role.has_value(),
-                                            role_pill(one.role.value_or("")))} {
-
-    fState.setRecorded(true);  // played back as the list repaints around it
-  }
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-  [[nodiscard]] bool onClick(float, float) {
-    open(*this);
-    return true;
-  }
-};
+inline auto member_row(const palette& colours, const member& one, std::string how) {
+  const std::string name = one.name.empty() ? one.id : one.name;
+  return skiff::compose::recorded(skiff::compose::onClick(request::open_member_info{one.id}, skiff::compose::row(
+      skiff::compose::hbox(12.0f, {.fillX = true, .height = 54.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f},
+          .hoverBackground = colours.chosen}),
+      avatar_mark(one.id, name, 40.0f), two_lines(colours, name, std::move(how), 14.0f, 4.0f),
+      skiff::compose::visible(one.role.has_value(), skiff::compose::styled(
+          {.alignSelf = scene::align::kStart, .margin = {10.0f, 0.0f, 0.0f, 0.0f}},
+          widgets::Pill(one.role.value_or(""), {.plate = skia::colorSetARGB(255, 62, 52, 96),
+              .text = skia::colorSetARGB(255, 190, 170, 250), .size = 12.0f, .height = 20.0f, .padX = 8.0f})))), name));
+}
+using member_row_t = decltype(member_row(std::declval<const palette&>(), std::declval<const member&>(), ""));
 
 // A round avatar on its own: the chat's, big, over its name.
 struct big_avatar : avatar_mark {

@@ -198,8 +198,14 @@ struct icon_button : scene::Node {
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   [[nodiscard]] bool focusChangesAppearance() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
-    act();
+    act_on(fState, act);
     return true;
+  }
+  // Its act's answer, as the press is delivered.
+  auto onPress()
+    requires skiff::scene::Answering<Act>
+  {
+    return act();
   }
   [[nodiscard]] scene::Semantics semantics() const {
     scene::Semantics out;

@@ -371,6 +371,12 @@ void app::apply_asked() {
 // window and done at once, the handler that asked having returned: a press
 // acts before the next event, not a frame later.
 void app::after_event() {
+  // The nodes pressed that answer with what they ask for: each delivered
+  // along the nodes the press went through -- nothing has moved since -- its
+  // event sent at once up the scopes it is in; what nothing in the window
+  // takes, to the program.
+  for (const auto& way : std::exchange(skiff::scene::hostWork().pressed, {}))
+    (void)skiff::bind::press(root(), this->state, way, &ask);
   if (skiff::bind::pendingCount() == 0 && ask.requests.empty())
     return;
   this->take_page_input();

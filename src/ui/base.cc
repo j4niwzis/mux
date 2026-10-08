@@ -383,24 +383,31 @@ inline void look_as_its_content(const auto&, const palette&) {}
 //   void pop_panel()                 -- back from the top panel to what is under it
 //   void open_settings(), close_settings(), settings_home(), settings_animations()
 
-// A request sent as an event: kept until the walk that drains the window
-// takes it, the program taking those that nothing in the window does. Made
-// from the window's actions as an ask was, which it does not need.
+// A request sent as an event: the answer to a press, sent up the scopes the
+// node pressed is in as the press is delivered -- the program taking those
+// that nothing in the window does. Nothing kept.
 template <class E>
 struct sends {
+  using Answer = E;
   E event{};
-  std::vector<E> fEmitted;
-  sends() = default;
-  template <class A>
-  sends(A*) {}
-  void operator()() {
-    fEmitted.push_back(event);
-    ++skiff::bind::pendingCount();
-  }
+  E operator()() const { return event; }
 };
-// Whether an act sends its events so.
+// Whether an act sends its events: kept for the walk (fEmitted), or as the
+// answer to a press (scene::Answering).
 template <class Act>
-concept sending = requires(Act& a) { a.fEmitted; };
+concept sending = requires(Act& a) { a.fEmitted; } || skiff::scene::Answering<Act>;
+// An act done where a node is pressed: one that answers, said pressed --
+// its answer asked as the press is delivered (the node's onPress()); else
+// called at once.
+template <class Act>
+  requires skiff::scene::Answering<Act>
+void act_on(scene::State& pressed, Act&) {
+  skiff::scene::pressLater(pressed);
+}
+template <class Act>
+void act_on(scene::State&, Act& act) {
+  act();
+}
 
 // A skiff-widgets button or toggle for an act: the plain one where the act
 // sends events, which the walk takes from its action; else the one the

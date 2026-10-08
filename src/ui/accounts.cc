@@ -175,39 +175,6 @@ struct switch_row : nodes::Stack {
   }
 };
 
-// The client's pages of an account's settings, every account's.
-namespace account_page {
-struct connection {};
-struct privacy {};
-struct notifications {};
-struct chats {};
-struct proxy {};
-}  // namespace account_page
-// Each protocol's own pages, as its account_pages(state) lists them.
-template <class List>
-struct account_page_types;
-template <class... Pages>
-struct account_page_types<proto::account_page_list<Pages...>> {
-  using type = type_list<Pages...>;
-};
-template <class>
-struct protocol_account_pages;
-template <class... Tags>
-struct protocol_account_pages<protocol_list<Tags...>> {
-  using type = typename joined<type_list<>,
-                               typename account_page_types<decltype(proto::account_pages_of(::mux::state_of<Tags>{}))>::type...>::type;
-};
-// A page of an account's: the client's, or one of a protocol's.
-using account_page_t = typename variant_of_types<typename joined<
-    type_list<account_page::connection, account_page::privacy, account_page::notifications, account_page::chats,
-              account_page::proxy>,
-    typename protocol_account_pages<protocols>::type>::type>::type;
-namespace request {
-// One of the chosen account's pages asked for.
-struct account_page {
-  account_page_t page = ::mux::ui::account_page::connection{};
-};
-}  // namespace request
 
 // A page of an account's settings chosen from its list.
 template <class Actions>

@@ -224,24 +224,6 @@ inline std::vector<std::pair<std::string, std::string>>& listed_avatars() {
 // Whether files may be sent into an account's chats: where its account
 // sends them, and its protocol allows it now.
 [[nodiscard]] inline bool may_send_files(const ui_shared& shared, const account_id& of);
-// Lists of types, put together: the client's and every protocol's -- the
-// Manage tabs and pages, the account pages.
-template <class... Ts>
-struct type_list {};
-template <class... Lists>
-struct joined;
-template <class... Ts>
-struct joined<type_list<Ts...>> {
-  using type = type_list<Ts...>;
-};
-template <class... As, class... Bs, class... Rest>
-struct joined<type_list<As...>, type_list<Bs...>, Rest...> : joined<type_list<As..., Bs...>, Rest...> {};
-template <class List>
-struct variant_of_types;
-template <class... Ts>
-struct variant_of_types<type_list<Ts...>> {
-  using type = spl::variant<Ts...>;
-};
 // A node a press acts on -- a row, a tile, a tab: it takes the pointer, is
 // lit under it, and a click calls its act.
 template <class Base>

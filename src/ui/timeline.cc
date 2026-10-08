@@ -28,49 +28,6 @@ export namespace mux::ui {
 // The messages, and over them, where one has scrolled up from the newest,
 // the way back down. Each is placed by its own spec.
 // What a message's menu is made from: the message, and what it carries.
-// One who has read a message: who, by their name in the chat, and when,
-// where their receipt says.
-struct seen_reader {
-  std::string id;
-  std::string name;
-  std::optional<std::chrono::sys_time<std::chrono::milliseconds>> at;
-};
-struct menu_facts {
-  std::string id;
-  bool own = false;
-  std::string text;    // all of it
-  std::string copied;  // what Copy takes: the selection, or all of it
-  bool selection = false;
-  std::vector<seen_reader> seen;
-  std::optional<std::string> media;  // a picture's or a file's source
-  std::optional<std::string> picture;  // a picture's source, or a video's thumbnail's: what Copy Image copies
-  bool captioned = false;  // a picture whose caption may be edited (not a video's)
-  std::string media_name;
-  bool moving = false;  // a GIF or a moving WebP: one that can be saved to the GIFs
-  bool pinned = false;  // pinned in its chat: the menu offers Unpin
-  bool pinnable = false;  // in a chat where pins are kept: a Matrix room
-  bool editable = false;  // one's own, as its protocol's rule for edits allows
-  bool history = false;   // edited here before: its edit history can be shown
-  proto::account_ops can;  // what its account does: React, Forward, threads...
-  bool deletable = false;  // one may take it away: one's own, or another's with the power to
-  bool reaction_events = false;  // reacted to, the reactions being events
-  std::size_t reaction_count = 0;  // how many reactions it has, of anyone
-  std::string link;  // a link to it, where it has one
-  std::string pressed_link;  // the link pressed on: in its text, or its preview
-  std::optional<emote> sticker;  // a sticker's: what making it a favourite keeps
-  // A reaction's: the message it is on, and its key -- the menu's reactions
-  // change it to another, where it is one's own.
-  struct reaction_facts {
-    std::string to;
-    std::string key;
-  };
-  std::optional<reaction_facts> reaction;
-  float x = 0.0f, y = 0.0f;
-};
-namespace request {
-// A message's menu asked for: what it is opened over.
-using message_menu = menu_facts;
-}  // namespace request
 
 // A chat's background shown on a wallpaper: the theme's gradient and
 // Telegram's pattern, a plain colour (what is behind showing), or a picture.

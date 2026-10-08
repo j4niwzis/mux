@@ -10,8 +10,106 @@ import skiff.scene;
 import mux.core;
 import mux.config;
 import mux.protocols;
+import skiff.bind;
 
 export namespace mux::ui {
+
+// Lists of types, put together: the client's and every protocol's -- the
+// Manage tabs and pages, the account pages.
+template <class... Ts>
+struct type_list {};
+template <class... Lists>
+struct joined;
+template <class... Ts>
+struct joined<type_list<Ts...>> {
+  using type = type_list<Ts...>;
+};
+template <class... As, class... Bs, class... Rest>
+struct joined<type_list<As...>, type_list<Bs...>, Rest...> : joined<type_list<As..., Bs...>, Rest...> {};
+template <class List>
+struct variant_of_types;
+template <class... Ts>
+struct variant_of_types<type_list<Ts...>> {
+  using type = spl::variant<Ts...>;
+};
+
+// One who has read a message: who, by their name in the chat, and when,
+// where their receipt says.
+struct seen_reader {
+  std::string id;
+  std::string name;
+  std::optional<std::chrono::sys_time<std::chrono::milliseconds>> at;
+};
+struct menu_facts {
+  std::string id;
+  bool own = false;
+  std::string text;    // all of it
+  std::string copied;  // what Copy takes: the selection, or all of it
+  bool selection = false;
+  std::vector<seen_reader> seen;
+  std::optional<std::string> media;  // a picture's or a file's source
+  std::optional<std::string> picture;  // a picture's source, or a video's thumbnail's: what Copy Image copies
+  bool captioned = false;  // a picture whose caption may be edited (not a video's)
+  std::string media_name;
+  bool moving = false;  // a GIF or a moving WebP: one that can be saved to the GIFs
+  bool pinned = false;  // pinned in its chat: the menu offers Unpin
+  bool pinnable = false;  // in a chat where pins are kept: a Matrix room
+  bool editable = false;  // one's own, as its protocol's rule for edits allows
+  bool history = false;   // edited here before: its edit history can be shown
+  proto::account_ops can;  // what its account does: React, Forward, threads...
+  bool deletable = false;  // one may take it away: one's own, or another's with the power to
+  bool reaction_events = false;  // reacted to, the reactions being events
+  std::size_t reaction_count = 0;  // how many reactions it has, of anyone
+  std::string link;  // a link to it, where it has one
+  std::string pressed_link;  // the link pressed on: in its text, or its preview
+  std::optional<emote> sticker;  // a sticker's: what making it a favourite keeps
+  // A reaction's: the message it is on, and its key -- the menu's reactions
+  // change it to another, where it is one's own.
+  struct reaction_facts {
+    std::string to;
+    std::string key;
+  };
+  std::optional<reaction_facts> reaction;
+  float x = 0.0f, y = 0.0f;
+};
+namespace request {
+// A message's menu asked for: what it is opened over.
+using message_menu = menu_facts;
+}  // namespace request
+
+// The client's pages of an account's settings, every account's.
+namespace account_page {
+struct connection {};
+struct privacy {};
+struct notifications {};
+struct chats {};
+struct proxy {};
+}  // namespace account_page
+// Each protocol's own pages, as its account_pages(state) lists them.
+template <class List>
+struct account_page_types;
+template <class... Pages>
+struct account_page_types<proto::account_page_list<Pages...>> {
+  using type = type_list<Pages...>;
+};
+template <class>
+struct protocol_account_pages;
+template <class... Tags>
+struct protocol_account_pages<protocol_list<Tags...>> {
+  using type = typename joined<type_list<>,
+                               typename account_page_types<decltype(proto::account_pages_of(::mux::state_of<Tags>{}))>::type...>::type;
+};
+// A page of an account's: the client's, or one of a protocol's.
+using account_page_t = typename variant_of_types<typename joined<
+    type_list<account_page::connection, account_page::privacy, account_page::notifications, account_page::chats,
+              account_page::proxy>,
+    typename protocol_account_pages<protocols>::type>::type>::type;
+namespace request {
+// One of the chosen account's pages asked for.
+struct account_page {
+  account_page_t page = ::mux::ui::account_page::connection{};
+};
+}  // namespace request
 
 // What the message field's text is for.
 namespace compose {
@@ -549,5 +647,37 @@ struct close_settings {};
 struct settings_home {};
 struct settings_animations {};
 }  // namespace request
+
+// Every protocol's own requests, as each lists them.
+template <class List>
+struct request_types;
+template <class... Requests>
+struct request_types<mux::proto::request_list<Requests...>> {
+  using type = type_list<Requests...>;
+};
+template <class>
+struct protocol_requests;
+template <class... Tags>
+struct protocol_requests<mux::protocol_list<Tags...>> {
+  using type = typename joined<
+      type_list<>, typename request_types<decltype(mux::proto::protocol_requests_of(::mux::state_of<Tags>{}))>::type...>::type;
+};
+// What the window asks: the client's requests, then each protocol's own.
+using request_t = typename variant_of_types<typename joined<type_list<request::choose, request::back, request::open_accounts, request::open_new_account, request::add_account_of, request::select_account, request::toggle_advanced, request::toggle_plain, request::submit_login, request::flip_enabled, request::remove_account, request::open_drawer, request::show_account, request::quit, request::open_settings, request::close_settings, request::settings_home, request::settings_animations, request::pop_panel, request::toggle_info, request::load_older, request::load_context, request::load_newer, request::jump_to_end, request::return_to_chat, request::menu_copy_image, request::copy_picture, request::message_menu, request::menu_copy_link, request::menu_copy_url, request::menu_fave_sticker, request::menu_save, request::react, request::menu_react, request::close_menu, request::menu_reply, request::menu_quote_reply, request::menu_edit, request::menu_copy, request::menu_delete, request::cancel_compose, request::retry_unsent, request::discard_unsent, request::open_url, request::switch_account, request::submit_message, request::send_typed, request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_search, request::edit_last, request::reply_step, request::close_search, request::search_typed, request::search_step, request::search_pick, request::open_member_info, request::reply_to, request::open_picture, request::open_avatar, request::close_picture, request::save_picture, request::open_video, request::stop_jump, request::press_loader, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::close_notice, request::close_person_info, request::close_room_card, request::join_room_card, request::knock_room_card, request::decline_room_card, request::jump_to_mark, request::list_marks, request::go_to_mark, request::close_marks, request::open_explore, request::close_explore, request::search_rooms, request::explore_space, request::manage_space, request::flip_forum, request::flip_home_hide, request::close_forum, request::manage_forum, request::join_directory_room, request::create_room, request::settings_notifications, request::give_passphrase, request::verify_person, request::verify_accept_now, request::verify_cancel_now, request::verify_match, request::verify_mismatch, request::close_verification, request::flip_local_encryption, request::change_passphrase, request::toggle_emoji, request::set_account_colour, request::flip_account_strip, request::open_replacement, request::place_chat, request::unplace_chat, request::flip_chat_strip, request::set_chat_strip_colour, request::attach_in_thread, request::toggle_thread_emoji, request::close_emoji, request::insert_emoji, request::menu_save_gif, request::menu_pin, request::menu_reactions, request::close_reactions, request::open_manage, request::close_manage, request::room_act, request::menu_forward, request::close_forward, request::forward_to, request::menu_view_source, request::menu_edit_history, request::close_edit_history, request::menu_select, request::toggle_selected, request::selection_forward, request::selection_copy, request::selection_delete, request::selection_cancel, request::close_dialog, request::open_new_chat, request::close_new_chat, request::find_people, request::search_elsewhere, request::open_new_room, request::open_leave_space, request::leave_space, request::close_leave_space, request::open_new_room_in, request::close_new_room, request::open_wallpaper, request::close_wallpaper, request::set_wallpaper, request::set_bubbles, request::toggle_threads, request::open_thread, request::close_thread, request::send_in_thread, request::menu_thread, request::open_packs, request::open_room_packs, request::close_packs, request::save_pack, request::delete_pack, request::pick_pack_images, request::copy_text, request::text_key, request::ask_link, request::set_link, request::close_link, request::start_call, request::dismiss_call, request::call_chosen, request::accept_call, request::decline_call, request::hang_up, request::mute_call, request::start_direct, request::start_group, request::flip_room_events, request::flip_account_room_events, request::flip_chat_room_events, request::show_gifs, request::send_gif, request::send_sticker, request::play_audio, request::resize_info, request::choose_new_proxy, request::toggle_mute, request::toggle_mute_of, request::close_account_pages, request::accounts_back, request::account_page, request::flip_account_receipts, request::flip_only_verified, request::accept_identity, request::typing, request::proxy_kind, request::choose_account_proxy, request::manage_proxies, request::settings_proxies, request::add_proxy, request::edit_proxy, request::save_proxy_profile, request::delete_proxy_profile, request::settings_appearance, request::settings_rendering, request::settings_storage, request::clear_stored, request::set_renderer, request::set_frost_blur, request::place_spaces, request::set_space_bars, request::set_home_hides, request::set_home_direct, request::leave_chat, request::close_chat, request::flip_account_mentions_shared, request::flip_account_mentions_sealed>, typename protocol_requests<mux::protocols>::type>::type>::type;
+
+// What a node or an act sent: kept until the walk that drains the window
+// takes it, the program taking those nothing in the window takes. Made
+// from the window's actions as it was, which it does not need.
+struct outbox {
+  std::vector<request_t> fEmitted;
+  outbox() = default;
+  template <class A>
+  outbox(A*) {}
+  template <class E>
+  void send(E one) {
+    fEmitted.emplace_back(std::move(one));
+    ++skiff::bind::pendingCount();
+  }
+};
 
 }  // namespace mux::ui

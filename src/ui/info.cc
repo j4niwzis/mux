@@ -46,6 +46,26 @@ export import :info_explore;
 
 export namespace mux::ui {
 
+inline auto info_tiles(const palette& colours, bool muted, bool leavable) {
+  return skiff::compose::row(
+      skiff::compose::hbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}}),
+      skiff::compose::styled({.grow = scene::axes::kX},
+          action_tile<sends<request::toggle_mute>>(colours, muted ? "Unmute" : "Mute", icon::bell{})),
+      skiff::compose::styled({.grow = scene::axes::kX},
+          action_tile<sends<request::open_manage>>(colours, "Manage", icon::sliders{})),
+      skiff::compose::visible(leavable, skiff::compose::styled({.grow = scene::axes::kX},
+          action_tile<sends<request::leave_chat>>(colours, "Leave", icon::leave{}))));
+}
+using info_tiles_t = decltype(info_tiles(std::declval<const palette&>(), false, false));
+template <class Act> auto person_actions(const palette& colours, Act action) {
+  return skiff::compose::row(
+      skiff::compose::hbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}}),
+      skiff::compose::styled({.grow = scene::axes::kX},
+          action_tile<Act>(colours, "Message", icon::send{}, std::move(action))));
+}
+template <class Act> using person_actions_t = decltype(person_actions(std::declval<const palette&>(), std::declval<Act>()));
+
+
 // What the management of a room shows: as it is now.
 [[nodiscard]] inline std::string role_of(std::int64_t level) {
   if (level >= 100)
@@ -147,48 +167,6 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
         parts.gap.apply({.height = 1.0f, .grow = scene::axes::kX});
       }
     };
-    struct tiles_row : skiff::compose::Stacked {
-      using mute_tile = action_tile<sends<::mux::ui::request::toggle_mute>>;
-      using manage_tile = action_tile<sends<::mux::ui::request::open_manage>>;
-      using leave_tile = action_tile<sends<::mux::ui::request::leave_chat>>;
-      struct parts_t {
-        mute_tile mute;
-        manage_tile manage;
-        leave_tile leave;
-      } parts;
-      tiles_row(const palette &colours, bool muted, bool leavable)
-          : Stacked(skiff::compose::hbox(
-                8.0f, {.fillX = true,
-                       .autoSize = scene::axes::kY,
-                       .margin = {16.0f, 16.0f, 4.0f, 16.0f}})),
-            parts{.mute = skiff::compose::styled(
-                      {.grow = scene::axes::kX},
-                      mute_tile(colours, muted ? "Unmute" : "Mute",
-                                icon::bell{}, {})),
-                  .manage = skiff::compose::styled(
-                      {.grow = scene::axes::kX},
-                      manage_tile(colours, "Manage", icon::sliders{}, {})),
-                  .leave = skiff::compose::visible(
-                      leavable,
-                      skiff::compose::styled(
-                          {.grow = scene::axes::kX},
-                          leave_tile(colours, "Leave", icon::leave{}, {})))} {}
-    };
-    // A member's own: a message to them.
-    struct person_row : skiff::compose::Stacked {
-      struct parts_t {
-        action_tile<message_them> message;
-      } parts;
-      person_row(info_panel *panel)
-          : Stacked(skiff::compose::hbox(
-                0.0f, {.fillX = true,
-                       .autoSize = scene::axes::kY,
-                       .margin = {16.0f, 16.0f, 4.0f, 16.0f}})),
-            parts{.message = skiff::compose::styled(
-                      {.grow = scene::axes::kX},
-                      action_tile<message_them>(*panel->colours_, "Message",
-                                                icon::send{}, {panel}))} {}
-    };
     // What the chat is about, as Telegram's group description: its text,
     // links in it pressed as any, and what it is under it, dim.
     struct about_block : skiff::compose::Stacked {
@@ -215,8 +193,8 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
       avatar_button<Actions> avatar;
       nodes::Text name;
       nodes::Text status;
-      std::optional<tiles_row> tiles;
-      std::optional<person_row> person_tiles;
+      std::optional<info_tiles_t> tiles;
+      std::optional<person_actions_t<message_them>> person_tiles;
       nodes::Box<> band_1;
       about_block about;
       std::vector<id_line_t> addresses;
@@ -241,9 +219,9 @@ template <class Actions> struct info_panel : skiff::compose::Stacked {
       for (const std::string& address : shown.addresses)
         addresses.push_back(id_line(*panel->colours_, address, "", "Address"));
       if (shown.of_person)
-        person_tiles.emplace(panel);
+        person_tiles.emplace(person_actions(*panel->colours_, message_them{panel}));
       else
-        tiles.emplace(*panel->colours_, shown.muted, shown.leavable);
+        tiles.emplace(info_tiles(*panel->colours_, shown.muted, shown.leavable));
       for (nodes::Text* centred : {&name, &status}) {
         centred->setElided(true);
         centred->apply({.alignSelf = scene::align::kMiddle, .margin = {4.0f, 20.0f, 0.0f, 20.0f}});

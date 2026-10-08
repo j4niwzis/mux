@@ -1100,3 +1100,31 @@ TEST(Controls, MemberRowPressSendsItsIdAndKeepsDrawingCached) {
   ASSERT_TRUE(skiff::bind::press(row, model, scene::Path{}, &requests));
   EXPECT_EQ(requests.opened, person.id);
 }
+
+TEST(Controls, ActionTileComputesOptionalRequestAtPressTime) {
+  struct action {
+    using Answer = std::optional<mux::ui::request::not_implemented>;
+    const std::string* current;
+    Answer operator()() const {
+      if (current->empty()) return std::nullopt;
+      return mux::ui::request::not_implemented{*current};
+    }
+  };
+  struct sink {
+    std::vector<std::string> asked;
+    void take(const mux::ui::request::not_implemented& request) { asked.push_back(request.what); }
+  } requests;
+  using model_t = skiff::model::Model<int, skiff::bind::NoReactions>;
+  model_t model(0);
+  mux::ui::palette colours;
+  std::string current;
+  auto tile = mux::ui::action_tile(colours, "Action", mux::ui::icon::info{}, action{&current});
+  const auto id = tile.fState.id();
+  ASSERT_TRUE(skiff::bind::press(tile, model, scene::Path{}, &requests));
+  EXPECT_TRUE(requests.asked.empty());
+  current = "Updated action";
+  ASSERT_TRUE(skiff::bind::press(tile, model, scene::Path{}, &requests));
+  ASSERT_EQ(requests.asked.size(), 1u);
+  EXPECT_EQ(requests.asked.front(), current);
+  EXPECT_EQ(tile.fState.id(), id);
+}

@@ -100,19 +100,19 @@ template <class Actions> struct person_card : skiff::compose::Stacked {
     person_cover_t<Actions> face;
     nodes::Box<> band;
     id_line_t id;
-    action_tile<message_them> message;
-    action_tile<verify_them> verify;
+    action_tile_t<message_them> message;
+    action_tile_t<verify_them> verify;
     // Their identity reset: taken as theirs now, unverified (Element's
     // "Withdraw verification").
-    action_tile<accept_them> accept;
-    action_tile<to_them> remove;
-    action_tile<to_them> ban;
+    action_tile_t<accept_them> accept;
+    action_tile_t<to_them> remove;
+    action_tile_t<to_them> ban;
     // Their sessions, as Element lists them on a person: each with its
     // name or id, and verified or not.
     nodes::Text sessions_title;
     std::vector<nodes::Text> sessions;
     // Its protocol's own buttons for them (proto::person_actions).
-    std::vector<action_tile<ask_protocol>> theirs;
+    std::vector<action_tile_t<ask_protocol>> theirs;
   } parts;
 
   person_card(const ui_needs<Actions>& n, const person_shown& shown)
@@ -171,8 +171,8 @@ template <class Actions> struct person_card : skiff::compose::Stacked {
 
     std::ranges::for_each(std::views::enumerate(proto::person_actions(protocol_state_of(shared, account), account, key)), [&](const auto& one) {
       const auto& [index, label] = one;
-      parts.theirs.emplace_back(colours, label, icon::check{}, ask_protocol{{account, key, static_cast<std::size_t>(index)}})
-          .apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
+      parts.theirs.push_back(skiff::compose::styled({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}},
+          action_tile<ask_protocol>(colours, label, icon::check{}, {{account, key, static_cast<std::size_t>(index)}})));
     });
     parts.sessions_title.setText(facts.devices.empty() ? std::string()
                                                        : std::format("SESSIONS ({})", facts.devices.size()));
@@ -273,9 +273,9 @@ template <class Actions> struct room_card : skiff::compose::Stacked {
   struct parts_t {
     top_bar top;
     nodes::ScrollContainer<details> scroll;
-    action_tile<join_it> join;
+    action_tile_t<join_it> join;
     // An invite's: let go of.
-    std::optional<action_tile<decline_it>> decline;
+    std::optional<action_tile_t<decline_it>> decline;
   } parts;
 
   room_card(const ui_needs<Actions>& n, const room_card_facts& facts) : room_card(*n.colours, facts.asked, facts.known) {}
@@ -299,7 +299,7 @@ template <class Actions> struct room_card : skiff::compose::Stacked {
 
     if (known.invite) {
       std::get<1>(parts.top.fParts).setText("Invite");
-      parts.decline.emplace(colours, "Decline", icon::close{}, decline_it{});
+      parts.decline.emplace(action_tile<decline_it>(colours, "Decline", icon::close{}, {}));
       parts.decline->apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
     }
   }

@@ -39,46 +39,19 @@ import :timeline;  // a message's menu, for the reactions list's bubbles
 export namespace mux::ui {
 
 // One of the square buttons of a chat's info: its icon over its name.
-template <class Act> struct action_tile : pressable<skiff::compose::Stacked> {
-  Act act;
-  struct parts_t {
-    icon_mark_t mark;
-    nodes::Text label;
-  } parts;
+template <class Act>
+auto action_tile(const palette& colours, std::string text, icon_t icon, Act what = {}) {
+  return skiff::compose::onPress(std::move(what), skiff::compose::column(
+      skiff::compose::justified(skiff::compose::vbox(0.0f, {.height = 58.0f,
+          .padding = {6.0f, 0.0f, 8.0f, 0.0f}, .cornerRadius = 8.0f, .background = colours.tile,
+          .hoverBackground = colours.chosen, .focusBackground = colours.chosen}), nodes::justify::space_between{}),
+      skiff::compose::styled({.width = 28.0f, .height = 24.0f, .alignSelf = scene::align::kMiddle},
+          nodes::Icon(shape_of(icon), colours.text)),
+      skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(text, 12.0f, colours.text))), text);
+}
+template <class Act>
+using action_tile_t = decltype(action_tile(std::declval<const palette&>(), "", icon::none{}, std::declval<Act>()));
 
-  // Declared: the icon at the top, the name at the bottom.
-  action_tile(const palette &colours, std::string text, icon_t icon,
-              Act what = {})
-      : pressable<skiff::compose::Stacked>(skiff::compose::justified(
-            skiff::compose::vbox(0.0f, {.height = 58.0f,
-                                        .padding = {6.0f, 0.0f, 8.0f, 0.0f},
-                                        .cornerRadius = 8.0f,
-                                        .background = colours.tile,
-                                        .hoverBackground = colours.chosen,
-                                        .focusBackground = colours.chosen}),
-            nodes::justify::space_between{})),
-        act(std::move(what)),
-        parts{.mark = skiff::compose::styled({.height = 24.0f},
-                                             icon_mark(colours, icon)),
-              .label = skiff::compose::styled(
-                  {.alignSelf = scene::align::kMiddle},
-                  nodes::Text(std::move(text), 12.0f, colours.text))} {
-    auto& [mark, label] = parts;
-    mark.setColour(colours.text);
-  }
-
-  [[nodiscard]] bool focusChangesAppearance() const { return true; }
-  [[nodiscard]] scene::Semantics semantics() const {
-    scene::Semantics out;
-    out.fRole = scene::semantic_role::button{};
-    out.fLabel = parts.label.text();
-    out.fActions = {scene::semantic_action::focus{}, scene::semantic_action::activate{}};
-    return out;
-  }
-};
-
-// Someone in a group, in its info: avatar, name, how they are, and their
-// role in a pill. Pressed, they are shown on a page of their own.
 inline auto member_row(const palette& colours, const member& one, std::string how) {
   const std::string name = one.name.empty() ? one.id : one.name;
   return skiff::compose::recorded(skiff::compose::onClick(request::open_member_info{one.id}, skiff::compose::row(

@@ -26,28 +26,10 @@ import mux.platform.audio;
 
 export namespace mux::ui {
 
-// Leaves said as they are made, for the combinators: a button drawn as the
-// primary one, what its box is for; a text cut where it runs out of room; a
-// text wrapped onto lines, selectable.
-template <class Button>
-[[nodiscard]] Button primary(Button button) {
-  button.setPrimary(true);
-  return button;
-}
-template <class Text> [[nodiscard]] Text elided(Text text) {
-  text.setElided(true);
-  return text;
-}
-// A switch set as it is made, with no slide.
-template <class Toggle>
-[[nodiscard]] Toggle on_now(Toggle toggle, bool on) {
-  toggle.setOnNow(on);
-  return toggle;
-}
-template <class Text> [[nodiscard]] Text wrapped(Text text) {
-  text.setWrapped(true);
-  return text;
-}
+using skiff::compose::primary;
+using skiff::compose::elided;
+using skiff::compose::on_now;
+using skiff::compose::wrapped;
 
 namespace scene = skiff::scene;
 namespace nodes = skiff::nodes;

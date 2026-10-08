@@ -67,6 +67,10 @@ struct menu_facts {
   std::optional<reaction_facts> reaction;
   float x = 0.0f, y = 0.0f;
 };
+namespace request {
+// A message's menu asked for: what it is opened over.
+using message_menu = menu_facts;
+}  // namespace request
 
 // A chat's background shown on a wallpaper: the theme's gradient and
 // Telegram's pattern, a plain colour (what is behind showing), or a picture.

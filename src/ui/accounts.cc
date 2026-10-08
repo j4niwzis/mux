@@ -202,6 +202,12 @@ using account_page_t = typename variant_of_types<typename joined<
     type_list<account_page::connection, account_page::privacy, account_page::notifications, account_page::chats,
               account_page::proxy>,
     typename protocol_account_pages<protocols>::type>::type>::type;
+namespace request {
+// One of the chosen account's pages asked for.
+struct account_page {
+  account_page_t page = ::mux::ui::account_page::connection{};
+};
+}  // namespace request
 
 // A page of an account's settings chosen from its list.
 template <class Actions>

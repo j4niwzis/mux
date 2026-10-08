@@ -190,7 +190,14 @@ struct shown_screen : Screen {
 // pressed, a swipe, Esc -- that part set so.
 template <class Base, class Content>
 struct shown_drawer : widgets::Drawer<Base, Content, widgets::dismiss::pressed> {
-  using widgets::Drawer<Base, Content, widgets::dismiss::pressed>::Drawer;
+  // Keep the piecewise construction inside the drawer: the surrounding
+  // binding and slide-over forward only the screen's needs.
+  template <class Actions>
+  explicit shown_drawer(const ui_needs<Actions>& needs)
+      : widgets::Drawer<Base, Content, widgets::dismiss::pressed>(
+            std::piecewise_construct,
+            std::forward_as_tuple(std::in_place, needs),
+            std::forward_as_tuple(needs)) {}
   void read(const drawer_shown& now) {
     if (now.out != this->isOpen())
       this->setOpen(now.out);
@@ -644,9 +651,7 @@ template <class Actions> struct window : skiff::compose::Specced {
         : Specced({.fill = true}),
           parts{.backdrop = nodes::Box<>(n.colours->background),
                 .frame = frame_t(std::in_place, &n,
-                                 std::in_place, std::piecewise_construct,
-                                 std::forward_as_tuple(std::in_place, n),
-                                 std::forward_as_tuple(n)),
+                                 std::in_place, n),
                 .settings =
                     shown_made<settings_dialog<Actions>, settings_facts>(n),
                 .notice = shown_made<notice_box_t, notice_facts>(n),

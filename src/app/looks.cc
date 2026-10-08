@@ -145,7 +145,7 @@ class looks_part {
       managing->show_tab(managing->tab);
     s_->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
       if (panel.chats_page())
-        panel.show_page(mux::ui::account_page::chats{}, account, *s_->model, k_->proxies, k_->appearance().theme);
+        panel.show_page(mux::ui::account_page::chats{}, account, *s_->model, k_->proxies(), k_->appearance().theme);
     });
   }
 

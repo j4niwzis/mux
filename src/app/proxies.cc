@@ -29,7 +29,7 @@ class proxies_part {
     if (!mux::config::enabled_of(account) || s_->demo())
       return;
     s_->net->remove(mux::config::address_of(account));
-    s_->net->add(account, k_->proxies);
+    s_->net->add(account, k_->proxies());
   }
   // The accounts going through a profile, connected again.
   void reconnect_through(const std::string& name) {
@@ -42,19 +42,19 @@ class proxies_part {
   void apply(const request::manage_proxies&) {
     s_->root().open_settings();
     if (auto* up = s_->root().settings_up())
-      up->show_proxies(k_->proxies, false);
+      up->show_proxies(k_->proxies(), false);
   }
   void apply(const request::settings_proxies&) {
     if (auto* up = s_->root().settings_up())
-      up->show_proxies(k_->proxies);
+      up->show_proxies(k_->proxies());
   }
   void apply(const request::add_proxy&) {
     if (auto* up = s_->root().settings_up())
       up->show_proxy(std::nullopt, -1);
   }
   void apply(const request::edit_proxy& one) {
-    if (auto* up = s_->root().settings_up(); up && one.index >= 0 && static_cast<std::size_t>(one.index) < k_->proxies.size())
-      up->show_proxy(k_->proxies[static_cast<std::size_t>(one.index)], one.index);
+    if (auto* up = s_->root().settings_up(); up && one.index >= 0 && static_cast<std::size_t>(one.index) < k_->proxies().size())
+      up->show_proxy(k_->proxies()[static_cast<std::size_t>(one.index)], one.index);
   }
   // The kind of proxy the editor shows.
   void apply(const request::proxy_kind& one) {
@@ -74,7 +74,7 @@ class proxies_part {
       editor->say(typed.error(), true);
       return;
     }
-    const bool taken = std::ranges::any_of(std::views::enumerate(k_->proxies), [&](const auto& each) {
+    const bool taken = std::ranges::any_of(std::views::enumerate(k_->proxies()), [&](const auto& each) {
       const auto& [at, one] = each;
       return one.name == typed->name && at != editor->index;
     });
@@ -84,9 +84,9 @@ class proxies_part {
     }
     const std::string name = typed->name;
     if (editor->index < 0) {
-      k_->proxies.push_back(std::move(*typed));
+      k_->change_part<std::vector<mux::config::proxy_settings>>([&](auto& all) { all.push_back(std::move(*typed)); });
     } else {
-      auto& kept = k_->proxies[static_cast<std::size_t>(editor->index)];
+      const auto& kept = k_->proxies()[static_cast<std::size_t>(editor->index)];
       // The accounts going through it, through it under its new name.
       const auto users = std::ranges::to<std::vector<std::string>>(
           std::views::filter(k_->accounts().keys(), [&](const std::string& address) {
@@ -94,14 +94,15 @@ class proxies_part {
           }));
       for (const std::string& address : users)
         k_->change_account(address, [&](mux::config::account_t& one) { mux::config::proxy_in(one) = name; });
-      kept = std::move(*typed);
+      k_->change_part<std::vector<mux::config::proxy_settings>>(
+          [&](auto& all) { all[static_cast<std::size_t>(editor->index)] = std::move(*typed); });
     }
     if (auto failed = k_->write()) {
       editor->say(*failed, true);
       return;
     }
     this->reconnect_through(name);
-    up->show_proxies(k_->proxies);
+    up->show_proxies(k_->proxies());
     s_->refresh_due = true;  // the new account's row of proxies, where it is being added
   }
   // A profile deleted -- not while an account goes through it: those would
@@ -110,9 +111,9 @@ class proxies_part {
   void apply(const request::delete_proxy_profile&) {
     auto* up = s_->root().settings_up();
     auto* editor = up ? up->editor() : nullptr;
-    if (!editor || editor->index < 0 || static_cast<std::size_t>(editor->index) >= k_->proxies.size())
+    if (!editor || editor->index < 0 || static_cast<std::size_t>(editor->index) >= k_->proxies().size())
       return;
-    const std::string name = k_->proxies[static_cast<std::size_t>(editor->index)].name;
+    const std::string name = k_->proxies()[static_cast<std::size_t>(editor->index)].name;
     const auto users = std::ranges::to<std::vector<std::string>>(std::views::transform(std::views::filter(k_->accounts().values(), [&](const auto& one) { return mux::config::proxy_of(one) == name; }), [](const auto& one) { return mux::config::address_of(one); }));
     if (!users.empty()) {
       editor->say(std::format("In use by {}: choose another proxy for them, or none, first.",
@@ -120,9 +121,9 @@ class proxies_part {
                   true);
       return;
     }
-    k_->proxies.erase(k_->proxies.begin() + editor->index);
+    k_->change_part<std::vector<mux::config::proxy_settings>>([&](auto& all) { all.erase(all.begin() + editor->index); });
     (void)k_->write();
-    up->show_proxies(k_->proxies);
+    up->show_proxies(k_->proxies());
   }
 
  private:

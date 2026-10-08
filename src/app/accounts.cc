@@ -56,14 +56,14 @@ class accounts_part {
   // Adding an account: beside the list, on the accounts page.
   void show_adding() {
     auto& panel = this->show_accounts();
-    panel.proxies = k_->proxies;
+    panel.proxies = k_->proxies();
     panel.show_adding();
     s_->refresh_due = true;
   }
   // The page brought up to date with the model and the settings. Whether
   // the account being added is in now -- the chats to be shown.
   [[nodiscard]] bool bring_up_to_date(accounts& panel) {
-    panel.proxies = k_->proxies;
+    panel.proxies = k_->proxies();
     panel.show(k_->accounts().values(), *s_->model);
     auto* pane = panel.adding();
     return pane && spl::visit([this](auto& form) { return this->watch_login(form); }, pane->parts.form);
@@ -139,7 +139,7 @@ class accounts_part {
     if (found == nullptr)
       return;
     if (mux::config::enabled_of(*found))
-      s_->net->add(*found, k_->proxies);
+      s_->net->add(*found, k_->proxies());
     else
       s_->net->remove(one.address);
     this->save();
@@ -170,7 +170,7 @@ class accounts_part {
   // asks for it as it opens.
   void apply(const request::account_page& one) {
     s_->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
-      panel.show_page(one.page, account, *s_->model, k_->proxies, k_->appearance().theme);
+      panel.show_page(one.page, account, *s_->model, k_->proxies(), k_->appearance().theme);
     });
   }
 
@@ -224,7 +224,7 @@ class accounts_part {
       form.say(*failed, true);
       return;
     }
-    s_->net->add(account, k_->proxies);
+    s_->net->add(account, k_->proxies());
     pending_login_ = address;
     form.say("Connecting\u2026", false);
   }
@@ -264,7 +264,7 @@ class accounts_part {
     if (!same) {
       s_->net->remove(was);
       if (mux::config::enabled_of(account))
-        s_->net->add(account, k_->proxies);
+        s_->net->add(account, k_->proxies());
     }
     // The form is made again from what was saved: `form` is gone after this.
     auto& panel = this->show_account(address);

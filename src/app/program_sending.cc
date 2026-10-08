@@ -25,8 +25,7 @@ void app::apply(const request::switch_account& one) {
   screen.current = mux::account_id{mux::ui::protocol_of(one.address), one.address};
   screen.wanted.reset();
   screen.chosen.reset();
-  this->last_account = one.address;
-  (void)this->write();
+  this->change_part<recently_used>([&](recently_used& now) { now.last_account = one.address; });
   root().close_drawer();
   this->refresh();
 }

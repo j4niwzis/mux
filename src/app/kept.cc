@@ -38,6 +38,16 @@ struct chat_choices {
   friend bool operator==(const chat_choices&, const chat_choices&) = default;
 };
 
+// What was used lately, for the next start: the account shown last, by its
+// address; the emoji picked lately, newest first; the stickers sent lately,
+// and the favourites.
+struct recently_used {
+  std::optional<std::string> last_account;
+  std::vector<std::string> emoji;
+  std::vector<mux::emote> stickers, favourite_stickers;
+  friend bool operator==(const recently_used&, const recently_used&) = default;
+};
+
 // What is kept, as the model holds it: each chat's own choices, by the chat.
 struct kept_root {
   // The accounts saved, by their addresses, in the order they are listed.
@@ -55,6 +65,11 @@ struct kept_root {
   skiff::model::Tracked<mux::config::cache_limits> limits;
   // How the window looks.
   skiff::model::Tracked<mux::config::look_settings> looks;
+  // The proxy profiles, in their order.
+  skiff::model::Tracked<std::vector<mux::config::proxy_settings>> proxies;
+  // The chats listed in other accounts' lists than their own.
+  skiff::model::Tracked<std::vector<mux::config::chat_placement>> placements;
+  skiff::model::Tracked<recently_used> recent;
 };
 // The file to be written again: one, however many changes asked for it.
 struct write_kept {
@@ -97,6 +112,9 @@ struct motion_chosen {
 // again. UnifiedPush turned on or off: its connector with it.
 struct kept_reactions {
   [[nodiscard]] write_kept on(skiff::model::Changed<chat_choices>, const chat_choices&) const { return {}; }
+  [[nodiscard]] write_kept on(skiff::model::Changed<std::vector<mux::config::proxy_settings>>, const auto&) const { return {}; }
+  [[nodiscard]] write_kept on(skiff::model::Changed<std::vector<mux::config::chat_placement>>, const auto&) const { return {}; }
+  [[nodiscard]] write_kept on(skiff::model::Changed<recently_used>, const recently_used&) const { return {}; }
   [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::notification_settings>,
                               const mux::config::notification_settings&) const {
     return {};
@@ -140,12 +158,21 @@ struct kept_settings {
   // The file's accounts of a protocol this build has not: written back as
   // they were, not lost.
   std::vector<mux::config::saved_account> foreign_accounts;
-  // The account shown last, by its address, for the next start.
-  std::optional<std::string> last_account;
-  // The emoji picked lately, newest first.
-  std::vector<std::string> recent_emoji;
-  // The stickers sent lately, and the favourites.
-  std::vector<mux::emote> recent_stickers, favourite_stickers;
+  // What was used lately, the proxy profiles and the chats placed in other
+  // lists, as the model holds them.
+  [[nodiscard]] const recently_used& recent() const { return state.root().recent.fValue; }
+  [[nodiscard]] const std::vector<mux::config::proxy_settings>& proxies() const { return state.root().proxies.fValue; }
+  [[nodiscard]] const std::vector<mux::config::chat_placement>& placements() const { return state.root().placements.fValue; }
+  // A part the model's root holds one of, changed: a copy changed, set
+  // again where it changed.
+  template <class Part, class F>
+  void change_part(F&& change) {
+    const Part& had = *state.template look<Part>();
+    Part next = had;
+    change(next);
+    if (!(next == had))
+      this->set_part(std::move(next));
+  }
   // What is done to a picture dropped before it is sent, as the model holds it.
   [[nodiscard]] const mux::config::sending_settings& sending() const { return state.root().sending.fValue; }
   // What is kept and shown of the history, as the model holds it.
@@ -170,8 +197,6 @@ struct kept_settings {
     (void)state.apply(skiff::model::edit(skiff::model::placeOf<skiff::model::Field<M>, kept_root>(),
                                          skiff::model::setTo(Part(std::move(now)))));
   }
-  // The chats listed in other accounts' lists than their own.
-  std::vector<mux::config::chat_placement> placements;
   // What each chat -- or space -- chose for itself, by the chat: only those
   // that chose something.
   kept_model state;
@@ -290,7 +315,6 @@ struct kept_settings {
   void set_notifications(mux::config::notification_settings now) {
     (void)state.apply(skiff::model::edit(skiff::model::placeOf<mux::config::notification_settings, kept_root>(), skiff::model::setTo(std::move(now))));
   }
-  std::vector<mux::config::proxy_settings> proxies;
   // Why the accounts file could not be read, when it could not: then it is
   // not written over either.
   std::optional<std::string> config_error;
@@ -326,8 +350,8 @@ struct kept_settings {
                                            skiff::model::setTo(std::move(next))));
       return;
     }
-    const auto at = static_cast<std::size_t>(std::ranges::distance(
-        this->accounts().keys().begin(), std::ranges::find(this->accounts().keys(), address)));
+    const auto keys = this->accounts().keys();
+    const auto at = static_cast<std::size_t>(std::ranges::distance(keys.begin(), std::ranges::find(keys, address)));
     (void)state.applyBatch(skiff::model::take<mux::config::account_t>(std::string(address)),
                            skiff::model::over<skiff::model::Keyed<std::string, mux::config::account_t>>(
                                skiff::model::Put<std::string, mux::config::account_t>{now, std::move(next), at}));
@@ -477,17 +501,17 @@ struct kept_settings {
     looks_read.motion = mux::config::motion_of(saved.motion);
     // The account shown last, shown again once it is in the model: accounts
     // arrive after the first frame, and the first one there is not the one.
-    this->last_account = saved.last_account;
     // The emoji picked lately, the stickers sent lately, and the favourites.
-    this->recent_emoji = saved.recent_emoji.value_or(std::vector<std::string>{});
     const auto emotes_of = [](const std::optional<std::vector<mux::config::sticker_kept>>& kept) {
       return std::ranges::to<std::vector>(std::views::transform(kept.value_or(std::vector<mux::config::sticker_kept>{}), [](const mux::config::sticker_kept& one) {
                return mux::emote{.shortcode = one.shortcode, .url = one.url, .body = one.body, .w = one.w, .h = one.h, .size = one.size,
                                  .mimetype = one.mimetype};
              }));
     };
-    this->recent_stickers = emotes_of(saved.recent_stickers);
-    this->favourite_stickers = emotes_of(saved.favourite_stickers);
+    const recently_used recent_read{.last_account = saved.last_account,
+                                    .emoji = saved.recent_emoji.value_or(std::vector<std::string>{}),
+                                    .stickers = emotes_of(saved.recent_stickers),
+                                    .favourite_stickers = emotes_of(saved.favourite_stickers)};
     looks_read.theme = mux::config::theme_of(saved.theme);
     if (saved.wallpaper)
       looks_read.wallpaper = mux::config::wallpaper_of(std::string_view(*saved.wallpaper));
@@ -515,7 +539,7 @@ struct kept_settings {
     const auto limits_read = saved.cache.value_or(mux::config::cache_limits{});
     const auto sending_read = saved.sending.value_or(mux::config::sending_settings{});
     const auto history_read = saved.history.value_or(mux::config::history_settings{});
-    this->proxies = saved.proxies.value_or(std::vector<mux::config::proxy_settings>{});
+    const auto proxies_read = saved.proxies.value_or(std::vector<mux::config::proxy_settings>{});
     const auto notifications_read = saved.notifications.value_or(mux::config::notification_settings{});
     for (const auto& one : saved.chat_notify.value_or(std::vector<mux::config::chat_notify>{}))
       chats[chat_of(one.account, one.conversation)].notify = mux::config::notify_choices{
@@ -545,7 +569,7 @@ struct kept_settings {
       chosen.forum = one.forum.value_or(false);
       chosen.hidden_from_home = one.hide_from_home.value_or(false);
     }
-    this->placements = saved.placements.value_or(std::vector<mux::config::chat_placement>{});
+    const auto placements_read = saved.placements.value_or(std::vector<mux::config::chat_placement>{});
     for (const auto& one : saved.muted.value_or(std::vector<mux::config::muted_chat>{}))
       chats[chat_of(one.account, one.conversation)].muted = true;
     std::erase_if(chats, [](const auto& one) { return one.second == chat_choices{}; });
@@ -560,6 +584,9 @@ struct kept_settings {
     root.history.fValue = history_read;
     root.limits.fValue = limits_read;
     root.looks.fValue = looks_read;
+    root.proxies.fValue = proxies_read;
+    root.placements.fValue = placements_read;
+    root.recent.fValue = recent_read;
     this->state = kept_model(std::move(root));
   }
   [[nodiscard]] mux::config::file file() const {
@@ -567,20 +594,20 @@ struct kept_settings {
     const auto listed = std::ranges::to<std::vector>(this->accounts().values());
     auto out = mux::config::file_of(listed, foreign_accounts);
     out.motion = mux::config::word_of(this->appearance().motion);
-    out.last_account = last_account;
-    if (!recent_emoji.empty())
-      out.recent_emoji = recent_emoji;
+    out.last_account = this->recent().last_account;
+    if (!this->recent().emoji.empty())
+      out.recent_emoji = this->recent().emoji;
     const auto kept_of = [](const std::vector<mux::emote>& all) {
       return std::ranges::to<std::vector>(std::views::transform(all, [](const mux::emote& one) {
                return mux::config::sticker_kept{one.shortcode, one.url, one.body, one.w, one.h, one.size, one.mimetype};
              }));
     };
-    if (!recent_stickers.empty())
-      out.recent_stickers = kept_of(recent_stickers);
-    if (!favourite_stickers.empty())
-      out.favourite_stickers = kept_of(favourite_stickers);
-    if (!proxies.empty())
-      out.proxies = proxies;
+    if (!this->recent().stickers.empty())
+      out.recent_stickers = kept_of(this->recent().stickers);
+    if (!this->recent().favourite_stickers.empty())
+      out.favourite_stickers = kept_of(this->recent().favourite_stickers);
+    if (!this->proxies().empty())
+      out.proxies = this->proxies();
     out.theme = mux::config::word_of(this->appearance().theme);
     if (this->appearance().wallpaper)
       out.wallpaper = mux::config::word_of(*this->appearance().wallpaper);
@@ -665,8 +692,8 @@ struct kept_settings {
       out.chat_notify = std::move(notify);
     if (!choices.empty())
       out.room_events = std::move(choices);
-    if (!placements.empty())
-      out.placements = placements;
+    if (!this->placements().empty())
+      out.placements = this->placements();
     if (!muted.empty())
       out.muted = std::move(muted);
     return out;

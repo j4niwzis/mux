@@ -117,43 +117,47 @@ class preferences_part {
     if (one.to == one.chat.account)
       return;
     // Moved: out of every other list it was moved to, into this one.
-    if (one.moved)
-      std::erase_if(k_->placements, [&](const mux::config::chat_placement& each) {
-        return each.account == one.chat.account.address && each.conversation == one.chat.id && each.moved;
-      });
-    if (auto* kept = this->placement_of(one.chat, one.to))
-      kept->moved = one.moved;
-    else
-      k_->placements.push_back({.account = one.chat.account.address, .conversation = one.chat.id, .listed_in = one.to.address,
-                            .moved = one.moved});
+    k_->change_part<std::vector<mux::config::chat_placement>>([&](auto& all) {
+      if (one.moved)
+        std::erase_if(all, [&](const mux::config::chat_placement& each) {
+          return each.account == one.chat.account.address && each.conversation == one.chat.id && each.moved;
+        });
+      if (auto* kept = placement_in(all, one.chat, one.to))
+        kept->moved = one.moved;
+      else
+        all.push_back({.account = one.chat.account.address, .conversation = one.chat.id, .listed_in = one.to.address,
+                       .moved = one.moved});
+    });
     (void)k_->write();
     s_->refresh_due = true;
   }
   void apply(const request::unplace_chat& one) {
     (void)s_->root().main().close_space_menu();
-    std::erase_if(k_->placements, [&](const mux::config::chat_placement& each) {
-      return each.account == one.chat.account.address && each.conversation == one.chat.id && each.listed_in == one.from.address;
+    k_->change_part<std::vector<mux::config::chat_placement>>([&](auto& all) {
+      std::erase_if(all, [&](const mux::config::chat_placement& each) {
+        return each.account == one.chat.account.address && each.conversation == one.chat.id && each.listed_in == one.from.address;
+      });
     });
     (void)k_->write();
     s_->refresh_due = true;
   }
   void apply(const request::flip_chat_strip& one) {
     (void)s_->root().main().close_space_menu();
-    if (auto* kept = this->placement_of(one.chat, one.in)) {
-      const auto* own = k_->settings_of(one.chat.account.address);
-      const bool now = kept->strip.value_or(own == nullptr || mux::config::strip_of(*own));
-      kept->strip = !now;
-      (void)k_->write();
-    }
+    const auto* own = k_->settings_of(one.chat.account.address);
+    k_->change_part<std::vector<mux::config::chat_placement>>([&](auto& all) {
+      if (auto* kept = placement_in(all, one.chat, one.in))
+        kept->strip = !kept->strip.value_or(own == nullptr || mux::config::strip_of(*own));
+    });
     s_->refresh_due = true;
   }
   void apply(const request::set_chat_strip_colour& one) {
     (void)s_->root().main().close_space_menu();
-    if (auto* kept = this->placement_of(one.chat, one.in)) {
-      kept->strip_colour = std::string(spl::visit([](const auto& each) { return mux::config::word_of(each); }, one.colour));
-      kept->strip = true;
-      (void)k_->write();
-    }
+    k_->change_part<std::vector<mux::config::chat_placement>>([&](auto& all) {
+      if (auto* kept = placement_in(all, one.chat, one.in)) {
+        kept->strip_colour = std::string(spl::visit([](const auto& each) { return mux::config::word_of(each); }, one.colour));
+        kept->strip = true;
+      }
+    });
     s_->refresh_due = true;
   }
   // A notification setting at a level: every chat's -- said, the client's
@@ -447,23 +451,23 @@ class preferences_part {
   void apply(const request::choose_account_proxy& one) {
     s_->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
       auto& kept = mux::config::proxy_in(account);
-      if (one.index < 0 || static_cast<std::size_t>(one.index) >= k_->proxies.size())
+      if (one.index < 0 || static_cast<std::size_t>(one.index) >= k_->proxies().size())
         kept.reset();
       else
-        kept = k_->proxies[static_cast<std::size_t>(one.index)].name;
+        kept = k_->proxies()[static_cast<std::size_t>(one.index)].name;
       (void)k_->write();
       proxying_->reconnect(account);
-      panel.show_page(mux::ui::account_page::proxy{}, account, *s_->model, k_->proxies, k_->appearance().theme);
+      panel.show_page(mux::ui::account_page::proxy{}, account, *s_->model, k_->proxies(), k_->appearance().theme);
     });
   }
 
  private:
   // Chats in other accounts' lists: placed, taken out, their strips.
-  mux::config::chat_placement* placement_of(const mux::conversation_id& chat, const mux::account_id& in) {
-    const auto found = std::ranges::find_if(k_->placements, [&](const mux::config::chat_placement& one) {
+  static mux::config::chat_placement* placement_in(std::vector<mux::config::chat_placement>& all, const mux::conversation_id& chat, const mux::account_id& in) {
+    const auto found = std::ranges::find_if(all, [&](const mux::config::chat_placement& one) {
       return one.account == chat.account.address && one.conversation == chat.id && one.listed_in == in.address;
     });
-    return found == k_->placements.end() ? nullptr : &*found;
+    return found == all.end() ? nullptr : &*found;
   }
 
   services* s_;

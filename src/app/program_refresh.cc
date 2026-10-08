@@ -43,7 +43,7 @@ void app::show_placements() {
     screen.listed_in.clear();
     screen.moved_out.clear();
     screen.strips.clear();
-    for (const mux::config::chat_placement& one : placements) {
+    for (const mux::config::chat_placement& one : this->placements()) {
       const mux::conversation_id chat{{mux::ui::protocol_of(one.account), one.account}, one.conversation};
       const mux::account_id to{mux::ui::protocol_of(one.listed_in), one.listed_in};
       screen.listed_in[to].push_back(chat);

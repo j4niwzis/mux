@@ -51,11 +51,13 @@ struct account_sessions : nodes::Stack, outbox {
   struct sign_out_one {
     account_sessions* page;
     std::string device;
-    void operator()() const { page->sign_out({device}); }
+    using Answer = std::optional<request::sign_out_sessions>;
+    Answer operator()() const { return page->sign_out({device}); }
   };
   struct sign_out_rest {
     account_sessions* page;
-    void operator()() const { page->sign_out(page->others); }
+    using Answer = std::optional<request::sign_out_sessions>;
+    Answer operator()() const { return page->sign_out(page->others); }
   };
   struct verify_one {
     using Answer = request::verify_session;
@@ -71,7 +73,8 @@ struct account_sessions : nodes::Stack, outbox {
   struct save_rename {
     account_sessions* page;
     std::size_t row;
-    void operator()() const { page->rename(row); }
+    using Answer = std::optional<request::rename_session>;
+    Answer operator()() const { return page->rename(row); }
   };
   struct reload {
     using Answer = request::refresh_sessions;
@@ -254,14 +257,16 @@ struct account_sessions : nodes::Stack, outbox {
       parts.password.setVisible(true);
     this->invalidateLayout();
   }
-  void sign_out(std::vector<std::string> devices) {
+  std::optional<request::sign_out_sessions> sign_out(std::vector<std::string> devices) {
+    std::optional<request::sign_out_sessions> asked;
     if (devices.empty())
-      return;
+      return asked;
     parts.note.setText("Signing out…");
     parts.note.setColour(colours_->dim);
     parts.note.setVisible(true);
-    this->emit(request::sign_out_sessions{std::move(devices), parts.password.parts.field.text()});
+    asked = request::sign_out_sessions{std::move(devices), parts.password.parts.field.text()};
     this->invalidateLayout();
+    return asked;
   }
   [[nodiscard]] session_row* row_at(std::size_t index) {
     if (index == 0)
@@ -272,11 +277,13 @@ struct account_sessions : nodes::Stack, outbox {
     if (session_row* row = this->row_at(index))
       row->show_field(true);
   }
-  void rename(std::size_t index) {
+  std::optional<request::rename_session> rename(std::size_t index) {
+    std::optional<request::rename_session> asked;
     if (session_row* row = this->row_at(index)) {
       row->show_field(false);
-      this->emit(request::rename_session{row->device, row->parts.field.text()});
+      asked = request::rename_session{row->device, row->parts.field.text()};
     }
+    return asked;
   }
   void say(std::string, bool) {}
 };

@@ -181,11 +181,13 @@ struct start_chat_box : nodes::Stack, outbox {
   };
   struct typed {
     start_chat_box* box;
-    void operator()(std::string_view text) const { box->search(text); }
+    using Answer = std::optional<::mux::ui::request::find_people>;
+    Answer operator()(std::string_view text) const { return box->search(text); }
   };
   struct go_press {
     start_chat_box* box;
-    void operator()() const { box->go(); }
+    using Answer = std::optional<::mux::ui::request::start_direct>;
+    Answer operator()() const { return box->go(); }
   };
   struct copy_press {
     using Answer = ::mux::ui::request::copy_text;
@@ -268,12 +270,14 @@ struct start_chat_box : nodes::Stack, outbox {
                                  logic::mention_in(*link));
   }
   static constexpr auto lower = mux::logic::folded;
-  void search(std::string_view text) {
+  std::optional<::mux::ui::request::find_people> search(std::string_view text) {
+    std::optional<::mux::ui::request::find_people> asked;
     query = std::string(text);
     found.clear();
     this->show_rows();
     if (query.size() >= 2)
-      this->emit(::mux::ui::request::find_people{query});
+      asked = ::mux::ui::request::find_people{query};
+    return asked;
   }
   // The directory's answer, where it is for what is typed now.
   void show_found(const std::vector<found_person>& people, const std::string& asked) {
@@ -306,14 +310,16 @@ struct start_chat_box : nodes::Stack, outbox {
     parts.list.scrollTo(0.0f);
   }
   // Go: the ID typed, or the first found.
-  void go() {
+  std::optional<::mux::ui::request::start_direct> go() {
+    std::optional<::mux::ui::request::start_direct> asked;
     if (whole_id(query)) {
-      this->emit(::mux::ui::request::start_direct{query});
-      return;
+      asked = ::mux::ui::request::start_direct{query};
+      return asked;
     }
     const auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
     if (!rows.empty())
-      this->emit(::mux::ui::request::start_direct{rows.front().id});
+      asked = ::mux::ui::request::start_direct{rows.front().id};
+    return asked;
   }
 };
 

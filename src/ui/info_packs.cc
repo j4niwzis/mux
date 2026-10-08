@@ -79,11 +79,13 @@ struct packs_box : nodes::Stack, outbox {
   };
   struct save_press {
     packs_box* box;
-    void operator()() const { box->save(); }
+    using Answer = std::optional<::mux::ui::request::save_pack>;
+    Answer operator()() const { return box->save(); }
   };
   struct delete_press {
     packs_box* box;
-    void operator()() const { box->remove_pack(); }
+    using Answer = std::optional<::mux::ui::request::delete_pack>;
+    Answer operator()() const { return box->remove_pack(); }
   };
   struct flip_emoji {
     packs_box* box;
@@ -399,21 +401,25 @@ struct packs_box : nodes::Stack, outbox {
     draft.pictures.push_back(std::move(one));
     this->show_pictures();
   }
-  void save() {
+  std::optional<::mux::ui::request::save_pack> save() {
+    std::optional<::mux::ui::request::save_pack> asked;
     draft.name = parts.name.text();
     draft.attribution = parts.attribution.text();
     if (!draft.avatar && !draft.pictures.empty())
       draft.avatar = draft.pictures.front().url;
     std::erase_if(draft.pictures, [](const pack_picture& one) { return one.shortcode.empty() || one.url.empty(); });
-    this->emit(::mux::ui::request::save_pack{draft});
+    asked = ::mux::ui::request::save_pack{draft};
     parts.note.setText("Saving…");
+    return asked;
   }
   // As its protocol takes a pack away; a new one, not saved yet, is nothing.
-  void remove_pack() {
+  std::optional<::mux::ui::request::delete_pack> remove_pack() {
+    std::optional<::mux::ui::request::delete_pack> asked;
     if (draft.key.empty())
-      return;
-    this->emit(::mux::ui::request::delete_pack{draft});
+      return asked;
+    asked = ::mux::ui::request::delete_pack{draft};
     parts.note.setText("Deleting…");
+    return asked;
   }
 };
 

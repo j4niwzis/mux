@@ -73,7 +73,9 @@ struct reactions_box : nodes::Stack {
   // A reaction as the chat would show it: a bubble from who reacted,
   // saying what they reacted with, in runs as the chat's bubbles are.
   // Pressed, it is answered.
-  struct row : nodes::Stack, outbox {
+  struct row : nodes::Stack {
+    // Its menu; a link in it followed; else it answered, and the list closed.
+    using Answer = std::variant<menu_facts, ::mux::ui::request::open_url, std::tuple<std::optional<::mux::ui::request::reply_to>, ::mux::ui::request::close_reactions>>;
     reaction_entry entry;
     struct parts_t {
       message_bubble<Actions> bubble;
@@ -100,9 +102,9 @@ struct reactions_box : nodes::Stack {
     // link under the pointer, the preview's -- and, one's own, the reaction
     // changed to another from the menu's reactions, or taken back.
     using scene::Node::onPointer;
-    void onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
+    std::optional<Answer> onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
       if (press.button != 3)
-        return;
+        return std::nullopt;
       const message_bubble<Actions>& one = parts.bubble;
       menu_facts facts;
       facts.id = entry.event;
@@ -119,26 +121,22 @@ struct reactions_box : nodes::Stack {
         facts.reaction = menu_facts::reaction_facts{entry.to, entry.key};
       facts.x = press.x;
       facts.y = press.y;
-      this->emit(std::move(facts));
       reply.handle();
+      return Answer{std::move(facts)};
     }
-    [[nodiscard]] bool onClick(float x, float y) {
+    std::optional<Answer> onClick(float x, float y) {
       // A link's preview or card in it: followed, as in the chat.
       const message_bubble<Actions>& one = parts.bubble;
-      if (const auto& preview = one.parts.body.parts.preview; preview && preview->bounds().contains(x, y)) {
-        this->emit(::mux::ui::request::open_url{preview->url});
-        return true;
-      }
-      for (const link_card& card : one.parts.body.parts.cards)
-        if (card.bounds().contains(x, y)) {
-          this->emit(::mux::ui::request::open_url{card.url});
-          return true;
-        }
-      // Answered, where it is an event of its own to answer.
+      if (const auto& preview = one.parts.body.parts.preview; preview && preview->bounds().contains(x, y))
+        return ::mux::ui::request::open_url{preview->url};
+      const auto cards = one.parts.body.parts.cards | std::views::filter([&](const link_card& card) { return card.bounds().contains(x, y); });
+      if (!std::ranges::empty(cards))
+        return ::mux::ui::request::open_url{std::ranges::begin(cards)->url};
+      // Answered, where it is an event of its own to answer; the list closed.
+      std::optional<::mux::ui::request::reply_to> answered;
       if (!entry.event.empty())
-        this->emit(::mux::ui::request::reply_to{entry.event, std::format("{} reacted {}", entry.name, entry.key)});
-      this->emit(::mux::ui::request::close_reactions{});
-      return true;
+        answered = ::mux::ui::request::reply_to{entry.event, std::format("{} reacted {}", entry.name, entry.key)};
+      return std::tuple{answered, ::mux::ui::request::close_reactions{}};
     }
   };
   using rows_t = nodes::Flow<std::vector<row>>;
@@ -244,7 +242,9 @@ struct marks_box : nodes::Stack {
       parts.key.apply({.alignSelf = scene::align::kMiddle});
     }
   };
-  struct row : nodes::Stack, outbox {
+  struct row : nodes::Stack {
+    // A press: to the mark, the list closed.
+    using Answer = std::tuple<::mux::ui::request::go_to_mark, ::mux::ui::request::close_marks>;
     mark_kind_t kind;
     std::string event;
     struct parts_t {
@@ -262,11 +262,7 @@ struct marks_box : nodes::Stack {
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-    [[nodiscard]] bool onClick(float, float) {
-      this->emit(::mux::ui::request::go_to_mark{kind, event});
-      this->emit(::mux::ui::request::close_marks{});
-      return true;
-    }
+    std::optional<Answer> onClick(float, float) { return Answer{::mux::ui::request::go_to_mark{kind, event}, ::mux::ui::request::close_marks{}}; }
   };
   using rows_t = nodes::Flow<std::vector<row>>;
   struct parts_t {

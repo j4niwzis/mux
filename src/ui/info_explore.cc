@@ -45,16 +45,17 @@ import :info_packs;
 export namespace mux::ui {
 // Join a room; a space in a space's listing, opened -- its own listed.
 template <class Actions>
-struct directory_join : outbox {
+struct directory_join {
+  // A space opened to look into, else the room joined.
+  using Answer = std::variant<::mux::ui::request::explore_space, ::mux::ui::request::join_directory_room>;
   std::string room;
   std::string server;
   bool open = false;
   std::string name;
-  void operator()() {
+  Answer operator()() const {
     if (open)
-      this->emit(::mux::ui::request::explore_space{room, name});
-    else
-      this->emit(::mux::ui::request::join_directory_room{room, server});
+      return ::mux::ui::request::explore_space{room, name};
+    return ::mux::ui::request::join_directory_room{room, server};
   }
 };
 

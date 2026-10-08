@@ -107,8 +107,9 @@ struct resize_info_to {
 
 // What Enter in the message field does: asks for its text to be sent.
 template <class Actions>
-struct submit_message : outbox {
-  void operator()(std::string_view text) { this->emit(::mux::ui::request::submit_message{with_blocks_closed(text)}); }
+struct submit_message {
+  using Answer = ::mux::ui::request::submit_message;
+  Answer operator()(std::string_view text) const { return ::mux::ui::request::submit_message{with_blocks_closed(text)}; }
 };
 
 

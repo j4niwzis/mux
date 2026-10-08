@@ -810,17 +810,18 @@ struct side_column : nodes::Stack, outbox {
     this->light(this->bar_at(at.x, at.y));
     reply.handle();
   }
-  void drag_up(const scene::pointer::up& at, scene::PointerReply& reply) {
+  std::optional<::mux::ui::request::place_spaces> drag_up(const scene::pointer::up& at, scene::PointerReply& reply) {
+    std::optional<::mux::ui::request::place_spaces> asked;
     if (!drag)
-      return;
+      return asked;
     const drag_t was = *std::exchange(drag, std::nullopt);
     if (was.scrolling) {
       reply.releasePointer();
       reply.handle();
-      return;
+      return asked;
     }
     if (!was.moving)
-      return;
+      return asked;
     reply.releasePointer();
     reply.handle();
     this->light(std::nullopt);
@@ -847,16 +848,17 @@ struct side_column : nodes::Stack, outbox {
       target = along_x ? skia::SkPoint{top_bar.bounds().fLeft + step * 0.5f, top_bar.bounds().centerY()}
                        : skia::SkPoint{side_bar.bounds().centerX(), side_bar.bounds().fTop + step * 0.5f};
     if (bar)
-      this->emit(::mux::ui::request::place_spaces{account, *bar, order, was.from, was.item});
+      asked = ::mux::ui::request::place_spaces{account, *bar, order, was.from, was.item};
     this->let_go(was.item, {at.x, at.y}, target);
     this->show_drop_targets(false);
+    return asked;
   }
   using Node::onPointer;
   void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply& reply) { drag_down(press, reply); }
   void onPointer(scene::phase::capture, const scene::pointer::move& at, scene::PointerReply& reply) { drag_move(at, reply); }
   void onPointer(scene::phase::target, const scene::pointer::move& at, scene::PointerReply& reply) { drag_move(at, reply); }
-  void onPointer(scene::phase::capture, const scene::pointer::up& at, scene::PointerReply& reply) { drag_up(at, reply); }
-  void onPointer(scene::phase::target, const scene::pointer::up& at, scene::PointerReply& reply) { drag_up(at, reply); }
+  std::optional<::mux::ui::request::place_spaces> onPointer(scene::phase::capture, const scene::pointer::up& at, scene::PointerReply& reply) { return drag_up(at, reply); }
+  std::optional<::mux::ui::request::place_spaces> onPointer(scene::phase::target, const scene::pointer::up& at, scene::PointerReply& reply) { return drag_up(at, reply); }
   // The menu closed after the press that chose from it, or one off it:
   // not from inside that press's handling.
   [[nodiscard]] bool wantsTick() const { return menu_close_due || fly.moving() || (parts.ghost && !drag); }

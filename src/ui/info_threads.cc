@@ -62,11 +62,13 @@ struct threads_panel : nodes::Stack, outbox {
   };
   struct sent {
     threads_panel* panel;
-    void operator()(std::string_view) const { panel->send(); }
+    using Answer = std::optional<::mux::ui::request::send_in_thread>;
+    Answer operator()(std::string_view) const { return panel->send(); }
   };
   struct send_press {
     threads_panel* panel;
-    void operator()() const { panel->send(); }
+    using Answer = std::optional<::mux::ui::request::send_in_thread>;
+    Answer operator()() const { return panel->send(); }
   };
   struct stop_answer {
     threads_panel* panel;
@@ -274,13 +276,15 @@ struct threads_panel : nodes::Stack, outbox {
   }
   // What is written, sent in the thread open -- an answer to what is
   // answered, where something is.
-  void send() {
+  std::optional<::mux::ui::request::send_in_thread> send() {
+    std::optional<::mux::ui::request::send_in_thread> asked;
     const std::string text = parts.line.plain();
     if (!open || text.empty())
-      return;
-    this->emit(::mux::ui::request::send_in_thread{*open, text, answering});
+      return asked;
+    asked = ::mux::ui::request::send_in_thread{*open, text, answering};
     parts.line.clear();
     this->stop_answering();
+    return asked;
   }
 };
 

@@ -54,7 +54,8 @@ struct devtools_box : nodes::Stack, outbox {
   };
   struct send_press {
     devtools_box* box;
-    void operator()() const { box->send(); }
+    using Answer = std::optional<request::send_custom>;
+    Answer operator()() const { return box->send(); }
   };
   using entry_row = row_item<pick>;
   using rows_t = nodes::Flow<std::vector<entry_row>>;
@@ -220,14 +221,16 @@ struct devtools_box : nodes::Stack, outbox {
         return;
       }
   }
-  void send() {
+  std::optional<request::send_custom> send() {
+    std::optional<request::send_custom> asked;
     if (!parts.sending)
-      return;
+      return asked;
     auto& [type, key, caption, body, button] = parts.sending->parts;
     if (type.text().empty())
-      return;
-    this->emit(request::send_custom{type.text(), key.text().empty() ? std::nullopt : std::optional<std::string>(key.text()),
-                                          body.text()});
+      return asked;
+    asked = request::send_custom{type.text(), key.text().empty() ? std::nullopt : std::optional<std::string>(key.text()),
+                                          body.text()};
+    return asked;
   }
 };
 

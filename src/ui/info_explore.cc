@@ -111,8 +111,27 @@ struct directory_row : nodes::Stack {
 // many are in it and what it is about, and Join. An address typed in is
 // gone to at once.
 // Explore open: the server it lists first.
+// What a directory listed, as Explore shows it: the rooms so far, of which
+// server, in which space, for what was searched, and where the next page
+// starts.
+struct explore_listing {
+  std::vector<directory_room> rooms;
+  std::string server;
+  std::optional<std::string> space;
+  std::string query;
+  std::optional<std::string> next;
+};
+// A space looked into: its room, and its name over what it holds.
+struct explore_space_shown {
+  std::string room;
+  std::string name;
+};
 struct explore_facts {
   std::string own_server;
+  std::optional<explore_listing> listing;
+  // Asked of the server, not answered yet.
+  bool loading = false;
+  std::optional<explore_space_shown> space;
 };
 template <class Actions>
 struct explore_box : nodes::Stack {
@@ -207,7 +226,19 @@ struct explore_box : nodes::Stack {
   } parts;
   // The row's fields, by their names, for what reads them.
   field& query_field() { return parts.search.parts.query; }
-  explore_box(const ui_needs<Actions>& n, const explore_facts& facts) : explore_box(*n.colours, facts.own_server) {}
+  explore_box(const ui_needs<Actions>& n, const explore_facts& facts) : explore_box(*n.colours, facts.own_server) { this->show_page(facts); }
+  // What is shown, as its facts say: the space looked into, the asking, the
+  // rooms listed -- all of them, as the program keeps them.
+  void show_page(const explore_facts& facts) {
+    if (facts.space)
+      this->as_space(facts.space->room, facts.space->name);
+    if (facts.loading) {
+      parts.status.setText("Loading the rooms this server lists\u2026");
+      parts.status.setVisible(true);
+    }
+    if (facts.listing)
+      this->show(facts.listing->rooms, facts.listing->server, facts.listing->space, facts.listing->query, facts.listing->next, false);
+  }
   explore_box(const palette& colours, const std::string& own_server)
       : colours_(&colours),
         parts{.header = header_t(colours, "Explore rooms", {}, {}, false, true),

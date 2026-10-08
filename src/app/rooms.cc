@@ -91,13 +91,12 @@ class rooms_part {
     const std::string own = by ? by->address.substr(by->address.find(':') + 1) : std::string();
     mux::ui::show(*s_->showing, mux::ui::drawer_shown{false});
     mux::ui::show<mux::ui::new_chat_facts>(*s_->showing, std::nullopt);
-    mux::ui::show(*s_->showing, std::optional(mux::ui::explore_facts{own}));
     // What the server lists, at once, as Cinny opens its explorer: its
-    // directory with nothing searched.
-    if (by && !s_->demo()) {
-      s_->root().explore_loading();
+    // directory with nothing searched -- said as asked until it answers.
+    const bool asking = by && !s_->demo();
+    mux::ui::show(*s_->showing, std::optional(mux::ui::explore_facts{own, std::nullopt, asking, std::nullopt}));
+    if (asking)
       s_->net->search_directory(*by, own, std::string());
-    }
   }
   void apply(const request::close_explore&) { mux::ui::show<mux::ui::explore_facts>(*s_->showing, std::nullopt); }
   // A space's rooms and spaces, in Explore: asked of its account.
@@ -108,13 +107,12 @@ class rooms_part {
       return;
     mux::ui::show(*s_->showing, mux::ui::drawer_shown{false});
     mux::ui::show<mux::ui::new_chat_facts>(*s_->showing, std::nullopt);
-    mux::ui::show(*s_->showing, std::optional(mux::ui::explore_facts{by->address.substr(by->address.find(':') + 1)}));
     // Said as the space's: its name and picture over what it holds.
     std::string name = one.name;
     if (const auto& chats = s_->model->accounts().at(*by).conversations; chats.contains(one.room))
       name = mux::ui::display_name(chats.at(one.room));
-    s_->root().explore_as_space(one.room, name.empty() ? one.room : name);
-    s_->root().explore_loading();
+    mux::ui::show(*s_->showing, std::optional(mux::ui::explore_facts{by->address.substr(by->address.find(':') + 1), std::nullopt, true,
+                                                                     mux::ui::explore_space_shown{one.room, name.empty() ? one.room : name}}));
     s_->net->explore_space(*by, one.room);
   }
   // A search: an address typed in is gone to, as a link to it would be --

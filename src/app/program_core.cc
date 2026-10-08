@@ -58,8 +58,16 @@ void app::woken() {
                                [&](const mux::change::room_created& made) { made_room_ = made.id; },
                                // A directory searched: its rooms, in Explore.
                                [&](const mux::change::directory_listed& listed) {
-                                 root().show_directory(listed.rooms, listed.server, listed.space, listed.query, listed.next,
-                                                       listed.more);
+                                 // The rooms put in Explore's facts: a further page
+                                                                 // after those there, else in their place.
+                                 mux::ui::change_shown<std::optional<mux::ui::explore_facts>>(showing, [&](auto& now) {
+                                   if (!now)
+                                     return;
+                                   auto rooms = listed.more && now->listing ? std::move(now->listing->rooms) : std::vector<mux::directory_room>{};
+                                   rooms.insert(rooms.end(), listed.rooms.begin(), listed.rooms.end());
+                                   now->listing = mux::ui::explore_listing{std::move(rooms), listed.server, listed.space, listed.query, listed.next};
+                                   now->loading = false;
+                                 });
                                  // The own server's, for what the chat list searched.
                                  if (listed.server.empty() && !listed.space)
                                    root().main().found_rooms_elsewhere(listed.query, listed.rooms);

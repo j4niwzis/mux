@@ -946,23 +946,6 @@ struct window : scene::Node {
         up->parts.note.setText("An image could not be uploaded: " + picture.body);
     }
   }
-  void explore_as_space(const std::string& room, const std::string& name) {
-    if (auto* up = layer().explore.shown())
-      up->as_space(room, name);
-  }
-  // Explore rooms asking its server's directory: said so until it answers.
-  void explore_loading() {
-    if (auto* up = layer().explore.shown()) {
-      up->parts.status.setText("Loading the rooms this server lists\u2026");
-      up->parts.status.setVisible(true);
-    }
-  }
-  void show_directory(const std::vector<directory_room>& rooms, const std::string& server,
-                      const std::optional<std::string>& space = std::nullopt, const std::string& query = {},
-                      const std::optional<std::string>& next = std::nullopt, bool more = false) {
-    if (auto* up = layer().explore.shown())
-      up->show(rooms, server, space, query, next, more);
-  }
   // A protocol's own dialog up (Node, one of its dialogs), made from args.
   template <class Node, class... Args>
   void open_dialog(Args&&... args) {

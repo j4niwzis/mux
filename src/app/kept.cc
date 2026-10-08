@@ -580,7 +580,7 @@ struct kept_settings {
     // Copied: the file is made of a contiguous list of them.
     const auto listed = std::ranges::to<std::vector>(this->accounts().values());
     auto out = mux::config::file_of(listed, foreign_accounts);
-    out.motion = mux::config::word_of(this->appearance().motion);
+    out.motion = mux::config::said_of<mux::config::motion_said_t>(this->appearance().motion);
     out.last_account = this->recent().last_account;
     if (!this->recent().emoji.empty())
       out.recent_emoji = this->recent().emoji;
@@ -595,15 +595,15 @@ struct kept_settings {
       out.favourite_stickers = kept_of(this->recent().favourite_stickers);
     if (!this->proxies().empty())
       out.proxies = this->proxies();
-    out.theme = mux::config::word_of(this->appearance().theme);
+    out.theme = mux::config::said_of<mux::config::theme_said_t>(this->appearance().theme);
     if (this->appearance().wallpaper)
       out.wallpaper = mux::config::word_of(*this->appearance().wallpaper);
     if (this->appearance().bubbles)
       out.bubbles = mux::config::word_of(*this->appearance().bubbles);
     if (this->appearance().panels)
       out.panels = mux::config::word_of(*this->appearance().panels);
-    out.accent = mux::config::word_of(this->appearance().accent);
-    out.renderer = mux::config::word_of(this->appearance().renderer);
+    out.accent = mux::config::said_of<mux::config::accent_said_t>(this->appearance().accent);
+    out.renderer = mux::config::said_of<mux::config::renderer_said_t>(this->appearance().renderer);
     if (this->frames().partial_redraw)
       out.partial_redraw = true;
     if (this->frames().flash_redraws)

@@ -169,6 +169,18 @@ using renderer_said_t = spl::variant<renderer::opengl, renderer::software, std::
                                     [](auto one) -> renderer_t { return one; }},
                     *said);
 }
+// An accent said as a word somewhere other than the file's own field -- an
+// account's colour, a chat's strip -- read so until those are typed too.
+[[nodiscard]] inline accent_t accent_of(const std::optional<std::string>& word) {
+  static const std::unordered_map<std::string_view, accent_t> known = {
+      {"blue", accent::blue{}},     {"cyan", accent::blue{}},   {"green", accent::green{}},
+      {"pink", accent::pink{}},     {"orange", accent::orange{}}, {"purple", accent::purple{}},
+      {"red", accent::red{}},       {"grey", accent::grey{}},   {"gold", accent::gold{}}};
+  if (!word)
+    return accent::theme_own{};
+  const auto found = known.find(*word);
+  return found == known.end() ? accent_t{accent::theme_own{}} : found->second;
+}
 // And each written as it is.
 template <class Said, class... Ts>
 [[nodiscard]] Said said_of(const spl::variant<Ts...>& one) {
@@ -188,6 +200,9 @@ struct built_in {
 };
 }  // namespace notify_backend
 using notify_backend_t = spl::variant<notify_backend::native, notify_backend::built_in>;
+[[nodiscard]] inline notify_backend_t notify_backend_of(const std::optional<std::string>& word) {
+  return word == "built-in" ? notify_backend_t{notify_backend::built_in{}} : notify_backend_t{notify_backend::native{}};
+}
 // A chat's own choice of what notifies, as Telegram's and Element's: as
 // its account says, everything, only what mentions the user, nothing.
 namespace notify_mode {
@@ -209,6 +224,13 @@ struct off {
 };
 }  // namespace notify_mode
 using notify_mode_t = spl::variant<notify_mode::by_default, notify_mode::all, notify_mode::mentions, notify_mode::off>;
+[[nodiscard]] inline notify_mode_t notify_mode_of(const std::optional<std::string>& word) {
+  if (word == "all")
+    return notify_mode::all{};
+  if (word == "mentions")
+    return notify_mode::mentions{};
+  return notify_mode::by_default{};
+}
 // The switches of the notifications page, each a member of its settings.
 namespace notify_flag {
 struct desktop {};

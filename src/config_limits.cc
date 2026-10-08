@@ -237,7 +237,7 @@ struct file {
   std::optional<std::vector<saved_account>> accounts;
   // How much the window moves: "none", "reduced" (sections unfold, panels
   // just appear) or "full". Nothing said is full.
-  std::optional<std::string> motion;
+  std::optional<motion_said_t> motion;
   // The account shown last, by its address: shown again at the next start.
   std::optional<std::string> last_account;
   // The emoji picked lately, newest first.
@@ -254,8 +254,8 @@ struct file {
   std::optional<std::vector<proxy_settings>> proxies;
   // The theme, "dark" or "light", and what draws the window, "opengl" or
   // "software". Nothing said is dark and OpenGL.
-  std::optional<std::string> theme;
-  std::optional<std::string> accent;
+  std::optional<theme_said_t> theme;
+  std::optional<accent_said_t> accent;
   // Every chat's background, as word_of(wallpaper_t) says it; none, the theme's.
   std::optional<std::string> wallpaper;
   // Every chat's bubbles, as word_of(bubble_look) says them; none, solid.
@@ -263,7 +263,7 @@ struct file {
   std::optional<std::string> panels;  // its panels' look, as word_of(bubble_look) says it
   std::optional<bool> home_hides_spaced;  // Home without what spaces hold, but direct messages
   std::optional<bool> home_hides_direct;  // and without direct messages too, where it is so
-  std::optional<std::string> renderer;
+  std::optional<renderer_said_t> renderer;
   // Only what changed repainted, into a frame kept between them.
   std::optional<bool> partial_redraw;
   // What each frame repainted, outlined: to see that only that is.

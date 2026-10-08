@@ -156,14 +156,14 @@ struct kept_settings {
   // program from the model at each refresh: a space's own choices are its
   // rooms', where they have none, nearest first, through spaces in spaces.
   std::map<conversation_id, conversation_id> space_above;
+  // What a chat's settings come to, as the window reads them too.
+  [[nodiscard]] mux::chat_settings reads() const { return {&state.root(), &space_above}; }
 
   // A chat's own choice of one setting, by its member pointer; as unsaid
   // where it chose nothing.
   template <auto M>
   [[nodiscard]] auto own_of(const conversation_id& chat) const {
-    using T = std::remove_cvref_t<decltype(std::declval<const chat_choices&>().*M)>;
-    const chat_choices* found = state.root().chats.find(chat);
-    return found == nullptr ? T{} : found->*M;
+    return this->reads().own_of<M>(chat);
   }
   // One setting of a chat's, chosen: the chat forgotten where it then has
   // nothing chosen.
@@ -193,65 +193,23 @@ struct kept_settings {
   // The chats with a flag set.
   template <auto M>
   [[nodiscard]] std::set<conversation_id> chats_where() const {
-    std::set<conversation_id> out;
-    const auto& chats = state.root().chats;
-    for (std::size_t i = 0; i < chats.size(); ++i)
-      if (chats.valueAt(i).*M)
-        out.insert(chats.keyAt(i));
-    return out;
+    return mux::chats_where<M>(state.root());
   }
   // A chat's own choice of a setting, else the nearest space's above it.
   template <auto M>
   [[nodiscard]] auto own_or_space(const conversation_id& chat) const {
-    conversation_id at = chat;
-    for (int steps = 0; steps < 17; ++steps) {
-      if (auto own = this->own_of<M>(at))
-        return own;
-      const auto up = space_above.find(at);
-      if (up == space_above.end())
-        break;
-      at = up->second;
-    }
-    return decltype(this->own_of<M>(chat)){};
-  }
-  // A chat's look: the lowest level's that has one -- its own or its
-  // space's, its account's, every chat's -- what it leaves unsaid taken
-  // from the levels over it, in turn.
-  template <auto In>
-  [[nodiscard]] mux::config::bubble_look look_of(const std::optional<std::string>& account_word,
-                                                 const std::optional<mux::config::bubble_look>& everywhere,
-                                                 const conversation_id& chat) {
-    std::vector<mux::config::bubble_look> levels;
-    if (const auto own = this->own_or_space<In>(chat))
-      levels.push_back(*own);
-    if (account_word)
-      levels.push_back(mux::config::bubble_look_of(*account_word));
-    if (everywhere)
-      levels.push_back(*everywhere);
-    if (levels.empty())
-      return mux::config::bubble_look{};
-    return std::ranges::fold_left(std::views::drop(levels, 1), levels.front(),
-                                  [](mux::config::bubble_look below, const mux::config::bubble_look& above) {
-                                    return mux::config::filled_from(std::move(below), above);
-                                  });
+    return this->reads().own_or_space<M>(chat);
   }
   [[nodiscard]] mux::config::bubble_look panels_of(const conversation_id& chat) {
-    const auto* account = this->settings_of(chat.account.address);
-    return this->look_of<&chat_choices::panels>(account ? mux::config::panels_of(*account) : std::nullopt, this->appearance().panels, chat);
+    return this->reads().panels_of(chat);
   }
   [[nodiscard]] mux::config::bubble_look bubbles_of(const conversation_id& chat) {
-    const auto* account = this->settings_of(chat.account.address);
-    return this->look_of<&chat_choices::bubbles>(account ? mux::config::bubbles_of(*account) : std::nullopt, this->appearance().bubbles, chat);
+    return this->reads().bubbles_of(chat);
   }
   // A chat's background: its own, else its account's, else every chat's,
   // else the theme's.
   [[nodiscard]] mux::config::wallpaper_t wallpaper_of(const conversation_id& chat) {
-    if (const auto own = this->own_or_space<&chat_choices::wallpaper>(chat))
-      return *own;
-    if (const auto* account = this->settings_of(chat.account.address))
-      if (const auto& chosen = mux::config::wallpaper_of(*account))
-        return mux::config::wallpaper_of(std::string_view(*chosen));
-    return this->appearance().wallpaper.value_or(mux::config::wallpaper_t{mux::config::wallpaper::theme{}});
+    return this->reads().wallpaper_of(chat);
   }
   // What notifies, as the model holds it; changed by its edits: one
   // setting in its place, by its member pointer, or all of them at once.
@@ -331,60 +289,30 @@ struct kept_settings {
   // How far a jump's search pages back in a chat: its own limit, else its
   // account's, else every account's.
   [[nodiscard]] std::int64_t jump_search_of(const conversation_id& chat) {
-    if (const auto own = this->own_or_space<&chat_choices::jump_search>(chat))
-      return *own;
-    if (const auto* account = this->settings_of(chat.account.address))
-      if (const auto& chosen = mux::config::jump_search_of(*account))
-        return *chosen;
-    return this->history().jump_search;
+    return this->reads().jump_search_of(chat);
   }
   // Whether a chat shows link previews: its own choice, else its account's,
   // else every account's.
   [[nodiscard]] bool previews_shown(const conversation_id& chat) {
-    if (const auto own = this->own_or_space<&chat_choices::previews>(chat))
-      return *own;
-    if (const auto* account = this->settings_of(chat.account.address))
-      if (const auto& chosen = mux::config::link_previews_of(*account))
-        return *chosen;
-    return this->history().link_previews;
+    return this->reads().previews_shown(chat);
   }
   // Whether a chat's link previews come from the sites themselves: its own
   // choice, its space's, its account's, else every account's.
   [[nodiscard]] bool previews_direct(const conversation_id& chat) {
-    if (const auto own = this->own_or_space<&chat_choices::previews_direct>(chat))
-      return *own;
-    if (const auto* account = this->settings_of(chat.account.address))
-      if (const auto& chosen = mux::config::previews_direct_of(*account))
-        return *chosen;
-    return this->history().previews_direct.value_or(false);
+    return this->reads().previews_direct(chat);
   }
   // Whether others in a chat are told one is typing: its own choice, its
   // space's, its account's, else every account's.
   [[nodiscard]] bool typing_sent(const conversation_id& chat) {
-    if (const auto own = this->own_or_space<&chat_choices::typing>(chat))
-      return *own;
-    if (const auto* account = this->settings_of(chat.account.address))
-      if (const auto& chosen = mux::config::send_typing_of(*account))
-        return *chosen;
-    return this->history().send_typing.value_or(true);
+    return this->reads().typing_sent(chat);
   }
   [[nodiscard]] bool receipts_shown(const conversation_id& chat) {
-    if (const auto own = this->own_or_space<&chat_choices::receipts>(chat))
-      return *own;
-    if (const auto* account = this->settings_of(chat.account.address))
-      if (const auto& chosen = mux::config::show_receipts_of(*account))
-        return *chosen;
-    return this->history().show_receipts;
+    return this->reads().receipts_shown(chat);
   }
   // Whether a chat shows what is done in it: its own choice, else its
   // account's, else every account's.
   [[nodiscard]] bool room_events_shown(const conversation_id& chat) {
-    if (const auto own = this->own_or_space<&chat_choices::room_events>(chat))
-      return *own;
-    if (const auto* account = this->settings_of(chat.account.address))
-      if (const auto& chosen = mux::config::room_events_of(*account))
-        return *chosen;
-    return this->history().show_room_events;
+    return this->reads().room_events_shown(chat);
   }
 
   // What a message coming to a chat notifies with: nothing where the chat
@@ -435,12 +363,7 @@ struct kept_settings {
   // Which room events a chat shows, kind by kind: its own choices, its
   // account's, every account's.
   [[nodiscard]] mux::room_event_filter room_event_filter_of(const conversation_id& chat) {
-    const mux::config::account_t* account = this->settings_of(chat.account.address);
-    return mux::logic::filter_of(
-        this->own_or_space<&chat_choices::room_event_kinds>(chat), this->own_or_space<&chat_choices::room_events>(chat),
-        account ? mux::config::room_event_kinds_of(*account) : std::nullopt,
-        account ? mux::config::room_events_of(*account) : std::nullopt, this->history().room_event_kinds,
-        this->history().show_room_events);
+    return this->reads().room_event_filter_of(chat);
   }
 
   // The file as all of this says it.

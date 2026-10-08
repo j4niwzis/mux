@@ -33,51 +33,17 @@ void app::note_spaces() {
             space_above.try_emplace(mux::conversation_id{one.id.account, child}, one.id);
 }
 
-// The chats muted, and those listed in other accounts' lists with their
-// strips: each its own colour, else its account's; shown as it says, else
-// as its account.
+// What the chat list's menus offer: the account shown, the theme, and the
+// accounts there are to move a chat to.
 void app::show_placements() {
   {
     auto& screen = root().main();
-    screen.listed_in.clear();
-    screen.moved_out.clear();
-    screen.strips.clear();
-    for (const mux::config::chat_placement& one : this->placements()) {
-      const mux::conversation_id chat{{mux::ui::protocol_of(one.account), one.account}, one.conversation};
-      const mux::account_id to{mux::ui::protocol_of(one.listed_in), one.listed_in};
-      screen.listed_in[to].push_back(chat);
-      if (one.moved)
-        screen.moved_out.insert(chat);
-      const auto* own = this->settings_of(one.account);
-      const bool on = one.strip.value_or(own == nullptr || mux::config::strip_of(*own));
-      if (!on)
-        continue;
-      const mux::config::accent_t colour = one.strip_colour ? mux::config::accent_of(one.strip_colour)
-                                           : own != nullptr ? mux::config::colour_of(*own)
-                                                                : mux::config::default_colour_of(one.account);
-      screen.strips.insert_or_assign(chat, mux::ui::colour_of(colour, this->appearance().theme));
-    }
     screen.side.current_account = screen.current;
     screen.side.theme_now = this->appearance().theme;
     screen.side.accounts_known.clear();
     for (const auto& [id, account] : model->accounts())
       screen.side.accounts_known.push_back(id);
   }
-}
-
-// Which chats show what is done in them, as the settings say now. In an
-// encrypted room, who joins and who is invited is always shown: each of
-// them is given the room's key, and the server could put anyone there --
-// the one thing to see before writing on.
-void app::show_event_filters() {
-  root().main().event_filters =
-      std::ranges::to<std::remove_cvref_t<decltype(root().main().event_filters)>>(std::views::transform(this->all_chats(), [this](const mux::conversation& one) {
-        auto filter = this->room_event_filter_of(one.id);
-        if (one.encrypted)
-          for (const mux::room_event_t kind : {mux::room_event_t{mux::room_event::joins{}}, mux::room_event_t{mux::room_event::invites{}}})
-            filter.shown[kind.index()] = true;
-        return std::pair{one.id, filter};
-      }));
 }
 
 // The chosen chat's bubbles and the panels' look, as its levels say.
@@ -139,17 +105,6 @@ void app::show_backgrounds() {
   // Behind the whole window, where it is so: the chat's, else every chat's.
   root().show_behind(root().main().chosen ? root().main().wallpaper
                                           : this->appearance().wallpaper.value_or(mux::config::wallpaper_t{mux::config::wallpaper::theme{}}));
-}
-
-// Which chats show who has read up to where, which show no link previews,
-// and how far a jump's search pages back in each.
-void app::show_chat_choices() {
-  auto& screen = root().main();
-  screen.receipts_in = std::ranges::to<std::remove_cvref_t<decltype(screen.receipts_in)>>(std::views::transform(std::views::filter(this->all_chats(), [this](const mux::conversation& one) { return this->receipts_shown(one.id); }), &mux::conversation::id));
-  screen.previews_off = std::ranges::to<std::remove_cvref_t<decltype(screen.previews_off)>>(std::views::transform(std::views::filter(this->all_chats(), [this](const mux::conversation& one) { return !this->previews_shown(one.id); }), &mux::conversation::id));
-  screen.jump_limits = std::ranges::to<std::remove_cvref_t<decltype(screen.jump_limits)>>(std::views::transform(this->all_chats(), [this](const mux::conversation& one) {
-                         return std::pair{one.id, this->jump_search_of(one.id)};
-                       }));
 }
 
 }  // namespace mux::app

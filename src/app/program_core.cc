@@ -466,11 +466,9 @@ void app::refresh(std::source_location from) {
   }
   this->note_spaces();
   this->show_placements();
-  this->show_event_filters();
   this->show_looks_now();
   this->show_levels();
   this->show_backgrounds();
-  this->show_chat_choices();
   root().show(this->accounts().values(), *model);
   // The chat screen, as the chats binding reads it: against everything the
   // model holds beside the chats, and shown again whether or not they moved.

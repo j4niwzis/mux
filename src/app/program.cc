@@ -231,11 +231,9 @@ struct app : kept_settings {
   // Each thing the window shows of the settings, brought up to date.
   void note_spaces();
   void show_placements();
-  void show_event_filters();
   void show_looks_now();
   void show_levels();
   void show_backgrounds();
-  void show_chat_choices();
   // Every chat of every account.
   [[nodiscard]] auto all_chats() const {
     return std::views::values(std::views::join(std::views::transform(std::views::values(model->accounts()), [](const auto& account) -> const auto& { return account.conversations; })));

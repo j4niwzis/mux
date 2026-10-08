@@ -1396,19 +1396,70 @@ struct conversations_screen : nodes::Stack, outbox {
   // Read by the window's binding: what the settings say of the chats --
   // which are muted, which shown as forums or out of Home -- and how the
   // spaces show; the screen shown again where any of it moved.
+  // What is kept, as the window's binding last read it: what each chat's
+  // settings come to is read from it, with the chats, at every show.
+  const kept_root* kept_ = nullptr;
+  // Each chat's settings as they come to now -- its own, its space's, its
+  // account's, every chat's: which room events it shows (in an encrypted
+  // room, who joins and who is invited always: each is given the room's
+  // key, and the server could put anyone there -- the one thing to see
+  // before writing), whether it shows receipts and link previews, how far
+  // a jump's search pages back.
+  void read_chat_settings(const model& now) {
+    if (kept_ == nullptr)
+      return;
+    const auto space = space_above_of(now.accounts());
+    const chat_settings reads{kept_, &space};
+    const auto all = [&] {
+      return now.accounts().values() | std::views::transform([](const account& one) { return one.conversations.values(); }) | std::views::join;
+    };
+    event_filters = all() | std::views::transform([&](const conversation& one) {
+                      room_event_filter filter = reads.room_event_filter_of(one.id);
+                      if (one.encrypted)
+                        std::ranges::for_each(std::array{room_event_t{room_event::joins{}}, room_event_t{room_event::invites{}}},
+                                              [&](const room_event_t& kind) { filter.shown[kind.index()] = true; });
+                      return std::pair{one.id, filter};
+                    }) |
+                    std::ranges::to<std::map>();
+    receipts_in = all() | std::views::filter([&](const conversation& one) { return reads.receipts_shown(one.id); }) |
+                  std::views::transform(&conversation::id) | std::ranges::to<std::set>();
+    previews_off = all() | std::views::filter([&](const conversation& one) { return !reads.previews_shown(one.id); }) |
+                   std::views::transform(&conversation::id) | std::ranges::to<std::set>();
+    jump_limits = all() | std::views::transform([&](const conversation& one) { return std::pair{one.id, reads.jump_search_of(one.id)}; }) |
+                  std::ranges::to<std::map>();
+  }
   template <class Reactions>
   void refresh(const skiff::model::Model<kept_root, Reactions>& kept) {
     const kept_root& root = kept.root();
+    kept_ = &root;
     const auto& looks = root.looks.fValue;
     const config::account_t* own = current ? account_settings(root, current->address) : nullptr;
     const auto own_or = [&](const std::optional<bool>& theirs, bool everyone) { return theirs.value_or(everyone); };
-    auto now = std::tuple{chats_where<&config::chat_choices::muted>(root), chats_where<&config::chat_choices::forum>(root),
+    // The chats listed in other accounts' lists, each with its strip: its
+    // own colour, else its account's; shown as it says, else as its account.
+    std::map<account_id, std::vector<conversation_id>> listed_now;
+    std::set<conversation_id> moved_now;
+    std::map<conversation_id, skia::SkColor> strips_now;
+    std::ranges::for_each(root.placements.fValue, [&](const config::chat_placement& one) {
+      const conversation_id chat{{protocol_of(one.account), one.account}, one.conversation};
+      listed_now[account_id{protocol_of(one.listed_in), one.listed_in}].push_back(chat);
+      if (one.moved)
+        moved_now.insert(chat);
+      const config::account_t* theirs = account_settings(root, one.account);
+      if (!one.strip.value_or(theirs == nullptr || config::strip_of(*theirs)))
+        return;
+      const config::accent_t colour = one.strip_colour ? config::accent_of(one.strip_colour)
+                                      : theirs != nullptr ? config::colour_of(*theirs)
+                                                          : config::default_colour_of(one.account);
+      strips_now.insert_or_assign(chat, colour_of(colour, looks.theme));
+    });
+    auto now = std::tuple{std::move(listed_now), std::move(moved_now), std::move(strips_now), chats_where<&config::chat_choices::muted>(root), chats_where<&config::chat_choices::forum>(root),
                           chats_where<&config::chat_choices::hidden_from_home>(root), looks.spaces, looks.top_bar, looks.space_places,
                           own ? own_or(config::home_hides_of(*own), looks.home_hides_spaced) : looks.home_hides_spaced,
                           own ? own_or(config::home_direct_of(*own), looks.home_hides_direct) : looks.home_hides_direct};
-    auto was = std::tie(muted, forums, hidden_from_home, spaces_on, top_bar_on, space_places, home_hides_spaced, home_hides_direct);
-    if (was == now)
-      return;
+    auto was = std::tie(listed_in, moved_out, strips, muted, forums, hidden_from_home, spaces_on, top_bar_on, space_places, home_hides_spaced, home_hides_direct);
+    // The chats' own settings may have moved with anything kept: shown
+    // again whenever the binding reads it.
     was = std::move(now);
     if (last_model)
       this->show(*last_model);

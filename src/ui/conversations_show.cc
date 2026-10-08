@@ -826,6 +826,7 @@ void conversations_screen<Actions>::show_rows(const model& now) {
 template <class Actions>
 void conversations_screen<Actions>::show(const model& now, bool with_chat) {
   last_model = &now;
+  this->read_chat_settings(now);
   // Files attached where the chat's account sends them, and its protocol
   // allows it now: no paperclip otherwise, in the chat or its thread.
   if (chosen) {

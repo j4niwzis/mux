@@ -28,14 +28,14 @@ class manage_part {
 
   // The room's management: made from what the model knows of it now.
   void apply(const request::open_manage&) {
-    (void)s_->root().main().close_space_menu();  // the chat menu its Settings came from
+    s_->root().main().close_space_menu_soon();  // the chat menu its Settings came from
     s_->manage_target.reset();
     if (const auto chosen = s_->root().main().chosen)
       this->manage_chat(*chosen);
   }
   // A space's settings: Manage, for it.
   void apply(const request::manage_space& one) {
-    (void)s_->root().main().close_space_menu();
+    s_->root().main().close_space_menu_soon();
     const auto by = s_->root().main().current;
     if (!by)
       return;

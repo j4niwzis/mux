@@ -870,6 +870,8 @@ struct conversations_screen : nodes::Stack {
     side.close_menu();
     return true;
   }
+  // The menu the program acted on, closed at the next frame.
+  void close_space_menu_soon() { side.close_menu_soon(); }
 
   // The chat list as wide as `x`, where its edge was dragged to.
   void resize_sidebar(float x) {

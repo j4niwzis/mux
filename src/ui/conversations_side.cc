@@ -727,6 +727,12 @@ struct side_column : nodes::Stack {
     this->invalidateLayout();
     this->markDamaged();
   }
+  // Closed at the next frame, not now: the program asks it as it does what
+  // was chosen in it, while the press that chose is still being answered.
+  void close_menu_soon() {
+    menu_close_due = this->menu_up();
+    this->markDamaged();
+  }
   [[nodiscard]] bool menu_up() const { return parts.menu || parts.row_menu; }
   [[nodiscard]] bool menu_has(float x, float y) const {
     return (parts.menu && parts.menu->bounds().contains(x, y)) || (parts.row_menu && parts.row_menu->bounds().contains(x, y));
@@ -875,11 +881,8 @@ struct side_column : nodes::Stack {
       if (!fly.moving())
         this->land();
     }
-    if (std::exchange(menu_close_due, false) && parts.menu) {
-      parts.menu.reset();
-      this->invalidateLayout();
-      this->markDamaged();
-    }
+    if (std::exchange(menu_close_due, false))
+      this->close_menu();
   }
   // Its own width, as far as the window has room for it.
   void measure(const skia::SkRect& parent) {

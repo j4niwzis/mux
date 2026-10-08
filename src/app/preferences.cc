@@ -113,7 +113,7 @@ class preferences_part {
     s_->refresh_due = true;
   }
   void apply(const request::place_chat& one) {
-    (void)s_->root().main().close_space_menu();
+    s_->root().main().close_space_menu_soon();
     if (one.to == one.chat.account)
       return;
     // Moved: out of every other list it was moved to, into this one.
@@ -132,7 +132,7 @@ class preferences_part {
     s_->refresh_due = true;
   }
   void apply(const request::unplace_chat& one) {
-    (void)s_->root().main().close_space_menu();
+    s_->root().main().close_space_menu_soon();
     k_->change_part<std::vector<mux::config::chat_placement>>([&](auto& all) {
       std::erase_if(all, [&](const mux::config::chat_placement& each) {
         return each.account == one.chat.account.address && each.conversation == one.chat.id && each.listed_in == one.from.address;
@@ -142,7 +142,7 @@ class preferences_part {
     s_->refresh_due = true;
   }
   void apply(const request::flip_chat_strip& one) {
-    (void)s_->root().main().close_space_menu();
+    s_->root().main().close_space_menu_soon();
     const auto* own = k_->settings_of(one.chat.account.address);
     k_->change_part<std::vector<mux::config::chat_placement>>([&](auto& all) {
       if (auto* kept = placement_in(all, one.chat, one.in))
@@ -151,7 +151,7 @@ class preferences_part {
     s_->refresh_due = true;
   }
   void apply(const request::set_chat_strip_colour& one) {
-    (void)s_->root().main().close_space_menu();
+    s_->root().main().close_space_menu_soon();
     k_->change_part<std::vector<mux::config::chat_placement>>([&](auto& all) {
       if (auto* kept = placement_in(all, one.chat, one.in)) {
         kept->strip_colour = mux::config::said_of<mux::config::accent_said_t>(one.colour);
@@ -217,7 +217,7 @@ class preferences_part {
   }
   // An item's bars, as chosen: the side, the top, both, or none -- hidden.
   void apply(const request::set_space_bars& one) {
-    (void)s_->root().main().close_space_menu();
+    s_->root().main().close_space_menu_soon();
     auto places = k_->appearance().space_places;
     std::erase_if(places, [&](const mux::config::space_placed& p) { return p.account == one.account && p.item == one.item; });
     if (one.side)

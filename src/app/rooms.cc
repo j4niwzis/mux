@@ -102,7 +102,7 @@ class rooms_part {
   void apply(const request::close_explore&) { mux::ui::show<mux::ui::explore_facts>(*s_->showing, std::nullopt); }
   // A space's rooms and spaces, in Explore: asked of its account.
   void apply(const request::explore_space& one) {
-    (void)s_->root().main().close_space_menu();
+    s_->root().main().close_space_menu_soon();
     const auto by = s_->root().main().current;
     if (!by || s_->demo())
       return;

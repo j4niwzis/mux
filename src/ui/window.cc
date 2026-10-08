@@ -58,6 +58,7 @@ struct shown_root {
   skiff::model::Tracked<std::optional<room_settings_facts>> manage;
   skiff::model::Tracked<std::optional<send_facts>> sending;
   skiff::model::Tracked<std::optional<verification_view>> verifying;
+  skiff::model::Tracked<std::optional<proto::passphrase_for_t>> passphrase;
 };
 struct shown_reactions {};
 using shown_model = skiff::model::Model<shown_root, shown_reactions>;
@@ -75,11 +76,21 @@ struct shown_dialog : widgets::Dialog<Content, widgets::dismiss::pressed> {
   const Needs* needs = nullptr;
   explicit shown_dialog(const Needs* handed) : needs(handed) {}
   void read(const std::optional<Facts>& now) {
-    if (now)
+    if (now) {
+      this->dismissable_for(*now);
       (void)this->open(*needs, *now);
-    else
+    } else {
       this->close();
+    }
   }
+  // Whether a press off it or Esc dismisses it, where what it shows says so
+  // of these facts; else as its look says.
+  void dismissable_for(const Facts& facts)
+    requires requires { Content::dismissable(facts); }
+  {
+    this->setDismissable(Content::dismissable(facts));
+  }
+  void dismissable_for(const Facts&) {}
   auto onPress() { return skiff::bind::own(skiff::model::setTo(std::optional<Facts>{})); }
 };
 
@@ -263,7 +274,7 @@ struct window : scene::Node {
       shown_in<send_box<Actions>, send_facts> sending;
       // A passphrase asked for: at the start, where local data is encrypted;
       // or to turn that on or off, or change it. Over everything.
-      widgets::Dialog<passphrase_box<Actions>> passphrase;
+      shown_in<passphrase_box<Actions>, proto::passphrase_for_t> passphrase;
       // An emoji verification, as it goes.
       shown_in<verification_box<Actions>, verification_view> verifying;
       std::optional<emoji_popup<Actions>> emoji;
@@ -473,6 +484,7 @@ struct window : scene::Node {
                 .wallpaper = shown_made<wallpaper_box<Actions>, wallpaper_facts>(n),
                 .explore = shown_made<explore_box<Actions>, explore_facts>(n),
                 .sending = shown_made<send_box<Actions>, send_facts>(n),
+                .passphrase = shown_made<passphrase_box<Actions>, proto::passphrase_for_t>(n),
                 .verifying = shown_made<verification_box<Actions>, verification_view>(n)} {
       auto& [backdrop, behind, frame, ...over] = parts;
       fState.apply({.fill = true});
@@ -744,18 +756,10 @@ struct window : scene::Node {
   // The menu's card, where one is up: what takes the keys while it is.
   [[nodiscard]] scene::Node* menu_card() { return layer().menu ? &layer().menu->parts.menu : nullptr; }
 
-  // A passphrase asked for: the one at the start is not dismissed.
-  void ask_passphrase(proto::passphrase_for_t why) {
-    auto& dialog = layer().passphrase;
-    dialog.setDismissable(spl::visit(
-        spl::overloaded{[](config::passphrase_for::unlock) { return false; }, [](const auto&) { return true; }}, why));
-    dialog.open(needs_, why);
-  }
   void passphrase_refused(std::string why) {
     if (auto* box = layer().passphrase.shown())
       box->say(std::move(why));
   }
-  void close_passphrase() { layer().passphrase.close(); }
 
   void show_found_people(const std::vector<found_person>& people, const std::string& query) {
     if (auto* up = layer().new_chat.shown())

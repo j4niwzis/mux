@@ -31,7 +31,7 @@ class local_data_part {
   void lock(std::vector<mux::config::account_t> extra, bool demo) {
     waiting_extra_ = std::move(extra);
     waiting_demo_ = demo;
-    s_->root().ask_passphrase(mux::config::passphrase_for::unlock{});
+    mux::ui::show<mux::proto::passphrase_for_t>(*s_->showing, mux::config::passphrase_for::unlock{});
   }
   // What the start does once local data is open: the settings read, and
   // what it waited with.
@@ -53,7 +53,7 @@ class local_data_part {
     if (vault.resealing() && !this->reseal([](mux::vault::vault&) {}))
       s_->notice("Local data", "Re-sealing what is kept, begun before, could not be finished. It is "
                                             "tried again at the next start; everything stays readable.");
-    s_->root().close_passphrase();
+    mux::ui::show<mux::proto::passphrase_for_t>(*s_->showing, std::nullopt);
     opened out{.extra = std::move(waiting_extra_), .demo = waiting_demo_};
     if (auto loaded = mux::config::load(k_->config_path, vault))
       out.saved = std::move(*loaded);
@@ -93,16 +93,16 @@ class local_data_part {
   // From Storage: on asks for a new passphrase, off for the one now.
   void apply(const request::flip_local_encryption&) {
     if (s_->vault->on())
-      s_->root().ask_passphrase(mux::config::passphrase_for::decrypt{});
+      mux::ui::show<mux::proto::passphrase_for_t>(*s_->showing, mux::config::passphrase_for::decrypt{});
     else
-      s_->root().ask_passphrase(mux::config::passphrase_for::encrypt{});
+      mux::ui::show<mux::proto::passphrase_for_t>(*s_->showing, mux::config::passphrase_for::encrypt{});
   }
-  void apply(const request::change_passphrase&) { s_->root().ask_passphrase(mux::config::passphrase_for::change{}); }
+  void apply(const request::change_passphrase&) { mux::ui::show<mux::proto::passphrase_for_t>(*s_->showing, mux::config::passphrase_for::change{}); }
 
  private:
   // The passphrase asked for done: its dialog closed, Storage showing it.
   void done() {
-    s_->root().close_passphrase();
+    mux::ui::show<mux::proto::passphrase_for_t>(*s_->showing, std::nullopt);
     if (auto* up = s_->root().settings_up())
       if (auto* page = up->storage())
         page->show_sealed(s_->vault->on());

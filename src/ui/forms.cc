@@ -160,6 +160,11 @@ struct passphrase_box : nodes::Stack {
   } parts;
 
   passphrase_box(const ui_needs<Actions>& n, proto::passphrase_for_t why) : passphrase_box(*n.colours, why) {}
+  // Not dismissed where it is asked at the start: the local data is locked
+  // until it is given.
+  [[nodiscard]] static bool dismissable(const proto::passphrase_for_t& why) {
+    return spl::visit(spl::overloaded{[](config::passphrase_for::unlock) { return false; }, [](const auto&) { return true; }}, why);
+  }
   passphrase_box(const palette& colours, proto::passphrase_for_t why)
       : purpose(why),
         parts{.title = nodes::Text(std::string(said().title), 17.0f, colours.text, true),

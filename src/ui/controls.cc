@@ -435,10 +435,18 @@ struct choice_menu : nodes::Stack {
     for (std::size_t i = 0; i < parts.options.size(); ++i)
       if (parts.options[i].visible() && parts.options[i].bounds().contains(x, y)) {
         this->show_options(false);
-        choose(i);
+        picked = i;
+        act_on(fState, choose, i);
         return true;
       }
     return false;
+  }
+  // The option pressed last, and what its act answers with it.
+  std::size_t picked = 0;
+  auto onPress()
+    requires skiff::scene::Answering<Choose>
+  {
+    return choose(picked);
   }
 };
 
@@ -446,13 +454,15 @@ struct choice_menu : nodes::Stack {
 // with where it is: the side bar, the top one, both, or hidden.
 template <class Actions>
 struct spaces_choices : nodes::Stack {
-  struct pick_bars : outbox {
+  struct pick_bars {
+    using Answer = std::optional<::mux::ui::request::set_space_bars>;
     std::string account;
     config::space_item_t item;
-    void operator()(std::size_t index) {
+    std::optional<::mux::ui::request::set_space_bars> operator()(std::size_t index) {
       static constexpr std::array<std::pair<bool, bool>, 4> kWays{{{true, false}, {false, true}, {true, true}, {false, false}}};
       if (index < kWays.size())
-        this->emit(::mux::ui::request::set_space_bars{account, item, kWays[index].first, kWays[index].second});
+        return ::mux::ui::request::set_space_bars{account, item, kWays[index].first, kWays[index].second};
+      return std::nullopt;
     }
   };
   struct row : nodes::Stack {
@@ -467,7 +477,7 @@ struct spaces_choices : nodes::Stack {
                                                 : one.top && !one.side ? 1
                                                 : one.side && one.top  ? 2
                                                                        : 3,
-                                                pick_bars{{}, account, one.item})} {
+                                                pick_bars{account, one.item})} {
       this->setGap(4.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 20.0f, 4.0f, 20.0f}});
     }

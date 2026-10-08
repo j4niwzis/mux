@@ -126,7 +126,7 @@ struct person_card : nodes::Stack {
               .face = cover(colours, key, facts),
               .band = section_band(colours),
               .id = id_line(colours, key, ""),
-              .message = action_tile<message_them>(colours, "Message", icon::send{}, {{}, conversation_id{account, key}}),
+              .message = action_tile<message_them>(colours, "Message", icon::send{}, {conversation_id{account, key}}),
               .verify = action_tile<verify_them>(colours, "Verify with emoji", icon::check{}, {{}, conversation_id{account, key}}),
               .accept = action_tile<accept_them>(colours, "Withdraw verification", icon::close{}, {conversation_id{account, key}}),
               .remove = action_tile<to_them>(colours, "Remove from room", icon::leave{}, {{}, room_action::kick{key}}),

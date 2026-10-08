@@ -427,8 +427,9 @@ struct selection_bar : nodes::Stack, outbox {
 // 12"), the arrows to the newer and the older, and ✕. Enter goes to the
 // older one, Shift+Enter to the newer, Esc closes.
 template <class Actions>
-struct search_typed : outbox {
-  void operator()(std::string_view text) { this->emit(::mux::ui::request::search_typed{std::string(text)}); }
+struct search_typed {
+  using Answer = std::optional<::mux::ui::request::search_typed>;
+  std::optional<::mux::ui::request::search_typed> operator()(std::string_view text) { return ::mux::ui::request::search_typed{std::string(text)}; }
 };
 template <class Actions>
 struct search_step {

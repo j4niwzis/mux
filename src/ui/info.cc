@@ -99,11 +99,13 @@ struct info_panel : nodes::Stack, outbox {
     info_panel* panel;
     void operator()() const { panel->close_member(); }
   };
-  struct message_them : outbox {
+  struct message_them {
+    using Answer = std::optional<::mux::ui::request::message_person>;
     info_panel* panel;
-    void operator()() {
+    std::optional<::mux::ui::request::message_person> operator()() {
       if (panel->person)
-        this->emit(::mux::ui::request::message_person{conversation_id{panel->account, *panel->person}});
+        return ::mux::ui::request::message_person{conversation_id{panel->account, *panel->person}};
+      return std::nullopt;
     }
   };
 
@@ -174,7 +176,7 @@ struct info_panel : nodes::Stack, outbox {
         action_tile<message_them> message;
       } parts;
       person_row(info_panel* panel)
-          : parts{.message = action_tile<message_them>(*panel->colours_, "Message", icon::send{}, {{}, panel})} {
+          : parts{.message = action_tile<message_them>(*panel->colours_, "Message", icon::send{}, {panel})} {
         this->setHorizontal();
         fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}});
         parts.message.apply({.grow = scene::axes::kX});

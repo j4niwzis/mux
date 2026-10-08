@@ -433,13 +433,14 @@ struct side_column : nodes::Stack, outbox {
     ::mux::ui::request::open_leave_space operator()() { return ::mux::ui::request::open_leave_space{conversation_id{account_id{protocol_of(account), account}, room}}; }
   };
   // A room, or a space, made in it -- Element's Add room and Add space.
-  struct create_in_act : outbox {
+  struct create_in_act {
+    using Answer = std::optional<::mux::ui::request::open_new_room_in>;
     std::string account;
     std::string room;
     std::string name;
     bool make_space = false;
-    void operator()() {
-      this->emit(::mux::ui::request::open_new_room_in{conversation_id{account_id{protocol_of(account), account}, room}, name, make_space});
+    std::optional<::mux::ui::request::open_new_room_in> operator()() {
+      return ::mux::ui::request::open_new_room_in{conversation_id{account_id{protocol_of(account), account}, room}, name, make_space};
     }
   };
   // The column's menus' look: a card over the rest, 190 wide.
@@ -542,8 +543,8 @@ struct side_column : nodes::Stack, outbox {
         : parts{.title = nodes::Text(name, 13.0f, colours.dim, true),
                 .explore = widgets::Button<explore_act>(colours.widgets, "Explore its rooms\u2026", {room_of(item)}),
                 .manage = widgets::Button<manage_act>(colours.widgets, "Space settings\u2026", {room_of(item)}),
-                .add_room = widgets::Button<create_in_act>(colours.widgets, "Create a room in it\u2026", {{}, account, room_of(item), name, false}),
-                .add_space = widgets::Button<create_in_act>(colours.widgets, "Create a space in it\u2026", {{}, account, room_of(item), name, true}),
+                .add_room = widgets::Button<create_in_act>(colours.widgets, "Create a room in it\u2026", {account, room_of(item), name, false}),
+                .add_space = widgets::Button<create_in_act>(colours.widgets, "Create a space in it\u2026", {account, room_of(item), name, true}),
                 .leave = widgets::Button<leave_act>(colours.widgets, "Leave space\u2026", {account, room_of(item)}),
                 .side = widgets::Button<set_bars_act>(colours.widgets, "Side bar only", {account, item, true, false}),
                 .top = widgets::Button<set_bars_act>(colours.widgets, "Top bar only", {account, item, false, true}),

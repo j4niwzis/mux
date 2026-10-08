@@ -108,11 +108,13 @@ struct call_buttons : nodes::Stack {
     ::mux::ui::request::hang_up operator()() { return ::mux::ui::request::hang_up{}; }
   };
   // Over: called again, as Element's Call back; or put away.
-  struct call_back_it : outbox {
+  struct call_back_it {
+    using Answer = std::optional<::mux::ui::request::start_call>;
     call_buttons* buttons;
-    void operator()() {
+    std::optional<::mux::ui::request::start_call> operator()() {
       if (buttons->in_)
-        this->emit(::mux::ui::request::start_call{*buttons->in_});
+        return ::mux::ui::request::start_call{*buttons->in_};
+      return std::nullopt;
     }
   };
   struct dismiss_it {
@@ -139,7 +141,7 @@ struct call_buttons : nodes::Stack {
               .decline = icon_button<decline_it>(colours, icon::hang_up{}, {}),
               .hang_up = icon_button<hang_up_it>(colours, icon::hang_up{}, {}),
               .accept = icon_button<accept_it>(colours, icon::phone{}, {}),
-              .call_back = icon_button<call_back_it>(colours, icon::phone{}, {{}, this}),
+              .call_back = icon_button<call_back_it>(colours, icon::phone{}, {this}),
               .dismiss = icon_button<dismiss_it>(colours, icon::close{}, {})},
         colours_(&colours) {
     this->setHorizontal();

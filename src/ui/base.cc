@@ -224,17 +224,18 @@ inline std::vector<std::pair<std::string, std::string>>& listed_avatars() {
 // Whether files may be sent into an account's chats: where its account
 // sends them, and its protocol allows it now.
 [[nodiscard]] inline bool may_send_files(const ui_shared& shared, const account_id& of);
-// An act done where a node is pressed: one that answers, said pressed --
-// its answer asked as the press is delivered (the node's onPress()); else
+// An act done where a node is pressed, with what was picked if anything: one
+// that answers, said pressed -- its answer asked as the press is delivered
+// (the node's onPress(), from what the node keeps of the press); else
 // called at once.
-template <class Act>
+template <class Act, class... Given>
   requires skiff::scene::Answering<Act>
-void act_on(scene::State& pressed, Act&) {
+void act_on(scene::State& pressed, Act&, Given&&...) {
   skiff::scene::pressLater(pressed);
 }
-template <class Act>
-void act_on(scene::State&, Act& act) {
-  act();
+template <class Act, class... Given>
+void act_on(scene::State&, Act& act, Given&&... given) {
+  act(std::forward<Given>(given)...);
 }
 // A node a press acts on -- a row, a tile, a tab: it takes the pointer, is
 // lit under it, and a click calls its act -- or, where the act answers,

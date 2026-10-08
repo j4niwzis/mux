@@ -674,8 +674,23 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
   }
 
   // One of the chosen account's pages beside the list, brought up afresh.
+  // A page that asks the program for something as it opens (its sessions,
+  // the server's) says so: what it asks given to `asked`.
+  template <class Page, class Asked>
+    requires requires(Page& p) { p.asked_as_it_opens(); }
+  static void opened(Page& page, Asked& asked) {
+    asked(page.asked_as_it_opens());
+  }
+  template <class Page, class Asked>
+  static void opened(Page&, Asked&) {}
   void show_page(const account_page_t& page, const config::account_t& one, const model& now,
                  const std::vector<config::proxy_settings>& proxies = {}, const config::theme_t& theme = config::theme_t{}) {
+    const auto nothing = [](const auto&) {};
+    this->show_page(page, one, now, proxies, theme, nothing);
+  }
+  template <class Asked>
+  void show_page(const account_page_t& page, const config::account_t& one, const model& now,
+                 const std::vector<config::proxy_settings>& proxies, const config::theme_t& theme, const Asked& asked) {
     pages.light(page);
     this->show_detail(true);
     spl::visit(
@@ -708,8 +723,9 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
             [&](account_page::proxy) { detail.template emplace<4>(*needs_.colours, proxies, config::proxy_of(one)); },
             // A protocol's own: its node, made for the program's actions.
             [&]<class Page>(Page) {
-              detail.template emplace<typename decltype(page_type(Page{}, type_tag<Actions>{}))::type>(*needs_.colours, *needs_.shared, one,
-                                                                                                                 now);
+              auto& made = detail.template emplace<typename decltype(page_type(Page{}, type_tag<Actions>{}))::type>(*needs_.colours,
+                                                                                                                       *needs_.shared, one, now);
+              opened(made, asked);
             }},
         page);
     this->fit_detail();

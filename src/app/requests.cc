@@ -40,6 +40,8 @@ struct actions {
   void take(const E& one) {
     requests.emplace_back(one);
   }
+  // A protocol's "nothing to ask": nothing.
+  void take(const mux::proto::part::no_request&) {}
 
   void choose(const mux::conversation_id& which) { requests.emplace_back(request::choose{which}); }
   void send(const mux::conversation_id& to, std::string text) {

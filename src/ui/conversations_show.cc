@@ -468,7 +468,7 @@ void conversations_screen<Actions>::update(double now_ms) {
       // Come with the context, but as an answer in a thread: kept with its
       // thread, never in the timeline -- paged back for, the whole chat was
       // fetched to the beginning and it was not found. Its thread opened.
-      this->emit(::mux::ui::request::open_thread{*held->thread});
+      if (wants_) want(*wants_, ::mux::ui::request::open_thread{*held->thread});
       this->stop_jump();
     } else if (proto::offers(protocol_state_of(*needs_.shared, chosen->account), proto::feature::history_context{}) && !jump_paging) {
       // Not here: a window of the history around it, from the server --
@@ -477,7 +477,7 @@ void conversations_screen<Actions>::update(double now_ms) {
       if (context_asked != jumping_to) {
         context_asked = jumping_to;
         jump_since_ms = now_ms;
-        this->emit(::mux::ui::request::load_context{*chosen, *jumping_to});
+        if (wants_) want(*wants_, ::mux::ui::request::load_context{*chosen, *jumping_to});
       } else if (now_ms - jump_since_ms > kContextPatienceMs) {
         jump_paging = true;
         jump_tries = 0;
@@ -494,7 +494,7 @@ void conversations_screen<Actions>::update(double now_ms) {
         history_asked = history_from;
         history_asked_ms = now_ms;
         jump_since_ms = now_ms;
-        this->emit(::mux::ui::request::load_older{*chosen, *history_from});
+        if (wants_) want(*wants_, ::mux::ui::request::load_older{*chosen, *history_from});
       }
     } else if (!history_from && now_ms - jump_since_ms > 2000.0) {
       jumping_to.reset();  // the beginning, and it was not there
@@ -567,7 +567,7 @@ void conversations_screen<Actions>::update(double now_ms) {
   if (const bool has_text = !line.text().empty(); has_text != was_typing || (has_text && line.text() != typed_last)) {
     was_typing = has_text;
     typed_last = line.text();
-    this->emit(::mux::ui::request::typing{has_text});
+    if (wants_) want(*wants_, ::mux::ui::request::typing{has_text});
   }
   if (side.search.field.text() != searched && last_model) {
     searched = side.search.field.text();
@@ -638,12 +638,12 @@ void conversations_screen<Actions>::update(double now_ms) {
       } else if (timeline.current() <= 4.0f && from == 0 && history_from && history_asked != history_from) {
         history_asked = history_from;
         history_asked_ms = now_ms;
-        this->emit(::mux::ui::request::load_older{*chosen, *history_from});
+        if (wants_) want(*wants_, ::mux::ui::request::load_older{*chosen, *history_from});
       } else if (made.to_end && one->detached && one->future_from && newer_asked != one->future_from &&
                  timeline.current() >= timeline.extent() - 300.0f) {
         // At the end of a window: paged forward, toward the newest.
         newer_asked = one->future_from;
-        this->emit(::mux::ui::request::load_newer{*chosen, *one->future_from});
+        if (wants_) want(*wants_, ::mux::ui::request::load_newer{*chosen, *one->future_from});
       } else if (!made.to_end && timeline.current() >= timeline.extent() - ahead) {
         to = std::min(one->timeline.size(), to + kMadeStep);
         from = to > kMostMade && to - from > kMostMade ? to - kMostMade : from;
@@ -920,7 +920,7 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
     rooms_elsewhere.clear();
     people_elsewhere.clear();
     rooms_came = people_came = false;
-    this->emit(::mux::ui::request::search_elsewhere{typed});
+    if (wants_) want(*wants_, ::mux::ui::request::search_elsewhere{typed});
     this->show_elsewhere();
   } else if (!elsewhere && !asked_elsewhere.empty()) {
     asked_elsewhere.clear();
@@ -953,7 +953,7 @@ void conversations_screen<Actions>::show_banners(const conversation* one, const 
     if (label.empty())
       button.reset();
     else {
-      button.emplace(needs_.colours->widgets, label, banner_press{{}, &chat.banner_asks});
+      button.emplace(needs_.colours->widgets, label, banner_press{&chat.banner_asks});
       button->apply({.width = 120.0f, .height = 30.0f, .alignSelf = scene::align::kEnd,
                      .margin = {4.0f, 14.0f, 6.0f, 14.0f}});
     }

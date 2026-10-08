@@ -45,7 +45,7 @@ using namespace ::mux::ui;
 }
 
 template <class Actions>
-struct account_sessions : nodes::Stack, outbox {
+struct account_sessions : nodes::Stack {
   // The colours it is made in, for the rows it makes later.
   const palette* colours_ = nullptr;
   struct sign_out_one {
@@ -209,8 +209,9 @@ struct account_sessions : nodes::Stack, outbox {
     parts.refresh.apply({.width = 100.0f, .height = 30.0f});
     for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.current_title, &parts.others_title})
       each->setVisible(false);
-    this->emit(request::refresh_sessions{});
   }
+  // Its sessions, asked of the server as it opens.
+  [[nodiscard]] static request::refresh_sessions asked_as_it_opens() { return {}; }
   // Element's Security, under Device verification: whether this session has
   // the cross-signing keys, and whether room keys are backed up.
   void show_security(bool cross_signing, bool backup) {

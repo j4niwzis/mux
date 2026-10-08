@@ -412,10 +412,9 @@ struct sends {
   E event{};
   E operator()() const { return event; }
 };
-// Whether an act sends its events: kept for the walk (fEmitted), or as the
-// answer to a press (scene::Answering).
+// Whether an act answers a press with what it asks for (scene::Answering).
 template <class Act>
-concept sending = requires(Act& a) { a.fEmitted; } || skiff::scene::Answering<Act>;
+concept sending = skiff::scene::Answering<Act>;
 
 
 // A skiff-widgets button or toggle for an act: the plain one where the act

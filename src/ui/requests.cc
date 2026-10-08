@@ -11,6 +11,7 @@ import mux.core;
 import mux.config;
 import mux.protocols;
 import skiff.bind;
+import skiff.model;
 
 export namespace mux::ui {
 
@@ -665,16 +666,39 @@ struct protocol_requests<mux::protocol_list<Tags...>> {
 // What the window asks: the client's requests, then each protocol's own.
 using request_t = typename variant_of_types<typename joined<type_list<request::choose, request::back, request::open_accounts, request::open_new_account, request::add_account_of, request::select_account, request::toggle_advanced, request::toggle_plain, request::submit_login, request::flip_enabled, request::remove_account, request::open_drawer, request::show_account, request::quit, request::open_settings, request::close_settings, request::settings_home, request::settings_animations, request::pop_panel, request::toggle_info, request::load_older, request::load_context, request::load_newer, request::jump_to_end, request::return_to_chat, request::menu_copy_image, request::copy_picture, request::message_menu, request::menu_copy_link, request::menu_copy_url, request::menu_fave_sticker, request::menu_save, request::react, request::menu_react, request::close_menu, request::menu_reply, request::menu_quote_reply, request::menu_edit, request::menu_copy, request::menu_delete, request::cancel_compose, request::retry_unsent, request::discard_unsent, request::open_url, request::switch_account, request::submit_message, request::send_typed, request::resize_sidebar, request::not_implemented, request::message_person, request::jump_to_message, request::open_search, request::edit_last, request::reply_step, request::close_search, request::search_typed, request::search_step, request::search_pick, request::open_member_info, request::reply_to, request::open_picture, request::open_avatar, request::close_picture, request::save_picture, request::open_video, request::stop_jump, request::press_loader, request::open_file, request::attach_files, request::close_send_box, request::send_files, request::settings_files, request::close_notice, request::close_person_info, request::close_room_card, request::join_room_card, request::knock_room_card, request::decline_room_card, request::jump_to_mark, request::list_marks, request::go_to_mark, request::close_marks, request::open_explore, request::close_explore, request::search_rooms, request::explore_space, request::manage_space, request::flip_forum, request::flip_home_hide, request::close_forum, request::manage_forum, request::join_directory_room, request::create_room, request::settings_notifications, request::give_passphrase, request::verify_person, request::verify_accept_now, request::verify_cancel_now, request::verify_match, request::verify_mismatch, request::close_verification, request::flip_local_encryption, request::change_passphrase, request::toggle_emoji, request::set_account_colour, request::flip_account_strip, request::open_replacement, request::place_chat, request::unplace_chat, request::flip_chat_strip, request::set_chat_strip_colour, request::attach_in_thread, request::toggle_thread_emoji, request::close_emoji, request::insert_emoji, request::menu_save_gif, request::menu_pin, request::menu_reactions, request::close_reactions, request::open_manage, request::close_manage, request::room_act, request::menu_forward, request::close_forward, request::forward_to, request::menu_view_source, request::menu_edit_history, request::close_edit_history, request::menu_select, request::toggle_selected, request::selection_forward, request::selection_copy, request::selection_delete, request::selection_cancel, request::close_dialog, request::open_new_chat, request::close_new_chat, request::find_people, request::search_elsewhere, request::open_new_room, request::open_leave_space, request::leave_space, request::close_leave_space, request::open_new_room_in, request::close_new_room, request::open_wallpaper, request::close_wallpaper, request::set_wallpaper, request::set_bubbles, request::toggle_threads, request::open_thread, request::close_thread, request::send_in_thread, request::menu_thread, request::open_packs, request::open_room_packs, request::close_packs, request::save_pack, request::delete_pack, request::pick_pack_images, request::copy_text, request::text_key, request::ask_link, request::set_link, request::close_link, request::start_call, request::dismiss_call, request::call_chosen, request::accept_call, request::decline_call, request::hang_up, request::mute_call, request::start_direct, request::start_group, request::flip_room_events, request::flip_account_room_events, request::flip_chat_room_events, request::show_gifs, request::send_gif, request::send_sticker, request::play_audio, request::resize_info, request::choose_new_proxy, request::toggle_mute, request::toggle_mute_of, request::close_account_pages, request::accounts_back, request::account_page, request::flip_account_receipts, request::flip_only_verified, request::accept_identity, request::typing, request::proxy_kind, request::choose_account_proxy, request::manage_proxies, request::settings_proxies, request::add_proxy, request::edit_proxy, request::save_proxy_profile, request::delete_proxy_profile, request::settings_appearance, request::settings_rendering, request::settings_storage, request::clear_stored, request::set_renderer, request::set_frost_blur, request::place_spaces, request::set_space_bars, request::set_home_hides, request::set_home_direct, request::leave_chat, request::close_chat, request::flip_account_mentions_shared, request::flip_account_mentions_sealed>, typename protocol_requests<mux::protocols>::type>::type>::type;
 
-// What a node or an act sent: kept until the walk that drains the window
-// takes it, the program taking those nothing in the window takes. Made
-// from the window's actions as it was, which it does not need.
-struct outbox {
-  std::vector<request_t> fEmitted;
-  template <class E>
-  void emit(E one) {
-    fEmitted.emplace_back(std::move(one));
-    ++skiff::bind::pendingCount();
+
+// What the window wants of the program as its state comes to want it, not
+// at any press: older history as the view nears the top, newer at the end
+// of a window, the context around a jump, a thread's answers, typing as the
+// field fills or empties, rooms elsewhere as a search finds nothing here.
+// Parts of a model of their own, set by the screen; a reaction to each makes
+// the program's work of it -- the program sets it back once it is done.
+struct window_wants {
+  skiff::model::Tracked<std::optional<request::load_older>> older;
+  skiff::model::Tracked<std::optional<request::load_newer>> newer;
+  skiff::model::Tracked<std::optional<request::load_context>> context;
+  skiff::model::Tracked<std::optional<request::open_thread>> thread;
+  skiff::model::Tracked<std::optional<request::typing>> typing;
+  skiff::model::Tracked<std::optional<request::search_elsewhere>> elsewhere;
+};
+struct window_wanting {
+  template <class R>
+  std::optional<R> on(skiff::model::Changed<std::optional<R>>, const std::optional<R>& now) const {
+    return now;
   }
 };
+using window_want_t = std::variant<request::load_older, request::load_newer, request::load_context, request::open_thread, request::typing,
+                                   request::search_elsewhere>;
+using wants_model = skiff::model::Model<window_wants, window_wanting, window_want_t>;
+// What the window comes to want, set: the program told by the reaction.
+template <class R>
+void want(wants_model& wants, R wanted) {
+  (void)wants.apply(skiff::model::edit(skiff::model::placeOf<std::optional<R>, window_wants>(), skiff::model::setTo(std::optional<R>(std::move(wanted)))));
+}
+// Done with: set back, so that the same want comes again as a change.
+template <class R>
+void wanted_done(wants_model& wants) {
+  (void)wants.apply(skiff::model::edit(skiff::model::placeOf<std::optional<R>, window_wants>(), skiff::model::setTo(std::optional<R>())));
+}
 
 }  // namespace mux::ui

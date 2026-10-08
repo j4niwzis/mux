@@ -69,7 +69,7 @@ constexpr auto composer_views_for(const State& state, type_tag<Actions> tag) {
 }
 
 template <class Actions>
-struct conversations_screen : nodes::Stack, outbox {
+struct conversations_screen : nodes::Stack {
   // What its keys and its swipes ask for.
   using Answer = std::variant<::mux::ui::request::toggle_threads, ::mux::ui::request::toggle_info, ::mux::ui::request::close_chat, ::mux::ui::request::choose, ::mux::ui::request::open_search, ::mux::ui::request::ask_link, ::mux::ui::request::reply_step, ::mux::ui::request::edit_last, ::mux::ui::request::selection_cancel, ::mux::ui::request::close_search, ::mux::ui::request::cancel_compose, ::mux::ui::request::jump_to_end, ::mux::ui::request::open_drawer, ::mux::ui::request::toggle_mute_of>;
   // What it was handed, for the rows it makes.
@@ -583,12 +583,11 @@ struct conversations_screen : nodes::Stack, outbox {
     ::mux::ui::request::jump_to_message operator()() const { return ::mux::ui::request::jump_to_message{id}; }
   };
   // A banner's button pressed: its protocol's request, asked.
-  struct banner_press : outbox {
+  struct banner_press {
+    // Its protocol's request, as the banner had it.
+    using Answer = std::optional<proto::any_request_t>;
     const std::optional<proto::any_request_t>* asks;
-    void operator()() {
-      if (*asks)
-        spl::visit(spl::overloaded{[](proto::part::no_request) {}, [&](const auto& one) { this->emit(one); }}, **asks);
-    }
+    Answer operator()() const { return *asks; }
   };
   // A node of the chat's protocol's own over the composer (a Telegram bot's
   // keyboard): listed by composer_views(state, type_tag<Actions>), made for
@@ -1113,6 +1112,8 @@ struct conversations_screen : nodes::Stack, outbox {
   bool rooms_came = false;
   bool people_came = false;
   const model* last_model = nullptr;
+  // What it wants of the program, as its state comes to want it.
+  wants_model* wants_ = nullptr;
 
   bool was_typing = false;
   std::string typed_last;

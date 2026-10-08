@@ -81,11 +81,10 @@ struct person_card : nodes::Stack {
     ::mux::ui::request::accept_identity operator()() { return ::mux::ui::request::accept_identity{who}; }
   };
   // A button of its protocol's own: its request asked.
-  struct ask_protocol : outbox {
+  struct ask_protocol {
+    using Answer = proto::any_request_t;
     proto::any_request_t asks;
-    void operator()() {
-      spl::visit(spl::overloaded{[](proto::part::no_request) {}, [&](const auto& one) { this->emit(one); }}, asks);
-    }
+    Answer operator()() const { return asks; }
   };
   struct verify_them {
     using Answer = std::tuple<::mux::ui::request::verify_person, ::mux::ui::request::close_person_info>;
@@ -134,7 +133,7 @@ struct person_card : nodes::Stack {
     parts.ban.setVisible(facts.may_ban);
     std::ranges::for_each(proto::person_actions(protocol_state_of(shared, account), account, key), [&](proto::any_action& one) {
       if (one.asks)
-        parts.theirs.emplace_back(colours, one.label, icon::check{}, ask_protocol{{}, std::move(*one.asks)})
+        parts.theirs.emplace_back(colours, one.label, icon::check{}, ask_protocol{std::move(*one.asks)})
             .apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
     });
     parts.sessions_title.setText(facts.devices.empty() ? std::string()

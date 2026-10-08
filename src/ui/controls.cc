@@ -113,12 +113,6 @@ struct two_lines : nodes::Stack {
 template <class Act>
 struct row_item : pressable<nodes::Stack> {
   Act act;
-  // The events its act sent, where it sends them so.
-  auto takeEvents()
-    requires sending<Act>
-  {
-    return std::exchange(act.fEmitted, {});
-  }
   // Whether it is one of a choice, and the chosen one.
   std::optional<bool> radio;
   struct parts_t {
@@ -173,12 +167,6 @@ struct row_item : pressable<nodes::Stack> {
 template <class Act>
 struct icon_button : scene::Node {
   Act act;
-  // The events its act sent, where it sends them so.
-  auto takeEvents()
-    requires sending<Act>
-  {
-    return std::exchange(act.fEmitted, {});
-  }
   struct parts_t {
     nodes::Icon mark;
   } parts;
@@ -267,12 +255,6 @@ struct page_header : nodes::Stack {
 template <class Act>
 struct segment : pressable<nodes::Stack> {
   Act act;
-  // The events its act sent, where it sends them so.
-  auto takeEvents()
-    requires sending<Act>
-  {
-    return std::exchange(act.fEmitted, {});
-  }
   bool active = false;
   struct parts_t {
     nodes::Text label;

@@ -353,12 +353,26 @@ void app::settle_model() {
 // model holds beside the chats, whether or not they moved.
 void app::show_chats_now() {
   press_target_now() = {&this->state, &ask};
+  root().main().wants_ = &wants;
   root().main().last_model = &*model;
   // What is kept read first, where it moved since: the screen reads each
   // chat's settings from it as it is shown.
   window_binding.refresh(root(), this->state);
   chats_binding.invalidate();
   chats_binding.refresh(root(), model->chats());
+}
+
+// What the window came to want -- the reactions to its wants, as effects:
+// each done, and the want set back, so that the same comes again as a
+// change.
+void app::take_wants() {
+  for (const auto& wanted : wants.outbox().drain())
+    std::visit(
+        [this](const auto& each) {
+          this->route(each);
+          mux::ui::wanted_done<std::remove_cvref_t<decltype(each)>>(wants);
+        },
+        wanted);
 }
 
 // What the window asked for, done: each request in the order it came.
@@ -372,6 +386,7 @@ void app::apply_asked() {
 // window and done at once, the handler that asked having returned: a press
 // acts before the next event, not a frame later.
 void app::after_event() {
+  this->take_wants();
   // The nodes pressed that answer with what they ask for: each delivered
   // along the path the scene routed it on, its event sent at once up the
   // scopes it is in; what nothing in the window takes, to the program.
@@ -392,6 +407,8 @@ void app::before_frame() {
   ++mux::ui::image_cache::frame();
   // What the model's widgets did: edits of the model, before the frame.
   this->take_page_input();
+  // What the screen came to want as it was updated: done.
+  this->take_wants();
   root().drop_closed();
   // What has been on screen in the chat shown is read, as far as it goes,
   // as in tdesktop: the chat list's counts go down as it is read, not all

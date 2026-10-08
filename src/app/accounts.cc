@@ -170,7 +170,9 @@ class accounts_part {
   // asks for it as it opens.
   void apply(const request::account_page& one) {
     s_->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
-      panel.show_page(one.page, account, *s_->model, k_->proxies(), k_->appearance().theme);
+      // What the page asks for as it opens, asked.
+      const auto asked = [this](const auto& request) { s_->ask->take(request); };
+      panel.show_page(one.page, account, *s_->model, k_->proxies(), k_->appearance().theme, asked);
     });
   }
 

@@ -228,6 +228,9 @@ struct app : kept_settings {
   std::array<const void*, 3> bound_pages{};
   // And to the chats, the window's other model.
   skiff::bind::Binding<mux::chats_model> chats_binding;
+  // What the window wants of the program as its state comes to want it.
+  mux::ui::wants_model wants;
+  void take_wants();
   void show_chats_now();
   void take_page_input();
   void settle_model();

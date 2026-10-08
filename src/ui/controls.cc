@@ -7,6 +7,7 @@ import splice;
 import skia;
 import skiff.paint;
 import skiff.scene;
+import skiff.compose;
 import skiff.nodes.flow;
 import skiff.nodes.icon;
 import skiff.nodes.text;
@@ -85,9 +86,15 @@ struct avatar_button : avatar_mark {
     return ::mux::ui::request::open_avatar{key};
   }
 };
+// A text cut where it runs out of room.
+[[nodiscard]] inline nodes::Text elided(nodes::Text text) {
+  text.setElided(true);
+  return text;
+}
+
 // A name over how it is: two lines, each cut where it runs out of room,
 // taking what their row leaves them.
-struct two_lines : nodes::Stack {
+struct two_lines : skiff::compose::Stacked {
   struct parts_t {
     nodes::Text name;
     nodes::Text state;
@@ -96,18 +103,11 @@ struct two_lines : nodes::Stack {
       : two_lines(colours, std::move(first), std::move(second), size, gap, size - 2.0f) {}
   // The line under it its own size: an account's facts under its name.
   two_lines(const palette& colours, std::string first, std::string second, float size, float gap, float second_size)
-      : parts{.name = nodes::Text(std::move(first), size, colours.text, true),
-              .state = nodes::Text(std::move(second), second_size, colours.dim)} {
-    this->setGap(gap);
-    fState.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-    for (nodes::Text* each : {&parts.name, &parts.state}) {
-      each->setElided(true);
-      each->apply({.fillX = true});
-    }
-    // Nothing to say under the name -- no presence known, no role: no line
-    // kept for it, the name alone in the middle.
-    parts.state.setVisible(!parts.state.text().empty());
-  }
+      : Stacked(skiff::compose::vbox(gap, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle})),
+        parts{.name = skiff::compose::styled({.fillX = true}, elided(nodes::Text(std::move(first), size, colours.text, true))),
+              // Nothing to say under the name -- no presence known, no role:
+              // no line kept for it, the name alone in the middle.
+              .state = skiff::compose::visible(!second.empty(), skiff::compose::styled({.fillX = true}, elided(nodes::Text(second, second_size, colours.dim))))} {}
 };
 
 template <class Act>
@@ -215,7 +215,7 @@ using no_back = no_action;
 // the page's name, and ✕ on the right where the page closes. Every panel,
 // box and page that has a title and a ✕ has this one.
 template <class Back, class Close>
-struct page_header : nodes::Stack {
+struct page_header : skiff::compose::Stacked {
   struct parts_t {
     icon_button<Back> back;
     nodes::Text title;
@@ -225,21 +225,14 @@ struct page_header : nodes::Stack {
   static constexpr float kHeight = 54.0f;
 
   page_header(const palette& colours, std::string name, Back to, Close shut, bool has_back, bool has_close)
-      : parts{.back = icon_button<Back>(colours, icon::back{}, std::move(to)),
-              .title = nodes::Text(std::move(name), 17.0f, colours.text, true),
-              .close = icon_button<Close>(colours, icon::close{}, std::move(shut))} {
-    auto& [back, title, close] = parts;
-    this->setHorizontal();
-    this->setGap(12.0f);
-    fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}});
-    back.setVisible(has_back);
-    close.setVisible(has_close);
-    back.apply({.alignSelf = scene::align::kMiddle});
-    close.apply({.alignSelf = scene::align::kMiddle});
-    title.setElided(true);
-    title.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle,
-                 .margin = {0.0f, 0.0f, 0.0f, has_back ? 0.0f : 10.0f}});
-  }
+      : Stacked(skiff::compose::hbox(12.0f, {.fillX = true, .height = kHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}})),
+        parts{.back = skiff::compose::visible(has_back, skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+                                                                               icon_button<Back>(colours, icon::back{}, std::move(to)))),
+              .title = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle,
+                                               .margin = {0.0f, 0.0f, 0.0f, has_back ? 0.0f : 10.0f}},
+                                              elided(nodes::Text(std::move(name), 17.0f, colours.text, true))),
+              .close = skiff::compose::visible(has_close, skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+                                                                                 icon_button<Close>(colours, icon::close{}, std::move(shut))))} {}
   // Esc, as its ← is pressed: a step back where it has one -- false where
   // it has none, for what holds it to close instead.
   bool step_back() {
@@ -374,40 +367,34 @@ template <class Choose>
 struct choice_menu : nodes::Stack {
   Choose choose;  // told the index of the option pressed
   bool open = false;
-  struct head_t : nodes::Stack {
+  struct head_t : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text label;
       nodes::Text value;
       nodes::Icon chevron;
     } parts;
     head_t(const palette& colours, std::string label, std::string value)
-        : parts{.label = nodes::Text(std::move(label), 13.0f, colours.dim),
-                .value = nodes::Text(std::move(value), 14.0f, colours.text),
-                .chevron = nodes::Icon(shape_of(icon::down{}), colours.dim)} {
-      this->setHorizontal();
-      this->setGap(8.0f);
-      fState.apply({.fillX = true, .height = 36.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 6.0f,
-                    .background = colours.tile, .hoverBackground = colours.chosen, .border = scene::Border{colours.band, 1.0f}});
-      parts.label.apply({.alignSelf = scene::align::kMiddle});
-      parts.label.setVisible(!parts.label.text().empty());
-      parts.value.setElided(true);
-      parts.value.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-      parts.chevron.apply({.width = 16.0f, .height = 16.0f, .alignSelf = scene::align::kMiddle});
-    }
+        : Stacked(skiff::compose::hbox(8.0f, {.fillX = true, .height = 36.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 6.0f,
+                                              .background = colours.tile, .hoverBackground = colours.chosen,
+                                              .border = scene::Border{colours.band, 1.0f}})),
+          parts{.label = skiff::compose::visible(!label.empty(), skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+                                                                                         nodes::Text(label, 13.0f, colours.dim))),
+                .value = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                                                elided(nodes::Text(std::move(value), 14.0f, colours.text))),
+                .chevron = skiff::compose::styled({.width = 16.0f, .height = 16.0f, .alignSelf = scene::align::kMiddle},
+                                                  nodes::Icon(shape_of(icon::down{}), colours.dim))} {}
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   };
-  struct option_t : nodes::Stack {
+  struct option_t : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text name;
     } parts;
     option_t(const palette& colours, std::string name, bool chosen)
-        : parts{.name = nodes::Text(std::move(name), 14.0f, chosen ? colours.accent : colours.text, chosen)} {
-      this->setHorizontal();
-      fState.apply({.fillX = true, .height = 32.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 6.0f,
-                    .hoverBackground = colours.chosen});
-      parts.name.apply({.alignSelf = scene::align::kMiddle});
-    }
+        : Stacked(skiff::compose::hbox(0.0f, {.fillX = true, .height = 32.0f, .padding = {0.0f, 12.0f, 0.0f, 12.0f}, .cornerRadius = 6.0f,
+                                              .hoverBackground = colours.chosen})),
+          parts{.name = skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+                                               nodes::Text(std::move(name), 14.0f, chosen ? colours.accent : colours.text, chosen))} {}
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   };

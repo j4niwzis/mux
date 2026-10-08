@@ -201,13 +201,13 @@ class outbox_part {
   }
   // Enter in the field: sent while the field still holds it. Two asked for
   // before the first was handled -- the field emptied by it -- send once.
-  void apply(const request::submit_message& one) {
+  std::optional<request_t> apply(const request::submit_message& one) {
     if (s_->root().main().line.plain().empty())
-      return;
-    this->send(one.text);
+      return std::nullopt;
+    return this->send(one.text);
   }
   void apply(const request::stop_jump&) { s_->root().main().stop_jump(); }
-  void apply(const request::send_typed&) { this->send(s_->root().main().line.plain()); }
+  std::optional<request_t> apply(const request::send_typed&) { return this->send(s_->root().main().line.plain()); }
 
   // Files: chosen with the paperclip, or dropped; the send box closed, or
   // what is in it sent -- the caption with the first.
@@ -388,21 +388,22 @@ class outbox_part {
   std::optional<std::string> files_thread_;
   // The field's text sent: as a message, an answer, or an edit -- as what is
   // written says -- and the field and its draft emptied.
-  void send(std::string text) {
+  // Sent; or, a command of its protocol's own, what it asks for returned.
+  std::optional<request_t> send(std::string text) {
     // A text sent: the ways back from jumps let go, as tdesktop's
     // sendTextWithTags clears its reply returns.
     if (const auto& chosen = s_->root().main().chosen)
       s_->root().main().returns.erase(*chosen);
     auto& screen = s_->root().main();
     if (!screen.chosen || !logic::sendable(text))
-      return;
+      return std::nullopt;
     const conversation_id to = *screen.chosen;
     // A command of its protocol's own: asked, not sent.
     if (const auto asked = mux::proto::command_of(mux::ui::protocol_state_of(s_->ui, to.account), to, text)) {
-      spl::visit(spl::overloaded{[](mux::proto::part::no_request) {}, [&](const auto& one) { s_->ask->take(one); }},
-                    *asked);
       screen.line.set_text({});
-      return;
+      return spl::visit(spl::overloaded{[](mux::proto::part::no_request) -> std::optional<request_t> { return std::nullopt; },
+                                        [](const auto& one) -> std::optional<request_t> { return request_t{one}; }},
+                        *asked);
     }
     // What is sent goes at the chat's end: the chat back to its newest
     // first, where it is a window elsewhere, or it would not be shown.
@@ -440,6 +441,7 @@ class outbox_part {
     screen.line.show_context(std::nullopt);
     screen.line.clear();
     drafts_->keep(to, std::string());
+    return std::nullopt;
   }
 
   struct file {

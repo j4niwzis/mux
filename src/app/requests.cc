@@ -24,24 +24,14 @@ using mux::ui::request_t;
 // Every request, one of them: a spl::variant, built in time linear in how
 // many there are (std::variant's nested union made it quadratic).
 
-// What the screens ask: each a request, kept until the program applies it
-// between events -- except a message, which goes to the network at once.
+// What the program's parts reach of the network for a message sent -- in
+// the demo, put in at once, as sent.
 struct actions {
   network* net = nullptr;
   // In the demo, a message sent is there at once, as sent.
   bool demo = false;
   mailbox_type* box = nullptr;
   int demo_sent = 0;
-  std::vector<request_t> requests;
-  // A request the window sent as an event, which nothing in it took: taken
-  // as the program's sink, queued as one asked.
-  template <class E>
-    requires std::constructible_from<request_t, E>
-  void take(const E& one) {
-    requests.emplace_back(one);
-  }
-  // A protocol's "nothing to ask": nothing.
-  void take(const mux::proto::part::no_request&) {}
 
   void send(const mux::conversation_id& to, std::string text) {
     if (!demo) {

@@ -66,9 +66,10 @@ export namespace mux::app {
 // window's scopes edit, and the program's sink for what nothing in the
 // window takes. The program says them once it has them; till then nothing
 // is answered there, and a press is delivered along its path instead.
+struct app;
 struct press_target {
   kept_model* model = nullptr;
-  actions* sink = nullptr;
+  app* sink = nullptr;
 };
 inline press_target& press_target_now() {
   static press_target kept;
@@ -144,16 +145,49 @@ struct app : kept_settings {
   // A request, to the part that takes it -- the first with an apply for
   // it, as overload resolution finds -- and to the program's own where
   // none does.
+  // Offered to a part: done by it -- and what it asks for in turn, where
+  // its apply() returns that, done too.
   template <class Part, class Request>
-    requires requires(Part& part, const Request& one) { part.apply(one); }
-  static bool offer(Part& part, const Request& one) {
+    requires requires(Part& part, const Request& one) {
+      { part.apply(one) } -> std::same_as<void>;
+    }
+  bool offer(Part& part, const Request& one) {
     part.apply(one);
     return true;
   }
   template <class Part, class Request>
-  static bool offer(Part&, const Request&) {
+    requires requires(Part& part, const Request& one) {
+      { part.apply(one) } -> std::same_as<std::optional<request_t>>;
+    }
+  bool offer(Part& part, const Request& one) {
+    this->take(part.apply(one));
+    return true;
+  }
+  template <class Part, class Request>
+  bool offer(Part&, const Request&) {
     return false;
   }
+
+ public:
+  // What the window answers, and what the program's parts ask in turn:
+  // done at once, as it is taken -- the program is the window's sink. A
+  // press is answered after the handler that made it has returned, and
+  // what is done to the window is a model's edit, read by the bindings
+  // after the event: nothing pressed is gone under its own answer.
+  template <class E>
+    requires std::constructible_from<request_t, E>
+  void take(const E& one) {
+    this->route(one);
+  }
+  void take(const request_t& one) {
+    spl::visit([this](const auto& each) { this->route(each); }, one);
+  }
+  void take(const std::optional<request_t>& one) {
+    if (one)
+      this->take(*one);
+  }
+  // A protocol's "nothing to ask": nothing.
+  void take(const mux::proto::part::no_request&) {}
   template <class Part, class Request>
   static constexpr bool takes = requires(Part& part, const Request& one) { part.apply(one); };
   // A protocol's own request: done as its program glue says (mux.app.proto).
@@ -221,10 +255,9 @@ struct app : kept_settings {
   // A Matrix session given: kept with its account, for the next start.
 
   // A link pressed in a message's text: routed as a link is.
-  void open_link(std::string url) { ask.take(mux::ui::request::open_url{std::move(url)}); }
+  void open_link(std::string url) { this->take(mux::ui::request::open_url{std::move(url)}); }
   void before_frame();
   void after_event();
-  void apply_asked();
   // The window bound to the model, and the pages with the model's widgets
   // it was last walked whole with.
   skiff::bind::Binding<kept_model> window_binding;

@@ -32,7 +32,7 @@ export namespace mux::proto::xmpp {
 template <class App>
 void program_told(App& app, const registration_asked& asked) {
   if (asked.fields.empty() && asked.page) {
-    app.ask.take(mux::ui::request::open_url{*asked.page});
+    app.take(mux::ui::request::open_url{*asked.page});
     app.shared.notice("Register in your browser",
                             "The server makes accounts on a page of its own, now open in your browser. Once the account "
                             "is made there, turn Create a new account off in its settings, and mux signs in to it.");

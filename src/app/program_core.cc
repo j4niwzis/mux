@@ -353,7 +353,7 @@ void app::settle_model() {
 void app::show_chats_now() {
   // The chat chosen, as what is shown has it, read first.
   this->refresh_shown();
-  press_target_now() = {&this->state, &ask};
+  press_target_now() = {&this->state, this};
   root().main().wants_ = &wants;
   root().main().last_model = &*model;
   // What is kept read first, where it moved since: the screen reads each
@@ -376,13 +376,6 @@ void app::take_wants() {
         wanted);
 }
 
-// What the window asked for, done: each request in the order it came.
-void app::apply_asked() {
-  auto pending = std::exchange(ask.requests, {});
-  for (const request_t& one : pending)
-    spl::visit([this](const auto& each) { this->route(each); }, one);
-}
-
 void app::refresh_shown() {
   showing_binding.refresh(root(), showing);
   if (std::exchange(shared.menu_focus_due, false))
@@ -402,23 +395,22 @@ void app::after_event() {
   // node is bound in.
   const auto ways = std::exchange(skiff::scene::hostWork().pressed, {});
   const bool pressed = std::ranges::count_if(ways, [this](const auto& way) {
-                         return skiff::bind::press(root(), this->state, way, &ask) ||
-                                skiff::bind::press(root(), model->chats(), way, &ask) ||
-                                skiff::bind::press(root(), showing, way, &ask);
+                         return skiff::bind::press(root(), this->state, way, this) ||
+                                skiff::bind::press(root(), model->chats(), way, this) ||
+                                skiff::bind::press(root(), showing, way, this);
                        }) > 0;
   // What handlers returned that they ask for, where the routing carried
   // nothing down to send it with (a debug build's erased walks): sent up the
   // scopes their nodes are in, along their paths.
   const auto kept = std::exchange(skiff::scene::hostWork().answers, {});
   const bool answered = std::ranges::count_if(kept, [this](const auto& one) {
-                          return skiff::bind::answer(root(), this->state, one, &ask) ||
-                                 skiff::bind::answer(root(), model->chats(), one, &ask) ||
-                                 skiff::bind::answer(root(), showing, one, &ask);
+                          return skiff::bind::answer(root(), this->state, one, this) ||
+                                 skiff::bind::answer(root(), model->chats(), one, this) ||
+                                 skiff::bind::answer(root(), showing, one, this);
                         }) > 0;
-  if (!pressed && !answered && ask.requests.empty())
+  if (!pressed && !answered)
     return;
   this->take_page_input();
-  this->apply_asked();
   // What the requests opened or closed, shown.
   this->refresh_shown();
 }
@@ -465,7 +457,6 @@ void app::before_frame() {
   }
   calls.tick();
   menu.keep_selection();
-  this->apply_asked();
   // A selectable text or a field pressed with the right button -- a long
   // press, on a phone: its menu, the last asked for.
   if (auto asked = std::exchange(skiff::scene::textMenusAsked(), {}); !asked.empty() && !root().context_menu_up())

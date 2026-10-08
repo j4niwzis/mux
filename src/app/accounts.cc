@@ -58,7 +58,7 @@ class accounts_part {
     return panel;
   }
   // Adding an account: beside the list, on the accounts page.
-  void show_adding() { this->show_accounts(mux::ui::panel_detail::adding{}); }
+  void show_adding() { this->show_accounts(mux::ui::panel_detail::adding{std::nullopt}); }
   // The page brought up to date with the model and the settings. Whether
   // the account being added is in now -- the chats to be shown.
   [[nodiscard]] bool bring_up_to_date(accounts& panel) {
@@ -73,7 +73,12 @@ class accounts_part {
                                        editor->say(*one.said, one.error);
                                    }
                                  },
-                                 [&](mux::ui::panel_detail::adding) { panel.show_adding(); }},
+                                 [&](const mux::ui::panel_detail::adding& one) {
+                                   if (!panel.adding())
+                                     panel.show_adding();
+                                   if (auto* pane = panel.adding(); pane && one.speaks)
+                                     pane->show(*one.speaks);
+                                 }},
                  *due);
     panel.show(k_->accounts().values(), *s_->model);
     auto* pane = panel.adding();
@@ -85,16 +90,13 @@ class accounts_part {
   void apply(const request::show_account& one) { this->show_account(one.address); }
   // A protocol chosen for the account being added: its form.
   void apply(const request::add_account_of& one) {
-    auto* up = s_->root().open_panel();
-    if (!up)
+    auto facts = *s_->showing->look<std::optional<mux::ui::panel_facts>>();
+    if (!facts)
       return;
     pending_login_.reset();
-    spl::visit(
-        [&](accounts& panel) {
-          if (auto* pane = panel.adding())
-            pane->show(one.speaks);
-        },
-        *up);
+    facts->detail = mux::ui::panel_detail::adding{one.speaks};
+    mux::ui::show(*s_->showing, std::move(facts));
+    s_->refresh_due = true;
   }
   void apply(const request::select_account& one) {
     auto* up = s_->root().open_panel();

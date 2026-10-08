@@ -81,7 +81,7 @@ struct avatar_button : avatar_mark, outbox {
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
     if (!key.empty())
-      this->send(::mux::ui::request::open_avatar{key});
+      this->emit(::mux::ui::request::open_avatar{key});
     return true;
   }
 };
@@ -326,7 +326,7 @@ struct menu_button : scene::Node, outbox {
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   [[nodiscard]] bool focusChangesAppearance() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
-    this->send(::mux::ui::request::open_drawer{});
+    this->emit(::mux::ui::request::open_drawer{});
     return true;
   }
   [[nodiscard]] scene::Semantics semantics() const {
@@ -449,7 +449,7 @@ struct spaces_choices : nodes::Stack {
     void operator()(std::size_t index) {
       static constexpr std::array<std::pair<bool, bool>, 4> kWays{{{true, false}, {false, true}, {true, true}, {false, false}}};
       if (index < kWays.size())
-        this->send(::mux::ui::request::set_space_bars{account, item, kWays[index].first, kWays[index].second});
+        this->emit(::mux::ui::request::set_space_bars{account, item, kWays[index].first, kWays[index].second});
     }
   };
   struct row : nodes::Stack {

@@ -269,10 +269,10 @@ struct leave_space_box : nodes::Stack, outbox {
   };
   struct go {
     leave_space_box* box;
-    void operator()() const { box->send(::mux::ui::request::leave_space{box->facts.space, box->leaving()}); }
+    void operator()() const { box->emit(::mux::ui::request::leave_space{box->facts.space, box->leaving()}); }
   };
   struct cancel : outbox {
-    void operator()() { this->send(::mux::ui::request::close_leave_space{}); }
+    void operator()() { this->emit(::mux::ui::request::close_leave_space{}); }
   };
   struct parts_t {
     nodes::Text title;
@@ -513,14 +513,14 @@ struct room_settings : nodes::Stack, outbox {
     bool allowed = true;
     void operator()() {
       if (allowed)
-        this->send(::mux::ui::request::flip_forum{room});
+        this->emit(::mux::ui::request::flip_forum{room});
     }
   };
   // A space's rooms out of Home, or in it: a switch, for a space that is
   // not shown as one chat.
   struct flip_home_hide_act : outbox {
     std::string room;
-    void operator()() { this->send(::mux::ui::request::flip_home_hide{room}); }
+    void operator()() { this->emit(::mux::ui::request::flip_home_hide{room}); }
   };
   using settings_t = decltype(chat_settings_view(std::declval<const palette&>(), std::declval<const conversation_id&>()));
   struct general_page : nodes::Stack {
@@ -606,7 +606,7 @@ struct room_settings : nodes::Stack, outbox {
 
   // ---- the dialog ---------------------------------------------------------------------
   struct close_it : outbox {
-    void operator()() { this->send(::mux::ui::request::close_manage{}); }
+    void operator()() { this->emit(::mux::ui::request::close_manage{}); }
   };
   using header_t = page_header<no_back, close_it>;
   struct body_row : nodes::Stack {

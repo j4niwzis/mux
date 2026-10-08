@@ -64,7 +64,7 @@ struct forward_box : nodes::Stack, outbox {
   const palette* colours_ = nullptr;
   std::vector<forward_target> all;
   struct close_it : outbox {
-    void operator()() { this->send(::mux::ui::request::close_forward{}); }
+    void operator()() { this->emit(::mux::ui::request::close_forward{}); }
   };
   struct typed {
     forward_box* box;
@@ -91,7 +91,7 @@ struct forward_box : nodes::Stack, outbox {
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
-      this->send(::mux::ui::request::forward_to{id});
+      this->emit(::mux::ui::request::forward_to{id});
       return true;
     }
   };
@@ -153,7 +153,7 @@ struct found_person_row : nodes::Stack, outbox {
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
-    this->send(::mux::ui::request::start_direct{id});
+    this->emit(::mux::ui::request::start_direct{id});
     return true;
   }
 };
@@ -177,7 +177,7 @@ struct start_chat_box : nodes::Stack, outbox {
   std::string query;
   std::string link;
   struct close_it : outbox {
-    void operator()() { this->send(::mux::ui::request::close_new_chat{}); }
+    void operator()() { this->emit(::mux::ui::request::close_new_chat{}); }
   };
   struct typed {
     start_chat_box* box;
@@ -189,7 +189,7 @@ struct start_chat_box : nodes::Stack, outbox {
   };
   struct copy_press {
     start_chat_box* box;
-    void operator()() const { box->send(::mux::ui::request::copy_text{box->link}); }
+    void operator()() const { box->emit(::mux::ui::request::copy_text{box->link}); }
   };
   using person_row = found_person_row<Actions>;
   using header_t = page_header<no_back, close_it>;
@@ -272,7 +272,7 @@ struct start_chat_box : nodes::Stack, outbox {
     found.clear();
     this->show_rows();
     if (query.size() >= 2)
-      this->send(::mux::ui::request::find_people{query});
+      this->emit(::mux::ui::request::find_people{query});
   }
   // The directory's answer, where it is for what is typed now.
   void show_found(const std::vector<found_person>& people, const std::string& asked) {
@@ -307,12 +307,12 @@ struct start_chat_box : nodes::Stack, outbox {
   // Go: the ID typed, or the first found.
   void go() {
     if (whole_id(query)) {
-      this->send(::mux::ui::request::start_direct{query});
+      this->emit(::mux::ui::request::start_direct{query});
       return;
     }
     const auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
     if (!rows.empty())
-      this->send(::mux::ui::request::start_direct{rows.front().id});
+      this->emit(::mux::ui::request::start_direct{rows.front().id});
   }
 };
 
@@ -337,20 +337,20 @@ struct create_room_box : nodes::Stack, outbox {
   bool advanced = false;
   bool choosing = false;  // the list of who can join, open
   struct close_it : outbox {
-    void operator()() { this->send(::mux::ui::request::close_new_room{}); }
+    void operator()() { this->emit(::mux::ui::request::close_new_room{}); }
   };
   struct create_press {
     create_room_box* box;
     void operator()() const {
       const std::string& name = box->parts.name.text();
       if (!name.empty())
-        box->send(::mux::ui::request::create_room{name, box->parts.topic.text(), box->open_room, box->parts.address.text(), box->federate,
+        box->emit(::mux::ui::request::create_room{name, box->parts.topic.text(), box->open_room, box->parts.address.text(), box->federate,
                                   box->encrypted, box->place ? std::optional<conversation_id>(box->place->space) : std::nullopt,
                                   box->space_members, box->place && box->place->make_space});
     }
   };
   struct cancel_press : outbox {
-    void operator()() { this->send(::mux::ui::request::close_new_room{}); }
+    void operator()() { this->emit(::mux::ui::request::close_new_room{}); }
   };
   struct flip_list {
     create_room_box* box;

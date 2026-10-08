@@ -51,12 +51,12 @@ struct window : scene::Node, outbox {
   struct text_menu : nodes::Stack {
     struct copy_it : outbox {
       std::string text;
-      void operator()() { this->send(::mux::ui::request::copy_text{text}); }
+      void operator()() { this->emit(::mux::ui::request::copy_text{text}); }
     };
     struct key_it : outbox {
       scene::Key key;
       bool shift = false;
-      void operator()() { this->send(::mux::ui::request::text_key{key, shift}); }
+      void operator()() { this->emit(::mux::ui::request::text_key{key, shift}); }
     };
     struct parts_t {
       std::optional<widgets::Button<copy_it>> copy;

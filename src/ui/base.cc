@@ -194,7 +194,7 @@ struct panel_ease_t {
 template <class Actions>
 struct open_wallpaper_at : outbox {
   choice_level_t level;
-  void operator()() { this->send(::mux::ui::request::open_wallpaper{level}); }
+  void operator()() { this->emit(::mux::ui::request::open_wallpaper{level}); }
 };
 // A background's picture, read from where mux keeps it and decoded once.
 inline skia::Sp<skia::SkImage> wallpaper_picture(const std::string& path) {
@@ -414,12 +414,12 @@ using toggle_for = std::conditional_t<sending<Act>, widgets::internal::Toggle<Ac
 template <class Actions>
 struct flip_account : outbox {
   std::string address;
-  void operator()() { this->send(::mux::ui::request::flip_enabled{address}); }
+  void operator()() { this->emit(::mux::ui::request::flip_enabled{address}); }
 };
 template <class Actions>
 struct remove_account : outbox {
   std::string address;
-  void operator()() { this->send(::mux::ui::request::remove_account{address}); }
+  void operator()() { this->emit(::mux::ui::request::remove_account{address}); }
 };
 
 // ---- laying out ----------------------------------------------------------

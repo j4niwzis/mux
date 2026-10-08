@@ -47,8 +47,8 @@ struct person_card : nodes::Stack {
   struct message_them : outbox {
     conversation_id who;
     void operator()() {
-      this->send(::mux::ui::request::message_person{who});
-      this->send(::mux::ui::request::close_person_info{});
+      this->emit(::mux::ui::request::message_person{who});
+      this->emit(::mux::ui::request::close_person_info{});
     }
   };
   using close_act = sends<::mux::ui::request::close_person_info>;
@@ -74,27 +74,27 @@ struct person_card : nodes::Stack {
   struct to_them : outbox {
     room_action_t action;
     void operator()() {
-      this->send(::mux::ui::request::room_act{action});
-      this->send(::mux::ui::request::close_person_info{});
+      this->emit(::mux::ui::request::room_act{action});
+      this->emit(::mux::ui::request::close_person_info{});
     }
   };
   // Verified by comparing emoji with each of their devices that answers.
   struct accept_them : outbox {
     conversation_id who;
-    void operator()() { this->send(::mux::ui::request::accept_identity{who}); }
+    void operator()() { this->emit(::mux::ui::request::accept_identity{who}); }
   };
   // A button of its protocol's own: its request asked.
   struct ask_protocol : outbox {
     proto::any_request_t asks;
     void operator()() {
-      spl::visit(spl::overloaded{[](proto::part::no_request) {}, [&](const auto& one) { this->send(one); }}, asks);
+      spl::visit(spl::overloaded{[](proto::part::no_request) {}, [&](const auto& one) { this->emit(one); }}, asks);
     }
   };
   struct verify_them : outbox {
     conversation_id who;
     void operator()() {
-      this->send(::mux::ui::request::verify_person{who});
-      this->send(::mux::ui::request::close_person_info{});
+      this->emit(::mux::ui::request::verify_person{who});
+      this->emit(::mux::ui::request::close_person_info{});
     }
   };
   // The colours it is made in.
@@ -178,13 +178,13 @@ struct room_card : nodes::Stack {
     bool knock = false;  // asked to be let in, where it lets people knock
     void operator()() {
       if (knock)
-        this->send(::mux::ui::request::knock_room_card{});
+        this->emit(::mux::ui::request::knock_room_card{});
       else
-        this->send(::mux::ui::request::join_room_card{});
+        this->emit(::mux::ui::request::join_room_card{});
     }
   };
   struct decline_it : outbox {
-    void operator()() { this->send(::mux::ui::request::decline_room_card{}); }
+    void operator()() { this->emit(::mux::ui::request::decline_room_card{}); }
   };
   using close_act = sends<::mux::ui::request::close_room_card>;
   using close_button = icon_button<close_act>;

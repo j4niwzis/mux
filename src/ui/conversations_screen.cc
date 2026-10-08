@@ -545,7 +545,7 @@ struct conversations_screen : nodes::Stack, outbox {
     // whatever the modifiers, and took Alt+Left from under this.
     if (press.modifiers.template has<scene::modifier::alt>() && press.key == keys::kRight && pointed) {
       const conversation_id into = *std::exchange(pointed, std::nullopt);
-      this->send(::mux::ui::request::choose{into});
+      this->emit(::mux::ui::request::choose{into});
       reply.handle();
       return;
     }
@@ -580,7 +580,7 @@ struct conversations_screen : nodes::Stack, outbox {
     conversations_screen* screen;
     std::string id;
     void operator()() const {
-      screen->send(::mux::ui::request::jump_to_message{id});
+      screen->emit(::mux::ui::request::jump_to_message{id});
     }
   };
   // A banner's button pressed: its protocol's request, asked.
@@ -588,7 +588,7 @@ struct conversations_screen : nodes::Stack, outbox {
     const std::optional<proto::any_request_t>* asks;
     void operator()() {
       if (*asks)
-        spl::visit(spl::overloaded{[](proto::part::no_request) {}, [&](const auto& one) { this->send(one); }}, **asks);
+        spl::visit(spl::overloaded{[](proto::part::no_request) {}, [&](const auto& one) { this->emit(one); }}, **asks);
     }
   };
   // A node of the chat's protocol's own over the composer (a Telegram bot's
@@ -861,11 +861,11 @@ struct conversations_screen : nodes::Stack, outbox {
   // the chat to the chats -- a swipe across, or Esc.
   void step_back() {
     if (threads_open)
-      this->send(::mux::ui::request::toggle_threads{});
+      this->emit(::mux::ui::request::toggle_threads{});
     else if (info_open)
-      this->send(::mux::ui::request::toggle_info{});
+      this->emit(::mux::ui::request::toggle_info{});
     else
-      this->send(::mux::ui::request::close_chat{});
+      this->emit(::mux::ui::request::close_chat{});
   }
   // Esc too.
   bool close_space_menu() {

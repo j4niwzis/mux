@@ -94,7 +94,7 @@ struct info_panel : nodes::Stack, outbox {
   // pages are made again.
   struct open_person {
     info_panel* panel;
-    void operator()(const auto& row) const { panel->send(::mux::ui::request::open_member_info{row.id}); }
+    void operator()(const auto& row) const { panel->emit(::mux::ui::request::open_member_info{row.id}); }
   };
   struct back_to_group {
     info_panel* panel;
@@ -104,7 +104,7 @@ struct info_panel : nodes::Stack, outbox {
     info_panel* panel;
     void operator()() {
       if (panel->person)
-        this->send(::mux::ui::request::message_person{conversation_id{panel->account, *panel->person}});
+        this->emit(::mux::ui::request::message_person{conversation_id{panel->account, *panel->person}});
     }
   };
 

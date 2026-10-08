@@ -61,7 +61,7 @@ struct account_sessions : nodes::Stack, outbox {
   struct verify_one {
     account_sessions* page;
     std::string device;
-    void operator()() const { page->send(request::verify_session{device}); }
+    void operator()() const { page->emit(request::verify_session{device}); }
   };
   struct start_rename {
     account_sessions* page;
@@ -74,7 +74,7 @@ struct account_sessions : nodes::Stack, outbox {
     void operator()() const { page->rename(row); }
   };
   struct reload : outbox {
-    void operator()() { this->send(request::refresh_sessions{}); }
+    void operator()() { this->emit(request::refresh_sessions{}); }
   };
   // One session: its name over its ID, when and where it was last seen;
   // Rename, and Sign out where it is not this one.
@@ -205,7 +205,7 @@ struct account_sessions : nodes::Stack, outbox {
     parts.refresh.apply({.width = 100.0f, .height = 30.0f});
     for (scene::Node* each : std::initializer_list<scene::Node*>{&parts.current_title, &parts.others_title})
       each->setVisible(false);
-    a->ask_for(request::refresh_sessions{});
+    this->emit(request::refresh_sessions{});
   }
   // Element's Security, under Device verification: whether this session has
   // the cross-signing keys, and whether room keys are backed up.
@@ -259,7 +259,7 @@ struct account_sessions : nodes::Stack, outbox {
     parts.note.setText("Signing out…");
     parts.note.setColour(colours_->dim);
     parts.note.setVisible(true);
-    this->send(request::sign_out_sessions{std::move(devices), parts.password.parts.field.text()});
+    this->emit(request::sign_out_sessions{std::move(devices), parts.password.parts.field.text()});
     this->invalidateLayout();
   }
   [[nodiscard]] session_row* row_at(std::size_t index) {
@@ -274,7 +274,7 @@ struct account_sessions : nodes::Stack, outbox {
   void rename(std::size_t index) {
     if (session_row* row = this->row_at(index)) {
       row->show_field(false);
-      this->send(request::rename_session{row->device, row->parts.field.text()});
+      this->emit(request::rename_session{row->device, row->parts.field.text()});
     }
   }
   void say(std::string, bool) {}

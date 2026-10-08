@@ -274,7 +274,7 @@ struct chat_header : nodes::Stack {
     [[nodiscard]] bool onClick(float, float) {
       if (!taps_to_info)
         return false;
-      this->send(::mux::ui::request::toggle_info{});
+      this->emit(::mux::ui::request::toggle_info{});
       return true;
     }
   };
@@ -381,7 +381,7 @@ struct selection_bar : nodes::Stack, outbox {
   using Node::onKey;
   void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
     if (press.key == scene::keys::kEscape) {
-      this->send(::mux::ui::request::selection_cancel{});
+      this->emit(::mux::ui::request::selection_cancel{});
       reply.handle();
     }
   }
@@ -393,12 +393,12 @@ struct selection_bar : nodes::Stack, outbox {
 // older one, Shift+Enter to the newer, Esc closes.
 template <class Actions>
 struct search_typed : outbox {
-  void operator()(std::string_view text) { this->send(::mux::ui::request::search_typed{std::string(text)}); }
+  void operator()(std::string_view text) { this->emit(::mux::ui::request::search_typed{std::string(text)}); }
 };
 template <class Actions>
 struct search_step : outbox {
   bool older = true;
-  void operator()() { this->send(::mux::ui::request::search_step{older}); }
+  void operator()() { this->emit(::mux::ui::request::search_step{older}); }
 };
 template <class Actions>
 struct search_bar : nodes::Stack, outbox {
@@ -444,16 +444,16 @@ struct search_bar : nodes::Stack, outbox {
   using Node::onKey;
   void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
     if (press.key == scene::keys::kEnter) {
-      this->send(::mux::ui::request::search_step{!press.modifiers.template has<scene::modifier::shift>()});
+      this->emit(::mux::ui::request::search_step{!press.modifiers.template has<scene::modifier::shift>()});
       reply.handle();
     } else if (press.key == scene::keys::kEscape) {
-      this->send(::mux::ui::request::close_search{});
+      this->emit(::mux::ui::request::close_search{});
       reply.handle();
     } else if (press.key == scene::keys::kUp) {
-      this->send(::mux::ui::request::search_step{false});
+      this->emit(::mux::ui::request::search_step{false});
       reply.handle();
     } else if (press.key == scene::keys::kDown) {
-      this->send(::mux::ui::request::search_step{true});
+      this->emit(::mux::ui::request::search_step{true});
       reply.handle();
     }
   }

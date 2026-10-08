@@ -40,7 +40,7 @@ void chose(Box* box, const join_rule_t& rule) {
   if (!may(box->facts, power_need::change_access{}))
     return;
   rules_in(box->facts.theirs).join_rule = rule;
-  box->send(request::change_room{room_change::set_join_rule{rule}});
+  box->emit(request::change_room{room_change::set_join_rule{rule}});
   box->show_again();
 }
 template <class Box>
@@ -48,7 +48,7 @@ void chose(Box* box, const history_rule_t& rule) {
   if (!may(box->facts, power_need::change_history{}))
     return;
   rules_in(box->facts.theirs).history = rule;
-  box->send(request::change_room{room_change::set_history{rule}});
+  box->emit(request::change_room{room_change::set_history{rule}});
   box->show_again();
 }
 template <class Box>
@@ -62,7 +62,7 @@ void encrypt(Box* box) {
   } else {
     kept.confirming_encryption = false;
     facts.encrypted = true;
-    box->send(request::change_room{room_change::encrypt{}});
+    box->emit(request::change_room{room_change::encrypt{}});
   }
   box->show_again();
 }
@@ -71,7 +71,7 @@ void needs_level(Box* box, const power_need_t& need, std::int64_t level) {
   auto& facts = box->facts;
   if (!may(facts, power_need::change_permissions{}) || level > facts.mine)
     return;
-  box->send(request::change_room{room_change::set_need{need, level}});
+  box->emit(request::change_room{room_change::set_need{need, level}});
   spl::visit(spl::overloaded{[&](power_need::default_role) { rules_in(facts.theirs).needs.users_default = level; },
                                    [&](power_need::send_messages) { rules_in(facts.theirs).needs.events_default = level; },
                                    [&](power_need::change_settings) { rules_in(facts.theirs).needs.state_default = level; },
@@ -89,7 +89,7 @@ void user_level(Box* box, const std::string& user, std::int64_t level) {
   auto& facts = box->facts;
   if (!may(facts, power_need::change_permissions{}) || level > facts.mine)
     return;
-  box->send(request::change_room{room_change::set_power{user, level}});
+  box->emit(request::change_room{room_change::set_power{user, level}});
   const auto found = std::ranges::find(facts.privileged, user, &room_settings_facts::person::id);
   if (found != facts.privileged.end())
     found->level = level;
@@ -100,7 +100,7 @@ void event_level(Box* box, const std::string& event, std::int64_t level) {
   auto& facts = box->facts;
   if (!may(facts, power_need::change_permissions{}) || level > facts.mine || event.empty())
     return;
-  box->send(request::change_room{room_change::set_event_need{event, level}});
+  box->emit(request::change_room{room_change::set_event_need{event, level}});
   rules_in(facts.theirs).needs.events.insert_or_assign(event, level);
   box->show_again();
 }
@@ -168,7 +168,7 @@ void change_child(Box* box, const std::string& room, bool add) {
     return;
   to.push_back(*found);
   from.erase(found);
-  box->send(request::change_room{add ? room_change_t{room_change::add_child{room}}
+  box->emit(request::change_room{add ? room_change_t{room_change::add_child{room}}
                                                  : room_change_t{room_change::remove_child{room}}});
   box->show_again();
 }
@@ -216,11 +216,11 @@ struct room_page : nodes::Stack {
       const std::string& name = page->parts.name.text();
       const std::string& topic = page->parts.topic.text();
       if (name != facts.name && may(facts, power_need::rename{})) {
-        box->send(::mux::ui::request::room_act{room_action::rename{name}});
+        box->emit(::mux::ui::request::room_act{room_action::rename{name}});
         facts.name = name;
       }
       if (topic != facts.topic && may(facts, power_need::retopic{})) {
-        box->send(::mux::ui::request::room_act{room_action::retopic{topic}});
+        box->emit(::mux::ui::request::room_act{room_action::retopic{topic}});
         facts.topic = topic;
       }
     }
@@ -648,7 +648,7 @@ struct advanced_page : nodes::Stack {
       if (!may(box->facts, power_need::upgrade{}))
         return;
       if (const std::string version = page->parts.upgrade_to.text(); !version.empty())
-        box->send(request::change_room{room_change::upgrade{version}});
+        box->emit(request::change_room{room_change::upgrade{version}});
     }
   };
   struct parts_t {

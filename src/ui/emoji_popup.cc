@@ -34,7 +34,7 @@ template <class Actions>
 struct react_with : outbox {
   // What is typed in its search, a reaction too: Matrix takes any text.
   [[nodiscard]] static constexpr bool takes_text() { return true; }
-  void operator()(const std::string&, const std::string& key) { this->send(::mux::ui::request::menu_react{key}); }
+  void operator()(const std::string&, const std::string& key) { this->emit(::mux::ui::request::menu_react{key}); }
 };
 // What the input's emoji do: go into what is written.
 template <class Actions>
@@ -43,7 +43,7 @@ struct insert_emoji_into : outbox {
   // A glyph as itself; a custom emoji (its key its picture's, not its
   // text) as its picture.
   void operator()(const std::string& text, const std::string& key) {
-    this->send(::mux::ui::request::insert_emoji{text, key == text ? std::string() : key});
+    this->emit(::mux::ui::request::insert_emoji{text, key == text ? std::string() : key});
   }
 };
 
@@ -67,7 +67,7 @@ struct gif_grid : nodes::Stack, outbox {
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
-      this->send(::mux::ui::request::send_gif{path});
+      this->emit(::mux::ui::request::send_gif{path});
       return true;
     }
     // Drawn again each frame while it moves, for its next frame.
@@ -239,7 +239,7 @@ struct emoji_popup : scene::Node, outbox {
       parts.tabs.parts.stickers.fState.apply({.selected = stickers});
       parts.tabs.parts.gifs.fState.apply({.selected = gifs});
       if (gifs)
-        this->send(::mux::ui::request::show_gifs{});
+        this->emit(::mux::ui::request::show_gifs{});
       this->invalidateLayout();
     }
     [[nodiscard]] bool acceptsInput() const { return true; }

@@ -63,7 +63,7 @@ struct packs_box : nodes::Stack, outbox {
   bool open = false;              // a pack open, not the list
   bool new_pack = false;          // the one open not yet saved
   struct close_it : outbox {
-    void operator()() { this->send(::mux::ui::request::close_packs{}); }
+    void operator()() { this->emit(::mux::ui::request::close_packs{}); }
   };
   struct back_press {
     packs_box* box;
@@ -74,7 +74,7 @@ struct packs_box : nodes::Stack, outbox {
     void operator()() const { box->open_pack(std::nullopt); }
   };
   struct add_press : outbox {
-    void operator()() { this->send(::mux::ui::request::pick_pack_images{}); }
+    void operator()() { this->emit(::mux::ui::request::pick_pack_images{}); }
   };
   struct save_press {
     packs_box* box;
@@ -404,14 +404,14 @@ struct packs_box : nodes::Stack, outbox {
     if (!draft.avatar && !draft.pictures.empty())
       draft.avatar = draft.pictures.front().url;
     std::erase_if(draft.pictures, [](const pack_picture& one) { return one.shortcode.empty() || one.url.empty(); });
-    this->send(::mux::ui::request::save_pack{draft});
+    this->emit(::mux::ui::request::save_pack{draft});
     parts.note.setText("Saving…");
   }
   // As its protocol takes a pack away; a new one, not saved yet, is nothing.
   void remove_pack() {
     if (draft.key.empty())
       return;
-    this->send(::mux::ui::request::delete_pack{draft});
+    this->emit(::mux::ui::request::delete_pack{draft});
     parts.note.setText("Deleting…");
   }
 };

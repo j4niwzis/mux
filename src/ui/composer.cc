@@ -73,11 +73,11 @@ struct drag_edge : scene::Node {
 // Where an edge was dragged to, asked of the program.
 template <class Actions>
 struct resize_sidebar_to : outbox {
-  void operator()(float x) { this->send(::mux::ui::request::resize_sidebar{x}); }
+  void operator()(float x) { this->emit(::mux::ui::request::resize_sidebar{x}); }
 };
 template <class Actions>
 struct resize_info_to : outbox {
-  void operator()(float x) { this->send(::mux::ui::request::resize_info{x}); }
+  void operator()(float x) { this->emit(::mux::ui::request::resize_info{x}); }
 };
 
 // ---- the message field --------------------------------------------------------------
@@ -98,7 +98,7 @@ struct resize_info_to : outbox {
 // What Enter in the message field does: asks for its text to be sent.
 template <class Actions>
 struct submit_message : outbox {
-  void operator()(std::string_view text) { this->send(::mux::ui::request::submit_message{with_blocks_closed(text)}); }
+  void operator()(std::string_view text) { this->emit(::mux::ui::request::submit_message{with_blocks_closed(text)}); }
 };
 
 
@@ -711,11 +711,11 @@ struct composer_bar : nodes::Stack {
   // knock refused), and how many more.
   struct approve_it : outbox {
     std::string user;
-    void operator()() { this->send(::mux::ui::request::room_act{room_action::invite{user}}); }
+    void operator()() { this->emit(::mux::ui::request::room_act{room_action::invite{user}}); }
   };
   struct deny_it : outbox {
     std::string user;
-    void operator()() { this->send(::mux::ui::request::room_act{room_action::kick{user}}); }
+    void operator()() { this->emit(::mux::ui::request::room_act{room_action::kick{user}}); }
   };
   using knock_row = two_choice_bar<deny_it, approve_it>;
   [[nodiscard]] static std::string knock_said(const knock_request& one, std::size_t more) {
@@ -937,7 +937,7 @@ struct mark_button : scene::Node, outbox {
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
-    this->send(::mux::ui::request::jump_to_mark{kind});
+    this->emit(::mux::ui::request::jump_to_mark{kind});
     return true;
   }
   // The other button: all of them, listed. On the way back up, not at the
@@ -947,7 +947,7 @@ struct mark_button : scene::Node, outbox {
   void onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
     if (press.button != 3)
       return;
-    this->send(::mux::ui::request::list_marks{kind});
+    this->emit(::mux::ui::request::list_marks{kind});
     reply.handle();
   }
   // And where the press is on the button itself -- the target, which the
@@ -955,7 +955,7 @@ struct mark_button : scene::Node, outbox {
   // press as a node's is, a click.
   void onPointer(scene::phase::target, const scene::pointer::down& press, scene::PointerReply& reply) {
     if (press.button == 3) {
-      this->send(::mux::ui::request::list_marks{kind});
+      this->emit(::mux::ui::request::list_marks{kind});
       reply.handle();
       return;
     }
@@ -998,7 +998,7 @@ struct jump_button : scene::Node, outbox {
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
-    this->send(::mux::ui::request::jump_to_end{});
+    this->emit(::mux::ui::request::jump_to_end{});
     return true;
   }
 };
@@ -1029,7 +1029,7 @@ struct back_button : scene::Node, outbox {
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
-    this->send(::mux::ui::request::return_to_chat{});
+    this->emit(::mux::ui::request::return_to_chat{});
     return true;
   }
 };

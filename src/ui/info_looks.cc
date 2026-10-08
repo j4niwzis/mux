@@ -78,7 +78,7 @@ struct bubbles_picker : nodes::Stack {
     config::look_part_t part;
     void operator()() {
       if (usable(level, part))
-        this->send(::mux::ui::request::set_bubbles{level.level, std::nullopt, part});
+        this->emit(::mux::ui::request::set_bubbles{level.level, std::nullopt, part});
     }
   };
   struct pick_kind : outbox {
@@ -87,7 +87,7 @@ struct bubbles_picker : nodes::Stack {
     config::bubbles_t kind;
     void operator()() {
       if (usable(level, part))
-        this->send(::mux::ui::request::set_bubbles{level.level, config::bubble_look{kind, current(level, part).opacity}, part});
+        this->emit(::mux::ui::request::set_bubbles{level.level, config::bubble_look{kind, current(level, part).opacity}, part});
     }
   };
   // An opacity let go at: of the kind in use -- solid has none, so
@@ -103,7 +103,7 @@ struct bubbles_picker : nodes::Stack {
                                                    [](const auto& other) { return config::bubbles_t{other}; }},
                                 look.kind);
       look.opacity = static_cast<int>(std::lround(10.0f + std::clamp(fraction, 0.0f, 1.0f) * 90.0f));
-      this->send(::mux::ui::request::set_bubbles{level.level, look, part});
+      this->emit(::mux::ui::request::set_bubbles{level.level, look, part});
     }
   };
   // An element's opacity, apart from the bubbles': let go at, or given back
@@ -117,7 +117,7 @@ struct bubbles_picker : nodes::Stack {
         return;
       config::bubble_look look = current(level, config::look_part::bubbles{});
       look.elements.*which = static_cast<int>(std::lround(std::clamp(fraction, 0.0f, 1.0f) * 100.0f));
-      this->send(::mux::ui::request::set_bubbles{level.level, look, config::look_part::bubbles{}});
+      this->emit(::mux::ui::request::set_bubbles{level.level, look, config::look_part::bubbles{}});
     }
   };
   struct element_reset : outbox {
@@ -128,7 +128,7 @@ struct bubbles_picker : nodes::Stack {
         return;
       config::bubble_look look = current(level, config::look_part::bubbles{});
       look.elements.*which = std::nullopt;
-      this->send(::mux::ui::request::set_bubbles{level.level, look, config::look_part::bubbles{}});
+      this->emit(::mux::ui::request::set_bubbles{level.level, look, config::look_part::bubbles{}});
     }
   };
   struct element_row : nodes::Stack {
@@ -192,7 +192,7 @@ struct bubbles_picker : nodes::Stack {
       if (!usable(level, part))
         return;
       if (inherit && index == 0) {
-        this->send(::mux::ui::request::set_bubbles{level.level, std::nullopt, part});
+        this->emit(::mux::ui::request::set_bubbles{level.level, std::nullopt, part});
         return;
       }
       static const std::array<config::bubbles_t, 4> kinds{config::bubbles::solid{}, config::bubbles::translucent{},
@@ -202,7 +202,7 @@ struct bubbles_picker : nodes::Stack {
         return;
       config::bubble_look look = current(level, part);
       look.kind = kinds[at];
-      this->send(::mux::ui::request::set_bubbles{level.level, look, part});
+      this->emit(::mux::ui::request::set_bubbles{level.level, look, part});
     }
   };
   // Frosted's blur, let go at: the look's own -- the bubbles' apart from the
@@ -215,7 +215,7 @@ struct bubbles_picker : nodes::Stack {
         return;
       config::bubble_look look = current(level, part);
       look.blur = static_cast<double>(std::clamp(fraction, 0.0f, 1.0f)) * 100.0;
-      this->send(::mux::ui::request::set_bubbles{level.level, look, part});
+      this->emit(::mux::ui::request::set_bubbles{level.level, look, part});
     }
   };
   // An element's blur, apart from the bubbles': let go at, or given back.
@@ -228,7 +228,7 @@ struct bubbles_picker : nodes::Stack {
         return;
       config::bubble_look look = current(level, config::look_part::bubbles{});
       look.blurs.*which = static_cast<double>(std::clamp(fraction, 0.0f, 1.0f)) * 100.0;
-      this->send(::mux::ui::request::set_bubbles{level.level, look, config::look_part::bubbles{}});
+      this->emit(::mux::ui::request::set_bubbles{level.level, look, config::look_part::bubbles{}});
     }
   };
   struct element_blur_reset : outbox {
@@ -239,7 +239,7 @@ struct bubbles_picker : nodes::Stack {
         return;
       config::bubble_look look = current(level, config::look_part::bubbles{});
       look.blurs.*which = std::nullopt;
-      this->send(::mux::ui::request::set_bubbles{level.level, look, config::look_part::bubbles{}});
+      this->emit(::mux::ui::request::set_bubbles{level.level, look, config::look_part::bubbles{}});
     }
   };
   // An element drawn frosted: its blur, and a way back to the bubbles'.
@@ -373,13 +373,13 @@ struct look_choices : nodes::Stack {
     bool inherit;
     void operator()(std::size_t index) {
       if (inherit && index == 0) {
-        this->send(::mux::ui::request::set_wallpaper{level, config::wallpaper_pick::inherit{}});
+        this->emit(::mux::ui::request::set_wallpaper{level, config::wallpaper_pick::inherit{}});
         return;
       }
       static const std::array<config::wallpaper_pick_t, 3> picks{config::wallpaper_pick::theme{}, config::wallpaper_pick::plain{},
                                                                 config::wallpaper_pick::picture{}};
       if (const std::size_t at = index - (inherit ? 1 : 0); at < picks.size())
-        this->send(::mux::ui::request::set_wallpaper{level, picks[at]});
+        this->emit(::mux::ui::request::set_wallpaper{level, picks[at]});
     }
   };
   [[nodiscard]] static std::vector<std::string> background_names(const looks_shown& looks, const choice_level_t& level) {
@@ -443,7 +443,7 @@ struct wallpaper_box : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{380.0f}}; }
   struct close_it : outbox {
-    void operator()() { this->send(::mux::ui::request::close_wallpaper{}); }
+    void operator()() { this->emit(::mux::ui::request::close_wallpaper{}); }
   };
   using header_t = page_header<no_back, close_it>;
   struct parts_t {

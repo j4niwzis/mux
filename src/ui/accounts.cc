@@ -82,7 +82,7 @@ struct account_entry : nodes::Stack, outbox {
 
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
-    this->send(::mux::ui::request::select_account{address});
+    this->emit(::mux::ui::request::select_account{address});
     return true;
   }
   [[nodiscard]] scene::Semantics semantics() const {
@@ -180,7 +180,7 @@ struct switch_row : nodes::Stack {
 template <class Actions>
 struct choose_account_page : outbox {
   account_page_t page = account_page::connection{};
-  void operator()() { this->send(::mux::ui::request::account_page{page}); }
+  void operator()() { this->emit(::mux::ui::request::account_page{page}); }
 };
 
 // An account's pages, in place of the list of accounts once one is chosen: a
@@ -382,14 +382,14 @@ template <class Actions>
 struct account_chats : nodes::Stack {
   // Its colour chosen.
   struct set_colour : outbox {
-    void operator()(const config::accent_t& one) { this->send(::mux::ui::request::set_account_colour{one}); }
+    void operator()(const config::accent_t& one) { this->emit(::mux::ui::request::set_account_colour{one}); }
   };
   // Home without what its spaces hold -- but direct messages -- or as every
   // account's.
   struct pick_home : outbox {
     void operator()(std::size_t index) {
-      this->send(::mux::ui::request::set_home_hides{choice_level::account{}, index == 0 ? std::nullopt : std::optional<bool>(index >= 2)});
-      this->send(::mux::ui::request::set_home_direct{choice_level::account{}, index == 0 ? std::nullopt : std::optional<bool>(index == 3)});
+      this->emit(::mux::ui::request::set_home_hides{choice_level::account{}, index == 0 ? std::nullopt : std::optional<bool>(index >= 2)});
+      this->emit(::mux::ui::request::set_home_direct{choice_level::account{}, index == 0 ? std::nullopt : std::optional<bool>(index == 3)});
     }
   };
   struct parts_t {
@@ -439,7 +439,7 @@ struct account_chats : nodes::Stack {
 template <class Actions>
 struct choose_account_proxy : outbox {
   int index = -1;
-  void operator()() { this->send(::mux::ui::request::choose_account_proxy{index}); }
+  void operator()() { this->emit(::mux::ui::request::choose_account_proxy{index}); }
 };
 
 // An account's Proxy page, as Gajim's: which of the program's proxy profiles

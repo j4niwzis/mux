@@ -78,8 +78,8 @@ struct seen_row : nodes::Stack, outbox {
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
-      this->send(::mux::ui::request::close_menu{});
-      this->send(::mux::ui::request::open_member_info{id});
+      this->emit(::mux::ui::request::close_menu{});
+      this->emit(::mux::ui::request::open_member_info{id});
       return true;
     }
   };
@@ -208,7 +208,7 @@ struct context_menu : scene::Node, outbox {
       [[nodiscard]] bool acceptsInput() const { return true; }
       [[nodiscard]] bool hoverChangesAppearance() const { return true; }
       [[nodiscard]] bool onClick(float, float) {
-        this->send(::mux::ui::request::menu_react{key});
+        this->emit(::mux::ui::request::menu_react{key});
         return true;
       }
     };
@@ -489,7 +489,7 @@ struct context_menu : scene::Node, outbox {
   [[nodiscard]] bool acceptsInput() const { return true; }
   using Node::onPointer;
   void onPointer(scene::phase::target, const scene::pointer::down&, scene::PointerReply& reply) {
-    this->send(::mux::ui::request::close_menu{});
+    this->emit(::mux::ui::request::close_menu{});
     reply.handle();
   }
 };

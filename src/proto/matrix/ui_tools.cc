@@ -34,7 +34,7 @@ struct devtools_box : nodes::Stack, outbox {
   // The colours it is made in, for its parts and the rows it makes later.
   const palette* colours_ = nullptr;
   struct close_it : outbox {
-    void operator()() { this->send(::mux::ui::request::close_dialog{}); }
+    void operator()() { this->emit(::mux::ui::request::close_dialog{}); }
   };
   struct back_up {
     devtools_box* box;
@@ -229,7 +229,7 @@ struct devtools_box : nodes::Stack, outbox {
     auto& [type, key, caption, body, button] = parts.sending->parts;
     if (type.text().empty())
       return;
-    this->send(request::send_custom{type.text(), key.text().empty() ? std::nullopt : std::optional<std::string>(key.text()),
+    this->emit(request::send_custom{type.text(), key.text().empty() ? std::nullopt : std::optional<std::string>(key.text()),
                                           body.text()});
   }
 };
@@ -241,13 +241,13 @@ template <class Actions>
 struct uia_box : nodes::Stack {
   struct open_again : outbox {
     std::string url;
-    void operator()() { this->send(::mux::ui::request::open_url{url}); }
+    void operator()() { this->emit(::mux::ui::request::open_url{url}); }
   };
   struct cancel : outbox {
-    void operator()() { this->send(request::cancel_uia{}); }
+    void operator()() { this->emit(request::cancel_uia{}); }
   };
   struct go : outbox {
-    void operator()() { this->send(request::continue_uia{}); }
+    void operator()() { this->emit(request::continue_uia{}); }
   };
   struct parts_t {
     nodes::Text title;

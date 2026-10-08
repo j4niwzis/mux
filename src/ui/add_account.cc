@@ -24,7 +24,7 @@ export namespace mux::ui {
 template <class Actions>
 struct choose_new_proxy : outbox {
   int index = -1;
-  void operator()() { this->send(::mux::ui::request::choose_new_proxy{index}); }
+  void operator()() { this->emit(::mux::ui::request::choose_new_proxy{index}); }
 };
 
 // Adding an account, beside the list of them: XMPP or Matrix at the top, and
@@ -36,7 +36,7 @@ struct add_account_pane : nodes::Stack, outbox {
   // its protocol names itself.
   struct pick_protocol : outbox {
     protocol_t speaks;
-    void operator()() { this->send(::mux::ui::request::add_account_of{speaks}); }
+    void operator()() { this->emit(::mux::ui::request::add_account_of{speaks}); }
   };
   struct protocol_switch : nodes::Stack {
     struct parts_t {

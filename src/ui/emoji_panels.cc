@@ -71,7 +71,7 @@ struct sticker_grid : nodes::Stack, outbox {
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
-      this->send(::mux::ui::request::send_sticker{sticker});
+      this->emit(::mux::ui::request::send_sticker{sticker});
       return true;
     }
   };

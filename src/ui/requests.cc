@@ -674,7 +674,7 @@ struct outbox {
   template <class A>
   outbox(A*) {}
   template <class E>
-  void send(E one) {
+  void emit(E one) {
     fEmitted.emplace_back(std::move(one));
     ++skiff::bind::pendingCount();
   }

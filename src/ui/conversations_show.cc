@@ -65,15 +65,15 @@ void conversations_screen<Actions>::onKey(scene::phase::bubble, const scene::key
   if (!chosen && !((press.key == keys::kUp || press.key == keys::kDown) && press.modifiers.template has<scene::modifier::alt>()))
     return;
   if (press.key == keys::kF && control) {
-    this->send(::mux::ui::request::open_search{});
+    this->emit(::mux::ui::request::open_search{});
   } else if (press.key == keys::kK && control) {
-    this->send(::mux::ui::request::ask_link{});
+    this->emit(::mux::ui::request::ask_link{});
   } else if (press.key == keys::kUp && control) {
-    this->send(::mux::ui::request::reply_step{true});
+    this->emit(::mux::ui::request::reply_step{true});
   } else if (press.key == keys::kDown && control) {
-    this->send(::mux::ui::request::reply_step{false});
+    this->emit(::mux::ui::request::reply_step{false});
   } else if (press.key == keys::kUp && !any && line.text().empty()) {
-    this->send(::mux::ui::request::edit_last{});
+    this->emit(::mux::ui::request::edit_last{});
   } else if (press.key == keys::kC && control) {
     auto& bubbles = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
     const auto selected = std::ranges::find_if(bubbles, [](message_bubble<Actions>& one) { return one.parts.body.parts.text.hasSelection(); });
@@ -86,13 +86,13 @@ void conversations_screen<Actions>::onKey(scene::phase::bubble, const scene::key
     skiff::scene::setClipboardText(selected->parts.body.parts.text.selected());
   } else if (press.key == keys::kEscape && !any && chat.parts.selection.visible()) {
     // Messages selected, the focus elsewhere than their bar: let go first.
-    this->send(::mux::ui::request::selection_cancel{});
+    this->emit(::mux::ui::request::selection_cancel{});
   } else if (press.key == keys::kEscape && !any && search.visible()) {
-    this->send(::mux::ui::request::close_search{});
+    this->emit(::mux::ui::request::close_search{});
   } else if (press.key == keys::kEscape && !any && parts.threads.answering) {
     parts.threads.stop_answering();
   } else if (press.key == keys::kEscape && !any && line.answering()) {
-    this->send(::mux::ui::request::cancel_compose{});
+    this->emit(::mux::ui::request::cancel_compose{});
   } else if ((press.key == keys::kTab && control) ||
              ((press.key == keys::kUp || press.key == keys::kDown) && press.modifiers.template has<scene::modifier::alt>())) {
     // To the next chat in the list, or the one before: Ctrl+Tab and
@@ -113,14 +113,14 @@ void conversations_screen<Actions>::onKey(scene::phase::bubble, const scene::key
         this->show(*last_model, false);
     } else {
       pointed.reset();
-      this->send(::mux::ui::request::choose{rows[to]});
+      this->emit(::mux::ui::request::choose{rows[to]});
     }
   } else if (press.key == keys::kPageUp || press.key == keys::kPageDown) {
     // A page of the messages, most of what is in view.
     const float page = timeline.bounds().height() * 0.9f;
     timeline.scrollTo(std::max(0.0f, timeline.current() + (press.key == keys::kPageUp ? -page : page)));
   } else if (press.key == keys::kEnd && control) {
-    this->send(::mux::ui::request::jump_to_end{});
+    this->emit(::mux::ui::request::jump_to_end{});
   } else if (press.key == keys::kEscape && !any) {
     // Nothing else to cancel: a step back -- the threads or the info shut,
     // else the chat closed, as tdesktop's Esc closes it.
@@ -342,10 +342,10 @@ void conversations_screen<Actions>::onPointer(scene::phase::capture, const scene
     if (chosen)
       this->step_back();
     else
-      this->send(::mux::ui::request::open_drawer{});
+      this->emit(::mux::ui::request::open_drawer{});
     reply.handle();
   } else if (const auto row = std::exchange(swipe_row, std::nullopt); row && !chosen && -dx > 90.0f && std::abs(dy) < -dx * 0.5f) {
-    this->send(::mux::ui::request::toggle_mute_of{*row});
+    this->emit(::mux::ui::request::toggle_mute_of{*row});
     reply.handle();
   }
 }
@@ -464,7 +464,7 @@ void conversations_screen<Actions>::update(double now_ms) {
       // Come with the context, but as an answer in a thread: kept with its
       // thread, never in the timeline -- paged back for, the whole chat was
       // fetched to the beginning and it was not found. Its thread opened.
-      this->send(::mux::ui::request::open_thread{*held->thread});
+      this->emit(::mux::ui::request::open_thread{*held->thread});
       this->stop_jump();
     } else if (proto::offers(protocol_state_of(*needs_.shared, chosen->account), proto::feature::history_context{}) && !jump_paging) {
       // Not here: a window of the history around it, from the server --
@@ -473,7 +473,7 @@ void conversations_screen<Actions>::update(double now_ms) {
       if (context_asked != jumping_to) {
         context_asked = jumping_to;
         jump_since_ms = now_ms;
-        this->send(::mux::ui::request::load_context{*chosen, *jumping_to});
+        this->emit(::mux::ui::request::load_context{*chosen, *jumping_to});
       } else if (now_ms - jump_since_ms > kContextPatienceMs) {
         jump_paging = true;
         jump_tries = 0;
@@ -490,7 +490,7 @@ void conversations_screen<Actions>::update(double now_ms) {
         history_asked = history_from;
         history_asked_ms = now_ms;
         jump_since_ms = now_ms;
-        this->send(::mux::ui::request::load_older{*chosen, *history_from});
+        this->emit(::mux::ui::request::load_older{*chosen, *history_from});
       }
     } else if (!history_from && now_ms - jump_since_ms > 2000.0) {
       jumping_to.reset();  // the beginning, and it was not there
@@ -563,7 +563,7 @@ void conversations_screen<Actions>::update(double now_ms) {
   if (const bool has_text = !line.text().empty(); has_text != was_typing || (has_text && line.text() != typed_last)) {
     was_typing = has_text;
     typed_last = line.text();
-    this->send(::mux::ui::request::typing{has_text});
+    this->emit(::mux::ui::request::typing{has_text});
   }
   if (side.search.field.text() != searched && last_model) {
     searched = side.search.field.text();
@@ -634,12 +634,12 @@ void conversations_screen<Actions>::update(double now_ms) {
       } else if (timeline.current() <= 4.0f && from == 0 && history_from && history_asked != history_from) {
         history_asked = history_from;
         history_asked_ms = now_ms;
-        this->send(::mux::ui::request::load_older{*chosen, *history_from});
+        this->emit(::mux::ui::request::load_older{*chosen, *history_from});
       } else if (made.to_end && one->detached && one->future_from && newer_asked != one->future_from &&
                  timeline.current() >= timeline.extent() - 300.0f) {
         // At the end of a window: paged forward, toward the newest.
         newer_asked = one->future_from;
-        this->send(::mux::ui::request::load_newer{*chosen, *one->future_from});
+        this->emit(::mux::ui::request::load_newer{*chosen, *one->future_from});
       } else if (!made.to_end && timeline.current() >= timeline.extent() - ahead) {
         to = std::min(one->timeline.size(), to + kMadeStep);
         from = to > kMostMade && to - from > kMostMade ? to - kMostMade : from;
@@ -929,7 +929,7 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
     rooms_elsewhere.clear();
     people_elsewhere.clear();
     rooms_came = people_came = false;
-    this->send(::mux::ui::request::search_elsewhere{typed});
+    this->emit(::mux::ui::request::search_elsewhere{typed});
     this->show_elsewhere();
   } else if (!elsewhere && !asked_elsewhere.empty()) {
     asked_elsewhere.clear();

@@ -71,10 +71,10 @@ struct link_box : nodes::Stack, outbox {
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{400.0f}}; }
   struct done {
     link_box* box;
-    void operator()() const { box->send(::mux::ui::request::set_link{box->parts.text.text(), box->parts.url.text()}); }
+    void operator()() const { box->emit(::mux::ui::request::set_link{box->parts.text.text(), box->parts.url.text()}); }
   };
   struct cancel : outbox {
-    void operator()() { this->send(::mux::ui::request::close_link{}); }
+    void operator()() { this->emit(::mux::ui::request::close_link{}); }
   };
   Actions* actions = nullptr;
   struct parts_t {
@@ -136,7 +136,7 @@ struct passphrase_box : nodes::Stack, outbox {
   struct submit {
     passphrase_box* box;
     void operator()() const {
-      box->send(::mux::ui::request::give_passphrase{box->purpose, box->parts.current.text(), box->parts.fresh.text(), box->parts.again.text(),
+      box->emit(::mux::ui::request::give_passphrase{box->purpose, box->parts.current.text(), box->parts.fresh.text(), box->parts.again.text(),
                                     box->parts.file.text()});
     }
   };

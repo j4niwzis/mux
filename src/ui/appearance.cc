@@ -32,7 +32,7 @@ export namespace mux::ui {
 template <class Actions>
 struct choose_renderer : outbox {
   config::renderer_t renderer;
-  void operator()() { this->send(::mux::ui::request::set_renderer{renderer}); }
+  void operator()() { this->emit(::mux::ui::request::set_renderer{renderer}); }
 };
 
 // A theme's card on the Appearance page: a small picture of it -- its

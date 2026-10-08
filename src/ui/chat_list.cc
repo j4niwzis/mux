@@ -304,7 +304,7 @@ struct conversation_row : nodes::Stack, outbox {
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
-    this->send(::mux::ui::request::choose{id});
+    this->emit(::mux::ui::request::choose{id});
     return true;
   }
   [[nodiscard]] scene::Semantics semantics() const {

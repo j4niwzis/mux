@@ -52,9 +52,9 @@ struct directory_join : outbox {
   std::string name;
   void operator()() {
     if (open)
-      this->send(::mux::ui::request::explore_space{room, name});
+      this->emit(::mux::ui::request::explore_space{room, name});
     else
-      this->send(::mux::ui::request::join_directory_room{room, server});
+      this->emit(::mux::ui::request::join_directory_room{room, server});
   }
 };
 
@@ -117,7 +117,7 @@ struct explore_box : nodes::Stack, outbox {
   // The colours it is made in, for its parts and the rows it makes later.
   const palette* colours_ = nullptr;
   struct close_it : outbox {
-    void operator()() { this->send(::mux::ui::request::close_explore{}); }
+    void operator()() { this->emit(::mux::ui::request::close_explore{}); }
   };
   struct search_press {
     explore_box* box;
@@ -128,7 +128,7 @@ struct explore_box : nodes::Stack, outbox {
       }
       box->parts.status.setText("Searching\u2026");
       box->parts.status.setVisible(true);
-      box->send(::mux::ui::request::search_rooms{box->parts.search.parts.server.text(), box->parts.search.parts.query.text()});
+      box->emit(::mux::ui::request::search_rooms{box->parts.search.parts.server.text(), box->parts.search.parts.query.text()});
     }
   };
   // Whose rooms are listed, where a space's are; and what it listed, to be
@@ -145,7 +145,7 @@ struct explore_box : nodes::Stack, outbox {
       if (!box->next)
         return;
       box->parts.more.setLabel("Loading\u2026");
-      box->send(::mux::ui::request::search_rooms{box->listed_server, box->listed_query, *box->next});
+      box->emit(::mux::ui::request::search_rooms{box->listed_server, box->listed_query, *box->next});
     }
   };
   // A space's name and picture, over what it holds.

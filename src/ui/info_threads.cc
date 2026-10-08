@@ -54,10 +54,10 @@ struct threads_panel : nodes::Stack, outbox {
   const model* seen_model = nullptr;
   std::optional<conversation_id> seen_chat;
   struct close_it : outbox {
-    void operator()() { this->send(::mux::ui::request::toggle_threads{}); }
+    void operator()() { this->emit(::mux::ui::request::toggle_threads{}); }
   };
   struct back_it : outbox {
-    void operator()() { this->send(::mux::ui::request::close_thread{}); }
+    void operator()() { this->emit(::mux::ui::request::close_thread{}); }
   };
   struct sent {
     threads_panel* panel;
@@ -126,7 +126,7 @@ struct threads_panel : nodes::Stack, outbox {
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
     [[nodiscard]] bool onClick(float, float) {
-      this->send(::mux::ui::request::open_thread{root});
+      this->emit(::mux::ui::request::open_thread{root});
       return true;
     }
   };
@@ -262,7 +262,7 @@ struct threads_panel : nodes::Stack, outbox {
     const std::string text = parts.line.plain();
     if (!open || text.empty())
       return;
-    this->send(::mux::ui::request::send_in_thread{*open, text, answering});
+    this->emit(::mux::ui::request::send_in_thread{*open, text, answering});
     parts.line.clear();
     this->stop_answering();
   }

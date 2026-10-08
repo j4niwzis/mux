@@ -54,7 +54,7 @@ struct drawer_account : nodes::Stack, outbox {
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }
   [[nodiscard]] bool onClick(float, float) {
-    this->send(::mux::ui::request::switch_account{address});
+    this->emit(::mux::ui::request::switch_account{address});
     return true;
   }
   [[nodiscard]] scene::Semantics semantics() const {

@@ -140,7 +140,7 @@ struct matrix_form : nodes::Stack, outbox {
   using Node::onKey;
   void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
     if (press.key == scene::keys::kEnter) {
-      this->send(::mux::ui::request::submit_login{});
+      this->emit(::mux::ui::request::submit_login{});
       reply.handle();
     }
   }

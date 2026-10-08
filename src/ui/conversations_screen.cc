@@ -644,6 +644,12 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
           parts{.shown = composer_view_t(std::move(made))} {}
   };
   struct chat_column : skiff::compose::Stacked {
+    // Child references and handlers require a fixed address.
+    chat_column(const chat_column&) = delete;
+    chat_column& operator=(const chat_column&) = delete;
+    chat_column(chat_column&&) = delete;
+    chat_column& operator=(chat_column&&) = delete;
+
     using header_t = chat_head<Actions>;
     using pinned_t = nodes::Memo<pinned_view, pinned_bar<pinned_press>>;
     struct empty_state : skiff::compose::Stacked {

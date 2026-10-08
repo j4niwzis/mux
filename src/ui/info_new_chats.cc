@@ -61,6 +61,12 @@ struct forward_facts {
   std::vector<forward_target> chats;
 };
 template <class Actions> struct forward_box : skiff::compose::Stacked {
+  // Child references and handlers require a fixed address.
+  forward_box(const forward_box&) = delete;
+  forward_box& operator=(const forward_box&) = delete;
+  forward_box(forward_box&&) = delete;
+  forward_box& operator=(forward_box&&) = delete;
+
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{400.0f, 520.0f}}; }
   // The colours it is made in, for the rows it makes later.
@@ -166,6 +172,12 @@ struct new_chat_facts {
   std::string query;
 };
 template <class Actions> struct start_chat_box : skiff::compose::Stacked {
+  // Child references and handlers require a fixed address.
+  start_chat_box(const start_chat_box&) = delete;
+  start_chat_box& operator=(const start_chat_box&) = delete;
+  start_chat_box(start_chat_box&&) = delete;
+  start_chat_box& operator=(start_chat_box&&) = delete;
+
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{480.0f, 560.0f}}; }
   // The colours it is made in, for its parts and the rows it makes later.
@@ -359,6 +371,12 @@ struct new_room_facts {
   std::optional<new_room_place> place;
 };
 template <class Actions> struct create_room_box : skiff::compose::Stacked {
+  // Child references and handlers require a fixed address.
+  create_room_box(const create_room_box&) = delete;
+  create_room_box& operator=(const create_room_box&) = delete;
+  create_room_box(create_room_box&&) = delete;
+  create_room_box& operator=(create_room_box&&) = delete;
+
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{480.0f}}; }
   // The colours it is made in, for its parts.

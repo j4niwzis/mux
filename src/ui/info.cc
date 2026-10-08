@@ -76,6 +76,12 @@ template <class Act> using person_actions_t = decltype(person_actions(std::declv
 }
 
 template <class Actions> struct info_panel : skiff::compose::Stacked {
+  // Child references and handlers require a fixed address.
+  info_panel(const info_panel&) = delete;
+  info_panel& operator=(const info_panel&) = delete;
+  info_panel(info_panel&&) = delete;
+  info_panel& operator=(info_panel&&) = delete;
+
   // The colours it is made in, for what it makes later; and what the
   // window's parts share: the accounts' protocol states.
   const palette* colours_ = nullptr;

@@ -401,6 +401,12 @@ inline auto chat_notify_view(const palette& colours, const conversation_id& chat
 }
 
 template <class Actions> struct room_settings : skiff::compose::Stacked {
+  // Child references and handlers require a fixed address.
+  room_settings(const room_settings&) = delete;
+  room_settings& operator=(const room_settings&) = delete;
+  room_settings(room_settings&&) = delete;
+  room_settings& operator=(room_settings&&) = delete;
+
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{860.0f, 620.0f}}; }
   using actions_type = Actions;

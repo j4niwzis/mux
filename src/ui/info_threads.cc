@@ -46,6 +46,12 @@ export namespace mux::ui {
 // when the latest came -- and one opened: its root, its answers, and a
 // field to answer in it.
 template <class Actions> struct threads_panel : skiff::compose::Stacked {
+  // Child references and handlers require a fixed address.
+  threads_panel(const threads_panel&) = delete;
+  threads_panel& operator=(const threads_panel&) = delete;
+  threads_panel(threads_panel&&) = delete;
+  threads_panel& operator=(threads_panel&&) = delete;
+
   std::optional<std::string> open;  // the thread open, else the list
   std::vector<message> shown;       // what the open thread shows now
   std::optional<std::string> answering;  // an answer in it, answered

@@ -133,7 +133,19 @@ struct emoji_facts {
   std::vector<std::string> gifs;
 };
 template <class Actions> struct emoji_popup : skiff::compose::Specced {
+  // Child references and handlers require a fixed address.
+  emoji_popup(const emoji_popup&) = delete;
+  emoji_popup& operator=(const emoji_popup&) = delete;
+  emoji_popup(emoji_popup&&) = delete;
+  emoji_popup& operator=(emoji_popup&&) = delete;
+
   struct card_t : skiff::compose::Stacked {
+    // Child references and handlers require a fixed address.
+    card_t(const card_t&) = delete;
+    card_t& operator=(const card_t&) = delete;
+    card_t(card_t&&) = delete;
+    card_t& operator=(card_t&&) = delete;
+
     // A swipe to the GIFs: what has been saved since, asked for.
     using Answer = ::mux::ui::request::show_gifs;
     using panel_t = emoji_panel<insert_emoji_into<Actions>>;

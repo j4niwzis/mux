@@ -512,6 +512,12 @@ struct panel_facts {
 };
 template <class Actions>
 struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::accounts_back>> {
+  // Child references and handlers require a fixed address.
+  accounts_panel(const accounts_panel&) = delete;
+  accounts_panel& operator=(const accounts_panel&) = delete;
+  accounts_panel(accounts_panel&&) = delete;
+  accounts_panel& operator=(accounts_panel&&) = delete;
+
   static constexpr int kTab = 2;
   static constexpr float kListWidth = 280.0f;
 

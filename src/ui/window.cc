@@ -237,9 +237,10 @@ using shown_layer =
     skiff::compose::Mounted<Content, Facts, layer_arguments<Needs>>;
 template <class Content, class Facts, class Needs>
 auto layer_for(const Needs &needs) {
-  return skiff::compose::bound<std::optional<Facts>>(
-      skiff::compose::mount<Content, Facts>(layer_arguments<Needs>{needs},
-                                            {.fill = true}, true));
+  return skiff::bind::Bound<std::optional<Facts>,
+                            shown_layer<Content, Facts, Needs>>(
+      std::in_place, layer_arguments<Needs>{needs}, scene::Spec{.fill = true},
+      true);
 }
 
 // The conversations; over them the panel that is open, if one is, sliding in
@@ -248,6 +249,12 @@ auto layer_for(const Needs &needs) {
 // events.
 
 template <class Actions> struct window : skiff::compose::Specced {
+  // Child references and handlers require a fixed address.
+  window(const window&) = delete;
+  window& operator=(const window&) = delete;
+  window(window&&) = delete;
+  window& operator=(window&&) = delete;
+
   using panel_type = spl::variant<accounts_panel<Actions>>;
   using screen_node = skiff::bind::Bound<chat_shown, shown_screen<conversations_screen<Actions>>>;
   using drawer_node = shown_drawer<screen_node, drawer_panel<Actions>>;
@@ -386,7 +393,7 @@ template <class Actions> struct window : skiff::compose::Specced {
     using shown_in = skiff::bind::Bound<std::optional<Facts>, shown_dialog<Content, Facts, ui_needs<Actions>>>;
     template <class Content, class Facts>
     static shown_in<Content, Facts> shown_made(const ui_needs<Actions>& n) {
-      return shown_in<Content, Facts>(shown_dialog<Content, Facts, ui_needs<Actions>>(&n));
+      return shown_in<Content, Facts>(std::in_place, &n);
     }
     struct parts_t {
       nodes::Box<> backdrop;

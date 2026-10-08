@@ -684,6 +684,12 @@ struct two_choice_bar : skiff::compose::Stacked {
 
 template <class Actions, class Where = in_chat<Actions>>
 struct composer_bar : skiff::compose::Stacked {
+  // Child references and handlers require a fixed address.
+  composer_bar(const composer_bar&) = delete;
+  composer_bar& operator=(const composer_bar&) = delete;
+  composer_bar(composer_bar&&) = delete;
+  composer_bar& operator=(composer_bar&&) = delete;
+
   // What is written answers or edits: the reply bar, its ✕ going back to
   // a plain message.
   using context_row = context_bar<typename Where::cancel>;

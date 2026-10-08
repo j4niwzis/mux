@@ -215,6 +215,12 @@ template <class Pick> struct top_view : skiff::compose::Stacked {
 };
 template <class Actions, class Pick>
 struct side_column : skiff::compose::Stacked {
+  // Child references and handlers require a fixed address.
+  side_column(const side_column&) = delete;
+  side_column& operator=(const side_column&) = delete;
+  side_column(side_column&&) = delete;
+  side_column& operator=(side_column&&) = delete;
+
   // A space dragged to another place in the bars.
   using Answer = ::mux::ui::request::place_spaces;
   // The colours it is made in, for what it makes later: its menus, the

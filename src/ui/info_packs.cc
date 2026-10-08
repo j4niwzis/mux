@@ -55,6 +55,12 @@ struct packs_facts {
   bool editable = false;
 };
 template <class Actions> struct packs_box : skiff::compose::Stacked {
+  // Child references and handlers require a fixed address.
+  packs_box(const packs_box&) = delete;
+  packs_box& operator=(const packs_box&) = delete;
+  packs_box(packs_box&&) = delete;
+  packs_box& operator=(packs_box&&) = delete;
+
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{620.0f, 600.0f}}; }
   // The colours it is made in, for its parts and the rows it makes later.

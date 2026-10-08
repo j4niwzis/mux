@@ -57,6 +57,12 @@ template <class Rows> [[nodiscard]] auto picker_list(Rows rows) {
 }
 
 template <class Actions> struct sticker_grid : skiff::compose::Stacked {
+  // Child references and handlers require a fixed address.
+  sticker_grid(const sticker_grid&) = delete;
+  sticker_grid& operator=(const sticker_grid&) = delete;
+  sticker_grid(sticker_grid&&) = delete;
+  sticker_grid& operator=(sticker_grid&&) = delete;
+
   static constexpr float kCell = 78.0f;
   struct cell : skiff::compose::Stacked {
     // What its handlers ask for, returned.
@@ -290,6 +296,12 @@ template <class Actions> struct sticker_grid : skiff::compose::Stacked {
 // one in view. A press on an emoji gives it to Pick: a reaction, from a
 // message's menu; text in the input, from the input's own button.
 template <class Pick> struct emoji_panel : skiff::compose::Stacked {
+  // Child references and handlers require a fixed address.
+  emoji_panel(const emoji_panel&) = delete;
+  emoji_panel& operator=(const emoji_panel&) = delete;
+  emoji_panel(emoji_panel&&) = delete;
+  emoji_panel& operator=(emoji_panel&&) = delete;
+
   Pick pick;
   static constexpr float kCell = 37.0f;
   // A reaction that is text -- Matrix takes any -- as SchildiChat offers one:

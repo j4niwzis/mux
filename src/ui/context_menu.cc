@@ -194,6 +194,12 @@ template <class Actions> struct seen_row : skiff::compose::Stacked {
 };
 
 template <class Actions> struct context_menu : skiff::compose::Specced {
+  // Child references and handlers require a fixed address.
+  context_menu(const context_menu&) = delete;
+  context_menu& operator=(const context_menu&) = delete;
+  context_menu(context_menu&&) = delete;
+  context_menu& operator=(context_menu&&) = delete;
+
   // A press off it, Esc in it: closed.
   using Answer = ::mux::ui::request::close_menu;
   struct card : skiff::compose::Stacked {

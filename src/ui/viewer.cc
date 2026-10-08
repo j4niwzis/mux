@@ -39,6 +39,12 @@ struct viewer_facts {
   std::optional<std::filesystem::path> file;
 };
 template <class Actions> struct picture_viewer : skiff::compose::Stacked {
+  // Child references and handlers require a fixed address.
+  picture_viewer(const picture_viewer&) = delete;
+  picture_viewer& operator=(const picture_viewer&) = delete;
+  picture_viewer(picture_viewer&&) = delete;
+  picture_viewer& operator=(picture_viewer&&) = delete;
+
   // The colours its menu is made in.
   const palette* colours_ = nullptr;
   std::string source;

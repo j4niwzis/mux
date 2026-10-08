@@ -61,6 +61,25 @@ import mux.logic.links;
 
 export namespace mux::app {
 
+// What a press is answered with where it is made -- in a release build, as
+// the window routes it, every node with its type: the settings model the
+// window's scopes edit, and the program's sink for what nothing in the
+// window takes. The program says them once it has them; till then nothing
+// is answered there, and a press is delivered along its path instead.
+struct press_target {
+  kept_model* model = nullptr;
+  actions* sink = nullptr;
+};
+inline press_target& press_target_now() {
+  static press_target kept;
+  return kept;
+}
+// What the window's routing starts with (found by its root's type).
+inline auto startCarry(window_type&) {
+  const press_target& now = press_target_now();
+  return skiff::bind::carryFrom(now.model, now.sink);
+}
+
 // What the program does to the window between events.
 // What the program does to the window between events -- on what the
 // accounts file keeps, its base.

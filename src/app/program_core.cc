@@ -352,6 +352,7 @@ void app::settle_model() {
 // The chat screen read again by the chats binding: against everything the
 // model holds beside the chats, whether or not they moved.
 void app::show_chats_now() {
+  press_target_now() = {&this->state, &ask};
   root().main().last_model = &*model;
   // What is kept read first, where it moved since: the screen reads each
   // chat's settings from it as it is shown.

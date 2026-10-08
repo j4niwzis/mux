@@ -111,7 +111,7 @@ struct two_lines : skiff::compose::Stacked {
 };
 
 template <class Act>
-struct row_item : pressable<nodes::Stack> {
+struct row_item : pressable<skiff::compose::Stacked> {
   Act act;
   // Whether it is one of a choice, and the chosen one.
   std::optional<bool> radio;
@@ -125,17 +125,17 @@ struct row_item : pressable<nodes::Stack> {
 
   // Declared: its icon, its text taking the room, and a radio at the end.
   row_item(const palette& colours, std::string text, Act what, icon_t icon = icon::none{}, std::optional<bool> choice = std::nullopt)
-      : act(std::move(what)), radio(choice),
-        parts{.mark = icon_mark(colours, icon), .label = nodes::Text(std::move(text), 15.0f, colours.text), .dot = radio_mark(colours)} {
-    auto& [mark, label, dot] = parts;
-    this->setHorizontal();
-    this->setGap(16.0f);
-    fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f}, .hoverBackground = colours.chosen, .selectedBackground = colours.chosen, .focusBackground = colours.chosen});
-    mark.setVisible(spl::visit([](auto one) { return drawn(one); }, icon));
-    label.setElided(true);
-    label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-    dot.set_on(choice.value_or(false));
-    dot.setVisible(choice.has_value());
+      : pressable<skiff::compose::Stacked>(skiff::compose::hbox(16.0f, {.fillX = true, .height = kHeight, .padding = {0.0f, 20.0f, 0.0f, 20.0f},
+                                                                        .hoverBackground = colours.chosen, .selectedBackground = colours.chosen,
+                                                                        .focusBackground = colours.chosen})),
+        act(std::move(what)), radio(choice),
+        parts{.mark = skiff::compose::visible(spl::visit([](auto one) { return drawn(one); }, icon), icon_mark(colours, icon)),
+              .label = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                                              elided(nodes::Text(std::move(text), 15.0f, colours.text))),
+              .dot = skiff::compose::visible(choice.has_value(), dot_lit(radio_mark(colours), choice.value_or(false)))} {}
+  [[nodiscard]] static radio_mark dot_lit(radio_mark dot, bool on) {
+    dot.set_on(on);
+    return dot;
   }
 
   void set_chosen(bool on) {
@@ -842,18 +842,15 @@ struct chat_choice_values {
 // A notification as mux shows it itself, as Telegram Desktop's own: a card
 // in a small window of its own -- the chat's avatar beside the title over
 // the text.
-struct toast_card : nodes::Stack {
+struct toast_card : skiff::compose::Stacked {
   struct parts_t {
     avatar_mark face;
     two_lines texts;
   } parts;
   toast_card(const palette& colours, std::string key, std::string title, std::string text)
-      : parts{.face = avatar_mark(key, title, 44.0f), .texts = two_lines(colours, title, std::move(text), 14.0f, 4.0f)} {
-    this->setHorizontal();
-    this->setGap(12.0f);
-    fState.apply({.fill = true, .padding = {12.0f, 14.0f, 12.0f, 14.0f}, .background = colours.sidebar,
-                  .border = scene::Border{colours.band, 1.0f}});
-  }
+      : Stacked(skiff::compose::hbox(12.0f, {.fill = true, .padding = {12.0f, 14.0f, 12.0f, 14.0f}, .background = colours.sidebar,
+                                             .border = scene::Border{colours.band, 1.0f}})),
+        parts{.face = avatar_mark(key, title, 44.0f), .texts = two_lines(colours, title, std::move(text), 14.0f, 4.0f)} {}
 };
 
 // What a message being written answers or edits, as shown over the field:

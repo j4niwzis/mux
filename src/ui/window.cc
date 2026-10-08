@@ -134,6 +134,11 @@ struct shown_dialog : widgets::Dialog<Content, widgets::dismiss::pressed> {
     else
       (void)this->open(*needs, facts);
   }
+  void show_with(const Facts& facts)
+    requires requires { make_content(std::type_identity<Content>{}, *needs, facts); }
+  {
+    (void)this->open(make_content(std::type_identity<Content>{}, *needs, facts));
+  }
   void show_with(const Facts& facts) { (void)this->open(*needs, facts); }
   // Whether a press off it or Esc dismisses it, where what it shows says so
   // of these facts; else as its look says.
@@ -393,7 +398,7 @@ template <class Actions> struct window : skiff::compose::Specced {
       // A message's earlier versions, as AyuGram's edit history.
       shown_in<edit_history_box<Actions>, history_facts> history;
       // A link put on what is selected in the message field: Ctrl+K's.
-      shown_in<link_box<Actions>, link_facts> linking;
+      shown_in<link_box_t, link_facts> linking;
       // Leaving a space, and which of its rooms with it.
       shown_in<leave_space_box<Actions>, leave_space_facts> leaving;
       // The mentions or the reactions not yet seen, listed.
@@ -636,7 +641,7 @@ template <class Actions> struct window : skiff::compose::Specced {
                     shown_made<reactions_box<Actions>, reactions_facts>(n),
                 .history =
                     shown_made<edit_history_box<Actions>, history_facts>(n),
-                .linking = shown_made<link_box<Actions>, link_facts>(n),
+                .linking = shown_made<link_box_t, link_facts>(n),
                 .leaving =
                     shown_made<leave_space_box<Actions>, leave_space_facts>(n),
                 .marks = shown_made<marks_box<Actions>, marks_facts>(n),

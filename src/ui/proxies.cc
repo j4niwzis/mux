@@ -130,14 +130,6 @@ struct proxy_draft_events {
     return skiff::model::Up{request::delete_proxy_profile{draft.index}};
   }
 };
-template <auto Member>
-auto proxy_text_field(const palette& colours, std::string label, std::string placeholder, bool masked = false) {
-  return skiff::compose::column(
-      skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = scene::Margin::horizontal(16.0f)}),
-      nodes::Text(std::move(label), 13.0f, colours.dim),
-      skiff::compose::bound<skiff::model::Field<Member>>(skiff::compose::styled(
-          {.fillX = true, .height = 36.0f}, widgets::TextField<std::string>(colours.widgets, std::move(placeholder), masked))));
-}
 inline auto proxy_editor(const palette& colours, const std::optional<config::proxy_settings>& from, int index) {
   proxy_draft draft{.index = index};
   if (from) draft = {.index = index, .name = from->name, .kind = from->kind, .host = from->host,
@@ -147,15 +139,15 @@ inline auto proxy_editor(const palette& colours, const std::optional<config::pro
       skiff::compose::vbox(8.0f, {.fillX = true, .autoSize = scene::axes::kY}),
       page_header<sends<request::settings_proxies>, sends<request::close_settings>>(colours,
           from ? from->name : "New proxy", {}, {}, true, true),
-      proxy_text_field<&proxy_draft::name>(colours, "Name", "Home, Tor, Work…"),
+      model_field<&proxy_draft::name>(colours, "Name", "Home, Tor, Work…", false, scene::Margin::horizontal(16.0f)),
       skiff::compose::bound<skiff::model::Field<&proxy_draft::kind>>(skiff::compose::styled(
           {.fillX = true, .height = 30.0f, .margin = scene::Margin::horizontal(16.0f)},
           widgets::ChoiceTabs<config::proxy_kind_t>({{"SOCKS5", config::proxy_kind::socks5{}}, {"HTTP", config::proxy_kind::http{}}}))),
-      proxy_text_field<&proxy_draft::host>(colours, "Host", "proxy.example.com"),
-      proxy_text_field<&proxy_draft::port>(colours, "Port", "1080"),
-      proxy_text_field<&proxy_draft::username>(colours, "User name", "none"),
-      proxy_text_field<&proxy_draft::password>(colours, "Password", "none", true),
-      proxy_text_field<&proxy_draft::resolver>(colours, "XMPP SRV lookups: nameserver", "the system's; an IP address, or off"),
+      model_field<&proxy_draft::host>(colours, "Host", "proxy.example.com", false, scene::Margin::horizontal(16.0f)),
+      model_field<&proxy_draft::port>(colours, "Port", "1080", false, scene::Margin::horizontal(16.0f)),
+      model_field<&proxy_draft::username>(colours, "User name", "none", false, scene::Margin::horizontal(16.0f)),
+      model_field<&proxy_draft::password>(colours, "Password", "none", true, scene::Margin::horizontal(16.0f)),
+      model_field<&proxy_draft::resolver>(colours, "XMPP SRV lookups: nameserver", "the system's; an IP address, or off", false, scene::Margin::horizontal(16.0f)),
       skiff::compose::text_for<proxy_notice>([](const proxy_notice& notice) { return notice.text; },
           wrapped(skiff::compose::styled({.fillX = true, .margin = scene::Margin::horizontal(16.0f)},
                                         nodes::Text("", 13.0f, colours.error)))),

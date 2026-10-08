@@ -1128,3 +1128,34 @@ TEST(Controls, ActionTileComputesOptionalRequestAtPressTime) {
   EXPECT_EQ(requests.asked.front(), current);
   EXPECT_EQ(tile.fState.id(), id);
 }
+
+TEST(Forms, LinkEditorSubmitsItsModelFields) {
+  struct sink {
+    std::optional<mux::ui::request::set_link> saved;
+    void take(const mux::ui::request::set_link& request) { saved = request; }
+    void take(const mux::ui::request::close_link&) {}
+  } requests;
+  using model_t = skiff::model::Model<int, skiff::bind::NoReactions>;
+  model_t model(0);
+  mux::ui::palette colours;
+  auto box = mux::ui::link_box(colours, mux::ui::link_facts{"Original", "https://example.com"});
+  box.fModel.apply(skiff::model::over<skiff::model::Field<&mux::ui::link_draft::text>>(
+      skiff::model::setTo(std::string("Changed"))));
+  skiff::bind::Binding<model_t> binding;
+  binding.refresh(box, model);
+  ASSERT_TRUE(skiff::bind::press(box, model, scene::Path{3}, &requests));
+  ASSERT_TRUE(requests.saved.has_value());
+  EXPECT_EQ(requests.saved->text, "Changed");
+  EXPECT_EQ(requests.saved->url, "https://example.com");
+}
+
+TEST(Forms, ExpressionDialogUsesItsFactoryAndDeclaredLook) {
+  stub program;
+  ui_state ui;
+  const auto needs = ui.needs(program);
+  mux::ui::shown_dialog<mux::ui::link_box_t, mux::ui::link_facts, mux::ui::ui_needs<stub>> dialog(&needs);
+  mux::ui::look_as_its_content(dialog, *needs.colours);
+  dialog.read(std::optional(mux::ui::link_facts{"Text", "https://example.com"}));
+  ASSERT_NE(dialog.shown(), nullptr);
+  EXPECT_EQ(dialog.shown()->fModel.root().text, "Text");
+}

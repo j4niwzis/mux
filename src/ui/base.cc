@@ -309,10 +309,13 @@ struct dialog_look {
 };
 [[nodiscard]] inline skia::SkColor colour_of(sheet::side, const palette& colours) { return colours.sidebar; }
 [[nodiscard]] inline skia::SkColor colour_of(sheet::chat, const palette& colours) { return colours.chat; }
+template <class Content> dialog_look content_look(std::type_identity<Content>) {
+  return Content::look_of_dialog();
+}
 // A dialog put as its content says, in the palette's colours.
 template <class Content, class Dismiss>
 void look_as_its_content(widgets::Dialog<Content, Dismiss>& dialog, const palette& colours) {
-  const dialog_look look = Content::look_of_dialog();
+  const dialog_look look = content_look(std::type_identity<Content>{});
   dialog.setSheetColour(spl::visit([&](auto one) { return colour_of(one, colours); }, look.sheet));
   spl::visit(spl::overloaded{[](dialog_size::as_opened) {},
                                    [&](dialog_size::fixed size) { dialog.setSize(size.width, size.height); },

@@ -8,6 +8,8 @@ import skia;
 import skiff.paint;
 import skiff.scene;
 import skiff.compose;
+import skiff.model;
+import skiff.widgets.model;
 import skiff.nodes.flow;
 import skiff.nodes.text;
 import skiff.widgets.button;
@@ -20,6 +22,16 @@ import :base;
 import :themes;
 
 export namespace mux::ui {
+
+template <auto Member>
+auto model_field(const palette& colours, std::string label, std::string placeholder, bool masked = false,
+                 scene::Margin margin = {}) {
+  return skiff::compose::column(
+      skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = margin}),
+      nodes::Text(std::move(label), 13.0f, colours.dim),
+      skiff::compose::bound<skiff::model::Field<Member>>(skiff::compose::styled(
+          {.fillX = true, .height = 36.0f}, widgets::TextField<std::string>(colours.widgets, std::move(placeholder), masked))));
+}
 
 // ---- a form row: a caption and a field -----------------------------------
 
@@ -78,35 +90,28 @@ struct link_facts {
   std::string text;
   std::string url;
 };
-template <class Actions>
-struct link_box : skiff::compose::Stacked {
-  // The dialog it is shown in.
-  [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{400.0f}}; }
-  struct done {
-    using Answer = ::mux::ui::request::set_link;
-    link_box* box;
-    ::mux::ui::request::set_link operator()() const { return ::mux::ui::request::set_link{box->parts.text.text(), box->parts.url.text()}; }
-  };
-  struct cancel {
-    using Answer = ::mux::ui::request::close_link;
-    ::mux::ui::request::close_link operator()() { return ::mux::ui::request::close_link{}; }
-  };
-  struct parts_t {
-    nodes::Text title;
-    field text;
-    field url;
-    widgets::Button<done> go;
-    widgets::Button<cancel> back;
-  } parts;
-  link_box(const ui_needs<Actions>& n, const link_facts& facts) : link_box(n, facts.text, facts.url) {}
-  link_box(const ui_needs<Actions>& n, std::string text, std::string url)
-      : Stacked(skiff::compose::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}})),
-        parts{.title = skiff::compose::styled({.fillX = true}, nodes::Text(url.empty() ? "Add link" : "Edit link", 17.0f, n.colours->text, true)),
-              .text = field(*n.colours, "Text", "Text", std::move(text)),
-              .url = field(*n.colours, "URL", "https://", std::move(url)),
-              .go = widgets::Button<done>(n.colours->widgets, "Done", {this}),
-              .back = widgets::Button<cancel>(n.colours->widgets, "Cancel", {})} {}
+struct link_draft { std::string text, url; };
+struct submit_link {};
+struct link_events {
+  auto on(submit_link, const link_draft& draft) const {
+    return skiff::model::Up{request::set_link{draft.text, draft.url}};
+  }
 };
+inline auto link_box(const palette& colours, const link_facts& facts) {
+  return skiff::compose::local<link_draft>(link_events{}, skiff::compose::column(
+      skiff::compose::vbox(10.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {20.0f, 22.0f, 20.0f, 22.0f}}),
+      skiff::compose::styled({.fillX = true}, nodes::Text(facts.url.empty() ? "Add link" : "Edit link", 17.0f, colours.text, true)),
+      model_field<&link_draft::text>(colours, "Text", "Text"),
+      model_field<&link_draft::url>(colours, "URL", "https://"),
+      widgets::SendButton<submit_link>(colours.widgets, "Done", {}),
+      widgets::SendButton<request::close_link>(colours.widgets, "Cancel", {})), link_draft{facts.text, facts.url});
+}
+using link_box_t = decltype(link_box(std::declval<const palette&>(), std::declval<const link_facts&>()));
+inline dialog_look content_look(std::type_identity<link_box_t>) { return {.size = dialog_size::fitting{400.0f}}; }
+template <class Needs>
+auto make_content(std::type_identity<link_box_t>, const Needs& needs, const link_facts& facts) {
+  return link_box(*needs.colours, facts);
+}
 
 // A passphrase asked for: to open local data at the start (not dismissed --
 // nothing behind it is anything until it opens), to turn its encryption on

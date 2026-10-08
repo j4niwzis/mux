@@ -142,7 +142,7 @@ template <class Actions> struct threads_panel : skiff::compose::Stacked {
       return ::mux::ui::request::open_thread{root};
     }
   };
-  using head_t = page_header<back_it, close_it>;
+  using head_t = page_header_t<back_it, close_it>;
   // The chat's own composer, writing into the thread: its ✕ lets go of the
   // answer, Enter and the arrow send there, its paperclip and emoji too.
   struct in_thread {
@@ -169,7 +169,7 @@ template <class Actions> struct threads_panel : skiff::compose::Stacked {
       : Stacked(skiff::compose::vbox(
             0.0f, {.fillY = true, .background = n.colours->sidebar})),
         colours_(n.colours),
-        parts{.head = head_t(*n.colours, "Threads", {}, {}, false, true),
+        parts{.head = page_header<back_it, close_it>(*n.colours, "Threads", {}, {}, false, true),
               .divider = skiff::compose::styled({.fillX = true, .height = 1.0f},
                                                 nodes::Box<>(n.colours->band)),
               .empty = skiff::compose::styled(
@@ -211,8 +211,8 @@ template <class Actions> struct threads_panel : skiff::compose::Stacked {
   void show(const conversation& chat, const model* now) {
     seen_model = now;
     seen_chat = chat.id;
-    parts.head.parts.back.setVisible(open.has_value());
-    parts.head.parts.title.setText(open ? "Thread" : "Threads");
+    std::get<0>(parts.head.fParts).setVisible(open.has_value());
+    std::get<1>(parts.head.fParts).setText(open ? "Thread" : "Threads");
     parts.list.setVisible(!open);
     parts.answers.setVisible(open.has_value());
     parts.line.setVisible(open.has_value());

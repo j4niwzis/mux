@@ -57,7 +57,7 @@ template <class Actions> struct person_card : skiff::compose::Stacked {
   };
   using close_act = sends<::mux::ui::request::close_person_info>;
   using close_button = icon_button<close_act>;
-  using top_bar = page_header<no_back, close_act>;
+  using top_bar = page_header_t<no_back, close_act>;
   // tdesktop's cover: 108 high, a 72 photo, the name and status beside it.
   struct cover : skiff::compose::Stacked {
     struct parts_t {
@@ -133,7 +133,7 @@ template <class Actions> struct person_card : skiff::compose::Stacked {
                                         .autoSize = scene::axes::kY,
                                         .padding = {0.0f, 0.0f, 16.0f, 0.0f}})),
         colours_(&colours),
-        parts{.top = top_bar(colours, "User info", {}, {}, false, true),
+        parts{.top = page_header<no_back, close_act>(colours, "User info", {}, {}, false, true),
               .face = cover(colours, key, facts),
               .band = section_band(colours),
               .id = id_line(colours, key, ""),
@@ -225,7 +225,7 @@ template <class Actions> struct room_card : skiff::compose::Stacked {
   };
   using close_act = sends<::mux::ui::request::close_room_card>;
   using close_button = icon_button<close_act>;
-  using top_bar = page_header<no_back, close_act>;
+  using top_bar = page_header_t<no_back, close_act>;
   struct cover : skiff::compose::Stacked {
     struct parts_t {
       avatar_mark photo;
@@ -299,7 +299,7 @@ template <class Actions> struct room_card : skiff::compose::Stacked {
             const room_preview &known)
       : Stacked(skiff::compose::vbox(
             0.0f, {.fillX = true, .padding = {0.0f, 0.0f, 16.0f, 0.0f}})),
-        parts{.top = top_bar(colours, "Room info", {}, {}, false, true),
+        parts{.top = page_header<no_back, close_act>(colours, "Room info", {}, {}, false, true),
               .scroll = skiff::compose::styled(
                   {.fillX = true, .grow = scene::axes::kY},
                   nodes::ScrollContainer<details>(
@@ -314,7 +314,7 @@ template <class Actions> struct room_card : skiff::compose::Stacked {
                                        {known.knock && !known.invite}))} {
 
     if (known.invite) {
-      parts.top.parts.title.setText("Invite");
+      std::get<1>(parts.top.fParts).setText("Invite");
       parts.decline.emplace(colours, "Decline", icon::close{}, decline_it{});
       parts.decline->apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
     }

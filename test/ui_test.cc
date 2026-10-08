@@ -447,7 +447,7 @@ TEST(RoomInfo, LongDescriptionsScrollWithoutHidingTheActions) {
       }
     }
     const int closed = program.room_cards_closed;
-    click(card->parts.top.parts.close);
+    click(std::get<2>(card->parts.top.fParts));
     EXPECT_EQ(program.room_cards_closed, closed + 1);
   }
 

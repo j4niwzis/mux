@@ -228,34 +228,29 @@ using no_back = no_action;
 // The head of a page: ← on the left where there is somewhere to go back to,
 // the page's name, and ✕ on the right where the page closes. Every panel,
 // box and page that has a title and a ✕ has this one.
+inline constexpr float kPageHeaderHeight = 54.0f;
 template <class Back, class Close>
-struct page_header : skiff::compose::Stacked {
-  struct parts_t {
-    icon_button<Back> back;
-    nodes::Text title;
-    icon_button<Close> close;
-  } parts;
-
-  static constexpr float kHeight = 54.0f;
-
-  page_header(const palette& colours, std::string name, Back to, Close shut, bool has_back, bool has_close)
-      : Stacked(skiff::compose::hbox(12.0f, {.fillX = true, .height = kHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}})),
-        parts{.back = skiff::compose::visible(has_back, skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-                                                                               icon_button<Back>(colours, icon::back{}, std::move(to)))),
-              .title = skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle,
-                                               .margin = {0.0f, 0.0f, 0.0f, has_back ? 0.0f : 10.0f}},
-                                              elided(nodes::Text(std::move(name), 17.0f, colours.text, true))),
-              .close = skiff::compose::visible(has_close, skiff::compose::styled({.alignSelf = scene::align::kMiddle},
-                                                                                 icon_button<Close>(colours, icon::close{}, std::move(shut))))} {}
-  // Esc, as its ← is pressed: a step back where it has one -- false where
-  // it has none, for what holds it to close instead.
-  bool step_back() {
-    if (!parts.back.visible())
-      return false;
-    (void)parts.back.onClick(0.0f, 0.0f);
-    return true;
-  }
-};
+auto page_header(const palette& colours, std::string name, Back back, Close close, bool has_back, bool has_close) {
+  return skiff::compose::row(
+      skiff::compose::hbox(12.0f, {.fillX = true, .height = kPageHeaderHeight, .padding = {0.0f, 10.0f, 0.0f, 10.0f}}),
+      skiff::compose::visible(has_back, skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+          icon_button<Back>(colours, icon::back{}, std::move(back)))),
+      skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle,
+                             .margin = {0.0f, 0.0f, 0.0f, has_back ? 0.0f : 10.0f}},
+          elided(nodes::Text(std::move(name), 17.0f, colours.text, true))),
+      skiff::compose::visible(has_close, skiff::compose::styled({.alignSelf = scene::align::kMiddle},
+          icon_button<Close>(colours, icon::close{}, std::move(close)))));
+}
+template <class Back, class Close>
+using page_header_t = decltype(page_header(std::declval<const palette&>(), std::string{}, Back{}, Close{}, false, false));
+// Esc activates the back control through the same press route as a click.
+template <class Header> bool page_step_back(Header& header) {
+  auto& back = std::get<0>(header.fParts);
+  if (!back.visible())
+    return false;
+  (void)back.onClick(0.0f, 0.0f);
+  return true;
+}
 
 // One segment of a segmented control: square, its text centred, filled
 // with the accent while it is the one chosen.

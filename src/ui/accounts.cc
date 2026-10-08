@@ -529,7 +529,7 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
   };
   // Its ← goes back from an account's pages to the list, and from the list
   // to the chats.
-  using header_t = page_header<sends<::mux::ui::request::accounts_back>, sends<::mux::ui::request::accounts_back>>;
+  using header_t = page_header_t<sends<::mux::ui::request::accounts_back>, sends<::mux::ui::request::accounts_back>>;
   // Under the header: the list down the side, and beside it what is chosen.
   struct body_row : skiff::compose::Stacked {
     struct side_column : skiff::compose::Stacked {
@@ -681,7 +681,7 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
   ui_needs<Actions> needs_;
   accounts_panel(const ui_needs<Actions>& n)
       : closes_on_escape<Actions, sends<::mux::ui::request::accounts_back>>(),
-        parts{.header = header_t(*n.colours, "Accounts", {}, {}, true, false), .body = body_row(*n.colours)},
+        parts{.header = page_header<sends<::mux::ui::request::accounts_back>, sends<::mux::ui::request::accounts_back>>(*n.colours, "Accounts", {}, {}, true, false), .body = body_row(*n.colours)},
         needs_(n) {
     this->fState.apply({.fill = true});
   }
@@ -848,7 +848,7 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
     add.setVisible(!shown);
     list.setVisible(!shown);
     this->slide_side();
-    header.parts.title.setText(shown && selected ? *selected : std::string("Accounts"));
+    std::get<1>(header.fParts).setText(shown && selected ? *selected : std::string("Accounts"));
     this->invalidateLayout();
   }
   // Back to the list of accounts, nothing chosen.

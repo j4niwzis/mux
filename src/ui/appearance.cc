@@ -188,10 +188,10 @@ inline auto frame_look_view(const palette& colours, bool see_through) {
 template <class Actions>
 auto appearance_page(const ui_needs<Actions>& needs, const config::theme_t& theme, const config::accent_t&) {
   const auto& colours = *needs.colours;
-  using header = page_header<sends<request::settings_home>, sends<request::close_settings>>;
+  using header = page_header_t<sends<request::settings_home>, sends<request::close_settings>>;
   return skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar}, header(colours, "Appearance", {}, {}, true, true)),
+      skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar}, page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Appearance", {}, {}, true, true)),
       skiff::compose::column(
           skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
           appearance_settings_view(colours, theme),
@@ -219,11 +219,11 @@ inline auto frame_settings_view(const palette& colours) {
                               "effect at once."));
 }
 inline auto rendering_page(const palette& colours) {
-  using header = page_header<sends<request::settings_home>, sends<request::close_settings>>;
+  using header = page_header_t<sends<request::settings_home>, sends<request::close_settings>>;
   using field = skiff::model::Field<&config::look_settings::renderer>;
   return skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar}, header(colours, "Rendering", {}, {}, true, true)),
+      skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar}, page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Rendering", {}, {}, true, true)),
       skiff::compose::column(
           skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY, .padding = {0.0f, 0.0f, 12.0f, 0.0f}}),
           skiff::compose::bound<field>(widgets::ChoiceRowField<config::renderer_t>(colours.widgets, "OpenGL (the graphics card)", config::renderer::opengl{})),

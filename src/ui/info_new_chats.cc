@@ -104,7 +104,7 @@ template <class Actions> struct forward_box : skiff::compose::Stacked {
     }
   };
   using rows_t = nodes::Flow<std::vector<row>>;
-  using header_t = page_header<no_back, close_it>;
+  using header_t = page_header_t<no_back, close_it>;
   struct parts_t {
     header_t header;
     widgets::TextBox<typed> field;
@@ -115,7 +115,7 @@ template <class Actions> struct forward_box : skiff::compose::Stacked {
   forward_box(const palette &colours, const std::vector<forward_target> &chats)
       : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .height = 520.0f})),
         colours_(&colours), all(chats),
-        parts{.header = header_t(colours, "Forward to…", {}, {}, false, true),
+        parts{.header = page_header<no_back, close_it>(colours, "Forward to…", {}, {}, false, true),
               .field = skiff::compose::styled(
                   {.fillX = true,
                    .height = 34.0f,
@@ -217,7 +217,7 @@ template <class Actions> struct start_chat_box : skiff::compose::Stacked {
     ::mux::ui::request::copy_text operator()() const { return ::mux::ui::request::copy_text{box->link}; }
   };
   using person_row = found_person_row<Actions>;
-  using header_t = page_header<no_back, close_it>;
+  using header_t = page_header_t<no_back, close_it>;
   using rows_t = nodes::Flow<std::vector<person_row>>;
   struct search_row : skiff::compose::Stacked {
     struct parts_t {
@@ -284,7 +284,7 @@ template <class Actions> struct start_chat_box : skiff::compose::Stacked {
                                       .height = 560.0f,
                                       .padding = {0.0f, 12.0f, 16.0f, 12.0f}})),
         colours_(&colours), known(std::move(people)), link(std::move(own_link)),
-        parts{.header = header_t(colours, "Start chat", {}, {}, false, true),
+        parts{.header = page_header<no_back, close_it>(colours, "Start chat", {}, {}, false, true),
               .intro = skiff::compose::styled(
                   {.fillX = true, .margin = {0.0f, 10.0f, 4.0f, 10.0f}},
                   wrapped(
@@ -565,7 +565,7 @@ template <class Actions> struct create_room_box : skiff::compose::Stacked {
                   widgets::Toggle<Flip>(box->colours_->widgets, {box}))} {}
   };
   using buttons_row = dialog_buttons<cancel_press, create_press>;
-  using header_t = page_header<no_back, close_it>;
+  using header_t = page_header_t<no_back, close_it>;
   struct parts_t {
     header_t header;
     field name;
@@ -594,7 +594,7 @@ template <class Actions> struct create_room_box : skiff::compose::Stacked {
         colours_(&colours), server(std::move(own_server)),
         place(std::move(where)), space_members(place.has_value()),
         parts{
-            .header = header_t(colours, "Create a room", {}, {}, false, true),
+            .header = page_header<no_back, close_it>(colours, "Create a room", {}, {}, false, true),
             .name = field(colours, "Name", ""),
             .topic = field(colours, "Topic (optional)", ""),
             .rule_caption = skiff::compose::styled(
@@ -651,7 +651,7 @@ template <class Actions> struct create_room_box : skiff::compose::Stacked {
   void show_choice() {
     // What is made, and where: a room or a space, in a space or not.
     const std::string what = place && place->make_space ? "space" : "room";
-    parts.header.parts.title.setText(place ? std::format("Create a {} in {}", what, place->name)
+    std::get<1>(parts.header.fParts).setText(place ? std::format("Create a {} in {}", what, place->name)
                                            : open_room ? "Create a public room" : "Create a room");
     parts.rule.parts.value.setText(open_room       ? "Public " + what
                                    : space_members ? std::string("Visible to space members")

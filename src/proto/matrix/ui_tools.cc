@@ -40,7 +40,7 @@ template <class Actions> struct devtools_box : skiff::compose::Stacked {
     devtools_box* box;
     void operator()() const { box->go_back(); }
   };
-  using header_t = page_header<back_up, close_it>;
+  using header_t = page_header_t<back_up, close_it>;
   // A line of the state's list: a type, or a key of one; pressed, what is
   // under it, at the next frame -- not from inside the list it is in.
   struct pick {
@@ -117,7 +117,7 @@ template <class Actions> struct devtools_box : skiff::compose::Stacked {
 
   devtools_box(const palette &colours, std::string title, std::string text)
       : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .height = 560.0f})),
-        colours_(&colours), parts{.header = header_t(colours, std::move(title),
+        colours_(&colours), parts{.header = page_header<back_up, close_it>(colours, std::move(title),
                                                      {this}, {}, false, true),
                                   .reading = reading_of(colours)} {
     this->show_text(std::move(text));
@@ -125,7 +125,7 @@ template <class Actions> struct devtools_box : skiff::compose::Stacked {
   devtools_box(const palette &colours,
                std::vector<proto::matrix::state_entry> entries)
       : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .height = 560.0f})),
-        colours_(&colours), parts{.header = header_t(colours, "Room state",
+        colours_(&colours), parts{.header = page_header<back_up, close_it>(colours, "Room state",
                                                      {this}, {}, false, true),
                                   .reading = reading_of(colours)},
         state(std::move(entries)) {
@@ -145,7 +145,7 @@ template <class Actions> struct devtools_box : skiff::compose::Stacked {
   devtools_box(const palette &colours, send_form_t)
       : Stacked(skiff::compose::vbox(0.0f, {.fillX = true, .height = 560.0f})),
         colours_(&colours),
-        parts{.header = header_t(colours, "Send custom event", {this}, {},
+        parts{.header = page_header<back_up, close_it>(colours, "Send custom event", {this}, {},
                                  false, true),
               .reading = skiff::compose::visible(false, reading_of(colours))} {
     parts.sending.emplace(this);
@@ -172,7 +172,7 @@ template <class Actions> struct devtools_box : skiff::compose::Stacked {
   void show_types() {
     showing_state = true;
     type_shown.reset();
-    parts.header.parts.back.setVisible(false);
+    std::get<0>(parts.header.fParts).setVisible(false);
     std::map<std::string, std::size_t> counts;
     for (const proto::matrix::state_entry& one : state)
       ++counts[one.type];
@@ -186,7 +186,7 @@ template <class Actions> struct devtools_box : skiff::compose::Stacked {
   // A type's keys.
   void show_keys(const std::string& type) {
     type_shown = type;
-    parts.header.parts.back.setVisible(true);
+    std::get<0>(parts.header.fParts).setVisible(true);
     std::vector<std::pair<std::string, pick>> rows;
     for (const proto::matrix::state_entry& one : state)
       if (one.type == type)
@@ -209,7 +209,7 @@ template <class Actions> struct devtools_box : skiff::compose::Stacked {
       return;
     const auto& text = std::get<0>(parts.reading.fChildren);
     skiff::scene::setClipboardText(text.hasSelection() ? text.selected() : text.text());
-    auto& title = parts.header.parts.title;
+    auto& title = std::get<1>(parts.header.fParts);
     if (!title_before)
       title_before = title.text();
     title.setText(text.hasSelection() ? "Selection copied" : "Copied");
@@ -224,7 +224,7 @@ template <class Actions> struct devtools_box : skiff::compose::Stacked {
       if (title_back_at == 0.0)
         title_back_at = now_ms + 1200.0;
       else if (now_ms >= title_back_at)
-        parts.header.parts.title.setText(*std::exchange(title_before, std::nullopt));
+        std::get<1>(parts.header.fParts).setText(*std::exchange(title_before, std::nullopt));
     }
     if (!pending)
       return;
@@ -235,7 +235,7 @@ template <class Actions> struct devtools_box : skiff::compose::Stacked {
     }
     for (const proto::matrix::state_entry& one : state)
       if (one.type == what.type && one.key == *what.key) {
-        parts.header.parts.back.setVisible(true);
+        std::get<0>(parts.header.fParts).setVisible(true);
         this->show_text(one.json);
         return;
       }

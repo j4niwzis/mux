@@ -33,7 +33,7 @@ template <class Actions> struct settings_home : skiff::compose::Stacked {
   // Its children, in the order they are shown: the header, then the lines,
   // one under another -- walked as they are declared.
   struct parts_t {
-    page_header<sends<::mux::ui::request::close_settings>, sends<::mux::ui::request::close_settings>> header;
+    page_header_t<sends<::mux::ui::request::close_settings>, sends<::mux::ui::request::close_settings>> header;
     row_item<sends<::mux::ui::request::open_accounts>> accounts;
     row_item<sends<::mux::ui::request::settings_animations>> animations;
     row_item<sends<::mux::ui::request::settings_appearance>> appearance;
@@ -48,7 +48,7 @@ template <class Actions> struct settings_home : skiff::compose::Stacked {
   explicit settings_home(const ui_needs<Actions>& n) : settings_home(*n.colours) {}
   settings_home(const palette &colours)
       : Stacked(skiff::compose::vbox(0.0f, {.fill = true})),
-        parts{.header = {colours, "Settings", {}, {}, false, true},
+        parts{.header = page_header<sends<request::close_settings>, sends<request::close_settings>>(colours, "Settings", {}, {}, false, true),
               .accounts = {colours, "Accounts", {}, icon::person{}},
               .animations = {colours, "Animations", {}, icon::motion{}},
               .appearance = {colours, "Appearance", {}, icon::eye{}},
@@ -102,7 +102,7 @@ inline auto motion_settings_view(const palette& colours) {
           colours, {{"Full", config::motion::full{}}, {"Reduced", config::motion::reduced{}}, {"None", config::motion::none{}}})));
 }
 template <class Actions> struct animations_page : skiff::compose::Stacked {
-  using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
+  using header_t = page_header_t<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
   using settings_t = decltype(motion_settings_view(std::declval<const palette&>()));
   struct parts_t {
     header_t header;
@@ -112,7 +112,7 @@ template <class Actions> struct animations_page : skiff::compose::Stacked {
   explicit animations_page(const ui_needs<Actions>& n) : animations_page(*n.colours) {}
   animations_page(const palette &colours)
       : Stacked(skiff::compose::vbox(0.0f, {.fill = true})),
-        parts{.header = header_t(colours, "Animations", {}, {}, true, true),
+        parts{.header = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>(colours, "Animations", {}, {}, true, true),
               .settings = motion_settings_view(colours)} {}
   void show_receipts(bool) {}
 };
@@ -135,7 +135,7 @@ struct choose_proxy_kind {
 // Settings' Proxies page, as Gajim's Manage Proxies: the profiles, and a way
 // to add one.
 template <class Actions> struct proxies_page : skiff::compose::Stacked {
-  using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
+  using header_t = page_header_t<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
   using add_row = row_item<sends<::mux::ui::request::add_proxy>>;
   struct parts_t {
     header_t header;
@@ -150,7 +150,7 @@ template <class Actions> struct proxies_page : skiff::compose::Stacked {
   proxies_page(const palette &colours,
                const std::vector<config::proxy_settings> &all, bool with_back)
       : Stacked(skiff::compose::vbox(0.0f, {.fill = true})),
-        parts{.header = header_t(colours, "Proxies", {}, {}, with_back, true),
+        parts{.header = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>(colours, "Proxies", {}, {}, with_back, true),
               .add = add_row(colours, "Add proxy", {}, icon::plus{}),
               .empty = skiff::compose::visible(
                   all.empty(),
@@ -222,7 +222,7 @@ template <class Actions> struct proxy_editor : skiff::compose::Stacked {
   // The colours what it says is said in.
   const palette* colours_ = nullptr;
   config::proxy_kind_t kind = config::proxy_kind::socks5{};
-  using header_t = page_header<sends<::mux::ui::request::settings_proxies>, sends<::mux::ui::request::close_settings>>;
+  using header_t = page_header_t<sends<::mux::ui::request::settings_proxies>, sends<::mux::ui::request::close_settings>>;
   using save_button = button_for<sends<::mux::ui::request::save_proxy_profile>>;
   using delete_button = button_for<sends<::mux::ui::request::delete_proxy_profile>>;
   struct parts_t {
@@ -245,7 +245,7 @@ template <class Actions> struct proxy_editor : skiff::compose::Stacked {
                const std::optional<config::proxy_settings> &from, int at)
       : Stacked(skiff::compose::vbox(8.0f, {.fill = true})), index(at),
         colours_(&colours),
-        parts{.header = header_t(colours,
+        parts{.header = page_header<sends<::mux::ui::request::settings_proxies>, sends<::mux::ui::request::close_settings>>(colours,
                                  from ? from->name : std::string("New proxy"),
                                  {}, {}, true, true),
               .name = field(colours, "Name", "Home, Tor, Work…"),

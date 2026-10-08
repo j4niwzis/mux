@@ -85,7 +85,7 @@ template <class Actions> struct settings_dialog : skiff::compose::Specced {
   // edited. False on home, which Esc closes.
   bool step_back() {
     return spl::visit(spl::overloaded{[](settings_home<Actions>&) { return false; },
-                                      [](auto& one) { return settings_header(one).step_back(); }},
+                                      [](auto& one) { return page_step_back(settings_header(one)); }},
                       this->page());
   }
   // A page fills the dialog across, and is as tall as what it holds.

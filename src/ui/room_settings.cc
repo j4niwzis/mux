@@ -673,7 +673,7 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
     using Answer = ::mux::ui::request::close_manage;
     ::mux::ui::request::close_manage operator()() { return ::mux::ui::request::close_manage{}; }
   };
-  using header_t = page_header<no_back, close_it>;
+  using header_t = page_header_t<no_back, close_it>;
   struct body_row : skiff::compose::Stacked {
     struct parts_t {
       tab_list tabs;
@@ -729,7 +729,7 @@ template <class Actions> struct room_settings : skiff::compose::Stacked {
                 const room_settings_facts &shown)
       : Stacked(skiff::compose::vbox(0.0f, {.fill = true})), colours_(colours),
         looks_(looks), facts(shown),
-        parts{.header = header_t(*colours, "Room Settings - " + shown.name, {},
+        parts{.header = page_header<no_back, close_it>(*colours, "Room Settings - " + shown.name, {},
                                  {}, false, true),
               .body =
                   body_row(this, page_t(std::in_place_index<0>, this, shown))} {

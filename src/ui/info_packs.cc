@@ -294,7 +294,7 @@ template <class Actions> struct packs_box : skiff::compose::Stacked {
         each->apply({.width = 110.0f, .height = 34.0f});
     }
   };
-  using header_t = page_header<no_back, close_it>;
+  using header_t = page_header_t<no_back, close_it>;
   using packs_t = nodes::Flow<std::vector<pack_row>>;
   using pictures_t = nodes::Flow<std::vector<picture_row>>;
   struct parts_t {
@@ -321,7 +321,7 @@ template <class Actions> struct packs_box : skiff::compose::Stacked {
         colours_(&colours), shared_(&shared), room(std::move(in)),
         may_edit(editable),
         parts{.header =
-                  header_t(colours, "Emojis & Stickers", {}, {}, false, true),
+                  page_header<no_back, close_it>(colours, "Emojis & Stickers", {}, {}, false, true),
               .note = skiff::compose::styled(
                   {.fillX = true, .margin = {0.0f, 10.0f, 4.0f, 10.0f}},
                   wrapped(nodes::Text("", 13.0f, colours.dim))),
@@ -354,7 +354,7 @@ template <class Actions> struct packs_box : skiff::compose::Stacked {
   }
   void show_list() {
     open = false;
-    parts.header.parts.title.setText("Emojis & Stickers");
+    std::get<1>(parts.header.fParts).setText("Emojis & Stickers");
     parts.note.setText(room ? (packs.empty() ? std::string("This room has no packs yet.")
                                              : std::string("The packs of this room: their emoji and stickers are "
                                                            "there for everyone in it."))
@@ -370,7 +370,7 @@ template <class Actions> struct packs_box : skiff::compose::Stacked {
     new_pack = !index;
     draft = index && *index < packs.size() ? packs[*index] : emote_pack{.chat = room, .emoji = true, .sticker = true};
     open = true;
-    parts.header.parts.title.setText(new_pack ? "New pack" : draft.name.empty() ? "Pack" : draft.name);
+    std::get<1>(parts.header.fParts).setText(new_pack ? "New pack" : draft.name.empty() ? "Pack" : draft.name);
     parts.name.parts.box.setText(draft.name);
     parts.attribution.parts.box.setText(draft.attribution);
     parts.note.setText(may_edit ? std::string("Shortcodes are what the emoji are typed as, :like_this:.")

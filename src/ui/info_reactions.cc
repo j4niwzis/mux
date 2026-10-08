@@ -84,7 +84,7 @@ template <class Actions> struct reactions_box : skiff::compose::Stacked {
   [[nodiscard]] static dialog_look look_of_dialog() { return {.sheet = sheet::chat{}, .size = dialog_size::fixed{392.0f, 420.0f}}; }
   using close_act = sends<::mux::ui::request::close_reactions>;
   using close_button = icon_button<close_act>;
-  using top_bar = page_header<no_back, close_act>;
+  using top_bar = page_header_t<no_back, close_act>;
   // A reaction as the chat would show it: a bubble from who reacted,
   // saying what they reacted with, in runs as the chat's bubbles are.
   // Pressed, it is answered.
@@ -173,7 +173,7 @@ template <class Actions> struct reactions_box : skiff::compose::Stacked {
   reactions_box(const ui_needs<Actions> &n, const conversation &in,
                 const std::vector<reaction_entry> &entries, const model *now)
       : Stacked(list_dialog(420.0f)),
-        parts{.top = top_bar(*n.colours, "Reactions", {}, {}, false, true)} {
+        parts{.top = page_header<no_back, close_act>(*n.colours, "Reactions", {}, {}, false, true)} {
     auto &rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
     rows.reserve(entries.size());
     for (std::size_t i = 0; i < entries.size(); ++i)
@@ -194,7 +194,7 @@ struct history_facts {
 template <class Actions> struct edit_history_box : skiff::compose::Stacked {
   [[nodiscard]] static dialog_look look_of_dialog() { return {.sheet = sheet::chat{}, .size = dialog_size::fixed{460.0f, 560.0f}}; }
   using close_act = sends<::mux::ui::request::close_edit_history>;
-  using top_bar = page_header<no_back, close_act>;
+  using top_bar = page_header_t<no_back, close_act>;
   struct row : skiff::compose::Stacked {
     struct parts_t {
       message_bubble<Actions> bubble;
@@ -240,7 +240,7 @@ template <class Actions> struct edit_history_box : skiff::compose::Stacked {
   edit_history_box(const ui_needs<Actions> &n, const conversation &in,
                    const message &now, const model *known)
       : Stacked(list_dialog(560.0f)),
-        parts{.top = top_bar(*n.colours, "Edit History", {}, {}, false, true)} {
+        parts{.top = page_header<no_back, close_act>(*n.colours, "Edit History", {}, {}, false, true)} {
     auto &rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
     const auto versions = versions_of(now);
     // Made where they stay: a bubble knows its parts by their addresses.
@@ -276,7 +276,7 @@ template <class Actions> struct marks_box : skiff::compose::Stacked {
   [[nodiscard]] static dialog_look look_of_dialog() { return {.sheet = sheet::chat{}, .size = dialog_size::fixed{460.0f, 520.0f}}; }
   using close_act = sends<::mux::ui::request::close_marks>;
   using close_button = icon_button<close_act>;
-  using top_bar = page_header<no_back, close_act>;
+  using top_bar = page_header_t<no_back, close_act>;
   struct badge : skiff::compose::Stacked {
     struct parts_t {
       avatar_mark face;
@@ -337,7 +337,7 @@ template <class Actions> struct marks_box : skiff::compose::Stacked {
   // hold it now -- none where it is gone.
   marks_box(const ui_needs<Actions> &n, const marks_facts &facts)
       : Stacked(list_dialog(520.0f)),
-        parts{.top = top_bar(
+        parts{.top = page_header<no_back, close_act>(
                   *n.colours,
                   spl::visit(spl::overloaded{[](mark_kind::mention) {
                                                return std::string("Mentions");

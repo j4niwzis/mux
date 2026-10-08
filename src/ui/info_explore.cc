@@ -202,7 +202,7 @@ template <class Actions> struct explore_box : skiff::compose::Stacked {
   };
   using join_press = directory_join<Actions>;
   using result_row = directory_row<Actions>;
-  using header_t = page_header<no_back, close_it>;
+  using header_t = page_header_t<no_back, close_it>;
   struct search_row : skiff::compose::Stacked {
     struct parts_t {
       field query;
@@ -267,7 +267,7 @@ template <class Actions> struct explore_box : skiff::compose::Stacked {
                                       .padding = {0.0f, 12.0f, 12.0f, 12.0f}})),
         colours_(&colours),
         parts{
-            .header = header_t(colours, "Explore rooms", {}, {}, false, true),
+            .header = page_header<no_back, close_it>(colours, "Explore rooms", {}, {}, false, true),
             .space_head = skiff::compose::visible(false, space_head_t(colours)),
             .search = search_row(this, own_server),
             .status = skiff::compose::visible(

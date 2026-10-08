@@ -530,7 +530,7 @@ template <class Actions> struct wallpaper_box : skiff::compose::Stacked {
     using Answer = ::mux::ui::request::close_wallpaper;
     ::mux::ui::request::close_wallpaper operator()() { return ::mux::ui::request::close_wallpaper{}; }
   };
-  using header_t = page_header<no_back, close_it>;
+  using header_t = page_header_t<no_back, close_it>;
   struct parts_t {
     header_t header;
     look_choices<Actions> choices;
@@ -542,7 +542,7 @@ template <class Actions> struct wallpaper_box : skiff::compose::Stacked {
                                      {.fillX = true,
                                       .autoSize = scene::axes::kY,
                                       .padding = {0.0f, 12.0f, 18.0f, 12.0f}})),
-        parts{.header = header_t(colours, "Chat background and looks", {}, {},
+        parts{.header = page_header<no_back, close_it>(colours, "Chat background and looks", {}, {},
                                  false, true),
               .choices = look_choices<Actions>(colours, looks, level)} {}
 };

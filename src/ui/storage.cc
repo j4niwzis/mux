@@ -97,7 +97,7 @@ auto limit_stepper(const palette& colours, std::string what, std::string_view un
 // events. The limits and the history's switch are the model's widgets; the
 // seal, the clearing and every chat's choices are asked as before.
 template <class Actions> struct storage_page : skiff::compose::Stacked {
-  using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
+  using header_t = page_header_t<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
   using clear_row = row_item<sends<::mux::ui::request::clear_stored>>;
   using seal_row = switch_row<sends<::mux::ui::request::flip_local_encryption>>;
   using change_row = row_item<sends<::mux::ui::request::change_passphrase>>;
@@ -189,7 +189,7 @@ template <class Actions> struct storage_page : skiff::compose::Stacked {
   storage_page(const palette &colours, const config::history_settings &history,
                bool sealed)
       : Stacked(skiff::compose::vbox(0.0f, {.fill = true})),
-        parts{.header = header_t(colours, "Storage", {}, {}, true, true),
+        parts{.header = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>(colours, "Storage", {}, {}, true, true),
               .settings = settings_of(colours, history, sealed)} {}
   void show_receipts(bool) {}
   void show_sealed(bool sealed) { std::get<1>(parts.settings.fParts).show_sealed(sealed); }
@@ -216,10 +216,10 @@ inline auto notification_settings_view(const palette& colours) {
                            "of messages while it runs."));
 }
 inline auto notifications_page(const palette& colours) {
-  using header = page_header<sends<request::settings_home>, sends<request::close_settings>>;
+  using header = page_header_t<sends<request::settings_home>, sends<request::close_settings>>;
   return skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar}, header(colours, "Notifications", {}, {}, true, true)),
+      skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar}, page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Notifications", {}, {}, true, true)),
       notification_settings_view(colours));
 }
 using notifications_page_t = decltype(notifications_page(std::declval<const palette&>()));
@@ -237,10 +237,10 @@ inline auto files_settings_view(const palette& colours) {
                            "It is cut out of the file; the picture itself is sent as it is, not compressed again."));
 }
 inline auto files_page(const palette& colours) {
-  using header = page_header<sends<request::settings_home>, sends<request::close_settings>>;
+  using header = page_header_t<sends<request::settings_home>, sends<request::close_settings>>;
   return skiff::compose::column(
       skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
-      skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar}, header(colours, "Files", {}, {}, true, true)),
+      skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar}, page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Files", {}, {}, true, true)),
       files_settings_view(colours));
 }
 using files_page_t = decltype(files_page(std::declval<const palette&>()));

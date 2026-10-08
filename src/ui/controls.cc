@@ -664,63 +664,64 @@ struct event_kinds_field : nodes::Stack {
   }
 };
 
-// How far a search for a message jumped to pages back, at one level: a few
-// numbers of events and No limit, and, where a level under decides for it,
-// Default.
-template <class Actions>
-struct jump_search_choice : nodes::Stack {
+// How far a search for a message jumped to pages back, at one level, as
+// the model holds it: a few numbers of events and No limit, and, where a
+// level above decides for it, Default. Bound to an optional count unsaid as
+// above, or to every chat's count.
+inline std::optional<std::int64_t> said_of(std::int64_t now) { return now; }
+inline std::optional<std::int64_t> said_of(const std::optional<std::int64_t>& now) { return now; }
+inline std::int64_t count_of(std::optional<std::int64_t> chosen, std::type_identity<std::int64_t>) { return chosen.value_or(5000); }
+inline std::optional<std::int64_t> count_of(std::optional<std::int64_t> chosen, std::type_identity<std::optional<std::int64_t>>) {
+  return chosen;
+}
+template <class T>
+struct jump_search_field : nodes::Stack {
   static constexpr std::array<std::int64_t, 4> kChoices{500, 5000, 50000, 0};
-  struct row;
-  struct choose {
-    row* in = nullptr;
+  struct pick {
     std::optional<std::int64_t> most;
-    void operator()() const { in->chose(most); }
-  };
-  struct row : nodes::Stack {
-    Actions* actions = nullptr;
-    choice_level_t level;
-    struct parts_t {
-      nodes::Text label;
-      segment<choose> fallback;
-      std::vector<segment<choose>> choices;
-    } parts;
-    [[nodiscard]] static std::string label_of(std::int64_t most) {
-      return most == 0 ? std::string("No limit") : std::format("{}", most);
-    }
-    row(Actions* a, const palette& colours, choice_level_t at, std::optional<std::int64_t> now)
-        : actions(a), level(at),
-          parts{.label = nodes::Text("Look back for a message", 14.0f, colours.text),
-                .fallback = segment<choose>(colours, "Default", {this, std::nullopt})} {
-      const bool everywhere = !has_level_above(level);
-      lay_out_setting_row(*this, parts.label);
-      parts.fallback.apply({.width = 64.0f, .alignSelf = scene::align::kMiddle});
-      parts.fallback.setVisible(!everywhere);
-      parts.choices.reserve(kChoices.size());
-      for (const std::int64_t most : kChoices) {
-        parts.choices.emplace_back(colours, label_of(most), choose{this, most});
-        parts.choices.back().apply({.width = 64.0f, .alignSelf = scene::align::kMiddle});
-      }
-      this->show_choice(everywhere ? std::optional<std::int64_t>(now.value_or(5000)) : now);
-    }
-    void show_choice(std::optional<std::int64_t> now) {
-      parts.fallback.set_active(!now);
-      for (std::size_t i = 0; i < kChoices.size(); ++i)
-        parts.choices[i].set_active(now == kChoices[i]);
-    }
-    void chose(std::optional<std::int64_t> most) {
-      this->show_choice(most);
-      actions->set_jump_search(level, most);
+    bool pressed = false;
+    void operator()() {
+      pressed = true;
+      ++skiff::bind::pendingCount();
     }
   };
-  // Made where it stays, apart from the page: its switches know it by its
-  // address.
   struct parts_t {
-    std::vector<row> rows;
+    nodes::Text label;
+    segment<pick> fallback;
+    std::vector<segment<pick>> choices;
   } parts;
-  jump_search_choice(Actions* a, const palette& colours, choice_level_t at, std::optional<std::int64_t> now) {
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-    parts.rows.reserve(1);
-    parts.rows.emplace_back(a, colours, at, now);
+  bool top = false;
+  [[nodiscard]] static std::string label_of(std::int64_t most) {
+    return most == 0 ? std::string("No limit") : std::format("{}", most);
+  }
+  jump_search_field(const palette& colours, choice_level_t level)
+      : parts{.label = nodes::Text("Look back for a message", 14.0f, colours.text),
+              .fallback = segment<pick>(colours, "Default", {std::nullopt})},
+        top(!has_level_above(level)) {
+    lay_out_setting_row(*this, parts.label);
+    parts.fallback.apply({.width = 64.0f, .alignSelf = scene::align::kMiddle});
+    parts.fallback.setVisible(!top);
+    parts.choices.reserve(kChoices.size());
+    for (const std::int64_t most : kChoices) {
+      parts.choices.emplace_back(colours, label_of(most), pick{most});
+      parts.choices.back().apply({.width = 64.0f, .alignSelf = scene::align::kMiddle});
+    }
+  }
+  void read(const T& now) {
+    const std::optional<std::int64_t> said = said_of(now);
+    const std::optional<std::int64_t> shown = top ? std::optional<std::int64_t>(said.value_or(5000)) : said;
+    parts.fallback.set_active(!shown);
+    for (std::size_t i = 0; i < kChoices.size(); ++i)
+      parts.choices[i].set_active(shown == kChoices[i]);
+  }
+  std::vector<skiff::model::SetTo<T>> takeChanges() {
+    std::vector<skiff::model::SetTo<T>> out;
+    if (std::exchange(parts.fallback.act.pressed, false))
+      out.push_back(skiff::model::setTo(count_of(std::nullopt, std::type_identity<T>{})));
+    for (auto& each : parts.choices)
+      if (std::exchange(each.act.pressed, false))
+        out.push_back(skiff::model::setTo(count_of(each.act.most, std::type_identity<T>{})));
+    return out;
   }
 };
 

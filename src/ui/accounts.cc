@@ -291,7 +291,8 @@ inline auto account_chats_view(const palette& colours, std::string address) {
           bound<skiff::model::Field<&shared::show_receipts>>(show_hide_field<receipts_setting, std::optional<bool>>(colours, level)),
           bound<skiff::model::Field<&shared::link_previews>>(show_hide_field<link_previews_setting, std::optional<bool>>(colours, level)),
           bound<skiff::model::Field<&shared::previews_direct>>(
-              show_hide_field<previews_direct_setting, std::optional<bool>>(colours, level))),
+              show_hide_field<previews_direct_setting, std::optional<bool>>(colours, level)),
+          bound<skiff::model::Field<&shared::jump_search>>(jump_search_field<std::optional<std::int64_t>>(colours, level))),
       std::move(address));
 }
 
@@ -429,7 +430,6 @@ struct account_chats : nodes::Stack {
     switch_row<ask<Actions, &Actions::flip_account_strip>> strip;
     nodes::Text title;
     decltype(account_chats_view(std::declval<const palette&>(), std::string())) settings;
-    jump_search_choice<Actions> jump_search;
     nodes::Text looks_title;
     look_choices<Actions> looks;
     nodes::Text spaces_title;
@@ -444,7 +444,6 @@ struct account_chats : nodes::Stack {
               .strip = switch_row<ask<Actions, &Actions::flip_account_strip>>(colours, "A strip on its chats in other lists", {a}),
               .title = section_title(colours, "CHATS"),
               .settings = account_chats_view(colours, std::move(address)),
-              .jump_search = jump_search_choice<Actions>(a, colours, choice_level::account{}, chats.jump_search),
               .looks_title = section_title(colours, "LOOKS"),
               .looks = look_choices<Actions>(a, colours, looks, choice_level::account{}),
               .spaces_title = section_title(colours, "SPACES"),

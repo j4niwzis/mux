@@ -183,7 +183,6 @@ struct stub {
   void close_verification() {}
   void flip_local_encryption() {}
   void change_passphrase() {}
-  void set_jump_search(mux::choice_level_t, std::optional<std::int64_t>) {}
   void press_loader(std::string) {}
   void stop_jump() {}
   void open_video(std::string, std::string, std::string, std::string, std::string) {}

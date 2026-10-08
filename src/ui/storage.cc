@@ -168,7 +168,8 @@ struct storage_page : nodes::Stack {
         bound<skiff::model::Field<&config::history_settings::link_previews>>(show_hide_field<link_previews_setting, bool>(colours, choice_level::everywhere{})),
         bound<skiff::model::Field<&config::history_settings::previews_direct>>(
             show_hide_field<previews_direct_setting, std::optional<bool>>(colours, choice_level::everywhere{})),
-        jump_search_choice<Actions>(a, colours, choice_level::everywhere{}, history.jump_search),
+        bound<skiff::model::Field<&config::history_settings::jump_search>>(
+            jump_search_field<std::int64_t>(colours, choice_level::everywhere{})),
         bound<skiff::model::Field<&config::history_settings::send_typing>>(
             show_hide_field<typing_setting, std::optional<bool>>(colours, choice_level::everywhere{})),
         spaced_note(colours, "Deleted messages are kept on disk, apart from the rest and up to their own size, the "

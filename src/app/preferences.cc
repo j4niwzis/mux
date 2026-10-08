@@ -232,24 +232,6 @@ class preferences_part {
     if (auto* up = s_->root().settings_up(); up && up->appearance())
       up->show_appearance(k_->appearance().theme, k_->appearance().accent);
   }
-  // How far a jump's search pages back, at a level.
-  void apply(const request::set_jump_search& one) {
-    spl::visit(spl::overloaded{[&](mux::choice_level::everywhere) { k_->choose_field<&mux::config::history_settings::jump_search>(one.most.value_or(5000)); },
-                               [&](mux::choice_level::account) {
-                                 s_->with_chosen_account([&](accounts&, mux::config::account_t& account) {
-                                   mux::config::jump_search_in(account) = one.most;
-                                 });
-                               },
-                               [&](mux::choice_level::chat) {
-                                 const auto chosen = s_->managed();
-                                 if (!chosen)
-                                   return;
-                                 k_->choose<&mux::app::chat_choices::jump_search>(*chosen, one.most);
-                               }},
-               one.level);
-    (void)k_->write();
-    s_->refresh_due = true;
-  }
   // Room events, for the chosen account's chats: shown or not from now on,
   // whatever every account's is.
   void apply(const request::flip_account_room_events&) {

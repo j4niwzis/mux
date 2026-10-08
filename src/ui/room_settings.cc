@@ -366,7 +366,8 @@ inline auto chat_settings_view(const palette& colours, const conversation_id& ch
               show_hide_field<link_previews_setting, std::optional<bool>>(colours, level)),
           skiff::compose::bound<skiff::model::Field<&choices::previews_direct>>(
               show_hide_field<previews_direct_setting, std::optional<bool>>(colours, level)),
-          skiff::compose::bound<skiff::model::Field<&choices::typing>>(show_hide_field<typing_setting, std::optional<bool>>(colours, level))),
+          skiff::compose::bound<skiff::model::Field<&choices::typing>>(show_hide_field<typing_setting, std::optional<bool>>(colours, level)),
+          skiff::compose::bound<skiff::model::Field<&choices::jump_search>>(jump_search_field<std::optional<std::int64_t>>(colours, level))),
       chat);
 }
 
@@ -530,7 +531,6 @@ struct room_settings : nodes::Stack {
       nodes::Text heading;
       nodes::Text events_about;
       settings_t settings;
-      jump_search_choice<Actions> jump_search;
       nodes::Text forum_heading;
       toggle_line<flip_forum_act> forum;
       nodes::Text forum_about;
@@ -542,7 +542,6 @@ struct room_settings : nodes::Stack {
         : parts{.heading = tab_heading(*box->colours_, "General"),
                 .events_about = explained(*box->colours_, "Room events shown in this room, for you: Default is as your account's."),
                 .settings = chat_settings_view(*box->colours_, facts.chat),
-                .jump_search = jump_search_choice<Actions>(a, *box->colours_, choice_level::chat{}, facts.jump_search),
                 .forum_heading = part_heading(*box->colours_, "Shown as"),
                 .forum = toggle_line<flip_forum_act>(*box->colours_, "One chat, its rooms as topics", {a, facts.id, !facts.holds_spaces},
                                                      facts.forum, !facts.holds_spaces),

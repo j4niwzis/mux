@@ -168,6 +168,11 @@ struct found_person_row : nodes::Stack {
 // in the server's user directory -- each with their picture, name and ID,
 // a press on one starting the chat; and one's own link, to send to someone
 // not found.
+// Start chat open: the people known, and one's own link.
+struct new_chat_facts {
+  std::vector<found_person> people;
+  std::string own_link;
+};
 template <class Actions>
 struct start_chat_box : nodes::Stack {
   // The dialog it is shown in.
@@ -245,6 +250,7 @@ struct start_chat_box : nodes::Stack {
     nodes::Text note;
     link_row share;
   } parts;
+  start_chat_box(const ui_needs<Actions>& n, const new_chat_facts& facts) : start_chat_box(*n.colours, facts.people, facts.own_link) {}
   start_chat_box(const palette& colours, std::vector<found_person> people, std::string own_link)
       : colours_(&colours), known(std::move(people)), link(std::move(own_link)),
         parts{.header = header_t(colours, "Start chat", {}, {}, false, true),
@@ -331,6 +337,11 @@ struct start_chat_box : nodes::Stack {
 // Element's Create a room (its CreateRoomDialog): a name, a topic, who can
 // join -- by invitation, or anyone, with the address it is found by -- and,
 // among the advanced, whether those of other servers may ever join.
+// Create a room open: on which server, and where in a space, if in one.
+struct new_room_facts {
+  std::string own_server;
+  std::optional<new_room_place> place;
+};
 template <class Actions>
 struct create_room_box : nodes::Stack {
   // The dialog it is shown in.
@@ -523,6 +534,7 @@ struct create_room_box : nodes::Stack {
     nodes::Text block_note;
     buttons_row buttons;
   } parts;
+  create_room_box(const ui_needs<Actions>& n, const new_room_facts& facts) : create_room_box(*n.colours, facts.own_server, facts.place) {}
   create_room_box(const palette& colours, std::string own_server, std::optional<new_room_place> where = std::nullopt)
       : colours_(&colours), server(std::move(own_server)), place(std::move(where)), space_members(place.has_value()),
         parts{.header = header_t(colours, "Create a room", {}, {}, false, true),

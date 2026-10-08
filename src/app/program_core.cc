@@ -81,15 +81,15 @@ void app::woken() {
                                [&](const mux::change::devices_listed& listed) {
                                  if (person_open_ && person_open_->first.account == listed.by && person_open_->second == listed.user) {
                                    const auto [chat, user] = *person_open_;
-                                   root().open_person(chat.account, user,
-                                                      mux::ui::person_of(shared.ui, model->find(chat), *model, chat.account, user));
+                                   mux::ui::show(showing, std::optional(mux::ui::person_shown{chat.account, user,
+                                                      mux::ui::person_of(shared.ui, model->find(chat), *model, chat.account, user)}));
                                  }
                                },
                                [&](const mux::change::trust_changed& told) {
                                  if (person_open_ && person_open_->first.account == told.by && person_open_->second == told.user) {
                                    const auto [chat, user] = *person_open_;
-                                   root().open_person(chat.account, user,
-                                                      mux::ui::person_of(shared.ui, model->find(chat), *model, chat.account, user));
+                                   mux::ui::show(showing, std::optional(mux::ui::person_shown{chat.account, user,
+                                                      mux::ui::person_of(shared.ui, model->find(chat), *model, chat.account, user)}));
                                  }
                                },
                                [&](const mux::change::people_found& found) {

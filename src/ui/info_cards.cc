@@ -39,6 +39,12 @@ export namespace mux::ui {
 // A person's info, as tdesktop's profile layer: a box in the middle of the
 // window over the chats -- a bar with its title and ✕, their photo beside
 // their name and how they are, their ID to copy, and a message to them.
+// A person's card open: from which account, who, and what is known of them.
+struct person_shown {
+  account_id account;
+  std::string key;
+  person_facts facts;
+};
 template <class Actions>
 struct person_card : nodes::Stack {
   // tdesktop's profile layer: 392 wide (infoDesiredWidth), as high as what
@@ -113,6 +119,8 @@ struct person_card : nodes::Stack {
     std::vector<action_tile<ask_protocol>> theirs;
   } parts;
 
+  person_card(const ui_needs<Actions>& n, const person_shown& shown)
+      : person_card(*n.colours, *n.shared, shown.account, shown.key, shown.facts) {}
   person_card(const palette& colours, const ui_shared& shared, const account_id& account, const std::string& key, const person_facts& facts)
       : colours_(&colours),
         parts{.top = top_bar(colours, "User info", {}, {}, false, true),
@@ -164,6 +172,11 @@ struct person_card : nodes::Stack {
 // photo beside its name and how many are in it, what it is about, its ID to
 // copy, and a button to join it. What its server says (/room_summary) fills
 // it when it comes; till then, or where it says nothing, the address alone.
+// A room's card open: what was asked for, and what is known of it so far.
+struct room_card_facts {
+  std::string asked;
+  room_preview known;
+};
 template <class Actions>
 struct room_card : nodes::Stack {
   // The dialog it is shown in.
@@ -241,6 +254,7 @@ struct room_card : nodes::Stack {
     std::optional<action_tile<decline_it>> decline;
   } parts;
 
+  room_card(const ui_needs<Actions>& n, const room_card_facts& facts) : room_card(*n.colours, facts.asked, facts.known) {}
   room_card(const palette& colours, const std::string& asked, const room_preview& known)
       : parts{.top = top_bar(colours, "Room info", {}, {}, false, true),
               .scroll = nodes::ScrollContainer<details>(details(colours, asked, known)),

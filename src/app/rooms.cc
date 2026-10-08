@@ -43,7 +43,8 @@ class rooms_part {
       link = mux::proto::share_link(mux::ui::protocol_state_of(s_->ui, *current), current->address).value_or(std::string());
     }
     std::ranges::sort(known, {}, &mux::found_person::name);
-    s_->root().open_new_chat(std::move(known), std::move(link));
+    s_->root().close_drawer();
+    mux::ui::show(*s_->showing, std::optional(mux::ui::new_chat_facts{std::move(known), std::move(link)}));
   }
   void apply(const request::find_people& one) {
     const auto by = s_->account_offering(mux::proto::feature::people_directory{});
@@ -60,20 +61,22 @@ class rooms_part {
   }
   void apply(const request::open_new_room&) {
     const auto by = s_->account_offering(mux::proto::feature::room_creation{});
-    s_->root().open_new_room(by ? by->address.substr(by->address.find(':') + 1) : std::string());
+    s_->root().close_drawer();
+    mux::ui::show(*s_->showing, std::optional(mux::ui::new_room_facts{by ? by->address.substr(by->address.find(':') + 1) : std::string()}));
   }
   void apply(const request::open_new_room_in& one) {
     const std::string& address = one.space.account.address;
-    s_->root().open_new_room(address.substr(address.find(':') + 1),
-                             mux::ui::new_room_place{one.space, one.name, one.make_space});
+    s_->root().close_drawer();
+    mux::ui::show(*s_->showing, std::optional(mux::ui::new_room_facts{address.substr(address.find(':') + 1),
+                             mux::ui::new_room_place{one.space, one.name, one.make_space}}));
   }
-  void apply(const request::close_new_room&) { s_->root().close_new_room(); }
-  void apply(const request::close_new_chat&) { s_->root().close_new_chat(); }
+  void apply(const request::close_new_room&) { mux::ui::show<mux::ui::new_room_facts>(*s_->showing, std::nullopt); }
+  void apply(const request::close_new_chat&) { mux::ui::show<mux::ui::new_chat_facts>(*s_->showing, std::nullopt); }
   void apply(const request::start_direct& one) {
     const auto& current = s_->root().main().current;
     if (!current || s_->demo())
       return;
-    s_->root().close_new_chat();
+    mux::ui::show<mux::ui::new_chat_facts>(*s_->showing, std::nullopt);
     for (const auto& [key, chat] : s_->model->accounts().at(*current).conversations)
       if (!mux::ui::is_group(chat) && mux::ui::contact_of(s_->ui, chat) == one.user) {
         s_->chat_due = chat.id;
@@ -86,7 +89,9 @@ class rooms_part {
   void apply(const request::open_explore&) {
     const auto by = s_->account_offering(mux::proto::feature::room_directory{});
     const std::string own = by ? by->address.substr(by->address.find(':') + 1) : std::string();
-    s_->root().open_explore(own);
+    s_->root().close_drawer();
+    mux::ui::show<mux::ui::new_chat_facts>(*s_->showing, std::nullopt);
+    mux::ui::show(*s_->showing, std::optional(mux::ui::explore_facts{own}));
     // What the server lists, at once, as Cinny opens its explorer: its
     // directory with nothing searched.
     if (by && !s_->demo()) {
@@ -94,14 +99,16 @@ class rooms_part {
       s_->net->search_directory(*by, own, std::string());
     }
   }
-  void apply(const request::close_explore&) { s_->root().close_explore(); }
+  void apply(const request::close_explore&) { mux::ui::show<mux::ui::explore_facts>(*s_->showing, std::nullopt); }
   // A space's rooms and spaces, in Explore: asked of its account.
   void apply(const request::explore_space& one) {
     (void)s_->root().main().close_space_menu();
     const auto by = s_->root().main().current;
     if (!by || s_->demo())
       return;
-    s_->root().open_explore(by->address.substr(by->address.find(':') + 1));
+    s_->root().close_drawer();
+    mux::ui::show<mux::ui::new_chat_facts>(*s_->showing, std::nullopt);
+    mux::ui::show(*s_->showing, std::optional(mux::ui::explore_facts{by->address.substr(by->address.find(':') + 1)}));
     // Said as the space's: its name and picture over what it holds.
     std::string name = one.name;
     if (const auto& chats = s_->model->accounts().at(*by).conversations; chats.contains(one.room))
@@ -114,7 +121,7 @@ class rooms_part {
   // its card, or the room where joined; else the directory asked.
   void apply(const request::search_rooms& one) {
     if (auto link = mux::logic::link_of_id(one.query)) {
-      s_->root().close_explore();
+      mux::ui::show<mux::ui::explore_facts>(*s_->showing, std::nullopt);
       s_->link_due = *link;
       return;
     }
@@ -134,7 +141,7 @@ class rooms_part {
       via.push_back(one.server);
     s_->joining = mux::logic::link_of_id(one.room);
     s_->net->join(*by, one.room, via);
-    s_->root().close_explore();
+    mux::ui::show<mux::ui::explore_facts>(*s_->showing, std::nullopt);
   }
   // A room made, and opened once the model has it.
   void apply(const request::create_room& one) {
@@ -143,7 +150,7 @@ class rooms_part {
                               : s_->account_offering(mux::proto::feature::room_creation{});
     if (!by || s_->demo())
       return;
-    s_->root().close_new_room();
+    mux::ui::show<mux::ui::new_room_facts>(*s_->showing, std::nullopt);
     // Its alias's local part, as the protocol has it (#name:server, name).
     const std::string alias = mux::proto::local_part_of(mux::ui::protocol_state_of(s_->ui, *by), one.alias);
     s_->net->create_room(*by, one.name, one.topic, one.open, one.open ? alias : std::string(), one.federate, one.encrypted,
@@ -155,7 +162,7 @@ class rooms_part {
     const auto& current = s_->root().main().current;
     if (!current || s_->demo())
       return;
-    s_->root().close_new_chat();
+    mux::ui::show<mux::ui::new_chat_facts>(*s_->showing, std::nullopt);
     s_->net->create_group(*current, one.name);
     s_->notice("New group", "Making " + one.name + "…");
   }

@@ -110,6 +110,10 @@ struct directory_row : nodes::Stack {
 // own, or another named -- each room with its picture, name, address, how
 // many are in it and what it is about, and Join. An address typed in is
 // gone to at once.
+// Explore open: the server it lists first.
+struct explore_facts {
+  std::string own_server;
+};
 template <class Actions>
 struct explore_box : nodes::Stack {
   // The dialog it is shown in.
@@ -203,6 +207,7 @@ struct explore_box : nodes::Stack {
   } parts;
   // The row's fields, by their names, for what reads them.
   field& query_field() { return parts.search.parts.query; }
+  explore_box(const ui_needs<Actions>& n, const explore_facts& facts) : explore_box(*n.colours, facts.own_server) {}
   explore_box(const palette& colours, const std::string& own_server)
       : colours_(&colours),
         parts{.header = header_t(colours, "Explore rooms", {}, {}, false, true),

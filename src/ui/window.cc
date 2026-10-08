@@ -48,6 +48,12 @@ struct shown_root {
   skiff::model::Tracked<std::optional<history_facts>> history;
   skiff::model::Tracked<std::optional<forward_facts>> forwarding;
   skiff::model::Tracked<std::optional<wallpaper_facts>> wallpaper;
+  skiff::model::Tracked<std::optional<person_shown>> person;
+  skiff::model::Tracked<std::optional<room_card_facts>> room;
+  skiff::model::Tracked<std::optional<new_chat_facts>> new_chat;
+  skiff::model::Tracked<std::optional<new_room_facts>> new_room;
+  skiff::model::Tracked<std::optional<packs_facts>> packs;
+  skiff::model::Tracked<std::optional<explore_facts>> explore;
 };
 struct shown_reactions {};
 using shown_model = skiff::model::Model<shown_root, shown_reactions>;
@@ -222,9 +228,9 @@ struct window : scene::Node {
       widgets::Dialog<settings_dialog<Actions>> settings;
       shown_in<notice_box<Actions>, notice_facts> notice;
       // A person's info, in the middle, as tdesktop's profile layer.
-      widgets::Dialog<person_card<Actions>> person;
+      shown_in<person_card<Actions>, person_shown> person;
       // A room not joined, from a link: its card, as a person's.
-      widgets::Dialog<room_card<Actions>> room;
+      shown_in<room_card<Actions>, room_card_facts> room;
       // A message's reactions as events.
       shown_in<reactions_box<Actions>, reactions_facts> reactions;
       // A message's earlier versions, as AyuGram's edit history.
@@ -240,14 +246,14 @@ struct window : scene::Node {
       // Where a message is forwarded to.
       shown_in<forward_box<Actions>, forward_facts> forwarding;
       // Element's Start chat, and its Create a room.
-      widgets::Dialog<start_chat_box<Actions>> new_chat;
-      widgets::Dialog<create_room_box<Actions>> new_room;
+      shown_in<start_chat_box<Actions>, new_chat_facts> new_chat;
+      shown_in<create_room_box<Actions>, new_room_facts> new_room;
       // Emojis & Stickers: a room's packs, or one's own.
-      widgets::Dialog<packs_box<Actions>> packs;
+      shown_in<packs_box<Actions>, packs_facts> packs;
       // A chat background chosen, at a level.
       shown_in<wallpaper_box<Actions>, wallpaper_facts> wallpaper;
       // A server's public rooms, searched.
-      widgets::Dialog<explore_box<Actions>> explore;
+      shown_in<explore_box<Actions>, explore_facts> explore;
       // A protocol's own dialog: Matrix's developer tools, for one.
       widgets::Dialog<tool_holder> tools;
       widgets::Dialog<send_box<Actions>> sending;
@@ -447,13 +453,19 @@ struct window : scene::Node {
         : parts{.backdrop = nodes::Box<>(n.colours->background),
                 .frame = frame_t(std::piecewise_construct, std::forward_as_tuple(n), std::forward_as_tuple(n)),
                 .notice = shown_made<notice_box<Actions>, notice_facts>(n),
+                .person = shown_made<person_card<Actions>, person_shown>(n),
+                .room = shown_made<room_card<Actions>, room_card_facts>(n),
                 .reactions = shown_made<reactions_box<Actions>, reactions_facts>(n),
                 .history = shown_made<edit_history_box<Actions>, history_facts>(n),
                 .linking = shown_made<link_box<Actions>, link_facts>(n),
                 .leaving = shown_made<leave_space_box<Actions>, leave_space_facts>(n),
                 .marks = shown_made<marks_box<Actions>, marks_facts>(n),
                 .forwarding = shown_made<forward_box<Actions>, forward_facts>(n),
-                .wallpaper = shown_made<wallpaper_box<Actions>, wallpaper_facts>(n)} {
+                .new_chat = shown_made<start_chat_box<Actions>, new_chat_facts>(n),
+                .new_room = shown_made<create_room_box<Actions>, new_room_facts>(n),
+                .packs = shown_made<packs_box<Actions>, packs_facts>(n),
+                .wallpaper = shown_made<wallpaper_box<Actions>, wallpaper_facts>(n),
+                .explore = shown_made<explore_box<Actions>, explore_facts>(n)} {
       auto& [backdrop, behind, frame, ...over] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
@@ -744,34 +756,12 @@ struct window : scene::Node {
   void show_verification(const verification_view& view) { layer().verifying.open(needs_, view); }
   void close_verification() { layer().verifying.close(); }
 
-  void open_person(const account_id& account, const std::string& key, const person_facts& facts) {
-    layer().person.open(*needs_.colours, *needs_.shared, account, key, facts);
-  }
-  void close_person() { layer().person.close(); }
-  // Opened again while up, it takes what is known now in place.
-  void open_room_card(const std::string& asked, const room_preview& known) {
-    layer().room.open(*needs_.colours, asked, known);
-  }
-  void close_room_card() { layer().room.close(); }
-  [[nodiscard]] bool room_card_up() { return layer().room.shown() != nullptr; }
   void open_manage(const room_settings_facts& facts) { layer().manage.open(needs_, facts); }
   void close_manage() { layer().manage.close(); }
-  void open_new_chat(std::vector<found_person> known, std::string own_link) {
-    close_drawer();
-    layer().new_chat.open(*needs_.colours, std::move(known), std::move(own_link));
-  }
-  void close_new_chat() { layer().new_chat.close(); }
   void show_found_people(const std::vector<found_person>& people, const std::string& query) {
     if (auto* up = layer().new_chat.shown())
       up->show_found(people, query);
   }
-  void open_new_room(const std::string& own_server, std::optional<new_room_place> place = std::nullopt) {
-    close_drawer();
-    layer().new_room.open(*needs_.colours, own_server, std::move(place));
-  }
-  void close_new_room() { layer().new_room.close(); }
-  void open_packs(std::optional<std::string> room, bool editable) { layer().packs.open(*needs_.colours, *needs_.shared, std::move(room), editable); }
-  void close_packs() { layer().packs.close(); }
   void show_packs(std::vector<emote_pack> packs) {
     if (auto* up = layer().packs.shown())
       up->show_packs(std::move(packs));
@@ -803,12 +793,6 @@ struct window : scene::Node {
         up->parts.note.setText("An image could not be uploaded: " + picture.body);
     }
   }
-  void open_explore(const std::string& own_server) {
-    close_drawer();
-    layer().new_chat.close();
-    layer().explore.open(*needs_.colours, own_server);
-  }
-  void close_explore() { layer().explore.close(); }
   void explore_as_space(const std::string& room, const std::string& name) {
     if (auto* up = layer().explore.shown())
       up->as_space(room, name);

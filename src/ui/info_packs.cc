@@ -47,6 +47,12 @@ export namespace mux::ui {
 // (as emoji, as stickers), and its images, each with its shortcode and use,
 // removable; images added from files, uploaded as they are chosen; saved as
 // the room's state, or one's account data.
+// Emojis & Stickers open: a room's packs, or one's own; and whether they
+// may be changed.
+struct packs_facts {
+  std::optional<std::string> room;
+  bool editable = false;
+};
 template <class Actions>
 struct packs_box : nodes::Stack {
   // The dialog it is shown in.
@@ -269,6 +275,7 @@ struct packs_box : nodes::Stack {
     nodes::ScrollContainer<pictures_t> pictures{pictures_t({.spacingY = 0.0f, .wrap = false}, {})};
     edit_buttons edit_actions;
   } parts;
+  packs_box(const ui_needs<Actions>& n, const packs_facts& facts) : packs_box(*n.colours, *n.shared, facts.room, facts.editable) {}
   packs_box(const palette& colours, ui_shared& shared, std::optional<std::string> in, bool editable)
       : colours_(&colours), shared_(&shared), room(std::move(in)), may_edit(editable),
         parts{.header = header_t(colours, "Emojis & Stickers", {}, {}, false, true),

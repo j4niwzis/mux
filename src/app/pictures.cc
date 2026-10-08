@@ -492,14 +492,14 @@ class pictures_part {
     const auto kept = kept_file(media_use::whole{}, source);
     auto bytes_read = kept ? spl::bytes::file_text(*kept) : std::nullopt;
     if (!bytes_read) {
-      s_->root().show_message("GIFs", "The GIF has not loaded yet. Save it once it plays.");
+      s_->notice("GIFs", "The GIF has not loaded yet. Save it once it plays.");
       return;
     }
     std::string bytes = std::move(*bytes_read);
     std::error_code failed;
     std::filesystem::create_directories(gifs(), failed);
     std::ofstream(gifs() / mux::config::file_name_of(source), std::ios::binary) << bytes;
-    s_->root().show_message("GIFs", "Saved to your GIFs.");
+    s_->notice("GIFs", "Saved to your GIFs.");
   }
   // The saved GIFs, newest first, to the input's GIF tab; each decoded on a
   // worker into the frames it plays, where it is not already.
@@ -598,7 +598,7 @@ class pictures_part {
   // Bytes written where the dialog said, and said.
   void write_chosen(const std::string& bytes, const std::string& path) {
     const bool saved = mux::platform::files::write(path, bytes);
-    s_->root().show_message("Saved", saved ? std::format("Saved to {}", path) : std::format("Could not write {}", path));
+    s_->notice("Saved", saved ? std::format("Saved to {}", path) : std::format("Could not write {}", path));
   }
   // What Save As… was asked for, until the dialog answers; and where the
   // bytes go when they have to be fetched first.
@@ -781,12 +781,12 @@ class pictures_part {
       where = downloads() / std::vformat("{} ({}){}", std::make_format_args(stem, n, extension));
     std::ofstream(where, std::ios::binary) << bytes;
     if (open && runs_when_opened(where))
-      s_->root().show_message("Saved, not opened",
+      s_->notice("Saved, not opened",
                               std::format("Saved to {}. It was not opened: a file like it runs as a program.", where.string()));
     else if (open)
       mux::platform::system::open_url("file://" + where.string());
     else
-      s_->root().show_message("Saved", std::format("Saved to {}", where.string()));
+      s_->notice("Saved", std::format("Saved to {}", where.string()));
   }
   static std::filesystem::path downloads() {
     if (const char* home = std::getenv("HOME"); home && *home)

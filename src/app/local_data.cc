@@ -51,7 +51,7 @@ class local_data_part {
       return std::nullopt;
     }
     if (vault.resealing() && !this->reseal([](mux::vault::vault&) {}))
-      s_->root().show_message("Local data", "Re-sealing what is kept, begun before, could not be finished. It is "
+      s_->notice("Local data", "Re-sealing what is kept, begun before, could not be finished. It is "
                                             "tried again at the next start; everything stays readable.");
     s_->root().close_passphrase();
     opened out{.extra = std::move(waiting_extra_), .demo = waiting_demo_};

@@ -133,7 +133,7 @@ struct app : kept_settings {
   // The file dialog not shown -- on Linux, SDL asks xdg-desktop-portal for
   // it, else zenity: with neither, the paperclip did nothing at all.
   void dialog_failed(std::string why) {
-    root().show_message("The file dialog could not be opened",
+    shared.notice("The file dialog could not be opened",
                         "The system gave no file dialog (" + why +
                             "). On Linux it comes from xdg-desktop-portal with a backend (-gtk, -gnome, -kde or -wlr), or "
                             "from zenity: install one of them. Meanwhile files can be dropped on the window, and pictures pasted.");

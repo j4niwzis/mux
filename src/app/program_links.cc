@@ -74,7 +74,7 @@ void app::follow(const mux::logic::link_t& where) {
                              [&](const mux::logic::link_step::member_page& step) {
                                this->apply(request::open_member_info{step.user});
                              },
-                             [&](const mux::logic::link_step::say& step) { root().show_message(step.title, step.text); },
+                             [&](const mux::logic::link_step::say& step) { shared.notice(step.title, step.text); },
                              [&](const mux::logic::link_step::join& step) {
                                // Its card first, as a person's: filled when
                                // its server answers, in woken(), and joined

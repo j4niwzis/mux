@@ -251,7 +251,7 @@ class preferences_part {
     const bool now = k_->room_events_shown(*chosen);
     k_->choose<&mux::app::chat_choices::room_events>(*chosen, !now);
     (void)k_->write();
-    s_->root().show_message("Room events", !now ? "Joins, renames and other room events are shown in this chat."
+    s_->notice("Room events", !now ? "Joins, renames and other room events are shown in this chat."
                                             : "Room events are hidden in this chat.");
     s_->refresh_due = true;
   }

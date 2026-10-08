@@ -33,7 +33,7 @@ class calls_part {
     // A build without calls: said so, and nothing sent -- it would only
     // fail, and the room be told it had.
     if (!calls::kAvailable) {
-      s_->root().show_message("Calls aren't in this build",
+      s_->notice("Calls aren't in this build",
                               "This mux was built without calls (MUX_CALLS=OFF). Configure it with -DMUX_CALLS=ON to "
                               "make and take voice calls; libdatachannel is taken from the system where it is installed.");
       return;

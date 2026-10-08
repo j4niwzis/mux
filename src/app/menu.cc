@@ -173,10 +173,10 @@ class menu_part {
         if (std::ranges::none_of(events, [&](const auto& one) { return one.key == key && one.who == user; }))
           entries.push_back({std::string(), user, mux::ui::sender_name(*chat, user), key, said->at,
                              user == chat->id.account.address, target_.id});
-    s_->root().open_reactions(*chat, entries, &*s_->model);
+    mux::ui::show(*s_->showing, std::optional(mux::ui::reactions_facts{chat->id, std::move(entries), &*s_->model}));
   }
-  void apply(const request::close_reactions&) { s_->root().close_reactions(); }
-  void apply(const request::close_edit_history&) { s_->root().close_edit_history(); }
+  void apply(const request::close_reactions&) { mux::ui::show<mux::ui::reactions_facts>(*s_->showing, std::nullopt); }
+  void apply(const request::close_edit_history&) { mux::ui::show<mux::ui::history_facts>(*s_->showing, std::nullopt); }
   // Forward: the chats of the account, to choose where; then sent there.
   void apply(const request::menu_forward&) {
     s_->root().close_menu();
@@ -194,9 +194,9 @@ class menu_part {
         for (const auto& [key, one] : account.conversations)
           chats.push_back({one.id, mux::ui::display_name(one)});
     std::ranges::sort(chats, {}, &mux::ui::forward_target::name);
-    s_->root().open_forward(chats);
+    mux::ui::show(*s_->showing, std::optional(mux::ui::forward_facts{std::move(chats)}));
   }
-  void apply(const request::close_forward&) { s_->root().close_forward(); }
+  void apply(const request::close_forward&) { mux::ui::show<mux::ui::forward_facts>(*s_->showing, std::nullopt); }
   // The message as the server has it.
   void apply(const request::menu_view_source&) {
     s_->root().close_menu();
@@ -274,16 +274,16 @@ class menu_part {
       found = &*there;
     if (!found || found->versions.empty())
       return;
-    s_->root().open_edit_history(*chat, *found, s_->model);
+    mux::ui::show(*s_->showing, std::optional(mux::ui::history_facts{chat->id, *found, s_->model}));
   }
   void apply(const request::forward_to& one) {
-    s_->root().close_forward();
+    mux::ui::show<mux::ui::forward_facts>(*s_->showing, std::nullopt);
     if (!forwarding_ || s_->demo())
       return;
     const auto [from, events] = *std::exchange(forwarding_, std::nullopt);
     for (const std::string& event : events)
       s_->net->forward(from, event, one.to);
-    s_->root().show_message("Forward", "Forwarded to " + [&] {
+    s_->notice("Forward", "Forwarded to " + [&] {
       const conversation* to = s_->model->find(one.to);
       return to ? mux::ui::display_name(*to) : one.to.id;
     }());

@@ -43,6 +43,11 @@ struct shown_root {
   skiff::model::Tracked<std::optional<marks_facts>> marks;
   skiff::model::Tracked<std::optional<leave_space_facts>> leaving;
   skiff::model::Tracked<std::optional<link_facts>> linking;
+  skiff::model::Tracked<std::optional<notice_facts>> notice;
+  skiff::model::Tracked<std::optional<reactions_facts>> reactions;
+  skiff::model::Tracked<std::optional<history_facts>> history;
+  skiff::model::Tracked<std::optional<forward_facts>> forwarding;
+  skiff::model::Tracked<std::optional<wallpaper_facts>> wallpaper;
 };
 struct shown_reactions {};
 using shown_model = skiff::model::Model<shown_root, shown_reactions>;
@@ -215,15 +220,15 @@ struct window : scene::Node {
       // The pages slide over the drawer too: Manage accounts comes in over it.
       frame_t frame;
       widgets::Dialog<settings_dialog<Actions>> settings;
-      widgets::Dialog<notice_box<Actions>> notice;
+      shown_in<notice_box<Actions>, notice_facts> notice;
       // A person's info, in the middle, as tdesktop's profile layer.
       widgets::Dialog<person_card<Actions>> person;
       // A room not joined, from a link: its card, as a person's.
       widgets::Dialog<room_card<Actions>> room;
       // A message's reactions as events.
-      widgets::Dialog<reactions_box<Actions>> reactions;
+      shown_in<reactions_box<Actions>, reactions_facts> reactions;
       // A message's earlier versions, as AyuGram's edit history.
-      widgets::Dialog<edit_history_box<Actions>> history;
+      shown_in<edit_history_box<Actions>, history_facts> history;
       // A link put on what is selected in the message field: Ctrl+K's.
       shown_in<link_box<Actions>, link_facts> linking;
       // Leaving a space, and which of its rooms with it.
@@ -233,14 +238,14 @@ struct window : scene::Node {
       // A room's management.
       widgets::Dialog<room_settings<Actions>> manage;
       // Where a message is forwarded to.
-      widgets::Dialog<forward_box<Actions>> forwarding;
+      shown_in<forward_box<Actions>, forward_facts> forwarding;
       // Element's Start chat, and its Create a room.
       widgets::Dialog<start_chat_box<Actions>> new_chat;
       widgets::Dialog<create_room_box<Actions>> new_room;
       // Emojis & Stickers: a room's packs, or one's own.
       widgets::Dialog<packs_box<Actions>> packs;
       // A chat background chosen, at a level.
-      widgets::Dialog<wallpaper_box<Actions>> wallpaper;
+      shown_in<wallpaper_box<Actions>, wallpaper_facts> wallpaper;
       // A server's public rooms, searched.
       widgets::Dialog<explore_box<Actions>> explore;
       // A protocol's own dialog: Matrix's developer tools, for one.
@@ -441,9 +446,14 @@ struct window : scene::Node {
     layers(const ui_needs<Actions>& n)
         : parts{.backdrop = nodes::Box<>(n.colours->background),
                 .frame = frame_t(std::piecewise_construct, std::forward_as_tuple(n), std::forward_as_tuple(n)),
+                .notice = shown_made<notice_box<Actions>, notice_facts>(n),
+                .reactions = shown_made<reactions_box<Actions>, reactions_facts>(n),
+                .history = shown_made<edit_history_box<Actions>, history_facts>(n),
                 .linking = shown_made<link_box<Actions>, link_facts>(n),
                 .leaving = shown_made<leave_space_box<Actions>, leave_space_facts>(n),
-                .marks = shown_made<marks_box<Actions>, marks_facts>(n)} {
+                .marks = shown_made<marks_box<Actions>, marks_facts>(n),
+                .forwarding = shown_made<forward_box<Actions>, forward_facts>(n),
+                .wallpaper = shown_made<wallpaper_box<Actions>, wallpaper_facts>(n)} {
       auto& [backdrop, behind, frame, ...over] = parts;
       fState.apply({.fill = true});
       backdrop.apply({.fill = true});
@@ -719,13 +729,6 @@ struct window : scene::Node {
   // The menu's card, where one is up: what takes the keys while it is.
   [[nodiscard]] scene::Node* menu_card() { return layer().menu ? &layer().menu->parts.menu : nullptr; }
 
-  void show_notice(std::string what) {
-    layer().notice.open(needs_, "Not implemented yet", std::format("{} isn't implemented yet.", what));
-  }
-  void show_message(std::string heading, std::string text) {
-    layer().notice.open(needs_, std::move(heading), std::move(text));
-  }
-  void close_notice() { layer().notice.close(); }
   // A passphrase asked for: the one at the start is not dismissed.
   void ask_passphrase(proto::passphrase_for_t why) {
     auto& dialog = layer().passphrase;
@@ -751,18 +754,8 @@ struct window : scene::Node {
   }
   void close_room_card() { layer().room.close(); }
   [[nodiscard]] bool room_card_up() { return layer().room.shown() != nullptr; }
-  void open_reactions(const conversation& in, const std::vector<reaction_entry>& entries, const model* now) {
-    layer().reactions.open(needs_, in, entries, now);
-  }
-  void close_reactions() { layer().reactions.close(); }
-  void open_edit_history(const conversation& in, const message& now, const model* known) {
-    layer().history.open(needs_, in, now, known);
-  }
-  void close_edit_history() { layer().history.close(); }
   void open_manage(const room_settings_facts& facts) { layer().manage.open(needs_, facts); }
   void close_manage() { layer().manage.close(); }
-  void open_forward(const std::vector<forward_target>& chats) { layer().forwarding.open(*needs_.colours, chats); }
-  void close_forward() { layer().forwarding.close(); }
   void open_new_chat(std::vector<found_person> known, std::string own_link) {
     close_drawer();
     layer().new_chat.open(*needs_.colours, std::move(known), std::move(own_link));
@@ -779,8 +772,6 @@ struct window : scene::Node {
   void close_new_room() { layer().new_room.close(); }
   void open_packs(std::optional<std::string> room, bool editable) { layer().packs.open(*needs_.colours, *needs_.shared, std::move(room), editable); }
   void close_packs() { layer().packs.close(); }
-  void open_wallpaper(choice_level_t level) { layer().wallpaper.open(*needs_.colours, *needs_.looks, level); }
-  void close_wallpaper() { layer().wallpaper.close(); }
   void show_packs(std::vector<emote_pack> packs) {
     if (auto* up = layer().packs.shown())
       up->show_packs(std::move(packs));

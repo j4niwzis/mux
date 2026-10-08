@@ -61,9 +61,9 @@ void app::apply(const request::text_key& one) {
 // The developer tools, for the chat being read.
 void app::apply(const request::close_dialog&) { root().close_dialog(); }
 
-void app::apply(const request::not_implemented& one) { root().show_notice(one.what); }
+void app::apply(const request::not_implemented& one) { shared.not_implemented(one.what); }
 
-void app::apply(const request::close_notice&) { root().close_notice(); }
+void app::apply(const request::close_notice&) { shared.close_notice(); }
 
 void app::apply(const request::resize_info& one) { root().main().resize_info(one.x); }
 

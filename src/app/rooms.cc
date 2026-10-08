@@ -80,7 +80,7 @@ class rooms_part {
         return;
       }
     s_->net->create_direct(*current, one.user);
-    s_->root().show_message("New chat", "Starting a chat with " + one.user + "…");
+    s_->notice("New chat", "Starting a chat with " + one.user + "…");
   }
   // Explore rooms: opened on the account's own server.
   void apply(const request::open_explore&) {
@@ -149,7 +149,7 @@ class rooms_part {
     s_->net->create_room(*by, one.name, one.topic, one.open, one.open ? alias : std::string(), one.federate, one.encrypted,
                          mux::room_place{one.space ? std::optional<std::string>(one.space->id) : std::nullopt,
                                          one.space_members, one.make_space});
-    s_->root().show_message("New room", "Making " + one.name + "\u2026");
+    s_->notice("New room", "Making " + one.name + "\u2026");
   }
   void apply(const request::start_group& one) {
     const auto& current = s_->root().main().current;
@@ -157,7 +157,7 @@ class rooms_part {
       return;
     s_->root().close_new_chat();
     s_->net->create_group(*current, one.name);
-    s_->root().show_message("New group", "Making " + one.name + "…");
+    s_->notice("New group", "Making " + one.name + "…");
   }
 
  private:

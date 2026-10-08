@@ -55,6 +55,10 @@ struct forward_target {
 
 // Where to forward a message, as tdesktop's box: the account's chats, with
 // a field to find one by its name; a press sends it there.
+// Where a message may be forwarded to: the chats asked among.
+struct forward_facts {
+  std::vector<forward_target> chats;
+};
 template <class Actions>
 struct forward_box : nodes::Stack {
   // The dialog it is shown in.
@@ -103,6 +107,7 @@ struct forward_box : nodes::Stack {
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
   } parts;
 
+  forward_box(const ui_needs<Actions>& n, const forward_facts& facts) : forward_box(*n.colours, facts.chats) {}
   forward_box(const palette& colours, const std::vector<forward_target>& chats)
       : colours_(&colours), all(chats),
         parts{.header = header_t(colours, "Forward to…", {}, {}, false, true),

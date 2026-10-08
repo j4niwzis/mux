@@ -79,6 +79,14 @@ struct services {
   mux::platform::audio::speaker* speaker = nullptr;
 
   [[nodiscard]] window_type& root() const { return scene->root(); }
+  // A notice shown, or the one up closed: what the window shows, edited.
+  void notice(std::string heading, std::string text) const {
+    mux::ui::show(*showing, std::optional(mux::ui::notice_facts{std::move(heading), std::move(text)}));
+  }
+  void not_implemented(std::string what) const {
+    this->notice("Not implemented yet", std::format("{} isn't implemented yet.", what));
+  }
+  void close_notice() const { mux::ui::show<mux::ui::notice_facts>(*showing, std::nullopt); }
   // A chat that is a window of its history away from its newest: back to
   // its newest, live -- before anything is put at its end. Its newest from
   // the disk, where all that came meanwhile is kept.

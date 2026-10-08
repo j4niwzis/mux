@@ -97,7 +97,7 @@ void app::apply(const request::leave_chat&) {
   const mux::conversation* one = model->find(*chosen);
   // As its protocol says: where it may not be left, there is no Leave.
   if (!one || !mux::proto::can_leave(mux::ui::protocol_state_of(shared.ui, chosen->account), *one)) {
-    root().show_notice("This chat cannot be left");
+    shared.not_implemented("This chat cannot be left");
     return;
   }
   // A space: Element's box first, for which of its rooms to leave with it.

@@ -69,7 +69,7 @@ class room_card_part {
     const auto looked = *std::exchange(looked_, std::nullopt);
     s_->net->knock(looked.step.by, looked.step.room, looked.step.via, std::string());
     s_->root().close_room_card();
-    s_->root().show_notice("Asked to join. You'll be let in once someone in the room accepts.");
+    s_->not_implemented("Asked to join. You'll be let in once someone in the room accepts.");
   }
   void apply(const request::join_room_card&) {
     if (!looked_)

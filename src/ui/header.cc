@@ -35,6 +35,11 @@ inline void lay_out_notice(nodes::Stack& box, nodes::Text& title, nodes::Text& n
   }
 }
 
+// What a notice says: its heading and its text.
+struct notice_facts {
+  std::string heading;
+  std::string text;
+};
 template <class Actions>
 struct notice_box : nodes::Stack {
   // The dialog it is shown in.
@@ -46,6 +51,7 @@ struct notice_box : nodes::Stack {
     ok_button ok;
   } parts;
 
+  notice_box(const ui_needs<Actions>& n, const notice_facts& facts) : notice_box(*n.colours, facts.heading, facts.text) {}
   notice_box(const ui_needs<Actions>& n, std::string heading, std::string text)
       : notice_box(*n.colours, std::move(heading), std::move(text)) {}
   notice_box(const palette& colours, std::string heading, std::string text)

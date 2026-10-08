@@ -30,8 +30,8 @@ class looks_part {
   looks_part(const looks_part&) = delete;
   looks_part& operator=(const looks_part&) = delete;
 
-  void apply(const request::open_wallpaper& one) { s_->root().open_wallpaper(one.level); }
-  void apply(const request::close_wallpaper&) { s_->root().close_wallpaper(); }
+  void apply(const request::open_wallpaper& one) { mux::ui::show(*s_->showing, std::optional(mux::ui::wallpaper_facts{one.level})); }
+  void apply(const request::close_wallpaper&) { mux::ui::show<mux::ui::wallpaper_facts>(*s_->showing, std::nullopt); }
   // A background chosen: the theme's, plain, or as the level over it says,
   // set at once; a picture, chosen first in the system's dialog (took_files).
   void apply(const request::set_wallpaper& one) {
@@ -104,7 +104,7 @@ class looks_part {
     std::string bytes = std::move(*bytes_read);
     const auto type = mux::media::picture_of(bytes);
     if (!type || !skia::decodeImage(bytes.data(), bytes.size())) {
-      s_->root().show_message("Chat background", "That file is not a picture mux can show.");
+      s_->notice("Chat background", "That file is not a picture mux can show.");
       return;
     }
     // Kept under its own name -- shown where it is chosen -- in a folder its
@@ -137,7 +137,7 @@ class looks_part {
                                      }},
                   level);
     (void)k_->write();
-    s_->root().close_wallpaper();
+    mux::ui::show<mux::ui::wallpaper_facts>(*s_->showing, std::nullopt);
     s_->refresh_due = true;
     if (auto* up = s_->root().settings_up(); up && up->appearance())
       up->show_appearance(k_->appearance().theme, k_->appearance().accent);

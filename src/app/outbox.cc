@@ -340,7 +340,7 @@ class outbox_part {
       return;
     // Dropped or pasted where files are not sent: said, not lost silently.
     if (!mux::ui::may_send_files(s_->ui, s_->root().main().chosen->account)) {
-      s_->root().show_message("Files", "Files cannot be sent in this chat.");
+      s_->notice("Files", "Files cannot be sent in this chat.");
       return;
     }
     // Dropped while the thread's field has the keys: into the thread, as

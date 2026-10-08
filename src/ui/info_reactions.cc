@@ -63,6 +63,18 @@ template <class List>
   return std::get<0>(flow.fChildren);
 }
 
+// A chat as the chats hold it now: none, where it is gone.
+[[nodiscard]] inline const conversation& chat_or_none(const model* now, const conversation_id& in) {
+  static const conversation none{};
+  const conversation* found = now == nullptr ? nullptr : now->find(in);
+  return found == nullptr ? none : *found;
+}
+// A message's reactions open: in which chat, the reactions, the chats.
+struct reactions_facts {
+  conversation_id in;
+  std::vector<reaction_entry> entries;
+  const model* now = nullptr;
+};
 template <class Actions>
 struct reactions_box : nodes::Stack {
   // On the chat's colour: its bubbles, as in the chat.
@@ -146,6 +158,8 @@ struct reactions_box : nodes::Stack {
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
   } parts;
 
+  reactions_box(const ui_needs<Actions>& n, const reactions_facts& facts)
+      : reactions_box(n, chat_or_none(facts.now, facts.in), facts.entries, facts.now) {}
   reactions_box(const ui_needs<Actions>& n, const conversation& in, const std::vector<reaction_entry>& entries, const model* now)
       : parts{.top = top_bar(*n.colours, "Reactions", {}, {}, false, true)} {
     auto& rows = listed_rows(*this, parts.list, 420.0f);
@@ -159,6 +173,12 @@ struct reactions_box : nodes::Stack {
 // A message's edit history, as AyuGram Desktop's: each version of it the
 // chat's own bubble, on the chat's colour, oldest first, each at the time
 // it was written -- the message as it is now last, the list scrolled to it.
+// A message's earlier versions open: in which chat, the message, the chats.
+struct history_facts {
+  conversation_id in;
+  message said;
+  const model* known = nullptr;
+};
 template <class Actions>
 struct edit_history_box : nodes::Stack {
   [[nodiscard]] static dialog_look look_of_dialog() { return {.sheet = sheet::chat{}, .size = dialog_size::fixed{460.0f, 560.0f}}; }
@@ -198,6 +218,8 @@ struct edit_history_box : nodes::Stack {
     nodes::ScrollContainer<rows_t> list{rows_t({.spacingY = 0.0f, .wrap = false}, {})};
   } parts;
 
+  edit_history_box(const ui_needs<Actions>& n, const history_facts& facts)
+      : edit_history_box(n, chat_or_none(facts.known, facts.in), facts.said, facts.known) {}
   edit_history_box(const ui_needs<Actions>& n, const conversation& in, const message& now, const model* known)
       : parts{.top = top_bar(*n.colours, "Edit History", {}, {}, false, true)} {
     auto& rows = listed_rows(*this, parts.list, 560.0f);

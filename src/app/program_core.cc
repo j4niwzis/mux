@@ -65,8 +65,8 @@ void app::woken() {
                                    root().main().found_rooms_elsewhere(listed.query, listed.rooms);
                                },
                                // Something the server refused: a notice saying why.
-                               [&](const mux::change::refused& said) { root().show_message("Not done", said.what); },
-                               [&](const mux::change::notice& said) { root().show_message(said.heading, said.what); },
+                               [&](const mux::change::refused& said) { shared.notice("Not done", said.what); },
+                               [&](const mux::change::notice& said) { shared.notice(said.heading, said.what); },
                                // People found: in Start chat, while it asks for them.
                                // A person's profile: their picture asked for, where they have one.
                                [&](const mux::change::profile_found& found) {
@@ -208,7 +208,7 @@ void app::woken() {
                                            screen.jump_to(*gone.instead);
                                          } else {
                                            screen.stop_jump();
-                                           root().show_notice("That message isn't there any more, or can't be seen from this account.");
+                                           shared.not_implemented("That message isn't there any more, or can't be seen from this account.");
                                          }
                                        }
                                      },

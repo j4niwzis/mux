@@ -113,7 +113,7 @@ void program_told(App& app, const session_given& given) {
 template <class App>
 void program_told(App& app, const registration_page& page) {
   app.ask.take(mux::ui::request::open_url{page.url});
-  app.root().show_message("Finish registering in your browser",
+  app.shared.notice("Finish registering in your browser",
                           "The server asks for a step it does on its own page, now open in your browser. Once it is done "
                           "there, mux carries on with the registration by itself.");
 }
@@ -122,7 +122,7 @@ void program_told(App& app, const registration_page& page) {
 template <class App>
 void program_told(App& app, const sign_in_page& page) {
   app.ask.take(mux::ui::request::open_url{page.url});
-  app.root().show_message("Sign in in your browser",
+  app.shared.notice("Sign in in your browser",
                           "The server's sign-in page is open in your browser. Once you have signed in there, the "
                           "browser comes back to mux, and the account carries on by itself.");
 }

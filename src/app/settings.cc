@@ -85,7 +85,7 @@ class settings_part {
     std::error_code failed;
     std::filesystem::remove_all(mux::config::state_path("messages"), failed);
     pictures_->clear();
-    s_->root().show_message("Storage", "The stored messages and pictures are cleared.");
+    s_->notice("Storage", "The stored messages and pictures are cleared.");
     s_->refresh_due = true;
   }
 

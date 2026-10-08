@@ -451,6 +451,10 @@ struct look_choices : nodes::Stack {
 };
 
 // A chat background and its looks chosen, at a level, in a dialog.
+// A background being chosen: at which level.
+struct wallpaper_facts {
+  choice_level_t level;
+};
 template <class Actions>
 struct wallpaper_box : nodes::Stack {
   // The dialog it is shown in.
@@ -464,6 +468,7 @@ struct wallpaper_box : nodes::Stack {
     header_t header;
     look_choices<Actions> choices;
   } parts;
+  wallpaper_box(const ui_needs<Actions>& n, const wallpaper_facts& facts) : wallpaper_box(*n.colours, *n.looks, facts.level) {}
   wallpaper_box(const palette& colours, const looks_shown& looks, choice_level_t level)
       : parts{.header = header_t(colours, "Chat background and looks", {}, {}, false, true),
               .choices = look_choices<Actions>(colours, looks, level)} {

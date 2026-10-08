@@ -112,18 +112,9 @@ template <class Actions> struct packs_box : skiff::compose::Stacked {
   struct pack_row : skiff::compose::Stacked {
     packs_box* box;
     std::size_t index;
-    struct lines_t : two_lines {
-      lines_t(const palette& colours, const emote_pack& one)
-          : two_lines(colours, one.name.empty() ? std::string("Unnamed pack") : one.name,
-                      std::format("{} image{} · {}", one.pictures.size(), one.pictures.size() == 1 ? "" : "s",
-                                  one.emoji && one.sticker ? "Emoji and stickers"
-                                  : one.emoji              ? "Emoji"
-                                                           : "Stickers"),
-                      14.0f, 2.0f) {}
-    };
     struct parts_t {
       nodes::Image<from_avatars> face;
-      lines_t lines;
+      two_lines_t lines;
     } parts;
     pack_row(packs_box *b, std::size_t i, const emote_pack &one)
         : Stacked(skiff::compose::hbox(
@@ -142,7 +133,9 @@ template <class Actions> struct packs_box : skiff::compose::Stacked {
                     nodes::Image<from_avatars>({one.avatar.value_or(
                         one.pictures.empty() ? std::string()
                                              : one.pictures.front().url)})),
-                .lines = lines_t(*b->colours_, one)} {
+                .lines = two_lines(*b->colours_, one.name.empty() ? "Unnamed pack" : one.name,
+                    std::format("{} image{} · {}", one.pictures.size(), one.pictures.size() == 1 ? "" : "s",
+                        one.emoji && one.sticker ? "Emoji and stickers" : one.emoji ? "Emoji" : "Stickers"), 14.0f, 2.0f)} {
 
       parts.face.keepBox();
     }

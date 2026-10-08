@@ -142,36 +142,15 @@ template <class Actions> struct forward_box : skiff::compose::Stacked {
 
 // Someone found: their picture, name and ID; pressed, the chat with them --
 // in Start chat, and in the chat list where nothing joined matches.
-template <class Actions> struct found_person_row : skiff::compose::Stacked {
-  // What its handlers ask for, returned.
-  using Answer = ::mux::ui::request::start_direct;
-  std::string id;
-  struct lines_t : two_lines {
-    lines_t(const palette& colours, const found_person& one) : two_lines(colours, one.name.empty() ? one.id : one.name, one.id, 14.0f, 2.0f) {}
-  };
-  struct parts_t {
-    avatar_mark face;
-    lines_t lines;
-  } parts;
-  found_person_row(const palette &colours, const found_person &one)
-      : Stacked(
-            skiff::compose::hbox(12.0f, {.fillX = true,
-                                         .height = 52.0f,
-                                         .padding = {8.0f, 14.0f, 8.0f, 14.0f},
-                                         .cornerRadius = 8.0f,
-                                         .hoverBackground = colours.chosen})),
-        id(one.id),
-        parts{.face = skiff::compose::styled(
-                  {.alignSelf = scene::align::kMiddle},
-                  avatar_mark(one.id, one.name.empty() ? one.id : one.name,
-                              36.0f)),
-              .lines = lines_t(colours, one)} {}
-  [[nodiscard]] bool acceptsInput() const { return true; }
-  [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-  std::optional<Answer> onClick(float, float) {
-    return ::mux::ui::request::start_direct{id};
-  }
-};
+inline auto found_person_row(const palette& colours, const found_person& one) {
+  const std::string name = one.name.empty() ? one.id : one.name;
+  return skiff::compose::onClick(request::start_direct{one.id}, skiff::compose::row(
+      skiff::compose::hbox(12.0f, {.fillX = true, .height = 52.0f, .padding = {8.0f, 14.0f, 8.0f, 14.0f},
+          .cornerRadius = 8.0f, .hoverBackground = colours.chosen}),
+      avatar_mark(one.id, name, 36.0f),
+      two_lines(colours, name, one.id, 14.0f, 2.0f)), name);
+}
+using found_person_row_t = decltype(found_person_row(std::declval<const palette&>(), std::declval<const found_person&>()));
 
 // Element's Start chat (its InviteDialog, for a direct chat): who to talk
 // to, found as it is typed -- among those one already has chats with, and
@@ -216,7 +195,7 @@ template <class Actions> struct start_chat_box : skiff::compose::Stacked {
     start_chat_box* box;
     ::mux::ui::request::copy_text operator()() const { return ::mux::ui::request::copy_text{box->link}; }
   };
-  using person_row = found_person_row<Actions>;
+  using person_row = found_person_row_t;
   using header_t = page_header_t<no_back, close_it>;
   using rows_t = nodes::Flow<std::vector<person_row>>;
   struct search_row : skiff::compose::Stacked {
@@ -344,7 +323,7 @@ template <class Actions> struct start_chat_box : skiff::compose::Stacked {
     std::set<std::string> listed;
     const auto add = [&](const found_person& one) {
       if (rows.size() < 60 && listed.insert(one.id).second)
-        rows.emplace_back(*colours_, one);
+        rows.push_back(found_person_row(*colours_, one));
     };
     if (whole_id(query))
       add(found_person{.id = query});
@@ -366,7 +345,7 @@ template <class Actions> struct start_chat_box : skiff::compose::Stacked {
     }
     const auto& rows = std::get<0>(std::get<0>(parts.list.fChildren).fChildren);
     if (!rows.empty())
-      asked = ::mux::ui::request::start_direct{rows.front().id};
+      asked = rows.front().onPress();
     return asked;
   }
 };

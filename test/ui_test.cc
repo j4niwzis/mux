@@ -1014,3 +1014,25 @@ TEST(Storage, SealModelRefreshesControlsWithoutReplacingThem) {
   EXPECT_TRUE(change.visible());
   EXPECT_EQ(toggle.fState.id(), id);
 }
+
+TEST(Controls, NameStatusRowsDeclareSelectionAndVisibility) {
+  mux::ui::palette colours;
+  auto text = mux::ui::two_lines(colours, "Alice", "", 14.0f, 2.0f,
+      mux::ui::two_line_style{.first_ink = colours.accent, .selectable = true});
+  EXPECT_EQ(std::get<0>(text.fParts).text(), "Alice");
+  EXPECT_TRUE(std::get<0>(text.fParts).selectable());
+  EXPECT_TRUE(std::get<1>(text.fParts).selectable());
+  EXPECT_FALSE(std::get<1>(text.fParts).visible());
+  auto forced = mux::ui::two_lines(colours, "Account", "", 14.0f, 2.0f,
+      mux::ui::two_line_style{.show_second = true});
+  EXPECT_TRUE(std::get<1>(forced.fParts).visible());
+}
+
+TEST(Controls, PersonSearchRowSendsItsIdAndNamesItsAction) {
+  mux::ui::palette colours;
+  const mux::found_person person{.id = "@alice:example.com", .name = "Alice"};
+  const auto row = mux::ui::found_person_row(colours, person);
+  EXPECT_EQ(row.onPress().user, person.id);
+  EXPECT_EQ(row.semantics().fLabel, "Alice");
+  EXPECT_EQ(std::get<0>(std::get<1>(row.fParts).fParts).text(), "Alice");
+}

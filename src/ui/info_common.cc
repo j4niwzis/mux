@@ -86,9 +86,6 @@ template <class Open> struct member_row : skiff::compose::Stacked {
   std::string id;
   std::optional<std::string> role;
   // Their name, and how they are under it.
-  struct texts_column : two_lines {
-    texts_column(const palette& colours, std::string shown, std::string how) : two_lines(colours, std::move(shown), std::move(how), 14.0f, 4.0f) {}
-  };
   // Their role, in a pill beside their name.
   struct role_pill : widgets::Pill {
     explicit role_pill(std::string what)
@@ -102,7 +99,7 @@ template <class Open> struct member_row : skiff::compose::Stacked {
   };
   struct parts_t {
     avatar_mark face;
-    texts_column texts;
+    two_lines_t texts;
     role_pill pill;
   } parts;
 
@@ -119,8 +116,7 @@ template <class Open> struct member_row : skiff::compose::Stacked {
         parts{
             .face = avatar_mark(one.id, one.name.empty() ? one.id : one.name,
                                 40.0f),
-            .texts = texts_column(colours, one.name.empty() ? one.id : one.name,
-                                  std::move(how)),
+            .texts = two_lines(colours, one.name.empty() ? one.id : one.name, std::move(how), 14.0f, 4.0f),
             .pill = skiff::compose::visible(one.role.has_value(),
                                             role_pill(one.role.value_or("")))} {
 

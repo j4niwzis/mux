@@ -149,7 +149,7 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
     Pick act;
     struct parts_t {
       Face face;
-      two_lines texts;
+      two_lines_t texts;
     } parts;
     suggestion_row(const palette &colours, Pick what, Face face,
                    std::string first, std::string second)
@@ -268,7 +268,7 @@ template <class Actions> struct conversations_screen : skiff::compose::Stacked {
     auto& people = std::get<0>(shown.parts.people.fChildren);
     people.clear();
     for (const found_person& one : std::views::take(people_elsewhere, 30))
-      people.emplace_back(*needs_.colours, one);
+      people.push_back(found_person_row(*needs_.colours, one));
     shown.parts.rooms_title.setVisible(!rooms.empty());
     shown.parts.people_title.setVisible(!people.empty());
     const bool waiting = !rooms_came || !people_came;

@@ -31,25 +31,27 @@ template <class Actions> struct drawer_account : skiff::compose::Stacked {
   bool current = false;
   struct parts_t {
     avatar_mark face;
-    two_lines texts;
+    two_lines_t texts;
     // The account whose chats are shown: a tick at the end.
     icon_mark tick;
   } parts;
 
+  static auto account_lines(const palette& colours, const config::account_t& saved, const model& now) {
+    const auto [how, failed] = state_of(saved, now);
+    return two_lines(colours, config::address_of(saved), std::format("{} · {}", config::protocol_name(saved), how),
+                     14.0f, 3.0f, two_line_style{.second_ink = failed ? colours.error : colours.dim, .show_second = true});
+  }
   // Declared: the avatar, the address over its state, the tick.
   drawer_account(const ui_needs<Actions> &n, const config::account_t &saved,
                  const model &now, bool is_current)
       : Stacked(skiff::compose::hbox(14.0f, {})),
         address(config::address_of(saved)), current(is_current),
         parts{.face = avatar_mark(address, address, 38.0f),
-              .texts = two_lines(*n.colours, address, "", 14.0f, 3.0f),
+              .texts = account_lines(*n.colours, saved, now),
               .tick = skiff::compose::visible(
                   current, icon_mark(*n.colours, icon::check{}))} {
     const palette& colours = *n.colours;
     fState.apply({.fillX = true, .height = 56.0f, .padding = {0.0f, 16.0f, 0.0f, 16.0f}, .hoverBackground = colours.chosen, .selectedBackground = colours.chosen, .focusBackground = colours.chosen, .selected = current});
-    const auto [how, failed] = state_of(saved, now);
-    parts.texts.parts.state.setText(std::format("{} · {}", config::protocol_name(saved), how));
-    parts.texts.parts.state.setColour(failed ? colours.error : colours.dim);
     parts.tick.setColour(colours.accent);
   }
 

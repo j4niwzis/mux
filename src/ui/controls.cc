@@ -93,21 +93,29 @@ struct avatar_button : avatar_mark {
 
 // A name over how it is: two lines, each cut where it runs out of room,
 // taking what their row leaves them.
-struct two_lines : skiff::compose::Stacked {
-  struct parts_t {
-    nodes::Text name;
-    nodes::Text state;
-  } parts;
-  two_lines(const palette& colours, std::string first, std::string second, float size, float gap)
-      : two_lines(colours, std::move(first), std::move(second), size, gap, size - 2.0f) {}
-  // The line under it its own size: an account's facts under its name.
-  two_lines(const palette& colours, std::string first, std::string second, float size, float gap, float second_size)
-      : Stacked(skiff::compose::vbox(gap, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle})),
-        parts{.name = skiff::compose::styled({.fillX = true}, elided(nodes::Text(std::move(first), size, colours.text, true))),
-              // Nothing to say under the name -- no presence known, no role:
-              // no line kept for it, the name alone in the middle.
-              .state = skiff::compose::visible(!second.empty(), skiff::compose::styled({.fillX = true}, elided(nodes::Text(second, second_size, colours.dim))))} {}
+struct two_line_style {
+  float second_size = 0.0f;
+  std::optional<skia::SkColor> first_ink;
+  std::optional<skia::SkColor> second_ink;
+  bool selectable = false;
+  std::optional<bool> show_second;
 };
+inline auto two_lines(const palette& colours, std::string first, std::string second,
+                      float size, float gap, two_line_style style = {}) {
+  return skiff::compose::column(
+      skiff::compose::vbox(gap, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}),
+      skiff::compose::styled({.fillX = true}, elided(nodes::Text(std::move(first), size,
+          style.first_ink.value_or(colours.text), true, style.selectable))),
+      skiff::compose::visible(style.show_second.value_or(!second.empty()),
+          skiff::compose::styled({.fillX = true}, elided(nodes::Text(second,
+              style.second_size > 0.0f ? style.second_size : size - 2.0f,
+              style.second_ink.value_or(colours.dim), false, style.selectable)))));
+}
+inline auto two_lines(const palette& colours, std::string first, std::string second,
+                      float size, float gap, float second_size) {
+  return two_lines(colours, std::move(first), std::move(second), size, gap, two_line_style{.second_size = second_size});
+}
+using two_lines_t = decltype(two_lines(std::declval<const palette&>(), "", "", 14.0f, 4.0f));
 
 struct row_look {
   float height = 46.0f, gap = 16.0f;
@@ -846,7 +854,7 @@ struct chat_choice_values {
 struct toast_card : skiff::compose::Stacked {
   struct parts_t {
     avatar_mark face;
-    two_lines texts;
+    two_lines_t texts;
   } parts;
   toast_card(const palette& colours, std::string key, std::string title, std::string text)
       : Stacked(skiff::compose::hbox(12.0f, {.fill = true, .padding = {12.0f, 14.0f, 12.0f, 14.0f}, .background = colours.sidebar,

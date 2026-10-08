@@ -637,7 +637,7 @@ template <class Box> struct roles_page : skiff::compose::Stacked {
   struct privileged_row : skiff::compose::Stacked {
     struct parts_t {
       avatar_mark face;
-      two_lines texts;
+      two_lines_t texts;
       level_choice<set_level<Box>, user_maker> levels;
     } parts;
     privileged_row(Box *box, const room_settings_facts::person &one,

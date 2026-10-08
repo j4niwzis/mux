@@ -72,7 +72,7 @@ template <class Actions> struct picture_viewer : skiff::compose::Stacked {
     using close_button = icon_button<sends<::mux::ui::request::close_picture>>;
     struct parts_t {
       avatar_mark face;
-      two_lines texts;
+      two_lines_t texts;
       nodes::Box<> gap{skia::colorSetARGB(0, 0, 0, 0)};
       icon_button<zoom_by> smaller;
       icon_button<zoom_by> larger;
@@ -88,15 +88,14 @@ template <class Actions> struct picture_viewer : skiff::compose::Stacked {
                      .padding = {0.0f, 12.0f, 0.0f, 16.0f}})),
           parts{
               .face = avatar_mark(sender, name, 36.0f),
-              .texts = two_lines(colours, name, when, 14.0f, 2.0f),
+              .texts = two_lines(colours, name, when, 14.0f, 2.0f, two_line_style{
+                  .first_ink = skia::colorSetARGB(255, 255, 255, 255), .second_ink = skia::colorSetARGB(255, 200, 200, 200)}),
               .smaller = icon_button<zoom_by>(colours, icon::minus{},
                                               {viewer, 1.0f / 1.25f}),
               .larger =
                   icon_button<zoom_by>(colours, icon::plus{}, {viewer, 1.25f}),
               .save = icon_button<save_it>(colours, icon::download{}, {source}),
               .close = close_button(colours, icon::close{}, {})} {
-      parts.texts.parts.name.setColour(skia::colorSetARGB(255, 255, 255, 255));
-      parts.texts.parts.state.setColour(skia::colorSetARGB(255, 200, 200, 200));
       parts.gap.apply({.height = 1.0f, .grow = scene::axes::kX});
       // White on the dark of the viewer.
       for (auto* white : {&parts.smaller, &parts.larger})

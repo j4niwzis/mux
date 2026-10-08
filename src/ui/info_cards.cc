@@ -62,7 +62,7 @@ template <class Actions> struct person_card : skiff::compose::Stacked {
   struct cover : skiff::compose::Stacked {
     struct parts_t {
       avatar_button<Actions> photo;
-      two_lines texts;
+      two_lines_t texts;
     } parts;
     cover(const palette &colours, const std::string &key,
           const person_facts &facts)
@@ -72,9 +72,7 @@ template <class Actions> struct person_card : skiff::compose::Stacked {
                       .padding = {0.0f, 22.0f, 0.0f, 22.0f}})),
           parts{.photo = avatar_button<Actions>(key, facts.name, 72.0f),
                 .texts =
-                    two_lines(colours, facts.name, facts.status, 17.0f, 6.0f)} {
-      parts.texts.parts.name.setSelectable(true);
-      parts.texts.parts.state.setSelectable(true);
+                    two_lines(colours, facts.name, facts.status, 17.0f, 6.0f, two_line_style{.selectable = true})} {
     }
   };
   // What a moderator does to them, as Element's user info offers it.
@@ -229,7 +227,7 @@ template <class Actions> struct room_card : skiff::compose::Stacked {
   struct cover : skiff::compose::Stacked {
     struct parts_t {
       avatar_mark photo;
-      two_lines texts;
+      two_lines_t texts;
     } parts;
     cover(const palette &colours, const std::string &key,
           const std::string &name, const std::string &line)
@@ -238,7 +236,7 @@ template <class Actions> struct room_card : skiff::compose::Stacked {
                       .height = 108.0f,
                       .padding = {0.0f, 22.0f, 0.0f, 22.0f}})),
           parts{.photo = avatar_mark(key, name, 72.0f),
-                .texts = two_lines(colours, name, line, 17.0f, 6.0f)} {}
+                .texts = two_lines(colours, name, line, 17.0f, 6.0f, two_line_style{.selectable = true})} {}
   };
   // Its name, else its address, else what the link said.
   static std::string name_of(const std::string& asked, const room_preview& known) {
@@ -282,8 +280,6 @@ template <class Actions> struct room_card : skiff::compose::Stacked {
                     id_line(colours, known.id.empty() ? asked : known.id, "")} {
 
       parts.about.setSelectable(true);
-      parts.face.parts.texts.parts.name.setSelectable(true);
-      parts.face.parts.texts.parts.state.setSelectable(true);
     }
   };
   struct parts_t {

@@ -370,7 +370,7 @@ struct side_column : skiff::compose::Stacked {
   // directory and the people of its user directory that do -- as Explore
   // and Start chat list them, to join or to write to.
   using room_rows_t = nodes::Flow<std::vector<directory_row<Actions>>>;
-  using people_rows_t = nodes::Flow<std::vector<found_person_row<Actions>>>;
+  using people_rows_t = nodes::Flow<std::vector<found_person_row_t>>;
   struct elsewhere_list : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text rooms_title;

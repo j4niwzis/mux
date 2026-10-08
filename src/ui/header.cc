@@ -230,7 +230,7 @@ template <class Actions> struct chat_header : skiff::compose::Stacked {
     struct parts_t {
       back_button back;
       avatar_mark face;
-      two_lines texts;
+      two_lines_t texts;
       find_button find;
       // A call to the other, where the chat is two and its protocol calls.
       call_button call;
@@ -253,7 +253,7 @@ template <class Actions> struct chat_header : skiff::compose::Stacked {
                     shown.key.has_value(),
                     avatar_mark(shown.key.value_or(""), shown.title, 38.0f)),
                 .texts =
-                    two_lines(colours, shown.title, shown.status, 15.0f, 3.0f),
+                    two_lines(colours, shown.title, shown.status, 15.0f, 3.0f, two_line_style{.show_second = shown.key.has_value()}),
                 .find = skiff::compose::visible(
                     shown.key.has_value(),
                     skiff::compose::styled(
@@ -275,7 +275,6 @@ template <class Actions> struct chat_header : skiff::compose::Stacked {
                         {.alignSelf = scene::align::kMiddle},
                         info_button(colours, icon::info{}, {})))} {
 
-      parts.texts.parts.state.setVisible(shown.key.has_value());
     }
     [[nodiscard]] bool acceptsInput() const { return taps_to_info; }
     std::optional<Answer> onClick(float, float) {
@@ -349,7 +348,7 @@ struct pinned_bar : skiff::compose::Stacked {
   Press press;
   struct parts_t {
     nodes::Box<> stripe;
-    two_lines texts;
+    two_lines_t texts;
     nodes::Box<> divider;
   } parts;
   static constexpr float kHeight = 46.0f;
@@ -358,14 +357,9 @@ struct pinned_bar : skiff::compose::Stacked {
                                              .hoverBackground = colours.chosen})),
         press(std::move(what)),
         parts{.stripe = skiff::compose::styled({.fillY = true, .width = 2.0f, .cornerRadius = 1.0f}, nodes::Box<>(colours.accent)),
-              .texts = accent_named(colours, two_lines(colours, shown.title, shown.line, 13.0f, 2.0f)),
+              .texts = two_lines(colours, shown.title, shown.line, 13.0f, 2.0f, two_line_style{.first_ink = colours.accent}),
               .divider = skiff::compose::styled({.place = scene::anchor::kBottomLeft, .fillX = true, .height = 1.0f}, nodes::Box<>(colours.band))} {
     fState.setCursor(scene::cursor::hand{});
-  }
-  // Its title in the accent, as tdesktop's pinned bar.
-  [[nodiscard]] static two_lines accent_named(const palette& colours, two_lines texts) {
-    texts.parts.name.setColour(colours.accent);
-    return texts;
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
   [[nodiscard]] bool hoverChangesAppearance() const { return true; }

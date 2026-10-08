@@ -85,12 +85,8 @@ template <class Actions> struct account_sessions : skiff::compose::Stacked {
   struct session_row : skiff::compose::Stacked {
     std::string device;
     std::string name;
-    struct lines_t : two_lines {
-      lines_t(const palette& colours, std::string shown, std::string facts)
-          : two_lines(colours, std::move(shown), std::move(facts), 15.0f, 2.0f, 12.0f) {}
-    };
     struct parts_t {
-      lines_t lines;
+      two_lines_t lines;
       widgets::TextBox<> field;
       widgets::Button<save_rename> save;
       widgets::Button<start_rename> rename;
@@ -107,10 +103,10 @@ template <class Actions> struct account_sessions : skiff::compose::Stacked {
                                           .background = page->colours_->tile})),
           device(one.id), name(one.name),
           parts{.lines =
-                    lines_t(*page->colours_,
+                    two_lines(*page->colours_,
                             one.name.empty() ? std::string("Unnamed session")
                                              : one.name,
-                            facts_of(one, current)),
+                            facts_of(one, current), 15.0f, 2.0f, 12.0f),
                 .field = skiff::compose::visible(
                     false, skiff::compose::styled(
                                {.height = 32.0f,

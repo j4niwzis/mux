@@ -18,6 +18,8 @@ import mux.platform.push;
 import mux.app.network;
 import mux.app.services;
 import mux.app.requests;
+import mux.app.kept;
+import skiff.bind;
 
 export namespace mux::app {
 
@@ -214,11 +216,49 @@ class notices_part {
   void show_page() {
     if (auto* up = s_->root().settings_up())
       up->show_notifications(s_->kept->notifications());
+    // A page of new widgets: bound afresh, and shown what the model holds.
+    binding_ = {};
+    this->refresh_page();
+  }
+ public:
+  // Before each frame: what the page's widgets did since, edits of the
+  // model; what those asked for, done; and the page shown the model again.
+  void take_input() {
+    if (auto* page = this->page()) {
+      binding_.drain(page->parts.settings, s_->kept->model);
+      this->settle();
+    }
+  }
+  // What the model's reactions asked for: the file written, UnifiedPush's
+  // connector started or stopped.
+  void settle() {
+    for (const auto& effect : s_->kept->take_effects())
+      std::visit(spl::overloaded{[&](const write_kept&) { (void)s_->kept->write(); },
+                                 [&](const push_wanted& wanted) {
+                                   if (wanted.on)
+                                     this->start_push();
+                                   else
+                                     this->stop_push();
+                                 }},
+                 effect);
+    this->refresh_page();
+  }
+ private:
+  [[nodiscard]] auto* page() {
+    auto* up = s_->root().settings_up();
+    return up == nullptr ? nullptr : up->notifications();
+  }
+  void refresh_page() {
+    if (auto* page = this->page())
+      binding_.refresh(page->parts.settings, s_->kept->model);
   }
 
   // UnifiedPush's connector, on a thread of its own: what it says put in a
   // box drained by take_push() -- data the program reads, the window woken
   // for it.
+  // The Notifications page's widgets, bound to the model.
+  skiff::bind::Binding<kept_model> binding_;
+
   struct push_inbox {
     std::mutex lock;
     std::vector<mux::platform::push::event> pending;

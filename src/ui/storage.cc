@@ -10,6 +10,9 @@ import skiff.scene;
 import skiff.nodes.flow;
 import skiff.nodes.scroll;
 import skiff.nodes.text;
+import skiff.model;
+import skiff.compose;
+import skiff.widgets.model;
 import mux.core;
 import mux.config;
 import :base;
@@ -173,74 +176,67 @@ struct storage_page : nodes::Stack {
 
 // Settings' Notifications page, as Telegram Desktop's: a notification on
 // the desktop or not, the sender's name and the text in it or not, a sound
-// or not; and what shows it -- the desktop's own service, or mux's window.
-template <class Actions>
-struct choose_notify_backend {
-  Actions* actions = nullptr;
-  config::notify_backend_t backend;
-  void operator()() const { actions->set_notify_backend(backend); }
-};
+// or not; what shows it -- the desktop's own service, or mux's window; and
+// whether UnifiedPush wakes mux. Made of the model's widgets, each bound to
+// its setting by its member pointer: what is chosen is an edit of the
+// model, and what the model holds is what shows.
+template <auto Setting, class T = bool>
+auto notify_switch(const palette& colours, std::string text) {
+  auto label = nodes::Text(std::move(text), 15.0f, colours.text);
+  label.setElided(true);
+  label.apply({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+  auto toggle = skiff::compose::bound<skiff::model::Field<Setting>>(widgets::ToggleField<T>(colours.widgets));
+  toggle.apply({.alignSelf = scene::align::kMiddle});
+  return skiff::compose::row(skiff::compose::hbox(16.0f, {.fillX = true, .height = row_item<nothing>::kHeight,
+                                                          .padding = {0.0f, 20.0f, 0.0f, 20.0f}}),
+                             std::move(label), std::move(toggle));
+}
+inline nodes::Text spaced_title(const palette& colours, std::string text) {
+  auto title = section_title(colours, std::move(text));
+  title.apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
+  return title;
+}
+inline nodes::Text spaced_note(const palette& colours, std::string text) {
+  auto note = note_text(colours, std::move(text));
+  note.setWrapped(true);
+  note.apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
+  return note;
+}
+inline auto notification_settings_view(const palette& colours) {
+  using every = config::notification_settings;
+  auto backend = skiff::compose::bound<skiff::model::Field<&every::backend>>(widgets::ChoiceTabs<std::string>(
+      {{"System", std::string(config::word_of(config::notify_backend::native{}))},
+       {"Built in", std::string(config::word_of(config::notify_backend::built_in{}))}}));
+  backend.apply({.margin = {4.0f, 20.0f, 4.0f, 20.0f}});
+  return skiff::compose::column(
+      skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY}), spaced_title(colours, "NOTIFICATIONS"),
+      notify_switch<&every::desktop>(colours, "Notifications"),
+      notify_switch<&every::mentions_only, std::optional<bool>>(colours, "Only mentions and keywords"),
+      notify_switch<&every::show_name>(colours, "The sender's name"),
+      notify_switch<&every::show_text>(colours, "The message's text"), notify_switch<&every::sound>(colours, "Sound"),
+      spaced_title(colours, "SHOWN BY"), std::move(backend),
+      spaced_note(colours, "System asks the desktop's own notification service (org.freedesktop.Notifications); Built in "
+                           "shows mux's own, in a corner of the screen, as Telegram Desktop does."),
+      spaced_title(colours, "WAKE"),
+      notify_switch<&every::unified_push, std::optional<bool>>(colours, "Wake by UnifiedPush"),
+      spaced_note(colours, "Your Matrix servers push to the UnifiedPush distributor on this device (ntfy, NextPush, "
+                           "KDE's), which wakes mux at once. Off, nothing is given to the servers, and mux only learns "
+                           "of messages while it runs."));
+}
 template <class Actions>
 struct notifications_page : nodes::Stack {
   using header_t = page_header<ask<Actions, &Actions::settings_home>, ask<Actions, &Actions::close_settings>>;
-  using push_row = switch_row<ask<Actions, &Actions::flip_unified_push>>;
-  using backend_segment = segment<choose_notify_backend<Actions>>;
-  struct backend_row : nodes::Stack {
-    struct parts_t {
-      backend_segment native, built_in;
-    } parts;
-    backend_row(const palette& colours, Actions* a)
-        : parts{.native = backend_segment(colours, "System", {a, config::notify_backend::native{}}),
-                .built_in = backend_segment(colours, "Built in", {a, config::notify_backend::built_in{}})} {
-      this->setHorizontal();
-      this->setGap(4.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .padding = {4.0f, 20.0f, 4.0f, 20.0f}});
-    }
-  };
+  using settings_t = decltype(notification_settings_view(std::declval<const palette&>()));
   struct parts_t {
     header_t header;
-    nodes::Text title;
-    notify_choice_rows<Actions> choices;
-    nodes::Text backend_title;
-    backend_row backend;
-    nodes::Text note;
-    nodes::Text push_title;
-    push_row push;
-    nodes::Text push_note;
+    settings_t settings;
   } parts;
-  notifications_page(const ui_needs<Actions>& n, const config::notification_settings& now)
-      : notifications_page(*n.colours, n.actions, now) {}
-  notifications_page(const palette& colours, Actions* a, const config::notification_settings& now)
+  notifications_page(const ui_needs<Actions>& n, const config::notification_settings&)
+      : notifications_page(*n.colours, n.actions) {}
+  notifications_page(const palette& colours, Actions* a)
       : parts{.header = header_t(colours, "Notifications", {a}, {a}, true, true),
-              .title = section_title(colours, "NOTIFICATIONS"),
-              .choices = notify_choice_rows<Actions>(a, colours, choice_level::everywhere{}, config::notify_choices_of(now), 4.0f),
-              .backend_title = section_title(colours, "SHOWN BY"),
-              .backend = backend_row(colours, a),
-              .note = note_text(colours, "System asks the desktop's own notification service (org.freedesktop.Notifications); Built in "
-                     "shows mux's own, in a corner of the screen, as Telegram Desktop does."),
-              .push_title = section_title(colours, "WAKE"),
-              .push = push_row(colours, "Wake by UnifiedPush", {a}),
-              .push_note = note_text(colours, "Your Matrix servers push to the UnifiedPush distributor on this device (ntfy, NextPush, "
-                          "KDE's), which wakes mux at once. Off, nothing is given to the servers, and mux only learns "
-                          "of messages while it runs.")} {
+              .settings = notification_settings_view(colours)} {
     fState.apply({.fill = true});
-    parts.choices.apply({.padding = {0.0f, 20.0f, 0.0f, 20.0f}});
-    for (nodes::Text* title : {&parts.title, &parts.backend_title, &parts.push_title})
-      title->apply({.margin = {10.0f, 0.0f, 4.0f, 20.0f}});
-    for (nodes::Text* note : {&parts.note, &parts.push_note}) {
-      note->setWrapped(true);
-      note->apply({.fillX = true, .margin = {10.0f, 20.0f, 0.0f, 20.0f}});
-    }
-    this->show(now);
-  }
-  void show(const config::notification_settings& now) {
-    parts.choices.show(config::notify_choices_of(now));
-    parts.push.parts.toggle.setOnNow(now.unified_push.value_or(false));
-    const bool native = spl::visit(spl::overloaded{[](config::notify_backend::native) { return true; },
-                                              [](const auto&) { return false; }},
-                                   config::notify_backend_of(now.backend));
-    parts.backend.parts.native.set_active(native);
-    parts.backend.parts.built_in.set_active(!native);
   }
   void show_motion(std::string_view) {}
   void show_receipts(bool) {}

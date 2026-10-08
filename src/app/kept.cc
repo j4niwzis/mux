@@ -48,12 +48,21 @@ struct kept_root {
 struct write_kept {
   [[nodiscard]] constexpr int key() const { return 0; }
 };
-// A chat's choices changed or gone: the file is written again.
+// UnifiedPush wanted on, or off: its connector started, or stopped.
+struct push_wanted {
+  bool on = false;
+  [[nodiscard]] constexpr int key() const { return 0; }
+};
+// A chat's choices changed or gone, or what notifies: the file is written
+// again. UnifiedPush turned on or off: its connector with it.
 struct kept_reactions {
   [[nodiscard]] write_kept on(skiff::model::Changed<chat_choices>, const chat_choices&) const { return {}; }
   [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::notification_settings>,
                               const mux::config::notification_settings&) const {
     return {};
+  }
+  [[nodiscard]] push_wanted on(skiff::model::Changed<skiff::model::Field<&mux::config::notification_settings::unified_push>>, const auto& at) const {
+    return {skiff::model::part(at).value_or(false)};
   }
   [[nodiscard]] write_kept on(skiff::model::Removed<chat_choices>, const chat_choices&, const conversation_id&) const {
     return {};
@@ -228,6 +237,8 @@ struct kept_settings {
     (void)model.apply(skiff::model::edit(skiff::model::placeOf<skiff::model::Field<M>, kept_root>(),
                                          skiff::model::setTo(Part(std::move(now)))));
   }
+  // What the model's reactions asked for, to be done by the program.
+  [[nodiscard]] std::vector<kept_model::Effect> take_effects() { return model.outbox().drain(); }
   void set_notifications(mux::config::notification_settings now) {
     (void)model.apply(skiff::model::edit(skiff::model::placeOf<mux::config::notification_settings, kept_root>(), skiff::model::setTo(std::move(now))));
   }
@@ -569,8 +580,7 @@ struct kept_settings {
   }
   // Written back: nothing, or why not.
   [[nodiscard]] std::optional<std::string> write() {
-    // What the model asked for is this: done here, by whoever changed it.
-    (void)model.outbox().drain();
+    // The change log is not read yet: let go of, as the file is written.
     (void)model.takeChanges();
     if (keeps_nothing)
       return std::nullopt;

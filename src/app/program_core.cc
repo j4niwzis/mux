@@ -253,6 +253,8 @@ void app::wire() {
 
 void app::before_frame() {
   ++mux::ui::image_cache::frame();
+  // What the model's widgets did: edits of the model, before the frame.
+  notices.take_input();
   root().drop_closed();
   // What has been on screen in the chat shown is read, as far as it goes,
   // as in tdesktop: the chat list's counts go down as it is read, not all

@@ -165,7 +165,7 @@ struct emoji_popup : scene::Node, outbox {
     card_t(const palette& colours, emoji_kept& kept, Actions* a)
         : colours_(&colours),
           parts{.tabs = tabs_row(this),
-                .panel = panel_t(colours, kept, insert_emoji_into<Actions>{a}),
+                .panel = panel_t(colours, kept, insert_emoji_into<Actions>{}),
                 .stickers = sticker_grid<Actions>(colours, kept, a),
                 .gifs = gif_grid<Actions>(colours, a)},
           actions(a) {

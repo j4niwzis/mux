@@ -826,9 +826,9 @@ struct conversations_screen : nodes::Stack, outbox {
       : actions(a),
         needs_(n),
         parts{.side = side_column(*n.colours, a),
-              .edge = side_edge(*n.colours, resize_sidebar_to<Actions>{a}),
+              .edge = side_edge(*n.colours, resize_sidebar_to<Actions>{}),
               .chat = chat_column(n),
-              .info_edge = info_edge_t(*n.colours, resize_info_to<Actions>{a}, false),
+              .info_edge = info_edge_t(*n.colours, resize_info_to<Actions>{}, false),
               .info = info_panel<Actions>(a, *n.colours, *n.shared),
               .threads = threads_panel<Actions>(n)} {
     fState.apply({.fill = true});

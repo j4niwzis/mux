@@ -420,7 +420,7 @@ struct account_chats : nodes::Stack {
               .home = choice_menu<pick_home>(colours, "Home",
                                              {"As above", "Every chat", "Without chats spaces hold",
                                               "Without those and direct messages"},
-                                             !home_hides ? 0 : !*home_hides ? 1 : home_direct.value_or(false) ? 3 : 2, pick_home{a}),
+                                             !home_hides ? 0 : !*home_hides ? 1 : home_direct.value_or(false) ? 3 : 2, pick_home{}),
               .places = spaces_choices<Actions>(a, colours, shared)} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});

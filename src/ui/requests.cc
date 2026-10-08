@@ -670,9 +670,6 @@ using request_t = typename variant_of_types<typename joined<type_list<request::c
 // from the window's actions as it was, which it does not need.
 struct outbox {
   std::vector<request_t> fEmitted;
-  outbox() = default;
-  template <class A>
-  outbox(A*) {}
   template <class E>
   void emit(E one) {
     fEmitted.emplace_back(std::move(one));

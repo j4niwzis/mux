@@ -294,7 +294,7 @@ struct closes_on_escape : nodes::Stack, outbox {
   using Node::onKey;
   void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
     if (press.key == scene::keys::kEscape) {
-      Back{actions}();
+      Back{}();
       reply.handle();
     }
   }

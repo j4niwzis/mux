@@ -255,7 +255,7 @@ struct room_card : nodes::Stack {
     parts.scroll.apply({.fillX = true, .grow = scene::axes::kY});
     if (known.invite) {
       parts.top.parts.title.setText("Invite");
-      parts.decline.emplace(colours, "Decline", icon::close{}, decline_it{a});
+      parts.decline.emplace(colours, "Decline", icon::close{}, decline_it{});
       parts.decline->apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});
     }
     parts.join.apply({.fillX = true, .margin = {8.0f, 22.0f, 0.0f, 22.0f}});

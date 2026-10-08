@@ -181,12 +181,11 @@ class accounts_part {
   }
   // A page of the chosen account: one that wants something of the server
   // asks for it as it opens.
-  std::optional<request_t> apply(const request::account_page& one) {
-    std::optional<request_t> wanted;
+  std::optional<mux::proto::any_request_t> apply(const request::account_page& one) {
+    std::optional<mux::proto::any_request_t> wanted;
     s_->with_chosen_account([&](accounts& panel, mux::config::account_t& account) {
       // What the page asks for as it opens, returned to be done.
-      const auto asked = spl::overloaded{[](const mux::proto::part::no_request&) {},
-                                         [&](const auto& request) { wanted.emplace(request); }};
+      const auto asked = [&](const auto& request) { wanted.emplace(request); };
       panel.show_page(one.page, account, *s_->model, k_->proxies(), k_->appearance().theme, asked);
     });
     return wanted;

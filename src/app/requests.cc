@@ -19,7 +19,6 @@ export namespace mux::app {
 namespace compose = mux::ui::compose;
 using mux::ui::compose_t;
 namespace request = mux::ui::request;
-using mux::ui::request_t;
 
 // Every request, one of them: a spl::variant, built in time linear in how
 // many there are (std::variant's nested union made it quadratic).

@@ -157,7 +157,7 @@ struct app : kept_settings {
   }
   template <class Part, class Request>
     requires requires(Part& part, const Request& one) {
-      { part.apply(one) } -> std::same_as<std::optional<request_t>>;
+      { part.apply(one) } -> std::same_as<std::optional<mux::proto::any_request_t>>;
     }
   bool offer(Part& part, const Request& one) {
     this->take(part.apply(one));
@@ -175,14 +175,15 @@ struct app : kept_settings {
   // what is done to the window is a model's edit, read by the bindings
   // after the event: nothing pressed is gone under its own answer.
   template <class E>
-    requires std::constructible_from<request_t, E>
   void take(const E& one) {
     this->route(one);
   }
-  void take(const request_t& one) {
-    spl::visit([this](const auto& each) { this->route(each); }, one);
+  template <class... E>
+  void take(const spl::variant<E...>& one) {
+    spl::visit([this](const auto& each) { this->take(each); }, one);
   }
-  void take(const std::optional<request_t>& one) {
+  template <class E>
+  void take(const std::optional<E>& one) {
     if (one)
       this->take(*one);
   }

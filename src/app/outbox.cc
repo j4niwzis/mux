@@ -201,13 +201,13 @@ class outbox_part {
   }
   // Enter in the field: sent while the field still holds it. Two asked for
   // before the first was handled -- the field emptied by it -- send once.
-  std::optional<request_t> apply(const request::submit_message& one) {
+  std::optional<mux::proto::any_request_t> apply(const request::submit_message& one) {
     if (s_->root().main().line.plain().empty())
       return std::nullopt;
     return this->send(one.text);
   }
   void apply(const request::stop_jump&) { s_->root().main().stop_jump(); }
-  std::optional<request_t> apply(const request::send_typed&) { return this->send(s_->root().main().line.plain()); }
+  std::optional<mux::proto::any_request_t> apply(const request::send_typed&) { return this->send(s_->root().main().line.plain()); }
 
   // Files: chosen with the paperclip, or dropped; the send box closed, or
   // what is in it sent -- the caption with the first.
@@ -389,7 +389,7 @@ class outbox_part {
   // The field's text sent: as a message, an answer, or an edit -- as what is
   // written says -- and the field and its draft emptied.
   // Sent; or, a command of its protocol's own, what it asks for returned.
-  std::optional<request_t> send(std::string text) {
+  std::optional<mux::proto::any_request_t> send(std::string text) {
     // A text sent: the ways back from jumps let go, as tdesktop's
     // sendTextWithTags clears its reply returns.
     if (const auto& chosen = s_->root().main().chosen)
@@ -401,9 +401,7 @@ class outbox_part {
     // A command of its protocol's own: asked, not sent.
     if (const auto asked = mux::proto::command_of(mux::ui::protocol_state_of(s_->ui, to.account), to, text)) {
       screen.line.set_text({});
-      return spl::visit(spl::overloaded{[](mux::proto::part::no_request) -> std::optional<request_t> { return std::nullopt; },
-                                        [](const auto& one) -> std::optional<request_t> { return request_t{one}; }},
-                        *asked);
+      return asked;
     }
     // What is sent goes at the chat's end: the chat back to its newest
     // first, where it is a window elsewhere, or it would not be shown.

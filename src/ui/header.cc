@@ -293,6 +293,39 @@ struct chat_header : nodes::Stack {
   }
 };
 
+// The head as the chats model has it: the chosen chat's, read by the
+// window's binding as the chats move, and made again only where what it
+// shows did.
+template <class Actions>
+struct chat_head : nodes::Memo<typename chat_header<Actions>::view, chat_header<Actions>> {
+  ui_needs<Actions> needs;
+  const model* now = nullptr;
+  std::optional<conversation_id> chosen;
+  bool back = false;
+  // The chat chosen, or the window gone single or not: shown as it is now.
+  void choose(const model& with, std::optional<conversation_id> one, bool single) {
+    now = &with;
+    chosen = std::move(one);
+    back = single;
+    this->redo();
+  }
+  void go_back(bool single) {
+    back = single;
+    this->redo();
+  }
+  void refresh(const chats_model&) { this->redo(); }
+
+ private:
+  void redo() {
+    if (now == nullptr)
+      return;
+    const conversation* one = chosen ? now->find(*chosen) : nullptr;
+    auto shown = chat_header<Actions>::view_of(*needs.shared, one, *now);
+    shown.back = back;
+    this->show(shown, [this](const auto& made) { return chat_header<Actions>(needs, made); });
+  }
+};
+
 // The pinned message, as tdesktop's bar under a chat's head: a stripe in
 // the accent, "Pinned message" -- "#2 of 3" where there are more -- over a
 // line of it. A press goes to it, and the bar to the one pinned before it,

@@ -153,7 +153,7 @@ void conversations_screen<Actions>::show_space_bars(const model& now) {
       if (one.space)
         for (const std::string& child : one.children)
           if (const auto found = chats->find(child);
-              found != nullptr && found->space && !this->shown_as_forumfound->second && child != one.id.id &&
+              found != nullptr && found->space && !this->shown_as_forum(*found) && child != one.id.id &&
               !parent_of.contains(child)) {
             parent_of.emplace(child, one.id.id);
             spaces_in[one.id.id].push_back(found);
@@ -1006,9 +1006,7 @@ void conversations_screen<Actions>::show_conversation(const model& now) {
   const float left_at = timeline.current();
   auto& entries = std::get<0>(std::get<0>(timeline.fChildren).fChildren);
   const conversation* one = chosen ? now.find(*chosen) : nullptr;
-  head_shown = chat_header<Actions>::view_of(*needs_.shared, one, now);
-  head_shown.back = single;
-  header.show(head_shown, [this](const auto& shown) { return chat_header<Actions>(needs_, shown); });
+  header.choose(now, chosen, single);
   this->show_banners(one, now);
   if (pinned_of != chosen) {
     pinned_of = chosen;

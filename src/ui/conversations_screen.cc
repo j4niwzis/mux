@@ -386,9 +386,6 @@ struct conversations_screen : nodes::Stack, outbox {
     for (scene::Node* each : std::initializer_list<scene::Node*>{&side, &chat, &info, &parts.threads})
       each->apply({.shiftX = shift});
   }
-  // What the head was last made from: made again with its back arrow, or
-  // without, as the window goes single or not.
-  typename chat_header<Actions>::view head_shown;
   struct pick_folder {
     conversations_screen* screen;
     void operator()(const folder_t& which) const { screen->choose_folder(which); }
@@ -642,7 +639,7 @@ struct conversations_screen : nodes::Stack, outbox {
   struct chat_column : nodes::Stack {
     // What the banner's button asks, while it is shown.
     std::optional<proto::any_request_t> banner_asks;
-    using header_t = nodes::Memo<typename chat_header<Actions>::view, chat_header<Actions>>;
+    using header_t = chat_head<Actions>;
     using pinned_t = nodes::Memo<pinned_view, pinned_bar<pinned_press>>;
     struct empty_state : nodes::Stack {
       using add_button = button_for<sends<::mux::ui::request::open_new_account>>;
@@ -744,6 +741,7 @@ struct conversations_screen : nodes::Stack, outbox {
       header.apply({.fillX = true, .height = chat_header<Actions>::kHeight});
       parts.pinned.apply({.fillX = true, .height = pinned_bar<pinned_press>::kHeight});
       parts.pinned.setVisible(false);
+      header.needs = n;
       header.show({}, [&n](const auto& shown) { return chat_header<Actions>(n, shown); });
       // A plain colour: the wallpaper is the messages' own -- the timeline's
       // Wallpaper -- not behind Select a chat, where Telegram has none.
@@ -780,7 +778,7 @@ struct conversations_screen : nodes::Stack, outbox {
   // The old names, for what is kept in the parts.
   nodes::ScrollContainer<nodes::Flow<std::vector<conversation_row<Actions>>>>& list = side.list;
   nodes::Text& no_chats = side.no_chats;
-  nodes::Memo<typename chat_header<Actions>::view, chat_header<Actions>>& header = chat.header;
+  chat_head<Actions>& header = chat.header;
   search_bar<Actions>& search = chat.search;
   // The keys of a chat, as tdesktop's -- what the input leaves to it:
   // Ctrl+F finds in it; Up in an empty input edits the last message sent;
@@ -923,10 +921,8 @@ struct conversations_screen : nodes::Stack, outbox {
     const skia::SkRect box = fState.contentBox();
     const bool now = box.width() < 600.0f && box.height() > box.width();
     if (now != single || (now && box.width() != single_width)) {
-      if (now != single) {
-        head_shown.back = now;
-        header.show(head_shown, [this](const auto& shown) { return chat_header<Actions>(needs_, shown); });
-      }
+      if (now != single)
+        header.go_back(now);
       single = now;
       single_width = box.width();
       this->show_info();

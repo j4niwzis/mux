@@ -146,9 +146,9 @@ inline scene::Spec call_button_look(float size, skia::SkColor plate, skia::SkCol
 }
 template <class Event>
 auto call_button(const palette& colours, float size, skia::SkColor plate, skia::SkColor hover,
-                 skia::SkColor ink, icon_t mark, Event event, bool shown) {
+                 skia::SkColor ink, icon_t mark, Event event, bool shown, std::string label) {
   return skiff::compose::visible(shown, skiff::compose::onClick(std::move(event),
-      skiff::compose::styled(call_button_look(size, plate, hover), nodes::Icon(shape_of(mark), ink))));
+      skiff::compose::styled(call_button_look(size, plate, hover), nodes::Icon(shape_of(mark), ink)), std::move(label)));
 }
 inline auto call_buttons(const palette& colours, float size, const call_view& view) {
   const auto white = skia::colorSetARGB(255, 255, 255, 255);
@@ -157,12 +157,12 @@ inline auto call_buttons(const palette& colours, float size, const call_view& vi
       skiff::compose::hbox(size / 2.0f, {.autoSize = scene::axes::kBoth, .alignSelf = scene::align::kMiddle}),
       call_button(colours, size, colours.tile, colours.chosen, colours.text,
                   view.muted ? icon_t{icon::microphone_off{}} : icon_t{icon::microphone{}},
-                  request::mute_call{}, !ringing && !ended),
-      call_button(colours, size, kHangUpRed, kHangUpRed, white, icon::hang_up{}, request::decline_call{}, ringing),
-      call_button(colours, size, kHangUpRed, kHangUpRed, white, icon::hang_up{}, request::hang_up{}, !ringing && !ended),
-      call_button(colours, size, kAnswerGreen, kAnswerGreen, white, icon::phone{}, request::accept_call{}, ringing && view.available),
-      call_button(colours, size, kAnswerGreen, kAnswerGreen, white, icon::phone{}, request::start_call{view.in}, ended && view.available),
-      call_button(colours, size, colours.tile, colours.chosen, colours.text, icon::close{}, request::dismiss_call{}, ended)));
+                  request::mute_call{}, !ringing && !ended, view.muted ? "Unmute" : "Mute"),
+      call_button(colours, size, kHangUpRed, kHangUpRed, white, icon::hang_up{}, request::decline_call{}, ringing, "Decline"),
+      call_button(colours, size, kHangUpRed, kHangUpRed, white, icon::hang_up{}, request::hang_up{}, !ringing && !ended, "Hang up"),
+      call_button(colours, size, kAnswerGreen, kAnswerGreen, white, icon::phone{}, request::accept_call{}, ringing && view.available, "Accept"),
+      call_button(colours, size, kAnswerGreen, kAnswerGreen, white, icon::phone{}, request::start_call{view.in}, ended && view.available, "Call back"),
+      call_button(colours, size, colours.tile, colours.chosen, colours.text, icon::close{}, request::dismiss_call{}, ended, "Dismiss")));
 }
 inline auto call_avatar(const call_view& view, float size) {
   return skiff::compose::styled({.alignSelf = scene::align::kMiddle},

@@ -9,10 +9,12 @@ import skiff.paint;
 import skiff.scene;
 import skiff.nodes.box;
 import skiff.nodes.flow;
+import skiff.nodes.icon;
 import skiff.nodes.text;
 import skiff.widgets.button;
 import skiff.model;
 import skiff.compose;
+import skiff.widgets.model;
 import skiff.bind;
 import mux.core;
 import mux.config;
@@ -29,93 +31,49 @@ export namespace mux::ui {
 
 // Settings, as Telegram Desktop shows them: a box over the window, a list of
 // sections, and each section a page of the same box.
-template <class Actions> struct settings_home : skiff::compose::Stacked {
-  // Its children, in the order they are shown: the header, then the lines,
-  // one under another -- walked as they are declared.
-  struct parts_t {
-    page_header_t<sends<::mux::ui::request::close_settings>, sends<::mux::ui::request::close_settings>> header;
-    row_item<sends<::mux::ui::request::open_accounts>> accounts;
-    row_item<sends<::mux::ui::request::settings_animations>> animations;
-    row_item<sends<::mux::ui::request::settings_appearance>> appearance;
-    row_item<sends<::mux::ui::request::open_packs>> packs;
-    row_item<sends<::mux::ui::request::settings_rendering>> rendering;
-    row_item<sends<::mux::ui::request::settings_notifications>> notifications;
-    row_item<sends<::mux::ui::request::settings_storage>> storage;
-    row_item<sends<::mux::ui::request::settings_files>> files;
-    row_item<sends<::mux::ui::request::settings_proxies>> proxies;
-  } parts;
-
-  explicit settings_home(const ui_needs<Actions>& n) : settings_home(*n.colours) {}
-  settings_home(const palette &colours)
-      : Stacked(skiff::compose::vbox(0.0f, {.fill = true})),
-        parts{.header = page_header<sends<request::close_settings>, sends<request::close_settings>>(colours, "Settings", {}, {}, false, true),
-              .accounts = {colours, "Accounts", {}, icon::person{}},
-              .animations = {colours, "Animations", {}, icon::motion{}},
-              .appearance = {colours, "Appearance", {}, icon::eye{}},
-              .packs = {colours, "Emojis & Stickers", {}, icon::smile{}},
-              .rendering = {colours, "Rendering", {}, icon::sliders{}},
-              .notifications = {colours, "Notifications", {}, icon::bell{}},
-              .storage = {colours, "Storage", {}, icon::clip{}},
-              .files = {colours, "Files", {}, icon::send{}},
-              .proxies = {colours, "Proxies", {}, icon::gear{}}} {}
-
-  void show_receipts(bool) {}
-};
-
-// A value a row stands for: pressed, the part set to it.
-template <class T>
-struct picks {
-  using Answer = skiff::bind::Own<skiff::model::SetTo<T>>;
-  T value;
-  Answer operator()() const { return skiff::bind::own(skiff::model::setTo(value)); }
-};
-// Rows, one for each value a part can be, the one it is checked: bound to
-// the part, set to the row pressed.
-template <class T> struct choice_rows : skiff::compose::Stacked {
-  using row = row_item<picks<T>>;
-  struct parts_t {
-    std::vector<row> rows;
-  } parts;
-  choice_rows(const palette &colours,
-              std::initializer_list<std::pair<std::string_view, T>> choices)
-      : Stacked(skiff::compose::vbox(
-            0.0f, {.fillX = true, .autoSize = scene::axes::kY})) {
-    parts.rows.reserve(choices.size());
-    for (const auto& [label, value] : choices)
-      parts.rows.emplace_back(colours, std::string(label), picks<T>{value}, icon::none{}, false);
-  }
-  void read(const T& now) {
-    for (auto& one : parts.rows)
-      one.set_chosen(one.act.value == now);
-  }
-};
-
-// Settings' Animations page: how much the window moves, bound to it.
-inline auto motion_settings_view(const palette& colours) {
-  auto note = note_text(colours, "How much the window moves. Reduced keeps the small movements, such as a section "
-                                 "unfolding, and shows panels at once.");
-  note.setWrapped(true);
-  note.apply({.fillX = true, .margin = {4.0f, 20.0f, 12.0f, 20.0f}});
-  return skiff::compose::column(
-      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(note),
-      skiff::compose::bound<skiff::model::Field<&config::look_settings::motion>>(choice_rows<config::motion_t>(
-          colours, {{"Full", config::motion::full{}}, {"Reduced", config::motion::reduced{}}, {"None", config::motion::none{}}})));
+template <class Event>
+auto settings_link(const palette& colours, std::string label, icon_t icon, Event event) {
+  return skiff::compose::onClick(std::move(event), skiff::compose::row(
+      skiff::compose::hbox(16.0f, {.fillX = true, .height = 46.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f},
+                                  .hoverBackground = colours.chosen, .focusBackground = colours.chosen}),
+      skiff::compose::styled({.width = 28.0f, .height = 36.0f, .alignSelf = scene::align::kMiddle}, nodes::Icon(shape_of(icon), colours.dim)),
+      skiff::compose::styled({.grow = scene::axes::kX, .alignSelf = scene::align::kMiddle}, elided(nodes::Text(label, 15.0f, colours.text)))), label);
 }
-template <class Actions> struct animations_page : skiff::compose::Stacked {
-  using header_t = page_header_t<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
-  using settings_t = decltype(motion_settings_view(std::declval<const palette&>()));
-  struct parts_t {
-    header_t header;
-    settings_t settings;
-  } parts;
+inline auto settings_home(const palette& colours) {
+  return skiff::compose::column(
+      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar},
+          page_header<sends<request::close_settings>, sends<request::close_settings>>(colours, "Settings", {}, {}, false, true)),
+      settings_link(colours, "Accounts", icon::person{}, request::open_accounts{}),
+      settings_link(colours, "Animations", icon::motion{}, request::settings_animations{}),
+      settings_link(colours, "Appearance", icon::eye{}, request::settings_appearance{}),
+      settings_link(colours, "Emojis & Stickers", icon::smile{}, request::open_packs{}),
+      settings_link(colours, "Rendering", icon::sliders{}, request::settings_rendering{}),
+      settings_link(colours, "Notifications", icon::bell{}, request::settings_notifications{}),
+      settings_link(colours, "Storage", icon::clip{}, request::settings_storage{}),
+      settings_link(colours, "Files", icon::send{}, request::settings_files{}),
+      settings_link(colours, "Proxies", icon::gear{}, request::settings_proxies{}));
+}
+using settings_home_t = decltype(settings_home(std::declval<const palette&>()));
 
-  explicit animations_page(const ui_needs<Actions>& n) : animations_page(*n.colours) {}
-  animations_page(const palette &colours)
-      : Stacked(skiff::compose::vbox(0.0f, {.fill = true})),
-        parts{.header = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>(colours, "Animations", {}, {}, true, true),
-              .settings = motion_settings_view(colours)} {}
-  void show_receipts(bool) {}
-};
+inline auto motion_settings_view(const palette& colours) {
+  using field = skiff::model::Field<&config::look_settings::motion>;
+  return skiff::compose::column(
+      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      wrapped(skiff::compose::styled({.fillX = true, .margin = {4.0f, 20.0f, 12.0f, 20.0f}},
+          note_text(colours, "How much the window moves. Reduced keeps the small movements, such as a section unfolding, and shows panels at once."))),
+      skiff::compose::bound<field>(widgets::ChoiceRowField<config::motion_t>(colours.widgets, "Full", config::motion::full{})),
+      skiff::compose::bound<field>(widgets::ChoiceRowField<config::motion_t>(colours.widgets, "Reduced", config::motion::reduced{})),
+      skiff::compose::bound<field>(widgets::ChoiceRowField<config::motion_t>(colours.widgets, "None", config::motion::none{})));
+}
+inline auto animations_page(const palette& colours) {
+  return skiff::compose::column(
+      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar},
+          page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Animations", {}, {}, true, true)),
+      motion_settings_view(colours));
+}
+using animations_page_t = decltype(animations_page(std::declval<const palette&>()));
 
 // A proxy profile opened from the list in Settings.
 template <class Actions>
@@ -134,40 +92,23 @@ struct choose_proxy_kind {
 
 // Settings' Proxies page, as Gajim's Manage Proxies: the profiles, and a way
 // to add one.
-template <class Actions> struct proxies_page : skiff::compose::Stacked {
-  using header_t = page_header_t<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
-  using add_row = row_item<sends<::mux::ui::request::add_proxy>>;
-  struct parts_t {
-    header_t header;
-    std::vector<row_item<edit_proxy<Actions>>> profiles;
-    add_row add;
-    nodes::Text empty;
-  } parts;
-
-  // With a way back to the settings' list where it was opened from there.
-  proxies_page(const ui_needs<Actions>& n, const std::vector<config::proxy_settings>& all, bool with_back)
-      : proxies_page(*n.colours, all, with_back) {}
-  proxies_page(const palette &colours,
-               const std::vector<config::proxy_settings> &all, bool with_back)
-      : Stacked(skiff::compose::vbox(0.0f, {.fill = true})),
-        parts{.header = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>(colours, "Proxies", {}, {}, with_back, true),
-              .add = add_row(colours, "Add proxy", {}, icon::plus{}),
-              .empty = skiff::compose::visible(
-                  all.empty(),
-                  skiff::compose::styled(
-                      {.fillX = true, .margin = {8.0f, 20.0f, 0.0f, 20.0f}},
-                      wrapped(note_text(
-                          colours,
-                          "No proxies yet. Accounts connect directly."))))} {
-    auto& [header, profiles, add, empty] = parts;
-
-    for (std::size_t i = 0; i < all.size(); ++i)
-      profiles.emplace_back(colours, std::format("{} ({} {}:{})", all[i].name, config::label_of(all[i].kind),
-                                        all[i].host, all[i].port),
-                            edit_proxy<Actions>{static_cast<int>(i)}, icon::dot{proxy_colour(all[i].name)});
-  }
-  void show_receipts(bool) {}
-};
+inline auto proxies_page(const palette& colours, const std::vector<config::proxy_settings>& profiles, bool with_back) {
+  auto rows = std::views::iota(std::size_t{0}, profiles.size()) |
+      std::views::transform([&](std::size_t index) {
+        const auto& profile = profiles[index];
+        return settings_link(colours, std::format("{} ({} {}:{})", profile.name, config::label_of(profile.kind), profile.host, profile.port),
+                             icon::dot{proxy_colour(profile.name)}, request::edit_proxy{static_cast<int>(index)});
+      }) | std::ranges::to<std::vector>();
+  return skiff::compose::column(
+      skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}),
+      skiff::compose::styled({.depth = 1.0f, .background = colours.sidebar},
+          page_header<sends<request::settings_home>, sends<request::close_settings>>(colours, "Proxies", {}, {}, with_back, true)),
+      skiff::compose::many(skiff::compose::vbox(0.0f, {.fillX = true, .autoSize = scene::axes::kY}), std::move(rows)),
+      settings_link(colours, "Add proxy", icon::plus{}, request::add_proxy{}),
+      skiff::compose::visible(profiles.empty(), wrapped(skiff::compose::styled({.fillX = true, .margin = {8.0f, 20.0f, 0.0f, 20.0f}},
+          note_text(colours, "No proxies yet. Accounts connect directly.")))));
+}
+using proxies_page_t = decltype(proxies_page(std::declval<const palette&>(), std::declval<const std::vector<config::proxy_settings>&>(), true));
 
 // SOCKS5 | HTTP: two segments in a frame, the chosen one lit by a plate
 // that slides from one to the other.

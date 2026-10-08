@@ -70,7 +70,7 @@ template <class Actions> struct settings_dialog : skiff::compose::Specced {
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{440.0f, 520.0f}}; }
   // What it was handed, for the pages it makes.
   ui_needs<Actions> needs_;
-  using page_t = spl::variant<settings_home<Actions>, animations_page<Actions>, proxies_page<Actions>, proxy_editor<Actions>,
+  using page_t = spl::variant<settings_home_t, animations_page_t, proxies_page_t, proxy_editor<Actions>,
                               appearance_page_t<Actions>, rendering_page_t, storage_page<Actions>, files_page_t,
                               notifications_page_t>;
   // The page up: home, or one of its pages.
@@ -84,7 +84,7 @@ template <class Actions> struct settings_dialog : skiff::compose::Specced {
   // Esc: the page's ← -- home from a page, the proxies from one being
   // edited. False on home, which Esc closes.
   bool step_back() {
-    return spl::visit(spl::overloaded{[](settings_home<Actions>&) { return false; },
+    return spl::visit(spl::overloaded{[](settings_home_t&) { return false; },
                                       [](auto& one) { return page_step_back(settings_header(one)); }},
                       this->page());
   }
@@ -173,18 +173,18 @@ template <class Actions> struct settings_dialog : skiff::compose::Specced {
       : Specced({.fill = true}), needs_(n),
         parts{.scroll = skiff::compose::styled(
                   {.fill = true}, nodes::ScrollContainer<page_t>(
-                                      page_t(std::in_place_index<0>, n)))} {
+                                      page_t(std::in_place_index<0>, settings_home(*n.colours))))} {
     parts.scroll.setCopiesOnScroll(false);
     this->fit_page();
   }
 
   // Home comes back from the left, the pages come in from the right.
   void show_home() {
-    this->page().template emplace<0>(needs_);
+    this->page().template emplace<0>(settings_home(*needs_.colours));
     this->begin_swap(-1.0f);
   }
   void show_animations() {
-    this->page().template emplace<1>(needs_);
+    this->page().template emplace<1>(animations_page(*needs_.colours));
     this->begin_swap(1.0f);
   }
   // Made again where it is up -- a choice on it changed -- where it was
@@ -238,7 +238,7 @@ template <class Actions> struct settings_dialog : skiff::compose::Specced {
                       this->page());
   }
   void show_proxies(const std::vector<config::proxy_settings>& all, bool with_back = true) {
-    this->page().template emplace<2>(needs_, all, with_back);
+    this->page().template emplace<2>(proxies_page(*needs_.colours, all, with_back));
     this->begin_swap(1.0f);
   }
   void show_proxy(const std::optional<config::proxy_settings>& from, int index) {

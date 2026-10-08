@@ -37,7 +37,7 @@ inline auto theme_card(const palette& colours, config::theme_t theme, std::strin
       skiff::bind::own(skiff::model::setTo(theme)),
       skiff::compose::column(
           skiff::compose::vbox(0.0f, {.width = 92.0f, .height = 92.0f, .padding = {66.0f, 6.0f, 0.0f, 6.0f}}),
-          skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(label), 12.0f, colours.dim)),
+          skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(label, 12.0f, colours.dim)),
           skiff::compose::spec_for<field>(
               [theme, ring = colours.accent](const config::theme_t& now) -> scene::Spec {
                 const bool selected = theme == now;
@@ -49,7 +49,7 @@ inline auto theme_card(const palette& colours, config::theme_t theme, std::strin
                   skiff::compose::styled({.place = scene::anchor::kTopLeft, .x = 6.0f, .y = 8.0f,
                                          .width = 44.0f, .height = 14.0f, .cornerRadius = 7.0f}, nodes::Box<>(incoming)),
                   skiff::compose::styled({.place = scene::anchor::kTopRight, .x = -6.0f, .y = 30.0f,
-                                         .width = 44.0f, .height = 14.0f, .cornerRadius = 7.0f}, nodes::Box<>(outgoing)))))));
+                                         .width = 44.0f, .height = 14.0f, .cornerRadius = 7.0f}, nodes::Box<>(outgoing))))), label));
 }
 
 // What was picked of a T in a row of nodes that each call one: the press

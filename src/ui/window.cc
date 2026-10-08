@@ -61,6 +61,7 @@ struct shown_root {
   skiff::model::Tracked<std::optional<proto::passphrase_for_t>> passphrase;
   skiff::model::Tracked<std::optional<menu_facts>> menu;
   skiff::model::Tracked<std::optional<viewer_facts>> viewer;
+  skiff::model::Tracked<std::optional<emoji_facts>> emoji;
 };
 struct shown_reactions {};
 using shown_model = skiff::model::Model<shown_root, shown_reactions>;
@@ -305,7 +306,7 @@ struct window : scene::Node {
       shown_in<passphrase_box<Actions>, proto::passphrase_for_t> passphrase;
       // An emoji verification, as it goes.
       shown_in<verification_box<Actions>, verification_view> verifying;
-      std::optional<emoji_popup<Actions>> emoji;
+      skiff::bind::Bound<std::optional<emoji_facts>, shown_layer<emoji_popup<Actions>, emoji_facts, ui_needs<Actions>>> emoji;
       skiff::bind::Bound<std::optional<menu_facts>, shown_layer<context_menu<Actions>, menu_facts, ui_needs<Actions>>> menu;
       skiff::bind::Bound<std::optional<viewer_facts>, shown_layer<picture_viewer<Actions>, viewer_facts, ui_needs<Actions>>> viewer;
       // A selectable text's menu, where it was pressed with the right button.
@@ -326,13 +327,13 @@ struct window : scene::Node {
     std::optional<Answer> onPointer(scene::phase::capture, const scene::pointer::up& lift, scene::PointerReply&) {
       std::optional<Answer> answer;
       const auto off = std::exchange(press_off_emoji, std::nullopt);
-      if (off && parts.emoji && std::hypot(lift.x - off->fX, lift.y - off->fY) < 8.0f)
+      if (off && parts.emoji.shown() && std::hypot(lift.x - off->fX, lift.y - off->fY) < 8.0f)
         answer = ::mux::ui::request::close_emoji{};
       return answer;
     }
     void onPointer(scene::phase::capture, const scene::pointer::down& press, scene::PointerReply&) {
       last_press = {press.x, press.y};
-      press_off_emoji = parts.emoji && !parts.emoji->parts.card.bounds().contains(press.x, press.y)
+      press_off_emoji = parts.emoji.shown() && !parts.emoji.shown()->parts.card.bounds().contains(press.x, press.y)
                             ? std::optional<skia::SkPoint>(skia::SkPoint::Make(press.x, press.y))
                             : std::nullopt;
       if (parts.text_menu_up && !parts.text_menu_up->bounds().contains(press.x, press.y)) {
@@ -375,7 +376,7 @@ struct window : scene::Node {
       }
       if (parts.menu.shown())
         return closed(::mux::ui::request::close_menu{});
-      if (parts.emoji)
+      if (parts.emoji.shown())
         return closed(::mux::ui::request::close_emoji{});
       if (parts.viewer.shown())
         return closed(::mux::ui::request::close_picture{});
@@ -514,6 +515,7 @@ struct window : scene::Node {
                 .sending = shown_made<send_box<Actions>, send_facts>(n),
                 .passphrase = shown_made<passphrase_box<Actions>, proto::passphrase_for_t>(n),
                 .verifying = shown_made<verification_box<Actions>, verification_view>(n),
+                .emoji = decltype(parts_t::emoji)(shown_layer<emoji_popup<Actions>, emoji_facts, ui_needs<Actions>>(&n)),
                 .menu = decltype(parts_t::menu)(shown_layer<context_menu<Actions>, menu_facts, ui_needs<Actions>>(&n)),
                 .viewer = decltype(parts_t::viewer)(shown_layer<picture_viewer<Actions>, viewer_facts, ui_needs<Actions>>(&n))} {
       auto& [backdrop, behind, frame, ...over] = parts;
@@ -748,9 +750,8 @@ struct window : scene::Node {
   [[nodiscard]] bool pages_moving() { return layer().frame.settling(); }
 
   // The input's emoji panel, over the chat above its button.
-  void open_emoji(float right, float bottom) { layer().emoji.emplace(needs_, right, bottom); }
-  void close_emoji() {
-    layer().emoji.reset();
+  // The emoji panel gone: the field back where it was.
+  void emoji_closed() {
     needs_.shared->set_docked_panel_height(0.0f);  // the field back at the bottom
     // Told here, not only by its id: the screen made at the start was moved
     // into the window since, and the panel gone left an empty space under
@@ -759,13 +760,14 @@ struct window : scene::Node {
   }
   // The GIFs saved, for the popup's GIF tab, where it is open.
   void show_gifs(const std::vector<std::string>& paths) {
-    if (layer().emoji)
-      layer().emoji->parts.card.parts.gifs.show(paths);
+    if (auto* up = layer().emoji.shown())
+      up->parts.card.parts.gifs.show(paths);
   }
-  [[nodiscard]] bool emoji_open() { return layer().emoji.has_value(); }
+  [[nodiscard]] bool emoji_open() { return layer().emoji.shown() != nullptr; }
   // The sticker pictures the panel shows, for the program to ask for.
   [[nodiscard]] std::vector<std::string> emoji_pictures_shown() {
-    return layer().emoji ? layer().emoji->parts.card.parts.stickers.pictures_shown() : std::vector<std::string>{};
+    auto* up = layer().emoji.shown();
+    return up ? up->parts.card.parts.stickers.pictures_shown() : std::vector<std::string>{};
   }
   // The menu's card, where one is up: what takes the keys while it is.
   [[nodiscard]] scene::Node* menu_card() {

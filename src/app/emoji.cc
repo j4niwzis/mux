@@ -24,8 +24,8 @@ class emoji_part {
 
   // The input's emoji panel: opened over the chat above its button, or closed.
   void apply(const request::toggle_emoji&) {
-    if (s_->root().emoji_open()) {
-      s_->root().close_emoji();
+    if (s_->emoji_open()) {
+      s_->close_emoji();
       return;
     }
     into_ = request::writing::chat{};
@@ -34,15 +34,15 @@ class emoji_part {
   }
   // The thread's: the same panel, over its button, writing in its field.
   void apply(const request::toggle_thread_emoji&) {
-    if (s_->root().emoji_open()) {
-      s_->root().close_emoji();
+    if (s_->emoji_open()) {
+      s_->close_emoji();
       return;
     }
     into_ = request::writing::thread{};
     const auto at = s_->root().main().parts.threads.parts.line.parts.input.parts.emoji.bounds();
     this->open_at(at.fRight, at.fTop);
   }
-  void apply(const request::close_emoji&) { s_->root().close_emoji(); }
+  void apply(const request::close_emoji&) { s_->close_emoji(); }
   // An emoji picked: into what is written, where the caret is; the input keeps
   // the keys.
   void apply(const request::insert_emoji& one) {
@@ -76,7 +76,7 @@ class emoji_part {
     // the panel and brings the keyboard back.
     if (s_->by_touch)
       s_->scene->clearFocus();
-    s_->root().open_emoji(right, top - 6.0f);
+    s_->open_emoji(right, top - 6.0f);
   }
 
   services* s_;

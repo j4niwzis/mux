@@ -114,6 +114,12 @@ struct gif_grid : nodes::Stack {
 // (emojiPanWidth), 278 to 640 high, rounded 8, its bottom right at the top
 // right of the button that opened it; a press off it closes it. It stays
 // open while emoji are picked, and the input keeps the keys.
+// The input's emoji panel open: where it is put, its right edge and its
+// bottom, in the window.
+struct emoji_facts {
+  float right = 0.0f;
+  float bottom = 0.0f;
+};
 template <class Actions>
 struct emoji_popup : scene::Node {
   struct card_t : nodes::Stack {
@@ -258,6 +264,7 @@ struct emoji_popup : scene::Node {
   // What the window's parts tell one another: the docked panel's height.
   ui_shared* shared_ = nullptr;
 
+  emoji_popup(const ui_needs<Actions>& n, const emoji_facts& facts) : emoji_popup(n, facts.right, facts.bottom) {}
   emoji_popup(const ui_needs<Actions>& n, float at_right, float at_bottom)
       : parts{.card = card_t(*n.colours, *n.emoji)}, right(at_right), bottom(at_bottom), shared_(n.shared) {
     fState.apply({.fill = true});

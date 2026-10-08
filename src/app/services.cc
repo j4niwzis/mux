@@ -88,6 +88,14 @@ struct services {
   void not_implemented(std::string what) const {
     this->notice("Not implemented yet", std::format("{} isn't implemented yet.", what));
   }
+  // The emoji panel open where it is put, or closed -- the field back where
+  // it was; and whether it is open, as what is shown says.
+  void open_emoji(float right, float bottom) const { mux::ui::show(*showing, std::optional(mux::ui::emoji_facts{right, bottom})); }
+  void close_emoji() const {
+    mux::ui::show<mux::ui::emoji_facts>(*showing, std::nullopt);
+    this->root().emoji_closed();
+  }
+  [[nodiscard]] bool emoji_open() const { return showing->root().emoji.fValue.has_value(); }
   void close_notice() const { mux::ui::show<mux::ui::notice_facts>(*showing, std::nullopt); }
   // A chat that is a window of its history away from its newest: back to
   // its newest, live -- before anything is put at its end. Its newest from

@@ -292,7 +292,7 @@ class outbox_part {
       sent.height = image->height();
       mux::ui::thumbnails().put("local:" + sent.local, std::move(image));
     }
-    s_->root().close_emoji();
+    s_->close_emoji();
     s_->go_live(*chosen);
     s_->root().main().jump_to_end();
     // Sent while answering: the answer, as a sticker or a text would be.
@@ -322,7 +322,7 @@ class outbox_part {
     const auto& chosen = s_->root().main().chosen;
     if (!chosen || s_->demo())
       return;
-    s_->root().close_emoji();
+    s_->close_emoji();
     s_->go_live(*chosen);
     s_->root().main().jump_to_end();
     // Sent while answering: the answer, as a text would be.

@@ -96,7 +96,7 @@ struct directory_row : nodes::Stack {
       : parts{.face = avatar_mark(one.id, one.name.empty() ? one.alias : one.name, 40.0f),
               .texts = texts_t(colours, one),
               .join = widgets::Button<directory_join<Actions>>(colours.widgets, one.space ? "Open" : "Join",
-                                                  {{}, one.space ? one.id : (one.alias.empty() ? one.id : one.alias), server, one.space,
+                                                  {one.space ? one.id : (one.alias.empty() ? one.id : one.alias), server, one.space,
                                                    one.name})} {
     this->setHorizontal();
     this->setGap(12.0f);

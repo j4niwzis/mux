@@ -129,9 +129,10 @@ struct reactions_box : nodes::Stack {
       const message_bubble<Actions>& one = parts.bubble;
       if (const auto& preview = one.parts.body.parts.preview; preview && preview->bounds().contains(x, y))
         return ::mux::ui::request::open_url{preview->url};
-      const auto cards = one.parts.body.parts.cards | std::views::filter([&](const link_card& card) { return card.bounds().contains(x, y); });
-      if (!std::ranges::empty(cards))
-        return ::mux::ui::request::open_url{std::ranges::begin(cards)->url};
+      const auto& cards = one.parts.body.parts.cards;
+      if (const auto card = std::ranges::find_if(cards, [&](const link_card& each) { return each.bounds().contains(x, y); });
+          card != cards.end())
+        return ::mux::ui::request::open_url{card->url};
       // Answered, where it is an event of its own to answer; the list closed.
       std::optional<::mux::ui::request::reply_to> answered;
       if (!entry.event.empty())

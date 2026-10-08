@@ -56,7 +56,7 @@ struct forward_target {
 // Where to forward a message, as tdesktop's box: the account's chats, with
 // a field to find one by its name; a press sends it there.
 template <class Actions>
-struct forward_box : nodes::Stack, outbox {
+struct forward_box : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{400.0f, 520.0f}}; }
   // The colours it is made in, for the rows it makes later.
@@ -188,8 +188,9 @@ struct start_chat_box : nodes::Stack, outbox {
     void operator()() const { box->go(); }
   };
   struct copy_press {
+    using Answer = ::mux::ui::request::copy_text;
     start_chat_box* box;
-    void operator()() const { box->emit(::mux::ui::request::copy_text{box->link}); }
+    ::mux::ui::request::copy_text operator()() const { return ::mux::ui::request::copy_text{box->link}; }
   };
   using person_row = found_person_row<Actions>;
   using header_t = page_header<no_back, close_it>;
@@ -320,7 +321,7 @@ struct start_chat_box : nodes::Stack, outbox {
 // join -- by invitation, or anyone, with the address it is found by -- and,
 // among the advanced, whether those of other servers may ever join.
 template <class Actions>
-struct create_room_box : nodes::Stack, outbox {
+struct create_room_box : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{480.0f}}; }
   // The colours it is made in, for its parts.
@@ -340,13 +341,15 @@ struct create_room_box : nodes::Stack, outbox {
     ::mux::ui::request::close_new_room operator()() { return ::mux::ui::request::close_new_room{}; }
   };
   struct create_press {
+    using Answer = std::optional<::mux::ui::request::create_room>;
     create_room_box* box;
-    void operator()() const {
+    std::optional<::mux::ui::request::create_room> operator()() const {
       const std::string& name = box->parts.name.text();
-      if (!name.empty())
-        box->emit(::mux::ui::request::create_room{name, box->parts.topic.text(), box->open_room, box->parts.address.text(), box->federate,
+      if (name.empty())
+        return std::nullopt;
+      return ::mux::ui::request::create_room{name, box->parts.topic.text(), box->open_room, box->parts.address.text(), box->federate,
                                   box->encrypted, box->place ? std::optional<conversation_id>(box->place->space) : std::nullopt,
-                                  box->space_members, box->place && box->place->make_space});
+                                  box->space_members, box->place && box->place->make_space};
     }
   };
   struct cancel_press {

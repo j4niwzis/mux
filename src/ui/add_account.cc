@@ -31,7 +31,7 @@ struct choose_new_proxy {
 // Adding an account, beside the list of them: XMPP or Matrix at the top, and
 // that protocol's form under it.
 template <class Actions>
-struct add_account_pane : nodes::Stack, outbox {
+struct add_account_pane : nodes::Stack {
   // A segment a protocol, in a thin frame -- from the list, each named as
   // its protocol names itself.
   struct pick_protocol {

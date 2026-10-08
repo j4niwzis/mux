@@ -66,12 +66,13 @@ struct field : nodes::Stack {
 // EditLinkBox: its text and its URL, the forms' own fields; Done puts it on,
 // Esc or Cancel leaves the field as it was.
 template <class Actions>
-struct link_box : nodes::Stack, outbox {
+struct link_box : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{400.0f}}; }
   struct done {
+    using Answer = ::mux::ui::request::set_link;
     link_box* box;
-    void operator()() const { box->emit(::mux::ui::request::set_link{box->parts.text.text(), box->parts.url.text()}); }
+    ::mux::ui::request::set_link operator()() const { return ::mux::ui::request::set_link{box->parts.text.text(), box->parts.url.text()}; }
   };
   struct cancel {
     using Answer = ::mux::ui::request::close_link;
@@ -101,7 +102,7 @@ struct link_box : nodes::Stack, outbox {
 // or off, or to change it. Its fields are the forms' own, masked; what each
 // purpose shows and says, by its type.
 template <class Actions>
-struct passphrase_box : nodes::Stack, outbox {
+struct passphrase_box : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{420.0f}}; }
   struct words {
@@ -133,10 +134,11 @@ struct passphrase_box : nodes::Stack, outbox {
             "Decrypt", true, false};
   }
   struct submit {
+    using Answer = ::mux::ui::request::give_passphrase;
     passphrase_box* box;
-    void operator()() const {
-      box->emit(::mux::ui::request::give_passphrase{box->purpose, box->parts.current.text(), box->parts.fresh.text(), box->parts.again.text(),
-                                    box->parts.file.text()});
+    Answer operator()() const {
+      return ::mux::ui::request::give_passphrase{box->purpose, box->parts.current.text(), box->parts.fresh.text(), box->parts.again.text(),
+                                    box->parts.file.text()};
     }
   };
   proto::passphrase_for_t purpose;

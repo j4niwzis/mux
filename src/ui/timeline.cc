@@ -71,8 +71,13 @@ inline void show_wallpaper_on(wallpaper_t& wall, const config::wallpaper_t& chos
 // A press on what is in a message -- a picture, a file, a reply's quote,
 // its sender -- as a click, wherever the message is shown: the timeline, a
 // thread. The press in the space its bubble is laid out in.
+// What a press in a bubble asks for: the picture or video seen, the file
+// opened, a reaction, a link followed, the thread, the message replied to,
+// the person.
+using bubble_press = std::variant<::mux::ui::request::open_file, ::mux::ui::request::open_video, ::mux::ui::request::open_picture, ::mux::ui::request::play_audio, ::mux::ui::request::react, ::mux::ui::request::open_url,
+                                  ::mux::ui::request::open_thread, ::mux::ui::request::jump_to_message, ::mux::ui::request::open_member_info>;
 template <class Actions>
-[[nodiscard]] bool press_in_bubble(outbox& out, const message_bubble<Actions>& one, float x, float y, const conversation* chat) {
+[[nodiscard]] std::optional<bubble_press> press_in_bubble(const message_bubble<Actions>& one, float x, float y, const conversation* chat) {
   const struct {
     float x, y;
   } press{x, y};
@@ -81,25 +86,22 @@ template <class Actions>
   // without video, by the system's player, as a file is opened.
   if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y) &&
       one.said.attachment && one.said.attachment->video && !mux::platform::video::kPlays) {
-    out.emit(::mux::ui::request::open_file{*one.said.attachment->video, one.said.attachment->name});
-    return true;
+    return ::mux::ui::request::open_file{*one.said.attachment->video, one.said.attachment->name};
   }
   if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y) &&
       one.said.attachment && one.said.attachment->video) {
     
     const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
-    out.emit(::mux::ui::request::open_video{one.parts.body.parts.picture->source, *one.said.attachment->video, one.sender,
+    return ::mux::ui::request::open_video{one.parts.body.parts.picture->source, *one.said.attachment->video, one.sender,
                         chat ? sender_name(*chat, one.sender) : one.sender,
-                        std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day}, clock_of(one.said.at))});
-    return true;
+                        std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day}, clock_of(one.said.at))};
   }
   if (one.parts.body.parts.picture && one.parts.body.parts.picture->bounds().contains(press.x, press.y)) {
     
     const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
-    out.emit(::mux::ui::request::open_picture{one.parts.body.parts.picture->source, one.sender,
+    return ::mux::ui::request::open_picture{one.parts.body.parts.picture->source, one.sender,
                           chat ? sender_name(*chat, one.sender) : one.sender,
-                          std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day}, clock_of(one.said.at))});
-    return true;
+                          std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day}, clock_of(one.said.at))};
   }
   // A picture of an album: seen whole, as one alone is.
   if (one.parts.body.parts.album)
@@ -108,48 +110,41 @@ template <class Actions>
         if (cell.bounds().contains(press.x, press.y)) {
           
           const auto day = std::chrono::floor<std::chrono::days>(one.said.at);
-          out.emit(::mux::ui::request::open_picture{cell.source, one.sender, chat ? sender_name(*chat, one.sender) : one.sender,
+          return ::mux::ui::request::open_picture{cell.source, one.sender, chat ? sender_name(*chat, one.sender) : one.sender,
                                 std::format("{:%d.%m.%Y} at {}", std::chrono::year_month_day{day},
-                                            clock_of(one.said.at))});
-          return true;
+                                            clock_of(one.said.at))};
         }
   if (one.parts.body.parts.file && one.parts.body.parts.file->bounds().contains(press.x, press.y) && one.said.attachment) {
     if (one.parts.body.parts.file->sound)
-      out.emit(::mux::ui::request::play_audio{one.parts.body.parts.file->source});
+      return ::mux::ui::request::play_audio{one.parts.body.parts.file->source};
     else
-      out.emit(::mux::ui::request::open_file{one.parts.body.parts.file->source, one.said.attachment->name});
-    return true;
+      return ::mux::ui::request::open_file{one.parts.body.parts.file->source, one.said.attachment->name};
   }
   // A reaction's chip: the user's own put or taken back.
   if (one.parts.body.parts.reactions)
     for (const reaction_chip& chip : one.parts.body.parts.reactions->chips())
       if (chip.bounds().contains(press.x, press.y)) {
-        out.emit(::mux::ui::request::react{one.message_id, chip.key});
-        return true;
+        return ::mux::ui::request::react{one.message_id, chip.key};
       }
   // A card of a link to a room or a message: followed.
   for (const link_card& card : one.parts.body.parts.cards)
     if (card.bounds().contains(press.x, press.y)) {
-      out.emit(::mux::ui::request::open_url{card.url});
-      return true;
+      return ::mux::ui::request::open_url{card.url};
     }
   // A link's preview: the link, followed.
   if (const auto& preview = one.parts.body.parts.preview; preview && preview->bounds().contains(press.x, press.y)) {
-    out.emit(::mux::ui::request::open_url{preview->url});
-    return true;
+    return ::mux::ui::request::open_url{preview->url};
   }
   // A thread's summary under its root: the thread, beside the chat.
   if (const auto& thread = one.parts.body.parts.thread; thread && thread->bounds().contains(press.x, press.y)) {
-    out.emit(::mux::ui::request::open_thread{one.message_id});
-    return true;
+    return ::mux::ui::request::open_thread{one.message_id};
   }
   // A reaction shown as a line: pressed anywhere, to what it is on.
   if (one.said.service && one.said.replies_to && one.parts.body.bounds().contains(press.x, press.y) &&
       spl::visit(spl::overloaded{[](room_event::reactions) { return true; },
                                        [](room_event::unreactions) { return true; }, [](const auto&) { return false; }},
                  one.said.event_kind)) {
-    out.emit(::mux::ui::request::jump_to_message{*one.said.replies_to, std::nullopt, one.message_id});
-    return true;
+    return ::mux::ui::request::jump_to_message{*one.said.replies_to, std::nullopt, one.message_id};
   }
   // A quoted stretch of a reply's text -- the part of the message it
   // answers, as "> " quotes it: to that message, the part marked, as
@@ -158,10 +153,9 @@ template <class Actions>
       one.said.replies_to && text.visible() && text.bounds().contains(press.x, press.y) && !text.hasSelection()) {
     // The quote pressed, of those the reply has: its own words marked.
     if (const auto quote = text.quoteAt(press.x, press.y)) {
-      out.emit(::mux::ui::request::jump_to_message{*one.said.replies_to,
+      return ::mux::ui::request::jump_to_message{*one.said.replies_to,
                                trimmed_fragment(std::string_view(text.text()).substr(quote->first, quote->second - quote->first)),
-                               one.message_id});
-      return true;
+                               one.message_id};
     }
   }
   // The reply's header: to the message it answers, as it is -- a part
@@ -170,10 +164,9 @@ template <class Actions>
   if (one.parts.body.parts.quote && one.said.replies_to && one.parts.body.parts.quote->shownBounds().contains(press.x, press.y)) {
     // Where the header shows the quote itself, the quoted part marked.
     if (one.header_quote)
-      out.emit(::mux::ui::request::jump_to_message{*one.said.replies_to, one.header_quote, one.message_id});
+      return ::mux::ui::request::jump_to_message{*one.said.replies_to, one.header_quote, one.message_id};
     else
-      out.emit(::mux::ui::request::jump_to_message{*one.said.replies_to, std::nullopt, one.message_id});
-    return true;
+      return ::mux::ui::request::jump_to_message{*one.said.replies_to, std::nullopt, one.message_id};
   }
   // A forward's line: its sender's pill, their page; its words, the
   // original, where its link is.
@@ -183,21 +176,18 @@ template <class Actions>
         one.parts.body.parts.forwarded->parts.who.bounds()
             .makeOffset(one.parts.body.parts.forwarded->fState.fShiftX, one.parts.body.parts.forwarded->fState.fShiftY)
             .contains(press.x, press.y)) {
-      out.emit(::mux::ui::request::open_member_info{one.said.forwarded->from});
-      return true;
+      return ::mux::ui::request::open_member_info{one.said.forwarded->from};
     }
     if (!one.said.forwarded->link.empty()) {
-      out.emit(::mux::ui::request::open_url{one.said.forwarded->link});
-      return true;
+      return ::mux::ui::request::open_url{one.said.forwarded->link};
     }
   }
   // The sender, by their avatar or their name: their page.
   if ((one.parts.face.visible() && one.parts.face.fState.fAlpha > 0.0f && one.parts.face.bounds().contains(press.x, press.y)) ||
       (one.parts.body.parts.name && one.parts.body.parts.name->bounds().contains(press.x, press.y))) {
-    out.emit(::mux::ui::request::open_member_info{one.sender});
-    return true;
+    return ::mux::ui::request::open_member_info{one.sender};
   }
-  return false;
+  return std::nullopt;
 }
 
 // What a message's menu offers, for a right press on it wherever it is
@@ -276,7 +266,10 @@ struct shown_how {
 };
 
 template <class Actions>
-struct timeline_area : scene::Node, outbox {
+struct timeline_area : scene::Node {
+  // What a press on the messages asks for: a message selected or not, one
+  // replied to by a swipe, the menu of one, or what a press in a bubble asks.
+  using Answer = std::variant<::skiff::scene::Taken, ::mux::ui::request::toggle_selected, ::mux::ui::request::reply_to, menu_facts, bubble_press>;
   // The loader's cross: the message jumped to no longer looked for.
   struct stop_jump {
     using Answer = ::mux::ui::request::stop_jump;
@@ -485,17 +478,21 @@ struct timeline_area : scene::Node, outbox {
         return;
       }
   }
-  void swipe_up(scene::PointerReply& reply) {
+  std::optional<Answer> swipe_up(scene::PointerReply& reply) {
     swipe_armed = false;
-    if (message_bubble<Actions>* one = this->swiped()) {
-      if (one->swipe.value() <= -message_bubble<Actions>::kSwipeToReply)
-        this->emit(::mux::ui::request::reply_to{one->message_id, one->plain});
-      one->swipe.setTarget(0.0f);
-      scene::work::mark(one->fState.fId);  // ticked back: nothing else asks for its frames
-      swiping.reset();
-      reply.releasePointer();
-      reply.handle();
-    }
+    message_bubble<Actions>* one = this->swiped();
+    if (!one)
+      return std::nullopt;
+    const bool replied = one->swipe.value() <= -message_bubble<Actions>::kSwipeToReply;
+    std::optional<Answer> asked;
+    if (replied)
+      asked = ::mux::ui::request::reply_to{one->message_id, one->plain};
+    one->swipe.setTarget(0.0f);
+    scene::work::mark(one->fState.fId);  // ticked back: nothing else asks for its frames
+    swiping.reset();
+    reply.releasePointer();
+    reply.handle();
+    return asked;
   }
   void swipe_cancel(scene::PointerReply& reply) {
     swipe_armed = false;
@@ -517,8 +514,8 @@ struct timeline_area : scene::Node, outbox {
   void onPointer(scene::phase::target, const scene::pointer::move& at, scene::PointerReply& reply) {
     swipe_move(at, reply);
   }
-  void onPointer(scene::phase::capture, const scene::pointer::up&, scene::PointerReply& reply) { swipe_up(reply); }
-  void onPointer(scene::phase::target, const scene::pointer::up&, scene::PointerReply& reply) { swipe_up(reply); }
+  std::optional<Answer> onPointer(scene::phase::capture, const scene::pointer::up&, scene::PointerReply& reply) { return swipe_up(reply); }
+  std::optional<Answer> onPointer(scene::phase::target, const scene::pointer::up&, scene::PointerReply& reply) { return swipe_up(reply); }
   void onPointer(scene::phase::capture, const scene::pointer::cancel&, scene::PointerReply& reply) {
     swipe_cancel(reply);
   }
@@ -575,30 +572,30 @@ struct timeline_area : scene::Node, outbox {
     for (message_bubble<Actions>& one : this->bubbles())
       one.select(selected_ids.contains(one.message_id));
   }
-  [[nodiscard]] bool onClick(float x, float y) {
+  std::optional<Answer> onClick(float x, float y) {
     // In the space the rows are laid out in: the list draws them scrolled.
     const struct {
       float x, y;
     } press{x, y - parts.timeline.contentsShift()};
+    const auto& bubbles = this->bubbles();
+    // Selecting: the message pressed selected, or not.
     if (!selected_ids.empty()) {
-      for (const message_bubble<Actions>& one : this->bubbles())
-        if (one.bounds().contains(press.x, press.y) && !one.message_id.empty()) {
-          this->emit(::mux::ui::request::toggle_selected{one.message_id});
-          return true;
-        }
-      return false;
+      const auto pressed = std::ranges::find_if(bubbles, [&](const message_bubble<Actions>& one) {
+        return one.bounds().contains(press.x, press.y) && !one.message_id.empty();
+      });
+      if (pressed == std::ranges::end(bubbles))
+        return std::nullopt;
+      return ::mux::ui::request::toggle_selected{pressed->message_id};
     }
-      for (const message_bubble<Actions>& one : this->bubbles()) {
-        if (press_in_bubble(*this, one, press.x, press.y, seen_chat_of()))
-          return true;
-      }
-    return false;
+    // Else what the press asks for in the bubble it is in.
+    for (const message_bubble<Actions>& one : bubbles)
+      if (auto asked = press_in_bubble(one, press.x, press.y, seen_chat_of()))
+        return Answer{*asked};
+    return std::nullopt;
   }
-  void onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
-    if (press.button == 1)
-      return;  // the main button's presses come as clicks, above
+  std::optional<Answer> onPointer(scene::phase::bubble, const scene::pointer::down& press, scene::PointerReply& reply) {
     if (press.button != 3)
-      return;
+      return std::nullopt;  // the main button's presses come as clicks, above
     // Whichever message's row the press is in -- its text, its bubble or the
     // room beside it. What Copy takes is what is selected in it, if anything
     // is, and all of it if not.
@@ -606,10 +603,10 @@ struct timeline_area : scene::Node, outbox {
       if (parts.timeline.toView(one.bounds()).contains(press.x, press.y)) {
         menu_facts facts = facts_of_bubble(one, seen_chat_of(), press.x, press.y);
         facts.seen = this->seen_by(one.message_id, one.sender);
-        this->emit(std::move(facts));
         reply.handle();
-        return;
+        return Answer{std::move(facts)};
       }
+    return std::nullopt;
   }
 };
 

@@ -110,7 +110,7 @@ struct directory_row : nodes::Stack {
 // many are in it and what it is about, and Join. An address typed in is
 // gone to at once.
 template <class Actions>
-struct explore_box : nodes::Stack, outbox {
+struct explore_box : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{640.0f, 560.0f}}; }
   // The colours it is made in, for its parts and the rows it makes later.
@@ -120,15 +120,16 @@ struct explore_box : nodes::Stack, outbox {
     ::mux::ui::request::close_explore operator()() { return ::mux::ui::request::close_explore{}; }
   };
   struct search_press {
+    using Answer = std::optional<::mux::ui::request::search_rooms>;
     explore_box* box;
-    void operator()() const {
+    std::optional<::mux::ui::request::search_rooms> operator()() const {
       if (box->space) {
         box->filter(box->parts.search.parts.query.text());
-        return;
+        return std::nullopt;
       }
       box->parts.status.setText("Searching\u2026");
       box->parts.status.setVisible(true);
-      box->emit(::mux::ui::request::search_rooms{box->parts.search.parts.server.text(), box->parts.search.parts.query.text()});
+      return ::mux::ui::request::search_rooms{box->parts.search.parts.server.text(), box->parts.search.parts.query.text()};
     }
   };
   // Whose rooms are listed, where a space's are; and what it listed, to be
@@ -140,12 +141,13 @@ struct explore_box : nodes::Stack, outbox {
   std::string listed_query;
   std::optional<std::string> next;
   struct more_press {
+    using Answer = std::optional<::mux::ui::request::search_rooms>;
     explore_box* box;
-    void operator()() const {
+    std::optional<::mux::ui::request::search_rooms> operator()() const {
       if (!box->next)
-        return;
+        return std::nullopt;
       box->parts.more.setLabel("Loading\u2026");
-      box->emit(::mux::ui::request::search_rooms{box->listed_server, box->listed_query, *box->next});
+      return ::mux::ui::request::search_rooms{box->listed_server, box->listed_query, *box->next};
     }
   };
   // A space's name and picture, over what it holds.

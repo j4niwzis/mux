@@ -58,9 +58,10 @@ struct account_sessions : nodes::Stack, outbox {
     void operator()() const { page->sign_out(page->others); }
   };
   struct verify_one {
+    using Answer = request::verify_session;
     account_sessions* page;
     std::string device;
-    void operator()() const { page->emit(request::verify_session{device}); }
+    request::verify_session operator()() const { return request::verify_session{device}; }
   };
   struct start_rename {
     account_sessions* page;

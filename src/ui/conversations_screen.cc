@@ -576,11 +576,10 @@ struct conversations_screen : nodes::Stack, outbox {
   // The pinned bar pressed: to the pinned message -- the bar then shows the
   // one pinned above it, as it always shows the one above the view.
   struct pinned_press {
+    using Answer = ::mux::ui::request::jump_to_message;
     conversations_screen* screen;
     std::string id;
-    void operator()() const {
-      screen->emit(::mux::ui::request::jump_to_message{id});
-    }
+    ::mux::ui::request::jump_to_message operator()() const { return ::mux::ui::request::jump_to_message{id}; }
   };
   // A banner's button pressed: its protocol's request, asked.
   struct banner_press : outbox {

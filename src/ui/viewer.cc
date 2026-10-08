@@ -27,7 +27,7 @@ export namespace mux::ui {
 // the room. A press on the dark around it closes it; the whole picture
 // replaces its thumbnail when it has come.
 template <class Actions>
-struct picture_viewer : nodes::Stack, outbox {
+struct picture_viewer : nodes::Stack {
   // The colours its menu is made in.
   const palette* colours_ = nullptr;
   std::string source;
@@ -53,8 +53,9 @@ struct picture_viewer : nodes::Stack, outbox {
   };
   // The loader pressed: the download stopped, or started again.
   struct press_loader {
+    using Answer = ::mux::ui::request::press_loader;
     picture_viewer* viewer;
-    void operator()() const { viewer->emit(::mux::ui::request::press_loader{viewer->video.value_or(viewer->source)}); }
+    ::mux::ui::request::press_loader operator()() const { return ::mux::ui::request::press_loader{viewer->video.value_or(viewer->source)}; }
   };
   struct top_bar : nodes::Stack {
     using close_button = icon_button<sends<::mux::ui::request::close_picture>>;
@@ -92,6 +93,8 @@ struct picture_viewer : nodes::Stack, outbox {
   };
   // Where the picture is drawn: fitted, zoomed, moved.
   struct stage : scene::Node {
+    // A press off the picture: closed.
+    using Answer = ::mux::ui::request::close_picture;
     picture_viewer* viewer;
     // The picture: the whole one where it has come, its thumbnail until then.
     struct parts_t {
@@ -171,12 +174,12 @@ struct picture_viewer : nodes::Stack, outbox {
     bool dragging = false;
     float last_x = 0.0f, last_y = 0.0f;
     using Node::onPointer;
-    void onPointer(scene::phase::target, const scene::pointer::down& press, scene::PointerReply& reply) {
+    std::optional<::mux::ui::request::close_picture> onPointer(scene::phase::target, const scene::pointer::down& press, scene::PointerReply& reply) {
       // Its menu up: a press anywhere else closes it, and does nothing more.
       if (viewer->parts.menu) {
         viewer->close_menu_later();
         reply.handle();
-        return;
+        return std::nullopt;
       }
       // The other button on the picture: its menu, there.
       if (press.button == 3) {
@@ -186,27 +189,28 @@ struct picture_viewer : nodes::Stack, outbox {
           viewer->invalidateLayout();
         }
         reply.handle();
-        return;
+        return std::nullopt;
       }
       // Off the picture: closed. On it, and larger than the room: dragged.
       if (!this->where().contains(press.x, press.y)) {
-        viewer->emit(::mux::ui::request::close_picture{});
         reply.handle();
-        return;
+        return ::mux::ui::request::close_picture{};
       }
       // On a video playing: paused, or played on.
       if (viewer->playing) {
         viewer->playing->toggle();
         this->markDamaged();
         reply.handle();
-        return;
+        return std::nullopt;
       }
       dragging = true;
       last_x = press.x;
       last_y = press.y;
       reply.capturePointer();
       reply.handle();
+      return std::nullopt;
     }
+
     void onPointer(scene::phase::target, const scene::pointer::move& at, scene::PointerReply& reply) {
       if (!dragging || viewer->zoom <= 1.0f)
         return;
@@ -280,12 +284,14 @@ struct picture_viewer : nodes::Stack, outbox {
   // Its own menu, as a right press on the picture opens it there: the
   // picture copied, or saved. A press anywhere else closes it.
   struct copy_it {
+    using Answer = ::mux::ui::request::copy_picture;
     picture_viewer* viewer;
-    void operator()() const { viewer->emit(::mux::ui::request::copy_picture{viewer->source}); }
+    ::mux::ui::request::copy_picture operator()() const { return ::mux::ui::request::copy_picture{viewer->source}; }
   };
   struct save_this {
+    using Answer = ::mux::ui::request::save_picture;
     picture_viewer* viewer;
-    void operator()() const { viewer->emit(::mux::ui::request::save_picture{viewer->source}); }
+    ::mux::ui::request::save_picture operator()() const { return ::mux::ui::request::save_picture{viewer->source}; }
   };
   template <class Do>
   struct menu_row : nodes::Stack {

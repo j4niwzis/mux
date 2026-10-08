@@ -40,7 +40,7 @@ export namespace mux::ui {
 // out from the left. All in this one window, switched by the program between
 // events.
 template <class Actions>
-struct window : scene::Node, outbox {
+struct window : scene::Node {
   using panel_type = spl::variant<accounts_panel<Actions>>;
   using with_drawer = widgets::Drawer<conversations_screen<Actions>, drawer_panel<Actions>>;
 

@@ -36,42 +36,49 @@ struct part {
 // What is done: asked of the program, and the facts kept as they will be --
 // the page made again from them.
 template <class Box>
-void chose(Box* box, const join_rule_t& rule) {
+std::optional<request::change_room> chose(Box* box, const join_rule_t& rule) {
+  std::optional<request::change_room> asked;
   if (!may(box->facts, power_need::change_access{}))
-    return;
+    return asked;
   rules_in(box->facts.theirs).join_rule = rule;
-  box->emit(request::change_room{room_change::set_join_rule{rule}});
+  asked = request::change_room{room_change::set_join_rule{rule}};
   box->show_again();
+  return asked;
 }
 template <class Box>
-void chose(Box* box, const history_rule_t& rule) {
+std::optional<request::change_room> chose(Box* box, const history_rule_t& rule) {
+  std::optional<request::change_room> asked;
   if (!may(box->facts, power_need::change_history{}))
-    return;
+    return asked;
   rules_in(box->facts.theirs).history = rule;
-  box->emit(request::change_room{room_change::set_history{rule}});
+  asked = request::change_room{room_change::set_history{rule}};
   box->show_again();
+  return asked;
 }
 template <class Box>
-void encrypt(Box* box) {
+std::optional<request::change_room> encrypt(Box* box) {
+  std::optional<request::change_room> asked;
   auto& facts = box->facts;
   if (facts.encrypted || !may(facts, power_need::encrypt{}))
-    return;
+    return asked;
   part& kept = box->template part<state>();
   if (!kept.confirming_encryption) {
     kept.confirming_encryption = true;
   } else {
     kept.confirming_encryption = false;
     facts.encrypted = true;
-    box->emit(request::change_room{room_change::encrypt{}});
+    asked = request::change_room{room_change::encrypt{}};
   }
   box->show_again();
+  return asked;
 }
 template <class Box>
-void needs_level(Box* box, const power_need_t& need, std::int64_t level) {
+std::optional<request::change_room> needs_level(Box* box, const power_need_t& need, std::int64_t level) {
+  std::optional<request::change_room> asked;
   auto& facts = box->facts;
   if (!may(facts, power_need::change_permissions{}) || level > facts.mine)
-    return;
-  box->emit(request::change_room{room_change::set_need{need, level}});
+    return asked;
+  asked = request::change_room{room_change::set_need{need, level}};
   spl::visit(spl::overloaded{[&](power_need::default_role) { rules_in(facts.theirs).needs.users_default = level; },
                                    [&](power_need::send_messages) { rules_in(facts.theirs).needs.events_default = level; },
                                    [&](power_need::change_settings) { rules_in(facts.theirs).needs.state_default = level; },
@@ -83,65 +90,76 @@ void needs_level(Box* box, const power_need_t& need, std::int64_t level) {
                                    [&]<sends_state Need>(Need) { rules_in(facts.theirs).needs.events.insert_or_assign(std::string(Need::event), level); }},
                 need);
   box->show_again();
+  return asked;
 }
 template <class Box>
-void user_level(Box* box, const std::string& user, std::int64_t level) {
+std::optional<request::change_room> user_level(Box* box, const std::string& user, std::int64_t level) {
+  std::optional<request::change_room> asked;
   auto& facts = box->facts;
   if (!may(facts, power_need::change_permissions{}) || level > facts.mine)
-    return;
-  box->emit(request::change_room{room_change::set_power{user, level}});
+    return asked;
+  asked = request::change_room{room_change::set_power{user, level}};
   const auto found = std::ranges::find(facts.privileged, user, &room_settings_facts::person::id);
   if (found != facts.privileged.end())
     found->level = level;
   box->show_again();
+  return asked;
 }
 template <class Box>
-void event_level(Box* box, const std::string& event, std::int64_t level) {
+std::optional<request::change_room> event_level(Box* box, const std::string& event, std::int64_t level) {
+  std::optional<request::change_room> asked;
   auto& facts = box->facts;
   if (!may(facts, power_need::change_permissions{}) || level > facts.mine || event.empty())
-    return;
-  box->emit(request::change_room{room_change::set_event_need{event, level}});
+    return asked;
+  asked = request::change_room{room_change::set_event_need{event, level}};
   rules_in(facts.theirs).needs.events.insert_or_assign(event, level);
   box->show_again();
+  return asked;
 }
 
 template <class Box>
 struct choose_join {
   Box* box;
   join_rule_t rule;
-  void operator()() const { chose(box, rule); }
+  using Answer = std::optional<request::change_room>;
+  Answer operator()() const { return chose(box, rule); }
 };
 template <class Box>
 struct choose_history {
   Box* box;
   history_rule_t rule;
-  void operator()() const { chose(box, rule); }
+  using Answer = std::optional<request::change_room>;
+  Answer operator()() const { return chose(box, rule); }
 };
 template <class Box>
 struct turn_encryption_on {
   Box* box;
-  void operator()() const { encrypt(box); }
+  using Answer = std::optional<request::change_room>;
+  Answer operator()() const { return encrypt(box); }
 };
 template <class Box>
 struct set_need {
   Box* box;
   power_need_t need;
   std::int64_t level;
-  void operator()() const { needs_level(box, need, level); }
+  using Answer = std::optional<request::change_room>;
+  Answer operator()() const { return needs_level(box, need, level); }
 };
 template <class Box>
 struct set_level {
   Box* box;
   std::string user;
   std::int64_t level;
-  void operator()() const { user_level(box, user, level); }
+  using Answer = std::optional<request::change_room>;
+  Answer operator()() const { return user_level(box, user, level); }
 };
 template <class Box>
 struct set_event_level {
   Box* box;
   std::string event;
   std::int64_t level;
-  void operator()() const { event_level(box, event, level); }
+  using Answer = std::optional<request::change_room>;
+  Answer operator()() const { return event_level(box, event, level); }
 };
 template <class Box>
 struct pick_new_level {
@@ -157,32 +175,36 @@ struct pick_new_level {
 // A room put in the space or taken out of it: asked of the server, and the
 // facts kept as they will be -- moved from one list to the other.
 template <class Box>
-void change_child(Box* box, const std::string& room, bool add) {
+std::optional<request::change_room> change_child(Box* box, const std::string& room, bool add) {
+  std::optional<request::change_room> asked;
   auto& facts = box->facts;
   if (!may(facts, power_need::change_settings{}))
-    return;
+    return asked;
   auto& from = add ? facts.addable : facts.children;
   auto& to = add ? facts.children : facts.addable;
   const auto found = std::ranges::find(from, room, &room_settings_facts::named_room::id);
   if (found == from.end())
-    return;
+    return asked;
   to.push_back(*found);
   from.erase(found);
-  box->emit(request::change_room{add ? room_change_t{room_change::add_child{room}}
-                                                 : room_change_t{room_change::remove_child{room}}});
+  asked = request::change_room{add ? room_change_t{room_change::add_child{room}}
+                                                 : room_change_t{room_change::remove_child{room}}};
   box->show_again();
+  return asked;
 }
 template <class Box>
 struct add_child_press {
   Box* box;
   std::string room;
-  void operator()() const { change_child(box, room, true); }
+  using Answer = std::optional<request::change_room>;
+  Answer operator()() const { return change_child(box, room, true); }
 };
 template <class Box>
 struct remove_child_press {
   Box* box;
   std::string room;
-  void operator()() const { change_child(box, room, false); }
+  using Answer = std::optional<request::change_room>;
+  Answer operator()() const { return change_child(box, room, false); }
 };
 // A room listed with what may be done to it: its name, and a button.
 template <class Press>
@@ -207,22 +229,28 @@ struct listed_room_row : nodes::Stack {
 // ---- Room: its picture, name, topic and addresses ----------------------------
 template <class Box>
 struct room_page : nodes::Stack {
+  // Enter: saved, as Save does -- what it changes asked for.
+  using Answer = std::tuple<std::optional<::mux::ui::request::room_act>, std::optional<::mux::ui::request::room_act>>;
   using Actions = typename Box::actions_type;
   struct save {
     Box* box;
     room_page* page;
-    void operator()() const {
+    // The name and the topic changed, each where it may be.
+    using Answer = std::tuple<std::optional<::mux::ui::request::room_act>, std::optional<::mux::ui::request::room_act>>;
+    Answer operator()() const {
       auto& facts = box->facts;
       const std::string& name = page->parts.name.text();
       const std::string& topic = page->parts.topic.text();
+      Answer asked;
       if (name != facts.name && may(facts, power_need::rename{})) {
-        box->emit(::mux::ui::request::room_act{room_action::rename{name}});
+        std::get<0>(asked) = ::mux::ui::request::room_act{room_action::rename{name}};
         facts.name = name;
       }
       if (topic != facts.topic && may(facts, power_need::retopic{})) {
-        box->emit(::mux::ui::request::room_act{room_action::retopic{topic}});
+        std::get<1>(asked) = ::mux::ui::request::room_act{room_action::retopic{topic}};
         facts.topic = topic;
       }
+      return asked;
     }
   };
   struct cancel {
@@ -299,18 +327,18 @@ struct room_page : nodes::Stack {
   // Element's; Ctrl+Enter saves from either, taken before the field.
   Box* box_ = nullptr;
   using Node::onKey;
-  void onKey(scene::phase::capture, const scene::key::down& press, scene::Reply& reply) {
+  std::optional<Answer> onKey(scene::phase::capture, const scene::key::down& press, scene::Reply& reply) {
     if (press.key != scene::keys::kEnter || !press.modifiers.template has<scene::modifier::control>() || press.repeat ||
         !parts.buttons.visible())
-      return;
-    save{box_, this}();
+      return std::nullopt;
     reply.handle();
+    return save{box_, this}();
   }
-  void onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
+  std::optional<Answer> onKey(scene::phase::bubble, const scene::key::down& press, scene::Reply& reply) {
     if (press.key != scene::keys::kEnter || press.repeat || !parts.buttons.visible())
-      return;
-    save{box_, this}();
+      return std::nullopt;
     reply.handle();
+    return save{box_, this}();
   }
 };
 
@@ -445,21 +473,23 @@ struct roles_page : nodes::Stack {
   struct add_privileged {
     Box* box;
     roles_page* page;
-    void operator()() const {
+    using Answer = std::optional<request::change_room>;
+    Answer operator()() const {
       const std::string user = page->parts.adding.parts.user.text();
       if (user.empty())
-        return;
+        return std::nullopt;
       auto& facts = box->facts;
       if (std::ranges::find(facts.privileged, user, &room_settings_facts::person::id) == facts.privileged.end())
         facts.privileged.push_back({user, user, rules_of(facts.theirs).needs.users_default});
-      user_level(box, user, box->template part<state>().new_level);
+      return user_level(box, user, box->template part<state>().new_level);
     }
   };
   struct add_event_need {
     Box* box;
     roles_page* page;
-    void operator()() const {
-      event_level(box, page->parts.adding_event.parts.event.text(), box->template part<state>().new_level);
+    using Answer = std::optional<request::change_room>;
+    Answer operator()() const {
+      return event_level(box, page->parts.adding_event.parts.event.text(), box->template part<state>().new_level);
     }
   };
   // A kind of event the list does not name, as the power levels set it.
@@ -644,11 +674,13 @@ struct advanced_page : nodes::Stack {
   struct upgrade_press {
     Box* box;
     advanced_page* page;
-    void operator()() const {
+    using Answer = std::optional<request::change_room>;
+    Answer operator()() const {
       if (!may(box->facts, power_need::upgrade{}))
-        return;
+        return std::nullopt;
       if (const std::string version = page->parts.upgrade_to.text(); !version.empty())
-        box->emit(request::change_room{room_change::upgrade{version}});
+        return request::change_room{room_change::upgrade{version}};
+      return std::nullopt;
     }
   };
   struct parts_t {

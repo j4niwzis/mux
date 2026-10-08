@@ -188,7 +188,7 @@ struct choose_account_page {
 // line for each page of its settings, the one shown lit -- the client's, and
 // after Chats its protocol's own.
 template <class Actions>
-struct account_pages : nodes::Stack, outbox {
+struct account_pages : nodes::Stack {
   using row = row_item<choose_account_page<Actions>>;
   // The colours its protocol's rows are made in, as they change.
   const palette* colours_ = nullptr;

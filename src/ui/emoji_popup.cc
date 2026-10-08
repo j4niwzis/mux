@@ -31,26 +31,28 @@ import :emoji_panels;
 export namespace mux::ui {
 // What the menu's emoji do: react with it.
 template <class Actions>
-struct react_with : outbox {
+struct react_with {
+  using Answer = ::mux::ui::request::menu_react;
   // What is typed in its search, a reaction too: Matrix takes any text.
   [[nodiscard]] static constexpr bool takes_text() { return true; }
-  void operator()(const std::string&, const std::string& key) { this->emit(::mux::ui::request::menu_react{key}); }
+  Answer operator()(const std::string&, const std::string& key) const { return ::mux::ui::request::menu_react{key}; }
 };
 // What the input's emoji do: go into what is written.
 template <class Actions>
-struct insert_emoji_into : outbox {
+struct insert_emoji_into {
+  using Answer = ::mux::ui::request::insert_emoji;
   [[nodiscard]] static constexpr bool takes_text() { return false; }
   // A glyph as itself; a custom emoji (its key its picture's, not its
   // text) as its picture.
-  void operator()(const std::string& text, const std::string& key) {
-    this->emit(::mux::ui::request::insert_emoji{text, key == text ? std::string() : key});
+  Answer operator()(const std::string& text, const std::string& key) const {
+    return ::mux::ui::request::insert_emoji{text, key == text ? std::string() : key};
   }
 };
 
 // The GIFs saved, as tdesktop's GIF tab shows them: a grid of them playing,
 // newest first; a press sends one into the chat.
 template <class Actions>
-struct gif_grid : nodes::Stack, outbox {
+struct gif_grid : nodes::Stack {
   struct gif_cell : nodes::Stack {
     // What its handlers ask for, returned.
     using Answer = ::mux::ui::request::send_gif;
@@ -113,11 +115,14 @@ struct gif_grid : nodes::Stack, outbox {
 // right of the button that opened it; a press off it closes it. It stays
 // open while emoji are picked, and the input keeps the keys.
 template <class Actions>
-struct emoji_popup : scene::Node, outbox {
-  struct card_t : nodes::Stack, outbox {
+struct emoji_popup : scene::Node {
+  struct card_t : nodes::Stack {
+    // A swipe to the GIFs: what has been saved since, asked for.
+    using Answer = ::mux::ui::request::show_gifs;
     using panel_t = emoji_panel<insert_emoji_into<Actions>>;
     // Emoji, stickers or GIFs, as tdesktop's tabs at the panel's top.
     struct tab : nodes::Stack {
+      using Answer = std::variant<::skiff::scene::Taken, ::mux::ui::request::show_gifs>;
       card_t* card;
       popup_page_t page;
       struct parts_t {
@@ -132,9 +137,10 @@ struct emoji_popup : scene::Node, outbox {
         parts.label.apply({.alignSelf = scene::align::kMiddle});
       }
       [[nodiscard]] bool acceptsInput() const { return true; }
-      [[nodiscard]] bool onClick(float, float) {
-        card->show(page);
-        return true;
+      std::optional<std::variant<::skiff::scene::Taken, ::mux::ui::request::show_gifs>> onClick(float, float) {
+        if (auto asked = card->show(page))
+          return *asked;
+        return ::skiff::scene::Taken{};
       }
     };
     struct tabs_row : nodes::Stack {
@@ -172,7 +178,7 @@ struct emoji_popup : scene::Node, outbox {
       parts.panel.apply({.fillX = true, .grow = scene::axes::kY});
       parts.stickers.apply({.fillX = true, .grow = scene::axes::kY});
       parts.gifs.apply({.fillX = true, .grow = scene::axes::kY});
-      this->show(popup_page::emoji{});
+      (void)this->show(popup_page::emoji{});
     }
     // Docked as Telegram's apps have it, on a phone: across all of the window
     // over the field, square, its tabs a row along its bottom -- or a card
@@ -205,24 +211,24 @@ struct emoji_popup : scene::Node, outbox {
       if (docked && press.button <= 1)
         swipe_from = skia::SkPoint{press.x, press.y};
     }
-    void onPointer(scene::phase::capture, const scene::pointer::up& lift, scene::PointerReply& reply) {
+    std::optional<::mux::ui::request::show_gifs> onPointer(scene::phase::capture, const scene::pointer::up& lift, scene::PointerReply& reply) {
       const std::optional<skia::SkPoint> from = std::exchange(swipe_from, std::nullopt);
       if (!from)
-        return;
+        return std::nullopt;
       const float dx = lift.x - from->fX;
       const float dy = lift.y - from->fY;
       if (std::abs(dx) < 90.0f || std::abs(dy) > std::abs(dx) * 0.5f)
-        return;
+        return std::nullopt;
       static const std::array<popup_page_t, 3> kPages{popup_page::emoji{}, popup_page::stickers{}, popup_page::gifs{}};
       const int to = std::clamp(page_at + (dx < 0.0f ? 1 : -1), 0, 2);
-      if (to != page_at) {
-        this->show(kPages[static_cast<std::size_t>(to)]);
-        reply.handle();
-      }
+      if (to == page_at)
+        return std::nullopt;
+      reply.handle();
+      return this->show(kPages[static_cast<std::size_t>(to)]);
     }
     // One tab's page shown, the others hidden; the GIFs asked of the program
     // as their tab opens, for what was saved since.
-    void show(const popup_page_t& page) {
+    std::optional<::mux::ui::request::show_gifs> show(const popup_page_t& page) {
       const auto [emoji, stickers, gifs] =
           spl::visit(spl::overloaded{[](popup_page::emoji) { return std::array{true, false, false}; },
                                 [](popup_page::stickers) { return std::array{false, true, false}; },
@@ -235,9 +241,10 @@ struct emoji_popup : scene::Node, outbox {
       parts.tabs.parts.emoji.fState.apply({.selected = emoji});
       parts.tabs.parts.stickers.fState.apply({.selected = stickers});
       parts.tabs.parts.gifs.fState.apply({.selected = gifs});
-      if (gifs)
-        this->emit(::mux::ui::request::show_gifs{});
       this->invalidateLayout();
+      if (gifs)
+        return ::mux::ui::request::show_gifs{};
+      return std::nullopt;
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
   };

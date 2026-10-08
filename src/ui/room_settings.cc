@@ -244,7 +244,7 @@ struct some {};
 }  // namespace leave_choice
 using leave_choice_t = spl::variant<leave_choice::none, leave_choice::all, leave_choice::some>;
 template <class Actions>
-struct leave_space_box : nodes::Stack, outbox {
+struct leave_space_box : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fitting{440.0f}}; }
   leave_space_facts facts;
@@ -267,8 +267,9 @@ struct leave_space_box : nodes::Stack, outbox {
     }
   };
   struct go {
+    using Answer = ::mux::ui::request::leave_space;
     leave_space_box* box;
-    void operator()() const { box->emit(::mux::ui::request::leave_space{box->facts.space, box->leaving()}); }
+    ::mux::ui::request::leave_space operator()() const { return ::mux::ui::request::leave_space{box->facts.space, box->leaving()}; }
   };
   struct cancel {
     using Answer = ::mux::ui::request::close_leave_space;
@@ -409,7 +410,7 @@ inline auto chat_notify_view(const palette& colours, const conversation_id& chat
 }
 
 template <class Actions>
-struct room_settings : nodes::Stack, outbox {
+struct room_settings : nodes::Stack {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{860.0f, 620.0f}}; }
   using actions_type = Actions;

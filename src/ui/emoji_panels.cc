@@ -49,7 +49,7 @@ inline void lay_out_picker(nodes::Stack& panel, auto& field, auto& list, auto& f
 }
 
 template <class Actions>
-struct sticker_grid : nodes::Stack, outbox {
+struct sticker_grid : nodes::Stack {
   static constexpr float kCell = 78.0f;
   struct cell : nodes::Stack {
     // What its handlers ask for, returned.
@@ -271,6 +271,7 @@ struct emoji_panel : nodes::Stack {
   // what is searched, itself, at the top of the results, where the panel
   // reacts rather than writes.
   struct text_chip : nodes::Stack {
+    using Answer = typename Pick::Answer;
     emoji_panel* panel;
     std::string text;
     struct parts_t {
@@ -300,14 +301,14 @@ struct emoji_panel : nodes::Stack {
     }
     [[nodiscard]] bool acceptsInput() const { return true; }
     [[nodiscard]] bool hoverChangesAppearance() const { return true; }
-    [[nodiscard]] bool onClick(float, float) {
+    auto onClick(float, float) -> std::optional<typename Pick::Answer> {
       panel->tones_done = true;
-      panel->pick(text, text);
-      return true;
+      return panel->pick(text, text);
     }
   };
   // One emoji of the list.
   struct cell : nodes::Stack {
+    using Answer = typename Pick::Answer;
     emoji_panel* panel;
     std::string glyph;
     // The emoji it shows, where it is one of the table's: its tones are
@@ -344,14 +345,13 @@ struct emoji_panel : nodes::Stack {
       parts.picture->apply({.width = 26.0f, .height = 26.0f, .alignSelf = scene::align::kMiddle});
       parts.picture->keepBox();  // fixed: its coming repaints, lays nothing out
     }
-    [[nodiscard]] bool onClick(float, float) {
+    auto onClick(float, float) -> std::optional<typename Pick::Answer> {
       const std::string chosen = glyph;
       const std::string key = picture_url.empty() ? glyph : picture_url;
       if (picture_url.empty())
         panel->kept_->remember_emoji(chosen);
       panel->tones_done = true;
-      panel->pick(chosen, key);
-      return true;
+      return panel->pick(chosen, key);
     }
     // The other button: its skin tones, over it, where it has any.
     using Node::onPointer;

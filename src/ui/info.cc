@@ -55,7 +55,7 @@ export namespace mux::ui {
 }
 
 template <class Actions>
-struct info_panel : nodes::Stack, outbox {
+struct info_panel : nodes::Stack {
   // The colours it is made in, for what it makes later; and what the
   // window's parts share: the accounts' protocol states.
   const palette* colours_ = nullptr;
@@ -92,8 +92,9 @@ struct info_panel : nodes::Stack, outbox {
   // What a press does, to the panel -- which stays where it is while its
   // pages are made again.
   struct open_person {
+    using Answer = ::mux::ui::request::open_member_info;
     info_panel* panel;
-    void operator()(const auto& row) const { panel->emit(::mux::ui::request::open_member_info{row.id}); }
+    ::mux::ui::request::open_member_info operator()(const auto& row) const { return ::mux::ui::request::open_member_info{row.id}; }
   };
   struct back_to_group {
     info_panel* panel;

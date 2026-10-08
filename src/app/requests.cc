@@ -50,6 +50,7 @@ struct actions {
 
 using window_type = mux::ui::window<actions>;
 
+
 }  // namespace mux::app
 
 // The window's scene is instantiated once, in src/app/scene.cc: its walks
@@ -120,3 +121,20 @@ template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::context_m
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::context_menu<mux::app::actions>>() noexcept;
 template <> inline constexpr bool skiff::scene::kOpsElsewhere<mux::ui::picture_viewer<mux::app::actions>> = true;
 template <> const skiff::scene::AnyNode::Ops& skiff::scene::opsElsewhere<mux::ui::picture_viewer<mux::app::actions>>() noexcept;
+
+export namespace mux::app {
+// Inline storage with lifetime defined beside Scene's explicit instantiation.
+// Clang cannot destroy that extern specialization in an importing unit
+// (CODE_STYLE.md, like destroy_account). A union suppresses implicit teardown.
+class window_scene {
+public:
+  explicit window_scene(const mux::ui::ui_needs<actions>& needs);
+  ~window_scene();
+  window_scene(const window_scene&) = delete;
+  window_scene& operator=(const window_scene&) = delete;
+  skiff::scene::Scene<window_type>& get() noexcept { return fScene; }
+private:
+  union { skiff::scene::Scene<window_type> fScene; };
+};
+
+}

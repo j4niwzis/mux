@@ -88,11 +88,10 @@ struct app : kept_settings {
   // Made in the theme's colours, which are in place before the window is.
   // Made in the theme's colours and the window's look as the program
   // starts: the window, made here, is shown in them.
-  app(const mux::ui::palette& theme_colours, const mux::ui::window_look_t& window)
-      : shared{.looks = {.window = window}}, colours(theme_colours) {
-    shared.paint.looks = &shared.looks;
-    shared.paint.colours = &colours;
-  }
+  app(const mux::ui::palette& theme_colours, const mux::ui::window_look_t& window);
+  // Keep construction, exception cleanup and UI teardown in the owning
+  // module unit; importers must not instantiate the window's destructors.
+  ~app();
   // -- the parts: each owns its state, and reaches the rest through what
   // they share
   services shared;
@@ -241,8 +240,9 @@ struct app : kept_settings {
   // made again in new ones when the theme changes (rebuild_in_theme).
   mux::ui::palette colours;
   actions ask;
-  skiff::scene::Scene<window_type> scene{std::in_place,
-                                         mux::ui::ui_needs<actions>{.sound = &speaker, .colours = &colours, .emoji = &shared.emoji, .looks = &shared.looks, .paint = &shared.paint, .shared = &shared.ui}};
+  window_scene scene_storage{mux::ui::ui_needs<actions>{.sound = &speaker, .colours = &colours, .emoji = &shared.emoji,
+      .looks = &shared.looks, .paint = &shared.paint, .shared = &shared.ui}};
+  skiff::scene::Scene<window_type>& scene = scene_storage.get();
 
   // -- what the host asks
   skiff::scene::Scene<window_type>& window();

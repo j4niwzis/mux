@@ -480,7 +480,7 @@ if(MUX_UI)
   target_sources(mux PRIVATE FILE_SET CXX_MODULES BASE_DIRS src FILES src/app/program.cc)
   # What the program does, a part each: the module's implementation units.
   target_sources(mux PRIVATE
-    src/app/program_core.cc src/app/program_media.cc
+    src/app/program_core.cc src/app/program_lifetime.cc src/app/program_media.cc
     src/app/program_chats.cc src/app/program_links.cc src/app/program_accounts.cc
     src/app/program_settings.cc src/app/program_sending.cc src/app/program_refresh.cc
     src/app/scene.cc)

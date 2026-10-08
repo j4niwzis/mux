@@ -76,7 +76,7 @@ void app::apply(const request::choose& one) {
       members_fetched.insert(one.which).second)
     net->fetch_members(one.which);
   root().main().chosen = one.which;
-  root().main().show(*model);
+  this->show_chats_now();
 }
 
 void app::apply(const request::close_chat&) {
@@ -87,7 +87,7 @@ void app::apply(const request::close_chat&) {
   screen.line.set_text({});
   screen.info_open = false;
   screen.chosen.reset();
-  screen.show(*model);
+  this->show_chats_now();
 }
 
 void app::apply(const request::leave_chat&) {

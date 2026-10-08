@@ -349,6 +349,14 @@ void app::settle_model() {
   chats_binding.refresh(root(), model->chats());
 }
 
+// The chat screen read again by the chats binding: against everything the
+// model holds beside the chats, whether or not they moved.
+void app::show_chats_now() {
+  root().main().last_model = &*model;
+  chats_binding.invalidate();
+  chats_binding.refresh(root(), model->chats());
+}
+
 void app::before_frame() {
   ++mux::ui::image_cache::frame();
   // What the model's widgets did: edits of the model, before the frame.
@@ -467,9 +475,7 @@ void app::refresh(std::source_location from) {
   root().show(this->accounts().values(), *model);
   // The chat screen, as the chats binding reads it: against everything the
   // model holds beside the chats, and shown again whether or not they moved.
-  root().main().last_model = &*model;
-  chats_binding.invalidate();
-  chats_binding.refresh(root(), model->chats());
+  this->show_chats_now();
   // The newly made range is now known, including a just-opened chat.
   pictures.ask();
   // The accounts page, where it is up: the account being added shown in,

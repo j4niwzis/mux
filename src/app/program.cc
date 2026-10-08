@@ -208,6 +208,7 @@ struct app : kept_settings {
   const void* bound_page = nullptr;
   void take_page_input();
   void settle_model();
+  void show_looks();
 
   void closing();
   // Drafts: in the screen, and on disk in one small file, written anew

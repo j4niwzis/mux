@@ -90,9 +90,7 @@ struct stub {
   void attach_files() {}
   void typing(bool) {}
   void settings_files() {}
-  void flip_strip_metadata() {}
   void flip_show_deleted() {}
-  void flip_rename_pictures() {}
   void close_send_box() {}
   void send_files() {}
   void open_member_info(std::string) {}
@@ -128,23 +126,18 @@ struct stub {
   void close_wallpaper() {}
   void set_bubbles(mux::choice_level_t, std::optional<mux::config::bubble_look>,
                    mux::config::look_part_t = mux::config::look_part::bubbles{}) {}
-  void set_window_opacity(int) {}
-  void flip_wallpaper_behind() {}
   void set_frost_blur(int) {}
   void place_spaces(std::string, mux::config::space_bar_t, std::vector<mux::config::space_item_t>,
                     std::optional<mux::config::space_bar_t>, std::optional<mux::config::space_item_t>) {}
   void set_space_bars(std::string, mux::config::space_item_t, bool, bool) {}
-  void flip_spaces() {}
   void set_home_hides(mux::choice_level_t, std::optional<bool>) {}
   void set_home_direct(mux::choice_level_t, std::optional<bool>) {}
-  void flip_top_bar() {}
   void set_wallpaper(mux::choice_level_t, mux::config::wallpaper_pick_t) {}
   void open_thread(std::string) {}
   void close_thread() {}
   void send_in_thread(std::string, std::string, std::optional<std::string>) {}
   void attach_in_thread() {}
   void toggle_thread_emoji() {}
-  void flip_live_blur() {}
   void set_account_colour(mux::config::accent_t) {}
   void flip_account_strip() {}
   void open_replacement() {}
@@ -182,9 +175,6 @@ struct stub {
   void hang_up() {}
   void mute_call() {}
   void settings_notifications() {}
-  void flip_notify(mux::config::notify_flag_t) {}
-  void flip_unified_push() {}
-  void set_notify_backend(mux::config::notify_backend_t) {}
   void set_notify_choice(mux::choice_level_t, mux::config::notify_setting_t, std::optional<bool>) {}
   void set_chat_notify(mux::config::notify_mode_t) {}
   void set_room_event_kind(mux::choice_level_t, std::optional<mux::room_event_t>, std::optional<bool>) {}
@@ -262,19 +252,12 @@ struct stub {
   void settings_storage() {}
   void change_limit(mux::config::limit_t, bool) {}
   void clear_stored() {}
-  void set_theme(mux::config::theme_t) {}
-  void flip_partial_redraw() {}
-  void flip_vsync() {}
-  void flip_show_fps() {}
   void menu_quote_reply() {}
   void show_account(std::string) {}
-  void flip_flash_redraws() {}
   void set_renderer(mux::config::renderer_t) {}
-  void set_accent(mux::config::accent_t) {}
   void leave_chat() {}
   void close_chat() {}
   void toggle_mute_of(mux::conversation_id) {}
-  void set_interface_scale(int) {}
 };
 
 // What each test's window reads and paints with: kept until it is gone.

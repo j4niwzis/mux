@@ -68,6 +68,20 @@ struct push_wanted {
 struct limits_changed {
   [[nodiscard]] constexpr int key() const { return 0; }
 };
+// How the window looks changed: what the window's parts read of it put in
+// place; and where the theme, the accent or the background behind the
+// window did, every style resolved again and the window made anew.
+struct looks_changed {
+  [[nodiscard]] constexpr int key() const { return 0; }
+};
+struct restyle_wanted {
+  [[nodiscard]] constexpr int key() const { return 0; }
+};
+// The window's opacity chosen: in effect at once where the window is see-
+// through already, else from the next start.
+struct opacity_chosen {
+  [[nodiscard]] constexpr int key() const { return 0; }
+};
 // A chat's choices changed or gone, or what notifies: the file is written
 // again. UnifiedPush turned on or off: its connector with it.
 struct kept_reactions {
@@ -82,7 +96,17 @@ struct kept_reactions {
   [[nodiscard]] std::tuple<write_kept, limits_changed> on(skiff::model::Changed<mux::config::cache_limits>, const mux::config::cache_limits&) const {
     return {};
   }
-  [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::look_settings>, const mux::config::look_settings&) const { return {}; }
+  [[nodiscard]] std::tuple<write_kept, looks_changed> on(skiff::model::Changed<mux::config::look_settings>, const mux::config::look_settings&) const {
+    return {};
+  }
+  [[nodiscard]] restyle_wanted on(skiff::model::Changed<skiff::model::Field<&mux::config::look_settings::theme>>, const auto&) const { return {}; }
+  [[nodiscard]] restyle_wanted on(skiff::model::Changed<skiff::model::Field<&mux::config::look_settings::accent>>, const auto&) const { return {}; }
+  [[nodiscard]] restyle_wanted on(skiff::model::Changed<skiff::model::Field<&mux::config::look_settings::wallpaper_behind>>, const auto&) const {
+    return {};
+  }
+  [[nodiscard]] opacity_chosen on(skiff::model::Changed<skiff::model::Field<&mux::config::look_settings::window_opacity>>, const auto&) const {
+    return {};
+  }
   [[nodiscard]] push_wanted on(skiff::model::Changed<skiff::model::Field<&mux::config::notification_settings::unified_push>>, const auto& at) const {
     return {skiff::model::part(at).value_or(false)};
   }

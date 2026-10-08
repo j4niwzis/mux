@@ -93,32 +93,6 @@ class notices_part {
 
   // Notifications in Settings: the page, its switches, what shows them.
   void apply(const request::settings_notifications&) { this->show_page(); }
-  void apply(const request::flip_notify& one) {
-    auto next = s_->kept->notifications();
-    bool& flag = mux::config::flag_in(next, one.flag);
-    flag = !flag;
-    s_->kept->set_notifications(std::move(next));
-    (void)s_->kept->write();
-    this->show_page();
-  }
-  void apply(const request::set_notify_backend& one) {
-    s_->kept->choose_notification<&mux::config::notification_settings::backend>(std::string(mux::config::word_of(one.backend)));
-    (void)s_->kept->write();
-    this->show_page();
-  }
-  // Woken by UnifiedPush: on, the connector started and the servers given a
-  // pusher as it hands an endpoint; off, the registration dropped with the
-  // distributor, and the endpoint forgotten.
-  void apply(const request::flip_unified_push&) {
-    const bool on = !s_->kept->notifications().unified_push.value_or(false);
-    s_->kept->choose_notification<&mux::config::notification_settings::unified_push>(std::optional<bool>(on));
-    if (on)
-      this->start_push();
-    else
-      this->stop_push();
-    (void)s_->kept->write();
-    this->show_page();
-  }
 
   void start_push() {
     const auto& settings = s_->kept->notifications();

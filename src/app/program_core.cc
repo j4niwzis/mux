@@ -278,11 +278,43 @@ void app::take_page_input() {
       up->page());
   this->settle_model();
 }
+// How the window looks, as the model holds it, put where the window's
+// parts read it.
+void app::show_looks() {
+  const auto& now = this->appearance();
+  auto& window = shared.looks.window;
+  window.home_hides = now.home_hides_spaced;
+  window.home_direct = now.home_hides_direct;
+  window.spaces = now.spaces;
+  window.top_bar = now.top_bar;
+  window.interface_scale = now.interface_scale;
+  window.live_blur = now.live_blur;
+  window.behind = now.wallpaper_behind;
+  window.frost = now.frost_blur;
+  window.chosen = now.window_opacity;
+  shared.looks.bubbles_everywhere = now.bubbles.value_or(mux::config::bubble_look{});
+  shared.looks.panels_everywhere = now.panels.value_or(mux::config::bubble_look{});
+  shared.refresh_due = true;
+}
 // What the model's reactions asked for: the file written, UnifiedPush's
 // connector started or stopped; and the page up shown the model again.
 void app::settle_model() {
   for (const auto& effect : this->take_effects())
     std::visit(spl::overloaded{[&](const write_kept&) { (void)this->write(); },
+                               [&](const looks_changed&) { this->show_looks(); },
+                               [&](const restyle_wanted&) {
+                                 skiff::scene::forgetStyles();
+                                 shared.rebuild_due = true;
+                               },
+                               [&](const opacity_chosen&) {
+                                 auto& look = shared.looks.window;
+                                 look.chosen = this->appearance().window_opacity;
+                                 if (look.see_through) {
+                                   look.opacity = look.chosen;
+                                   skiff::scene::forgetStyles();
+                                   shared.rebuild_due = true;
+                                 }
+                               },
                                [&](const limits_changed&) {
                                  settings.apply_limits();
                                  model->trim(static_cast<std::size_t>(this->limits().messages_in_memory), root().main().chosen);

@@ -364,9 +364,9 @@ inline void look_as_its_content(const auto&, const palette&) {}
 //        save_proxy_profile(), delete_proxy_profile()
 //   void settings_appearance(), settings_rendering(), settings_storage()
 //   void change_limit(config::limit_t, bool more), clear_stored()  -- Storage
-//   void settings_files(), flip_strip_metadata(), flip_rename_pictures()  -- Files
+//   void settings_files()  -- Files (its switches are the model's)
 //   void flip_show_deleted()  -- Storage: deleted messages shown, marked
-//   void set_theme(config::theme_t), set_accent(config::accent_t), set_renderer(config::renderer_t)
+//   void set_renderer(config::renderer_t)  -- the theme and accent are the model's
 //   void proxy_kind(config::proxy_kind_t)
 //   void not_implemented(std::string what)  -- a box saying it is not there yet
 //   void close_notice()
@@ -391,7 +391,7 @@ inline void look_as_its_content(const auto&, const palette&) {}
 //   void open_explore(), close_explore(), search_rooms(server, query), join_directory_room(room, server),
 //        search_elsewhere(query)  -- the chat list's search, where nothing joined matches,
 //        create_room(name, topic, open, alias, federate, encrypted)  -- rooms found and made
-//   void settings_notifications(), flip_notify(notify_flag_t), set_notify_backend(notify_backend_t),
+//   void settings_notifications(),
 //        set_notify_choice(choice_level_t, notify_setting_t, optional<bool>)  -- notifications, at a level
 //   void set_room_event_kind(choice_level_t, optional<room_event_t>, optional<bool>)  -- which room events show
 //   void toggle_emoji(), close_emoji(), insert_emoji(std::string text, std::string picture)  -- the input's emoji panel

@@ -246,7 +246,7 @@ struct page_header : skiff::compose::Stacked {
 // One segment of a segmented control: square, its text centred, filled
 // with the accent while it is the one chosen.
 template <class Act>
-struct segment : pressable<nodes::Stack> {
+struct segment : pressable<skiff::compose::Stacked> {
   Act act;
   bool active = false;
   struct parts_t {
@@ -256,11 +256,13 @@ struct segment : pressable<nodes::Stack> {
   // The colours its text turns as it is chosen.
   const palette* colours_ = nullptr;
   segment(const palette& colours, std::string text, Act what)
-      : act(std::move(what)), parts{.label = nodes::Text(std::move(text), 13.0f, colours.text, true)}, colours_(&colours) {
-    fState.apply({.width = 92.0f, .height = 28.0f, .hoverBackground = colours.chosen, .selectedBackground = colours.accent, .focusBackground = colours.chosen});
-    fStack.justify = nodes::justify::middle{};
-    parts.label.apply({.alignSelf = scene::align::kMiddle});
-  }
+      : pressable<skiff::compose::Stacked>(skiff::compose::justified(
+            skiff::compose::vbox(0.0f, {.width = 92.0f, .height = 28.0f, .hoverBackground = colours.chosen, .selectedBackground = colours.accent,
+                                        .focusBackground = colours.chosen}),
+            nodes::justify::middle{})),
+        act(std::move(what)),
+        parts{.label = skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text(std::move(text), 13.0f, colours.text, true))},
+        colours_(&colours) {}
 
   void set_active(bool on) {
     active = on;
@@ -446,7 +448,7 @@ struct choice_menu : nodes::Stack {
 // The items of the space bars -- Home, Direct messages, each space -- each
 // with where it is: the side bar, the top one, both, or hidden.
 template <class Actions>
-struct spaces_choices : nodes::Stack {
+struct spaces_choices : skiff::compose::Stacked {
   struct pick_bars {
     using Answer = std::optional<::mux::ui::request::set_space_bars>;
     std::string account;
@@ -458,33 +460,29 @@ struct spaces_choices : nodes::Stack {
       return std::nullopt;
     }
   };
-  struct row : nodes::Stack {
+  struct row : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text name;
       choice_menu<pick_bars> where;
     } parts;
     row(const palette& colours, const std::string& account, const space_item_shown& one)
-        : parts{.name = nodes::Text(one.name, 14.0f, colours.text),
+        : Stacked(skiff::compose::vbox(4.0f, {.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 20.0f, 4.0f, 20.0f}})),
+          parts{.name = nodes::Text(one.name, 14.0f, colours.text),
                 .where = choice_menu<pick_bars>(colours, "", {"Side bar", "Top bar", "Both bars", "Hidden"},
                                                 one.side && !one.top   ? 0
                                                 : one.top && !one.side ? 1
                                                 : one.side && one.top  ? 2
                                                                        : 3,
-                                                pick_bars{account, one.item})} {
-      this->setGap(4.0f);
-      fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {4.0f, 20.0f, 4.0f, 20.0f}});
-    }
+                                                pick_bars{account, one.item})} {}
   };
   struct parts_t {
     std::vector<row> rows;
   } parts;
-  spaces_choices(const palette& colours, const ui_shared& shared) {
-    this->setGap(2.0f);
-    fState.apply({.fillX = true, .autoSize = scene::axes::kY});
-    parts.rows.reserve(shared.space_items.size());
-    for (const space_item_shown& one : shared.space_items)
-      parts.rows.emplace_back(colours, shared.space_account, one);
-  }
+  spaces_choices(const palette& colours, const ui_shared& shared)
+      : Stacked(skiff::compose::vbox(2.0f, {.fillX = true, .autoSize = scene::axes::kY})),
+        parts{.rows = shared.space_items |
+                      std::views::transform([&](const space_item_shown& one) { return row(colours, shared.space_account, one); }) |
+                      std::ranges::to<std::vector>()} {}
 };
 
 // What each level holds of room events, as the program last said: for a
@@ -532,12 +530,17 @@ inline room_events_held& room_events_at(const choice_level_t& level) {
 // it looks as if it did something. Custom starts from what was in effect.
 // A setting's row at a level: its label at the left, cut short where the
 // room runs out, and its choices at the right.
-inline void lay_out_setting_row(nodes::Stack& row, nodes::Text& label) {
-  row.setHorizontal();
-  row.setGap(4.0f);
-  row.fState.apply({.fillX = true, .height = 36.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
-  label.setElided(true);
-  label.apply({.grow = scene::axes::kX, .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle});
+[[nodiscard]] inline skiff::compose::Look setting_row() {
+  return skiff::compose::hbox(4.0f, {.fillX = true, .height = 36.0f, .padding = {0.0f, 20.0f, 0.0f, 20.0f}});
+}
+[[nodiscard]] inline nodes::Text setting_label(nodes::Text label) {
+  return skiff::compose::styled({.grow = scene::axes::kX, .shrink = scene::axes::kX, .alignSelf = scene::align::kMiddle},
+                                elided(std::move(label)));
+}
+// A segment of a setting's row: as wide as said, in the middle of the row.
+template <class Segment>
+[[nodiscard]] Segment setting_choice(float width, Segment one) {
+  return skiff::compose::styled({.width = width, .alignSelf = scene::align::kMiddle}, std::move(one));
 }
 
 // What a level holds of room events -- all of them or messages only, and
@@ -577,7 +580,7 @@ inline constexpr std::size_t kEventsAbove = 0, kEventsAll = 1, kEventsMessages =
 // part that keeps it (Owner), set whole.
 template <class Owner>
 struct event_kinds_field : nodes::Stack {
-  struct row : nodes::Stack {
+  struct row : skiff::compose::Stacked {
     room_event_t kind;
     bool live = false;
     struct parts_t {
@@ -585,14 +588,11 @@ struct event_kinds_field : nodes::Stack {
       segment<sets<Owner>> show, hide;
     } parts;
     row(const palette& colours, room_event_t which, std::string_view text)
-        : kind(which),
-          parts{.label = nodes::Text(std::string(text), 14.0f, colours.text),
-                .show = segment<sets<Owner>>(colours, "Show", {}),
-                .hide = segment<sets<Owner>>(colours, "Hide", {})} {
-      lay_out_setting_row(*this, parts.label);
-      for (segment<sets<Owner>>* each : {&parts.show, &parts.hide})
-        each->apply({.width = 70.0f, .alignSelf = scene::align::kMiddle});
-    }
+        : Stacked(setting_row()),
+          kind(which),
+          parts{.label = setting_label(nodes::Text(std::string(text), 14.0f, colours.text)),
+                .show = setting_choice(70.0f, segment<sets<Owner>>(colours, "Show", {})),
+                .hide = setting_choice(70.0f, segment<sets<Owner>>(colours, "Hide", {}))} {}
     void show_value(bool on) {
       parts.show.set_active(on);
       parts.hide.set_active(!on);
@@ -684,7 +684,7 @@ inline std::optional<std::int64_t> count_of(std::optional<std::int64_t> chosen, 
   return chosen;
 }
 template <class T>
-struct jump_search_field : nodes::Stack {
+struct jump_search_field : skiff::compose::Stacked {
   static constexpr std::array<std::int64_t, 4> kChoices{500, 5000, 50000, 0};
   // A count pressed: set as the part holds it.
   struct pick {
@@ -702,18 +702,14 @@ struct jump_search_field : nodes::Stack {
     return most == 0 ? std::string("No limit") : std::format("{}", most);
   }
   jump_search_field(const palette& colours, choice_level_t level)
-      : parts{.label = nodes::Text("Look back for a message", 14.0f, colours.text),
-              .fallback = segment<pick>(colours, "Default", {std::nullopt})},
-        top(!has_level_above(level)) {
-    lay_out_setting_row(*this, parts.label);
-    parts.fallback.apply({.width = 64.0f, .alignSelf = scene::align::kMiddle});
-    parts.fallback.setVisible(!top);
-    parts.choices.reserve(kChoices.size());
-    for (const std::int64_t most : kChoices) {
-      parts.choices.emplace_back(colours, label_of(most), pick{most});
-      parts.choices.back().apply({.width = 64.0f, .alignSelf = scene::align::kMiddle});
-    }
-  }
+      : Stacked(setting_row()),
+        parts{.label = setting_label(nodes::Text("Look back for a message", 14.0f, colours.text)),
+              .fallback = skiff::compose::visible(has_level_above(level), setting_choice(64.0f, segment<pick>(colours, "Default", {std::nullopt}))),
+              .choices = kChoices | std::views::transform([&](std::int64_t most) {
+                           return setting_choice(64.0f, segment<pick>(colours, label_of(most), pick{most}));
+                         }) |
+                         std::ranges::to<std::vector>()},
+        top(!has_level_above(level)) {}
   void read(const T& now) {
     const std::optional<std::int64_t> said = said_of(now);
     const std::optional<std::int64_t> shown = top ? std::optional<std::int64_t>(said.value_or(5000)) : said;
@@ -790,23 +786,19 @@ inline std::optional<bool> part_of(std::optional<bool> chosen, std::type_identit
 // Part: what a press sets -- the part shown, else one holding it, which
 // gives each segment what it sets as it reads the model.
 template <class Setting, class T, class Part = T>
-struct show_hide_field : nodes::Stack {
+struct show_hide_field : skiff::compose::Stacked {
   struct parts_t {
     nodes::Text label;
     segment<sets<Part>> fallback, show, hide;
   } parts;
   bool top = false;
   show_hide_field(const palette& colours, choice_level_t level)
-      : parts{.label = nodes::Text(std::string(Setting::label), 14.0f, colours.text),
-              .fallback = segment<sets<Part>>(colours, "Default", {}),
-              .show = segment<sets<Part>>(colours, std::string(Setting::yes), {}),
-              .hide = segment<sets<Part>>(colours, std::string(Setting::no), {})},
-        top(!has_level_above(level)) {
-    lay_out_setting_row(*this, parts.label);
-    for (segment<sets<Part>>* each : {&parts.fallback, &parts.show, &parts.hide})
-      each->apply({.width = 70.0f, .alignSelf = scene::align::kMiddle});
-    parts.fallback.setVisible(!top);
-  }
+      : Stacked(setting_row()),
+        parts{.label = setting_label(nodes::Text(std::string(Setting::label), 14.0f, colours.text)),
+              .fallback = skiff::compose::visible(has_level_above(level), setting_choice(70.0f, segment<sets<Part>>(colours, "Default", {}))),
+              .show = setting_choice(70.0f, segment<sets<Part>>(colours, std::string(Setting::yes), {})),
+              .hide = setting_choice(70.0f, segment<sets<Part>>(colours, std::string(Setting::no), {}))},
+        top(!has_level_above(level)) {}
   // Which is lit, and what each sets.
   void show_value(std::optional<bool> shown) {
     parts.fallback.set_active(!shown);
@@ -868,22 +860,18 @@ struct compose_context {
 // for every field that answers: the chat's composer, a thread's;
 // Cancel is what its ✕ does there.
 template <class Cancel>
-struct context_bar : nodes::Stack {
+struct context_bar : skiff::compose::Stacked {
   static constexpr float kHeight = 49.0f;  // historyReplyHeight
   static constexpr float kSkip = 51.0f;    // historyReplySkip
-  struct lines_column : nodes::Stack {
+  struct lines_column : skiff::compose::Stacked {
     struct parts_t {
       nodes::Text title;
       nodes::Text line;
     } parts;
     explicit lines_column(const palette& colours)
-        : parts{.title = nodes::Text("", 13.0f, colours.accent, true), .line = nodes::Text("", 13.0f, colours.text)} {
-      this->setGap(2.0f);
-      for (nodes::Text* each : {&parts.title, &parts.line}) {
-        each->setElided(true);
-        each->apply({.fillX = true});
-      }
-    }
+        : Stacked(skiff::compose::vbox(2.0f, {.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle})),
+          parts{.title = skiff::compose::styled({.fillX = true}, elided(nodes::Text("", 13.0f, colours.accent, true))),
+                .line = skiff::compose::styled({.fillX = true}, elided(nodes::Text("", 13.0f, colours.text)))} {}
   };
   using cancel_button = icon_button<Cancel>;
   struct parts_t {
@@ -892,15 +880,10 @@ struct context_bar : nodes::Stack {
     cancel_button cancel;
   } parts;
   context_bar(const palette& colours, Cancel cancel)
-      : parts{.mark = nodes::Icon(IconShape{}, colours.accent),
+      : Stacked(skiff::compose::hbox(8.0f, {.fillX = true, .height = kHeight, .padding = {0.0f, 8.0f, 0.0f, 0.0f}})),
+        parts{.mark = skiff::compose::styled({.fillY = true, .width = kSkip - 8.0f}, nodes::Icon(IconShape{}, colours.accent)),
               .lines = lines_column(colours),
-              .cancel = cancel_button(colours, icon::close{}, std::move(cancel))} {
-    this->setHorizontal();
-    this->setGap(8.0f);
-    fState.apply({.fillX = true, .height = kHeight, .padding = {0.0f, 8.0f, 0.0f, 0.0f}});
-    parts.mark.apply({.fillY = true, .width = kSkip - 8.0f});
-    parts.lines.apply({.autoSize = scene::axes::kY, .grow = scene::axes::kX, .alignSelf = scene::align::kMiddle});
-    parts.cancel.apply({.alignSelf = scene::align::kMiddle});
+              .cancel = skiff::compose::styled({.alignSelf = scene::align::kMiddle}, cancel_button(colours, icon::close{}, std::move(cancel)))} {
     this->setVisible(false);
   }
   // What is answered or edited, shown; or nothing, hidden.
@@ -916,22 +899,21 @@ struct context_bar : nodes::Stack {
 
 // A count on an accent badge over the top of a round button: the @ and the
 // heart's, and the down arrow's.
-struct count_badge : nodes::Stack {
+struct count_badge : skiff::compose::Stacked {
   struct parts_t {
     nodes::Text count;
   } parts;
-  explicit count_badge(const palette& colours) : parts{.count = nodes::Text("", 11.0f, colours.on_accent, true)} {
-    fState.apply({.place = scene::anchor::kTopCentre,
-                  .y = -10.0f,
-                  .height = 18.0f,
-                  .autoSize = scene::axes::kX,
-                  .minWidth = 20.0f,
-                  .padding = {1.0f, 5.0f, 1.0f, 5.0f},
-                  .cornerRadius = 9.0f,
-                  .background = colours.accent});
-    fStack.justify = nodes::justify::middle{};
-    parts.count.apply({.alignSelf = scene::align::kMiddle});
-  }
+  explicit count_badge(const palette& colours)
+      : Stacked(skiff::compose::justified(skiff::compose::vbox(0.0f, {.place = scene::anchor::kTopCentre,
+                                                                      .y = -10.0f,
+                                                                      .height = 18.0f,
+                                                                      .autoSize = scene::axes::kX,
+                                                                      .minWidth = 20.0f,
+                                                                      .padding = {1.0f, 5.0f, 1.0f, 5.0f},
+                                                                      .cornerRadius = 9.0f,
+                                                                      .background = colours.accent}),
+                                          nodes::justify::middle{})),
+        parts{.count = skiff::compose::styled({.alignSelf = scene::align::kMiddle}, nodes::Text("", 11.0f, colours.on_accent, true))} {}
 };
 
 // A label, and a small button on its right that is there only where it

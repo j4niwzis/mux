@@ -39,9 +39,12 @@ export namespace mux::ui {
 // What the window shows that the program opens and closes, as a model:
 // each dialog's facts, while it is open. The program edits it; the
 // dialogs, bound to it, open and close as they read it.
-// The chat chosen, if one is.
+// The chat screen as the program sets it: the account shown, the chat
+// chosen, if one is, and whether its info is open beside it.
 struct chat_shown {
   std::optional<conversation_id> chosen;
+  std::optional<account_id> current;
+  bool info_open = false;
 };
 // Whether the drawer is out.
 struct drawer_shown {
@@ -81,6 +84,13 @@ template <class Part>
 void show(shown_model& showing, Part part) {
   (void)showing.apply(skiff::model::edit(skiff::model::placeOf<Part, shown_root>(), skiff::model::setTo(std::move(part))));
 }
+// Such a part changed from what it is: the rest of it as it was.
+template <class Part, class Change>
+void change_shown(shown_model& showing, Change change) {
+  Part now = *showing.look<Part>();
+  change(now);
+  show(showing, std::move(now));
+}
 // A dialog shown with these facts, or closed: its part of what is shown set.
 template <class Facts>
 void show(shown_model& showing, std::optional<Facts> facts) {
@@ -117,7 +127,12 @@ struct shown_dialog : widgets::Dialog<Content, widgets::dismiss::pressed> {
 template <class Screen>
 struct shown_screen : Screen {
   using Screen::Screen;
-  void read(const chat_shown& now) { this->chosen = now.chosen; }
+  void read(const chat_shown& now) {
+    this->chosen = now.chosen;
+    this->current = now.current;
+    if (this->info_open != now.info_open)
+      this->set_info_open(now.info_open);
+  }
 };
 
 // The drawer, out while what is shown says so; pushed back -- the scrim

@@ -22,10 +22,8 @@ namespace mux::app {
 
 void app::rebuild_in_theme() {
   auto& before = root().main();
-  const auto current = before.current;
   const float side_width = before.side_width;
   const float info_width = before.info_width;
-  const bool info_open = before.info_open;
   const float settings_at = root().settings_up() ? root().settings_up()->offset() : 0.0f;
   mux::ui::use_scroll_bars(this->appearance().theme);
   colours = mux::ui::palette_of(this->appearance().theme, this->appearance().accent, shared.looks.window.opacity);
@@ -36,10 +34,8 @@ void app::rebuild_in_theme() {
   showing_binding.invalidate();
   this->refresh_shown();
   auto& after = root().main();
-  after.current = current;
   after.side_width = side_width;
   after.info_width = info_width;
-  after.info_open = info_open;
   this->refresh();
   mux::ui::show(showing, std::optional(mux::ui::settings_facts{}));
   this->refresh_shown();

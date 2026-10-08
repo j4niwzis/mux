@@ -22,11 +22,14 @@ namespace mux::app {
 
 void app::apply(const request::switch_account& one) {
   auto& screen = root().main();
-  screen.current = mux::account_id{mux::ui::protocol_of(one.address), one.address};
+  mux::ui::change_shown<mux::ui::chat_shown>(showing, [&](mux::ui::chat_shown& now) {
+    now.current = mux::account_id{mux::ui::protocol_of(one.address), one.address};
+    now.chosen.reset();
+  });
   screen.wanted.reset();
-  mux::ui::show(showing, mux::ui::chat_shown{});
   this->change_part<recently_used>([&](recently_used& now) { now.last_account = one.address; });
   mux::ui::show(showing, mux::ui::drawer_shown{false});
+  this->refresh_shown();
   this->refresh();
 }
 

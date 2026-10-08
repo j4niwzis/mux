@@ -29,7 +29,7 @@ void app::open_chat(const mux::conversation_id& which, const std::optional<std::
     return;
   }
   auto& screen = root().main();
-  screen.current = which.account;
+  mux::ui::change_shown<mux::ui::chat_shown>(showing, [&](mux::ui::chat_shown& now) { now.current = which.account; });
   screen.wanted.reset();
   this->change_part<recently_used>([&](recently_used& now) { now.last_account = which.account.address; });
   this->apply(request::choose{which});

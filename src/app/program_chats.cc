@@ -75,7 +75,7 @@ void app::apply(const request::choose& one) {
       chat && !ask.demo && chat->member_count > static_cast<std::int64_t>(chat->members.size()) &&
       members_fetched.insert(one.which).second)
     net->fetch_members(one.which);
-  mux::ui::show(showing, mux::ui::chat_shown{one.which});
+  mux::ui::change_shown<mux::ui::chat_shown>(showing, [&](mux::ui::chat_shown& now) { now.chosen = one.which; });
   this->show_chats_now();
 }
 
@@ -85,8 +85,10 @@ void app::apply(const request::close_chat&) {
     return;
   drafts.keep(*screen.chosen, screen.line.plain());
   screen.line.set_text({});
-  screen.info_open = false;
-  mux::ui::show(showing, mux::ui::chat_shown{});
+  mux::ui::change_shown<mux::ui::chat_shown>(showing, [](mux::ui::chat_shown& now) {
+    now.chosen.reset();
+    now.info_open = false;
+  });
   this->show_chats_now();
 }
 
@@ -107,7 +109,7 @@ void app::apply(const request::leave_chat&) {
   }
   if (!ask.demo)
     net->leave(*chosen);
-  root().main().info_open = false;
+  mux::ui::change_shown<mux::ui::chat_shown>(showing, [](mux::ui::chat_shown& now) { now.info_open = false; });
 }
 
 void app::apply(const request::open_leave_space& one) {
@@ -127,7 +129,7 @@ void app::apply(const request::leave_space& one) {
   for (const std::string& room : one.rooms)
     net->leave(mux::conversation_id{one.space.account, room});
   net->leave(one.space);
-  root().main().info_open = false;
+  mux::ui::change_shown<mux::ui::chat_shown>(showing, [](mux::ui::chat_shown& now) { now.info_open = false; });
 }
 void app::apply(const request::close_leave_space&) { mux::ui::show<mux::ui::leave_space_facts>(showing, std::nullopt); }
 
@@ -139,7 +141,8 @@ void app::apply(const request::close_drawer&) { mux::ui::show(showing, mux::ui::
 void app::apply(const request::quit&) { mux::platform::events::request_quit(); }
 
 void app::apply(const request::toggle_info&) {
-  root().main().toggle_info();
+  mux::ui::change_shown<mux::ui::chat_shown>(showing, [](mux::ui::chat_shown& now) { now.info_open = !now.info_open; });
+  this->refresh_shown();
   // An encrypted room's members, what is known of each one's identity asked
   // for, for their rows -- up to two hundred: the account answers from what
   // it holds, and no more than a page of rows is looked at.

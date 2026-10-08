@@ -965,8 +965,9 @@ struct conversations_screen : nodes::Stack {
     return true;
   }
 
-  void toggle_info() {
-    info_open = !info_open;
+  void toggle_info() { this->set_info_open(!info_open); }
+  void set_info_open(bool on) {
+    info_open = on;
     this->show_info();
     // Not kept up while shut: shown as it is now.
     if (last_model && chosen)

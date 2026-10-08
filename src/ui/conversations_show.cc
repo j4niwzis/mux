@@ -308,9 +308,9 @@ void conversations_screen<Actions>::onPointer(scene::phase::capture, const scene
   swipe_row.reset();
   if (single && !chosen && press.button <= 1 && side.visible() && side.bounds().contains(press.x, press.y)) {
     swipe_from = skia::SkPoint{press.x, press.y};
-    for (const conversation_row<Actions>& row : std::get<0>(std::get<0>(list.fChildren).fChildren))
-      if (list.toView(row.bounds()).contains(press.x, press.y))
-        swipe_row = row.id;
+    for (const auto& kept : std::get<0>(list.fChildren).fRows)
+      if (list.toView(kept.fRow.bounds()).contains(press.x, press.y))
+        swipe_row = kept.fKey;
   }
   if (single && chosen && press.button <= 1 &&
       ((chat.visible() && chat.bounds().contains(press.x, press.y)) ||
@@ -376,7 +376,7 @@ void conversations_screen<Actions>::update(double now_ms) {
   // The list scrolled past the rows made: those for where it is now made,
   // those far from it let go.
   if (last_model && list.visible() && this->chats_window() != std::pair{chats_from, chats_made})
-    this->show(*last_model, false);
+    this->show_rows(*last_model);
   // The panels' opacity on its way to the chat's.
   if (auto& ease = needs_.paint->ease; ease.t.step(now_ms)) {
     needs_.paint->panel.opacity = ease.from + (ease.to - ease.from) * ease.t.value();
@@ -649,6 +649,180 @@ void conversations_screen<Actions>::update(double now_ms) {
     }
 }
 
+// What the list shows, from the model and what is chosen: the chats of
+// the account shown in the folder chosen -- or the forum open -- with the
+// other accounts' placed here, those searched for, invites first, then by
+// their newest.
+template <class Actions>
+chat_listing<Actions> conversations_screen<Actions>::listing_of(const model& now) const {
+  chat_listing<Actions> out;
+  constexpr auto lower = mux::logic::folded;
+  const std::string wanted = lower(side.search.field.text());
+  const account* in = current ? &now.accounts().at(*current) : nullptr;
+  if (in == nullptr)
+    return out;
+  // The rooms of the space chosen: its own, and those of the spaces in it,
+  // down every level -- each space once, however they hold each other.
+  std::set<std::string> in_space;
+  if (const std::optional<std::string> chosen_room = space_of(folder)) {
+    std::set<std::string> seen;
+    std::vector<std::string> todo{*chosen_room};
+    while (!todo.empty()) {
+      const std::string at = std::move(todo.back());
+      todo.pop_back();
+      if (!seen.insert(at).second)
+        continue;
+      if (const auto* found = in->conversations.find(at); found != nullptr)
+        std::ranges::for_each(found->children, [&](const std::string& child) {
+          in_space.insert(child);
+          todo.push_back(child);
+        });
+    }
+  }
+  // Forums: each listed as one chat; their rooms in them, not beside them.
+  std::set<std::string> in_forums;
+  std::ranges::for_each(in->conversations.values() | std::views::filter([&](const conversation& one) { return this->shown_as_forum(one); }),
+                        [&](const conversation& one) { in_forums.insert(one.children.begin(), one.children.end()); });
+  const conversation* forum = forum_open ? in->conversations.find(*forum_open) : nullptr;
+  // What the account's spaces hold: out of Home, where it is chosen so --
+  // but direct messages. Every space's, where Home hides all that spaces
+  // hold; else those of the spaces that hide theirs.
+  std::set<std::string> in_spaces;
+  if (folder == folder_t{folder::all{}})
+    std::ranges::for_each(in->conversations.values() | std::views::filter([&](const conversation& each) {
+                            return each.space && (home_hides_spaced || hidden_from_home.contains(each.id));
+                          }),
+                          [&](const conversation& each) { in_spaces.insert(each.children.begin(), each.children.end()); });
+  const auto direct = [](const conversation& one) {
+    return spl::visit(spl::overloaded{[](conversation_kind::direct) { return true; }, [](const auto&) { return false; }}, one.kind);
+  };
+  const auto in_folder = [&](const conversation& one) {
+    if (!one.space && in_spaces.contains(one.id.id) && !direct(one))
+      return false;
+    if (home_hides_spaced && home_hides_direct && folder == folder_t{folder::all{}} && direct(one))
+      return false;
+    if (forum)
+      return !one.space && std::ranges::contains(forum->children, one.id.id);
+    // A space is a folder, not a chat -- but a forum is one chat.
+    if (one.space && !this->shown_as_forum(one))
+      return false;
+    if (!one.space && in_forums.contains(one.id.id))
+      return false;
+    return spl::visit(spl::overloaded{[](const folder::all&) { return true; },
+                                      [&](const folder::space&) { return in_space.contains(one.id.id); },
+                                      [&](const folder::group& g) { return std::ranges::contains(one.groups, g.name); },
+                                      [&](const folder::direct&) { return direct(one); }},
+                      folder);
+  };
+  // Upgraded away, its new room here: only the new one listed, as Element
+  // -- where the two agree: its tombstone names the new room, and the new
+  // room's creation names it as what it continues. One side alone is not
+  // believed (as matrix-js-sdk's CVE-2025-59160, the other way round): a
+  // room could otherwise hide another from the list.
+  const auto found_by = [&](const conversation& one) {
+    if (const auto successor = proto::successor_of(protocol_state_of(*needs_.shared, one.id.account), one))
+      if (const auto* next = in->conversations.find(*successor);
+          next != nullptr && proto::predecessor_of(protocol_state_of(*needs_.shared, one.id.account), *next) == one.id.id)
+        return false;
+    return in_folder(one) && (wanted.empty() || lower(display_name(one)).contains(wanted) || lower(one.id.id).contains(wanted));
+  };
+  // Its own chats -- not those moved to another account's list -- and the
+  // other accounts' listed in it.
+  std::vector<const conversation*> chats = in->conversations.values() |
+                                           std::views::filter([&](const conversation& one) { return !moved_out.contains(one.id) && found_by(one); }) |
+                                           std::views::transform([](const conversation& one) { return &one; }) | std::ranges::to<std::vector>();
+  if (const auto extra = listed_in.find(*current); extra != listed_in.end())
+    std::ranges::copy(extra->second | std::views::transform([&](const conversation_id& id) { return now.find(id); }) |
+                          std::views::filter([&](const conversation* one) { return one != nullptr && found_by(*one); }),
+                      std::back_inserter(chats));
+  // The strip of a chat listed here from another account.
+  const auto strip_for = [&](const conversation* one) -> std::optional<skia::SkColor> {
+    if (one->id.account == *current)
+      return std::nullopt;
+    const auto found = strips.find(one->id);
+    return found == strips.end() ? std::nullopt : std::optional<skia::SkColor>(found->second);
+  };
+  // Each chat's room events as it shows them: what it hides is not its
+  // newest, nor counted.
+  const auto events_of = [&](const conversation* one) {
+    const auto found = event_filters.find(one->id);
+    return found == event_filters.end() ? room_event_filter{} : found->second;
+  };
+  // A forum's row, as tdesktop's: the newest of its topics, and their
+  // unread summed -- not the space's own, which says what was done to it.
+  std::ranges::for_each(chats, [&](const conversation*& one) {
+    if (!this->shown_as_forum(*one))
+      return;
+    conversation made = *one;
+    made.timeline.clear();
+    made.read_up_to.reset();
+    made.detached = false;
+    made.unread = 0;
+    made.highlights = 0;
+    auto topics = one->children | std::views::transform([&](const std::string& child) { return in->conversations.find(child); }) |
+                        std::views::filter([](const conversation* topic) { return topic != nullptr && !topic->space; });
+    made.unread = std::ranges::fold_left(topics | std::views::transform([&](const conversation* topic) { return topic->unread_here(events_of(topic)); }),
+                                         std::int64_t{0}, std::plus{});
+    made.highlights = std::ranges::fold_left(topics | std::views::transform(&conversation::highlights), decltype(made.highlights){0}, std::plus{});
+    // The newest of its topics, and which.
+    const auto newest_in = [&](const conversation* topic) { return newest(*topic, events_of(topic)); };
+    auto with_one = topics | std::views::filter([&](const conversation* topic) { return newest_in(topic) != nullptr; });
+    if (const auto best = std::ranges::max_element(with_one, {}, [&](const conversation* topic) { return newest_in(topic)->at; });
+        best != std::ranges::end(with_one)) {
+      made.timeline.push_back(*newest_in(*best));
+      // Said as tdesktop says a forum's newest: in which topic, by whom.
+      made.forum_topic = display_name(**best);
+      made.members = (*best)->members;
+    }
+    one = &out.forums.insert_or_assign(one->id, std::move(made)).first->second;
+  });
+  // Invites first, as Element lists them; then by their newest.
+  std::ranges::sort(chats, std::ranges::greater{}, [&](const conversation* one) {
+    const message* last = newest(*one, events_of(one));
+    return std::pair{one->invite.has_value(), last ? last->at : std::chrono::sys_time<std::chrono::milliseconds>{}};
+  });
+  // The chat open -- or, where Alt+Up or Alt+Down went to a forum, that.
+  const auto is_chosen = [&](const conversation* one) { return pointed ? *pointed == one->id : chosen && *chosen == one->id; };
+  out.chats = chats | std::views::transform([&](const conversation* one) {
+                return listed_chat<Actions>{.id = one->id,
+                                            .view = conversation_row<Actions>::view_of(*needs_.shared, *one, is_chosen(one), muted.contains(one->id),
+                                                                                       draft_of(one->id), events_of(one), strip_for(one)),
+                                            .events = events_of(one),
+                                            .strip = strip_for(one),
+                                            .height = conversation_row<Actions>::height_of(*one)};
+              }) |
+              std::ranges::to<std::vector>();
+  return out;
+}
+
+// The rows for where the list is now: those a screen above the view to two
+// below it made from the listing, the rest stand-ins of their height (the
+// rows' padding above and below).
+template <class Actions>
+void conversations_screen<Actions>::show_rows(const model& now) {
+  auto& rows = std::get<0>(list.fChildren);
+  const auto key_of = [](const auto& kept) { return kept.fKey; };
+  const std::vector<conversation_id> listed_before = rows.fRows | std::views::transform(key_of) | std::ranges::to<std::vector>();
+  chats_listed = listing.chats.size();
+  order = listing.chats | std::views::transform(&listed_chat<Actions>::id) | std::ranges::to<std::vector>();
+  const std::vector<float> heights = listing.chats | std::views::transform(&listed_chat<Actions>::height) | std::ranges::to<std::vector>();
+  tops.assign(1, 0.0f);
+  std::inclusive_scan(heights.begin(), heights.end(), std::back_inserter(tops));
+  std::tie(chats_from, chats_made) = this->chats_window();
+  rows.apply({.padding = scene::Margin{tops[chats_from], 0.0f, tops.back() - tops[chats_made], 0.0f}});
+  const auto items = listing.chats | std::views::drop(chats_from) | std::views::take(chats_made - chats_from) |
+                     std::views::transform([&](const listed_chat<Actions>& one) {
+                       return chat_item<Actions>{one.id, one.view, listing.find(now, one.id), &one, &needs_};
+                     });
+  if (rows.read(items)) {
+    list.invalidateLayout();
+    // A chat come or gone -- or moved to another place: the whole list
+    // painted again, not only what says it moved.
+    if (!std::ranges::equal(listed_before, rows.fRows | std::views::transform(key_of)))
+      list.markDamaged();
+  }
+}
+
 template <class Actions>
 void conversations_screen<Actions>::show(const model& now, bool with_chat) {
   last_model = &now;
@@ -664,8 +838,6 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
   } else if (!current || !now.accounts().contains(*current)) {
     current = now.accounts().empty() ? std::nullopt : std::optional<account_id>(now.accounts().keyAt(0));
   }
-  auto& rows = std::get<0>(std::get<0>(list.fChildren).fChildren);
-  std::vector<const conversation*> chats;
   // What is searched for, in any case: in a name or an address.
   constexpr auto lower = mux::logic::folded;
   const std::string wanted = lower(side.search.field.text());
@@ -711,206 +883,17 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
   shown_folder = folder;
   side.folders.setVisible(folders.size() > 1);
   this->show_space_bars(now);
-  // Whether a chat is in the folder chosen. A space is a folder, not a
-  // chat: it is never listed.
-  const account* in = current ? &now.accounts().at(*current) : nullptr;
-  // The rooms of the space chosen: its own, and those of the spaces in it,
-  // down every level -- each space once, however they hold each other.
-  std::set<std::string> in_space;
-  if (in)
-    if (const std::optional<std::string> chosen_room = space_of(folder)) {
-      std::set<std::string> seen;
-      std::vector<std::string> todo{*chosen_room};
-      while (!todo.empty()) {
-        const std::string at = std::move(todo.back());
-        todo.pop_back();
-        if (!seen.insert(at).second)
-          continue;
-        if (const auto found = in->conversations.find(at); found != nullptr)
-          for (const std::string& child : found->children) {
-            in_space.insert(child);
-            todo.push_back(child);
-          }
-      }
-    }
-  // Forums: each listed as one chat; their rooms in them, not beside them.
-  std::set<std::string> in_forums;
-  if (in)
-    std::ranges::for_each(std::views::filter(std::views::values(in->conversations), [&](const conversation& one) { return this->shown_as_forum(one); }),
-                          [&](const conversation& one) { in_forums.insert(one.children.begin(), one.children.end()); });
   // The forum open: still one; its rooms, the list.
   if (forum_open && (!current || !this->is_forum(conversation_id{*current, *forum_open})))
     forum_open.reset();
-  const conversation* forum = forum_open && in && in->conversations.contains(*forum_open) ? &in->conversations.at(*forum_open) : nullptr;
+  const account* in = current ? &now.accounts().at(*current) : nullptr;
+  const conversation* forum = forum_open && in ? in->conversations.find(*forum_open) : nullptr;
   side.forum_head.setVisible(forum != nullptr);
   if (forum)
     side.forum_head.parts.name.setText(display_name(*forum));
-  // What the account's spaces hold: out of Home, where it is chosen so --
-  // but direct messages.
-  std::set<std::string> in_spaces;
-  // Every space's, where Home hides all that spaces hold; else those of
-  // the spaces that hide theirs.
-  if (in && folder == folder_t{folder::all{}})
-    for (const auto& [key, each] : in->conversations)
-      if (each.space && (home_hides_spaced || hidden_from_home.contains(each.id)))
-        in_spaces.insert(each.children.begin(), each.children.end());
-  const auto direct = [](const conversation& one) {
-    return spl::visit(spl::overloaded{[](conversation_kind::direct) { return true; }, [](const auto&) { return false; }}, one.kind);
-  };
-  const auto in_folder = [&](const conversation& one) {
-    if (!one.space && in_spaces.contains(one.id.id) && !direct(one))
-      return false;
-    if (home_hides_spaced && home_hides_direct && folder == folder_t{folder::all{}} && direct(one))
-      return false;
-    if (forum)
-      return !one.space && std::ranges::contains(forum->children, one.id.id);
-    // A space is a folder, not a chat -- but a forum is one chat.
-    if (one.space && !this->shown_as_forum(one))
-      return false;
-    if (!one.space && in_forums.contains(one.id.id))
-      return false;
-    return spl::visit(spl::overloaded{[](const folder::all&) { return true; },
-                                 [&](const folder::space&) { return in_space.contains(one.id.id); },
-                                 [&](const folder::group& g) { return std::ranges::contains(one.groups, g.name); },
-                                 [&](const folder::direct&) {
-                                   return spl::visit(spl::overloaded{[](conversation_kind::direct) { return true; },
-                                                                           [](const auto&) { return false; }},
-                                                        one.kind);
-                                 }},
-                      folder);
-  };
-  // Its own chats -- not those moved to another account's list -- and the
-  // other accounts' listed in it.
-  const auto found_by = [&](const conversation& one) {
-    // Upgraded away, its new room here: only the new one listed, as Element
-    // -- where the two agree: its tombstone names the new room, and the new
-    // room's creation names it as what it continues. One side alone is not
-    // believed (as matrix-js-sdk's CVE-2025-59160, the other way round):
-    // a room could otherwise hide another from the list.
-    if (const auto successor = proto::successor_of(protocol_state_of(*needs_.shared, one.id.account), one); successor && in)
-      if (const auto next = in->conversations.find(*successor);
-          next != in->conversations.end() &&
-          proto::predecessor_of(protocol_state_of(*needs_.shared, one.id.account), next->second) == one.id.id)
-        return false;
-    return in_folder(one) && (wanted.empty() || lower(display_name(one)).contains(wanted) || lower(one.id.id).contains(wanted));
-  };
-  if (in)
-    for (const auto& [key, one] : in->conversations)
-      if (!moved_out.contains(one.id) && found_by(one))
-        chats.push_back(&one);
-  if (in && current)
-    if (const auto extra = listed_in.find(*current); extra != listed_in.end())
-      for (const conversation_id& id : extra->second)
-        if (const conversation* one = now.find(id); one && found_by(*one))
-          chats.push_back(one);
-  // The strip of a chat listed here from another account.
-  const auto strip_for = [&](const conversation* one) -> std::optional<skia::SkColor> {
-    if (!current || one->id.account == *current)
-      return std::nullopt;
-    const auto found = strips.find(one->id);
-    return found == strips.end() ? std::nullopt : std::optional<skia::SkColor>(found->second);
-  };
-  // Each chat's room events as it shows them: what it hides is not its
-  // newest, nor counted.
-  const auto events_of = [&](const conversation* one) {
-    const auto found = event_filters.find(one->id);
-    return found == event_filters.end() ? room_event_filter{} : found->second;
-  };
-  // A forum's row, as tdesktop's: the newest of its topics, and their
-  // unread summed -- not the space's own, which says what was done to it.
-  std::map<conversation_id, conversation> forum_shown;
-  if (in)
-    for (const conversation*& one : chats)
-      if (this->shown_as_forum(*one)) {
-        conversation made = *one;
-        made.timeline.clear();
-        made.read_up_to.reset();
-        made.detached = false;
-        made.unread = 0;
-        made.highlights = 0;
-        const message* best = nullptr;
-        std::string best_in;
-        for (const std::string& child : one->children)
-          if (const auto found = in->conversations.find(child); found != nullptr && !found->space) {
-            const conversation& topic = *found;
-            made.unread += topic.unread_here(events_of(&topic));
-            made.highlights += topic.highlights;
-            if (const message* last = newest(topic, events_of(&topic)); last && (!best || last->at > best->at)) {
-              best = last;
-              best_in = topic.id.id;
-            }
-          }
-        if (best) {
-          made.timeline.push_back(*best);
-          // Said as tdesktop says a forum's newest: in which topic, by whom.
-          if (const auto found = in->conversations.find(best_in); found != nullptr) {
-            made.forum_topic = display_name(*found);
-            made.members = found->members;
-          }
-        }
-        one = &forum_shown.insert_or_assign(one->id, std::move(made)).first->second;
-      }
-  // Invites first, as Element lists them; then by their newest.
-  std::ranges::sort(chats, std::ranges::greater{}, [&](const conversation* one) {
-    const message* last = newest(*one, events_of(one));
-    return std::pair{one->invite.has_value(), last ? last->at : std::chrono::sys_time<std::chrono::milliseconds>{}};
-  });
-  // The rows, as a function of the chats: those whose chat shows the same
-  // are kept as they are.
-  // The chat open -- or, where Alt+Up or Alt+Down went to a forum, that.
-  const auto is_chosen = [&](const conversation* one) {
-    return pointed ? *pointed == one->id : chosen && *chosen == one->id;
-  };
-  const std::vector<conversation_id> listed_before =
-      std::ranges::to<std::vector>(std::views::transform(rows, [](const conversation_row<Actions>& row) { return row.id; }));
-  chats_listed = chats.size();
-  order = std::ranges::to<std::vector>(std::views::transform(chats, [](const conversation* one) { return one->id; }));
-  tops.assign(1, 0.0f);
-  tops.reserve(chats.size() + 1);
-  for (const conversation* one : chats)
-    tops.push_back(tops.back() + conversation_row<Actions>::height_of(*one));
-  std::tie(chats_from, chats_made) = this->chats_window();
-  const auto made = std::views::take(std::views::drop(chats, chats_from), chats_made - chats_from);
-  // The rows not made, above and below: as much room as they would take.
-  std::get<0>(list.fChildren).apply({.padding = scene::Margin{tops[chats_from], 0.0f, tops.back() - tops[chats_made], 0.0f}});
-  {
-    const std::set<conversation_id> listed = std::ranges::to<std::set>(std::views::transform(made, [](const conversation* one) { return one->id; }));
-    for (conversation_row<Actions>& row : rows)
-      if (!listed.contains(row.id)) {
-        const conversation_id id = row.id;
-        rows_kept.insert_or_assign(id, std::move(row));
-      }
-    while (rows_kept.size() > kRowsKept)
-      rows_kept.erase(rows_kept.begin());
-  }
-  if (nodes::reconcile(
-          rows, made, [](const conversation* one) { return one->id; },
-          [](const conversation_row<Actions>& row) { return row.id; },
-          [&](const conversation* one) {
-            if (const auto kept = rows_kept.find(one->id); kept != rows_kept.end()) {
-              const bool same = kept->second.shown == conversation_row<Actions>::view_of(*needs_.shared, *one, is_chosen(one), muted.contains(one->id),
-                                                                                         draft_of(one->id), events_of(one), strip_for(one));
-              if (same) {
-                conversation_row<Actions> back = std::move(kept->second);
-                rows_kept.erase(kept);
-                return back;
-              }
-              rows_kept.erase(kept);
-            }
-            return conversation_row<Actions>(needs_, *one, is_chosen(one), muted.contains(one->id), draft_of(one->id),
-                                             events_of(one), strip_for(one));
-          },
-          [&](const conversation_row<Actions>& row, const conversation* one) {
-            return row.shown ==
-                   conversation_row<Actions>::view_of(*needs_.shared, *one, is_chosen(one), muted.contains(one->id), draft_of(one->id),
-                                                      events_of(one), strip_for(one));
-          })) {
-    list.invalidateLayout();
-    // A chat come or gone -- or moved to another place: the whole list
-    // painted again, not only what says it moved.
-    if (!std::ranges::equal(listed_before, rows, {}, {}, [](const conversation_row<Actions>& row) { return row.id; }))
-      list.markDamaged();
-  }
+  // The chats listed, as the model has them now, made into rows.
+  listing = this->listing_of(now);
+  this->show_rows(now);
   const bool none = now.accounts().empty();
   // The messages' area, not only its list: hidden, it no longer takes the
   // column's height and pushes what is said instead to the bottom.
@@ -923,7 +906,7 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
   // the server is asked for rooms and people that do, once for each
   // thing typed.
   const std::string& typed = side.search.field.text();
-  const bool elsewhere = !none && !wanted.empty() && chats.empty() && typed.size() >= 2;
+  const bool elsewhere = !none && !wanted.empty() && listing.chats.empty() && typed.size() >= 2;
   if (elsewhere && typed != asked_elsewhere) {
     asked_elsewhere = typed;
     rooms_elsewhere.clear();
@@ -938,7 +921,7 @@ void conversations_screen<Actions>::show(const model& now, bool with_chat) {
     this->show_elsewhere();
   }
   side.elsewhere.setVisible(elsewhere);
-  no_chats.setVisible(!none && chats.empty() && !elsewhere);
+  no_chats.setVisible(!none && listing.chats.empty() && !elsewhere);
   chat.empty.setVisible(none);
   this->show_info();
   // Laid out again, repainting only what moves: what changed repaints

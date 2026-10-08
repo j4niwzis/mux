@@ -321,11 +321,12 @@ struct conversations_screen : nodes::Stack, outbox {
     to += (kChatsStep - to % kChatsStep) % kChatsStep;
     return {from, std::min(count, std::max(to, from + kChatsFirst))};
   }
-  // Rows that left the list -- another space chosen -- kept by their chat,
-  // already laid out and recorded: coming back showing the same, a row is
-  // taken back as it was, not made again. A few hundred at most.
-  static constexpr std::size_t kRowsKept = 300;
-  std::map<conversation_id, conversation_row<Actions>> rows_kept;
+  // What the list shows, as the model had it at the last show: read again
+  // from the model, not kept up by hand.
+  chat_listing<Actions> listing;
+  [[nodiscard]] chat_listing<Actions> listing_of(const model& now) const;
+  // The rows for where the list is now, from the listing.
+  void show_rows(const model& now);
   float list_from = 1.0f;
   // Begun two frames on: the frame the list is made in -- its rows made,
   // laid out, their avatars scaled -- took its time out of the slide's
@@ -774,7 +775,7 @@ struct conversations_screen : nodes::Stack, outbox {
   info_panel<Actions>& info = parts.info;
 
   // The old names, for what is kept in the parts.
-  nodes::ScrollContainer<nodes::Flow<std::vector<conversation_row<Actions>>>>& list = side.list;
+  nodes::ScrollContainer<chat_rows<Actions>>& list = side.list;
   nodes::Text& no_chats = side.no_chats;
   chat_head<Actions>& header = chat.header;
   search_bar<Actions>& search = chat.search;

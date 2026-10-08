@@ -254,7 +254,7 @@ struct side_column : nodes::Stack, outbox {
         fState.apply({.selected = field.focused()});
     }
   };
-  using list_t = nodes::ScrollContainer<nodes::Flow<std::vector<conversation_row<Actions>>>>;
+  using list_t = nodes::ScrollContainer<chat_rows<Actions>>;
   // What is right of the side bar: the search, the tabs, the chats.
   // A forum open: its name, and the way back to the chats.
   struct forum_head_t : nodes::Stack {
@@ -357,7 +357,7 @@ struct side_column : nodes::Stack, outbox {
       nodes::Flow<std::vector<folder_tab<Pick>>> folders{
           {.direction = nodes::direction::horizontal{}, .spacingX = 2.0f, .spacingY = 2.0f}, {}};
       nodes::Text no_chats;
-      list_t list{nodes::Flow<std::vector<conversation_row<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
+      list_t list{chat_rows<Actions>()};
       // While a chat is searched: what was found, in the chats' place.
       nodes::Text found_title;
       found_list_t found{nodes::Flow<std::vector<found_row>>({.spacingY = 0.0f, .wrap = false}, {})};
@@ -735,8 +735,8 @@ struct side_column : nodes::Stack, outbox {
     const space_icon<Pick>* one = this->icon_at(press.x, press.y);
     // A right press on a chat in the list: its menu, where it was pressed.
     if (!one && press.button == 3 && list.visible())
-      for (const auto& row : std::get<0>(std::get<0>(list.fChildren).fChildren))
-        if (list.toView(row.bounds()).contains(press.x, press.y)) {
+      for (const auto& kept : std::get<0>(list.fChildren).fRows)
+        if (const auto& row = kept.fRow; list.toView(row.bounds()).contains(press.x, press.y)) {
           parts.row_menu.emplace(*colours_, row.id, row.parts.lines.parts.top.parts.name.text(),
                                  current_account ? *current_account : row.id.account, accounts_known, theme_now);
           this->place_menu(*parts.row_menu, press.x, press.y, 320.0f, 260.0f);

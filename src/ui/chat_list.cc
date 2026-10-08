@@ -316,4 +316,46 @@ struct conversation_row : nodes::Stack, outbox {
   }
 };
 
+// A chat as the list shows it: its row's view, and what its row is made
+// from besides -- its room events, its strip -- and the row's height.
+template <class Actions>
+struct listed_chat {
+  conversation_id id;
+  typename conversation_row<Actions>::view view;
+  room_event_filter events;
+  std::optional<skia::SkColor> strip;
+  float height = conversation_row<Actions>::kHeight;
+};
+// What the list shows, read from the model: every chat in it, in order,
+// and the forums' rows, each made up from its topics.
+template <class Actions>
+struct chat_listing {
+  std::vector<listed_chat<Actions>> chats;
+  std::map<conversation_id, conversation> forums;
+  // The chat a row shows: a forum's made-up one, else the model's.
+  [[nodiscard]] const conversation* find(const model& now, const conversation_id& id) const {
+    if (const auto made = forums.find(id); made != forums.end())
+      return &made->second;
+    return now.find(id);
+  }
+};
+// A row's item, while the list is read: its key and view, the chat it
+// shows, how it is listed, and what rows are made with.
+template <class Actions>
+using chat_item = std::tuple<conversation_id, typename conversation_row<Actions>::view, const conversation*, const listed_chat<Actions>*,
+                             const ui_needs<Actions>*>;
+template <class Actions>
+struct make_chat_row {
+  conversation_row<Actions> operator()(const chat_item<Actions>& item) const {
+    const auto& [id, view, one, listed, needs] = item;
+    return conversation_row<Actions>(*needs, *one, view.chosen, view.muted, view.draft, listed->events, listed->strip);
+  }
+};
+// The chat list's rows: one for each chat listed where the list is, kept
+// while its chat shows the same.
+template <class Actions>
+struct chat_rows : nodes::MemoRows<conversation_id, typename conversation_row<Actions>::view, conversation_row<Actions>, make_chat_row<Actions>> {
+  chat_rows() { this->fState.apply({.fillX = true, .autoSize = scene::axes::kY}); }
+};
+
 }  // namespace mux::ui

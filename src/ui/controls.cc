@@ -71,10 +71,9 @@ struct avatar_mark : widgets::Avatar<from_avatars> {
 // An avatar that opens: pressed, its picture in the viewer, where it can be
 // looked at whole and saved -- a person's in their card, a chat's in its
 // info.
-template <class Actions>
 struct avatar_button : avatar_mark, outbox {
-  Actions* actions = nullptr;
-  avatar_button(Actions* a, std::string id, std::string shown, float size)
+  no_actions* actions = nullptr;
+  avatar_button(no_actions* a, std::string id, std::string shown, float size)
       : avatar_mark(std::move(id), shown, size), actions(a) {
     fState.setCursor(scene::cursor::hand{});
   }
@@ -302,15 +301,14 @@ struct segment : pressable<nodes::Stack> {
 
 // Three lines at the top-left of the conversation list: a press pulls the
 // drawer out.
-template <class Actions>
 struct menu_button : scene::Node, outbox {
   // Three bars, and a plate under them while it is hovered or focused.
   struct parts_t {
     nodes::Icon bars;
   } parts;
-  Actions* actions = nullptr;
+  no_actions* actions = nullptr;
 
-  menu_button(const palette& colours, Actions* a)
+  menu_button(const palette& colours, no_actions* a)
       : parts{.bars = nodes::Icon(IconShape{{{nodes::mark::rect{-8.0f, -7.0f, 8.0f, -5.0f, 1.0f}, 0.0f, true},
                                              {nodes::mark::rect{-8.0f, -1.0f, 8.0f, 1.0f, 1.0f}, 0.0f, true},
                                              {nodes::mark::rect{-8.0f, 5.0f, 8.0f, 7.0f, 1.0f}, 0.0f, true}}},
@@ -441,7 +439,6 @@ struct choice_menu : nodes::Stack {
 
 // The items of the space bars -- Home, Direct messages, each space -- each
 // with where it is: the side bar, the top one, both, or hidden.
-template <class Actions>
 struct spaces_choices : nodes::Stack {
   struct pick_bars : outbox {
     std::string account;
@@ -457,7 +454,7 @@ struct spaces_choices : nodes::Stack {
       nodes::Text name;
       choice_menu<pick_bars> where;
     } parts;
-    row(Actions* a, const palette& colours, const std::string& account, const space_item_shown& one)
+    row(no_actions* a, const palette& colours, const std::string& account, const space_item_shown& one)
         : parts{.name = nodes::Text(one.name, 14.0f, colours.text),
                 .where = choice_menu<pick_bars>(colours, "", {"Side bar", "Top bar", "Both bars", "Hidden"},
                                                 one.side && !one.top   ? 0
@@ -472,7 +469,7 @@ struct spaces_choices : nodes::Stack {
   struct parts_t {
     std::vector<row> rows;
   } parts;
-  spaces_choices(Actions* a, const palette& colours, const ui_shared& shared) {
+  spaces_choices(no_actions* a, const palette& colours, const ui_shared& shared) {
     this->setGap(2.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     parts.rows.reserve(shared.space_items.size());

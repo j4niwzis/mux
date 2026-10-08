@@ -49,25 +49,22 @@ export namespace mux::ui {
 
 // A node of a chat's protocol's own in its row of the list, after what was
 // said last (a Telegram channel's views, an IRC channel's modes): listed by
-// row_views(state, type_tag<Actions>), made for a chat by make_row_view,
+// row_views(state, type_tag<no_actions>), made for a chat by make_row_view,
 // found by ADL; none by default.
 namespace row_view_defaults {
-template <class Actions>
-constexpr proto::sticker_view_list<> row_views(const auto&, type_tag<Actions>) {
+constexpr proto::sticker_view_list<> row_views(const auto&, type_tag<no_actions>) {
   return {};
 }
-template <class Actions>
-constexpr std::nullopt_t make_row_view(const auto&, const conversation&, type_tag<Actions>) {
+constexpr std::nullopt_t make_row_view(const auto&, const conversation&, type_tag<no_actions>) {
   return std::nullopt;
 }
 }  // namespace row_view_defaults
-template <class State, class Actions>
-constexpr auto row_views_for(const State& state, type_tag<Actions> tag) {
+template <class State>
+constexpr auto row_views_for(const State& state, type_tag<no_actions> tag) {
   using row_view_defaults::row_views;
   return row_views(state, tag);
 }
 
-template <class Actions>
 struct conversation_row : nodes::Stack, outbox {
   template <class List>
   struct view_nodes;
@@ -80,7 +77,7 @@ struct conversation_row : nodes::Stack, outbox {
   template <class... Tags>
   struct protocol_row_nodes<protocol_list<Tags...>> {
     using type = typename joined<
-        type_list<>, typename view_nodes<decltype(row_views_for(::mux::state_of<Tags>{}, type_tag<Actions>{}))>::type...>::type;
+        type_list<>, typename view_nodes<decltype(row_views_for(::mux::state_of<Tags>{}, type_tag<no_actions>{}))>::type...>::type;
   };
   using row_view_t = typename variant_of_types<
       typename joined<type_list<nodes::Text>, typename protocol_row_nodes<protocols>::type>::type>::type;
@@ -93,7 +90,7 @@ struct conversation_row : nodes::Stack, outbox {
       fState.apply({.autoSize = scene::axes::kBoth});
     }
   };
-  Actions* actions = nullptr;
+  no_actions* actions = nullptr;
   conversation_id id;
   bool chosen = false;
   bool muted = false;
@@ -217,7 +214,7 @@ struct conversation_row : nodes::Stack, outbox {
   }
   view shown;
 
-  conversation_row(const ui_needs<Actions>& n, const conversation& one, bool is_chosen, bool is_muted, std::string draft = {},
+  conversation_row(const ui_needs& n, const conversation& one, bool is_chosen, bool is_muted, std::string draft = {},
                    const room_event_filter& events = {}, std::optional<skia::SkColor> strip = std::nullopt)
       : actions(n.actions), id(one.id), chosen(is_chosen), muted(is_muted), shown(view_of(*n.shared, one, is_chosen, is_muted, draft, events, strip)),
         parts{.face = avatar_mark(one.id.id, display_name(one), 46.0f),
@@ -231,7 +228,7 @@ struct conversation_row : nodes::Stack, outbox {
     spl::visit(
         [&](const auto& now) {
           using row_view_defaults::make_row_view;
-          this->place_view(make_row_view(now, one, type_tag<Actions>{}));
+          this->place_view(make_row_view(now, one, type_tag<no_actions>{}));
         },
         protocol_state_of(*n.shared, one.id.account));
     auto& time = parts.lines.parts.top.parts.time;

@@ -199,7 +199,7 @@ struct top_view : nodes::Stack {
   }
   [[nodiscard]] bool acceptsInput() const { return true; }
 };
-template <class Actions, class Pick>
+template <class Pick>
 struct side_column : nodes::Stack, outbox {
   // The colours it is made in, for what it makes later: its menus, the
   // icon dragged.
@@ -210,7 +210,7 @@ struct side_column : nodes::Stack, outbox {
   struct head_row : nodes::Stack {
     using explore_button = icon_button<sends<::mux::ui::request::open_explore>>;
     struct parts_t {
-      menu_button<Actions> menu;
+      menu_button menu;
       nodes::Text name;
       // The top bar of spaces, after the name: there, empty or not, unless
       // the settings say otherwise -- something can always be put in it.
@@ -220,8 +220,8 @@ struct side_column : nodes::Stack, outbox {
       // Element's compass is.
       explore_button explore;
     } parts;
-    head_row(const palette& colours, Actions* a)
-        : parts{.menu = menu_button<Actions>(colours, a),
+    head_row(const palette& colours, no_actions* a)
+        : parts{.menu = menu_button(colours, a),
                 .name = nodes::Text("mux", 17.0f, colours.text, true),
                 .explore = explore_button(colours, icon::compass{}, {a})} {
       this->setHorizontal();
@@ -254,7 +254,7 @@ struct side_column : nodes::Stack, outbox {
         fState.apply({.selected = field.focused()});
     }
   };
-  using list_t = nodes::ScrollContainer<nodes::Flow<std::vector<conversation_row<Actions>>>>;
+  using list_t = nodes::ScrollContainer<nodes::Flow<std::vector<conversation_row>>>;
   // What is right of the side bar: the search, the tabs, the chats.
   // A forum open: its name, and the way back to the chats.
   struct forum_head_t : nodes::Stack {
@@ -264,7 +264,7 @@ struct side_column : nodes::Stack, outbox {
       // Its settings: it is in no bar, to be right-pressed.
       icon_button<sends<::mux::ui::request::manage_forum>> settings;
     } parts;
-    forum_head_t(const palette& colours, Actions* a)
+    forum_head_t(const palette& colours, no_actions* a)
         : parts{.back = icon_button<sends<::mux::ui::request::close_forum>>(colours, icon::back{}, {a}),
                 .name = nodes::Text("", 15.0f, colours.text, true),
                 .settings = icon_button<sends<::mux::ui::request::manage_forum>>(colours, icon::gear{}, {a})} {
@@ -306,7 +306,7 @@ struct side_column : nodes::Stack, outbox {
       avatar_mark face;
       lines_t lines;
     } parts;
-    found_row(const palette& colours, Actions* a, const search_result& one)
+    found_row(const palette& colours, no_actions* a, const search_result& one)
         : pick{a, one.index}, parts{.face = avatar_mark(one.sender, one.name, 40.0f), .lines = lines_t(colours, one)} {
       this->setHorizontal();
       this->setGap(10.0f);
@@ -324,8 +324,8 @@ struct side_column : nodes::Stack, outbox {
   // Nothing joined matching what is searched: the rooms of the server's
   // directory and the people of its user directory that do -- as Explore
   // and Start chat list them, to join or to write to.
-  using room_rows_t = nodes::Flow<std::vector<directory_row<Actions>>>;
-  using people_rows_t = nodes::Flow<std::vector<found_person_row<Actions>>>;
+  using room_rows_t = nodes::Flow<std::vector<directory_row>>;
+  using people_rows_t = nodes::Flow<std::vector<found_person_row>>;
   struct elsewhere_list : nodes::Stack {
     struct parts_t {
       nodes::Text rooms_title;
@@ -357,13 +357,13 @@ struct side_column : nodes::Stack, outbox {
       nodes::Flow<std::vector<folder_tab<Pick>>> folders{
           {.direction = nodes::direction::horizontal{}, .spacingX = 2.0f, .spacingY = 2.0f}, {}};
       nodes::Text no_chats;
-      list_t list{nodes::Flow<std::vector<conversation_row<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
+      list_t list{nodes::Flow<std::vector<conversation_row>>({.spacingY = 0.0f, .wrap = false}, {})};
       // While a chat is searched: what was found, in the chats' place.
       nodes::Text found_title;
       found_list_t found{nodes::Flow<std::vector<found_row>>({.spacingY = 0.0f, .wrap = false}, {})};
       elsewhere_t elsewhere;
     } parts;
-    rest_t(const palette& colours, Actions* a)
+    rest_t(const palette& colours, no_actions* a)
         : parts{.forum_head = forum_head_t(colours, a),
                 .search = search_box(colours),
                 .no_chats = nodes::Text("No chats yet.", 13.0f, colours.dim),
@@ -395,7 +395,7 @@ struct side_column : nodes::Stack, outbox {
       nodes::ScrollContainer<space_icons<Pick>> side{space_icons<Pick>({.spacingY = 8.0f, .wrap = false, .crossAlign = scene::align::kMiddle}, {})};
       rest_t rest;
     } parts;
-    body_t(const palette& colours, Actions* a) : parts{.rest = rest_t(colours, a)} {
+    body_t(const palette& colours, no_actions* a) : parts{.rest = rest_t(colours, a)} {
       this->setHorizontal();
       fState.apply({.fillX = true, .grow = scene::axes::kY});
       parts.side.apply({.fillY = true, .width = 56.0f});
@@ -482,7 +482,7 @@ struct side_column : nodes::Stack, outbox {
     } parts;
     // Its places: Copy to and Move to each other account. Listed here from
     // another, its way out of this list, and its strip.
-    chat_menu(const palette& colours, Actions* a, conversation_id id, std::string name, const account_id& listing,
+    chat_menu(const palette& colours, no_actions* a, conversation_id id, std::string name, const account_id& listing,
               const std::vector<account_id>& accounts, const config::theme_t& theme)
         : parts{.title = nodes::Text(std::move(name), 13.0f, colours.dim, true),
                 .settings = widgets::Button<chat_settings_act>(colours.widgets, "Chat settings\u2026", {a, id})} {
@@ -525,7 +525,7 @@ struct side_column : nodes::Stack, outbox {
                                               [](const auto&) { return std::string(); }},
                            item);
     }
-    space_menu(const palette& colours, Actions* a, const std::string& account, const config::space_item_t& item, std::string name)
+    space_menu(const palette& colours, no_actions* a, const std::string& account, const config::space_item_t& item, std::string name)
         : parts{.title = nodes::Text(name, 13.0f, colours.dim, true),
                 .explore = widgets::Button<explore_act>(colours.widgets, "Explore its rooms\u2026", {a, room_of(item)}),
                 .manage = widgets::Button<manage_act>(colours.widgets, "Space settings\u2026", {a, room_of(item)}),
@@ -573,10 +573,10 @@ struct side_column : nodes::Stack, outbox {
   nodes::ScrollContainer<space_icons<Pick>>& side_bar = parts.body.parts.side;
   space_icons<Pick>& top_line = parts.head.parts.top.parts.line;
   space_icons<Pick>& side_line = std::get<0>(parts.body.parts.side.fChildren);
-  Actions* actions = nullptr;
+  no_actions* actions = nullptr;
   // Whose spaces the bars hold, as the screen says as it shows them.
   std::string account;
-  side_column(const palette& colours, Actions* a)
+  side_column(const palette& colours, no_actions* a)
       : colours_(&colours), parts{.head = head_row(colours, a), .body = body_t(colours, a)}, actions(a) {
     fState.apply({.fillY = true, .background = colours.sidebar});
   }

@@ -25,7 +25,7 @@ export namespace mux::app {
 
 class looks_part {
  public:
-  using accounts = mux::ui::accounts_panel<actions>;
+  using accounts = mux::ui::accounts_panel;
   looks_part(services& shared, kept_settings& kept) : s_(&shared), k_(&kept) {}
   looks_part(const looks_part&) = delete;
   looks_part& operator=(const looks_part&) = delete;

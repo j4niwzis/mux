@@ -342,7 +342,7 @@ struct actions {
   void settings_animations() { requests.emplace_back(request::settings_animations{}); }
 };
 
-using window_type = mux::ui::window<actions>;
+using window_type = mux::ui::window;
 
 }  // namespace mux::app
 

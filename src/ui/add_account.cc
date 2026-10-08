@@ -21,7 +21,6 @@ export namespace mux::ui {
 // ---- adding an account ------------------------------------------------------------
 
 // A proxy chosen for an account being added: -1 for none.
-template <class Actions>
 struct choose_new_proxy : outbox {
   int index = -1;
   void operator()() { this->send(::mux::ui::request::choose_new_proxy{index}); }
@@ -29,9 +28,8 @@ struct choose_new_proxy : outbox {
 
 // Adding an account, beside the list of them: XMPP or Matrix at the top, and
 // that protocol's form under it.
-template <class Actions>
 struct add_account_pane : nodes::Stack, outbox {
-  Actions* actions = nullptr;
+  no_actions* actions = nullptr;
   // A segment a protocol, in a thin frame -- from the list, each named as
   // its protocol names itself.
   struct pick_protocol : outbox {
@@ -43,10 +41,10 @@ struct add_account_pane : nodes::Stack, outbox {
       std::vector<segment<pick_protocol>> each;
     } parts;
     template <class... Tags>
-    void make(const palette& colours, Actions* a, protocol_list<Tags...>) {
+    void make(const palette& colours, no_actions* a, protocol_list<Tags...>) {
       (parts.each.emplace_back(colours, std::string(protocol_name(config::kept_of<Tags>{})), pick_protocol{a, protocol_t{Tags{}}}), ...);
     }
-    protocol_switch(const palette& colours, Actions* a) {
+    protocol_switch(const palette& colours, no_actions* a) {
       this->make(colours, a, protocols{});
       this->setHorizontal();
       this->setGap(1.0f);
@@ -59,10 +57,10 @@ struct add_account_pane : nodes::Stack, outbox {
     using add_button = segment<sends<::mux::ui::request::manage_proxies>>;
     struct parts_t {
       nodes::Text title;
-      std::vector<segment<choose_new_proxy<Actions>>> choices;
+      std::vector<segment<choose_new_proxy>> choices;
       add_button add;
     } parts;
-    proxy_row(const palette& colours, Actions* a)
+    proxy_row(const palette& colours, no_actions* a)
         : parts{.title = nodes::Text("Proxy", 13.0f, colours.dim), .add = add_button(colours, "Add proxy\u2026", {a})} {
       this->setHorizontal();
       this->setGap(4.0f);
@@ -76,22 +74,22 @@ struct add_account_pane : nodes::Stack, outbox {
     protocol_switch tabs;
     nodes::Text note;
     proxy_row proxies_row;
-    account_form<Actions> form;
+    account_form form;
   } parts;
   std::vector<std::string> proxy_names;
   std::optional<std::string> proxy;
   // The form coming in when the protocol changes, fading in.
   skiff::paint::Tween swap{1.0f, 200.0f, skiff::paint::movement::subtle{}};
 
-  add_account_pane(const ui_needs<Actions>& n, const std::vector<config::proxy_settings>& proxies)
+  add_account_pane(const ui_needs& n, const std::vector<config::proxy_settings>& proxies)
       : add_account_pane(n, n.actions, proxies) {}
-  add_account_pane(const ui_needs<Actions>& n, Actions* a, const std::vector<config::proxy_settings>& proxies)
+  add_account_pane(const ui_needs& n, no_actions* a, const std::vector<config::proxy_settings>& proxies)
       : actions(a),
         colours_(n.colours),
         parts{.tabs = protocol_switch(*n.colours, a),
               .note = nodes::Text("", 13.0f, n.colours->dim),
               .proxies_row = proxy_row(*n.colours, a),
-              .form = account_form<Actions>(std::in_place_index<0>, a, *n.colours, std::nullopt)} {
+              .form = account_form(std::in_place_index<0>, a, *n.colours, std::nullopt)} {
     fState.apply({.fill = true});
     this->setGap(12.0f);
     parts.note.setWrapped(true);
@@ -103,7 +101,7 @@ struct add_account_pane : nodes::Stack, outbox {
   // A protocol's form, blank, in place of the one up.
   void show(const protocol_t& speaks) {
     spl::visit([this](auto of) {
-      parts.form.template emplace<form_of_t<decltype(of), Actions>>(this->actions, *colours_, std::nullopt);
+      parts.form.template emplace<form_of_t<decltype(of), no_actions>>(this->actions, *colours_, std::nullopt);
     }, speaks);
     this->begin_swap();
     this->light();
@@ -120,9 +118,9 @@ struct add_account_pane : nodes::Stack, outbox {
     const auto chosen = proxy;
     proxy_names = std::move(names);
     choices.clear();
-    choices.emplace_back(*colours_, "None", choose_new_proxy<Actions>{actions, -1});
+    choices.emplace_back(*colours_, "None", choose_new_proxy{actions, -1});
     for (std::size_t k = 0; k < proxy_names.size(); ++k)
-      choices.emplace_back(*colours_, proxy_names[k], choose_new_proxy<Actions>{actions, static_cast<int>(k)});
+      choices.emplace_back(*colours_, proxy_names[k], choose_new_proxy{actions, static_cast<int>(k)});
     const auto at = chosen ? std::ranges::find(proxy_names, *chosen) : proxy_names.end();
     this->set_proxy(at == proxy_names.end() ? -1 : static_cast<int>(at - proxy_names.begin()));
     this->invalidateLayout();

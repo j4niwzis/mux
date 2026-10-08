@@ -115,7 +115,6 @@ struct limit_stepper : nodes::Stack {
 // messages are shown, and how much of them is kept; and every chat's room
 // events. The limits and the history's switch are the model's widgets; the
 // seal, the clearing and every chat's choices are asked as before.
-template <class Actions>
 struct storage_page : nodes::Stack {
   using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
   using clear_row = row_item<sends<::mux::ui::request::clear_stored>>;
@@ -127,7 +126,7 @@ struct storage_page : nodes::Stack {
       seal_row seal;
       change_row change;
     } parts;
-    seal_rows(const palette& colours, Actions* a, bool sealed)
+    seal_rows(const palette& colours, no_actions* a, bool sealed)
         : parts{.seal = seal_row(colours, "Encrypt local data", {a}),
                 .change = change_row(colours, "Change the passphrase", {a})} {
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -141,7 +140,7 @@ struct storage_page : nodes::Stack {
       parts.change.setVisible(sealed);
     }
   };
-  static auto settings_of(const palette& colours, Actions* a, const config::history_settings& history, bool sealed) {
+  static auto settings_of(const palette& colours, no_actions* a, const config::history_settings& history, bool sealed) {
     namespace limit = config::limit;
     using skiff::compose::bound;
     auto clear = clear_row(colours, "Clear stored messages and pictures", {a}, icon::close{});
@@ -182,9 +181,9 @@ struct storage_page : nodes::Stack {
     settings_t settings;
   } parts;
 
-  storage_page(const ui_needs<Actions>& n, const config::cache_limits&, const config::history_settings& history, bool sealed)
+  storage_page(const ui_needs& n, const config::cache_limits&, const config::history_settings& history, bool sealed)
       : storage_page(*n.colours, n.actions, history, sealed) {}
-  storage_page(const palette& colours, Actions* a, const config::history_settings& history, bool sealed)
+  storage_page(const palette& colours, no_actions* a, const config::history_settings& history, bool sealed)
       : parts{.header = header_t(colours, "Storage", {a}, {a}, true, true), .settings = settings_of(colours, a, history, sealed)} {
     fState.apply({.fill = true});
   }
@@ -213,7 +212,6 @@ inline auto notification_settings_view(const palette& colours) {
                            "KDE's), which wakes mux at once. Off, nothing is given to the servers, and mux only learns "
                            "of messages while it runs."));
 }
-template <class Actions>
 struct notifications_page : nodes::Stack {
   using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
   using settings_t = decltype(notification_settings_view(std::declval<const palette&>()));
@@ -221,9 +219,9 @@ struct notifications_page : nodes::Stack {
     header_t header;
     settings_t settings;
   } parts;
-  notifications_page(const ui_needs<Actions>& n, const config::notification_settings&)
+  notifications_page(const ui_needs& n, const config::notification_settings&)
       : notifications_page(*n.colours, n.actions) {}
-  notifications_page(const palette& colours, Actions* a)
+  notifications_page(const palette& colours, no_actions* a)
       : parts{.header = header_t(colours, "Notifications", {a}, {a}, true, true),
               .settings = notification_settings_view(colours)} {
     fState.apply({.fill = true});
@@ -243,7 +241,6 @@ inline auto files_settings_view(const palette& colours) {
       spaced_note(colours, "Metadata is where and when a picture was taken, with what, by whom: EXIF, XMP and the like. "
                            "It is cut out of the file; the picture itself is sent as it is, not compressed again."));
 }
-template <class Actions>
 struct files_page : nodes::Stack {
   using header_t = page_header<sends<::mux::ui::request::settings_home>, sends<::mux::ui::request::close_settings>>;
   using settings_t = decltype(files_settings_view(std::declval<const palette&>()));
@@ -251,8 +248,8 @@ struct files_page : nodes::Stack {
     header_t header;
     settings_t settings;
   } parts;
-  files_page(const ui_needs<Actions>& n, const config::sending_settings&) : files_page(*n.colours, n.actions) {}
-  files_page(const palette& colours, Actions* a)
+  files_page(const ui_needs& n, const config::sending_settings&) : files_page(*n.colours, n.actions) {}
+  files_page(const palette& colours, no_actions* a)
       : parts{.header = header_t(colours, "Files", {a}, {a}, true, true), .settings = files_settings_view(colours)} {
     fState.apply({.fill = true});
   }

@@ -71,11 +71,9 @@ struct drag_edge : scene::Node {
 };
 
 // Where an edge was dragged to, asked of the program.
-template <class Actions>
 struct resize_sidebar_to : outbox {
   void operator()(float x) { this->send(::mux::ui::request::resize_sidebar{x}); }
 };
-template <class Actions>
 struct resize_info_to : outbox {
   void operator()(float x) { this->send(::mux::ui::request::resize_info{x}); }
 };
@@ -96,7 +94,6 @@ struct resize_info_to : outbox {
 }
 
 // What Enter in the message field does: asks for its text to be sent.
-template <class Actions>
 struct submit_message : outbox {
   void operator()(std::string_view text) { this->send(::mux::ui::request::submit_message{with_blocks_closed(text)}); }
 };
@@ -612,10 +609,9 @@ struct message_input : nodes::Stack {
 // Where what is written goes, as a composer is told it: what its ✕, its
 // Enter, its paperclip, its emoji and its arrow do, and what its empty field
 // says. The chat's own; a thread's is its panel's.
-template <class Actions>
 struct in_chat {
   using cancel = sends<::mux::ui::request::cancel_compose>;
-  using submit = submit_message<Actions>;
+  using submit = submit_message;
   using attach = sends<::mux::ui::request::attach_files>;
   using emoji = sends<::mux::ui::request::toggle_emoji>;
   using send = sends<::mux::ui::request::send_typed>;
@@ -661,7 +657,7 @@ struct two_choice_bar : nodes::Stack {
   }
 };
 
-template <class Actions, class Where = in_chat<Actions>>
+template <class Where = in_chat>
 struct composer_bar : nodes::Stack {
   // What is written answers or edits: the reply bar, its ✕ going back to
   // a plain message.
@@ -694,7 +690,7 @@ struct composer_bar : nodes::Stack {
       nodes::Text line;
       widgets::Button<go_on> go;
     } parts;
-    replaced_row(const palette& colours, Actions* a)
+    replaced_row(const palette& colours, no_actions* a)
         : parts{.line = nodes::Text("This room has been replaced and is no longer active.", 13.0f, colours.dim),
                 .go = widgets::Button<go_on>(colours.widgets, "The conversation continues here", {a})} {
       this->setHorizontal();
@@ -741,8 +737,8 @@ struct composer_bar : nodes::Stack {
 
   // Declared: the divider, the unsent bar, the answer's line where there is
   // one, the row -- or, where the reader may not post, the line saying so.
-  explicit composer_bar(const ui_needs<Actions>& n) : composer_bar(n, {n.actions}, {n.actions}, {n.actions}, {n.actions}, {n.actions}) {}
-  composer_bar(const ui_needs<Actions>& n, typename Where::cancel cancel, typename Where::submit submit, typename Where::attach attach,
+  explicit composer_bar(const ui_needs& n) : composer_bar(n, {n.actions}, {n.actions}, {n.actions}, {n.actions}, {n.actions}) {}
+  composer_bar(const ui_needs& n, typename Where::cancel cancel, typename Where::submit submit, typename Where::attach attach,
                typename Where::emoji emoji, typename Where::send send)
       : colours_(n.colours),
         parts{.divider = nodes::Box<>(n.colours->band),
@@ -841,7 +837,7 @@ struct composer_bar : nodes::Stack {
   }
   // Those asking to join, where one may let them in: the first, and how many
   // more. Made again only as who is first changes.
-  void show_knocks(Actions* a, const std::vector<knock_request>& knocking, bool may) {
+  void show_knocks(no_actions* a, const std::vector<knock_request>& knocking, bool may) {
     if (!may || knocking.empty()) {
       if (parts.knocks) {
         parts.knocks.reset();
@@ -903,16 +899,15 @@ struct composer_bar : nodes::Stack {
 
 // Telegram's @ and heart over "↓": how many mentions of the user, or
 // reactions to theirs, are not yet seen; pressed, the oldest is gone to.
-template <class Actions>
 struct mark_button : scene::Node, outbox {
-  Actions* actions = nullptr;
+  no_actions* actions = nullptr;
   mark_kind_t kind;
   using badge_t = count_badge;
   struct parts_t {
     nodes::Text glyph;
     badge_t badge;
   } parts;
-  mark_button(const palette& colours, Actions* a, mark_kind_t which, std::string glyph)
+  mark_button(const palette& colours, no_actions* a, mark_kind_t which, std::string glyph)
       : actions(a), kind(which), parts{.glyph = nodes::Text(std::move(glyph), 18.0f, colours.text, true), .badge = badge_t(colours)} {
     fState.apply({.place = scene::anchor::kBottomRight,
                   .x = -18.0f,
@@ -964,9 +959,8 @@ struct mark_button : scene::Node, outbox {
 };
 
 // "↓": back to the newest, with how many came while one read above them.
-template <class Actions>
 struct jump_button : scene::Node, outbox {
-  Actions* actions = nullptr;
+  no_actions* actions = nullptr;
   int unseen = 0;
   // A round plate with a chevron down, and over its top the count of what
   // came while the reader was above, on a badge in the accent.
@@ -975,7 +969,7 @@ struct jump_button : scene::Node, outbox {
     nodes::Icon chevron;
     badge_t badge;
   } parts;
-  jump_button(const palette& colours, Actions* a)
+  jump_button(const palette& colours, no_actions* a)
       : actions(a), parts{.chevron = nodes::Icon(shape_of(icon::down{}), colours.text), .badge = badge_t(colours)} {
     parts.badge.setVisible(false);
     fState.apply({.place = scene::anchor::kBottomRight,
@@ -1005,13 +999,12 @@ struct jump_button : scene::Node, outbox {
 
 // Back to the chat a jump came from -- a link or a reply into another chat
 // -- over "↓", as Telegram's: the chat as it was left.
-template <class Actions>
 struct back_button : scene::Node, outbox {
-  Actions* actions = nullptr;
+  no_actions* actions = nullptr;
   struct parts_t {
     nodes::Icon mark;
   } parts;
-  back_button(const palette& colours, Actions* a) : actions(a), parts{.mark = nodes::Icon(shape_of(icon::back{}), colours.text)} {
+  back_button(const palette& colours, no_actions* a) : actions(a), parts{.mark = nodes::Icon(shape_of(icon::back{}), colours.text)} {
     fState.apply({.place = scene::anchor::kBottomRight,
                   .x = -18.0f,
                   .y = -12.0f,

@@ -53,9 +53,8 @@ export namespace mux::ui {
 
 // One account in the list: its address, protocol and state. A click shows
 // its settings beside the list.
-template <class Actions>
 struct account_entry : nodes::Stack, outbox {
-  Actions* actions = nullptr;
+  no_actions* actions = nullptr;
   std::string address;
   bool selected = false;
   struct parts_t {
@@ -65,7 +64,7 @@ struct account_entry : nodes::Stack, outbox {
 
   // Declared: its address over its protocol and state, on a plate lit
   // while it is the one chosen.
-  account_entry(const ui_needs<Actions>& n, const config::account_t& saved, const model& now, bool is_selected)
+  account_entry(const ui_needs& n, const config::account_t& saved, const model& now, bool is_selected)
       : actions(n.actions), address(config::address_of(saved)), selected(is_selected),
         parts{.name = nodes::Text(address, 15.0f, n.colours->text, true), .state = nodes::Text("", 13.0f, n.colours->dim)} {
     const palette& colours = *n.colours;
@@ -96,22 +95,21 @@ struct account_entry : nodes::Stack, outbox {
 };
 
 // The chosen account: on or off, removed, and its own protocol's form.
-template <class Actions>
 struct account_editor : nodes::Stack {
   // Its address, then on or off and Remove, in a line.
   struct head_row : nodes::Stack {
     struct parts_t {
       nodes::Text heading;
       nodes::Text enabled_label;
-      widgets::Toggle<flip_account<Actions>> enabled;
-      widgets::Button<remove_account<Actions>> remove;
+      widgets::Toggle<flip_account> enabled;
+      widgets::Button<remove_account> remove;
     } parts;
-    head_row(const palette& colours, Actions* a, const config::account_t& saved)
+    head_row(const palette& colours, no_actions* a, const config::account_t& saved)
         : parts{.heading = nodes::Text(config::address_of(saved), 20.0f, colours.text, true),
                 .enabled_label = nodes::Text("On", 13.0f, colours.dim),
-                .enabled = widgets::Toggle<flip_account<Actions>>(colours.widgets, flip_account<Actions>{a, config::address_of(saved)}),
-                .remove = widgets::Button<remove_account<Actions>>(colours.widgets, 
-                    "Remove", remove_account<Actions>{a, config::address_of(saved)})} {
+                .enabled = widgets::Toggle<flip_account>(colours.widgets, flip_account{a, config::address_of(saved)}),
+                .remove = widgets::Button<remove_account>(colours.widgets, 
+                    "Remove", remove_account{a, config::address_of(saved)})} {
       this->setHorizontal();
       this->setGap(10.0f);
       fState.apply({.fillX = true, .autoSize = scene::axes::kY});
@@ -128,10 +126,10 @@ struct account_editor : nodes::Stack {
   struct parts_t {
     head_row head;
     nodes::Text state;
-    account_form<Actions> form;
+    account_form form;
   } parts;
 
-  account_editor(const ui_needs<Actions>& n, const config::account_t& saved)
+  account_editor(const ui_needs& n, const config::account_t& saved)
       : colours_(n.colours),
         parts{.head = head_row(*n.colours, n.actions, saved),
               .state = nodes::Text("", 13.0f, n.colours->dim),
@@ -177,7 +175,6 @@ struct switch_row : nodes::Stack {
 
 
 // A page of an account's settings chosen from its list.
-template <class Actions>
 struct choose_account_page : outbox {
   account_page_t page = account_page::connection{};
   void operator()() { this->send(::mux::ui::request::account_page{page}); }
@@ -186,10 +183,9 @@ struct choose_account_page : outbox {
 // An account's pages, in place of the list of accounts once one is chosen: a
 // line for each page of its settings, the one shown lit -- the client's, and
 // after Chats its protocol's own.
-template <class Actions>
 struct account_pages : nodes::Stack, outbox {
-  using row = row_item<choose_account_page<Actions>>;
-  Actions* actions = nullptr;
+  using row = row_item<choose_account_page>;
+  no_actions* actions = nullptr;
   // The colours its protocol's rows are made in, as they change.
   const palette* colours_ = nullptr;
   struct parts_t {
@@ -201,7 +197,7 @@ struct account_pages : nodes::Stack, outbox {
     row proxy;
   } parts;
 
-  account_pages(const palette& colours, Actions* a)
+  account_pages(const palette& colours, no_actions* a)
       : actions(a), colours_(&colours),
         parts{.connection = row(colours, "Connection", {a, account_page::connection{}}, icon::sliders{}),
               .privacy = row(colours, "Privacy", {a, account_page::privacy{}}, icon::eye{}),
@@ -214,7 +210,7 @@ struct account_pages : nodes::Stack, outbox {
   // A protocol's pages: each its title and icon, by its own overloads.
   template <class... Pages>
   void add(proto::account_page_list<Pages...>) {
-    (parts.own.emplace_back(*colours_, std::string(page_title(Pages{})), choose_account_page<Actions>{actions, account_page_t{Pages{}}},
+    (parts.own.emplace_back(*colours_, std::string(page_title(Pages{})), choose_account_page{actions, account_page_t{Pages{}}},
                             page_icon(Pages{})),
      ...);
   }
@@ -268,7 +264,6 @@ inline auto account_chats_view(const palette& colours, std::string address) {
       std::move(address));
 }
 
-template <class Actions>
 struct account_privacy : nodes::Stack {
   using receipts_row = switch_row<sends<::mux::ui::request::flip_account_receipts>>;
   using mentions_shared_row = switch_row<sends<::mux::ui::request::flip_account_mentions_shared>>;
@@ -286,8 +281,8 @@ struct account_privacy : nodes::Stack {
   } parts;
 
   template <class... Rest>
-  account_privacy(const ui_needs<Actions>& n, Rest&&... rest) : account_privacy(*n.colours, n.actions, std::forward<Rest>(rest)...) {}
-  account_privacy(const palette& colours, Actions* a, bool receipts_on, std::string address, std::optional<bool> events_all = std::nullopt,
+  account_privacy(const ui_needs& n, Rest&&... rest) : account_privacy(*n.colours, n.actions, std::forward<Rest>(rest)...) {}
+  account_privacy(const palette& colours, no_actions* a, bool receipts_on, std::string address, std::optional<bool> events_all = std::nullopt,
                   const std::optional<config::room_event_kinds>& kinds = std::nullopt, bool notify_on = true,
                   bool notify_sound_on = true, std::optional<bool> faces_on = std::nullopt,
                   std::optional<std::int64_t> jump_most = std::nullopt, std::optional<bool> previews_on = std::nullopt,
@@ -352,7 +347,6 @@ inline auto account_notify_view(const palette& colours, std::string address) {
 // An account's Notifications page: whether what comes through it is told --
 // a message, an invite -- and with sound; each chat of it may choose again
 // in its own settings.
-template <class Actions>
 struct account_notifications : nodes::Stack {
   using settings_t = decltype(account_notify_view(std::declval<const palette&>(), std::string()));
   struct parts_t {
@@ -360,7 +354,7 @@ struct account_notifications : nodes::Stack {
     settings_t settings;
     nodes::Text note;
   } parts;
-  account_notifications(const ui_needs<Actions>& n, std::string address)
+  account_notifications(const ui_needs& n, std::string address)
       : parts{.title = section_title(*n.colours, "NOTIFICATIONS"),
               .settings = account_notify_view(*n.colours, std::move(address)),
               .note = note_text(*n.colours, "For messages and invites that come through this account; Default is as the "
@@ -378,7 +372,6 @@ struct account_notifications : nodes::Stack {
 // who has read up to where, link previews, how far a jump looks back, their
 // looks, and its spaces in the bars. Each as every account's, until chosen
 // here; a chat of it may choose again.
-template <class Actions>
 struct account_chats : nodes::Stack {
   // Its colour chosen.
   struct set_colour : outbox {
@@ -401,12 +394,12 @@ struct account_chats : nodes::Stack {
     nodes::Text title;
     decltype(account_chats_view(std::declval<const palette&>(), std::string())) settings;
     nodes::Text looks_title;
-    look_choices<Actions> looks;
+    look_choices looks;
     nodes::Text spaces_title;
     choice_menu<pick_home> home;
-    spaces_choices<Actions> places;
+    spaces_choices places;
   } parts;
-  account_chats(Actions* a, const palette& colours, const looks_shown& looks, const ui_shared& shared, std::string address,
+  account_chats(no_actions* a, const palette& colours, const looks_shown& looks, const ui_shared& shared, std::string address,
                 const chat_choice_values& chats, std::optional<bool> home_hides,
                 std::optional<bool> home_direct, const config::accent_t& colour, bool strip_on, const config::theme_t& theme)
       : parts{.colour_title = section_title(colours, "COLOUR"),
@@ -415,13 +408,13 @@ struct account_chats : nodes::Stack {
               .title = section_title(colours, "CHATS"),
               .settings = account_chats_view(colours, std::move(address)),
               .looks_title = section_title(colours, "LOOKS"),
-              .looks = look_choices<Actions>(a, colours, looks, choice_level::account{}),
+              .looks = look_choices(a, colours, looks, choice_level::account{}),
               .spaces_title = section_title(colours, "SPACES"),
               .home = choice_menu<pick_home>(colours, "Home",
                                              {"As above", "Every chat", "Without chats spaces hold",
                                               "Without those and direct messages"},
                                              !home_hides ? 0 : !*home_hides ? 1 : home_direct.value_or(false) ? 3 : 2, pick_home{a}),
-              .places = spaces_choices<Actions>(a, colours, shared)} {
+              .places = spaces_choices(a, colours, shared)} {
     this->setGap(8.0f);
     fState.apply({.fillX = true, .autoSize = scene::axes::kY});
     for (nodes::Text* each : {&parts.title, &parts.looks_title, &parts.spaces_title})
@@ -436,7 +429,6 @@ struct account_chats : nodes::Stack {
 };
 
 // A proxy profile chosen for the chosen account: -1 for none.
-template <class Actions>
 struct choose_account_proxy : outbox {
   int index = -1;
   void operator()() { this->send(::mux::ui::request::choose_account_proxy{index}); }
@@ -444,16 +436,15 @@ struct choose_account_proxy : outbox {
 
 // An account's Proxy page, as Gajim's: which of the program's proxy profiles
 // it connects through, or none; and the way to the profiles themselves.
-template <class Actions>
 struct account_proxy : nodes::Stack {
   using manage_row = row_item<sends<::mux::ui::request::manage_proxies>>;
   struct parts_t {
     nodes::Text title;
-    std::vector<row_item<choose_account_proxy<Actions>>> choices;
+    std::vector<row_item<choose_account_proxy>> choices;
     manage_row manage;
   } parts;
 
-  account_proxy(Actions* a, const palette& colours, const std::vector<config::proxy_settings>& all, const std::optional<std::string>& current)
+  account_proxy(no_actions* a, const palette& colours, const std::vector<config::proxy_settings>& all, const std::optional<std::string>& current)
       : parts{.title = section_title(colours, "PROXY"),
               .manage = manage_row(colours, "Manage proxies…", {a}, icon::gear{})} {
     auto& choices = parts.choices;
@@ -461,12 +452,12 @@ struct account_proxy : nodes::Stack {
     parts.manage.apply({.margin = {8.0f, 0.0f, 0.0f, 0.0f}});
     fState.apply({.fill = true});
     // An empty place where the dots are, so the names line up.
-    choices.emplace_back(colours, "No proxy", choose_account_proxy<Actions>{a, -1}, icon::dot{skia::colorSetARGB(0, 0, 0, 0)},
+    choices.emplace_back(colours, "No proxy", choose_account_proxy{a, -1}, icon::dot{skia::colorSetARGB(0, 0, 0, 0)},
                          !current.has_value());
     for (std::size_t i = 0; i < all.size(); ++i)
       choices.emplace_back(colours, std::format("{} ({} {}:{})", all[i].name, config::label_of(config::proxy_kind_of(all[i].kind)),
                                        all[i].host, all[i].port),
-                           choose_account_proxy<Actions>{a, static_cast<int>(i)}, icon::dot{proxy_colour(all[i].name)},
+                           choose_account_proxy{a, static_cast<int>(i)}, icon::dot{proxy_colour(all[i].name)},
                            current && *current == all[i].name);
   }
   void show(bool) {}
@@ -475,8 +466,7 @@ struct account_proxy : nodes::Stack {
 
 // The saved accounts down the side, and the chosen one's settings beside
 // them.
-template <class Actions>
-struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::accounts_back>> {
+struct accounts_panel : closes_on_escape<sends<::mux::ui::request::accounts_back>> {
   static constexpr int kTab = 2;
   static constexpr float kListWidth = 280.0f;
 
@@ -484,13 +474,13 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
   // The proxy profiles, for adding an account through one.
   std::vector<config::proxy_settings> proxies;
 
-  using actions_type = Actions;
+  using actions_type = no_actions;
   // A protocol's account pages, as the nodes its page_type makes of them.
   template <class List>
   struct page_nodes;
   template <class... Pages>
   struct page_nodes<type_list<Pages...>> {
-    using type = type_list<typename decltype(page_type(Pages{}, type_tag<Actions>{}))::type...>;
+    using type = type_list<typename decltype(page_type(Pages{}, type_tag<no_actions>{}))::type...>;
   };
   // Its ← goes back from an account's pages to the list, and from the list
   // to the chats.
@@ -501,18 +491,18 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
       using add_row = row_item<sends<::mux::ui::request::open_new_account>>;
       struct parts_t {
         add_row add;
-        account_pages<Actions> pages;
+        account_pages pages;
         nodes::Text message;
-        nodes::ScrollContainer<nodes::Flow<std::vector<account_entry<Actions>>>> list{
-            nodes::Flow<std::vector<account_entry<Actions>>>({.spacingY = 0.0f, .wrap = false}, {})};
+        nodes::ScrollContainer<nodes::Flow<std::vector<account_entry>>> list{
+            nodes::Flow<std::vector<account_entry>>({.spacingY = 0.0f, .wrap = false}, {})};
       } parts;
       add_row& add = parts.add;
-      account_pages<Actions>& pages = parts.pages;
+      account_pages& pages = parts.pages;
       nodes::Text& message = parts.message;
       decltype(parts_t::list)& list = parts.list;
-      side_column(const palette& colours, Actions* a)
+      side_column(const palette& colours, no_actions* a)
           : parts{.add = add_row(colours, "Add account", {a}, icon::plus{}),
-                  .pages = account_pages<Actions>(colours, a),
+                  .pages = account_pages(colours, a),
                   .message = nodes::Text("", 13.0f, colours.error)} {
         fState.apply({.fillY = true, .width = kListWidth, .background = colours.sidebar});
         pages.setVisible(false);
@@ -525,8 +515,8 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
     };
     // The client's pages, then each protocol's own: made by its page_type.
     using detail_t = typename variant_of_types<typename joined<
-        type_list<nodes::Text, account_editor<Actions>, add_account_pane<Actions>, account_privacy<Actions>, account_proxy<Actions>,
-                  account_chats<Actions>, account_notifications<Actions>>,
+        type_list<nodes::Text, account_editor, add_account_pane, account_privacy, account_proxy,
+                  account_chats, account_notifications>,
         typename page_nodes<typename protocol_account_pages<protocols>::type>::type>::type>::type;
     struct detail_column : nodes::Stack {
       // No account chosen, or the chosen one, or adding one.
@@ -544,7 +534,7 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
       side_column side;
       detail_column main;
     } parts;
-    body_row(const palette& colours, Actions* a) : parts{.side = side_column(colours, a), .main = detail_column(colours)} {
+    body_row(const palette& colours, no_actions* a) : parts{.side = side_column(colours, a), .main = detail_column(colours)} {
       this->setHorizontal();
       fState.apply({.fillX = true, .grow = scene::axes::kY});
     }
@@ -577,7 +567,7 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
   } parts;
   header_t& header = parts.header;
   typename body_row::side_column::add_row& add = parts.body.parts.side.add;
-  account_pages<Actions>& pages = parts.body.parts.side.pages;
+  account_pages& pages = parts.body.parts.side.pages;
   nodes::Text& message = parts.body.parts.side.message;
   decltype(body_row::side_column::parts_t::list)& list = parts.body.parts.side.list;
   typename body_row::detail_t& detail = std::get<0>(parts.body.parts.main.parts.scroll.fChildren);
@@ -635,10 +625,10 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
   }
 
   // What it was handed, for the panes it makes.
-  ui_needs<Actions> needs_;
-  explicit accounts_panel(const ui_needs<Actions>& n) : accounts_panel(n, n.actions) {}
-  accounts_panel(const ui_needs<Actions>& n, Actions* a)
-      : closes_on_escape<Actions, sends<::mux::ui::request::accounts_back>>(a),
+  ui_needs needs_;
+  explicit accounts_panel(const ui_needs& n) : accounts_panel(n, n.actions) {}
+  accounts_panel(const ui_needs& n, no_actions* a)
+      : closes_on_escape<sends<::mux::ui::request::accounts_back>>(a),
         parts{.header = header_t(*n.colours, "Accounts", {a}, {a}, true, false), .body = body_row(*n.colours, a)},
         needs_(n) {
     this->fState.apply({.fill = true});
@@ -706,7 +696,7 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
             [&](account_page::proxy) { detail.template emplace<4>(this->actions, *needs_.colours, proxies, config::proxy_of(one)); },
             // A protocol's own: its node, made for the program's actions.
             [&]<class Page>(Page) {
-              detail.template emplace<typename decltype(page_type(Page{}, type_tag<Actions>{}))::type>(this->actions, *needs_.colours, *needs_.shared, one,
+              detail.template emplace<typename decltype(page_type(Page{}, type_tag<no_actions>{}))::type>(this->actions, *needs_.colours, *needs_.shared, one,
                                                                                                                  now);
             }},
         page);
@@ -714,14 +704,14 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
     this->begin_swap();
     this->invalidateLayout();
   }
-  [[nodiscard]] account_privacy<Actions>* privacy() {
-    return spl::visit(spl::overloaded{[](account_privacy<Actions>& one) { return &one; },
-                                 [](auto&) -> account_privacy<Actions>* { return nullptr; }},
+  [[nodiscard]] account_privacy* privacy() {
+    return spl::visit(spl::overloaded{[](account_privacy& one) { return &one; },
+                                 [](auto&) -> account_privacy* { return nullptr; }},
                       detail);
   }
-  [[nodiscard]] account_chats<Actions>* chats_page() {
-    return spl::visit(spl::overloaded{[](account_chats<Actions>& one) { return &one; },
-                                            [](auto&) -> account_chats<Actions>* { return nullptr; }},
+  [[nodiscard]] account_chats* chats_page() {
+    return spl::visit(spl::overloaded{[](account_chats& one) { return &one; },
+                                            [](auto&) -> account_chats* { return nullptr; }},
                          detail);
   }
   // The page shown, where it is one of this type: a protocol's own, as the
@@ -743,9 +733,9 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
   [[nodiscard]] Node* shown_page() {
     return spl::visit(spl::overloaded{[](Node& one) { return &one; }, [](auto&) -> Node* { return nullptr; }}, detail);
   }
-  [[nodiscard]] account_proxy<Actions>* proxy() {
-    return spl::visit(spl::overloaded{[](account_proxy<Actions>& one) { return &one; },
-                                 [](auto&) -> account_proxy<Actions>* { return nullptr; }},
+  [[nodiscard]] account_proxy* proxy() {
+    return spl::visit(spl::overloaded{[](account_proxy& one) { return &one; },
+                                 [](auto&) -> account_proxy* { return nullptr; }},
                       detail);
   }
   [[nodiscard]] bool pages_open() const { return pages.visible(); }
@@ -814,21 +804,21 @@ struct accounts_panel : closes_on_escape<Actions, sends<::mux::ui::request::acco
     this->invalidateLayout();
   }
 
-  [[nodiscard]] account_editor<Actions>* editor() {
-    return spl::visit(spl::overloaded{[](account_editor<Actions>& one) { return &one; },
-                                 [](auto&) -> account_editor<Actions>* { return nullptr; }},
+  [[nodiscard]] account_editor* editor() {
+    return spl::visit(spl::overloaded{[](account_editor& one) { return &one; },
+                                 [](auto&) -> account_editor* { return nullptr; }},
                       detail);
   }
-  [[nodiscard]] add_account_pane<Actions>* adding() {
-    return spl::visit(spl::overloaded{[](add_account_pane<Actions>& one) { return &one; },
-                                 [](auto&) -> add_account_pane<Actions>* { return nullptr; }},
+  [[nodiscard]] add_account_pane* adding() {
+    return spl::visit(spl::overloaded{[](add_account_pane& one) { return &one; },
+                                 [](auto&) -> add_account_pane* { return nullptr; }},
                       detail);
   }
   // The account form up -- an editor's, or the pane's that adds one.
-  [[nodiscard]] account_form<Actions>* form() {
-    return spl::visit(spl::overloaded{[](account_editor<Actions>& one) { return &one.parts.form; },
-                                 [](add_account_pane<Actions>& one) { return &one.parts.form; },
-                                 [](auto&) -> account_form<Actions>* { return nullptr; }},
+  [[nodiscard]] account_form* form() {
+    return spl::visit(spl::overloaded{[](account_editor& one) { return &one.parts.form; },
+                                 [](add_account_pane& one) { return &one.parts.form; },
+                                 [](auto&) -> account_form* { return nullptr; }},
                       detail);
   }
 

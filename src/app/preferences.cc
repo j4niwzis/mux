@@ -25,7 +25,7 @@ export namespace mux::app {
 
 class preferences_part {
  public:
-  using accounts = mux::ui::accounts_panel<actions>;
+  using accounts = mux::ui::accounts_panel;
   preferences_part(services& shared, kept_settings& kept, proxies_part& proxying)
       : s_(&shared), k_(&kept), proxying_(&proxying) {}
   preferences_part(const preferences_part&) = delete;

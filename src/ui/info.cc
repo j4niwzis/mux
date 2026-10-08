@@ -54,9 +54,8 @@ export namespace mux::ui {
   return level > 0 ? std::format("Level {}", level) : std::string("Member");
 }
 
-template <class Actions>
 struct info_panel : nodes::Stack, outbox {
-  Actions* actions = nullptr;
+  no_actions* actions = nullptr;
   // The colours it is made in, for what it makes later; and what the
   // window's parts share: the accounts' protocol states.
   const palette* colours_ = nullptr;
@@ -138,7 +137,7 @@ struct info_panel : nodes::Stack, outbox {
         nodes::Box<> gap{skia::colorSetARGB(0, 0, 0, 0)};
         close_button close;
       } parts;
-      top_row(Actions* a, info_panel* panel, bool with_back)
+      top_row(no_actions* a, info_panel* panel, bool with_back)
           : parts{.back = icon_button<back_to_group>(*panel->colours_, icon::back{}, {panel}),
                   .close = close_button(*panel->colours_, icon::close{}, {a})} {
         this->setHorizontal();
@@ -156,7 +155,7 @@ struct info_panel : nodes::Stack, outbox {
         manage_tile manage;
         leave_tile leave;
       } parts;
-      tiles_row(Actions* a, const palette& colours, bool muted, bool leavable)
+      tiles_row(no_actions* a, const palette& colours, bool muted, bool leavable)
           : parts{.mute = mute_tile(colours, muted ? "Unmute" : "Mute", icon::bell{}, {a}),
                   .manage = manage_tile(colours, "Manage", icon::sliders{}, {a}),
                   .leave = leave_tile(colours, "Leave", icon::leave{}, {a})} {
@@ -174,7 +173,7 @@ struct info_panel : nodes::Stack, outbox {
       struct parts_t {
         action_tile<message_them> message;
       } parts;
-      person_row(Actions* a, info_panel* panel)
+      person_row(no_actions* a, info_panel* panel)
           : parts{.message = action_tile<message_them>(*panel->colours_, "Message", icon::send{}, {a, panel})} {
         this->setHorizontal();
         fState.apply({.fillX = true, .autoSize = scene::axes::kY, .margin = {16.0f, 16.0f, 4.0f, 16.0f}});
@@ -200,7 +199,7 @@ struct info_panel : nodes::Stack, outbox {
     };
     struct parts_t {
       top_row top;
-      avatar_button<Actions> avatar;
+      avatar_button avatar;
       nodes::Text name;
       nodes::Text status;
       std::optional<tiles_row> tiles;
@@ -211,9 +210,9 @@ struct info_panel : nodes::Stack, outbox {
       id_line id_text;
     } parts;
 
-    head(Actions* a, info_panel* panel, const view& shown)
+    head(no_actions* a, info_panel* panel, const view& shown)
         : parts{.top = top_row(a, panel, shown.of_person),
-                .avatar = avatar_button<Actions>(a, shown.key, shown.name, 96.0f),
+                .avatar = avatar_button(a, shown.key, shown.name, 96.0f),
                 .name = nodes::Text(shown.name, 17.0f, panel->colours_->text, true),
                 .status = nodes::Text(shown.status, 13.0f, panel->colours_->dim),
                 .band_1 = section_band(*panel->colours_),
@@ -237,13 +236,13 @@ struct info_panel : nodes::Stack, outbox {
     }
   };
   struct members_head : nodes::Stack {
-    using add_button = icon_button<not_yet<Actions>>;
+    using add_button = icon_button<not_yet>;
     struct parts_t {
       icon_view people;
       nodes::Text title;
       add_button add_member;
     } parts;
-    members_head(Actions* a, const palette& colours, std::size_t count)
+    members_head(no_actions* a, const palette& colours, std::size_t count)
         : parts{.people = icon_view(colours, icon::people{}),
                 .title = nodes::Text(std::format("{} MEMBER{}", count, count == 1 ? "" : "S"), 13.0f, colours.dim, true),
                 .add_member = add_button(colours, icon::add_person{}, {a, "Adding members"})} {
@@ -284,7 +283,7 @@ struct info_panel : nodes::Stack, outbox {
 
   static constexpr float kWidth = 340.0f;
 
-  info_panel(Actions* a, const palette& colours, const ui_shared& shared) : actions(a), colours_(&colours), shared_(&shared), parts{.scroll = nodes::ScrollContainer<column>(column(colours)), .edge = nodes::Box<>(colours.band)} {
+  info_panel(no_actions* a, const palette& colours, const ui_shared& shared) : actions(a), colours_(&colours), shared_(&shared), parts{.scroll = nodes::ScrollContainer<column>(column(colours)), .edge = nodes::Box<>(colours.band)} {
     fState.apply({.background = colours.sidebar, .masking = true});
     parts.edge.apply({.place = scene::anchor::kTopLeft, .fillY = true, .width = 1.0f});
     parts.scroll.apply({.fillX = true, .grow = scene::axes::kY});

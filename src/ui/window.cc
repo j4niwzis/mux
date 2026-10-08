@@ -35,10 +35,9 @@ export namespace mux::ui {
 // from the right and back out when closed; and over both, the drawer, pulled
 // out from the left. All in this one window, switched by the program between
 // events.
-template <class Actions>
 struct window : scene::Node, outbox {
-  using panel_type = spl::variant<accounts_panel<Actions>>;
-  using with_drawer = widgets::Drawer<conversations_screen<Actions>, drawer_panel<Actions>>;
+  using panel_type = spl::variant<accounts_panel>;
+  using with_drawer = widgets::Drawer<conversations_screen, drawer_panel>;
 
   // What the window holds, made anew when the theme changes: what is made
   // takes its colours then. Its layers, bottom to top.
@@ -77,14 +76,14 @@ struct window : scene::Node, outbox {
       std::optional<widgets::Button<key_it>> plain;
     } parts;
     // A selectable text's.
-    text_menu(const ui_needs<Actions>& n, std::string text, std::optional<std::string> link) : text_menu(*n.colours) {
+    text_menu(const ui_needs& n, std::string text, std::optional<std::string> link) : text_menu(*n.colours) {
       parts.copy.emplace(n.colours->widgets, "Copy", copy_it{n.actions, std::move(text)});
       if (link)
         parts.copy_link.emplace(n.colours->widgets, "Copy Link", copy_it{n.actions, std::move(*link)});
       this->rows();
     }
     // A field's.
-    text_menu(const ui_needs<Actions>& n, const scene::text_menu::of_field& field) : text_menu(*n.colours) {
+    text_menu(const ui_needs& n, const scene::text_menu::of_field& field) : text_menu(*n.colours) {
       const auto item = [&](std::optional<widgets::Button<key_it>>& button, std::string label, scene::Key key,
                             bool shift = false) {
         button.emplace(n.colours->widgets, std::move(label), key_it{n.actions, key, shift});
@@ -131,7 +130,7 @@ struct window : scene::Node, outbox {
   struct dialog_nodes;
   template <class... Ds>
   struct dialog_nodes<proto::dialog_list<Ds...>> {
-    using type = type_list<typename decltype(dialog_type(Ds{}, type_tag<Actions>{}))::type...>;
+    using type = type_list<typename decltype(dialog_type(Ds{}, type_tag<no_actions>{}))::type...>;
   };
   template <class>
   struct protocol_dialog_nodes;
@@ -165,55 +164,55 @@ struct window : scene::Node, outbox {
       wallpaper_t behind;
       // The pages slide over the drawer too: Manage accounts comes in over it.
       frame_t frame;
-      widgets::Dialog<settings_dialog<Actions>> settings;
-      widgets::Dialog<notice_box<Actions>> notice;
+      widgets::Dialog<settings_dialog> settings;
+      widgets::Dialog<notice_box> notice;
       // A person's info, in the middle, as tdesktop's profile layer.
-      widgets::Dialog<person_card<Actions>> person;
+      widgets::Dialog<person_card> person;
       // A room not joined, from a link: its card, as a person's.
-      widgets::Dialog<room_card<Actions>> room;
+      widgets::Dialog<room_card> room;
       // A message's reactions as events.
-      widgets::Dialog<reactions_box<Actions>> reactions;
+      widgets::Dialog<reactions_box> reactions;
       // A message's earlier versions, as AyuGram's edit history.
-      widgets::Dialog<edit_history_box<Actions>> history;
+      widgets::Dialog<edit_history_box> history;
       // A link put on what is selected in the message field: Ctrl+K's.
-      widgets::Dialog<link_box<Actions>> linking;
+      widgets::Dialog<link_box> linking;
       // Leaving a space, and which of its rooms with it.
-      widgets::Dialog<leave_space_box<Actions>> leaving;
+      widgets::Dialog<leave_space_box> leaving;
       // The mentions or the reactions not yet seen, listed.
-      widgets::Dialog<marks_box<Actions>> marks;
+      widgets::Dialog<marks_box> marks;
       // A room's management.
-      widgets::Dialog<room_settings<Actions>> manage;
+      widgets::Dialog<room_settings> manage;
       // Where a message is forwarded to.
-      widgets::Dialog<forward_box<Actions>> forwarding;
+      widgets::Dialog<forward_box> forwarding;
       // Element's Start chat, and its Create a room.
-      widgets::Dialog<start_chat_box<Actions>> new_chat;
-      widgets::Dialog<create_room_box<Actions>> new_room;
+      widgets::Dialog<start_chat_box> new_chat;
+      widgets::Dialog<create_room_box> new_room;
       // Emojis & Stickers: a room's packs, or one's own.
-      widgets::Dialog<packs_box<Actions>> packs;
+      widgets::Dialog<packs_box> packs;
       // A chat background chosen, at a level.
-      widgets::Dialog<wallpaper_box<Actions>> wallpaper;
+      widgets::Dialog<wallpaper_box> wallpaper;
       // A server's public rooms, searched.
-      widgets::Dialog<explore_box<Actions>> explore;
+      widgets::Dialog<explore_box> explore;
       // A protocol's own dialog: Matrix's developer tools, for one.
       widgets::Dialog<tool_holder> tools;
-      widgets::Dialog<send_box<Actions>> sending;
+      widgets::Dialog<send_box> sending;
       // A passphrase asked for: at the start, where local data is encrypted;
       // or to turn that on or off, or change it. Over everything.
-      widgets::Dialog<passphrase_box<Actions>> passphrase;
+      widgets::Dialog<passphrase_box> passphrase;
       // An emoji verification, as it goes.
-      widgets::Dialog<verification_box<Actions>> verifying;
-      std::optional<emoji_popup<Actions>> emoji;
-      std::optional<context_menu<Actions>> menu;
-      std::optional<picture_viewer<Actions>> viewer;
+      widgets::Dialog<verification_box> verifying;
+      std::optional<emoji_popup> emoji;
+      std::optional<context_menu> menu;
+      std::optional<picture_viewer> viewer;
       // A selectable text's menu, where it was pressed with the right button.
       std::optional<text_menu> text_menu_up;
       // A call, while there is one: over everything.
-      std::optional<call_bar<Actions>> call_up;
+      std::optional<call_bar> call_up;
       // A call on a phone: the whole window, as Element's phone apps.
-      std::optional<call_screen<Actions>> call_whole;
+      std::optional<call_screen> call_whole;
     } parts;
 
-    Actions* actions_of = nullptr;
+    no_actions* actions_of = nullptr;
     // Where the pointer was last pressed, in the window: where a menu asked
     // by that press is put. A press off the text menu closes it, at once --
     // nothing of it is pressed.
@@ -259,7 +258,7 @@ struct window : scene::Node, outbox {
     void onKey(scene::phase::capture, const scene::key::down& press, scene::Reply& reply) {
       if (press.key != scene::keys::kEscape)
         return;
-      Actions* a = actions_of;
+      no_actions* a = actions_of;
       const auto closed = [&] { reply.handle(); };
       if (parts.text_menu_up) {
         parts.text_menu_up.reset();
@@ -383,8 +382,8 @@ struct window : scene::Node, outbox {
       over_if(emoji, menu, viewer, text_menu_up, call_up, call_whole);
     }
 
-    explicit layers(const ui_needs<Actions>& n) : layers(n, n.actions) {}
-    layers(const ui_needs<Actions>& n, Actions* a)
+    explicit layers(const ui_needs& n) : layers(n, n.actions) {}
+    layers(const ui_needs& n, no_actions* a)
         : parts{.backdrop = nodes::Box<>(n.colours->background),
                 .frame = frame_t(std::piecewise_construct, std::forward_as_tuple(n), std::forward_as_tuple(n))},
           actions_of(a) {
@@ -402,7 +401,7 @@ struct window : scene::Node, outbox {
     }
   };
 
-  Actions* actions = nullptr;
+  no_actions* actions = nullptr;
   struct parts_t {
     std::optional<layers> now;
   } parts;
@@ -410,8 +409,8 @@ struct window : scene::Node, outbox {
   [[nodiscard]] typename layers::parts_t& layer() { return parts.now->parts; }
 
   // What it was handed: the program's own objects, for the layers it makes.
-  ui_needs<Actions> needs_;
-  explicit window(const ui_needs<Actions>& n) : actions(n.actions), needs_(n) {
+  ui_needs needs_;
+  explicit window(const ui_needs& n) : actions(n.actions), needs_(n) {
     fState.apply({.fill = true});
     parts.now.emplace(n);
   }
@@ -423,7 +422,7 @@ struct window : scene::Node, outbox {
     this->markDamaged();
   }
 
-  [[nodiscard]] conversations_screen<Actions>& main() { return layer().frame.base().base(); }
+  [[nodiscard]] conversations_screen& main() { return layer().frame.base().base(); }
   // The background behind the whole window, where it is so.
   void show_behind(const config::wallpaper_t& chosen) {
     if (needs_.looks->window.behind)
@@ -478,7 +477,7 @@ struct window : scene::Node, outbox {
     layer().sending.open(needs_, files);
   }
   void close_send_box() { layer().sending.close(); }
-  [[nodiscard]] send_box<Actions>* send_box_up() { return layer().sending.shown(); }
+  [[nodiscard]] send_box* send_box_up() { return layer().sending.shown(); }
   void close_picture() { layer().viewer.reset(); }
   // A video: the viewer on its thumbnail, waiting for it; played once its
   // file is there, where the viewer is still up for it.
@@ -491,7 +490,7 @@ struct window : scene::Node, outbox {
       up->start(file);
   }
   void close_settings() { layer().settings.close(); }
-  [[nodiscard]] settings_dialog<Actions>* settings_up() { return layer().settings.shown(); }
+  [[nodiscard]] settings_dialog* settings_up() { return layer().settings.shown(); }
   // A selectable text's menu, where the pointer was pressed, kept in the
   // window; and gone.
   void show_text_menu(std::string text, std::optional<std::string> link = std::nullopt) {
@@ -572,7 +571,7 @@ struct window : scene::Node, outbox {
       now.markDamaged();
     }
   }
-  [[nodiscard]] room_settings<Actions>* manage_up() { return layer().manage.shown(); }
+  [[nodiscard]] room_settings* manage_up() { return layer().manage.shown(); }
 
   void open_drawer() { layer().frame.base().open(); }
   void close_drawer() { layer().frame.base().close(); }

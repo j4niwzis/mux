@@ -17,16 +17,15 @@ import :storage;
 
 export namespace mux::ui {
 
-template <class Actions>
 struct settings_dialog : scene::Node, outbox {
   // The dialog it is shown in.
   [[nodiscard]] static dialog_look look_of_dialog() { return {.size = dialog_size::fixed{440.0f, 520.0f}}; }
-  Actions* actions = nullptr;
+  no_actions* actions = nullptr;
   // What it was handed, for the pages it makes.
-  ui_needs<Actions> needs_;
-  using page_t = spl::variant<settings_home<Actions>, animations_page<Actions>, proxies_page<Actions>, proxy_editor<Actions>,
-                              appearance_page<Actions>, rendering_page<Actions>, storage_page<Actions>, files_page<Actions>,
-                              notifications_page<Actions>>;
+  ui_needs needs_;
+  using page_t = spl::variant<settings_home, animations_page, proxies_page, proxy_editor,
+                              appearance_page, rendering_page, storage_page, files_page,
+                              notifications_page>;
   // The page up: home, or one of its pages.
   // The page up, in a scroll view of the dialog's size: sized to what it
   // holds, it scrolls where it is taller -- never past the dialog's edges,
@@ -38,7 +37,7 @@ struct settings_dialog : scene::Node, outbox {
   // Esc: the page's ← -- home from a page, the proxies from one being
   // edited. False on home, which Esc closes.
   bool step_back() {
-    return spl::visit(spl::overloaded{[](settings_home<Actions>&) { return false; },
+    return spl::visit(spl::overloaded{[](settings_home&) { return false; },
                                       [](auto& one) { return one.parts.header.step_back(); }},
                       this->page());
   }
@@ -106,8 +105,8 @@ struct settings_dialog : scene::Node, outbox {
       this->invalidateLayout();
   }
 
-  explicit settings_dialog(const ui_needs<Actions>& n) : settings_dialog(n, n.actions) {}
-  settings_dialog(const ui_needs<Actions>& n, Actions* a)
+  explicit settings_dialog(const ui_needs& n) : settings_dialog(n, n.actions) {}
+  settings_dialog(const ui_needs& n, no_actions* a)
       : actions(a), needs_(n),
         parts{.scroll = nodes::ScrollContainer<page_t>(page_t(std::in_place_index<0>, n))} {
     fState.apply({.fill = true});
@@ -147,9 +146,9 @@ struct settings_dialog : scene::Node, outbox {
     this->page().template emplace<8>(needs_, now);
     this->begin_swap(1.0f);
   }
-  [[nodiscard]] notifications_page<Actions>* notifications() {
-    return spl::visit(spl::overloaded{[](notifications_page<Actions>& one) { return &one; },
-                                 [](auto&) -> notifications_page<Actions>* { return nullptr; }},
+  [[nodiscard]] notifications_page* notifications() {
+    return spl::visit(spl::overloaded{[](notifications_page& one) { return &one; },
+                                 [](auto&) -> notifications_page* { return nullptr; }},
                       this->page());
   }
   void show_files(const config::sending_settings& now) {
@@ -160,19 +159,19 @@ struct settings_dialog : scene::Node, outbox {
     this->page().template emplace<6>(needs_, limits, history, sealed);
     this->begin_swap(1.0f);
   }
-  [[nodiscard]] storage_page<Actions>* storage() {
-    return spl::visit(spl::overloaded{[](storage_page<Actions>& one) { return &one; },
-                                 [](auto&) -> storage_page<Actions>* { return nullptr; }},
+  [[nodiscard]] storage_page* storage() {
+    return spl::visit(spl::overloaded{[](storage_page& one) { return &one; },
+                                 [](auto&) -> storage_page* { return nullptr; }},
                       this->page());
   }
-  [[nodiscard]] rendering_page<Actions>* rendering() {
-    return spl::visit(spl::overloaded{[](rendering_page<Actions>& one) { return &one; },
-                                 [](auto&) -> rendering_page<Actions>* { return nullptr; }},
+  [[nodiscard]] rendering_page* rendering() {
+    return spl::visit(spl::overloaded{[](rendering_page& one) { return &one; },
+                                 [](auto&) -> rendering_page* { return nullptr; }},
                       this->page());
   }
-  [[nodiscard]] appearance_page<Actions>* appearance() {
-    return spl::visit(spl::overloaded{[](appearance_page<Actions>& one) { return &one; },
-                                 [](auto&) -> appearance_page<Actions>* { return nullptr; }},
+  [[nodiscard]] appearance_page* appearance() {
+    return spl::visit(spl::overloaded{[](appearance_page& one) { return &one; },
+                                 [](auto&) -> appearance_page* { return nullptr; }},
                       this->page());
   }
   void show_proxies(const std::vector<config::proxy_settings>& all, bool with_back = true) {
@@ -183,9 +182,9 @@ struct settings_dialog : scene::Node, outbox {
     this->page().template emplace<3>(needs_, from, index);
     this->begin_swap(1.0f);
   }
-  [[nodiscard]] proxy_editor<Actions>* editor() {
-    return spl::visit(spl::overloaded{[](proxy_editor<Actions>& one) { return &one; },
-                                 [](auto&) -> proxy_editor<Actions>* { return nullptr; }},
+  [[nodiscard]] proxy_editor* editor() {
+    return spl::visit(spl::overloaded{[](proxy_editor& one) { return &one; },
+                                 [](auto&) -> proxy_editor* { return nullptr; }},
                       this->page());
   }
 

@@ -195,7 +195,7 @@ struct xmpp_form : nodes::Stack, outbox {
     asked_part asked;
     advanced_button_t advanced_button;
     widgets::Collapsible<xmpp_advanced<Actions>> more;
-    form_end<Actions> end;
+    form_end end;
   } parts;
 
   xmpp_form(Actions* a, const palette& colours, const std::optional<::mux::proto::xmpp::kept>& from)
@@ -210,7 +210,7 @@ struct xmpp_form : nodes::Stack, outbox {
               .asked = asked_part(colours),
               .advanced_button = advanced_button_t(colours.widgets, "Advanced", {a}),
               .more = widgets::Collapsible<xmpp_advanced<Actions>>(a, colours),
-              .end = form_end<Actions>(colours, a, from.has_value())} {
+              .end = form_end(colours, a, from.has_value())} {
     auto& [address, password, mode, asked, advanced_button, more, end] = parts;
     // An account kept and signed in to: one already, nothing to choose.
     mode.setVisible(!from || creating);

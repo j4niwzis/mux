@@ -103,7 +103,7 @@ struct services {
     if (!up)
       return;
     spl::visit(
-        [&](mux::ui::accounts_panel<actions>& panel) {
+        [&](mux::ui::accounts_panel& panel) {
           if (!panel.selected)
             return;
           // A copy changed, and put back in the model where it changed.

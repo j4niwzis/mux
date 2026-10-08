@@ -23,7 +23,7 @@ export namespace mux::app {
 
 class accounts_part {
  public:
-  using accounts = mux::ui::accounts_panel<actions>;
+  using accounts = mux::ui::accounts_panel;
   accounts_part(services& shared, kept_settings& kept) : s_(&shared), k_(&kept) {}
   accounts_part(const accounts_part&) = delete;
   accounts_part& operator=(const accounts_part&) = delete;
@@ -176,7 +176,7 @@ class accounts_part {
 
  private:
   // The panel that is up, if one is, and the form in it, if there is one.
-  [[nodiscard]] mux::ui::account_form<actions>* form_up() {
+  [[nodiscard]] mux::ui::account_form* form_up() {
     auto* up = s_->root().open_panel();
     if (!up)
       return nullptr;

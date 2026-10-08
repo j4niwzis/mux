@@ -586,7 +586,7 @@ struct conversations_screen : nodes::Stack, outbox {
   // A banner's button pressed: its protocol's request, asked.
   struct banner_press : outbox {
     const std::optional<proto::any_request_t>* asks;
-    void operator()() const {
+    void operator()() {
       if (*asks)
         spl::visit(spl::overloaded{[](proto::part::no_request) {}, [&](const auto& one) { this->send(one); }}, **asks);
     }

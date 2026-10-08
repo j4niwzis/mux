@@ -243,7 +243,8 @@ struct mux_paint;
 // own objects, each a pointer of a type of its own: what a node reads, it is
 // given by its parent, and takes what it needs of it with spl::remapped<>.
 template <class Actions>
-struct ui_needs : outbox {
+struct ui_needs {
+  Actions* actions = nullptr;
   // What plays voice messages: the program's.
   platform::audio::speaker* sound = nullptr;
   // The theme's colours: the program's.

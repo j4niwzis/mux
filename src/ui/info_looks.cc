@@ -95,7 +95,7 @@ struct bubbles_picker : nodes::Stack {
   struct opacity_done : outbox {
     look_level level;
     config::look_part_t part;
-    void operator()(float fraction) const {
+    void operator()(float fraction) {
       if (!usable(level, part) || !own_here(level, part))
         return;
       config::bubble_look look = current(level, part);
@@ -112,7 +112,7 @@ struct bubbles_picker : nodes::Stack {
   struct element_done : outbox {
     look_level level;
     element_t which;
-    void operator()(float fraction) const {
+    void operator()(float fraction) {
       if (!own_here(level, config::look_part::bubbles{}))
         return;
       config::bubble_look look = current(level, config::look_part::bubbles{});
@@ -123,7 +123,7 @@ struct bubbles_picker : nodes::Stack {
   struct element_reset : outbox {
     look_level level;
     element_t which;
-    void operator()() const {
+    void operator()() {
       if (!own_here(level, config::look_part::bubbles{}))
         return;
       config::bubble_look look = current(level, config::look_part::bubbles{});
@@ -188,7 +188,7 @@ struct bubbles_picker : nodes::Stack {
     look_level level;
     config::look_part_t part;
     bool inherit;
-    void operator()(std::size_t index) const {
+    void operator()(std::size_t index) {
       if (!usable(level, part))
         return;
       if (inherit && index == 0) {
@@ -223,7 +223,7 @@ struct bubbles_picker : nodes::Stack {
   struct element_blur_done : outbox {
     look_level level;
     element_blur_t which;
-    void operator()(float fraction) const {
+    void operator()(float fraction) {
       if (!own_here(level, config::look_part::bubbles{}))
         return;
       config::bubble_look look = current(level, config::look_part::bubbles{});
@@ -234,7 +234,7 @@ struct bubbles_picker : nodes::Stack {
   struct element_blur_reset : outbox {
     look_level level;
     element_blur_t which;
-    void operator()() const {
+    void operator()() {
       if (!own_here(level, config::look_part::bubbles{}))
         return;
       config::bubble_look look = current(level, config::look_part::bubbles{});
@@ -371,7 +371,7 @@ struct look_choices : nodes::Stack {
   struct pick_wallpaper_at : outbox {
     choice_level_t level;
     bool inherit;
-    void operator()(std::size_t index) const {
+    void operator()(std::size_t index) {
       if (inherit && index == 0) {
         this->send(::mux::ui::request::set_wallpaper{level, config::wallpaper_pick::inherit{}});
         return;

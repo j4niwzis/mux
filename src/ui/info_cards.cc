@@ -86,7 +86,7 @@ struct person_card : nodes::Stack {
   // A button of its protocol's own: its request asked.
   struct ask_protocol : outbox {
     proto::any_request_t asks;
-    void operator()() const {
+    void operator()() {
       spl::visit(spl::overloaded{[](proto::part::no_request) {}, [&](const auto& one) { this->send(one); }}, asks);
     }
   };

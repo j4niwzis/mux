@@ -446,7 +446,7 @@ struct spaces_choices : nodes::Stack {
   struct pick_bars : outbox {
     std::string account;
     config::space_item_t item;
-    void operator()(std::size_t index) const {
+    void operator()(std::size_t index) {
       static constexpr std::array<std::pair<bool, bool>, 4> kWays{{{true, false}, {false, true}, {true, true}, {false, false}}};
       if (index < kWays.size())
         this->send(::mux::ui::request::set_space_bars{account, item, kWays[index].first, kWays[index].second});

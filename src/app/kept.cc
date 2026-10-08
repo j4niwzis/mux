@@ -49,6 +49,8 @@ struct kept_root {
   skiff::model::Tracked<mux::config::frame_settings> frames;
   // What is kept and shown of the history, for every chat that does not say.
   skiff::model::Tracked<mux::config::history_settings> history;
+  // How much is kept, in memory and on disk.
+  skiff::model::Tracked<mux::config::cache_limits> limits;
 };
 // The file to be written again: one, however many changes asked for it.
 struct write_kept {
@@ -57,6 +59,11 @@ struct write_kept {
 // UnifiedPush wanted on, or off: its connector started, or stopped.
 struct push_wanted {
   bool on = false;
+  [[nodiscard]] constexpr int key() const { return 0; }
+};
+// The limits changed: the caches and the disk told, and what is held in
+// memory trimmed to them.
+struct limits_changed {
   [[nodiscard]] constexpr int key() const { return 0; }
 };
 // A chat's choices changed or gone, or what notifies: the file is written
@@ -70,6 +77,9 @@ struct kept_reactions {
   [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::sending_settings>, const mux::config::sending_settings&) const { return {}; }
   [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::frame_settings>, const mux::config::frame_settings&) const { return {}; }
   [[nodiscard]] write_kept on(skiff::model::Changed<mux::config::history_settings>, const mux::config::history_settings&) const { return {}; }
+  [[nodiscard]] std::tuple<write_kept, limits_changed> on(skiff::model::Changed<mux::config::cache_limits>, const mux::config::cache_limits&) const {
+    return {};
+  }
   [[nodiscard]] push_wanted on(skiff::model::Changed<skiff::model::Field<&mux::config::notification_settings::unified_push>>, const auto& at) const {
     return {skiff::model::part(at).value_or(false)};
   }
@@ -117,21 +127,26 @@ struct kept_settings {
   // The interface's scale, in percent of the display's: read by the host at
   // each frame.
   int interface_scale = 100;
-  // How much is kept, in memory and on disk.
-  mux::config::cache_limits limits;
   // What is done to a picture dropped before it is sent, as the model holds it.
-  [[nodiscard]] const mux::config::sending_settings& sending() const { return model.root().sending.fValue; }
+  [[nodiscard]] const mux::config::sending_settings& sending() const { return state.root().sending.fValue; }
   // What is kept and shown of the history, as the model holds it.
-  [[nodiscard]] const mux::config::history_settings& history() const { return model.root().history.fValue; }
+  [[nodiscard]] const mux::config::history_settings& history() const { return state.root().history.fValue; }
+  // How much is kept, as the model holds it.
+  [[nodiscard]] const mux::config::cache_limits& limits() const { return state.root().limits.fValue; }
+  // A part the model's root holds one of, made what is given, whole.
+  template <class Part>
+  void set_part(Part now) {
+    (void)state.apply(skiff::model::edit(skiff::model::placeOf<Part, kept_root>(), skiff::model::setTo(std::move(now))));
+  }
   // How frames are drawn, as the model holds it: read by the host at each.
-  [[nodiscard]] const mux::config::frame_settings& frames() const { return model.root().frames.fValue; }
+  [[nodiscard]] const mux::config::frame_settings& frames() const { return state.root().frames.fValue; }
   // One setting of what the model keeps, chosen in its place by its member
   // pointer: a field of a part the root holds one of.
   template <auto M, class T>
   void choose_field(T now) {
     using Owner = typename skiff::model::detail::MemberPointer<decltype(M)>::Class;
     using Part = std::remove_cvref_t<decltype(std::declval<Owner&>().*M)>;
-    (void)model.apply(skiff::model::edit(skiff::model::placeOf<skiff::model::Field<M>, kept_root>(),
+    (void)state.apply(skiff::model::edit(skiff::model::placeOf<skiff::model::Field<M>, kept_root>(),
                                          skiff::model::setTo(Part(std::move(now)))));
   }
   // The chats listed in other accounts' lists than their own.
@@ -142,7 +157,7 @@ struct kept_settings {
   std::optional<mux::config::bubble_look> panels;
   // What each chat -- or space -- chose for itself, by the chat: only those
   // that chose something.
-  kept_model model;
+  kept_model state;
   // The space each chat is in -- the first found holding it -- set by the
   // program from the model at each refresh: a space's own choices are its
   // rooms', where they have none, nearest first, through spaces in spaces.
@@ -153,26 +168,26 @@ struct kept_settings {
   template <auto M>
   [[nodiscard]] auto own_of(const conversation_id& chat) const {
     using T = std::remove_cvref_t<decltype(std::declval<const chat_choices&>().*M)>;
-    const chat_choices* found = model.root().chats.find(chat);
+    const chat_choices* found = state.root().chats.find(chat);
     return found == nullptr ? T{} : found->*M;
   }
   // One setting of a chat's, chosen: the chat forgotten where it then has
   // nothing chosen.
   template <auto M, class T>
   void choose(const conversation_id& chat, T now) {
-    const chat_choices* had = model.root().chats.find(chat);
+    const chat_choices* had = state.root().chats.find(chat);
     chat_choices next = had == nullptr ? chat_choices{} : *had;
     next.*M = now;
     if (next == chat_choices{}) {
       if (had != nullptr)
-        (void)model.apply(skiff::model::take<chat_choices>(chat));
+        (void)state.apply(skiff::model::take<chat_choices>(chat));
     } else if (had == nullptr) {
-      (void)model.apply(skiff::model::put<chat_choices>(chat, std::move(next)));
+      (void)state.apply(skiff::model::put<chat_choices>(chat, std::move(next)));
     } else {
       // Only the one setting, in its place: what shows it is told, and
       // nothing else.
       using Part = std::remove_cvref_t<decltype(next.*M)>;
-      (void)model.apply(skiff::model::edit(skiff::model::placeOf<skiff::model::Field<M>, kept_root>(chat),
+      (void)state.apply(skiff::model::edit(skiff::model::placeOf<skiff::model::Field<M>, kept_root>(chat),
                                            skiff::model::setTo(Part(std::move(now)))));
     }
   }
@@ -185,7 +200,7 @@ struct kept_settings {
   template <auto M>
   [[nodiscard]] std::set<conversation_id> chats_where() const {
     std::set<conversation_id> out;
-    const auto& chats = model.root().chats;
+    const auto& chats = state.root().chats;
     for (std::size_t i = 0; i < chats.size(); ++i)
       if (chats.valueAt(i).*M)
         out.insert(chats.keyAt(i));
@@ -246,17 +261,17 @@ struct kept_settings {
   }
   // What notifies, as the model holds it; changed by its edits: one
   // setting in its place, by its member pointer, or all of them at once.
-  [[nodiscard]] const mux::config::notification_settings& notifications() const { return model.root().notifications.fValue; }
+  [[nodiscard]] const mux::config::notification_settings& notifications() const { return state.root().notifications.fValue; }
   template <auto M, class T>
   void choose_notification(T now) {
     using Part = std::remove_cvref_t<decltype(std::declval<mux::config::notification_settings&>().*M)>;
-    (void)model.apply(skiff::model::edit(skiff::model::placeOf<skiff::model::Field<M>, kept_root>(),
+    (void)state.apply(skiff::model::edit(skiff::model::placeOf<skiff::model::Field<M>, kept_root>(),
                                          skiff::model::setTo(Part(std::move(now)))));
   }
   // What the model's reactions asked for, to be done by the program.
-  [[nodiscard]] std::vector<kept_model::Effect> take_effects() { return model.outbox().drain(); }
+  [[nodiscard]] std::vector<kept_model::Effect> take_effects() { return state.outbox().drain(); }
   void set_notifications(mux::config::notification_settings now) {
-    (void)model.apply(skiff::model::edit(skiff::model::placeOf<mux::config::notification_settings, kept_root>(), skiff::model::setTo(std::move(now))));
+    (void)state.apply(skiff::model::edit(skiff::model::placeOf<mux::config::notification_settings, kept_root>(), skiff::model::setTo(std::move(now))));
   }
   std::vector<mux::config::proxy_settings> proxies;
   // Why the accounts file could not be read, when it could not: then it is
@@ -445,7 +460,7 @@ struct kept_settings {
                                                                 mux::config::space_bar_of(one.bar)};
                              }));
     this->interface_scale = saved.interface_scale.value_or(100);
-    this->limits = saved.cache.value_or(mux::config::cache_limits{});
+    const auto limits_read = saved.cache.value_or(mux::config::cache_limits{});
     const auto sending_read = saved.sending.value_or(mux::config::sending_settings{});
     const auto history_read = saved.history.value_or(mux::config::history_settings{});
     this->proxies = saved.proxies.value_or(std::vector<mux::config::proxy_settings>{});
@@ -488,7 +503,8 @@ struct kept_settings {
     root.sending.fValue = sending_read;
     root.frames.fValue = frames_read;
     root.history.fValue = history_read;
-    this->model = kept_model(std::move(root));
+    root.limits.fValue = limits_read;
+    this->state = kept_model(std::move(root));
   }
   [[nodiscard]] mux::config::file file() const {
     auto out = mux::config::file_of(saved, foreign_accounts);
@@ -548,14 +564,14 @@ struct kept_settings {
       out.show_fps = true;
     if (interface_scale != 100)
       out.interface_scale = interface_scale;
-    out.cache = limits;
+    out.cache = this->limits();
     out.sending = this->sending();
     out.history = this->history();
     out.notifications = this->notifications();
     std::vector<mux::config::chat_notify> notify;
     std::vector<mux::config::room_events_choice> choices;
     std::vector<mux::config::muted_chat> muted;
-    const auto& chats = model.root().chats;
+    const auto& chats = state.root().chats;
     for (std::size_t i = 0; i < chats.size(); ++i) {
       const conversation_id& chat = chats.keyAt(i);
       const chat_choices& chosen = chats.valueAt(i);
@@ -600,7 +616,7 @@ struct kept_settings {
   // Written back: nothing, or why not.
   [[nodiscard]] std::optional<std::string> write() {
     // The change log is not read yet: let go of, as the file is written.
-    (void)model.takeChanges();
+    (void)state.takeChanges();
     if (keeps_nothing)
       return std::nullopt;
     if (config_error)

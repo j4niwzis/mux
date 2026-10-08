@@ -172,7 +172,7 @@ void app::woken() {
                  one);
   }
   // Messages held to a number in all, least recently read out first.
-  model->trim(static_cast<std::size_t>(limits.messages_in_memory), root().main().chosen);
+  model->trim(static_cast<std::size_t>(this->limits().messages_in_memory), root().main().chosen);
   this->refresh();
   // A room the user made: opened once the model has it.
   if (made_room_ && model->find(*made_room_))
@@ -259,6 +259,7 @@ void app::take_page_input() {
   auto* up = root().settings_up();
   if (up == nullptr) {
     bound_page = nullptr;
+    this->settle_model();
     return;
   }
   spl::visit(
@@ -267,9 +268,9 @@ void app::take_page_input() {
           if (bound_page != &page.parts.settings) {
             bound_page = &page.parts.settings;
             page_binding = {};
-            page_binding.refresh(page.parts.settings, model);
+            page_binding.refresh(page.parts.settings, this->state);
           }
-          page_binding.drain(page.parts.settings, model);
+          page_binding.drain(page.parts.settings, this->state);
         } else {
           bound_page = nullptr;
         }
@@ -282,6 +283,10 @@ void app::take_page_input() {
 void app::settle_model() {
   for (const auto& effect : this->take_effects())
     std::visit(spl::overloaded{[&](const write_kept&) { (void)this->write(); },
+                               [&](const limits_changed&) {
+                                 settings.apply_limits();
+                                 model->trim(static_cast<std::size_t>(this->limits().messages_in_memory), root().main().chosen);
+                               },
                                [&](const push_wanted& wanted) {
                                  if (wanted.on)
                                    notices.start_push();
@@ -293,7 +298,7 @@ void app::settle_model() {
     spl::visit(
         [&](auto& page) {
           if constexpr (requires { page.parts.settings; })
-            page_binding.refresh(page.parts.settings, model);
+            page_binding.refresh(page.parts.settings, this->state);
         },
         up->page());
 }

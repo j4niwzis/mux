@@ -29,9 +29,9 @@ class settings_part {
 
   // The limits, as kept: to the caches and the disk.
   void apply_limits() {
-    pictures_->set_limits(k_->limits);
-    s_->store->budget = static_cast<std::uintmax_t>(k_->limits.messages_on_disk_mb) << 20;
-    s_->store->deleted_budget = static_cast<std::uintmax_t>(mux::config::deleted_on_disk_of(k_->limits)) << 20;
+    pictures_->set_limits(k_->limits());
+    s_->store->budget = static_cast<std::uintmax_t>(k_->limits().messages_on_disk_mb) << 20;
+    s_->store->deleted_budget = static_cast<std::uintmax_t>(mux::config::deleted_on_disk_of(k_->limits())) << 20;
   }
   // How much moves: set, shown, kept.
   void set_motion(std::string level) {
@@ -176,18 +176,18 @@ class settings_part {
   // of it cleared.
   void apply(const request::settings_storage&) {
     if (auto* up = s_->root().settings_up())
-      up->show_storage(k_->limits, k_->history(), s_->vault->on());
+      up->show_storage(k_->limits(), k_->history(), s_->vault->on());
   }
   void apply(const request::change_limit& one) {
-    std::int64_t& value = mux::config::value_of(k_->limits, one.which);
+    // The model's reaction tells the caches and the disk, and writes it.
+    auto next = k_->limits();
+    std::int64_t& value = mux::config::value_of(next, one.which);
     const auto [low, high] = mux::config::bounds_of(one.which);
     value = std::clamp(one.more ? value * 2 : value / 2, low, high);
-    this->apply_limits();
-    s_->model->trim(static_cast<std::size_t>(k_->limits.messages_in_memory), s_->root().main().chosen);
-    (void)k_->write();
+    k_->set_part(std::move(next));
     if (auto* up = s_->root().settings_up())
       if (auto* page = up->storage())
-        page->show(k_->limits);
+        page->show(k_->limits());
   }
   void apply(const request::clear_stored&) {
     std::error_code failed;
